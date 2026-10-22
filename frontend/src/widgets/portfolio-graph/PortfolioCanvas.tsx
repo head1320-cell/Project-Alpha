@@ -218,6 +218,17 @@ function AlignMenu({ n, onPick }: { n: number; onPick: (k: AlignKind) => void })
   );
 }
 
+/** 확대율(CF5b) — 지금 배율(%). 누르면 100%(떠 있는 판 사이 가운데 기준 — `zoomBy`). */
+function ZoomPct({ onReset }: { onReset: (zoom: number) => void }) {
+  const z = useStore((st) => st.transform[2]);
+  const pct = Math.round(z * 100);
+  return (
+    <ControlButton className="pg-zoom-pct" title="누르면 100%" aria-label={`확대율 ${pct}% — 누르면 100%`} onClick={() => onReset(z)}>
+      {pct}%
+    </ControlButton>
+  );
+}
+
 /** '보기' 메뉴(CF4b·CF4c) — 도구줄 단추 하나. 단계 레인 켬/끔 · 켜졌을 때 '레인에 맞추기' · 선 모양(곡선·직각·직선). 명령 찾기(Ctrl+K)에도 같은 항목이 있다. */
 function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire }:
   { lanes: boolean; onLanes: () => void; onFitLanes: () => void; wire: WireShape; onWire: (w: WireShape) => void }) {
@@ -497,7 +508,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const [panels, setPanels] = useState<Panels>(DEFAULT_PANELS);
   const narrowNow = () => typeof window !== "undefined" && !!window.matchMedia?.(NARROW_Q).matches;
   useEffect(() => { setPanels(readPanels(narrowNow(), window.innerWidth >= 1440)); }, []);
-  useEffect(() => { const v = readView(); usePortfolioGraph.getState().setLanes(v.lanes); usePortfolioGraph.getState().setWireShape(v.wire); }, []);
+  useEffect(() => {
+    const v = readView(), g = usePortfolioGraph.getState();
+    g.setLanes(v.lanes);
+    g.setWireShape(v.wire);
+    g.setMinimap(v.minimap);                          // CF5b — 사람이 켠 것만(기본 끔)
+  }, []);
   const updatePanels = useCallback((f: (p: Panels) => Panels) => {
     setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
   }, []);
@@ -587,6 +603,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const live = useMemo(() => (s.report
     ? (staleSet.size ? Object.fromEntries(Object.entries(s.report.nodes).filter(([id]) => !staleSet.has(id))) : s.report.nodes)
     : null), [s.report, staleSet]);
+  // 미니맵 칸(CF5b) — 노드 단계(카탈로그)와 표시(고름 > 실패 > 막힘, 지금 결과만).
+  const stageOfNode = (id: string) => {
+    const kind = s.nodes.find((x) => x.id === id)?.data.kind;
+    return s.catalog?.find((c) => c.type === kind)?.stage ?? null;
+  };
+  const mmMark = (id: string): "picked" | "failed" | "blocked" | null =>
+    s.picked.includes(id) || s.selectedId === id ? "picked"
+      : live?.[id]?.status === "failed" ? "failed" : live?.[id]?.status === "blocked" ? "blocked" : null;
   // BM C2 — 들어간 상자·필터가 켜지면 나머지를 흐린다(원인 경로가 켜져 있으면 그것이 먼저다).
   const focusSet = useMemo(() => {
     const g = s.groups.find((x) => x.id === s.focusGroup);
@@ -1252,6 +1276,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     saveView({ ...readView(), lanes: v });
   };
   const fitToLanes = () => { usePortfolioGraph.getState().fitToLanes(); fit(); };
+  // 미니맵(CF5b) — 도구줄·명령 찾기·모서리 [접기]가 같은 켬/끔을 쓰고, 이 브라우저에 남긴다.
+  const toggleMinimap = () => {
+    const v = !usePortfolioGraph.getState().showMinimap;
+    usePortfolioGraph.getState().setMinimap(v);
+    saveView({ ...readView(), minimap: v });
+  };
   // 선 모양(CF4c) — 보기만 바꾼다. 이 브라우저에 남긴다.
   const setWire = (w: WireShape) => { usePortfolioGraph.getState().setWireShape(w); saveView({ ...readView(), wire: w }); };
 
@@ -1283,7 +1313,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     { id: "panel-focus", group: "보기", label: panels.focus ? "집중 끝내기" : "집중해서 보기", keys: "\\",
       hint: "왼쪽 목록과 오른쪽 창을 잠시 모두 닫아요", run: () => updatePanels((p) => toggle(p, "focus")) },
     { id: "minimap", group: "보기", label: s.showMinimap ? "미니맵 끄기" : "미니맵 켜기",
-      run: () => usePortfolioGraph.getState().setMinimap(!usePortfolioGraph.getState().showMinimap) },
+      run: toggleMinimap },
     { id: "lanes", group: "보기", label: s.showLanes ? "단계 레인 끄기" : "단계 레인 보기", hint: "흐름 단계 여섯을 왼쪽에서 오른쪽 세로 띠로 깔아요",
       run: toggleLanes },
     ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드마다 자기 단계 띠 안으로 옮겨요", run: fitToLanes }] : []),
@@ -1411,7 +1441,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             )}
           </span>
           <button type="button" className={`pg-icon-tool${s.showMinimap ? " on" : ""}`} aria-pressed={s.showMinimap}
-                  aria-label="미니맵" title="미니맵" onClick={() => s.setMinimap(!s.showMinimap)}><MapIcon size={16} /></button>
+                  aria-label="미니맵" title="미니맵" onClick={toggleMinimap}><MapIcon size={16} /></button>
           <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} wire={s.wireShape} onWire={setWire} />
           <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
                   onClick={() => setCmdOpen(true)}><Command size={16} /></button>
@@ -1662,13 +1692,24 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             <Controls showZoom={false} showFitView={false} showInteractive={false}>
               <ControlButton className="react-flow__controls-zoomin" title="확대" aria-label="확대" onClick={() => zoomBy(1.2)}><Plus size={14} aria-hidden="true" /></ControlButton>
               <ControlButton className="react-flow__controls-zoomout" title="축소" aria-label="축소" onClick={() => zoomBy(1 / 1.2)}><Minus size={14} aria-hidden="true" /></ControlButton>
+              <ZoomPct onReset={(z) => zoomBy(1 / z)} />
               <ControlButton className="react-flow__controls-fitview" title="맞춰 보기" aria-label="맞춰 보기"
                              onClick={() => fitClear(rf.current, canvasEl.current)}><Maximize size={13} aria-hidden="true" /></ControlButton>
             </Controls>
             {s.showMinimap && (
-              <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap"
-                       nodeColor={(n) => (n.type === PG_GROUP_TYPE ? "transparent"
-                         : bandOf.has(n.id) ? `var(--pg-band-${bandOf.get(n.id)})` : "var(--pg-line)")} />
+              <>
+                {/* CF5b — 칸 = 단계색(전략 띠 구성원은 띠 색) · 테두리 = 고름 파랑 > 실패 빨강 > 막힘 주황(지금 결과만 — 낡은 결과는 칠하지 않는다). */}
+                <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap" nodeStrokeWidth={24}
+                         nodeColor={(n) => (n.type === PG_GROUP_TYPE ? "transparent"
+                           : bandOf.has(n.id) ? `var(--pg-band-${bandOf.get(n.id)})` : STAGE_VAR[stageOfNode(n.id) ?? ""] ?? "var(--pg-line)")}
+                         nodeStrokeColor={(n) => { const k = mmMark(n.id); return k === "picked" ? "var(--pg-blue)" : k === "failed" ? "var(--pg-fail)"
+                           : k === "blocked" ? "var(--pg-assume)" : "transparent"; }}
+                         nodeClassName={(n) => { const st = stageOfNode(n.id), k = mmMark(n.id);
+                           return ["pg-mm", st && `pg-mm--stage-${st}`, k && `pg-mm--${k}`].filter(Boolean).join(" "); }} />
+                <button type="button" className="pg-minimap-fold nodrag nopan" aria-label="미니맵 접기" title="미니맵 접기" onClick={toggleMinimap}>
+                  <X size={13} aria-hidden="true" />
+                </button>
+              </>
             )}
           </ReactFlow>
           <p className="pg-sr-live" aria-live="polite">{announce}</p>

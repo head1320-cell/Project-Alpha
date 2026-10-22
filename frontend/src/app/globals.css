@@ -4390,6 +4390,12 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* 미니맵 · 계산 기록 */
 .pg-canvas .pg-minimap { background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 12px; box-shadow: var(--pg-shadow); }
 .pg-canvas .pg-minimap .react-flow__minimap-mask { fill: color-mix(in srgb, var(--pg-canvas) 70%, transparent); }
+/* CF5b — 미니맵 모서리 [접기](미니맵 200×150 · 판 여백 15 — 오른쪽 위 안쪽) · 확대율 글(다른 단추와 같은 26px 칸) */
+.pg-theme .pg-minimap-fold { position: absolute; z-index: 6; right: calc(var(--pg-right-inset) + 21px); bottom: 135px; display: grid; place-items: center;
+  width: 24px; height: 24px; padding: 0; color: var(--pg-body); background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 7px; cursor: pointer; }
+.pg-theme .pg-minimap-fold:hover { color: var(--pg-ink); background: var(--pg-soft); }
+.pg-canvas .react-flow__controls-button.pg-zoom-pct { width: 24px; padding: 5px 1px; font-size: 9.5px; font-weight: 700; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums; color: var(--pg-ink); }
 .pg-canvas .react-flow__background circle { fill: var(--pg-dot); }
 /* CF4a — 큰 칸 선(110 = 점 다섯 칸)은 점보다 옅게(바탕 대비 ≈1.2:1) — 눈금이지 내용이 아니다. 끌 때 안내선은 파랑 1px(확대와 무관). */
 .pg-canvas .pg-grid-lines path { stroke: var(--pg-grid-line); }
@@ -5872,9 +5878,9 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
 .pg-next-later { flex: none; height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: var(--pg-mute); font-size: 13px; cursor: pointer; }
 .pg-next-go:focus-visible, .pg-next-later:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 /* K4 — 좁은 화면: 위에 뜬 창 열기 단추가 아래 바의 폭까지 깎아 한 낱말씩 줄이 바뀌었다. 바는 캔버스 폭(양옆 16)을 쓰고
-   확대 단추(아래 15 + 높이 81) 위에 선다. 글은 한 줄 전체, 단추는 아래 줄 오른쪽. */
+   확대 단추(아래 15 + 높이 108 — CF5b 확대율 칸으로 81 에서 늘었다) 위에 선다. 글은 한 줄 전체, 단추는 아래 줄 오른쪽. */
 @media (max-width: 640px) {
-  .pg-canvas .pg-hint.pg-next { left: 16px; right: 16px; bottom: 108px; transform: none; width: auto; max-width: none; text-align: left; }
+  .pg-canvas .pg-hint.pg-next { left: 16px; right: 16px; bottom: 135px; transform: none; width: auto; max-width: none; text-align: left; }
   .pg-next-text { flex: 1 1 100%; }
 }
 /* BT3 — "‘수익률’을 이어 주세요" 의 이름이 단추다: 누르면 그 값을 내는 노드만 보이는 빠른 추가. */

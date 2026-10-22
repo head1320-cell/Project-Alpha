@@ -250,3 +250,11 @@ export function cardsOverflow(cardSelector: string): string {
   return out;
 })()`;
 }
+
+/** 미니맵을 켜거나 끈다(CF5b — 켬/끔은 이 브라우저에 남아, 도구줄 단추를 그냥 누르면 반대가 될 수 있다). 눌린 상태가 다를 때만 누른다. */
+export async function minimapOn(page: Page, on: boolean): Promise<void> {
+  const b = page.locator('button[aria-label="미니맵"]');
+  if ((await b.getAttribute("aria-pressed")) !== String(on)) await b.click();
+  if (on) await page.locator(".pg-minimap").waitFor({ state: "visible" });
+  else await page.locator(".pg-minimap").waitFor({ state: "detached" });
+}
