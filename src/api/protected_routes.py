@@ -142,6 +142,10 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_ADMIN, "실계좌 관문 선언 — 이름을 적은 사용자에게 실계좌 주문을 연다"),
     ("DELETE", "/api/v1/admin/live-gate"):
         (REQUIRE_ADMIN, "실계좌 관문 철회 — LIVE 였던 운영자 실행기는 SHADOW 로"),
+
+    # ── 캔버스 AI 도우미 (AI0) — 화면은 열려 있고 AI 만 로그인. 돈·PII 가 아니라 운영자 비용이라 잠근다 ──
+    ("POST", "/api/v1/assist/canvas/suggest"):
+        (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도"),
 }
 
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.

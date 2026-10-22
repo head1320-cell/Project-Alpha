@@ -23379,3 +23379,50 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   tsc 0 · eslint 오류 0(경고 1 은 전부터) · `gen-dark-modules --check` · CSS 가드 pytest 5. 서버 코드 변화 0 이라 전체 pytest 는 돌리지 않음.
 - 하지 않음: '묻기' 칸·이야기 탭 AI 절(결정 ①) · AI 추천(AI1) · 유령을 끌어 자리 옮기기 · 노드별 '고치는 법'(fixes)을 유령으로(카드 안에 이미 있다) ·
   맞춰 보기에 유령 넣기(맞춤은 진짜 노드만 — 화면 밖 유령은 바가 글로 말한다) · 추천을 기록·저장 · 서버 바꿈(응답 그대로라 전체 pytest 생략).
+
+## AI0 · Claude 서버 기반 + 노드 추천 경로 (2026-10-22, 2부 첫 단계)
+
+- 왜: CF 스펙 2부(Claude 접목)의 바닥. 조사로 ★기존 클라이언트가 실제 호출을 한 번도 못 하고 있었다★는 것이 드러났다 — 설치된 SDK `anthropic` 2.1.0(API `2026-10-21`)은
+  `messages.create` 에 `temperature` 인자가 없는데 `ClaudeClient.invoke/stream` 이 늘 넘겨, 키가 있어도 TypeError 를 일반 except 가 오류 응답으로 삼켰다
+  (이야기 narrators · 스크리너 코파일럿 · narrative/macro 라우트가 쓰는 길). 또 키 있음 + SDK 없음은 데모 글을 `error=None` 으로 정상처럼 냈다(테스트가 빨강으로 확인).
+- 사용자 결정(2026-10-22): ① 범위 = AI0 기반 + AI1 노드 추천 한 조각(경로는 suggest 하나 — narrate·ask·draft·guide 는 AI2~AI5) ② 기존 클라이언트는 temperature 를 보내지 않는다
+  ③ AI 추천은 누를 때만 부른다(화면은 다음 커밋 AI1).
+- 무엇:
+  · `claude_client.py`(외과적): `invoke`·`stream` 이 temperature 를 보내지 않는다(`NarrativeRequest.temperature` 칸은 부르는 쪽 호환으로 남김) · 키 있음 + SDK 없음 → `error="sdk_missing"`
+    (클라이언트 생성 실패면 `client_init_failed`) · 가격표를 claude-api 스킬 표(2026-10-06)로 — Opus 4.6 15/75→5/25 · Haiku 4.5 0.8/4→1/5 바로잡고 현행 모델 추가 · `price_of()`(모르면 None).
+    새 `invoke_structured()` — `beta.messages.create` + `output_config={"effort","format": json_schema}` + 거절 대비 `fallbacks: "default"`(beta `server-side-fallback-2026-07-01`) ·
+    ★데모 응답 없음★(키 없음 `no_key` · SDK 없음 · 차단기 · `refusal`+분류(내용보다 먼저 봄) · `max_tokens` · 끝나지 않음 · 형식 오류 `bad_json` · 429/상태/네트워크/예상 밖) ·
+    답한 모델 = `usage.iterations` 의 `fallback_message`(대체 모델이 답했으면 그 모델 · 마지막 fallback 블록 뒤의 글만 읽는다) · 비용은 걸음마다 그 모델 값으로 더하고 가격표에 없으면 None + 사유 ·
+    예외 문장을 로그에 쓸 때 키 값을 지운다.
+  · 새 `src/services/canvas_assist/`: `ground`(카탈로그 · 그래프 구조 · `/validate` 절차·오류 — ★설정값은 싣지 않는다★, 근거 속 숫자 모음) · `prompts`(시스템 글 · 출력 스키마:
+    params 칸 없음 · 모든 객체 닫힘 · 종류는 카탈로그 enum — 3개 한도는 구조화 출력이 받지 않는 제약이라 서버 검사) · `check`(스펙 검사 1~6: 카탈로그 · 연결 = 붙인 문서를
+    `/validate` 해 ★새 오류 0★(타입·찬 입력·없는 포트·없는 노드·순환·계산 때 실패할 선, 새 노드 자신의 빈 입력·설정값은 사람 몫이라 허용) · 근거 밖 숫자 · 금지 표현 · 설정값 ·
+    3개 · 같은 추천 하나 · 그래프가 있는데 안 잇는 추천 — 탈락은 종류·코드·사유로 돌려준다) · `limiter`(사용자별 시간당, 미끄러지는 창) ·
+    `service.suggest`(쓸 수 있나 → 근거 → 캐시(근거 전체 + 모델 + 프롬프트 판, 1시간, 실패는 안 함) → 한도(캐시 적중은 안 셈) → 호출(모델 `CLAUDE_MODEL` 또는 `claude-opus-5-5`, effort medium) → 검사).
+    못 쓰면 `{available:false, source:"unavailable", reason_code, reason, rule}` — `rule` 은 규칙 대체(`/validate` 절차의 next·by_gate). 비용 한 줄 로그(키 없음).
+  · 새 경로 `POST /api/v1/assist/canvas/suggest` + `Depends(require_login)` · `app_factory` 등록 · `PROTECTED`(REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도") ·
+    `accessMap.json` 로그인 층 "포트폴리오 설계의 AI 추천" · `.env.example` 에 `CLAUDE_MODEL`·`CANVAS_ASSIST_HOURLY_LIMIT` 설명 · 스펙 §AI0 구현 기록.
+  · ★경로를 스펙과 다르게★ 뒀다: 스펙의 `/api/v1/allocation/graph/assist/…` 는 로그인 지도 테스트 ③(열린 화면 '포트폴리오 설계'의 접두사 아래는 잠글 수 없다)에 걸린다.
+    화면은 열려 있고 AI 만 로그인이다.
+- 테스트: 새 `tests/test_ai0_canvas_assist.py` 59(가짜 SDK·클라이언트 주입, 네트워크 0) — 먼저 빨강 58(모듈 없음 + temperature 감 + 키·SDK 없음에 데모 글 + 경로 404 — 이유 확인) →
+  초록. 클라이언트(temperature 안 감 · 짝 model/system/messages 감 · stream 도 · sdk_missing 짝 키 없음은 지금 그대로 · 가격표 · 짝 모르는 모델 None) · 구조화(인자 · 못 쓰는 셋은 부르지 않음 ·
+  거절 짝 end_turn · 잘림/형식 오류 · 대체 모델 · 모르는 모델 비용 None · 예외 속 키가 응답·로그에 0(짝: 로그가 비어 통과하는 게 아님)) · 근거·스키마 · 검사 각각 + 짝 · 서비스
+  (응답 모양 · 모델 환경 변수 · 탈락 동행 · 근거 숫자 통과/밖 탈락 · 키 없음 = 사유 + 규칙 대체 + 데모 글 0 · 실패는 캐시 안 함 · 읽을 수 없는 그래프는 부르기 전에 · 한도 · 창이 미끄러짐 ·
+  설정 오류는 지어내지 않음 · 캐시 열쇠에 모델 · 키 누출 0) · 경로(401 짝 로그인 200 → 이 환경은 키가 없어 `no_key` · 로그인 이름이 서비스로 · 보호 목록·지도).
+  ★테스트를 고친 둘★(변이를 짜다 보임): 한도 테스트 순서가 '캐시 적중을 센다'를 가려낼 수 없었다(A·B·A적중·C → A·A적중·B·C) · 서비스가 근거 숫자를 안 넘겨도 통과했다(근거 숫자 통과/밖 탈락 테스트 더함).
+- 변이 30 — 모두 죽음(`S/ai0/muts.py`, 별도 작업 트리): 숫자·카탈로그·연결·금지 표현·설정값·3개·같은 추천·안 잇는 추천·@new 한쪽·새 노드 허용 검사 끄기 각각 ·
+  temperature 다시(invoke·stream) · 키+SDK 없음에 데모 글 · 키 없어도 부름 · 못 쓸 때 규칙 추천을 AI 처럼 · 한도 끄기 · 캐시 적중을 한도에 셈 · 키를 로그에 · 로그인 의존 빼기 ·
+  거절을 성공으로 · 잘림을 성공으로 · 서버 대체 끄기 · 대체 경계 무시 · 모르는 모델 비용을 기본값으로 · 실패도 캐시 · 캐시 열쇠에 모델 없음 · 서비스가 근거 숫자를 안 넘김 ·
+  근거에 설정값 · 경로 등록 빠뜨림 · 한도 설정 오류를 기본값으로.
+- ★전체 pytest 가 찾은 것★: 첫 전체 실행 2 실패(`test_backtest_attribution_wiring` · `test_backtest_worker_death` — "no such table: backtest_runs").
+  ★내 경로 테스트 픽스처 탓★: 앱 시작이 임시 DB 에 표를 만들고 `backtest_runs._inited` 메모를 남겨, 뒤 테스트가 진짜 DB 에서 표 만들기를 건너뛰었다.
+  같은 71 파일 구간을 이 파일 빼고 돌리면 통과(건너뜀 10) · 넣으면 2 실패(건너뜀 22) — 기존 경로 테스트(`test_account_balance_route.py`)의 관용구대로 메모·싱글턴을
+  `monkeypatch` 로 되돌리게 고쳐 같은 구간 1392 통과(건너뜀 10).
+- 게이트: 새 파일 59 · 이웃(보호 목록·로그인 지도·유통 금지·인증·이야기·코파일럿) 297 통과 · 로그인 E2E 19 통과(지도 파일 = 화면) · ruff 0 ·
+  가로채지 않은 실제 경로: 로그아웃 401 · 로그인 200 `no_key` "서버에 Claude 키가 없어요" + 규칙 대체(next = 비중 계산) — 인증·프록시·경로·서비스 끝까지 · ★전체 pytest(픽스처 고친 뒤 다시) 8412 통과 · 건너뜀 11 · 실패 0★(27분) · 화면 PNG(로그인 지도 칩, 라이트·다크 1440 · 390) 사용자 허락(2026-10-22)
+- ★실제 Claude 응답은 관측 못 함★ — 이 환경엔 `ANTHROPIC_API_KEY`·`ant` CLI 가 없다. 키가 생기면 볼 것: 구조화 출력 스키마가 받아들여지는가(enum 크기) · 첫 호출 지연(스키마 컴파일) ·
+  실제 추천이 검사를 몇 개 통과하는가 · 토큰·비용 · 거절 분류가 나오는가.
+- 하지 않음: 화면(AI1 — 다음 커밋) · narrate·ask·draft·guide · 자동 호출 · 키가 없을 때 기존 이야기 데모 글 정리(그대로 — `error` 라벨은 이미 붙어 있다) · 기존 클라이언트의 기본 모델
+  바꾸기(이야기 기능은 `CLAUDE_MODEL` 또는 sonnet-4-6 그대로 — 단 `CLAUDE_MODEL` 을 구조화 출력을 받지 않는 모델로 두면 AI 추천은 HTTP 오류 사유로 못 보인다) ·
+  `invoke`/`stream` 의 모르는 모델 비용(아직 기본 모델 값으로 계산 — 구조화 호출만 None) · 비용을 DB 에 쌓기(사용량 통계 + 로그) · 프롬프트 캐싱 · 스트리밍 ·
+  근거에 `/run` 사실·관계 문장·기능 목록(AI2·AI5) · 글 숫자("세 개") 검사.

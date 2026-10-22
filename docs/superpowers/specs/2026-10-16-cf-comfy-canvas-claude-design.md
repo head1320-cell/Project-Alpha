@@ -268,6 +268,19 @@
   - 키 값은 응답·로그에 0. `source_coverage`·`capability` 테스트 관용구를 쓴다.
 - 기존 구멍을 같이 고친다: `claude_client` 의 "키 있음 + SDK 없음 = 데모 글을 정상처럼" → `error` 를 채운다.
 
+**구현 기록 (2026-10-22, AI0 + AI1 서버 — 사용자 결정: 경로는 suggest 하나 · temperature 를 보내지 않음 · 누를 때만 부름)**
+
+- ★경로를 바꿨다★ `POST /api/v1/assist/canvas/suggest`(위의 `/api/v1/allocation/graph/assist/…` 가 아니다). 로그인 지도는
+  '포트폴리오 설계'(`/api/v1/allocation` 접두사)를 열린 화면이라 말하고, 열린 화면의 접두사 아래는 잠글 수 없다
+  (`tests/test_login_access_map.py` ③). 화면은 열려 있고 AI 만 로그인이다. narrate·ask·draft·guide 는 같은 접두사 아래에 AI2~AI5 때 더한다.
+- 설치된 SDK 2.1(API `2026-10-21`)은 `temperature` 를 받지 않는다 → 기존 `invoke`·`stream` 이 보내던 것을 뺐다(전에는 키가 있어도 모든 실제 호출이 실패했다).
+- 구조화 출력은 `output_config.format`(json_schema) + `effort: "medium"` + 거절 대비 `fallbacks: "default"`(beta `server-side-fallback-2026-07-01`).
+  강제 `tool_choice` 는 쓰지 않는다(현행 모델에서 400). 개수 한도 3 은 구조화 출력이 받지 않는 제약이라 서버 검사가 건다. 모델은 `CLAUDE_MODEL` 또는 `claude-opus-5-5`.
+- 근거 묶음에 `/run` explain 사실·관계 문장·기능 목록은 아직 넣지 않았다 — suggest 는 구조·절차·오류만 쓴다(AI2·AI5 때). ★설정값은 싣지 않는다.★
+- 검사 ②는 화면의 `connectionProblem` 을 서버에 옮기지 않고, 붙인 문서를 `/validate` 해 ★새 오류가 없는지★ 본다(같은 판정을 한 곳에서).
+  새 노드 자신의 빈 입력·설정값 오류는 사람이 채울 몫이라 허용한다. 검사 ⑤(연습용 경고)는 suggest 에 결과 글이 없어 해당 없음.
+- 캐시 열쇠 = 근거 묶음 전체 + 모델 + 프롬프트 판(질문이 없는 suggest 의 "그래프 서명"). 실패는 캐시하지 않는다. 한도는 `CANVAS_ASSIST_HOURLY_LIMIT`(기본 30)이고 캐시 적중은 세지 않는다.
+
 ### AI1~AI5
 
 | | 무엇 | 입력 → 출력 | 화면 |
