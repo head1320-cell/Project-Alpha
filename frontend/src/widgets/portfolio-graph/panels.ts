@@ -73,3 +73,11 @@ export function floatInsets(el: HTMLElement | null): { left: number; right: numb
   }
   return out;
 }
+
+/** 오른쪽 아래에 떠 있는 미니맵(CF5b)의 왼쪽 위 — 캔버스 안 좌표. 없으면 null. 고른 노드 막대가 그 밑에 깔리지 않게 쓴다. */
+export function floatCorner(el: HTMLElement | null): { x: number; y: number } | null {
+  const m = el?.querySelector<HTMLElement>(".pg-minimap");
+  if (!el || !m || m.offsetParent === null) return null;
+  const c = el.getBoundingClientRect(), r = m.getBoundingClientRect();
+  return { x: r.left - c.left, y: r.top - c.top };
+}

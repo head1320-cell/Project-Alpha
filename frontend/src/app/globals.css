@@ -5083,8 +5083,9 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .pg-side-resize::after { transition: none; } }
 
 /* 안내·파일 안내 = 캔버스 아래 가운데 떠 있는 토스트 */
+/* 양옆 56 — 긴 안내(두 줄)가 왼쪽 아래 확대 단추 위에 얹혀 맞춰 보기를 누를 수 없었다(CF5c E2E 가 찾음, K4 다음 한 걸음 바와 같은 몫). 가운데는 그대로. */
 .pg-toasts { position: absolute; z-index: 9; bottom: 14px; left: var(--pg-mid); display: flex; flex-direction: column; align-items: center; gap: 8px;
-  width: max-content; max-width: min(640px, calc(100% - var(--pg-left-inset) - var(--pg-right-inset) - 24px)); transform: translateX(-50%); pointer-events: none; }
+  width: max-content; max-width: min(640px, calc(100% - var(--pg-left-inset) - var(--pg-right-inset) - 112px)); transform: translateX(-50%); pointer-events: none; }
 .pg-toasts:empty { display: none; }
 /* 토스트는 맞춰 보기가 비워 둔 아래 띠(64px)에 뜬다 — 그 사이 안내 한 줄은 비켜 준다. 환영 줄이 있으면 그 위에. */
 .pg-root:has(.pg-toasts:not(:empty)) .pg-hint { visibility: hidden; }

@@ -91,7 +91,7 @@ import { WIRE_SHAPES, wirePath, type WireShape } from "./wirePath";
 import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_KIND_PREFIX, PALETTE_MIME, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
-import { DEFAULT_PANELS, NARROW_Q, RIGHT_W, clampW, floatInsets, readPanels, savePanels, toggle, type Panels } from "./panels";
+import { DEFAULT_PANELS, NARROW_Q, RIGHT_W, clampW, floatCorner, floatInsets, readPanels, savePanels, toggle, type Panels } from "./panels";
 import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { NodeResultPanel } from "./NodeResultPanel";
 import { RecordsSheetBody } from "./RecordsSheet";
@@ -139,8 +139,8 @@ const TOOLBAR_H = 48;
 /** 고른 노드 막대의 자리(BS2) — 아래가 기본(상자 머리를 가리지 않게), 아래 공간이 모자라면 위로.
  *  캔버스 아래에는 안내 줄(약 60px)이 떠 있다 — 예전에는 아래 끝의 노드를 고르면 막대가 그 밑에 깔려 누를 수 없었다(E2E 가 찾음). */
 const SELBAR_ROOM = 14 + 44 + 64;
-/** 막대 폭(대략) — 가운데 맞춤이 떠 있는 판 밑으로 들어가는지 볼 때 쓴다. CF4a '정렬' 단추로 실측 255 → 321 이라 360(전과 같은 여유 약 40). */
-const SELBAR_W = 360;
+/** 막대 폭(대략) — 가운데 맞춤이 떠 있는 판 밑으로 들어가는지 볼 때 쓴다. CF4a '정렬' 단추로 실측 255 → 321 이라 360, CF5c '갈래' 단추로 실측 386 이라 430(여유 약 40). */
+const SELBAR_W = 430;
 /** 끌기 격자(BN N3) — 22 점 칸의 반. */
 const SNAP = 11;
 function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
@@ -160,7 +160,11 @@ function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
     const ins = floatInsets(st.domNode ?? null);
     const mid = (left + right) / 2;
     const align = mid + SELBAR_W / 2 > st.width - ins.right ? "end" : mid - SELBAR_W / 2 < ins.left ? "start" : "center";
-    const below = st.height - ins.bottom - bottom >= SELBAR_ROOM || top < SELBAR_ROOM;
+    // 아래에 두면 켜진 미니맵(CF5b) 밑에 깔리는지 — 깔리면 단추를 누를 수 없다(CF5c E2E 가 찾음). 위에 자리가 있으면 위로.
+    const mm = floatCorner(st.domNode ?? null);
+    const barL = align === "end" ? right - SELBAR_W : align === "start" ? left : mid - SELBAR_W / 2;
+    const underMap = !!mm && barL + SELBAR_W > mm.x && bottom + 14 + 44 > mm.y;
+    const below = (st.height - ins.bottom - bottom >= SELBAR_ROOM && !underMap) || top < SELBAR_ROOM;
     return `${below ? "b" : "t"}|${align}`;
   });
   const [side, align] = place.split("|") as ["b" | "t", "start" | "center" | "end"];
@@ -1285,6 +1289,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   // 선 모양(CF4c) — 보기만 바꾼다. 이 브라우저에 남긴다.
   const setWire = (w: WireShape) => { usePortfolioGraph.getState().setWireShape(w); saveView({ ...readView(), wire: w }); };
 
+  const multiPicked = s.picked.length > 1;
   const commands = useMemo<PaletteCommand[]>(() => [
     { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
     { id: "find", group: "보기", label: "캔버스에서 노드 찾기", keys: "Ctrl+F", run: () => setFindOpen(true) },
@@ -1324,6 +1329,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...(s.selectedId ? [{ id: "branch", group: "비교", label: "고른 노드에서 갈래 만들기",
                           hint: "그 노드와 하류를 복제해 설정만 바꿔 나란히 봐요(한 노드에 4개까지)",
                           run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.act(() => st.makeBranch(st.selectedId!)); } }] : []),
+    ...(multiPicked ? [{ id: "branch-picked", group: "비교", label: "고른 노드째 갈래 만들기",
+                                 hint: "고른 노드만 복제해 설정을 바꿔 나란히 봐요 — 뿌리는 흐름 맨 앞(한 뿌리에 4개까지)",
+                                 run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.branchPicked()); } }] : []),
     { id: "strategy-picked", group: "전략", label: "고른 노드를 전략으로 묶기", hint: "비중을 내는 노드가 들어 있어야 해요",
       run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.strategyPicked()); } },
     { id: "compare-picked", group: "비교", label: "고른 노드 견고성 비교",
@@ -1336,7 +1344,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.showMinimap, s.showLanes, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  ], [s.selectedId, multiPicked, s.showMinimap, s.showLanes, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -1685,6 +1693,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                         title={compareCheck.ok ? "고른 노드를 ‘견고성 비교’에 이어요 — 같이 무너지는지 봐요" : compareCheck.reason}
                         onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.comparePicked()); }}>
                   <Scale size={14} aria-hidden="true" /> 견고성 비교
+                </button>
+                <button type="button" className="pg-selbar-b pg-selbar-branch"
+                        title="고른 노드만 복제해 갈래를 만들어요 — 뿌리는 흐름 맨 앞, 밖으로 나가는 선은 잇지 않아요"
+                        onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.branchPicked()); }}>
+                  <GitBranch size={14} aria-hidden="true" /> 갈래
                 </button>
               </SelBar>
             )}

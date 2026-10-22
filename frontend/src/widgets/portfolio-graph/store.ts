@@ -262,8 +262,11 @@ export interface PgState {
   cutEdge: (id: string) => void;
   /** 선 사이에 노드를 끼운다(BT4) — 원래 선을 지우고 보내는 쪽 → 새 노드 → 받는 쪽으로 잇는다. 되돌리기 한 번. */
   insertOnEdge: (edgeId: string, kind: string, inPort: string, outPort: string, at?: { x: number; y: number }) => string | null;
-  /** 이 노드와 같은 전략 안의 하류를 복제해 갈래를 만든다 — 한 뿌리에 최대 4개. 돌려주는 값은 한 줄 안내. */
-  makeBranch: (rootId: string, strategyId?: string) => string;
+  /** 이 노드와 같은 전략 안의 하류를 복제해 갈래를 만든다 — 한 뿌리에 최대 4개. 돌려주는 값은 한 줄 안내.
+   *  `members` 를 주면 그 노드만(뿌리 = 그중 흐름 맨 앞) — 전략째 갈래와 같은 규칙(CF5c). */
+  makeBranch: (rootId: string, strategyId?: string, members?: string[]) => string;
+  /** 고른 노드째 갈래(CF5c) — 고른 노드만 복제한다. 포트폴리오 노드는 넣지 않고 그렇다고 말한다. */
+  branchPicked: () => string;
   /** 갈래를 지운다 — 복제 노드도 함께. */
   removeBranch: (id: string) => void;
   /** 갈래 승격(BN N2) — 복제의 설정을 원본으로 옮기고 갈래·복제를 지운다(되돌리기 한 번). 돌려주는 값은 한 줄 안내. */
@@ -724,21 +727,27 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     },
     setSimple: (simple) => set({ simple }),
     setGrowing: (growing) => set({ growing }),
-    makeBranch: (rootIdArg, strategyId) => {
+    makeBranch: (rootIdArg, strategyId, picked) => {
       const s = get();
       // 전략째 갈래(BN N2) — 뿌리 = 전략의 흐름 첫 노드, 범위 = 전략 구성원 전부.
+      // 고른 노드째 갈래(CF5c) — 같은 규칙: 뿌리 = 고른 것 중 흐름 첫 노드(고른 순서가 아니다), 범위 = 고른 노드만.
       const strat = strategyId ? s.groups.find((g) => g.id === strategyId && g.kind === "strategy") : undefined;
-      const members = strat ? topoOrder(s.nodes.map((n) => n.id), s.edges).filter((id) => strat.members.includes(id)) : null;
+      const want = strat ? strat.members : picked;
+      const members = want ? topoOrder(s.nodes.map((n) => n.id), s.edges).filter((id) => want.includes(id)) : null;
       const rootId = members?.[0] ?? rootIdArg;
       const root = s.nodes.find((n) => n.id === rootId);
       if (!root) return "갈래를 만들 노드를 찾지 못했어요.";
       // 갈래의 갈래는 원본 뿌리에 붙인다 — 비교 표가 한 원본을 기준으로 선다.
       const parent = s.branches.find((b) => rootId in b.map);
       const ofRoot = parent ? parent.map[rootId] : rootId;
+      // 고른 것은 모두 원본이거나 모두 뿌리와 같은 갈래 안이어야 한다 — 섞이면 어느 쪽 설정을 이을지 정할 수 없다.
+      if (picked && members!.some((id) => s.branches.find((b) => id in b.map) !== parent))
+        return "고른 노드가 원본과 갈래(또는 서로 다른 갈래)에 섞여 있어요 — 원본에서만, 또는 한 갈래 안에서만 골라 주세요.";
       if (parent && parent.root !== rootId) return "갈래는 뿌리 노드에서만 다시 만들 수 있어요 — 갈래 안의 뿌리(점선 틀의 맨 앞)를 골라 주세요.";
       const letter = nextBranchLetter(ofRoot, s.branches);
       if (!letter) return `한 노드에 갈래는 ${MAX_BRANCHES}개까지예요 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커져요. 쓰지 않는 갈래를 지우고 만들어 주세요.`;
-      const scope = branchScope(ofRoot, s.nodes, s.edges, s.groups, s.branches, members ?? undefined);
+      // 갈래 안에서 고른 것은 원본 이름으로 — 범위는 늘 원본 노드다(복제의 설정은 아래 `from` 이 잇는다).
+      const scope = branchScope(ofRoot, s.nodes, s.edges, s.groups, s.branches, members?.map((id) => parent?.map[id] ?? id));
       push();
       const taken = new Set(s.nodes.map((n) => n.id));
       const idOf = new Map<string, string>();
@@ -753,8 +762,16 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const from = (orig: string) => (src ? Object.entries(src.map).find(([, o]) => o === orig)?.[0] : undefined) ?? orig;
       const scoped = scope.map((id) => s.nodes.find((n) => n.id === id)!);
       // 갈래마다 한 칸씩 아래로 — 칸 높이 = 복제 범위의 높이(카드 실제 높이까지) + 틀 머리·여백(겹치지 않게).
-      const band = Math.max(...scoped.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog)))
-        - Math.min(...scoped.map((n) => n.position.y)) + 56 + 2 * 28 + 60;  // 카드 · 틀 머리 · 위아래 여백 · 틈
+      const bottomOf = (n: PgNode) => n.position.y + cardHeight(n.data.kind, s.catalog);
+      const top = Math.min(...scoped.map((n) => n.position.y));
+      const x0 = Math.min(...scoped.map((n) => n.position.x)), x1 = Math.max(...scoped.map((n) => n.position.x)) + NODE_W;
+      let bottom = Math.max(...scoped.map(bottomOf));
+      // 범위 밖인데 범위의 열·높이 안에 낀 원본 카드(고른 노드째 갈래 — 고른 둘 사이의 노드)도 센다. 안 세면 틀 머리가 그 카드 밑에 깔렸다(CF5c).
+      const copiesAll = new Set(s.branches.flatMap((b) => Object.keys(b.map)));
+      for (const n of s.nodes)
+        if (!scope.includes(n.id) && !copiesAll.has(n.id) && n.position.x < x1 && n.position.x + NODE_W > x0
+            && n.position.y >= top && n.position.y < bottom) bottom = Math.max(bottom, bottomOf(n));
+      const band = bottom - top + 56 + 2 * 28 + 60;  // 카드 · 틀 머리 · 위아래 여백 · 틈
       const dy = band * (1 + s.branches.filter((b) => b.of_root === ofRoot).length);
       const copies: PgNode[] = scope.map((id) => {
         const base = s.nodes.find((n) => n.id === from(id)) ?? s.nodes.find((n) => n.id === id)!;
@@ -774,6 +791,14 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       set({ nodes: [...s.nodes, ...copies], edges: [...s.edges, ...newEdges], branches: [...s.branches, branch],
             selectedId: branch.root, picked: [branch.root], tab: "settings" });
       return `‘${branch.label}’를 만들었어요 — 노드 ${scope.length}개를 복제했어요. 설정을 바꾸고 계산하면 원본과 다른 값만 나란히 보여요.`;
+    },
+    branchPicked: () => {
+      const s = get();
+      const ok = s.picked.filter((id) => s.nodes.find((n) => n.id === id)?.data.kind !== PORTFOLIO_NODE);
+      if (!ok.length) return "포트폴리오 노드는 갈래로 복제하지 않아요 — 계산 노드를 골라 주세요.";
+      const before = s.branches.length;
+      const msg = get().makeBranch("", undefined, ok);
+      return get().branches.length > before && ok.length < s.picked.length ? `${msg} 포트폴리오 노드는 넣지 않았어요.` : msg;
     },
     removeBranch: (id) => {
       const s = get();
