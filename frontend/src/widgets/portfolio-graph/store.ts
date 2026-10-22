@@ -67,6 +67,7 @@ import {
   type NodeCatalogEntry,
   type NodeStatus,
   type PgNode,
+  type RunEvent,
   type RunReport,
   type ValidateReport,
 } from "@/entities/portfolio-graph";
@@ -86,6 +87,11 @@ export interface RunRecord {
 }
 
 interface Snapshot { nodes: PgNode[]; edges: Edge[]; groups: GraphGroup[]; branches?: GraphBranch[] }
+
+/** 실행 줄(CF5a) — 이번 계산의 노드별 진행. 곁줄 이벤트로 바뀌고, 끝나면 ★보고서로 확정★한다(`final`). `lost` = 곁줄이 끊겼다. */
+export type RunPhase = "waiting" | "running" | "done";
+export interface RunCell { phase: RunPhase; status?: NodeStatus; elapsed_ms?: number | null }
+export interface RunProgress { order: string[]; cells: Record<string, RunCell>; lost: boolean; final: boolean }
 
 export interface PgState {
   catalog: NodeCatalogEntry[] | null;
@@ -120,6 +126,7 @@ export interface PgState {
   running: boolean;
   /** 지금 계산 중인 노드들(부분 계산이면 대상의 조상) — 경로를 밝힌다. */
   runningIds: string[] | null;
+  progress: RunProgress | null;
   /** "여기까지 계산" 에 마우스를 올렸을 때 계산될 노드 — 누르기 전에 무엇이 돌지 보인다. */
   preview: string[] | null;
   runError: string | null;
@@ -193,6 +200,9 @@ export interface PgState {
   setCatalogMeta: (m: PgState["catalogMeta"]) => void;
   startRun: (ids?: string[] | null) => void;
   finishRun: (r: RunReport | null, err?: string | null) => void;
+  /** 곁줄 이벤트(CF5a) — 확정된 뒤(늦게 온 이벤트)는 무시한다. */
+  applyRunEvent: (ev: RunEvent) => void;
+  progressLost: () => void;
   setPreview: (ids: string[] | null) => void;
   undo: () => void;
   redo: () => void;
@@ -342,6 +352,9 @@ export function causePath(id: string, edges: { source: string; target: string }[
 }
 
 const clean = (nodes: PgNode[]) => nodes.map((n) => ({ ...n, selected: false, dragging: false }));
+/** 계산을 시작할 때 — 서버가 순서(`plan`)를 알리기 전까지는 계산할 노드를 그대로 대기로 둔다. */
+const waitingFor = (ids: string[]): RunProgress =>
+  ({ order: ids, lost: false, final: false, cells: Object.fromEntries(ids.map((id) => [id, { phase: "waiting" as const }])) });
 /** 선 복사본(복제·갈래·붙여넣기)은 경유점을 가져가지 않는다(CF4c) — 노드가 다른 자리로 가니 옛 길은 틀린 길이다. 화면 선의 `data` 는 경유점만 담는다. */
 const bare = (e: Edge): Edge => { const { data: _via, ...rest } = e; void _via; return rest; };
 /** 쌓기·맞추기에 쓰는 카드 높이(CF4a) — 화면에서 잰 높이와 카드 높이 중 큰 값(막힘 사유로 자란 카드 · 아직 안 잰 카드). */
@@ -403,6 +416,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     picked: [],
     running: false,
     runningIds: null,
+    progress: null,
     preview: null,
     runError: null,
     runs: [],
@@ -650,9 +664,11 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     setProcHover: (procHover) => set({ procHover }),
     setCatalogMeta: (catalogMeta) => set({ catalogMeta }),
     startRun: (ids = null) => set((s) => ({ running: true, runError: null, runningIds: ids, preview: null, cause: null,
+                                            progress: waitingFor(ids ?? s.nodes.map((n) => n.id)),
                                             runSigs: deepSigs(s.nodes, s.edges) })),
     finishRun: (report, err = null) => set((s) => {
-      if (!report) return { running: false, runningIds: null, runError: err, runSigs: null };
+      if (!report) return { running: false, runningIds: null, runError: err, runSigs: null,
+                            progress: s.progress && { ...s.progress, final: true } };
       const partial = report.partial?.targets ?? null;
       let merged = report;
       if (partial && s.report) {
@@ -673,13 +689,26 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       // 계산하지 않은 낡은 노드는 계속 낡은 것으로 남는다).
       const sigs = s.runSigs ?? deepSigs(s.nodes, s.edges);
       const fresh = Object.fromEntries(Object.keys(report.nodes).map((id) => [id, sigs[id]]));
+      const order = report.partial?.computed ?? report.order ?? Object.keys(report.nodes);
       return {
         running: false, runningIds: null, runError: err, runSigs: null,
+        progress: { order, lost: s.progress?.lost ?? false, final: true,
+                    cells: Object.fromEntries(order.filter((id) => report.nodes[id]).map((id) =>
+                      [id, { phase: "done" as const, status: report.nodes[id].status, elapsed_ms: report.nodes[id].elapsed_ms ?? null }])) },
         report: merged,
         snap: partial && s.report ? { ...(s.snap ?? {}), ...fresh } : fresh,
         runs: [record(report, partial), ...s.runs].slice(0, RUNS),
       };
     }),
+    applyRunEvent: (ev) => set((s) => {
+      const p = s.progress;
+      if (!p || p.final) return {};
+      if (ev.type === "plan") return { progress: { ...p, order: ev.order, cells: Object.fromEntries(ev.order.map((id) => [id, p.cells[id] ?? { phase: "waiting" as const }])) } };
+      if (ev.type === "node_start") return { progress: { ...p, cells: { ...p.cells, [ev.id]: { phase: "running" } } } };
+      if (ev.type === "node_done") return { progress: { ...p, cells: { ...p.cells, [ev.id]: { phase: "done", status: ev.status, elapsed_ms: ev.elapsed_ms } } } };
+      return {};
+    }),
+    progressLost: () => set((s) => (s.progress && !s.progress.final ? { progress: { ...s.progress, lost: true } } : {})),
     setPreview: (preview) => set({ preview }),
     setStages: (stages) => set({ stages }),
     setFocusGroup: (focusGroup) => set((s) => ({

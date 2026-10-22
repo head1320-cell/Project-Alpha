@@ -69,10 +69,10 @@ export function extractErrorDetail(err: unknown, fallback: string): string {
 /** JSON POST 단축 — 응답 파싱/에러 처리는 호출자 책임(기존 동작 유지).
  *  ★인증 헤더는 여기서 한 번만 붙인다★(AC7) — 토큰이 없으면 아무것도 붙지 않으므로
  *  공개 라우트는 이전과 똑같이 동작한다. */
-export const postJson = (path: string, body: unknown) =>
+export const postJson = (path: string, body: unknown, headers?: Record<string, string>) =>
   fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", ...headers, ...authHeaders() },
     body: JSON.stringify(body),
   });
 

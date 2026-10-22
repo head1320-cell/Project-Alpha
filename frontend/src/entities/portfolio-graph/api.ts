@@ -4,7 +4,7 @@
  * 오류를 200 으로 돌려준다 — 여기서 HTTP 오류는 "서버에 닿지 못했다" 뿐이다.
  */
 import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
-import type { BranchEvidence, GraphDoc, NodeCatalog, RunReport, SaveResult, ValidateReport } from "./types";
+import type { BranchEvidence, GraphDoc, NodeCatalog, RunEvent, RunReport, SaveResult, ValidateReport } from "./types";
 
 const BASE = "/api/v1/allocation/graph";
 
@@ -21,10 +21,37 @@ export const portfolioGraphApi = {
     readJson<NodeCatalog>(await getWithAuth(`${BASE}/node-types`), "노드 카탈로그 조회"),
   validate: async (doc: GraphDoc): Promise<ValidateReport> =>
     readJson<ValidateReport>(await postJson(`${BASE}/validate`, doc), "그래프 검증"),
-  /** `targets` 를 주면 그 노드들과 조상만 계산한다(BL1 "여기까지 계산") — 관문 판정은 없다. */
-  run: async (doc: GraphDoc, targets?: string[]): Promise<RunReport> =>
-    readJson<RunReport>(await postJson(targets?.length ? `${BASE}/run?targets=${encodeURIComponent(targets.join(","))}` : `${BASE}/run`, doc),
+  /** `targets` 를 주면 그 노드들과 조상만 계산한다(BL1 "여기까지 계산") — 관문 판정은 없다.
+   *  `progressId` 를 주면 서버가 노드 진행을 그 곁줄에 흘린다(CF5a — `followProgress`). ★주소는 그대로★ 두고 머리글로 보낸다
+   *  (`/run` 주소를 가로채는 곳이 많다 — 질의 문자열이 붙으면 그 패턴이 조용히 빗나간다). 보고서는 같다. */
+  run: async (doc: GraphDoc, targets?: string[], progressId?: string): Promise<RunReport> =>
+    readJson<RunReport>(await postJson(targets?.length ? `${BASE}/run?targets=${encodeURIComponent(targets.join(","))}` : `${BASE}/run`, doc,
+                                       progressId ? { "X-Graph-Progress": progressId } : undefined),
                         "그래프 실행"),
+  /** 진행 곁줄(CF5a, SSE) — `end` 면 끝, 끊기거나(`end` 없이 닫힘)·`timeout`·HTTP 오류면 던진다(화면이 "진행을 받지 못했어요"라고 말한다). */
+  followProgress: async (rid: string, onEvent: (ev: RunEvent) => void, signal?: AbortSignal): Promise<void> => {
+    const r = await getWithAuth(`${BASE}/progress/${encodeURIComponent(rid)}`, { signal });
+    if (!r.ok || !r.body) throw new Error(`진행 곁줄 실패 (HTTP ${r.status})`);
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) throw new Error("진행 곁줄이 끝을 알리지 않고 닫혔어요");
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop() ?? "";
+      for (const part of parts) {
+        const line = part.split("\n").find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        let ev: RunEvent;
+        try { ev = JSON.parse(line.slice(5).trim()) as RunEvent; } catch { continue; }
+        if (ev.type === "end") return;
+        if (ev.type === "timeout") throw new Error("진행 곁줄이 계산 시작을 기다리다 끝났어요");
+        onEvent(ev);
+      }
+    }
+  },
   /** 저장은 여기서만 — 서버가 다시 계산해 미리보기 해시가 같을 때만 한 번 쓴다(BK0). */
   save: async (doc: GraphDoc, nodeId: string, previewHash: string): Promise<SaveResult> =>
     readJson<SaveResult>(await postJson(`${BASE}/save`, { graph: doc, node_id: nodeId, preview_hash: previewHash }), "노드 저장"),

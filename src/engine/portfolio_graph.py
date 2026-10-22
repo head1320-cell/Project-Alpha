@@ -31,7 +31,7 @@ import json
 import logging
 import math
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
@@ -566,7 +566,8 @@ def _briefs_ok(spec: NodeSpec, values: Mapping, registry: Registry) -> dict[str,
     return out
 
 
-def run(graph: Any, registry: Registry, targets: list[str] | None = None) -> dict:
+def run(graph: Any, registry: Registry, targets: list[str] | None = None,
+        on_node: Callable[[dict], None] | None = None) -> dict:
     """검증 → 위상 순서 실행. 반환:
     `{"ok", "errors", "order", "nodes": {id: {type, status, reason, view, provenance,
     explain, lineage, view_hash}}}`.
@@ -574,8 +575,11 @@ def run(graph: Any, registry: Registry, targets: list[str] | None = None) -> dic
     `targets` 를 주면 ★그 노드들과 조상만★ 계산한다(BL1 "여기까지 계산" — n8n 의 Execute step). 나머지 노드는
     결과에 **없다** — 이전 결과를 섞는 것은 화면의 일이고, 화면은 그것을 "이전 계산" 으로 표시한다. 보고서에
     `partial: {targets, computed}` 가 붙는다. 계산한 노드의 값은 전체 계산과 같다(같은 함수·같은 입력).
+
+    `on_node` 를 주면 진행을 알린다(CF5a 실행 줄) — `plan`(계산할 순서) · 노드마다 `node_start` → `node_done {status, elapsed_ms}`.
+    ★알리기만 한다★ — 보고서는 콜백이 있든 없든 같다(테스트가 건다).
     """
-    report, values, params = _execute(graph, registry, targets)
+    report, values, params = _execute(graph, registry, targets, on_node)
     if report.get("nodes"):
         report["edges"] = _handoffs(graph, registry, report, values, params)
     return report
@@ -706,7 +710,30 @@ def _ancestors(targets: list[str], incoming: dict[str, dict]) -> set[str]:
     return need
 
 
+def _announced(order: list[str], results: dict[str, dict], on_node: Callable[[dict], None] | None) -> Iterator[str]:
+    """계산 순서를 하나씩 내주며 진행을 알린다(CF5a) — 반복문 몸통은 그대로 둔다. 다음 노드를 달라고 할 때 앞 노드는 끝났다
+    (`continue` 로 건너뛴 막힘·설정 오류 노드도 결과가 있다)."""
+    if on_node is None:
+        yield from order
+        return
+    on_node({"type": "plan", "order": list(order)})
+    prev: str | None = None
+    for nid in order:
+        if prev is not None:
+            on_node(_done_event(prev, results[prev]))
+        on_node({"type": "node_start", "id": nid})
+        yield nid
+        prev = nid
+    if prev is not None:
+        on_node(_done_event(prev, results[prev]))
+
+
+def _done_event(nid: str, r: dict) -> dict:
+    return {"type": "node_done", "id": nid, "status": r["status"], "elapsed_ms": r.get("elapsed_ms")}
+
+
 def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
+             on_node: Callable[[dict], None] | None = None,
              ) -> tuple[dict, dict[str, dict[str, Any]], dict[str, Any]]:
     """`run` 의 본체 — 보고서와 함께 노드별 내부 값·파라미터를 돌려준다(저장 액션 전용)."""
     doc = _document_errors(graph)
@@ -738,7 +765,7 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
 
     results: dict[str, dict] = {}
     values: dict[str, dict[str, Any]] = {}
-    for nid in order:
+    for nid in _announced(order, results, on_node):
         raw_type = str(nodes[nid].get("type"))
         spec = specs[nid]
         if nid in own_error:

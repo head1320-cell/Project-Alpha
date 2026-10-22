@@ -11,11 +11,15 @@
  * 알약 = 서버 요약 수(`summary.confirmed/total`) + 관문 8개의 작은 점(레일과 같은 상태 클래스 — 색만이 아니라 모양도 다르다).
  * 누르면 지금의 레일 전체가 알약 아래 카드로 펼쳐지고, Esc·바깥 누르기로 접힌다. 펼침 여부는 이 브라우저에 남는다.
  * 새로 실패한 관문이 생기면 알약이 한 번 강조된다(감속 모션이면 없음).
+ *
+ * CF5a — 알약은 실행 줄도 된다(ComfyUI 큐). 계산하는 동안 알약 글이 "계산 중 k/n · ‘지금 노드’" 가 되고 알약 아래 한 줄 칩이
+ * 노드마다 대기·계산 중·완료·막힘·실패를 보인다(진행은 곁줄 — 끊기면 그렇다고 말한다). 끝나면 칩은 사라지고 카드에 '이번 계산' 목록
+ * (상태·시간)이 남는다 — 이 목록은 보고서로 확정한 것이다. 칩·줄을 누르면 그 노드로 간다.
  */
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { GateReport, GateState, ProcedureSuggestion } from "@/entities/portfolio-graph";
-import { usePortfolioGraph } from "./store";
+import { usePortfolioGraph, type RunCell } from "./store";
 
 const STATE_TEXT: Record<GateState | "idle", string> = {
   confirmed: "확인", assumed: "가정", partial: "절반 확인", unknown: "몰라요",
@@ -30,6 +34,16 @@ const REASON_TEXT: Record<string, string> = {
  * 예전에는 화면이 이름 목록을 따로 들고 있어 서버와 어긋날 수 있었다.
  */
 
+const DONE_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
+/** 줄 상태 글 — 확정된 뒤에도 끝나지 않은 노드는 '계산하지 못함'(계산이 실패했거나 서버가 그 노드를 알리지 않았다). */
+const cellText = (c: RunCell, final: boolean) =>
+  c.phase === "done" && c.status ? DONE_TEXT[c.status] : final ? "계산하지 못함" : c.phase === "running" ? "계산 중" : "대기";
+const msText = (c: RunCell) => {
+  if (c.phase !== "done" || typeof c.elapsed_ms !== "number") return "—";            // 막힘·대기 — 계산하지 않았다
+  const ms = c.elapsed_ms;
+  return ms < 10 ? "0.01초 미만" : `${(ms / 1000).toFixed(ms < 1000 ? 2 : 1)}초`;    // 0.00초는 '안 걸림'으로 읽힌다
+};
+
 export const RAIL_KEY = "alpha_pg_rail";
 const readOpen = () => { try { return localStorage.getItem(RAIL_KEY) === "open"; } catch { return false; } };
 const saveOpen = (v: boolean) => { try { localStorage.setItem(RAIL_KEY, v ? "open" : "closed"); } catch { /* 이번 방문에만 */ } };
@@ -37,7 +51,7 @@ const saveOpen = (v: boolean) => { try { localStorage.setItem(RAIL_KEY, v ? "ope
 let seenFailed = new Set<string>();
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function GateRail({ report, note = null, stale = false, byGate = null, nodeLabel, onFocusNode, onApply }: {
+export function GateRail({ report, note = null, stale = false, byGate = null, nodeLabel, nodeBadge, onFocusNode, onApply }: {
   report: GateReport | null;
   note?: string | null;
   /** 결과가 있는 노드 중 낡은 것이 있다(BT5) — 관문은 그래프 전체 판정이라 지우지 않고 "예전 결과 기준"이라고 말한다. */
@@ -45,10 +59,16 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
   /** 관문마다 잴 수 있게 하는 한 걸음(BT2 — 서버 절차의 `by_gate`). */
   byGate?: Record<string, ProcedureSuggestion | null> | null;
   nodeLabel?: (id: string) => string;
+  /** 실행 줄(CF5a) — 카드 머리와 같은 번호와 쉬운 이름. */
+  nodeBadge?: (id: string) => { num: number | null; name: string };
   onFocusNode?: (id: string) => void;
   onApply?: (s: ProcedureSuggestion) => void;
 }) {
   const meta = usePortfolioGraph((s) => s.catalogMeta);
+  const progress = usePortfolioGraph((s) => s.progress);
+  const running = usePortfolioGraph((s) => s.running);
+  const live = running && progress && !progress.final ? progress : null;
+  const badge = (id: string) => nodeBadge?.(id) ?? { num: null, name: id };
   const open = usePortfolioGraph((s) => s.openGate);
   const setOpen = usePortfolioGraph((s) => s.setOpenGate);
   const [expanded, setExpanded] = useState(false);
@@ -95,7 +115,10 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
   /** 선은 두 역 사이의 것 — 둘 다 지나왔을 때만 잇는다(건너뛴 관문은 통과한 관문이 아니다). */
   const link = (i: number) => (!report || i === 0 ? "" : passes(gates[i - 1].state) && passes(gates[i].state)
     ? " pg-stn--link-on" : " pg-stn--link-off");
-  const pillText = report ? `${stale ? "예전 결과 기준 · " : ""}관문 ${report.summary.confirmed}/${report.summary.total} 확인`
+  const doneN = live ? live.order.filter((id) => live.cells[id]?.phase === "done").length : 0;
+  const current = live?.order.find((id) => live.cells[id]?.phase === "running") ?? null;
+  const pillText = live ? (live.lost ? "계산 중 · 진행을 받지 못했어요" : `계산 중 ${doneN}/${live.order.length}${current ? ` · ‘${badge(current).name}’` : ""}`)
+    : report ? `${stale ? "예전 결과 기준 · " : ""}관문 ${report.summary.confirmed}/${report.summary.total} 확인`
     : note ? "관문은 전체를 계산해야 봐요" : "계산하면 관문을 확인해요";
 
   return (
@@ -104,13 +127,35 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
               data-alert={alert ? "new" : undefined} title="이 결과를 어디까지 믿을 수 있을까요 — 눌러서 관문 8개 보기"
               onClick={() => toggle(!expanded)}>
         <span className="pg-rail-pill-text">{pillText}</span>
-        <span className="pg-rail-dots" aria-hidden="true">
-          {gates.map((g) => (
-            <span key={g.key} className={`pg-rail-dot pg-stn--${g.state}`} data-gate={g.key}><span className="pg-stn-dot" /></span>
-          ))}
-        </span>
+        {live ? (
+          <span className="pg-rail-bar" aria-hidden="true"><span style={{ width: `${live.order.length ? (doneN / live.order.length) * 100 : 0}%` }} /></span>
+        ) : (
+          <span className="pg-rail-dots" aria-hidden="true">
+            {gates.map((g) => (
+              <span key={g.key} className={`pg-rail-dot pg-stn--${g.state}`} data-gate={g.key}><span className="pg-stn-dot" /></span>
+            ))}
+          </span>
+        )}
         <ChevronDown size={15} aria-hidden="true" className={`pg-rail-chev${expanded ? " on" : ""}`} />
       </button>
+      {live && (
+        <div className="pg-runline">
+          <ol aria-label="이번 계산 진행">
+            {live.order.map((id) => {
+              const c = live.cells[id] ?? { phase: "waiting" as const };
+              const b = badge(id);
+              return (
+                <li key={id}>
+                  <button type="button" className="pg-runchip" data-node-id={id} data-phase={c.phase} data-status={c.status}
+                          aria-label={`${b.num ? `${b.num}. ` : ""}${b.name} — ${cellText(c, false)}`} title={`${b.name} — ${cellText(c, false)}`}
+                          onClick={() => onFocusNode?.(id)}>{b.num ?? "·"}</button>
+                </li>
+              );
+            })}
+          </ol>
+          {live.lost && <p className="pg-runline-note" role="status">진행을 받지 못했어요 — 결과는 계산이 끝나면 보여요.</p>}
+        </div>
+      )}
       {expanded && (
         <div id="pg-rail-card" className="pg-rail-card">
           <section className="pg-rail" aria-label="증거 관문">
@@ -161,6 +206,27 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
               </div>
             )}
           </section>
+          {progress && (
+            <section className="pg-runlist-wrap" aria-label="이번 계산">
+              <h3 className="pg-runlist-h">{progress.final ? "이번 계산" : "계산하는 중"}</h3>
+              <ol className="pg-runlist">
+                {progress.order.map((id) => {
+                  const c = progress.cells[id] ?? { phase: "waiting" as const };
+                  const b = badge(id);
+                  return (
+                    <li key={id} className="pg-runrow" data-node-id={id} data-phase={c.phase} data-status={c.status}>
+                      <button type="button" onClick={() => onFocusNode?.(id)}>
+                        <span className="pg-runrow-n">{b.num ?? "—"}</span>
+                        <span className="pg-runrow-name">{b.name}</span>
+                        <span className="pg-runrow-state">{cellText(c, progress.final)}</span>
+                        <span className="pg-runrow-time">{msText(c)}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          )}
         </div>
       )}
     </div>

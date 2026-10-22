@@ -1117,13 +1117,22 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     addAt(kind, rf.current.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
   }, [addAt, applyLoad, insertSpot]);
 
+  // 실행 줄(CF5a) — 진행은 곁줄로 받는다. 곁줄을 먼저 열고 계산한다(늦게 붙어도 서버가 쌓인 것부터 준다). 곁줄이 끊기면 그렇다고 말하고,
+  // 계산과 결과는 `/run` 이 그대로 낸다. 다음 계산을 시작하면 앞 곁줄은 닫는다.
+  const follower = useRef<AbortController | null>(null);
   const run = useCallback(async (targets?: string[]) => {
     const st = usePortfolioGraph.getState();
     const ids = targets?.length ? ancestorsOf(targets, st.edges) : st.nodes.map((n) => n.id);
     st.startRun(ids);
     st.setOpenGate(null);
+    follower.current?.abort();
+    const ctl = new AbortController();
+    follower.current = ctl;
+    const rid = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    portfolioGraphApi.followProgress(rid, (ev) => usePortfolioGraph.getState().applyRunEvent(ev), ctl.signal)
+      .catch(() => { if (!ctl.signal.aborted) usePortfolioGraph.getState().progressLost(); });
     try {
-      st.finishRun(await portfolioGraphApi.run(toDoc(st.nodes, st.edges), targets?.length ? targets : undefined));
+      st.finishRun(await portfolioGraphApi.run(toDoc(st.nodes, st.edges), targets?.length ? targets : undefined, rid));
     } catch (e) {
       st.finishRun(null, (e as Error).message);
     }
@@ -1332,12 +1341,17 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     });
   }, []);
   fixRef.current = applySuggestion;
-  const nodeLabel = useCallback((id: string) => {
+  /** 노드 번호(캔버스 흐름 순서 — 카드 머리 번호와 같다)와 쉬운 이름. */
+  const nodeBadge = useCallback((id: string) => {
     const n = s.nodes.find((x) => x.id === id);
     const e = s.catalog?.find((c) => c.type === n?.data.kind);
     const num = order.indexOf(id);
-    return `${num >= 0 ? `${num + 1}. ` : ""}${e?.plain_label ?? n?.data.kind ?? id}`;
+    return { num: num >= 0 ? num + 1 : null, name: e?.plain_label ?? n?.data.kind ?? id };
   }, [s.nodes, s.catalog, order]);
+  const nodeLabel = useCallback((id: string) => {
+    const b = nodeBadge(id);
+    return `${b.num ? `${b.num}. ` : ""}${b.name}`;
+  }, [nodeBadge]);
   // BT3 — 다음 한 걸음(서버). [다음에] 는 이 그래프 모양(노드 종류 모음)에 대해 이번 방문 동안만 숨긴다.
   const [dismissedNext, setDismissedNext] = useState<Set<string>>(() => new Set());
   const shapeKey = useMemo(() => [...new Set(s.nodes.map((n) => n.data.kind))].sort().join(","), [s.nodes]);
@@ -1492,7 +1506,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
       {/* 진행상황 알약(BQ Q2) — 캔버스 위 가운데. 간단히 보기에서는 그 위에 한 줄로. */}
       {s.simple && <GateRail report={s.report?.gates ?? null} stale={s.reportStale}
                   note={s.report?.partial ? s.report.gates_reason ?? null : null}
-                  byGate={s.validation?.procedure?.by_gate ?? null} nodeLabel={nodeLabel}
+                  byGate={s.validation?.procedure?.by_gate ?? null} nodeLabel={nodeLabel} nodeBadge={nodeBadge}
                   onFocusNode={focusNode} onApply={applySuggestion} />}
       {s.simple && (
         <SimpleView nodes={s.nodes} edges={s.edges} groups={s.groups} catalog={s.catalog ?? []}
@@ -1660,7 +1674,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
           <p className="pg-sr-live" aria-live="polite">{announce}</p>
           {!s.simple && <GateRail report={s.report?.gates ?? null} stale={s.reportStale}
                   note={s.report?.partial ? s.report.gates_reason ?? null : null}
-                  byGate={s.validation?.procedure?.by_gate ?? null} nodeLabel={nodeLabel}
+                  byGate={s.validation?.procedure?.by_gate ?? null} nodeLabel={nodeLabel} nodeBadge={nodeBadge}
                   onFocusNode={focusNode} onApply={applySuggestion} />}
           {s.catalog && s.nodes.length === 0 && (
             <div className="pg-empty-start">

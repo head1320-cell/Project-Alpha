@@ -8,14 +8,17 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Header, Path, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.api.allocation_graph_nodes import PORT_PLAIN, PORT_TYPES, REGISTRY, STAGES
 from src.api.allocation_graph_relations import briefs_of, relations
 from src.api.allocation_graph_roles import NEED_PLAIN
+from src.api.graph_progress import RID_PATTERN, ProgressHub
 from src.domain import design_procedure as proc
 from src.domain.workflow_gates import GATES
 from src.domain.workflow_gates import evaluate as evaluate_gates
@@ -140,16 +143,45 @@ def _relations(graph: Any, kinds: dict[str, dict], briefs: dict | None = None) -
     return relations(graph["nodes"], edges, kinds, PORT_PLAIN, briefs)
 
 
+#: 진행 곁줄(CF5a) — 프로세스 안 통(`graph_progress` 참고).
+_PROGRESS = ProgressHub()
+
+
 @router.post("/run")
-def graph_run(graph: Any = Body(...), targets: str | None = Query(None, max_length=2000)) -> dict:
+def graph_run(graph: Any = Body(...), targets: str | None = Query(None, max_length=2000),
+              progress: str | None = Header(None, alias="X-Graph-Progress", pattern=RID_PATTERN, max_length=64)) -> dict:
     """위상 순서로 실행. 노드별 `{status, reason, view, provenance}` — 실패는 번지되
     지어내지 않는다(`portfolio_graph` 의 약속).
 
     `?targets=a,b` 는 ★그 노드들과 조상만★ 계산한다(BL1 "여기까지 계산"). 부분 계산에는 증거 관문 판정을 내지
     않는다 — 관문은 그래프 전체를 보고 판정하는데 계산하지 않은 노드를 "건너뜀" 으로 셀 수 없다(`gates: null` + 사유).
+
+    머리글 `X-Graph-Progress: <rid>` 를 주면 노드 진행을 그 통에 흘린다(CF5a — `GET /progress/{rid}` 가 읽는다). 보고서는 같다.
+    ★주소가 아니라 머리글★ — `/run` 주소를 가로채는 화면 테스트가 많아 질의 문자열이 붙으면 그 패턴이 조용히 빗나간다.
     """
+    if not isinstance(progress, str):            # 없음 — 함수를 직접 부르면(테스트) 기본값이 Header 객체다
+        return _graph_run(graph, targets, None)
+    try:
+        return _graph_run(graph, targets, lambda ev: _PROGRESS.emit(progress, ev))
+    finally:
+        _PROGRESS.close(progress)
+
+
+@router.get("/progress/{rid}")
+def graph_progress(rid: str = Path(..., pattern=RID_PATTERN, max_length=64)) -> StreamingResponse:
+    """계산 진행 곁줄(SSE) — `plan` · `node_start` · `node_done` 다음 `end`(시작하지 않은 rid 는 `timeout`). 보기일 뿐이다 —
+    최종 상태·시간은 `/run` 보고서가 정한다."""
+    def gen():
+        for ev in _PROGRESS.follow(rid):
+            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _graph_run(graph: Any, targets: str | None, on_node) -> dict:
     ids = [t for t in (targets or "").split(",") if t] if targets is not None else None
-    report = pg.run(graph, REGISTRY, targets=ids)
+    report = pg.run(graph, REGISTRY, targets=ids, on_node=on_node)
     report["relations"] = _relations(graph, _kinds(), briefs_of(report.get("nodes") or {}))
     if ids is not None:
         report["gates"] = None

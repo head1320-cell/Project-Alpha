@@ -261,6 +261,14 @@ export interface ValidateReport {
 
 export type NodeStatus = "ok" | "blocked" | "failed";
 
+/** 계산 진행 곁줄 이벤트(CF5a · `GET /allocation/graph/progress/{rid}`) — 보기일 뿐, 최종 상태·시간은 보고서가 정한다. */
+export type RunEvent =
+  | { type: "plan"; order: string[] }
+  | { type: "node_start"; id: string }
+  | { type: "node_done"; id: string; status: NodeStatus; elapsed_ms: number | null }
+  | { type: "end" }
+  | { type: "timeout" };
+
 export type TrustState = "confirmed" | "assumed" | "unknown" | "failed";
 
 /** 서버가 만든 쉬운 말 설명(BJ1) — 화면은 그리기만 한다. */
