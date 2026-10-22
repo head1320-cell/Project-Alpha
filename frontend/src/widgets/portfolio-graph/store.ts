@@ -56,6 +56,7 @@ import {
   cardWidth,
   topoOrder,
   NEW_NODE,
+  placeSuggestion,
   type ProcedureSuggestion,
   type GraphBlock,
   type GraphBranch,
@@ -139,6 +140,8 @@ export interface PgState {
   showLanes: boolean;
   /** 선 모양(CF4c) — 곡선·직각·직선. 보기만 바꾼다. */
   wireShape: WireShape;
+  /** 추천 유령(CF6) 켬/끔 — 보기 설정. */
+  showGhosts: boolean;
   /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
   tab: "story" | "settings" | "detail" | "branches" | "wire";
   /** 오른쪽 판 "선" 탭이 보이는 선(BT4). */
@@ -225,6 +228,7 @@ export interface PgState {
   setMinimap: (v: boolean) => void;
   setLanes: (v: boolean) => void;
   setWireShape: (v: WireShape) => void;
+  setShowGhosts: (v: boolean) => void;
   setTab: (t: PgState["tab"]) => void;
   setExpert: (v: boolean) => void;
   setOpenGate: (k: string | null) => void;
@@ -255,7 +259,7 @@ export interface PgState {
    * `connect` 는 선만 잇는다. 되돌리기 한 번. 새 노드는 보내는 쪽 오른쪽 열(없으면 받는 쪽 왼쪽 열)에 놓는다.
    * 돌려주는 값은 새 노드 id(없으면 null).
    */
-  applySuggestion: (sug: ProcedureSuggestion) => string | null;
+  applySuggestion: (sug: ProcedureSuggestion, at?: { x: number; y: number }) => string | null;
   /** 선을 골라 "선" 탭을 연다(BT4). null 이면 닫는다. */
   selectEdge: (id: string | null) => void;
   /** 선을 끊는다(BT4) — 되돌리기 한 번. */
@@ -429,6 +433,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     showMinimap: false,
     showLanes: false,
     wireShape: "curve",
+    showGhosts: true,
     tab: "story",
     selectedEdge: null,
     expert: false,
@@ -528,21 +533,16 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       return id;
     },
 
-    applySuggestion: (sug) => {
+    applySuggestion: (sug, at) => {
       push();
       const s = get();
       const ids = new Set(s.nodes.map((n) => n.id));
-      const pos = (id: string) => s.nodes.find((n) => n.id === id)?.position;
       let id: string | null = null;
       let nodes = s.nodes;
       if (sug.action === "add" && sug.kind) {
         id = newId(sug.kind, ids);
-        const from = sug.attach.find((a) => a.target === NEW_NODE && a.source !== NEW_NODE);
-        const to = sug.attach.find((a) => a.source === NEW_NODE && a.target !== NEW_NODE);
-        const anchor = (from && pos(from.source)) ?? (to && pos(to.target));
-        const dx = from ? COL : to ? -COL : 0;
-        const bottom = s.nodes.reduce((m, n) => Math.max(m, n.position.y), 0);
-        const position = anchor ? { x: anchor.x + dx, y: anchor.y } : { x: 0, y: s.nodes.length ? bottom + 200 : 0 };
+        // 자리 = 유령이 보인 자리(CF6) — 주지 않으면 같은 규칙(`placeSuggestion`: 옆 열 · 겹치면 그 아래 빈 자리)으로 잰다.
+        const position = at ?? placeSuggestion(sug, s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), s.catalog);
         nodes = [...s.nodes.map((n) => ({ ...n, selected: false })),
                  { id, type: PG_NODE_TYPE, position, data: { kind: sug.kind, params: {} } }];
       }
@@ -1163,6 +1163,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     setMinimap: (showMinimap) => set({ showMinimap }),
     setLanes: (showLanes) => set({ showLanes }),
     setWireShape: (wireShape) => set({ wireShape }),
+    setShowGhosts: (showGhosts) => set({ showGhosts }),
     setTab: (tab) => set({ tab }),
     setExpert: (expert) => set({ expert }),
     setOpenGate: (openGate) => set({ openGate }),

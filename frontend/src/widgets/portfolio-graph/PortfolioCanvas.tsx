@@ -60,11 +60,17 @@ import {
   nodeSummary,
   topoOrder,
   stepOfNode,
+  CHIP_H,
+  ghostSuggestions,
+  placeConnectChip,
+  placeSuggestion,
+  suggestionKey,
   connectionProblem,
   restackDoc,
   type ConnTry,
   type GraphDoc,
   type NodeRunResult,
+  type Box,
   type ProcedureSuggestion,
   type ParseResult,
   type WorkflowStage,
@@ -76,6 +82,7 @@ import { AlphaSheetBody } from "./AlphaSheet";
 import { CommandPalette, type PaletteCommand } from "./CommandPalette";
 import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
+import { GhostLayer, type PlacedGhost } from "./GhostLayer";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
 import { wireFlag, wireLook } from "./wireStyle";
@@ -234,8 +241,9 @@ function ZoomPct({ onReset }: { onReset: (zoom: number) => void }) {
 }
 
 /** '보기' 메뉴(CF4b·CF4c) — 도구줄 단추 하나. 단계 레인 켬/끔 · 켜졌을 때 '레인에 맞추기' · 선 모양(곡선·직각·직선). 명령 찾기(Ctrl+K)에도 같은 항목이 있다. */
-function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire }:
-  { lanes: boolean; onLanes: () => void; onFitLanes: () => void; wire: WireShape; onWire: (w: WireShape) => void }) {
+function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire, ghosts, onGhosts }:
+  { lanes: boolean; onLanes: () => void; onFitLanes: () => void; wire: WireShape; onWire: (w: WireShape) => void;
+    ghosts: boolean; onGhosts: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useDismiss(open, useCallback(() => setOpen(false), []), ref);
@@ -254,6 +262,11 @@ function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire }:
               <span className="pg-view-check" aria-hidden="true" />레인에 맞추기
             </button>
           )}
+          {/* CF6 — 서버 규칙 추천을 캔버스 위 유령 노드로(기본 켬). 꺼도 아래 '다음 한 걸음' 바는 글로 남는다. */}
+          <button type="button" role="menuitemcheckbox" aria-checked={ghosts} data-view="ghosts"
+                  onClick={() => { setOpen(false); onGhosts(); }}>
+            <span className="pg-view-check" aria-hidden="true">{ghosts && <Check size={14} />}</span>추천 보기
+          </button>
           <div className="pg-view-sep" role="separator" />
           <div role="group" aria-label="선 모양" className="pg-view-group">
             <span className="pg-view-h" aria-hidden="true">선 모양</span>
@@ -503,6 +516,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const onSocket = useCallback((id: string, port: string, type: string, side: "in" | "out") => socketRef.current(id, port, type, side), []);
   /** 카드의 고치는 법 단추(BT7) — 절차 제안과 같은 길(되돌리기 한 번). 정의가 아래에 있어 ref 로 잇는다. */
   const fixRef = useRef<(sug: ProcedureSuggestion) => void>(() => undefined);
+  /** 지금 보이는 유령(CF6) — 붙이기가 그 자리를 찾는다(콜백을 다시 만들지 않게 ref). */
+  const ghostsRef = useRef<PlacedGhost[]>([]);
   const onFix = useCallback((sug: ProcedureSuggestion) => fixRef.current(sug), []);
   const focusRef = useRef<(id: string) => void>(() => {});
   const runStrategyRef = useRef<(groupId: string) => void>(() => {});
@@ -517,6 +532,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     g.setLanes(v.lanes);
     g.setWireShape(v.wire);
     g.setMinimap(v.minimap);                          // CF5b — 사람이 켠 것만(기본 끔)
+    g.setShowGhosts(v.ghosts);                        // CF6 — 기본 켬
   }, []);
   const updatePanels = useCallback((f: (p: Panels) => Panels) => {
     setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
@@ -1288,6 +1304,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   };
   // 선 모양(CF4c) — 보기만 바꾼다. 이 브라우저에 남긴다.
   const setWire = (w: WireShape) => { usePortfolioGraph.getState().setWireShape(w); saveView({ ...readView(), wire: w }); };
+  const toggleGhosts = () => {
+    const v = !usePortfolioGraph.getState().showGhosts;
+    usePortfolioGraph.getState().setShowGhosts(v);
+    saveView({ ...readView(), ghosts: v });
+  };
 
   const multiPicked = s.picked.length > 1;
   const commands = useMemo<PaletteCommand[]>(() => [
@@ -1322,6 +1343,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     { id: "lanes", group: "보기", label: s.showLanes ? "단계 레인 끄기" : "단계 레인 보기", hint: "흐름 단계 여섯을 왼쪽에서 오른쪽 세로 띠로 깔아요",
       run: toggleLanes },
     ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드마다 자기 단계 띠 안으로 옮겨요", run: fitToLanes }] : []),
+    { id: "ghosts", group: "보기", label: s.showGhosts ? "추천 유령 끄기" : "추천 유령 보기",
+      hint: "서버 규칙이 고른 다음 노드를 붙일 자리에 반투명하게 보여요", run: toggleGhosts },
     ...WIRE_SHAPES.map((w) => ({ id: `wire:${w.shape}`, group: "보기", label: `선 모양: ${w.label}`,
                                  hint: "선을 두 번 누르면 경유점을 끼워 길을 바꿀 수 있어요", run: () => setWire(w.shape) })),
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
@@ -1344,7 +1367,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, multiPicked, s.showMinimap, s.showLanes, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  ], [s.selectedId, multiPicked, s.showMinimap, s.showLanes, s.showGhosts, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -1373,8 +1396,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   }, [focusNode]);
   const applySuggestion = useCallback((sug: ProcedureSuggestion) => {
     const st = usePortfolioGraph.getState();
+    // 유령이 보인 자리에 놓는다(CF6) — 바·절차 판·유령 어느 쪽에서 붙여도 같은 자리.
+    const at = ghostsRef.current.find((g) => g.key === suggestionKey(sug))?.at ?? undefined;
     st.act(() => {
-      const id = st.applySuggestion(sug);
+      const id = st.applySuggestion(sug, at);
       return id ? `‘${sug.label}’를 붙이고 이었어요.` : "선을 이었어요.";
     });
   }, []);
@@ -1391,9 +1416,32 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     return `${b.num ? `${b.num}. ` : ""}${b.name}`;
   }, [nodeBadge]);
   // BT3 — 다음 한 걸음(서버). [다음에] 는 이 그래프 모양(노드 종류 모음)에 대해 이번 방문 동안만 숨긴다.
-  const [dismissedNext, setDismissedNext] = useState<Set<string>>(() => new Set());
+  // CF6 — 유령과 하나: 숨김 키 = 모양 + 추천(같은 추천이면 바 [다음에]와 유령 [닫기]가 같다).
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
   const shapeKey = useMemo(() => [...new Set(s.nodes.map((n) => n.data.kind))].sort().join(","), [s.nodes]);
-  const nextStep = s.validation?.procedure?.next && !dismissedNext.has(shapeKey) ? s.validation.procedure.next : null;
+  const dismiss = useCallback((sug: ProcedureSuggestion) => setDismissed((d) => new Set(d).add(`${shapeKey}|${suggestionKey(sug)}`)), [shapeKey]);
+  const procNext = s.validation?.procedure?.next ?? null;
+  const nextStep = procNext && !dismissed.has(`${shapeKey}|${suggestionKey(procNext)}`) ? procNext : null;
+  // CF6 — 유령: next 먼저 + 막힌 관문, 서로 다른 것만 최대 3 · 자리는 앞선 유령도 피한다.
+  const ghosts = useMemo<PlacedGhost[]>(() => {
+    if (!s.showGhosts || s.simple || !s.validation?.procedure) return [];
+    const place = s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position }));
+    const taken: Box[] = [];
+    return ghostSuggestions(s.validation.procedure, s.nodes.map((n) => n.id))
+      .filter((g) => !dismissed.has(`${shapeKey}|${g.key}`))
+      .map((g) => {
+        if (g.action !== "add" || !g.kind) {
+          const chip = placeConnectChip(g, place, s.catalog, taken);
+          if (chip) taken.push({ x: chip.x, y: chip.y, w: NODE_W, h: CHIP_H });
+          return { ...g, at: null, chip };
+        }
+        const at = placeSuggestion(g, place, s.catalog, taken);
+        taken.push({ x: at.x, y: at.y, w: NODE_W, h: cardHeight(g.kind, s.catalog) });
+        return { ...g, at, chip: null };
+      });
+  }, [s.showGhosts, s.simple, s.validation, s.nodes, s.catalog, dismissed, shapeKey]);
+  ghostsRef.current = ghosts;
+  const [ghostHot, setGhostHot] = useState<string | null>(null);
   const hereStep = stepOfNode(s.validation?.procedure, s.selectedId)?.key ?? null;
   const procedureView = (
     <ProcedurePanel procedure={s.validation?.procedure ?? null} error={s.validationError}
@@ -1450,7 +1498,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
           </span>
           <button type="button" className={`pg-icon-tool${s.showMinimap ? " on" : ""}`} aria-pressed={s.showMinimap}
                   aria-label="미니맵" title="미니맵" onClick={toggleMinimap}><MapIcon size={16} /></button>
-          <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} wire={s.wireShape} onWire={setWire} />
+          <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} wire={s.wireShape} onWire={setWire}
+                    ghosts={s.showGhosts} onGhosts={toggleGhosts} />
           <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
                   onClick={() => setCmdOpen(true)}><Command size={16} /></button>
         </div>
@@ -1624,6 +1673,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
               </ViewportPortal>
             )}
             {s.showLanes && <StageLanes stages={stages} />}
+            {ghosts.length > 0 && (
+              <GhostLayer ghosts={ghosts} catalog={s.catalog} shape={s.wireShape} hot={ghostHot} gateLabel={gateLabel}
+                          onApply={applySuggestion} onDismiss={dismiss} />
+            )}
             <ZoomWatch el={canvasEl} />
             {focused && (
               <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">
@@ -1749,12 +1802,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
               </button>
             </div>
           ) : nextStep && !dragOver && s.picked.length <= 1 && !s.selectedId ? (
-            <div className="pg-hint pg-next" role="region" aria-label="다음 한 걸음">
+            <div className="pg-hint pg-next" role="region" aria-label="다음 한 걸음"
+                 onMouseEnter={() => setGhostHot(suggestionKey(nextStep))} onMouseLeave={() => setGhostHot(null)}
+                 onFocus={() => setGhostHot(suggestionKey(nextStep))} onBlur={() => setGhostHot(null)}>
               <p className="pg-next-text">{nextStep.text}</p>
               <button type="button" className="pg-next-go" onClick={() => applySuggestion(nextStep)}>
                 {nextStep.action === "connect" ? "잇기" : "붙이기"}
               </button>
-              <button type="button" className="pg-next-later" onClick={() => setDismissedNext((d) => new Set(d).add(shapeKey))}>다음에</button>
+              <button type="button" className="pg-next-later" onClick={() => dismiss(nextStep)}>다음에</button>
             </div>
           ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
             : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`

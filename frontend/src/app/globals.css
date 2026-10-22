@@ -4411,6 +4411,38 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* CF4b — 단계 레인: 노드 뒤(뷰포트 쌓임 맨 아래) 세로 띠. 누르기·끌기를 잡지 않는다. 띠 색은 단계 색을 아주 옅게(글자색으로 쓰지 않는다 — 다크 대비),
    이름은 잉크색. 머리 글은 멀리서도 읽히게 확대에 반비례(최대 30px). */
 .pg-lanes { position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none; }
+/* CF6 — 유령 노드: 서버 규칙 추천을 붙일 자리에. ★진짜 카드 밑★(z -1, 레인과 같은 층)에 그리고 단추만 누름을 받는다 —
+   카드·빈 캔버스 누름을 가로채지 않는다. 반투명은 점선 테두리 + 옅은 바탕으로 — 글자는 잉크색 그대로(AA). */
+.pg-ghosts { position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none; }
+.pg-ghost-wires { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.pg-ghost-wire path { fill: none; stroke: var(--pg-mute); stroke-width: 2; stroke-dasharray: 6 5; }
+.pg-ghost-wire--hot path { stroke: var(--pg-blue); stroke-width: 2.5; }
+.pg-ghost { position: absolute; top: 0; left: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px;
+  border: 1.5px dashed color-mix(in srgb, var(--pg-stage, var(--pg-blue)) 70%, var(--pg-card-line)); border-radius: 14px;
+  background: color-mix(in srgb, var(--pg-paper) 70%, var(--pg-canvas)); color: var(--pg-ink); pointer-events: none; }
+.pg-ghost--connect { padding: 10px 12px; }
+.pg-ghost-lead { stroke: var(--pg-mute); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.pg-ghost-lead.pg-ghost-wire--hot { stroke: var(--pg-blue); }
+.pg-ghost--hot { border-style: solid; border-color: var(--pg-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pg-blue) 22%, transparent); }
+.pg-ghost-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pg-ghost-chip { flex: none; align-self: flex-start; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--pg-ink);
+  background: var(--pg-soft); border: 1px solid var(--pg-card-line); }
+.pg-ghost-name { min-width: 0; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-ghost-text { margin: 0; font-size: 12px; line-height: 1.45; color: var(--pg-body); word-break: keep-all; }
+.pg-ghost-gates { margin: 0; font-size: 11.5px; line-height: 1.4; color: var(--pg-body); word-break: keep-all; }
+.pg-ghost-acts { display: flex; gap: 6px; margin-top: 2px; }
+.pg-theme .pg-ghost-add, .pg-theme .pg-ghost-x { pointer-events: auto; height: 28px; padding: 0 12px; border-radius: 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.pg-theme .pg-ghost-add { border: 0; background: var(--pg-cta); color: #fff; }
+.pg-theme .pg-ghost-x { border: 1px solid var(--pg-card-line); background: var(--pg-paper); color: var(--pg-body); }
+.pg-ghost-add:focus-visible, .pg-ghost-x:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-ghost-port { position: absolute; width: 10px; height: 10px; margin-top: -5px; box-sizing: border-box; border-radius: 50%;
+  border: 2px dashed var(--pg-mute); background: var(--pg-paper); }
+.pg-ghost-port--in { left: -6px; }
+.pg-ghost-port--out { right: -6px; }
+/* 멀리 — 진짜 카드처럼 이름만(화면 11px 바닥, BR R2 와 같은 식) · 글·관문 줄은 숨기고 단추는 남긴다. */
+.pg-canvas[data-zoom="far"] .pg-ghost-text, .pg-canvas[data-zoom="far"] .pg-ghost-gates { display: none; }
+.pg-canvas[data-zoom="far"] .pg-ghost-head { flex-direction: column; align-items: flex-start; }
+.pg-canvas[data-zoom="far"] .pg-ghost-name { white-space: normal; font-size: min(28px, calc(11px / var(--pg-z, 1))); line-height: 1.2; }
 .pg-lane { position: absolute; box-sizing: border-box; border-left: 1px solid color-mix(in srgb, var(--pg-lane-c) 28%, transparent);
   background: color-mix(in srgb, var(--pg-lane-c) 5%, transparent); }
 .pg-lane:last-child { border-right: 1px solid color-mix(in srgb, var(--pg-lane-c) 28%, transparent); }

@@ -1,6 +1,6 @@
 /**
- * 보기 설정(CF4b·CF4c·CF5b) — 단계 레인 켬/끔 · 선 모양 · 미니맵 켬/끔. ★이 브라우저에만★ 남는 편의 상태(localStorage) — 문서·서버에는 가지 않는다.
- * 못 읽거나 망가졌으면 기본값(레인 끔 · 곡선 = 지금 모습 · 미니맵 끔 — 켜 두면 구석의 카드를 덮어 누를 수 없었다).
+ * 보기 설정(CF4b·CF4c·CF5b·CF6) — 단계 레인 켬/끔 · 선 모양 · 미니맵 켬/끔 · 추천 유령 켬/끔. ★이 브라우저에만★ 남는 편의 상태(localStorage) — 문서·서버에는 가지 않는다.
+ * 못 읽거나 망가졌으면 기본값(레인 끔 · 곡선 = 지금 모습 · 미니맵 끔 — 켜 두면 구석의 카드를 덮어 누를 수 없었다 · 유령 켬 — 카드와 겹치지 않는다).
  */
 import { isWireShape, type WireShape } from "./wirePath";
 
@@ -10,8 +10,9 @@ export interface View {
   lanes: boolean;
   wire: WireShape;
   minimap: boolean;
+  ghosts: boolean;
 }
-export const DEFAULT_VIEW: View = { lanes: false, wire: "curve", minimap: false };
+export const DEFAULT_VIEW: View = { lanes: false, wire: "curve", minimap: false, ghosts: true };
 
 export function readView(): View {
   try {
@@ -22,6 +23,7 @@ export function readView(): View {
       lanes: typeof v.lanes === "boolean" ? v.lanes : DEFAULT_VIEW.lanes,
       wire: isWireShape(v.wire) ? v.wire : DEFAULT_VIEW.wire,
       minimap: typeof v.minimap === "boolean" ? v.minimap : DEFAULT_VIEW.minimap,
+      ghosts: typeof v.ghosts === "boolean" ? v.ghosts : DEFAULT_VIEW.ghosts,
     };
   } catch {
     return DEFAULT_VIEW;
