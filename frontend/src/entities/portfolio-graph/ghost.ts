@@ -1,10 +1,11 @@
 /**
  * 유령 노드(CF6) — 서버 규칙 추천(`procedure.next` · `by_gate`)을 캔버스에 보일 모양과 자리.
  * ★추천을 새로 만들지 않는다★ — 서버가 낸 것을 합치고(같은 추천은 하나로) 놓일 자리만 정한다. 설정값은 다루지 않는다.
+ * AI1 — 서버가 검사를 통과시킨 AI 추천도 같은 그릇에 담는다(`withAiGhosts`): 규칙과 같은 추천이면 그 유령에 AI 이유를 붙이고(두 칩), 아니면 따로.
  */
 import { NEW_NODE } from "./procedure";
 import { cardHeight, COL, NODE_W, PORT_TOP, ROW_GAP } from "./size";
-import type { NodeCatalogEntry, Procedure, ProcedureSuggestion } from "./types";
+import type { AiSuggestion, NodeCatalogEntry, Procedure, ProcedureSuggestion } from "./types";
 
 /** 한 번에 보일 유령 수 — 2부 AI1(노드 추천 1~3)과 같은 그릇. */
 export const MAX_GHOSTS = 3;
@@ -12,8 +13,10 @@ export const MAX_GHOSTS = 3;
 export interface Ghost extends ProcedureSuggestion {
   /** 같은 추천을 가리는 서명(종류 · 잇는 선). 숨김·붙이기 자리를 이 키로 찾는다. */
   key: string;
-  /** 누가 낸 추천인가 — 지금은 서버 규칙뿐. 2부 AI1 이 다른 값을 쓴다. */
-  source: "rule";
+  /** 누가 낸 추천인가 — 서버 규칙(`rule`) 또는 AI(`claude`, AI1). 글(`text`)은 이 출처의 것이다. */
+  source: "rule" | "claude";
+  /** AI 가 같은 추천을 냈으면 그 이유(서버 검사를 통과한 한 줄) — 규칙 유령이면 두 칩, AI 유령이면 `text` 와 같다. 없으면 null. */
+  aiReason: string | null;
   /** 이 추천으로 잴 수 있게 되는 관문(관문별 추천 키 + `unlocks`, 서버 관문 순서). */
   gates: string[];
   /** 아래 '다음 한 걸음' 바와 같은 추천인가. */
@@ -37,13 +40,35 @@ export function ghostSuggestions(proc: Procedure | null | undefined, nodeIds: It
     if (!s || !s.attach.every((a) => real(a.source) && real(a.target))) return;
     const key = suggestionKey(s);
     let g = out.find((x) => x.key === key);
-    if (!g) { g = { ...s, key, source: "rule", gates: [], isNext }; out.push(g); }
+    if (!g) { g = { ...s, key, source: "rule", aiReason: null, gates: [], isNext }; out.push(g); }
     for (const k of [...(gate ? [gate] : []), ...s.unlocks]) if (!g.gates.includes(k)) g.gates.push(k);
   };
   take(proc.next, null, true);
   for (const k of order) take(proc.by_gate[k], k, false);
   for (const g of out) g.gates.sort((a, b) => rank(a) - rank(b));
   return out.slice(0, MAX_GHOSTS);
+}
+
+/**
+ * AI 추천을 유령에 합친다(AI1) — 같은 추천(종류·잇는 선, 순서 무관)이 규칙 유령에 있으면 그 유령에 AI 이유만 붙인다(유령 하나에 두 칩).
+ * 아니면 AI 유령을 규칙 유령 뒤에 더한다(AI 만 최대 `MAX_GHOSTS`). 문서에 없는 노드를 가리키는 추천은 뺀다(규칙 유령과 같은 규칙).
+ */
+export function withAiGhosts(rule: Ghost[], ai: AiSuggestion[], nodeIds: Iterable<string>): Ghost[] {
+  const have = new Set(nodeIds);
+  const real = (id: string) => id === NEW_NODE || have.has(id);
+  const out = rule.map((g) => ({ ...g }));
+  let added = 0;
+  for (const s of ai) {
+    if (!s.attach.every((a) => real(a.source) && real(a.target))) continue;
+    const sug: ProcedureSuggestion = { action: "add", kind: s.kind, label: s.label, text: s.reason, attach: s.attach, unlocks: [] };
+    const key = suggestionKey(sug);
+    const same = out.find((g) => g.key === key);
+    if (same) { same.aiReason = s.reason; continue; }
+    if (added >= MAX_GHOSTS) continue;
+    out.push({ ...sug, key, source: "claude", aiReason: s.reason, gates: [], isNext: false });
+    added++;
+  }
+  return out;
 }
 
 /** 자리를 잴 노드 — 문서 노드의 id · 종류 · 왼쪽 위. */

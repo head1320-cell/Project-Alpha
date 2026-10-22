@@ -200,6 +200,16 @@ export interface ProcedureSuggestion {
   unlocks: string[];
 }
 
+/** AI 추천(AI1) — 서버가 검사를 통과시킨 것만 온다(카탈로그·연결·근거 숫자·금지 표현). 설정값은 없다. */
+export interface AiSuggestion { action: "add"; kind: string; label: string; attach: AttachEdge[]; reason: string }
+/** 검사에서 빠진 AI 추천 — 무엇이 왜(서버 문장). */
+export interface AiRejected { kind: string | null; code: string; reason: string }
+/** `POST /api/v1/assist/canvas/suggest` — 쓸 수 있으면 통과·탈락, 못 쓰면 사유(★AI 글은 없다★). */
+export type AssistSuggest =
+  | { available: true; source: "claude"; model: string; suggestions: AiSuggestion[]; rejected: AiRejected[]; cached: boolean;
+      usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
+  | { available: false; source: "unavailable"; reason_code: string; reason: string };
+
 export interface Procedure {
   steps: ProcedureStep[];
   next: ProcedureSuggestion | null;

@@ -62,6 +62,7 @@ import {
   stepOfNode,
   CHIP_H,
   ghostSuggestions,
+  withAiGhosts,
   placeConnectChip,
   placeSuggestion,
   suggestionKey,
@@ -83,6 +84,8 @@ import { CommandPalette, type PaletteCommand } from "./CommandPalette";
 import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { GhostLayer, type PlacedGhost } from "./GhostLayer";
+import { AiAsk, useAiAssist } from "./AiAsk";
+import { useSession } from "@/entities/session";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
 import { wireFlag, wireLook } from "./wireStyle";
@@ -613,6 +616,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
 
   const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups, s.branches, s.pinned, s.folded),
     [s.nodes, s.edges, s.name, s.groups, s.branches, s.pinned, s.folded]);
+  // AI1 — 누를 때만 묻는 AI 노드 추천. 로그인 판정은 서버가 하고, 화면은 로그아웃이면 묻지 않는다(요청 0).
+  const { session } = useSession();
+  const aiNoteSink = useCallback((n: string) => usePortfolioGraph.getState().setNote(n), []);
+  const ai = useAiAssist(doc, session, aiNoteSink);
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
@@ -1345,6 +1352,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드마다 자기 단계 띠 안으로 옮겨요", run: fitToLanes }] : []),
     { id: "ghosts", group: "보기", label: s.showGhosts ? "추천 유령 끄기" : "추천 유령 보기",
       hint: "서버 규칙이 고른 다음 노드를 붙일 자리에 반투명하게 보여요", run: toggleGhosts },
+    { id: "ai-ask", group: "추천", label: "AI 에게 다음 노드 묻기",
+      hint: "지금 그래프를 Claude 에게 보내 다음에 붙일 노드를 물어요(로그인 · 누를 때만)", run: () => { void ai.ask(); } },
     ...WIRE_SHAPES.map((w) => ({ id: `wire:${w.shape}`, group: "보기", label: `선 모양: ${w.label}`,
                                  hint: "선을 두 번 누르면 경유점을 끼워 길을 바꿀 수 있어요", run: () => setWire(w.shape) })),
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
@@ -1367,7 +1376,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, multiPicked, s.showMinimap, s.showLanes, s.showGhosts, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  ], [s.selectedId, multiPicked, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -1427,7 +1436,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     if (!s.showGhosts || s.simple || !s.validation?.procedure) return [];
     const place = s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position }));
     const taken: Box[] = [];
-    return ghostSuggestions(s.validation.procedure, s.nodes.map((n) => n.id))
+    const ids = s.nodes.map((n) => n.id);
+    // AI1 — 서버가 검사를 통과시킨 AI 추천을 같은 그릇에(규칙과 같은 추천이면 두 칩 하나) — 숨김·자리·붙이기는 그대로.
+    return withAiGhosts(ghostSuggestions(s.validation.procedure, ids), ai.suggestions, ids)
       .filter((g) => !dismissed.has(`${shapeKey}|${g.key}`))
       .map((g) => {
         if (g.action !== "add" || !g.kind) {
@@ -1439,9 +1450,26 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
         taken.push({ x: at.x, y: at.y, w: NODE_W, h: cardHeight(g.kind, s.catalog) });
         return { ...g, at, chip: null };
       });
-  }, [s.showGhosts, s.simple, s.validation, s.nodes, s.catalog, dismissed, shapeKey]);
+  }, [s.showGhosts, s.simple, s.validation, s.nodes, s.catalog, dismissed, shapeKey, ai.suggestions]);
   ghostsRef.current = ghosts;
   const [ghostHot, setGhostHot] = useState<string | null>(null);
+  /** AI 묻기 칸 — 추천 유령을 보이는 동안만(끄면 물을 곳도 없다). */
+  const aiShown = s.showGhosts && !s.simple;
+  // AI1 — 새 답의 AI 유령이 떠 있는 판 밑이나 화면 밖이면 그쪽을 판 사이 가운데로 옮겨 보인다(확대는 그대로 · focusNode 와 같은 식).
+  // 물은 사람은 답을 봐야 한다 — 오른쪽 창 밑에 깔린 유령은 [붙이기]를 누를 수도 없었다(AI1 E2E 가 찾음).
+  useEffect(() => {
+    if (ai.ai.state !== "ready" || !rf.current || !canvasEl.current) return;
+    const boxes = ghostsRef.current.filter((g) => g.aiReason !== null && g.at)
+      .map((g) => ({ x: g.at!.x, y: g.at!.y, w: NODE_W, h: cardHeight(g.kind!, usePortfolioGraph.getState().catalog) }));
+    if (!boxes.length) return;
+    const { x: tx, y: ty, zoom } = rf.current.getViewport();
+    const el = canvasEl.current;
+    const ins = floatInsets(el);
+    const l = Math.min(...boxes.map((b) => b.x)), r = Math.max(...boxes.map((b) => b.x + b.w));
+    const t = Math.min(...boxes.map((b) => b.y)), bt = Math.max(...boxes.map((b) => b.y + b.h));
+    const seen = l * zoom + tx >= ins.left && r * zoom + tx <= el.clientWidth - ins.right && t * zoom + ty >= 0 && bt * zoom + ty <= el.clientHeight - ins.bottom;
+    if (!seen) rf.current.setCenter((l + r) / 2 + (ins.right - ins.left) / 2 / zoom, (t + bt) / 2 + ins.bottom / 2 / zoom, { zoom, duration: 250 });
+  }, [ai.ai]);
   const hereStep = stepOfNode(s.validation?.procedure, s.selectedId)?.key ?? null;
   const procedureView = (
     <ProcedurePanel procedure={s.validation?.procedure ?? null} error={s.validationError}
@@ -1810,11 +1838,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                 {nextStep.action === "connect" ? "잇기" : "붙이기"}
               </button>
               <button type="button" className="pg-next-later" onClick={() => dismiss(nextStep)}>다음에</button>
+              {aiShown && <AiAsk session={session} ai={ai.ai} onAsk={() => { void ai.ask(); }} />}
             </div>
           ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
             : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"
-            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. 선을 빈 곳에 놓으면 이을 노드를 찾아요 · 단축키 ?"}</div>}
+            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. 선을 빈 곳에 놓으면 이을 노드를 찾아요 · 단축키 ?"}
+            {aiShown && !dragOver && <AiAsk session={session} ai={ai.ai} onAsk={() => { void ai.ask(); }} />}</div>}
           {quick && s.catalog && (
             <QuickAdd at={quick} catalog={s.catalog} stageKeys={stages.map((x) => x.key)}
                       fromKind={quick.from ? s.nodes.find((n) => n.id === quick.from!.node)?.data.kind ?? null : null}

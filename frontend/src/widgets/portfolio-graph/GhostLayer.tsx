@@ -3,6 +3,7 @@
  * 유령 노드(CF6) — 서버 규칙 추천(`procedure.next` · `by_gate`)을 캔버스 위에.
  * ★문서가 아니다★ — 노드 목록·저장·계산·미니맵에 들어가지 않는다(`ViewportPortal`). 진짜 카드 밑에 그리고 단추만 누름을 받는다 —
  * 카드나 빈 캔버스를 누르는 것을 가로채지 않는다. 자리는 `placeSuggestion`(옆 열 · 겹치면 그 아래 빈 자리) — [붙이기]가 같은 자리에 놓는다.
+ * AI1 — 칩이 출처를 말한다: "규칙 추천" · "AI 추천"(서버 검사를 통과한 AI 이유) · 같은 추천이면 둘 다(규칙 글 + AI 이유 한 줄).
  */
 import { Position, useStore, ViewportPortal, type InternalNode } from "@xyflow/react";
 import { cardHeight, NEW_NODE, NODE_W, PORT_GAP, PORT_TOP, type Ghost, type NodeCatalogEntry } from "@/entities/portfolio-graph";
@@ -29,6 +30,19 @@ function ghostPort(g: PlacedGhost, entry: NodeCatalogEntry | undefined, side: "i
   const i = Math.max(0, list.findIndex((p) => p.name === name));
   return { x: g.at!.x + (side === "in" ? 0 : NODE_W), y: g.at!.y + PORT_TOP + i * PORT_GAP };
 }
+
+/** 출처 칩 — 규칙 · AI · 둘 다. AI 칩은 따로 표시(`--ai`)해 규칙 추천으로 읽히지 않게 한다. */
+function Chips({ g }: { g: PlacedGhost }) {
+  return (
+    <>
+      {g.source === "rule" && <span className="pg-ghost-chip">규칙 추천</span>}
+      {g.aiReason !== null && <span className="pg-ghost-chip pg-ghost-chip--ai">AI 추천</span>}
+    </>
+  );
+}
+
+/** 접근성 이름의 출처 — 칩과 같은 말. */
+const sourceName = (g: PlacedGhost) => (g.source === "claude" ? "AI 추천" : g.aiReason !== null ? "규칙·AI 추천" : "규칙 추천");
 
 export function GhostLayer({ ghosts, catalog, shape, hot, gateLabel, onApply, onDismiss }: {
   ghosts: PlacedGhost[]; catalog: NodeCatalogEntry[] | null; shape: WireShape; hot: string | null;
@@ -71,7 +85,11 @@ export function GhostLayer({ ghosts, catalog, shape, hot, gateLabel, onApply, on
         </svg>
         {ghosts.map((g) => {
           const hotCls = hot === g.key ? " pg-ghost--hot" : "";
-          const common = { "data-source": g.source, "data-next": String(g.isNext), "data-action": g.action, "data-gates": g.gates.join(" ") };
+          const common = { "data-source": g.source === "rule" && g.aiReason !== null ? "rule claude" : g.source,
+                           "data-next": String(g.isNext), "data-action": g.action, "data-gates": g.gates.join(" ") };
+          // 규칙 유령에 AI 가 같은 추천을 냈으면 그 이유 한 줄(AI 만의 유령은 `text` 가 곧 이유다).
+          const reason = g.source === "rule" && g.aiReason !== null
+            ? <p className="pg-ghost-reason"><span className="pg-ghost-reason-k">AI</span> {g.aiReason}</p> : null;
           const acts = (
             <div className="pg-ghost-acts">
               <button type="button" className="pg-ghost-add" onClick={() => onApply(g)}>{g.action === "connect" ? "잇기" : "붙이기"}</button>
@@ -82,10 +100,11 @@ export function GhostLayer({ ghosts, catalog, shape, hot, gateLabel, onApply, on
             // 잇기만 하는 추천 — 카드 없이 점선 + 빈 자리의 칩(점선 끈으로 선 가운데와 잇는다).
             if (!g.chip) return null;
             return (
-              <div key={g.key} className={`pg-ghost pg-ghost--connect${hotCls}`} role="group" aria-label="규칙 추천: 잇기" {...common}
+              <div key={g.key} className={`pg-ghost pg-ghost--connect${hotCls}`} role="group" aria-label={`${sourceName(g)}: 잇기`} {...common}
                    style={{ transform: `translate(${g.chip.x}px, ${g.chip.y}px)`, width: NODE_W }}>
-                <span className="pg-ghost-chip">규칙 추천</span>
+                <Chips g={g} />
                 <p className="pg-ghost-text">{g.text}</p>
+                {reason}
                 {acts}
               </div>
             );
@@ -94,15 +113,16 @@ export function GhostLayer({ ghosts, catalog, shape, hot, gateLabel, onApply, on
           const ports = g.attach.map((a) => (a.target === NEW_NODE ? { side: "in" as const, name: a.target_port } : a.source === NEW_NODE ? { side: "out" as const, name: a.source_port } : null))
             .filter((p): p is { side: "in" | "out"; name: string } => !!p);
           return (
-            <div key={g.key} className={`pg-ghost${hotCls}`} role="group" aria-label={`규칙 추천: ${g.label ?? g.kind}`} data-kind={g.kind ?? ""}
+            <div key={g.key} className={`pg-ghost${hotCls}`} role="group" aria-label={`${sourceName(g)}: ${g.label ?? g.kind}`} data-kind={g.kind ?? ""}
                  data-x={g.at.x} data-y={g.at.y} {...common}
                  style={{ transform: `translate(${g.at.x}px, ${g.at.y}px)`, width: NODE_W, height: cardHeight(g.kind!, catalog),
                           ["--pg-stage" as string]: STAGE_VAR[entry?.stage ?? ""] ?? "var(--pg-st-data)" }}>
               <div className="pg-ghost-head">
-                <span className="pg-ghost-chip">규칙 추천</span>
+                <Chips g={g} />
                 <span className="pg-ghost-name">{g.label ?? g.kind}</span>
               </div>
               <p className="pg-ghost-text">{g.text}</p>
+              {reason}
               {g.gates.length > 0 && <p className="pg-ghost-gates">잴 수 있게 되는 관문 · {g.gates.map(gateLabel).join(" · ")}</p>}
               {acts}
               {ports.map((p) => {

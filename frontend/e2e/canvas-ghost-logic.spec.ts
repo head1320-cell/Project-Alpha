@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { CHIP_H, ghostSuggestions, placeConnectChip, placeSuggestion, MAX_GHOSTS, type PlaceNode } from "../src/entities/portfolio-graph/ghost";
+import { CHIP_H, ghostSuggestions, placeConnectChip, placeSuggestion, MAX_GHOSTS, withAiGhosts, type PlaceNode } from "../src/entities/portfolio-graph/ghost";
 import { cardHeight, COL, NODE_W, PORT_TOP, ROW_GAP } from "../src/entities/portfolio-graph/size";
-import type { Procedure, ProcedureSuggestion } from "../src/entities/portfolio-graph/types";
+import type { AiSuggestion, AttachEdge, Procedure, ProcedureSuggestion } from "../src/entities/portfolio-graph/types";
 
 /**
  * CF6 · 유령 노드 — 순수 규칙(브라우저 없이)
@@ -107,4 +107,27 @@ test("잇기 칩 자리: 선 가운데가 비면 거기 · 아니면 두 카드 
   const taken = [{ x: (NODE_W + 1000) / 2 - NODE_W / 2, y: PORT_TOP, w: NODE_W, h: CHIP_H }];
   expect(placeConnectChip(conn, far, null, taken)!.y).toBe(-CHIP_H - ROW_GAP);
   expect(placeConnectChip({ ...conn, attach: [] }, far, null)).toBeNull();
+});
+
+// AI1 — AI 추천을 같은 그릇에.
+const ai = (kind: string, attach: AttachEdge[], reason = "이유"): AiSuggestion => ({ action: "add", kind, label: kind, attach, reason });
+const W: AttachEdge[] = [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" }];
+
+test("AI 합치기: 규칙과 같은 추천은 그 유령에 AI 이유만(두 칩) · 다른 것은 뒤에 따로(source claude) · 입력은 바꾸지 않는다", () => {
+  const rule = ghostSuggestions(proc(EST, { cost: BT }), IDS);
+  const g = withAiGhosts(rule, [ai("backtest", [...BT.attach].reverse(), "AI 이유"), ai("risk", W)], IDS);
+  expect(g.map((x) => [x.kind, x.source, x.aiReason])).toEqual([["estimate", "rule", null], ["backtest", "rule", "AI 이유"], ["risk", "claude", "이유"]]);
+  expect(g[1].text).toBe(BT.text);                                   // 규칙 글 그대로 — AI 이유는 따로
+  expect(g[1].gates).toEqual(["cost", "oos"]);                        // 규칙 유령의 관문도 그대로
+  expect(g[2].text).toBe("이유");
+  expect(g[2].key).not.toBe(g[1].key);
+  expect(rule.every((x) => x.aiReason === null)).toBe(true);          // 규칙 유령 원본은 그대로
+});
+
+test("AI 합치기: 문서에 없는 노드를 가리키면 뺀다 · AI 만 최대 3 — 짝: AI 가 없으면 규칙 그대로", () => {
+  expect(withAiGhosts([], [ai("risk", [{ ...W[0], source: "gone" }])], IDS)).toEqual([]);
+  const many = ["risk", "scenario_stress", "custom_scenario", "factor_xray"].map((k) => ai(k, W));
+  expect(withAiGhosts([], many, IDS).map((x) => x.kind)).toEqual(["risk", "scenario_stress", "custom_scenario"]);
+  const rule = ghostSuggestions(proc(EST, {}), IDS);
+  expect(withAiGhosts(rule, [], IDS)).toEqual(rule);
 });
