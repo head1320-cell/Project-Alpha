@@ -255,8 +255,8 @@ def intake_optimizer_returns(h: pg.Handoff) -> dict:
     issues = _structural_returns(h.value)
     gap = (((h.value or {}).get("coverage") or {}).get("alignment") or {}).get("bench_gap_days")
     if _beta_active(h.params) and gap:
-        issues.append(_i("changed", "beta_dropped", f"벤치마크가 기간 중 {gap}일 비어 베타 제약을 걸지 못했어요 — "
-                                                    "제약 보고의 사유는 '벤치마크가 없다'로 나와요."))
+        issues.append(_i("changed", "beta_dropped", f"벤치마크가 기간 중 {gap}일 비어 기간 길이가 맞지 않아 "
+                                                    "베타 제약을 걸지 못했어요."))
     return _out([_R2_CHECK, "베타 제약에 쓸 벤치마크가 기간 전체에 있는지"], issues)
 
 

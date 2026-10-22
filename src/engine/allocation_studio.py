@@ -431,6 +431,8 @@ def optimize(model: str, names: list[str], R: np.ndarray,
     w_view = w_mkt
     #: 대체 기록(CF3) — 무엇을 무엇으로 대신했는지. 비어 있으면 응답에 키가 없다.
     fallbacks: list[dict] = []
+    #: 사후는 됐는데 그 기대 수익으로 max-sharpe 비중을 풀지 못했는가(K1 — `views_applied` 가 이걸 본다).
+    view_solve_failed = False
     if all_views:
         pi = delta * S @ w_mkt
         P, Q, omega, skipped_views = build_user_views(all_views, names, S, tau)
@@ -442,7 +444,8 @@ def optimize(model: str, names: list[str], R: np.ndarray,
                     w_view = np.maximum(wv, 0.0)
                     w_view = w_view / w_view.sum()
                 else:
-                    # ★기록만★ (CF3) — 사후는 됐지만 비중은 시장 비중 그대로다. `views_applied` 라벨 정정은 별도 작업.
+                    # 사후는 됐지만 비중은 시장 비중 그대로다(CF3 기록 · K1 라벨 — 아래 `views_applied`).
+                    view_solve_failed = True
                     fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
                                       "reason": "생각을 넣은 기대 수익으로 비중을 풀지 못해 시장 비중을 그대로 썼어요.",
                                       "affects_weights": model == "bl"})
@@ -485,7 +488,10 @@ def optimize(model: str, names: list[str], R: np.ndarray,
         "names": names,
         "weights": w_final,
         "flow": {"market": w_mkt, "view_applied": w_view, "optimized": w_final},
-        "views_applied": mu_bl is not None,
+        # ★생각이 BL 비중에 닿았는가★ (K1) — 사후를 풀지 못해 시장 비중을 쓴 BL 이면 거짓이다. 다른 방식의 비중은
+        # 생각 열을 쓰지 않으므로 뜻이 예전 그대로다(생각을 넣은 기대 수익을 계산했다 — EP 는 자기 μ 로 생각을 쓴다).
+        # 제약을 걸면 `_apply_constraints` 가 사후 μ 로 다시 풀어 생각이 비중에 닿는다 — 그 라우트가 참으로 되돌린다.
+        "views_applied": mu_bl is not None and not (model == "bl" and view_solve_failed),
         "skipped_views": skipped_views,
         "cap_missing": cap_missing,
         "mu_annual": (R.mean(axis=0) * 252.0),

@@ -387,6 +387,11 @@ def _ep_unavailable_reason(probes: dict) -> str | None:
     return None
 
 
+#: `constrained_solve` 가 베타 제약을 걸 벤치마크를 받지 못했을 때 쓰는 문장(엔진 글 그대로 — `constrained_opt.py` 는
+#: SHA 가드라 고치지 않는다). 라우트가 벤치마크를 길이 때문에 버린 경우에만 정확한 사유로 바꿔 싣는다(K1).
+_ENGINE_BETA_NO_BENCH = "베타 제약이 지정됐지만 벤치마크 수익률이 없어 적용 불가 — 제약 무시됨(정직 보고)."
+
+
 def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -> dict | None:
     """P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체한다.
 
@@ -400,6 +405,7 @@ def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -
     cobj = Constraints(**req.constraints.model_dump())
     if not cobj.any_active():
         return None
+    bench_cut = bench is not None and len(bench) != R.shape[0]
     sol = constrained_solve(
         req.model, names, R,
         mu=np.asarray(opt["mu_used"], dtype=float),
@@ -407,16 +413,28 @@ def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -
         constraints=cobj,
         w_current=req.weights,
         groups_of=sector_groups_for(names),
-        bench_returns=(bench.values if bench is not None
-                       and len(bench) == R.shape[0] else None),
+        bench_returns=(None if bench is None or bench_cut else bench.values),
         risk_aversion=getattr(req, "risk_aversion", None),
     )
     report = {k: sol.get(k) for k in
               ("status", "violations", "binding", "relaxed",
                "notes", "reason", "projected")}
+    if bench_cut and report["notes"]:
+        # 벤치마크는 있었는데 빈 날 때문에 길이가 달라 버렸다 — "없어" 가 아니라 그 사실을 적는다(K1).
+        report["notes"] = [
+            (f"베타 제약이 지정됐지만 벤치마크에 빈 날이 있어 기간 길이가 수익률과 맞지 않아(수익률 {R.shape[0]}일 · "
+             f"벤치마크 {len(bench)}일) 적용 불가 — 제약 무시됨(정직 보고).") if n == _ENGINE_BETA_NO_BENCH else n
+            for n in report["notes"]]
     if sol["status"] != "infeasible" and sol.get("weights") is not None:
         opt["weights"] = np.asarray(sol["weights"], dtype=float)
         opt["flow"]["optimized"] = opt["weights"]
+        if req.model == "bl" and opt.get("mu_engine") == "bl" and not opt.get("views_applied"):
+            # ★생각이 비중에 다시 닿는다★ (K1) — 사후 max-sharpe 는 못 풀어 시장 비중이었지만, 제약 해는 사후 μ(`mu_used`)로
+            # 풀었다. 라벨을 참으로 되돌리고 그 대체 기록은 최종 비중에 닿지 않은 것으로 고친다(관문·선 점검이 그걸 읽는다).
+            opt["views_applied"] = True
+            if opt.get("fallbacks"):
+                opt["fallbacks"] = [({**f, "affects_weights": False, "resolved_by": "constraints"}
+                                     if f.get("stage") == "view_applied" else f) for f in opt["fallbacks"]]
     return report
 
 

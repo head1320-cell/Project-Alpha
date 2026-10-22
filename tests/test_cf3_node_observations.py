@@ -49,10 +49,10 @@ def test_no_fallback_keeps_the_old_view_and_sentence(market):
 
 
 def test_bl_market_fallback_corrects_the_views_sentence(market, monkeypatch):
-    """BL 사후는 됐는데 비중을 풀지 못함 — '내 생각을 반영했어요' 대신 무엇이 반영됐는지 말한다(라벨 `views_applied` 는 그대로)."""
+    """BL 사후는 됐는데 비중을 풀지 못함 — '내 생각을 반영했어요' 대신 무엇이 반영됐는지 말한다(라벨 `views_applied` 도 K1 부터 거짓)."""
     monkeypatch.setattr("src.engine.allocation_studio._opt", _opt_none)
     o = _run(_chain("bl", views=VIEWS))["o"]
-    assert o["view"]["views_applied"] is True
+    assert o["view"]["views_applied"] is False
     texts = _texts(o["explain"])
     assert "내 생각을 반영했어요." not in texts
     assert any("시가총액 비중" in t for t in texts)

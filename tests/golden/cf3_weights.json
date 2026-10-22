@@ -3635,7 +3635,7 @@
      "tau": 0.05
     },
     "skipped_views": [],
-    "views_applied": true,
+    "views_applied": false,
     "weights": {
      "000660": 18.46,
      "005930": 61.54,

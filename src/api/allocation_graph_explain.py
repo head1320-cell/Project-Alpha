@@ -173,7 +173,10 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_practice())
     cap = view.get("cap_missing") or []
     if model in _MARKET_PRIOR_MODELS and cap:
-        trust.append(_t(ASSUMED, f"시가총액을 몰라서 {len(cap)}개 종목의 출발점을 똑같이 나눴어요."))
+        # `market_cap_weights` 와 같은 일을 말한다(K1) — 모두 모르면 균등, 일부만 모르면 아는 종목들의 중앙값으로 채운다.
+        trust.append(_t(ASSUMED, "시가총액을 하나도 몰라서 출발점을 모든 종목에 똑같이 나눴어요."
+                        if len(cap) >= len(view.get("names") or []) else
+                        f"{len(cap)}개 종목은 시가총액을 몰라서 출발점에 나머지 종목 시가총액의 중앙값을 넣었어요."))
     cr = view.get("constraints_report") or None
     if cr:
         if cr.get("status") == "infeasible":
@@ -203,7 +206,8 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
                                  "‘내 생각 반영’을 고르면 비중에 들어가요."))
     if model in _MARKET_PRIOR_MODELS:
         market = any(f.get("stage") == "view_applied" for f in used)
-        facts.append("기대 수익에는 생각을 넣었지만 비중은 시가총액 비중이에요." if market and view.get("views_applied")
+        # K1 — 생각을 넣은 비중을 못 만들어 시가총액 비중을 썼으면 그렇게 말한다(`views_applied` 는 그때 거짓이다).
+        facts.append("생각을 반영한 비중을 만들지 못해 시가총액 비중을 썼어요." if market
                      else "내 생각을 반영했어요." if view.get("views_applied") else "반영된 생각이 없어요.")
     return {"title": "비중을 이렇게 나눴어요", "headline": headline, "facts": facts, "trust": trust}
 

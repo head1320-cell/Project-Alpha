@@ -279,6 +279,8 @@ def _fallback_texts(fallbacks: list[dict], model: str, constraints_report: dict 
         else:
             text = str(f.get("reason") or "")
             text += (" 그래서 비중은 시가총액 비중이에요." if f.get("affects_weights")
+                     else " 그 뒤 제약을 걸어 생각을 넣은 기대 수익으로 다시 풀어서, 최종 비중에는 생각이 들어갔어요."
+                     if f.get("resolved_by") == "constraints"
                      else f" ‘{name}’ 방식은 생각을 쓰지 않아 최종 비중에는 닿지 않아요.")
         out.append({**f, "text": text})
     return out
