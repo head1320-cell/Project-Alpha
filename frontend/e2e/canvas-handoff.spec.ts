@@ -5,7 +5,9 @@ import { test, expect, type Page } from "@playwright/test";
  * 거는 것(짝으로 항상-표시·항상-침묵을 배제):
  *  · 표시 칩은 문제가 있는 선에만, 받는 쪽 끝에 하나 — `[]`(점검했고 찾지 못함)·`null`(점검하지 않음)에는 없다
  *  · 단계 우선순위 lost > changed > structural > unused · 개수 = 서버 문제 수 · 이름은 "전달 점검 n건: 첫 글"
- *  · 실제 계산: 충격 점검에서 비중 계산 → 민감도는 '바뀜', 비중 계산 → 시나리오는 칩 없음 · 수익률 → 기대 수익 추정은 '쓰지 않음'
+ *  · 실제 계산: 충격 점검에서 수익률 → 기대 수익 추정은 '쓰지 않음', 비중 계산 → 시나리오·민감도는 칩 없음
+ *    (K3 부터 민감도는 받은 비중의 방식으로 다시 풀어 그 선이 깨끗하다 — 예전엔 '바뀜')
+ *  · 민감도(K3): 기대 수익을 쓰지 않는 방식(위험 똑같이)이면 0 칸 히트맵 대신 서버 문장 · 짝: 수익 대비 위험 최적은 히트맵
  *  · 칩은 카드·선 요약과 겹치지 않는다(중간·가까이) · 멀리에서는 글자 없는 점
  *  · 칩을 누르면 선 판: 관계 문장·건너간 것(키)·문제 글 = 서버 · `[]` 이면 점검한 것을 말하고 · `null` 이면 사유
  *  · 계산 전 관계 문장은 요약 괄호가 없고, 계산 뒤엔 요약이 들어간다
@@ -87,7 +89,7 @@ test("실제 계산: 문제가 있는 선에만 칩 하나 · 단계·개수·�
   await openWith(page, STRESS);
   await patchRun(page);
   const body = await run(page);
-  expect(body.edges[SENS].issues?.map((i) => i.level)).toContain("changed");
+  expect(body.edges[SENS].issues).toEqual([]);                                   // K3 — 같은 방식으로 다시 푼다
   expect(body.edges[EST].issues?.map((i) => i.level)).toEqual(["unused"]);
   expect(body.edges[SCEN].issues).toEqual([]);
 
@@ -101,6 +103,7 @@ test("실제 계산: 문제가 있는 선에만 칩 하나 · 단계·개수·�
     await expect(flag(page, id)).toHaveAttribute("aria-label", `전달 점검 ${r.issues!.length}건: ${r.issues![0].text}`);
   }
   await expect(flag(page, SCEN)).toHaveCount(0);
+  await expect(flag(page, SENS)).toHaveCount(0);
   await expect(flag(page, OPT_RET)).toHaveCount(0);
 });
 
@@ -159,31 +162,33 @@ test("자리: 칩은 받는 쪽 끝에 있고 카드·선 요약과 겹치지 �
 
 test("칩을 누르면 선 판: 관계 문장 · 건너간 것 · 문제 글 = 서버 · `[]` 이면 점검한 것 · `null` 이면 사유", async ({ page }) => {
   await openWith(page, STRESS);
-  await patchRun(page, (b) => { b.edges[EST].issues = null; b.edges[EST].issues_reason = "이 자리는 아직 점검 규칙이 없어요."; });
+  // 실제 문제가 있는 선은 수익률 → 기대 수익 추정(쓰지 않음) · 실제로 깨끗한 선은 비중 계산 → 민감도(K3) · 점검하지 않은 선은 주입.
+  await patchRun(page, (b) => { b.edges[SCEN].issues = null; b.edges[SCEN].issues_reason = "이 자리는 아직 점검 규칙이 없어요."; });
   const body = await run(page);
-  await flag(page, SENS).click();
+  await flag(page, EST).click();
   await expect(page.locator(".pg-wire-sheet")).toBeVisible();
-  await expect(page.locator("p.pg-wire-relation")).toHaveText(body.relations[SENS].text);
-  expect(body.relations[SENS].text).toContain(`(${body.relations[SENS].brief})`);
+  await expect(page.locator("p.pg-wire-relation")).toHaveText(body.relations[EST].text);
+  expect(body.relations[EST].text).toContain(`(${body.relations[EST].brief})`);
   const keys = await row(page, "facts").locator("tr[data-key]").evaluateAll((trs) => trs.map((t) => t.getAttribute("data-key")));
-  expect(keys).toEqual(body.edges[SENS].facts!.map((f) => f.key));
+  expect(keys).toEqual(body.edges[EST].facts!.map((f) => f.key));
   const issues = row(page, "issues").locator("li.pg-wire-issue");
-  await expect(issues).toHaveCount(body.edges[SENS].issues!.length);
-  for (const [i, is] of body.edges[SENS].issues!.entries()) {
+  await expect(issues).toHaveCount(body.edges[EST].issues!.length);
+  for (const [i, is] of body.edges[EST].issues!.entries()) {
     await expect(issues.nth(i)).toHaveAttribute("data-level", is.level);
     await expect(issues.nth(i)).toHaveAttribute("data-code", is.code);
     await expect(issues.nth(i)).toContainText(is.text);
   }
 
   // 짝 — 점검했고 찾지 못한 선: 점검한 것을 말한다(빈 줄 아님) · 문제 줄 0.
-  const scen = body.edges[SCEN];
-  await page.locator(`.react-flow__edge[data-testid="rf__edge-${SCEN}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  const sens = body.edges[SENS];
+  expect(sens.issues).toEqual([]);
+  await page.locator(`.react-flow__edge[data-testid="rf__edge-${SENS}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await expect(row(page, "issues")).toContainText("잃거나 바뀐 것을 찾지 못했어요");
-  for (const c of scen.checks) await expect(row(page, "issues")).toContainText(c);
+  for (const c of sens.checks) await expect(row(page, "issues")).toContainText(c);
   await expect(row(page, "issues").locator("li.pg-wire-issue")).toHaveCount(0);
 
   // 짝 — 점검하지 않은 선: 사유(지어내지 않는다).
-  await page.locator(`.react-flow__edge[data-testid="rf__edge-${EST}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await page.locator(`.react-flow__edge[data-testid="rf__edge-${SCEN}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await expect(row(page, "issues")).toContainText("이 자리는 아직 점검 규칙이 없어요.");
   await expect(row(page, "issues")).not.toContainText("찾지 못했어요");
 });
@@ -202,7 +207,8 @@ test("계산 전 관계 문장에는 요약 괄호가 없고, 계산 뒤엔 서�
 
 test("여기까지 계산 뒤에도 다시 계산하지 않은 받는 쪽의 기록은 남는다 · 받는 쪽이 예전 결과면 칩을 숨긴다(짝)", async ({ page }) => {
   await openWith(page, STRESS);
-  await patchRun(page);
+  // 화면이 기록을 합치고 숨기는 규칙을 본다 — 비중 계산 → 민감도 선에 문제 하나를 주입한다(K3 부터 실제로는 깨끗하다).
+  await patchRun(page, (b) => { if (b.edges[SENS]) b.edges[SENS].issues = [{ level: "changed", code: "x", text: "바뀌었어요" }]; });
   await run(page);
   await expect(flag(page, SENS)).toHaveCount(1);
   await expect(flag(page, EST)).toHaveCount(1);
@@ -245,4 +251,34 @@ test("고른 방식 대신 다른 비중이면 카드에 '고른 방식 대신�
   const assumeBefore = (before ?? "").match(/가정 (있음|\d+개)/)?.[0] ?? null;
   const assumeAfter = ((await card.locator(".pg-node-ev").textContent()) ?? "").match(/가정 (있음|\d+개)/)?.[0] ?? null;
   expect(assumeAfter).toBe(assumeBefore);
+});
+
+// ── K3 · 민감도는 받은 비중의 방식으로 다시 푼다 ──────────────────────────────────────────────
+async function sensDetail(page: Page) {
+  await page.locator('.pg-node[data-node-id="sens"]').click();
+  await page.locator('.pg-tab[data-tab="detail"]').click();
+}
+
+test("민감도(K3): 위험 똑같이는 기대 수익을 쓰지 않아 0 칸 히트맵 대신 서버 문장 · 짝: 수익 대비 위험 최적은 히트맵", async ({ page }) => {
+  await openWith(page, STRESS);
+  await patchRun(page);
+  const body = await run(page);
+  const r = body.nodes.sens.view!.result as { still?: string; mu_reach?: string; matrix: (number[] | null)[] };
+  expect(r.mu_reach).toBe("none");
+  expect(r.matrix.flat().every((x) => x === 0)).toBe(true);
+  await sensDetail(page);
+  await expect(page.locator(".pg-sens-still")).toHaveText(r.still!);
+  await expect(page.locator(".pg-heat")).toHaveCount(0);
+});
+
+test("민감도(K3) 짝: 수익 대비 위험 최적이면 히트맵이 서버 행렬을 그린다 · 문장 없음", async ({ page }) => {
+  const doc = { ...STRESS, nodes: STRESS.nodes.map((x) => (x.id === "optimizer" ? { ...x, params: { model: "mvo" } } : x)) };
+  await openWith(page, doc);
+  await patchRun(page);
+  const body = await run(page);
+  const r = body.nodes.sens.view!.result as { still?: string | null; matrix: number[][] };
+  expect(r.still ?? null).toBeNull();
+  await sensDetail(page);
+  await expect(page.locator(".pg-sens-still")).toHaveCount(0);
+  await expect(page.locator(".pg-heat tbody tr")).toHaveCount(r.matrix.length);
 });

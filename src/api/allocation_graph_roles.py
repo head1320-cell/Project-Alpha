@@ -35,7 +35,7 @@ ROLES: dict[tuple[str, str], str] = {
     ("corr_stress", "returns"): "평소의 흔들림과 상관을 재는 데 써요.",
     ("corr_stress", "weights"): "상관이 치솟을 때 흔들림이 얼마나 커지는지 볼 비중이에요.",
     ("sensitivity", "returns"): "기대 수익을 조금씩 바꿔 비중을 다시 푸는 데 써요.",
-    ("sensitivity", "weights"): "이 비중을 만든 규칙(위험 회피·생각)을 받아 다시 풀어요.",
+    ("sensitivity", "weights"): "이 비중을 만든 규칙(방식·제약·위험 회피·생각)을 받아 같은 방식으로 다시 풀어요.",
     ("factor_xray", "weights"): "가치·모멘텀 같은 성격이 어디로 기울었는지 잴 비중이에요.",
     ("screener", "universe"): "조건으로 거를 후보 종목이에요.",
     ("factor_scores", "universe"): "점수를 매길 종목이에요.",

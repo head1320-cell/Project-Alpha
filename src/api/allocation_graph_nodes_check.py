@@ -239,11 +239,22 @@ def _sensitivity(inputs: dict, p) -> pg.NodeOutput:
                              "비중을 이어 주세요.")
     names, _ = _names_on(w, r["returns"])
     views = [v.model_dump() for v in (req.views or [])]
-    out = sensitivity_matrix(names, r["returns"][names].values, views=views or None,
-                             delta=req.delta, tau=req.tau, bump_pct=p.bump_pct)
-    basis = "bl" if views else "mvo"
-    view = {"result": {**out, "labels": _labels(names)}, "model": req.model, "basis": basis,
-            "has_constraints": bool(req.constraints)}
+    # ★'비중 계산' 과 같은 길★(K3) — 고른 방식 · 제약(벤치마크·종목군·지금 비중까지 `_apply_constraints` 와 같게) · λ.
+    from src.engine.constrained_opt import Constraints, sector_groups_for
+    from src.engine.entropy_views import EPUnavailable
+    cobj = Constraints(**req.constraints.model_dump()) if req.constraints is not None else None
+    active = cobj is not None and cobj.any_active()
+    R = r["returns"][names].values
+    bench = r.get("bench")
+    try:
+        out = sensitivity_matrix(names, R, views=views or None, delta=req.delta, tau=req.tau, bump_pct=p.bump_pct,
+                                 model=req.model, constraints=cobj if active else None, risk_aversion=req.risk_aversion,
+                                 w_current=req.weights, groups_of=sector_groups_for(names),
+                                 bench_returns=(bench.values if bench is not None and len(bench) == R.shape[0] else None))
+    except EPUnavailable as e:
+        raise pg.NodeFailure(str(e)) from e
+    view = {"result": {**out, "labels": _labels(names)}, "model": req.model, "basis": req.model,
+            "has_constraints": active, "constraints_applied": out["constraints_applied"]}
     return pg.NodeOutput(values={}, view=view)
 
 
@@ -252,22 +263,37 @@ def _explain_sensitivity(view: dict, prov: dict, params: Any) -> dict:
     names, labels, m = r.get("names") or [], r.get("labels") or {}, r.get("matrix") or []
     best = (0.0, None, None)
     for i, row in enumerate(m):
-        for j, d in enumerate(row):
+        for j, d in enumerate(row or []):
             if abs(d) > abs(best[0]):
                 best = (d, i, j)
     facts, trust = [], []
     bump = float(getattr(params, "bump_pct", 0) or 0)
+    model = view.get("model")
+    # K3 — 실제로 넘긴 것만 말한다(같은 방식 · 같은 수익률 · 생각이 기대 수익에 들어갔을 때만 생각 · 걸린 제약 · 효용의 λ).
+    passed = ["같은 수익률"] + (["같은 생각"] if r.get("views_used") else []) \
+        + (["같은 제약"] if r.get("constraints_applied") else []) + (["같은 위험 회피 λ"] if model == "mv_utility" else [])
+    redo = (f"‘{MODEL_PLAIN.get(model, model)}’ 방식에 {'·'.join(passed)}{'를' if passed[-1].endswith('λ') else '을'} 넣어 다시 풀었어요."
+            if r.get("model")
+            else "같은 수익률과 같은 생각(뷰)으로 다시 풀었어요.")
+    if r.get("still"):
+        # 기대 수익을 쓰지 않는 방식 — 0 칸을 '가장 큰 변화' 로 세우지 않고 그렇다고 말한다(사용자 결정 2026-10-18).
+        return {"title": "기대수익이 틀려도 이 비중은 움직이지 않아요", "headline": None, "facts": [str(r["still"])],
+                "trust": [_t(CONFIRMED, redo)],
+                "unmeasured": ["공분산이 틀렸을 때의 민감도", "여러 종목이 함께 틀릴 때"]}
     if best[1] is not None:
         ni, nj = names[best[1]], names[best[2]]
         facts.append(f"{labels.get(ni, ni)}의 기대수익을 {bump:g}%p 높이면 {labels.get(nj, nj)} 비중이 "
                      f"{best[0]:+.2f}%p 바뀌어요.")
-    trust.append(_t(CONFIRMED, "같은 수익률과 같은 생각(뷰)으로 다시 풀었어요."))
+    trust.append(_t(CONFIRMED, redo))
+    if r.get("failed_rows"):
+        trust.append(_t(UNKNOWN, f"기대수익을 흔든 {len(m)}번 중 {r['failed_rows']}번은 비중을 풀지 못해 그 줄을 비웠어요."))
+    if view.get("has_constraints") and r.get("constraints_applied") is False:
+        trust.append(_t(ASSUMED, "정한 제약을 모두 지킬 수 없어 제약 없는 비중으로 점검했어요 — "
+                                 + str(r.get("constraints_reason") or "")))
     if view.get("model") != view.get("basis"):
         trust.append(_t(ASSUMED, f"이 점검은 ‘{MODEL_PLAIN.get(view.get('basis'), view.get('basis'))}’ 기준으로 "
                                  f"다시 풀어요 — 고른 방식(‘{MODEL_PLAIN.get(view.get('model'), view.get('model'))}’)의 "
                                  "민감도와 다를 수 있어요."))
-    if view.get("has_constraints"):
-        trust.append(_t(ASSUMED, "비중 제약은 이 점검에 넣지 않았어요."))
     return {"title": "기대수익이 조금 틀려도 비중이 얼마나 바뀌는지 봤어요",
             "headline": {"label": "가장 큰 비중 변화", "value": best[0], "unit": "%p", "text": f"{best[0]:+.2f}%p"},
             "facts": facts, "trust": trust,

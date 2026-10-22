@@ -143,8 +143,11 @@ export function SensitivityResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
   const names = (r.names as string[]) ?? [];
   const labels = (r.labels as Record<string, string>) ?? {};
-  const m = (r.matrix as number[][]) ?? [];
-  const max = Math.max(0.01, ...m.flat().map((x) => Math.abs(x)));
+  // 흔든 기대 수익으로 풀지 못한 줄은 서버가 `null` 로 준다(K3) — 0 이 아니라 칸마다 "—".
+  const m: (number | null)[][] = ((r.matrix as (number[] | null)[]) ?? []).map((row) => row ?? names.map(() => null));
+  // 기대 수익을 쓰지 않는 방식은 칸이 모두 0 이다 — 0 칸 히트맵 대신 서버 문장(K3 · 사용자 결정 2026-10-18).
+  if (typeof r.still === "string") return <p className="pg-note pg-sens-still">{r.still}</p>;
+  const max = Math.max(0.01, ...m.flat().map((x) => Math.abs(num(x) ?? 0)));
   const short = (n: string) => labels[n] ?? n;
   return (
     <>
@@ -155,11 +158,13 @@ export function SensitivityResult({ v }: { v: Dict }) {
           <tbody>{m.map((row, i) => (
             <tr key={names[i]}>
               <th scope="row">{short(names[i])}</th>
-              {row.map((d, j) => (num(d) === null
-                ? <td key={j}>—</td>
-                : <td key={j} style={{ ["--pg-heat" as string]: `${Math.round((Math.abs(d) / max) * 40)}%` }}
-                      className={d < 0 ? "neg" : d > 0 ? "pos" : ""}>{d > 0 ? "+" : ""}{d.toFixed(1)}</td>
-              ))}
+              {row.map((x, j) => {
+                const d = num(x);
+                return d === null
+                  ? <td key={j}>—</td>
+                  : <td key={j} style={{ ["--pg-heat" as string]: `${Math.round((Math.abs(d) / max) * 40)}%` }}
+                        className={d < 0 ? "neg" : d > 0 ? "pos" : ""}>{d > 0 ? "+" : ""}{d.toFixed(1)}</td>;
+              })}
             </tr>
           ))}</tbody>
         </table>

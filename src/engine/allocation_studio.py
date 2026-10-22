@@ -610,17 +610,57 @@ def target_weight_range(names: list[str], R: np.ndarray, *,
 
 
 # ── Sensitivity Heatmap (Robustness 재정의 — 기댓값 변동 → Weight 민감도) ──────
+#: 무제약이면 비중이 기대 수익을 읽지 않는 방식(K3) — 흔들어도 비중이 같다.
+_MU_FREE = frozenset({"min_var", "risk_parity", "hrp", "max_div", "min_cvar"})
+#: 제약을 걸어도 읽지 않는 방식 — `constrained_solve` 가 분산(min_var)·근사 투영(risk_parity·hrp)으로 푼다.
+#: 나머지는 제약이 걸리면 `constrained_solve` 의 기대 수익 목적함수(샤프·효용)로 풀린다 — '비중 계산' 과 같은 길이다.
+_MU_FREE_CONSTRAINED = frozenset({"min_var", "risk_parity", "hrp"})
+
+
+def _mu_reach(model: str, has_views: bool, constrained: bool) -> str:
+    """흔든 기대 수익이 비중에 닿는가 — `reads` 닿는다 · `none` 그 방식은 기대 수익을 쓰지 않는다 · `own` 스스로 다시 추정한다."""
+    if constrained:
+        return "none" if model in _MU_FREE_CONSTRAINED else "reads"
+    if model == "bl":
+        return "reads" if has_views else "none"
+    if model == "robust":
+        return "own"
+    return "none" if model in _MU_FREE else "reads"
+
+
+_STILL = {
+    "none": "이 방식은 기대 수익을 쓰지 않아 기대 수익을 흔들어도 비중이 움직이지 않아요.",
+    "none_bl": ("생각(뷰)이 없으면 이 방식의 비중은 시가총액 비중이라 기대 수익을 쓰지 않아 기대 수익을 흔들어도 "
+                "비중이 움직이지 않아요."),
+    "none_bl_failed": ("생각을 넣은 기대 수익을 계산하지 못해 이 방식의 비중이 시가총액 비중이라, 기대 수익을 쓰지 않아 "
+                       "기대 수익을 흔들어도 비중이 움직이지 않아요."),
+    "own": ("이 방식은 기대 수익을 수익률에서 스스로 다시 추정해서, 여기서 흔든 기대 수익이 들어가지 않아 "
+            "비중이 움직이지 않아요."),
+}
+
+
 def sensitivity_matrix(names: list[str], R: np.ndarray,
                        views: list[dict] | None = None,
                        delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT,
-                       bump_pct: float = 2.0) -> dict:
+                       bump_pct: float = 2.0, *,
+                       model: str | None = None, constraints=None,
+                       risk_aversion: float | None = None,
+                       w_current=None, bench_returns: np.ndarray | None = None,
+                       groups_of: dict[str, str] | None = None) -> dict:
     """자산 i의 기대수익 μ_i에 +bump(연 %p) 충격 → max-sharpe 재최적화 →
     matrix[i][j] = w_j(shock i) − w_j(base) (%p, N×N).
 
     base μ는 optimize()와 동일 경로(뷰 있으면 BL posterior, 없으면 히스토리컬
     연율 평균) — Robustness가 검증하는 대상이 실제 사용 중인 기대수익이 되도록.
     행별 Δ 합은 합1 제약으로 ≈0. SLSQP N회(N≤30)라 수 초 내.
+
+    ★`model` 을 주면(K3) 그 방식·제약·λ 로 '비중 계산' 과 같은 길을 탄다★ — `_sensitivity_for_model`.
+    주지 않으면 아래 예전 길 그대로다(`/sensitivity` 라우트 — 바이트 불변).
     """
+    if model is not None:
+        return _sensitivity_for_model(names, R, views, delta, tau, bump_pct, model=model,
+                                      constraints=constraints, risk_aversion=risk_aversion,
+                                      w_current=w_current, bench_returns=bench_returns, groups_of=groups_of)
     n = len(names)
     base = optimize("bl" if views else "mvo", names, R, views=views,
                     delta=delta, tau=tau)
@@ -647,4 +687,83 @@ def sensitivity_matrix(names: list[str], R: np.ndarray,
         "matrix": matrix,           # 행=충격 자산, 열=반응 비중 Δ%p
         "bump_pct": bump_pct,
         "views_applied": base["views_applied"],
+    }
+
+
+def _sensitivity_for_model(names, R, views, delta, tau, bump_pct, *, model, constraints, risk_aversion,
+                           w_current, bench_returns, groups_of) -> dict:
+    """고른 방식의 민감도(K3) — 기준 비중은 '비중 계산' 노드와 같은 길(`optimize` → 제약이면 `constrained_solve`,
+    못 풀면 제약 없는 비중 — `_apply_constraints` 와 같다). 흔든 기대 수익마다 같은 길로 다시 푼다.
+
+    흔드는 기대 수익은 그 방식이 실제로 쓰는 것이다: 제약 해·BL·EP 는 `mu_used`(사후 μ 포함), 나머지 무제약 방식은 과거 평균.
+    흔든 μ 로 풀지 못한 줄은 0 이 아니라 `None` 이고 `failed_rows` 로 센다(조용한 무반응 금지).
+    """
+    n = len(names)
+    R = np.asarray(R, dtype=float)
+    base = optimize(model, names, R, views=views, delta=delta, tau=tau, risk_aversion=risk_aversion)
+    S = np.asarray(base["sigma_annual"], dtype=float)
+    w0 = np.asarray(base["weights"], dtype=float)
+    active = constraints is not None and constraints.any_active()
+    applied, reason = False, None
+
+    def _constrained(mu):
+        from src.engine.constrained_opt import constrained_solve
+        return constrained_solve(model, names, R, mu=mu, S=S, constraints=constraints, w_current=w_current,
+                                 groups_of=groups_of or {}, bench_returns=bench_returns, risk_aversion=risk_aversion)
+
+    if active:
+        sol = _constrained(np.asarray(base["mu_used"], dtype=float))
+        if sol["status"] != "infeasible" and sol.get("weights") is not None:
+            applied, w0 = True, np.asarray(sol["weights"], dtype=float)
+        else:
+            reason = sol.get("reason")
+    from_posterior = base.get("mu_engine") in ("bl", "ep") and (applied or model in ("bl", "ep"))
+    mu0 = (np.asarray(base["mu_used"], dtype=float) if applied or model in ("bl", "ep")
+           else R.mean(axis=0) * 252.0)
+    has_views = bool(views) and base.get("mu_engine") == "bl"
+    w_mkt = np.asarray(base["flow"]["market"], dtype=float)
+
+    def _solve(mu):
+        if applied:
+            sol = _constrained(mu)
+            return (np.asarray(sol["weights"], dtype=float)
+                    if sol["status"] != "infeasible" and sol.get("weights") is not None else None)
+        if model == "bl":
+            if not has_views:
+                return w_mkt
+            w = _max_sharpe_w(mu, S, n)
+            if w is None or not np.all(np.isfinite(w)) or w.sum() <= 0:
+                return None
+            w = np.maximum(np.asarray(w, dtype=float), 0.0)
+            return w / w.sum()
+        return _raw_weights_for_model("mvo" if model == "ep" else model, R, mu, S, risk_aversion)
+
+    bump = float(bump_pct) / 100.0
+    matrix: list[list[float] | None] = []
+    failed = 0
+    for i in range(n):
+        mu = mu0.copy()
+        mu[i] += bump
+        w = _solve(mu)
+        if w is None:
+            matrix.append(None)
+            failed += 1
+            continue
+        matrix.append([round(float((w[j] - w0[j]) * 100.0), 2) for j in range(n)])
+    reach = _mu_reach(model, has_views, applied)
+    still = ((_STILL["none_bl_failed"] if views else _STILL["none_bl"]) if reach == "none" and model == "bl" and not applied
+             else _STILL.get(reach))
+    return {
+        "names": names,
+        "base_weights": [round(float(x) * 100.0, 2) for x in w0],
+        "matrix": matrix,
+        "bump_pct": bump_pct,
+        "views_applied": base["views_applied"],
+        "model": model,
+        "mu_reach": reach,
+        "still": still,
+        "failed_rows": failed,
+        "views_used": bool(from_posterior and views),
+        "constraints_applied": applied if active else None,
+        "constraints_reason": reason,
     }

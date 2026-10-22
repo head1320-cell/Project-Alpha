@@ -216,10 +216,11 @@ def _sens(model, **opt):
     return g
 
 
-def test_r10_sensitivity_re_solves_with_another_model(clean):
+def test_r10_sensitivity_re_solves_with_the_same_model(clean):
+    """K3 부터 민감도는 받은 비중의 방식으로 다시 푼다 — 규칙이 살아 있는 짝은 `test_k3_sensitivity_model`."""
     e, rep = _edges(_sens("risk_parity"))
     assert rep["nodes"]["s"]["status"] == "ok"
-    assert "other_model" in _codes(e["o.weights->s.weights"])
+    assert "other_model" not in _codes(e["o.weights->s.weights"])
 
 
 def test_r10_same_model_clean(clean):
@@ -227,9 +228,10 @@ def test_r10_same_model_clean(clean):
     assert e["o.weights->s.weights"]["issues"] == []
 
 
-def test_r10_constraints_are_lost(clean):
+def test_r10_constraints_are_carried(clean):
+    """K3 부터 제약도 넘어간다."""
     e, _ = _edges(_sens("mvo", constraints={"max_weight_pct": 40}))
-    assert "constraints_dropped" in _codes(e["o.weights->s.weights"])
+    assert "constraints_dropped" not in _codes(e["o.weights->s.weights"])
 
 
 # ── R11·R12 점수 → 비중 ──────────────────────────────────────────────────────

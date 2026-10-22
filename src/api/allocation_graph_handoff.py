@@ -332,7 +332,7 @@ def intake_backtest_weights(h: pg.Handoff) -> dict:
 
 
 def intake_sensitivity_weights(h: pg.Handoff) -> dict:
-    """R10 — 민감도는 고른 방식이 아니라 BL/MVO 로 다시 풀고 제약을 뺀다."""
+    """R10 — 민감도가 받은 비중과 다른 방식으로 풀었거나 · 제약을 뺐거나 · 넘어가지 않는 생각이 있는지(K3 부터 같은 방식·제약으로 푼다)."""
     base = intake_weights_default(h)
     issues = list(base["issues"])
     view = h.view or {}
@@ -341,12 +341,17 @@ def intake_sensitivity_weights(h: pg.Handoff) -> dict:
     if model and basis and model != basis:
         issues.append(_i("changed", "other_model", f"‘{MODEL_PLAIN.get(model, model)}’ 비중을 받았지만 민감도는 "
                                                    f"‘{MODEL_PLAIN.get(basis, basis)}’ 방식으로 다시 풀어요."))
-    if view.get("has_constraints"):
+    cr = (h.source_view or {}).get("constraints_report") or {}
+    if view.get("has_constraints") and not view.get("constraints_applied") and cr.get("status") != "infeasible":
+        # 비중 계산도 제약을 못 풀었으면(infeasible) 둘 다 제약 없는 비중이라 빠진 것이 아니다.
         issues.append(_i("lost", "constraints_dropped", "비중 계산에 건 제약은 민감도로 넘어가지 않아요."))
     req = (h.value or {}).get("req")
     if req is not None and getattr(req, "conditional", False):
         issues.append(_i("changed", "conditional_dropped", "경기 국면 반영은 민감도로 넘어가지 않아요."))
-    return _out(base["checks"] + ["같은 방식으로 다시 푸는지", "제약", "경기 국면 반영"], issues)
+    used = ((h.value or {}).get("opt") or {}).get("company_views_used") or 0
+    if used:
+        issues.append(_i("lost", "company_views_dropped", f"회사 가치에서 온 생각 {used}개는 민감도로 넘어가지 않아요."))
+    return _out(base["checks"] + ["같은 방식으로 다시 푸는지", "제약", "경기 국면 반영", "회사 가치 생각"], issues)
 
 
 def intake_s2w_scores(h: pg.Handoff) -> dict:

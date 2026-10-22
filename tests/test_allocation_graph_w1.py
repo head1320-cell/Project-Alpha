@@ -196,11 +196,14 @@ def test_sensitivity_with_a_view_uses_the_same_view_as_the_route(market):
     assert not any(t["state"] == "assumed" for t in m["explain"]["trust"]), "BL + 뷰는 같은 기준이다"
 
 
-def test_sensitivity_says_it_is_measured_on_the_mean_variance_basis_for_other_models(market):
+def test_sensitivity_of_a_mu_free_model_says_it_does_not_move(market):
+    """K3(사용자 결정 2026-10-18) — HRP 는 기대 수익을 쓰지 않는다: 같은 방식으로 계산하고 '안 움직여요' 라고 말한다."""
     m = _run(_sens_graph(model="hrp"))["nodes"]["m"]
     assert m["status"] == "ok", m["reason"]
-    assumed = [t["text"] for t in m["explain"]["trust"] if t["state"] == "assumed"]
-    assert assumed and "기준" in assumed[0]
+    assert m["view"]["basis"] == "hrp" and m["view"]["result"]["mu_reach"] == "none"
+    assert all(x == 0.0 for row in m["view"]["result"]["matrix"] for x in row)
+    assert any("움직이지 않아요" in f for f in m["explain"]["facts"])
+    assert not any(t["state"] == "assumed" for t in m["explain"]["trust"])
 
 
 # ── 팩터 성격 ────────────────────────────────────────────────────────────────
