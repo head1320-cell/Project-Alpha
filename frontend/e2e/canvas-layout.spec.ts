@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { contrastAudit, type AuditResult } from "./helpers";
 
 /**
  * CF4 · 배경·배치 — ★자유 배치는 그대로, 맞추는 도구를 더한다★
@@ -258,3 +259,125 @@ test("자동 정리는 자란 카드의 실제 높이로 쌓는다 — 아래 �
   expect(Math.abs(top.x - below.x)).toBeLessThan(2);                            // 같은 열
   expect(below.y, "아래 카드가 자란 카드 밑에서 시작한다").toBeGreaterThanOrEqual(top.y + top.height);
 });
+
+// ── CF4b · 단계 레인('보기' 메뉴) ────────────────────────────────────────────────
+// 레인 = 서버 단계 순서대로 왼→오 세로 띠 여섯. 노드가 아니다(끌 수도 고를 수도 없다) · 빈 곳 누르기·끌기는 그대로 캔버스로 간다.
+// STACK 은 비중 계산(build)이 x 640 — '신호' 띠 자리라 맞추기 전에는 제 띠 밖이다(짝).
+
+async function stagesOf(page: Page): Promise<{ key: string; label: string }[]> {
+  return (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()).stages;
+}
+async function viewMenu(page: Page) {
+  await page.locator(".pg-view-open").click();
+  await expect(page.locator(".pg-view-menu")).toBeVisible();
+}
+async function lanesOn(page: Page, on: boolean) {
+  await viewMenu(page);
+  const item = page.locator('.pg-view-menu [role=menuitemcheckbox][data-view="lanes"]');
+  if ((await item.getAttribute("aria-checked")) !== String(on)) await item.click();
+  else await page.keyboard.press("Escape");
+}
+const center = (b: { x: number; width: number }) => b.x + b.width / 2;
+
+test("레인: 켜면 띠 여섯이 서버 단계 순서·이름 그대로 · 노드 수 · 짝: 끄면 0 · 노드는 그대로", async ({ page }) => {
+  await openWith(page, STACK);
+  const stages = await stagesOf(page);
+  expect(stages.length).toBe(6);
+  await expect(page.locator(".pg-lane")).toHaveCount(0);                       // 기본은 꺼짐
+  await viewMenu(page);
+  await expect(page.locator('.pg-view-menu [data-view="lanes"]')).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator('.pg-view-menu [data-view="fit-lanes"]')).toHaveCount(0);   // 짝 — 끈 동안 맞추기 없음
+  await page.keyboard.press("Escape");
+  await lanesOn(page, true);
+  const lanes = page.locator(".pg-lane");
+  await expect(lanes).toHaveCount(6);
+  expect(await lanes.evaluateAll((els) => els.map((el) => el.getAttribute("data-stage")))).toEqual(stages.map((s) => s.key));
+  for (const [i, s] of stages.entries()) await expect(lanes.nth(i).locator(".pg-lane-name")).toHaveText(s.label);
+  const counts = await lanes.evaluateAll((els) => els.map((el) => Number(el.getAttribute("data-count"))));
+  expect(counts).toEqual([2, 0, 0, 1, 2, 0]);                                   // universe·returns / optimizer / scenario·corr
+  // 띠는 왼→오로 겹치지 않고 이어진다.
+  const xs = await Promise.all([...Array(6).keys()].map(async (i) => (await lanes.nth(i).boundingBox())!));
+  for (let i = 1; i < 6; i++) expect(Math.abs(xs[i].x - (xs[i - 1].x + xs[i - 1].width))).toBeLessThan(1.5);
+  await expect(page.locator(".react-flow__node")).toHaveCount(STACK.nodes.length);   // 노드로 만들지 않았다
+  await lanesOn(page, false);
+  await expect(page.locator(".pg-lane")).toHaveCount(0);
+});
+
+test("레인은 누르기·끌기를 잡지 않는다 — 빈 띠 위 점은 캔버스(pane)", async ({ page }) => {
+  await openWith(page, STACK);
+  await lanesOn(page, true);
+  const empty = (await page.locator('.pg-lane[data-stage="belief"]').boundingBox())!;    // 빈 띠
+  const canvasBox = (await page.locator(".pg-canvas").boundingBox())!;
+  const p = { x: center(empty), y: Math.min(empty.y + empty.height / 2, canvasBox.y + canvasBox.height - 120) };
+  const hit = await page.evaluate(([x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    return { pane: !!el?.closest(".react-flow__pane"), lane: !!el?.closest(".pg-lane") };
+  }, [p.x, p.y]);
+  expect(hit).toEqual({ pane: true, lane: false });
+});
+
+test("레인에 맞추기: 노드마다 자기 단계 띠 안으로 · 되돌리기 한 번에 원래 자리 (짝: 맞추기 전엔 띠 밖 노드가 있다)", async ({ page }) => {
+  await openWith(page, STACK);
+  const stages = await stagesOf(page);
+  const catalog = (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()).nodes as { type: string; stage: string }[];
+  const stageOf = (kind: string) => catalog.find((c) => c.type === kind)!.stage;
+  await lanesOn(page, true);
+  const outside = async () => {
+    const out: string[] = [];
+    for (const nd of STACK.nodes) {
+      const lane = (await page.locator(`.pg-lane[data-stage="${stageOf(nd.type)}"]`).boundingBox())!;
+      const c = center((await card(page, nd.id).boundingBox())!);
+      if (c < lane.x || c > lane.x + lane.width) out.push(nd.id);
+    }
+    return out;
+  };
+  expect(await outside(), "맞추기 전엔 띠 밖 노드가 있다").not.toEqual([]);
+  const before = await Promise.all(STACK.nodes.map((nd) => pos(page, nd.id)));
+  await viewMenu(page);
+  await page.locator('.pg-view-menu [role=menuitem][data-view="fit-lanes"]').click();
+  await page.waitForTimeout(500);
+  expect(await outside()).toEqual([]);
+  expect(stages.length).toBe(6);
+  await page.keyboard.press("Control+z");
+  expect(await Promise.all(STACK.nodes.map((nd) => pos(page, nd.id)))).toEqual(before);
+});
+
+test("레인 켬은 이 브라우저에 남는다 — 새로고침 뒤에도 켜짐 · 짝: 끄고 새로고침하면 꺼짐", async ({ page }) => {
+  await openWith(page, STACK);
+  await lanesOn(page, true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".pg-lane")).toHaveCount(6);
+  await lanesOn(page, false);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(400);
+  await expect(page.locator(".pg-lane")).toHaveCount(0);
+});
+
+test("명령 찾기(Ctrl+K)에도 같은 항목 — 레인 켜기 · 레인에 맞추기", async ({ page }) => {
+  await openWith(page, STACK);
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("명령 찾기").last().fill("단계 레인");
+  await expect(page.locator('.pg-cmd-item[data-cmd="lanes"]')).toContainText("단계 레인 보기");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".pg-lane")).toHaveCount(6);
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("명령 찾기").last().fill("레인에 맞추기");
+  await expect(page.locator('.pg-cmd-item[data-cmd="fit-lanes"]')).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("명령 찾기").last().fill("단계 레인");
+  await expect(page.locator('.pg-cmd-item[data-cmd="lanes"]')).toContainText("단계 레인 끄기");
+});
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`레인 대비(${scheme}): 띠 머리 글은 AA · 띠 바탕은 카드보다 조용하다`, async ({ page }) => {
+    await openWith(page, STACK);
+    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await lanesOn(page, true);
+    const a = await page.evaluate<AuditResult>(contrastAudit(".pg-lanes"));
+    expect(a.checked).toBeGreaterThanOrEqual(6);
+    expect(a.low, `${scheme} 띠 머리`).toEqual([]);
+  });
+}

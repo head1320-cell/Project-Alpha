@@ -72,6 +72,7 @@ import {
 } from "@/entities/portfolio-graph";
 import { deepSigs, staleNodes } from "@/entities/portfolio-graph/staleness";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
+import { fitLanes } from "@/entities/portfolio-graph/lanes";
 import { alignRects, type AlignKind } from "./guides";
 
 /** 계산 기록 한 줄 — 노드마다 상태와 헤드라인만(원 결과는 두지 않는다: 가볍게, 비교에 필요한 만큼). */
@@ -125,6 +126,8 @@ export interface PgState {
   future: Snapshot[];
   clip: { nodes: PgNode[]; edges: Edge[] } | null;
   showMinimap: boolean;
+  /** 단계 레인(CF4b) — 보기만 바꾼다(문서·계산과 무관). 켬/끔은 `view.ts` 가 이 브라우저에 남긴다. */
+  showLanes: boolean;
   /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
   tab: "story" | "settings" | "detail" | "branches" | "wire";
   /** 오른쪽 판 "선" 탭이 보이는 선(BT4). */
@@ -195,11 +198,14 @@ export interface PgState {
   groupPicked: (label?: string) => string | null;
   /** 고른 카드 정렬·간격 맞추기(CF4a) — 되돌리기 한 번. 간격은 셋 이상일 때만. */
   alignPicked: (kind: AlignKind) => void;
+  /** 레인에 맞추기(CF4b) — 노드마다 자기 단계 띠의 하위 열로, 열 안은 지금 순서대로 실제 높이로 쌓는다. 되돌리기 한 번. */
+  fitToLanes: () => void;
   ungroup: (id: string) => void;
   toggleGroup: (id: string) => void;
   renameGroup: (id: string, label: string) => void;
   moveGroup: (id: string, dx: number, dy: number) => void;
   setMinimap: (v: boolean) => void;
+  setLanes: (v: boolean) => void;
   setTab: (t: PgState["tab"]) => void;
   setExpert: (v: boolean) => void;
   setOpenGate: (k: string | null) => void;
@@ -393,6 +399,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     future: [],
     clip: null,
     showMinimap: false,
+    showLanes: false,
     tab: "story",
     selectedEdge: null,
     expert: false,
@@ -899,6 +906,17 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       set({ nodes: s.nodes.map((n) => (to.has(n.id) ? { ...n, position: to.get(n.id)! } : n)) });
     },
 
+    fitToLanes: () => {
+      const s = get();
+      if (!s.catalog || !s.stages.length) return;
+      const byId = new Map(s.nodes.map((n) => [n.id, n]));
+      const to = fitLanes(s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), s.edges, s.catalog, s.stages,
+                          (id) => boxH(byId.get(id)!, s.catalog));
+      if (!to.size) return;
+      push();
+      set({ nodes: s.nodes.map((n) => (to.has(n.id) ? { ...n, position: to.get(n.id)! } : n)) });
+    },
+
     groupPicked: (label) => {
       const s = get();
       const ids = s.picked.filter((id) => s.nodes.some((n) => n.id === id));
@@ -1049,6 +1067,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     }),
 
     setMinimap: (showMinimap) => set({ showMinimap }),
+    setLanes: (showLanes) => set({ showLanes }),
     setTab: (tab) => set({ tab }),
     setExpert: (expert) => set({ expert }),
     setOpenGate: (openGate) => set({ openGate }),

@@ -40,7 +40,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlignStartVertical, Archive, Boxes, ClipboardList, ClipboardPaste, Command, Copy, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
+import { AlignStartVertical, Archive, Boxes, Check, ClipboardList, ClipboardPaste, Command, Copy, Eye, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
 import {
   BRIEF_MAX_W,
   COL,
@@ -85,6 +85,8 @@ import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { measuredH, measuredW } from "./toolbarPlace";
 import { ALIGN_ITEMS, snapToGuides, type AlignKind, type Guide } from "./guides";
+import { laneLayout } from "@/entities/portfolio-graph/lanes";
+import { readView, saveView } from "./view";
 import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, PALETTE_KIND_PREFIX, PALETTE_MIME, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
@@ -169,6 +171,18 @@ function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
   );
 }
 
+/** 열린 메뉴 닫기 — 바깥을 누르거나 Escape. 정렬·보기 메뉴가 같이 쓴다. */
+function useDismiss(open: boolean, close: () => void, ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as HTMLElement)) close(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("pointerdown", away);
+    window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc); };
+  }, [open, close, ref]);
+}
+
 /** 정렬·간격(CF4a) — 고른 카드 막대의 '정렬' 단추 하나 → 글자 항목(간격 맞추기는 셋 이상일 때만). 툴팁 없이 보이는 글. */
 function AlignMenu({ n, onPick }: { n: number; onPick: (k: AlignKind) => void }) {
   const [open, setOpen] = useState(false);
@@ -184,14 +198,7 @@ function AlignMenu({ n, onPick }: { n: number; onPick: (k: AlignKind) => void })
     const h = menu.current.offsetHeight + 8, below = c.bottom - b.bottom, above = b.top - c.top;
     setDir(below >= h || below >= above ? "down" : "up");
   }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as HTMLElement)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("pointerdown", away);
-    window.addEventListener("keydown", esc);
-    return () => { window.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc); };
-  }, [open]);
+  useDismiss(open, useCallback(() => setOpen(false), []), ref);
   return (
     <div className="pg-align" ref={ref}>
       <button type="button" className="pg-selbar-b pg-align-open" aria-haspopup="menu" aria-expanded={open}
@@ -207,6 +214,66 @@ function AlignMenu({ n, onPick }: { n: number; onPick: (k: AlignKind) => void })
         </div>
       )}
     </div>
+  );
+}
+
+/** '보기' 메뉴(CF4b) — 도구줄 단추 하나. 단계 레인 켬/끔 · 켜졌을 때 '레인에 맞추기'. 명령 찾기(Ctrl+K)에도 같은 항목이 있다. */
+function ViewMenu({ lanes, onLanes, onFitLanes }: { lanes: boolean; onLanes: () => void; onFitLanes: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useDismiss(open, useCallback(() => setOpen(false), []), ref);
+  return (
+    <span className="pg-view-wrap" ref={ref}>
+      <button type="button" className={`pg-icon-tool pg-view-open${lanes ? " on" : ""}`} aria-haspopup="menu" aria-expanded={open}
+              aria-label="보기" title="보기 — 단계 레인" onClick={() => setOpen((v) => !v)}><Eye size={16} /></button>
+      {open && (
+        <div className="pg-view-menu" role="menu" aria-label="보기">
+          <button type="button" role="menuitemcheckbox" aria-checked={lanes} data-view="lanes"
+                  onClick={() => { setOpen(false); onLanes(); }}>
+            <span className="pg-view-check" aria-hidden="true">{lanes && <Check size={14} />}</span>단계 레인 보기
+          </button>
+          {lanes && (
+            <button type="button" role="menuitem" data-view="fit-lanes" onClick={() => { setOpen(false); onFitLanes(); }}>
+              <span className="pg-view-check" aria-hidden="true" />레인에 맞추기
+            </button>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** 띠 머리 높이(캔버스 좌표) — 맨 위 노드 위로 이만큼 띠를 늘려 이름을 둔다. */
+const LANE_HEAD = 72;
+
+/**
+ * 단계 레인(CF4b) — 서버 단계 순서대로 왼→오 세로 띠 여섯. ★노드가 아니다★(끌 수도 고를 수도 없다 · 누르기는 캔버스로 간다).
+ * 띠 x·폭은 문서·카탈로그로만(`laneLayout`) — 지금 위치와 무관하다. 위아래만 노드를 덮도록 늘인다.
+ */
+function StageLanes({ stages }: { stages: WorkflowStage[] }) {
+  const nodes = usePortfolioGraph((st) => st.nodes);
+  const edges = usePortfolioGraph((st) => st.edges);
+  const catalog = usePortfolioGraph((st) => st.catalog);
+  const geo = useMemo(() => {
+    if (!catalog || !stages.length) return null;
+    const { lanes } = laneLayout(nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), edges, catalog, stages);
+    const h = (n: (typeof nodes)[number]) => measuredH(n) || cardHeight(n.data.kind, catalog);
+    const top = Math.min(0, ...nodes.map((n) => n.position.y)) - LANE_HEAD;
+    const bottom = Math.max(0, ...nodes.map((n) => n.position.y + h(n))) + 40;
+    return { lanes, top, h: bottom - top };
+  }, [nodes, edges, catalog, stages]);
+  if (!geo) return null;
+  return (
+    <ViewportPortal>
+      <div className="pg-lanes" aria-hidden="true">
+        {geo.lanes.map((l) => (
+          <div key={l.key} className="pg-lane" data-stage={l.key} data-count={l.count}
+               style={{ left: l.x, top: geo.top, width: l.w, height: geo.h, ["--pg-lane-c" as string]: STAGE_VAR[l.key] ?? "var(--pg-st-data)" }}>
+            <div className="pg-lane-head"><span className="pg-lane-name">{l.label}</span><span className="pg-lane-n">{l.count}개</span></div>
+          </div>
+        ))}
+      </div>
+    </ViewportPortal>
   );
 }
 
@@ -417,6 +484,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const [panels, setPanels] = useState<Panels>(DEFAULT_PANELS);
   const narrowNow = () => typeof window !== "undefined" && !!window.matchMedia?.(NARROW_Q).matches;
   useEffect(() => { setPanels(readPanels(narrowNow(), window.innerWidth >= 1440)); }, []);
+  useEffect(() => { usePortfolioGraph.getState().setLanes(readView().lanes); }, []);
   const updatePanels = useCallback((f: (p: Panels) => Panels) => {
     setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
   }, []);
@@ -1153,6 +1221,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     return () => window.removeEventListener("keydown", onKey);
   }, [run, runTo, updatePanels]);
 
+  // 단계 레인(CF4b) — 켬/끔은 이 브라우저에 남긴다. 맞추기는 되돌리기 한 번 + 맞춰 보기.
+  const toggleLanes = () => {
+    const v = !usePortfolioGraph.getState().showLanes;
+    usePortfolioGraph.getState().setLanes(v);
+    saveView({ ...readView(), lanes: v });
+  };
+  const fitToLanes = () => { usePortfolioGraph.getState().fitToLanes(); fit(); };
+
   const commands = useMemo<PaletteCommand[]>(() => [
     { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
     { id: "find", group: "보기", label: "캔버스에서 노드 찾기", keys: "Ctrl+F", run: () => setFindOpen(true) },
@@ -1182,6 +1258,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
       hint: "왼쪽 목록과 오른쪽 창을 잠시 모두 닫아요", run: () => updatePanels((p) => toggle(p, "focus")) },
     { id: "minimap", group: "보기", label: s.showMinimap ? "미니맵 끄기" : "미니맵 켜기",
       run: () => usePortfolioGraph.getState().setMinimap(!usePortfolioGraph.getState().showMinimap) },
+    { id: "lanes", group: "보기", label: s.showLanes ? "단계 레인 끄기" : "단계 레인 보기", hint: "흐름 단계 여섯을 왼쪽에서 오른쪽 세로 띠로 깔아요",
+      run: toggleLanes },
+    ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드마다 자기 단계 띠 안으로 옮겨요", run: fitToLanes }] : []),
     { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
       run: () => usePortfolioGraph.getState().groupPicked() },
     ...(s.selectedId ? [{ id: "branch", group: "비교", label: "고른 노드에서 갈래 만들기",
@@ -1199,7 +1278,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.showMinimap, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  ], [s.selectedId, s.showMinimap, s.showLanes, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -1300,6 +1379,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
           </span>
           <button type="button" className={`pg-icon-tool${s.showMinimap ? " on" : ""}`} aria-pressed={s.showMinimap}
                   aria-label="미니맵" title="미니맵" onClick={() => s.setMinimap(!s.showMinimap)}><MapIcon size={16} /></button>
+          <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} />
           <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
                   onClick={() => setCmdOpen(true)}><Command size={16} /></button>
         </div>
@@ -1472,6 +1552,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                 </svg>
               </ViewportPortal>
             )}
+            {s.showLanes && <StageLanes stages={stages} />}
             <ZoomWatch el={canvasEl} />
             {focused && (
               <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">
