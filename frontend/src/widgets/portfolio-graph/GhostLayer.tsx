@@ -17,7 +17,7 @@ type Pt = { x: number; y: number };
 interface GhostWire { ghost: string; from: string; to: string; action: string; d: string; mid: Pt }
 
 /** 진짜 노드의 포트 가운데(캔버스 좌표) — 아직 재지 못했으면 null(그 선은 그리지 않는다). */
-function handleAt(n: InternalNode | undefined, type: "source" | "target", id: string): Pt | null {
+export function handleAt(n: InternalNode | undefined, type: "source" | "target", id: string): Pt | null {
   const h = n?.internals.handleBounds?.[type]?.find((x) => x.id === id);
   if (!n || !h) return null;
   const p = n.internals.positionAbsolute;

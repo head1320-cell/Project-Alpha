@@ -58,6 +58,9 @@ import {
   NEW_NODE,
   placeSuggestion,
   type ProcedureSuggestion,
+  type DraftBody,
+  type DraftSet,
+  type PgNodeData,
   type GraphBlock,
   type GraphBranch,
   type WorkflowStage,
@@ -72,7 +75,7 @@ import {
   type RunReport,
   type ValidateReport,
 } from "@/entities/portfolio-graph";
-import { deepSigs, staleNodes } from "@/entities/portfolio-graph/staleness";
+import { deepSigs, stableJson, staleNodes } from "@/entities/portfolio-graph/staleness";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
 import { fitLanes } from "@/entities/portfolio-graph/lanes";
 import { viaOf } from "@/entities/portfolio-graph/format";
@@ -266,6 +269,11 @@ export interface PgState {
    * 돌려주는 값은 새 노드 id(없으면 null).
    */
   applySuggestion: (sug: ProcedureSuggestion, at?: { x: number; y: number }) => string | null;
+  /**
+   * 말로 설계(AI4)의 [받아들이기] — 노드 더하기 · 선 잇기 · 값 넣기(+ 출처 `said`)를 ★`push()` 한 번★에(되돌리기 한 번 = 전부 원래대로).
+   * 이름·목표는 건드리지 않는다. 초안이 기댄 문서와 달라졌으면(더할 id 가 이미 있음 · 값 넣을 노드가 없음) 하지 않고 null.
+   */
+  applyDraft: (d: DraftBody, at: Record<string, { x: number; y: number }>) => { added: number; connected: number; set: number } | null;
   /** 선을 골라 "선" 탭을 연다(BT4). null 이면 닫는다. */
   selectEdge: (id: string | null) => void;
   /** 선을 끊는다(BT4) — 되돌리기 한 번. */
@@ -384,6 +392,13 @@ function record(report: RunReport, partial: string[] | null): RunRecord {
                   value: typeof h?.value === "number" ? h.value : null };
   }
   return { at: Date.now(), partial, counts, nodes };
+}
+
+/** 말로 설계 출처 중 값이 그대로인 칸만 남긴다(AI4). 남는 것이 없으면 없음. */
+function keepSaid(said: Record<string, string> | undefined, before: Record<string, unknown>, after: Record<string, unknown>) {
+  if (!said) return undefined;
+  const kept = Object.entries(said).filter(([f]) => f in after && stableJson(before[f]) === stableJson(after[f]));
+  return kept.length ? Object.fromEntries(kept) : undefined;
 }
 
 export const usePortfolioGraph = create<PgState>((rawSet, get) => {
@@ -512,7 +527,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
         const targetHandle = plan.inputs[e.id] ?? e.targetHandle ?? null;
         return { ...e, sourceHandle, targetHandle, id: `${e.source}.${sourceHandle}->${e.target}.${targetHandle}` };
       });
-      set({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, kind, params: {} } } : n)), edges,
+      set({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, kind, params: {}, said: undefined } } : n)), edges,
             selectedEdge: null });
       return id;
     },
@@ -565,6 +580,30 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       return id;
     },
 
+    applyDraft: (d, at) => {
+      const s = get();
+      const ids = new Set(s.nodes.map((n) => n.id));
+      const adding = new Set(d.add.map((a) => a.id));
+      if (d.add.some((a) => ids.has(a.id)) || d.set.some((x) => !ids.has(x.node) && !adding.has(x.node))) return null;
+      push();
+      const sets = new Map<string, DraftSet[]>();
+      for (const x of d.set) sets.set(x.node, [...(sets.get(x.node) ?? []), x]);
+      const withSets = (id: string, data: PgNodeData): PgNodeData => {
+        const mine = sets.get(id);
+        if (!mine) return data;
+        return { ...data, params: { ...data.params, ...Object.fromEntries(mine.map((x) => [x.field, structuredClone(x.value)])) },
+                 said: { ...(data.said ?? {}), ...Object.fromEntries(mine.map((x) => [x.field, x.quote])) } };
+      };
+      const nodes: PgNode[] = [...s.nodes.map((n) => ({ ...n, selected: false, data: withSets(n.id, n.data) })),
+                               ...d.add.map((a) => ({ id: a.id, type: PG_NODE_TYPE, position: at[a.id] ?? { x: 0, y: 0 },
+                                                      data: withSets(a.id, { kind: a.kind, params: {} }) }))];
+      let edges = s.edges;
+      for (const c of d.connect)
+        edges = addEdge({ id: c.id, source: c.source, sourceHandle: c.source_port, target: c.target, targetHandle: c.target_port }, edges);
+      set({ nodes, edges, selectedId: null, selectedEdge: null, picked: [], pickedByUser: false });
+      return { added: d.add.length, connected: d.connect.length, set: d.set.length };
+    },
+
     selectEdge: (id) => set((s) => (id ? { selectedEdge: id, tab: "wire", selectedId: null, picked: [], pickedByUser: false }
                                        : { selectedEdge: null, tab: s.tab === "wire" ? "story" : s.tab })),
 
@@ -606,8 +645,9 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const now = Date.now();
       if (!(lastParamEdit && lastParamEdit.id === id && now - lastParamEdit.at < COALESCE_MS)) push();
       lastParamEdit = { id, at: now };
+      // 말로 설계(AI4)의 출처 칩은 ★그 칸 값이 그대로일 때만★ — 사람이 고친 칸은 더는 말씀에서 온 값이 아니다(다른 칸은 남는다).
       set((s) => ({
-        nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, params } } : n)),
+        nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, params, said: keepSaid(n.data.said, n.data.params, params) } } : n)),
       }));
     },
 
@@ -786,7 +826,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
         const base = s.nodes.find((n) => n.id === from(id)) ?? s.nodes.find((n) => n.id === id)!;
         const orig = s.nodes.find((n) => n.id === id)!;
         return { ...orig, id: idOf.get(id)!, selected: false, position: { x: orig.position.x, y: orig.position.y + dy },
-                 data: { ...orig.data, params: structuredClone(base.data.params ?? {}) } };
+                 data: { ...orig.data, params: structuredClone(base.data.params ?? {}), said: base.data.said ? { ...base.data.said } : undefined } };
       });
       const inScope = new Set(scope);
       // 안쪽 선은 복제끼리, 밖에서 들어오는 선은 원본과 같이. 밖으로 나가는 선은 잇지 않는다.
@@ -830,7 +870,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
         const c = copyOf.has(n.id) ? s.nodes.find((x) => x.id === copyOf.get(n.id)) : undefined;
         if (!c) return n;
         moved += paramDiff(n.data.params ?? {}, c.data.params ?? {}).length;
-        return { ...n, data: { ...n.data, params: structuredClone(c.data.params ?? {}) } };
+        return { ...n, data: { ...n.data, params: structuredClone(c.data.params ?? {}), said: c.data.said ? { ...c.data.said } : undefined } };
       });
       set({ nodes, edges: s.edges.filter((e) => !copies.has(e.source) && !copies.has(e.target)),
             groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.has(m)) })),

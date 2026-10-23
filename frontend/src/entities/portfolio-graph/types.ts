@@ -16,6 +16,8 @@ export interface GraphDocNode {
   type: string;
   params: Record<string, unknown>;
   position: { x: number; y: number };
+  /** 말로 설계(AI4) — 칸 → 그 값을 말한 말씀 조각. 그 칸을 고치면 지운다. 서버 검증·계산은 보지 않는다. */
+  said?: Record<string, string>;
 }
 
 export interface GraphDocEdge {
@@ -243,6 +245,19 @@ export type AssistAsk =
   | { available: false; source: "unavailable"; reason_code: string; reason: string; dropped?: AskDropped[] };
 
 /** `POST /api/v1/assist/canvas/guide` — 써 볼 도구 1~2(적용되는 것만 · 이유의 숫자는 상태 안에서만). 못 보이면 사유(화면은 규칙 길잡이 줄을 둔다). */
+/** 말로 설계(AI4) 초안 — 서버가 검사를 마친 것만. 값(`value`)은 서버가 말씀 조각(`quote`)에서 읽었다. */
+export interface DraftAdd { ref: string; id: string; kind: string; label: string }
+export interface DraftConnect { id: string; source: string; source_port: string; target: string; target_port: string }
+export interface DraftSet { node: string; field: string; label: string; value: unknown; display: string; quote: string;
+  read: "preset" | "option" | "number" | "tickers" }
+export interface DraftEmpty { node: string; field?: string; port?: string | null; why: string }
+export interface DraftBody { summary: string | null; add: DraftAdd[]; connect: DraftConnect[]; set: DraftSet[]; empty: DraftEmpty[] }
+export type AssistDraft =
+  | { available: true; source: "claude"; model: string; understood: boolean; cannot: string | null; draft: DraftBody;
+      rejected: { op: string; code: string; reason: string }[]; cached: boolean;
+      usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
+  | { available: false; source: "unavailable"; reason_code: string; reason: string };
+
 export type AssistGuide =
   | { available: true; source: "claude"; model: string; tips: { feature: string; label: string; why: string }[];
       rejected: { code: string; reason: string }[]; cached: boolean;

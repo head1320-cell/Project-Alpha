@@ -19,10 +19,10 @@ export const PALETTE_MIME = "application/x-pg-node";
 /** 끄는 동안(dragover)에는 값을 읽을 수 없어 종류를 타입 이름에 싣는다(BT4 선 위에 놓기 — 끼울 수 있는 선만 강조). */
 export const PALETTE_KIND_PREFIX = "application/x-pg-kind.";
 
-export type LeftTab = "proc" | "add";
+export type LeftTab = "proc" | "add" | "say";
 
 export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTemplate, onGoal, hidden = false, onClose,
-                              tab = "add", onTab, procedure, next = null }: {
+                              tab = "add", onTab, procedure, say, next = null }: {
   catalog: NodeCatalogEntry[];
   stages: WorkflowStage[];
   /** 처음 검색어 — 옛 주소로 온 사람에게 그 화면의 일을 하는 노드를 먼저 보인다(BL4). */
@@ -38,6 +38,8 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
   tab?: LeftTab;
   onTab?: (t: LeftTab) => void;
   procedure?: ReactNode;
+  /** 말로 설계(AI4) — 셋째 탭 '말로'. 내용은 캔버스가 그려 넘긴다. */
+  say?: ReactNode;
   /** 지금 이을 수 있어요(BT6) — 사람이 노드를 골랐을 때만. 누르면 그 노드 뒤에 이어 붙는다(BT3 규칙). */
   next?: { from: string; items: NodeCatalogEntry[] } | null;
 }) {
@@ -59,7 +61,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
         <div className="pg-palette-head">
           {procedure && onTab ? (
             <div className="pg-left-tabs" role="tablist" aria-label="왼쪽 판">
-              {([["proc", "절차"], ["add", "노드 추가"]] as const).map(([k, label]) => (
+              {([["proc", "절차"], ["add", "노드 추가"], ...(say ? [["say", "말로"]] : [])] as [LeftTab, string][]).map(([k, label]) => (
                 <button key={k} type="button" role="tab" id={`pg-left-tab-${k}`} aria-selected={tab === k}
                         aria-controls={`pg-left-panel-${k}`} data-tab={k}
                         className={`pg-left-tab${tab === k ? " pg-left-tab--on" : ""}`} onClick={() => onTab(k)}>{label}</button>
@@ -80,6 +82,9 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
       </div>
       {procedure && tab === "proc" && (
         <div id="pg-left-panel-proc" role="tabpanel" aria-labelledby="pg-left-tab-proc">{procedure}</div>
+      )}
+      {say && tab === "say" && (
+        <div id="pg-left-panel-say" role="tabpanel" aria-labelledby="pg-left-tab-say">{say}</div>
       )}
       <div id="pg-left-panel-add" role={procedure ? "tabpanel" : undefined}
            aria-labelledby={procedure ? "pg-left-tab-add" : undefined} hidden={tab !== "add"}>

@@ -5934,7 +5934,9 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .dark .ca-band-marker-lbl { background: var(--t-bg); padding: 0 2px; }
 
 /* ═══ BT2 · 절차 탭 — 여섯 단계가 한 줄 척추로 이어진다(관문 레일과 같은 말: 실선 = 채움, 점선 = 아직) ═══ */
-.pg-left-tabs { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; border-radius: 12px; background: var(--pg-soft); }
+.pg-left-tabs { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border-radius: 12px; background: var(--pg-soft); }
+/* AI4 — 탭이 셋(절차 · 노드 추가 · 말로)이면 좁은 창 폭(208)에 맞게 글을 줄인다. */
+.pg-left-tabs:has(> :nth-child(3)) .pg-left-tab { padding: 0 2px; font-size: 13px; white-space: nowrap; }
 .pg-left-tab { height: 32px; border: 0; border-radius: 9px; background: transparent; color: var(--pg-mute); font-size: 14px; font-weight: 600; cursor: pointer; }
 .pg-left-tab--on { background: var(--pg-paper); color: var(--pg-ink); box-shadow: 0 1px 2px rgb(25 31 40 / 10%); }
 .pg-left-tab:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 1px; }
@@ -6035,6 +6037,62 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
 /* 두 창을 연 좁은 폭(바 ≈ 300px)에선 AI 노드 추천 단추를 접는다 — 길잡이 바가 네 줄(149px)이 됐다. Ctrl+K 'AI 에게 다음 노드 묻기'로 남는다. */
 @media (max-width: 1279px) { .pg-root[data-left="open"][data-right="open"] .pg-guidebar .pg-ai, .pg-root[data-left="open"][data-right="open"] .pg-guidebar .pg-ai-login { display: none; } }
 .pg-guide-more:focus-visible, .pg-guide-ai:focus-visible, .pg-guide-login:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+/* AI4 — 말로 설계: 왼쪽 창 셋째 탭 '말로'(.pg-say*) · 캔버스의 초안 유령(.pg-draft* — 문서가 아니라 누름을 받지 않는다) · 설정 탭의 '말씀에서' 칩(.pg-said). */
+.pg-say { display: flex; flex-direction: column; gap: 10px; padding: 2px 4px 12px; }
+.pg-say-intro { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--pg-body); word-break: keep-all; }
+.pg-say-examples { display: flex; flex-direction: column; gap: 6px; }
+.pg-say-ex { padding: 7px 10px; border: 1px solid var(--pg-card-line); border-radius: 10px; background: var(--pg-paper); color: var(--pg-ink);
+  font-size: 12.5px; line-height: 1.45; text-align: left; word-break: keep-all; cursor: pointer; }
+.pg-say-ex:hover { border-color: var(--pg-blue); }
+.pg-say-text { width: 100%; min-height: 72px; max-height: 180px; padding: 8px 10px; box-sizing: border-box; resize: vertical; border: 1px solid var(--pg-card-line);
+  border-radius: 10px; background: var(--pg-paper); color: var(--pg-ink); font: inherit; font-size: 13.5px; line-height: 1.45; }
+.pg-say-text::placeholder { color: var(--pg-body); }
+.pg-say-text:disabled { background: var(--pg-soft); }
+.pg-say-send, .pg-say-accept { height: 36px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--pg-cta); color: #fff;
+  font-size: 13px; font-weight: 700; cursor: pointer; }
+.pg-say-send { align-self: flex-end; }
+.pg-say-send:disabled { cursor: default; background: var(--pg-soft); color: var(--pg-body); }
+.pg-say-send[aria-busy="true"] { cursor: progress; }
+.pg-say-discard { height: 36px; padding: 0 12px; border: 1px solid var(--pg-card-line); border-radius: 10px; background: var(--pg-paper);
+  color: var(--pg-ink); font-size: 13px; cursor: pointer; }
+.pg-say-login { font-size: 13px; color: var(--pg-blue-ink); text-decoration: underline; text-underline-offset: 2px; }
+.pg-say-note, .pg-say-wait { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--pg-body); word-break: keep-all; }
+.pg-say-result { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--pg-line); }
+.pg-say-sent { align-self: flex-end; max-width: 92%; margin: 0; padding: 6px 10px; border-radius: 12px 12px 4px 12px; background: var(--pg-soft);
+  font-size: 13px; line-height: 1.45; color: var(--pg-ink); word-break: keep-all; }
+.pg-say-k { margin-right: 4px; font-size: 11.5px; font-weight: 700; color: var(--pg-body); }
+.pg-say-summary, .pg-say-cannot { margin: 0; font-size: 13.5px; line-height: 1.5; font-weight: 700; color: var(--pg-ink); word-break: keep-all; }
+.pg-say-sec { display: flex; flex-direction: column; gap: 4px; }
+.pg-say-sec-h { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; font-weight: 700; color: var(--pg-body); }
+.pg-say-n { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: var(--pg-soft); color: var(--pg-ink);
+  font-size: 11.5px; line-height: 18px; text-align: center; }
+.pg-say-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.pg-say-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 13px; line-height: 1.45; color: var(--pg-ink); word-break: keep-all; }
+.pg-say-sec[data-sec="empty"] .pg-say-item, .pg-say-sec[data-sec="rejected"] .pg-say-item { font-size: 12.5px; color: var(--pg-body); }
+.pg-say-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.pg-said-chip, .pg-said { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1.5;
+  color: var(--pg-blue-ink); background: var(--pg-blue-soft); }
+.pg-q .pg-said { margin-left: 6px; vertical-align: 1px; }
+.pg-say-acts { display: flex; justify-content: flex-end; gap: 8px; }
+/* 받아들이기·버리기는 왼쪽 창 맨 아래에 붙어 늘 보인다(PNG 검토에서 찾음: 바뀐 점이 길면 단추가 창 밖으로 밀려 1024·1440·390 모두 스크롤해야 했다). */
+.pg-say-result .pg-say-acts { position: sticky; bottom: -14px; z-index: 1; margin: 0 -12px -14px; padding: 10px 12px 14px;
+  background: var(--pg-paper); border-top: 1px solid var(--pg-line); }
+.pg-say-ex:focus-visible, .pg-say-text:focus-visible, .pg-say-send:focus-visible, .pg-say-login:focus-visible, .pg-say-accept:focus-visible,
+.pg-say-discard:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-drafts { position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none; }
+.pg-draft-wires { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: visible; }
+.pg-draft-wire path { fill: none; stroke: var(--pg-blue); stroke-width: 2; stroke-dasharray: 6 5; }
+.pg-draft-node { position: absolute; top: 0; left: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+  border: 1.5px dashed color-mix(in srgb, var(--pg-stage, var(--pg-blue)) 70%, var(--pg-card-line)); border-radius: 14px;
+  background: color-mix(in srgb, var(--pg-paper) 80%, var(--pg-canvas)); color: var(--pg-ink); }
+.pg-draft-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pg-draft-tag, .pg-draft-chip { flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--pg-blue-ink); background: var(--pg-blue-soft); }
+.pg-draft-name { min-width: 0; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-draft-vals { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.pg-draft-val { font-size: 12px; line-height: 1.45; color: var(--pg-body); word-break: keep-all; }
+.pg-draft-val b { color: var(--pg-ink); }
+.pg-draft-touched { position: absolute; top: 0; left: 0; box-sizing: border-box; border: 2px dashed var(--pg-blue); border-radius: 18px; }
+.pg-draft-chip { position: absolute; top: -12px; right: 10px; white-space: nowrap; }
 /* K4 — 좁은 화면: 위에 뜬 창 열기 단추가 아래 바의 폭까지 깎아 한 낱말씩 줄이 바뀌었다. 바는 캔버스 폭(양옆 16)을 쓰고
    확대 단추(아래 15 + 높이 108 — CF5b 확대율 칸으로 81 에서 늘었다) 위에 선다. 글은 한 줄 전체, 단추는 아래 줄 오른쪽. */
 @media (max-width: 640px) {

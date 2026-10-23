@@ -235,15 +235,17 @@ function linkedPorts(params: Params, edges?: Edge[], nodeId?: string): LinkedPor
     .map((port) => ({ port, label: labels[port] ?? `전략 ${port.replace(/^s/, "")}` }));
 }
 
-function BasicField({ f, value, root, ports, onChange }: {
+function BasicField({ f, value, root, ports, onChange, said }: {
   f: FieldSpec; value: unknown; root: JsonSchema | null; ports: LinkedPort[]; onChange: (v: unknown) => void;
+  /** 말로 설계(AI4) — 이 값을 말한 말씀 조각. 사람이 이 칸을 고치면 사라진다(store `updateParams`). */
+  said?: string;
 }) {
   const eff = value !== undefined ? value : f.defaultValue;
   if (f.ui.widget === "per_port") return <PerPort f={f} value={value} ports={ports} onChange={onChange} />;
   if (f.ui.widget === "per_port_number") return <PerPortNumber f={f} value={value} ports={ports} onChange={onChange} />;
   const item = f.kind === "json" ? itemSchemaOf(f, root) : null;
   if (item) return <ObjectList f={f} item={item} value={eff} onChange={onChange} />;
-  const q = <div className="pg-q">{f.ui.question ?? f.ui.label}</div>;
+  const q = <div className="pg-q">{f.ui.question ?? f.ui.label}{said && <span className="pg-said">말씀에서 ‘{said}’</span>}</div>;
   const help = f.ui.help ? <p className="pg-help">{f.ui.help}</p> : null;
 
   if (f.ui.options && Object.keys(f.ui.options).length > 12) {
@@ -619,7 +621,7 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   // `show_if` 로 지금 방식에서 뜻이 없는 칸은 숨긴다(BO O1).
   const basic = basicFieldsOf(entry?.params_schema ?? null, params);
   const ports = linkedPorts(params, edges, node.id);
-  const basicRendered = basic.map((f) => ({ f, el: <BasicField key={f.name} f={f} value={params[f.name]}
+  const basicRendered = basic.map((f) => ({ f, el: <BasicField key={f.name} f={f} value={params[f.name]} said={node.data.said?.[f.name]}
                                                                root={entry?.params_schema ?? null} ports={ports}
                                                                onChange={(v) => onChange(setOrClear(params, f.name, v))} /> }));
 

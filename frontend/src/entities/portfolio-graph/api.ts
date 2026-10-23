@@ -5,7 +5,7 @@
  */
 import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
 import type { GuideState } from "./guide";
-import type { AskRecord, AskTarget, AssistAsk, AssistGuide, AssistNarrate, AssistSuggest, BranchEvidence, GraphDoc, NarrateFact, NodeCatalog, RunEvent, RunReport, SaveResult, ValidateReport } from "./types";
+import type { AskRecord, AskTarget, AssistAsk, AssistDraft, AssistGuide, AssistNarrate, AssistSuggest, BranchEvidence, GraphDoc, NarrateFact, NodeCatalog, RunEvent, RunReport, SaveResult, ValidateReport } from "./types";
 
 const BASE = "/api/v1/allocation/graph";
 /** AI 도우미(AI0) — 로그인 경로. 화면(포트폴리오 설계)은 열려 있고 AI 만 로그인이라 접두사가 다르다. */
@@ -86,4 +86,6 @@ export const portfolioGraphApi = {
     assistCall<AssistAsk>("ask", { graph: doc, target, question, previous, facts, records }),
   assistGuide: (doc: GraphDoc, state: GuideState, applicable: string[]): Promise<AssistGuide> =>
     assistCall<AssistGuide>("guide", { graph: doc, state, applicable }),
+  /** 말로 설계(AI4) — ★누를 때만★. 초안은 미리보기일 뿐 — 화면은 [받아들이기] 때만 반영한다. 던지지 않는다. */
+  assistDraft: (doc: GraphDoc, sentence: string): Promise<AssistDraft> => assistCall<AssistDraft>("draft", { graph: doc, sentence }),
 };

@@ -65,6 +65,9 @@ import {
   withAiGhosts,
   placeConnectChip,
   placeSuggestion,
+  placeDraft,
+  draftTouched,
+  type DraftBody,
   suggestionKey,
   connectionProblem,
   restackDoc,
@@ -94,6 +97,8 @@ import { GateRail } from "./GateRail";
 import { GhostLayer, type PlacedGhost } from "./GhostLayer";
 import { AiAsk, useAiAssist } from "./AiAsk";
 import { AiQuestion, useAiQuestion } from "./AiQuestion";
+import { DraftPanel, useDraft } from "./DraftPanel";
+import { DraftLayer } from "./DraftLayer";
 import { GuideBar, useGuide } from "./Guide";
 import { AiStory, useAiStory } from "./AiStory";
 import { useSession } from "@/entities/session";
@@ -559,7 +564,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const [guides, setGuides] = useState<Guide[]>([]);
   // BT2 — 왼쪽 판 탭. 고른 적이 없으면 노드 추가(예전 그대로)이고, 캔버스가 비어 있으면 절차를 먼저 보인다.
   const [leftTab, setLeftTabState] = useState<LeftTab | null>(() => {
-    try { const v = localStorage.getItem(LEFT_TAB_KEY); return v === "proc" || v === "add" ? v : null; } catch { return null; }
+    try { const v = localStorage.getItem(LEFT_TAB_KEY); return v === "proc" || v === "add" || v === "say" ? v : null; } catch { return null; }
   });
   const setLeftTab = useCallback((t: LeftTab) => {
     setLeftTabState(t);
@@ -629,6 +634,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const fit = (opts?: { minZoom?: number }) => {
     let tries = 0;
     const go = () => { if (!fitClear(rf.current, canvasEl.current, opts) && tries++ < 20) requestAnimationFrame(go); };
+    setTimeout(go, 60);
+  };
+  /** 몇 노드만 맞춰 보기 — 막 생긴 노드는 크기를 잴 때까지 다시(위 `fit` 과 같은 까닭). */
+  const fitIds = (ids: string[]) => {
+    let tries = 0;
+    const go = () => { if (!fitClear(rf.current, canvasEl.current, { ids, maxZoom: 1, duration: 250 }) && tries++ < 20) requestAnimationFrame(go); };
     setTimeout(go, 60);
   };
   /** 판 사이 보이는 가운데를 기준으로 확대·축소(BQ Q1). */
@@ -701,6 +712,57 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     : s.selectedEdge ? { kind: "edge", id: s.selectedEdge } : null), [s.selectedId, s.selectedEdge]);
   const aiQ = useAiQuestion(doc, order, s.report, staleSet, session, askTarget);
   const askFocus = useRef<() => void>(() => {});
+  // AI4 — 말로 설계(왼쪽 창 '말로' 탭). 초안은 미리보기일 뿐 — [받아들이기] 때만 문서가 바뀐다(되돌리기 한 번).
+  const draftQ = useDraft(doc, session);
+  const sayInput = useRef<HTMLTextAreaElement | null>(null);
+  const draftAt = useMemo(() => (draftQ.draft
+    ? placeDraft(draftQ.draft, s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), s.catalog) : {}),
+  [draftQ.draft, s.nodes, s.catalog]);
+  const draftAtRef = useRef(draftAt);
+  draftAtRef.current = draftAt;
+  // 새 초안이 판 밑이나 화면 밖이면 그쪽을 보인다(AI1 유령과 같은 까닭 — 미리 볼 수 없으면 받아들일지 정할 수 없다. PNG 검토에서 찾음:
+  // 더할 노드가 오른쪽 창 밑에 깔렸다). 지금 확대로 다 들어오지 않으면 줄인다. 초안이 올 때 한 번만 — 노드를 옮길 때마다 따라가지 않는다.
+  useEffect(() => {
+    const dr = draftQ.draft;
+    const el = canvasEl.current;
+    if (!dr || !rf.current || !el) return;
+    const st = usePortfolioGraph.getState();
+    const box = (x: number, y: number, kind: string) => ({ x, y, w: NODE_W, h: cardHeight(kind, st.catalog) });
+    const boxes = [...dr.add.flatMap((a) => (draftAtRef.current[a.id] ? [box(draftAtRef.current[a.id].x, draftAtRef.current[a.id].y, a.kind)] : [])),
+                   ...draftTouched(dr, new Set(st.nodes.map((n) => n.id))).flatMap((id) => {
+                     const n = st.nodes.find((x) => x.id === id);
+                     return n ? [box(n.position.x, n.position.y, n.data.kind)] : [];
+                   })];
+    if (!boxes.length) return;
+    const { x: tx, y: ty, zoom } = rf.current.getViewport();
+    const ins = floatInsets(el);
+    const l = Math.min(...boxes.map((b) => b.x)), r = Math.max(...boxes.map((b) => b.x + b.w));
+    const t = Math.min(...boxes.map((b) => b.y)), bt = Math.max(...boxes.map((b) => b.y + b.h));
+    const seen = l * zoom + tx >= ins.left && r * zoom + tx <= el.clientWidth - ins.right && t * zoom + ty >= 0 && bt * zoom + ty <= el.clientHeight - ins.bottom;
+    if (seen) return;
+    const fitZoom = 0.9 * Math.min((el.clientWidth - ins.left - ins.right) / (r - l), (el.clientHeight - ins.bottom) / (bt - t));
+    const z = Math.max(0.2, Math.min(zoom, fitZoom));
+    rf.current.setCenter((l + r) / 2 + (ins.right - ins.left) / 2 / z, (t + bt) / 2 + ins.bottom / 2 / z, { zoom: z, duration: 250 });
+  }, [draftQ.draft]);
+  /** '말로' 탭을 열고 입력에 초점(명령 찾기 · 좁은 화면은 왼쪽 시트를 연다). */
+  const openSay = () => {
+    updatePanels((p) => (p.left ? p : toggle(p, "left")));
+    setLeftTab("say");
+    window.setTimeout(() => sayInput.current?.focus(), 80);
+  };
+  /** [받아들이기] — 미리 본 자리 그대로, 되돌리기 한 번(`applyDraft`). 새 노드와 값이 바뀐 노드로 맞춰 본다. 계산은 하지 않는다(길잡이가 권한다). */
+  const acceptDraft = (dr: DraftBody) => {
+    const st = usePortfolioGraph.getState();
+    const touched = draftTouched(dr, new Set(st.nodes.map((n) => n.id)));
+    let ok = false;
+    st.act(() => {
+      const r = st.applyDraft(dr, draftAt);
+      if (!r) return "캔버스가 바뀌어 초안을 받아들이지 못했어요 — 다시 말해 주세요.";
+      ok = true;
+      return `말씀대로 바꿨어요 — 노드 ${r.added}개 더함 · 선 ${r.connected}개 이음 · 값 ${r.set}개 넣음. 계산하면 결과가 나와요.`;
+    });
+    if (ok) fitIds([...dr.add.map((a) => a.id), ...touched]);
+  };
   const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
   const live = useMemo(() => (s.report
@@ -1431,6 +1493,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...(s.selectedId || s.selectedEdge ? [{ id: "ask-here", group: "AI", label: s.selectedId ? "고른 노드에게 묻기" : "고른 선에게 묻기",
       hint: "오른쪽 창 아래 칸에서 계산 결과에 대해 Claude 에게 물어요(로그인 · 계산한 뒤)",
       run: () => { updatePanels((p) => (p.right ? p : toggle(p, "right"))); window.setTimeout(() => askFocus.current(), 60); } }] : []),
+    { id: "say", group: "AI", label: "말로 설계", hint: "말로 지금 캔버스를 고치는 초안을 받아요(로그인 · 받아들일 때만 바뀌어요)",
+      run: openSay },
     { id: "ai-ask", group: "추천", label: "AI 에게 다음 노드 묻기",
       hint: "지금 그래프를 Claude 에게 보내 다음에 붙일 노드를 물어요(로그인 · 누를 때만)", run: () => { void ai.ask(); } },
     ...WIRE_SHAPES.map((w) => ({ id: `wire:${w.shape}`, group: "보기", label: `선 모양: ${w.label}`,
@@ -1512,7 +1576,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const nextStep = procNext && !dismissed.has(`${shapeKey}|${suggestionKey(procNext)}`) ? procNext : null;
   // CF6 — 유령: next 먼저 + 막힌 관문, 서로 다른 것만 최대 3 · 자리는 앞선 유령도 피한다.
   const ghosts = useMemo<PlacedGhost[]>(() => {
-    if (!s.showGhosts || s.simple || !s.validation?.procedure) return [];
+    // AI4 — 초안을 미리 보는 동안은 초안만(규칙·AI 유령이 같은 자리를 다투지 않게). 버리거나 받아들이면 돌아온다.
+    if (!s.showGhosts || s.simple || !s.validation?.procedure || draftQ.draft) return [];
     const place = s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position }));
     const taken: Box[] = [];
     const ids = s.nodes.map((n) => n.id);
@@ -1529,7 +1594,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
         taken.push({ x: at.x, y: at.y, w: NODE_W, h: cardHeight(g.kind, s.catalog) });
         return { ...g, at, chip: null };
       });
-  }, [s.showGhosts, s.simple, s.validation, s.nodes, s.catalog, dismissed, shapeKey, ai.suggestions]);
+  }, [s.showGhosts, s.simple, s.validation, s.nodes, s.catalog, dismissed, shapeKey, ai.suggestions, draftQ.draft]);
   ghostsRef.current = ghosts;
   const [ghostHot, setGhostHot] = useState<string | null>(null);
   /** AI 묻기 칸 — 추천 유령을 보이는 동안만(끄면 물을 곳도 없다). */
@@ -1778,7 +1843,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
       <div className="pg-body" hidden={s.simple}>
         {s.catalog && <NodePalette catalog={s.catalog} stages={stages} initialQuery={legacy?.aliases[1] ?? ""} onAdd={(k) => addAt(k)} onTemplate={loadTemplate}
                                   onGoal={() => setGoalOpen(true)} hidden={!leftShown} onClose={() => updatePanels((p) => toggle(p, "left"))}
-                                  tab={leftTab ?? "add"} onTab={setLeftTab} procedure={procedureView} next={paletteNext} />}
+                                  tab={leftTab ?? "add"} onTab={setLeftTab} procedure={procedureView} next={paletteNext}
+                                  say={<DraftPanel d={draftQ} session={session} catalog={s.catalog} plain={s.catalogMeta?.portPlain ?? PORT_PLAIN}
+                                                   nameOf={nodeLabel} kindOf={kindOf} onAccept={acceptDraft} inputRef={sayInput} />} />}
         {!leftShown && (
           <button type="button" className="pg-palette-fab" aria-label="노드 목록 열기 ([)" title="노드 추가 — 목록 열기 ([)"
                   onClick={() => updatePanels((p) => toggle(p, "left"))}><Plus size={20} aria-hidden="true" /></button>
@@ -1851,6 +1918,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
               <GhostLayer ghosts={ghosts} catalog={s.catalog} shape={s.wireShape} hot={ghostHot} gateLabel={gateLabel}
                           onApply={applySuggestion} onDismiss={dismiss} />
             )}
+            {draftQ.draft && <DraftLayer draft={draftQ.draft} at={draftAt} catalog={s.catalog} shape={s.wireShape} />}
             <ZoomWatch el={canvasEl} />
             {focused && (
               <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">

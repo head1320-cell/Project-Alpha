@@ -34,6 +34,8 @@ export type PgNodeData = {
   /** 카탈로그에 없는 포트를 가리키는 링크가 있을 때 — 버리지 않고 여기 붙인다. */
   extraInputs?: string[];
   extraOutputs?: string[];
+  /** 말로 설계(AI4) — 칸 → 그 값을 말한 말씀 조각(설정 탭의 '말씀에서' 칩). 사람이 그 칸을 고치면 지운다. */
+  said?: Record<string, string>;
 }
 
 export type PgNode = Node<PgNodeData>;
@@ -45,6 +47,14 @@ export interface ParseResult {
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** 말로 설계의 출처(AI4) — 칸 이름 → 말씀 조각(글, 300자 이하). 하나라도 망가졌으면 통째로 버린다(값은 그대로 — 출처만 모른다). */
+const MAX_SAID = 300;
+function saidOf(v: unknown): { ok: Record<string, string> | null; bad: boolean } {
+  if (v === undefined) return { ok: null, bad: false };
+  if (!isObj(v) || !Object.entries(v).every(([k, x]) => k && typeof x === "string" && x.length <= MAX_SAID)) return { ok: null, bad: true };
+  return { ok: Object.keys(v).length ? { ...(v as Record<string, string>) } : null, bad: false };
+}
 
 /** 경유점(CF4c) — 점마다 유한한 x·y 가 있어야 한다. 하나라도 망가졌으면 그 선의 경유점은 통째로 버린다(지어내지 않는다). 없으면 `null`. */
 function waypointsOf(v: unknown): { ok: { x: number; y: number }[] | null; bad: boolean } {
@@ -93,6 +103,8 @@ export function parseFile(text: string): ParseResult {
     }
     seen.add(n.id);
     const pos = isObj(n.position) ? n.position : {};
+    const said = saidOf(n.said);
+    if (said.bad) problems.push(`노드 ${n.id} 의 ‘말씀에서’ 출처가 형식에 맞지 않아 뺐어요 — 값은 그대로예요.`);
     nodes.push({
       id: n.id,
       type: n.type,
@@ -101,6 +113,7 @@ export function parseFile(text: string): ParseResult {
         x: typeof pos.x === "number" ? pos.x : 0,
         y: typeof pos.y === "number" ? pos.y : i * 140,
       },
+      ...(said.ok ? { said: said.ok } : {}),
     });
   }
   const edges: GraphDocEdge[] = [];
@@ -185,6 +198,14 @@ export function parseFile(text: string): ParseResult {
 
 const portNames = (ps: CatalogPort[] | undefined) => new Set((ps ?? []).map((p) => p.name));
 
+/** 출처 칩은 ★값이 있는 칸★에만(값 없이 출처만 남은 칸은 말이 안 된다) · 아는 종류면 그 종류에 있는 칸만. */
+function saidKept(n: GraphDocNode, entry: NodeCatalogEntry | undefined): Record<string, string> | null {
+  if (!n.said) return null;
+  const props = (entry?.params_schema as { properties?: Record<string, unknown> } | undefined)?.properties;
+  const kept = Object.entries(n.said).filter(([f]) => f in n.params && (!entry || !!props?.[f]));
+  return kept.length ? Object.fromEntries(kept) : null;
+}
+
 /** 문서 → React Flow. 모르는 타입·포트는 표시해서 남긴다. */
 export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: PgNode[]; edges: Edge[] } {
   const byType = new Map(catalog.map((c) => [c.type, c]));
@@ -201,20 +222,24 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
       extraIn.set(e.target, (extraIn.get(e.target) ?? new Set()).add(e.target_port));
     }
   }
-  const nodes: PgNode[] = doc.nodes.map((n) => ({
-    id: n.id,
-    type: PG_NODE_TYPE,
-    position: { ...n.position },
-    data: {
-      kind: n.type,
-      params: { ...n.params },
-      unknownReason: byType.has(n.type) ? null
-        : `모르는 노드 타입 "${n.type}" — 이 서버에 없는 노드입니다(다른 버전에서 만든 파일일 수 `
-          + "있습니다). 원본 설정은 보존되고, 내보내면 그대로 다시 저장됩니다.",
-      extraInputs: [...(extraIn.get(n.id) ?? [])],
-      extraOutputs: [...(extraOut.get(n.id) ?? [])],
-    },
-  }));
+  const nodes: PgNode[] = doc.nodes.map((n) => {
+    const said = saidKept(n, byType.get(n.type));
+    return {
+      id: n.id,
+      type: PG_NODE_TYPE,
+      position: { ...n.position },
+      data: {
+        kind: n.type,
+        params: { ...n.params },
+        unknownReason: byType.has(n.type) ? null
+          : `모르는 노드 타입 "${n.type}" — 이 서버에 없는 노드입니다(다른 버전에서 만든 파일일 수 `
+            + "있습니다). 원본 설정은 보존되고, 내보내면 그대로 다시 저장됩니다.",
+        extraInputs: [...(extraIn.get(n.id) ?? [])],
+        extraOutputs: [...(extraOut.get(n.id) ?? [])],
+        ...(said ? { said } : {}),
+      },
+    };
+  });
   const edges: Edge[] = doc.edges.map((e) => ({
     id: e.id,
     source: e.source,
@@ -244,6 +269,7 @@ export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], g
       type: n.data.kind,
       params: { ...n.data.params },
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+      ...(n.data.said && Object.keys(n.data.said).length ? { said: { ...n.data.said } } : {}),
     })),
     edges: edges.map((e) => {
       const wp = viaOf(e);
