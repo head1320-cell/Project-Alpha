@@ -396,3 +396,47 @@
 - 자동(무클릭) AI 호출.
 - 경유점이 계산에 영향을 주는 것.
 - ComfyUI 의 어두운 시각 언어 복제.
+
+## 8. 3부 · 완성도 (2026-10-23)
+
+1·2부가 끝난 뒤(`11ccf4a`) 사용자 요청: "더 높은 완성도와 UI/UX·포트폴리오 설계 고도화 — 1·2부에서 못 살핀 작업 + React Flow 기능을 적극 활용했는지".
+
+**점검(읽기 전용)**
+- React Flow 12.12.0 — 쓰는 것: 미니맵 · Controls(+ ControlButton) · Panel · Background 두 겹 · `ViewportPortal`(유령·초안·정렬선) · `NodeToolbar` ·
+  `EdgeLabelRenderer` · 선 다시 꽂기 · `connectionLineComponent` · `isValidConnection` · 격자 맞춤. 안 쓰는 것: `NodeResizer` · `getIntersectingNodes` ·
+  `selectionOnDrag`/`useOnSelectionChange` · `onBeforeDelete` · `onlyRenderVisibleElements` · `ariaLabelConfig` · `getViewportForBounds`(그림 내보내기) · `EdgeToolbar` ·
+  sub flow(`parentId`) · `colorMode` · `useNodesData`/`useNodeConnections`.
+- 포트폴리오 설계 — 엔진 `ConstraintsInput` 은 10가지(하한·상한·업종 상한·회전율·베타·현금·총/순 노출)를 받는데 캔버스 기본 화면에는 "한 종목 최대 %" 하나뿐(나머지는 전문가 모드 JSON).
+  옵티마이저 폴백이 결과 카드에서 평소 결과와 같아 보인다 · 백테스트가 리밸런싱마다 폴백 수를 세지 않는다 · 벤치마크 빈칸을 0 으로 채운다 · 민감도 폭 2%p 고정.
+- 기반 — `PortfolioCanvas.tsx` 2,222줄(본체 컴포넌트 549~2195) · `store.ts` 1,220줄 · 흔들리는 E2E 셋 · CF3a 이후 전체 E2E 없음 · ADR-002("reactflow")·로드맵("LLM 설명" 미완) 낡음.
+
+**결정 (AskUserQuestion, 2026-10-23)** — 네 묶음 전부 · 순서 ★기반(E) → 설계(P) → React Flow(R) → 사용성(U)★ · 나누는 깊이 = 부품과 훅으로.
+묶음마다 스펙 → 계획 → 구현. P·R·U 의 상세 설계는 앞 묶음이 끝난 뒤 따로 묻고 이 절 아래에 적는다.
+
+### 8.1 E 기반 정리
+★동작 불변★ — 코드는 옮기기만 한다(이름·CSS 클래스·`data-*`·문구·렌더 순서·effect 순서). 리팩터 중 본 버그는 고치지 않고 적어 둔다.
+동작 불변은 골든으로 못 박는다(CLAUDE.md §5): 나누기 전에 골든 E2E 를 초록으로, 나눈 뒤 같은 골든 + 캔버스 E2E.
+- **E1 기준선·골든**(테스트만): 전체 E2E 한 번(통과 수·실패·시간) · `e2e/canvas-golden.spec.ts` — 문서 골든(정해진 조작 뒤 내보낸 파일 · 단계별 되돌리기 칸 수) ·
+  화면 골든(상태별 `.pg-root` 아래 클래스·`data-*` 이름 집합) · 명령 골든(명령 찾기 · 우클릭 메뉴 · 단축키 한 장). `UPDATE_CANVAS_GOLDEN=1` 로만 다시 얼린다.
+  짝: 골든이 없거나 비면 실패 · 상태마다 클래스 수 하한. 변이 5(클래스 이름 · 명령 하나 · 내보내기 칸 · `applyDraft` push 두 번 · 우클릭 순서) 전부 죽어야.
+- **E2 PortfolioCanvas 나누기**(≤ 900줄): 2a 순수 함수(`canvasGeometry.ts`)·작은 부품(`CanvasChrome.tsx`·`WireDragLine.tsx`) → 2b 훅(`useCanvasView`·`useQuickAdd`·
+  `useCanvasCommands`·`useCanvasAi`)·JSX 조각(`CanvasToolbar.tsx`·`RightPanel.tsx`). 훅 호출 순서 = 지금 코드의 등장 순서(effect 순서 보존).
+- **E3 store 나누기**(≤ 500줄): zustand 조각 graph·history·run·layout·view — 같은 `usePortfolioGraph`·같은 `PgState`·같은 경로. 조각은 `(set, get, push)` 를 받는다
+  (`set` = 낡음 재계산을 감싼 것 그대로).
+- **E4 흔들리는 테스트**: `canvas-procedure` '390 바 대비(dark)' · `insights.spec:766` · `canvas-workspace:360` — 부하에서 재현(`--repeat-each` + trace) → 원인 → 고침.
+  `retries`·임의 기다림 늘리기 없음. 재현 못 하면 횟수를 그대로 적는다.
+- **E5 낡은 문서**: ADR-002 에 고침 줄(@xyflow/react v12) · 로드맵 "LLM 기반 설명 생성" 줄(캔버스 AI 는 함 · 일일 설명은 템플릿 먼저 그대로). CLAUDE.md 는 그대로.
+- 화면이 바뀌지 않으니 PNG 대신 ★골든 차이 0★ 을 보고한다. 하지 않음: 기능 추가 · 이름 바꾸기 · context 도입 · 다른 큰 파일(SettingsPanel 등) 나누기.
+
+### 8.2 P 포트폴리오 설계 (개요 — 상세는 E 뒤에)
+P1 제약 편집기 — 엔진이 이미 받는 10가지를 질문형 카드로 + 프리셋(롱온리 · 130/30 · 달러중립) + 서버 검증으로 풀 수 없는 조합 미리 알림. ★엔진·`constrained_opt.py` 무변경★ ·
+P2 옵티마이저 폴백을 결과 카드에 '열화'로(라벨·관측만) · P3 백테스트 리밸런싱마다 폴백 수 관측 · P4 민감도 폭을 칸으로 ·
+벤치마크 빈칸 0 채움 → 미상은 백테스트 동작 변경이라 ★별도 승인★ 으로만 적는다. 하지 않음: 프런티어 점 → 비중 계산 설정(뷰·제약 없는 표본 경계라 다른 질문이 섞인다).
+
+### 8.3 R React Flow (개요)
+`NodeResizer`(결과 칸 156px 고정 → 크기 조절·문서 저장) · `getIntersectingNodes`(상자 위에 놓으면 들어감) · `selectionOnDrag` + `useOnSelectionChange`(끌어 여럿 고르기 · 선택 바) ·
+`onBeforeDelete`(결과·하류 있는 노드 지우기 확인) · `onlyRenderVisibleElements`(측정 뒤) · `ariaLabelConfig` 한국어 · PNG 내보내기(새 의존성 html-to-image) · `EdgeToolbar`.
+하지 않음: sub flow 전환(돌아가는 상자 이동 코드를 갈아엎는 위험) · `colorMode`(CSS 클래스 = E2E 계약) · 측정 근거 없는 `useNodesData` 리팩터.
+
+### 8.4 U 사용성 마감 (개요)
+420px 미만 배치 · 여러 노드 갈래의 전략 상자 · 유령 끌어 놓기 · 미니맵 눌러 고르기 · 다중 선택 정렬선·오른쪽/아래 맞춤 · 단계 띠로 끌기 · 말로 초안 일부만 받아들이기.
