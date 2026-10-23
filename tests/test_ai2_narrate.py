@@ -349,6 +349,15 @@ def test_the_cache_answers_the_same_facts_once_and_failures_are_not_cached():
     assert len(bad.beta.messages.calls) == 2
 
 
+def test_a_cache_hit_reports_this_requests_dropped_facts():
+    """(AI3 설계 중 찾음) 캐시는 근거로 찾는데 `dropped` 는 요청마다 다르다 — 적중해도 이번 요청의 것을 말한다."""
+    c = _client(FakeSDK(_msg({"paragraphs": [_para("비중을 나눴어요.", ["o"])]})))
+    first = _narrate(c, [_sealed("o", "optimizer", EX_O)])
+    assert first["dropped"] == []
+    res = _narrate(c, [_sealed("o", "optimizer", EX_O), {"node_id": "u", "explain": EX_U, "sig": "bad"}])
+    assert res["cached"] is True and [d["node_id"] for d in res["dropped"]] == ["u"]
+
+
 def test_the_key_never_reaches_the_response_or_the_log(caplog):
     caplog.set_level(logging.DEBUG)
     boom = _narrate(_client(FakeSDK(exc=RuntimeError(f"bad key {SECRET}"))), [_sealed("o", "optimizer", EX_O)])

@@ -1,10 +1,11 @@
-"""캔버스 AI 도우미 — 노드 추천(AI1 `suggest`) · 풀어 쓰기(AI2 `narrate`). 둘 다 `_ask`: 쓸 수 있나 → 한도 설정 → 캐시 → 한도 → Claude → 검사.
+"""캔버스 AI 도우미 — 노드 추천(AI1 `suggest`) · 풀어 쓰기(AI2 `narrate`) · 묻기(AI3 `ask`). 모두 `_ask`: 쓸 수 있나 → 한도 설정 → 캐시 → 한도 → Claude → 검사.
 
 응답은 둘 중 하나다:
 - `{available:true, source:"claude", model, …검사를 통과한 것…, rejected, cached, usage}`.
 - `{available:false, source:"unavailable", reason_code, reason, …}` — ★AI 글은 없다★(데모 글 금지). suggest 는 `rule`(규칙 대체 —
-  `/validate` 절차의 next·by_gate), narrate 는 `dropped`(확인하지 못한 설명과 사유)를 함께 낸다.
-- 사용자별 시간당 한도는 ★한 그릇★ — 추천과 풀어 쓰기를 합쳐 센다. 캐시 적중은 세지 않는다.
+  `/validate` 절차의 next·by_gate), narrate·ask 는 `dropped`(확인하지 못한 설명·기록과 사유)를 함께 낸다.
+- 사용자별 시간당 한도는 ★한 그릇★ — 추천·풀어 쓰기·묻기를 합쳐 센다. 캐시 적중은 세지 않는다.
+- `dropped` 는 요청마다 다르다(캐시는 근거로 찾는다) — 캐시에 적중해도 ★이번 요청의 것★을 붙인다.
 
 `catalog`·`validate`·`key` 는 경로가 넘긴다(`allocation_graph_routes._kinds`·`graph_validate` · `auth.derived_key`) — 서비스가 API 층을 import 하지 않게.
 """
@@ -20,6 +21,7 @@ from collections.abc import Callable
 from typing import Any
 
 from src.engine.portfolio_graph import FATAL_CODES
+from src.services.canvas_assist import ask as ak
 from src.services.canvas_assist import check as ck
 from src.services.canvas_assist import ground as gr
 from src.services.canvas_assist import narrate as nr
@@ -45,6 +47,8 @@ REASONS = {
     "bad_graph": "그래프 문서를 읽을 수 없어요(형식·버전·순환을 먼저 고쳐 주세요)",
     "no_facts": "지금 그래프의 계산 결과가 없어요. 계산한 뒤에 풀어 쓸 수 있어요",
     "stale_facts": "보낸 계산 결과를 확인하지 못했어요(그래프가 바뀌었거나 서버가 다시 시작했어요). 다시 계산하면 풀어 쓸 수 있어요",
+    "no_target": "그래프에 없는 노드·선이에요",
+    "no_facts_target": "이 노드·선의 지금 계산 결과가 없어요. 계산한 뒤에 물을 수 있어요",
     "rate_limited": "한 시간에 {limit}번까지 물을 수 있어요. 이번 시간에는 다 썼어요",
     "refusal": "Claude 가 이 요청에 답하지 않았어요(분류: {detail})",
     "max_tokens": "Claude 의 답이 길이 한도에서 잘렸어요",
@@ -170,6 +174,37 @@ def narrate(graph: Any, facts: list[dict], username: str, *, catalog: Callable[[
     def check(data: Any) -> dict:
         ok, bad = nr.check(data, g)
         return {"paragraphs": ok, "rejected": bad, "dropped": dropped, "notice": nr.NOTICE if g["practice"] else None}
-    return _ask("narrate", username, client or ClaudeClient.get_default(), {"dropped": dropped},
-                version=pr.NARRATE_VERSION, grounding=g, system=pr.NARRATE_SYSTEM, user=pr.narrate_user(g),
-                schema=pr.narrate_schema([n["id"] for n in g["nodes"]]), check=check)
+    res = _ask("narrate", username, client or ClaudeClient.get_default(), {"dropped": dropped},
+               version=pr.NARRATE_VERSION, grounding=g, system=pr.NARRATE_SYSTEM, user=pr.narrate_user(g),
+               schema=pr.narrate_schema([n["id"] for n in g["nodes"]]), check=check)
+    return {**res, "dropped": dropped}
+
+
+def ask(graph: Any, target: dict, question: str, previous: dict | None, facts: list[dict], records: list[dict],
+        username: str, *, catalog: Callable[[], dict], relate: Callable[[Any], dict], key: bytes,
+        client: ClaudeClient | None = None) -> dict:
+    """AI3 — 고른 노드·선의 범위(조상 전부 + 그것 + 바로 아래) 안에서 ★봉인이 지금 문서로 확인되는 설명·기록만★ 근거로 답한다.
+    대상 자신의 확인된 결과가 없으면 부르지 않는다. 범위 밖에서 깨진 것은 말하지 않는다(쓰지 않으니까)."""
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list) or not isinstance(graph.get("edges"), list):
+        return _unavailable("bad_graph", {"dropped": []})
+    sc = ak.scope(graph, target)
+    if sc is None:
+        return _unavailable("no_target", {"dropped": []})
+    nodes_in, edges_in = sc
+    verified, dropped_n = nr.verify_facts(graph, facts, key)
+    records_ok, dropped_e = ak.verify_records(graph, records, key)
+    dropped = [d for d in dropped_n if d.get("node_id") in nodes_in] + [d for d in dropped_e if d.get("edge_id") in edges_in]
+    has = (target["id"] in {f["node_id"] for f in verified}) if target["kind"] == "node" else target["id"] in records_ok
+    if not has:                                          # 부르기 전에 — 대상의 지금 결과 없이 답하지 않는다
+        return _unavailable("no_facts_target", {"dropped": dropped})
+    g, refs = ak.ground(graph, target, question, previous, verified, records_ok, catalog(), relate(graph))
+
+    def check(data: Any) -> dict:
+        answer, bad = ak.check(data, g)
+        cited = {f for s in answer["sentences"] for f in s["fact_ids"]}
+        return {"answer": answer, "facts": {f: refs[f] for f in sorted(cited, key=lambda x: int(x[1:]))}, "rejected": bad,
+                "notice": nr.NOTICE if g["practice"] else None, "scope": {"nodes": nodes_in, "edges": edges_in}}
+    res = _ask("ask", username, client or ClaudeClient.get_default(), {"dropped": dropped},
+               version=pr.ASK_VERSION, grounding=g, system=pr.ASK_SYSTEM, user=pr.ask_user(g),
+               schema=pr.ask_schema([x["id"] for x in g["lines"]]), check=check)
+    return {**res, "dropped": dropped}

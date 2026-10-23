@@ -16,6 +16,8 @@ import json
 from typing import Any
 
 PURPOSE = "canvas-explain-facts/v1"
+#: 전달 점검 기록(AI3)을 봉인할 때 노드 종류 자리에 쓰는 표시 — 카탈로그 종류와 겹치지 않는다.
+EDGE_TYPE = "@edge"
 
 
 def _canon(v: Any) -> Any:

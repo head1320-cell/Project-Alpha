@@ -64,3 +64,38 @@ def narrate_schema(node_ids: list[str]) -> dict:
                            "node_ids": {"type": "array", "items": {"type": "string", "enum": list(node_ids)}}}}
     return {"type": "object", "additionalProperties": False, "required": ["paragraphs"],
             "properties": {"paragraphs": {"type": "array", "items": para}}}
+
+
+# ── AI3 묻기 ──────────────────────────────────────────────────────────────────
+
+ASK_VERSION = "ai3-ask-1"
+
+ASK_SYSTEM = """너는 포트폴리오 설계 캔버스에서 사용자가 고른 노드나 선에 대한 질문에 답한다.
+
+규칙:
+- 근거는 주어진 사실 줄(lines)뿐이다. 거기 없는 사실·원인·전망을 더하지 않는다.
+- 해요체 1~4문장으로 답한다. 문장마다 그 문장이 기댄 사실 줄 id 를 fact_ids 에 하나 이상 단다.
+- 숫자는 그 문장이 댄 사실 줄에 있는 숫자만 쓴다. 줄 id·단계 번호는 글에 쓰지 않는다(화면이 칩으로 보여 준다).
+- '몰라요'·'가정'으로 적힌 것은 숨기지 않고 그대로 말한다. 재지 않은 것을 잰 것처럼 말하지 않는다.
+- 근거로 답할 수 없으면 answerable 을 false 로, why_not 을 not_in_facts 로 한다. 사도 되는지·좋은 전략인지 같은 투자 판단을 물으면
+  answerable false, why_not judgement 로 한다(투자 판단은 하지 않는다). 계산과 상관없는 질문이면 off_topic. 답할 수 있으면 why_not 은 none.
+  답할 수 없을 때도 관련된 사실 줄(예: 재지 않은 것)이 있으면 그 줄을 대어 한두 문장으로 말해도 된다.
+- previous 가 있으면 바로 앞 문답이다. '그건' 같은 말은 그것을 가리킨다. 앞 답의 숫자도 사실 줄에 있어야 다시 쓸 수 있다.
+- 성과 약속을 하지 않는다. "검증됨", "입증됨", "견고함", "투자 우위", "더 나은 전략", "통과해요", "좋아져요" 같은 말을 쓰지 않는다.
+- 답은 주어진 JSON 스키마대로만 낸다."""
+
+
+def ask_user(grounding: dict) -> str:
+    return ("아래는 질문 대상과 그 근거 사실 줄(JSON, 흐름 순서)이다. 이것만 근거로 question 에 답해.\n\n"
+            + json.dumps(grounding, ensure_ascii=False, sort_keys=True))
+
+
+def ask_schema(line_ids: list[str]) -> dict:
+    """문장마다 사실 줄 — 댈 수 있는 것은 근거 줄뿐(enum). 문장 수 한도(4)는 서버 검사가 건다."""
+    sentence = {"type": "object", "additionalProperties": False, "required": ["text", "fact_ids"],
+                "properties": {"text": {"type": "string"},
+                               "fact_ids": {"type": "array", "items": {"type": "string", "enum": list(line_ids)}}}}
+    return {"type": "object", "additionalProperties": False, "required": ["answerable", "why_not", "sentences"],
+            "properties": {"answerable": {"type": "boolean"},
+                           "why_not": {"type": "string", "enum": ["none", "not_in_facts", "judgement", "off_topic"]},
+                           "sentences": {"type": "array", "items": sentence}}}

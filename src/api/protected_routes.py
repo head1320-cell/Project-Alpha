@@ -148,6 +148,8 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도"),
     ("POST", "/api/v1/assist/canvas/narrate"):
         (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도(추천과 한 그릇)"),
+    ("POST", "/api/v1/assist/canvas/ask"):
+        (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도(추천·풀어 쓰기와 한 그릇)"),
 }
 
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.

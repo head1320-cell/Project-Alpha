@@ -208,6 +208,10 @@ def _seal_explains(graph: Any, report: dict) -> None:
     for nid, res in (report.get("nodes") or {}).items():
         if isinstance(res, dict) and isinstance(res.get("explain"), dict) and nid in deep:
             res["explain_sig"] = fact_seal.seal(key, nid, res.get("type"), deep[nid], res["explain"])
+    # AI3 — 전달 점검 기록도 봉인한다. ★받는 노드의 깊은 서명★으로 — 그 서명이 보낸 노드의 서명과 이 선을 품는다.
+    for eid, rec in (report.get("edges") or {}).items():
+        if isinstance(rec, dict) and rec.get("target") in deep:
+            rec["sig"] = fact_seal.seal(key, eid, fact_seal.EDGE_TYPE, deep[rec["target"]], rec)
 
 
 class GraphSaveRequest(BaseModel):
