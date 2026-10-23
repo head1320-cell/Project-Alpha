@@ -18,8 +18,10 @@ from pydantic import BaseModel, Field
 from src.api.allocation_graph_nodes import PORT_PLAIN, PORT_TYPES, REGISTRY, STAGES
 from src.api.allocation_graph_relations import briefs_of, relations
 from src.api.allocation_graph_roles import NEED_PLAIN
+from src.api.auth import derived_key
 from src.api.graph_progress import RID_PATTERN, ProgressHub
 from src.domain import design_procedure as proc
+from src.domain import fact_seal
 from src.domain.workflow_gates import GATES
 from src.domain.workflow_gates import evaluate as evaluate_gates
 from src.engine import portfolio_graph as pg
@@ -183,6 +185,7 @@ def _graph_run(graph: Any, targets: str | None, on_node) -> dict:
     ids = [t for t in (targets or "").split(",") if t] if targets is not None else None
     report = pg.run(graph, REGISTRY, targets=ids, on_node=on_node)
     report["relations"] = _relations(graph, _kinds(), briefs_of(report.get("nodes") or {}))
+    _seal_explains(graph, report)
     if ids is not None:
         report["gates"] = None
         report["gates_reason"] = "일부만 계산했어요 — 증거 관문은 전체를 계산할 때 판정해요."
@@ -195,6 +198,16 @@ def _graph_run(graph: Any, targets: str | None, on_node) -> dict:
                                      history_types=history)
     report["procedure"] = _procedure(graph, _kinds())
     return report
+
+
+def _seal_explains(graph: Any, report: dict) -> None:
+    """AI2 — 노드 설명마다 서버 봉인(`explain_sig`). AI 풀어 쓰기가 화면이 돌려보낸 설명을 ★지금 문서의 깊은 서명으로★ 확인한다
+    (`src/domain/fact_seal.py`). 엔진 결과는 건드리지 않고 칸 하나만 더한다."""
+    deep = fact_seal.deep_sigs(graph)
+    key = derived_key(fact_seal.PURPOSE)
+    for nid, res in (report.get("nodes") or {}).items():
+        if isinstance(res, dict) and isinstance(res.get("explain"), dict) and nid in deep:
+            res["explain_sig"] = fact_seal.seal(key, nid, res.get("type"), deep[nid], res["explain"])
 
 
 class GraphSaveRequest(BaseModel):

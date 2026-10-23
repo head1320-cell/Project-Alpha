@@ -5,14 +5,21 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends
+from pydantic import BaseModel, Field, field_validator
 
 from src.api import allocation_graph_routes as graph_routes
-from src.api.auth import require_login
+from src.api.auth import derived_key, require_login
+from src.domain import fact_seal
 from src.domain.auth_identity import Principal
 from src.services.canvas_assist import service
+
+#: 풀어 쓰기 요청 상한 — 사실 수·설명 하나의 크기(넘으면 422). 그래프 노드보다 많을 일이 없다.
+MAX_FACTS = 120
+MAX_EXPLAIN_BYTES = 8 * 1024
 
 router = APIRouter(prefix="/api/v1/assist/canvas", tags=["canvas-assist"])
 
@@ -21,3 +28,30 @@ router = APIRouter(prefix="/api/v1/assist/canvas", tags=["canvas-assist"])
 def canvas_suggest(graph: Any = Body(...), p: Principal = Depends(require_login)) -> dict:
     """다음에 붙일 노드 1~3 — 검사를 통과한 것만. 키·한도·거절이면 `available:false` + 사유 + 규칙 대체."""
     return service.suggest(graph, p.username, catalog=graph_routes._kinds, validate=graph_routes.graph_validate)
+
+
+class NarrateFact(BaseModel):
+    """`/run` 이 낸 노드 설명 하나와 그 봉인(`explain_sig`) — 화면이 받은 그대로 돌려보낸다."""
+    node_id: str = Field(..., min_length=1, max_length=120)
+    explain: dict
+    sig: str = Field(..., min_length=1, max_length=128)
+
+    @field_validator("explain")
+    @classmethod
+    def _small(cls, v: dict) -> dict:
+        if len(json.dumps(v, ensure_ascii=False, default=str).encode("utf-8")) > MAX_EXPLAIN_BYTES:
+            raise ValueError(f"설명 하나가 {MAX_EXPLAIN_BYTES}바이트를 넘어요")
+        return v
+
+
+class NarrateRequest(BaseModel):
+    graph: Any
+    facts: list[NarrateFact] = Field(..., max_length=MAX_FACTS)
+
+
+@router.post("/narrate")
+def canvas_narrate(req: NarrateRequest, p: Principal = Depends(require_login)) -> dict:
+    """AI2 — 계산 결과를 읽는 순서로 풀어 쓴다. ★서버 봉인이 지금 그래프로 확인되는 설명만★ 근거 · 문단마다 근거 노드 ·
+    연습용이면 서버가 경고를 붙인다. 키·한도·거절이면 `available:false` + 사유(확인 못 한 설명은 `dropped`)."""
+    return service.narrate(req.graph, [f.model_dump() for f in req.facts], p.username,
+                           catalog=graph_routes._kinds, key=derived_key(fact_seal.PURPOSE))

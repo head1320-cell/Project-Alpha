@@ -30,6 +30,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import logging
 import os
 import secrets
@@ -94,6 +96,13 @@ def auth_secret_state() -> str:
 
 def _signing_secret() -> str:
     return _configured_secret() or _EPHEMERAL_SECRET
+
+
+def derived_key(purpose: str) -> bytes:
+    """서명 비밀에서 ★용도별★ 키(HMAC, 용도 분리) — 토큰 서명이 아닌 다른 서명(AI2 설명 봉인 등)이 같은 키를 쓰지 않게.
+    비밀 자체는 내보내지 않는다. 비밀이 프로세스 로컬 난수면(열화 — `auth_secret_state`) 재시작 뒤 이 키도 바뀌어
+    전에 봉인한 것은 모두 확인에 실패한다 — 쓰는 쪽이 사유를 말한다."""
+    return hmac.new(_signing_secret().encode("utf-8"), f"derived:{purpose}".encode(), hashlib.sha256).digest()
 
 
 def warn_if_degraded() -> None:

@@ -34,3 +34,33 @@ def output_schema(kinds: dict[str, dict]) -> dict:
                            "reason": {"type": "string"}}}
     return {"type": "object", "additionalProperties": False, "required": ["suggestions"],
             "properties": {"suggestions": {"type": "array", "items": item}}}
+
+
+# ── AI2 풀어 쓰기 ─────────────────────────────────────────────────────────────
+
+NARRATE_VERSION = "ai2-narrate-1"
+
+NARRATE_SYSTEM = """너는 포트폴리오 설계 캔버스의 계산 결과를 사람이 읽기 쉬운 글로 풀어 쓴다.
+
+규칙:
+- 근거는 주어진 노드 설명(nodes)뿐이다. 거기 없는 사실·원인·전망을 더하지 않는다.
+- 흐름 순서대로 해요체 2~5문단으로 쓴다. 문단마다 그 문단이 기댄 노드 id 를 node_ids 에 하나 이상 단다.
+- 숫자는 그 문단이 댄 노드의 설명에 있는 숫자만 쓴다. 단계 번호는 쓰지 않는다(화면이 번호를 보여 준다).
+- '몰라요'·'가정'으로 적힌 것은 숨기지 않고 그대로 말한다. 재지 않은 것(unmeasured)을 잰 것처럼 말하지 않는다.
+- practice 가 true 면 연습용 합성 데이터로 계산한 결과라는 점을 글에서도 말한다.
+- 투자 판단이나 성과 약속을 하지 않는다. "검증됨", "입증됨", "견고함", "투자 우위", "더 나은 전략", "통과해요", "좋아져요" 같은 말을 쓰지 않는다.
+- 답은 주어진 JSON 스키마대로만 낸다."""
+
+
+def narrate_user(grounding: dict) -> str:
+    return ("아래는 계산을 마친 노드들의 설명(JSON, 흐름 순서)이다. 이것만 근거로 풀어 써.\n\n"
+            + json.dumps(grounding, ensure_ascii=False, sort_keys=True))
+
+
+def narrate_schema(node_ids: list[str]) -> dict:
+    """문단마다 근거 노드 — 근거로 댈 수 있는 것은 확인된 노드뿐(enum). 문단 수 한도(5)는 서버 검사가 건다."""
+    para = {"type": "object", "additionalProperties": False, "required": ["text", "node_ids"],
+            "properties": {"text": {"type": "string"},
+                           "node_ids": {"type": "array", "items": {"type": "string", "enum": list(node_ids)}}}}
+    return {"type": "object", "additionalProperties": False, "required": ["paragraphs"],
+            "properties": {"paragraphs": {"type": "array", "items": para}}}
