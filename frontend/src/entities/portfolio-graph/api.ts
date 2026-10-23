@@ -4,7 +4,7 @@
  * 오류를 200 으로 돌려준다 — 여기서 HTTP 오류는 "서버에 닿지 못했다" 뿐이다.
  */
 import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
-import type { AssistNarrate, AssistSuggest, BranchEvidence, GraphDoc, NarrateFact, NodeCatalog, RunEvent, RunReport, SaveResult, ValidateReport } from "./types";
+import type { AskRecord, AskTarget, AssistAsk, AssistNarrate, AssistSuggest, BranchEvidence, GraphDoc, NarrateFact, NodeCatalog, RunEvent, RunReport, SaveResult, ValidateReport } from "./types";
 
 const BASE = "/api/v1/allocation/graph";
 /** AI 도우미(AI0) — 로그인 경로. 화면(포트폴리오 설계)은 열려 있고 AI 만 로그인이라 접두사가 다르다. */
@@ -80,4 +80,7 @@ export const portfolioGraphApi = {
   /** AI 풀어 쓰기(AI2) — ★누를 때만★. 설명·봉인은 `/run` 이 준 그대로 보낸다(서버가 지금 그래프로 확인한다). 던지지 않는다. */
   assistNarrate: (doc: GraphDoc, facts: NarrateFact[]): Promise<AssistNarrate> =>
     assistCall<AssistNarrate>("narrate", { graph: doc, facts }),
+  assistAsk: (doc: GraphDoc, target: AskTarget, question: string, previous: { question: string; answer: string } | null,
+              facts: NarrateFact[], records: AskRecord[]): Promise<AssistAsk> =>
+    assistCall<AssistAsk>("ask", { graph: doc, target, question, previous, facts, records }),
 };

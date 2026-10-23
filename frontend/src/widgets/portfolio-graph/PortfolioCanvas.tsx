@@ -68,6 +68,7 @@ import {
   suggestionKey,
   connectionProblem,
   restackDoc,
+  type AskTarget,
   type ConnTry,
   type GraphDoc,
   type NodeRunResult,
@@ -85,6 +86,7 @@ import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { GhostLayer, type PlacedGhost } from "./GhostLayer";
 import { AiAsk, useAiAssist } from "./AiAsk";
+import { AiQuestion, useAiQuestion } from "./AiQuestion";
 import { AiStory, useAiStory } from "./AiStory";
 import { useSession } from "@/entities/session";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
@@ -628,6 +630,11 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const staleSet = useMemo(() => new Set(s.staleIds), [s.staleIds]);
   // AI2 — 이야기 탭 맨 위 'AI 가 풀어 쓴 글'(누를 때만 · 낡지 않은 결과의 설명·봉인만 보낸다).
   const aiStory = useAiStory(doc, order, s.report?.nodes ?? null, staleSet, session);
+  // AI3 — 고른 노드·선에게 묻기(오른쪽 창 아래 칸). 문답은 대상마다 이번 방문 동안 남는다.
+  const askTarget = useMemo<AskTarget | null>(() => (s.selectedId ? { kind: "node", id: s.selectedId }
+    : s.selectedEdge ? { kind: "edge", id: s.selectedEdge } : null), [s.selectedId, s.selectedEdge]);
+  const aiQ = useAiQuestion(doc, order, s.report, staleSet, session, askTarget);
+  const askFocus = useRef<() => void>(() => {});
   const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
   const live = useMemo(() => (s.report
@@ -1355,6 +1362,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드마다 자기 단계 띠 안으로 옮겨요", run: fitToLanes }] : []),
     { id: "ghosts", group: "보기", label: s.showGhosts ? "추천 유령 끄기" : "추천 유령 보기",
       hint: "서버 규칙이 고른 다음 노드를 붙일 자리에 반투명하게 보여요", run: toggleGhosts },
+    ...(s.selectedId || s.selectedEdge ? [{ id: "ask-here", group: "AI", label: s.selectedId ? "고른 노드에게 묻기" : "고른 선에게 묻기",
+      hint: "오른쪽 창 아래 칸에서 계산 결과에 대해 Claude 에게 물어요(로그인 · 계산한 뒤)",
+      run: () => { updatePanels((p) => (p.right ? p : toggle(p, "right"))); window.setTimeout(() => askFocus.current(), 60); } }] : []),
     { id: "ai-ask", group: "추천", label: "AI 에게 다음 노드 묻기",
       hint: "지금 그래프를 Claude 에게 보내 다음에 붙일 노드를 물어요(로그인 · 누를 때만)", run: () => { void ai.ask(); } },
     ...WIRE_SHAPES.map((w) => ({ id: `wire:${w.shape}`, group: "보기", label: `선 모양: ${w.label}`,
@@ -1379,7 +1389,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, multiPicked, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  ], [s.selectedId, s.selectedEdge, multiPicked, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -1951,6 +1961,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
               </>
             )}
           </div>
+          {askTarget && (askTarget.kind === "node" ? !!selected : !!selEdge) && (
+            <AiQuestion q={aiQ} session={session} badge={nodeBadge} focusRef={askFocus}
+                        target={askTarget.kind === "node" ? askTarget : { ...askTarget, source: selEdge!.source, targetNode: selEdge!.target }}
+                        onRunTo={(id) => void runTo(id)} onGotoNode={focusNode}
+                        onGotoEdge={(id) => usePortfolioGraph.getState().selectEdge(id)} />
+          )}
         </aside>
         {!rightShown && (
           <button type="button" className="pg-side-fab" aria-label="오른쪽 창 열기 (])" title="이야기·설정 창 열기 (])"

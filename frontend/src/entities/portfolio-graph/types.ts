@@ -221,6 +221,24 @@ export type AssistNarrate =
       usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
   | { available: false; source: "unavailable"; reason_code: string; reason: string; dropped?: NarrateDropped[] };
 
+/** 묻는 대상(AI3) — 고른 노드나 선. */
+export interface AskTarget { kind: "node" | "edge"; id: string }
+/** 돌려보내는 전달 점검 기록 — `/run` 의 기록에서 `sig` 칸을 뗀 것과 그 봉인. */
+export interface AskRecord { edge_id: string; record: Omit<EdgeRecord, "sig">; sig: string }
+/** 답이 댄 사실 줄 — 서버가 붙인 id 의 원문과 자리(화면은 `index` 로 "사실 2" 를 그린다). */
+export interface AskFactRef { target_kind: "node" | "edge"; target_id: string; part: string; index: number; text: string }
+export interface AskSentence { text: string; fact_ids: string[] }
+export interface AskAnswer { answerable: boolean; cannot: string | null; sentences: AskSentence[] }
+/** 확인하지 못해 뺀 것 — 노드 설명이면 `node_id`, 전달 점검이면 `edge_id`. */
+export interface AskDropped { node_id?: string | null; edge_id?: string | null; reason: string }
+/** `POST /api/v1/assist/canvas/ask` — 범위(조상 전부 + 그것 + 바로 아래) 안 봉인한 설명·기록만 근거 · 문장마다 사실 줄. */
+export type AssistAsk =
+  | { available: true; source: "claude"; model: string; answer: AskAnswer; facts: Record<string, AskFactRef>;
+      rejected: { code: string; reason: string }[]; dropped: AskDropped[]; notice: string | null;
+      scope: { nodes: string[]; edges: string[] }; cached: boolean;
+      usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
+  | { available: false; source: "unavailable"; reason_code: string; reason: string; dropped?: AskDropped[] };
+
 export interface Procedure {
   steps: ProcedureStep[];
   next: ProcedureSuggestion | null;
@@ -270,6 +288,8 @@ export interface EdgeRecord {
   checks: string[];
   issues: EdgeIssue[] | null;
   issues_reason: string | null;
+  /** 서버 봉인(AI3) — 이 기록이 그 서버가 지금 그래프에 대해 낸 것인지 묻기 때 확인한다. 기록(이 칸 빼고)에 대한 것. */
+  sig?: string;
 }
 
 export interface ValidateReport {
