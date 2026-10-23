@@ -23849,3 +23849,19 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   effect 순서가 그대로라서).
 - 하지 않음: 이름 바꾸기 · 기능 · context 도입 · 원래부터 쓰지 않던 `MoreHorizontal` import 정리(이번 변경과 무관 — 그대로 둠) · 절차·유령·길잡이 구간(본체에 남김 — 서로 얽혀
   있어 나누면 인자가 스무 개를 넘는다).
+
+## CF 3부 · E3 `store.ts` 나누기 — 1,220줄 → 331줄 (2026-10-23)
+
+- 왜: 캔버스 상태(zustand) 하나에 액션 75개가 한 객체로 있어, 3부의 다음 묶음(제약 편집기·노드 크기·선택 바)이 손댈 곳을 찾기 어려웠다. ★동작 불변★ — E1 골든으로 확인.
+- 무엇(같은 폴더): 같은 `usePortfolioGraph` · 같은 `PgState` · 같은 경로(`./store`) — 부르는 쪽 28 파일은 그대로.
+  · `storeShared.ts` — 함께 쓰는 셈·상수·순수 함수(`uniqueLabel` · `newId` · 일련번호 · `STRUCTURAL`·`HISTORY`·`INSERT_GAP`·`RUNS`·`COALESCE_MS` ·
+    `descendantsOf`·`ancestorsOf`·`causePath` · `clean`·`waitingFor`·`bare`·`boxH` · `record` · `keepSaid`) + 조각이 받는 `SliceCtx{set, get, push}`.
+  · 조각 다섯 — `storeGraph`(노드·선 편집 25) · `storeRun`(검증·계산·안내 13) · `storeHistory`(되돌리기·복사 4) ·
+    `storeLayout`(배치·묶음·전략·갈래·블록·경유점 22) · `storeView`(보기 11). 각 조각은 `(ctx) => Pick<PgState, …>` 이고 `store.ts` 가 초기값 뒤에 펼친다.
+  · `store.ts` 에는 상태 타입·초기값·낡음 다시 세기(`derive`)를 감싼 `set`·`push`·조각 합치기만 남았다. `descendantsOf`·`ancestorsOf`·`causePath` 는 다시 내보낸다.
+  · 옮긴 액션 본문은 원본과 글자 그대로(들여쓰기 2칸만 줄임 — 줄 단위로 대조함). 바꾼 것은 하나: 묶음·갈래 id 의 `(++seq)` → `nextSeq()` —
+    모듈 경계를 넘어 `let` 을 올릴 수 없어서다. 셈은 `storeShared` 한 곳뿐이라 노드·묶음·갈래가 예전처럼 같은 수를 잇는다(문서 골든의 묶음·갈래 id 가 그대로라 확인됨).
+    `lastParamEdit`(설정을 잇달아 고치면 한 단계)·`dragging`(끌기 한 번 = 한 단계)은 그것만 쓰는 `storeGraph` 의 모듈 값으로.
+  · 변환은 스크립트로(scratchpad `split_store.py` — 액션 이름표로 나누고, 이름이 하나라도 빠지거나 남으면 멈춤).
+- 확인: ★E1 골든 3 이 그대로★(나눈 빌드에서 `--repeat-each=2` 6/6 — 묶음·갈래 id 까지 같다) · ★전체 E2E 1,036 통과 · 실패 0★(73분 — 이 실행이 E3 의 게이트이자 E4 확인·기준선 비교를 겸한다. 캔버스 게이트는 그 안에 든다) · tsc 0 · eslint 오류 0(경고 2 — 무관한 기존) · `gen-dark-modules --check` 깨끗 · CSS 가드 5 통과 · `/allocation` 첫 로드 9.63 kB / 97.9 kB 그대로.
+- 하지 않음: 액션 이름·상태 모양 바꾸기 · 조각마다 따로 쓰는 훅(구독 범위 줄이기 — 성능 근거 없이 하지 않는다) · 상태 키 순서(객체 키 순서에 기대는 곳 없음 — 확인함).
