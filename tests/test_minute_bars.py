@@ -60,6 +60,13 @@ def run(monkeypatch, bars_by_date: dict | None, **cfg_kw):
     monkeypatch.setattr(loader, "load_ohlcv_unified", lambda ticker, *a, **k: df.copy())
     monkeypatch.setattr(mb, "load_minute_bars",
                         lambda tk, d: (bars_by_date or {}).get(str(d)))
+    # ★이 파일의 픽스처는 "신호 봉 = 체결 봉" 을 전제로 손으로 짜였다★ —
+    # 신호봉 하나에 신호와 체결가 도달을 같이 넣어 두었다. 그 전제는 예전
+    # 기본값(`signal_lag=0`)에서 **암묵적**이었고 기본이 1로 바뀌자(AG) 드러났다.
+    # ★단언을 느슨하게 하는 대신 전제를 명시한다★ — 여기 주제는 체결가 산식이지
+    # 신호 시차가 아니다. 기본 시차에서의 체결은 `test_ladder.py` 의
+    # `test_a_ladder_fills_the_bar_after_the_signal` 이 건다.
+    cfg_kw.setdefault("signal_lag", 0)
     cfg = BacktestConfig(
         symbols=["000111"], strategy_name="Condition",
         strategy_params={"buy_conditions": BUY},

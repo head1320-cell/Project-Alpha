@@ -1,8 +1,8 @@
-import DbStatusPanel from "@/components/admin/DbStatusPanel";
+import DbStatusPanel from "@/widgets/admin/DbStatusPanel";
 
 export const metadata = {
-  title: "Data Infra · DB Status",
-  description: "전 도구 DB 적재 현황 + 적재 트리거",
+  title: "데이터 상태",
+  description: "데이터 원천 연결·적재 현황과 연구 등급",
 };
 
 export default function DataInfraPage() {

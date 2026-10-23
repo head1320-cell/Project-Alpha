@@ -133,7 +133,11 @@ def _date_chunks(start: str, end: str):
 def backfill_flows_krx(start: str, end: str | None = None,
                        tickers: list[str] | None = None, all_listed: bool = False,
                        engine=None, fetcher=None) -> dict:
-    """투자자별 수급 과거 백필 — ISIN은 KIS 마스터 캐시(collect-master 선행 필요)."""
+    """투자자별 수급 과거 백필 — ISIN은 KIS 마스터 캐시(collect-master 선행 필요).
+
+    ISIN 판정은 `instrument_master_store.isin_status()` **하나**를 쓴다.
+    건너뛴 종목은 합계(`no_isin`)와 **사유별 내역**(`no_isin_by_reason`)에 함께 남는다.
+    """
     from src.data.kis_flows import bulk_upsert_flows, ensure_flows_table
     from src.data.stock_master import load_master_flags
 
@@ -156,13 +160,26 @@ def backfill_flows_krx(start: str, end: str | None = None,
             tickers = [t[0] for t in SEED_TICKERS]
 
     end = end or datetime.now().strftime("%Y-%m-%d")
+    # ★식별자 해소는 한 곳이다★ 예전에는 여기서 조회를 **인라인으로 다시** 썼고,
+    # 그 규칙(`len == 12`)이 `isin_of` 의 규칙("비어 있지 않으면")과 달랐다.
+    from src.data import instrument_master_store as ims
+
     stats = {"tickers": len(tickers), "loaded": 0, "rows": 0,
-             "no_isin": 0, "errors": 0}
+             "no_isin": 0, "errors": 0,
+             # ★합계 하나로는 어디를 고쳐야 할지 알 수 없다★ 마스터가 없는 것 ·
+             # ISIN 이 빈 것 · 길이가 틀린 것(=파서·출처 결함)은 처방이 전부 다르다.
+             # 합계 `no_isin` 은 **의미가 그대로다** — 기존 소비자가 읽는다.
+             "no_isin_by_reason": {ims.KIND_NO_MASTER: 0, ims.KIND_NO_ISIN: 0,
+                                   ims.KIND_MALFORMED: 0}}
 
     for tk in tickers:
-        isin = (flags.get(tk) or {}).get("isin") or ""
-        if len(isin) != 12:
+        resolved = ims.isin_status(tk, flags=flags)
+        isin = resolved["isin"]
+        if isin is None:
             stats["no_isin"] += 1
+            kind = resolved["kind"]
+            stats["no_isin_by_reason"][kind] = \
+                stats["no_isin_by_reason"].get(kind, 0) + 1
             continue
         try:
             qty_rows: list[dict] = []

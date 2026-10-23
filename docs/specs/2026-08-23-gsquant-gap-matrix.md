@@ -1,0 +1,75 @@
+# GS Quant 아키텍처 벤치마크 — 갭 매트릭스 (§39 Phase 0 산출물)
+
+> 출처: `Project_Alpha_GSQuant_Architectural_Benchmark.md`
+> §34 Phase 0 · §39 가 요구한 **프로덕션 코드 수정 전 감사**.
+> 원칙: GS Quant 를 **복제하지 않는다**(§3·§35). 설계 원칙만 차용한다.
+
+## 0. 한 문장
+
+> 기능은 거의 다 있다. **없는 것은 그 기능들이 공유해야 할 도메인 객체**다 —
+> 특히 팩터 리스크 모델의 **조립**(Σ_asset = BΣ_fB' + D)이 비어 있었다.
+
+## 1. 갭 매트릭스
+
+| 도메인 원시객체(§39) | 상태 | 근거 (파일·실측) |
+|---|---|---|
+| **ResearchContext**(S1) | ✅ 최소 기반 | `src/engine/research_context.py` 가 단일 출처 — 세 벌 복사돼 있던 `code_version()` 이 위임으로 합쳐졌고, 갈라져 있던 `backtest_runs.engine_version` 의 `APP_VERSION` 폴백이 복구됐다. `as_of` 정책(`validate_as_of`)도 라우트에서 엔진으로 옮겼다. `rebalance-decision` 응답이 `research_context`(지문·출처·미선언 절단일)를 싣는다. `rebalance-decision` 의 **팩터 스택**(베타·월별수익률·리스크모델·매크로 계열)이 `as_of` 를 실제로 지키고, 지킨 절단일만 `cutoffs_declared` 에 오른다 — 예전에는 가격만 자르고 `information_cutoff` 를 선언했다. **다른 엔진 전면 주입은 여전히 범위 밖**(§34 Phase 1) |
+| **Dataset**(S2) | ⚠️ 부분(측정 불가) | `ohlcv_loader` · `fundamentals_store` · `dart_history` · `regime_analyzer.collector`(61계열) · `universe_select` — 도메인별 인터페이스는 있으나 **공통 context/provenance 규약이 없다**. ★`load_ohlcv_unified` 는 프레임마다 `attrs["source"]`(mock/db/kis)를 정확히 붙이는데 읽는 곳이 1곳뿐★이고 `research_context.data_source()` 는 환경 플래그를 사실처럼 보고한다. 다만 **이 컨테이너는 DB 가 없어 출처가 갈리는 상황을 재현할 수 없다** — 피해를 확인하기 전에는 손대지 않는다 |
+| **Instrument**(S3) | ⚠️ 최소(거래가능성) | ticker 가 곧 정체성인 것은 그대로. ★그 부재가 실행 게이트에서 피해를 냈다★ — `implement_exposures(market="us")` 가 낸 `SPY`·`GLD` 목표가 `executable` 이 되어 `build_plan` 이 주문까지 만들었다. `target_versions.untradable()` 이 **주문 경로의 어휘**만 판정한다(형식). `instrument_id`·`valid_from/to`·`listing_status`·상장폐지·거래정지는 여전히 없음. ★식별 자체도 실측 피해가 있었다★ — 마스터가 모르는 코드가 최적화에서 89% 를 가져가는데 `excluded: []` 였다. `stock_master.unknown_codes()` 가 사실을 돌려주고 `/analyze`·`rebalance-decision` 이 그것을 싣는다(막지는 않는다 — `SPY` 같은 정당한 연구 대상이 있고, 주문은 `untradable` 이 막는다) |
+| **Position/PositionSet**(S4) | ⚠️ 부분(피해 봉인) | `holdings: dict[str, float]` 가 라우트마다 반복. ★그 반복의 대가는 실측됐다★ — 부호를 아는 곳이 없어 분석 7곳이 각자 `max(w,0)` 로 숏을 버렸고, 시장중립 북이 풀노출(1.0)로 보고됐다. `src/engine/portfolio_weights.py` 가 부호·gross/net 을 단일 출처로 담당한다. 남은 것은 **구조화**(Position 객체·수량·통화·체결가). 재발은 `tests/test_no_weight_sign_loss.py` 가 정적으로 막는다 — 라우트 경계에서 부호를 지우면 CI 가 실패한다 |
+| **Portfolio**(S5) | ❌ 없음 | weights 배열. `PortfolioDecisionState` 는 설계 문서상 개념으로만 존재 |
+| **Factor**(S6) | ✅ 있음 | `factor_exposure.FACTOR_PROXIES` 9팩터(각 59개월) · `allocation_studio.effective_number_of_bets` |
+| **RiskModel**(§13) | ❌ **조립 없음** | `factor_risk` 는 **분해**만 한다. Σ_asset 은 여전히 `_cov(R)*252` 표본 공분산(`allocation_studio.py:262`) |
+| **ConstraintSet**(S7) | ⚠️ 부분 | `constrained_opt.Constraints` 11종(가중·그룹·회전율·베타·현금·gross/net). per-constraint `unit`·`scope`·`source`·`reason` 없음 |
+| **BacktestEngine**(§17) | ✅ 있음 | P0 에서 프로세스 격리·텔레메트리 12항목·취소·재시도·고아 복구 |
+| **BacktestResult**(§22) | ⚠️ 부분 | `equity_curve`·`statistics`·`trades`·`monthly_returns` 는 있고 `factor_exposures`·`regime_exposure` 는 P3-2 가 라우트로 낸다 |
+| **AnalyticsProcessor**(§30) | ⚠️ 부분 | 라우트가 엔진 결과를 가공한다 — 별도 계층은 없음 |
+| **InvestmentThesis**(§29) | ✅ 있음 | `company_thesis`(주장·근거·촉매·kill 조건 + 3단 분류) |
+| **CompanySnapshot**(§24) | ✅ 있음 | `company_snapshots` — 12섹션 불변 스냅샷 |
+| **Mimicking portfolio**(§14) | ❌ 없음 | `instrument_selector.EXPOSURES` 가 재료로 있다 |
+
+## 2. 이 감사가 반증한 것
+
+- "Company 언더라이팅이 없다" — **있다**(§24·§25·§26·§27·§28·§29 전부 P2 에서 닫힘).
+- "PIT 개념이 없다" — **있다**(`pit_store`·`pit_macro.ResearchUsage`·`derive_usage`).
+- "팩터가 없다" — **있다**(9팩터, 이름 있는 경제 팩터).
+
+문제는 조각이 없는 것이 아니라 **조각들이 공유 객체로 묶이지 않은 것**이다.
+이것은 벤치마크 문서 §1 의 진단과 정확히 같다.
+
+## 3. 첫 수직 슬라이스 — §13 팩터 리스크 모델
+
+★재료도 주입점도 이미 있다★
+
+| 필요한 것 | 어디에 |
+|---|---|
+| B (자산×팩터 노출) | 자산별 결합 OLS — `factor_exposure` 의 팩터 계열 사용 |
+| Σ_f (팩터 공분산) | `reverse_stress.factor_covariance` (단위 정규화 완료) |
+| D (고유분산) | 회귀 잔차, 자유도 보정 |
+| 주입점 | `allocation_studio.optimize(s_override=…)` — **P2.5 가 만들어 둠** |
+
+### 실측 (4자산 · 9팩터 · 59개월 · 자산별 dof 49)
+
+| 자산 | 모델 월변동성 | 표본 월변동성 | 팩터 설명 |
+|---|---|---|---|
+| 005930 | 8.45% | 7.89% | 19.8% |
+| 000660 | 8.41% | 7.82% | 13.9% |
+| 035420 | 10.26% | 9.58% | 20.3% |
+| 005380 | 8.54% | 7.95% | 16.8% |
+
+**최소 고유값 6.68e-03 > 0 — 양정부호.** `BΣ_fB'` 는 항상 PSD 이고 D 는 양의
+대각이므로 합은 **항상 PD** 다. 표본 공분산은 자산수 > 관측수 에서 특이행렬이
+되지만 이 모델은 그렇지 않다 — §13 이 "more scalable" 이라 한 근거다.
+
+★결합 베타를 쓴다★ 단변량이면 상관된 팩터의 공통 변동을 중복 흡수한다
+(P3-4 에서 그 결과가 설명분산 **103,809%** 였다).
+
+## 4. 다음 후보 (승인 필요)
+
+| 순위 | 항목 | 비고 |
+|---|---|---|
+| 1 | ~~**S1 ResearchContext**~~ | **완료(최소 기반)** — 컨텍스트 객체 + 중복 제거 + `rebalance-decision` 배선. 모든 엔진에 `context` 인자를 주입하는 전면 리팩터는 여전히 별도 승인 대상 |
+| 2 | **Position/PositionSet/Portfolio** | Phase 6. `holdings` dict 를 대체. ★부호·단위는 `portfolio_weights` 가 먼저 담당하게 됐다★ — 원시객체가 없어서 생긴 **측정된 피해**(분석 7곳이 각자 `max(w,0)` 로 숏을 버림)는 닫혔고, 남은 것은 구조화다 |
+| 3 | **§14 팩터 복제 바스켓** | mock 에서 ETF 상관이 0(SPY-VTI 0.037)이라 품질 검증 불가 — 구조만 가능 |
+| 4 | **§15 ConstraintSet 구조화** | 현 `Constraints` 로 동작 중이라 급하지 않음 |
+| 5 | **S3 Instrument** | 생존편향 정합성에 필요하나 `tickers_asof` 가 부분 대체 중 |

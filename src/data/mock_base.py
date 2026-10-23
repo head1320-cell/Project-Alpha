@@ -71,8 +71,36 @@ class DeterministicMockStore:
 
     # ─── 공통 캐시 ────────────────────────────────────────────────────
 
+    @staticmethod
+    def _mode() -> str:
+        """현재 캐시 네임스페이스. ★호출 시점마다 환경을 읽는다★
+
+        `mock_allowed()` 와 같은 규율이다 — 프로세스 시작 시점에 고정하면 런타임에
+        모드가 바뀌었을 때 그 사실을 놓친다.
+        """
+        from src.data.mock_gate import mock_allowed
+        return "mock" if mock_allowed() else "real"
+
+    def _scoped(self, key: str) -> str:
+        """캐시 키에 모드를 붙인다 — ★메모리·DB 양쪽에 같은 규칙★
+
+        예전에는 `price_factors:005930` 하나였다. 그래서 `KIS_USE_MOCK=1` 에서
+        만든 합성값이 `=0` 으로 바뀐 뒤에도 그대로 서빙됐다(실측: `908.9` 가
+        `mock_allowed()=False` 에서 나왔다). 운영 경로가 합성값을 받는다는 뜻이고,
+        `2aff832` 가 유동성 게이트에서 고친 것과 **같은 종류의 결함**이다.
+        """
+        return f"{self._mode()}:{key}"
+
     def _persist_on(self) -> bool:
         if not self.PERSIST:
+            return False
+        # ★합성값은 영속하지 않는다★ — 이것이 둘째 누수였고 더 위험했다.
+        # `snapshot_db.enabled()` 는 `bool(DART_API_KEY) or not mock_allowed()` 라,
+        # `KIS_USE_MOCK=1` + 실 DART 키(정당한 부분 연동 개발 조합)에서 **참**이
+        # 된다. 그러면 mock 값이 `factor_snapshot` 에 기록되고 **재시작을 넘어**
+        # 운영에서 실값처럼 읽힌다. 프로세스 수명 안의 문제가 아니었다.
+        from src.data.mock_gate import mock_allowed
+        if mock_allowed():
             return False
         try:
             from src.data import snapshot_db
@@ -88,6 +116,7 @@ class DeterministicMockStore:
         EMPTY_RETRY_TTL만 유지 → 원인 해소 후 자동 재시도. 과거에 영속된 빈 히트도
         miss로 취급해 재계산한다(오염 자가 치유).
         """
+        key = self._scoped(key)
         with self._lock:
             entry = self._cache.get(key)
             if entry:
@@ -112,6 +141,7 @@ class DeterministicMockStore:
 
     def prime(self, keys: list[str]) -> int:
         """DB에서 여러 키를 한 번에 in-memory로 적재 (스크리너 벌크 — N개 1쿼리)."""
+        keys = [self._scoped(k) for k in keys]     # ★cached() 와 같은 네임스페이스★
         if not keys or not self._persist_on():
             return 0
         from src.data import snapshot_db

@@ -6,7 +6,8 @@ import os
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
-from main_api import _dart_backfill_sleep_seconds, _ingest_run  # noqa: E402
+from src.api.data_routes import _ingest_run
+from src.startup.lifecycle import _dart_backfill_sleep_seconds  # noqa: E402
 
 
 def test_sleep_quota_exhausted_waits_for_reset():

@@ -1,0 +1,312 @@
+import { test, expect, type Page } from "@playwright/test";
+import { contrastAudit, type AuditResult } from "./helpers";
+
+/**
+ * BT2 · 절차 탭 + 관문 알약 ↔ 노드 — ★그래프가 스스로 절차를 말한다★
+ * 거는 것(짝으로 항상-제안·항상-침묵을 배제):
+ *  · 빈 캔버스는 절차 탭을 먼저 연다 · 첫 한 걸음을 누르면 노드가 생기고, 다음 걸음은 **선까지 이어서** 붙는다
+ *  · 비중까지만 있는 흐름: 확인하기 단계가 비어 있고 [‘과거로 돌려 보기’ 붙이기] → 새 노드 + 선 2개(짝: 채운 단계에는 단추가 없다)
+ *  · 단계 줄에 올리면 그 단계 노드만 또렷하다(짝: 다른 노드는 흐림 · 떼면 흐림 없음)
+ *  · 노드를 고르면 그 단계 줄에 표시가 켜진다
+ *  · 관문 설명에 판정한 노드 목록 → 누르면 그 노드가 골라진다 · 건너뛴 관문의 [붙이기] 가 그 관문을 잴 노드를 이어 붙인다
+ *  · 서버에 닿지 못하면 절차를 지어내지 않고 그렇다고 말한다(짝: 다시 시도하면 단계가 나온다)
+ *  · 라이트·다크 AA
+ */
+
+const F = { format: "project-alpha.portfolio-graph", version: 1 };
+const TICKERS = ["005930", "000660", "035420"];
+const n = (id: string, type: string, x: number, y: number, params: Record<string, unknown> = {}) => ({ id, type, position: { x, y }, params });
+const e = (s: string, sp: string, t: string, tp: string) => ({ id: `${s}.${sp}->${t}.${tp}`, source: s, source_port: sp, target: t, target_port: tp });
+const EMPTY = { ...F, nodes: [], edges: [] };
+const BUILD_ONLY = {
+  ...F,
+  nodes: [n("universe", "universe", 0, 140, { tickers: TICKERS }), n("returns", "returns", 320, 140),
+          n("estimate", "estimate", 640, 20), n("optimizer", "optimizer", 960, 140)],
+  edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "estimate", "returns"),
+          e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")],
+};
+
+/** 멀리(확대 < 0.55)에서는 카드 안 단추가 숨는다 — CF1 자리 고정 상자는 커서 맞춰 보기가 멀리로 열릴 수 있다. 단추를 누르기 전에 보통 이상으로. */
+async function atLeastMid(page: Page) {
+  for (let i = 0; i < 12 && (await page.locator(".pg-canvas").getAttribute("data-zoom")) === "far"; i++) {
+    await page.locator(".react-flow__controls-zoomin").click();
+    await page.waitForTimeout(120);
+  }
+  await expect(page.locator(".pg-canvas")).not.toHaveAttribute("data-zoom", "far");
+}
+
+async function openWith(page: Page, doc: object | null, tab: "proc" | "add" | null = null) {
+  await page.addInitScript(([d, t]) => {
+    try {
+      if (sessionStorage.getItem("bt2_seeded")) return;
+      sessionStorage.setItem("bt2_seeded", "1");
+      localStorage.removeItem("alpha_pg_panels");
+      if (t) localStorage.setItem("alpha_pg_left_tab", t as string); else localStorage.removeItem("alpha_pg_left_tab");
+      if (d) sessionStorage.setItem("alpha_pg_wip", JSON.stringify(d)); else sessionStorage.removeItem("alpha_pg_wip");
+    } catch { /* */ }
+  }, [doc, tab] as const);
+  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  // 좁은 화면(K4)에서는 왼쪽 창이 접혀 열기 단추만 보인다.
+  // CF 3부 E4 — ★보이는 것 중★ 첫째. 접힌 목록(`.pg-palette[hidden]`)은 카탈로그가 오면 DOM 에서 열기 단추보다 앞에 생겨, 카탈로그가 첫 확인보다
+  // 먼저 오면(부하) `.first()` 가 숨은 목록을 잡아 30초를 기다렸다 — 카탈로그를 받은 뒤 확인하게 해 매번 재현했다.
+  await expect(page.locator(".pg-palette:visible, .pg-palette-fab:visible").first()).toBeVisible({ timeout: 30_000 });
+}
+const step = (page: Page, key: string) => page.locator(`.pg-proc-step[data-step="${key}"]`);
+const edges = (page: Page) => page.locator(".react-flow__edge");
+const nodeOf = (page: Page, kind: string) => page.locator(`.pg-node[data-kind="${kind}"]`);
+
+test("빈 캔버스: 절차 탭이 먼저 · 첫 걸음은 종목 고르기 · 다음 걸음은 선까지 이어서 붙는다", async ({ page }) => {
+  await openWith(page, EMPTY);
+  await expect(page.locator('.pg-left-tab[data-tab="proc"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".pg-proc-step")).toHaveCount(6);
+  await expect(step(page, "data")).toHaveAttribute("data-state", "empty");
+  await expect(step(page, "data").locator(".pg-proc-need")).toHaveText("필수");
+  await step(page, "data").locator(".pg-proc-fix").click();
+  await expect(nodeOf(page, "universe")).toHaveCount(1);
+  await expect(edges(page)).toHaveCount(0);
+  await expect(step(page, "data")).toHaveAttribute("data-state", "partial");          // 종목만으로는 데이터 관문을 잴 수 없다
+  // 다음 걸음 — 수익률은 종목에서 이어 붙는다(붙이기만 하고 잇지 않는 제안은 없다)
+  await expect(step(page, "data").locator(".pg-proc-fix")).toHaveText("‘수익률 불러오기’ 붙이기");
+  await step(page, "data").locator(".pg-proc-fix").click();
+  await expect(nodeOf(page, "returns")).toHaveCount(1);
+  await expect(edges(page)).toHaveCount(1);
+  await expect(step(page, "data")).toHaveAttribute("data-state", "filled");
+  await expect(step(page, "data").locator(".pg-proc-fix")).toHaveCount(0);           // ★짝★ 채운 단계는 단추가 없다
+  // 되돌리기 한 번에 노드와 선이 함께 사라진다
+  await page.keyboard.press("Control+z");
+  await expect(nodeOf(page, "returns")).toHaveCount(0);
+  await expect(edges(page)).toHaveCount(0);
+});
+
+test("비중까지만: 확인하기가 비어 있고 붙이면 과거로 돌려 보기가 선 2개로 이어진다", async ({ page }) => {
+  await openWith(page, BUILD_ONLY, "proc");
+  await expect(step(page, "build")).toHaveAttribute("data-state", "filled");
+  await expect(step(page, "build").locator(".pg-proc-fix")).toHaveCount(0);
+  await expect(step(page, "check")).toHaveAttribute("data-state", "empty");
+  await expect(step(page, "check").locator(".pg-proc-need")).toHaveText("권장");
+  await expect(step(page, "check").locator('.pg-proc-gate[data-gate="cost"]')).toBeVisible();
+  const before = await edges(page).count();
+  await step(page, "check").locator(".pg-proc-fix").click();
+  await expect(nodeOf(page, "backtest")).toHaveCount(1);
+  await expect(edges(page)).toHaveCount(before + 2);
+  // 새 노드는 비중 계산의 비중과 수익률을 받는다
+  const bt = await page.evaluate(() => JSON.parse(sessionStorage.getItem("alpha_pg_wip") ?? "{}"));
+  const id = bt.nodes.find((x: { type: string }) => x.type === "backtest").id;
+  expect(bt.edges.filter((x: { target: string }) => x.target === id).map((x: { source: string; target_port: string }) => `${x.source}.${x.target_port}`).sort())
+    .toEqual(["optimizer.weights", "returns.returns"]);
+  await expect(step(page, "check")).toHaveAttribute("data-state", "filled");
+  await expect(page.locator(".pg-proc-done")).toContainText("절차를 다 채웠어요");
+});
+
+test("양방향: 단계에 올리면 그 노드만 또렷하고, 노드를 고르면 그 단계가 켜진다", async ({ page }) => {
+  await openWith(page, BUILD_ONLY, "proc");
+  await expect(step(page, "build")).toHaveAttribute("data-state", "filled");
+  await step(page, "build").hover();
+  await expect(page.locator('.react-flow__node:has(.pg-node[data-kind="optimizer"])')).not.toHaveClass(/pg-dim/);
+  await expect(page.locator('.react-flow__node:has(.pg-node[data-kind="returns"])')).toHaveClass(/pg-dim/);      // ★짝★
+  await page.mouse.move(900, 20);
+  await expect(page.locator(".react-flow__node.pg-dim")).toHaveCount(0);
+  await expect(page.locator(".pg-proc-step--here")).toHaveCount(0);
+  await nodeOf(page, "returns").click();
+  await expect(step(page, "data")).toHaveClass(/pg-proc-step--here/);
+  await expect(step(page, "build")).not.toHaveClass(/pg-proc-step--here/);
+});
+
+test("관문 알약: 판정한 노드로 가고, 건너뛴 관문의 [붙이기] 가 그 관문을 잴 노드를 잇는다", async ({ page }) => {
+  await openWith(page, BUILD_ONLY, "add");
+  const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-run").click();
+  await resp;
+  await page.locator(".pg-rail-pill").click();
+  await page.locator('.pg-stn[data-gate="data"] button').click();
+  const nodes = page.locator(".pg-gate-pop .pg-gate-node");
+  await expect(nodes).toHaveCount(1);
+  await expect(nodes.first()).toContainText("수익률 불러오기");
+  await nodes.first().click();
+  await expect(page.locator('.pg-node[data-kind="returns"].pg-node--selected')).toHaveCount(1);
+  // ★짝★ 잴 걸음이 없는 관문(데이터 — 이미 수익률이 있다)에는 [붙이기] 가 없다
+  await page.locator('.pg-stn[data-gate="data"] button').click();
+  await expect(page.locator(".pg-gate-pop")).toBeVisible();
+  await expect(page.locator(".pg-gate-pop .pg-gate-fix")).toHaveCount(0);
+  await page.locator('.pg-stn[data-gate="cost"] button').click();
+  await expect(page.locator('.pg-stn[data-gate="cost"]')).toHaveClass(/pg-stn--skipped/);
+  const before = await edges(page).count();
+  await page.locator(".pg-gate-pop .pg-gate-fix").click();
+  await expect(nodeOf(page, "backtest")).toHaveCount(1);
+  await expect(edges(page)).toHaveCount(before + 2);
+});
+
+test("서버에 닿지 못하면 절차를 지어내지 않는다 · 다시 시도하면 나온다", async ({ page }) => {
+  await page.route("**/allocation/graph/validate", (r) => r.abort());
+  await openWith(page, BUILD_ONLY, "proc");
+  await expect(page.locator(".pg-proc-empty")).toContainText("절차를 불러오지 못했어요");
+  await expect(page.locator(".pg-proc-step")).toHaveCount(0);
+  await page.unroute("**/allocation/graph/validate");
+  await page.locator(".pg-proc-retry").click();
+  await expect(page.locator(".pg-proc-step")).toHaveCount(6);                           // ★짝★
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`절차 탭 대비 AA (${theme})`, async ({ page }) => {
+    await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+    await openWith(page, BUILD_ONLY, "proc");
+    await expect(page.locator(".pg-proc-step")).toHaveCount(6);
+    if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+    const r = await page.evaluate<AuditResult>(contrastAudit(".pg-palette"));
+    expect(r.checked).toBeGreaterThan(20);
+    expect(r.low, JSON.stringify(r.low)).toEqual([]);
+  });
+}
+
+// ── BT3 · 다음 한 걸음 · 추가하면 이어진다 · "이어 주세요" 단추 ────────────────────────────────
+
+test("다음 한 걸음: 서버 문장 그대로 · [붙이기] 뒤 다음 규칙으로 · 다 채우면 그 자리는 길잡이 '계산하기'(짝)", async ({ page }) => {
+  await openWith(page, BUILD_ONLY, "add");
+  const next = page.locator(".pg-next");
+  await expect(next).toContainText("‘과거로 돌려 보기’");
+  await expect(next).toContainText("잴 수 있게 돼요");
+  const before = await edges(page).count();
+  await next.locator(".pg-next-go").click();
+  await expect(nodeOf(page, "backtest")).toHaveCount(1);
+  await expect(edges(page)).toHaveCount(before + 2);
+  await expect(next).toHaveCount(0);                                              // 다 채웠다 — 제안이 없다
+  await page.locator(".react-flow__pane").click({ position: { x: 600, y: 60 } });   // 새 노드 고름을 풀면 그 자리
+  // AI5 — 아래 바 순서(환영 > 다음 한 걸음 > 길잡이 > 기본 안내): 다 채웠으니 길잡이 '계산하기'(예전엔 조작 도움말이었다).
+  await expect(page.locator(".pg-guidebar")).toHaveAttribute("data-tool", "run");
+});
+
+test("[다음에] 는 이 모양에서 숨기고, 기본 흐름(다 채움)에는 처음부터 없다(짝)", async ({ page }) => {
+  await openWith(page, BUILD_ONLY, "add");
+  await expect(page.locator(".pg-next")).toBeVisible();
+  await page.locator(".pg-next-later").click();
+  await expect(page.locator(".pg-next")).toHaveCount(0);
+  // AI5 — 그 자리는 길잡이(비중 노드가 하나라 '전략 더하기') · 길잡이도 [다음에] 하면 기본 안내(조작 도움말)로 떨어진다.
+  await expect(page.locator(".pg-guidebar")).toHaveAttribute("data-tool", "strategy_add");
+  await page.locator(".pg-guide-later").click();
+  await expect(page.locator(".pg-guidebar")).toHaveCount(0);
+  await expect(page.locator(".pg-hint")).toContainText("같은 색 점끼리");
+});
+
+test("기본 흐름은 절차를 다 채웠다 — 다음 한 걸음이 없다(짝)", async ({ page }) => {
+  await openWith(page, null, "add");
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".pg-hint")).toBeVisible();
+  await expect(page.locator(".pg-next")).toHaveCount(0);
+});
+
+test("사람이 고른 노드 뒤에 붙인다 · 고르지 않았으면 잇지 않는다(짝) · 연속 추가는 사슬이 되지 않는다", async ({ page }) => {
+  await openWith(page, BUILD_ONLY, "add");
+  const base = await edges(page).count();
+  await nodeOf(page, "optimizer").click();
+  await page.locator('.pg-palette-item[data-kind="risk"]').click();
+  await expect(nodeOf(page, "risk")).toHaveCount(1);
+  await expect(edges(page)).toHaveCount(base + 1);
+  await expect(page.locator(".pg-note")).toContainText("‘비중 계산’ 뒤에 이었어요");
+  // 새 노드가 자동으로 골라졌지만 사람이 고른 것이 아니다 — 한 번 더 눌러도 사슬로 잇지 않는다.
+  // ★공허하지 않게★ 비중을 받아 비중을 내는 노출 조절로 본다(자기 자신 뒤에 이을 수 있는 종류 — 흔들림 나눠 보기는 그럴 수 없다).
+  await nodeOf(page, "optimizer").click();
+  await page.locator('.pg-palette-item[data-kind="exposure_overlay"]').click();
+  await expect(nodeOf(page, "exposure_overlay")).toHaveCount(1);
+  await expect(edges(page)).toHaveCount(base + 2);
+  await page.locator('.pg-palette-item[data-kind="exposure_overlay"]').click();
+  await expect(nodeOf(page, "exposure_overlay")).toHaveCount(2);
+  await expect(edges(page)).toHaveCount(base + 2);
+  // ★짝★ 아무것도 고르지 않으면 잇지 않는다
+  await page.locator(".react-flow__pane").click({ position: { x: 600, y: 60 } });
+  await page.locator('.pg-palette-item[data-kind="risk"]').click();
+  await expect(nodeOf(page, "risk")).toHaveCount(2);
+  await expect(edges(page)).toHaveCount(base + 2);
+});
+
+test("‘기대 수익’을 이어 주세요 — 이름을 누르면 그 값을 내는 노드만 보이고, 고르면 잇는다", async ({ page }) => {
+  const doc = { ...BUILD_ONLY, edges: BUILD_ONLY.edges.filter((x) => x.target_port !== "belief") };
+  await openWith(page, doc, "add");
+  await atLeastMid(page);
+  const btn = nodeOf(page, "optimizer").locator('.pg-node-need-btn[data-port="belief"]');
+  await expect(btn).toHaveText("‘기대 수익’");
+  await btn.click();
+  const items = page.locator(".pg-quick .pg-quick-item");
+  await expect(items.first()).toBeVisible();
+  const kinds = await items.evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
+  expect(kinds).toContain("estimate");
+  expect(kinds).not.toContain("backtest");                                        // ★짝★ 기대 수익을 내지 않는 노드는 없다
+  const before = await edges(page).count();
+  await page.locator('.pg-quick .pg-quick-item[data-kind="estimate"]').click();
+  await expect(edges(page)).toHaveCount(before + 1);
+  await expect(nodeOf(page, "optimizer").locator(".pg-node-need")).toHaveCount(0);
+});
+
+// ── K4 · '다음 한 걸음' 바 자리 (작업 카드 — CSS) ─────────────────────────────────────────────
+// 좁은 화면에서는 위에 떠 있는 둥근 단추(왼쪽·오른쪽 창 열기)가 아래 바의 폭까지 깎아 한 낱말씩 줄이 바뀌었다(390 에서 폭 198 · 높이 261).
+// 넓은 화면에서는 바가 확대 단추(왼쪽 아래) 위에 얹혀 누를 수 없었다. ★바는 캔버스 폭을 쓰되 확대 단추를 가리지 않는다★.
+type Box = { x: number; y: number; width: number; height: number };
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const inside = (a: Box, b: Box) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.width <= b.x + b.width + 0.5 && a.y + a.height <= b.y + b.height + 0.5;
+const viewportScale = (page: Page) => page.locator(".react-flow__viewport").evaluate((el) => getComputedStyle(el).transform);
+
+async function zoomStillClickable(page: Page, bar: Box) {
+  const z = (await page.locator(".react-flow__controls").boundingBox())!;
+  expect(overlaps(bar, z), `바 ${JSON.stringify(bar)} · 확대 단추 ${JSON.stringify(z)}`).toBe(false);
+  const before = await viewportScale(page);
+  await page.locator(".react-flow__controls-zoomin").click();                     // 진짜 클릭(force 없음) — 가려 있으면 바가 받는다
+  await expect.poll(() => viewportScale(page)).not.toBe(before);
+}
+
+test.describe("K4 · 좁은 화면(390)", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("바는 캔버스 폭을 거의 다 쓰고 · 글은 세 줄 이하 · 단추는 바 안 · 확대 단추를 가리지 않는다", async ({ page }) => {
+    await openWith(page, BUILD_ONLY, "add");
+    const bar = page.locator(".pg-next");
+    await expect(bar).toBeVisible();
+    await page.waitForTimeout(300);
+    const c = (await page.locator(".pg-canvas").boundingBox())!;
+    const b = (await bar.boundingBox())!;
+    expect(b.width).toBeGreaterThanOrEqual(c.width - 32 - 1);
+    expect(inside(b, c)).toBe(true);
+    const lines = await page.locator(".pg-next-text").evaluate((el) =>
+      Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+    expect(lines).toBeLessThanOrEqual(3);
+    for (const sel of [".pg-next-go", ".pg-next-later"]) expect(inside((await page.locator(sel).boundingBox())!, b), sel).toBe(true);
+    await zoomStillClickable(page, b);
+    await page.locator(".pg-next-later").click();
+    await expect(bar).toHaveCount(0);
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`바 대비 AA (${theme})`, async ({ page }) => {
+      await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+      await openWith(page, BUILD_ONLY, "add");
+      await expect(page.locator(".pg-next")).toBeVisible();
+      if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+      const r = await page.evaluate<AuditResult>(contrastAudit(".pg-next"));
+      expect(r.checked).toBeGreaterThan(2);
+      expect(r.low, JSON.stringify(r.low)).toEqual([]);
+    });
+  }
+});
+
+for (const [w, h] of [[1024, 768], [1440, 900]] as const) {
+  test.describe(`K4 · 넓은 화면(${w})`, () => {
+    test.use({ viewport: { width: w, height: h } });
+
+    test("바는 폭 640 이하 · 단추는 바 안 · 확대 단추를 가리지 않는다(짝) · 미니맵을 켜면 미니맵도 비켜 선다", async ({ page }) => {
+      await openWith(page, BUILD_ONLY, "add");
+      const bar = page.locator(".pg-next");
+      await expect(bar).toBeVisible();
+      await page.waitForTimeout(300);
+      const b = (await bar.boundingBox())!;
+      expect(b.width).toBeLessThanOrEqual(640);
+      expect(b.height).toBeLessThan(120);
+      for (const sel of [".pg-next-go", ".pg-next-later"]) expect(inside((await page.locator(sel).boundingBox())!, b), sel).toBe(true);
+      await zoomStillClickable(page, b);
+      await page.locator('button[aria-label="미니맵"]').click();
+      const m = page.locator(".pg-minimap");
+      await expect(m).toBeVisible();
+      await page.waitForTimeout(200);
+      const b2 = (await bar.boundingBox())!;
+      expect(overlaps(b2, (await m.boundingBox())!), `바 ${JSON.stringify(b2)}`).toBe(false);
+      for (const sel of [".pg-next-go", ".pg-next-later"]) expect(inside((await page.locator(sel).boundingBox())!, b2), sel).toBe(true);
+    });
+  });
+}

@@ -3,7 +3,7 @@ import os
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
-from main_api import ingest_doctor  # noqa: E402
+from src.api.data_routes import ingest_doctor  # noqa: E402
 
 
 def test_doctor_shape_without_keys(monkeypatch):

@@ -234,6 +234,11 @@ def _format_regime_alpha(regime_alpha: dict) -> str:
 # 3. Macro Briefing Prompt
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _score_text(v) -> str:
+    """★없는 점수를 0.0 으로 쓰지 않는다★ (BH1) — LLM 이 "위험 0" 으로 읽는다."""
+    return "미상 (생산자 없음 — 이 값으로 판단하지 말 것)" if v is None else f"{float(v):.1f} / 100"
+
+
 def macro_briefing_prompt(regime_state: dict) -> tuple[str, str]:
     """매크로 환경 + Regime 판정 → 시장 시사점."""
     system = QUANT_ANALYST_PERSONA + """
@@ -263,7 +268,7 @@ def macro_briefing_prompt(regime_state: dict) -> tuple[str, str]:
 
 ## Regime 판정
 - 현재 국면: **{regime_state.get('regime', '?')}**
-- Systemic Risk Score: {regime_state.get('systemic_risk_score', 0):.1f} / 100
+- Systemic Risk Score: {_score_text(regime_state.get('systemic_risk_score'))}
 - 모드: {regime_state.get('mode', 'NORMAL')} (NORMAL/CAUTIOUS/DEFENSIVE)
 
 ## 5종 매크로 지표
