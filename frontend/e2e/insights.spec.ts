@@ -547,8 +547,14 @@ const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 const sec = (page: Page, s: string) => page.locator(`.ci-sec[data-sec=${s}]`);
 async function goSec(page: Page, s: string, label: string) {
   await page.locator(".ci-toc-item", { hasText: label }).first().click();
-  await sec(page, s).evaluate((e) => e.scrollIntoView({ block: "start" }));
-  await page.waitForTimeout(500);
+  // CF 3부 E4 — 절이 ★화면에 머문 것★을 확인한다. 관계도·위험 심화는 절이 화면에 들어야(IntersectionObserver) 부른다. 부하에서는 위쪽 절이 늦게 차올라
+  // 스크롤한 직후 자리를 밀어, 이 절이 한 번도 화면에 든 적이 없게 됐다(관계도 요청 0 — trace 로 확인 · 부하에서 6번 중 2번).
+  // 밀렸으면 다시 맞춘다(사람이 밀린 화면을 다시 맞추는 것과 같다) — 300ms 를 사이에 두고 자리가 같을 때까지.
+  await expect(async () => {
+    const top = await sec(page, s).evaluate((e) => { e.scrollIntoView({ block: "start" }); return e.getBoundingClientRect().top; });
+    await page.waitForTimeout(300);
+    expect(Math.abs(await sec(page, s).evaluate((e) => e.getBoundingClientRect().top) - top)).toBeLessThan(2);
+  }).toPass({ timeout: 20_000 });
 }
 async function deep(page: Page, fin: unknown = FX_FIN, risk: unknown = FX_RISK) {
   await page.route(`${CO}/financial-deep`, (r) => r.fulfill({ json: fin }));

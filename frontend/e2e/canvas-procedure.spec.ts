@@ -47,7 +47,9 @@ async function openWith(page: Page, doc: object | null, tab: "proc" | "add" | nu
   }, [doc, tab] as const);
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   // 좁은 화면(K4)에서는 왼쪽 창이 접혀 열기 단추만 보인다.
-  await expect(page.locator(".pg-palette, .pg-palette-fab").first()).toBeVisible({ timeout: 30_000 });
+  // CF 3부 E4 — ★보이는 것 중★ 첫째. 접힌 목록(`.pg-palette[hidden]`)은 카탈로그가 오면 DOM 에서 열기 단추보다 앞에 생겨, 카탈로그가 첫 확인보다
+  // 먼저 오면(부하) `.first()` 가 숨은 목록을 잡아 30초를 기다렸다 — 카탈로그를 받은 뒤 확인하게 해 매번 재현했다.
+  await expect(page.locator(".pg-palette:visible, .pg-palette-fab:visible").first()).toBeVisible({ timeout: 30_000 });
 }
 const step = (page: Page, key: string) => page.locator(`.pg-proc-step[data-step="${key}"]`);
 const edges = (page: Page) => page.locator(".react-flow__edge");

@@ -2,6 +2,8 @@
 
 - 상태: **Accepted** (2026-09-25, 사용자 결정 — 스펙 `docs/superpowers/specs/2026-09-25-aas-node-canvas-design.md`)
 - 관련: [ADR 001](adr-001-tailwind-shadcn-aas-migration.md)(스타일·번들 예산·E2E 클래스 계약)
+- 개정(2026-10-23, CF 3부 E5): 라이브러리는 `reactflow` 11.11.4 에서 **`@xyflow/react` 12.12.0(정확히 고정)** 으로 옮겼다 — CF0(2026-10-16, 보이는 변화 0 ·
+  스펙 `docs/superpowers/specs/2026-10-16-cf-comfy-canvas-claude-design.md` §3). 아래 본문의 "reactflow" 는 결정 당시의 이름 그대로 둔다(번들 예산의 뜻은 같다).
 
 ## 1. 결정
 
