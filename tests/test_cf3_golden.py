@@ -11,14 +11,17 @@ CF3 는 수익률 불러오기·옵티마이저·점수→비중에 **관측**(�
 `np.exp` 같은 CPU 마다 끝자리가 갈리는 연산을 거치지 않는다(`a687c2d` 의 교훈). 늦게 시작하는 종목 · 중간에 빈 날이 있는 종목 ·
 빈 날이 있는 벤치마크를 일부러 넣는다 — CF3 가 드러낼 바로 그 경우다.
 
-비교는 상대 1e-9 로 한다(최적화기의 마지막 비트는 BLAS 에 따라 갈릴 수 있다). `CF3_GOLDEN_EXACT=1` 이면 정확히 같아야 한다 —
-관측을 더하기 전·후에 로컬에서 이 모드로 한 번씩 돌린다. 얼리기: `UPDATE_CF3_GOLDEN=1`.
+비교는 ★값 종류별 허용 오차★(`_close`, 2026-10-23 사용자 결정): 반올림해 낸 값은 인쇄된 마지막 자리 1단위까지, 반올림하지 않은 최적화 원값은
+상대 1e-7(풀이기 수렴 정밀도 — SLSQP ftol 1e-9)까지. 호스트 CPU 가 바뀌면 numpy 의 OpenBLAS(DYNAMIC_ARCH)가 다른 커널을 골라
+끝자리가 갈린다(`docs/HISTORY.md` 2026-10-23 — 이 호스트는 Prescott 커널, 골든은 AVX-512 커널에서 얼림). `CF3_GOLDEN_EXACT=1` 이면
+정확히 같아야 한다 — 관측을 더하기 전·후에 같은 호스트에서 이 모드로 한 번씩 돌린다. 얼리기: `UPDATE_CF3_GOLDEN=1`.
 """
 from __future__ import annotations
 
 import json
 import math
 import os
+from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +29,8 @@ import pandas as pd
 import pytest
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
+
+from scripts.golden_compare import _unit_of  # noqa: E402
 
 from src.api import allocation_graph_nodes as gn  # noqa: E402
 from src.engine import portfolio_graph as pg  # noqa: E402
@@ -203,30 +208,61 @@ def _strip(x):
     return x
 
 
-def _diff(a, b, path="$") -> str | None:
-    """첫 차이의 위치 — 없으면 None."""
-    exact = os.environ.get("CF3_GOLDEN_EXACT") == "1"
+#: 반올림하지 않은 원값의 상대 허용 — 실측 최대 2.6e-8(커널 Prescott ↔ SkylakeX), 풀이기 수렴 정밀도 수준.
+RAW_REL = 1e-7
+#: 유효숫자가 이만큼 이상이면 반올림하지 않은 원값으로 본다(반올림한 값은 짧게 인쇄된다).
+RAW_DIGITS = 10
+#: 차이를 이만큼까지 줄로 보인다(나머지는 수만).
+SHOW = 20
+
+
+def _close(a: float, b: float) -> bool:
+    """값 종류별 허용 오차. ① 두 값을 최단 표기(`repr`)로 읽어 ★더 엄격한★ 마지막 자리 1단위 안이면 같다
+    (`scripts/golden_compare.py::_unit_of` — 반올림 경계의 끝자리 하나) ② 둘 다 원값(유효숫자 10+)이면 상대 1e-7 까지 같다.
+    우연히 짧은 원값(0.25)이 바뀌면 바뀐 쪽 표기가 길어져 ①이 엄격해지고 ②도 걸리지 않는다."""
+    if math.isnan(a) or math.isnan(b):
+        return math.isnan(a) and math.isnan(b)
+    if math.isinf(a) or math.isinf(b):
+        return a == b
+    da, db = Decimal(repr(a)), Decimal(repr(b))
+    unit = _unit_of(da, db)
+    if unit < 1 and abs(da - db) <= unit:
+        return True
+    raw = min(len(da.as_tuple().digits), len(db.as_tuple().digits)) >= RAW_DIGITS
+    return raw and math.isclose(a, b, rel_tol=RAW_REL, abs_tol=1e-12)
+
+
+def _diffs(a, b, path: str, out: list[str], exact: bool) -> None:
     if isinstance(a, dict) and isinstance(b, dict):
         if set(a) != set(b):
-            return f"{path}: 키 {sorted(set(a) ^ set(b))}"
+            out.append(f"{path}: 키 {sorted(set(a) ^ set(b))}")
+            return
         for k in a:
-            d = _diff(a[k], b[k], f"{path}.{k}")
-            if d:
-                return d
-        return None
+            _diffs(a[k], b[k], f"{path}.{k}", out, exact)
+        return
     if isinstance(a, list) and isinstance(b, list):
         if len(a) != len(b):
-            return f"{path}: 길이 {len(a)} ≠ {len(b)}"
+            out.append(f"{path}: 길이 {len(a)} ≠ {len(b)}")
+            return
         for i, (x, y) in enumerate(zip(a, b, strict=True)):
-            d = _diff(x, y, f"{path}[{i}]")
-            if d:
-                return d
-        return None
+            _diffs(x, y, f"{path}[{i}]", out, exact)
+        return
     if isinstance(a, float) and isinstance(b, float) and not exact:
-        if math.isnan(a) and math.isnan(b):
-            return None
-        return None if math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12) else f"{path}: {a!r} ≠ {b!r}"
-    return None if a == b else f"{path}: {a!r} ≠ {b!r}"
+        if not _close(a, b):
+            out.append(f"{path}: {a!r} ≠ {b!r}")
+        return
+    if a != b:
+        out.append(f"{path}: {a!r} ≠ {b!r}")
+
+
+def _diff(a, b, path="$") -> str | None:
+    """차이 ★전부★ — 없으면 None. 첫 차이만 보이면 같은 원인의 다른 자리를 놓친다."""
+    out: list[str] = []
+    _diffs(a, b, path, out, os.environ.get("CF3_GOLDEN_EXACT") == "1")
+    if not out:
+        return None
+    more = f"\n… 외 {len(out) - SHOW}곳" if len(out) > SHOW else ""
+    return f"{len(out)}곳 다름:\n" + "\n".join(out[:SHOW]) + more
 
 
 @pytest.fixture(scope="module")
@@ -265,8 +301,76 @@ def test_the_fallback_cases_actually_fall_back(market, monkeypatch):
 
 
 def test_the_comparison_is_not_vacuous():
-    """짝 — 값 하나를 바꾸면 비교가 잡는다 · 관측 키만 다르면 잡지 않는다."""
+    """짝 — 값 하나를 바꾸면 비교가 잡는다 · 관측 키만 다르면 잡지 않는다.
+    (2026-10-23: 반올림 값의 마지막 자리 1단위는 허용이 되어 예시를 40.01 → 40.02 로 — 1단위는 위 `_close` 짝들이 건다.)"""
     a = {"o": {"view": {"weights": {"005930": 40.0}, "flow": [1.0, 2.0]}}}
-    assert _diff(_strip(a), _strip({"o": {"view": {"weights": {"005930": 40.01}, "flow": [1.0, 2.0]}}}))
+    assert _diff(_strip(a), _strip({"o": {"view": {"weights": {"005930": 40.02}, "flow": [1.0, 2.0]}}}))
     assert _diff(_strip(a), _strip({"o": {"view": {"weights": {"005930": 40.0}, "flow": [1.0, 2.0],
                                                    "fallbacks": [{"stage": "optimized"}]}}})) is None
+
+
+# ── 비교 규칙(2026-10-23 · 사용자 결정: 값 종류별 허용 오차) ─────────────────────
+# 호스트 CPU 가 바뀌면 numpy 의 OpenBLAS 가 다른 커널을 고른다(DYNAMIC_ARCH). 반올림한 값은 반올림 경계에서 마지막 자리 하나가,
+# 최적화 원값은 풀이기 수렴 정밀도(SLSQP ftol 1e-9) 안에서 끝자리가 갈린다. 그보다 큰 변화는 잡아야 한다 — 아래 짝들.
+
+def test_rounded_values_may_differ_by_one_last_place_but_not_two():
+    assert _close(40.1493, 40.1492)
+    assert not _close(40.1494, 40.1492)
+    assert not _close(40.15, 40.1492)          # 짧은 쪽이 더 굵어도 ★더 엄격한 쪽★ 자리로 잰다
+
+
+def test_raw_optimizer_values_allow_solver_noise_but_not_a_real_change():
+    assert _close(0.4218052769699755, 0.4218052785731531)        # 실측 3.8e-9
+    assert _close(0.11375430662, 0.11375430368)                  # 실측 최대 2.6e-8
+    w = 0.4218052785731531
+    assert not _close(w * (1 + 1e-6), w)
+    assert not _close(w * (1 + 2e-7), w)
+
+
+def test_a_short_raw_value_does_not_borrow_a_coarse_last_place():
+    """0.25 는 반올림한 값이 아니라 우연히 짧은 원값일 수 있다 — 0.255 는 다르다."""
+    assert not _close(0.25, 0.255)
+    assert not _close(0.25, 0.2500003)         # 바뀐 쪽 표기의 마지막 자리로 3단위 · 원값으로 보면 상대 1.2e-6
+
+
+def test_a_rounded_large_value_gets_no_relative_slack():
+    """짧게 인쇄된(반올림한) 큰 값은 상대 허용을 받지 않는다 — 마지막 자리 2단위면 다르다."""
+    assert not _close(98765.43, 98765.4302)
+    assert _close(98765.43, 98765.4301)
+
+
+def test_special_values():
+    nan = float("nan")
+    assert _close(nan, nan)
+    assert not _close(nan, 1.0) and not _close(1.0, nan)
+    assert _close(float("inf"), float("inf"))
+    assert not _close(float("inf"), 1e308)
+    assert not _close(1e20, 1.1e20)
+
+
+def test_exact_mode_still_demands_bit_equality(monkeypatch):
+    monkeypatch.setenv("CF3_GOLDEN_EXACT", "1")
+    assert _diff({"x": 40.1493}, {"x": 40.1492})
+    monkeypatch.delenv("CF3_GOLDEN_EXACT")
+    assert _diff({"x": 40.1493}, {"x": 40.1492}) is None
+
+
+def test_every_difference_is_reported_not_just_the_first():
+    a = {"a": 1.0, "b": [1, 2, 3], "c": {"d": "x"}}
+    b = {"a": 2.0, "b": [1, 9, 3], "c": {"d": "y"}}
+    d = _diff(a, b)
+    assert d and "$.a" in d and "$.b[1]" in d and "$.c.d" in d and "3곳" in d
+
+
+def test_the_rule_catches_real_changes_on_the_frozen_outputs(frozen):
+    """골든 위에서의 변이 — 원값 비중을 상대 1e-6 흔들면 · 반올림 값을 마지막 자리 2 바꾸면 잡힌다(짝: 1이면 통과)."""
+    import copy
+    base = frozen["scores_min_var"]
+    bumped = copy.deepcopy(base)
+    bumped["weights"][0] *= 1 + 1e-6
+    assert _diff(_strip(bumped), _strip(base))
+    rc = frozen["min_cvar"]["k"]["view"]["risk_contribution_optimized"]["pct"]
+    for step, caught in ((0.0002, True), (0.0001, False)):
+        m = copy.deepcopy(frozen["min_cvar"])
+        m["k"]["view"]["risk_contribution_optimized"]["pct"]["005930"] = round(rc["005930"] + step, 4)
+        assert bool(_diff(_strip(m), _strip(frozen["min_cvar"]))) is caught, step
