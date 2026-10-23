@@ -26,7 +26,8 @@
       { "label": "포트폴리오 설계의 AI 추천", "routes": ["POST /api/v1/assist/canvas/suggest"] },
       { "label": "포트폴리오 설계의 AI 풀어 쓰기", "routes": ["POST /api/v1/assist/canvas/narrate"] },
       { "label": "포트폴리오 설계의 AI 묻기", "routes": ["POST /api/v1/assist/canvas/ask"] },
-      { "label": "포트폴리오 설계의 AI 길잡이", "routes": ["POST /api/v1/assist/canvas/guide"] }
+      { "label": "포트폴리오 설계의 AI 길잡이", "routes": ["POST /api/v1/assist/canvas/guide"] },
+      { "label": "포트폴리오 설계의 AI 말로 설계", "routes": ["POST /api/v1/assist/canvas/draft"] }
     ]
   },
   "admin": {

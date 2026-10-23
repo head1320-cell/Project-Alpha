@@ -6,16 +6,20 @@
 from __future__ import annotations
 
 import json
+import re
+from functools import lru_cache
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends
-from pydantic import BaseModel, Field, StrictBool, field_validator
+from pydantic import BaseModel, Field, StrictBool, ValidationError, field_validator
 
 from src.api import allocation_graph_routes as graph_routes
 from src.api.auth import derived_key, require_login
+from src.data import stock_master
 from src.domain import fact_seal
 from src.domain.auth_identity import Principal
 from src.services.canvas_assist import service
+from src.services.canvas_assist.draft import MAX_SENTENCE
 
 #: 풀어 쓰기 요청 상한 — 사실 수·설명 하나의 크기(넘으면 422). 그래프 노드보다 많을 일이 없다.
 MAX_FACTS = 120
@@ -147,3 +151,59 @@ def canvas_guide(req: GuideRequest, p: Principal = Depends(require_login)) -> di
     """AI5 — 지금 상태에서 써 볼 캔버스 도구 1~2 와 이유. 도구 안내만(투자 판단 없음) · 적용되는 도구만 · 숫자는 상태 안에서만.
     키·한도·거절이면 `available:false` + 사유(화면은 규칙 길잡이 줄을 그대로 둔다)."""
     return service.guide(req.graph, req.state.model_dump(), req.applicable, p.username, catalog=graph_routes._kinds)
+
+
+# ── AI4 말로 설계 ─────────────────────────────────────────────────────────────
+
+@lru_cache(maxsize=1)
+def _draft_kinds() -> dict[str, dict]:
+    """말로 설계의 종류 표 — 절차 판정 표(`_kinds`)에 칸 스키마(`params_schema`)를 더한 것. 등록은 시작 때 끝나 한 번만 만든다."""
+    schemas = {e["type"]: e.get("params_schema") or {} for e in graph_routes.REGISTRY.catalog()}
+    return {t: {**k, "params_schema": schemas.get(t) or {}} for t, k in graph_routes._kinds().items()}
+
+
+def _field_errors(kind: str, params: dict) -> set[tuple[str, str]]:
+    """그 종류의 설정 모델로 본 칸별 오류 `{(칸, 오류 종류)}` — 말로 넣은 값이 그 칸에 ★새 오류★를 만드는지 본다."""
+    spec = graph_routes.REGISTRY.get(kind)
+    if spec is None or spec.params_model is None:
+        return set()
+    try:
+        spec.params_model.model_validate(params or {})
+    except ValidationError as e:
+        return {(str(d["loc"][0]) if d.get("loc") else "", str(d.get("type"))) for d in e.errors()}
+    return set()
+
+
+def _resolve_ticker(name: str) -> dict:
+    """종목표(`stock_master`)로 이름·코드 확인 — 6자리 코드는 표에 있을 때만, 이름은 ★정확히 같은 이름 하나★일 때만.
+    아니면 넣지 않고 후보(최대 3)를 돌려준다(없으면 빈 목록). 별칭·부분 일치로 고르지 않는다."""
+    q = (name or "").strip()
+    if re.fullmatch(r"\d{6}", q):
+        nm = stock_master.get_stock_name(q)
+        return {"code": q, "name": nm} if nm else {"candidates": []}
+    hits = stock_master.search_stocks(q, limit=20) if q else []
+    exact = [h for h in hits if (h.get("name") or "").lower() == q.lower()]
+    if len(exact) == 1:
+        return {"code": exact[0]["code"], "name": exact[0]["name"]}
+    return {"candidates": [{"code": h["code"], "name": h["name"]} for h in (exact or hits)[:3]]}
+
+
+class DraftRequest(BaseModel):
+    graph: Any
+    sentence: str = Field(..., min_length=1, max_length=MAX_SENTENCE)
+
+    @field_validator("sentence")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("말씀이 비어 있어요")
+        return v.strip()
+
+
+@router.post("/draft")
+def canvas_draft(req: DraftRequest, p: Principal = Depends(require_login)) -> dict:
+    """AI4 — 말씀을 지금 캔버스를 고치는 초안으로(노드 더하기 · 선 잇기 · 말한 값 넣기). ★값은 서버가 말씀 조각에서 읽는다★ ·
+    종목은 종목표 정확 일치 · 선은 새 오류가 없을 때만 · 탈락은 사유와 함께. 화면은 [받아들이기] 때만 반영한다.
+    키·한도·거절이면 `available:false` + 사유."""
+    return service.draft(req.graph, req.sentence, p.username, catalog=_draft_kinds, validate=graph_routes.graph_validate,
+                         field_errors=_field_errors, resolve_ticker=_resolve_ticker)

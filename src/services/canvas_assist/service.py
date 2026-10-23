@@ -1,10 +1,11 @@
-"""캔버스 AI 도우미 — 노드 추천(AI1 `suggest`) · 풀어 쓰기(AI2 `narrate`) · 묻기(AI3 `ask`) · 길잡이(AI5 `guide`). 모두 `_ask`: 쓸 수 있나 → 한도 설정 → 캐시 → 한도 → Claude → 검사.
+"""캔버스 AI 도우미 — 노드 추천(AI1 `suggest`) · 풀어 쓰기(AI2 `narrate`) · 묻기(AI3 `ask`) · 말로 설계(AI4 `draft`) · 길잡이(AI5 `guide`).
+모두 `_ask`: 쓸 수 있나 → 한도 설정 → 캐시 → 한도 → Claude → 검사.
 
 응답은 둘 중 하나다:
 - `{available:true, source:"claude", model, …검사를 통과한 것…, rejected, cached, usage}`.
 - `{available:false, source:"unavailable", reason_code, reason, …}` — ★AI 글은 없다★(데모 글 금지). suggest 는 `rule`(규칙 대체 —
   `/validate` 절차의 next·by_gate), narrate·ask 는 `dropped`(확인하지 못한 설명·기록과 사유)를 함께 낸다.
-- 사용자별 시간당 한도는 ★한 그릇★ — 추천·풀어 쓰기·묻기·길잡이를 합쳐 센다. 캐시 적중은 세지 않는다.
+- 사용자별 시간당 한도는 ★한 그릇★ — 추천·풀어 쓰기·묻기·말로 설계·길잡이를 합쳐 센다. 캐시 적중은 세지 않는다.
 - guide 는 못 보일 때 곁들임이 없다 — 화면의 규칙 길잡이 줄이 그대로 남는다.
 - `dropped` 는 요청마다 다르다(캐시는 근거로 찾는다) — 캐시에 적중해도 ★이번 요청의 것★을 붙인다.
 
@@ -24,6 +25,7 @@ from typing import Any
 from src.engine.portfolio_graph import FATAL_CODES
 from src.services.canvas_assist import ask as ak
 from src.services.canvas_assist import check as ck
+from src.services.canvas_assist import draft as df
 from src.services.canvas_assist import ground as gr
 from src.services.canvas_assist import guide as gd
 from src.services.canvas_assist import narrate as nr
@@ -114,9 +116,10 @@ def _cache_put(key: str, value: dict) -> None:
 
 
 def _ask(kind: str, username: str, client: ClaudeClient, extra: dict, *, version: str, grounding: Any,
-         system: str, user: str, schema: dict, check: Callable[[Any], dict]) -> dict:
-    """쓸 수 있나 → 한도 설정 → 캐시(근거 + 모델 + 프롬프트 판) → 한도(한 그릇) → 호출 → 비용 한 줄 → 검사 → 캐시.
-    `check(data)` 는 검사를 통과한 칸들을 돌려준다. 실패는 캐시하지 않는다."""
+         system: str, user: str, schema: dict, check: Callable[[Any], dict], key_extra: Any = None) -> dict:
+    """쓸 수 있나 → 한도 설정 → 캐시(근거 + 모델 + 프롬프트 판 · `key_extra`) → 한도(한 그릇) → 호출 → 비용 한 줄 → 검사 → 캐시.
+    `check(data)` 는 검사를 통과한 칸들을 돌려준다. 실패는 캐시하지 않는다. `key_extra` 는 근거(프롬프트)에 싣지 않지만 검사 결과를
+    바꾸는 것(말로 설계의 지금 설정값)이다 — 열쇠에만 넣는다."""
     why = client.unavailable_reason()
     if why:
         return _unavailable(why, extra)
@@ -124,8 +127,8 @@ def _ask(kind: str, username: str, client: ClaudeClient, extra: dict, *, version
     if limit is None:
         return _unavailable("config", extra)
     model = os.getenv("CLAUDE_MODEL") or DEFAULT_MODEL
-    key = hashlib.sha256(json.dumps([version, model, grounding], ensure_ascii=False, sort_keys=True,
-                                    default=str).encode("utf-8")).hexdigest()
+    parts = [version, model, grounding] if key_extra is None else [version, model, grounding, key_extra]
+    key = hashlib.sha256(json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()
     hit = _cache_get(key)
     if hit:
         return {**hit, "cached": True}                   # 부르지 않았다 — 한도에 세지 않는다
@@ -225,3 +228,22 @@ def guide(graph: Any, state: dict, applicable: list[str], username: str, *, cata
         return {"tips": ok, "rejected": bad}
     return _ask("guide", username, client or ClaudeClient.get_default(), {}, version=pr.GUIDE_VERSION, grounding=g,
                 system=pr.GUIDE_SYSTEM, user=pr.guide_user(g), schema=pr.guide_schema([t["id"] for t in g["tools"]]), check=check)
+
+
+def draft(graph: Any, sentence: str, username: str, *, catalog: Callable[[], dict], validate: Callable[[Any], dict],
+          field_errors: Callable[[str, dict], set], resolve_ticker: Callable[[str], dict],
+          client: ClaudeClient | None = None) -> dict:
+    """AI4 — 말씀을 지금 캔버스를 고치는 초안으로(더하기·잇기·값). ★값은 서버가 말씀 조각에서 읽는다★ — Claude 는 조각과 읽는 법만.
+    읽을 수 없는 문서면 부르지 않는다. 캐시 열쇠에 지금 설정값을 더한다(근거에는 싣지 않지만 값 검사·빈 칸 판정이 그것을 본다)."""
+    rep = validate(graph)
+    if not isinstance(graph, dict) or any(e.get("code") in FATAL_CODES or e.get("code") == "document"
+                                          for e in rep.get("errors") or []):
+        return _unavailable("bad_graph")
+    kinds = catalog()
+    g = df.ground(graph, sentence, kinds, rep)
+    params = {str(n.get("id")): n.get("params") for n in graph["nodes"] if isinstance(n, dict)}
+
+    def check(data: Any) -> dict:
+        return df.check(data, g, graph, kinds, validate, field_errors, resolve_ticker)
+    return _ask("draft", username, client or ClaudeClient.get_default(), {}, version=pr.DRAFT_VERSION, grounding=g,
+                system=pr.DRAFT_SYSTEM, user=pr.draft_user(g), schema=pr.draft_schema(kinds), check=check, key_extra=params)

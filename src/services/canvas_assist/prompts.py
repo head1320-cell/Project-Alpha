@@ -128,3 +128,49 @@ def guide_schema(features: list[str]) -> dict:
            "properties": {"feature": {"type": "string", "enum": list(features)}, "why": {"type": "string"}}}
     return {"type": "object", "additionalProperties": False, "required": ["tips"],
             "properties": {"tips": {"type": "array", "items": tip}}}
+
+
+# ── AI4 말로 설계 ─────────────────────────────────────────────────────────────
+
+DRAFT_VERSION = "ai4-draft-1"
+
+DRAFT_SYSTEM = """너는 포트폴리오 설계 캔버스에서 사용자의 말씀(sentence)을 지금 그래프를 고치는 초안으로 옮긴다.
+
+규칙:
+- 할 수 있는 조작은 셋뿐이다: 노드 더하기(add) · 선 잇기(connect) · 칸에 말씀의 값 넣기(set). 지금 그래프의 노드나 선은 지우지 않고 바꿔 꽂지도 않는다.
+- add 의 ref 는 이 초안 안에서 새 노드를 가리키는 이름표다(지금 노드 id 와 겹치지 않게). 종류는 근거의 kinds 에 있는 것만 쓴다.
+- connect 의 from·to 는 ref 나 지금 노드 id 다. 포트 이름과 타입은 kinds 그대로 쓰고, 받는 쪽 입력에 이미 선이 있으면 그 자리에 잇지 않는다.
+- ★값은 쓰지 않는다★. set 에는 말씀에서 그 값을 말한 부분을 글자 그대로 quote 에 옮기고, 읽는 법(how)만 고른다:
+  how=preset 이면 choice 에 그 칸 presets 의 라벨 하나, how=option 이면 choice 에 그 칸 options 의 키 하나,
+  how=number 면 choice 는 빈 글(서버가 quote 의 숫자를 읽는다), how=tickers 면 names 에 말씀에 나온 종목 이름이나 코드를 그대로.
+  고른 라벨에 숫자가 있으면 그 숫자가 quote 에도 있어야 한다. 칸은 근거의 fields 에 있는 것만 쓴다.
+- 말씀에 없는 값은 지어내지 않고 비워 둔다(서버가 '비어 있어요'라고 사용자에게 말한다). 기본값으로 채우지 않는다.
+- summary 는 초안이 무엇을 하는지 해요체 한 문장(80자 이내)이다. 숫자는 말씀에 있는 것만 쓴다.
+- 설계와 상관없는 말이면 understood 를 false, why_not 을 off_topic 으로 한다. 어떤 종목을 사야 하는지·좋은 전략인지 같은 투자 판단을 바라면
+  understood false, why_not judgement 로 한다(투자 판단은 하지 않는다). 옮길 수 있으면 understood true, why_not none.
+- 성과 약속을 하지 않는다. "검증됨", "입증됨", "견고함", "투자 우위", "더 나은 전략", "통과해요", "좋아져요" 같은 말을 쓰지 않는다.
+- 답은 주어진 JSON 스키마대로만 낸다."""
+
+
+def draft_user(grounding: dict) -> str:
+    return ("아래는 사용자의 말씀(sentence)과 지금 캔버스(graph·procedure), 노드 종류와 말로 넣을 수 있는 칸(kinds)이다(JSON). "
+            "이것만 보고 말씀을 초안으로 옮겨.\n\n" + json.dumps(grounding, ensure_ascii=False, sort_keys=True))
+
+
+def draft_schema(kinds: dict[str, dict]) -> dict:
+    """★값 칸이 없다★ — 값은 서버가 quote 에서 읽는다. 종류·칸·읽는 법은 enum 으로 묶고, 개수 한도는 서버 검사가 건다."""
+    from src.services.canvas_assist.draft import HOWS, WHY_NOT, speakable
+
+    fields = sorted({f for k in kinds.values() for f in speakable(k.get("params_schema"))})
+
+    def obj(props: dict) -> dict:
+        return {"type": "object", "additionalProperties": False, "required": list(props), "properties": props}
+    s = {"type": "string"}
+    return obj({"understood": {"type": "boolean"},
+                "why_not": {"type": "string", "enum": list(WHY_NOT)},
+                "summary": s,
+                "add": {"type": "array", "items": obj({"ref": s, "kind": {"type": "string", "enum": sorted(kinds)}})},
+                "connect": {"type": "array", "items": obj({"from": s, "from_port": s, "to": s, "to_port": s})},
+                "set": {"type": "array", "items": obj({"node": s, "field": {"type": "string", "enum": fields}, "quote": s,
+                                                       "how": {"type": "string", "enum": list(HOWS)}, "choice": s,
+                                                       "names": {"type": "array", "items": s}})}})
