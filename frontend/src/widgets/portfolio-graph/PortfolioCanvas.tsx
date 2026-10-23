@@ -39,7 +39,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlignStartVertical, Archive, Boxes, Check, ClipboardList, ClipboardPaste, Command, Copy, Eye, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Trash2, Undo2, X } from "lucide-react";
+import { AlignStartVertical, Archive, Boxes, Check, ClipboardList, ClipboardPaste, Command, Copy, Eye, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Target, Trash2, Undo2, X } from "lucide-react";
 import {
   BRIEF_MAX_W,
   COL,
@@ -69,6 +69,8 @@ import {
   connectionProblem,
   restackDoc,
   type AskTarget,
+  GOALS,
+  type GoalKey,
   type ConnTry,
   type GraphDoc,
   type NodeRunResult,
@@ -283,6 +285,56 @@ function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire, ghosts, onGhosts }
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+/**
+ * 목표 칩(AI1 목표 — 사용자 결정 2026-10-23: 네 목표를 설계에 기억 + 고치기) — ★설계 이름 칸 안 오른쪽 끝의 작은 단추★.
+ * 도구 막대는 이미 꽉 차 있어(오류 줄이 있으면 1440 에서 남는 폭 65px, 1024 에서 8px — 측정) 글 칩을 두면 두 줄이 됐다(PNG 검토에서 찾음) →
+ * 이름 칸 폭 안에 넣는다. 목표가 있으면 파란 표시 + 제목 풍선말·이름, 메뉴에서 바꾸거나 없앤다. '목표로 시작'은 이름도 목표 제목으로 정한다.
+ * 목표는 계산에 끼지 않고 ★AI 추천의 근거★다(서버가 키를 자기 문장으로 바꾼다). 규칙 추천은 목표와 무관하다고 메뉴가 말한다.
+ */
+function NameWithGoal({ name, onName, goal, onGoal }: { name: string; onName: (v: string) => void;
+                                                       goal: GoalKey | null; onGoal: (g: GoalKey | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useDismiss(open, useCallback(() => setOpen(false), []), ref);
+  const title = goal ? GOALS.find((g) => g.key === goal)?.title ?? null : null;
+  const label = `이 설계의 목표: ${title ?? "정하지 않았어요"}`;
+  const pick = (g: GoalKey | null) => { setOpen(false); onGoal(g); };
+  // 메뉴는 캔버스 왼쪽 끝(앱 탐색 줄 오른쪽)과 화면 오른쪽 끝 사이에 머문다 — 390 에서 칩이 가운데쯤이면 그대로 두면 넘친다.
+  const [place, setPlace] = useState<{ dx: number; w: number } | null>(null);
+  useEffect(() => {
+    if (!open || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const lo = (ref.current.closest(".pg-root")?.getBoundingClientRect().left ?? 0) + 8;
+    const w = Math.min(300, window.innerWidth - lo - 8);              // 360 에선 캔버스 폭이 300 + 여백보다 좁다
+    setPlace({ dx: Math.max(lo, Math.min(r.left, window.innerWidth - 8 - w)) - r.left, w });
+  }, [open]);
+  return (
+    <span className="pg-goalchip-wrap" ref={ref}>
+      <input className="pg-name" value={name} placeholder="이름 없는 설계" aria-label="설계 이름" onChange={(e) => onName(e.target.value)} />
+      <button type="button" className={`pg-goalchip${goal ? " on" : ""}`} aria-haspopup="menu" aria-expanded={open}
+              aria-label={label} title={`${label} — AI 추천이 이 목표에 비춰 다음 노드를 골라요`} onClick={() => setOpen((v) => !v)}>
+        <Target size={14} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="pg-goalchip-menu" role="menu" aria-label="이 설계의 목표" style={place ? { left: place.dx, width: place.w } : undefined}>
+          <p className="pg-goalchip-h">이 설계의 목표</p>
+          {GOALS.map((g) => (
+            <button key={g.key} type="button" role="menuitemradio" aria-checked={goal === g.key} data-goal={g.key} onClick={() => pick(g.key)}>
+              <span className="pg-view-check" aria-hidden="true">{goal === g.key && <Check size={14} />}</span>
+              <span className="pg-goalchip-text"><span className="pg-goalchip-title">{g.title}</span><span className="pg-goalchip-sub">{g.sub}</span></span>
+            </button>
+          ))}
+          <div className="pg-view-sep" role="separator" />
+          <button type="button" role="menuitemradio" aria-checked={goal === null} data-goal="none" onClick={() => pick(null)}>
+            <span className="pg-view-check" aria-hidden="true">{goal === null && <Check size={14} />}</span>목표 없음
+          </button>
+          <p className="pg-goalchip-note">AI 추천이 이 목표에 비춰 다음 노드를 골라요. 규칙 추천은 바뀌지 않아요.</p>
         </div>
       )}
     </span>
@@ -617,8 +669,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 한 번만(넘겨받은 흐름은 열 때 한 번 싣는다)
   }, []);
 
-  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name ? { name: s.name } : undefined, s.groups, s.branches, s.pinned, s.folded),
-    [s.nodes, s.edges, s.name, s.groups, s.branches, s.pinned, s.folded]);
+  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name || s.goal ? { ...(s.name ? { name: s.name } : {}), ...(s.goal ? { goal: s.goal } : {}) } : undefined,
+                                  s.groups, s.branches, s.pinned, s.folded),
+    [s.nodes, s.edges, s.name, s.goal, s.groups, s.branches, s.pinned, s.folded]);
   // AI1 — 누를 때만 묻는 AI 노드 추천. 로그인 판정은 서버가 하고, 화면은 로그아웃이면 묻지 않는다(요청 0).
   const { session } = useSession();
   const aiNoteSink = useCallback((n: string) => usePortfolioGraph.getState().setNote(n), []);
@@ -1544,8 +1597,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
           <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
                   onClick={() => setCmdOpen(true)}><Command size={16} /></button>
         </div>
-        <input className="pg-name" value={s.name} placeholder="이름 없는 설계" aria-label="설계 이름"
-               onChange={(e) => s.setName(e.target.value)} />
+        <NameWithGoal name={s.name} onName={s.setName} goal={s.goal} onGoal={s.setGoal} />
         <span className="pg-toolbar-spacer" />
         {nErrors > 0 && <span className="pg-summary pg-summary--err">설정을 확인할 곳이 {nErrors}군데 있어요</span>}
         {s.reportStale && (
@@ -1570,7 +1622,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
           </span>
         )}
         <MoreMenu drawers={DRAWERS} onDrawer={(k) => setDrawer(k as DrawerKey)} onImport={applyLoad} canExport={s.nodes.length > 0}
-                  getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)} />
+                  getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, ...(s.goal ? { goal: s.goal } : {}), exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)} />
         <nav className="pg-drawers" aria-label="서랍">
           {DRAWERS.map((d) => (
             <button key={d.key} type="button" className="pg-drawer-open" aria-haspopup="dialog" title={d.sub}
@@ -1581,7 +1633,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
         </nav>
         {topExtra}
         <ImportControl onLoad={applyLoad} />
-        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)}
+        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, ...(s.goal ? { goal: s.goal } : {}), exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)}
                       disabled={s.nodes.length === 0} />
         <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"
                 disabled={s.running || !s.catalog || s.nodes.length === 0}>

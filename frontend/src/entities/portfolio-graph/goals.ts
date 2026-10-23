@@ -3,6 +3,7 @@
  * ==========================================================================
  * ★규칙을 새로 정하지 않는다★ — 흐름은 기존 템플릿(또는 기업 노드 두 개)이고, 답은 그 노드들의 **기본 층 파라미터**에만 들어간다.
  * 기간 선택지는 서버 x-ui 프리셋(`returns.lookback_days`)에서 온다. 고르지 않은 칸은 서버 기본값(키를 넣지 않는다).
+ * 고른 목표는 문서 `meta.goal` 에 남는다(AI1, 2026-10-23) — AI 추천의 근거. 서버 `src/services/canvas_assist/goals.py` 와 키·제목·설명이 같다(패리티 테스트).
  */
 import { GRAPH_FORMAT, GRAPH_VERSION, type GraphDoc } from "./types";
 import { TEMPLATES } from "./templates";
@@ -30,6 +31,11 @@ export const GOALS: Goal[] = [
 
 const TEMPLATE_OF: Record<Exclude<GoalKey, "company">, string> = { build: "core", check: "risk", timing: "timing" };
 
+/** 문서 `meta.goal` 로 받을 수 있는 값인가 — 네 키만(모르는 값은 불러올 때 빼고 말한다). */
+export function isGoalKey(x: unknown): x is GoalKey {
+  return typeof x === "string" && GOALS.some((g) => g.key === x);
+}
+
 /**
  * 답 → 문서. 템플릿의 유니버스 종목과 수익률 기간만 바꾼다(기간을 고르지 않았으면 그대로 — 서버 기본값).
  * 위험 성향(BO O1)을 골랐으면 비중 노드를 `mv_utility` + 그 λ 로 — 고르지 않았으면 템플릿 방식 그대로.
@@ -39,7 +45,7 @@ export function goalDoc(goal: GoalKey, tickers: string[], lookbackDays: number |
   if (goal === "company") {
     const code = tickers[0];
     return {
-      format: GRAPH_FORMAT, version: GRAPH_VERSION, meta: { name: "기업 하나 깊게" },
+      format: GRAPH_FORMAT, version: GRAPH_VERSION, meta: { name: "기업 하나 깊게", goal: "company" },
       nodes: [
         { id: "valuation", type: "company_valuation", params: { code }, position: { x: 0, y: 0 } },
         { id: "distribution", type: "valuation_distribution", params: { code }, position: { x: 0, y: 220 } },
@@ -49,7 +55,7 @@ export function goalDoc(goal: GoalKey, tickers: string[], lookbackDays: number |
   }
   const t = TEMPLATES.find((x) => x.key === TEMPLATE_OF[goal])!;
   const doc: GraphDoc = structuredClone(t.doc);
-  doc.meta = { ...(doc.meta ?? {}), name: GOALS.find((g) => g.key === goal)!.title };
+  doc.meta = { ...(doc.meta ?? {}), name: GOALS.find((g) => g.key === goal)!.title, goal };
   for (const n of doc.nodes) {
     if (n.type === "universe") n.params = { ...n.params, tickers: [...tickers] };
     if (n.type === "returns" && lookbackDays !== null) n.params = { ...n.params, lookback_days: lookbackDays };

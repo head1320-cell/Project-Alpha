@@ -4534,6 +4534,27 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-view-check { display: inline-grid; place-items: center; width: 16px; color: var(--pg-blue-ink); }
 .pg-view-sep { height: 1px; margin: 4px 6px; background: var(--pg-line); }
 .pg-view-group { display: grid; }
+/* 목표 칩(AI1 목표) — 설계 이름 칸 안 오른쪽 끝의 작은 단추(도구 막대 폭을 늘리지 않는다 — 글 칩은 막대를 두 줄로 만들었다).
+   목표가 있으면 파란 표시. 메뉴는 '보기' 메뉴와 같은 판에 두 줄 항목, 자리는 JS 가 화면 안으로 당긴다(left). */
+.pg-goalchip-wrap { position: relative; display: inline-flex; align-items: center; }
+.pg-toolbar > .pg-goalchip-wrap { flex: 0 1 88px; min-width: 64px; }   /* 줄을 바꾸기 전에 줄어들지 않으므로(flex-wrap) 기준 폭 자체를 작게 — 긴 이름은 칸 안에서 흐른다 */
+.pg-goalchip-wrap > .pg-name { width: 100%; min-width: 0; padding-right: 30px; }
+.pg-goalchip { position: absolute; right: 4px; top: 50%; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-top: -12px; padding: 0;
+  color: var(--pg-body); background: none; border: 1px dashed var(--pg-line); border-radius: 12px; cursor: pointer; }
+.pg-goalchip.on { color: var(--pg-blue-ink); background: var(--pg-blue-soft); border: 1px solid color-mix(in srgb, var(--pg-blue) 35%, var(--pg-line)); }
+.pg-goalchip:hover { border-color: var(--pg-blue); }
+.pg-goalchip:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-goalchip-menu { position: absolute; z-index: 45; top: calc(100% + 6px); left: 0; display: grid; width: min(300px, calc(100vw - 24px)); padding: 6px;
+  background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 12px; box-shadow: var(--pg-float-shadow); }
+.pg-goalchip-h { margin: 4px 10px 4px; font-size: 12px; font-weight: 700; color: var(--pg-body); }
+.pg-theme .pg-goalchip-menu [role^="menuitem"] { display: flex; align-items: flex-start; gap: 8px; min-height: 34px; padding: 7px 10px; font: inherit; font-size: 13.5px;
+  font-weight: 600; color: var(--pg-ink); text-align: left; background: none; border: 0; border-radius: 8px; cursor: pointer; }
+.pg-theme .pg-goalchip-menu [role^="menuitem"]:hover, .pg-theme .pg-goalchip-menu [role^="menuitem"]:focus-visible { background: var(--pg-soft); }
+.pg-goalchip-menu .pg-view-check { margin-top: 1px; }
+.pg-goalchip-text { display: grid; gap: 2px; min-width: 0; }
+.pg-goalchip-title { line-height: 1.35; }
+.pg-goalchip-sub { font-size: 12px; font-weight: 400; line-height: 1.45; color: var(--pg-body); word-break: keep-all; }
+.pg-goalchip-note { margin: 4px 10px 4px; font-size: 12px; line-height: 1.45; color: var(--pg-body); word-break: keep-all; }
 .pg-view-h { padding: 4px 10px 2px 34px; font-size: 12px; font-weight: 600; color: var(--pg-body); }
 /* CF4c — 경유점: 고르거나 올린 선에서만 보이고 눌린다(화면 크기는 확대와 무관하게 12px). 끌어 옮기고, 두 번 누르거나 Delete 로 지운다. */
 .pg-waypoint { position: absolute; box-sizing: border-box; width: calc(12px / var(--pg-z, 1)); height: calc(12px / var(--pg-z, 1)); padding: 0;
@@ -5206,7 +5227,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-toolbar { min-width: 0; }
 .pg-toolbar > * { flex: none; }
 .pg-toolbar > .pg-toolbar-spacer { flex: 1 1 0; min-width: 0; }
-.pg-toolbar > .pg-name { flex: 0 1 88px; min-width: 64px; }   /* 줄을 바꾸기 전에 줄어들지 않으므로(flex-wrap) 기준 폭 자체를 작게 — 긴 이름은 칸 안에서 흐른다 */
 .pg-toolbar > .pg-summary { white-space: nowrap; }
 .pg-tl { white-space: nowrap; }
 .pg-summary-practice { font-weight: 700; color: var(--pg-assume); }

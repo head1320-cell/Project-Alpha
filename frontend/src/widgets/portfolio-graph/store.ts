@@ -76,6 +76,7 @@ import { deepSigs, staleNodes } from "@/entities/portfolio-graph/staleness";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
 import { fitLanes } from "@/entities/portfolio-graph/lanes";
 import { viaOf } from "@/entities/portfolio-graph/format";
+import type { GoalKey } from "@/entities/portfolio-graph/goals";
 import type { WireShape } from "./wirePath";
 import { alignRects, type AlignKind } from "./guides";
 
@@ -101,6 +102,8 @@ export interface PgState {
   edges: Edge[];
   groups: GraphGroup[];
   name: string;
+  /** '목표로 시작'에서 고른 목표(AI1) — 문서 `meta.goal`. 없으면 null. */
+  goal: GoalKey | null;
   report: RunReport | null;
   /** 호환용 파생값(BT5) — `staleIds` 가 하나라도 있는가. 직접 쓰지 않는다(매 변경마다 다시 센다). */
   reportStale: boolean;
@@ -196,6 +199,7 @@ export interface PgState {
   duplicateNode: (id: string) => string | null;
   loadDoc: (doc: GraphDoc, problems?: string[]) => void;
   setName: (n: string) => void;
+  setGoal: (g: GoalKey | null) => void;
   select: (id: string | null) => void;
   setValidation: (v: ValidateReport | null) => void;
   setValidationError: (v: boolean) => void;
@@ -408,6 +412,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     edges: [],
     groups: [],
     name: "",
+    goal: null,
     report: null,
     reportStale: false,
     staleIds: [],
@@ -651,7 +656,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const groups = (doc.groups ?? []).map((g) => ({ ...g, members: g.members.filter((m) => ids.has(m)) }))
         .filter((g) => g.members.length);
       set({
-        nodes, edges, groups, name: doc.meta?.name ?? "", loadProblems: problems,
+        nodes, edges, groups, name: doc.meta?.name ?? "", goal: doc.meta?.goal ?? null, loadProblems: problems,
         report: null, snap: null, validation: null, selectedId: null, picked: [], runError: null,
         pinned: (doc.pinned ?? []).filter((id) => nodes.some((n) => n.id === id)), cause: null, focusGroup: null, filters: [],
         folded: (doc.folded ?? []).filter((id) => nodes.some((n) => n.id === id)),
@@ -660,6 +665,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     },
 
     setName: (name) => set({ name }),
+    setGoal: (goal) => set({ goal }),
     select: (selectedId) => set((s) => ({ selectedId, picked: selectedId ? [selectedId] : [], pickedByUser: !!selectedId,
                                            ...(selectedId && s.selectedEdge ? { selectedEdge: null, tab: s.tab === "wire" ? "settings" : s.tab } : {}) })),
     setValidation: (validation) => set({ validation, validationError: false }),

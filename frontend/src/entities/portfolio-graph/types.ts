@@ -6,6 +6,8 @@
  * 실행 결과는 담지 않는다(파라미터·위치만). 결과는 다시 실행해서 얻는다.
  */
 
+import type { GoalKey } from "./goals";
+
 export const GRAPH_FORMAT = "project-alpha.portfolio-graph";
 export const GRAPH_VERSION = 1;
 
@@ -56,7 +58,8 @@ export interface GraphBranch {
 export interface GraphDoc {
   format: typeof GRAPH_FORMAT;
   version: typeof GRAPH_VERSION;
-  meta?: { name?: string; exported_at?: string };
+  /** `goal` — '목표로 시작'에서 고른 목표(AI1, 네 키만). 계산에는 끼지 않고 AI 추천의 근거가 된다(서버가 키를 자기 문장으로 바꾼다). */
+  meta?: { name?: string; exported_at?: string; goal?: GoalKey };
   nodes: GraphDocNode[];
   edges: GraphDocEdge[];
   groups?: GraphGroup[];

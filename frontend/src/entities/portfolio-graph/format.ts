@@ -9,6 +9,7 @@
  *      사용자가 모르는 사이 그래프가 줄어든다.
  */
 import type { Edge, Node } from "@xyflow/react";
+import { isGoalKey } from "./goals";
 import {
   GRAPH_FORMAT,
   GRAPH_VERSION,
@@ -165,9 +166,15 @@ export function parseFile(text: string): ParseResult {
   const foldRaw = Array.isArray(raw.folded) ? (raw.folded as unknown[]) : [];
   const folded = [...new Set(foldRaw.filter((x): x is string => typeof x === "string" && seen.has(x)))];
   if (foldRaw.length > folded.length) problems.push(`없는 노드를 가리키는 접기 ${foldRaw.length - folded.length}개는 뺐어요.`);
+  // 목표(AI1) — 네 키만. 모르는 값은 빼고 말한다(화면이 보낸 글이 AI 근거가 되지 않게 — 서버도 키로만 받는다).
+  const rawGoal = isObj(raw.meta) ? raw.meta.goal : undefined;
+  if (rawGoal !== undefined && !isGoalKey(rawGoal)) {
+    problems.push(`모르는 목표 ‘${typeof rawGoal === "string" ? rawGoal : "형식이 틀린 값"}’는 뺐어요.`);
+  }
   const meta = isObj(raw.meta) ? {
     name: typeof raw.meta.name === "string" ? raw.meta.name : undefined,
     exported_at: typeof raw.meta.exported_at === "string" ? raw.meta.exported_at : undefined,
+    ...(isGoalKey(rawGoal) ? { goal: rawGoal } : {}),
   } : undefined;
   return {
     doc: { format: GRAPH_FORMAT, version: GRAPH_VERSION, meta, nodes, edges, ...(groups.length ? { groups } : {}),
