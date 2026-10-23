@@ -17,7 +17,7 @@
  * 다시하기(Ctrl+Shift+Z) · 복사(Ctrl+C)/붙여넣기(Ctrl+V) · 여러 개 지우기 · 자동 정리 · 미니맵 · 묶음 상자(Ctrl+G) ·
  * 명령 팔레트(Ctrl+K) · 계산 기록. ★이번 대담함은 한 곳★ — "여기까지 계산" 에 올리면 돌 경로가 먼저 밝아진다.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ReactFlow,
   Background,
@@ -25,37 +25,23 @@ import {
   ControlButton,
   Controls,
   MiniMap,
-  NodeToolbar,
   Panel,
-  Position,
   ViewportPortal,
-  useStore,
-  type Connection,
-  type ConnectionLineComponentProps,
-  type FinalConnectionState,
   type Edge,
   type Node,
   type NodeChange,
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlignStartVertical, Archive, Boxes, Check, ClipboardList, ClipboardPaste, Command, Copy, Eye, GitBranch, LayoutGrid, Loader2, Filter, LayoutList, Map as MapIcon, Maximize, Minus, MoreHorizontal, PanelRightClose, PanelRightOpen, Pin, PinOff, Play, Plus, Redo2, Replace, Route, Scale, Search as SearchIcon, Sparkles, Sigma, Target, Trash2, Undo2, X } from "lucide-react";
+import { Boxes, GitBranch, Filter, Maximize, Minus, MoreHorizontal, PanelRightOpen, Plus, Scale, Sparkles, X } from "lucide-react";
 import {
   BRIEF_MAX_W,
-  COL,
-  CORE_CHAIN_TEMPLATE,
   cardHeight,
   cardsOverlap,
   cardWidth,
-  compareTargets,
   NODE_W,
-  fieldsOf,
-  goalDoc,
-  PORTFOLIO_NODE,
   TEMPLATES,
-  parseFile,
   PG_NODE_TYPE,
-  portfolioGraphApi,
   toDoc,
   nodeSummary,
   topoOrder,
@@ -65,374 +51,60 @@ import {
   withAiGhosts,
   placeConnectChip,
   placeSuggestion,
-  placeDraft,
-  draftTouched,
-  type DraftBody,
   suggestionKey,
-  connectionProblem,
   restackDoc,
-  type AskTarget,
   COMPARE_KIND,
   RECORD_KIND,
   toolOf,
   type GuideId,
   type GuideState,
-  GOALS,
-  type GoalKey,
-  type ConnTry,
   type GraphDoc,
-  type NodeRunResult,
   type Box,
   type ProcedureSuggestion,
-  type ParseResult,
   type WorkflowStage,
-  viaOf,
-  euro, josa, nextKinds, swapCandidates,
 } from "@/entities/portfolio-graph";
-import { ExportButton, ImportControl, readGraphFile } from "@/features/portfolio-graph-io";
-import { AlphaSheetBody } from "./AlphaSheet";
-import { CommandPalette, type PaletteCommand } from "./CommandPalette";
-import { ExecutionSheetBody } from "./ExecutionSheet";
+import { CommandPalette } from "./CommandPalette";
 import { GateRail } from "./GateRail";
 import { GhostLayer, type PlacedGhost } from "./GhostLayer";
-import { AiAsk, useAiAssist } from "./AiAsk";
-import { AiQuestion, useAiQuestion } from "./AiQuestion";
-import { DraftPanel, useDraft } from "./DraftPanel";
+import { AiAsk } from "./AiAsk";
+import { DraftPanel } from "./DraftPanel";
 import { DraftLayer } from "./DraftLayer";
 import { GuideBar, useGuide } from "./Guide";
-import { AiStory, useAiStory } from "./AiStory";
-import { useSession } from "@/entities/session";
-import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
-import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
-import { wireFlag, wireLook } from "./wireStyle";
+import { BranchFrame, PG_BRANCH_TYPE } from "./Branches";
+import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND } from "./EvidenceEdge";
 import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_PLAIN, STAGE_VAR } from "./GraphNode";
-import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
-import { GroupFrame, PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
+import { GroupFrame, PG_GROUP_TYPE } from "./GroupFrame";
 import { measuredH, measuredW } from "./toolbarPlace";
-import { ALIGN_ITEMS, snapToGuides, type AlignKind, type Guide } from "./guides";
-import { laneLayout } from "@/entities/portfolio-graph/lanes";
-import { readView, saveView } from "./view";
-import { WIRE_SHAPES, wirePath, type WireShape } from "./wirePath";
-import { ContextMenu, FindBar, MoreMenu, NoteLine, QuickAdd, ShortcutSheet, type MenuItem, type QuickAddState } from "./CanvasAssist";
-import { NodePalette, PALETTE_KIND_PREFIX, PALETTE_MIME, type LeftTab } from "./NodePalette";
+import { snapToGuides, type Guide } from "./guides";
+import { ContextMenu, FindBar, NoteLine, QuickAdd, ShortcutSheet, type QuickAddState } from "./CanvasAssist";
+import { NodePalette, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
-import { DEFAULT_PANELS, NARROW_Q, RIGHT_W, clampW, floatCorner, floatInsets, readPanels, savePanels, toggle, type Panels } from "./panels";
+import { floatInsets, toggle } from "./panels";
 import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
-import { NodeResultPanel } from "./NodeResultPanel";
-import { RecordsSheetBody } from "./RecordsSheet";
-import { SettingsPanel } from "./SettingsPanel";
 import { Sheet } from "@/shared/ui/tx";
-import { StoryPanel } from "./StoryPanel";
-import { RunHistory } from "./RunHistory";
 import { SimpleView } from "./SimpleView";
-import { WirePanel } from "./WirePanel";
-import { ancestorsOf, usePortfolioGraph, type FilterKey, type PgState } from "./store";
+import { usePortfolioGraph, type PgState } from "./store";
+import { AlignMenu, SelBar, StageLanes, ZoomPct, ZoomWatch } from "./CanvasChrome";
+import { DRAWERS, FILTERS, LEFT_TAB_KEY, markWelcomed, matchFilter, welcomeSeen, type DrawerKey } from "./canvasConfig";
+import { MIN_ZOOM, SNAP, fitClear } from "./canvasGeometry";
+import { overlapping, useWireHandlers } from "./canvasRules";
+import { WireDragLine } from "./WireDragLine";
+import { useCanvasView, useViewFollow } from "./useCanvasView";
+import { CanvasToolbar } from "./CanvasToolbar";
+import { RightPanel } from "./RightPanel";
+import { useCanvasCommands } from "./useCanvasCommands";
+import { useRunActions } from "./useRunActions";
+import { useCanvasDrop } from "./useCanvasDrop";
+import { useQuickAdd } from "./useQuickAdd";
+import { useDocSync } from "./useDocSync";
+import { useCanvasGraph } from "./useCanvasGraph";
+import { useCanvasAi } from "./useCanvasAi";
+import { useCanvasBoot } from "./useCanvasBoot";
 
 const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_BRANCH_TYPE]: BranchFrame };
 const EDGE_TYPES = { [PG_WIRE_TYPE]: EvidenceEdge };
-/** 확대 3단계(BM C1 · 의미 확대) — 멀리: 이름과 숫자 하나 · 보통: 카드 · 가까이: 작은 그림·계산 시간까지. */
-export const ZOOM_FAR = 0.55;
-export const ZOOM_NEAR = 1.05;
-export type ZoomLevel = "far" | "mid" | "near";
-export const zoomLevel = (z: number): ZoomLevel => (z < ZOOM_FAR ? "far" : z > ZOOM_NEAR ? "near" : "mid");
-
-/** 확대 값을 캔버스 요소의 `data-zoom`·`--pg-z` 로 옮긴다 — 노드를 다시 그리지 않고 CSS 가 단계별로 보이고 숨긴다. */
-function ZoomWatch({ el }: { el: RefObject<HTMLDivElement> }) {
-  const z = useStore((st) => st.transform[2]);
-  useEffect(() => {
-    const node = el.current;
-    if (!node) return;
-    node.dataset.zoom = zoomLevel(z);
-    node.style.setProperty("--pg-z", String(z));
-  }, [z, el]);
-  return null;
-}
-/** 묶음 상자 여백·노드 카드 크기(대략) — 상자는 안의 노드를 감싸는 사각형이다. */
-const GROUP_PAD = 28;
-/** 맞춰 보기의 안쪽 여백(px) — 위 64 = 선 범례·걸러 보기 판(10 + 36 + 여유), 아래 64 = 안내 줄. */
-const FIT_INSET = { top: 64, bottom: 64, left: 24, right: 24 } as const;
-/** 판 사이 가운데가 이보다 좁으면 선 범례·걸러 보기가 알약 아래 둘째 줄로 내려간다(BQ Q2) — 맞춰 보기 위 여백도 그만큼. */
-const TIGHT_MIDDLE = 760;
-const TIGHT_ROW = 44;
-/** 위 여백 — 둘째 줄이 있으면 그만큼 더. */
-const fitTop = (el: HTMLElement | null) => FIT_INSET.top + (el?.closest("[data-tight]") ? TIGHT_ROW : 0);
-/** 아래 여백 — 64(안내 줄) · 아래 시트 · ★보이는 아래 바의 실제 위 끝 + 8★ 중 큰 것. 다음 한 걸음·길잡이 바는 단추가 있어 64 보다 높고
- *  좁으면 두 줄이 된다 — 길잡이 바가 맞춘 노드의 아래 끝을 덮었다(AI5b 전체 게이트가 찾음). */
-const fitBottom = (el: HTMLElement, sheet: number) => {
-  const bar = el.querySelector<HTMLElement>(".pg-hint");
-  const clear = bar && bar.offsetParent !== null ? el.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 8 : 0;
-  return Math.max(FIT_INSET.bottom + sheet, clear);
-};
-/** 노드 도구줄 높이 + 간격(px) — 고른 노드 위에 이만큼 비어 있어야 도구줄이 떠 있는 판 밑에 깔리지 않는다. */
-const TOOLBAR_H = 48;
-
-/** 맞춰 보기 — 떠 있는 판(위: 선 범례·걸러 보기 · 아래: 안내 줄)이 노드·상자 머리를 가리지 않게 위아래를 비워 둔다.
- *  (BN N1 에서 찾은 결함: 균일 여백 맞춤은 맨 위 전략 상자의 머리 줄을 선 범례 밑에 두어 누를 수 없었다.) */
-/** 고른 노드 막대의 자리(BS2) — 아래가 기본(상자 머리를 가리지 않게), 아래 공간이 모자라면 위로.
- *  캔버스 아래에는 안내 줄(약 60px)이 떠 있다 — 예전에는 아래 끝의 노드를 고르면 막대가 그 밑에 깔려 누를 수 없었다(E2E 가 찾음). */
-const SELBAR_ROOM = 14 + 44 + 64;
-/** 막대 폭(대략) — 가운데 맞춤이 떠 있는 판 밑으로 들어가는지 볼 때 쓴다. CF4a '정렬' 단추로 실측 255 → 321 이라 360, CF5c '갈래' 단추로 실측 386 이라 430(여유 약 40). */
-const SELBAR_W = 430;
-/** 끌기 격자(BN N3) — 22 점 칸의 반. */
-const SNAP = 11;
-function SelBar({ ids, children }: { ids: string[]; children: ReactNode }) {
-  // 가로도 — 가운데에 두면 떠 있는 오른쪽 창·왼쪽 목록 밑으로 들어가는 경우 고른 노드의 끝에 맞춘다(E2E 가 찾음).
-  const place = useStore((st) => {
-    const [tx, ty, zoom] = st.transform;
-    let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
-    for (const id of ids) {
-      const n = st.nodeLookup.get(id);
-      if (!n) continue;
-      const p = n.internals.positionAbsolute;
-      top = Math.min(top, p.y * zoom + ty);
-      bottom = Math.max(bottom, (p.y + measuredH(n)) * zoom + ty);
-      left = Math.min(left, p.x * zoom + tx);
-      right = Math.max(right, (p.x + measuredW(n)) * zoom + tx);
-    }
-    const ins = floatInsets(st.domNode ?? null);
-    const mid = (left + right) / 2;
-    const align = mid + SELBAR_W / 2 > st.width - ins.right ? "end" : mid - SELBAR_W / 2 < ins.left ? "start" : "center";
-    // 아래에 두면 켜진 미니맵(CF5b) 밑에 깔리는지 — 깔리면 단추를 누를 수 없다(CF5c E2E 가 찾음). 위에 자리가 있으면 위로.
-    const mm = floatCorner(st.domNode ?? null);
-    const barL = align === "end" ? right - SELBAR_W : align === "start" ? left : mid - SELBAR_W / 2;
-    const underMap = !!mm && barL + SELBAR_W > mm.x && bottom + 14 + 44 > mm.y;
-    const below = (st.height - ins.bottom - bottom >= SELBAR_ROOM && !underMap) || top < SELBAR_ROOM;
-    return `${below ? "b" : "t"}|${align}`;
-  });
-  const [side, align] = place.split("|") as ["b" | "t", "start" | "center" | "end"];
-  return (
-    <NodeToolbar nodeId={ids} isVisible position={side === "b" ? Position.Bottom : Position.Top} align={align} offset={14}
-                 className="pg-selbar">
-      {children}
-    </NodeToolbar>
-  );
-}
-
-/** 열린 메뉴 닫기 — 바깥을 누르거나 Escape. 정렬·보기 메뉴가 같이 쓴다. */
-function useDismiss(open: boolean, close: () => void, ref: RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as HTMLElement)) close(); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    window.addEventListener("pointerdown", away);
-    window.addEventListener("keydown", esc);
-    return () => { window.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc); };
-  }, [open, close, ref]);
-}
-
-/** 정렬·간격(CF4a) — 고른 카드 막대의 '정렬' 단추 하나 → 글자 항목(간격 맞추기는 셋 이상일 때만). 툴팁 없이 보이는 글. */
-function AlignMenu({ n, onPick }: { n: number; onPick: (k: AlignKind) => void }) {
-  const [open, setOpen] = useState(false);
-  const [dir, setDir] = useState<"down" | "up">("down");
-  const ref = useRef<HTMLDivElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
-  // 열 쪽 — 캔버스 안에 메뉴가 다 들어가는 쪽(아래 먼저). 둘 다 모자라면 넓은 쪽. 그리기 전에 정한다(깜빡임 없음).
-  useLayoutEffect(() => {
-    if (!open || !ref.current || !menu.current) return;
-    const b = ref.current.getBoundingClientRect();
-    const c = ref.current.closest(".pg-canvas")?.getBoundingClientRect();
-    if (!c) return;
-    const h = menu.current.offsetHeight + 8, below = c.bottom - b.bottom, above = b.top - c.top;
-    setDir(below >= h || below >= above ? "down" : "up");
-  }, [open]);
-  useDismiss(open, useCallback(() => setOpen(false), []), ref);
-  return (
-    <div className="pg-align" ref={ref}>
-      <button type="button" className="pg-selbar-b pg-align-open" aria-haspopup="menu" aria-expanded={open}
-              onClick={() => setOpen((v) => !v)}>
-        <AlignStartVertical size={14} aria-hidden="true" /> 정렬
-      </button>
-      {open && (
-        <div className="pg-align-menu" role="menu" aria-label="정렬" data-dir={dir} ref={menu}>
-          {ALIGN_ITEMS.filter((i) => n >= i.min).map((i) => (
-            <button key={i.kind} type="button" role="menuitem" data-align={i.kind}
-                    onClick={() => { setOpen(false); onPick(i.kind); }}>{i.label}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** 확대율(CF5b) — 지금 배율(%). 누르면 100%(떠 있는 판 사이 가운데 기준 — `zoomBy`). */
-function ZoomPct({ onReset }: { onReset: (zoom: number) => void }) {
-  const z = useStore((st) => st.transform[2]);
-  const pct = Math.round(z * 100);
-  return (
-    <ControlButton className="pg-zoom-pct" title="누르면 100%" aria-label={`확대율 ${pct}% — 누르면 100%`} onClick={() => onReset(z)}>
-      {pct}%
-    </ControlButton>
-  );
-}
-
-/** '보기' 메뉴(CF4b·CF4c) — 도구줄 단추 하나. 단계 레인 켬/끔 · 켜졌을 때 '레인에 맞추기' · 선 모양(곡선·직각·직선). 명령 찾기(Ctrl+K)에도 같은 항목이 있다. */
-function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire, ghosts, onGhosts }:
-  { lanes: boolean; onLanes: () => void; onFitLanes: () => void; wire: WireShape; onWire: (w: WireShape) => void;
-    ghosts: boolean; onGhosts: () => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
-  useDismiss(open, useCallback(() => setOpen(false), []), ref);
-  return (
-    <span className="pg-view-wrap" ref={ref}>
-      <button type="button" className={`pg-icon-tool pg-view-open${lanes ? " on" : ""}`} aria-haspopup="menu" aria-expanded={open}
-              aria-label="보기" title="보기 — 단계 레인" onClick={() => setOpen((v) => !v)}><Eye size={16} /></button>
-      {open && (
-        <div className="pg-view-menu" role="menu" aria-label="보기">
-          <button type="button" role="menuitemcheckbox" aria-checked={lanes} data-view="lanes"
-                  onClick={() => { setOpen(false); onLanes(); }}>
-            <span className="pg-view-check" aria-hidden="true">{lanes && <Check size={14} />}</span>단계 레인 보기
-          </button>
-          {lanes && (
-            <button type="button" role="menuitem" data-view="fit-lanes" onClick={() => { setOpen(false); onFitLanes(); }}>
-              <span className="pg-view-check" aria-hidden="true" />레인에 맞추기
-            </button>
-          )}
-          {/* CF6 — 서버 규칙 추천을 캔버스 위 유령 노드로(기본 켬). 꺼도 아래 '다음 한 걸음' 바는 글로 남는다. */}
-          <button type="button" role="menuitemcheckbox" aria-checked={ghosts} data-view="ghosts"
-                  onClick={() => { setOpen(false); onGhosts(); }}>
-            <span className="pg-view-check" aria-hidden="true">{ghosts && <Check size={14} />}</span>추천 보기
-          </button>
-          <div className="pg-view-sep" role="separator" />
-          <div role="group" aria-label="선 모양" className="pg-view-group">
-            <span className="pg-view-h" aria-hidden="true">선 모양</span>
-            {WIRE_SHAPES.map((w) => (
-              <button key={w.shape} type="button" role="menuitemradio" aria-checked={wire === w.shape} data-wire={w.shape}
-                      onClick={() => { setOpen(false); onWire(w.shape); }}>
-                <span className="pg-view-check" aria-hidden="true">{wire === w.shape && <Check size={14} />}</span>{w.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </span>
-  );
-}
-
-/**
- * 목표 칩(AI1 목표 — 사용자 결정 2026-10-23: 네 목표를 설계에 기억 + 고치기) — ★설계 이름 칸 안 오른쪽 끝의 작은 단추★.
- * 도구 막대는 이미 꽉 차 있어(오류 줄이 있으면 1440 에서 남는 폭 65px, 1024 에서 8px — 측정) 글 칩을 두면 두 줄이 됐다(PNG 검토에서 찾음) →
- * 이름 칸 폭 안에 넣는다. 목표가 있으면 파란 표시 + 제목 풍선말·이름, 메뉴에서 바꾸거나 없앤다. '목표로 시작'은 이름도 목표 제목으로 정한다.
- * 목표는 계산에 끼지 않고 ★AI 추천의 근거★다(서버가 키를 자기 문장으로 바꾼다). 규칙 추천은 목표와 무관하다고 메뉴가 말한다.
- */
-function NameWithGoal({ name, onName, goal, onGoal }: { name: string; onName: (v: string) => void;
-                                                       goal: GoalKey | null; onGoal: (g: GoalKey | null) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
-  useDismiss(open, useCallback(() => setOpen(false), []), ref);
-  const title = goal ? GOALS.find((g) => g.key === goal)?.title ?? null : null;
-  const label = `이 설계의 목표: ${title ?? "정하지 않았어요"}`;
-  const pick = (g: GoalKey | null) => { setOpen(false); onGoal(g); };
-  // 메뉴는 캔버스 왼쪽 끝(앱 탐색 줄 오른쪽)과 화면 오른쪽 끝 사이에 머문다 — 390 에서 칩이 가운데쯤이면 그대로 두면 넘친다.
-  const [place, setPlace] = useState<{ dx: number; w: number } | null>(null);
-  useEffect(() => {
-    if (!open || !ref.current) return;
-    const r = ref.current.getBoundingClientRect();
-    const lo = (ref.current.closest(".pg-root")?.getBoundingClientRect().left ?? 0) + 8;
-    const w = Math.min(300, window.innerWidth - lo - 8);              // 360 에선 캔버스 폭이 300 + 여백보다 좁다
-    setPlace({ dx: Math.max(lo, Math.min(r.left, window.innerWidth - 8 - w)) - r.left, w });
-  }, [open]);
-  return (
-    <span className="pg-goalchip-wrap" ref={ref}>
-      <input className="pg-name" value={name} placeholder="이름 없는 설계" aria-label="설계 이름" onChange={(e) => onName(e.target.value)} />
-      <button type="button" className={`pg-goalchip${goal ? " on" : ""}`} aria-haspopup="menu" aria-expanded={open}
-              aria-label={label} title={`${label} — AI 추천이 이 목표에 비춰 다음 노드를 골라요`} onClick={() => setOpen((v) => !v)}>
-        <Target size={14} aria-hidden="true" />
-      </button>
-      {open && (
-        <div className="pg-goalchip-menu" role="menu" aria-label="이 설계의 목표" style={place ? { left: place.dx, width: place.w } : undefined}>
-          <p className="pg-goalchip-h">이 설계의 목표</p>
-          {GOALS.map((g) => (
-            <button key={g.key} type="button" role="menuitemradio" aria-checked={goal === g.key} data-goal={g.key} onClick={() => pick(g.key)}>
-              <span className="pg-view-check" aria-hidden="true">{goal === g.key && <Check size={14} />}</span>
-              <span className="pg-goalchip-text"><span className="pg-goalchip-title">{g.title}</span><span className="pg-goalchip-sub">{g.sub}</span></span>
-            </button>
-          ))}
-          <div className="pg-view-sep" role="separator" />
-          <button type="button" role="menuitemradio" aria-checked={goal === null} data-goal="none" onClick={() => pick(null)}>
-            <span className="pg-view-check" aria-hidden="true">{goal === null && <Check size={14} />}</span>목표 없음
-          </button>
-          <p className="pg-goalchip-note">AI 추천이 이 목표에 비춰 다음 노드를 골라요. 규칙 추천은 바뀌지 않아요.</p>
-        </div>
-      )}
-    </span>
-  );
-}
-
-/** 띠 머리 높이(캔버스 좌표) — 맨 위 노드 위로 이만큼 띠를 늘려 이름을 둔다. */
-const LANE_HEAD = 72;
-
-/**
- * 단계 레인(CF4b) — 서버 단계 순서대로 왼→오 세로 띠 여섯. ★노드가 아니다★(끌 수도 고를 수도 없다 · 누르기는 캔버스로 간다).
- * 띠 x·폭은 문서·카탈로그로만(`laneLayout`) — 지금 위치와 무관하다. 위아래만 노드를 덮도록 늘인다.
- */
-function StageLanes({ stages }: { stages: WorkflowStage[] }) {
-  const nodes = usePortfolioGraph((st) => st.nodes);
-  const edges = usePortfolioGraph((st) => st.edges);
-  const catalog = usePortfolioGraph((st) => st.catalog);
-  const geo = useMemo(() => {
-    if (!catalog || !stages.length) return null;
-    const { lanes } = laneLayout(nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), edges, catalog, stages);
-    const h = (n: (typeof nodes)[number]) => measuredH(n) || cardHeight(n.data.kind, catalog);
-    const top = Math.min(0, ...nodes.map((n) => n.position.y)) - LANE_HEAD;
-    const bottom = Math.max(0, ...nodes.map((n) => n.position.y + h(n))) + 40;
-    return { lanes, top, h: bottom - top };
-  }, [nodes, edges, catalog, stages]);
-  if (!geo) return null;
-  return (
-    <ViewportPortal>
-      <div className="pg-lanes" aria-hidden="true">
-        {geo.lanes.map((l) => (
-          <div key={l.key} className="pg-lane" data-stage={l.key} data-count={l.count}
-               style={{ left: l.x, top: geo.top, width: l.w, height: geo.h, ["--pg-lane-c" as string]: STAGE_VAR[l.key] ?? "var(--pg-st-data)" }}>
-            <div className="pg-lane-head"><span className="pg-lane-name">{l.label}</span><span className="pg-lane-n">{l.count}개</span></div>
-          </div>
-        ))}
-      </div>
-    </ViewportPortal>
-  );
-}
-
-function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
-                  opts: { ids?: string[]; minZoom?: number; maxZoom?: number; duration?: number } = {}): boolean {
-  if (!inst || !el) return false;
-  // 일부만 맞출 때(갈래·들어가기 — BO O5)도 같은 여백 — 예전 fitView 는 맨 위 노드의 도구줄을 캔버스 위 끝 밖으로 밀었다.
-  const want = opts.ids ? new Set(opts.ids) : null;
-  const shown = inst.getNodes().filter((n) => !n.hidden && (!want || want.has(n.id)));
-  // 크기는 내부 노드에서 읽는다 — 묶음 상자·갈래 띠는 그릴 때마다 새로 만드는 노드라 사용자 노드에는 실측이 없다(CF0, v12).
-  const ns = shown.filter((n) => { const i = inst.getInternalNode(n.id); return !!i && measuredW(i) > 0 && measuredH(i) > 0; });
-  // 아직 크기를 잰 노드가 모자라면(파일을 막 불러온 직후) 맞추지 않고 "못 맞춤" 을 알린다 — 부르는 쪽이 다음 프레임에 다시.
-  if (!ns.length || ns.length < shown.length) return false;
-  const b = inst.getNodesBounds(ns.map((n) => n.id));
-  // 떠 있는 왼쪽 목록·오른쪽 창(BQ Q1)이 가리는 폭만큼 더 비운다 — 캔버스는 판 뒤까지 이어져 있다.
-  const ins = floatInsets(el);
-  const L = FIT_INSET.left + ins.left;
-  const w = Math.max(1, el.clientWidth - L - FIT_INSET.right - ins.right);
-  const top = fitTop(el);
-  const h = Math.max(1, el.clientHeight - top - fitBottom(el, ins.bottom));
-  const zoom = Math.min(opts.maxZoom ?? 1, Math.max(opts.minZoom ?? 0.2, Math.min(w / b.width, h / b.height)));
-  // 가장 작게 줄여도 넘치면 가운데 두지 않고 흐름의 시작(왼쪽 위)에 붙인다 — 넘친 쪽은 오른쪽·아래로 간다.
-  const dx = w - b.width * zoom;
-  const dy = h - b.height * zoom;
-  inst.setViewport({ x: L + (dx > 0 ? dx / 2 : 0) - b.x * zoom,
-                     y: top + (dy > 0 ? dy / 2 : 0) - b.y * zoom, zoom },
-                   opts.duration ? { duration: opts.duration } : undefined);
-  return true;
-}
-/** React Flow 확대 한계 — `minZoom` 속성과 기본 최대(2). */
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 2;
-const WIP_KEY = "alpha_pg_wip";
-/** 왼쪽 판의 마지막 탭(BT2) — 이 브라우저에만. */
-const LEFT_TAB_KEY = "alpha_pg_left_tab";
-/** 첫 방문 환영 줄(BN N2)을 본 적 있나 — 이 브라우저 localStorage. 못 읽거나 못 쓰면 "본 적 없음"(올 때마다 뜨되 닫을 수 있다). */
-const WELCOME_KEY = "alpha_pg_welcomed";
-function welcomeSeen(): boolean {
-  try { return localStorage.getItem(WELCOME_KEY) === "1"; } catch { return false; }
-}
-function markWelcomed() {
-  try { localStorage.setItem(WELCOME_KEY, "1"); } catch { /* 적을 수 없으면 이번만 닫는다 */ }
-}
+export { ZOOM_FAR, ZOOM_NEAR, zoomLevel, type ZoomLevel } from "./canvasGeometry";
 
 export interface PortfolioCanvasProps {
   /** 상단 바 오른쪽 — 케이스 상자 등. app 계층이 채운다. */
@@ -444,107 +116,6 @@ export interface PortfolioCanvasProps {
   /** 옛 주소(`/allocation/<화면>` → `?from=`)로 왔을 때 그 예전 화면(BL4). 배너·팔레트 검색·템플릿·서랍을 안내한다. */
   legacy?: LegacyScreen | null;
 }
-
-/** 이웃 노드 — ←→ 는 선을 따라(같은 줄에 가까운 것 먼저), ↑↓ 는 흐름 번호 순서. 없으면 null. */
-function neighbour(id: string, key: string, nodes: { id: string; position: { x: number; y: number } }[],
-                   edges: { source: string; target: string }[]): string | null {
-  const me = nodes.find((n) => n.id === id);
-  if (!me) return null;
-  const near = (ids: string[]) => ids.map((x) => nodes.find((n) => n.id === x)).filter((n): n is typeof me => !!n)
-    .sort((a, b) => Math.abs(a.position.y - me.position.y) - Math.abs(b.position.y - me.position.y))[0]?.id ?? null;
-  if (key === "ArrowRight") return near(edges.filter((e) => e.source === id).map((e) => e.target));
-  if (key === "ArrowLeft") return near(edges.filter((e) => e.target === id).map((e) => e.source));
-  const order = topoOrder(nodes.map((n) => n.id), edges);
-  const i = order.indexOf(id);
-  if (key === "ArrowDown") return order[i + 1] ?? null;
-  if (key === "ArrowUp") return i > 0 ? order[i - 1] : null;
-  return null;
-}
-
-const FILTERS: [FilterKey, string][] = [
-  ["failed", "실패"], ["blocked", "막힘"], ["practice", "연습용"], ["forward", "지금 시점 전용"], ["assumed", "가정 있음"],
-];
-function matchFilter(k: FilterKey, r: NodeRunResult): boolean {
-  return (k === "failed" && r.status === "failed") || (k === "blocked" && r.status === "blocked")
-    || (k === "practice" && !!r.lineage?.practice) || (k === "forward" && r.lineage?.pit === "forward_only")
-    || (k === "assumed" && !!r.explain?.trust?.some((t) => t.state === "assumed"));
-}
-
-function readWip(): string | null {
-  try { return typeof window === "undefined" ? null : sessionStorage.getItem(WIP_KEY); }
-  catch { return null; }
-}
-
-/** 같은 쪽 점끼리 이으려 할 때의 사유 — 놓은 뒤 토스트·끄는 중 사유 글·다시 꽂기가 같은 말을 쓴다. */
-const SAME_SIDE = {
-  source: "내는 점끼리는 이을 수 없어요 — 내는 점에서 받는 점으로 이어요.",
-  target: "받는 점끼리는 이을 수 없어요 — 내는 점에서 받는 점으로 이어요.",
-} as const;
-/** CF1 — 예전 크기(폭 150)로 놓인 문서를 불러왔을 때. 자동으로 옮기지 않는다(사용자의 배치를 말없이 바꾸지 않음). */
-const OVERLAP_NOTE = "예전 크기로 놓인 문서라 노드가 겹쳐요. 위 도구줄의 ‘자동 정리’를 누르면 다시 놓아요.";
-function overlapping(): boolean {
-  const st = usePortfolioGraph.getState();
-  return cardsOverlap(st.nodes, st.catalog);
-}
-/** 연결 규칙 하나(타입·한 입력 한 선·순환) — 다시 꽂는 중인 선은 빼고 본다(CF2). */
-function wireProblem(c: ConnTry): string | null {
-  const st = usePortfolioGraph.getState();
-  const edges = st.reconnecting ? st.edges.filter((e) => e.id !== st.reconnecting) : st.edges;
-  return connectionProblem(c, st.nodes, edges, st.catalog ?? [], st.catalogMeta?.portPlain ?? PORT_PLAIN);
-}
-
-/**
- * 끄는 중 연결선(CF2) — 보내는 타입 색의 곡선. 손잡이 위에 올렸는데 이을 수 없으면 선을 회색 점선으로 바꾸고, 왜 안 되는지를
- * 커서 옆에 ★보이는 글★로 쓴다(툴팁 아님). 글자는 확대와 상관없이 화면 12px(= 12 / 확대율). 문장은 놓은 뒤 토스트와 같다.
- */
-function WireDragLine({ fromX, fromY, toX, toY, fromPosition, toPosition, fromHandle, toHandle, connectionStatus }: ConnectionLineComponentProps) {
-  const zoom = useStore((st) => st.transform[2]);
-  const st = usePortfolioGraph.getState();
-  const kind = st.nodes.find((n) => n.id === fromHandle.nodeId)?.data.kind;
-  const entry = st.catalog?.find((c) => c.type === kind);
-  const type = (fromHandle.type === "source" ? entry?.outputs : entry?.inputs)?.find((p) => p.name === fromHandle.id)?.type;
-  const bad = connectionStatus === "invalid";
-  let why: string | null = null;
-  if (bad && toHandle) {
-    why = toHandle.type === fromHandle.type ? SAME_SIDE[fromHandle.type]
-      : wireProblem(fromHandle.type === "source"
-          ? { source: fromHandle.nodeId, sourceHandle: fromHandle.id ?? null, target: toHandle.nodeId, targetHandle: toHandle.id ?? null }
-          : { source: toHandle.nodeId, sourceHandle: toHandle.id ?? null, target: fromHandle.nodeId, targetHandle: fromHandle.id ?? null });
-  }
-  const shape = usePortfolioGraph((x) => x.wireShape);
-  const { d } = wirePath(shape, { x: fromX, y: fromY }, { x: toX, y: toY }, [], { s: fromPosition, t: toPosition });
-  const k = 1 / (zoom || 1);
-  // 사유 글은 끌어 온 쪽에 쓴다 — 오른쪽으로 끌면 커서 왼쪽(오른쪽 판 밑으로 잘리지 않게), 왼쪽으로 끌면 커서 오른쪽. " — " 에서 두 줄로.
-  const back = toX >= fromX;
-  const tx = toX + (back ? -14 : 14) * k;
-  const lines = why ? why.split(" — ") : [];
-  return (
-    <g className={`pg-drag-wire${bad ? " pg-drag-wire--bad" : ""}`} data-type={type ?? ""}>
-      <path d={d} fill="none" stroke={bad ? "var(--pg-mute)" : type ? portTypeColor(type) : "var(--pg-blue)"}
-            strokeWidth={2.5 * k} strokeDasharray={bad ? `${6 * k} ${4 * k}` : undefined} />
-      {why && (
-        <text className="pg-drag-why" x={tx} y={toY - (12 + 16 * (lines.length - 1)) * k} textAnchor={back ? "end" : "start"}
-              fontSize={12 * k} strokeWidth={4 * k} role="status">
-          {lines.map((l, i) => <tspan key={i} x={tx} dy={i ? 16 * k : 0}>{i ? ` — ${l}` : l}</tspan>)}
-        </text>
-      )}
-    </g>
-  );
-}
-
-const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"], ["branches", "갈래"], ["wire", "선"]] as const;
-
-
-type DrawerKey = "execution" | "records" | "alphas";
-/** 서랍 셋 — 예전 EXECUTION·JOURNAL·ALPHA LAB 화면의 기록 관리를 옮겼다(BL2). 계산은 노드, 기록 관리는 서랍. */
-const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof Archive; Body: () => ReactNode }[] = [
-  { key: "execution", label: "실행실", Icon: ClipboardList, Body: ExecutionSheetBody,
-    sub: "저장한 실행 목표로 주문 계획을 만들고 검토·승인해요. 주문은 나가지 않아요." },
-  { key: "records", label: "기록함", Icon: Archive, Body: RecordsSheetBody,
-    sub: "판단 기록·연구 기록·실행 목표·국면 스냅샷을 다시 보고 고쳐요." },
-  { key: "alphas", label: "알파", Icon: Sigma, Body: AlphaSheetBody,
-    sub: "알파 식을 등록하고 단계를 올리거나 내려요." },
-];
 
 export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: PortfolioCanvasProps) {
   const s = usePortfolioGraph();
@@ -599,346 +170,23 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const runStrategyRef = useRef<(groupId: string) => void>(() => {});
   const branchStrategyRef = useRef<(groupId: string) => void>(() => {});
   const [announce, setAnnounce] = useState("");
-  // 떠 있는 판(BQ Q1) — 여닫기·폭. 넓은 화면에서 바꾼 것만 이 브라우저에 남긴다(좁은 화면은 늘 닫힌 채 시작).
-  const [panels, setPanels] = useState<Panels>(DEFAULT_PANELS);
-  const narrowNow = () => typeof window !== "undefined" && !!window.matchMedia?.(NARROW_Q).matches;
-  useEffect(() => { setPanels(readPanels(narrowNow(), window.innerWidth >= 1440)); }, []);
-  useEffect(() => {
-    const v = readView(), g = usePortfolioGraph.getState();
-    g.setLanes(v.lanes);
-    g.setWireShape(v.wire);
-    g.setMinimap(v.minimap);                          // CF5b — 사람이 켠 것만(기본 끔)
-    g.setShowGhosts(v.ghosts);                        // CF6 — 기본 켬
-  }, []);
-  const updatePanels = useCallback((f: (p: Panels) => Panels) => {
-    setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
-  }, []);
-  // 판 사이 가운데가 좁으면(알약 + 선 범례 + 걸러 보기가 한 줄에 안 듦) 범례·걸러 보기를 한 줄 아래로(BQ Q2).
-  const [tight, setTight] = useState(false);
-  const leftShown = panels.left && !panels.focus;
-  const rightShown = panels.right && !panels.focus;
-  useEffect(() => {
-    const el = canvasEl.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => { const ins = floatInsets(el); setTight(el.clientWidth - ins.left - ins.right < TIGHT_MIDDLE); };
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    // 판 자체의 크기도 본다 — 왼쪽 목록은 카탈로그가 온 뒤에야 그려진다.
-    el.closest(".pg-root")?.querySelectorAll(".pg-palette, .pg-side").forEach((x) => ro.observe(x));
-    const t = setTimeout(measure, 0);                                   // 판이 열리고 닫힌 뒤의 폭
-    return () => { ro.disconnect(); clearTimeout(t); };
-  }, [leftShown, rightShown, panels.rightW, !!s.catalog]);
+  const { panels, setPanels, updatePanels, tight, leftShown, rightShown, fit, fitIds, zoomBy } = useCanvasView(rf, canvasEl, !!s.catalog);
 
-  // 맞춰 보기 — 불러온 직후엔 노드 크기를 아직 모를 수 있어, 잴 수 있을 때까지 프레임마다 다시(최대 20번). 한 번만 60ms 뒤에 하던 것은
-  // 크기를 재기 전이면 조용히 건너뛰어, 불러온 흐름이 떠 있는 판 밑에 남는 일이 가끔 있었다(묶음 상자 E2E 가 3번에 1번 찾음).
-  const fit = (opts?: { minZoom?: number }) => {
-    let tries = 0;
-    const go = () => { if (!fitClear(rf.current, canvasEl.current, opts) && tries++ < 20) requestAnimationFrame(go); };
-    setTimeout(go, 60);
-  };
-  /** 몇 노드만 맞춰 보기 — 막 생긴 노드는 크기를 잴 때까지 다시(위 `fit` 과 같은 까닭). */
-  const fitIds = (ids: string[]) => {
-    let tries = 0;
-    const go = () => { if (!fitClear(rf.current, canvasEl.current, { ids, maxZoom: 1, duration: 250 }) && tries++ < 20) requestAnimationFrame(go); };
-    setTimeout(go, 60);
-  };
-  /** 판 사이 보이는 가운데를 기준으로 확대·축소(BQ Q1). */
-  const zoomBy = useCallback((k: number) => {
-    const inst = rf.current;
-    const el = canvasEl.current;
-    if (!inst || !el) return;
-    const vp = inst.getViewport();
-    const ins = floatInsets(el);
-    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom * k));
-    const cx = ins.left + (el.clientWidth - ins.left - ins.right) / 2;
-    const cy = (el.clientHeight - ins.bottom) / 2;
-    const r = z / vp.zoom;
-    inst.setViewport({ x: cx - (cx - vp.x) * r, y: cy - (cy - vp.y) * r, zoom: z });
-  }, []);
-
-  // ── 카탈로그 → 복원(세션) 또는 기본 사슬 ──────────────────────────────
-  useEffect(() => {
-    let alive = true;
-    portfolioGraphApi.nodeTypes()
-      .then((cat) => {
-        if (!alive) return;
-        setStages(cat.stages ?? []);
-        usePortfolioGraph.getState().setStages(cat.stages ?? []);
-        usePortfolioGraph.getState().setCatalog(cat.nodes);
-        usePortfolioGraph.getState().setCatalogMeta({ gates: cat.gates ?? [], portPlain: cat.port_plain ?? {} });
-        const st = usePortfolioGraph.getState();
-        if (initialDoc) {
-          // 다른 화면이 넘긴 흐름(예: 매크로 스냅샷) — 지금 캔버스가 있으면 되돌리기로 돌아갈 수 있다(loadDoc 이 기록한다).
-          st.loadDoc(restackDoc(initialDoc.doc, cat.nodes));
-          setFileNote(initialDoc.note + (st.past.length ? " 이전 캔버스는 되돌리기(Ctrl+Z)로 돌아가요." : ""));
-        } else {
-          const saved = readWip();
-          const parsed = saved ? parseFile(saved) : null;
-          if (st.nodes.length === 0) {
-            // 코드가 만든 기본 사슬만 새 카드 높이로 다시 쌓는다(CF1). 작업 중 문서는 사용자의 배치라 그대로 두고, 겹치면 말만 한다.
-            if (parsed?.doc) st.loadDoc(parsed.doc, parsed.problems);
-            else st.loadDoc(restackDoc(CORE_CHAIN_TEMPLATE, cat.nodes));
-            if (parsed?.doc && overlapping()) setFileNote(OVERLAP_NOTE);
-          }
-          if (bootNote) setFileNote(bootNote);
-        }
-        // BT2 — 고른 탭이 없으면 처음 한 번만 정한다: 빈 캔버스는 절차부터(노드를 붙여도 탭이 바뀌지 않게 저장하지 않고 고정).
-        setLeftTabState((t) => t ?? (usePortfolioGraph.getState().nodes.length === 0 ? "proc" : "add"));
-        // 처음 열 때만 보통 확대 이상(사용자 결정 2026-10-17) — 자리 고정 상자로 전체를 담으면 멀리(이름·값만)로 열렸다.
-        // 넘치면 fitClear 가 흐름의 시작(왼쪽 위)에 붙인다. 맞춤 단추·자동 정리는 그대로 전체를 담는다.
-        fit({ minZoom: ZOOM_FAR });
-      })
-      .catch((e: Error) => { if (alive) usePortfolioGraph.getState().setCatalog(null, e.message); });
-    return () => { alive = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 한 번만(넘겨받은 흐름은 열 때 한 번 싣는다)
-  }, []);
+  useCanvasBoot(initialDoc, bootNote, setStages, setFileNote, setLeftTabState, fit);
 
   const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name || s.goal ? { ...(s.name ? { name: s.name } : {}), ...(s.goal ? { goal: s.goal } : {}) } : undefined,
                                   s.groups, s.branches, s.pinned, s.folded),
     [s.nodes, s.edges, s.name, s.goal, s.groups, s.branches, s.pinned, s.folded]);
-  // AI1 — 누를 때만 묻는 AI 노드 추천. 로그인 판정은 서버가 하고, 화면은 로그아웃이면 묻지 않는다(요청 0).
-  const { session } = useSession();
-  const aiNoteSink = useCallback((n: string) => usePortfolioGraph.getState().setNote(n), []);
-  const ai = useAiAssist(doc, session, aiNoteSink);
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
   /** 결과가 지금 그래프의 것이 아닌 노드(BT5) — 바뀐 노드와 그 하류만. 나머지는 결과·선 모양·한눈 요약을 그대로 둔다. */
   const staleSet = useMemo(() => new Set(s.staleIds), [s.staleIds]);
-  // AI2 — 이야기 탭 맨 위 'AI 가 풀어 쓴 글'(누를 때만 · 낡지 않은 결과의 설명·봉인만 보낸다).
-  const aiStory = useAiStory(doc, order, s.report?.nodes ?? null, staleSet, session);
-  // AI3 — 고른 노드·선에게 묻기(오른쪽 창 아래 칸). 문답은 대상마다 이번 방문 동안 남는다.
-  const askTarget = useMemo<AskTarget | null>(() => (s.selectedId ? { kind: "node", id: s.selectedId }
-    : s.selectedEdge ? { kind: "edge", id: s.selectedEdge } : null), [s.selectedId, s.selectedEdge]);
-  const aiQ = useAiQuestion(doc, order, s.report, staleSet, session, askTarget);
-  const askFocus = useRef<() => void>(() => {});
-  // AI4 — 말로 설계(왼쪽 창 '말로' 탭). 초안은 미리보기일 뿐 — [받아들이기] 때만 문서가 바뀐다(되돌리기 한 번).
-  const draftQ = useDraft(doc, session);
-  const sayInput = useRef<HTMLTextAreaElement | null>(null);
-  const draftAt = useMemo(() => (draftQ.draft
-    ? placeDraft(draftQ.draft, s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), s.catalog) : {}),
-  [draftQ.draft, s.nodes, s.catalog]);
-  const draftAtRef = useRef(draftAt);
-  draftAtRef.current = draftAt;
-  // 새 초안이 판 밑이나 화면 밖이면 그쪽을 보인다(AI1 유령과 같은 까닭 — 미리 볼 수 없으면 받아들일지 정할 수 없다. PNG 검토에서 찾음:
-  // 더할 노드가 오른쪽 창 밑에 깔렸다). 지금 확대로 다 들어오지 않으면 줄인다. 초안이 올 때 한 번만 — 노드를 옮길 때마다 따라가지 않는다.
-  useEffect(() => {
-    const dr = draftQ.draft;
-    const el = canvasEl.current;
-    if (!dr || !rf.current || !el) return;
-    const st = usePortfolioGraph.getState();
-    const box = (x: number, y: number, kind: string) => ({ x, y, w: NODE_W, h: cardHeight(kind, st.catalog) });
-    const boxes = [...dr.add.flatMap((a) => (draftAtRef.current[a.id] ? [box(draftAtRef.current[a.id].x, draftAtRef.current[a.id].y, a.kind)] : [])),
-                   ...draftTouched(dr, new Set(st.nodes.map((n) => n.id))).flatMap((id) => {
-                     const n = st.nodes.find((x) => x.id === id);
-                     return n ? [box(n.position.x, n.position.y, n.data.kind)] : [];
-                   })];
-    if (!boxes.length) return;
-    const { x: tx, y: ty, zoom } = rf.current.getViewport();
-    const ins = floatInsets(el);
-    const l = Math.min(...boxes.map((b) => b.x)), r = Math.max(...boxes.map((b) => b.x + b.w));
-    const t = Math.min(...boxes.map((b) => b.y)), bt = Math.max(...boxes.map((b) => b.y + b.h));
-    const seen = l * zoom + tx >= ins.left && r * zoom + tx <= el.clientWidth - ins.right && t * zoom + ty >= 0 && bt * zoom + ty <= el.clientHeight - ins.bottom;
-    if (seen) return;
-    const fitZoom = 0.9 * Math.min((el.clientWidth - ins.left - ins.right) / (r - l), (el.clientHeight - ins.bottom) / (bt - t));
-    const z = Math.max(0.2, Math.min(zoom, fitZoom));
-    rf.current.setCenter((l + r) / 2 + (ins.right - ins.left) / 2 / z, (t + bt) / 2 + ins.bottom / 2 / z, { zoom: z, duration: 250 });
-  }, [draftQ.draft]);
-  /** '말로' 탭을 열고 입력에 초점(명령 찾기 · 좁은 화면은 왼쪽 시트를 연다). */
-  const openSay = () => {
-    updatePanels((p) => (p.left ? p : toggle(p, "left")));
-    setLeftTab("say");
-    window.setTimeout(() => sayInput.current?.focus(), 80);
-  };
-  /** [받아들이기] — 미리 본 자리 그대로, 되돌리기 한 번(`applyDraft`). 새 노드와 값이 바뀐 노드로 맞춰 본다. 계산은 하지 않는다(길잡이가 권한다). */
-  const acceptDraft = (dr: DraftBody) => {
-    const st = usePortfolioGraph.getState();
-    const touched = draftTouched(dr, new Set(st.nodes.map((n) => n.id)));
-    let ok = false;
-    st.act(() => {
-      const r = st.applyDraft(dr, draftAt);
-      if (!r) return "캔버스가 바뀌어 초안을 받아들이지 못했어요 — 다시 말해 주세요.";
-      ok = true;
-      return `말씀대로 바꿨어요 — 노드 ${r.added}개 더함 · 선 ${r.connected}개 이음 · 값 ${r.set}개 넣음. 계산하면 결과가 나와요.`;
-    });
-    if (ok) fitIds([...dr.add.map((a) => a.id), ...touched]);
-  };
-  const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
-  const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
-  const live = useMemo(() => (s.report
-    ? (staleSet.size ? Object.fromEntries(Object.entries(s.report.nodes).filter(([id]) => !staleSet.has(id))) : s.report.nodes)
-    : null), [s.report, staleSet]);
-  // 미니맵 칸(CF5b) — 노드 단계(카탈로그)와 표시(고름 > 실패 > 막힘, 지금 결과만).
-  const stageOfNode = (id: string) => {
-    const kind = s.nodes.find((x) => x.id === id)?.data.kind;
-    return s.catalog?.find((c) => c.type === kind)?.stage ?? null;
-  };
-  const mmMark = (id: string): "picked" | "failed" | "blocked" | null =>
-    s.picked.includes(id) || s.selectedId === id ? "picked"
-      : live?.[id]?.status === "failed" ? "failed" : live?.[id]?.status === "blocked" ? "blocked" : null;
-  // BM C2 — 들어간 상자·필터가 켜지면 나머지를 흐린다(원인 경로가 켜져 있으면 그것이 먼저다).
-  const focusSet = useMemo(() => {
-    const g = s.groups.find((x) => x.id === s.focusGroup);
-    return g ? new Set(g.members) : null;
-  }, [s.groups, s.focusGroup]);
-  const filterSet = useMemo(() => {
-    if (!s.filters.length || !live) return null;
-    return new Set(s.nodes.map((n) => n.id).filter((id) => {
-      const r = live[id];
-      if (!r) return false;
-      return s.filters.some((f) => matchFilter(f, r));
-    }));
-  }, [s.filters, s.nodes, live]);
-  // BT2 — 절차 줄에 올린 동안은 그 단계 노드만 또렷하게(원인 경로가 켜져 있으면 그것이 먼저다).
-  const procSet = useMemo(() => (s.procHover ? new Set(s.procHover) : null), [s.procHover]);
-  const keep = cause ? causeSet : procSet ?? focusSet ?? filterSet;
-  /** 노드 → 그 노드가 든 접힌 상자(대리 포트로 선을 다시 그린다). */
-  const collapsedOf = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const g of s.groups) if (g.collapsed && g.id !== s.focusGroup) for (const id of g.members) m.set(id, g.id);
-    return m;
-  }, [s.groups, s.focusGroup]);
-  const portColor = useCallback((nodeId: string, handle: string | null | undefined, side: "in" | "out") => {
-    const kind = s.nodes.find((n) => n.id === nodeId)?.data.kind;
-    const entry = s.catalog?.find((c) => c.type === kind);
-    const p = (side === "out" ? entry?.outputs : entry?.inputs)?.find((x) => x.name === handle);
-    return { color: portTypeColor(p?.type), plain: p ? PORT_PLAIN[p.type] ?? p.name : handle ?? "?" };
-  }, [s.nodes, s.catalog]);
-  const bandOf = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const g of s.groups) if (g.kind === "strategy") for (const id of g.members) m.set(id, g.color ?? 0);
-    return m;
-  }, [s.groups]);
-
-  /** 전략(출력 노드)의 몫 — 이은 포트폴리오 노드 결과의 서버 값(`view.strategies[port].share_pct`). 계산 전·모르면 null. */
-  const shareByEdge = useCallback((target: string, port: string | null | undefined): number | null => {
-    const r = live?.[target];
-    if (!r || r.status !== "ok" || !port) return null;
-    const rows = (r.view?.strategies as { port: string; share_pct: unknown }[] | undefined) ?? [];
-    const v = rows.find((x) => x.port === port)?.share_pct;
-    return typeof v === "number" && Number.isFinite(v) ? v : null;
-  }, [live]);
-  /** 리밸런싱 주기의 쉬운 이름(BO O2) — 서버 x-ui 선택지. 카탈로그가 없으면 표시하지 않는다(지어내지 않는다). */
-  const rebalUi = useMemo(() => fieldsOf(s.catalog?.find((c) => c.type === PORTFOLIO_NODE)?.params_schema ?? null)
-    .find((f) => f.name === "rebalance")?.ui ?? null, [s.catalog]);
-  const shareOf = useCallback((output: string | null): { share: number | null; linked: boolean; rebalance: string | null } => {
-    const e = output ? s.edges.find((x) => x.source === output && s.nodes.find((n) => n.id === x.target)?.data.kind === PORTFOLIO_NODE) : undefined;
-    const pf = e ? s.nodes.find((n) => n.id === e.target) : undefined;
-    const set = (pf?.data.params.rebalance ?? {}) as Record<string, string>;
-    const code = e?.targetHandle ? set[e.targetHandle] ?? (rebalUi?.empty_value as string | undefined) : undefined;
-    return { share: e ? shareByEdge(e.target, e.targetHandle) : null, linked: !!e,
-             rebalance: code ? rebalUi?.options?.[code] ?? null : null };
-  }, [s.edges, s.nodes, shareByEdge, rebalUi]);
-
-  const numbered = useMemo(() => {
-    const num = new Map(order.map((id, i) => [id, i + 1]));
-    const picked = new Set(s.picked);
-    // 선택은 스토어가 진실 — 이야기 카드에서 고른 노드도, 상자로 여러 개 고른 노드도 캔버스에서 선택돼 보인다.
-    const cards: Node[] = s.nodes.map((n) => ({
-      ...n, hidden: collapsedOf.has(n.id), selected: picked.has(n.id) || n.id === s.selectedId,
-      className: [path.has(n.id) && "pg-on-path",
-                  keep && !keep.has(n.id) && "pg-dim",
-                  cause && causeSet.has(n.id) && "pg-on-cause",
-                  cause?.roots.includes(n.id) && "pg-cause-root"].filter(Boolean).join(" ") || undefined,
-      data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current, onNeed, onFix, onSocket },
-    }));
-    const frames: Node<GroupFrameData>[] = s.groups.map((g) => {
-      const ms = s.nodes.filter((n) => g.members.includes(n.id));
-      const strat = g.kind === "strategy";
-      const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
-      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 30;
-      // 상자 경계는 카드의 실제 폭·배치 높이로(BS2 — 예전 176·150 은 실제 카드와 달랐다).
-      const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) + GROUP_PAD;
-      const inside = new Set(g.members);
-      const collapsed = collapsedOf.has(g.members[0] ?? "") && !!g.collapsed;
-      const proxyIn = collapsed ? s.edges.filter((e) => inside.has(e.target) && !inside.has(e.source)).map((e) => {
-        const pc = portColor(e.target, e.targetHandle, "in");
-        return { id: `in|${e.target}|${e.targetHandle}`, label: pc.plain, color: pc.color };
-      }) : [];
-      const outs = new Map<string, { id: string; label: string; color: string }>();
-      if (collapsed) {
-        for (const e of s.edges.filter((x) => inside.has(x.source) && !inside.has(x.target))) {
-          const pc = portColor(e.source, e.sourceHandle, "out");
-          outs.set(`${e.source}|${e.sourceHandle}`, { id: `out|${e.source}|${e.sourceHandle}`, label: pc.plain, color: pc.color });
-        }
-      }
-      const dimmed = keep && !g.members.some((m) => keep.has(m));
-      // 접은 전략 카드는 전략의 출력 노드 자리에 선다(BO O5) — 포트폴리오로 가는 선이 전략 폭만큼 길어지지 않게.
-      // 자리는 여전히 노드에서 계산하므로 카드를 끌면 구성원이 함께 움직이는 규칙(차이만 옮김)은 그대로다.
-      const outNode = collapsed && strat && g.output ? ms.find((n) => n.id === g.output) : undefined;
-      const at = outNode ? { x: outNode.position.x, y: outNode.position.y } : { x: x0, y: y0 };
-      return { id: `frame:${g.id}`, type: PG_GROUP_TYPE, position: at, zIndex: -1, selectable: false,
-               className: dimmed ? "pg-dim" : undefined,
-               data: { groupId: g.id, label: g.label, collapsed, members: g.members, width: x1 - x0, height: y1 - y0,
-                       kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
-                       output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()],
-                       ...(strat ? shareOf(g.output ?? null) : { share: null, linked: false, rebalance: null }),
-                       onRunStrategy: runStrategyRef.current, onBranchStrategy: branchStrategyRef.current } };
-    });
-    // 갈래 틀(BM C3) — 복제 노드를 감싼 점선 상자. 바꾼 설정만 칩으로.
-    const branchFrames: Node<BranchFrameData>[] = s.branches.flatMap((b) => {
-      const ms = s.nodes.filter((n) => n.id in b.map);
-      if (!ms.length) return [];
-      const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
-      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 56;
-      const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) + GROUP_PAD;
-      const root = s.nodes.find((n) => n.id === b.of_root);
-      return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
-                className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined,
-                data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []),
-                        rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
-    });
-    return [...frames, ...branchFrames, ...cards];
-  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix, onSocket]);
-  /** 전달 점검 칩을 누르면(CF3b2) — 선을 누른 것과 같은 길(선 판) + 문제 줄로 내린다. */
-  const onFlag = useCallback((edgeId: string) => {
-    usePortfolioGraph.getState().selectEdge(edgeId);
-    updatePanels((p) => (p.right ? p : toggle(p, "right")));
-    requestAnimationFrame(() => document.querySelector('.pg-wire-row[data-row="issues"]')?.scrollIntoView({ block: "nearest" }));
-  }, [updatePanels]);
-  /** 한 노드만 골랐을 때 그 노드와 닿지 않은 선은 옅게(Houdini) — 흐리기 모드(원인·들어가기·필터)가 없을 때만. */
-  const faintOthers = !keep && s.picked.length <= 1 ? s.selectedId : null;
-  const edgesStyled = useMemo(() => {
-    // 선 요약은 ★원천 포트의 요약★이다 — 한 포트에서 여러 선이 나가면 같은 글이 겹쳐 쌓였다. 포트마다 한 번만(BS2).
-    const briefed = new Set<string>();
-    return s.edges.map((e) => {
-    const kind = s.nodes.find((n) => n.id === e.source)?.data.kind;
-    const out = s.catalog?.find((c) => c.type === kind)?.outputs.find((p) => p.name === e.sourceHandle);
-    const tkind = s.nodes.find((n) => n.id === e.target)?.data.kind;
-    const inp = s.catalog?.find((c) => c.type === tkind)?.inputs.find((p) => p.name === e.targetHandle);
-    const lit = path.has(e.source) && path.has(e.target);
-    const src = live?.[e.source];
-    const portKey = `${e.source}|${e.sourceHandle}`;
-    const firstFromPort = !briefed.has(portKey);
-    briefed.add(portKey);
-    const wire = wireOf(src, e.sourceHandle && firstFromPort ? src?.briefs?.[e.sourceHandle] : null);
-    const onCause = !!cause && causeSet.has(e.source) && causeSet.has(e.target);
-    const kept = !keep || (keep.has(e.source) && keep.has(e.target));
-    // 접힌 상자 — 안쪽끼리는 숨기고, 경계를 넘는 선은 상자의 대리 포트로(실제 링크는 그대로).
-    const gs = collapsedOf.get(e.source);
-    const gt = collapsedOf.get(e.target);
-    const remap = gs && gs === gt ? { hidden: true }
-      : { ...(gs ? { source: `frame:${gs}`, sourceHandle: `out|${e.source}|${e.sourceHandle}` } : {}),
-          ...(gt ? { target: `frame:${gt}`, targetHandle: `in|${e.target}|${e.targetHandle}` } : {}) };
-    const faint = faintOthers && e.source !== faintOthers && e.target !== faintOthers;
-    const look = wireLook({ required: inp?.required, lit, onCause, targetHasResult: !!s.report?.nodes[e.target],
-                            targetStale: staleSet.has(e.target), running: s.running, runningIds: s.runningIds });
-    const cls = ["pg-wire", look.required ? "pg-wire--req" : "pg-wire--opt", look.stale && "pg-wire--stale",
-                 look.flow && "pg-wire--flow", wire.evidence && `pg-wire--${wire.evidence}`, wire.forward && "pg-wire--forward",
-                 lit && "pg-edge--path", onCause && "pg-edge--cause", !kept && "pg-dim", faint && "pg-edge--faint",
-                 (gs || gt) && "pg-wire--proxy"].filter(Boolean).join(" ");
-    const typeLabel = out ? (s.catalogMeta?.portPlain ?? PORT_PLAIN)[out.type] ?? out.type : null;
-    return { ...e, ...remap, type: PG_WIRE_TYPE, data: { ...wire, typeLabel, hover: hoverEdge === e.id, flow: look.flow,
-                                                         flag: wireFlag(s.report?.edges?.[e.id], staleSet.has(e.target)), onFlag,
-                                                         waypoints: gs || gt ? [] : viaOf(e) },
-             selected: e.id === s.selectedEdge,
-             className: cls + (e.id === s.selectedEdge ? " pg-wire--picked" : "") + (e.id === dropWire ? " pg-wire--drop" : ""),
-             style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
-                      strokeWidth: look.width } };
-    });
-  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire]);
+  const { session, ai, aiStory, askTarget, aiQ, askFocus, draftQ, sayInput, draftAt, openSay, acceptDraft } =
+    useCanvasAi(s, doc, order, staleSet, rf, canvasEl, updatePanels, setLeftTab, fitIds);
+  const { cause, live, stageOfNode, mmMark, bandOf, numbered, onFlag, edgesStyled } =
+    useCanvasGraph(s, order, path, staleSet, { runToRef, previewRef, runStrategyRef, branchStrategyRef }, onNeed, onFix, onSocket,
+                   updatePanels, hoverEdge, dropWire);
   /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
   const strategySources = useMemo(() => {
     const cat = s.catalog ?? [];
@@ -960,59 +208,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     st.act(() => st.addStrategy(src));
     setStratOpen(false);
     fit();
-  }, []);
+  }, [fit]);
 
-  // 들어가기 — 그 상자에 맞춰 확대하고, 나오면 전체로.
-  useEffect(() => {
-    if (!rf.current) return;
-    const g = s.groups.find((x) => x.id === s.focusGroup);
-    if (g) setTimeout(() => fitClear(rf.current, canvasEl.current, { ids: g.members, maxZoom: 1.2, duration: 250 }), 30);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 들어가고 나올 때만
-  }, [s.focusGroup]);
+  useViewFollow(s, rf, canvasEl, ctx, leftShown, rightShown, setPanels);
   const focused = s.groups.find((g) => g.id === s.focusGroup);
-  // 고른 노드가 캔버스 위쪽 띠(선 범례·걸러 보기 판)에 있으면 도구줄이 그 판 밑에 깔린다 — 도구줄이 보이도록 판만 살짝 내린다(BP P1).
-  // 도구줄을 노드 아래로 뒤집으면 아래 노드를 가려 그 노드를 누르려던 손이 '갈래 만들기' 를 누른다(첫 시도에서 E2E 가 찾았다).
-  // 고른 노드가 떠 있는 판(BQ Q1) 밑에 있어도 판을 옆으로 옮겨 보이게 한다 — 이미 보이면 움직이지 않는다.
-  useEffect(() => {
-    const inst = rf.current;
-    const id = s.selectedId;
-    // 우클릭으로 고른 경우엔 움직이지 않는다 — 메뉴가 그 자리에 떠 있는데 판이 밀리면 가리키던 곳이 어긋난다(도구줄도 안 보인다).
-    if (!inst || !id || s.picked.length > 1 || ctx) return;
-    // 창이 막 열린 뒤의 폭을 재도록 한 박자 늦게.
-    const t = setTimeout(() => {
-      const n = inst.getInternalNode(id);
-      const el = canvasEl.current;
-      if (!n || !el) return;
-      const vp = inst.getViewport();
-      const top = n.internals.positionAbsolute.y * vp.zoom + vp.y;
-      const left = n.internals.positionAbsolute.x * vp.zoom + vp.x;
-      const right = left + (n.measured?.width ?? NODE_W) * vp.zoom;
-      const ins = floatInsets(el);
-      const need = fitTop(el) + TOOLBAR_H;
-      const dy = top < need ? need - top : 0;
-      let dx = 0;
-      const maxRight = el.clientWidth - ins.right - 16;
-      if (right > maxRight) dx = maxRight - right;
-      if (left + dx < ins.left + 16) dx = ins.left + 16 - left;
-      if (dx || dy) inst.setViewport({ ...vp, x: vp.x + dx, y: vp.y + dy }, { duration: 200 });
-    }, 0);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 고를 때·창이 열리고 닫힐 때만
-  }, [s.selectedId, rightShown, leftShown]);
-  // 노드를 고르면 오른쪽 창이 열린다 — × 로 닫았으면 다음에 고를 때 다시 열린다. 집중 모드(\)에서는 고르기만.
-  useEffect(() => {
-    if (s.selectedId) setPanels((p) => (p.focus || p.right ? p : { ...p, right: true }));
-  }, [s.selectedId]);
-  // 갈래를 막 만들었으면 원본 뿌리와 새 갈래가 함께 보이게 옮긴다(복제는 원본 아래에 놓인다).
-  const nBranches = useRef(s.branches.length);
-  useEffect(() => {
-    const grew = s.branches.length > nBranches.current;
-    nBranches.current = s.branches.length;
-    const b = s.branches[s.branches.length - 1];
-    if (!grew || !b || !rf.current) return;
-    const ids = [...Object.keys(b.map), ...Object.values(b.map)];
-    setTimeout(() => fitClear(rf.current, canvasEl.current, { ids, minZoom: 0.6, maxZoom: 1, duration: 250 }), 30);
-  }, [s.branches]);
 
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -1050,476 +249,22 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     if (rest.length) st.onNodesChange(rest);
   }, [numbered]);
 
-  // ── 작업 중 상태 보존(편의용 — 신뢰 저장이 아니다. 저장은 내보내기) ─────────
-  useEffect(() => {
-    if (!s.catalog) return;
-    try { sessionStorage.setItem(WIP_KEY, JSON.stringify(doc)); } catch { /* 용량 초과 등 — 편의 기능 */ }
-  }, [doc, s.catalog]);
+  const { setValidateTick } = useDocSync(doc, s.catalog);
 
-  // ── 구조가 바뀌면 서버 검증(위치 이동은 제외) ─────────────────────────
-  // 경유점(CF4c)은 화면 정보라 뺀다 — 점을 끌 때마다 다시 검증하지 않는다.
-  const structureKey = useMemo(() => JSON.stringify({
-    n: doc.nodes.map((n) => [n.id, n.type, n.params]), e: doc.edges.map((e) => [e.id, e.source, e.source_port, e.target, e.target_port]),
-  }), [doc]);
-  // BT2 — 빈 캔버스도 검증한다(서버가 절차의 첫 걸음을 준다). 서버에 닿지 못하면 절차를 지어내지 않고 그렇다고 말한다.
-  const [validateTick, setValidateTick] = useState(0);
-  useEffect(() => {
-    if (!s.catalog) { usePortfolioGraph.getState().setValidation(null); return; }
-    const t = setTimeout(() => {
-      portfolioGraphApi.validate(doc)
-        .then((v) => usePortfolioGraph.getState().setValidation(v))
-        .catch(() => { const g = usePortfolioGraph.getState(); g.setValidation(null); g.setValidationError(true); });
-    }, 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 위치 변화로는 다시 검증하지 않는다
-  }, [structureKey, s.catalog, validateTick]);
+  const { isValidConnection, onReconnectStart, onReconnect, onReconnectEnd } = useWireHandlers();
 
-  // ── 연결 규칙: 타입 일치 · 입력 하나에 링크 하나 · 순환 금지 ──────────────
-  // v12 는 선 다시 꽂기에도 같은 검사를 부르며 선(Edge)을 넘길 수 있다 — 연결 모양으로 맞춰 같은 규칙에 넣는다.
-  const isValidConnection = useCallback((c: Connection | Edge) => {
-    const conn: Connection = { source: c.source, target: c.target, sourceHandle: c.sourceHandle ?? null, targetHandle: c.targetHandle ?? null };
-    return !wireProblem(conn);
-  }, []);
-  // ── 선 끝 다시 꽂기(CF2) — 옮기는 선은 검사에서 뺀다(그 선 자신 때문에 거부되지 않게). 빈 곳에 놓으면 선은 그대로. ──
-  const onReconnectStart = useCallback((_: unknown, edge: Edge) => { usePortfolioGraph.getState().setReconnecting(edge.id); }, []);
-  const onReconnect = useCallback((old: Edge, c: Connection) => {
-    const st = usePortfolioGraph.getState();
-    if (st.reconnect(old.id, c)) st.setNote("선을 옮겨 꽂았어요.", true);
-  }, []);
-  const onReconnectEnd = useCallback((_: unknown, edge: Edge, __: unknown, fin: FinalConnectionState) => {
-    const st = usePortfolioGraph.getState();
-    const to = fin.toHandle;
-    if (to && !fin.isValid && fin.fromHandle) {
-      const from = fin.fromHandle;
-      const why = from.type === to.type
-        ? (from.type === "source" ? SAME_SIDE.source : SAME_SIDE.target)
-        : wireProblem(from.type === "source"
-            ? { source: from.nodeId, sourceHandle: from.id ?? null, target: to.nodeId, targetHandle: to.id ?? null }
-            : { source: to.nodeId, sourceHandle: to.id ?? null, target: from.nodeId, targetHandle: from.id ?? null });
-      if (why) st.setNote(`${why} 선은 그대로 두었어요.`);
-    }
-    st.setReconnecting(null);
-    void edge;
-  }, []);
+  const { addAt, onConnectStart, onConnectEnd, quickPick, compareCheck, pickedIsOneGroup, ctxItems } =
+    useQuickAdd(s, rf, canvasEl, addCount, connectFrom, quick, setQuick, ctx, fit, setFindOpen, runToRef);
 
-  // 클릭으로 추가하면 **보이는 캔버스의 가운데**에, 겹치지 않게 조금씩 비껴 놓는다.
-  const addAt = useCallback((kind: string, pos?: { x: number; y: number }) => {
-    let at = pos;
-    if (!at) {
-      const r = canvasEl.current?.getBoundingClientRect();
-      const k = addCount.current++ % 6;
-      at = r && rf.current
-        ? rf.current.screenToFlowPosition({ x: r.left + r.width / 2 + k * 28, y: r.top + r.height / 2 + k * 28 })
-        : { x: 200 + k * 28, y: 200 + k * 28 };
-    }
-    const st = usePortfolioGraph.getState();
-    // BT3 — 사람이 노드를 골라 둔 채 팔레트·명령으로 추가하면(끌어 놓은 자리가 없을 때) 그 노드 오른쪽에 놓고 잇는다.
-    if (!pos && st.pickedByUser && st.selectedId) {
-      const src = st.nodes.find((n) => n.id === st.selectedId);
-      const srcEntry = st.catalog?.find((c) => c.type === src?.data.kind);
-      const entry = st.catalog?.find((c) => c.type === kind);
-      const pair = srcEntry?.outputs.flatMap((o) => (entry?.inputs ?? []).filter((i) => i.type === o.type).map((i) => [o, i] as const))[0];
-      if (src && srcEntry && entry && pair) {
-        let id = "";
-        st.act(() => {
-          id = st.addLinked(kind, { x: src.position.x + COL, y: src.position.y }, { node: src.id, handle: pair[0].name, side: "source", port: pair[1].name });
-          return `‘${srcEntry.plain_label}’ 뒤에 이었어요.`;
-        });
-        st.setTab("settings");
-        return id;
-      }
-    }
-    const id = st.addNode(kind, at);
-    st.setTab("settings");
-    return id;
-  }, []);
 
-  // ── 선 끌어 놓기 빠른 추가(BN N3) — 포트에서 끌어 빈 곳에 놓으면 그 값을 이을 노드만 보인다 ──────────
-  const onConnectStart = useCallback((_: unknown, p: { nodeId: string | null; handleId: string | null; handleType: "source" | "target" | null }) => {
-    const st = usePortfolioGraph.getState();
-    const kind = st.nodes.find((n) => n.id === p.nodeId)?.data.kind;
-    const entry = st.catalog?.find((c) => c.type === kind);
-    const side = p.handleType ?? "source";
-    const port = (side === "source" ? entry?.outputs : entry?.inputs)?.find((x) => x.name === p.handleId);
-    connectFrom.current = p.nodeId && p.handleId && port ? { node: p.nodeId, handle: p.handleId, side, type: port.type } : null;
-  }, []);
-  const onConnectEnd = useCallback((e: MouseEvent | TouchEvent) => {
-    const from = connectFrom.current;
-    connectFrom.current = null;
-    if (usePortfolioGraph.getState().reconnecting) return;              // 다시 꽂기는 onReconnectEnd 가 말한다(빠른 추가도 열지 않음)
-    const target = e.target as Element | null;
-    // BT4 — 포트에 놓았는데 이을 수 없으면 왜 안 되는지 말한다(예전엔 조용히 거부했다).
-    const handle = target?.closest?.(".react-flow__handle") as HTMLElement | null;
-    if (from && handle) {
-      const st = usePortfolioGraph.getState();
-      const other = { node: handle.dataset.nodeid ?? null, handle: handle.dataset.handleid ?? null };
-      const c = from.side === "source"
-        ? { source: from.node, sourceHandle: from.handle, target: other.node, targetHandle: other.handle }
-        : { source: other.node, sourceHandle: other.handle, target: from.node, targetHandle: from.handle };
-      const onSameSide = handle.classList.contains(from.side);
-      const why = onSameSide ? SAME_SIDE[from.side] : wireProblem(c);
-      if (why) st.setNote(why);
-      return;
-    }
-    if (!from || !target?.classList.contains("react-flow__pane")) return;     // 포트에 놓았으면 평소의 연결
-    const pt = "changedTouches" in e ? e.changedTouches[0] : e;
-    const box = canvasEl.current?.getBoundingClientRect();
-    setQuick({ from, x: pt.clientX - (box?.left ?? 0), y: pt.clientY - (box?.top ?? 0), clientX: pt.clientX, clientY: pt.clientY });
-  }, []);
-  const quickPick = useCallback((kind: string, port: string | null) => {
-    const q = quick;
-    setQuick(null);
-    if (!q || !rf.current) return;
-    const at = rf.current.screenToFlowPosition({ x: q.clientX, y: q.clientY });
-    const st = usePortfolioGraph.getState();
-    if (q.from && port) {
-      // 입력에 이미 선이 있으면(입력 하나에 선 하나) 잇지 않고 놓기만 하고 말한다.
-      const taken = q.from.side === "target" && st.edges.some((e) => e.target === q.from!.node && e.targetHandle === q.from!.handle);
-      if (!taken) {
-        st.act(() => { st.addLinked(kind, at, { ...q.from!, port }); return "노드를 놓고 이었어요."; });
-        st.setTab("settings");
-        return;
-      }
-      st.addNode(kind, at);
-      st.setNote("노드를 놓았어요 — 그 입력에는 이미 선이 있어 잇지 않았어요.");
-      return;
-    }
-    addAt(kind, at);
-  }, [quick, addAt]);
+  const { applyLoad, loadTemplate, onDragOverCanvas, onDrop } = useCanvasDrop(rf, setFileNote, fit, setDragOver, setDropWire, addAt);
 
-  /** 우클릭 메뉴의 항목 — 노드면 노드 동작, 빈 곳이면 추가·붙여넣기·정리. 같은 동작이 명령 찾기에도 있다. */
-  const compareCheck = useMemo(() => compareTargets(s.picked, s.nodes, s.catalog ?? []), [s.picked, s.nodes, s.catalog]);
-  const pickedIsOneGroup = useMemo(() => s.groups.some((g) => g.members.length === s.picked.length
-    && s.picked.every((id) => g.members.includes(id))), [s.groups, s.picked]);
+  const { run, paletteNext, runTo, swapTo, runStale, startGoal } = useRunActions(s, stages, rf, canvasEl, setQuick, setGoalOpen, fit,
+    { needRef, socketRef, runToRef, runStrategyRef, branchStrategyRef, previewRef });
 
-  const ctxItems = useMemo((): MenuItem[] => {
-    if (!ctx) return [];
-    const st = usePortfolioGraph.getState();
-    if (!ctx.nodeId) {
-      return [
-        { key: "add-here", label: "여기에 노드 추가", icon: <Plus size={14} aria-hidden="true" />,
-          run: () => setQuick({ from: null, x: ctx.x, y: ctx.y, clientX: ctx.clientX, clientY: ctx.clientY }) },
-        { key: "paste", label: "붙여넣기", icon: <ClipboardPaste size={14} aria-hidden="true" />, disabled: !st.clip?.nodes.length,
-          run: () => { usePortfolioGraph.getState().paste(); } },
-        { key: "layout", label: "자동 정리", icon: <LayoutGrid size={14} aria-hidden="true" />, disabled: st.nodes.length === 0,
-          run: () => { usePortfolioGraph.getState().autoLayout(); fit(); } },
-        { key: "find", label: "노드 찾기 (Ctrl+F)", icon: <SearchIcon size={14} aria-hidden="true" />, run: () => setFindOpen(true) },
-      ];
-    }
-    const id = ctx.nodeId;
-    const r = st.staleIds.includes(id) ? undefined : st.report?.nodes[id];
-    const pinned = st.pinned.includes(id);
-    return [
-      { key: "run-to", label: "여기까지 계산", icon: <Play size={14} aria-hidden="true" />, disabled: st.running, run: () => runToRef.current(id) },
-      { key: "branch", label: "갈래 만들기", icon: <GitBranch size={14} aria-hidden="true" />,
-        run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.makeBranch(id)); } },
-      { key: "duplicate", label: "복제 (Ctrl+D)", icon: <Copy size={14} aria-hidden="true" />,
-        run: () => { usePortfolioGraph.getState().duplicateNode(id); } },
-      // BT6 — 바꿀 종류는 설정 판에서 고른다(메뉴는 그 칸으로 데려간다). 후보가 없으면 흐리게, 이유를 이름에.
-      ...(() => {
-        const none = swapCandidates(id, st.nodes, st.edges, st.catalog ?? []).length === 0;
-        return [{ key: "swap", label: none ? "다른 노드로 바꾸기 — 같은 선을 받는 다른 노드가 없어요" : "다른 노드로 바꾸기…",
-                  icon: <Replace size={14} aria-hidden="true" />, disabled: none,
-                  run: () => {
-                    const x = usePortfolioGraph.getState();
-                    x.select(id);
-                    x.setTab("settings");
-                    setTimeout(() => (document.querySelector(".pg-swap select") as HTMLSelectElement | null)?.focus(), 60);
-                  } }];
-      })(),
-      ...(st.picked.length > 1 && st.picked.includes(id)
-        ? [{ key: "compare", label: "고른 노드 견고성 비교", icon: <Scale size={14} aria-hidden="true" />,
-             run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.comparePicked()); } }] : []),
-      { key: "pin", label: pinned ? "그림 고정 풀기" : "그림 고정", icon: pinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />,
-        run: () => usePortfolioGraph.getState().togglePin(id) },
-      ...(r && r.status !== "ok" ? [{ key: "cause", label: "원인 따라가기", icon: <Route size={14} aria-hidden="true" />,
-                                      run: () => usePortfolioGraph.getState().showCause(id) }] : []),
-      { key: "remove", label: "지우기", icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
-        run: () => { const x = usePortfolioGraph.getState(); x.act(() => { x.removeNode(id); return "노드를 지웠어요."; }); } },
-    ];
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 메뉴를 열 때마다 새로 만든다
-  }, [ctx]);
-
-  const applyLoad = useCallback((r: ParseResult, fileName: string) => {
-    if (!r.doc) {
-      setFileNote(`「${fileName}」을 불러오지 않았어요 — ${r.problems.join(" ")} 캔버스는 그대로예요.`);
-      return;
-    }
-    usePortfolioGraph.getState().loadDoc(r.doc, r.problems);
-    setFileNote(`「${fileName}」을 불러왔어요 — 노드 ${r.doc.nodes.length}개, 링크 ${r.doc.edges.length}개.${overlapping() ? ` ${OVERLAP_NOTE}` : ""}`);
-    fit();
-  }, []);
-
-  const loadTemplate = useCallback((key: string) => {
-    const t = TEMPLATES.find((x) => x.key === key) ?? TEMPLATES[0];
-    const st = usePortfolioGraph.getState();
-    st.loadDoc(restackDoc(t.doc, st.catalog));
-    setFileNote(`‘${t.name}’을 불러왔어요. 종목·조건은 예시예요 — 노드를 눌러 바꿔 보세요.`);
-    fit();
-  }, []);
-
-  /**
-   * 선 위에 놓기(BT4, KNIME 식) — 끄는 점 아래의 선을 찾고, 그 선의 타입을 받아 같은 타입을 내는 종류일 때만 끼울 수 있다.
-   * 끼울 수 없으면 null — 그때는 예전처럼 그 자리에 놓는다(조용히 끼우지 않는다).
-   */
-  const insertSpot = useCallback((x: number, y: number, kind: string): { edge: string; i: string; o: string } | null => {
-    const st = usePortfolioGraph.getState();
-    const g = document.elementsFromPoint(x, y).map((el) => el.closest(".react-flow__edge")).find(Boolean);
-    const id = g?.getAttribute("data-testid")?.replace(/^rf__edge-/, "");
-    const e = id ? st.edges.find((x) => x.id === id) : undefined;
-    if (!e) return null;
-    const cat = st.catalog ?? [];
-    const type = cat.find((c) => c.type === st.nodes.find((n) => n.id === e.source)?.data.kind)
-      ?.outputs.find((p) => p.name === e.sourceHandle)?.type;
-    const k = cat.find((c) => c.type === kind);
-    const i = k?.inputs.find((p) => p.type === type);
-    const o = k?.outputs.find((p) => p.type === type);
-    return type && i && o ? { edge: e.id, i: i.name, o: o.name } : null;
-  }, []);
-  const onDragOverCanvas = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOver(e.dataTransfer.types.includes("Files"));
-    const t = e.dataTransfer.types.find((x) => x.startsWith(PALETTE_KIND_PREFIX));
-    const spot = t ? insertSpot(e.clientX, e.clientY, t.slice(PALETTE_KIND_PREFIX.length)) : null;
-    setDropWire((w) => (w === (spot?.edge ?? null) ? w : spot?.edge ?? null));
-  }, [insertSpot]);
-
-  const onDrop = useCallback(async (e: DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    setDropWire(null);
-    const file = e.dataTransfer.files?.[0];
-    if (file) { applyLoad(await readGraphFile(file), file.name); return; }
-    const kind = e.dataTransfer.getData(PALETTE_MIME);
-    if (!kind || !rf.current) return;
-    const spot = insertSpot(e.clientX, e.clientY, kind);
-    if (spot) {
-      const st = usePortfolioGraph.getState();
-      const at = rf.current.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      st.act(() => {
-        st.insertOnEdge(spot.edge, kind, spot.i, spot.o, { x: at.x - NODE_W / 2, y: at.y - 30 });
-        return "선 사이에 노드를 넣었어요.";
-      });
-      return;
-    }
-    addAt(kind, rf.current.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
-  }, [addAt, applyLoad, insertSpot]);
-
-  // 실행 줄(CF5a) — 진행은 곁줄로 받는다. 곁줄을 먼저 열고 계산한다(늦게 붙어도 서버가 쌓인 것부터 준다). 곁줄이 끊기면 그렇다고 말하고,
-  // 계산과 결과는 `/run` 이 그대로 낸다. 다음 계산을 시작하면 앞 곁줄은 닫는다.
-  const follower = useRef<AbortController | null>(null);
-  const run = useCallback(async (targets?: string[]) => {
-    const st = usePortfolioGraph.getState();
-    const ids = targets?.length ? ancestorsOf(targets, st.edges) : st.nodes.map((n) => n.id);
-    st.startRun(ids);
-    st.setOpenGate(null);
-    follower.current?.abort();
-    const ctl = new AbortController();
-    follower.current = ctl;
-    const rid = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-    portfolioGraphApi.followProgress(rid, (ev) => usePortfolioGraph.getState().applyRunEvent(ev), ctl.signal)
-      .catch(() => { if (!ctl.signal.aborted) usePortfolioGraph.getState().progressLost(); });
-    try {
-      st.finishRun(await portfolioGraphApi.run(toDoc(st.nodes, st.edges), targets?.length ? targets : undefined, rid));
-    } catch (e) {
-      st.finishRun(null, (e as Error).message);
-    }
-  }, []);
-  /** 지금 이을 수 있어요(BT6) — 사람이 고른 노드가 있을 때만(추가로 자동 선택된 노드에는 잇지 않으므로 보이지 않는다). */
-  const paletteNext = useMemo(() => {
-    const sel = s.pickedByUser ? s.nodes.find((n) => n.id === s.selectedId) : undefined;
-    const entry = sel && s.catalog?.find((c) => c.type === sel.data.kind);
-    return entry && s.catalog ? { from: entry.plain_label, items: nextKinds(entry.type, s.catalog, stages.map((x) => x.key)) } : null;
-  }, [s.pickedByUser, s.selectedId, s.nodes, s.catalog, stages]);
-  const runTo = useCallback((id: string) => run([id]), [run]);
-  /** 바꿔 끼우기(BT6) — 되돌리기 한 번. 설정이 기본값이 된다는 것을 토스트가 말한다. */
-  const swapTo = useCallback((id: string, kind: string) => {
-    const st = usePortfolioGraph.getState();
-    const name = (k?: string) => st.catalog?.find((c) => c.type === k)?.plain_label ?? k ?? "";
-    const from = name(st.nodes.find((n) => n.id === id)?.data.kind);
-    st.act(() => (st.swapNode(id, kind)
-      ? `${josa(`‘${from}’`, ["을", "를"])} ${euro(`‘${name(kind)}’`)} 바꿨어요 — 선과 자리는 그대로, 설정은 기본값이에요.`
-      : "바꿀 수 없어요 — 지금 선을 그대로 받을 수 없는 노드예요."));
-  }, []);
-  /** 바뀐 곳만 계산(BT5) — 낡은 노드들을 목표로 하는 부분 계산("여기까지 계산" 과 같은 길). 관문은 부분 계산이라 내지 않는다(기존 사유 문구). */
-  const runStale = useCallback(() => {
-    const ids = usePortfolioGraph.getState().staleIds;
-    return ids.length ? run(ids) : Promise.resolve();
-  }, [run]);
-  /** 목표로 시작 — 답으로 조립한 흐름을 싣고(되돌리기 가능), 흐름 순서대로 한 번 자라나게 한 뒤 곧바로 계산한다. */
-  const startGoal = useCallback((goal: Parameters<typeof goalDoc>[0], tickers: string[], lookback: number | null,
-                                 riskAversion: number | null) => {
-    const st = usePortfolioGraph.getState();
-    st.act(() => {
-      st.loadDoc(restackDoc(goalDoc(goal, tickers, lookback, riskAversion), st.catalog));
-      return "답으로 흐름을 만들었어요 — 계산하고 있어요. 노드를 눌러 설정을 바꿀 수 있어요.";
-    });
-    setGoalOpen(false);
-    st.setGrowing(true);
-    setTimeout(() => usePortfolioGraph.getState().setGrowing(false), 1800);
-    fit();
-    void run();
-  }, [run]);
-  needRef.current = (id, port, type) => {
-    const el = canvasEl.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
-    const box = canvasEl.current?.getBoundingClientRect();
-    if (!el || !box) return;
-    const r = el.getBoundingClientRect();
-    const cx = Math.max(box.left + 8, r.left - COL * (rf.current?.getZoom() ?? 1));
-    setQuick({ from: { node: id, handle: port, side: "target", type }, x: r.left - box.left, y: r.bottom - box.top + 6,
-               clientX: cx, clientY: r.top });
-  };
-  socketRef.current = (id, port, type, side) => {
-    if (side === "in") { needRef.current(id, port, type); return; }
-    const el = canvasEl.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
-    const box = canvasEl.current?.getBoundingClientRect();
-    if (!el || !box) return;
-    const r = el.getBoundingClientRect();
-    setQuick({ from: { node: id, handle: port, side: "source", type }, x: r.right - box.left + 6, y: r.top - box.top,
-               clientX: r.left + COL * (rf.current?.getZoom() ?? 1), clientY: r.top });
-  };
-  runToRef.current = (id) => { if (!usePortfolioGraph.getState().running) void runTo(id); };
-  // 이 전략만 계산(BN N1) — 전략 구성원 중 하류가 전략 안에 없는 노드(출력·잎)를 대상으로 부분 계산.
-  runStrategyRef.current = (groupId) => {
-    const st = usePortfolioGraph.getState();
-    const g = st.groups.find((x) => x.id === groupId);
-    if (!g || st.running) return;
-    const inside = new Set(g.members);
-    const targets = g.members.filter((m) => !st.edges.some((e) => e.source === m && inside.has(e.target)));
-    if (targets.length) void run(targets);
-  };
-  branchStrategyRef.current = (groupId) => {
-    const st = usePortfolioGraph.getState();
-    st.act(() => st.makeBranch("", groupId));
-  };
-  previewRef.current = (id) => {
-    const st = usePortfolioGraph.getState();
-    st.setPreview(id ? ancestorsOf([id], st.edges) : null);
-  };
-
-  // 단축키 — 입력 칸에 있을 때는 가로채지 않는다. Ctrl/⌘+Enter 계산 · Ctrl/⌘+D 복제 · Esc 관문 닫기.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
-      if (t?.closest("dialog")) return;                   // 서랍·명령 찾기 안의 키는 그 대화상자 몫이다
-      const st = usePortfolioGraph.getState();
-      const mod = e.ctrlKey || e.metaKey;
-      const k = e.key.toLowerCase();
-      if (mod && k === "k") { e.preventDefault(); setCmdOpen(true); }
-      else if (mod && k === "f") { e.preventDefault(); setFindOpen(true); }
-      else if ((e.key === "?" || (e.key === "/" && e.shiftKey)) && !mod) { e.preventDefault(); setKeysOpen(true); }
-      else if (mod && e.key === "Enter" && !st.running) { e.preventDefault(); void run(); }
-      else if (e.shiftKey && e.key === "Enter" && !st.running && st.selectedId) { e.preventDefault(); void runTo(st.selectedId); }
-      else if (mod && k === "z" && !e.shiftKey) { e.preventDefault(); st.undo(); }
-      else if (mod && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); st.redo(); }
-      else if (mod && k === "c") { if (st.copy()) e.preventDefault(); }
-      else if (mod && k === "v") { if (st.paste()) e.preventDefault(); }
-      else if (mod && k === "g") { e.preventDefault(); st.groupPicked(); }
-      else if (mod && k === "d" && st.selectedId) { e.preventDefault(); st.duplicateNode(st.selectedId); }
-      else if (!mod && !e.altKey && e.key === "[") { e.preventDefault(); updatePanels((p) => toggle(p, "left")); }
-      else if (!mod && !e.altKey && e.key === "]") { e.preventDefault(); updatePanels((p) => toggle(p, "right")); }
-      else if (!mod && !e.altKey && e.key === "\\") { e.preventDefault(); updatePanels((p) => toggle(p, "focus")); }
-      else if (e.key === "Escape" && st.cause) st.showCause(null);
-      else if (e.key === "Escape" && st.focusGroup) { st.setFocusGroup(null); fit(); }
-      else if (e.key === "Escape" && st.openGate) st.setOpenGate(null);
-      else if (e.altKey && e.key.startsWith("Arrow") && st.selectedId) {
-        // 키보드로 노드 사이 이동(접근성) — ←→ 선을 따라 앞·뒤 단계, ↑↓ 흐름 번호 순서.
-        const next = neighbour(st.selectedId, e.key, st.nodes, st.edges);
-        if (next) { e.preventDefault(); focusRef.current(next); }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [run, runTo, updatePanels]);
-
-  // 단계 레인(CF4b) — 켬/끔은 이 브라우저에 남긴다. 맞추기는 되돌리기 한 번 + 맞춰 보기.
-  const toggleLanes = () => {
-    const v = !usePortfolioGraph.getState().showLanes;
-    usePortfolioGraph.getState().setLanes(v);
-    saveView({ ...readView(), lanes: v });
-  };
-  const fitToLanes = () => { usePortfolioGraph.getState().fitToLanes(); fit(); };
-  // 미니맵(CF5b) — 도구줄·명령 찾기·모서리 [접기]가 같은 켬/끔을 쓰고, 이 브라우저에 남긴다.
-  const toggleMinimap = () => {
-    const v = !usePortfolioGraph.getState().showMinimap;
-    usePortfolioGraph.getState().setMinimap(v);
-    saveView({ ...readView(), minimap: v });
-  };
-  // 선 모양(CF4c) — 보기만 바꾼다. 이 브라우저에 남긴다.
-  const setWire = (w: WireShape) => { usePortfolioGraph.getState().setWireShape(w); saveView({ ...readView(), wire: w }); };
-  const toggleGhosts = () => {
-    const v = !usePortfolioGraph.getState().showGhosts;
-    usePortfolioGraph.getState().setShowGhosts(v);
-    saveView({ ...readView(), ghosts: v });
-  };
-
-  const multiPicked = s.picked.length > 1;
-  const commands = useMemo<PaletteCommand[]>(() => [
-    { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
-    { id: "find", group: "보기", label: "캔버스에서 노드 찾기", keys: "Ctrl+F", run: () => setFindOpen(true) },
-    { id: "keys", group: "도움말", label: "단축키 보기", keys: "?", run: () => setKeysOpen(true) },
-    ...(s.selectedId ? [
-      { id: "dup", group: "편집", label: "고른 노드 복제", keys: "Ctrl+D", run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.duplicateNode(st.selectedId); } },
-      { id: "pin", group: "보기", label: s.pinned.includes(s.selectedId) ? "고른 노드 그림 고정 풀기" : "고른 노드 그림 고정",
-        run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.togglePin(st.selectedId); } },
-      { id: "remove", group: "편집", label: "고른 노드 지우기", keys: "Delete",
-        run: () => { const st = usePortfolioGraph.getState(); const id = st.selectedId; if (id) st.act(() => { st.removeNode(id); return "노드를 지웠어요."; }); } },
-    ] : []),
-    { id: "goal", group: "시작", label: "목표로 새로 시작", hint: "무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 계산해요",
-      run: () => setGoalOpen(true) },
-    { id: "simple", group: "보기", label: s.simple ? "캔버스로 돌아가기" : "간단히 보기", hint: "노드 없이 정할 것과 결과만 봐요",
-      run: () => { const st = usePortfolioGraph.getState(); st.setSimple(!st.simple); } },
-    ...(s.selectedId ? [{ id: "run-to", group: "계산", label: "고른 노드까지 계산", keys: "Shift+Enter",
-                          run: () => void runTo(usePortfolioGraph.getState().selectedId!) }] : []),
-    { id: "undo", group: "편집", label: "되돌리기", keys: "Ctrl+Z", run: () => usePortfolioGraph.getState().undo() },
-    { id: "redo", group: "편집", label: "다시하기", keys: "Ctrl+Shift+Z", run: () => usePortfolioGraph.getState().redo() },
-    { id: "layout", group: "보기", label: "자동 정리", hint: "흐름 순서대로 왼쪽에서 오른쪽으로 놓아요",
-      run: () => { usePortfolioGraph.getState().autoLayout(); fit(); } },
-    { id: "panel-left", group: "보기", label: leftShown ? "왼쪽 목록 닫기" : "왼쪽 목록 열기", keys: "[",
-      run: () => updatePanels((p) => toggle(p, "left")) },
-    { id: "panel-right", group: "보기", label: rightShown ? "오른쪽 창 닫기" : "오른쪽 창 열기", keys: "]",
-      run: () => updatePanels((p) => toggle(p, "right")) },
-    { id: "panel-focus", group: "보기", label: panels.focus ? "집중 끝내기" : "집중해서 보기", keys: "\\",
-      hint: "왼쪽 목록과 오른쪽 창을 잠시 모두 닫아요", run: () => updatePanels((p) => toggle(p, "focus")) },
-    { id: "minimap", group: "보기", label: s.showMinimap ? "미니맵 끄기" : "미니맵 켜기",
-      run: toggleMinimap },
-    { id: "lanes", group: "보기", label: s.showLanes ? "단계 레인 끄기" : "단계 레인 보기", hint: "흐름 단계 여섯을 왼쪽에서 오른쪽 세로 띠로 깔아요",
-      run: toggleLanes },
-    ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드마다 자기 단계 띠 안으로 옮겨요", run: fitToLanes }] : []),
-    { id: "ghosts", group: "보기", label: s.showGhosts ? "추천 유령 끄기" : "추천 유령 보기",
-      hint: "서버 규칙이 고른 다음 노드를 붙일 자리에 반투명하게 보여요", run: toggleGhosts },
-    ...(s.selectedId || s.selectedEdge ? [{ id: "ask-here", group: "AI", label: s.selectedId ? "고른 노드에게 묻기" : "고른 선에게 묻기",
-      hint: "오른쪽 창 아래 칸에서 계산 결과에 대해 Claude 에게 물어요(로그인 · 계산한 뒤)",
-      run: () => { updatePanels((p) => (p.right ? p : toggle(p, "right"))); window.setTimeout(() => askFocus.current(), 60); } }] : []),
-    { id: "say", group: "AI", label: "말로 설계", hint: "말로 지금 캔버스를 고치는 초안을 받아요(로그인 · 받아들일 때만 바뀌어요)",
-      run: openSay },
-    { id: "ai-ask", group: "추천", label: "AI 에게 다음 노드 묻기",
-      hint: "지금 그래프를 Claude 에게 보내 다음에 붙일 노드를 물어요(로그인 · 누를 때만)", run: () => { void ai.ask(); } },
-    ...WIRE_SHAPES.map((w) => ({ id: `wire:${w.shape}`, group: "보기", label: `선 모양: ${w.label}`,
-                                 hint: "선을 두 번 누르면 경유점을 끼워 길을 바꿀 수 있어요", run: () => setWire(w.shape) })),
-    { id: "group", group: "편집", label: "고른 노드 묶기", keys: "Ctrl+G", hint: "노드를 두 개 이상 고르면 돼요",
-      run: () => usePortfolioGraph.getState().groupPicked() },
-    ...(s.selectedId ? [{ id: "branch", group: "비교", label: "고른 노드에서 갈래 만들기",
-                          hint: "그 노드와 하류를 복제해 설정만 바꿔 나란히 봐요(한 노드에 4개까지)",
-                          run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.act(() => st.makeBranch(st.selectedId!)); } }] : []),
-    ...(multiPicked ? [{ id: "branch-picked", group: "비교", label: "고른 노드째 갈래 만들기",
-                                 hint: "고른 노드만 복제해 설정을 바꿔 나란히 봐요 — 뿌리는 흐름 맨 앞(한 뿌리에 4개까지)",
-                                 run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.branchPicked()); } }] : []),
-    { id: "strategy-picked", group: "전략", label: "고른 노드를 전략으로 묶기", hint: "비중을 내는 노드가 들어 있어야 해요",
-      run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.strategyPicked()); } },
-    { id: "compare-picked", group: "비교", label: "고른 노드 견고성 비교",
-      hint: "비중을 내는 노드 2~4개를 골라, 평소·위기 때 같이 움직이는지와 크게 잃은 구간이 겹치는지 봐요",
-      run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.comparePicked()); } },
-    ...strategySources.map((x) => ({ id: `strategy:${x.key}`, group: "전략", label: `전략 추가: ${x.label}`, hint: x.sub,
-                                     run: () => addStrategy(x.src) })),
-    ...DRAWERS.map((d) => ({ id: `drawer:${d.key}`, group: "서랍", label: `${d.label} 열기`, hint: d.sub,
-                             run: () => setDrawer(d.key) })),
-    ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
-                               run: () => loadTemplate(t.key) })),
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.selectedEdge, multiPicked, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  const { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, commands } = useCanvasCommands(s, {
+    run, runTo, updatePanels, fit, setCmdOpen, setFindOpen, setKeysOpen, setGoalOpen, setDrawer, focusRef, askFocus,
+    leftShown, rightShown, panels, cmdOpen, openSay, ai, strategySources, addStrategy, loadTemplate });
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -1701,91 +446,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   return (
     <div className="pg-root pg-theme" data-left={leftShown ? "open" : "closed"} data-right={rightShown ? "open" : "closed"}
          data-simple={s.simple || undefined} data-tight={tight || undefined} style={{ "--pg-right-w": `${panels.rightW}px` } as CSSProperties}>
-      <header className="pg-toolbar">
-        <h1 className="pg-title">포트폴리오 설계</h1>
-
-        <div className="pg-edit-tools" role="toolbar" aria-label="편집">
-          <button type="button" className="pg-icon-tool" aria-label="되돌리기 (Ctrl+Z)" title="되돌리기 (Ctrl+Z)"
-                  disabled={s.past.length === 0} onClick={s.undo}><Undo2 size={16} /></button>
-          <button type="button" className="pg-icon-tool" aria-label="다시하기 (Ctrl+Shift+Z)" title="다시하기 (Ctrl+Shift+Z)"
-                  disabled={s.future.length === 0} onClick={s.redo}><Redo2 size={16} /></button>
-          <button type="button" className="pg-icon-tool" aria-label="자동 정리" title="자동 정리"
-                  disabled={s.nodes.length === 0} onClick={() => { s.autoLayout(); fit(); }}><LayoutGrid size={16} /></button>
-          <button type="button" className="pg-icon-tool" aria-label="고른 노드 묶기 (Ctrl+G)" title="고른 노드 묶기 (Ctrl+G)"
-                  disabled={s.picked.length < 2} onClick={() => s.groupPicked()}><Boxes size={16} /></button>
-          <button type="button" className="pg-icon-tool pg-goal-open" aria-label="목표로 시작" title="목표로 시작 — 무엇을 하려는지 고르면 흐름을 만들어 계산해요"
-                  disabled={!s.catalog} onClick={() => setGoalOpen(true)}><Sparkles size={16} /></button>
-          <button type="button" className={`pg-icon-tool pg-simple-toggle${s.simple ? " on" : ""}`} aria-pressed={s.simple}
-                  aria-label="간단히 보기" title="간단히 보기 — 노드 없이 정할 것과 결과만" onClick={() => s.setSimple(!s.simple)}>
-            <LayoutList size={16} />
-          </button>
-          <span className="pg-strat-menu-wrap">
-            <button type="button" className="pg-strat-add" aria-haspopup="menu" aria-expanded={stratOpen}
-                    disabled={!s.catalog} onClick={() => setStratOpen((o) => !o)}>
-              <Plus size={15} aria-hidden="true" />전략 추가
-            </button>
-            {stratOpen && (
-              <div className="pg-strat-menu" role="menu" aria-label="전략 추가">
-                <p className="pg-strat-menu-h">새 전략 띠로 넣고 ‘전략 합치기’에 이어요</p>
-                {strategySources.map((x) => (
-                  <button key={x.key} type="button" role="menuitem" className="pg-strat-item" data-source={x.key}
-                          onClick={() => addStrategy(x.src)}>
-                    <b>{x.label}</b><span>{x.sub}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </span>
-          <button type="button" className={`pg-icon-tool${s.showMinimap ? " on" : ""}`} aria-pressed={s.showMinimap}
-                  aria-label="미니맵" title="미니맵" onClick={toggleMinimap}><MapIcon size={16} /></button>
-          <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} wire={s.wireShape} onWire={setWire}
-                    ghosts={s.showGhosts} onGhosts={toggleGhosts} />
-          <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
-                  onClick={() => setCmdOpen(true)}><Command size={16} /></button>
-        </div>
-        <NameWithGoal name={s.name} onName={s.setName} goal={s.goal} onGoal={s.setGoal} />
-        <span className="pg-toolbar-spacer" />
-        {nErrors > 0 && <span className="pg-summary pg-summary--err">설정을 확인할 곳이 {nErrors}군데 있어요</span>}
-        {s.reportStale && (
-          <span className="pg-summary pg-summary--stale" data-count={s.staleIds.length}>
-            예전 결과 {s.staleIds.length}개
-            <button type="button" className="pg-stale-run" disabled={s.running} onClick={() => void runStale()}
-                    title="바뀐 노드와 그 하류만 다시 계산해요">바뀐 곳만 계산</button>
-          </span>
-        )}
-        {s.report?.partial && !s.reportStale && (
-          <span className="pg-summary pg-summary--partial">여기까지 계산 · {s.report.partial.computed.length}개</span>
-        )}
-        {s.report && !s.reportStale && !s.report.partial && (
-          <span className="pg-summary">
-            완료 {Object.values(s.report.nodes).filter((r) => r.status === "ok").length} · 막힘{" "}
-            {Object.values(s.report.nodes).filter((r) => r.status === "blocked").length} · 실패{" "}
-            {Object.values(s.report.nodes).filter((r) => r.status === "failed").length}
-            {/* 좁은 화면에서도 누르지 않고 보이는 연습용 표시(BQ Q1) — 오른쪽 창이 닫혀 있고 노드 칩이 멀리 확대에서 숨어도 합성 수가 실데이터처럼 읽히지 않게. */}
-            {Object.values(s.report.nodes).some((r) => r.lineage?.practice) && (
-              <b className="pg-summary-practice" title="연습용 합성 데이터로 계산한 결과예요 — 실제 시세가 아니에요"> · 연습용</b>
-            )}
-          </span>
-        )}
-        <MoreMenu drawers={DRAWERS} onDrawer={(k) => setDrawer(k as DrawerKey)} onImport={applyLoad} canExport={s.nodes.length > 0}
-                  getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, ...(s.goal ? { goal: s.goal } : {}), exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)} />
-        <nav className="pg-drawers" aria-label="서랍">
-          {DRAWERS.map((d) => (
-            <button key={d.key} type="button" className="pg-drawer-open" aria-haspopup="dialog" title={d.sub}
-                    aria-expanded={drawer === d.key} onClick={() => setDrawer(d.key)}>
-              <d.Icon size={15} aria-hidden="true" /><span className="pg-tl">{d.label}</span>
-            </button>
-          ))}
-        </nav>
-        {topExtra}
-        <ImportControl onLoad={applyLoad} />
-        <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, ...(s.goal ? { goal: s.goal } : {}), exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)}
-                      disabled={s.nodes.length === 0} />
-        <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"
-                disabled={s.running || !s.catalog || s.nodes.length === 0}>
-          {s.running ? <><Loader2 size={14} className="spin" /> 계산하는 중{s.runningIds ? ` · ${s.runningIds.length}개` : ""}</> : "계산하기"}
-        </button>
-      </header>
+      <CanvasToolbar s={s} fit={fit} setGoalOpen={setGoalOpen} stratOpen={stratOpen} setStratOpen={setStratOpen}
+                     strategySources={strategySources} addStrategy={addStrategy} toggleMinimap={toggleMinimap} toggleLanes={toggleLanes}
+                     fitToLanes={fitToLanes} setWire={setWire} toggleGhosts={toggleGhosts} setCmdOpen={setCmdOpen} nErrors={nErrors}
+                     runStale={runStale} applyLoad={applyLoad} drawer={drawer} setDrawer={setDrawer} topExtra={topExtra} run={run} />
 
 
       {s.catalogError && (
@@ -2080,99 +744,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
                      })} />
           )}
         </div>
-        <aside className="pg-side" aria-label="설명과 설정" hidden={!rightShown}>
-          <SideResize width={panels.rightW} onChange={(w, done) => (done ? updatePanels : setPanels)((p) => ({ ...p, rightW: w }))} />
-          <header className="pg-side-head">
-            <h2 className="pg-side-title">
-              {selected ? (
-                <>
-                  <b className="pg-side-num" style={{ background: STAGE_VAR[selEntry?.stage ?? ""] ?? "var(--pg-st-data)" }}>{order.indexOf(selected.id) + 1}</b>
-                  <span>{selEntry?.plain_label ?? selected.data.kind}</span>
-                </>
-              ) : selEdge ? <span>선</span> : <span>이 설계 한눈에</span>}
-            </h2>
-            <button type="button" className="pg-panel-toggle" data-panel="right" aria-label="오른쪽 창 닫기 (])" title="오른쪽 창 닫기 (])"
-                    onClick={() => updatePanels((p) => toggle(p, "right"))}><PanelRightClose size={18} aria-hidden="true" /></button>
-          </header>
-          <nav className="pg-tabs" role="tablist">
-            {TABS.filter(([k]) => (k !== "branches" || s.branches.length > 0) && (k !== "wire" || !!selEdge)).map(([k, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={s.tab === k}
-                      className={`pg-tab${s.tab === k ? " on" : ""}`} data-tab={k} onClick={() => s.setTab(k)}>{label}</button>
-            ))}
-          </nav>
-          <div className="pg-panel">
-            {s.tab === "story" && (
-              <StoryPanel order={order} nodes={s.nodes} catalog={s.catalog ?? []} results={s.report?.nodes ?? null}
-                          staleIds={staleSet} selectedId={s.selectedId} onSelect={focusNode}
-                          onDetail={(id) => { focusNode(id); s.setTab("detail"); }}
-                          top={<AiStory session={session} story={aiStory} badge={nodeBadge} onSelect={focusNode} />} />
-            )}
-            {s.tab === "branches" && (
-              <BranchCompare branches={s.branches} nodes={s.nodes} catalog={s.catalog ?? []}
-                             results={s.report?.nodes ?? null} staleIds={staleSet} />
-            )}
-            {s.tab === "wire" && selEdge && (
-              <WirePanel edge={selEdge} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []} results={s.report?.nodes ?? null}
-                         stale={staleSet.has(selEdge.source)} errors={s.validation?.errors ?? []} plain={s.catalogMeta?.portPlain ?? PORT_PLAIN}
-                         order={order} onFocus={focusNode}
-                         relation={(s.report && !staleSet.has(selEdge.source) ? s.report.relations?.[selEdge.id] : null)
-                                   ?? s.validation?.relations?.[selEdge.id] ?? null}
-                         record={s.report && !staleSet.has(selEdge.target) ? s.report.edges?.[selEdge.id] ?? null : null}
-                         recordGap={!s.report ? null : staleSet.has(selEdge.target) ? "받는 노드가 예전 결과예요 — 다시 계산하면 점검해요."
-                           : s.report.nodes[selEdge.source]?.status !== "ok" ? "보내는 노드가 계산되지 않아 점검하지 않았어요."
-                           : "받는 노드를 이번에 계산하지 않아 점검하지 않았어요."}
-                         onCut={() => { const st = usePortfolioGraph.getState(); st.act(() => { st.cutEdge(selEdge.id); return "선을 끊었어요."; }); }}
-                         onInsert={(k, i, o) => { const st = usePortfolioGraph.getState();
-                           st.act(() => { st.insertOnEdge(selEdge.id, k, i, o); return "선 사이에 노드를 넣었어요."; }); }} />
-            )}
-            {s.tab !== "story" && s.tab !== "branches" && s.tab !== "wire" && !selected && (
-              <p className="pg-empty">캔버스나 이야기에서 노드를 하나 골라 주세요.</p>
-            )}
-            {s.tab === "settings" && selected && (
-              <SettingsPanel node={selected} entry={selEntry} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []}
-                             stageLabel={stages.find((x) => x.key === selEntry?.stage)?.label ?? null}
-                             expert={s.expert} onExpert={s.setExpert}
-                             onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.removeNode(selected.id)}
-                             onDuplicate={() => s.duplicateNode(selected.id)}
-                             result={selResult} stale={staleSet.has(selected.id)}
-                             onFocus={focusNode} onImpact={s.setProcHover} onSwap={(k) => swapTo(selected.id, k)}
-                             onRewire={(port, src, h) => {
-                               const st = usePortfolioGraph.getState();
-                               st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 이었어요." : "선을 뗐어요."; });
-                             }}
-                             onSave={() => portfolioGraphApi.save(toDoc(s.nodes, s.edges), selected.id, selResult?.view_hash ?? "")}
-                             saveFollowUp={selected.data.kind === "backtest_setup" ? {
-                               label: "결과 불러오기 노드 추가",
-                               run: (runId) => {
-                                 // 시작한 실행을 읽는 노드를 설정 노드 오른쪽에 붙이고 고른다 — 링크는 없다(읽기는 run_id 로 한다).
-                                 const st = usePortfolioGraph.getState();
-                                 const id = st.addNode("backtest_load", { x: selected.position.x + COL, y: selected.position.y });
-                                 st.updateParams(id, { run_id: runId });
-                                 st.select(id);
-                               },
-                             } : null} />
-            )}
-            {s.tab === "detail" && selected && (
-              <>
-              <NodeResultPanel
-                kind={selected.data.kind}
-                result={selResult}
-                stale={staleSet.has(selected.id)}
-                params={selected.data.params}
-                onReload={() => void runTo(selected.id)}
-              />
-              <h4 className="pg-h4 pg-history-h">계산 기록</h4>
-              <RunHistory nodeId={selected.id} runs={s.runs} />
-              </>
-            )}
-          </div>
-          {askTarget && (askTarget.kind === "node" ? !!selected : !!selEdge) && (
-            <AiQuestion q={aiQ} session={session} badge={nodeBadge} focusRef={askFocus}
-                        target={askTarget.kind === "node" ? askTarget : { ...askTarget, source: selEdge!.source, targetNode: selEdge!.target }}
-                        onRunTo={(id) => void runTo(id)} onGotoNode={focusNode}
-                        onGotoEdge={(id) => usePortfolioGraph.getState().selectEdge(id)} />
-          )}
-        </aside>
+        <RightPanel s={s} rightShown={rightShown} panels={panels} updatePanels={updatePanels} setPanels={setPanels} selected={selected}
+                    selEdge={selEdge} selEntry={selEntry} selResult={selResult} order={order} staleSet={staleSet} stages={stages}
+                    focusNode={focusNode} nodeBadge={nodeBadge} session={session} aiStory={aiStory} askTarget={askTarget} aiQ={aiQ}
+                    askFocus={askFocus} swapTo={swapTo} runTo={runTo} />
         {!rightShown && (
           <button type="button" className="pg-side-fab" aria-label="오른쪽 창 열기 (])" title="이야기·설정 창 열기 (])"
                   onClick={() => updatePanels((p) => toggle(p, "right"))}><PanelRightOpen size={18} aria-hidden="true" /></button>
@@ -2192,31 +767,5 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   );
 }
 
-/** 오른쪽 창 폭 손잡이(BQ Q1) — 끌거나, 초점을 두고 ←(넓게)·→(좁게)·Home·End. 300~600px. 끝났을 때만 이 브라우저에 남긴다. */
-function SideResize({ width, onChange }: { width: number; onChange: (w: number, done: boolean) => void }) {
-  const drag = useRef<{ x: number; w: number } | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const onKey = (e: ReactKeyboardEvent) => {
-    const next = e.key === "ArrowLeft" ? width + RIGHT_W.step : e.key === "ArrowRight" ? width - RIGHT_W.step
-      : e.key === "Home" ? RIGHT_W.min : e.key === "End" ? RIGHT_W.max : null;
-    if (next === null) return;
-    e.preventDefault();
-    onChange(clampW(next), true);
-  };
-  const move = (e: ReactPointerEvent) => { if (drag.current) onChange(clampW(drag.current.w + (drag.current.x - e.clientX)), false); };
-  const end = (e: ReactPointerEvent) => {
-    if (!drag.current) return;
-    onChange(clampW(drag.current.w + (drag.current.x - e.clientX)), true);
-    drag.current = null;
-    setDragging(false);
-  };
-  return (
-    <div className="pg-side-resize" role="separator" aria-orientation="vertical" aria-label="오른쪽 창 폭"
-         aria-valuemin={RIGHT_W.min} aria-valuemax={RIGHT_W.max} aria-valuenow={width} tabIndex={0}
-         data-drag={dragging || undefined} onKeyDown={onKey}
-         onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, w: width }; setDragging(true); }}
-         onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
-  );
-}
 
 export default PortfolioCanvas;
