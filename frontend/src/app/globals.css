@@ -4120,6 +4120,29 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-empty { margin: 8px 0; font-size: 14px; line-height: 1.6; color: var(--pg-mute); }
 .pg-notice { padding: 12px 14px; margin-bottom: 14px; font-size: 14px; line-height: 1.5; color: var(--pg-assume); background: var(--pg-assume-soft); border-radius: 12px; }
 .pg-notice--stale { color: var(--pg-body); background: var(--pg-soft); }
+/* AI2 — 이야기 탭 맨 위 'AI 가 풀어 쓴 글'. 아래 서버 설명과 구별되게 옅은 파랑 테두리 카드 · 연습용 경고(서버 notice)는 경고색 ·
+   문단마다 근거 칩(화면 번호 + 이름, 누르면 그 노드). */
+.pg-ai-story { margin-bottom: 16px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--pg-blue) 30%, var(--pg-card-line));
+  border-radius: 14px; background: var(--pg-paper); }
+.pg-ai-story-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.pg-ai-story-h { flex: 1 1 auto; margin: 0; font-size: 15px; font-weight: 700; color: var(--pg-ink); }
+.pg-ai-story-ask { flex: none; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--pg-blue) 45%, var(--pg-card-line));
+  border-radius: 16px; background: var(--pg-paper); color: var(--pg-blue-ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+.pg-ai-story-ask:disabled { cursor: progress; color: var(--pg-body); border-color: var(--pg-card-line); }
+.pg-ai-story-login { font-size: 13px; color: var(--pg-blue-ink); text-decoration: underline; text-underline-offset: 2px; }
+.pg-ai-story-cap { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--pg-body); word-break: keep-all; }
+.pg-ai-story-wait, .pg-ai-story-stale, .pg-ai-story-note { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--pg-body); word-break: keep-all; }
+.pg-ai-story-notice { margin: 10px 0 0; padding: 10px 12px; font-size: 13.5px; line-height: 1.5; color: var(--pg-assume); background: var(--pg-assume-soft);
+  border-radius: 10px; word-break: keep-all; }
+.pg-ai-paras { display: flex; flex-direction: column; gap: 12px; margin: 10px 0 0; padding: 0; list-style: none; }
+.pg-ai-para-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--pg-ink); word-break: keep-all; }
+.pg-ai-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pg-ai-chip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 4px; border: 1px solid var(--pg-card-line);
+  border-radius: 13px; background: var(--pg-soft); color: var(--pg-ink); font-size: 12.5px; cursor: pointer; }
+.pg-ai-chip:hover { border-color: var(--pg-blue); }
+.pg-ai-chip-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px;
+  background: var(--pg-paper); color: var(--pg-ink); font-size: 11.5px; font-weight: 700; }
+.pg-ai-story-ask:focus-visible, .pg-ai-story-login:focus-visible, .pg-ai-chip:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 
 /* 이야기 */
 .pg-steps { margin: 0; padding: 0; list-style: none; }

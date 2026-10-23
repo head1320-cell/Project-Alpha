@@ -85,6 +85,7 @@ import { ExecutionSheetBody } from "./ExecutionSheet";
 import { GateRail } from "./GateRail";
 import { GhostLayer, type PlacedGhost } from "./GhostLayer";
 import { AiAsk, useAiAssist } from "./AiAsk";
+import { AiStory, useAiStory } from "./AiStory";
 import { useSession } from "@/entities/session";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { EvidenceEdge, PG_WIRE_TYPE, WIRE_LEGEND, wireOf } from "./EvidenceEdge";
@@ -625,6 +626,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const path = useMemo(() => new Set(s.runningIds ?? s.preview ?? []), [s.runningIds, s.preview]);
   /** 결과가 지금 그래프의 것이 아닌 노드(BT5) — 바뀐 노드와 그 하류만. 나머지는 결과·선 모양·한눈 요약을 그대로 둔다. */
   const staleSet = useMemo(() => new Set(s.staleIds), [s.staleIds]);
+  // AI2 — 이야기 탭 맨 위 'AI 가 풀어 쓴 글'(누를 때만 · 낡지 않은 결과의 설명·봉인만 보낸다).
+  const aiStory = useAiStory(doc, order, s.report?.nodes ?? null, staleSet, session);
   const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
   const live = useMemo(() => (s.report
@@ -1886,7 +1889,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
             {s.tab === "story" && (
               <StoryPanel order={order} nodes={s.nodes} catalog={s.catalog ?? []} results={s.report?.nodes ?? null}
                           staleIds={staleSet} selectedId={s.selectedId} onSelect={focusNode}
-                          onDetail={(id) => { focusNode(id); s.setTab("detail"); }} />
+                          onDetail={(id) => { focusNode(id); s.setTab("detail"); }}
+                          top={<AiStory session={session} story={aiStory} badge={nodeBadge} onSelect={focusNode} />} />
             )}
             {s.tab === "branches" && (
               <BranchCompare branches={s.branches} nodes={s.nodes} catalog={s.catalog ?? []}

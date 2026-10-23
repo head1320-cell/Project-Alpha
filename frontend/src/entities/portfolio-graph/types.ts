@@ -210,6 +210,17 @@ export type AssistSuggest =
       usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
   | { available: false; source: "unavailable"; reason_code: string; reason: string };
 
+/** AI 풀어 쓰기(AI2)에 보내는 사실 하나 — `/run` 의 설명과 봉인 그대로. */
+export interface NarrateFact { node_id: string; explain: NodeExplain; sig: string }
+/** 확인하지 못해 뺀 사실 — 어느 노드가 왜. */
+export interface NarrateDropped { node_id: string | null; reason: string }
+/** `POST /api/v1/assist/canvas/narrate` — 문단마다 근거 노드 · 연습용 경고는 서버가 붙인 것(`notice`). */
+export type AssistNarrate =
+  | { available: true; source: "claude"; model: string; paragraphs: { text: string; node_ids: string[] }[];
+      rejected: { code: string; reason: string }[]; dropped: NarrateDropped[]; notice: string | null; cached: boolean;
+      usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
+  | { available: false; source: "unavailable"; reason_code: string; reason: string; dropped?: NarrateDropped[] };
+
 export interface Procedure {
   steps: ProcedureStep[];
   next: ProcedureSuggestion | null;
@@ -300,6 +311,8 @@ export interface NodeRunResult {
   view: Record<string, unknown> | null;
   provenance: Record<string, unknown>;
   explain?: NodeExplain | null;
+  /** 설명 봉인(AI2) — 서버가 이 설명을 이 그래프에 대해 냈다는 HMAC. AI 풀어 쓰기가 설명과 함께 그대로 돌려보낸다(화면은 만들지 않는다). */
+  explain_sig?: string | null;
   /** 하류로 흐르는 계보(BK0) — 연습용 · 시점 정합 · 노출 조절. */
   lineage?: NodeLineage;
   /** 미리보기 해시 — 저장할 때 "본 것 == 지금 계산" 확인에 쓴다. 계산 못 한 노드는 `null`. */

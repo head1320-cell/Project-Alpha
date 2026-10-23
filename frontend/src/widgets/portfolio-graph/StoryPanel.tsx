@@ -4,8 +4,9 @@
  * ==========================================================================
  * 번호는 캔버스 노드 번호와 같다(그래프 순서 하나). 문장은 서버 `explain` 을 그대로 그린다 —
  * 화면이 문장을 짓지 않는다(사용자 결정). "믿어도 되나요?" 는 확인·가정·몰라요·실패를 한 줄씩.
- * 연습용 데이터가 하나라도 있으면 맨 위에 경고를 먼저 놓는다.
+ * 연습용 데이터가 하나라도 있으면 맨 위에 경고를 먼저 놓는다. AI2 — 그 위에 'AI 가 풀어 쓴 글' 자리(`top`)만 둔다(이 패널은 문장을 짓지 않는다).
  */
+import type { ReactNode } from "react";
 import type { NodeCatalogEntry, NodeRunResult, PgNode } from "@/entities/portfolio-graph";
 
 const TRUST_TEXT = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패" } as const;
@@ -68,7 +69,7 @@ function Step({ n, node, entry, result, stale, current, onSelect, onDetail }: {
   );
 }
 
-export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedId, onSelect, onDetail }: {
+export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedId, onSelect, onDetail, top }: {
   order: string[];
   nodes: PgNode[];
   catalog: NodeCatalogEntry[];
@@ -78,6 +79,8 @@ export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedI
   selectedId: string | null;
   onSelect: (id: string) => void;
   onDetail: (id: string) => void;
+  /** 맨 위 자리(AI2 'AI 가 풀어 쓴 글') — 서버 설명보다 앞에, 서버 설명은 그대로. */
+  top?: ReactNode;
 }) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const practice = Object.entries(results ?? {}).filter(([id]) => !staleIds.has(id)).map(([, r]) => r).some((r) =>
@@ -87,6 +90,7 @@ export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedI
   }
   return (
     <div className="pg-story">
+      {top}
       {practice && (
         <div className="pg-notice" role="note">
           <b>연습용 결과예요.</b> 실제 시세가 아니라 합성 데이터로 계산했어요. 투자 판단에 쓰기 전에 실데이터로 다시 계산해 주세요.
