@@ -9,7 +9,7 @@ import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 from src.api import allocation_graph_routes as graph_routes
 from src.api.auth import derived_key, require_login
@@ -115,3 +115,35 @@ def canvas_ask(req: AskRequest, p: Principal = Depends(require_login)) -> dict:
                        [f.model_dump() for f in req.facts], [r.model_dump() for r in req.records], p.username,
                        catalog=graph_routes._kinds, relate=lambda g: graph_routes._relations(g, graph_routes._kinds()),
                        key=derived_key(fact_seal.PURPOSE))
+
+
+class GuideState(BaseModel):
+    """화면이 센 지금 상태(AI5 길잡이) — 수·참거짓만. 칸을 더하면 422(화면 `entities/portfolio-graph/guide.ts` 의 `GuideState` 와 같다)."""
+    model_config = {"extra": "forbid"}
+    computed: StrictBool
+    fresh: StrictBool
+    ready_to_run: StrictBool
+    nodes: int = Field(..., ge=0, le=2000)
+    failed: int = Field(..., ge=0, le=2000)
+    wire_issues: int = Field(..., ge=0, le=5000)
+    weight_nodes: int = Field(..., ge=0, le=2000)
+    branches: int = Field(..., ge=0, le=500)
+    robustness: StrictBool
+    overlapping: StrictBool
+    lanes: StrictBool
+    minimap: StrictBool
+    backtest: StrictBool
+    gates_blocked: list[str] = Field(default_factory=list, max_length=8)
+
+
+class GuideRequest(BaseModel):
+    graph: Any
+    state: GuideState
+    applicable: list[str] = Field(default_factory=list, max_length=12)
+
+
+@router.post("/guide")
+def canvas_guide(req: GuideRequest, p: Principal = Depends(require_login)) -> dict:
+    """AI5 — 지금 상태에서 써 볼 캔버스 도구 1~2 와 이유. 도구 안내만(투자 판단 없음) · 적용되는 도구만 · 숫자는 상태 안에서만.
+    키·한도·거절이면 `available:false` + 사유(화면은 규칙 길잡이 줄을 그대로 둔다)."""
+    return service.guide(req.graph, req.state.model_dump(), req.applicable, p.username, catalog=graph_routes._kinds)

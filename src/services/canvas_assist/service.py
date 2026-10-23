@@ -1,10 +1,11 @@
-"""캔버스 AI 도우미 — 노드 추천(AI1 `suggest`) · 풀어 쓰기(AI2 `narrate`) · 묻기(AI3 `ask`). 모두 `_ask`: 쓸 수 있나 → 한도 설정 → 캐시 → 한도 → Claude → 검사.
+"""캔버스 AI 도우미 — 노드 추천(AI1 `suggest`) · 풀어 쓰기(AI2 `narrate`) · 묻기(AI3 `ask`) · 길잡이(AI5 `guide`). 모두 `_ask`: 쓸 수 있나 → 한도 설정 → 캐시 → 한도 → Claude → 검사.
 
 응답은 둘 중 하나다:
 - `{available:true, source:"claude", model, …검사를 통과한 것…, rejected, cached, usage}`.
 - `{available:false, source:"unavailable", reason_code, reason, …}` — ★AI 글은 없다★(데모 글 금지). suggest 는 `rule`(규칙 대체 —
   `/validate` 절차의 next·by_gate), narrate·ask 는 `dropped`(확인하지 못한 설명·기록과 사유)를 함께 낸다.
-- 사용자별 시간당 한도는 ★한 그릇★ — 추천·풀어 쓰기·묻기를 합쳐 센다. 캐시 적중은 세지 않는다.
+- 사용자별 시간당 한도는 ★한 그릇★ — 추천·풀어 쓰기·묻기·길잡이를 합쳐 센다. 캐시 적중은 세지 않는다.
+- guide 는 못 보일 때 곁들임이 없다 — 화면의 규칙 길잡이 줄이 그대로 남는다.
 - `dropped` 는 요청마다 다르다(캐시는 근거로 찾는다) — 캐시에 적중해도 ★이번 요청의 것★을 붙인다.
 
 `catalog`·`validate`·`key` 는 경로가 넘긴다(`allocation_graph_routes._kinds`·`graph_validate` · `auth.derived_key`) — 서비스가 API 층을 import 하지 않게.
@@ -24,6 +25,7 @@ from src.engine.portfolio_graph import FATAL_CODES
 from src.services.canvas_assist import ask as ak
 from src.services.canvas_assist import check as ck
 from src.services.canvas_assist import ground as gr
+from src.services.canvas_assist import guide as gd
 from src.services.canvas_assist import narrate as nr
 from src.services.canvas_assist import prompts as pr
 from src.services.canvas_assist.limiter import HourlyLimiter
@@ -49,6 +51,7 @@ REASONS = {
     "stale_facts": "보낸 계산 결과를 확인하지 못했어요(그래프가 바뀌었거나 서버가 다시 시작했어요). 다시 계산하면 풀어 쓸 수 있어요",
     "no_target": "그래프에 없는 노드·선이에요",
     "no_facts_target": "이 노드·선의 지금 계산 결과가 없어요. 계산한 뒤에 물을 수 있어요",
+    "no_tools": "지금 권할 도구가 없어요",
     "rate_limited": "한 시간에 {limit}번까지 물을 수 있어요. 이번 시간에는 다 썼어요",
     "refusal": "Claude 가 이 요청에 답하지 않았어요(분류: {detail})",
     "max_tokens": "Claude 의 답이 길이 한도에서 잘렸어요",
@@ -208,3 +211,17 @@ def ask(graph: Any, target: dict, question: str, previous: dict | None, facts: l
                version=pr.ASK_VERSION, grounding=g, system=pr.ASK_SYSTEM, user=pr.ask_user(g),
                schema=pr.ask_schema([x["id"] for x in g["lines"]]), check=check)
     return {**res, "dropped": dropped}
+
+
+def guide(graph: Any, state: dict, applicable: list[str], username: str, *, catalog: Callable[[], dict],
+          client: ClaudeClient | None = None) -> dict:
+    """AI5 — 화면이 센 상태와 ★지금 적용되는 도구★만 보고 써 볼 도구 1~2 와 이유. 도구 안내만(투자 판단 없음). 적용되는 도구가 없으면 부르지 않는다."""
+    if not gd.tools(applicable):
+        return _unavailable("no_tools")
+    g = gd.ground(graph, state, applicable, catalog())
+
+    def check(data: Any) -> dict:
+        ok, bad = gd.check(data, g)
+        return {"tips": ok, "rejected": bad}
+    return _ask("guide", username, client or ClaudeClient.get_default(), {}, version=pr.GUIDE_VERSION, grounding=g,
+                system=pr.GUIDE_SYSTEM, user=pr.guide_user(g), schema=pr.guide_schema([t["id"] for t in g["tools"]]), check=check)

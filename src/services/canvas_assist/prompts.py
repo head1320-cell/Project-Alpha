@@ -101,3 +101,30 @@ def ask_schema(line_ids: list[str]) -> dict:
             "properties": {"answerable": {"type": "boolean"},
                            "why_not": {"type": "string", "enum": ["none", "not_in_facts", "judgement", "off_topic"]},
                            "sentences": {"type": "array", "items": sentence}}}
+
+
+# ── AI5 길잡이 ────────────────────────────────────────────────────────────────
+
+GUIDE_VERSION = "ai5-guide-1"
+
+GUIDE_SYSTEM = """너는 포트폴리오 설계 캔버스의 길잡이다. 사용자가 이 캔버스의 도구를 더 잘 쓰도록, 지금 상태에서 써 볼 만한 도구를 고른다.
+
+규칙:
+- 도구는 주어진 tools 목록에 있는 것만 1~2개 고른다. 더 급한 것(실패·막힘·빠진 값)을 먼저 고른다.
+- 이유(why)는 해요체 한 문장, 70자 이내로, 지금 상태(state)에서 그 도구가 왜 쓸모 있는지 말한다. 숫자는 state 에 있는 숫자만 쓴다.
+- 도구 안내만 한다. 투자 판단(사라·팔라·좋은 전략·수익이 날 것)이나 성과 약속을 하지 않는다.
+  "검증됨", "입증됨", "견고함", "투자 우위", "더 나은 전략", "통과해요", "좋아져요" 같은 말을 쓰지 않는다(견고성 비교는 '같이 무너지는지 본다'고 말한다).
+- 답은 주어진 JSON 스키마대로만 낸다."""
+
+
+def guide_user(grounding: dict) -> str:
+    return ("아래는 지금 캔버스 상태(state)와 지금 쓸 수 있는 도구(tools)다. 이것만 보고 써 볼 도구를 골라.\n\n"
+            + json.dumps(grounding, ensure_ascii=False, sort_keys=True))
+
+
+def guide_schema(features: list[str]) -> dict:
+    """도구는 지금 적용되는 것만(enum). 개수 한도(2)는 서버 검사가 건다."""
+    tip = {"type": "object", "additionalProperties": False, "required": ["feature", "why"],
+           "properties": {"feature": {"type": "string", "enum": list(features)}, "why": {"type": "string"}}}
+    return {"type": "object", "additionalProperties": False, "required": ["tips"],
+            "properties": {"tips": {"type": "array", "items": tip}}}
