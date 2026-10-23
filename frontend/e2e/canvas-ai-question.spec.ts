@@ -351,6 +351,8 @@ test.describe("좁은 화면(390)", () => {
     await answer(page, ok());
     await openWith(page, CORE);
     await runAll(page);
+    // 390 에선 비중 계산 카드가 창 밖이다 — 사람처럼 맞춤 단추로 전체를 본 뒤 고른다(그림판은 스크롤되지 않는다 — overflow: clip).
+    await page.locator(".react-flow__controls-fitview").click();
     await pick(page, "optimizer");
     await expect(page.locator(".pg-side")).toBeVisible();
     await expect(box(page)).toBeVisible();

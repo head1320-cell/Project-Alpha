@@ -4538,7 +4538,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
    목표가 있으면 파란 표시. 메뉴는 '보기' 메뉴와 같은 판에 두 줄 항목, 자리는 JS 가 화면 안으로 당긴다(left). */
 .pg-goalchip-wrap { position: relative; display: inline-flex; align-items: center; }
 .pg-toolbar > .pg-goalchip-wrap { flex: 0 1 88px; min-width: 64px; }   /* 줄을 바꾸기 전에 줄어들지 않으므로(flex-wrap) 기준 폭 자체를 작게 — 긴 이름은 칸 안에서 흐른다 */
-.pg-goalchip-wrap > .pg-name { width: 100%; min-width: 0; padding-right: 30px; }
+.pg-goalchip-wrap > .pg-name { width: 100%; min-width: 0; padding-right: 30px; text-overflow: ellipsis; }   /* 단추 몫만큼 좁아 자리 글이 '이름 없'으로 잘렸다 */
 .pg-goalchip { position: absolute; right: 4px; top: 50%; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-top: -12px; padding: 0;
   color: var(--pg-body); background: none; border: 1px dashed var(--pg-line); border-radius: 12px; cursor: pointer; }
 .pg-goalchip.on { color: var(--pg-blue-ink); background: var(--pg-blue-soft); border: 1px solid color-mix(in srgb, var(--pg-blue) 35%, var(--pg-line)); }
@@ -5155,6 +5155,9 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 
 .pg-body { position: relative; display: block; flex: 1; min-height: 0; overflow: hidden; overflow: clip; }
 .pg-body > .pg-canvas { position: absolute; inset: 0; }
+/* 그림판도 스크롤 상자가 아니다(R3 의 .pg-body 와 같은 까닭) — React Flow 는 인라인 overflow: hidden 을 주고, 창 밖으로 반쯤 나간 노드로 초점·스크롤이
+   가면 그림판이 스크롤됐다가 다음 스크롤 이벤트에서 0 으로 돌아온다. 그 한 프레임 사이 누름이 어긋났다(AI5b 전체 게이트가 찾음). 인라인이라 !important. */
+.pg-canvas .react-flow { overflow: clip !important; }
 .pg-body > .pg-palette, .pg-body > .pg-side { position: absolute; z-index: 8; top: var(--pg-gap); bottom: var(--pg-gap);
   background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 16px; box-shadow: var(--pg-float-shadow); }
 .pg-body > .pg-palette { left: var(--pg-gap); width: var(--pg-left-w); padding: 0 12px 14px; }
@@ -5992,18 +5995,18 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
   color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
 .pg-gate-node:focus-visible, .pg-gate-fix:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 /* BT3 — 다음 한 걸음: 아래 안내 줄 자리에 서버가 고른 한 걸음 + [붙이기]·[다음에]. 누를 수 있어야 한다. */
-.pg-hint.pg-next { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; pointer-events: auto; white-space: normal;
+.pg-hint.pg-next, .pg-hint.pg-guidebar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; pointer-events: auto; white-space: normal;
   padding: 8px 8px 8px 16px; color: var(--pg-ink); }
 /* K4 — 이 바는 누를 수 있어서, 왼쪽 아래 확대 단추 위에 얹히면 단추를 누를 수 없었다(모든 폭). 왼쪽은 확대 단추 몫(56)을,
    오른쪽은 실제로 있는 것만(16 · 미니맵을 켜면 그 폭) 비우고 그 사이 가운데에 선다. 사이가 좁으면 단추가 글 아래 줄로 내려간다. */
-.pg-canvas .pg-hint.pg-next { --pg-next-l: calc(var(--pg-left-inset) + 56px); --pg-next-r: calc(var(--pg-right-inset) + 16px);
+.pg-canvas .pg-hint.pg-next, .pg-canvas .pg-hint.pg-guidebar { --pg-next-l: calc(var(--pg-left-inset) + 56px); --pg-next-r: calc(var(--pg-right-inset) + 16px);
   left: calc(var(--pg-next-l) + (100% - var(--pg-next-l) - var(--pg-next-r)) / 2);
   max-width: min(640px, calc(100% - var(--pg-next-l) - var(--pg-next-r))); }
-.pg-canvas:has(.pg-minimap) .pg-hint.pg-next { --pg-next-r: calc(var(--pg-right-inset) + 232px); }
-.pg-next-text { margin: 0; flex: 1 1 240px; font-size: 13px; line-height: 1.45; word-break: keep-all; text-align: left; }
-.pg-next-go { flex: none; margin-left: auto; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: var(--pg-cta); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
-.pg-next-later { flex: none; height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: var(--pg-mute); font-size: 13px; cursor: pointer; }
-.pg-next-go:focus-visible, .pg-next-later:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+.pg-canvas:has(.pg-minimap) .pg-hint.pg-next, .pg-canvas:has(.pg-minimap) .pg-hint.pg-guidebar { --pg-next-r: calc(var(--pg-right-inset) + 232px); }
+.pg-next-text, .pg-guide-text { margin: 0; flex: 1 1 240px; font-size: 13px; line-height: 1.45; word-break: keep-all; text-align: left; }
+.pg-next-go, .pg-guide-go { flex: none; margin-left: auto; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: var(--pg-cta); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+.pg-next-later, .pg-guide-later { flex: none; height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: var(--pg-mute); font-size: 13px; cursor: pointer; }
+.pg-next-go:focus-visible, .pg-next-later:focus-visible, .pg-guide-go:focus-visible, .pg-guide-later:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 /* AI1 — 아래 바 끝의 묻기 칸(누를 때만 묻는다). 안내 줄(.pg-hint)은 누름을 받지 않으므로 칸만 받게 한다. */
 .pg-ai { display: inline-flex; flex: none; align-items: center; gap: 8px; pointer-events: auto; }
 .pg-hint .pg-ai, .pg-hint .pg-ai-login { margin-left: 10px; }
@@ -6017,11 +6020,26 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
 .pg-hint:has(.pg-ai-note, .pg-ai-stale) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; white-space: normal; max-width: min(640px, calc(100% - 32px)); }
 .pg-ai-login { pointer-events: auto; font-size: 13px; color: var(--pg-blue-ink); text-decoration: underline; text-underline-offset: 2px; }
 .pg-ai-ask:focus-visible, .pg-ai-login:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
+/* AI5 — 길잡이(다음 한 걸음 자리 뒤의 세 번째 자리, `.pg-guidebar` — `.pg-next`·`.pg-guide`(맞춤 안내선)와 이름을 나누지 않는다): 같은 바 꼴 + 칩(규칙 회색 · AI 파랑) · [해 보기]·[다음에]·[AI 길잡이] · 상태 줄은 바 안. */
+.pg-guide-chip { display: inline-block; margin-right: 2px; padding: 1px 7px; border-radius: 10px; font-size: 11.5px; font-weight: 700; vertical-align: 1px;
+  background: var(--pg-soft); color: var(--pg-body); }
+.pg-guide-chip--claude { background: var(--pg-blue-soft); color: var(--pg-blue-ink); }
+.pg-guide-more { flex: none; height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: var(--pg-blue-ink);
+  font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.pg-guide-ai { flex: none; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--pg-blue) 45%, var(--pg-card-line)); border-radius: 16px;
+  background: var(--pg-paper); color: var(--pg-blue-ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+.pg-guide-ai:disabled { cursor: progress; color: var(--pg-body); border-color: var(--pg-card-line); }
+.pg-guide-login { flex: none; font-size: 13px; color: var(--pg-blue-ink); text-decoration: underline; text-underline-offset: 2px; }
+.pg-guide-note { flex: 1 1 100%; font-size: 12.5px; line-height: 1.4; color: var(--pg-body); white-space: normal; word-break: keep-all; text-align: left; }
+.pg-guidebar .pg-ai { margin-left: 0; }
+/* 두 창을 연 좁은 폭(바 ≈ 300px)에선 AI 노드 추천 단추를 접는다 — 길잡이 바가 네 줄(149px)이 됐다. Ctrl+K 'AI 에게 다음 노드 묻기'로 남는다. */
+@media (max-width: 1279px) { .pg-root[data-left="open"][data-right="open"] .pg-guidebar .pg-ai, .pg-root[data-left="open"][data-right="open"] .pg-guidebar .pg-ai-login { display: none; } }
+.pg-guide-more:focus-visible, .pg-guide-ai:focus-visible, .pg-guide-login:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 /* K4 — 좁은 화면: 위에 뜬 창 열기 단추가 아래 바의 폭까지 깎아 한 낱말씩 줄이 바뀌었다. 바는 캔버스 폭(양옆 16)을 쓰고
    확대 단추(아래 15 + 높이 108 — CF5b 확대율 칸으로 81 에서 늘었다) 위에 선다. 글은 한 줄 전체, 단추는 아래 줄 오른쪽. */
 @media (max-width: 640px) {
-  .pg-canvas .pg-hint.pg-next { left: 16px; right: 16px; bottom: 135px; transform: none; width: auto; max-width: none; text-align: left; }
-  .pg-next-text { flex: 1 1 100%; }
+  .pg-canvas .pg-hint.pg-next, .pg-canvas .pg-hint.pg-guidebar { left: 16px; right: 16px; bottom: 135px; transform: none; width: auto; max-width: none; text-align: left; }
+  .pg-next-text, .pg-guide-text { flex: 1 1 100%; }
 }
 /* BT3 — "‘수익률’을 이어 주세요" 의 이름이 단추다: 누르면 그 값을 내는 노드만 보이는 빠른 추가. */
 .pg-node-need-btn { padding: 0; border: 0; background: none; font: inherit; color: inherit; font-weight: 700;

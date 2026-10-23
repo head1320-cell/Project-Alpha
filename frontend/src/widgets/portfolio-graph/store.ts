@@ -182,6 +182,8 @@ export interface PgState {
   note: string | null;
   /** 안내가 되돌릴 수 있는 동작 뒤에 떴나(BN N3) — 그러면 안내 줄에 [되돌리기] 가 붙고 잠시 뒤 스스로 닫힌다. */
   noteUndo: boolean;
+  /** 스스로 닫히는 안내(AI5 길잡이의 '다음엔 어디서') — 되돌리기는 없지만 8초 뒤 닫힌다(바를 가리지 않게). */
+  noteTransient: boolean;
 
   setCatalog: (c: NodeCatalogEntry[] | null, err?: string | null) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -252,7 +254,7 @@ export interface PgState {
   /** 상자를 내 블록으로 — 이 브라우저에 넣고, 파일로 받을 수 있게 블록을 돌려준다(저장소가 막혀도 파일은 된다). */
   saveBlock: (groupId: string) => GraphBlock | null;
   removeBlock: (index: number) => void;
-  setNote: (n: string | null, undoable?: boolean) => void;
+  setNote: (n: string | null, undoable?: boolean, transient?: boolean) => void;
   /** 동작을 하고 그 안내를 띄운다 — 동작이 되돌리기 기록을 남겼으면 안내 줄에 [되돌리기] 가 붙는다(BN N3). */
   act: (fn: () => string) => void;
   /** 노드를 놓고 곧바로 잇는다(BN N3 선 끌어 놓기) — 되돌리기 한 번에 둘 다. */
@@ -454,6 +456,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     blocksAvailable: true,
     note: null,
     noteUndo: false,
+    noteTransient: false,
     branches: [],
     simple: false,
     growing: false,
@@ -725,11 +728,11 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       groups: focusGroup ? s.groups.map((g) => (g.id === focusGroup ? { ...g, collapsed: false } : g)) : s.groups,
     })),
     toggleFilter: (k) => set((s) => ({ filters: s.filters.includes(k) ? s.filters.filter((x) => x !== k) : [...s.filters, k] })),
-    setNote: (note, undoable = false) => set({ note, noteUndo: !!note && undoable }),
+    setNote: (note, undoable = false, transient = false) => set({ note, noteUndo: !!note && undoable, noteTransient: !!note && transient }),
     act: (fn) => {
       const before = get().past.length;
       const note = fn();
-      set({ note, noteUndo: get().past.length > before });
+      set({ note, noteUndo: get().past.length > before, noteTransient: false });
     },
     setSimple: (simple) => set({ simple }),
     setGrowing: (growing) => set({ growing }),
@@ -847,7 +850,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
       const ok = cur.available && writeBlocks([...cur.blocks.filter((b) => b.label !== block.label), block]);
       const r = readBlocks();
       set({ blocks: r.blocks, blocksAvailable: r.available && ok,
-            noteUndo: false, note: ok ? `‘${g.label}’을 내 블록에 넣었어요 — 이 브라우저에만 있어요. 다른 곳에서 쓰려면 파일로 받아 두세요.`
+            noteUndo: false, noteTransient: false, note: ok ? `‘${g.label}’을 내 블록에 넣었어요 — 이 브라우저에만 있어요. 다른 곳에서 쓰려면 파일로 받아 두세요.`
                      : `이 브라우저에 블록을 저장할 수 없어요 — ‘${g.label}’은 파일로 받아 두세요.` });
       return block;
     },

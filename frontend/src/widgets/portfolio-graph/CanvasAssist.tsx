@@ -203,19 +203,21 @@ export function ShortcutSheet({ open, onClose }: { open: boolean; onClose: () =>
 
 /**
  * 안내 줄(BN N3) — 되돌릴 수 있는 동작 뒤의 안내에는 [되돌리기] 가 붙고 8초 뒤 스스로 닫힌다.
- * 마우스를 올리거나 초점이 있거나 계산 중이면 기다린다. 되돌릴 수 없는 안내(사유·경고)는 사람이 닫을 때까지 남는다.
+ * 마우스를 올리거나 초점이 있거나 계산 중이면 기다린다. 되돌릴 수 없는 안내(사유·경고)는 사람이 닫을 때까지 남는다 —
+ * 다만 길잡이의 '다음엔 어디서'(`noteTransient`)는 알림일 뿐이라 8초 뒤 닫힌다(토스트는 아래 바를 가린다 — AI5 E2E 가 찾음).
  */
 export const NOTE_MS = 8000;
 export function NoteLine() {
   const note = usePortfolioGraph((s) => s.note);
   const undoable = usePortfolioGraph((s) => s.noteUndo && s.past.length > 0);
+  const transient = usePortfolioGraph((s) => s.noteTransient);
   const running = usePortfolioGraph((s) => s.running);
   const [hold, setHold] = useState(false);
   useEffect(() => {
-    if (!undoable || hold || running) return;
+    if (!(undoable || transient) || hold || running) return;
     const t = setTimeout(() => usePortfolioGraph.getState().setNote(null), NOTE_MS);
     return () => clearTimeout(t);
-  }, [undoable, hold, running, note]);
+  }, [undoable, transient, hold, running, note]);
   if (!note) return null;
   return (
     <p className={`pg-banner pg-note${undoable ? " pg-note--undoable" : ""}`} role="status"

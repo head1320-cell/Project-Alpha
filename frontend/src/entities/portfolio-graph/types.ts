@@ -242,6 +242,13 @@ export type AssistAsk =
       usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
   | { available: false; source: "unavailable"; reason_code: string; reason: string; dropped?: AskDropped[] };
 
+/** `POST /api/v1/assist/canvas/guide` — 써 볼 도구 1~2(적용되는 것만 · 이유의 숫자는 상태 안에서만). 못 보이면 사유(화면은 규칙 길잡이 줄을 둔다). */
+export type AssistGuide =
+  | { available: true; source: "claude"; model: string; tips: { feature: string; label: string; why: string }[];
+      rejected: { code: string; reason: string }[]; cached: boolean;
+      usage: { input_tokens: number; output_tokens: number; cost_usd: number | null; cost_note: string | null } }
+  | { available: false; source: "unavailable"; reason_code: string; reason: string };
+
 export interface Procedure {
   steps: ProcedureStep[];
   next: ProcedureSuggestion | null;

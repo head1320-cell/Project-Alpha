@@ -412,8 +412,9 @@ test("접기(CF1): 머리 줄만 · 핸들은 머리 가운데 · 선 그대로 
   await page.locator(".pg-export").click();
   const doc = JSON.parse(readFileSync((await (await dl).path())!, "utf-8")) as { folded?: string[] };
   expect(doc.folded).toEqual(["optimizer"]);
-  // 펴면 원래대로.
+  // 펴면 원래대로 — 다시 가까이 본 뒤 그 노드를 화면 가운데로(사람처럼 끌어서). 그림판은 스크롤되지 않는다(overflow: clip) — 화면 밖 단추는 누를 수 없다.
   await zoomTo(page, "near");
+  await center(page, "optimizer");
   await node(page, "optimizer").locator(".pg-node-fold").click();
   await expect(node(page, "optimizer")).not.toHaveClass(/pg-node--folded/);
   await expect(node(page, "optimizer").locator(".pg-cw")).toBeVisible();

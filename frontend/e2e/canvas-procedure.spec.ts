@@ -158,7 +158,7 @@ for (const theme of ["light", "dark"] as const) {
 
 // ── BT3 · 다음 한 걸음 · 추가하면 이어진다 · "이어 주세요" 단추 ────────────────────────────────
 
-test("다음 한 걸음: 서버 문장 그대로 · [붙이기] 뒤 다음 규칙으로 · 다 채우면 조작 도움말(짝)", async ({ page }) => {
+test("다음 한 걸음: 서버 문장 그대로 · [붙이기] 뒤 다음 규칙으로 · 다 채우면 그 자리는 길잡이 '계산하기'(짝)", async ({ page }) => {
   await openWith(page, BUILD_ONLY, "add");
   const next = page.locator(".pg-next");
   await expect(next).toContainText("‘과거로 돌려 보기’");
@@ -168,8 +168,9 @@ test("다음 한 걸음: 서버 문장 그대로 · [붙이기] 뒤 다음 규�
   await expect(nodeOf(page, "backtest")).toHaveCount(1);
   await expect(edges(page)).toHaveCount(before + 2);
   await expect(next).toHaveCount(0);                                              // 다 채웠다 — 제안이 없다
-  await page.locator(".react-flow__pane").click({ position: { x: 600, y: 60 } });   // 새 노드 고름을 풀면 조작 도움말
-  await expect(page.locator(".pg-hint")).toContainText("같은 색 점끼리");
+  await page.locator(".react-flow__pane").click({ position: { x: 600, y: 60 } });   // 새 노드 고름을 풀면 그 자리
+  // AI5 — 아래 바 순서(환영 > 다음 한 걸음 > 길잡이 > 기본 안내): 다 채웠으니 길잡이 '계산하기'(예전엔 조작 도움말이었다).
+  await expect(page.locator(".pg-guidebar")).toHaveAttribute("data-tool", "run");
 });
 
 test("[다음에] 는 이 모양에서 숨기고, 기본 흐름(다 채움)에는 처음부터 없다(짝)", async ({ page }) => {
@@ -177,6 +178,10 @@ test("[다음에] 는 이 모양에서 숨기고, 기본 흐름(다 채움)에�
   await expect(page.locator(".pg-next")).toBeVisible();
   await page.locator(".pg-next-later").click();
   await expect(page.locator(".pg-next")).toHaveCount(0);
+  // AI5 — 그 자리는 길잡이(비중 노드가 하나라 '전략 더하기') · 길잡이도 [다음에] 하면 기본 안내(조작 도움말)로 떨어진다.
+  await expect(page.locator(".pg-guidebar")).toHaveAttribute("data-tool", "strategy_add");
+  await page.locator(".pg-guide-later").click();
+  await expect(page.locator(".pg-guidebar")).toHaveCount(0);
   await expect(page.locator(".pg-hint")).toContainText("같은 색 점끼리");
 });
 

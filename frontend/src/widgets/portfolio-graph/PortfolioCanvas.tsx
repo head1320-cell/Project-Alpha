@@ -69,6 +69,11 @@ import {
   connectionProblem,
   restackDoc,
   type AskTarget,
+  COMPARE_KIND,
+  RECORD_KIND,
+  toolOf,
+  type GuideId,
+  type GuideState,
   GOALS,
   type GoalKey,
   type ConnTry,
@@ -89,6 +94,7 @@ import { GateRail } from "./GateRail";
 import { GhostLayer, type PlacedGhost } from "./GhostLayer";
 import { AiAsk, useAiAssist } from "./AiAsk";
 import { AiQuestion, useAiQuestion } from "./AiQuestion";
+import { GuideBar, useGuide } from "./Guide";
 import { AiStory, useAiStory } from "./AiStory";
 import { useSession } from "@/entities/session";
 import { BranchCompare, BranchFrame, branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
@@ -146,6 +152,13 @@ const TIGHT_MIDDLE = 760;
 const TIGHT_ROW = 44;
 /** 위 여백 — 둘째 줄이 있으면 그만큼 더. */
 const fitTop = (el: HTMLElement | null) => FIT_INSET.top + (el?.closest("[data-tight]") ? TIGHT_ROW : 0);
+/** 아래 여백 — 64(안내 줄) · 아래 시트 · ★보이는 아래 바의 실제 위 끝 + 8★ 중 큰 것. 다음 한 걸음·길잡이 바는 단추가 있어 64 보다 높고
+ *  좁으면 두 줄이 된다 — 길잡이 바가 맞춘 노드의 아래 끝을 덮었다(AI5b 전체 게이트가 찾음). */
+const fitBottom = (el: HTMLElement, sheet: number) => {
+  const bar = el.querySelector<HTMLElement>(".pg-hint");
+  const clear = bar && bar.offsetParent !== null ? el.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 8 : 0;
+  return Math.max(FIT_INSET.bottom + sheet, clear);
+};
 /** 노드 도구줄 높이 + 간격(px) — 고른 노드 위에 이만큼 비어 있어야 도구줄이 떠 있는 판 밑에 깔리지 않는다. */
 const TOOLBAR_H = 48;
 
@@ -391,7 +404,7 @@ function fitClear(inst: ReactFlowInstance | null, el: HTMLDivElement | null,
   const L = FIT_INSET.left + ins.left;
   const w = Math.max(1, el.clientWidth - L - FIT_INSET.right - ins.right);
   const top = fitTop(el);
-  const h = Math.max(1, el.clientHeight - top - FIT_INSET.bottom - ins.bottom);
+  const h = Math.max(1, el.clientHeight - top - fitBottom(el, ins.bottom));
   const zoom = Math.min(opts.maxZoom ?? 1, Math.max(opts.minZoom ?? 0.2, Math.min(w / b.width, h / b.height)));
   // 가장 작게 줄여도 넘치면 가운데 두지 않고 흐름의 시작(왼쪽 위)에 붙인다 — 넘친 쪽은 오른쪽·아래로 간다.
   const dx = w - b.width * zoom;
@@ -1536,6 +1549,74 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     const seen = l * zoom + tx >= ins.left && r * zoom + tx <= el.clientWidth - ins.right && t * zoom + ty >= 0 && bt * zoom + ty <= el.clientHeight - ins.bottom;
     if (!seen) rf.current.setCenter((l + r) / 2 + (ins.right - ins.left) / 2 / zoom, (t + bt) / 2 + ins.bottom / 2 / zoom, { zoom, duration: 250 });
   }, [ai.ai]);
+  // AI5 — 길잡이(아래 바 세 번째 자리). 상태는 화면이 센 수·참거짓 — 서버로도 간다(설정값·종목 없음).
+  const kindOf = useCallback((id: string) => s.nodes.find((n) => n.id === id)?.data.kind, [s.nodes]);
+  const isWeight = useCallback((id: string) => !!s.catalog?.find((c) => c.type === kindOf(id))?.outputs.some((o) => o.type === "Weights"),
+    [s.catalog, kindOf]);
+  const guideState = useMemo<GuideState>(() => {
+    const res = Object.values(s.report?.nodes ?? {});
+    return {
+      computed: !!s.report, fresh: !!s.report && !s.reportStale,
+      ready_to_run: s.nodes.length > 0 && !!s.validation?.procedure && s.validation.procedure.next === null && !(s.validation.errors ?? []).length,
+      nodes: s.nodes.length,
+      failed: res.filter((r) => r.status === "failed" || r.status === "blocked").length,
+      wire_issues: Object.values(s.report?.edges ?? {}).filter((r) => (r.issues ?? []).length > 0).length,
+      weight_nodes: s.nodes.filter((n) => isWeight(n.id)).length,
+      branches: s.branches.length,
+      robustness: s.nodes.some((n) => n.data.kind === COMPARE_KIND || n.data.kind === RECORD_KIND),
+      overlapping: cardsOverlap(s.nodes, s.catalog),
+      lanes: s.showLanes, minimap: s.showMinimap,
+      backtest: Object.entries(s.report?.nodes ?? {}).some(([id, r]) => r.status === "ok" && kindOf(id) === "backtest"),
+      gates_blocked: (s.report?.gates?.gates ?? []).filter((g) => ["failed", "unknown", "skipped", "partial"].includes(g.state)).map((g) => g.key),
+    };
+  }, [s.report, s.reportStale, s.nodes, s.validation, s.branches, s.catalog, s.showLanes, s.showMinimap, isWeight, kindOf]);
+  const guideDismissed = useMemo(() => new Set([...dismissed].filter((k) => k.startsWith("guide|")).map((k) => k.slice(6))), [dismissed]);
+  const guide = useGuide(doc, guideState, guideDismissed, session);
+  /** [해 보기] — 그 도구를 실제로 쓰고, 안내 줄에 ★다음엔 어디서 하나★를 붙인다(길잡이는 도구가 어디 있는지 가르친다). 바꾸는 것은 되돌리기 한 번. */
+  const tryTool = (id: GuideId) => {
+    const st = usePortfolioGraph.getState();
+    const where = toolOf(id)?.where ?? "";
+    const say = (msg: string) => st.setNote(`${msg} · ${where}`, false, true);
+    const openRight = () => updatePanels((p) => (p.right ? p : toggle(p, "right")));
+    switch (id) {
+      case "cause": {
+        const f = order.find((nid) => ["failed", "blocked"].includes(st.report?.nodes[nid]?.status ?? ""));
+        if (f) { focusNode(f); st.showCause(f); say("처음 막힌 곳부터 거슬러 보여 드려요"); }
+        return;
+      }
+      case "wire_check": {
+        const eid = Object.entries(st.report?.edges ?? {}).find(([, r]) => (r.issues ?? []).length > 0)?.[0];
+        if (eid) { onFlag(eid); say("빠지거나 바뀐 것이 있는 선을 열었어요"); }
+        return;
+      }
+      case "run": void run(); say("계산하고 있어요"); return;
+      case "layout": st.autoLayout(); fit(); say("흐름 순서대로 다시 놓았어요"); return;
+      case "branch": {
+        const root = order.find(isWeight);
+        if (root) st.act(() => `${st.makeBranch(root)} · ${where}`);
+        return;
+      }
+      case "strategy_add": setStratOpen(true); say("무엇을 더할지 골라 주세요"); return;
+      case "compare": {
+        usePortfolioGraph.setState({ picked: order.filter(isWeight).slice(0, 4), pickedByUser: true });
+        st.act(() => `${usePortfolioGraph.getState().comparePicked()} · ${where}`);
+        return;
+      }
+      case "story_ai":
+        openRight(); st.select(null); st.selectEdge(null); st.setTab("story");
+        requestAnimationFrame(() => (document.querySelector(".pg-ai-story-ask, .pg-ai-story-login") as HTMLElement | null)?.focus());
+        say("이야기 탭 맨 위에서 AI 로 풀어 쓸 수 있어요");
+        return;
+      case "ask_ai": {
+        const t = [...order].reverse().find(isWeight) ?? order[order.length - 1];
+        if (t) { focusNode(t); openRight(); window.setTimeout(() => askFocus.current(), 60); say("고른 노드에게 물어보세요"); }
+        return;
+      }
+      case "records": setDrawer("records"); say("기록함을 열었어요"); return;
+      case "lanes": if (!st.showLanes) toggleLanes(); say("단계 레인을 켰어요"); return;
+      case "minimap": if (!st.showMinimap) toggleMinimap(); say("미니맵을 켰어요"); return;
+    }
+  };
   const hereStep = stepOfNode(s.validation?.procedure, s.selectedId)?.key ?? null;
   const procedureView = (
     <ProcedurePanel procedure={s.validation?.procedure ?? null} error={s.validationError}
@@ -1905,6 +1986,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
               <button type="button" className="pg-next-later" onClick={() => dismiss(nextStep)}>다음에</button>
               {aiShown && <AiAsk session={session} ai={ai.ai} onAsk={() => { void ai.ask(); }} />}
             </div>
+          ) : guide.tip && !dragOver && s.picked.length <= 1 && !s.selectedId && !s.selectedEdge && s.nodes.length > 0 ? (
+            <GuideBar g={guide} session={session} onTry={tryTool}
+                      onLater={(id) => setDismissed((d) => new Set(d).add(`guide|${id}`))}
+                      extra={aiShown ? <AiAsk session={session} ai={ai.ai} onAsk={() => { void ai.ask(); }} /> : null} />
           ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
             : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"

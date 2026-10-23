@@ -280,6 +280,26 @@ test("날짜 축(BS3): 합치기 견고성 절은 서버가 준 날짜로 — �
   if (first) await expect(dsec).toContainText(`${first.start_date}~${first.end_date}`);
 });
 
+// 전체 게이트가 찾은 흔들림(AI5b · 바탕 커밋에서도 추적을 켜면 1/5): 창 아래로 반쯤 나간 노드를 누르면 Playwright 가 그 노드를 화면 안으로
+// 스크롤한다 — 그림판(.react-flow)은 React Flow 가 준 overflow: hidden 이라 스크롤이 '되고', React Flow 는 다음 스크롤 이벤트에서 0 으로 되돌린다.
+// 그 사이 누름 자리가 75px 어긋나 고른 노드의 도구줄을 눌렀다(아래 BS3). 사람의 초점 이동(Tab)도 같은 길이다 — 그림판은 한 프레임도 밀리지 않는다.
+test("그림판은 스크롤되지 않는다: 창 아래로 반쯤 나간 노드로 스크롤해도 한 프레임도 밀리지 않는다 — 짝: 그 노드는 정말 반쯤 나가 있다", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openCanvas(page);
+  await node(page, "backtest").click();
+  await page.keyboard.press("Control+d");
+  const dup = (await wip(page)).nodes.filter((n) => n.type === "backtest")[1];
+  const r = await node(page, dup.id).evaluate((el) => {
+    const flow = el.closest(".react-flow")!;
+    const before = el.getBoundingClientRect();
+    el.scrollIntoView({ block: "nearest" });
+    return { half: before.top < innerHeight && before.bottom > innerHeight, top: flow.scrollTop, moved: el.getBoundingClientRect().top - before.top };
+  });
+  expect(r.half, "노드가 창 아래로 반쯤 나가 있다(공허하지 않다)").toBe(true);
+  expect(r.top, "그림판이 스크롤된 만큼").toBe(0);
+  expect(r.moved, "노드가 움직인 거리").toBe(0);
+});
+
 test("기록끼리 견고성(BS3): 정책 백테스트 둘을 고르면 막대가 '기록끼리 견고성'에 t1·t2 로 잇고 · 계산하면 출처 칩과 날짜", async ({ page }) => {
   await openCanvas(page);
   await node(page, "backtest").click();

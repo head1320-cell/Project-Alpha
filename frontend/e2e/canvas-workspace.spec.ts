@@ -1303,6 +1303,8 @@ test("갈래 승격(BN N2): '이 갈래를 원본으로' — 바꾼 설정이 �
   let doc = (await wip(page)) as BDoc;
   const br = doc.branches![0];
   const copy = Object.entries(br.map).find(([, o]) => o === "optimizer")![0];
+  // 갈래는 원본 아래에 생겨 창 밖일 수 있다 — 사람처럼 맞춤 단추로 전체를 본 뒤 고른다(그림판은 스크롤되지 않는다 — overflow: clip).
+  await page.locator(".react-flow__controls-fitview").click();
   await node(page, copy).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   await page.locator('.pg-basic-field[data-field="constraints"] .pg-chip', { hasText: "20%" }).click();

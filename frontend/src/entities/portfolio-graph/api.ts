@@ -4,7 +4,8 @@
  * 오류를 200 으로 돌려준다 — 여기서 HTTP 오류는 "서버에 닿지 못했다" 뿐이다.
  */
 import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
-import type { AskRecord, AskTarget, AssistAsk, AssistNarrate, AssistSuggest, BranchEvidence, GraphDoc, NarrateFact, NodeCatalog, RunEvent, RunReport, SaveResult, ValidateReport } from "./types";
+import type { GuideState } from "./guide";
+import type { AskRecord, AskTarget, AssistAsk, AssistGuide, AssistNarrate, AssistSuggest, BranchEvidence, GraphDoc, NarrateFact, NodeCatalog, RunEvent, RunReport, SaveResult, ValidateReport } from "./types";
 
 const BASE = "/api/v1/allocation/graph";
 /** AI 도우미(AI0) — 로그인 경로. 화면(포트폴리오 설계)은 열려 있고 AI 만 로그인이라 접두사가 다르다. */
@@ -83,4 +84,6 @@ export const portfolioGraphApi = {
   assistAsk: (doc: GraphDoc, target: AskTarget, question: string, previous: { question: string; answer: string } | null,
               facts: NarrateFact[], records: AskRecord[]): Promise<AssistAsk> =>
     assistCall<AssistAsk>("ask", { graph: doc, target, question, previous, facts, records }),
+  assistGuide: (doc: GraphDoc, state: GuideState, applicable: string[]): Promise<AssistGuide> =>
+    assistCall<AssistGuide>("guide", { graph: doc, state, applicable }),
 };
