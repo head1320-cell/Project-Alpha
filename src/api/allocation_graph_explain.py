@@ -144,14 +144,35 @@ def explain_views(view: dict, prov: dict, params: Any) -> dict:
             "trust": [_t(ASSUMED, "내 생각은 입력한 가정이에요 — 맞는지는 이 계산이 확인하지 않아요.")]}
 
 
+#: CF 3부 P1 — 추정 노드는 수익률 입력을 받지만 쓰지 않는다(설정만 넘긴다). 선이 뜻하는 의존과 실제가 달라서 말한다.
+_ESTIMATE_INPUT_UNUSED = "이어진 수익률은 이 단계에서 쓰지 않아요 — 설정만 넘기고, 기대 수익은 비중 계산 단계가 자기 수익률 입력으로 계산해요."
+
+#: 완화 사다리가 건너뛴 제약 이름(`constrained_solve` 의 relaxed) → 쉬운 말.
+_RELAXED_PLAIN = {"turnover": "회전율", "beta": "시장 민감도", "group": "업종 상한"}
+
+
+def _constraints_approx_text(cr: dict) -> str:
+    """근사해·깎아 맞춘 해를 한 문장으로 — 값은 보고에 있는 것만(새 숫자 없음)."""
+    parts = []
+    if cr.get("projected"):
+        parts.append("이 계산 방식은 제약을 직접 풀지 못해 계산한 뒤 깎아 맞췄어요 — 회전율·시장 민감도 제약은 이 방식에서 적용되지 않아요.")
+    relaxed = [_RELAXED_PLAIN.get(r, str(r)) for r in cr.get("relaxed") or []]
+    if relaxed:
+        parts.append(f"원래 제약으로는 답이 없어 {'·'.join(relaxed)} 제약을 느슨하게 풀었어요.")
+    viol = cr.get("violations") or []
+    if viol:
+        parts.append(f"어긋난 제약 {len(viol)}개가 남았어요.")
+    return " ".join(parts) or "제약을 다 지키지 못해 가까운 비중을 냈어요."
+
+
 def explain_estimate(view: dict, prov: dict, params: Any) -> dict:
     s = view.get("settings") or {}
     if s.get("conditional"):
         return {"title": "경기 국면을 반영해 기대 수익을 잡기로 했어요",
-                "facts": ["실제로 반영됐는지는 비중 계산 단계가 알려 줘요."],
+                "facts": ["실제로 반영됐는지는 비중 계산 단계가 알려 줘요.", _ESTIMATE_INPUT_UNUSED],
                 "trust": [_t(ASSUMED, "국면이 앞으로도 이어진다고 가정해요.")]}
     return {"title": "과거 수익률을 기준으로 기대 수익을 잡았어요",
-            "facts": ["경기 국면은 반영하지 않았어요."],
+            "facts": ["경기 국면은 반영하지 않았어요.", _ESTIMATE_INPUT_UNUSED],
             "trust": [_t(ASSUMED, "과거 평균이 앞으로도 비슷하다고 가정해요.")]}
 
 
@@ -182,8 +203,14 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
         if cr.get("status") == "infeasible":
             trust.append(_t(FAILED, "제약을 모두 지킬 수 없어서 제약 없는 비중을 그대로 보여 줘요 — "
                                     + str(cr.get("reason") or "")))
+        elif cr.get("status") == "approx" or cr.get("projected"):
+            # CF 3부 P1 — 근사해·깎아 맞춘 해는 "제약 안에서" 가 확인이 아니다.
+            trust.append(_t(ASSUMED, _constraints_approx_text(cr)))
         else:
-            trust.append(_t(CONFIRMED, "정한 제약 안에서 계산했어요."))
+            trust.append(_t(CONFIRMED, "적용된 제약 안에서 계산했어요." if cr.get("unapplied")
+                            else "정한 제약 안에서 계산했어요."))
+        # 엔진이 말없이 건너뛴 업종 상한(라우트가 센 것) — 모르는 것으로 말한다.
+        trust += [_t(UNKNOWN, str(u.get("text") or "")) for u in cr.get("unapplied") or []]
     belief = view.get("belief") or {}
     if belief.get("blocked"):
         trust.append(_t(ASSUMED, "경기 국면 반영이 막혀서 과거 기준으로 계산했어요 — "

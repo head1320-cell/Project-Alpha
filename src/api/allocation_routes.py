@@ -395,6 +395,32 @@ def _ep_unavailable_reason(probes: dict) -> str | None:
 _ENGINE_BETA_NO_BENCH = "베타 제약이 지정됐지만 벤치마크 수익률이 없어 적용 불가 — 제약 무시됨(정직 보고)."
 
 
+def _group_cap_gaps(caps: dict[str, float], names: list[str], groups_of: dict[str, str]) -> list[dict]:
+    """업종 상한 중 ★엔진이 말없이 건너뛴 것★ (CF 3부 P1) — 보고만 한다.
+
+    `constrained_solve` 는 `groups_of` 에 있는 업종만 돈다. 그래서 ① 이 종목들 중 그 업종이 없는 상한과 ② 업종을 하나도
+    못 읽었을 때(`sector_groups_for` → `{}`)의 상한 전부는 적용되지 않는다. ③ 업종을 모르는 종목은 어떤 상한에도 들지 않는다.
+    엔진(`constrained_opt.py`)은 SHA 가드라 고치지 않고, 같은 사실을 여기서 센다.
+    """
+    if not caps:
+        return []
+    from src.data.stock_master import resolve_name
+    if not groups_of:
+        return [{"kind": "group_cap", "group": g, "cap_pct": float(cap),
+                 "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았어요 — 이 종목들의 업종을 읽지 못했어요."}
+                for g, cap in caps.items()]
+    present = set(groups_of.values())
+    out = [{"kind": "group_cap", "group": g, "cap_pct": float(cap),
+            "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았어요 — 이 종목들 중 그 업종이 없어요."}
+           for g, cap in caps.items() if g not in present]
+    unknown = [t for t in names if t not in groups_of]
+    if unknown:
+        shown = ", ".join(resolve_name(t) for t in unknown[:5]) + (" 등" if len(unknown) > 5 else "")
+        out.append({"kind": "unknown_sector", "names": unknown,
+                    "text": f"업종을 모르는 종목 {len(unknown)}개({shown})는 어떤 업종 상한에도 들지 않았어요."})
+    return out
+
+
 def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -> dict | None:
     """P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체한다.
 
@@ -409,19 +435,22 @@ def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -
     if not cobj.any_active():
         return None
     bench_cut = bench is not None and len(bench) != R.shape[0]
+    # 한 번만 읽어 엔진에 넘긴 그 dict 로 빠진 상한을 센다 — 두 번 읽으면 엔진이 본 것과 다를 수 있다.
+    groups_of = sector_groups_for(names)
     sol = constrained_solve(
         req.model, names, R,
         mu=np.asarray(opt["mu_used"], dtype=float),
         S=np.asarray(opt["sigma_annual"], dtype=float),
         constraints=cobj,
         w_current=req.weights,
-        groups_of=sector_groups_for(names),
+        groups_of=groups_of,
         bench_returns=(None if bench is None or bench_cut else bench.values),
         risk_aversion=getattr(req, "risk_aversion", None),
     )
     report = {k: sol.get(k) for k in
               ("status", "violations", "binding", "relaxed",
                "notes", "reason", "projected")}
+    report["unapplied"] = _group_cap_gaps(cobj.group_caps_pct, names, groups_of)
     if bench_cut and report["notes"]:
         # 벤치마크는 있었는데 빈 날 때문에 길이가 달라 버렸다 — "없어" 가 아니라 그 사실을 적는다(K1).
         report["notes"] = [

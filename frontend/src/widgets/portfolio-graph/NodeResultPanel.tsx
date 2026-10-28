@@ -11,6 +11,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 import type { NodeRunResult } from "@/entities/portfolio-graph";
+import type { ConstraintsReport } from "@/entities/allocation/api";
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 import { CorrStressResult, FactorXrayResult, ScenarioStressResult, SensitivityResult } from "./CheckResults";
 import { NeutralizeResult, PortfolioCombineResult, ScoresResult, ScoresToWeightsResult, ScreenerResult, SleeveResult } from "./SignalResults";
@@ -125,6 +126,44 @@ function LongShortLegs({ weights }: { weights: Record<string, number> }) {
   );
 }
 
+/** 완화 사다리가 건너뛴 제약(`relaxed`) → 쉬운 말. 서버 설명(`_RELAXED_PLAIN`)과 같은 낱말. */
+const RELAXED_TEXT: Record<string, string> = { turnover: "회전율", beta: "시장 민감도", group: "업종 상한" };
+const CONS_STATE = {
+  ok: ["confirmed", "제약 지킴"], approx: ["assumed", "가깝게 맞춤"], infeasible: ["failed", "제약을 못 지킴"],
+} as const;
+
+/**
+ * 제약이 어떻게 적용됐나 (CF 3부 P1) — ★보고를 그대로 옮긴다★(값을 다시 재지 않는다).
+ * 적용 안 된 것 · 어긋난 것 · 느슨히 푼 것 · 상한에 닿은 것 · 메모(깎아 맞춤은 엔진 메모가 말한다) 순서.
+ * 투영이거나 빠진 것이 있으면 '제약 지킴' 이라 하지 않는다.
+ */
+/** 상태 칩 — 투영이거나 빠진 것이 있으면 서버 상태가 ok 여도 '가깝게 맞춤'(칩과 위 줄이 같은 말을 한다). */
+function consState(cr: ConstraintsReport): readonly [string, string] {
+  const st = cr.status in CONS_STATE ? cr.status : "approx";
+  return st === "ok" && (cr.projected || (cr.unapplied ?? []).length) ? CONS_STATE.approx : CONS_STATE[st];
+}
+
+function ConstraintReport({ cr }: { cr: ConstraintsReport }) {
+  const unapplied = cr.unapplied ?? [];
+  const [tone, label] = consState(cr);
+  const relaxed = cr.relaxed.map((r) => RELAXED_TEXT[r] ?? r);
+  return (
+    <div className="pg-cons" data-cons-status={cr.status}>
+      <p className="pg-cons-head">
+        <span className={`pg-tag pg-tag--${tone}`}>{label}</span>
+        {cr.reason ? <span className="pg-note">{cr.reason}</span> : null}
+      </p>
+      <ul className="pg-list pg-cons-list">
+        {unapplied.map((u, i) => <li key={`u${i}`} className="pg-cons-unapplied">적용 안 됨 — {u.text}</li>)}
+        {cr.violations.map((x, i) => <li key={`v${i}`} className="pg-cons-violation">어긋남 — {x.detail}</li>)}
+        {relaxed.length > 0 && <li className="pg-cons-relaxed">느슨히 푼 것 — {relaxed.join(" · ")}</li>}
+        {cr.binding.map((b, i) => <li key={`b${i}`} className="pg-cons-binding">상한에 닿음 — {b}</li>)}
+        {cr.notes.map((n, i) => <li key={`n${i}`} className="pg-cons-note">{n}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 function Optimizer({ v }: { v: Dict }) {
   const cr = v.constraints_report as Dict | null;
   const belief = v.belief as Dict | undefined;
@@ -135,8 +174,9 @@ function Optimizer({ v }: { v: Dict }) {
       <KV rows={[
         ["모델", String(v.model)],
         ["뷰 적용", v.views_applied ? "적용" : "적용 안 됨"],
-        ["제약", cr ? `${String(cr.status)}${cr.reason ? ` — ${String(cr.reason)}` : ""}` : "없음"],
+        ["제약", cr ? consState(cr as unknown as ConstraintsReport)[1] : "없음"],
       ]} />
+      {cr && <ConstraintReport cr={cr as unknown as ConstraintsReport} />}
       <EngineEvidence v={v} />
       {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 가 막혀서 표본 추정으로 계산했어요 — {String(belief.blocked_reason)}</p>}
       {cap.length > 0 && <p className="pg-note">시가총액 미상 종목 {cap.length}개 — 시장 균형 가중은 그 종목에 대해 가정입니다.</p>}

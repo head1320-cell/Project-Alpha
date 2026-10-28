@@ -37,7 +37,9 @@ from src.engine import portfolio_graph as pg  # noqa: E402
 
 GOLDEN = Path(__file__).parent / "golden" / "cf3_weights.json"
 #: CF3 가 더하는 관측 키 — 비교에서 뺀다(어느 깊이에 있든).
-NEW_KEYS = {"alignment", "fallbacks", "view_legs_dropped", "sigma_missing", "dropped_zero"}
+NEW_KEYS = {"alignment", "fallbacks", "view_legs_dropped", "sigma_missing", "dropped_zero",
+            # CF 3부 P1 — 엔진이 말없이 건너뛴 업종 상한(보고만 · `tests/test_p1_constraints_report.py`)
+            "unapplied"}
 
 T5 = ["005930", "000660", "035420", "051910", "068270"]
 LATE, HOLEY = "068270", "051910"

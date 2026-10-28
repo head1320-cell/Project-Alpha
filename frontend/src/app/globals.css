@@ -4749,6 +4749,13 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-ls-blocked { padding: 10px 12px; border: 1px solid var(--pg-assume); border-radius: 10px; background: var(--pg-assume-soft); }
 .pg-ls-blocked .pg-list, .pg-ls-blocked .pg-warn { color: var(--pg-ink); }
 .pg-la-unmeasured { font-size: 12px; color: var(--pg-mute); }
+/* CF 3부 P1 · 제약이 어떻게 적용됐나 — 결론을 바꾸는 줄(적용 안 됨 · 어긋남)만 경고색, 나머지는 조용히. */
+.pg-cons { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--pg-line); border-radius: 10px; }
+.pg-cons-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0; font-size: 13px; color: var(--pg-body); }
+.pg-cons-list { margin: 0; color: var(--pg-body); }
+.pg-cons-list:empty { display: none; }
+.pg-cons-unapplied, .pg-cons-violation { color: var(--pg-assume); }
+.pg-cons-note { color: var(--pg-mute); font-size: 12px; }
 .pg-pack-id { margin: 0 0 8px; font-size: 12px; color: var(--pg-mute); }
 .pg-scroll-x { overflow-x: auto; max-width: 100%; }
 .pg-ci { font-size: 11px; color: var(--pg-mute); white-space: nowrap; }

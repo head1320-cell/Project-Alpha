@@ -50,7 +50,13 @@ export interface ConstraintsReport {
   notes: string[];
   reason?: string | null;
   projected?: boolean;
+  /** CF 3부 P1 — 엔진이 말없이 건너뛴 업종 상한(라우트가 센 것). 문장은 서버가 만든다. */
+  unapplied?: ConstraintUnapplied[];
 }
+
+export type ConstraintUnapplied =
+  | { kind: "group_cap"; group: string; cap_pct: number; text: string }
+  | { kind: "unknown_sector"; names: string[]; text: string };
 
 export interface AnalyzeRequest {
   tickers: string[];
