@@ -242,7 +242,9 @@ test("캔버스가 바뀌면 초안을 지우고 말한다 — 짝: 노드를 �
   const b = (await page.locator('.react-flow__node[data-id="estimate"]').boundingBox())!;
   await page.mouse.move(b.x + b.width / 2, b.y + 14);
   await page.mouse.down();
-  await page.mouse.move(b.x + b.width / 2 + 30, b.y + 64, { steps: 6 });
+  // 위아래로만 옮긴다 — 옆으로 30px 은 멀리 확대(0.375 아래)에서 옆 열 간격(80)을 넘어 '비중 계산' 카드 위에 얹혀, 다음 누름을 이 카드가 가로챘다
+  // (PB3 게이트 — 부하로 처음 맞춤이 더 멀리 열린 때 한 번). 이 테스트가 보는 것은 '옮기기만 하면 초안이 그대로' 다.
+  await page.mouse.move(b.x + b.width / 2, b.y + 64, { steps: 6 });
   await page.mouse.up();
   await page.waitForTimeout(300);
   await expect(page.locator(".pg-draft-node")).toHaveCount(1);                       // ★짝★ 옮기기만은 그대로
