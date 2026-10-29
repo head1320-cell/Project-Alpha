@@ -274,3 +274,35 @@ def test_account_without_a_type_stops_instead_of_defaulting(market):
 def test_future_assessment_date_is_refused():
     out = _run(_g([_node("c", "client_profile", risk_tolerance="moderate", assessed_at="2099-01-01")], []))["c"]
     assert out["status"] == "failed" and "미래" in out["reason"]
+
+
+# ── 설명 글은 사람 말로 (PB2 화면 점검에서 찾음) ─────────────────────────────
+
+_MARKS = ("**", "★", "`", "horizon_days", "target_retirement_year", "risky/safe")
+
+
+def _explain_texts(ex: dict) -> list[str]:
+    out = [ex.get("title") or ""]
+    out += [str(x) for x in ex.get("facts") or []]
+    out += [t["text"] for t in ex.get("trust") or []]
+    out += [str(x) for x in ex.get("unmeasured") or []]
+    if ex.get("headline"):
+        out.append(str(ex["headline"].get("text") or ""))
+    return out
+
+
+def test_explanations_carry_no_markup_or_field_names(market):
+    """기존 경로의 사유 문장은 강조 기호·백틱·필드 이름을 품는다 — 이야기 탭에 그대로 찍히면 PB 가 읽을 수 없다.
+    네 노드의 설명 글 어디에도 남지 않는다. 짝: 사유의 뜻은 남는다(목표 연도가 없다는 말이 사라지지 않는다)."""
+    g = _with([_node("a", "account", account_type="irp"), _node("t", "goal"), _node("h", "holdings_check"),
+               _node("c", "client_profile")],
+              [_edge("o", "weights", "a", "weights"), _edge("a", "account", "t", "account"),
+               _edge("o", "weights", "h", "weights"), _edge("c", "client", "a", "client")])
+    out = _run(g)
+    for nid in ("a", "t", "h", "c"):
+        assert out[nid]["status"] == "ok", (nid, out[nid].get("reason"))
+        for text in _explain_texts(out[nid]["explain"]):
+            for m in _MARKS:
+                assert m not in text, (nid, m, text)
+    goal = " ".join(_explain_texts(out["t"]["explain"]))
+    assert "목표 연도" in goal and "선언되지 않았" in goal                      # 짝 — 뜻은 남는다

@@ -48,6 +48,16 @@ CLASS_PLAIN = {"EQUITY": "주식", "RATES": "금리(채권)", "CREDIT": "신용"
 _CLASSES = tuple(c.value for c in AssetClass)
 
 _OPTIMIZER_UNAWARE = "최적화기는 이 고객·계좌를 모른 채 비중을 냈어요 — 이 점검은 사후 관측이고 비중을 바꾸지 않아요."
+#: 기존 경로 사유 문장의 필드 이름 → 사람 말 (PB2 화면 점검에서 찾음). 강조 기호·백틱은 걷는다 — 뜻은 그대로.
+_FIELD_PLAIN = {"horizon_days": "투자 기간(일)", "target_retirement_year": "목표 연도", "risky/safe": "위험자산/안전자산"}
+
+
+def _plain(v: Any) -> str:
+    """경로가 준 사유를 이야기 탭에 그대로 싣기 전에 — `**`·`★`·백틱을 걷고 필드 이름을 사람 말로."""
+    s = str(v).replace("**", "").replace("★", "").replace("`", "")
+    for k, w in _FIELD_PLAIN.items():
+        s = s.replace(k, w)
+    return s
 
 
 def _holdings(inputs: dict, what: str) -> dict[str, float]:
@@ -181,9 +191,9 @@ def _explain_account(view: dict, prov: dict, params: Any) -> dict:
     verdicts = r.get("verdicts") or []
     acct = ACCOUNT_PLAIN.get(view.get("account_type"), view.get("account_type"))
     facts = [f"{LIMIT_PLAIN.get(v['kind'], v['kind'])}: {VERDICT_PLAIN.get(v['verdict'], v['verdict'])}"
-             + (f" — {v['reason']}" if v.get("reason") else "") for v in verdicts]
+             + (f" — {_plain(v['reason'])}" if v.get("reason") else "") for v in verdicts]
     if not verdicts:
-        facts.append(str(r.get("note") or "이 계좌 유형에는 이 저장소가 아는 한도가 없어요."))
+        facts.append(_plain(r.get("note") or "이 계좌 유형에는 이 저장소가 아는 한도가 없어요."))
     rs = r.get("risky_share") or {}
     iv = rs.get("interval") or {}
     if rs.get("available") and iv.get("lo") is not None:
@@ -191,7 +201,7 @@ def _explain_account(view: dict, prov: dict, params: Any) -> dict:
         facts.append(f"위험자산 비중: {iv['lo']:g}~{iv['hi']:g}%"
                      + (f" — 자산군을 모르는 보유 {un:g}% 만큼 구간이 넓어요(모름을 0으로 접지 않아요)" if un else ""))
     elif rs.get("reason"):
-        facts.append(f"위험자산 비중을 재지 않았어요 — {rs['reason']}")
+        facts.append(f"위험자산 비중을 재지 않았어요 — {_plain(rs['reason'])}")
     if r.get("ignored_limits"):
         facts.append(f"이 계좌에 없는 한도라 보지 않은 것: {', '.join(LIMIT_PLAIN.get(k, k) for k in r['ignored_limits'])}")
     trust = []
@@ -253,7 +263,8 @@ def _explain_goal(view: dict, prov: dict, params: Any) -> dict:
     facts, trust = [], []
     target = g.get("target_pct")
     if target is None:
-        facts.append("목표 위험자산 비중을 내지 않았어요" + (f" — {g['reason']}" if g.get("reason") else "."))
+        why = list(dict.fromkeys(_plain(x) for x in (g.get("years_reason"), g.get("curve_reason"), g.get("reason")) if x))
+        facts.append("목표 위험자산 비중을 내지 않았어요" + (f" — {' / '.join(why)}" if why else "."))
         trust.append(_t(UNKNOWN, "곡선(두 점 이상)·남은 기간이 있어야 목표를 내요 — 지어내지 않아요."))
     else:
         facts.append(f"이 시점의 목표 위험자산 비중: {target:g}%")
@@ -264,7 +275,7 @@ def _explain_goal(view: dict, prov: dict, params: Any) -> dict:
     elif target is not None and gap.get("state") == "below":
         facts.append(f"지금 위험자산 비중이 목표보다 {-gap['hi']:.1f}~{-gap['lo']:.1f}%p 적어요")
     elif target is not None:
-        facts.append("지금 비중과 목표의 차이는 몰라요" + (f" — {gap['reason']}" if gap.get("reason") else ""))
+        facts.append("지금 비중과 목표의 차이는 몰라요" + (f" — {_plain(gap['reason'])}" if gap.get("reason") else ""))
         trust.append(_t(UNKNOWN, "격차의 부호를 모르면 0으로 보지 않아요 — 미배정 자산군 때문이에요."))
     months = (r.get("contribution") or {}).get("months")
     if months is not None:
@@ -301,11 +312,11 @@ def _explain_holdings(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, "진단 계산은 끝났어요.")]
     for name, blk in (("위험 기여", r.get("risk_contributions")), ("유동성", r.get("liquidity"))):
         if isinstance(blk, dict) and blk.get("available") is False:
-            trust.append(_t(FAILED, f"{name}를 재지 못했어요 — {blk.get('reason')}"))
+            trust.append(_t(FAILED, f"{name}를 재지 못했어요 — {_plain(blk.get('reason'))}"))
     if prov.get("source") == "mock":
         trust.append(_practice())
     if r.get("note"):
-        facts.append(str(r["note"]))
+        facts.append(_plain(r["note"]))
     return {"title": "지금 보유를 진단했어요", "facts": facts, "trust": trust,
             "unmeasured": ["이 진단이 앞으로의 위험을 맞히는지 — 과거 기준이에요"]}
 

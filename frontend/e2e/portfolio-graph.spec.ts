@@ -557,7 +557,7 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
   }
 });
 
-test("정리(BK W6): 템플릿 여섯이 서버 검증을 통과하고 돈다 · 단계 접기 · 예전 화면 이름으로 찾기", async ({ page }) => {
+test("정리(BK W6): 템플릿 모두가 서버 검증을 통과하고 돈다 · 단계 접기 · 예전 화면 이름으로 찾기", async ({ page }) => {
   await openCanvas(page);
   const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
   const types = new Set(catalog.nodes.map((c: { type: string }) => c.type));
@@ -2017,7 +2017,7 @@ function nullNumbers(x: unknown): unknown {
 }
 const FAKE_ZERO = /(^|[^\d.,])[+−-]?0\.0+(%|%p|배|원)?(?![\d])|NaN|Infinity|undefined/;
 
-test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그리지 않고 깨지지도 않는다 — 템플릿 여섯 + 지금 비중 · 수를 전부 지운 응답으로", async ({ page }) => {
+test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그리지 않고 깨지지도 않는다 — 템플릿 모두 + 지금 비중 · 수를 전부 지운 응답으로", async ({ page }) => {
   test.setTimeout(600_000);
   let lastError = "";
   page.on("pageerror", (e) => { lastError = e.message; });
@@ -2025,7 +2025,7 @@ test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그�
   page.on("console", (m) => { if (m.type() === "error" && /TypeError|Error:/.test(m.text())) lastError = m.text().split("\n")[0]; });
   await openCanvas(page);
   const bad: string[] = [];
-  // 템플릿 여섯 + 지금 비중 + **입력·필수 파라미터가 없는 노드 전부**(카탈로그에서 고른다 — 렌더러 대부분을 덮는다).
+  // 템플릿 모두 + 지금 비중 + **입력·필수 파라미터가 없는 노드 전부**(카탈로그에서 고른다 — 렌더러 대부분을 덮는다).
   const catalog = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
   const inputless = (catalog.nodes as { type: string; inputs: { required?: boolean }[]; params_schema?: { required?: string[] } }[])
     .filter((c) => !c.inputs.some((i) => i.required !== false) && !(c.params_schema?.required ?? []).length)

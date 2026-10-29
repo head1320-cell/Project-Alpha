@@ -55,6 +55,25 @@ OrderParams = _subset(
 )
 
 
+#: '지금 비중' 두 값을 같다고 볼 폭(%p) — 손으로 적은 값의 반올림까지만 같다고 본다.
+_SAME_PCT = 0.01
+
+
+def _holdings_vs_universe(order_w: dict, w: dict) -> dict | None:
+    """주문 목록의 '지금 비중' 과 유니버스 노드의 '지금 비중'(비중이 실어 온 요청) 견주기 (PB2 — ★관측만★).
+    유니버스에 지금 비중이 없으면 견주지 않는다(None). 한쪽에 없는 종목은 그쪽 0%."""
+    req = w.get("req")
+    uni = {str(k): float(v) for k, v in ((getattr(req, "weights", None) or {}).items())}
+    if not uni:
+        return None
+    if not order_w:
+        return {"state": "order_empty", "universe_count": len(uni)}
+    order = {str(k): float(v) for k, v in order_w.items()}
+    differs = [{"code": c, "order_pct": order.get(c, 0.0), "universe_pct": uni.get(c, 0.0)}
+               for c in sorted(set(order) | set(uni)) if abs(order.get(c, 0.0) - uni.get(c, 0.0)) > _SAME_PCT]
+    return {"state": "differs" if differs else "same", "differs": differs}
+
+
 def _order_preview(inputs: dict, p) -> pg.NodeOutput:
     from src.api.execution_routes import _compute
     target = _pct_of(inputs["weights"])
@@ -66,8 +85,26 @@ def _order_preview(inputs: dict, p) -> pg.NodeOutput:
     except HTTPException as e:
         raise pg.NodeFailure(f"주문 목록을 만들지 못했어요 — {e.detail}") from e
     view = {"plan": plan, "pretrade": pretrade, "portfolio_value": p.portfolio_value}
+    cmp_ = _holdings_vs_universe(dict(p.current_weights), inputs["weights"])
+    if cmp_ is not None:
+        view["holdings_vs_universe"] = cmp_
     return pg.NodeOutput(values={"trades": view}, view=view,
                          tags={"practice": mock_allowed(), "sources": ["execution_plan"]})
+
+
+def _holdings_line(cmp_: dict | None) -> dict | None:
+    if not cmp_:
+        return None
+    if cmp_["state"] == "same":
+        return _t(CONFIRMED, "주문 목록의 ‘지금 비중’이 유니버스 노드의 ‘지금 비중’과 같아요 — 같은 보유에서 출발했어요.")
+    if cmp_["state"] == "order_empty":
+        return _t(ASSUMED, "주문 목록의 ‘지금 비중’을 비워 새로 사는 주문으로 만들었어요 — 유니버스 노드에는 ‘지금 비중’"
+                           f"({cmp_['universe_count']}종목)이 있어요. 들고 있는 것에서 옮기려면 같은 값을 넣어 주세요.")
+    d = cmp_["differs"]
+    shown = " · ".join(f"{x['code']} {x['order_pct']:g}% / {x['universe_pct']:g}%" for x in d[:5])
+    more = f" 외 {len(d) - 5}종목" if len(d) > 5 else ""
+    return _t(ASSUMED, f"주문 목록의 ‘지금 비중’이 유니버스 노드의 ‘지금 비중’과 달라요(주문 목록 / 유니버스) — {shown}{more}. "
+                       "주문은 주문 목록 쪽 값으로 만들었어요 — 유니버스 쪽을 읽는 노드와 출발점이 달라요.")
 
 
 def _explain_orders(view: dict, prov: dict, params: Any) -> dict:
@@ -82,6 +119,9 @@ def _explain_orders(view: dict, prov: dict, params: Any) -> dict:
     if s.get("est_cost") is not None:
         facts.append(f"예상 비용은 {float(s['est_cost']):,.0f}원이에요.")
     trust = [_t(CONFIRMED, "주문은 만들지 않았어요 — 목록만 미리 봤어요.")]
+    held = _holdings_line(view.get("holdings_vs_universe"))
+    if held:
+        trust.append(held)
     trust += [_t("failed", f"{c['name']}: {c['detail']}") for c in blocks]
     trust += [_t(ASSUMED, f"{c['name']}: {c['detail']}") for c in warns]
     if mock_allowed():

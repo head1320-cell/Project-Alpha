@@ -135,6 +135,42 @@ const REBALANCE_TEMPLATE: GraphDoc = doc("리밸런싱 판단", [
   e("optimizer", "weights", "orders", "weights"),
 ]);
 
+/** 정기 점검의 예시 보유(%) — 유니버스 노드 한 곳에 적고, 주문 목록만 제 칸에 같은 값을 둔다. */
+const REVIEW_HOLD = { "005930": 50, "000660": 30, "035420": 20 };
+
+/**
+ * 정기 점검 (CF 3부 PB2) — 고객 → 계좌 점검 → 목표까지 · 지금 비중 → 보유 진단 · 목표 비중 → 리밸런싱 판단 → 주문 목록 미리보기 →
+ * 실행 목표 · 결정 기록. ★지금 비중은 유니버스 노드 한 곳★ — 지금 비중·리밸런싱 판단(설정을 비우면 유니버스 쪽을 쓴다)이 그것을 읽고,
+ * 주문 목록만 제 칸에 같은 값을 둔다(두 값이 다르면 주문 목록이 그렇다고 말한다). ★고객 정보는 비워 둔다★ — 성향은 모름, 계좌 유형은
+ * 골라야 계좌 점검이 돈다(기본값으로 정하지 않는다), 목표 연도·곡선이 없으면 목표 비중을 내지 않는다. 종목·보유는 예시. 주문은 만들지 않는다.
+ */
+const REVIEW_TEMPLATE: GraphDoc = doc("정기 점검", [
+  n("client", "client_profile", c(0), 0),
+  n("universe", "universe", c(0), 140, { tickers: TICKERS, weights: REVIEW_HOLD }),
+  n("now", "current_weights", c(1), 0),
+  ...HEAD.nodes.filter((x) => x.id !== "universe"),
+  n("account", "account", c(2), 0),
+  n("hold", "holdings_check", c(2), 10),
+  n("goal", "goal", c(3), 0),
+  n("optimizer", "optimizer", c(3), 140, { model: "risk_parity" }),
+  n("decide", "rebalance_decision", c(4), 0),
+  n("orders", "order_preview", c(4), 140, { current_weights: REVIEW_HOLD }),
+  n("target", "target_version", c(4), 280),
+  n("journal", "decision_journal", c(5), 140, { title: "정기 점검" }),
+], [
+  e("universe", "universe", "now", "universe"),
+  e("now", "weights", "account", "weights"),
+  e("client", "client", "account", "client"),
+  e("now", "weights", "hold", "weights"),
+  e("account", "account", "goal", "account"),
+  ...HEAD.edges,
+  e("optimizer", "weights", "decide", "weights"),
+  e("optimizer", "weights", "orders", "weights"),
+  e("optimizer", "weights", "target", "weights"),
+  e("target", "target", "journal", "target"),
+  e("orders", "trades", "journal", "trades"),
+]);
+
 /**
  * 매크로 화면에서 넘어온 국면 스냅샷으로 여는 흐름 (BL2b) — 타이밍 흐름에 '경기 국면 불러오기'(그 스냅샷)를 붙이고
  * 노출 조절이 타이밍과 국면을 함께 따르게 한다. ★스냅샷 id 는 서버가 확인한다★ — 없는 id 면 국면 노드가 사유와 함께 실패한다.
@@ -172,4 +208,6 @@ export const TEMPLATES: GraphTemplate[] = [
     description: "정한 비중이 하루에 얼마나 잃을 수 있는지 보고, 지수 선물로 시장 위험을 줄일 계약 수까지 계산해요." },
   { key: "rebalance", name: "리밸런싱 판단", doc: REBALANCE_TEMPLATE,
     description: "지금 들고 있는 비중에서 목표로 옮길 가치가 있는지 효용과 비용을 견줘 보고 주문 목록까지 봐요." },
+  { key: "review", name: "정기 점검", doc: REVIEW_TEMPLATE,
+    description: "고객·계좌·목표를 점검하고, 지금 비중에서 목표로 옮길지 본 뒤 주문 목록·결정 기록까지 이어요. 고객 정보는 비워 두었어요 — 채워야 계좌 점검이 돌아요." },
 ];

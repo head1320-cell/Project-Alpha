@@ -15,8 +15,12 @@ const LIMIT: Record<string, string> = { risky_asset_max_pct: "위험자산 비�
 const VERDICT: Record<string, [string, string]> = { pass: ["confirmed", "넘지 않음"], breach: ["failed", "넘음"],
   undetermined: ["assumed", "판정 못 함"] };
 
-/** 서버 사유 문장의 강조 기호(`**` · `★` · 백틱)만 걷는다 — 뜻은 그대로. */
-const plain = (v: unknown) => String(v ?? "").replace(/\*\*|★|`/g, "");
+/** 서버 사유 문장의 필드 이름 → 사람 말(서버 설명의 `_FIELD_PLAIN` 과 같은 표 — PB2 화면 점검에서 찾음). */
+const FIELD_PLAIN: [string, string][] = [["horizon_days", "투자 기간(일)"], ["target_retirement_year", "목표 연도"],
+  ["risky/safe", "위험자산/안전자산"]];
+/** 서버 사유 문장의 강조 기호(`**` · `★` · 백틱)를 걷고 필드 이름을 사람 말로 — 뜻은 그대로. */
+const plain = (v: unknown) =>
+  FIELD_PLAIN.reduce((s, [a, b]) => s.split(a).join(b), String(v ?? "").replace(/\*\*|★|`/g, ""));
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const fmt = (v: unknown, d = 1) => { const x = num(v); return x === null ? "모름" : Number.isInteger(x) ? x.toLocaleString("ko-KR") : x.toFixed(d); };
 
@@ -109,13 +113,17 @@ export function GoalResult({ v }: { v: Dict }) {
   const contrib = (r.contribution as Dict) ?? {};
   const st = String(gap.state ?? "unknown");
   const target = num(g.target_pct);
+  const years = num(g.years_remaining);
+  // 사유는 표 밖 한 줄로 — 긴 사유를 값 칸에 넣으면 이름 칸이 눌려 한 글자씩 세로로 선다(PB2 화면 점검에서 찾음).
+  const why = [years === null ? g.years_reason : null, target === null ? g.curve_reason : null]
+    .filter((x) => x).map(plain).filter((x, i, a) => a.indexOf(x) === i);
   return (
     <>
       <KV rows={[
-        ["남은 기간", num(g.years_remaining) === null ? `모름${g.years_reason ? ` — ${plain(g.years_reason)}` : ""}` : `${fmt(g.years_remaining)}년`],
-        ["목표 위험자산 비중", <span key="t" className="pg-goal-target">
-          {target === null ? `내지 않음${g.curve_reason ? ` — ${plain(g.curve_reason)}` : ""}` : `${fmt(target)}%`}</span>],
+        ["남은 기간", years === null ? "모름" : `${fmt(years)}년`],
+        ["목표 위험자산 비중", <span key="t" className="pg-goal-target">{target === null ? "내지 않음" : `${fmt(target)}%`}</span>],
       ]} />
+      {why.length > 0 && <p className="pg-note pg-goal-why">{why.join(" ")}</p>}
       <RiskyShare rs={r.risky_share as Dict | undefined} />
       {target !== null && (
         <p className="pg-goal-gap" data-state={st}>
