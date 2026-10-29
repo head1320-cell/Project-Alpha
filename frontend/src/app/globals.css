@@ -4801,7 +4801,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-client-chip[data-state="dirty"] .pg-client-state, .pg-client-chip[data-state="new"] .pg-client-state { color: var(--pg-assume); font-weight: 600; }
 .pg-client-chip[data-state="error"] .pg-client-state { color: var(--pg-fail); font-weight: 600; }
 .pg-client-chip[data-state="saved"] .pg-client-state { color: var(--pg-ok); }
-.pg-client-save { height: 30px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
+.pg-client-save, .pg-client-sheet { height: 30px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
 @media (min-width: 1680px) { .pg-client-doc { display: inline; } }
 @media (max-width: 640px) { .pg-client-who b { max-width: 84px; } }
 .pg-pack-id { margin: 0 0 8px; font-size: 12px; color: var(--pg-mute); }
@@ -9318,6 +9318,83 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .ma-form { display: flex; flex-direction: column; gap: 14px; }
 .ma-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ma-label { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+/* CF 3부 PB4 · 고객 한 장 — 종이 한 장처럼(인쇄 · PDF). `--tx-*` 토큰만. 비중 막대 폭은 그 % 를 그대로 쓴 그림(새 숫자 아님).
+   ★인쇄하면 한 장만★ — 메뉴·머리·도구·묻기는 숨긴다(이 화면이 있을 때만). */
+.cs-page { max-width: 860px; }
+.cs-page > * + * { margin-top: 12px; }
+.cs-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.cs-back { font-size: 14px; font-weight: 600; color: var(--tx-cta); text-decoration: none; }
+.cs-back:hover, .cs-back:focus-visible { text-decoration: underline; }
+.cs-tools-act { display: flex; gap: 8px; }
+.cs-tools-note { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--tx-sub); }
+.cs-sheet { background: var(--tx-surface); border-radius: var(--tx-r-sec); padding: 32px 36px; color: var(--tx-ink); }
+.cs-head { padding-bottom: 14px; border-bottom: 2px solid var(--tx-ink); }
+.cs-title { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; word-break: keep-all; text-wrap: balance; }
+.cs-meta { margin: 6px 0 0; font-size: 14px; color: var(--tx-sub); }
+.cs-alias { font-weight: 700; color: var(--tx-ink); }
+.cs-practice { margin: 14px 0 0; padding: 10px 14px; border-radius: var(--tx-r-row); background: var(--tx-warn-soft); color: var(--tx-warn);
+  font-size: 13.5px; font-weight: 600; line-height: 1.5; word-break: keep-all; }
+.cs-sec { margin-top: 22px; }
+.cs-h2 { margin: 0 0 8px; font-size: 16px; font-weight: 800; color: var(--tx-ink); }
+.cs-sub { margin: 0 0 10px; font-size: 13px; color: var(--tx-sub); word-break: keep-all; }
+.cs-weights { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cs-weight { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 4.5rem; align-items: center; gap: 12px; }
+.cs-weight-name { font-size: 15px; font-weight: 700; word-break: keep-all; }
+.cs-weight-code { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--tx-mute); }
+.cs-weight-bar { height: 10px; border-radius: 5px; background: var(--tx-soft); overflow: hidden; }
+.cs-weight-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--tx-blue); }
+.cs-weight-pct { font-size: 15px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.cs-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--tx-line); }
+.cs-step { padding: 10px 0; border-bottom: 1px solid var(--tx-line); }
+.cs-step-name { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--tx-mute); }
+.cs-step-title { margin: 2px 0 0; font-size: 15px; font-weight: 700; word-break: keep-all; }
+.cs-step-head { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--tx-ink); }
+.cs-step-failed { margin: 2px 0 0; font-size: 14px; color: var(--tx-danger); word-break: keep-all; }
+.cs-facts { margin: 4px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.55; color: var(--tx-sub); }
+.cs-trust, .cs-unmeasured { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.5; }
+/* 꼬리표는 왼쪽 칸에 고정 — 글이 길어 접혀도 꼬리표가 혼자 줄을 차지하지 않는다(390). */
+.cs-trust li { display: flex; align-items: baseline; gap: 8px; }
+.cs-tag { flex: none; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; background: var(--tx-soft); color: var(--tx-sub); }
+.cs-trust li[data-state="confirmed"] .cs-tag { background: var(--tx-ok-soft); color: var(--tx-ok); }
+.cs-trust li[data-state="assumed"] .cs-tag, .cs-trust li[data-state="unknown"] .cs-tag { background: var(--tx-warn-soft); color: var(--tx-warn); }
+/* 실패 칩 — 연한 바탕 위 빨강은 라이트에서 4.45:1 이라 바탕은 면 그대로 · 테두리로 구분(글자 대비 AA). */
+.cs-trust li[data-state="failed"] .cs-tag { background: var(--tx-surface); color: var(--tx-danger); box-shadow: inset 0 0 0 1px var(--tx-danger); }
+.cs-where { display: inline-block; font-size: 12px; color: var(--tx-mute); margin-left: 6px; white-space: nowrap; }
+.cs-foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid var(--tx-line); font-size: 13px; color: var(--tx-sub); line-height: 1.55; word-break: keep-all; }
+.cs-ask { background: var(--tx-surface); border-radius: var(--tx-r-sec); padding: 20px 24px; }
+.cs-ask-form { display: flex; gap: 8px; }
+.cs-ask-input { flex: 1; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 15px; }
+.cs-ask-input::placeholder { color: var(--tx-mute); }
+.cs-ask-reply { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.cs-ask-q { margin: 0; font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.cs-ask-answer p { margin: 0 0 6px; font-size: 15px; line-height: 1.6; color: var(--tx-ink); word-break: keep-all; }
+.cs-ask-fact { margin-left: 2px; padding: 1px 8px; border: 0; border-radius: 10px; background: var(--tx-blue-soft); color: var(--tx-cta);
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.cs-ask-line { margin: 0; padding: 8px 12px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 13px; color: var(--tx-sub); }
+.cs-ask-cannot { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--tx-ink); }
+.cs-ask-notice, .cs-ask-unavailable { margin: 0; font-size: 13px; color: var(--tx-warn); }
+.cs-ask-err { margin: 8px 0 0; font-size: 13px; color: var(--tx-danger); }
+.cl-practice { margin-left: 6px; padding: 1px 6px; border-radius: 8px; font-size: 11.5px; font-weight: 700; color: var(--tx-warn); background: var(--tx-warn-soft); }
+@media (max-width: 640px) {
+  .cs-sheet { padding: 20px 16px; }
+  .cs-weight { grid-template-columns: minmax(0, 1fr) 4.5rem; }
+  .cs-weight-bar { grid-column: 1 / -1; grid-row: 2; }
+  .cs-ask-form { flex-direction: column; }
+}
+@media print {
+  body:has(.cs-page) .terminal-header, body:has(.cs-page) .terminal-sidebar, body:has(.cs-page) .sidebar-backdrop,
+  body:has(.cs-page) .tcrumb, .cs-tools, .cs-ask { display: none !important; }
+  /* 셸은 화면 높이에 맞춘 스크롤 상자다 — 인쇄에서는 풀어야 한 장이 여러 쪽으로 이어진다(아니면 첫 화면 높이만 찍힌다). */
+  body:has(.cs-page) .terminal-root, body:has(.cs-page) .terminal-body, body:has(.cs-page) .terminal-main {
+    display: block !important; height: auto !important; overflow: visible !important; }
+  body:has(.cs-page) .terminal-main, body:has(.cs-page) .terminal-content { padding: 0 !important; margin: 0 !important; }
+  .cs-page { max-width: none; }
+  .cs-sheet { border-radius: 0; padding: 0; }
+  .cs-weight-bar > span { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cs-step, .cs-weight, .cs-trust li { break-inside: avoid; }
+}
+
 /* CF 3부 PB3 · 고객(/clients) — `--tx-*` 토큰만(라이트·다크 짝은 토큰이 갖는다). 넓으면 왼쪽 목록·더하기 / 오른쪽 고객, 좁으면 목록 → 고객 → 더하기. */
 .cl-page > * + * { margin-top: 12px; }
 .cl-page > .tx-head + * { margin-top: 0; }

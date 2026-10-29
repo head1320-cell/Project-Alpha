@@ -839,6 +839,28 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
 
 # ── 저장 액션 (BK0) ───────────────────────────────────────────────────────────
 
+def run_for_sheet(graph: Any, node_id: str, preview: Mapping[str, str | None], registry: Registry) -> dict:
+    """고객 한 장(CF 3부 PB4) — 그래프를 **다시 계산**하고, 주인공 `node_id` 가 비중(`Weights`)을 내는 계산된 노드이며 ★모든 노드의★
+    view 해시가 PB 가 본 계산(`preview` {노드 id: 해시 · 계산 못 한 노드는 None})과 같을 때만 `{"ok": True, report, values}`.
+    아니면 `{"ok": False, code, message}` — 코드: `no_node` · `not_weights` · `not_ok` · `stale` (`save_node` 와 같은 규율 —
+    한 장은 모든 단계의 설명을 싣으므로 본 것과 다른 설명·숫자를 싣지 않는다)."""
+    report, values, _params = _execute(graph, registry)
+    res = report["nodes"].get(node_id)
+    if res is None:
+        return {"ok": False, "code": "no_node", "message": f"그래프에 {node_id} 노드가 없어요."}
+    spec = registry.get(str(res.get("type")))
+    if spec is None or not any(p.type == "Weights" for p in spec.outputs) or \
+            not isinstance((res.get("view") or {}).get("weights") if res["status"] == STATUS_OK else {}, Mapping):
+        return {"ok": False, "code": "not_weights", "message": "이 노드는 비중 표를 내지 않아 한 장의 주인공이 될 수 없어요."}
+    if res["status"] != STATUS_OK:
+        return {"ok": False, "code": "not_ok",
+                "message": f"이 노드가 계산되지 않아 한 장을 만들 수 없어요 — {res.get('reason')}"}
+    if {nid: r.get("view_hash") for nid, r in report["nodes"].items()} != dict(preview):
+        return {"ok": False, "code": "stale",
+                "message": "보신 계산과 지금 계산이 달라요. 다시 계산한 뒤 한 장을 만들어 주세요."}
+    return {"ok": True, "report": report, "values": values}
+
+
 def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry) -> dict:
     """그래프를 **다시 계산**해 `node_id` 의 view 해시가 사용자가 본 미리보기와 같을 때만
     그 노드의 `save` 를 **한 번** 부른다. 결과 `{"ok": True, saved_id, text, node_id}` 또는

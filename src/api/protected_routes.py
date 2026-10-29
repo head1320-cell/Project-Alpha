@@ -122,6 +122,16 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 고객의 설계 문서 열기 — 그 고객의 문서만(다른 고객 문서 id 는 404)"),
     ("PUT", "/api/v1/pb/clients/{cid}/docs/{did}"):
         (REQUIRE_LOGIN, "내 고객의 설계 문서 저장 — 보관한 고객은 409"),
+    ("POST", "/api/v1/pb/clients/{cid}/snapshots"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 만들기(PB4) — 서버가 다시 계산하고 PB 가 본 미리보기와 같을 때만 둔다"),
+    ("GET", "/api/v1/pb/clients/{cid}/snapshots"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 목록"),
+    ("GET", "/api/v1/pb/clients/{cid}/snapshots/{sid}"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 보기 — 그 고객의 한 장만"),
+    ("DELETE", "/api/v1/pb/clients/{cid}/snapshots/{sid}"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 지우기 — 고객에게 보여 준 적 없는 것만(보여 준 것은 409)"),
+    ("POST", "/api/v1/pb/clients/{cid}/snapshots/{sid}/ask"):
+        (REQUIRE_LOGIN, "한 장에게 미리 묻기 — 근거는 그 한 장의 줄뿐 · PB 의 시간당 한도"),
 
     # ── 내 증권 계좌 (BV4) — 로그인 + ★본인 계좌만★: 소유자는 토큰에서 오고, 남의 계좌는 404 ──
     ("GET", "/api/v1/broker-accounts"):

@@ -211,7 +211,7 @@ def _explain_account(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(ASSUMED, "판정에 쓴 한도 값은 선언한 것이에요(출처·기준일과 함께) — 이 저장소는 법규 수치를 들고 있지 않아요."))
     trust.append(_t(UNKNOWN, _OPTIMIZER_UNAWARE))
     breach = sum(1 for v in verdicts if v["verdict"] == "breach")
-    headline = ({"label": "넘은 한도", "value": breach, "unit": "개", "text": f"넘은 한도 {breach}개"} if verdicts else None)
+    headline = ({"label": "넘은 한도", "value": breach, "unit": "개", "text": f"{breach}개"} if verdicts else None)
     return {"title": f"{acct} 계좌 한도를 점검했어요", "headline": headline, "facts": facts, "trust": trust,
             "unmeasured": ["계좌 잔고·실제 보유 — 계좌를 읽지 않고 이어진 비중만 봐요", "법규 수치가 지금도 같은지"]}
 

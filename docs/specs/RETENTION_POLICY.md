@@ -142,7 +142,7 @@
 
 ## 5. ⑤ 계정 소유 — 이 저장소가 정할 문제가 아니다
 
-`users` · `portfolios` · `trade_log` · `user_security` · `broker_accounts` · `pb_clients` · `pb_client_docs`
+`users` · `portfolios` · `trade_log` · `user_security` · `broker_accounts` · `pb_clients` · `pb_client_docs` · `pb_client_snapshots`
 
 지울지 말지는 **계정 소유자**가 정한다. 그래서 보호하지도, 재생성 가능이라고도
 하지 않는다. `users` 삭제는 나머지 표로 `ON DELETE CASCADE` 되도록 선언돼 있다.
@@ -155,6 +155,8 @@
 
 `pb_clients`·`pb_client_docs`(CF 3부 PB3)는 PB 가 관리하는 고객(★별칭만★ — 실명·연락처를 담지 않는다)과 고객별 설계 문서다.
 계정(PB)째로 지워지고, 문서는 고객 행과 함께 간다. ★지우는 경로는 두지 않았다★ — 보관(`archived_at`)만 있다.
+`pb_client_snapshots`(PB4)는 고객 한 장 — 만든 때의 그래프와 서버가 다시 계산한 설명·비중이다. ★고객에게 보여 준 한 장(`shared_at`)은
+지우는 경로가 거절한다★(무엇을 보여 줬는지가 남아야 한다). 보여 주기 전에는 PB 가 지울 수 있다.
 
 ★`trade_log` 와 `live_fills` 를 혼동하지 말 것★ — 이름이 비슷하지만 다른 표다.
 실거래 감사 기록은 `live_*` 쪽이고 그것은 ②로 보호된다.

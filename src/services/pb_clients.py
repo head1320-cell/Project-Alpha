@@ -28,7 +28,7 @@ import json
 import secrets
 from typing import Any
 
-from src.database import PbClient, PbClientDoc, session_scope
+from src.database import PbClient, PbClientDoc, PbClientSheet, session_scope
 from src.domain.pii_guard import ALIAS_MAX, pii_reason
 from src.engine import portfolio_graph as pg
 
@@ -50,6 +50,18 @@ class ClientArchived(RuntimeError):
 
 class DocTooLarge(ValueError):
     """문서가 상한보다 크다."""
+
+
+class SheetRefused(ValueError):
+    """한 장을 만들 수 없다 — `code`(no_node · not_weights · not_ok → 422 · stale → 409)와 사람 말 사유."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+class SheetShared(RuntimeError):
+    """고객에게 보여 준 한 장이라 지울 수 없다."""
 
 
 def _now() -> dt.datetime:
@@ -89,13 +101,14 @@ def _check_graph(graph: Any) -> str:
     return text
 
 
-def _client_dict(r: PbClient, docs: list[PbClientDoc]) -> dict:
+def _client_dict(r: PbClient, docs: list[PbClientDoc], last_sheet: dt.datetime | None = None) -> dict:
     return {
         "client_id": r.client_id, "alias": r.alias, "risk_tolerance": r.risk_tolerance,
         "profile_source": r.profile_source, "assessed_at": r.assessed_at, "assessed_age_days": _age_days(r.assessed_at),
         "horizon_years": r.horizon_years, "archived": r.archived_at is not None, "archived_at": _iso(r.archived_at),
         "created_at": _iso(r.created_at), "updated_at": _iso(r.updated_at),
         "doc_count": len(docs), "last_doc_at": _iso(max((d.updated_at for d in docs), default=None)),
+        "last_sheet_at": _iso(last_sheet),
     }
 
 
@@ -116,6 +129,12 @@ def _writable(s, owner: str, client_id: str) -> PbClient:
     if r.archived_at is not None:
         raise ClientArchived("보관한 고객이에요 — 다시 꺼낸 뒤 고쳐 주세요.")
     return r
+
+
+def _last_sheet(s, client_id: str) -> dt.datetime | None:
+    r = (s.query(PbClientSheet.created_at).filter(PbClientSheet.client_id == client_id)
+         .order_by(PbClientSheet.created_at.desc()).first())
+    return r[0] if r else None
 
 
 def _docs_of(s, client_id: str) -> list[PbClientDoc]:
@@ -141,14 +160,17 @@ def list_clients(owner: str, *, archived: bool = False) -> list[dict]:
     with session_scope() as s:
         q = s.query(PbClient).filter(PbClient.owner_username == owner)
         q = q.filter(PbClient.archived_at.isnot(None) if archived else PbClient.archived_at.is_(None))
-        return [_client_dict(r, _docs_of(s, r.client_id)) for r in q.order_by(PbClient.updated_at.desc()).all()]
+        return [_client_dict(r, _docs_of(s, r.client_id), _last_sheet(s, r.client_id))
+                for r in q.order_by(PbClient.updated_at.desc()).all()]
 
 
 def get(owner: str, client_id: str) -> dict:
     with session_scope() as s:
         r = _owned(s, owner, client_id)
         docs = _docs_of(s, r.client_id)
-        return {**_client_dict(r, docs), "docs": [_doc_meta(d) for d in docs]}
+        sheets = _sheets_of(s, r.client_id)
+        return {**_client_dict(r, docs, sheets[0].created_at if sheets else None), "docs": [_doc_meta(d) for d in docs],
+                "sheets": [_sheet_meta(x) for x in sheets]}
 
 
 def update(owner: str, client_id: str, changes: dict) -> dict:
@@ -164,7 +186,7 @@ def update(owner: str, client_id: str, changes: dict) -> dict:
             setattr(r, k, v)
         r.updated_at = _now()
         s.flush()
-        return _client_dict(r, _docs_of(s, r.client_id))
+        return _client_dict(r, _docs_of(s, r.client_id), _last_sheet(s, r.client_id))
 
 
 def set_archived(owner: str, client_id: str, archived: bool) -> dict:
@@ -172,7 +194,7 @@ def set_archived(owner: str, client_id: str, archived: bool) -> dict:
         r = _owned(s, owner, client_id)
         r.archived_at = _now() if archived else None
         s.flush()
-        return _client_dict(r, _docs_of(s, r.client_id))
+        return _client_dict(r, _docs_of(s, r.client_id), _last_sheet(s, r.client_id))
 
 
 # ── 설계 문서 ────────────────────────────────────────────────────────────
@@ -220,3 +242,80 @@ def save_doc(owner: str, client_id: str, doc_id: str, *, graph: Any, name: str |
         d.updated_at = c.updated_at = _now()
         s.flush()
         return _doc_meta(d)
+
+
+# ── 고객 한 장 (PB4) ─────────────────────────────────────────────────────
+
+def _sheets_of(s, client_id: str) -> list[PbClientSheet]:
+    return (s.query(PbClientSheet).filter(PbClientSheet.client_id == client_id)
+            .order_by(PbClientSheet.created_at.desc()).all())
+
+
+def _sheet_meta(x: PbClientSheet) -> dict:
+    return {"sheet_id": x.sheet_id, "client_id": x.client_id, "doc_id": x.doc_id, "title": x.title,
+            "focus_node_id": x.focus_node_id, "practice": x.practice, "created_at": _iso(x.created_at),
+            "shared": x.shared_at is not None, "shared_at": _iso(x.shared_at)}
+
+
+def create_sheet(owner: str, client_id: str, *, graph: Any, focus_node_id: str, preview: dict, title: str,
+                 doc_id: str | None, recompute: Any, kinds: Any) -> dict:
+    """서버가 다시 계산(`recompute(graph, focus, preview)` → `pg.run_for_sheet`)하고 ★모든 노드가★ 본 것과 같을 때만 한 장을 둔다."""
+    from src.services.pb_sheets import build_sheet
+    _check_text("한 장 제목", title, DOC_NAME_MAX)
+    text = _check_graph(graph)
+    with session_scope() as s:
+        c = _writable(s, owner, client_id)
+        alias = c.alias
+    res = recompute(graph, focus_node_id, preview)
+    if not res["ok"]:
+        raise SheetRefused(res["code"], res["message"])
+    sheet = build_sheet(graph, res["report"], focus_node_id, title=title, client_alias=alias, kinds=kinds)
+    with session_scope() as s:
+        c = _writable(s, owner, client_id)
+        x = PbClientSheet(sheet_id="sh_" + secrets.token_hex(8), client_id=c.client_id, doc_id=doc_id, title=title,
+                          focus_node_id=focus_node_id, view_hash=str(preview.get(focus_node_id)), practice=bool(sheet["practice"]),
+                          graph=text, sheet=json.dumps(sheet, ensure_ascii=False), created_at=_now())
+        s.add(x)
+        s.flush()
+        return _sheet_meta(x)
+
+
+def list_sheets(owner: str, client_id: str) -> list[dict]:
+    with session_scope() as s:
+        c = _owned(s, owner, client_id)
+        return [_sheet_meta(x) for x in _sheets_of(s, c.client_id)]
+
+
+def _owned_sheet(s, owner: str, client_id: str, sheet_id: str) -> tuple[PbClient, PbClientSheet]:
+    c = _owned(s, owner, client_id)
+    x = s.query(PbClientSheet).filter(PbClientSheet.sheet_id == sheet_id, PbClientSheet.client_id == c.client_id).first()
+    if x is None:
+        raise ClientNotFound(sheet_id)
+    return c, x
+
+
+def get_sheet(owner: str, client_id: str, sheet_id: str) -> dict:
+    with session_scope() as s:
+        c, x = _owned_sheet(s, owner, client_id, sheet_id)
+        return {**_sheet_meta(x), "client_alias": c.alias, "client_archived": c.archived_at is not None,
+                "sheet": json.loads(x.sheet)}
+
+
+def delete_sheet(owner: str, client_id: str, sheet_id: str) -> dict:
+    """★고객에게 보여 준 적 없는 한 장만★ 지운다 — 보여 준 것은 무엇을 보여 줬는지가 남아야 한다."""
+    with session_scope() as s:
+        c, x = _owned_sheet(s, owner, client_id, sheet_id)
+        if c.archived_at is not None:
+            raise ClientArchived("보관한 고객이에요 — 다시 꺼낸 뒤 고쳐 주세요.")
+        if x.shared_at is not None:
+            raise SheetShared("고객에게 보여 준 한 장이라 지울 수 없어요 — 무엇을 보여 줬는지가 남아야 해요.")
+        s.delete(x)
+    return {"deleted": sheet_id}
+
+
+def mark_shared(sheet_id: str) -> None:
+    """고객 주소(PB6)로 처음 보여 줄 때 — 그 뒤로는 지우지 않는다. 이미 적혀 있으면 그대로(처음 때를 남긴다)."""
+    with session_scope() as s:
+        x = s.query(PbClientSheet).filter(PbClientSheet.sheet_id == sheet_id).first()
+        if x is not None and x.shared_at is None:
+            x.shared_at = _now()

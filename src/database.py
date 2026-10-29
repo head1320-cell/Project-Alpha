@@ -310,6 +310,28 @@ class PbClientDoc(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False)
 
 
+class PbClientSheet(Base):
+    """고객 한 장 (CF 3부 PB4) — ★서버가 같은 그래프를 다시 계산한 보고에서 옮긴 것만★ 둔다(새 숫자를 만들지 않는다).
+
+    만든 때의 그래프(`graph`)와 한 장(`sheet` JSON — 흐름 순서의 노드 설명 · 주인공 비중 · 실패 사유 · 연습용 표시)을 함께 둔다.
+    `shared_at` 은 고객 주소(PB6)로 처음 보여 준 때 — ★그 뒤로는 지우지 않는다★(무엇을 보여 줬는지가 남아야 한다).
+    """
+    __tablename__ = "pb_client_snapshots"
+
+    sheet_id = Column(String(32), primary_key=True)     # "sh_" + 16 hex
+    client_id = Column(String(32), ForeignKey("pb_clients.client_id", ondelete="CASCADE"),
+                       index=True, nullable=False)
+    doc_id = Column(String(32))                         # 어느 고객 문서에서 만들었나(없을 수 있다 — FK 없음)
+    title = Column(String(80), nullable=False)
+    focus_node_id = Column(String(64), nullable=False)
+    view_hash = Column(String(64), nullable=False)
+    practice = Column(Boolean, nullable=False)
+    graph = Column(Text, nullable=False)
+    sheet = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    shared_at = Column(DateTime(timezone=True))
+
+
 class Portfolio(Base):
     __tablename__ = "portfolios"
 

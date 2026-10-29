@@ -25,10 +25,10 @@ export type PbClient = {
   client_id: string; alias: string; risk_tolerance: RiskTolerance | null; profile_source: ProfileSource;
   assessed_at: string | null; assessed_age_days: number | null; horizon_years: number | null;
   archived: boolean; archived_at: string | null; created_at: string | null; updated_at: string | null;
-  doc_count: number; last_doc_at: string | null;
+  doc_count: number; last_doc_at: string | null; last_sheet_at: string | null;
 };
 export type PbDocMeta = { doc_id: string; client_id: string; name: string; created_at: string | null; updated_at: string | null };
-export type PbClientDetail = PbClient & { docs: PbDocMeta[] };
+export type PbClientDetail = PbClient & { docs: PbDocMeta[]; sheets: PbSheetMeta[] };
 export type PbDoc = PbDocMeta & { graph: GraphDoc; client_alias: string; client_archived: boolean };
 
 export type ClientFacts = {
@@ -52,3 +52,38 @@ export const createDoc = (cid: string, name: string, graph: GraphDoc) => call<Pb
 export const getDoc = (cid: string, did: string) => call<PbDoc>(getWithAuth(at(cid, `/docs/${encodeURIComponent(did)}`)));
 export const saveDoc = (cid: string, did: string, graph: GraphDoc) =>
   call<PbDocMeta>(send("PUT", at(cid, `/docs/${encodeURIComponent(did)}`), { graph }));
+
+// ── 고객 한 장 (PB4) ───────────────────────────────────────────────────────
+
+export type SheetTrust = { state: string; text: string; kind?: string };
+export type SheetExplain = {
+  title?: string; headline?: { label?: string | null; value?: number | null; unit?: string | null; text?: string | null } | null;
+  facts?: string[]; trust?: SheetTrust[]; unmeasured?: string[];
+};
+export type SheetStep = { node_id: string; type: string | null; label: string; status: string; explain: SheetExplain | null; reason: string | null };
+export type SheetWeight = { code: string; name: string; pct: number };
+/** 서버가 같은 그래프를 다시 계산해 옮긴 한 장 — 화면은 이것을 그리기만 한다(새 숫자를 만들지 않는다). */
+export type Sheet = {
+  title: string; client_alias: string; computed_at: string;
+  focus: { node_id: string; label: string; weights: SheetWeight[] };
+  steps: SheetStep[]; practice: boolean; practice_note: string | null; note: string;
+};
+export type PbSheetMeta = {
+  sheet_id: string; client_id: string; doc_id: string | null; title: string; focus_node_id: string; practice: boolean;
+  created_at: string | null; shared: boolean; shared_at: string | null;
+};
+export type PbSheet = PbSheetMeta & { client_alias: string; client_archived: boolean; sheet: Sheet };
+export type SheetFact = { where?: string; part: string; index: number; text: string };
+export type SheetAnswer = {
+  available: boolean; reason?: string;
+  answer?: { answerable: boolean; cannot: string | null; sentences: { text: string; fact_ids: string[] }[] };
+  facts?: Record<string, SheetFact>; rejected?: { code: string; reason: string }[]; notice?: string | null;
+};
+
+export const createSheet = (cid: string, body: { graph: GraphDoc; focus_node_id: string; preview: Record<string, string | null>; title: string; doc_id: string | null }) =>
+  call<PbSheetMeta>(postJson(at(cid, "/snapshots"), body));
+export const getSheet = (cid: string, sid: string) => call<PbSheet>(getWithAuth(at(cid, `/snapshots/${encodeURIComponent(sid)}`)));
+export const deleteSheet = (cid: string, sid: string) =>
+  call<{ deleted: string }>(getWithAuth(at(cid, `/snapshots/${encodeURIComponent(sid)}`), { method: "DELETE" }));
+export const askSheet = (cid: string, sid: string, question: string, previous: { question: string; answer: string } | null) =>
+  call<SheetAnswer>(postJson(at(cid, `/snapshots/${encodeURIComponent(sid)}/ask`), { question, ...(previous ? { previous } : {}) }));

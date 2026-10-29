@@ -98,10 +98,12 @@ def _call(fn, *args, **kw):
         return fn(*args, **kw)
     except svc.ClientNotFound:
         raise HTTPException(404, _NOT_FOUND) from None
-    except svc.ClientArchived as e:
+    except (svc.ClientArchived, svc.SheetShared) as e:
         raise HTTPException(409, str(e)) from None
     except svc.DocTooLarge as e:
         raise HTTPException(413, str(e)) from None
+    except svc.SheetRefused as e:
+        raise HTTPException(409 if e.code == "stale" else 422, str(e)) from None
     except ValueError as e:
         raise HTTPException(422, str(e)) from None
 
@@ -157,3 +159,66 @@ def get_doc(cid: str, did: str, p: Principal = Depends(require_login)):
 def save_doc(cid: str, did: str, body: DocSave, p: Principal = Depends(require_login)):
     return _call(svc.save_doc, p.username, cid, did, graph=body.graph,
                  name=body.name.strip() if body.name is not None else None)
+
+
+# ── 고객 한 장 (PB4) ─────────────────────────────────────────────────────
+
+class SheetIn(BaseModel):
+    """한 장 만들기 — 서버가 다시 계산하고, ★모든 노드의★ `view_hash` 가 `preview`(PB 가 본 계산 — 노드 id → 해시, 계산 못 한
+    노드는 null)와 같을 때만 둔다."""
+    model_config = _FORBID
+    graph: dict
+    focus_node_id: str = Field(..., min_length=1, max_length=64)
+    preview: dict[str, str | None] = Field(..., max_length=500)
+    title: str = Field(..., min_length=1, max_length=svc.DOC_NAME_MAX)
+    doc_id: str | None = Field(None, max_length=32)
+
+
+class SheetAsk(BaseModel):
+    model_config = _FORBID
+    question: str = Field(..., min_length=1, max_length=300)
+    previous: dict[str, str] | None = None
+
+    @field_validator("question")
+    @classmethod
+    def _q(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("질문이 비어 있어요")
+        return v.strip()
+
+
+def _recompute(graph, focus, preview):
+    from src.api import allocation_graph_nodes as gn
+    from src.engine import portfolio_graph as pg
+    return pg.run_for_sheet(graph, focus, preview, gn.REGISTRY)
+
+
+@router.post("/{cid}/snapshots", status_code=201)
+def create_sheet(cid: str, body: SheetIn, p: Principal = Depends(require_login)):
+    from src.api import allocation_graph_routes as graph_routes
+    return _call(svc.create_sheet, p.username, cid, graph=body.graph, focus_node_id=body.focus_node_id,
+                 preview=body.preview, title=body.title.strip(), doc_id=body.doc_id,
+                 recompute=_recompute, kinds=graph_routes._kinds())
+
+
+@router.get("/{cid}/snapshots")
+def list_sheets(cid: str, p: Principal = Depends(require_login)):
+    return {"sheets": _call(svc.list_sheets, p.username, cid)}
+
+
+@router.get("/{cid}/snapshots/{sid}")
+def get_sheet(cid: str, sid: str, p: Principal = Depends(require_login)):
+    return _call(svc.get_sheet, p.username, cid, sid)
+
+
+@router.delete("/{cid}/snapshots/{sid}")
+def delete_sheet(cid: str, sid: str, p: Principal = Depends(require_login)):
+    return _call(svc.delete_sheet, p.username, cid, sid)
+
+
+@router.post("/{cid}/snapshots/{sid}/ask")
+def ask_sheet(cid: str, sid: str, body: SheetAsk, p: Principal = Depends(require_login)):
+    """PB 가 고객 AI 를 미리 물어본다 — 근거는 서버가 저장한 그 한 장의 줄뿐 · 고객용 고정 문장 · 한도는 PB 의 그릇."""
+    from src.services.canvas_assist import service as assist
+    got = _call(svc.get_sheet, p.username, cid, sid)
+    return assist.ask_sheet(got["sheet"], sid, body.question, body.previous, p.username)

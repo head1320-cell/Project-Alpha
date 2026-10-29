@@ -81,7 +81,7 @@ function Clients() {
                   <Link href={`/clients?client=${encodeURIComponent(c.client_id)}`} className="cl-item" data-client-id={c.client_id}
                         aria-current={c.client_id === want ? "true" : undefined}>
                     <span className="cl-item-alias">{c.alias}</span>
-                    <span className="cl-item-sub">{riskText(c)} · {ageText(c)} · 문서 {c.doc_count}개</span>
+                    <span className="cl-item-sub">{riskText(c)} · {ageText(c)} · 문서 {c.doc_count}개{c.last_sheet_at ? ` · 마지막 한 장 ${day(c.last_sheet_at)}` : ""}</span>
                   </Link>
                 </li>
               ))}
@@ -115,7 +115,7 @@ function FactsForm({ init, submitLabel, onSubmit, className, err }: {
   return (
     <form className={`cl-form ${p}-form`} onSubmit={submit}>
       <label className="cl-field cl-field--wide"><span className="cl-label">별칭</span>
-        <input className={`cl-input ${p}-alias`} value={alias} maxLength={40} required placeholder="예: 고객 A-12 · 2026 은퇴 준비"
+        <input className={`cl-input ${p}-alias`} value={alias} maxLength={40} required placeholder="예: A-12 · 2026 은퇴 준비"
                onChange={(e) => setAlias(e.target.value)} />
       </label>
       <label className="cl-field"><span className="cl-label">위험 성향</span>
@@ -213,6 +213,18 @@ function Detail({ cid }: { cid: string }) {
               <span className="cl-doc-name">{d.name}</span>
               <span className="cl-doc-when">고친 날 {day(d.updated_at)}</span>
               <Link href={`/allocation?client=${encodeURIComponent(cid)}&doc=${encodeURIComponent(d.doc_id)}`} className="cl-doc-open">캔버스에서 열기</Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <h3 className="cl-h3">고객 한 장</h3>
+      {(c.sheets ?? []).length === 0 ? <p className="cl-empty">아직 한 장이 없어요 — 캔버스에서 계산한 뒤 위 칩의 ‘한 장’ 으로 만들어요.</p> : (
+        <ul className="cl-docs">
+          {c.sheets.map((x) => (
+            <li key={x.sheet_id} className="cl-doc cl-sheet" data-sheet-id={x.sheet_id}>
+              <span className="cl-doc-name">{x.title}{x.practice && <span className="cl-practice">연습용</span>}</span>
+              <span className="cl-doc-when">{x.shared ? "고객에게 보여 줌" : `만든 날 ${day(x.created_at)}`}</span>
+              <Link href={`/clients/${encodeURIComponent(cid)}/sheets/${encodeURIComponent(x.sheet_id)}`} className="cl-doc-open">한 장 보기</Link>
             </li>
           ))}
         </ul>

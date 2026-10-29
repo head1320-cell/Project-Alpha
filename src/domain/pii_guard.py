@@ -23,6 +23,9 @@ _RRN = re.compile(r"\d{6}\s*-?\s*[1-8]\d{6}")
 _PHONE = re.compile(r"(?<!\d)0\d{1,2}[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)")
 #: 숫자만 9자리 이상 이어지면(하이픈·공백을 빼고) 계좌번호·전화번호 모양으로 본다.
 _LONG_DIGITS = re.compile(r"\d{9,}")
+#: 날짜(2026-10-29 · 2026.10.29 · 2026/10/29) — 긴 숫자열을 셀 때는 날짜를 구분 기호로 바꾼다(PB4 — 별칭 끝 숫자 + 날짜가 하이픈·공백을
+#: 걷으면 9자리를 넘어 계좌번호로 잘못 보였다). 날짜는 개인정보 모양이 아니다.
+_DATE = re.compile(r"(?<!\d)\d{4}[-./]\d{1,2}[-./]\d{1,2}(?!\d)")
 
 
 def pii_reason(text: str | None, *, label: str = "별칭", max_len: int = ALIAS_MAX) -> str | None:
@@ -39,6 +42,6 @@ def pii_reason(text: str | None, *, label: str = "별칭", max_len: int = ALIAS_
         return f"{label}에 주민등록번호 모양이 있어요 — 개인정보는 적지 않아요."
     if _PHONE.search(s):
         return f"{label}에 전화번호 모양이 있어요 — 연락처는 적지 않아요."
-    if _LONG_DIGITS.search(re.sub(r"[\s-]", "", s)):
+    if _LONG_DIGITS.search(re.sub(r"[\s-]", "", _DATE.sub("·", s))):
         return f"{label}에 긴 숫자열(계좌번호 모양)이 있어요 — 계좌번호는 적지 않아요."
     return None

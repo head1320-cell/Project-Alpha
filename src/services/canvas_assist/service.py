@@ -204,16 +204,35 @@ def ask(graph: Any, target: dict, question: str, previous: dict | None, facts: l
     if not has:                                          # 부르기 전에 — 대상의 지금 결과 없이 답하지 않는다
         return _unavailable("no_facts_target", {"dropped": dropped})
     g, refs = ak.ground(graph, target, question, previous, verified, records_ok, catalog(), relate(graph))
-
-    def check(data: Any) -> dict:
-        answer, bad = ak.check(data, g)
-        cited = {f for s in answer["sentences"] for f in s["fact_ids"]}
-        return {"answer": answer, "facts": {f: refs[f] for f in sorted(cited, key=lambda x: int(x[1:]))}, "rejected": bad,
-                "notice": nr.NOTICE if g["practice"] else None, "scope": {"nodes": nodes_in, "edges": edges_in}}
-    res = _ask("ask", username, client or ClaudeClient.get_default(), {"dropped": dropped},
-               version=pr.ASK_VERSION, grounding=g, system=pr.ASK_SYSTEM, user=pr.ask_user(g),
-               schema=pr.ask_schema([x["id"] for x in g["lines"]]), check=check)
+    res = ask_grounded(g, refs, username, client=client, extra={"dropped": dropped},
+                       scope={"nodes": nodes_in, "edges": edges_in})
     return {**res, "dropped": dropped}
+
+
+def ask_grounded(g: dict, refs: dict, username: str, *, client: ClaudeClient | None = None, extra: dict | None = None,
+                 scope: dict | None = None, kind: str = "ask", version: str = pr.ASK_VERSION, system: str = pr.ASK_SYSTEM,
+                 cannot: dict | None = None) -> dict:
+    """확인된 사실 줄(`g` · `refs` — 줄 id 는 서버가 붙인 것)로 묻기 — AI3 의 뒷부분(봉인 확인 뒤) · PB4 고객 한 장의 미리 묻기.
+    문장마다 줄 · 그 줄의 숫자만 · 답할 수 없으면 서버 고정 문장(`cannot` — 기본은 AI3 의 것). 한도는 같은 그릇(사용자별)."""
+    def check(data: Any) -> dict:
+        answer, bad = ak.check(data, g, cannot or ak.CANNOT)
+        cited = {f for s in answer["sentences"] for f in s["fact_ids"]}
+        out = {"answer": answer, "facts": {f: refs[f] for f in sorted(cited, key=lambda x: int(x[1:]))}, "rejected": bad,
+               "notice": nr.NOTICE if g["practice"] else None}
+        return {**out, "scope": scope} if scope is not None else out
+    return _ask(kind, username, client or ClaudeClient.get_default(), extra or {},
+                version=version, grounding=g, system=system, user=pr.ask_user(g),
+                schema=pr.ask_schema([x["id"] for x in g["lines"]]), check=check)
+
+
+def ask_sheet(sheet: dict, sheet_id: str, question: str, previous: dict | None, username: str, *,
+              client: ClaudeClient | None = None) -> dict:
+    """PB4 — 서버가 저장한 고객 한 장의 줄만 근거로 묻는다(봉인 확인이 필요 없다 — 서버가 만든 한 장을 서버가 읽는다).
+    답할 수 없으면 고객용 고정 문장. 한도는 묻는 사람(PB)의 그릇."""
+    from src.services.canvas_assist import sheet_ask as sa
+    g, refs = sa.ground_sheet(sheet, sheet_id, question, previous)
+    return ask_grounded(g, refs, username, client=client, kind="sheet_ask", version=pr.SHEET_ASK_VERSION,
+                        system=pr.SHEET_ASK_SYSTEM, cannot=sa.CANNOT_CLIENT)
 
 
 def guide(graph: Any, state: dict, applicable: list[str], username: str, *, catalog: Callable[[], dict],

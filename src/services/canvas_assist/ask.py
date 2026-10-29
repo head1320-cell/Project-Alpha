@@ -197,10 +197,11 @@ def _problem(it: Any, by_id: dict[str, dict]) -> tuple[str, str] | None:
     return None
 
 
-def check(raw: Any, grounding: dict) -> tuple[dict, list[dict]]:
-    """`(답 {answerable, cannot, sentences}, 탈락 [{code, reason}])` — 통과 문장의 줄 id 는 겹친 것을 하나로."""
+def check(raw: Any, grounding: dict, cannot: Mapping[str, str] = CANNOT) -> tuple[dict, list[dict]]:
+    """`(답 {answerable, cannot, sentences}, 탈락 [{code, reason}])` — 통과 문장의 줄 id 는 겹친 것을 하나로.
+    `cannot` 은 답할 수 없을 때의 ★서버 고정 문장★ 표(PB4 고객 한 장은 고객용 문장을 쓴다)."""
     if not isinstance(raw, dict) or not isinstance(raw.get("sentences"), list) or not isinstance(raw.get("answerable"), bool):
-        return {"answerable": False, "cannot": CANNOT["not_in_facts"], "sentences": []}, [_rej("shape", "답의 형식이 맞지 않아요")]
+        return {"answerable": False, "cannot": cannot["not_in_facts"], "sentences": []}, [_rej("shape", "답의 형식이 맞지 않아요")]
     by_id = {x["id"]: x for x in grounding["lines"]}
     ok: list[dict] = []
     bad: list[dict] = []
@@ -215,5 +216,5 @@ def check(raw: Any, grounding: dict) -> tuple[dict, list[dict]]:
         ok.append({"text": it["text"].strip(), "fact_ids": list(dict.fromkeys(it["fact_ids"]))})
     if raw["answerable"]:
         return {"answerable": True, "cannot": None, "sentences": ok}, bad
-    reason = raw.get("why_not") if raw.get("why_not") in CANNOT else "not_in_facts"
-    return {"answerable": False, "cannot": CANNOT[reason], "sentences": ok}, bad
+    reason = raw.get("why_not") if raw.get("why_not") in cannot else "not_in_facts"
+    return {"answerable": False, "cannot": cannot[reason], "sentences": ok}, bad

@@ -84,7 +84,8 @@ def test_owner_comes_only_from_the_token(client):
 
 # ── ② 남의 고객은 404 — 전수 ─────────────────────────────────────────────
 
-_CID_ROUTES = sorted(k for k in PROTECTED if "{cid}" in k[1])
+#: 고객·문서 경로 — 한 장(`/snapshots`, PB4)은 만드는 데 계산 미리보기가 필요해 `test_pb4_sheets.py` 가 같은 방식으로 훑는다.
+_CID_ROUTES = sorted(k for k in PROTECTED if "{cid}" in k[1] and "/snapshots" not in k[1])
 
 
 def test_there_are_client_routes_to_check():
@@ -185,7 +186,9 @@ def test_doc_name_and_client_node_alias_are_checked(client):
 # ── ④ 지우지 않고 보관 ───────────────────────────────────────────────────
 
 def test_there_is_no_delete_route_for_clients_or_docs():
-    assert not [k for k in PROTECTED if k[1].startswith(BASE) and k[0] == "DELETE"]
+    """고객·문서는 지우지 않는다 — 지우는 경로는 한 장(PB4 — 보여 준 적 없는 것만) 하나뿐."""
+    deletes = [k for k in PROTECTED if k[1].startswith(BASE) and k[0] == "DELETE"]
+    assert deletes == [("DELETE", f"{BASE}/{{cid}}/snapshots/{{sid}}")]
 
 
 def test_archive_hides_from_the_list_and_makes_it_read_only(client):
@@ -252,7 +255,7 @@ def test_doc_size_limit(client):
 def test_every_pb_route_is_registered_login_only(client):
     real = sorted((m, r.path) for r in client.app.routes if getattr(r, "path", "").startswith("/api/v1/pb/")
                   for m in (r.methods or []) if m not in {"HEAD", "OPTIONS"})
-    assert len(real) >= 9
+    assert len(real) >= 14
     for key in real:
         assert PROTECTED.get(key, (None,))[0] == REQUIRE_LOGIN, key
         assert looks_like_money_route(key[1]), key                          # 전수 검사의 사정거리 안

@@ -306,3 +306,10 @@ def test_explanations_carry_no_markup_or_field_names(market):
                 assert m not in text, (nid, m, text)
     goal = " ".join(_explain_texts(out["t"]["explain"]))
     assert "목표 연도" in goal and "선언되지 않았" in goal                      # 짝 — 뜻은 남는다
+
+
+def test_account_headline_text_is_the_value_not_the_label_again(market):
+    """요약 값(`headline`)은 다른 노드와 같은 모양 — 이름표는 `label`, 값은 `text`(이름표를 되풀이하면 "넘은 한도: 넘은 한도 0개" 로 읽힌다)."""
+    h = _run(_acct_graph({"account_type": "irp"}))["a"]["explain"]["headline"]
+    assert h["label"] == "넘은 한도" and h["text"] == f"{h['value']}{h['unit']}"
+    assert h["label"] not in h["text"]
