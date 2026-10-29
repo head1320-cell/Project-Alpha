@@ -237,7 +237,7 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
     const groups = (doc.groups ?? []).map((g) => ({ ...g, members: g.members.filter((m) => ids.has(m)) }))
       .filter((g) => g.members.length);
     set({
-      nodes, edges, groups, name: doc.meta?.name ?? "", goal: doc.meta?.goal ?? null, loadProblems: problems,
+      nodes, edges, groups, name: doc.meta?.name ?? "", goal: doc.meta?.goal ?? null, loadProblems: problems, loadSeq: cur.loadSeq + 1,
       report: null, snap: null, validation: null, selectedId: null, picked: [], runError: null,
       pinned: (doc.pinned ?? []).filter((id) => nodes.some((n) => n.id === id)), cause: null, focusGroup: null, filters: [],
       folded: (doc.folded ?? []).filter((id) => nodes.some((n) => n.id === id)),

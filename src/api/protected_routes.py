@@ -103,6 +103,26 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/api/v1/auth/users/{username}/reset-password"):
         (REQUIRE_ADMIN, "남의 비밀번호 초기화 — 그 사람의 토큰이 모두 죽는다"),
 
+    # ── PB 고객 관리 (CF 3부 PB3) — 로그인 + ★본인 고객만★(남의 고객 404) · 별칭만(개인정보 모양 거절) · 지우는 경로 없음 ──
+    ("GET", "/api/v1/pb/clients"):
+        (REQUIRE_LOGIN, "내 고객 목록 — 별칭·성향·평가일. 소유 PB 로 거른다"),
+    ("POST", "/api/v1/pb/clients"):
+        (REQUIRE_LOGIN, "고객 더하기 — 별칭만 받는다(전화·이메일·주민번호·긴 숫자열 모양 거절)"),
+    ("GET", "/api/v1/pb/clients/{cid}"):
+        (REQUIRE_LOGIN, "내 고객 하나와 그 고객의 설계 문서 목록 — 남의 고객은 404"),
+    ("PATCH", "/api/v1/pb/clients/{cid}"):
+        (REQUIRE_LOGIN, "내 고객 고치기 — 보관한 고객은 409"),
+    ("POST", "/api/v1/pb/clients/{cid}/archive"):
+        (REQUIRE_LOGIN, "내 고객 보관 — 지우지 않고 목록에서 숨긴다(읽기만)"),
+    ("POST", "/api/v1/pb/clients/{cid}/unarchive"):
+        (REQUIRE_LOGIN, "보관한 내 고객 다시 꺼내기"),
+    ("POST", "/api/v1/pb/clients/{cid}/docs"):
+        (REQUIRE_LOGIN, "내 고객의 설계 문서 만들기 — 그래프 모양·512KB·문서 안 별칭 확인"),
+    ("GET", "/api/v1/pb/clients/{cid}/docs/{did}"):
+        (REQUIRE_LOGIN, "내 고객의 설계 문서 열기 — 그 고객의 문서만(다른 고객 문서 id 는 404)"),
+    ("PUT", "/api/v1/pb/clients/{cid}/docs/{did}"):
+        (REQUIRE_LOGIN, "내 고객의 설계 문서 저장 — 보관한 고객은 409"),
+
     # ── 내 증권 계좌 (BV4) — 로그인 + ★본인 계좌만★: 소유자는 토큰에서 오고, 남의 계좌는 404 ──
     ("GET", "/api/v1/broker-accounts"):
         (REQUIRE_LOGIN, "내 증권 계좌 목록(가림) — 소유자로 거른다"),
@@ -251,6 +271,8 @@ MONEY_PATH_MARKERS = (
     "broker-account",
     # BV7 — 실계좌 관문 선언·철회.
     "live-gate",
+    # CF 3부 PB3 — PB 고객 자료(별칭·성향·설계 문서). 돈은 아니지만 고객 자료라 전수 검사의 사정거리 안에 둔다.
+    "/pb/",
 )
 
 

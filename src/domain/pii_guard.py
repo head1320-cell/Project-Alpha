@@ -25,19 +25,20 @@ _PHONE = re.compile(r"(?<!\d)0\d{1,2}[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)")
 _LONG_DIGITS = re.compile(r"\d{9,}")
 
 
-def pii_reason(text: str | None) -> str | None:
-    """별칭이 개인정보 모양이면 사유, 아니면 `None`. 빈 값은 문제 삼지 않는다(별칭은 선택)."""
+def pii_reason(text: str | None, *, label: str = "별칭", max_len: int = ALIAS_MAX) -> str | None:
+    """개인정보 모양이면 사유, 아니면 `None`. 빈 값은 문제 삼지 않는다(별칭은 선택).
+    `label` 은 사유 문장의 칸 이름(PB3 — 문서 이름·문서 안 고객 노드 별칭도 같은 검사), `max_len` 은 그 칸의 길이 상한."""
     if not text or not text.strip():
         return None
     s = text.strip()
-    if len(s) > ALIAS_MAX:
-        return f"별칭은 {ALIAS_MAX}자까지예요 — 메모나 실명을 적는 칸이 아니에요."
+    if len(s) > max_len:
+        return f"{label}은 {max_len}자까지예요 — 메모나 실명을 적는 칸이 아니에요."
     if _EMAIL.search(s):
-        return "별칭에 이메일 모양이 있어요 — 연락처는 적지 않아요."
+        return f"{label}에 이메일 모양이 있어요 — 연락처는 적지 않아요."
     if _RRN.search(s):
-        return "별칭에 주민등록번호 모양이 있어요 — 개인정보는 적지 않아요."
+        return f"{label}에 주민등록번호 모양이 있어요 — 개인정보는 적지 않아요."
     if _PHONE.search(s):
-        return "별칭에 전화번호 모양이 있어요 — 연락처는 적지 않아요."
+        return f"{label}에 전화번호 모양이 있어요 — 연락처는 적지 않아요."
     if _LONG_DIGITS.search(re.sub(r"[\s-]", "", s)):
-        return "별칭에 긴 숫자열(계좌번호 모양)이 있어요 — 계좌번호는 적지 않아요."
+        return f"{label}에 긴 숫자열(계좌번호 모양)이 있어요 — 계좌번호는 적지 않아요."
     return None

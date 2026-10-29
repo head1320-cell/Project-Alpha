@@ -75,6 +75,8 @@ export interface PgState {
   catalogMeta: { gates: { key: string; label: string }[]; portPlain: Record<string, string> } | null;
   /** 마지막 불러오기에서 건너뛴 것(깨진 링크 등) — 조용히 버리지 않고 말한다. */
   loadProblems: string[];
+  /** 문서를 통째로 불러온 횟수(PB3) — 고객 칩이 '이 문서를 연 순간' 을 알아 저장 기준을 잡는다. */
+  loadSeq: number;
   selectedId: string | null;
   /** 함께 고른 노드들(상자 끌기·Shift) — 복사·묶기·삭제의 대상. `selectedId` 는 그중 패널에 보이는 하나. */
   picked: string[];
@@ -286,6 +288,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     pickedByUser: false,
     catalogMeta: null,
     loadProblems: [],
+    loadSeq: 0,
     selectedId: null,
     picked: [],
     running: false,

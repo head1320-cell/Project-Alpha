@@ -8,12 +8,13 @@ import { portfolioGraphApi, type GraphDoc, type NodeCatalogEntry } from "@/entit
 import { WIP_KEY } from "./canvasConfig";
 import { usePortfolioGraph } from "./store";
 
-export function useDocSync(doc: GraphDoc, catalog: NodeCatalogEntry[] | null) {
+export function useDocSync(doc: GraphDoc, catalog: NodeCatalogEntry[] | null, persistWip = true) {
   // ── 작업 중 상태 보존(편의용 — 신뢰 저장이 아니다. 저장은 내보내기) ─────────
+  // PB3 — 고객 문서를 여는 동안은 남기지 않는다(고객 문서는 서버에 저장하고, 이 탭의 작업 중 문서는 그대로 둔다).
   useEffect(() => {
-    if (!catalog) return;
+    if (!catalog || !persistWip) return;
     try { sessionStorage.setItem(WIP_KEY, JSON.stringify(doc)); } catch { /* 용량 초과 등 — 편의 기능 */ }
-  }, [doc, catalog]);
+  }, [doc, catalog, persistWip]);
 
   // ── 구조가 바뀌면 서버 검증(위치 이동은 제외) ─────────────────────────
   // 경유점(CF4c)은 화면 정보라 뺀다 — 점을 끌 때마다 다시 검증하지 않는다.

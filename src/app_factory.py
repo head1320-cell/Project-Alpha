@@ -69,6 +69,8 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.report_routes",
     "src.api.scorecard_routes",
     "src.api.broker_account_routes",
+    # CF 3부 PB3 — PB 고객 관리(로그인 · 본인 고객만 · 별칭만).
+    "src.api.pb_client_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —

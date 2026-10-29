@@ -4789,6 +4789,21 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-goal-gap { margin: 8px 0; font-size: 13px; color: var(--pg-ink); }
 .pg-goal-gap[data-state="unknown"] { color: var(--pg-unknown); }
 .pg-hold-risk, .pg-hold-conc, .pg-hold-liq { margin: 8px 0; }
+/* CF 3부 PB3 · 고객 칩 — 고객 문서를 연 캔버스의 도구줄. 별칭 · 짧은 상태 · 저장. ★도구줄을 두 줄로 밀지 않게 짧게★ — 문서 이름은 넓을 때만.
+   고친 것·저장 전은 가정색, 실패는 실패색, 저장함은 확인색(글자도 함께 — 색만으로 말하지 않는다). */
+.pg-client-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 2px 3px 2px 10px;
+  border: 1px solid var(--pg-line); border-radius: 12px; background: var(--pg-blue-soft); }
+.pg-client-who { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; color: var(--pg-blue-ink); text-decoration: none; font-size: 13px; }
+.pg-client-who b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.pg-client-doc { display: none; color: var(--pg-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.pg-client-who:hover b, .pg-client-who:focus-visible b { text-decoration: underline; }
+.pg-client-state { font-size: 12.5px; color: var(--pg-body); white-space: nowrap; }
+.pg-client-chip[data-state="dirty"] .pg-client-state, .pg-client-chip[data-state="new"] .pg-client-state { color: var(--pg-assume); font-weight: 600; }
+.pg-client-chip[data-state="error"] .pg-client-state { color: var(--pg-fail); font-weight: 600; }
+.pg-client-chip[data-state="saved"] .pg-client-state { color: var(--pg-ok); }
+.pg-client-save { height: 30px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
+@media (min-width: 1680px) { .pg-client-doc { display: inline; } }
+@media (max-width: 640px) { .pg-client-who b { max-width: 84px; } }
 .pg-pack-id { margin: 0 0 8px; font-size: 12px; color: var(--pg-mute); }
 .pg-scroll-x { overflow-x: auto; max-width: 100%; }
 .pg-ci { font-size: 11px; color: var(--pg-mute); white-space: nowrap; }
@@ -9303,6 +9318,59 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .ma-form { display: flex; flex-direction: column; gap: 14px; }
 .ma-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ma-label { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+/* CF 3부 PB3 · 고객(/clients) — `--tx-*` 토큰만(라이트·다크 짝은 토큰이 갖는다). 넓으면 왼쪽 목록·더하기 / 오른쪽 고객, 좁으면 목록 → 고객 → 더하기. */
+.cl-page > * + * { margin-top: 12px; }
+.cl-page > .tx-head + * { margin-top: 0; }
+.cl-strong { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.cl-signed-out, .cl-must { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.cl-signed-out .tx-sec-sub { margin: 0; }
+.cl-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr); grid-template-areas: "list main" "add main"; gap: 12px; align-items: start; }
+.cl-grid > .tx-sec { margin-top: 0; }
+.cl-listbox { grid-area: list; }
+.cl-main { grid-area: main; min-width: 0; }
+.cl-add { grid-area: add; }
+.cl-add > .tx-notice { margin-top: 10px; }
+.cl-list-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.cl-list-tab { height: 34px; padding: 0 14px; border: 0; border-radius: 17px; background: var(--tx-soft); color: var(--tx-sub); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.cl-list-tab[aria-pressed="true"] { background: var(--tx-ink); color: var(--tx-surface); }
+.cl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cl-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--tx-r-row); color: var(--tx-ink); text-decoration: none; }
+.cl-item:hover, .cl-item:focus-visible { background: var(--tx-soft); }
+.cl-item[aria-current="true"] { background: var(--tx-blue-soft); box-shadow: inset 3px 0 0 var(--tx-cta); }
+.cl-item-alias { font-size: 15px; font-weight: 700; word-break: keep-all; }
+.cl-item-sub { font-size: 13px; color: var(--tx-sub); word-break: keep-all; }
+.cl-empty { margin: 4px 0; font-size: 14px; color: var(--tx-sub); word-break: keep-all; }
+.cl-detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cl-detail-alias { font-size: 20px; }
+.cl-badge { padding: 2px 10px; border-radius: 12px; font-size: 12.5px; font-weight: 700; color: var(--tx-warn); background: var(--tx-warn-soft); }
+.cl-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 14px 0 0; }
+.cl-facts > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cl-facts dt { font-size: 13px; color: var(--tx-mute); }
+.cl-facts dd { margin: 0; font-size: 15px; font-weight: 600; color: var(--tx-ink); word-break: keep-all; }
+.cl-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.cl-h3 { margin: 22px 0 8px; font-size: 15px; font-weight: 700; color: var(--tx-ink); }
+.cl-docs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--tx-line); }
+.cl-doc { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--tx-line); }
+.cl-doc-name { font-size: 14px; font-weight: 600; color: var(--tx-ink); overflow-wrap: anywhere; }
+.cl-doc-when { font-size: 13px; color: var(--tx-mute); white-space: nowrap; }
+.cl-doc-open { font-size: 14px; font-weight: 600; color: var(--tx-cta); white-space: nowrap; }
+.cl-edit { margin-top: 18px; }
+.cl-edit > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--tx-sub); }
+.cl-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.cl-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cl-field--wide, .cl-form-act, .cl-form .cl-err { grid-column: 1 / -1; }
+.cl-label { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.cl-input { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 15px; }
+.cl-input::placeholder { color: var(--tx-mute); }
+.cl-input:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 1px; }
+.cl-err { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--tx-danger); word-break: keep-all; }
+@media (max-width: 760px) {
+  .cl-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "main" "add"; }
+  .cl-facts, .cl-form { grid-template-columns: minmax(0, 1fr); }
+  .cl-doc { grid-template-columns: minmax(0, 1fr) auto; }
+  .cl-doc-when { grid-column: 1; grid-row: 2; }
+}
 .ma-input { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
   background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 15px; font-variant-numeric: tabular-nums; }
 .ma-textarea { height: auto; padding: 10px 12px; resize: vertical; }

@@ -42,7 +42,6 @@ import {
   NODE_W,
   TEMPLATES,
   PG_NODE_TYPE,
-  toDoc,
   nodeSummary,
   topoOrder,
   stepOfNode,
@@ -58,7 +57,6 @@ import {
   toolOf,
   type GuideId,
   type GuideState,
-  type GraphDoc,
   type Box,
   type ProcedureSuggestion,
   type WorkflowStage,
@@ -100,7 +98,8 @@ import { useQuickAdd } from "./useQuickAdd";
 import { useDocSync } from "./useDocSync";
 import { useCanvasGraph } from "./useCanvasGraph";
 import { useCanvasAi } from "./useCanvasAi";
-import { useCanvasBoot } from "./useCanvasBoot";
+import { useCanvasBoot, type BootDoc } from "./useCanvasBoot";
+import { docOf } from "./canvasDoc";
 
 const NODE_TYPES = { [PG_NODE_TYPE]: GraphNode, [PG_GROUP_TYPE]: GroupFrame, [PG_BRANCH_TYPE]: BranchFrame };
 const EDGE_TYPES = { [PG_WIRE_TYPE]: EvidenceEdge };
@@ -109,15 +108,18 @@ export { ZOOM_FAR, ZOOM_NEAR, zoomLevel, type ZoomLevel } from "./canvasGeometry
 export interface PortfolioCanvasProps {
   /** 상단 바 오른쪽 — 케이스 상자 등. app 계층이 채운다. */
   topExtra?: ReactNode;
-  /** 다른 화면이 넘긴 흐름(BL2b — 매크로 스냅샷 등). 있으면 세션 복원 대신 이것을 연다. */
-  initialDoc?: { doc: GraphDoc; note: string } | null;
+  /** 다른 화면이 넘긴 흐름(BL2b — 매크로 스냅샷 등). 있으면 세션 복원 대신 이것을 연다.
+   *  `restack: false` 면 위치를 그대로(PB3 — 사용자가 놓은 고객 문서) · `isolate` 면 연 뒤 되돌리기 기록을 비운다(다른 문서로 되돌아가지 않게). */
+  initialDoc?: BootDoc | null;
+  /** 작업 중 문서를 이 탭에 남길까(기본 예). PB3 고객 문서를 여는 동안은 아니오 — 고객 문서가 작업 중 문서와 섞이지 않는다. */
+  persistWip?: boolean;
   /** 넘겨받은 흐름을 싣지 못했을 때의 말(BU2 — 예: 종목 이름 확인 실패). 문서는 바꾸지 않고 안내만 띄운다. */
   bootNote?: string | null;
   /** 옛 주소(`/allocation/<화면>` → `?from=`)로 왔을 때 그 예전 화면(BL4). 배너·팔레트 검색·템플릿·서랍을 안내한다. */
   legacy?: LegacyScreen | null;
 }
 
-export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: PortfolioCanvasProps) {
+export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persistWip = true }: PortfolioCanvasProps) {
   const s = usePortfolioGraph();
   const rf = useRef<ReactFlowInstance | null>(null);
   const canvasEl = useRef<HTMLDivElement>(null);
@@ -172,10 +174,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
   const [announce, setAnnounce] = useState("");
   const { panels, setPanels, updatePanels, tight, leftShown, rightShown, fit, fitIds, zoomBy } = useCanvasView(rf, canvasEl, !!s.catalog);
 
-  useCanvasBoot(initialDoc, bootNote, setStages, setFileNote, setLeftTabState, fit);
+  const booted = useCanvasBoot(initialDoc, bootNote, setStages, setFileNote, setLeftTabState, fit);
 
-  const doc = useMemo(() => toDoc(s.nodes, s.edges, s.name || s.goal ? { ...(s.name ? { name: s.name } : {}), ...(s.goal ? { goal: s.goal } : {}) } : undefined,
-                                  s.groups, s.branches, s.pinned, s.folded),
+  const doc = useMemo(() => docOf(s),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 문서 칸만(s 전체가 아니라)
     [s.nodes, s.edges, s.name, s.goal, s.groups, s.branches, s.pinned, s.folded]);
   const order = useMemo(() => topoOrder(s.nodes.map((n) => n.id), s.edges), [s.nodes, s.edges]);
   /** 밝힐 경로 — 계산 중이면 계산하는 노드들, 아니면 "여기까지 계산" 에 올린 노드의 조상. */
@@ -249,7 +251,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy }: Port
     if (rest.length) st.onNodesChange(rest);
   }, [numbered]);
 
-  const { setValidateTick } = useDocSync(doc, s.catalog);
+  const { setValidateTick } = useDocSync(doc, s.catalog, persistWip && booted);
 
   const { isValidConnection, onReconnectStart, onReconnect, onReconnectEnd } = useWireHandlers();
 

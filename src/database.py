@@ -274,6 +274,42 @@ class LiveGateDeclaration(Base):
     revoked_at = Column(DateTime(timezone=True))
 
 
+class PbClient(Base):
+    """PB 가 관리하는 고객 (CF 3부 PB3) — ★PB 가 정한 별칭만★ 둔다.
+
+    실명·연락처·주민번호·계좌번호를 받는 칸이 없다(별칭은 `pii_guard` 가 모양으로 거른다 — 실명은 모양으로 알 수 없어 화면이
+    적지 말라고 안내한다). 지우는 길은 없고 보관(`archived_at`)만 있다. 읽고 쓰는 길은 `src/services/pb_clients.py` 하나 —
+    모든 조회가 소유 PB 로 거른다. `users` 가 지워지면 함께 간다(보존 ⑤ 계정 소유).
+    """
+    __tablename__ = "pb_clients"
+
+    client_id = Column(String(32), primary_key=True)    # "cl_" + 16 hex
+    owner_username = Column(String(64), ForeignKey("users.username", ondelete="CASCADE"),
+                            index=True, nullable=False)
+    alias = Column(String(40), nullable=False)
+    #: 모르면 NULL — 기본값으로 채우지 않는다(PB1 고객 노드와 같은 어휘).
+    risk_tolerance = Column(String(32))
+    profile_source = Column(String(16), default="unknown", nullable=False)
+    assessed_at = Column(String(10))
+    horizon_years = Column(Float)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    archived_at = Column(DateTime(timezone=True))
+
+
+class PbClientDoc(Base):
+    """고객별 설계 문서 (CF 3부 PB3) — 캔버스 그래프 문서 JSON 을 그대로 둔다(모양만 확인 · 512KB 상한)."""
+    __tablename__ = "pb_client_docs"
+
+    doc_id = Column(String(32), primary_key=True)       # "cd_" + 16 hex
+    client_id = Column(String(32), ForeignKey("pb_clients.client_id", ondelete="CASCADE"),
+                       index=True, nullable=False)
+    name = Column(String(80), nullable=False)
+    graph = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class Portfolio(Base):
     __tablename__ = "portfolios"
 
