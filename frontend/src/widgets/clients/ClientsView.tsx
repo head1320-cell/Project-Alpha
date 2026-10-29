@@ -157,6 +157,7 @@ function AddClient() {
         if (!r.ok) { setErr(r.error); return; }
         setErr(null);
         setN((x) => x + 1);
+        await qc.cancelQueries({ queryKey: ["pb-clients"] });      // 처음 목록 읽기에 얹히지 않게(아래 Detail.refresh 와 같은 까닭)
         await qc.invalidateQueries({ queryKey: ["pb-clients"] });
       }} />
     </section>
@@ -179,7 +180,12 @@ function Detail({ cid }: { cid: string }) {
     );
   }
   const c = q.data as PbClientDetail;
-  const refresh = async () => { await qc.invalidateQueries({ queryKey: ["pb-client", cid] }); await qc.invalidateQueries({ queryKey: ["pb-clients"] }); };
+  // 처음 목록 읽기가 아직 오는 중이면 다시 읽기가 그 읽기(고치기 전 값)에 얹힌다 — 먼저 끊고 새로 읽는다.
+  const refresh = async () => {
+    await qc.cancelQueries({ queryKey: ["pb-clients"] });
+    await qc.invalidateQueries({ queryKey: ["pb-client", cid] });
+    await qc.invalidateQueries({ queryKey: ["pb-clients"] });
+  };
   const act = async (fn: () => Promise<Result<unknown>>) => {
     const r = await fn();
     if (!r.ok) { setErr(r.error); return; }

@@ -164,6 +164,46 @@ test("PB3 · 보관 — 목록에서 숨고 보관함에 · 보관한 고객의 
   await expect(row(page, alias)).toBeVisible();
 });
 
+test("PB3 · 목록을 읽는 사이 보관·다시 꺼내기를 해도 목록이 최신이다(처음 읽기와 겹침)", async ({ page }) => {
+  // 처음 목록 읽기가 끝나기 전에 고치면, 다시 읽기가 처음 읽기(고치기 전 값)에 얹혀 옛 목록이 남았다 — 고객이 많아 목록이 느려지자 드러남.
+  const token = await login(page);
+  const alias = `PB3 겹침 ${tag()}`;
+  const { client_id } = await newClient(page, token, alias);
+  let first = true;
+  await page.route("**/api/v1/pb/clients", async (r) => {
+    if (r.request().method() === "GET" && first) {
+      first = false;
+      const res = await r.fetch();                       // 고치기 전 목록을 받아 두고
+      await new Promise((ok) => setTimeout(ok, 1500));   // 늦게 돌려준다
+      await r.fulfill({ response: res });
+    } else await r.continue();
+  });
+  await page.goto(`/clients?client=${client_id}`, { waitUntil: "domcontentloaded" });
+  await page.locator(".cl-archive").click();             // 처음 목록이 아직 오는 중
+  await expect(row(page, alias)).toHaveCount(0);
+  await page.waitForTimeout(1800);                       // 늦은 옛 목록이 도착한 뒤에도
+  await expect(row(page, alias)).toHaveCount(0);
+});
+
+test("PB3 · 목록을 읽는 사이 더한 고객도 목록에 보인다(처음 읽기와 겹침)", async ({ page }) => {
+  await login(page);
+  const alias = `PB3 겹쳐 더함 ${tag()}`;
+  let first = true;
+  await page.route("**/api/v1/pb/clients", async (r) => {
+    if (r.request().method() === "GET" && first) {
+      first = false;
+      const res = await r.fetch();
+      await new Promise((ok) => setTimeout(ok, 1500));
+      await r.fulfill({ response: res });
+    } else await r.continue();
+  });
+  await page.goto("/clients", { waitUntil: "domcontentloaded" });
+  await page.locator(".cl-add-alias").fill(alias);
+  await page.locator(".cl-add-go").click();              // 처음 목록이 아직 오는 중
+  await page.waitForTimeout(1800);
+  await expect(row(page, alias)).toBeVisible();
+});
+
 test("PB3 · 없는(남의) 고객 주소 — 사유를 말하고 일반 캔버스로 연다(칩 없음)", async ({ page }) => {
   await login(page);
   await page.goto("/allocation?client=cl_0000000000000000&doc=cd_0000000000000000", { waitUntil: "domcontentloaded" });
