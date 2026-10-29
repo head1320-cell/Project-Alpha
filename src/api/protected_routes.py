@@ -132,6 +132,17 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 고객의 한 장 지우기 — 고객에게 보여 준 적 없는 것만(보여 준 것은 409)"),
     ("POST", "/api/v1/pb/clients/{cid}/snapshots/{sid}/ask"):
         (REQUIRE_LOGIN, "한 장에게 미리 묻기 — 근거는 그 한 장의 줄뿐 · PB 의 시간당 한도"),
+    # ── 고객 주소 (PB6) — 본인 고객만. 만들기·다시 열기·한 장 바꾸기는 유통 관문 뒤(`distribution_surface`) ──
+    ("POST", "/api/v1/pb/clients/{cid}/share-links"):
+        (REQUIRE_LOGIN, "내 고객의 주소 만들기 — 관문이 열려 있을 때만 · 토큰은 이번 한 번만 보인다"),
+    ("GET", "/api/v1/pb/clients/{cid}/share-links"):
+        (REQUIRE_LOGIN, "내 고객의 주소 목록·상태와 관문 판정 — 토큰·한 장을 내지 않는다"),
+    ("PATCH", "/api/v1/pb/clients/{cid}/share-links/{lid}"):
+        (REQUIRE_LOGIN, "내 고객 주소가 보여 줄 한 장 바꾸기 — 그 고객의 한 장만 · 관문 뒤"),
+    ("POST", "/api/v1/pb/clients/{cid}/share-links/{lid}/reopen"):
+        (REQUIRE_LOGIN, "잠긴 내 고객 주소 다시 열기 — 관문 뒤"),
+    ("POST", "/api/v1/pb/clients/{cid}/share-links/{lid}/revoke"):
+        (REQUIRE_LOGIN, "내 고객 주소 끄기 — 관문과 무관하게 늘 된다"),
 
     # ── 내 증권 계좌 (BV4) — 로그인 + ★본인 계좌만★: 소유자는 토큰에서 오고, 남의 계좌는 404 ──
     ("GET", "/api/v1/broker-accounts"):
@@ -197,6 +208,14 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.
 #: 사유 없는 면제는 금지 — 여기 비어 있는 값이 있으면 트립와이어가 실패한다.
 OPEN_WITH_REASON: dict[tuple[str, str], str] = {
+    # ── 고객이 여는 경로 (PB6) — 고객 계정이 없다(사용자 결정: 비밀 주소 + PIN). 로그인 대신 ★매 요청 유통 관문★ + 주소·PIN 또는
+    #    주소에 묶인 30분 세션을 본다(`src/api/share_routes.py`). 관문이 닫혀 있으면 무엇보다 먼저 403 ──
+    ("POST", "/api/v1/share/open"):
+        "고객이 주소 토큰 + PIN 으로 연다 — 계정 대신 토큰(256비트)·PIN(5번 틀리면 잠김)·유통 관문",
+    ("GET", "/api/v1/share/sheet"):
+        "고객이 한 장을 본다 — 주소에 묶인 서명 세션 · 매 요청 관문과 주소 상태(철회·만료·잠김)",
+    ("POST", "/api/v1/share/ask"):
+        "고객 AI — 같은 세션·관문 · 근거는 그 한 장뿐 · 주소마다 시간당 10번",
     ("GET", "/api/v1/live/mode"):
         "현재 실행 모드 표시 — 관리 화면이 로그인 전에 상태를 읽어야 하고, 값이 돈을 옮기지 않는다",
     ("GET", "/api/v1/live/kill-switch/status"):
@@ -293,6 +312,8 @@ MONEY_PATH_MARKERS = (
     "/pb/",
     # CF 3부 PB5 — 유통 관문 선언·철회.
     "distribution-gate",
+    # CF 3부 PB6 — 고객이 여는 경로(로그인 대신 관문 + 주소·PIN·세션).
+    "/share/",
 )
 
 

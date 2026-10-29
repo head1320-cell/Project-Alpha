@@ -85,7 +85,8 @@ def test_owner_comes_only_from_the_token(client):
 # ── ② 남의 고객은 404 — 전수 ─────────────────────────────────────────────
 
 #: 고객·문서 경로 — 한 장(`/snapshots`, PB4)은 만드는 데 계산 미리보기가 필요해 `test_pb4_sheets.py` 가 같은 방식으로 훑는다.
-_CID_ROUTES = sorted(k for k in PROTECTED if "{cid}" in k[1] and "/snapshots" not in k[1])
+# 한 장(PB4)·고객 주소(PB6) 경로는 그 파일들이 같은 전수 검사를 한다(한 장·주소·관문이 있어야 뜻이 있다).
+_CID_ROUTES = sorted(k for k in PROTECTED if "{cid}" in k[1] and "/snapshots" not in k[1] and "/share-links" not in k[1])
 
 
 def test_there_are_client_routes_to_check():

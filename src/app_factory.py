@@ -37,6 +37,7 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.stage13_routes",
     "src.api.live_gate_routes",
     "src.api.distribution_gate_routes",
+    "src.api.share_routes",
     "src.api.valuation_routes",
     "src.api.company_routes",
     "src.api.company_snapshot_routes",

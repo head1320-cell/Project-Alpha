@@ -353,6 +353,32 @@ class PbClientSheet(Base):
     shared_at = Column(DateTime(timezone=True))
 
 
+class PbClientLink(Base):
+    """고객 주소 (CF 3부 PB6) — ★유통 관문 뒤★. 고객이 PIN 과 함께 열어 한 장을 본다.
+
+    ★토큰은 해시만★(`token_hash` — sha256) 둔다 — 평문은 만들 때 한 번만 PB 에게 보이고 어디에도 남지 않는다.
+    PIN 도 해시(`hash_password`)만. 연속 실패 · 잠김 · 마지막 열람 · 열람 횟수 · 철회를 남긴다 — 보존 ② 감사
+    ("무엇을 누구에게 언제까지 보여 줬나"). 그래서 ★FK 를 걸지 않는다★(계정·고객이 지워져도 기록은 남는다 — BV7 과 같다).
+    읽고 쓰는 길은 `src/services/pb_links.py` 하나다.
+    """
+    __tablename__ = "pb_client_links"
+
+    link_id = Column(String(32), primary_key=True)      # "ln_" + 16 hex
+    client_id = Column(String(32), index=True, nullable=False)
+    sheet_id = Column(String(32), nullable=False)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    pin_hash = Column(String(100), nullable=False)
+    created_by = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    failures = Column(Integer, default=0, nullable=False)
+    locked_at = Column(DateTime(timezone=True))
+    last_viewed_at = Column(DateTime(timezone=True))
+    views = Column(Integer, default=0, nullable=False)
+    revoked_by = Column(String(64))
+    revoked_at = Column(DateTime(timezone=True))
+
+
 class Portfolio(Base):
     __tablename__ = "portfolios"
 

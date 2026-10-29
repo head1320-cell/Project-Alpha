@@ -25,7 +25,7 @@
 | ① **리서치** | P1 | 동작 | 스크리너 3-레이어 · 백테스트 엔진 · 매크로 국면 · `run_evidence` |
 | ② **포트폴리오 운용** | P2 | 동작 · ★배분은 여전히 계좌·목표를 모른다★ | `rebalance_reason` · `decision_evidence` · 보유 진단 · 계좌 판정 · 글라이드패스(AO, **관측만**) |
 | ③ **설명가능성** | P3 | 동작 | `daily_explanation` · 귀인 6효과 · 포트폴리오 리포트 · 증거 배지 |
-| ④ **전략 평가·유통** | P4 | 기술만 · ★유통 표면 없음★ | `strategy_scorecard` · `distribution_gate` |
+| ④ **전략 평가·유통** | P4 | 기술만 · ★유통 표면은 관문 뒤(기본 닫힘)★ | `strategy_scorecard` · `distribution_gate` · 선언 `distribution_gate_store`(PB5) · 고객 주소(PB6) |
 
 ★③이 차별화 축이다.★ ①②④ 는 4사도 한다(매트릭스 §1~§4). 이 저장소가 다르게 하는
 것은 **수치마다 그것이 관측인지 가정인지 미상인지를 응답과 화면이 함께 말하는 것**이고,
@@ -322,7 +322,7 @@ B2B 어드바이저 API. `alpha_registry` 의 승격 사다리와 `strategy_heal
 |---|---|
 | **평가 카드** | ★완료(AE)★ — `src/domain/strategy_scorecard.py`(세 축) · `src/engine/scorecard_builder.py`(조립) · `POST /api/v1/strategies/scorecard` |
 | **유통 관문** | ★완료(AE)★ — `src/domain/distribution_gate.py`. 업권 경고가 **산문에서 호출 가능한 관문**이 됐다 |
-| **마켓플레이스 · 구독 · B2B 어드바이저 API** | ★만들지 않았다★ — 업권 사항. 만들어지지 않았다는 것을 `tests/test_distribution_blocked.py` 가 전수로 지킨다 |
+| **마켓플레이스 · 구독 · B2B 어드바이저 API** | ★만들지 않았다★ — 업권 사항. 유통 형태 경로는 전부 등록부(`src/api/distribution_surface.py`)에 있어야 하고 여는 것은 관문을 닫은 채 부르면 실제로 403 이라는 것을 `tests/test_distribution_blocked.py` 가 전수로 지킨다(PB6 고객 주소가 유일한 여는 표면 — 관문 뒤) |
 
 > **완료 판정(평가 카드)** — 전략 하나에 `lifecycle`·`health`·`evidence` 세 축이
 > **각각** 나오고, ★합성 등급이 없으며★, `strategy_health` 가 재지 못한다고 적어 둔

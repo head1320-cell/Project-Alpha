@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.api.auth import require_login
+from src.api.distribution_surface import gate_view, require_distribution_open
 from src.domain.auth_identity import Principal
 from src.domain.investor_profile import PROFILE_SOURCES, RISK_TOLERANCE_LEVELS, SOURCE_UNKNOWN
 from src.domain.pii_guard import ALIAS_MAX
@@ -222,3 +223,62 @@ def ask_sheet(cid: str, sid: str, body: SheetAsk, p: Principal = Depends(require
     from src.services.canvas_assist import service as assist
     got = _call(svc.get_sheet, p.username, cid, sid)
     return assist.ask_sheet(got["sheet"], sid, body.question, body.previous, p.username)
+
+
+# ── 고객 주소 (PB6 · ★유통 관문 뒤★) ─────────────────────────────────────────
+# 여는 것(만들기·다시 열기·한 장 바꾸기)은 로그인 다음 ★관문 → 조회★ 차례(`distribution_surface` — 의존성은 적힌 차례로 돈다).
+# 로그인이 먼저인 까닭: 보호 등록부 계약(익명은 401). 관문은 조회보다 먼저라 닫혀 있으면 무엇이 있는지 드러내지 않는다. 닫는 것(목록·철회)은 늘 된다.
+
+class LinkIn(BaseModel):
+    model_config = _FORBID
+    sheet_id: str = Field(..., min_length=1, max_length=32)
+    pin: str = Field(..., min_length=1, max_length=12)
+    days: int
+
+
+class LinkPatch(BaseModel):
+    model_config = _FORBID
+    sheet_id: str = Field(..., min_length=1, max_length=32)
+
+
+def _link_call(fn, *args, **kw):
+    from src.services import pb_links
+    try:
+        return _call(fn, *args, **kw)
+    except pb_links.LinkNotFound:
+        raise HTTPException(404, "그 주소가 없어요.") from None
+    except pb_links.LinkClosed as e:
+        raise HTTPException(409, str(e)) from None
+
+
+@router.post("/{cid}/share-links", status_code=201)
+def create_link(cid: str, body: LinkIn, p: Principal = Depends(require_login),
+                _g: dict = Depends(require_distribution_open)):
+    from src.services import pb_links
+    return _link_call(pb_links.create_link, p.username, cid, sheet_id=body.sheet_id, pin=body.pin, days=body.days)
+
+
+@router.get("/{cid}/share-links")
+def list_links(cid: str, p: Principal = Depends(require_login)):
+    from src.services import pb_links
+    return {"gate": gate_view(), "links": _link_call(pb_links.list_links, p.username, cid)}
+
+
+@router.patch("/{cid}/share-links/{lid}")
+def change_link_sheet(cid: str, lid: str, body: LinkPatch, p: Principal = Depends(require_login),
+                      _g: dict = Depends(require_distribution_open)):
+    from src.services import pb_links
+    return _link_call(pb_links.change_sheet, p.username, cid, lid, body.sheet_id)
+
+
+@router.post("/{cid}/share-links/{lid}/reopen")
+def reopen_link(cid: str, lid: str, p: Principal = Depends(require_login),
+                _g: dict = Depends(require_distribution_open)):
+    from src.services import pb_links
+    return _link_call(pb_links.reopen_link, p.username, cid, lid)
+
+
+@router.post("/{cid}/share-links/{lid}/revoke")
+def revoke_link(cid: str, lid: str, p: Principal = Depends(require_login)):
+    from src.services import pb_links
+    return _link_call(pb_links.revoke_link, p.username, cid, lid)

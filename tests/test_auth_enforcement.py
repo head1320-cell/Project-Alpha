@@ -141,7 +141,17 @@ _LOGIN_ONLY = sorted(k for k, v in PROTECTED.items() if v[0] == REQUIRE_LOGIN)
 def test_any_logged_in_role_passes_the_login_only_gate(client, method, path):
     """★짝★ — 로그인 표면을 admin 전용으로 좁히지 않았는지 본다."""
     res = _call(client, method, path, headers=_auth(client, "alice", "alice-pw"))
+    if res.status_code == 403 and _distribution_refusal(method, path, res):
+        return       # 역할이 아니라 유통 관문(PB6)이 닫혀서 — 관문이 열리면 analyst 도 통과한다(test_pb6_share_links)
     assert res.status_code != 403, f"{method} {path} 가 analyst 를 막는다"
+
+
+def _distribution_refusal(method: str, path: str, res) -> bool:
+    """이 403 이 ★등록부의 여는 경로★에서 유통 관문이 낸 것인가 — 다른 403 은 여전히 역할 차단으로 본다."""
+    from src.api.distribution_surface import DISTRIBUTION_SURFACE, OPENS
+    detail = res.json().get("detail")
+    return (DISTRIBUTION_SURFACE.get((method, path), ("", ""))[0] == OPENS
+            and isinstance(detail, dict) and detail.get("code") == "distribution_blocked")
 
 
 # ── ⑲ 과잉 차단 배제 ──────────────────────────────────────────────────────
