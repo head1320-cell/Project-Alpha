@@ -373,18 +373,20 @@ test("소켓 두 번 누르기(CF2): 내는 소켓 = 그 값을 받는 노드 ·
   await openWith(page, null);
   await center(page, "optimizer");                  // 처음 열림은 보통 확대 — 오른쪽 열은 판 밑일 수 있어 끌어 온다
   const z0 = await zoomOf(page);
+  // 노드를 고르면 판이 200ms 동안 옆으로 비킨다(오른쪽 창) — 그동안 d3 의 부드러운 이동이 확대를 1e-4 쯤 잠깐 낮췄다 되돌린다.
+  // ★끝난 값★을 본다(두 번 누르기가 캔버스를 확대했다면 그 값에 머물러 실패한다).
   await handle(page, "optimizer", "weights", "source").dblclick();
   const q = page.locator(".pg-quick");
   await expect(q).toHaveAttribute("data-type", "Weights");
   await expect(q.locator('.pg-quick-item[data-kind="risk"]')).toHaveCount(1);
   await expect(q.locator('.pg-quick-item[data-kind="returns"]'), "비중을 받지 않는 노드는 없다").toHaveCount(0);
-  expect(await zoomOf(page)).toBe(z0);
+  await expect.poll(() => zoomOf(page)).toBe(z0);
   await page.keyboard.press("Escape");
   await handle(page, "optimizer", "returns", "target").dblclick();
   await expect(q).toHaveAttribute("data-type", "Returns");
   await expect(q.locator('.pg-quick-item[data-kind="returns"]')).toHaveCount(1);
   await expect(q.locator('.pg-quick-item[data-kind="risk"]'), "수익률을 내지 않는 노드는 없다").toHaveCount(0);
-  expect(await zoomOf(page)).toBe(z0);
+  await expect.poll(() => zoomOf(page)).toBe(z0);
 });
 
 test("접기(CF1): 머리 줄만 · 핸들은 머리 가운데 · 선 그대로 · 작업 중 문서와 내보낸 파일에 남는다 · 짝: 펴면 원래대로", async ({ page }) => {
