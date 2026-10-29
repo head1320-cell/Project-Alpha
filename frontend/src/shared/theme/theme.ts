@@ -25,6 +25,8 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
   { pattern: /^\/my-account\/?$/, label: "내 계좌" },
   // CF 3부 PB3·PB4 — 고객 화면·고객 한 장도 `--tx-*` 토큰만 쓴다. clients.spec · client-sheet.spec 이 라이트·다크 AA 로 확인한다.
   { pattern: /^\/clients(\/|$)/, label: "고객" },
+  // CF 3부 PB6 — 고객 화면(단독). client-share.spec 이 라이트·다크 AA 로 확인한다.
+  { pattern: /^\/c\/?$/, label: "고객 화면" },
   // BU9b — 실거래도 `--tx-*` 토큰만 쓴다. live-trading.spec 이 다크 AA 로 확인한다.
   { pattern: /^\/admin\/live-trading\/?$/, label: "실거래" },
   // BS5 — 레거시 모듈. 라이트는 계산 스타일 골든 그대로, 다크는 주요 상태 전부 AA(E2E dark-modules.spec.ts).

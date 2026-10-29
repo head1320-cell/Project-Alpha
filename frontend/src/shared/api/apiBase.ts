@@ -51,6 +51,9 @@ export const API_BASE: string = resolveApiBase();
 export function extractErrorDetail(err: unknown, fallback: string): string {
   const detail = (err as { detail?: unknown } | null)?.detail;
   if (typeof detail === "string" && detail) return detail;
+  // 사유를 갖춘 객체(예: 유통 관문 `{code, reason, missing}`) — 사유 문장을 그대로.
+  const reason = (detail as { reason?: unknown } | null)?.reason;
+  if (detail && typeof detail === "object" && !Array.isArray(detail) && typeof reason === "string" && reason) return reason;
   if (Array.isArray(detail) && detail.length) {
     return detail
       .map((d) => {

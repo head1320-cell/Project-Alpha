@@ -3,7 +3,8 @@
  * 고객 한 장 — PB 화면 (CF 3부 PB4) · `/clients/<cid>/sheets/<sid>`.
  * ==========================================================================
  * 한 장(`ClientSheet` — 서버가 다시 계산해 옮긴 것) · 인쇄(브라우저의 인쇄 → PDF 로 저장도 같은 길) · 고객 AI 미리 묻기(근거는 이 한 장의 줄뿐 ·
- * 투자 판단은 고객용 고정 문장) · 지우기(고객에게 보여 준 적 없는 것만 — 서버가 판정). 인쇄하면 메뉴·도구·묻기는 숨고 한 장만 남는다.
+ * 투자 판단은 고객용 고정 문장) · 지우기(고객에게 보여 준 적 없는 것만 — 서버가 판정) · 고객 주소(PB6 — 유통 관문 뒤).
+ * 인쇄하면 메뉴·도구·주소·묻기는 숨고 한 장만 남는다.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,6 +15,7 @@ import { useSession } from "@/entities/session";
 import type { Result } from "@/shared/api/result";
 import { loginHref } from "@/shared/lib/nextPath";
 import { RetryFail } from "@/shared/ui/tx";
+import { SharePanel } from "./SharePanel";
 
 const unwrap = <T,>(fn: () => Promise<Result<T>>) => async (): Promise<T> => {
   const r = await fn();
@@ -73,6 +75,7 @@ function Body({ cid, sid }: { cid: string; sid: string }) {
         {err && <p className="cl-err" role="alert">{err}</p>}
       </div>
       <ClientSheet sheet={x.sheet} />
+      <SharePanel cid={cid} sid={sid} archived={x.client_archived} />
       <SheetAsk title="고객 AI 미리 묻기" sub="고객이 이 한 장에 물으면 어떻게 답하는지 미리 봐요. 근거는 이 한 장에 적힌 줄뿐이고, 투자 판단은 답하지 않아요."
                 ask={(question, prev) => askSheet(cid, sid, question, prev)} />
     </>

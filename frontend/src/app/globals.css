@@ -9381,10 +9381,76 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .cs-weight { grid-template-columns: minmax(0, 1fr) 4.5rem; }
   .cs-weight-bar { grid-column: 1 / -1; grid-row: 2; }
   .cs-ask-form { flex-direction: column; }
+  .cs-ask-form .cs-ask-input { flex: none; }   /* 세로로 쌓으면 flex:1 이 높이를 0 으로 접는다 */
 }
+/* CF 3부 PB6 · 고객 주소 판(PB 한 장 화면) — `--tx-*` 토큰만. 관문이 닫히면 경고 띠 + 꺼진 칸. 주소는 한 번만 보이는 상자. */
+.cs-share { background: var(--tx-surface); border-radius: var(--tx-r-sec); padding: 20px 24px; }
+.cs-share-blocked { margin: 0 0 12px; padding: 12px 14px; border-radius: var(--tx-r-row); background: var(--tx-warn-soft); }
+.cs-share-blocked p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--tx-ink); word-break: keep-all; }
+.cs-share-blocked .cs-share-blocked-why { font-weight: 700; }
+.cs-share-blocked p + p { margin-top: 4px; }
+.cs-share-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.cs-share-field { display: flex; flex-direction: column; gap: 4px; }
+.cs-share-label { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.cs-share-pin, .cs-share-days { box-sizing: border-box; height: 40px; padding: 0 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 15px; }
+.cs-share-pin { width: 9.5em; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
+.cs-share-pin::placeholder { color: var(--tx-mute); letter-spacing: normal; }
+.cs-share-pin:disabled, .cs-share-days:disabled { background: var(--tx-soft); color: var(--tx-mute); }
+/* 꺼진 고르개의 보기는 브라우저가 회색(GrayText 3.6:1)으로 칠한다 — 토큰 색으로(다크 짝은 토큰이). */
+.cs-share-days option { background: var(--tx-surface); color: var(--tx-ink); }
+.cs-share-pin:focus-visible, .cs-share-days:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 1px; }
+.cs-share-hint { margin: 8px 0 0; font-size: 13px; color: var(--tx-sub); line-height: 1.5; word-break: keep-all; }
+.cs-share-once { margin-top: 12px; padding: 14px; border-radius: var(--tx-r-row); background: var(--tx-blue-soft); }
+.cs-share-once-t { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.cs-share-url-row { display: flex; gap: 8px; }
+.cs-share-url { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 13.5px; }
+.cs-share-done { margin-top: 8px; padding: 0; border: 0; background: none; color: var(--tx-cta); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.cs-share-list { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--tx-line); }
+.cs-share-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--tx-line); }
+.cs-share-row-main { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.cs-share-state { flex: none; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; background: var(--tx-soft); color: var(--tx-sub); }
+.cs-share-row[data-state="open"] .cs-share-state { background: var(--tx-ok-soft); color: var(--tx-ok); }
+.cs-share-row[data-state="locked"] .cs-share-state { background: var(--tx-danger-soft); color: var(--tx-danger); }
+.cs-share-title { font-size: 14.5px; font-weight: 600; color: var(--tx-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-share-row-sub { grid-column: 1; margin: 0; font-size: 12.5px; color: var(--tx-sub); line-height: 1.5; word-break: keep-all; }
+.cs-share-acts { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.cs-share-btn { height: 32px; padding: 0 12px; font-size: 13px; }
+.cs-share-empty { margin: 12px 0 0; }
+@media (max-width: 560px) {
+  .cs-share { padding: 18px 16px; }
+  .cs-share-row { grid-template-columns: minmax(0, 1fr); }
+  .cs-share-acts { grid-column: 1; grid-row: auto; justify-content: flex-start; margin-top: 6px; }
+}
+
+/* CF 3부 PB6 · 고객 화면 `/c` — 메뉴 없는 단독 한 화면. 390 이 먼저(한 줄 흐름) · `--tx-*` 토큰만(다크는 토큰이). 회사 이름·로고 없음. */
+.sv-page { min-height: 100dvh; display: flex; flex-direction: column; background: var(--tx-bg); color: var(--tx-ink); font-family: var(--tx-font); }
+.sv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--tx-surface);
+  border-bottom: 1px solid var(--tx-line); }
+.sv-brand { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+.sv-close { height: 34px; padding: 0 14px; border: 0; border-radius: 17px; background: var(--tx-soft); color: var(--tx-ink); font: inherit; font-size: 14px;
+  font-weight: 600; cursor: pointer; }
+.sv-main { flex: 1; box-sizing: border-box; width: 100%; max-width: 760px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sv-card { background: var(--tx-surface); border-radius: var(--tx-r-sec); padding: 24px 20px; }
+.sv-h1 { margin: 0 0 6px; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; word-break: keep-all; }
+.sv-sub { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--tx-sub); word-break: keep-all; }
+.sv-pin-form { display: flex; gap: 8px; margin-top: 16px; }
+.sv-pin { flex: 1; min-width: 0; box-sizing: border-box; height: 52px; padding: 0 14px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 22px; letter-spacing: 0.3em; font-variant-numeric: tabular-nums; }
+.sv-pin::placeholder { color: var(--tx-mute); font-size: 15px; letter-spacing: normal; }
+.sv-pin:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 1px; }
+.sv-open { height: 52px; padding: 0 22px; font-size: 16px; }
+.sv-note { margin: 10px 0 0; font-size: 13.5px; color: var(--tx-warn); }
+.sv-err { margin: 10px 0 0; font-size: 13.5px; color: var(--tx-danger); }
+.sv-until { margin: 0; font-size: 13px; color: var(--tx-sub); }
+.sv-main .cs-sheet { padding: 24px 20px; }
+.sv-main .cs-ask { padding: 20px; }
+.sv-foot { padding: 16px; font-size: 12.5px; line-height: 1.55; color: var(--tx-sub); text-align: center; word-break: keep-all; }
+
 @media print {
   body:has(.cs-page) .terminal-header, body:has(.cs-page) .terminal-sidebar, body:has(.cs-page) .sidebar-backdrop,
-  body:has(.cs-page) .tcrumb, .cs-tools, .cs-ask { display: none !important; }
+  body:has(.cs-page) .tcrumb, .cs-tools, .cs-ask, .cs-share { display: none !important; }
   /* 셸은 화면 높이에 맞춘 스크롤 상자다 — 인쇄에서는 풀어야 한 장이 여러 쪽으로 이어진다(아니면 첫 화면 높이만 찍힌다). */
   body:has(.cs-page) .terminal-root, body:has(.cs-page) .terminal-body, body:has(.cs-page) .terminal-main {
     display: block !important; height: auto !important; overflow: visible !important; }

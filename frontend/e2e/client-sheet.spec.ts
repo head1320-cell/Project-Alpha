@@ -91,6 +91,7 @@ test("PB4 · 인쇄 — 메뉴·도구는 숨고 한 장만 · 미리 묻기(답
   await expect(page.locator(".cs-sheet")).toBeVisible();
   await expect(page.locator(".cs-tools")).toBeHidden();
   await expect(page.locator(".cs-ask")).toBeHidden();
+  await expect(page.locator(".cs-share")).toBeHidden();                     // 고객 주소 판(PB6)도 인쇄에 싣지 않는다
   await expect(page.locator(".terminal-nav")).toBeHidden();
   await expect(page.locator(".terminal-sidebar")).toBeHidden();             // 메뉴 레일이 한 장 왼쪽을 덮지 않는다
   // 한 장 전체가 문서 흐름에 있다 — 화면 높이로 자르는 스크롤 상자가 위에 없어야 인쇄가 여러 쪽으로 이어진다

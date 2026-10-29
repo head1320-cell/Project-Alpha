@@ -87,3 +87,29 @@ export const deleteSheet = (cid: string, sid: string) =>
   call<{ deleted: string }>(getWithAuth(at(cid, `/snapshots/${encodeURIComponent(sid)}`), { method: "DELETE" }));
 export const askSheet = (cid: string, sid: string, question: string, previous: { question: string; answer: string } | null) =>
   call<SheetAnswer>(postJson(at(cid, `/snapshots/${encodeURIComponent(sid)}/ask`), { question, ...(previous ? { previous } : {}) }));
+
+// ── 고객 주소 (PB6 · ★유통 관문 뒤★) ─────────────────────────────────────────
+// 만들기·다시 열기·한 장 바꾸기는 관문이 열려 있을 때만 서버가 받는다(닫혀 있으면 403 + 사유). 목록·끄기는 늘 된다.
+// ★토큰은 만들 때 한 번만★ 돌아온다 — 목록은 토큰을 내지 않는다.
+
+export type ShareGate = { state: "allowed" | "blocked"; reason: string | null; missing: string[] };
+export type ShareLinkState = "open" | "locked" | "expired" | "revoked" | "archived";
+export type ShareLink = {
+  link_id: string; client_id: string; sheet_id: string; sheet_title: string | null; state: ShareLinkState;
+  created_by: string; created_at: string | null; expires_at: string | null; failures: number; locked_at: string | null;
+  last_viewed_at: string | null; views: number; revoked_by: string | null; revoked_at: string | null;
+};
+export const SHARE_DAYS = [7, 30, 90] as const;
+/** 인가 기록 다섯 칸의 쉬운 이름 — 관문이 닫힌 까닭을 PB 에게 보일 때. */
+export const LICENSE_PLAIN: Record<string, string> = {
+  authority: "인가 기관", license_kind: "인가 종류", license_no: "인가 번호", verified_at: "확인일", scope: "범위",
+};
+
+const link = (cid: string, lid: string, rest = "") => at(cid, `/share-links/${encodeURIComponent(lid)}${rest}`);
+export const listLinks = (cid: string) => call<{ gate: ShareGate; links: ShareLink[] }>(getWithAuth(at(cid, "/share-links")));
+export const createLink = (cid: string, body: { sheet_id: string; pin: string; days: number }) =>
+  call<{ link: ShareLink; token: string }>(postJson(at(cid, "/share-links"), body));
+export const revokeLink = (cid: string, lid: string) => call<ShareLink>(postJson(link(cid, lid, "/revoke"), {}));
+export const reopenLink = (cid: string, lid: string) => call<ShareLink>(postJson(link(cid, lid, "/reopen"), {}));
+export const switchLinkSheet = (cid: string, lid: string, sheetId: string) =>
+  call<ShareLink>(send("PATCH", link(cid, lid), { sheet_id: sheetId }));

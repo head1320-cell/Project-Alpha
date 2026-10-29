@@ -42,7 +42,8 @@ function Steps({ title, steps }: { title: string; steps: SheetStep[] }) {
   );
 }
 
-export function ClientSheet({ sheet }: { sheet: Sheet }) {
+/** `audience` — PB 화면은 "노드" 를 말해도 되지만 고객 화면(PB6 `/c`)에서는 중립 문장으로. 숫자·단계는 같다. */
+export function ClientSheet({ sheet, audience = "pb" }: { sheet: Sheet; audience?: "pb" | "client" }) {
   const client = sheet.steps.filter((s) => CLIENT_KINDS.has(String(s.type)));
   const decide = sheet.steps.filter((s) => DECISION_KINDS.has(String(s.type)));
   const build = sheet.steps.filter((s) => !CLIENT_KINDS.has(String(s.type)) && !DECISION_KINDS.has(String(s.type)));
@@ -57,7 +58,7 @@ export function ClientSheet({ sheet }: { sheet: Sheet }) {
       {sheet.practice && <p className="cs-practice" role="note">{sheet.practice_note}</p>}
       <section className="cs-sec cs-weights-sec">
         <h2 className="cs-h2">내 포트폴리오 비중</h2>
-        <p className="cs-sub">{sheet.focus.label} 노드가 정한 비중이에요.</p>
+        <p className="cs-sub">{audience === "client" ? "이번 점검에서 정한 비중이에요." : `${sheet.focus.label} 노드가 정한 비중이에요.`}</p>
         <ol className="cs-weights">
           {sheet.focus.weights.map((w) => (
             <li key={w.code} className="cs-weight" data-code={w.code}>
