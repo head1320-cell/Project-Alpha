@@ -274,6 +274,27 @@ class LiveGateDeclaration(Base):
     revoked_at = Column(DateTime(timezone=True))
 
 
+class DistributionGateDeclaration(Base):
+    """유통 관문 선언 (CF 3부 PB5) — ★지우지 않는다★ (BV7 `LiveGateDeclaration` 과 같은 모양).
+
+    운영자가 인가 기록 다섯 칸(`distribution_gate.LICENSE_FIELDS`)을 선언한다. 새 선언은 옛 선언을 철회로 닫고(누가·언제),
+    철회도 행을 남긴다 — "무슨 근거로 고객에게 화면을 열었나" 를 나중에 물을 수 있게. 판정은 `distribution_gate` 가 하고
+    읽고 쓰는 길은 `src/services/distribution_gate_store.py` 하나다. 사용자 표에 FK 를 걸지 않는다(계정이 지워져도 기록은 남는다).
+    """
+    __tablename__ = "distribution_gate_declarations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    authority = Column(Text, nullable=False)
+    license_kind = Column(Text, nullable=False)
+    license_no = Column(Text, nullable=False)
+    verified_at = Column(String(32), nullable=False)
+    scope = Column(Text, nullable=False)
+    declared_by = Column(String(64), nullable=False)
+    declared_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_by = Column(String(64))
+    revoked_at = Column(DateTime(timezone=True))
+
+
 class PbClient(Base):
     """PB 가 관리하는 고객 (CF 3부 PB3) — ★PB 가 정한 별칭만★ 둔다.
 

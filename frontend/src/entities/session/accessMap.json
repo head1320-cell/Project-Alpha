@@ -41,7 +41,8 @@
       { "label": "비상 정지·해제", "routes": ["POST /api/v1/live/kill-switch/trigger", "POST /api/v1/live/kill-switch/resolve", "POST /api/v1/trading/kill-switch"] },
       { "label": "계정 발급·비밀번호 초기화", "routes": ["GET /api/v1/auth/users", "POST /api/v1/auth/users", "POST /api/v1/auth/users/{username}/reset-password"] },
       { "label": "실거래 기록 표 준비", "routes": ["POST /api/v1/live/init-schema"] },
-      { "label": "실계좌 관문 열기·닫기", "routes": ["GET /api/v1/admin/live-gate", "POST /api/v1/admin/live-gate", "DELETE /api/v1/admin/live-gate"] }
+      { "label": "실계좌 관문 열기·닫기", "routes": ["GET /api/v1/admin/live-gate", "POST /api/v1/admin/live-gate", "DELETE /api/v1/admin/live-gate"] },
+      { "label": "유통 관문 열기·닫기(고객 화면)", "routes": ["GET /api/v1/admin/distribution-gate", "POST /api/v1/admin/distribution-gate", "DELETE /api/v1/admin/distribution-gate"] }
     ]
   }
 }

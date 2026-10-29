@@ -173,6 +173,14 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     ("DELETE", "/api/v1/admin/live-gate"):
         (REQUIRE_ADMIN, "실계좌 관문 철회 — LIVE 였던 운영자 실행기는 SHADOW 로"),
 
+    # ── 유통 관문 (PB5) — 고객 화면(PB6)을 여는 인가 기록 선언·철회. 선언자는 토큰에서 ──
+    ("GET", "/api/v1/admin/distribution-gate"):
+        (REQUIRE_ADMIN, "유통 관문 선언·판정·이력 — 무슨 인가로 고객에게 화면이 열렸는지 드러난다"),
+    ("POST", "/api/v1/admin/distribution-gate"):
+        (REQUIRE_ADMIN, "유통 관문 선언 — 인가 기록 다섯 칸이 다 있어야 저장되고 그때 열린다"),
+    ("DELETE", "/api/v1/admin/distribution-gate"):
+        (REQUIRE_ADMIN, "유통 관문 철회 — 고객 주소·고객 화면·고객 AI 가 즉시 막힌다"),
+
     # ── 캔버스 AI 도우미 (AI0) — 화면은 열려 있고 AI 만 로그인. 돈·PII 가 아니라 운영자 비용이라 잠근다 ──
     ("POST", "/api/v1/assist/canvas/suggest"):
         (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도"),
@@ -283,6 +291,8 @@ MONEY_PATH_MARKERS = (
     "live-gate",
     # CF 3부 PB3 — PB 고객 자료(별칭·성향·설계 문서). 돈은 아니지만 고객 자료라 전수 검사의 사정거리 안에 둔다.
     "/pb/",
+    # CF 3부 PB5 — 유통 관문 선언·철회.
+    "distribution-gate",
 )
 
 
