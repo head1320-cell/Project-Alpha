@@ -175,11 +175,15 @@ OptimizerParams = _subset(
                      {"label": "많이 피함", "value": 10.0}],
             help="클수록 흔들림을 줄이는 쪽으로, 작을수록 기대 수익 쪽으로 나눠요. "
                  "세 값은 관례적인 크기라 나에게 맞는 값은 가정이에요 — 비우면 ‘보통’을 써요."),
-        "constraints": _ui("제약", question="한 종목에 최대 얼마까지 둘까요?",
+        # CF 3부 P2 — 기본 칩은 그대로(한 종목 최대 · 칩은 그 키만 바꾼다), `widget="constraints"` 가 나머지 아홉 칸을
+        # 질문 카드로 연다(범위는 이 스키마의 `ConstraintsInput`, 판정은 `/allocation/constraints/check`).
+        "constraints": _ui("제약", question="한 종목에 최대 얼마까지 둘까요?", widget="constraints",
                            presets=[{"label": "제한 없음", "value": None},
                                     {"label": "40%", "value": {"max_weight_pct": 40}},
                                     {"label": "30%", "value": {"max_weight_pct": 30}},
-                                    {"label": "20%", "value": {"max_weight_pct": 20}}]),
+                                    {"label": "20%", "value": {"max_weight_pct": 20}}],
+                           help="‘더 정하기’ 에서 업종 상한·회전율·시장 민감도·현금·공매도 노출까지 정할 수 있어요. "
+                                "풀 수 없는 조합이면 계산 전에 알려 줘요."),
     },
     model=(Literal[_MODELS], Field("mvo", json_schema_extra={"x-ui": _ui(
         "계산 방식", question="어떤 방식으로 나눌까요?", widget="cards",

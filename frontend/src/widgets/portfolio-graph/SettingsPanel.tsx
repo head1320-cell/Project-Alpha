@@ -20,7 +20,8 @@ import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
 import { fmtElapsed, sameValue, setOrClear, sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
-import { descendantsOf } from "./store";
+import { ancestorsOf, descendantsOf } from "./store";
+import { ConstraintsEditor } from "./ConstraintsEditor";
 
 type Params = Record<string, unknown>;
 const same = sameValue;
@@ -225,6 +226,17 @@ function PerPortNumber({ f, value, ports, onChange }: {
   );
 }
 
+/** 이 노드 위쪽 '종목 고르기'(universe)들의 종목 — 제약 확인이 몇 종목인지·업종이 무엇인지 묻는 데 쓴다(P2). */
+function upstreamTickers(nodeId: string, nodes: PgNode[], edges: Edge[]): string[] {
+  const up = new Set(ancestorsOf([nodeId], edges));
+  const out: string[] = [];
+  for (const n of nodes) {
+    const t = n.data.params?.tickers;
+    if (up.has(n.id) && n.data.kind === "universe" && Array.isArray(t)) out.push(...t.map(String));
+  }
+  return [...new Set(out)];
+}
+
 /** 이어진 포트 — 들어오는 선의 포트 순서, 이름은 `labels`(캔버스가 전략 이름으로 채움). 선을 모르면 `labels` 만으로. */
 function linkedPorts(params: Params, edges?: Edge[], nodeId?: string): LinkedPort[] {
   const labels = (params.labels && typeof params.labels === "object" ? params.labels : {}) as Record<string, string>;
@@ -235,12 +247,18 @@ function linkedPorts(params: Params, edges?: Edge[], nodeId?: string): LinkedPor
     .map((port) => ({ port, label: labels[port] ?? `전략 ${port.replace(/^s/, "")}` }));
 }
 
-function BasicField({ f, value, root, ports, onChange, said }: {
+function BasicField({ f, value, root, ports, onChange, said, names, model }: {
   f: FieldSpec; value: unknown; root: JsonSchema | null; ports: LinkedPort[]; onChange: (v: unknown) => void;
   /** 말로 설계(AI4) — 이 값을 말한 말씀 조각. 사람이 이 칸을 고치면 사라진다(store `updateParams`). */
   said?: string;
+  /** 제약 편집기(P2) — 위쪽 '종목 고르기' 의 종목과 지금 계산 방식. 모르면 빈 목록(확인 경로가 '× n종목' 을 재지 않는다). */
+  names?: string[];
+  model?: string;
 }) {
   const eff = value !== undefined ? value : f.defaultValue;
+  if (f.ui.widget === "constraints") {
+    return <ConstraintsEditor f={f} value={value} root={root} names={names ?? []} model={model} onChange={onChange} />;
+  }
   if (f.ui.widget === "per_port") return <PerPort f={f} value={value} ports={ports} onChange={onChange} />;
   if (f.ui.widget === "per_port_number") return <PerPortNumber f={f} value={value} ports={ports} onChange={onChange} />;
   const item = f.kind === "json" ? itemSchemaOf(f, root) : null;
@@ -621,8 +639,10 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
   // `show_if` 로 지금 방식에서 뜻이 없는 칸은 숨긴다(BO O1).
   const basic = basicFieldsOf(entry?.params_schema ?? null, params);
   const ports = linkedPorts(params, edges, node.id);
+  const names = upstreamTickers(node.id, nodes, edges);
+  const model = typeof params.model === "string" ? params.model : undefined;
   const basicRendered = basic.map((f) => ({ f, el: <BasicField key={f.name} f={f} value={params[f.name]} said={node.data.said?.[f.name]}
-                                                               root={entry?.params_schema ?? null} ports={ports}
+                                                               root={entry?.params_schema ?? null} ports={ports} names={names} model={model}
                                                                onChange={(v) => onChange(setOrClear(params, f.name, v))} /> }));
 
   return (

@@ -114,7 +114,7 @@ export interface ParamUi {
   question?: string;
   help?: string;
   unit?: string;
-  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers" | "per_port" | "per_port_number";
+  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers" | "per_port" | "per_port_number" | "constraints";
   /** `widget: "pick"` 가 부를 목록 이름(BK W5) — `strategies` · `research_runs`. 주소가 아니다. */
   source?: string;
   ends?: [string, string];

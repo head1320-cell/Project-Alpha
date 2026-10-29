@@ -4756,6 +4756,28 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-cons-list:empty { display: none; }
 .pg-cons-unapplied, .pg-cons-violation { color: var(--pg-assume); }
 .pg-cons-note { color: var(--pg-mute); font-size: 12px; }
+/* CF 3부 P2 · 제약 편집기 — 기본 칩 아래 판정 줄(풀 수 없음은 실패색 · 빠질 상한은 경고색), 나머지는 접힌 '더 정하기'. */
+.pg-cons-check { margin: 6px 0 0; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.5; }
+.pg-cons-check--bad { color: var(--pg-fail); background: var(--pg-fail-soft); }
+.pg-cons-check--warn { color: var(--pg-assume); background: var(--pg-assume-soft); }
+.pg-cons-short { margin: 6px 0 0; font-size: 12.5px; color: var(--pg-assume); }
+.pg-cons-more { margin-top: 10px; border-top: 1px solid var(--pg-line); padding-top: 8px; }
+.pg-cons-more > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--pg-ink); list-style-position: inside; }
+.pg-cons-more-sum { font-weight: 400; color: var(--pg-mute); }
+.pg-cons-shapes { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.pg-cons-assumed { margin: 4px 0 0; font-size: 12px; color: var(--pg-body); }
+.pg-cons-card { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px dashed var(--pg-line); }
+.pg-cons-card:last-child { border-bottom: 0; }
+.pg-cons-card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pg-cons-card-q { font-size: 13px; color: var(--pg-ink); }
+.pg-cons-card-in { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.pg-cons-card-in .pg-field-input, .pg-cons-cap .pg-field-input { width: 84px; text-align: right; }
+.pg-cons-unit { font-size: 12px; color: var(--pg-mute); min-width: 12px; }
+.pg-cons-sectors-none { margin: 0; font-size: 12.5px; color: var(--pg-assume); }
+.pg-cons-cap { display: flex; align-items: center; gap: 6px; }
+.pg-cons-cap-name { flex: 1; font-size: 13px; color: var(--pg-ink); }
+.pg-cons-cap-x { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--pg-mute); cursor: pointer; }
+.pg-cons-cap-x:hover { background: var(--pg-line); color: var(--pg-ink); }
 .pg-pack-id { margin: 0 0 8px; font-size: 12px; color: var(--pg-mute); }
 .pg-scroll-x { overflow-x: auto; max-width: 100%; }
 .pg-ci { font-size: 11px; color: var(--pg-mute); white-space: nowrap; }

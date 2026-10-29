@@ -6,7 +6,9 @@
  * 값 쓰기는 설정 판과 같은 길(`updateParams` + `setOrClear`)이라 되돌리기·예전 결과(하류)가 그대로 따라온다.
  * 표식은 `.pg-cw-*` — 설정 판의 `.pg-basic-field` 와 다르다(같은 칸이 판과 카드에 동시에 보일 때 둘을 가른다).
  */
-import { CARD_WIDGETS_MAX, cardControlOf, sameValue, setOrClear, type FieldSpec, type JsonSchema } from "@/entities/portfolio-graph";
+import {
+  CARD_WIDGETS_MAX, cardControlOf, constraintsSummary, maxPresetActive, mergeMaxPreset, sameValue, setOrClear, type FieldSpec, type JsonSchema,
+} from "@/entities/portfolio-graph";
 import { usePortfolioGraph } from "./store";
 
 type Params = Record<string, unknown>;
@@ -44,7 +46,9 @@ function CardField({ f, value, root, onChange }: {
     );
   }
   const choices = choicesOf(f);
-  const at = choices.findIndex((c) => sameValue(eff, c.value));
+  // 제약(P2) — 칩은 한 종목 최대만 고른다: 다른 제약이 있어도 켜지고, 고르면 나머지는 그대로 둔다(설정 판의 편집기와 같은 규칙).
+  const cons = f.ui.widget === "constraints";
+  const at = choices.findIndex((c) => (cons ? maxPresetActive(eff, c.value) : sameValue(eff, c.value)));
   return (
     <label className="pg-cw-f" data-field={f.name}>
       <span className="pg-cw-q">{q}</span>
@@ -53,9 +57,10 @@ function CardField({ f, value, root, onChange }: {
                 const c = choices[Number(e.target.value)];
                 if (!c) return;
                 // 프리셋의 null 은 "서버 기본값" — 설정 판과 같이 칸을 지운다.
-                onChange(f.ui.presets && c.value === null ? undefined : c.value);
+                onChange(cons ? mergeMaxPreset(eff, c.value) : f.ui.presets && c.value === null ? undefined : c.value);
               }}>
-        {at < 0 && <option value="custom" disabled>직접 정한 값{eff !== undefined && eff !== null ? ` (${String(eff)})` : ""}</option>}
+        {at < 0 && <option value="custom" disabled>직접 정한 값{eff !== undefined && eff !== null
+          ? ` (${cons ? constraintsSummary(eff) ?? "" : String(eff)})` : ""}</option>}
         {choices.map((c, i) => <option key={i} value={String(i)}>{c.label}</option>)}
       </select>
     </label>

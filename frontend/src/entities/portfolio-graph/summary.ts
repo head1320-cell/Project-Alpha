@@ -3,6 +3,7 @@
  * ★서버 x-ui 만 읽는다★(선택지 라벨·프리셋·쉬운 이름) — 요약 규칙을 노드마다 화면에 적지 않는다.
  * 선택지 → 목록 → 프리셋 → 그 밖의 값 순서로 첫 번째 기본 칸을 쓴다. 없으면 쉬운 이름.
  */
+import { constraintsSummary } from "./constraints";
 import { fieldsOf, isShown, type FieldSpec } from "./schema";
 import type { NodeCatalogEntry } from "./types";
 
@@ -21,6 +22,12 @@ export function nodeSummary(entry: NodeCatalogEntry | undefined, params: Record<
   const basic = all.filter((f) => f.ui.tier === "basic" && isShown(f, params, all)).sort((a, b) => rank(a) - rank(b));
   for (const f of basic) {
     const v = params[f.name] !== undefined ? params[f.name] : f.defaultValue;
+    if (f.ui.widget === "constraints") {
+      // 제약(P2) — 한 종목 최대 칩 하나로 줄이지 않는다(업종·회전율·공매도가 있으면 함께 말한다).
+      const s = constraintsSummary(v);
+      if (s) return s;
+      continue;
+    }
     const preset = f.ui.presets?.find((p) => same(p.value, v ?? null));
     if (preset) return f.ui.options ? preset.label : `${f.ui.label} ${preset.label}`;
     if (v === undefined || v === null) continue;

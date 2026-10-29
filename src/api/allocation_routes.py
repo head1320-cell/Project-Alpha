@@ -470,6 +470,52 @@ def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -
     return report
 
 
+# ── 제약 확인 (CF 3부 P2) — 편집기가 계산 전에 "풀 수 없어요" 를 말하게 ─────────────────────────
+
+#: 공매도(음수 하한)가 든 비중 — 실행 목표로 만들면 실행 게이트가 막는다(`allows_short` → research_only).
+_SHORT_NOTE = "공매도가 들어간 비중은 연구·백테스트용이에요 — 실행 목표로 만들면 실행할 수 없다고 막혀요."
+#: 공분산만 쓰는 방식 — 엔진이 롱숏을 거절한다(`constrained_solve` 의 cov_only 갈래와 같은 집합).
+_COV_ONLY_MODELS = ("risk_parity", "hrp")
+
+
+class ConstraintsCheckRequest(BaseModel):
+    constraints: ConstraintsInput = Field(default_factory=ConstraintsInput)
+    #: 이 옵티마이저 위쪽 '종목 고르기' 의 종목. 비면 '× n종목' 판정을 하지 않는다.
+    names: list[str] = Field(default_factory=list, max_length=500)
+    model: str | None = Field(None, max_length=32)
+
+
+@router.post("/constraints/check")
+def constraints_check(req: ConstraintsCheckRequest) -> dict:
+    """★엔진과 같은 판정★ — `_precheck`(구조적 불능)와 `sector_groups_for`(업종 표)를 그대로 부르고, 빠질 업종 상한은
+    `_group_cap_gaps`(P1)로 센다. 계산하지 않고 저장하지 않는다. 엔진(`constrained_opt.py`)은 읽기만 한다.
+    """
+    from src.engine.constrained_opt import Constraints, _precheck, constrained_solve, sector_groups_for
+    names = list(dict.fromkeys(n.strip() for n in req.names if n and n.strip()))
+    cobj = Constraints(**req.constraints.model_dump())
+    short = cobj.allows_short()
+    groups_of = sector_groups_for(names) if names else {}
+    out = {"checked": bool(names), "ok": None, "reason": None, "groups": groups_of,
+           "group_names": sorted(set(groups_of.values())), "unknown": [t for t in names if t not in groups_of],
+           "sectors_readable": bool(groups_of),
+           "unapplied": _group_cap_gaps(cobj.group_caps_pct, names, groups_of) if names else [],
+           "allows_short": short, "short_note": _SHORT_NOTE if short else None}
+    if not names:
+        return out
+    idx: dict[str, list[int]] = {}
+    for i, t in enumerate(names):
+        if groups_of.get(t):
+            idx.setdefault(groups_of[t], []).append(i)
+    reason = _precheck(len(names), cobj, idx)
+    if reason is None and short and req.model in _COV_ONLY_MODELS:
+        # 엔진의 문장을 다시 쓰지 않는다 — 같은 조건으로 엔진을 불러 그 사유를 그대로 옮긴다(데이터는 쓰지 않는 갈래).
+        n = len(names)
+        probe = constrained_solve(req.model, names, np.zeros((2, n)), np.zeros(n), np.eye(n), cobj, groups_of=groups_of)
+        reason = probe.get("reason") if probe.get("status") == "infeasible" else None
+    out.update(ok=reason is None, reason=reason)
+    return out
+
+
 def _series_stats(ret: np.ndarray, ppy: int = 252) -> dict:
     """일별 수익률 시리즈 → 헤드라인 지표 (연수익·변동성·Sharpe·MDD·Sortino·Calmar)."""
     r = np.asarray(ret, dtype=float)
