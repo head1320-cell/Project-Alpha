@@ -220,6 +220,9 @@ def test_enum_options_cover_exactly_the_allowed_values():
             if opts is None:
                 continue
             allowed = set(prop.get("enum") or [])
+            if not allowed and prop.get("anyOf"):
+                # 비울 수 있는 칸(`Literal | None`, CF 3부 PB1 — 위험 성향 '모름' = 비움) — 허용 값은 anyOf 안에 있다. null 은 선택지가 아니다.
+                allowed = {v for s in prop["anyOf"] for v in (s.get("enum") or [])}
             if prop.get("x-ui", {}).get("widget") == "per_port":
                 # 전략마다 하나씩 고르는 칸(BO O2) — 값의 선택지는 사전 값 스키마(additionalProperties)에 있다.
                 allowed = set((prop.get("additionalProperties") or {}).get("enum") or [])

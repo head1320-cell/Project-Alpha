@@ -61,7 +61,9 @@ PORT_TYPES = ("Universe", "Returns", "Belief", "Views", "Weights", "RiskReport",
               "Scenario", "StressReport", "Scores", "RegimeState", "TimingSignal", "Trades",
               "TargetVersion", "StrategyResult",
               # BL3 W1 — 백그라운드에서 끝난 조건식 백테스트 실행 한 건(불러오기 노드가 낸다).
-              "BacktestRun")
+              "BacktestRun",
+              # CF 3부 PB1 — 고객(별칭·성향)과 점검한 계좌(유형·보유·선언한 한도). 비중이 아니다 — 관측 노드끼리만 잇는다.
+              "Client", "Account")
 
 #: 포트 타입 → 사람이 읽는 이름(BT1 — 캔버스·절차 문장이 같은 말을 쓴다. 화면 사본은 이것을 받는다).
 PORT_PLAIN = {
@@ -70,6 +72,7 @@ PORT_PLAIN = {
     "Scenario": "시나리오", "StressReport": "충격 결과", "Scores": "점수", "RegimeState": "경기 국면",
     "TimingSignal": "타이밍 신호", "Trades": "주문 목록", "TargetVersion": "실행 목표",
     "StrategyResult": "전략 묶음 성과", "BacktestRun": "백테스트 실행",
+    "Client": "고객", "Account": "계좌",
 }
 
 
@@ -559,6 +562,10 @@ _current.register(REGISTRY)
 from src.api import allocation_graph_nodes_portfolio as _portfolio  # noqa: E402
 
 _portfolio.register(REGISTRY)
+# CF 3부 PB1 — 고객·계좌·목표·보유 진단(관측만 — 비중을 바꾸지 않는다).
+from src.api import allocation_graph_nodes_client as _client  # noqa: E402
+
+_client.register(REGISTRY)
 # ★그림은 마지막에 붙인다★ (BM C1) — 모든 노드가 등록된 뒤 한 곳에서.
 from src.api import allocation_graph_glance as _glance  # noqa: E402
 

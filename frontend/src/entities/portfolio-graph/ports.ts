@@ -4,6 +4,8 @@ export const PORT_TYPES = [
   "Universe", "Returns", "Belief", "Views", "Weights", "RiskReport", "BacktestResult",
   // BK — 레포 도구 노드의 값
   "Scenario", "StressReport", "Scores", "RegimeState", "TimingSignal", "Trades", "TargetVersion", "StrategyResult", "BacktestRun",
+  // CF 3부 PB1 — 고객·계좌(관측 노드끼리만 잇는다)
+  "Client", "Account",
 ] as const;
 export const PORT_COLORS: Record<string, string> = Object.fromEntries(PORT_TYPES.map((t) => [t, `var(--pg-port-${t})`]));
 export const PORT_UNKNOWN_COLOR = "var(--pg-port-unknown)";

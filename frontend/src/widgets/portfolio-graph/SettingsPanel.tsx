@@ -296,6 +296,13 @@ function BasicField({ f, value, root, ports, onChange, said, names, model }: {
               {desc?.[k] && <span className="pg-choice-help">{desc[k]}</span>}
             </button>
           ))}
+          {/* 비울 수 있는 칸(CF 3부 PB1 — 위험 성향 '모름' = 비움) — 고른 뒤에도 되돌릴 길. 칸을 지운다(값을 지어내지 않는다). */}
+          {f.nullable && (
+            <button type="button" className={`pg-choice${eff === undefined || eff === null ? " on" : ""}`}
+                    aria-pressed={eff === undefined || eff === null} data-choice="" onClick={() => onChange(undefined)}>
+              <b>정하지 않음</b>
+            </button>
+          )}
         </div>
         {help}
       </div>

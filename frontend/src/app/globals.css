@@ -3933,6 +3933,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --pg-port-Weights: #159946; --pg-port-RiskReport: #ef4444; --pg-port-BacktestResult: #109788; --pg-port-Scenario: #e11d48;
   --pg-port-StressReport: #9f1239; --pg-port-Scores: #5d960c; --pg-port-RegimeState: #b27904; --pg-port-TimingSignal: #e5560c;
   --pg-port-Trades: #475569; --pg-port-TargetVersion: #0f766e; --pg-port-StrategyResult: #c026d3; --pg-port-BacktestRun: #b45309;
+  --pg-port-Client: #9d174d; --pg-port-Account: #1d4ed8;
   --pg-port-unknown: #798697;
   /* 전략 띠 6색(BM C2) — 단계 색·상태 색과 다른 저채도 계열. 넓은 띠의 옅은 바탕과 왼쪽 레일에만 쓴다. */
   --pg-band-0: #3d5a80; --pg-band-1: #5b6b2a; --pg-band-2: #7a3f6f; --pg-band-3: #8a5a12; --pg-band-4: #6b4a3a; --pg-band-5: #3f5f5a;
@@ -3954,6 +3955,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --pg-port-Weights: #16a34a; --pg-port-RiskReport: #ef4444; --pg-port-BacktestResult: #14b8a6; --pg-port-Scenario: #e11d48;
   --pg-port-StressReport: #b03d5d; --pg-port-Scores: #65a30d; --pg-port-RegimeState: #ca8a04; --pg-port-TimingSignal: #ea580c;
   --pg-port-Trades: #5d697b; --pg-port-TargetVersion: #0f766e; --pg-port-StrategyResult: #c026d3; --pg-port-BacktestRun: #b45309;
+  --pg-port-Client: #f472b6; --pg-port-Account: #60a5fa;
   --pg-port-unknown: #94a3b8;
   --pg-band-0: #8fb0dc; --pg-band-1: #b3c47a; --pg-band-2: #d59ccb; --pg-band-3: #deb173; --pg-band-4: #c9a391; --pg-band-5: #93bdb6;
 }
@@ -4778,6 +4780,15 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-cons-cap-name { flex: 1; font-size: 13px; color: var(--pg-ink); }
 .pg-cons-cap-x { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--pg-mute); cursor: pointer; }
 .pg-cons-cap-x:hover { background: var(--pg-line); color: var(--pg-ink); }
+/* CF 3부 PB1 · 고객·계좌·목표·보유 진단 결과 — 판정 못 함·모르는 격차는 경고색이 아니라 '모름' 그대로(가정 칩). */
+.pg-acct-risky { margin: 8px 0; font-size: 13px; color: var(--pg-body); }
+.pg-acct-table td { vertical-align: top; font-size: 12.5px; }
+.pg-acct-table td b { font-weight: 600; color: var(--pg-ink); }
+.pg-acct-tag { width: 1%; white-space: nowrap; text-align: right; }
+.pg-acct-why { display: block; margin-top: 2px; font-size: 12px; color: var(--pg-mute); }
+.pg-goal-gap { margin: 8px 0; font-size: 13px; color: var(--pg-ink); }
+.pg-goal-gap[data-state="unknown"] { color: var(--pg-unknown); }
+.pg-hold-risk, .pg-hold-conc, .pg-hold-liq { margin: 8px 0; }
 .pg-pack-id { margin: 0 0 8px; font-size: 12px; color: var(--pg-mute); }
 .pg-scroll-x { overflow-x: auto; max-width: 100%; }
 .pg-ci { font-size: 11px; color: var(--pg-mute); white-space: nowrap; }

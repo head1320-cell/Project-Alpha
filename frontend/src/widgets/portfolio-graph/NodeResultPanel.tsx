@@ -42,6 +42,7 @@ import {
 import {
   CapacityResult, CashResult, CounterfactualResult, ImpactResult, ImplementResult, PairResult, RebalanceResult,
 } from "./AllocExtraResults";
+import { AccountResult, ClientProfileResult, GoalResult, HoldingsCheckResult } from "./ClientResults";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -486,6 +487,10 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   cash_yield: ({ v }) => <CashResult v={v} />,
   strategy_capacity: ({ v }) => <CapacityResult v={v} />,
   counterfactual: ({ v, prov }) => <CounterfactualResult v={v} prov={prov} />,
+  client_profile: ({ v }) => <ClientProfileResult v={v} />,
+  account: ({ v }) => <AccountResult v={v} />,
+  goal: ({ v }) => <GoalResult v={v} />,
+  holdings_check: ({ v }) => <HoldingsCheckResult v={v} />,
   alpha_portfolio: ({ v }) => (
     <AlphaPortfolioResult v={v} bars={<WeightBars weights={(v.weights as Record<string, number>) ?? {}}
                                                   labels={v.labels as Record<string, string> | undefined} />} />
