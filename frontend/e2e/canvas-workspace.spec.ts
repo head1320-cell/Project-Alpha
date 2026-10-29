@@ -69,8 +69,18 @@ async function zoomTo(page: Page, level: "far" | "mid" | "near") {
   await expect(canvas(page)).toHaveAttribute("data-zoom", level);
 }
 
+/** 판 옮김·확대 애니메이션이 끝날 때까지 기다린다 — 움직이는 중에 고른 빈 자리는 다 움직인 뒤 노드 위일 수 있다
+ *  (원인 노드로 가기의 판 옮김 중에 고른 자리를 누르면 '종목 고르기' 가 골라져 오른쪽 창이 열렸다). */
+async function settled(page: Page) {
+  let last = "";
+  await expect.poll(async () => {
+    const t = await page.locator(".react-flow__viewport").evaluate((el) => getComputedStyle(el).transform);
+    const same = t === last; last = t; return same;
+  }, { intervals: [80, 80, 80, 120, 200] }).toBe(true);
+}
 /** 떠 있는 판·노드·토스트에 가리지 않은 빈 캔버스 한 점(화면 좌표) — BQ Q1 뒤로 캔버스가 판 뒤까지 이어져 있다. */
 async function emptyPoint(page: Page): Promise<{ x: number; y: number }> {
+  await settled(page);
   return page.evaluate(() => {
     const r = document.querySelector(".react-flow")!.getBoundingClientRect();
     for (let y = r.bottom - 90; y > r.top + 80; y -= 17)

@@ -366,6 +366,8 @@ test("명령 찾기(Ctrl+K)에도 같은 항목 — 레인 켜기 · 레인에 �
   await page.getByLabel("명령 찾기").last().fill("레인에 맞추기");
   await expect(page.locator('.pg-cmd-item[data-cmd="fit-lanes"]')).toHaveCount(1);
   await page.keyboard.press("Escape");
+  // 기본 대화상자의 close 사건은 Esc 다음 차례에 온다 — 닫히기 전에 Ctrl+K 를 누르면 '이미 열림' 으로 무시돼 다시 열리지 않는다.
+  await expect(page.locator("dialog.pg-cmd")).toBeHidden();
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("단계 레인");
   await expect(page.locator('.pg-cmd-item[data-cmd="lanes"]')).toContainText("단계 레인 끄기");
