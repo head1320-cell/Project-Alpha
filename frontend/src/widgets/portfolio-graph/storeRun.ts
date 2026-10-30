@@ -68,8 +68,8 @@ export const runSlice = ({ set, get }: SliceCtx): RunSlice => ({
 
   setNote: (note, undoable = false, transient = false) => set({ note, noteUndo: !!note && undoable, noteTransient: !!note && transient }),
   act: (fn) => {
-    const before = get().past.length;
+    const before = get().undoSeq;
     const note = fn();
-    set({ note, noteUndo: get().past.length > before, noteTransient: false });
+    set({ note, noteUndo: get().undoSeq > before, noteTransient: false });
   },
 });

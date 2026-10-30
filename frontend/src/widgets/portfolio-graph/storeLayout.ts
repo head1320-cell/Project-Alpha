@@ -7,9 +7,12 @@ import { fitLanes } from "@/entities/portfolio-graph/lanes";
 import { viaOf } from "@/entities/portfolio-graph/format";
 import { alignRects } from "./guides";
 import type { PgState } from "./store";
-import { uniqueLabel, nextSeq, newId, INSERT_GAP, bare, boxH, type SliceCtx } from "./storeShared";
+import { uniqueLabel, nextSeq, newId, INSERT_GAP, bare, boxH, COALESCE_MS, type SliceCtx } from "./storeShared";
 
 type LayoutSlice = Pick<PgState, "autoLayout" | "alignPicked" | "addWaypoint" | "moveWaypoint" | "removeWaypoint" | "fitToLanes" | "groupPicked" | "strategyPicked" | "comparePicked" | "addStrategy" | "insertBlock" | "ungroup" | "toggleGroup" | "renameGroup" | "moveGroup" | "makeBranch" | "branchPicked" | "removeBranch" | "promoteBranch" | "loadBlocks" | "saveBlock" | "removeBlock">;
+
+/** 같은 상자 이름을 잇달아 고친 때 — 이어 친 글자는 한 단계(R1 · `updateParams` 와 같은 규칙). */
+let lastRename: { id: string; at: number } | null = null;
 
 export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
   autoLayout: () => {
@@ -220,26 +223,33 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
 
   ungroup: (id) => { push(); set((s) => ({ groups: s.groups.filter((g) => g.id !== id) })); },
   toggleGroup: (id) => set((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)) })),
-  renameGroup: (id, label) => set((s) => {
-    const groups = s.groups.map((g) => (g.id === id ? { ...g, label } : g));
-    const g = groups.find((x) => x.id === id);
-    // 전략 이름은 포트폴리오 노드의 전략 이름(파라미터)과 같아야 한다 — 이은 포트의 이름을 함께 바꾼다.
-    const e = g?.kind === "strategy" && g.output
-      ? s.edges.find((x) => x.source === g.output && s.nodes.find((n) => n.id === x.target)?.data.kind === PORTFOLIO_NODE) : undefined;
-    if (!e || !e.targetHandle || !label.trim()) return { groups };
-    return {
-      groups, nodes: s.nodes.map((n) => (n.id === e.target
-        ? { ...n, data: { ...n.data, params: { ...n.data.params,
-            labels: { ...((n.data.params.labels as Record<string, string>) ?? {}), [e.targetHandle!]: label.trim().slice(0, 40) } } } }
-        : n)),
-    };
-  }),
-  moveGroup: (id, dx, dy) => set((s) => {
-    const g = s.groups.find((x) => x.id === id);
-    if (!g || (!dx && !dy)) return {};
+  renameGroup: (id, label) => {
+    const now = Date.now();
+    if (!(lastRename && lastRename.id === id && now - lastRename.at < COALESCE_MS)) push();
+    lastRename = { id, at: now };
+    set((s) => {
+      const groups = s.groups.map((g) => (g.id === id ? { ...g, label } : g));
+      const g = groups.find((x) => x.id === id);
+      // 전략 이름은 포트폴리오 노드의 전략 이름(파라미터)과 같아야 한다 — 이은 포트의 이름을 함께 바꾼다.
+      const e = g?.kind === "strategy" && g.output
+        ? s.edges.find((x) => x.source === g.output && s.nodes.find((n) => n.id === x.target)?.data.kind === PORTFOLIO_NODE) : undefined;
+      if (!e || !e.targetHandle || !label.trim()) return { groups };
+      return {
+        groups, nodes: s.nodes.map((n) => (n.id === e.target
+          ? { ...n, data: { ...n.data, params: { ...n.data.params,
+              labels: { ...((n.data.params.labels as Record<string, string>) ?? {}), [e.targetHandle!]: label.trim().slice(0, 40) } } } }
+          : n)),
+      };
+    });
+  },
+  moveGroup: (id, dx, dy, record = false) => {
+    const g = get().groups.find((x) => x.id === id);
+    if (!g || (!dx && !dy)) return false;
+    if (record) push();
     const m = new Set(g.members);
-    return { nodes: s.nodes.map((n) => (m.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n)) };
-  }),
+    set((s) => ({ nodes: s.nodes.map((n) => (m.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n)) }));
+    return true;
+  },
 
   makeBranch: (rootIdArg, strategyId, picked) => {
     const s = get();

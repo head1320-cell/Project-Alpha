@@ -5,6 +5,7 @@
 import type { Edge } from "@xyflow/react";
 import { cardHeight, type GraphGroup, type NodeCatalogEntry, type NodeStatus, type PgNode, type RunReport } from "@/entities/portfolio-graph";
 import { stableJson } from "@/entities/portfolio-graph/staleness";
+import { pruneBranches } from "@/entities/portfolio-graph/format";
 import type { StoreApi } from "zustand";
 import type { PgState, RunRecord, RunProgress } from "./store";
 
@@ -112,6 +113,30 @@ export function keepSaid(said: Record<string, string> | undefined, before: Recor
   if (!said) return undefined;
   const kept = Object.entries(said).filter(([f]) => f in after && stableJson(before[f]) === stableJson(after[f]));
   return kept.length ? Object.fromEntries(kept) : undefined;
+}
+
+/**
+ * 지우기 뒤의 상태(R1) — 노드·선(지운 노드에 닿은 선 포함)을 빼고, 그것을 가리키던 것을 함께 정리한다: 상자 멤버(빈 상자는 없앰) ·
+ * ★전략의 비중을 내던 노드가 사라지면 `output` 을 비운다★(상자가 "비중을 내는 노드가 없다" 고 말한다) · 갈래(뿌리 복제가 사라지면 갈래째) ·
+ * 고른 것 · 고른 선(선 탭이면 이야기 탭으로) · 원인 길 · 들어간 상자. 그림 고정·접힘은 내보낼 때 걸러지므로 두지 않는다(되돌리면 그대로 돌아온다).
+ */
+export function pruneRemoved(s: PgState, nodeIds: Set<string>, edgeIds: Set<string>): Partial<PgState> {
+  const nodes = s.nodes.filter((n) => !nodeIds.has(n.id));
+  const keep = new Set(nodes.map((n) => n.id));
+  const edges = s.edges.filter((e) => !edgeIds.has(e.id) && keep.has(e.source) && keep.has(e.target));
+  const groups = s.groups
+    .map((g) => ({ ...g, members: g.members.filter((m) => keep.has(m)),
+                   ...(g.kind === "strategy" && g.output && !keep.has(g.output) ? { output: null } : {}) }))
+    .filter((g) => g.members.length > 0);
+  const edgeGone = !!s.selectedEdge && !edges.some((e) => e.id === s.selectedEdge);
+  return {
+    nodes, edges, groups, branches: pruneBranches(s.branches, keep),
+    selectedId: s.selectedId && !keep.has(s.selectedId) ? null : s.selectedId,
+    picked: s.picked.filter((p) => keep.has(p)),
+    ...(edgeGone ? { selectedEdge: null, tab: s.tab === "wire" ? "story" as const : s.tab } : {}),
+    ...(s.cause && s.cause.path.some((id) => !keep.has(id)) ? { cause: null } : {}),
+    ...(s.focusGroup && !groups.some((g) => g.id === s.focusGroup) ? { focusGroup: null } : {}),
+  };
 }
 
 /** 조각이 받는 것 — `set` 은 낡음을 다시 세는 것을 감싼 그대로, `push` 는 되돌리기 칸에 넣기. */

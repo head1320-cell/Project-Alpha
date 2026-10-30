@@ -5,13 +5,13 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
 import { fromDoc, PG_NODE_TYPE, ROW_GAP, cardHeight, NEW_NODE, placeSuggestion, type DraftSet, type PgNodeData, type PgNode } from "@/entities/portfolio-graph";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
 import type { PgState } from "./store";
-import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, type SliceCtx } from "./storeShared";
+import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, pruneRemoved, type SliceCtx } from "./storeShared";
 
 /** 같은 노드의 설정을 잇달아 고친 때 · 끌기 한 번 = 한 단계(이 조각만 쓴다). */
 let lastParamEdit: { id: string; at: number } | null = null;
 let dragging = false;
 
-type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "cutEdge" | "insertOnEdge" | "addNode" | "updateParams" | "removeNode" | "removePicked" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
+type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "cutEdge" | "insertOnEdge" | "addNode" | "updateParams" | "removeNode" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
 
 export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
   setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
@@ -189,28 +189,16 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
     }));
   },
 
-  removeNode: (id) => {
-    push();
-    set((s) => ({
-      nodes: s.nodes.filter((n) => n.id !== id),
-      edges: s.edges.filter((e) => e.source !== id && e.target !== id),
-      groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => m !== id) })).filter((g) => g.members.length),
-      selectedId: s.selectedId === id ? null : s.selectedId,
-      picked: s.picked.filter((p) => p !== id),
-    }));
-  },
+  removeNode: (id) => { get().deleteElements([id], []); },
 
-  removePicked: () => {
-    const ids = new Set(get().picked.length ? get().picked : get().selectedId ? [get().selectedId!] : []);
-    if (!ids.size) return;
+  deleteElements: (nodeIds, edgeIds) => {
+    const s = get();
+    const ns = new Set(nodeIds.filter((id) => s.nodes.some((n) => n.id === id)));
+    const es = new Set(edgeIds.filter((id) => s.edges.some((e) => e.id === id)));
+    if (!ns.size && !es.size) return false;
     push();
-    set((s) => ({
-      nodes: s.nodes.filter((n) => !ids.has(n.id)),
-      edges: s.edges.filter((e) => !ids.has(e.source) && !ids.has(e.target)),
-      groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.has(m)) })).filter((g) => g.members.length),
-      selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId,
-      picked: [],
-    }));
+    set((st) => pruneRemoved(st, ns, es));
+    return true;
   },
 
   duplicateNode: (id) => {

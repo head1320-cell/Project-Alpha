@@ -89,6 +89,8 @@ export interface PgState {
   runError: string | null;
   runs: RunRecord[];
   past: Snapshot[];
+  /** 되돌리기 칸에 넣은 횟수(R1) — 칸은 50개에서 잘리므로 길이가 아니라 이 수로 '이번 동작이 기록을 남겼나' 를 본다. */
+  undoSeq: number;
   future: Snapshot[];
   clip: { nodes: PgNode[]; edges: Edge[] } | null;
   showMinimap: boolean;
@@ -149,7 +151,8 @@ export interface PgState {
   addNode: (kind: string, position: { x: number; y: number }) => string;
   updateParams: (id: string, params: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
-  removePicked: () => void;
+  /** 노드·선을 함께 지운다(R1) — ★되돌리기 한 번★. 지운 것이 없으면 false. Delete 키·메뉴·명령이 모두 이 길이다. */
+  deleteElements: (nodeIds: string[], edgeIds: string[]) => boolean;
   /** 같은 입력(들어오는 링크)·같은 설정으로 옆에 하나 더 — 설정만 바꿔 나란히 비교할 때. 나가는 링크는 잇지 않는다. */
   duplicateNode: (id: string) => string | null;
   loadDoc: (doc: GraphDoc, problems?: string[]) => void;
@@ -183,7 +186,8 @@ export interface PgState {
   ungroup: (id: string) => void;
   toggleGroup: (id: string) => void;
   renameGroup: (id: string, label: string) => void;
-  moveGroup: (id: string, dx: number, dy: number) => void;
+  /** 상자째 옮기기 — `record` 면 이번에 되돌리기 칸에 넣는다(끌기 시작 · R1). 움직였으면 true. */
+  moveGroup: (id: string, dx: number, dy: number, record?: boolean) => boolean;
   setMinimap: (v: boolean) => void;
   setLanes: (v: boolean) => void;
   setWireShape: (v: WireShape) => void;
@@ -266,6 +270,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
   const push = () => set((s) => ({
     past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }].slice(-HISTORY),
     future: [],
+    undoSeq: s.undoSeq + 1,
   }));
 
   const ctx = { set, get, push };
@@ -299,6 +304,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     runs: [],
     past: [],
     future: [],
+    undoSeq: 0,
     clip: null,
     showMinimap: false,
     showLanes: false,

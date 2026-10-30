@@ -215,6 +215,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   useViewFollow(s, rf, canvasEl, ctx, leftShown, rightShown, setPanels);
   const focused = s.groups.find((g) => g.id === s.focusGroup);
 
+  /** 상자 끌기 한 번(R1) — 처음 움직인 때 한 번만 되돌리기 칸에 넣는다. */
+  const frameDrag = useRef<{ id: string; recorded: boolean } | null>(null);
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
@@ -242,7 +244,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       if ("id" in c && c.id.startsWith("frame:")) {
         if (c.type === "position" && c.position) {
           const frame = numbered.find((n) => n.id === c.id);
-          if (frame) st.moveGroup(c.id.slice(6), c.position.x - frame.position.x, c.position.y - frame.position.y);
+          if (frame) {
+            // 상자 자리(멤버 − 여백 28)는 격자(11)에 맞지 않는다 — 움직인 양을 격자 배수로 맞춰 멤버가 격자를 지킨다(R1).
+            const dx = Math.round((c.position.x - frame.position.x) / SNAP) * SNAP;
+            const dy = Math.round((c.position.y - frame.position.y) / SNAP) * SNAP;
+            const fd = frameDrag.current?.id === c.id ? frameDrag.current : (frameDrag.current = { id: c.id, recorded: false });
+            if (st.moveGroup(c.id.slice(6), dx, dy, !fd.recorded)) fd.recorded = true;
+          }
+          if (c.dragging === false) frameDrag.current = null;
         }
         continue;
       }
@@ -541,8 +550,24 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
               e.preventDefault();
               if (n.id.startsWith("frame:") || n.id.startsWith("branch:")) return;
               const box = canvasEl.current?.getBoundingClientRect();
-              s.select(n.id);
+              // 여럿 고른 것 안의 노드면 고르기를 지킨다(R1) — 메뉴의 '고른 노드' 동작이 그 여럿을 대상으로 한다.
+              if (!(s.picked.length > 1 && s.picked.includes(n.id))) s.select(n.id);
               setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: n.id });
+            }}
+            onSelectionContextMenu={(e, sel) => {
+              // Shift 상자로 고르면 고른 노드 위에 고르기 상자가 덮인다 — 그 아래 노드의 메뉴를 연다(R1). 고르기는 그대로.
+              e.preventDefault();
+              const hit = document.elementsFromPoint(e.clientX, e.clientY)
+                .map((el) => el.closest(".pg-node")?.getAttribute("data-node-id")).find((id): id is string => !!id);
+              const id = hit ?? sel.find((x) => !x.id.includes(":"))?.id;
+              if (!id) return;
+              const box = canvasEl.current?.getBoundingClientRect();
+              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: id });
+            }}
+            onBeforeDelete={async ({ nodes, edges }) => {
+              // React Flow 는 선을 먼저, 노드를 나중에 바꾼다(되돌리기 두 단계) — 여기서 한 번에 지우고 React Flow 의 지우기는 막는다(R1).
+              usePortfolioGraph.getState().deleteElements(nodes.map((x) => x.id).filter((id) => !id.includes(":")), edges.map((x) => x.id));
+              return false;
             }}
             onPaneContextMenu={(e) => {
               e.preventDefault();
