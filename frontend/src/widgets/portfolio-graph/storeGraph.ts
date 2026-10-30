@@ -2,7 +2,7 @@
  * 캔버스 상태 조각 — 노드·선 편집 (CF 3부 E3 — `store.ts` 에서 옮김 · 동작 불변)
  */
 import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
-import { fromDoc, PG_NODE_TYPE, ROW_GAP, cardHeight, NEW_NODE, placeSuggestion, type DraftSet, type PgNodeData, type PgNode } from "@/entities/portfolio-graph";
+import { fromDoc, PG_NODE_TYPE, ROW_GAP, nodeHeight, NEW_NODE, placeNodes, placeSuggestion, slotBase, slotHeight, type DraftSet, type PgNodeData, type PgNode } from "@/entities/portfolio-graph";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
 import type { PgState } from "./store";
 import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, pruneRemoved, type SliceCtx } from "./storeShared";
@@ -11,12 +11,15 @@ import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, pruneRemoved, type Slic
 let lastParamEdit: { id: string; at: number } | null = null;
 let dragging = false;
 
-type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "cutEdge" | "insertOnEdge" | "addNode" | "updateParams" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
+type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "cutEdge" | "insertOnEdge" | "addNode" | "updateParams" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "resizeSlot" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
 
 export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
   setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
 
-  onNodesChange: (changes) => {
+  onNodesChange: (all) => {
+    // 크기 손잡이(R3)가 내는 크기 바꾸기는 버린다 — 높이는 결과 칸(`resizeSlot`)으로만 정하고, 노드에 고정 높이를 박지 않는다.
+    const changes = all.filter((c) => !(c.type === "dimensions" && (c.resizing !== undefined || c.setAttributes)));
+    if (!changes.length) return;
     const structural = changes.some((c) => STRUCTURAL.has(c.type));
     const drag = changes.find((c) => c.type === "position") as { dragging?: boolean } | undefined;
     if (structural) push();
@@ -103,7 +106,7 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
     if (sug.action === "add" && sug.kind) {
       id = newId(sug.kind, ids);
       // 자리 = 유령이 보인 자리(CF6) — 주지 않으면 같은 규칙(`placeSuggestion`: 옆 열 · 겹치면 그 아래 빈 자리)으로 잰다.
-      const position = at ?? placeSuggestion(sug, s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), s.catalog);
+      const position = at ?? placeSuggestion(sug, placeNodes(s.nodes), s.catalog);
       nodes = [...s.nodes.map((n) => ({ ...n, selected: false })),
                { id, type: PG_NODE_TYPE, position, data: { kind: sug.kind, params: {} } }];
     }
@@ -210,7 +213,7 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
     push();
     const nid = newId(src.data.kind, new Set(get().nodes.map((n) => n.id)));
     const node: PgNode = {
-      ...src, id: nid, selected: false, position: { x: src.position.x + 36, y: src.position.y + cardHeight(src.data.kind, get().catalog) + ROW_GAP },
+      ...src, id: nid, selected: false, position: { x: src.position.x + 36, y: src.position.y + nodeHeight(src.data.kind, get().catalog, src.data.slotH) + ROW_GAP },
       data: { ...src.data, params: structuredClone(src.data.params ?? {}) },
     };
     const incoming = get().edges.filter((e) => e.target === id).map((e) => ({
@@ -238,6 +241,19 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
 
   setName: (name) => set({ name }),
   setGoal: (goal) => set({ goal }),
+  resizeSlot: (id, slotH, record = false) => {
+    const n = get().nodes.find((x) => x.id === id);
+    if (!n) return false;
+    const h = slotHeight(n.data.kind, slotH);
+    if (h === slotHeight(n.data.kind, n.data.slotH)) return false;
+    if (record) push();
+    set((s) => ({ nodes: s.nodes.map((x) => {
+      if (x.id !== id) return x;
+      const { slotH: _old, ...data } = x.data;
+      return { ...x, data: h > slotBase(x.data.kind) ? { ...data, slotH: h } : data };
+    }) }));
+    return true;
+  },
   pickIds: (ids) => {
     if (ids.length <= 1) { get().select(ids[0] ?? null); return; }
     set((s) => ({ picked: ids, pickedByUser: true, selectedId: s.selectedId && ids.includes(s.selectedId) ? s.selectedId : null,

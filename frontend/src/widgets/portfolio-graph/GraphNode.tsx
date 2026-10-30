@@ -13,11 +13,12 @@
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type Node, type NodeProps } from "@xyflow/react";
 import { ChevronDown, ChevronRight, GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { cardFieldsOf, cardHeight, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeSummary, PORT_GAP, PORT_TOP, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { cardFieldsOf, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeHeight, nodeSummary, PORT_GAP, PORT_TOP, slotBase, slotHeight, SLOT_MAX_K, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { NodeWidgets } from "./NodeWidgets";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
+import { SlotGrip } from "./SlotGrip";
 import { parsePlace, placeToolbar } from "./toolbarPlace";
 
 import { portColor } from "@/entities/portfolio-graph/ports";
@@ -206,7 +207,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   const elapsed = typeof live?.elapsed_ms === "number" ? live.elapsed_ms : null;
   // 작업 노드(CF1) — 카드 위젯 칸(서버 x-ui 기본 칸 중 카드에 맞는 것)과 상자 높이(모든 확대에서 같다).
   const cw = cardFieldsOf(entry?.params_schema ?? null, data.params ?? {});
-  const boxH = cardHeight(data.kind, catalog);
+  const boxH = nodeHeight(data.kind, catalog, data.slotH);
+  // 늘린 결과 칸(R3) — 작은 그림이 이만큼 더 보여 준다(서버가 보낸 점까지).
+  const slotExtra = slotHeight(data.kind, data.slotH) - slotBase(data.kind);
   const outCount = (name: string) => (outKey ? outKey.split("|").filter((h) => h === name).length : 0);
 
   if (unknown) {
@@ -331,7 +334,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
           });
           return <div className="pg-node-terminal"><StrategyDonut slices={slices} /></div>;
         })()}
-        {glance && data.kind !== "portfolio_combine" && <div className="pg-node-glance"><Glance glance={glance} /></div>}
+        {glance && data.kind !== "portfolio_combine" && <div className="pg-node-glance"><Glance glance={glance} extra={slotExtra} /></div>}
         {stale && result && <div className="pg-node-why pg-node-stale">설정이 바뀌어서 예전 결과예요.</div>}
         {live?.previous && <div className="pg-node-why pg-node-stale">이번에 계산하지 않았어요 — 이전 계산 결과예요.</div>}
         {errors.length > 0 && (
@@ -358,6 +361,11 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
                                         folded={folded} square={combine && !x.unknown} onSocket={data.onSocket} />)}
       {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown={x.unknown} nodeId={id}
                                    folded={folded} count={outCount(x.p.name)} onSocket={data.onSocket} />)}
+      {/* 결과 칸 손잡이(R3) — 하나만 고른 펼친 카드의 아래 가장자리. 높이는 결과 칸으로만(폭은 그대로). 멀리에서는 CSS 가 숨긴다. */}
+      {selected && single && !folded && (
+        <SlotGrip id={id} kind={data.kind} slotH={data.slotH}
+                  minH={nodeHeight(data.kind, catalog, slotBase(data.kind))} maxH={nodeHeight(data.kind, catalog, slotBase(data.kind) * SLOT_MAX_K)} />
+      )}
     </div>
   );
 }

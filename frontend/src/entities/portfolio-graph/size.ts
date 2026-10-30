@@ -64,11 +64,27 @@ export function cardHeight(kind: string, catalog: NodeCatalogEntry[] | null | un
 
 export const cardWidth = (_kind: string) => NODE_W;
 
-type Box = { id: string; position: { x: number; y: number }; data: { kind: string } };
+/**
+ * 결과 칸 높이(R3 — 사용자 결정 "결과 칸 높이만" · "늘린 만큼 더 보여 줌") — 카드 아래 손잡이로 결과 칸만 늘린다(폭 240 은 그대로).
+ * 기본 = 지금 결과 자리(156 · 합치기 168) · 최대 = 기본의 세 배. 문서에는 기본보다 클 때만 `size.slot_h` 로 남는다(서버는 읽지 않는다).
+ */
+export const SLOT_MAX_K = 3;
+export const slotBase = (kind: string) => (kind === "portfolio_combine" ? COMBINE_SLOT_H : SLOT_H);
+/** 결과 칸 높이 — 숫자가 아니면 기본, 기본 ~ 세 배로 맞춘다(정수). */
+export function slotHeight(kind: string, slotH: number | null | undefined): number {
+  const base = slotBase(kind);
+  if (typeof slotH !== "number" || !Number.isFinite(slotH)) return base;
+  return Math.min(base * SLOT_MAX_K, Math.max(base, Math.round(slotH)));
+}
+/** 카드 높이 — `cardHeight` 에 늘린 결과 칸만큼 더한다. 배치·테두리·유령 자리·카드 CSS 가 모두 이것을 읽는다. */
+export const nodeHeight = (kind: string, catalog: NodeCatalogEntry[] | null | undefined, slotH?: number | null) =>
+  cardHeight(kind, catalog) + slotHeight(kind, slotH) - slotBase(kind);
+
+type Box = { id: string; position: { x: number; y: number }; data: { kind: string; slotH?: number } };
 
 /** 카드끼리 겹치는 것이 있나 — 예전 크기(폭 150)로 놓인 문서를 불러왔을 때 '자동 정리' 안내를 띄울지 정한다. */
 export function cardsOverlap(nodes: Box[], catalog: NodeCatalogEntry[] | null | undefined): boolean {
-  const r = nodes.map((n) => ({ x: n.position.x, y: n.position.y, w: cardWidth(n.data.kind), h: cardHeight(n.data.kind, catalog) }));
+  const r = nodes.map((n) => ({ x: n.position.x, y: n.position.y, w: cardWidth(n.data.kind), h: nodeHeight(n.data.kind, catalog, n.data.slotH) }));
   for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) {
     const a = r[i], b = r[j];
     if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) return true;
@@ -83,14 +99,14 @@ export function cardsOverlap(nodes: Box[], catalog: NodeCatalogEntry[] | null | 
 export function restackColumns<T extends Box>(nodes: T[], catalog: NodeCatalogEntry[] | null | undefined): T[] {
   const cols = new Map<number, T[]>();
   for (const n of nodes) cols.set(n.position.x, [...(cols.get(n.position.x) ?? []), n]);
-  const heightOf = (col: T[]) => col.reduce((s, n) => s + cardHeight(n.data.kind, catalog), 0) + ROW_GAP * (col.length - 1);
+  const heightOf = (col: T[]) => col.reduce((s, n) => s + nodeHeight(n.data.kind, catalog, n.data.slotH), 0) + ROW_GAP * (col.length - 1);
   const tallest = Math.max(0, ...[...cols.values()].map(heightOf));
   const y = new Map<string, number>();
   for (const col of cols.values()) {
     let top = (tallest - heightOf(col)) / 2;
     for (const n of [...col].sort((a, b) => a.position.y - b.position.y)) {
       y.set(n.id, Math.round(top));
-      top += cardHeight(n.data.kind, catalog) + ROW_GAP;
+      top += nodeHeight(n.data.kind, catalog, n.data.slotH) + ROW_GAP;
     }
   }
   return nodes.map((n) => ({ ...n, position: { x: n.position.x, y: y.get(n.id) ?? n.position.y } }));
@@ -98,7 +114,7 @@ export function restackColumns<T extends Box>(nodes: T[], catalog: NodeCatalogEn
 
 /** 문서판 — 코드가 만든 흐름(`GraphDoc`)을 불러오기 전에 다시 쌓는다. 사용자 파일·작업 중 문서에는 쓰지 않는다(배치를 말없이 바꾸지 않음). */
 export function restackDoc(doc: GraphDoc, catalog: NodeCatalogEntry[] | null | undefined): GraphDoc {
-  const boxes = doc.nodes.map((n) => ({ id: n.id, position: n.position, data: { kind: n.type } }));
+  const boxes = doc.nodes.map((n) => ({ id: n.id, position: n.position, data: { kind: n.type, slotH: n.size?.slot_h } }));
   const y = new Map(restackColumns(boxes, catalog).map((b) => [b.id, b.position.y]));
   return { ...doc, nodes: doc.nodes.map((n) => ({ ...n, position: { x: n.position.x, y: y.get(n.id) ?? n.position.y } })) };
 }

@@ -3,7 +3,7 @@
  * 조각(slice) 파일들이 함께 쓰는 셈·상수·순수 함수. 일련번호(`seq`)는 여기 하나뿐이다.
  */
 import type { Edge } from "@xyflow/react";
-import { cardHeight, type GraphGroup, type NodeCatalogEntry, type NodeStatus, type PgNode, type RunReport } from "@/entities/portfolio-graph";
+import { nodeHeight, type GraphGroup, type NodeCatalogEntry, type NodeStatus, type PgNode, type RunReport } from "@/entities/portfolio-graph";
 import { stableJson } from "@/entities/portfolio-graph/staleness";
 import { pruneBranches } from "@/entities/portfolio-graph/format";
 import type { StoreApi } from "zustand";
@@ -93,7 +93,7 @@ export const waitingFor = (ids: string[]): RunProgress =>
 /** 선 복사본(복제·갈래·붙여넣기)은 경유점을 가져가지 않는다(CF4c) — 노드가 다른 자리로 가니 옛 길은 틀린 길이다. 화면 선의 `data` 는 경유점만 담는다. */
 export const bare = (e: Edge): Edge => { const { data: _via, ...rest } = e; void _via; return rest; };
 /** 쌓기·맞추기에 쓰는 카드 높이(CF4a) — 화면에서 잰 높이와 카드 높이 중 큰 값(막힘 사유로 자란 카드 · 아직 안 잰 카드). */
-export const boxH = (n: PgNode, catalog: NodeCatalogEntry[] | null) => Math.max(n.measured?.height ?? 0, cardHeight(n.data.kind, catalog));
+export const boxH = (n: PgNode, catalog: NodeCatalogEntry[] | null) => Math.max(n.measured?.height ?? 0, nodeHeight(n.data.kind, catalog, n.data.slotH));
 
 export function record(report: RunReport, partial: string[] | null): RunRecord {
   const nodes: RunRecord["nodes"] = {};

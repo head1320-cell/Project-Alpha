@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
-import { NODE_W, cardHeight, draftTouched, placeDraft, type AskTarget, type DraftBody, type GraphDoc } from "@/entities/portfolio-graph";
+import { NODE_W, nodeHeight, draftTouched, placeDraft, placeNodes, type AskTarget, type DraftBody, type GraphDoc } from "@/entities/portfolio-graph";
 import { useSession } from "@/entities/session";
 import { useAiAssist } from "./AiAsk";
 import { useAiQuestion } from "./AiQuestion";
@@ -35,7 +35,7 @@ export function useCanvasAi(s: PgState, doc: GraphDoc, order: string[], staleSet
   const draftQ = useDraft(doc, session);
   const sayInput = useRef<HTMLTextAreaElement | null>(null);
   const draftAt = useMemo(() => (draftQ.draft
-    ? placeDraft(draftQ.draft, s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), s.catalog) : {}),
+    ? placeDraft(draftQ.draft, placeNodes(s.nodes), s.catalog) : {}),
   [draftQ.draft, s.nodes, s.catalog]);
   const draftAtRef = useRef(draftAt);
   draftAtRef.current = draftAt;
@@ -46,11 +46,11 @@ export function useCanvasAi(s: PgState, doc: GraphDoc, order: string[], staleSet
     const el = canvasEl.current;
     if (!dr || !rf.current || !el) return;
     const st = usePortfolioGraph.getState();
-    const box = (x: number, y: number, kind: string) => ({ x, y, w: NODE_W, h: cardHeight(kind, st.catalog) });
+    const box = (x: number, y: number, kind: string, slotH?: number) => ({ x, y, w: NODE_W, h: nodeHeight(kind, st.catalog, slotH) });
     const boxes = [...dr.add.flatMap((a) => (draftAtRef.current[a.id] ? [box(draftAtRef.current[a.id].x, draftAtRef.current[a.id].y, a.kind)] : [])),
                    ...draftTouched(dr, new Set(st.nodes.map((n) => n.id))).flatMap((id) => {
                      const n = st.nodes.find((x) => x.id === id);
-                     return n ? [box(n.position.x, n.position.y, n.data.kind)] : [];
+                     return n ? [box(n.position.x, n.position.y, n.data.kind, n.data.slotH)] : [];
                    })];
     if (!boxes.length) return;
     const { x: tx, y: ty, zoom } = rf.current.getViewport();

@@ -5,15 +5,21 @@
  * ★그리기만 한다★ — 점과 값은 서버 `glance`(보기에서 고른 수 그대로)다. 화면은 순서·값을 바꾸지 않는다.
  * ★모르는 값은 모른다고★ — `null` 점은 막대를 그리지 않고 "모름", 선은 그 구간을 끊는다(0 으로 잇지 않는다).
  * 카드 폭(138px)에 맞춘 네 모양: 막대(비중·기여) · 선(곡선) · 분포(히스토그램) · 값 목록.
+ * 결과 칸을 늘리면(R3 `extra` px) ★늘린 만큼 더 보여 준다★ — 막대·값은 줄을 더(서버가 보낸 점까지), 선·분포는 그림을 그만큼 높게. 새 숫자는 없다.
  */
 import { fmtGlance, type NodeGlance } from "@/entities/portfolio-graph";
 
 const W = 138;
 const H = 40;
 const MAX_ROWS = 5;
+/** 막대·값 한 줄의 높이(글 11px 줄 + 틈 3px 을 넉넉히) — 늘린 칸에 들어가는 만큼만 줄을 더한다. */
+const ROW_H = 18;
+const rowsFor = (extra: number) => MAX_ROWS + Math.max(0, Math.floor(extra / ROW_H));
+/** 선·분포 그림 높이 — 늘린 만큼 그대로 높게. */
+const HEIGHT = (extra: number) => H + Math.max(0, extra);
 
-function Bars({ g }: { g: NodeGlance }) {
-  const rows = g.points.slice(0, MAX_ROWS);
+function Bars({ g, extra }: { g: NodeGlance; extra: number }) {
+  const rows = g.points.slice(0, rowsFor(extra));
   const more = g.points.length - rows.length;
   const max = Math.max(...g.points.map((p) => (p.value === null ? 0 : Math.abs(p.value))), 0) || 1;
   return (
@@ -33,7 +39,8 @@ function Bars({ g }: { g: NodeGlance }) {
 }
 
 /** 선 — null 에서 끊는다. 양 끝 값을 글로도 적는다(그림만으로 읽지 않게). */
-function Line({ g }: { g: NodeGlance }) {
+function Line({ g, extra }: { g: NodeGlance; extra: number }) {
+  const H = HEIGHT(extra);
   const vals = g.points.map((p) => p.value);
   const known = vals.filter((v): v is number => v !== null);
   const lo = Math.min(...known);
@@ -68,7 +75,8 @@ function Line({ g }: { g: NodeGlance }) {
   );
 }
 
-function Hist({ g }: { g: NodeGlance }) {
+function Hist({ g, extra }: { g: NodeGlance; extra: number }) {
+  const H = HEIGHT(extra);
   const max = Math.max(...g.points.map((p) => p.value ?? 0), 0) || 1;
   const bw = W / g.points.length;
   const first = g.points[0];
@@ -86,10 +94,10 @@ function Hist({ g }: { g: NodeGlance }) {
   );
 }
 
-function Values({ g }: { g: NodeGlance }) {
+function Values({ g, extra }: { g: NodeGlance; extra: number }) {
   return (
     <dl className="pg-gl-values">
-      {g.points.slice(0, MAX_ROWS).map((p, i) => (
+      {g.points.slice(0, rowsFor(extra)).map((p, i) => (
         <div key={`${p.label}-${i}`} className={p.value === null ? "pg-gl-unknown" : undefined}>
           <dt>{p.label}</dt><dd>{fmtGlance(p.value, g.unit)}</dd>
         </div>
@@ -98,14 +106,14 @@ function Values({ g }: { g: NodeGlance }) {
   );
 }
 
-export function Glance({ glance }: { glance: NodeGlance }) {
+export function Glance({ glance, extra = 0 }: { glance: NodeGlance; extra?: number }) {
   return (
     <figure className={`pg-glance pg-glance--${glance.kind}`} data-glance={glance.kind}>
       {glance.caption && <figcaption className="pg-gl-cap">{glance.caption}</figcaption>}
-      {glance.kind === "bars" && <Bars g={glance} />}
-      {glance.kind === "line" && <Line g={glance} />}
-      {glance.kind === "hist" && <Hist g={glance} />}
-      {glance.kind === "values" && <Values g={glance} />}
+      {glance.kind === "bars" && <Bars g={glance} extra={extra} />}
+      {glance.kind === "line" && <Line g={glance} extra={extra} />}
+      {glance.kind === "hist" && <Hist g={glance} extra={extra} />}
+      {glance.kind === "values" && <Values g={glance} extra={extra} />}
     </figure>
   );
 }

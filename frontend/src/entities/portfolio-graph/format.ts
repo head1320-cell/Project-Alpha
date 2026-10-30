@@ -10,6 +10,7 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 import { isGoalKey } from "./goals";
+import { slotBase, slotHeight, SLOT_MAX_K } from "./size";
 import {
   GRAPH_FORMAT,
   GRAPH_VERSION,
@@ -36,6 +37,8 @@ export type PgNodeData = {
   extraOutputs?: string[];
   /** 말로 설계(AI4) — 칸 → 그 값을 말한 말씀 조각(설정 탭의 '말씀에서' 칩). 사람이 그 칸을 고치면 지운다. */
   said?: Record<string, string>;
+  /** 결과 칸 높이(R3) — 기본보다 늘렸을 때만. 문서의 `size.slot_h`. */
+  slotH?: number;
 }
 
 export type PgNode = Node<PgNodeData>;
@@ -105,6 +108,20 @@ export function parseFile(text: string): ParseResult {
     const pos = isObj(n.position) ? n.position : {};
     const said = saidOf(n.said);
     if (said.bad) problems.push(`노드 ${n.id} 의 ‘말씀에서’ 출처가 형식에 맞지 않아 뺐어요 — 값은 그대로예요.`);
+    // 결과 칸 높이(R3) — 숫자가 아니면 빼고, 범위 밖이면 맞춘다. 둘 다 말한다(말없이 고치지 않음). 기본이면 쓰지 않는다.
+    let slot: number | null = null;
+    if (n.size !== undefined) {
+      const raw = isObj(n.size) ? n.size.slot_h : undefined;
+      if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        problems.push(`노드 ${n.id} 의 결과 칸 높이가 숫자가 아니라 뺐어요 — 기본 높이로 보여요.`);
+      } else {
+        slot = slotHeight(n.type, raw);
+        if (slot !== Math.round(raw)) {
+          problems.push(`노드 ${n.id} 의 결과 칸 높이 ${raw} 은 범위(${slotBase(n.type)}~${slotBase(n.type) * SLOT_MAX_K}) 밖이라 ${slot} 으로 맞췄어요.`);
+        }
+        if (slot <= slotBase(n.type)) slot = null;
+      }
+    }
     nodes.push({
       id: n.id,
       type: n.type,
@@ -114,6 +131,7 @@ export function parseFile(text: string): ParseResult {
         y: typeof pos.y === "number" ? pos.y : i * 140,
       },
       ...(said.ok ? { said: said.ok } : {}),
+      ...(slot ? { size: { slot_h: slot } } : {}),
     });
   }
   const edges: GraphDocEdge[] = [];
@@ -237,6 +255,7 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
         extraInputs: [...(extraIn.get(n.id) ?? [])],
         extraOutputs: [...(extraOut.get(n.id) ?? [])],
         ...(said ? { said } : {}),
+        ...(n.size ? { slotH: slotHeight(n.type, n.size.slot_h) } : {}),
       },
     };
   });
@@ -270,6 +289,7 @@ export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], g
       params: { ...n.data.params },
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
       ...(n.data.said && Object.keys(n.data.said).length ? { said: { ...n.data.said } } : {}),
+      ...(slotHeight(n.data.kind, n.data.slotH) > slotBase(n.data.kind) ? { size: { slot_h: slotHeight(n.data.kind, n.data.slotH) } } : {}),
     })),
     edges: edges.map((e) => {
       const wp = viaOf(e);

@@ -38,6 +38,8 @@ import { Boxes, GitBranch, Filter, Maximize, Minus, MoreHorizontal, PanelRightOp
 import {
   BRIEF_MAX_W,
   cardHeight,
+  nodeHeight,
+  placeNodes,
   cardsOverlap,
   cardWidth,
   NODE_W,
@@ -231,7 +233,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       const at = c.position;
       const me = st.nodes.find((x) => x.id === c.id);
       if (me) {
-        const box = (x: typeof me) => ({ w: measuredW(x) || cardWidth(x.data.kind), h: measuredH(x) || cardHeight(x.data.kind, st.catalog) });
+        const box = (x: typeof me) => ({ w: measuredW(x) || cardWidth(x.data.kind), h: measuredH(x) || nodeHeight(x.data.kind, st.catalog, x.data.slotH) });
         const others = st.nodes.filter((x) => x.id !== c.id).map((x) => ({ x: x.position.x, y: x.position.y, ...box(x) }));
         const r = snapToGuides({ x: at.x, y: at.y, ...box(me) }, others, 6 / (rf.current?.getZoom() ?? 1) + SNAP / 2);
         c.position = { x: r.x, y: r.y };
@@ -286,7 +288,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       const z = rf.current.getZoom();
       const ins = floatInsets(canvasEl.current);
       // 카드 가운데(CF1 — 자리 고정 상자: 폭·높이는 카탈로그로 정한 값. 예전 +90/+60 은 폭 150 카드의 가운데였다).
-      const cx = n.position.x + cardWidth(n.data.kind) / 2, cy = n.position.y + cardHeight(n.data.kind, usePortfolioGraph.getState().catalog) / 2;
+      const cx = n.position.x + cardWidth(n.data.kind) / 2, cy = n.position.y + nodeHeight(n.data.kind, usePortfolioGraph.getState().catalog, n.data.slotH) / 2;
       rf.current.setCenter(cx + (ins.right - ins.left) / 2 / z, cy + ins.bottom / 2 / z, { zoom: z, duration: 250 });
     }
     const entry = usePortfolioGraph.getState().catalog?.find((c) => c.type === n?.data.kind);
@@ -335,7 +337,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const ghosts = useMemo<PlacedGhost[]>(() => {
     // AI4 — 초안을 미리 보는 동안은 초안만(규칙·AI 유령이 같은 자리를 다투지 않게). 버리거나 받아들이면 돌아온다.
     if (!s.showGhosts || s.simple || !s.validation?.procedure || draftQ.draft) return [];
-    const place = s.nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position }));
+    const place = placeNodes(s.nodes);
     const taken: Box[] = [];
     const ids = s.nodes.map((n) => n.id);
     // AI1 — 서버가 검사를 통과시킨 AI 추천을 같은 그릇에(규칙과 같은 추천이면 두 칩 하나) — 숨김·자리·붙이기는 그대로.

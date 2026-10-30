@@ -9,7 +9,7 @@
  */
 import type { GraphDoc, GraphDocEdge, GraphDocNode, GraphGroup, NodeCatalogEntry } from "./types";
 import { topoOrder } from "./order";
-import { COL, COMBINE_W, NODE_W, ROW_GAP, cardHeight } from "./size";
+import { COL, COMBINE_W, NODE_W, ROW_GAP, cardHeight, nodeHeight } from "./size";
 
 export const STRATEGY_COLORS = 6;
 export const PORTFOLIO_NODE = "portfolio_combine";
@@ -20,7 +20,7 @@ export const PORTFOLIO_PORTS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"] 
 export const MAP = { col: COL, row: cardHeight("", null) + ROW_GAP, bandGap: 120, portfolioGap: 90 } as const;
 
 type Pos = { x: number; y: number };
-type N = { id: string; position: Pos; data: { kind: string } };
+type N = { id: string; position: Pos; data: { kind: string; slotH?: number } };
 type E = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
 
 /** 전략의 출력 — 구성원 중 Weights 를 내는 마지막 노드(흐름 순서). 없으면 null. */
@@ -50,7 +50,8 @@ export function portfolioLane(nodes: N[], edges: E[], groups: GraphGroup[]): Set
 
 export function mapLayout(nodes: N[], edges: E[], groups: GraphGroup[], catalog?: NodeCatalogEntry[] | null): Map<string, Pos> {
   const kindOf = new Map(nodes.map((n) => [n.id, n.data.kind] as const));
-  const hOf = (id: string) => cardHeight(kindOf.get(id) ?? "", catalog) + ROW_GAP;
+  const byId = new Map(nodes.map((n) => [n.id, n] as const));
+  const hOf = (id: string) => nodeHeight(byId.get(id)?.data.kind ?? "", catalog, byId.get(id)?.data.slotH) + ROW_GAP;
   const order = topoOrder(nodes.map((n) => n.id), edges);
   const depth = new Map<string, number>();
   for (const id of order) {

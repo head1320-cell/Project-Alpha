@@ -4083,6 +4083,12 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* ── 노드 카드 ── */
 .pg-node { position: relative; width: calc(var(--pg-node-w, 240) * 1px); padding: 12px 13px; font-size: 12px; color: var(--pg-ink); background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 16px; box-shadow: var(--pg-shadow); }
 .pg-node--selected { border-color: var(--pg-blue); box-shadow: 0 0 0 4px rgb(49 130 246 / 16%), var(--pg-shadow); }
+/* 결과 칸 손잡이(R3) — 하나만 고른 카드의 아래 가장자리. 잡는 띠는 12px(선 1px 은 잡기 어렵다) · 보이는 것은 가운데 작은 막대 하나.
+   멀리에서는 숨긴다(카드 안 내용이 줄어든 확대에서 칸을 재지 않게). */
+.react-flow__resize-control.line.bottom.pg-node-resize { height: 12px; border: 0; background: transparent; cursor: ns-resize; }
+.pg-node-resize::after { content: ""; position: absolute; left: 50%; top: 50%; width: 36px; height: 4px; border-radius: 2px;
+  background: var(--pg-blue); transform: translate(-50%, -50%); }
+.pg-canvas[data-zoom="far"] .pg-node-resize { display: none; }
 .pg-node--failed { border-color: var(--pg-fail); }
 .pg-node--warn { border-color: var(--pg-assume); }
 .pg-node--stale { opacity: 0.62; }

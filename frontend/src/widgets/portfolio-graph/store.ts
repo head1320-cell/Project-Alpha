@@ -162,6 +162,8 @@ export interface PgState {
   select: (id: string | null) => void;
   /** 여럿을 한 번에 고른다(R2 Ctrl+A) — 고른 선은 푼다. 하나만이면 그 노드를 고른 것과 같다. */
   pickIds: (ids: string[]) => void;
+  /** 결과 칸 높이(R3) — 기본 ~ 세 배로 맞춰 노드에 둔다(기본이면 지운다). `record` 면 그 전에 되돌리기 칸에 넣는다(끌기 시작 한 번). 바뀌었으면 true. */
+  resizeSlot: (id: string, slotH: number, record?: boolean) => boolean;
   setValidation: (v: ValidateReport | null) => void;
   setValidationError: (v: boolean) => void;
   setProcHover: (ids: string[] | null) => void;

@@ -2,7 +2,7 @@
  * 캔버스 상태 조각 — 배치·묶음·전략·갈래·블록·경유점 (CF 3부 E3 — `store.ts` 에서 옮김 · 동작 불변)
  */
 import { addEdge, type Edge } from "@xyflow/react";
-import { fromDoc, GRAPH_FORMAT, GRAPH_VERSION, blockFromGroup, branchScope, MAX_BRANCHES, nextBranchLetter, insertDoc, mapLayout, paramDiff, readBlocks, toDoc, writeBlocks, PG_NODE_TYPE, PORTFOLIO_NODE, PORTFOLIO_PORTS, portfolioLane, STRATEGY_COLORS, strategyOutput, compareTargets, COL, COMBINE_W, NODE_W, ROW_GAP, cardHeight, cardWidth, topoOrder, type GraphBranch, type PgNode } from "@/entities/portfolio-graph";
+import { fromDoc, GRAPH_FORMAT, GRAPH_VERSION, blockFromGroup, branchScope, MAX_BRANCHES, nextBranchLetter, insertDoc, mapLayout, paramDiff, readBlocks, toDoc, writeBlocks, PG_NODE_TYPE, PORTFOLIO_NODE, PORTFOLIO_PORTS, portfolioLane, STRATEGY_COLORS, strategyOutput, compareTargets, COL, COMBINE_W, NODE_W, ROW_GAP, nodeHeight, cardWidth, topoOrder, type GraphBranch, type PgNode } from "@/entities/portfolio-graph";
 import { fitLanes } from "@/entities/portfolio-graph/lanes";
 import { viaOf } from "@/entities/portfolio-graph/format";
 import { alignRects } from "./guides";
@@ -164,7 +164,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       }
     }
     // ② 새 전략을 가장 아래 카드의 ★바닥★ 밑에 넣는다(CF1 — 카드 높이가 카탈로그로 정해져 예전 "맨 위 y + 300" 은 겹쳤다).
-    const bottom = nodes.length ? Math.max(...nodes.map((n) => n.position.y + cardHeight(n.data.kind, catalog))) : 0;
+    const bottom = nodes.length ? Math.max(...nodes.map((n) => n.position.y + nodeHeight(n.data.kind, catalog, n.data.slotH))) : 0;
     const minX = nodes.length ? Math.min(...nodes.map((n) => n.position.x)) : 0;
     const k = groups.filter((g) => g.kind === "strategy").length + 1;
     const ins = insertDoc(src, new Set(nodes.map((n) => n.id)), `s${k}_`, { x: minX, y: nodes.length ? bottom + INSERT_GAP : 0 });
@@ -211,7 +211,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     if (b.kind === "strategy") return get().addStrategy({ label: b.label, nodes: b.nodes, edges: b.edges, output: b.output });
     const s = get();
     push();
-    const bottom = s.nodes.length ? Math.max(...s.nodes.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) : 0;
+    const bottom = s.nodes.length ? Math.max(...s.nodes.map((n) => n.position.y + nodeHeight(n.data.kind, s.catalog, n.data.slotH))) : 0;
     const minX = s.nodes.length ? Math.min(...s.nodes.map((n) => n.position.x)) : 0;
     const ins = insertDoc(b, new Set(s.nodes.map((n) => n.id)), "b_", { x: minX, y: s.nodes.length ? bottom + INSERT_GAP : 0 });
     const added = fromDoc({ format: GRAPH_FORMAT, version: GRAPH_VERSION, nodes: ins.nodes, edges: ins.edges }, s.catalog ?? []);
@@ -286,7 +286,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const from = (orig: string) => (src ? Object.entries(src.map).find(([, o]) => o === orig)?.[0] : undefined) ?? orig;
     const scoped = scope.map((id) => s.nodes.find((n) => n.id === id)!);
     // 갈래마다 한 칸씩 아래로 — 칸 높이 = 복제 범위의 높이(카드 실제 높이까지) + 틀 머리·여백(겹치지 않게).
-    const bottomOf = (n: PgNode) => n.position.y + cardHeight(n.data.kind, s.catalog);
+    const bottomOf = (n: PgNode) => n.position.y + nodeHeight(n.data.kind, s.catalog, n.data.slotH);
     const top = Math.min(...scoped.map((n) => n.position.y));
     const x0 = Math.min(...scoped.map((n) => n.position.x)), x1 = Math.max(...scoped.map((n) => n.position.x)) + NODE_W;
     let bottom = Math.max(...scoped.map(bottomOf));

@@ -4,7 +4,7 @@
  * AI1 — 서버가 검사를 통과시킨 AI 추천도 같은 그릇에 담는다(`withAiGhosts`): 규칙과 같은 추천이면 그 유령에 AI 이유를 붙이고(두 칩), 아니면 따로.
  */
 import { NEW_NODE } from "./procedure";
-import { cardHeight, COL, NODE_W, PORT_TOP, ROW_GAP } from "./size";
+import { cardHeight, COL, NODE_W, nodeHeight, PORT_TOP, ROW_GAP } from "./size";
 import type { AiSuggestion, NodeCatalogEntry, Procedure, ProcedureSuggestion } from "./types";
 
 /** 한 번에 보일 유령 수 — 2부 AI1(노드 추천 1~3)과 같은 그릇. */
@@ -72,7 +72,10 @@ export function withAiGhosts(rule: Ghost[], ai: AiSuggestion[], nodeIds: Iterabl
 }
 
 /** 자리를 잴 노드 — 문서 노드의 id · 종류 · 왼쪽 위. */
-export interface PlaceNode { id: string; kind: string; position: { x: number; y: number } }
+export interface PlaceNode { id: string; kind: string; position: { x: number; y: number }; slotH?: number }
+/** 캔버스 노드 → 자리 계산용(R3 — 늘린 결과 칸을 함께 넘긴다). 유령·초안·추천 붙이기가 같은 것을 쓴다. */
+export const placeNodes = (nodes: { id: string; position: { x: number; y: number }; data: { kind: string; slotH?: number } }[]): PlaceNode[] =>
+  nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position, ...(n.data.slotH ? { slotH: n.data.slotH } : {}) }));
 /** 차지한 상자(캔버스 좌표). */
 export interface Box { x: number; y: number; w: number; h: number }
 
@@ -114,7 +117,7 @@ export function placeConnectChip(sug: ProcedureSuggestion, nodes: PlaceNode[], c
 }
 
 function boxesOf(nodes: PlaceNode[], catalog: NodeCatalogEntry[] | null | undefined, taken: Box[]): Box[] {
-  return [...nodes.map((n) => ({ x: n.position.x, y: n.position.y, w: NODE_W, h: cardHeight(n.kind, catalog) })), ...taken];
+  return [...nodes.map((n) => ({ x: n.position.x, y: n.position.y, w: NODE_W, h: nodeHeight(n.kind, catalog, n.slotH) })), ...taken];
 }
 
 /** 폭 `NODE_W` · 높이 `h` 상자를 `p` 에서 시작해 겹치는 상자 아래로 내려 빈 자리(틈 `ROW_GAP`). */

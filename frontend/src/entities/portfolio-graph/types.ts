@@ -18,6 +18,8 @@ export interface GraphDocNode {
   position: { x: number; y: number };
   /** 말로 설계(AI4) — 칸 → 그 값을 말한 말씀 조각. 그 칸을 고치면 지운다. 서버 검증·계산은 보지 않는다. */
   said?: Record<string, string>;
+  /** 결과 칸 높이(R3) — 기본보다 늘렸을 때만 있다(기본 ~ 세 배). 화면 정보라 서버 검증·계산은 보지 않는다. */
+  size?: { slot_h: number };
 }
 
 export interface GraphDocEdge {

@@ -132,6 +132,18 @@ test("문서 골든 — 조작마다 작업 중 문서 · 되돌리기 사다리
   await expect.poll(async () => ((await wip(page)).edges.find((x) => x.id === W_UR)?.waypoints ?? []).length).toBe(1);
   await snap("01b-waypoint");
 
+  // 결과 칸 늘리기(R3) — 하나만 고른 카드의 아래 손잡이를 캔버스 좌표 +110(격자 10칸). 끌기 한 번 = 한 단계.
+  await node(page, "estimate").click({ position: HEAD });
+  const g = (await page.locator('.react-flow__node[data-id="estimate"] .pg-node-resize').boundingBox())!;
+  const z = await page.locator(".pg-canvas").evaluate((el) => Number(getComputedStyle(el).getPropertyValue("--pg-z")));
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + 55 * z, { steps: 5 });
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + 110 * z, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => ((await wip(page)).nodes.find((x) => x.id === "estimate") as { size?: unknown } | undefined)?.size).toBeTruthy();
+  await snap("01c-resize");
+
   // 복제(Ctrl+D)
   await node(page, "optimizer").click({ position: HEAD });
   await page.keyboard.press("Control+d");

@@ -160,6 +160,92 @@
     }
    ]
   },
+  "01c-resize": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    }
+   ]
+  },
   "02-duplicate": {
    "format": "project-alpha.portfolio-graph",
    "version": 1,
@@ -194,6 +280,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -300,6 +389,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -415,6 +507,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -530,6 +625,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -654,6 +752,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -778,6 +879,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -913,6 +1017,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1062,6 +1169,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1098,6 +1208,9 @@
      "position": {
       "x": 640,
       "y": 1108
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1289,6 +1402,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1325,6 +1441,9 @@
      "position": {
       "x": 640,
       "y": 1108
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1530,6 +1649,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1566,6 +1688,9 @@
      "position": {
       "x": 640,
       "y": 1108
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1617,7 +1742,7 @@
      },
      "position": {
       "x": 640,
-      "y": 402
+      "y": 512
      },
      "said": {
       "cost_bps": "0.3%"
@@ -1792,6 +1917,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1827,7 +1955,10 @@
      "params": {},
      "position": {
       "x": 640,
-      "y": 876
+      "y": 986
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -1879,7 +2010,7 @@
      },
      "position": {
       "x": 640,
-      "y": 402
+      "y": 512
      },
      "said": {
       "cost_bps": "0.3%"
@@ -2056,6 +2187,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -2092,6 +2226,9 @@
      "position": {
       "x": 640,
       "y": 1108
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -2143,7 +2280,7 @@
      },
      "position": {
       "x": 640,
-      "y": 402
+      "y": 512
      },
      "said": {
       "cost_bps": "0.3%"
@@ -2318,6 +2455,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -2354,6 +2494,9 @@
      "position": {
       "x": 640,
       "y": 1108
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -2559,6 +2702,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -2595,6 +2741,9 @@
      "position": {
       "x": 640,
       "y": 1108
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -2772,6 +2921,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -2896,6 +3048,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -3020,6 +3175,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -3142,6 +3300,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -3264,6 +3425,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -3379,6 +3543,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -3494,6 +3661,9 @@
      "position": {
       "x": 640,
       "y": 0
+     },
+     "size": {
+      "slot_h": 266
      }
     },
     {
@@ -3562,6 +3732,92 @@
      "source": "estimate",
      "source_port": "belief",
      "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
      "target_port": "belief"
     }
    ]
@@ -3791,6 +4047,9 @@
     "position": {
      "x": 640,
      "y": 0
+    },
+    "size": {
+     "slot_h": 266
     }
    },
    {
@@ -3826,7 +4085,10 @@
     "params": {},
     "position": {
      "x": 640,
-     "y": 876
+     "y": 986
+    },
+    "size": {
+     "slot_h": 266
     }
    },
    {
@@ -3878,7 +4140,7 @@
     },
     "position": {
      "x": 640,
-     "y": 402
+     "y": 512
     },
     "said": {
      "cost_bps": "0.3%"

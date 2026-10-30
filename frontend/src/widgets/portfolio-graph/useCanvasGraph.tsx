@@ -7,7 +7,7 @@
  */
 import { useCallback, useMemo, type MutableRefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { PORTFOLIO_NODE, cardHeight, cardWidth, fieldsOf, viaOf, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { PORTFOLIO_NODE, nodeHeight, cardWidth, fieldsOf, viaOf, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { matchFilter } from "./canvasConfig";
@@ -109,7 +109,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
       const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 30;
       // 상자 경계는 카드의 실제 폭·배치 높이로(BS2 — 예전 176·150 은 실제 카드와 달랐다).
       const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) + GROUP_PAD;
+      const y1 = Math.max(...ms.map((n) => n.position.y + nodeHeight(n.data.kind, s.catalog, n.data.slotH))) + GROUP_PAD;
       const inside = new Set(g.members);
       const collapsed = collapsedOf.has(g.members[0] ?? "") && !!g.collapsed;
       const proxyIn = collapsed ? s.edges.filter((e) => inside.has(e.target) && !inside.has(e.source)).map((e) => {
@@ -143,7 +143,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
       const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
       const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 56;
       const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y + cardHeight(n.data.kind, s.catalog))) + GROUP_PAD;
+      const y1 = Math.max(...ms.map((n) => n.position.y + nodeHeight(n.data.kind, s.catalog, n.data.slotH))) + GROUP_PAD;
       const root = s.nodes.find((n) => n.id === b.of_root);
       return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
                 className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined,

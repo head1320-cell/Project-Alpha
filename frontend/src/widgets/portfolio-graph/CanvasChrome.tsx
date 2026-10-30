@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { ControlButton, NodeToolbar, Position, ViewportPortal, useStore } from "@xyflow/react";
 import { AlignStartVertical, Check, Eye, Target } from "lucide-react";
-import { GOALS, cardHeight, type GoalKey, type WorkflowStage } from "@/entities/portfolio-graph";
+import { GOALS, nodeHeight, type GoalKey, type WorkflowStage } from "@/entities/portfolio-graph";
 import { laneLayout } from "@/entities/portfolio-graph/lanes";
 import { SELBAR_ROOM, SELBAR_W, zoomLevel } from "./canvasGeometry";
 import { STAGE_VAR } from "./GraphNode";
@@ -226,7 +226,7 @@ export function StageLanes({ stages }: { stages: WorkflowStage[] }) {
   const geo = useMemo(() => {
     if (!catalog || !stages.length) return null;
     const { lanes } = laneLayout(nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), edges, catalog, stages);
-    const h = (n: (typeof nodes)[number]) => measuredH(n) || cardHeight(n.data.kind, catalog);
+    const h = (n: (typeof nodes)[number]) => measuredH(n) || nodeHeight(n.data.kind, catalog, n.data.slotH);
     const top = Math.min(0, ...nodes.map((n) => n.position.y)) - LANE_HEAD;
     const bottom = Math.max(0, ...nodes.map((n) => n.position.y + h(n))) + 40;
     return { lanes, top, h: bottom - top };
