@@ -18,6 +18,7 @@ import { NodeResultPanel } from "./NodeResultPanel";
 import { toggle, type Panels } from "./panels";
 import { RunHistory } from "./RunHistory";
 import { SettingsPanel } from "./SettingsPanel";
+import { deleteNote } from "./canvasRules";
 import { usePortfolioGraph, type PgState } from "./store";
 import { StoryPanel } from "./StoryPanel";
 import { WirePanel } from "./WirePanel";
@@ -99,7 +100,7 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
           <SettingsPanel node={selected} entry={selEntry} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []}
                          stageLabel={stages.find((x) => x.key === selEntry?.stage)?.label ?? null}
                          expert={s.expert} onExpert={s.setExpert}
-                         onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.removeNode(selected.id)}
+                         onChange={(p) => s.updateParams(selected.id, p)} onRemove={() => s.act(() => deleteNote(s.deleteElements([selected.id], [])))}
                          onDuplicate={() => s.duplicateNode(selected.id)}
                          result={selResult} stale={staleSet.has(selected.id)}
                          onFocus={focusNode} onImpact={s.setProcHover} onSwap={(k) => swapTo(selected.id, k)}

@@ -139,6 +139,19 @@ export function pruneRemoved(s: PgState, nodeIds: Set<string>, edgeIds: Set<stri
   };
 }
 
+/** 접힌 상자 안 노드 → 그 상자(들어간 상자는 펼쳐 보인다) — 캔버스 그림(`useCanvasGraph`)과 Ctrl+A(R2)가 같은 규칙을 쓴다. */
+export function collapsedMembers(groups: PgState["groups"], focusGroup: string | null): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const g of groups) if (g.collapsed && g.id !== focusGroup) for (const id of g.members) m.set(id, g.id);
+  return m;
+}
+/** Ctrl+A 가 고르는 노드(R2) — 보이는 노드만 · 들어간 상자면 그 멤버만. */
+export function pickableIds(s: Pick<PgState, "nodes" | "groups" | "focusGroup">): string[] {
+  const hidden = collapsedMembers(s.groups, s.focusGroup);
+  const inside = s.focusGroup ? new Set(s.groups.find((g) => g.id === s.focusGroup)?.members ?? []) : null;
+  return s.nodes.map((n) => n.id).filter((id) => !hidden.has(id) && (!inside || inside.has(id)));
+}
+
 /** 조각이 받는 것 — `set` 은 낡음을 다시 세는 것을 감싼 그대로, `push` 는 되돌리기 칸에 넣기. */
 export interface SliceCtx {
   set: StoreApi<PgState>["setState"];

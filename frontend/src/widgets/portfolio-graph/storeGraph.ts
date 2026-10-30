@@ -11,7 +11,7 @@ import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, pruneRemoved, type Slic
 let lastParamEdit: { id: string; at: number } | null = null;
 let dragging = false;
 
-type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "cutEdge" | "insertOnEdge" | "addNode" | "updateParams" | "removeNode" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
+type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "cutEdge" | "insertOnEdge" | "addNode" | "updateParams" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
 
 export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
   setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
@@ -189,16 +189,19 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
     }));
   },
 
-  removeNode: (id) => { get().deleteElements([id], []); },
-
   deleteElements: (nodeIds, edgeIds) => {
     const s = get();
     const ns = new Set(nodeIds.filter((id) => s.nodes.some((n) => n.id === id)));
     const es = new Set(edgeIds.filter((id) => s.edges.some((e) => e.id === id)));
-    if (!ns.size && !es.size) return false;
+    if (!ns.size && !es.size) return null;
+    // 결과가 최신이던 노드 · 지워서 새로 낡은 하류 — 낡음은 set 뒤에 다시 센다(store `derive`). 결과가 없는 노드는 '예전 결과' 가 아니다.
+    const fresh = (id: string, st: PgState) => !!st.report?.nodes[id] && !st.staleIds.includes(id);
+    const results = [...ns].filter((id) => fresh(id, s)).length;
     push();
     set((st) => pruneRemoved(st, ns, es));
-    return true;
+    const after = get();
+    const downstream = after.staleIds.filter((id) => fresh(id, s)).length;
+    return { nodes: ns.size, edges: es.size, results, downstream };
   },
 
   duplicateNode: (id) => {
@@ -235,6 +238,11 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
 
   setName: (name) => set({ name }),
   setGoal: (goal) => set({ goal }),
+  pickIds: (ids) => {
+    if (ids.length <= 1) { get().select(ids[0] ?? null); return; }
+    set((s) => ({ picked: ids, pickedByUser: true, selectedId: s.selectedId && ids.includes(s.selectedId) ? s.selectedId : null,
+                  ...(s.selectedEdge ? { selectedEdge: null, tab: s.tab === "wire" ? "story" as const : s.tab } : {}) }));
+  },
   select: (selectedId) => set((s) => ({ selectedId, picked: selectedId ? [selectedId] : [], pickedByUser: !!selectedId,
                                          ...(selectedId && s.selectedEdge ? { selectedEdge: null, tab: s.tab === "wire" ? "settings" : s.tab } : {}) })),
   togglePin: (id) => set((s) => ({ pinned: s.pinned.includes(id) ? s.pinned.filter((x) => x !== id) : [...s.pinned, id] })),

@@ -97,6 +97,7 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
     const key = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (usePortfolioGraph.getState().openGate) return;          // 캔버스의 Esc 가 관문 설명을 닫는다
+      e.stopPropagation();                                        // 카드만 접는다 — 캔버스의 Esc(고르기 풀기)까지 가지 않게(R2)
       toggle(false);
     };
     const down = (e: PointerEvent) => { if (!wrap.current?.contains(e.target as Node)) toggle(false); };

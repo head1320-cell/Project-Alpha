@@ -7,7 +7,19 @@ import { useCallback } from "react";
 import type { Connection, Edge, FinalConnectionState } from "@xyflow/react";
 import { cardsOverlap, connectionProblem, type ConnTry } from "@/entities/portfolio-graph";
 import { PORT_PLAIN } from "./GraphNode";
-import { usePortfolioGraph } from "./store";
+import { usePortfolioGraph, type DeleteResult } from "./store";
+
+/**
+ * 지우기 토스트(R2) — 무엇이 사라졌는지 센 그대로. 0 인 부분은 말하지 않는다(계산 전이면 결과·하류 말 없음).
+ * 결과 = 지운 노드 중 결과가 최신이던 것 · 하류 = 지워서 새로 예전 결과가 된 노드. [되돌리기] 한 번이면 모두 돌아온다.
+ */
+export function deleteNote(r: DeleteResult | null): string | null {
+  if (!r) return null;
+  const head = r.nodes ? `노드 ${r.nodes}개를 지웠어요` : `선 ${r.edges}개를 끊었어요`;
+  const more = [r.results ? `그중 ${r.results}개는 계산 결과가 있었어요` : "",
+                r.downstream ? `하류 노드 ${r.downstream}개는 이제 예전 결과예요` : ""].filter(Boolean);
+  return `${head}${more.length ? ` — ${more.join(" · ")}` : ""}.`;
+}
 
 /** 같은 쪽 점끼리 이으려 할 때의 사유 — 놓은 뒤 토스트·끄는 중 사유 글·다시 꽂기가 같은 말을 쓴다. */
 export const SAME_SIDE = {

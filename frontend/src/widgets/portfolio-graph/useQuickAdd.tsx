@@ -8,7 +8,7 @@ import type { ReactFlowInstance } from "@xyflow/react";
 import { ClipboardPaste, Copy, GitBranch, LayoutGrid, Pin, PinOff, Play, Plus, Replace, Route, Scale, Search as SearchIcon, Trash2 } from "lucide-react";
 import { COL, compareTargets, swapCandidates } from "@/entities/portfolio-graph";
 import type { MenuItem, QuickAddState } from "./CanvasAssist";
-import { SAME_SIDE, wireProblem } from "./canvasRules";
+import { deleteNote, SAME_SIDE, wireProblem } from "./canvasRules";
 import { usePortfolioGraph, type PgState } from "./store";
 
 /** 우클릭한 자리 — 캔버스 안 좌표와 화면 좌표, 누른 노드(빈 곳이면 null). */
@@ -150,8 +150,12 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
         run: () => usePortfolioGraph.getState().togglePin(id) },
       ...(r && r.status !== "ok" ? [{ key: "cause", label: "원인 따라가기", icon: <Route size={14} aria-hidden="true" />,
                                       run: () => usePortfolioGraph.getState().showCause(id) }] : []),
-      { key: "remove", label: "지우기", icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
-        run: () => { const x = usePortfolioGraph.getState(); x.act(() => { x.removeNode(id); return "노드를 지웠어요."; }); } },
+      // 여럿 고른 것 안의 노드면 그 여럿을 한 번에(R2) — 되돌리기 한 번.
+      ...(st.picked.length > 1 && st.picked.includes(id)
+        ? [{ key: "remove-picked", label: `고른 노드 ${st.picked.length}개 지우기`, icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
+             run: () => { const x = usePortfolioGraph.getState(); x.act(() => deleteNote(x.deleteElements(x.picked, []))); } }] : []),
+      { key: "remove", label: st.picked.length > 1 && st.picked.includes(id) ? "이 노드만 지우기" : "지우기", icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
+        run: () => { const x = usePortfolioGraph.getState(); x.act(() => deleteNote(x.deleteElements([id], []))); } },
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 메뉴를 열 때마다 새로 만든다
   }, [ctx]);

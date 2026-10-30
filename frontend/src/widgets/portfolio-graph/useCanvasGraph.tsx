@@ -17,6 +17,7 @@ import { PORT_PLAIN } from "./GraphNode";
 import { PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { toggle, type Panels } from "./panels";
 import { usePortfolioGraph, type PgState } from "./store";
+import { collapsedMembers } from "./storeShared";
 import { wireFlag, wireLook } from "./wireStyle";
 
 export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, staleSet: Set<string>,
@@ -56,11 +57,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
   const procSet = useMemo(() => (s.procHover ? new Set(s.procHover) : null), [s.procHover]);
   const keep = cause ? causeSet : procSet ?? focusSet ?? filterSet;
   /** 노드 → 그 노드가 든 접힌 상자(대리 포트로 선을 다시 그린다). */
-  const collapsedOf = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const g of s.groups) if (g.collapsed && g.id !== s.focusGroup) for (const id of g.members) m.set(id, g.id);
-    return m;
-  }, [s.groups, s.focusGroup]);
+  const collapsedOf = useMemo(() => collapsedMembers(s.groups, s.focusGroup), [s.groups, s.focusGroup]);
   const portColor = useCallback((nodeId: string, handle: string | null | undefined, side: "in" | "out") => {
     const kind = s.nodes.find((n) => n.id === nodeId)?.data.kind;
     const entry = s.catalog?.find((c) => c.type === kind);

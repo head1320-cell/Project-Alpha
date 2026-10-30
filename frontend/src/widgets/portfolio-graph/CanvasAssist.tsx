@@ -166,13 +166,15 @@ export const SHORTCUTS: [string, string][] = [
   ["Ctrl+C / Ctrl+V", "복사 / 붙여넣기"],
   ["Ctrl+D", "고른 노드 복제"],
   ["Ctrl+G", "고른 노드 묶기"],
-  ["Delete", "고른 노드·선 지우기"],
+  ["Ctrl+A", "보이는 노드 모두 고르기"],
+  ["Shift+끌기", "상자로 고르기 — 닿기만 해도 골라요"],
+  ["Delete", "고른 노드·선 지우기 — 토스트의 되돌리기나 Ctrl+Z 로 돌려요"],
   ["Alt+← →", "선을 따라 앞·뒤 단계로"],
   ["Alt+↑ ↓", "흐름 번호 순서로"],
   ["[", "왼쪽 목록 열고 닫기"],
   ["]", "오른쪽 창 열고 닫기"],
   ["\\", "집중해서 보기 — 두 판을 잠시 모두 닫기·다시 열기"],
-  ["Esc", "원인 경로 · 들어간 상자 · 판 닫기"],
+  ["Esc", "원인 경로 · 들어간 상자 · 판 닫기 · 그다음 고르기 풀기"],
   ["?", "이 목록"],
 ];
 
@@ -282,9 +284,10 @@ function useDismissWhen(on: boolean, ref: React.RefObject<HTMLElement>, onClose:
   useEffect(() => {
     if (!on) return;
     const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    // Esc 는 잡는 단계에서 먹고 멈춘다(R2) — 캔버스의 Esc(고르기 풀기)까지 가지 않게.
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
     window.addEventListener("mousedown", down);
-    window.addEventListener("keydown", key);
-    return () => { window.removeEventListener("mousedown", down); window.removeEventListener("keydown", key); };
+    window.addEventListener("keydown", key, true);
+    return () => { window.removeEventListener("mousedown", down); window.removeEventListener("keydown", key, true); };
   }, [on, ref, onClose]);
 }

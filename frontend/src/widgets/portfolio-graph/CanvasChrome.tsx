@@ -66,10 +66,11 @@ export function useDismiss(open: boolean, close: () => void, ref: RefObject<HTML
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as HTMLElement)) close(); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    // Esc 는 잡는 단계에서 먹고 멈춘다(R2) — 캔버스의 Esc(고르기 풀기)까지 가지 않게.
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
     window.addEventListener("pointerdown", away);
-    window.addEventListener("keydown", esc);
-    return () => { window.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc); };
+    window.addEventListener("keydown", esc, true);
+    return () => { window.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc, true); };
   }, [open, close, ref]);
 }
 

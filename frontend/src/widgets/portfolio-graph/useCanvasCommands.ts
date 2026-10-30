@@ -8,9 +8,12 @@ import { TEMPLATES } from "@/entities/portfolio-graph";
 import type { useAiAssist } from "./AiAsk";
 import { DRAWERS, type DrawerKey } from "./canvasConfig";
 import { neighbour } from "./canvasGeometry";
+import { deleteNote } from "./canvasRules";
+import { ALIGN_ITEMS } from "./guides";
 import type { PaletteCommand } from "./CommandPalette";
 import { toggle, type Panels } from "./panels";
 import { usePortfolioGraph, type PgState } from "./store";
+import { pickableIds } from "./storeShared";
 import { readView, saveView } from "./view";
 import { WIRE_SHAPES, type WireShape } from "./wirePath";
 
@@ -40,7 +43,7 @@ export interface CommandDeps {
 export function useCanvasCommands(s: PgState, d: CommandDeps) {
   const { run, runTo, updatePanels, fit, setCmdOpen, setFindOpen, setKeysOpen, setGoalOpen, setDrawer, focusRef, askFocus,
           leftShown, rightShown, panels, cmdOpen, openSay, ai, strategySources, addStrategy, loadTemplate } = d;
-  // 단축키 — 입력 칸에 있을 때는 가로채지 않는다. Ctrl/⌘+Enter 계산 · Ctrl/⌘+D 복제 · Esc 관문 닫기.
+  // 단축키 — 입력 칸에 있을 때는 가로채지 않는다. Ctrl/⌘+Enter 계산 · Ctrl/⌘+D 복제 · Ctrl/⌘+A 모두 고르기 · Esc 관문 닫기 → 고르기 풀기.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -60,12 +63,16 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
       else if (mod && k === "v") { if (st.paste()) e.preventDefault(); }
       else if (mod && k === "g") { e.preventDefault(); st.groupPicked(); }
       else if (mod && k === "d" && st.selectedId) { e.preventDefault(); st.duplicateNode(st.selectedId); }
+      // 모두 고르기(R2) — 캔버스나 빈 곳에 초점일 때만(도구줄 단추 위에서는 브라우저 몫) · 보이는 노드만 · 들어간 상자면 그 멤버만.
+      else if (mod && k === "a" && !e.shiftKey && (!t || t === document.body || !!t.closest(".pg-canvas"))) { e.preventDefault(); st.pickIds(pickableIds(st)); }
       else if (!mod && !e.altKey && e.key === "[") { e.preventDefault(); updatePanels((p) => toggle(p, "left")); }
       else if (!mod && !e.altKey && e.key === "]") { e.preventDefault(); updatePanels((p) => toggle(p, "right")); }
       else if (!mod && !e.altKey && e.key === "\\") { e.preventDefault(); updatePanels((p) => toggle(p, "focus")); }
       else if (e.key === "Escape" && st.cause) st.showCause(null);
       else if (e.key === "Escape" && st.focusGroup) { st.setFocusGroup(null); fit(); }
       else if (e.key === "Escape" && st.openGate) st.setOpenGate(null);
+      // 고르기 풀기(R2) — ★맨 끝★. 메뉴·판의 Esc 는 잡는 단계에서 먼저 먹고 멈춘다(여기까지 오지 않는다).
+      else if (e.key === "Escape" && (st.picked.length || st.selectedId || st.selectedEdge)) { st.select(null); st.selectEdge(null); }
       else if (e.altKey && e.key.startsWith("Arrow") && st.selectedId) {
         // 키보드로 노드 사이 이동(접근성) — ←→ 선을 따라 앞·뒤 단계, ↑↓ 흐름 번호 순서.
         const next = neighbour(st.selectedId, e.key, st.nodes, st.edges);
@@ -107,7 +114,15 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
       { id: "pin", group: "보기", label: s.pinned.includes(s.selectedId) ? "고른 노드 그림 고정 풀기" : "고른 노드 그림 고정",
         run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.togglePin(st.selectedId); } },
       { id: "remove", group: "편집", label: "고른 노드 지우기", keys: "Delete",
-        run: () => { const st = usePortfolioGraph.getState(); const id = st.selectedId; if (id) st.act(() => { st.removeNode(id); return "노드를 지웠어요."; }); } },
+        run: () => { const st = usePortfolioGraph.getState(); const id = st.selectedId; if (id) st.act(() => deleteNote(st.deleteElements([id], []))); } },
+    ] : []),
+    { id: "select-all", group: "편집", label: "모두 고르기", keys: "Ctrl+A", hint: "보이는 노드를 모두 골라요 — 들어간 상자 안이면 그 상자 노드만",
+      run: () => { const st = usePortfolioGraph.getState(); st.pickIds(pickableIds(st)); } },
+    ...(multiPicked ? [
+      { id: "delete-picked", group: "편집", label: `고른 노드 ${s.picked.length}개 지우기`, keys: "Delete", hint: "지운 뒤 [되돌리기] 한 번이면 모두 돌아와요",
+        run: () => { const st = usePortfolioGraph.getState(); st.act(() => deleteNote(st.deleteElements(st.picked, []))); } },
+      ...ALIGN_ITEMS.filter((i) => s.picked.length >= i.min).map((i) => ({ id: `align:${i.kind}`, group: "편집", label: `정렬: ${i.label}`,
+        run: () => usePortfolioGraph.getState().alignPicked(i.kind) })),
     ] : []),
     { id: "goal", group: "시작", label: "목표로 새로 시작", hint: "무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 계산해요",
       run: () => setGoalOpen(true) },
@@ -161,6 +176,6 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.selectedEdge, multiPicked, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  ], [s.selectedId, s.selectedEdge, multiPicked, s.picked.length, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
   return { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, commands };
 }

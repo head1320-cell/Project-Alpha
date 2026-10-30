@@ -26,6 +26,7 @@ import {
   Controls,
   MiniMap,
   Panel,
+  SelectionMode,
   ViewportPortal,
   type Edge,
   type Node,
@@ -86,7 +87,7 @@ import { usePortfolioGraph, type PgState } from "./store";
 import { AlignMenu, SelBar, StageLanes, ZoomPct, ZoomWatch } from "./CanvasChrome";
 import { DRAWERS, FILTERS, LEFT_TAB_KEY, markWelcomed, matchFilter, welcomeSeen, type DrawerKey } from "./canvasConfig";
 import { MIN_ZOOM, SNAP, fitClear } from "./canvasGeometry";
-import { overlapping, useWireHandlers } from "./canvasRules";
+import { deleteNote, overlapping, useWireHandlers } from "./canvasRules";
 import { WireDragLine } from "./WireDragLine";
 import { useCanvasView, useViewFollow } from "./useCanvasView";
 import { CanvasToolbar } from "./CanvasToolbar";
@@ -566,7 +567,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             }}
             onBeforeDelete={async ({ nodes, edges }) => {
               // React Flow 는 선을 먼저, 노드를 나중에 바꾼다(되돌리기 두 단계) — 여기서 한 번에 지우고 React Flow 의 지우기는 막는다(R1).
-              usePortfolioGraph.getState().deleteElements(nodes.map((x) => x.id).filter((id) => !id.includes(":")), edges.map((x) => x.id));
+              const st = usePortfolioGraph.getState();
+              st.act(() => deleteNote(st.deleteElements(nodes.map((x) => x.id).filter((id) => !id.includes(":")), edges.map((x) => x.id))));
               return false;
             }}
             onPaneContextMenu={(e) => {
@@ -585,6 +587,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             onNodeDoubleClick={(_, n) => { if (n.id.startsWith("frame:")) s.setFocusGroup(n.id.slice(6)); }}
             deleteKeyCode={drawer || cmdOpen ? null : ["Backspace", "Delete"]}
             multiSelectionKeyCode={["Meta", "Control"]}
+            selectionMode={SelectionMode.Partial}
             defaultEdgeOptions={{ type: PG_WIRE_TYPE }}
             fitView
             fitViewOptions={{ padding: 0.08, maxZoom: 1 }}

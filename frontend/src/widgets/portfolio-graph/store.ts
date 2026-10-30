@@ -40,6 +40,8 @@ export interface RunRecord {
 }
 
 export interface Snapshot { nodes: PgNode[]; edges: Edge[]; groups: GraphGroup[]; branches?: GraphBranch[] }
+/** 지운 것(R2) — 노드·선 수 · 그중 결과가 최신이던 노드 · 지워서 새로 예전 결과가 된 하류 노드. 토스트(`deleteNote`)가 이것만 말한다. */
+export interface DeleteResult { nodes: number; edges: number; results: number; downstream: number }
 
 /** 실행 줄(CF5a) — 이번 계산의 노드별 진행. 곁줄 이벤트로 바뀌고, 끝나면 ★보고서로 확정★한다(`final`). `lost` = 곁줄이 끊겼다. */
 export type RunPhase = "waiting" | "running" | "done";
@@ -150,15 +152,16 @@ export interface PgState {
   swapNode: (id: string, kind: string) => string | null;
   addNode: (kind: string, position: { x: number; y: number }) => string;
   updateParams: (id: string, params: Record<string, unknown>) => void;
-  removeNode: (id: string) => void;
-  /** 노드·선을 함께 지운다(R1) — ★되돌리기 한 번★. 지운 것이 없으면 false. Delete 키·메뉴·명령이 모두 이 길이다. */
-  deleteElements: (nodeIds: string[], edgeIds: string[]) => boolean;
+  /** 노드·선을 함께 지운다(R1) — ★되돌리기 한 번★. 지운 것이 없으면 null. Delete 키·메뉴·명령이 모두 이 길이다. */
+  deleteElements: (nodeIds: string[], edgeIds: string[]) => DeleteResult | null;
   /** 같은 입력(들어오는 링크)·같은 설정으로 옆에 하나 더 — 설정만 바꿔 나란히 비교할 때. 나가는 링크는 잇지 않는다. */
   duplicateNode: (id: string) => string | null;
   loadDoc: (doc: GraphDoc, problems?: string[]) => void;
   setName: (n: string) => void;
   setGoal: (g: GoalKey | null) => void;
   select: (id: string | null) => void;
+  /** 여럿을 한 번에 고른다(R2 Ctrl+A) — 고른 선은 푼다. 하나만이면 그 노드를 고른 것과 같다. */
+  pickIds: (ids: string[]) => void;
   setValidation: (v: ValidateReport | null) => void;
   setValidationError: (v: boolean) => void;
   setProcHover: (ids: string[] | null) => void;
@@ -213,7 +216,7 @@ export interface PgState {
   removeBlock: (index: number) => void;
   setNote: (n: string | null, undoable?: boolean, transient?: boolean) => void;
   /** 동작을 하고 그 안내를 띄운다 — 동작이 되돌리기 기록을 남겼으면 안내 줄에 [되돌리기] 가 붙는다(BN N3). */
-  act: (fn: () => string) => void;
+  act: (fn: () => string | null) => void;
   /** 노드를 놓고 곧바로 잇는다(BN N3 선 끌어 놓기) — 되돌리기 한 번에 둘 다. */
   addLinked: (kind: string, position: { x: number; y: number },
               link: { node: string; handle: string; side: "source" | "target"; port: string }) => string;
