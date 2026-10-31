@@ -21,6 +21,7 @@ export * from "./size";
 export * from "./boxdrop";
 export * from "./swap";
 export * from "./aria";
+export * from "./exportImage";
 export * from "./josa";
 export * from "./ask";
 export * from "./guide";

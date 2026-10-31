@@ -8,6 +8,7 @@ import { TEMPLATES } from "@/entities/portfolio-graph";
 import type { useAiAssist } from "./AiAsk";
 import { DRAWERS, type DrawerKey } from "./canvasConfig";
 import { neighbour } from "./canvasGeometry";
+import { exportCanvasPng } from "./canvasPng";
 import { deleteNote } from "./canvasRules";
 import { ALIGN_ITEMS } from "./guides";
 import type { PaletteCommand } from "./CommandPalette";
@@ -141,6 +142,8 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     ...(s.selectedId ? [{ id: "run-to", group: "계산", label: "고른 노드까지 계산", keys: "Shift+Enter",
                           run: () => void runTo(usePortfolioGraph.getState().selectedId!) }] : []),
     { id: "undo", group: "편집", label: "되돌리기", keys: "Ctrl+Z", run: () => usePortfolioGraph.getState().undo() },
+    ...(s.nodes.length ? [{ id: "export-png", group: "파일", label: "그림(PNG)으로 받기", hint: "그래프 전체를 한 장으로 — 아래 띠에 이름·때·결과의 성격",
+                            run: () => void exportCanvasPng() }] : []),
     { id: "redo", group: "편집", label: "다시하기", keys: "Ctrl+Shift+Z", run: () => usePortfolioGraph.getState().redo() },
     { id: "layout", group: "보기", label: "자동 정리", hint: "흐름 순서대로 왼쪽에서 오른쪽으로 놓아요",
       run: () => { usePortfolioGraph.getState().autoLayout(); fit(); } },
@@ -186,6 +189,6 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.selectedEdge, multiPicked, s.picked.length, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus]);
+  ], [s.selectedId, s.selectedEdge, multiPicked, s.picked.length, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus, s.nodes.length]);
   return { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, commands };
 }

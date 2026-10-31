@@ -4,10 +4,11 @@
  * (CF 3부 E2b — `PortfolioCanvas.tsx` 의 `<header className="pg-toolbar">` 를 그대로 옮김 · 동작 불변).
  */
 import type { ReactNode } from "react";
-import { Boxes, Command, LayoutGrid, LayoutList, Loader2, Map as MapIcon, Plus, Redo2, Sparkles, Undo2 } from "lucide-react";
+import { Boxes, Command, ImageDown, LayoutGrid, LayoutList, Loader2, Map as MapIcon, Plus, Redo2, Sparkles, Undo2 } from "lucide-react";
 import { toDoc, type ParseResult } from "@/entities/portfolio-graph";
 import { ExportButton, ImportControl } from "@/features/portfolio-graph-io";
 import { MoreMenu } from "./CanvasAssist";
+import { exportCanvasPng } from "./canvasPng";
 import { NameWithGoal, ViewMenu } from "./CanvasChrome";
 import { DRAWERS, type DrawerKey } from "./canvasConfig";
 import type { PgState } from "./store";
@@ -58,7 +59,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
         <span className="pg-strat-menu-wrap">
           <button type="button" className="pg-strat-add" aria-haspopup="menu" aria-expanded={stratOpen}
                   disabled={!s.catalog} onClick={() => setStratOpen((o) => !o)}>
-            <Plus size={15} aria-hidden="true" />전략 추가
+            <Plus size={15} aria-hidden="true" /><span className="pg-strat-add-tl">전략 추가</span>
           </button>
           {stratOpen && (
             <div className="pg-strat-menu" role="menu" aria-label="전략 추가">
@@ -117,6 +118,11 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
       <ImportControl onLoad={applyLoad} />
       <ExportButton getDoc={() => toDoc(s.nodes, s.edges, { name: s.name || undefined, ...(s.goal ? { goal: s.goal } : {}), exported_at: new Date().toISOString() }, s.groups, s.branches, s.pinned, s.folded)}
                     disabled={s.nodes.length === 0} />
+      {/* 그림(R7) — 그래프 전체를 PNG 한 장으로 · 아래 띠에 이름·때·결과의 성격 */}
+      <button type="button" className="pg-export-png pg-btn" disabled={s.nodes.length === 0} onClick={() => void exportCanvasPng()}
+              aria-label="그래프 전체를 그림(PNG)으로 받기 — 아래 띠에 이름·때·결과의 성격을 적어요">
+        <ImageDown size={13} aria-hidden="true" /> <span className="pg-tl">그림</span>
+      </button>
       <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"
               disabled={s.running || !s.catalog || s.nodes.length === 0}>
         {s.running ? <><Loader2 size={14} className="spin" /> 계산하는 중{s.runningIds ? ` · ${s.runningIds.length}개` : ""}</> : "계산하기"}

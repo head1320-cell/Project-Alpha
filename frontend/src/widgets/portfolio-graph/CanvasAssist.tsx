@@ -7,9 +7,10 @@
  * 모든 판은 키보드로 쓸 수 있다: ↑↓ 로 고르고 Enter, Esc 로 닫는다. 같은 동작은 명령 찾기(Ctrl+K)에도 있다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Download, MoreHorizontal, Search, Undo2, Upload, X } from "lucide-react";
+import { Download, ImageDown, MoreHorizontal, Search, Undo2, Upload, X } from "lucide-react";
 import { quickAddItems, type GraphDoc, type NodeCatalogEntry, type ParseResult } from "@/entities/portfolio-graph";
 import { downloadGraph, readGraphFile } from "@/features/portfolio-graph-io";
+import { exportCanvasPng } from "./canvasPng";
 import { PORT_PLAIN } from "./GraphNode";
 import { usePortfolioGraph } from "./store";
 
@@ -268,6 +269,10 @@ export function MoreMenu({ drawers, onDrawer, onImport, getDoc, canExport }: {
           <button type="button" role="menuitem" className="pg-ctx-item pg-more-export" disabled={!canExport}
                   onClick={() => { setOpen(false); downloadGraph(getDoc()); }}>
             <Download size={14} aria-hidden="true" /> 내보내기
+          </button>
+          <button type="button" role="menuitem" className="pg-ctx-item pg-more-export-png" disabled={!canExport}
+                  onClick={() => { setOpen(false); void exportCanvasPng(); }}>
+            <ImageDown size={14} aria-hidden="true" /> 그림(PNG)으로 받기
           </button>
         </div>
       )}
