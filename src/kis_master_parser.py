@@ -318,6 +318,16 @@ async def collect_master_files(engine=None) -> dict:
         try:
             from src.data import stock_master as sm
             flags_saved = sm.save_master_flags(all_symbols)
+            # ★DB 사본 — 파일이 진실이고 이것은 복사본이다★ 파일 하나가 없어서
+            # krx_mdc 플로우·sector_groups_for·exposure_taxonomy 가 함께 멈추던
+            # 단일 장애점을 없앤다(감사 §3.3). 실패해도 적재는 성공이다.
+            try:
+                from src.data.instrument_master_store import save as _db_save
+                n_db = _db_save(sm.load_master_flags())
+                if n_db:
+                    logger.info(f"instrument_master DB 사본: {n_db} symbols")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"instrument_master DB 사본 실패(파일은 정상): {e}")
             sm.reload_master_flags()  # MANAGED/SUPERVISED 모듈 변수 + _status_codes 캐시 갱신
             try:  # 전종목 프레임 캐시 무효화 → 백테스터 유니버스가 전종목으로 갱신
                 from src.engine.universe_select import invalidate_universe_frame

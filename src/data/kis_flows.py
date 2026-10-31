@@ -43,9 +43,17 @@ CREATE TABLE IF NOT EXISTS investor_flows (
 """
 
 # 세부 주체(연기금/투신/사모/기타법인)는 KRX MDC 백필(krx_mdc)만 제공 — 마이그레이션 대상
-_MIGRATE_COLUMNS = ("pension_qty FLOAT", "pension_amt FLOAT", "trust_qty FLOAT",
-                    "trust_amt FLOAT", "pe_qty FLOAT", "pe_amt FLOAT",
-                    "othercorp_qty FLOAT", "othercorp_amt FLOAT")
+#: 후행 추가 컬럼 `(이름, DDL)` — `schema_add_columns.add_columns` 가 받는 모양.
+_MIGRATE_COLUMNS = (
+    ("pension_qty", "FLOAT"),
+    ("pension_amt", "FLOAT"),
+    ("trust_qty", "FLOAT"),
+    ("trust_amt", "FLOAT"),
+    ("pe_qty", "FLOAT"),
+    ("pe_amt", "FLOAT"),
+    ("othercorp_qty", "FLOAT"),
+    ("othercorp_amt", "FLOAT"),
+)
 
 # KIS 일별 적재용 — 3주체 컬럼만 갱신 (KRX 백필이 채운 세부 주체를 NULL로 덮지 않음)
 _UPSERT = """
@@ -97,12 +105,13 @@ def ensure_flows_table(engine) -> None:
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text(_TABLE_DDL))
-    for col in _MIGRATE_COLUMNS:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE investor_flows ADD COLUMN {col}"))
-        except Exception:
-            pass
+    # ★붙었는지 확인한다★ 예전에는 예외를 삼키고 끝이라, 권한 문제로 못 붙어도
+    # 붙은 줄 알고 이후 조회가 통째로 깨졌다(`schema_add_columns` 가 적어 둔 함정).
+    from src.data.schema_add_columns import add_columns
+    if not add_columns(engine, "investor_flows", list(_MIGRATE_COLUMNS),
+                       label="investor_flows"):
+        logger.warning("investor_flows 세부 주체 컬럼을 쓸 수 없습니다 — "
+                       "3주체만으로 동작합니다.")
 
 
 def bulk_upsert_flows(engine, ticker: str, rows: list[dict], full: bool = False) -> int:
@@ -193,7 +202,13 @@ def load_flows_series(ticker: str, field: str, engine=None) -> pd.Series | None:
 def flows_status(engine=None) -> dict:
     """investor_flows 적재 현황 — 행수/종목수/날짜범위/세부주체 보유. 테이블 없으면 0(정직)."""
     out = {"rows": 0, "tickers": 0, "min_date": None, "max_date": None, "has_detail": False}
-    engine = _get_engine(engine)
+    try:
+        # ★엔진 생성 자체가 던질 수 있다★ (드라이버 미설치 등) — 그 경우도 "적재 0" 이라는
+        # 정직한 답이지 500 이 아니다. 이 줄이 try 밖에 있어서 상태 조회 엔드포인트가
+        # psycopg2 없는 환경에서 통째로 실패했다(Phase 8b 에서 발견).
+        engine = _get_engine(engine)
+    except Exception:
+        return out
     if engine is None:
         return out
     try:

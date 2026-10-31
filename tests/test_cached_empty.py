@@ -39,8 +39,10 @@ def test_empty_result_retries_after_short_ttl(monkeypatch):
     assert st.cached("ffl:900002", builder) == {}
     # 빈값의 in-memory TTL을 지난 것으로 시뮬레이션
     with st._lock:
-        ts, v = st._cache["ffl:900002"]
-        st._cache["ffl:900002"] = (ts - (mb.EMPTY_RETRY_TTL + 1), v)
+        # ★스코프된 키로 읽고 쓴다★ — `cached()` 가 모드를 붙인다(`mock_base._scoped`).
+        _k = st._scoped("ffl:900002")
+        ts, v = st._cache[_k]
+        st._cache[_k] = (ts - (mb.EMPTY_RETRY_TTL + 1), v)
     assert st.cached("ffl:900002", builder) == {"roe": 5.0}   # 재시도로 실값 획득
     assert writes and writes[-1][1] == {"roe": 5.0}           # 실값만 영속
 
@@ -57,4 +59,5 @@ def test_normal_value_persisted_once(monkeypatch):
     writes: list = []
     st = _persist_on(monkeypatch, _Store(), writes)
     assert st.cached("ffl:900004", lambda: {"per": 9.9}) == {"per": 9.9}
-    assert len(writes) == 1 and writes[0][0] == "ffl:900004"
+    # ★영속 키도 모드로 갈린다★ — 규칙을 여기서 재조립하지 않고 `_scoped()` 를 쓴다.
+    assert len(writes) == 1 and writes[0][0] == st._scoped("ffl:900004")

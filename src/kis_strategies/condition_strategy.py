@@ -42,7 +42,19 @@ _PRICE_COL = {
 }
 
 
-def _base_series(df: pd.DataFrame, token: str) -> pd.Series | None:
+def _base_series(df: pd.DataFrame, token: str, *, macro_ctx=None) -> pd.Series | None:
+    """토큰 → 시리즈.
+
+    ★`macro_ctx` 가 매크로의 시점을 정한다★
+      · 없음 → 매크로는 **라이브**(오늘 최신값). 스크리너·실시간 경로가 그렇고,
+        거기서는 그것이 맞다.
+      · 있음 → 백테스트다. 매크로는 그 봉 시점의 빈티지로 평가되고, 그러지 못한
+        토큰은 ctx 에 **룩어헤드로 라벨**된다.
+
+    ★백테스트 경로에서 `macro_ctx` 를 빠뜨리면 조용히 룩어헤드가 된다★ — 결과만
+    보고는 알 수 없으므로 `tests/test_macro_pit_context.py` 의 정적 트립와이어가
+    호출부를 검사한다.
+    """
     name = (token or "").strip().strip("{}").strip()
     col = _PRICE_COL.get(name)
     if col is not None:
@@ -57,7 +69,15 @@ def _base_series(df: pd.DataFrame, token: str) -> pd.Series | None:
         resolve_market_token,
         resolve_ohlcv_token,
     )
-    for resolver in (resolve_ohlcv_token, resolve_market_token, resolve_macro_token,
+
+    def _macro(frame, tok):
+        if macro_ctx is not None:
+            from src.kis_strategies.macro_pit_context import is_macro_token
+            if is_macro_token(tok):
+                return macro_ctx.resolve(frame, tok)
+        return resolve_macro_token(frame, tok)
+
+    for resolver in (resolve_ohlcv_token, resolve_market_token, _macro,
                      resolve_flow_token):
         s = resolver(df, name)
         if s is not None:
@@ -243,8 +263,9 @@ def _apply_two_factor(s1: pd.Series, s2: pd.Series, fn: str) -> pd.Series | None
 
 
 # ── 단일 조건 평가 → True / False / None(평가 불가) ───────────
-def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = None) -> bool | None:
-    s = _base_series(df, cond.get("factor_token", ""))
+def _eval_condition(df: pd.DataFrame, cond: dict, fundamentals: dict | None = None,
+                    *, macro_ctx=None) -> bool | None:
+    s = _base_series(df, cond.get("factor_token", ""), macro_ctx=macro_ctx)
     if (s is None or len(s) == 0) and fundamentals is not None:
         fv = _fundamental_value(cond.get("factor_token", ""), fundamentals)
         if fv is not None:
@@ -380,6 +401,35 @@ class ConditionStrategy(BaseStrategy):
         self._expr_panels: dict = {}   # 산술식 내부 횡단면 패널 {canonical key: DataFrame}
         self._sig: dict = {}     # 벡터화 시그널 캐시 {ticker: Series[date → 0/1/2]}
         self._pit_base_cache: dict = {}  # 종목별 PIT 재무 패널 캐시 (financials_history 기반)
+        self._fund_cache: dict = {}      # per-bar 폴백용 종목별 펀더멘털 캐시(스냅샷은 날짜 무관 상수)
+        # 실행 스코프 매크로 시점(PIT) 컨텍스트. ★None 이면 매크로는 라이브★
+        # (스크리너·실시간 경로). 백테스트 엔진이 실행 달력을 확정한 뒤 심는다.
+        self._macro_ctx = None
+        # 실행 스코프 재무 공시일(PIT) 컨텍스트. ★None 이면 정적 시차 추정★
+        # (스크리너·실시간 경로 — 거기서는 그것이 맞다). 백테스트 엔진이 심는다.
+        self._fund_ctx = None
+
+    def set_fund_ctx(self, ctx) -> None:
+        """재무 공시일 컨텍스트를 심는다 — ★`prepare_panel` 보다 먼저★.
+
+        ★생성자 kwarg 로 받지 않는 이유는 `set_macro_ctx` 와 같다★ — `__init__`
+        이 `**_ignore` 라 이름을 한 글자 틀리면 조용히 삼켜지고, 그러면 백테스트가
+        아무 표시 없이 추정 시차로 돈다.
+
+        ★캐시를 비운다★ 늦게 심으면 라벨 없이 만들어진 패널이 `_pit_base_cache`
+        에 남아 조용히 이긴다.
+        """
+        self._fund_ctx = ctx
+        self._pit_base_cache = {}
+
+    def set_macro_ctx(self, ctx) -> None:
+        """매크로 시점 컨텍스트를 심는다 — ★`prepare_panel` 보다 먼저★.
+
+        ★생성자 kwarg 로 받지 않는 이유★ `__init__` 이 `**_ignore` 라 이름을 한 글자
+        틀리면 조용히 삼켜지고, 그러면 백테스트가 아무 표시 없이 라이브(룩어헤드)로
+        돈다. 전용 setter 는 오타가 `AttributeError` 로 드러난다.
+        """
+        self._macro_ctx = ctx
 
     @property
     def name(self) -> str:
@@ -414,13 +464,21 @@ class ConditionStrategy(BaseStrategy):
                     default=0)
         return max(base, tok + 10) + logic
 
+    def _cached_fundamentals(self, stock_code: str) -> dict:
+        """`_load_fundamentals`의 인스턴스 캐시 — 스냅샷은 날짜 무관 상수라 per-bar 폴백에서
+        같은 종목을 매 시뮬레이션일 재조회하지 않는다(벡터화 경로의 prepare_panel fund_cache와
+        동일 취지, 이쪽은 generate_signal 호출부용)."""
+        if stock_code not in self._fund_cache:
+            self._fund_cache[stock_code] = _load_fundamentals(stock_code)
+        return self._fund_cache[stock_code]
+
     def generate_signal(self, stock_code: str, stock_name: str) -> Signal:
         df = data_fetcher.get_daily_prices(stock_code, self.required_days)
         if df is None or df.empty or len(df) < 2:
             return Signal(stock_code=stock_code, stock_name=stock_name,
                           action=Action.HOLD, strength=0.0, reason="데이터 부족")
 
-        fund = _load_fundamentals(stock_code) if self.allow_snapshot_fundamentals else None
+        fund = self._cached_fundamentals(stock_code) if self.allow_snapshot_fundamentals else None
 
         # per-bar도 벡터화와 동일한 _signal_hits 단일 경로 — 조건 시계열 전체를 평가해
         # 마지막 봉 판정. (스칼라 별도 경로는 토큰 종류마다 비일관 위험: 횡단면 날짜 포맷,
@@ -474,11 +532,34 @@ class ConditionStrategy(BaseStrategy):
                     return True
         return any(a is not None and expr_tokens(a) & SCORE_TOKENS for a in asts)
 
+    def _measure_macro_revision(self, ohlcv_map: dict) -> None:
+        """개정이 매크로 레그 판정을 뒤집었는지 잰다 — ★실행당 토큰 1회★.
+
+        매크로 계열은 종목과 무관하므로 프레임 하나만 있으면 된다. 종목마다 재면
+        같은 답을 종목 수만큼 계산한다.
+        """
+        ctx = getattr(self, "_macro_ctx", None)
+        if ctx is None or not ohlcv_map:
+            return
+        from src.kis_strategies.macro_pit_context import is_macro_token
+        df = next(iter(ohlcv_map.values()))
+        by_token: dict[str, list] = {}
+        for c in (self.buy_conditions + self.sell_conditions):
+            name = (c.get("factor_token") or "").strip().strip("{}").strip()
+            if name and is_macro_token(name):
+                by_token.setdefault(name, []).append(c)
+        for name, conds in by_token.items():
+            try:
+                ctx.measure_revision(name, df, conds)
+            except Exception as e:  # noqa: BLE001 — 측정 실패가 백테스트를 막지 않는다
+                logger.debug(f"macro revision measurement skipped ({name}): {e}")
+
     def prepare_panel(self, ohlcv_map: dict) -> None:
         """순위/비율·점수·산술식 패널 사전계산. 엔진이 봉 루프 전에 1회 호출(전 종목 동일시점 값 필요)."""
         self._panels = {}
         self._score_panels = {}
         self._expr_panels = {}
+        self._measure_macro_revision(ohlcv_map)
         # 점수 근사 패널 — 조건이 점수 토큰을 참조할 때만 (성장·가치 레그는 펀더멘털 토글 시)
         if ohlcv_map and self._references_score():
             try:
@@ -552,7 +633,7 @@ class ConditionStrategy(BaseStrategy):
             cols: dict = {}
             for tk, odf in ohlcv_map.items():
                 try:
-                    s = _base_series(odf, token)
+                    s = _base_series(odf, token, macro_ctx=self._macro_ctx)
                     if s is None or len(s) == 0:
                         continue
                     # 내부 지표(중첩): 순위(변화율_기간(종가,20)) — 파생 시리즈를 랭킹 대상으로
@@ -584,16 +665,22 @@ class ConditionStrategy(BaseStrategy):
     # ═══════════════════════════════════════════════════════════════════════
 
     def precompute_signals(self, ohlcv_map: dict) -> None:
-        """종목별 매수/매도 조건을 전체 시계열에 1회 평가 → 봉별 액션 코드 캐시."""
+        """종목별 매수/매도 조건을 전체 시계열에 1회 평가 → 봉별 액션 코드 캐시.
+
+        ★격리 중요★: 종목별 try/except — 실데이터는 200종목 중 일부가 펀더멘털 결측·
+        상장초기 이력부족 등으로 평가 예외를 던질 수 있다(정상). 예외를 전체 루프
+        밖에서 잡으면 그 한 종목 때문에 전 종목의 _sig가 통째로 비워져 나머지 199종목까지
+        비싼 per-bar 폴백(_generate_signal_as_of, O(종목수×기간))으로 떨어져 백테스트가
+        수십 초에서 수십 분으로 느려진다 — 실측: 종목 1개 예외만으로 5배+ 슬로다운.
+        종목별로 격리하면 그 종목만 개별 폴백하고 나머지는 벡터화를 유지한다."""
         self._sig = {}
         if not (self.buy_conditions or self.sell_conditions) or not ohlcv_map:
             return
-        try:
-            for tk, df in ohlcv_map.items():
+        for tk, df in ohlcv_map.items():
+            try:
                 self._sig[str(tk)] = self._precompute_ticker(str(tk), df)
-        except Exception as e:
-            logger.debug(f"precompute_signals 실패 — per-bar 폴백: {e}")
-            self._sig = {}
+            except Exception as e:
+                logger.debug(f"precompute_signals({tk}) 실패 — 이 종목만 per-bar 폴백: {e}")
 
     def _precompute_ticker(self, tk: str, df: pd.DataFrame) -> pd.Series:
         import numpy as np
@@ -738,50 +825,168 @@ class ConditionStrategy(BaseStrategy):
             rows = load_history(tk)
         except Exception:
             return None
-        if not rows:
-            return None
+        # ★공시 시차 상수는 한 곳에만 있다★ 여기 리터럴 90/45 가 한 벌 더 있었다.
+        # 두 값이 우연히 같아 아무도 몰랐지만, 갈라지면 **조용히** 갈라진다 —
+        # 스크리너는 바뀌고 백테스트는 안 바뀌는데 둘 다 "공시 시차" 라 부른다.
+        # `company_snapshot_builder.publication_dates` 가 같은 자리에서 같은
+        # 방식으로 가져온다(함수 안 import 라 몽키패치가 실제로 반영된다 —
+        # `test_fundamentals_pit_wiring.py` 가 그것을 건다).
+        from src.engine.pit_store import (
+            ANNUAL_LAG_DAYS,
+            DISCLOSURE_LAG_DAYS,
+            FILING_SAME_DAY_GUARD_DAYS,
+            REPRT_ANNUAL,
+        )
         _PEND = {"11013": (3, 31), "11012": (6, 30), "11014": (9, 30), "11011": (12, 31)}
-        recs = []
-        for r in rows:
-            pe = _PEND.get(r.get("reprt"))
-            if not pe:
-                continue
+
+        # ★재무 공시일의 출처 — 기간 단위 병합이지 전환이 아니다★
+        #
+        # `financials_vintages`(V2)에 그 기간의 빈티지가 있으면 **실측 접수일**과
+        # **그 빈티지의 값**을 쓴다. 없으면 지금까지처럼 정적 시차로 추정하되
+        # 라벨을 단다. ★통째로 갈아타면 안 된다★ — 빈티지는 V2 이후로만 쌓이고
+        # `existing_keys` 가 3-튜플이라 이미 적재된 기간은 재조회되지 않는다.
+        # 지금 DB 는 비어 있으므로 전환하면 PIT 재무 조건이 전부 NaN 이 된다.
+        #
+        # ★값도 빈티지의 것을 쓴다★ `financials_history` 는 정정이 원본을 덮은
+        # **뒤**의 값이라, 날짜만 실측으로 바꾸고 값을 거기서 가져오면 개정본이
+        # 과거 봉에 들어간다 — 막으려던 룩어헤드가 다른 문으로 돌아온다.
+        ctx = getattr(self, "_fund_ctx", None)
+        vmap: dict = {}
+        v_unknown = False
+        if ctx is not None:
             try:
-                end = _dt.date(int(r["year"]), pe[0], pe[1])
-            except Exception:
-                continue
-            lag = 90 if r["reprt"] == "11011" else 45
-            af = ANNUALIZE_FACTOR.get(r["reprt"], 1.0)
+                vmap, _v_reason = ctx.vintages_by_period(tk)
+                v_unknown = bool(_v_reason)
+            except Exception as e:  # noqa: BLE001
+                # ★여기서 예외가 새면 조용히 무력화된다★ `_pit_fund_series` 가
+                # 예외를 통째로 삼켜 패널을 None 으로 만들고, 그러면 PIT 재무
+                # 조건이 화면에 아무 표시 없이 건너뛰어진다. 추정으로 내려간다.
+                logger.warning("재무 빈티지 판정 실패 (%s) — 정적 시차 추정으로 "
+                               "내려갑니다: %s", tk, e)
+                vmap, v_unknown = {}, False
+
+        by_hist = {}
+        for r in rows or []:
+            if str(r.get("reprt")) in _PEND:
+                try:
+                    by_hist[(int(r["year"]), str(r["reprt"]))] = r
+                except Exception:  # noqa: BLE001 — 연도를 못 읽는 행은 축에 못 놓는다
+                    continue
+        vmap = {k: v for k, v in vmap.items() if str(k[1]) in _PEND}
+
+        if not by_hist and not vmap:
+            if ctx is not None:
+                try:
+                    ctx.note_no_financials(tk)
+                except Exception:  # noqa: BLE001
+                    pass
+            return None
+
+        def _mk(row, reprt: str, avail, year: int) -> dict:
+            af = ANNUALIZE_FACTOR.get(reprt, 1.0)
 
             def _v(val, annualize=False, _af=af):
                 # 원 → 억. 손익(annualize=True)은 분기 누적 → 연환산.
                 return (val * (_af if annualize else 1.0) / 1e8) if val is not None else None
-            recs.append({
-                "avail": end + _dt.timedelta(days=lag),
-                "net_income": _v(r.get("net_income"), True),
-                "revenue": _v(r.get("revenue"), True),
-                "operating_profit": _v(r.get("operating_profit"), True),
-                "operating_cf": _v(r.get("operating_cf"), True),
-                "total_equity": _v(r.get("total_equity")),
-                "total_liabilities": _v(r.get("total_liabilities")),
-                "shares": r.get("shares_outstanding"),
-            })
+            return {
+                "avail": avail,
+                # ★기간 순서★ — 아래 step-forward 가 역전을 막는 데 쓴다.
+                "seq": year * 12 + _PEND[reprt][0],
+                "net_income": _v(row.get("net_income"), True),
+                "revenue": _v(row.get("revenue"), True),
+                "operating_profit": _v(row.get("operating_profit"), True),
+                "operating_cf": _v(row.get("operating_cf"), True),
+                "total_equity": _v(row.get("total_equity")),
+                "total_liabilities": _v(row.get("total_liabilities")),
+                "shares": row.get("shares_outstanding"),
+            }
+
+        recs = []
+        n_meas = n_est = n_unk = 0
+        for key in sorted(set(by_hist) | set(vmap)):
+            year, reprt = int(key[0]), str(key[1])
+            vints = vmap.get(key)
+            if vints:
+                # ★기간당 하나로 줄이지 않는다★ 최초 공시만 쓰면 정정을 영원히 못
+                # 보고, 최종 정정만 쓰면 정정 전 봉이 **미래의 값**을 본다. 각
+                # 빈티지가 각자의 접수일부터 값을 주는 것이 실제로 일어난 일이다.
+                used = 0
+                for v in vints:
+                    try:
+                        filed = _dt.date.fromisoformat(str(v["rcept_dt"]))
+                    except Exception:  # noqa: BLE001 — 접수일을 못 읽으면 빈티지가 아니다
+                        continue
+                    recs.append(_mk(v, reprt,
+                                    filed + _dt.timedelta(days=FILING_SAME_DAY_GUARD_DAYS),
+                                    year))
+                    used += 1
+                if used:
+                    n_meas += 1
+                    continue
+            r = by_hist.get(key)
+            if r is None:
+                continue
+            try:
+                end = _dt.date(year, _PEND[reprt][0], _PEND[reprt][1])
+            except Exception:
+                continue
+            lag = ANNUAL_LAG_DAYS if reprt == REPRT_ANNUAL else DISCLOSURE_LAG_DAYS
+            recs.append(_mk(r, reprt, end + _dt.timedelta(days=lag), year))
+            if v_unknown:
+                n_unk += 1          # ★미상 ≠ 추정★ — 확인 못 한 것을 추정이라 하지 않는다
+            else:
+                n_est += 1
+        if ctx is not None:
+            try:
+                ctx.record(tk, measured=n_meas, estimated=n_est, unknown=n_unk)
+            except Exception:  # noqa: BLE001
+                pass
         if not recs:
             return None
-        recs.sort(key=lambda x: x["avail"])
+        # ★같은 날 접수★ 회사가 밀린 사업보고서와 분기보고서를 같은 날 낼 수 있고,
+        # 그러면 `avail` 이 겹쳐 답이 정렬에 달린다. `seq` 를 2차 키로 둬 삽입
+        # 순서와 무관하게 만든다. ★정직하게 적어 둔다 — 오늘은 동치다★ 위에서
+        # 키 합집합을 `sorted()` 로 돌아 삽입 순서가 이미 기간 순서라, `seq` 를
+        # 빼도 안정 정렬이 같은 답을 낸다(변이 테스트가 그걸 확인했다). 삽입
+        # 순서가 바뀌는 날을 대비한 명시일 뿐, 지금 무언가를 고치고 있지는 않다.
+        recs.sort(key=lambda x: (x["avail"], x["seq"]))
         fields = ("net_income", "revenue", "operating_profit", "operating_cf",
                   "total_equity", "total_liabilities", "shares")
         cols: dict = {f: [] for f in fields}
         cur = dict.fromkeys(fields)
         ri = 0
-        for d in df.index:
+        cur_seq = -1
+        # ★두 경로가 같은 날짜를 봐야 한다★
+        # 예전에는 `df.index` 를 직접 돌며 `d.date()` 를 불렀다. 그런데 per-bar 폴백
+        # 경로가 넘기는 프레임은 `RangeIndex` + `date` 컬럼이라(엔진의
+        # `_generate_signal_as_of` 가 그렇게 만든다) 정수 라벨에 `.date` 가 없고,
+        # `bd` 가 항상 None → `cur` 가 끝까지 비어 **패널이 통째로 NaN** 이 됐다.
+        # `if not panel` 가드는 NaN Series 의 dict 가 truthy 라 잡지 못한다.
+        # 즉 PIT 재무 조건이 폴백 경로에서 **조용히 전부 건너뛰어졌다.**
+        #
+        # ★이 저장소는 이 부류를 이미 한 번 고쳤다 — 그 헬퍼를 쓴다★
+        # `factor_tokens._df_dates` 가 시장·매크로·수급 토큰에서 똑같은 사고를
+        # 겪고 만들어졌다(그 독스트링에 사고가 적혀 있다). 새로 만들지 않는다.
+        from src.kis_strategies.factor_tokens import _df_dates
+        _dates = _df_dates(df)
+        for d in _dates:
             bd = d.date() if hasattr(d, "date") else None
             if bd is not None:
                 while ri < len(recs) and recs[ri]["avail"] <= bd:
-                    for f in fields:
-                        if recs[ri][f] is not None:
-                            cur[f] = recs[ri][f]
+                    rec = recs[ri]
                     ri += 1
+                    # ★늦게 접수된 과거 기간이 최신 기간을 덮지 않는다★
+                    # 추정 시차에서는 `avail` 순서가 곧 기간 순서라(12/31+90 <
+                    # 3/31+45 < …) 이 루프가 **우연히** 안전했다. 실측 접수일에서는
+                    # 아니다 — 1년 늦게 낸 사업보고서가 그 사이 분기 값을 덮는다.
+                    # 그러면 패널이 조용히 낡고, 영원히 데이터 버그처럼 보인다.
+                    # ★추정만 쓸 때 이 가드는 아무 일도 하지 않는다★
+                    if rec["seq"] < cur_seq:
+                        continue
+                    cur_seq = rec["seq"]
+                    for f in fields:
+                        if rec[f] is not None:
+                            cur[f] = rec[f]
             for f in fields:
                 cols[f].append(cur[f])
         panel = {f: pd.Series(cols[f], index=df.index, dtype="float64") for f in fields}
@@ -795,13 +1000,18 @@ class ConditionStrategy(BaseStrategy):
         """PIT 펀더멘털 토큰 → 봉별 시계열 (financials_history 적재 시). 미적재/미지원이면 None."""
         if os.getenv("BACKTEST_PIT_FUNDAMENTALS", "1") == "0" or name not in _PIT_FUND_TOKENS:
             return None
-        panel = self._pit_base_cache.get(tk, _PIT_UNBUILT)
+        # ★패널은 `df.index` 에 묶여 있다★ 종목 키만으로 캐시하면, 봉마다 길이가
+        # 다른 슬라이스를 넘기는 폴백 경로가 **길이가 안 맞는 패널**을 돌려받는다
+        # (그러면 `_signal_hits` 의 마스크 길이가 어긋나 예외가 나고, 그 종목이
+        # 통째로 per-bar 폴백으로 떨어진다 — 5배+ 슬로다운의 원인 중 하나).
+        key = (tk, len(df))
+        panel = self._pit_base_cache.get(key, _PIT_UNBUILT)
         if panel is _PIT_UNBUILT:
             try:
                 panel = self._build_pit_base(tk, df)
             except Exception:
                 panel = None
-            self._pit_base_cache[tk] = panel
+            self._pit_base_cache[key] = panel
         if not panel:
             return None
         ni, te, rev = panel["net_income"], panel["total_equity"], panel["revenue"]
@@ -846,7 +1056,7 @@ class ConditionStrategy(BaseStrategy):
             if panel is None or str(tk) not in panel.columns:
                 return None
             return pd.Series(panel[str(tk)].reindex(_date_keys(df)).values, index=df.index)
-        s = _base_series(df, cond.get("factor_token", ""))
+        s = _base_series(df, cond.get("factor_token", ""), macro_ctx=self._macro_ctx)
         if s is None or len(s) == 0:
             # ① PIT 우선 — 봉별 시점 재무(financials_history). look-ahead 없음·allow_snapshot 무관.
             pit = self._pit_fund_series(tk, name, df)

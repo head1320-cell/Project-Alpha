@@ -32,6 +32,13 @@ def run(monkeypatch, rows, **kw):
     df = make_df(rows)
     import src.data.ohlcv_loader as loader
     monkeypatch.setattr(loader, "load_ohlcv_unified", lambda ticker, *a, **k: df.copy())
+    # ★이 파일의 픽스처는 "신호 봉 = 체결 봉" 을 전제로 손으로 짜였다★ — 점프봉
+    # 하나에 신호와 래더 도달을 같이 넣어 두었다. 그 전제는 예전 기본값
+    # (`signal_lag=0`)에서 **암묵적**이었고, 기본값이 1로 바뀌자 드러났다(AG).
+    # ★단언을 느슨하게 하는 대신 전제를 명시한다★ — 여기 주제는 래더 산식이지
+    # 신호 시차가 아니다. 그리고 그 전제가 가렸던 사각지대(래더가 `lag>=1` 에서도
+    # 도는가)는 아래 `test_a_ladder_fills_the_bar_after_the_signal` 이 덮는다.
+    kw.setdefault("signal_lag", 0)
     cfg = BacktestConfig(symbols=["000111"], strategy_name="Condition",
                          strategy_params={"buy_conditions": BUY, "sell_conditions": SELL},
                          start_date=START, end_date=df.index[-1].strftime("%Y-%m-%d"),
@@ -113,3 +120,29 @@ def test_ladder_weight_validation(monkeypatch):
     bad = [{"move_pct": 0.0, "weight_pct": 80.0}, {"move_pct": -1.0, "weight_pct": 40.0}]
     with pytest.raises(ValueError, match="비중 합"):
         run(monkeypatch, [(100, 100.5, 99.5, 100)], buy_ladder=bad)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ★사각지대★ — 래더가 **기본 시차**(`signal_lag=1`)에서도 도는가
+#
+# 위 넷은 전부 신호 봉에서 바로 체결하는 전제로 짜여 있었다. 그래서 운영 기본값
+# (신호는 전일 봉, 체결은 당일)에서 래더가 도는지는 **아무도 테스트하지 않았다**.
+# 기본값 변경이 그 구멍을 드러냈으니 구멍을 메운다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_a_ladder_fills_the_bar_after_the_signal(monkeypatch):
+    """신호는 06-04 봉에서 나고 래더는 **06-05 봉**에서 체결된다.
+
+    기준가는 그 전일(=신호 봉) 종가 110 이고, 단계는 110(0%)·107.8(-2%) 다.
+    ★체결일이 신호일이면 죽는다★ — 그게 기본값이 막으려던 룩어헤드다.
+    """
+    rows = [(100, 100.5, 99.5, 100),      # 06-03 — 무신호
+            (99, 111, 97.9, 110),          # 06-04 — +10% ★신호 봉★
+            (109, 111, 107.0, 110)]        # 06-05 — 래더 도달 봉
+    e = run(monkeypatch, rows, buy_fill_type="prev_close", buy_ladder=LADDER,
+            signal_lag=1)
+    buys = [t for t in e.trades if t.side == "buy"]
+    assert len(buys) == 2, [t.reason for t in buys]
+    assert {t.date for t in buys} == {"2024-06-05"}, "신호 봉에서 체결했다 — 룩어헤드"
+    assert abs(buys[0].price - 109.0) < 1e-9      # 0% 단계: min(110, 시가109)=109
+    assert abs(buys[1].price - 107.8) < 1e-9      # -2% 단계: min(107.8, 109)=107.8

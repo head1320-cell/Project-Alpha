@@ -18,14 +18,22 @@ _G_STEPS = (-0.010, -0.005, 0.0, 0.005, 0.010)
 _TV_GAP = 0.005                                    # g < ke - 0.5%p 발산 가드
 
 
+#: Rf 출처(`KR_10Y.source`) → 라벨. ★기본값은 관측이라 부르지 않고, 합성은 합성이라 부른다★ (BL3 W3-0)
+_RF_LABEL = {"BOK": "ECOS 국고채 10년 (최신 관측)", "MOCK": "연습용 합성 (mock) — 국고채 10년 대용"}
+_RF_DEFAULT_LABEL = "기본값 (국고채 10년 근사)"
+
+
 def resolve_default_params(code: str) -> dict:
-    """실측 기본 가정: Rf=ECOS 국고채10년, β=KIS 1년 실측. 실패 시 표준 기본값+출처 라벨."""
-    rf, rf_source = 0.035, "기본값 (국고채 10년 근사)"
+    """기본 가정: Rf=국고채 10년, β=일봉 1년. 실패 시 표준 기본값 — ★라벨은 값이 실제로 어디서 왔는지만 말한다★."""
+    from src.data.mock_gate import mock_allowed
+
+    rf, rf_source = 0.035, _RF_DEFAULT_LABEL
     try:
-        from src.engine.regime_analyzer import get_dynamic_risk_free_rate
-        v = get_dynamic_risk_free_rate()
-        if v and 0.0 < v < 0.15:
-            rf, rf_source = round(float(v), 4), "ECOS 국고채 10년 (실시간)"
+        from src.engine import regime_analyzer as _ra
+        v, src = _ra.get_dynamic_risk_free_rate_with_source()
+        if v and 0.0 < v < 0.15 and src != "default":
+            rf = round(float(v), 4)
+            rf_source = _RF_LABEL.get(src, f"국고채 10년 (출처 {src} — 확인 안 됨)")
     except Exception:
         pass
     beta, beta_source = 1.0, "기본값"
@@ -33,7 +41,9 @@ def resolve_default_params(code: str) -> dict:
         from src.data.price_factors_store import PriceFactorsStore
         b = PriceFactorsStore.get_default().get_factors(code).get("beta_1y")
         if b and 0.1 <= float(b) <= 3.0:
-            beta, beta_source = round(float(b), 2), "KIS 1년 실측"
+            # mock 모드에선 스토어가 합성 팩터로 채운다(`_mock_factors`) — 실측이라 부르지 않는다
+            beta = round(float(b), 2)
+            beta_source = "연습용 합성 (mock)" if mock_allowed() else "일봉 1년 실측 (DB·KIS)"
     except Exception:
         pass
     return {"rf": rf, "rf_source": rf_source, "beta": beta, "beta_source": beta_source,

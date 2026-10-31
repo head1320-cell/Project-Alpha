@@ -20,8 +20,27 @@ class FICCEngine:
         Black-Scholes Greeks for European vanilla options.
         T in years, sigma as decimal (0.2 = 20%).
         """
-        if T <= 0 or sigma <= 0 or S <= 0:
-            return dict(Price=0, Delta=0, Gamma=0, Theta=0, Vega=0, Rho=0)
+        # ★불가능한 입력에 0 을 돌려주지 않는다★ (BL3 M2) — 예전에는 모든 값 0 이었다(가격 0 원 옵션을 지어냈다).
+        if S <= 0:
+            raise ValueError("기초자산 가격은 0보다 커야 해요.")
+        if K <= 0:
+            raise ValueError("행사가는 0보다 커야 해요.")
+        if sigma <= 0:
+            raise ValueError("변동성은 0보다 커야 해요.")
+        if T < 0:
+            raise ValueError("만기는 0 이상이어야 해요.")
+        if T == 0:
+            # 만기 — 내재가치만 남는다(예전에는 가격 0). 델타는 계단, 등가격에선 정의되지 않는다.
+            call = option_type.lower() == "call"
+            intrinsic = max(S - K, 0.0) if call else max(K - S, 0.0)
+            if S == K:
+                delta = None
+            elif call:
+                delta = 1.0 if S > K else 0.0
+            else:
+                delta = -1.0 if S < K else 0.0
+            return {"Type": option_type.upper(), "Price": round(intrinsic, 4), "Delta": delta,
+                    "Gamma": 0.0, "Theta": 0.0, "Vega": 0.0, "Rho": 0.0, "at_expiry": True}
 
         d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
         d2 = d1 - sigma * np.sqrt(T)

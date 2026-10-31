@@ -1,0 +1,155 @@
+{
+ "altman": {
+  "z": 2.09,
+  "zone": "회색지대 (1.8~3.0)",
+  "components": [
+   {
+    "id": "x1",
+    "label": "운전자본/총자산",
+    "weight": 1.2,
+    "value": 0.437,
+    "contribution": 0.524
+   },
+   {
+    "id": "x2",
+    "label": "이익잉여금(근사)/총자산",
+    "weight": 1.4,
+    "value": 0.049,
+    "contribution": 0.068
+   },
+   {
+    "id": "x3",
+    "label": "영업이익/총자산",
+    "weight": 3.3,
+    "value": 0.125,
+    "contribution": 0.414
+   },
+   {
+    "id": "x4",
+    "label": "시총/총부채",
+    "weight": 0.6,
+    "value": 0.605,
+    "contribution": 0.363
+   },
+   {
+    "id": "x5",
+    "label": "매출/총자산",
+    "weight": 1.0,
+    "value": 0.716,
+    "contribution": 0.716
+   }
+  ]
+ },
+ "beneish": {
+  "available": true,
+  "m_score": -2.41,
+  "flag": "안전 지대",
+  "note": "매출채권·감가상각·판관비 원천 미보유 → 해당 지수 중립(1.0) 처리",
+  "indices": [
+   {
+    "id": "dsri",
+    "label": "매출채권 지수",
+    "value": 1.0,
+    "basis": "neutral"
+   },
+   {
+    "id": "gmi",
+    "label": "매출총이익률 지수",
+    "value": 1.083,
+    "basis": "real"
+   },
+   {
+    "id": "aqi",
+    "label": "자산의 질 지수",
+    "value": 1.021,
+    "basis": "approx"
+   },
+   {
+    "id": "sgi",
+    "label": "매출성장 지수",
+    "value": 1.162,
+    "basis": "real"
+   },
+   {
+    "id": "depi",
+    "label": "감가상각률 지수",
+    "value": 1.0,
+    "basis": "neutral"
+   },
+   {
+    "id": "sgai",
+    "label": "판관비 지수",
+    "value": 1.0,
+    "basis": "neutral"
+   },
+   {
+    "id": "tata",
+    "label": "총발생액/총자산",
+    "value": -0.075,
+    "basis": "real"
+   },
+   {
+    "id": "lvgi",
+    "label": "레버리지 지수",
+    "value": 0.962,
+    "basis": "real"
+   }
+  ]
+ },
+ "coverage": {
+  "years": [
+   2019,
+   2020,
+   2021,
+   2022,
+   2023,
+   2024
+  ],
+  "interest_coverage": [
+   38.2,
+   41.5,
+   57.9,
+   51.3,
+   7.4,
+   36.6
+  ],
+  "net_debt_to_ebitda": [
+   -1.32,
+   -1.41,
+   -1.18,
+   -1.05,
+   -0.62,
+   -0.88
+  ],
+  "note": "이자비용=총부채×(Rf+2%p)·현금=유동자산×25%·EBITDA=영업이익+매출×5% 근사"
+ },
+ "rate_stress": {
+  "rows": [
+   {
+    "shock_bp": 0,
+    "interest_coverage": 36.6,
+    "dcf_value": 20596.0,
+    "unified_value": 34986.0
+   },
+   {
+    "shock_bp": 100,
+    "interest_coverage": 30.1,
+    "dcf_value": 16437.0,
+    "unified_value": 31649.0
+   },
+   {
+    "shock_bp": 200,
+    "interest_coverage": 25.6,
+    "dcf_value": 13096.0,
+    "unified_value": 28843.0
+   },
+   {
+    "shock_bp": 300,
+    "interest_coverage": null,
+    "dcf_value": null,
+    "unified_value": 26438.0
+   }
+  ],
+  "note": "충격=할인율 전체 평행이동(+Kd)"
+ }
+}

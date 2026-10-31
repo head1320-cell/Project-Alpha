@@ -100,7 +100,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
       return new Response(
         JSON.stringify({
           error: true,
-          detail: `분석이 너무 오래 걸려 시간이 초과되었습니다 (>${Math.round(timeoutMs / 1000)}초). `
+          detail: `분석이 너무 오래 걸려 시간이 초과되었어요 (>${Math.round(timeoutMs / 1000)}초). `
             + `유니버스 범위(종목 수)나 조건을 줄여 다시 시도하세요.`,
         }),
         { status: 504, headers: { "content-type": "application/json" } },
@@ -108,7 +108,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
     }
     // Genuinely unreachable backend → clear 502 (not a confusing generic 500).
     return new Response(
-      JSON.stringify({ error: true, detail: `백엔드에 연결할 수 없습니다 (${backendBase()}): ${msg}` }),
+      JSON.stringify({ error: true, detail: `백엔드에 연결할 수 없어요 (${backendBase()}): ${msg}` }),
       { status: 502, headers: { "content-type": "application/json" } },
     );
   }
