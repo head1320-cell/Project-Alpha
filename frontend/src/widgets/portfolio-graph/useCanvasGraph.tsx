@@ -7,7 +7,8 @@
  */
 import { useCallback, useMemo, type MutableRefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { BRANCH_HEAD, PORTFOLIO_NODE, fieldsOf, frameRect, viaOf, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { BRANCH_HEAD, PORTFOLIO_NODE, boxAria, branchAria, cardState, edgeAria, fieldsOf, frameRect, nodeAria, nodeIssues, viaOf,
+         type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { matchFilter } from "./canvasConfig";
@@ -93,12 +94,25 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
              rebalance: code ? rebalUi?.options?.[code] ?? null : null };
   }, [s.edges, s.nodes, shareByEdge, rebalUi]);
 
+  // 카드 번호 배지 = 흐름 순서(선 탭 '1. 종목 고르기' 와 같음) — 노드·선의 접근 이름(R6)도 같은 번호를 쓴다.
+  const num = useMemo(() => new Map(order.map((id, i) => [id, i + 1])), [order]);
+  const plainOf = useCallback((id: string) => {
+    const kind = s.nodes.find((x) => x.id === id)?.data.kind;
+    return s.catalog?.find((c) => c.type === kind)?.plain_label ?? kind ?? id;
+  }, [s.nodes, s.catalog]);
   const numbered = useMemo(() => {
-    const num = new Map(order.map((id, i) => [id, i + 1]));
     const picked = new Set(s.picked);
+    // 접근 이름(R6) — 번호 · 이름 · 상태 · 확인할 곳. 상태 말은 카드와 같은 `cardState`, 문제 수는 카드와 같은 `nodeIssues`.
+    const ariaOf = (id: string) => {
+      const result = s.report?.nodes[id];
+      const stale = staleSet.has(id);
+      const issues = nodeIssues(s.validation?.errors, id).length;
+      return nodeAria(num.get(id), plainOf(id), cardState({ live: result && !stale ? result.status : undefined, stale, hasResult: !!result, issues }),
+                      issues, s.running && !!s.runningIds?.includes(id));
+    };
     // 선택은 스토어가 진실 — 이야기 카드에서 고른 노드도, 상자로 여러 개 고른 노드도 캔버스에서 선택돼 보인다.
     const cards: Node[] = s.nodes.map((n) => ({
-      ...n, hidden: collapsedOf.has(n.id), selected: picked.has(n.id) || n.id === s.selectedId,
+      ...n, hidden: collapsedOf.has(n.id), selected: picked.has(n.id) || n.id === s.selectedId, ariaLabel: ariaOf(n.id),
       className: [path.has(n.id) && "pg-on-path",
                   keep && !keep.has(n.id) && "pg-dim",
                   cause && causeSet.has(n.id) && "pg-on-cause",
@@ -131,7 +145,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
       const outNode = collapsed && strat && g.output ? ms.find((n) => n.id === g.output) : undefined;
       const at = outNode ? { x: outNode.position.x, y: outNode.position.y } : { x: x0, y: y0 };
       return [{ id: `frame:${g.id}`, type: PG_GROUP_TYPE, position: at, zIndex: -1, selectable: false,
-               className: dimmed ? "pg-dim" : undefined,
+               className: dimmed ? "pg-dim" : undefined, ariaLabel: boxAria(strat, g.label, ms.length, collapsed),
                data: { groupId: g.id, label: g.label, collapsed, members: g.members, width: x1 - x0, height: y1 - y0,
                        kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
                        output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()],
@@ -145,13 +159,13 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
       const { x0, y0, x1, y1 } = frameRect(ms, s.catalog, BRANCH_HEAD)!;
       const root = s.nodes.find((n) => n.id === b.of_root);
       return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
-                className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined,
+                className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined, ariaLabel: branchAria(b.label, ms.length),
                 data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []),
                         rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
     });
     return [...frames, ...branchFrames, ...cards];
-  }, [s.nodes, s.groups, s.edges, order, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix, onSocket,
-      runToRef, previewRef, runStrategyRef, branchStrategyRef]);
+  }, [s.nodes, s.groups, s.edges, num, plainOf, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix, onSocket,
+      runToRef, previewRef, runStrategyRef, branchStrategyRef, s.report, staleSet, s.validation, s.running, s.runningIds]);
   /** 전달 점검 칩을 누르면(CF3b2) — 선을 누른 것과 같은 길(선 판) + 문제 줄로 내린다. */
   const onFlag = useCallback((edgeId: string) => {
     usePortfolioGraph.getState().selectEdge(edgeId);
@@ -194,10 +208,13 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
                                                          flag: wireFlag(s.report?.edges?.[e.id], staleSet.has(e.target)), onFlag,
                                                          waypoints: gs || gt ? [] : viaOf(e), proxy: !!(gs || gt), onTool },
              selected: e.id === s.selectedEdge,
+             // 접근 이름(R6) — React Flow 기본은 영어 'Edge from <id> to <id>'. 실제 두 끝(대리 선이어도)의 번호·이름 + 흐르는 값.
+             ariaLabel: edgeAria({ num: num.get(e.source), label: plainOf(e.source) }, { num: num.get(e.target), label: plainOf(e.target) },
+                                 typeLabel ?? "모르는 값", !!(gs || gt)),
              className: cls + (e.id === s.selectedEdge ? " pg-wire--picked" : "") + (e.id === dropWire ? " pg-wire--drop" : ""),
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
                       strokeWidth: look.width } };
     });
-  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire, onTool]);
+  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire, onTool, num, plainOf]);
   return { cause, live, stageOfNode, mmMark, bandOf, numbered, onFlag, edgesStyled };
 }

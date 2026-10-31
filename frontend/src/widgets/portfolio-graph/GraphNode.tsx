@@ -13,7 +13,7 @@
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type Node, type NodeProps } from "@xyflow/react";
 import { ChevronDown, ChevronRight, GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { cardFieldsOf, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeHeight, nodeSummary, PORT_GAP, PORT_TOP, slotBase, slotHeight, SLOT_MAX_K, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { cardFieldsOf, cardState, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeHeight, nodeIssues, nodeSummary, PORT_GAP, PORT_TOP, slotBase, slotHeight, SLOT_MAX_K, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { NodeWidgets } from "./NodeWidgets";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
@@ -37,7 +37,6 @@ export const STAGE_VAR: Record<string, string> = {
   build: "var(--pg-st-build)", check: "var(--pg-st-check)", act: "var(--pg-st-act)",
 };
 
-const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
 // 포트 줄 치수(PORT_TOP·PORT_GAP)는 배치(`size.ts`)와 한 자리 — 배치가 카드 높이를 같은 식으로 셈한다(BS2).
 
 export type CanvasNodeData = PgNodeData & {
@@ -163,7 +162,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   });
   const portBand = JSON.parse(portBandKey) as [string, number | null, string][];
   // 필수 입력이 비었는데 서버가 이미 말한 것(missing_input)은 아래 "이어 주세요" 한 줄로 쉽게 바꿔 보인다(같은 사실 — BN N3).
-  const errors = (validation?.errors ?? []).filter((e) => e.node_id === id && e.code !== "missing_input");
+  const errors = nodeIssues(validation?.errors, id);
   // 비어 있는 필수 입력 — 연결 규칙과 같은 판정(필수 · 들어오는 선 없음). 포트에 고리, 제목 아래 한 줄.
   const linkedIn = usePortfolioGraph((s) => s.edges.filter((e) => e.target === id).map((e) => e.targetHandle).join("|"));
   const runningHere = usePortfolioGraph((s) => s.running && !!s.runningIds?.includes(id));
@@ -200,7 +199,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   const ex = live?.explain;
   const headline = live?.status === "ok" ? ex?.headline : null;
   const summary = nodeSummary(entry, data.params ?? {});
-  const state = live?.status ?? (stale && result ? "stale" : errors.length ? "warn" : "idle");
+  // 상태 말은 노드 이름(aria — R6)과 한 구현: 점 색 · 먼 보기 글자 · 상태 줄이 모두 이것.
+  const st = cardState({ live: live?.status, stale, hasResult: !!result, issues: errors.length });
+  const state = st.key;
   // 제목 줄 경고(Blender) — 서버 trust 의 '지키지 못함'·'모름' 수. 설정 오류는 따로 빨갛게 적힌다.
   const warns = live?.status === "ok" ? (ex?.trust ?? []).filter((t) => t.state === "failed" || t.state === "unknown") : [];
   const glance = live?.status === "ok" ? live.glance ?? null : null;
@@ -223,7 +224,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         {outputs.map((x, i) => <Port key={`o-${x.p.name}`} port={x.p} side="out" index={i} unknown />)}
         {live && (
           <div className={`pg-node-status pg-node-status--${live.status}`}>
-            <span className="pg-node-status-k">{STATUS_TEXT[live.status]}</span>
+            <span className="pg-node-status-k">{st.text}</span>
             <span className="pg-node-status-why">{live.reason}</span>
           </div>
         )}
@@ -276,7 +277,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         <span className={`pg-node-far-v pg-node-far-v--${state}`}>
           {headline && headline.value !== null
             ? <>{Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit}</small></>
-            : live ? STATUS_TEXT[live.status] : stale && result ? "예전 결과" : "계산 전"}
+            : st.text}
         </span>
       </div>
       {/* 소켓 줄 자리 — 소켓(핸들·이름)은 아래 .pg-port 가 같은 높이에 그린다(포트 DOM 은 그대로 — E2E 계약). */}
@@ -352,7 +353,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
       </div>
       {live && (
         <div className={`pg-node-status pg-node-status--${live.status}`} title={live.reason ?? undefined}>
-          <span className="pg-node-status-k">{STATUS_TEXT[live.status]}</span>
+          <span className="pg-node-status-k">{st.text}</span>
           {live.reason && <span className="pg-node-status-why">{live.reason}</span>}
         </div>
       )}

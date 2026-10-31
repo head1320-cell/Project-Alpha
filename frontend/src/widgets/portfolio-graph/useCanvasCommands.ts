@@ -38,11 +38,13 @@ export interface CommandDeps {
   strategySources: { key: string; label: string; sub: string; src: Parameters<PgState["addStrategy"]>[0] }[];
   addStrategy: (src: Parameters<PgState["addStrategy"]>[0]) => void;
   loadTemplate: (key: string) => void;
+  /** 선 누르기와 같은 길(R6) — 초점 둔 선의 Enter·Space. */
+  pickEdge: (id: string) => void;
 }
 
 export function useCanvasCommands(s: PgState, d: CommandDeps) {
   const { run, runTo, updatePanels, fit, setCmdOpen, setFindOpen, setKeysOpen, setGoalOpen, setDrawer, focusRef, askFocus,
-          leftShown, rightShown, panels, cmdOpen, openSay, ai, strategySources, addStrategy, loadTemplate } = d;
+          leftShown, rightShown, panels, cmdOpen, openSay, ai, strategySources, addStrategy, loadTemplate, pickEdge } = d;
   // 단축키 — 입력 칸에 있을 때는 가로채지 않는다. Ctrl/⌘+Enter 계산 · Ctrl/⌘+D 복제 · Ctrl/⌘+A 모두 고르기 · Esc 관문 닫기 → 고르기 풀기.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,6 +59,14 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
       else if ((e.key === "?" || (e.key === "/" && e.shiftKey)) && !mod) { e.preventDefault(); setKeysOpen(true); }
       else if (mod && e.key === "Enter" && !st.running) { e.preventDefault(); void run(); }
       else if (e.shiftKey && e.key === "Enter" && !st.running && st.selectedId) { e.preventDefault(); void runTo(st.selectedId); }
+      // 초점 둔 선·노드의 Enter·Space = 누르기(R6) — ★감싸개 그 자체★에 초점일 때만(카드 안 입력 칸은 위에서 빠지고, 단추는 제 몫).
+      // React Flow 의 키보드 고르기는 화면의 '고른 선'(`selectedEdge`)을 바꾸지 못해 선이 골라지지 않았다. 노드는 누르기와 같게 고른 선도 푼다.
+      else if (!mod && !e.altKey && !e.shiftKey && (e.key === "Enter" || e.key === " ") && t
+               && (t.classList.contains("react-flow__edge") || t.classList.contains("react-flow__node"))) {
+        const id = t.getAttribute("data-id") ?? "";
+        if (t.classList.contains("react-flow__edge")) { e.preventDefault(); pickEdge(id); }
+        else if (!id.includes(":")) { e.preventDefault(); st.select(id); }
+      }
       else if (mod && k === "z" && !e.shiftKey) { e.preventDefault(); st.undo(); }
       else if (mod && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); st.redo(); }
       else if (mod && k === "c") { if (st.copy()) e.preventDefault(); }
@@ -81,7 +91,7 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [run, runTo, updatePanels, fit, focusRef, setCmdOpen, setFindOpen, setKeysOpen]);
+  }, [run, runTo, updatePanels, fit, focusRef, setCmdOpen, setFindOpen, setKeysOpen, pickEdge]);
 
   // 단계 레인(CF4b) — 켬/끔은 이 브라우저에 남긴다. 맞추기는 되돌리기 한 번 + 맞춰 보기.
   const toggleLanes = () => {

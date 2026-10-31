@@ -10,6 +10,8 @@ import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, pruneRemoved, type Slic
 /** 같은 노드의 설정을 잇달아 고친 때 · 끌기 한 번 = 한 단계(이 조각만 쓴다). */
 let lastParamEdit: { id: string; at: number } | null = null;
 let dragging = false;
+/** 화살표로 같은 노드를 잇달아 옮긴 때(R6) — 이어 누른 것은 한 단계(`updateParams`·상자 이름과 같은 규칙). */
+let lastKeyMove: { key: string; at: number } | null = null;
 
 type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "insertOnEdge" | "addNode" | "updateParams" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "resizeSlot" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
 
@@ -24,6 +26,13 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
     const drag = changes.find((c) => c.type === "position") as { dragging?: boolean } | undefined;
     if (structural) push();
     else if (drag?.dragging && !dragging) { dragging = true; push(); }          // 끌기 한 번 = 한 단계
+    else if (drag && drag.dragging === false && !dragging) {
+      // 화살표 이동(R6) — React Flow 는 끌기가 아닌 위치 바꾸기(키보드)를 dragging false 로 보낸다. 끌기 끝(앞서 true)과 구별해 기록한다.
+      const key = changes.flatMap((c) => (c.type === "position" ? [c.id] : [])).sort().join("|");
+      const now = Date.now();
+      if (!(lastKeyMove && lastKeyMove.key === key && now - lastKeyMove.at < COALESCE_MS)) push();
+      lastKeyMove = { key, at: now };
+    }
     if (drag && drag.dragging === false) dragging = false;
     set((s) => {
       const removed = new Set(changes.filter((c) => c.type === "remove").map((c) => (c as { id: string }).id));

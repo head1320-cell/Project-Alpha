@@ -66,6 +66,7 @@ import {
   type PgNode,
   type ProcedureSuggestion,
   type WorkflowStage,
+  ARIA_KO,
 } from "@/entities/portfolio-graph";
 import { CommandPalette } from "./CommandPalette";
 import { GateRail } from "./GateRail";
@@ -229,6 +230,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const frameDrag = useRef<{ id: string; recorded: boolean } | null>(null);
   /** 노드 끌기 시작 자리(R4) — 상자 그림은 끄는 동안 멤버를 따라 커지므로 넣기·빼기는 시작 자리의 상자로 판단한다. */
   const dragStart = useRef<PgNode[] | null>(null);
+  /** 마우스 끌기 중(R6) — 앞서 dragging true 를 보았다. 화살표 이동(dragging false 만)과 구별한다. */
+  const pointerDrag = useRef(false);
+  /** 선 누르기(R6) — 마우스와 초점 둔 선의 Enter·Space 가 같은 길: 선 고름 + 오른쪽 창. */
+  const pickEdge = useCallback((id: string) => {
+    usePortfolioGraph.getState().selectEdge(id);
+    updatePanels((p) => (p.right ? p : toggle(p, "right")));
+  }, [updatePanels]);
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
@@ -236,7 +244,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     // CF4a — 카드 하나를 끄는 중이면 다른 카드의 가장자리·가운데에 붙인다(여럿·묶음 상자는 붙이지 않는다). 위치는 격자(11)에 맞춘 뒤 오므로
     // 문턱은 화면 6px 에 격자 반 칸을 더한다 — 손이 6px 안으로 가져간 자리는 격자로 밀려도 붙는다.
     // 놓을 때(dragging false) React Flow 는 끌기 자리를 다시 보낸다 — 그 자리도 같은 규칙으로 붙여야 놓은 뒤 격자로 되밀리지 않는다.
-    const drags = changes.filter((c) => c.type === "position" && typeof c.dragging === "boolean" && c.position && !c.id.includes(":"));
+    // 정렬선 붙이기는 ★마우스 끌기만★(R6) — 화살표 이동도 dragging false 로 와서, 줄 맞은 노드가 한 칸을 못 가고 다른 카드 선에 붙었다(관측 y 0 → 8).
+    if (changes.some((c) => c.type === "position" && c.dragging === true)) pointerDrag.current = true;
+    const drags = pointerDrag.current
+      ? changes.filter((c) => c.type === "position" && typeof c.dragging === "boolean" && c.position && !c.id.includes(":")) : [];
     const c = drags.length === 1 ? drags[0] : null;
     if (c && c.type === "position" && c.position) {
       const at = c.position;
@@ -251,6 +262,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     } else if (changes.some((c) => c.type === "position" && c.dragging === false)) {
       setGuides([]);
     }
+    if (changes.some((c) => c.type === "position" && c.dragging === false)) pointerDrag.current = false;
     for (const c of changes) {
       if ("id" in c && c.id.startsWith("branch:")) continue;
       if ("id" in c && c.id.startsWith("frame:")) {
@@ -319,7 +331,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
 
   const { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, commands } = useCanvasCommands(s, {
     run, runTo, updatePanels, fit, setCmdOpen, setFindOpen, setKeysOpen, setGoalOpen, setDrawer, focusRef, askFocus,
-    leftShown, rightShown, panels, cmdOpen, openSay, ai, strategySources, addStrategy, loadTemplate });
+    leftShown, rightShown, panels, cmdOpen, openSay, ai, strategySources, addStrategy, loadTemplate, pickEdge });
 
   const focusNode = useCallback((id: string) => {
     usePortfolioGraph.getState().select(id);
@@ -633,11 +645,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
             onPaneClick={() => { s.select(null); s.selectEdge(null); if (s.cause) s.showCause(null); }}
             onEdgeMouseEnter={(_, e) => setHoverEdge(e.id)} onEdgeMouseLeave={() => setHoverEdge(null)}
-            onEdgeClick={(_, e) => { usePortfolioGraph.getState().selectEdge(e.id); updatePanels((p) => (p.right ? p : toggle(p, "right"))); }}
+            onEdgeClick={(_, e) => pickEdge(e.id)}
             onNodeDoubleClick={(_, n) => { if (n.id.startsWith("frame:")) s.setFocusGroup(n.id.slice(6)); }}
             deleteKeyCode={drawer || cmdOpen ? null : ["Backspace", "Delete"]}
             multiSelectionKeyCode={["Meta", "Control"]}
             selectionMode={SelectionMode.Partial}
+            ariaLabelConfig={ARIA_KO}
             defaultEdgeOptions={{ type: PG_WIRE_TYPE }}
             fitView
             fitViewOptions={{ padding: 0.08, maxZoom: 1 }}

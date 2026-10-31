@@ -1117,7 +1117,8 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   await expect(donut.locator(`li[data-port="${portOf(doc, a)}"] b`)).toHaveText("61.2%");
 
   // 선은 그대로 — 몫이 61 대 39 여도 합치기로 들어가는 두 선은 같은 굵기, 비중(Weights) 색.
-  const into = page.locator(`.react-flow__edge[aria-label$=" to ${pf.id}"] .react-flow__edge-path`);
+  // 받는 쪽으로 찾는다 — 선 id 는 `보내는.포트->받는.포트`(R6 부터 접근 이름은 한국어라 React Flow 의 영어 기본 이름에 기대지 않는다).
+  const into = page.locator(`.react-flow__edge[data-id*="->${pf.id}."] .react-flow__edge-path`);
   await expect(into).toHaveCount(2);
   const styles = await into.evaluateAll((ps) => ps.map((p) => [getComputedStyle(p).strokeWidth, getComputedStyle(p).stroke]));
   expect(new Set(styles.map((x) => x[0]))).toEqual(new Set(["3px"]));   // 합치기 s1·s2 는 필수 입력 — 굵기 3(CF3b1)
