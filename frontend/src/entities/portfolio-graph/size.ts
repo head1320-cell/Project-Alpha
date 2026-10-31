@@ -18,6 +18,8 @@ export const COL_GAP = 80;
 export const COL = NODE_W + COL_GAP;
 /** 위아래 카드 사이 틈. */
 export const ROW_GAP = 28;
+/** 묶음·전략 상자와 갈래 틀의 안쪽 여백 — 멤버 카드 둘레(R4 에서 `canvasGeometry` 에서 옮김 — 상자 규칙 `boxdrop.ts` 가 함께 쓴다). */
+export const GROUP_PAD = 28;
 
 /** 카드 안 치수 — `GraphNode` 의 CSS(globals.css "CF1 작업 노드")와 같은 값이다. */
 export const CARD_PAD_Y = 12;

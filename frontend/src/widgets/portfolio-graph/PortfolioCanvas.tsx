@@ -37,6 +37,7 @@ import "@xyflow/react/dist/style.css";
 import { Boxes, GitBranch, Filter, Maximize, Minus, MoreHorizontal, PanelRightOpen, Plus, Scale, Sparkles, X } from "lucide-react";
 import {
   BRIEF_MAX_W,
+  boxDropPlan,
   cardHeight,
   nodeHeight,
   placeNodes,
@@ -61,6 +62,7 @@ import {
   type GuideId,
   type GuideState,
   type Box,
+  type PgNode,
   type ProcedureSuggestion,
   type WorkflowStage,
 } from "@/entities/portfolio-graph";
@@ -220,6 +222,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
 
   /** 상자 끌기 한 번(R1) — 처음 움직인 때 한 번만 되돌리기 칸에 넣는다. */
   const frameDrag = useRef<{ id: string; recorded: boolean } | null>(null);
+  /** 노드 끌기 시작 자리(R4) — 상자 그림은 끄는 동안 멤버를 따라 커지므로 넣기·빼기는 시작 자리의 상자로 판단한다. */
+  const dragStart = useRef<PgNode[] | null>(null);
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
@@ -261,6 +265,21 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       rest.push(c);
     }
     if (rest.length) st.onNodesChange(rest);
+    // 상자에 끌어 넣기·빼기(R4) — 끄는 동안 넣을 상자를 빛내고, 놓으면 멤버를 옮긴다(끌기 한 단계에 함께 — 따로 기록하지 않는다).
+    const moving = rest.filter((c) => c.type === "position" && typeof c.dragging === "boolean");
+    if (moving.length) {
+      dragStart.current ??= st.nodes;                                            // 이 바꾸기를 넣기 전 — 끌기 시작 자리
+      const now = usePortfolioGraph.getState();
+      const plan = boxDropPlan(moving.map((c) => (c as { id: string }).id), now.nodes, dragStart.current, now.groups, now.catalog, now.focusGroup);
+      if (moving.some((c) => c.type === "position" && c.dragging)) {
+        now.setDropGroups([...new Set(plan.moves.flatMap((m) => (m.to ? [m.to] : [])))]);
+      } else {
+        now.setDropGroups([]);
+        dragStart.current = null;
+        const note = now.applyBoxMembership(plan);
+        if (note) now.setNote(note, plan.moves.length > 0);
+      }
+    }
   }, [numbered]);
 
   const { setValidateTick } = useDocSync(doc, s.catalog, persistWip && booted);

@@ -19,7 +19,7 @@
  */
 import { create } from "zustand";
 import type { Connection, Edge, EdgeChange, NodeChange } from "@xyflow/react";
-import type { ProcedureSuggestion, DraftBody, GraphBlock, GraphBranch, WorkflowStage, GraphDoc, GraphDocEdge, GraphDocNode, GraphGroup, NodeCatalogEntry, NodeStatus, PgNode, RunEvent, RunReport, ValidateReport } from "@/entities/portfolio-graph";
+import type { BoxPlan, ProcedureSuggestion, DraftBody, GraphBlock, GraphBranch, WorkflowStage, GraphDoc, GraphDocEdge, GraphDocNode, GraphGroup, NodeCatalogEntry, NodeStatus, PgNode, RunEvent, RunReport, ValidateReport } from "@/entities/portfolio-graph";
 import { staleNodes } from "@/entities/portfolio-graph/staleness";
 import type { GoalKey } from "@/entities/portfolio-graph/goals";
 import type { WireShape } from "./wirePath";
@@ -124,6 +124,8 @@ export interface PgState {
   stages: WorkflowStage[];
   /** 들어간 전략 상자(ComfyUI 서브그래프 들어가기) — 나머지는 흐리게, 상단에 빵부스러기. */
   focusGroup: string | null;
+  /** 끄는 노드를 놓으면 들어갈 상자(R4) — 그 상자가 빛난다. 화면 상태(되돌리기·문서에 없음). */
+  dropGroups: string[];
   /** 캔버스 필터(Dataiku) — 맞지 않는 노드·선을 흐린다. 여러 개면 하나라도 맞으면 남긴다. */
   filters: FilterKey[];
   /** 내 블록(이 브라우저) — 저장소를 못 쓰면 `blocksAvailable: false`(없음과 다르다). 신뢰 저장은 파일. */
@@ -193,6 +195,9 @@ export interface PgState {
   renameGroup: (id: string, label: string) => void;
   /** 상자째 옮기기 — `record` 면 이번에 되돌리기 칸에 넣는다(끌기 시작 · R1). 움직였으면 true. */
   moveGroup: (id: string, dx: number, dy: number, record?: boolean) => boolean;
+  setDropGroups: (ids: string[]) => void;
+  /** 끌어 넣기·빼기 결과를 상자 멤버에 옮긴다(R4) — 되돌리기 칸에는 넣지 않는다(끌기 시작에 이미 한 단계). 돌려주는 값은 안내 한 줄(할 일이 없으면 null). */
+  applyBoxMembership: (plan: BoxPlan) => string | null;
   setMinimap: (v: boolean) => void;
   setLanes: (v: boolean) => void;
   setWireShape: (v: WireShape) => void;
@@ -325,6 +330,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     cause: null,
     stages: [],
     focusGroup: null,
+    dropGroups: [],
     filters: [],
     blocks: [],
     blocksAvailable: true,

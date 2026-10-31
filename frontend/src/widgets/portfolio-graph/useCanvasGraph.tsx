@@ -7,11 +7,10 @@
  */
 import { useCallback, useMemo, type MutableRefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { PORTFOLIO_NODE, nodeHeight, cardWidth, fieldsOf, viaOf, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { BRANCH_HEAD, PORTFOLIO_NODE, fieldsOf, frameRect, viaOf, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { portColor as portTypeColor } from "@/entities/portfolio-graph/ports";
 import { branchDiffs, PG_BRANCH_TYPE, type BranchFrameData } from "./Branches";
 import { matchFilter } from "./canvasConfig";
-import { GROUP_PAD } from "./canvasGeometry";
 import { PG_WIRE_TYPE, wireOf } from "./EvidenceEdge";
 import { PORT_PLAIN } from "./GraphNode";
 import { PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
@@ -102,14 +101,13 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
                   cause?.roots.includes(n.id) && "pg-cause-root"].filter(Boolean).join(" ") || undefined,
       data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current, onNeed, onFix, onSocket },
     }));
-    const frames: Node<GroupFrameData>[] = s.groups.map((g) => {
+    const frames: Node<GroupFrameData>[] = s.groups.flatMap((g) => {
       const ms = s.nodes.filter((n) => g.members.includes(n.id));
       const strat = g.kind === "strategy";
-      const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
-      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 30;
-      // 상자 경계는 카드의 실제 폭·배치 높이로(BS2 — 예전 176·150 은 실제 카드와 달랐다).
-      const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y + nodeHeight(n.data.kind, s.catalog, n.data.slotH))) + GROUP_PAD;
+      // 상자 경계는 카드의 실제 폭·배치 높이로(BS2 — 예전 176·150 은 실제 카드와 달랐다) — 끌어 넣기 판단(R4)과 같은 `frameRect`.
+      const f = frameRect(ms, s.catalog);
+      if (!f) return [];                                                          // 카드가 없는 상자는 그리지 않는다
+      const { x0, y0, x1, y1 } = f;
       const inside = new Set(g.members);
       const collapsed = collapsedOf.has(g.members[0] ?? "") && !!g.collapsed;
       const proxyIn = collapsed ? s.edges.filter((e) => inside.has(e.target) && !inside.has(e.source)).map((e) => {
@@ -128,22 +126,19 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
       // 자리는 여전히 노드에서 계산하므로 카드를 끌면 구성원이 함께 움직이는 규칙(차이만 옮김)은 그대로다.
       const outNode = collapsed && strat && g.output ? ms.find((n) => n.id === g.output) : undefined;
       const at = outNode ? { x: outNode.position.x, y: outNode.position.y } : { x: x0, y: y0 };
-      return { id: `frame:${g.id}`, type: PG_GROUP_TYPE, position: at, zIndex: -1, selectable: false,
+      return [{ id: `frame:${g.id}`, type: PG_GROUP_TYPE, position: at, zIndex: -1, selectable: false,
                className: dimmed ? "pg-dim" : undefined,
                data: { groupId: g.id, label: g.label, collapsed, members: g.members, width: x1 - x0, height: y1 - y0,
                        kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
                        output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()],
                        ...(strat ? shareOf(g.output ?? null) : { share: null, linked: false, rebalance: null }),
-                       onRunStrategy: runStrategyRef.current, onBranchStrategy: branchStrategyRef.current } };
+                       onRunStrategy: runStrategyRef.current, onBranchStrategy: branchStrategyRef.current } }];
     });
     // 갈래 틀(BM C3) — 복제 노드를 감싼 점선 상자. 바꾼 설정만 칩으로.
     const branchFrames: Node<BranchFrameData>[] = s.branches.flatMap((b) => {
       const ms = s.nodes.filter((n) => n.id in b.map);
       if (!ms.length) return [];
-      const x0 = Math.min(...ms.map((n) => n.position.x)) - GROUP_PAD;
-      const y0 = Math.min(...ms.map((n) => n.position.y)) - GROUP_PAD - 56;
-      const x1 = Math.max(...ms.map((n) => n.position.x + cardWidth(n.data.kind))) + GROUP_PAD;
-      const y1 = Math.max(...ms.map((n) => n.position.y + nodeHeight(n.data.kind, s.catalog, n.data.slotH))) + GROUP_PAD;
+      const { x0, y0, x1, y1 } = frameRect(ms, s.catalog, BRANCH_HEAD)!;
       const root = s.nodes.find((n) => n.id === b.of_root);
       return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
                 className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined,

@@ -77,6 +77,8 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
   const dive = usePortfolioGraph((s) => s.setFocusGroup);
   const saveBlock = usePortfolioGraph((s) => s.saveBlock);
   const running = usePortfolioGraph((s) => s.running);
+  // 끄는 노드를 놓으면 이 상자에 들어간다(R4) — 끄는 동안 빛난다.
+  const drop = usePortfolioGraph((s) => s.dropGroups.includes(data.groupId));
   const strategy = data.kind === "strategy";
   const ok = data.members.filter((m) => results?.[m]?.status === "ok").length;
   const blocked = data.members.filter((m) => results?.[m]?.status === "blocked").length;
@@ -91,7 +93,7 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
   }
   const minH = PROXY_TOP + Math.max(data.proxyIn.length, data.proxyOut.length) * PROXY_GAP + 10;
   return (
-    <div className={`pg-group${strategy ? ` pg-group--strategy pg-band-${data.color}` : ""}${data.collapsed ? " pg-group--collapsed" : ""}`}
+    <div className={`pg-group${strategy ? ` pg-group--strategy pg-band-${data.color}` : ""}${data.collapsed ? " pg-group--collapsed" : ""}${drop ? " pg-group--drop" : ""}`}
          data-group-id={data.groupId} data-kind={data.kind}
          style={{ width: data.collapsed ? 280 : data.width, height: data.collapsed ? undefined : data.height,
                   minHeight: data.collapsed ? minH : undefined }}>

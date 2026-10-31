@@ -14,7 +14,7 @@ export const ZOOM_NEAR = 1.05;
 export type ZoomLevel = "far" | "mid" | "near";
 export const zoomLevel = (z: number): ZoomLevel => (z < ZOOM_FAR ? "far" : z > ZOOM_NEAR ? "near" : "mid");
 /** 묶음 상자 여백·노드 카드 크기(대략) — 상자는 안의 노드를 감싸는 사각형이다. */
-export const GROUP_PAD = 28;
+export { GROUP_PAD } from "@/entities/portfolio-graph/size";
 /** 맞춰 보기의 안쪽 여백(px) — 위 64 = 선 범례·걸러 보기 판(10 + 36 + 여유), 아래 64 = 안내 줄. */
 const FIT_INSET = { top: 64, bottom: 64, left: 24, right: 24 } as const;
 /** 판 사이 가운데가 이보다 좁으면 선 범례·걸러 보기가 알약 아래 둘째 줄로 내려간다(BQ Q2) — 맞춰 보기 위 여백도 그만큼. */

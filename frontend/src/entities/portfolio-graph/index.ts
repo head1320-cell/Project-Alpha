@@ -18,6 +18,7 @@ export * from "./stocks";
 export * from "./quickadd";
 export * from "./compare";
 export * from "./size";
+export * from "./boxdrop";
 export * from "./swap";
 export * from "./josa";
 export * from "./ask";

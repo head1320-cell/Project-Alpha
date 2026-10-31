@@ -9,7 +9,7 @@ import { alignRects } from "./guides";
 import type { PgState } from "./store";
 import { uniqueLabel, nextSeq, newId, INSERT_GAP, bare, boxH, COALESCE_MS, type SliceCtx } from "./storeShared";
 
-type LayoutSlice = Pick<PgState, "autoLayout" | "alignPicked" | "addWaypoint" | "moveWaypoint" | "removeWaypoint" | "fitToLanes" | "groupPicked" | "strategyPicked" | "comparePicked" | "addStrategy" | "insertBlock" | "ungroup" | "toggleGroup" | "renameGroup" | "moveGroup" | "makeBranch" | "branchPicked" | "removeBranch" | "promoteBranch" | "loadBlocks" | "saveBlock" | "removeBlock">;
+type LayoutSlice = Pick<PgState, "autoLayout" | "alignPicked" | "addWaypoint" | "moveWaypoint" | "removeWaypoint" | "fitToLanes" | "groupPicked" | "strategyPicked" | "comparePicked" | "addStrategy" | "insertBlock" | "ungroup" | "toggleGroup" | "renameGroup" | "moveGroup" | "setDropGroups" | "applyBoxMembership" | "makeBranch" | "branchPicked" | "removeBranch" | "promoteBranch" | "loadBlocks" | "saveBlock" | "removeBlock">;
 
 /** 같은 상자 이름을 잇달아 고친 때 — 이어 친 글자는 한 단계(R1 · `updateParams` 와 같은 규칙). */
 let lastRename: { id: string; at: number } | null = null;
@@ -241,6 +241,28 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
           : n)),
       };
     });
+  },
+  setDropGroups: (ids) => set((s) => (s.dropGroups.length === ids.length && ids.every((x, i) => x === s.dropGroups[i]) ? {} : { dropGroups: ids })),
+  applyBoxMembership: (plan) => {
+    const s = get();
+    const labelOf = (id: string | null) => s.groups.find((g) => g.id === id)?.label ?? "";
+    if (plan.moves.length) {
+      set((st) => ({ groups: st.groups.map((g) => {
+        const out = new Set(plan.moves.filter((m) => m.from === g.id).map((m) => m.id));
+        const add = plan.moves.filter((m) => m.to === g.id).map((m) => m.id);
+        return out.size || add.length ? { ...g, members: [...g.members.filter((m) => !out.has(m)), ...add] } : g;
+      }).filter((g) => g.members.length > 0) }));                                // 마지막 멤버가 다른 상자로 가면 빈 상자는 없앤다(지우기와 같은 규칙)
+    }
+    // 안내 — 상자마다 몇 개를 넣고 뺐는지, 그리고 막힌 까닭(지어내지 않고 규칙이 준 문장 그대로).
+    const into = new Map<string, number>(), outOf = new Map<string, number>();
+    for (const m of plan.moves) {
+      if (m.to) into.set(m.to, (into.get(m.to) ?? 0) + 1);
+      else if (m.from) outOf.set(m.from, (outOf.get(m.from) ?? 0) + 1);
+    }
+    const said = [...[...into].map(([g, k]) => `‘${labelOf(g)}’ 상자에 노드 ${k}개를 넣었어요`),
+                  ...[...outOf].map(([g, k]) => `‘${labelOf(g)}’ 상자에서 노드 ${k}개를 뺐어요`)];
+    const text = [said.length ? `${said.join(" · ")}.` : "", ...[...new Set(plan.blocked.map((b) => b.why))]].filter(Boolean).join(" ");
+    return text || null;
   },
   moveGroup: (id, dx, dy, record = false) => {
     const g = get().groups.find((x) => x.id === id);

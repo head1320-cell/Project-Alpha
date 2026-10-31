@@ -4443,6 +4443,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* 묶음 상자 */
 .pg-group { position: relative; min-width: 220px; background: color-mix(in srgb, var(--pg-blue) 5%, transparent); border: 1.5px dashed color-mix(in srgb, var(--pg-blue) 40%, var(--pg-line)); border-radius: 20px; }
 .pg-group--collapsed { background: var(--pg-paper); border-style: solid; box-shadow: var(--pg-shadow); }
+/* 끌어 넣기(R4) — 끄는 노드를 놓으면 들어갈 상자. 점선이 실선이 되고 바탕이 조금 짙어진다. */
+.pg-group.pg-group--drop { border-style: solid; border-color: var(--pg-blue); background: color-mix(in srgb, var(--pg-blue) 12%, transparent); }
 .pg-group-head { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 8px; }
 .pg-theme .pg-group-toggle, .pg-theme .pg-group-x { display: grid; place-items: center; width: 26px; height: 26px; color: var(--pg-body); background: transparent; border: 0; border-radius: 7px; cursor: pointer; }
 .pg-theme .pg-group-toggle:hover, .pg-theme .pg-group-x:hover { background: var(--pg-soft); }
