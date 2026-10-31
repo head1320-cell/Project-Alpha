@@ -6,7 +6,7 @@
  * 화면이 문장을 짓지 않는다(사용자 결정). "믿어도 되나요?" 는 확인·가정·몰라요·실패를 한 줄씩.
  * 연습용 데이터가 하나라도 있으면 맨 위에 경고를 먼저 놓는다. AI2 — 그 위에 'AI 가 풀어 쓴 글' 자리(`top`)만 둔다(이 패널은 문장을 짓지 않는다).
  */
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type { NodeCatalogEntry, NodeRunResult, PgNode } from "@/entities/portfolio-graph";
 
 const TRUST_TEXT = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패" } as const;
@@ -28,10 +28,13 @@ function Bars({ weights, labels }: { weights: Record<string, number | null>; lab
   );
 }
 
-function Step({ n, node, entry, result, stale, current, onSelect, onDetail }: {
-  n: number; node: PgNode; entry?: NodeCatalogEntry; result?: NodeRunResult; stale: boolean; current: boolean;
-  onSelect: () => void; onDetail: () => void;
+/** 한 단계 — 값이 같으면 다시 그리지 않는다(R8 — 끌기 한 걸음마다 200단계가 모두 다시 그려졌다). 동작은 id 를 넘겨 늘 같은 함수로. */
+const Step = memo(function Step({ id, n, node, entry, result, stale, current, onSelect: select, onDetail: detail }: {
+  id: string; n: number; node: PgNode; entry?: NodeCatalogEntry; result?: NodeRunResult; stale: boolean; current: boolean;
+  onSelect: (id: string) => void; onDetail: (id: string) => void;
 }) {
+  const onSelect = () => select(id);
+  const onDetail = () => detail(id);
   const ex = result && !stale ? result.explain : null;
   const view = (result?.view ?? {}) as Record<string, unknown>;
   const title = ex?.title ?? `${entry?.plain_label ?? node.data.kind}`;
@@ -67,7 +70,7 @@ function Step({ n, node, entry, result, stale, current, onSelect, onDetail }: {
       </div>
     </li>
   );
-}
+});
 
 export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedId, onSelect, onDetail, top }: {
   order: string[];
@@ -106,9 +109,9 @@ export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedI
           const node = byId.get(id);
           if (!node) return null;
           return (
-            <Step key={id} n={i + 1} node={node} entry={catalog.find((c) => c.type === node.data.kind)}
+            <Step key={id} id={id} n={i + 1} node={node} entry={catalog.find((c) => c.type === node.data.kind)}
                   result={results?.[id]} stale={staleIds.has(id)} current={selectedId === id}
-                  onSelect={() => onSelect(id)} onDetail={() => onDetail(id)} />
+                  onSelect={onSelect} onDetail={onDetail} />
           );
         })}
       </ol>

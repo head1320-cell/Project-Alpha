@@ -12,19 +12,31 @@ import { laneLayout } from "@/entities/portfolio-graph/lanes";
 import { SELBAR_ROOM, SELBAR_W, zoomLevel } from "./canvasGeometry";
 import { STAGE_VAR } from "./GraphNode";
 import { ALIGN_ITEMS, type AlignKind } from "./guides";
+import { pgZRule } from "./zoomVar";
 import { RIGHT_W, clampW, floatCorner, floatInsets } from "./panels";
 import { usePortfolioGraph } from "./store";
 import { measuredH, measuredW } from "./toolbarPlace";
 import { WIRE_SHAPES, type WireShape } from "./wirePath";
 
-/** 확대 값을 캔버스 요소의 `data-zoom`·`--pg-z` 로 옮긴다 — 노드를 다시 그리지 않고 CSS 가 단계별로 보이고 숨긴다. */
+/** 확대 값을 캔버스 요소의 `data-zoom`·`--pg-z` 로 옮긴다 — 노드를 다시 그리지 않고 CSS 가 단계별로 보이고 숨긴다.
+ *  `--pg-z` 는 물려받지 않는다(R8 — `zoomVar.ts`): 캔버스 자신에 쓰고(E2E 가 읽는 계약), 쓰는 요소에는 규칙 한 줄로 놓는다.
+ *  예전처럼 캔버스에 쓴 값을 모두가 물려받으면 휠 한 칸마다 캔버스 아래 모든 요소의 스타일을 다시 계산했다. */
 export function ZoomWatch({ el }: { el: RefObject<HTMLDivElement> }) {
   const z = useStore((st) => st.transform[2]);
+  const rule = useRef<HTMLStyleElement | null>(null);
+  useEffect(() => {
+    const st = document.createElement("style");
+    st.dataset.pgZoom = "";
+    document.head.appendChild(st);
+    rule.current = st;
+    return () => { st.remove(); rule.current = null; };
+  }, []);
   useEffect(() => {
     const node = el.current;
     if (!node) return;
     node.dataset.zoom = zoomLevel(z);
     node.style.setProperty("--pg-z", String(z));
+    if (rule.current) rule.current.textContent = pgZRule(z);
   }, [z, el]);
   return null;
 }

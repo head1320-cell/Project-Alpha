@@ -17,7 +17,7 @@
  * 다시하기(Ctrl+Shift+Z) · 복사(Ctrl+C)/붙여넣기(Ctrl+V) · 여러 개 지우기 · 자동 정리 · 미니맵 · 묶음 상자(Ctrl+G) ·
  * 명령 팔레트(Ctrl+K) · 계산 기록. ★이번 대담함은 한 곳★ — "여기까지 계산" 에 올리면 돌 경로가 먼저 밝아진다.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
   ReactFlow,
   Background,
@@ -100,7 +100,17 @@ import { useCanvasView, useViewFollow } from "./useCanvasView";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { RightPanel } from "./RightPanel";
 import { useCanvasCommands } from "./useCanvasCommands";
+import { useLatestHandlers } from "./useLatestHandlers";
 import { useRunActions } from "./useRunActions";
+
+// R8 — React Flow 에 넘기는 설정은 모듈 상수로. 그릴 때마다 새 배열·객체를 넘기면 React Flow 가 그것을 바뀐 것으로 받아
+// 선 감싸개를 모두 다시 그렸다(`defaultEdgeOptions` — 200노드 끌기 한 걸음 = 선 200개, 재서 찾음). 값은 예전 그대로.
+const DEFAULT_EDGE_OPTIONS = { type: PG_WIRE_TYPE };
+const SNAP_GRID: [number, number] = [SNAP, SNAP];
+const DELETE_KEYS = ["Backspace", "Delete"];
+const MULTI_SELECT_KEYS = ["Meta", "Control"];
+const FIT_VIEW_OPTIONS = { padding: 0.08, maxZoom: 1 };
+const PRO_OPTIONS = { hideAttribution: true };
 import { useCanvasDrop } from "./useCanvasDrop";
 import { useQuickAdd, type CtxAt } from "./useQuickAdd";
 import { insertAt, snapPt } from "./wirePath";
@@ -504,6 +514,53 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
 
   focusRef.current = focusNode;
 
+  // R8 — React Flow 에 넘기는 손잡이는 늘 같은 함수(몸은 그대로 · ref 로 마지막 것을 부른다). 그릴 때마다 새 함수를 넘기면 카드·선
+  // 감싸개가 모두 다시 그려졌다(200노드 끌기 한 걸음 = 감싸개 400개 — 재서 찾음).
+  const rfOn = useLatestHandlers({
+    onNodeContextMenu: (e: ReactMouseEvent, n: Node) => {
+      e.preventDefault();
+      if (n.id.startsWith("frame:") || n.id.startsWith("branch:")) return;
+      const box = canvasEl.current?.getBoundingClientRect();
+      // 여럿 고른 것 안의 노드면 고르기를 지킨다(R1) — 메뉴의 '고른 노드' 동작이 그 여럿을 대상으로 한다.
+      if (!(s.picked.length > 1 && s.picked.includes(n.id))) s.select(n.id);
+      setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: n.id });
+    },
+    onSelectionContextMenu: (e: ReactMouseEvent, sel: Node[]) => {
+      // Shift 상자로 고르면 고른 노드 위에 고르기 상자가 덮인다 — 그 아래 노드의 메뉴를 연다(R1). 고르기는 그대로.
+      e.preventDefault();
+      const hit = document.elementsFromPoint(e.clientX, e.clientY)
+        .map((el) => el.closest(".pg-node")?.getAttribute("data-node-id")).find((id): id is string => !!id);
+      const id = hit ?? sel.find((x) => !x.id.includes(":"))?.id;
+      if (!id) return;
+      const box = canvasEl.current?.getBoundingClientRect();
+      setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: id });
+    },
+    onBeforeDelete: async ({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) => {
+      // React Flow 는 선을 먼저, 노드를 나중에 바꾼다(되돌리기 두 단계) — 여기서 한 번에 지우고 React Flow 의 지우기는 막는다(R1).
+      const st = usePortfolioGraph.getState();
+      st.act(() => deleteNote(st.deleteElements(nodes.map((x) => x.id).filter((id) => !id.includes(":")), edges.map((x) => x.id))));
+      return false;
+    },
+    onEdgeContextMenu: (e: ReactMouseEvent, edge: Edge) => {
+      // 선 우클릭(R5) — 그 선을 고르고 선 메뉴(도구줄과 같은 넷 · 접힌 상자의 대리 선이면 까닭 + 펼치기).
+      e.preventDefault();
+      usePortfolioGraph.getState().selectEdge(edge.id);
+      const box = canvasEl.current?.getBoundingClientRect();
+      setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: null, edgeId: edge.id, mode: "edge" });
+    },
+    onPaneContextMenu: (e: ReactMouseEvent | MouseEvent) => {
+      e.preventDefault();
+      const box = canvasEl.current?.getBoundingClientRect();
+      setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: null });
+    },
+    onNodeClick: (e: ReactMouseEvent, n: Node) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); },
+    onPaneClick: () => { s.select(null); s.selectEdge(null); if (s.cause) s.showCause(null); },
+    onEdgeMouseEnter: (_: ReactMouseEvent, e: Edge) => setHoverEdge(e.id),
+    onEdgeMouseLeave: () => setHoverEdge(null),
+    onEdgeClick: (_: ReactMouseEvent, e: Edge) => pickEdge(e.id),
+    onNodeDoubleClick: (_: ReactMouseEvent, n: Node) => { if (n.id.startsWith("frame:")) s.setFocusGroup(n.id.slice(6)); },
+  });
+
   const selected = s.nodes.find((n) => n.id === s.selectedId);
   const selEdge = s.selectedEdge ? s.edges.find((e) => e.id === s.selectedEdge) ?? null : null;
   const selEntry = s.catalog?.find((c) => c.type === selected?.data.kind);
@@ -602,59 +659,28 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             onReconnectStart={onReconnectStart}
             onReconnect={onReconnect}
             onReconnectEnd={onReconnectEnd}
-            onNodeContextMenu={(e, n) => {
-              e.preventDefault();
-              if (n.id.startsWith("frame:") || n.id.startsWith("branch:")) return;
-              const box = canvasEl.current?.getBoundingClientRect();
-              // 여럿 고른 것 안의 노드면 고르기를 지킨다(R1) — 메뉴의 '고른 노드' 동작이 그 여럿을 대상으로 한다.
-              if (!(s.picked.length > 1 && s.picked.includes(n.id))) s.select(n.id);
-              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: n.id });
-            }}
-            onSelectionContextMenu={(e, sel) => {
-              // Shift 상자로 고르면 고른 노드 위에 고르기 상자가 덮인다 — 그 아래 노드의 메뉴를 연다(R1). 고르기는 그대로.
-              e.preventDefault();
-              const hit = document.elementsFromPoint(e.clientX, e.clientY)
-                .map((el) => el.closest(".pg-node")?.getAttribute("data-node-id")).find((id): id is string => !!id);
-              const id = hit ?? sel.find((x) => !x.id.includes(":"))?.id;
-              if (!id) return;
-              const box = canvasEl.current?.getBoundingClientRect();
-              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: id });
-            }}
-            onBeforeDelete={async ({ nodes, edges }) => {
-              // React Flow 는 선을 먼저, 노드를 나중에 바꾼다(되돌리기 두 단계) — 여기서 한 번에 지우고 React Flow 의 지우기는 막는다(R1).
-              const st = usePortfolioGraph.getState();
-              st.act(() => deleteNote(st.deleteElements(nodes.map((x) => x.id).filter((id) => !id.includes(":")), edges.map((x) => x.id))));
-              return false;
-            }}
-            onEdgeContextMenu={(e, edge) => {
-              // 선 우클릭(R5) — 그 선을 고르고 선 메뉴(도구줄과 같은 넷 · 접힌 상자의 대리 선이면 까닭 + 펼치기).
-              e.preventDefault();
-              usePortfolioGraph.getState().selectEdge(edge.id);
-              const box = canvasEl.current?.getBoundingClientRect();
-              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: null, edgeId: edge.id, mode: "edge" });
-            }}
-            onPaneContextMenu={(e) => {
-              e.preventDefault();
-              const box = canvasEl.current?.getBoundingClientRect();
-              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: null });
-            }}
+            onNodeContextMenu={rfOn.onNodeContextMenu}
+            onSelectionContextMenu={rfOn.onSelectionContextMenu}
+            onBeforeDelete={rfOn.onBeforeDelete}
+            onEdgeContextMenu={rfOn.onEdgeContextMenu}
+            onPaneContextMenu={rfOn.onPaneContextMenu}
             snapToGrid
-            snapGrid={[SNAP, SNAP]}
+            snapGrid={SNAP_GRID}
             // v12 의 인스턴스는 노드·선 타입을 제네릭으로 싣는다 — 이 파일은 일반 Node/Edge 로만 부른다.
             onInit={(inst) => { rf.current = inst as unknown as ReactFlowInstance; }}
-            onNodeClick={(e, n) => { if (!n.id.startsWith("frame:") && !(e.shiftKey || e.metaKey || e.ctrlKey)) s.select(n.id); }}
-            onPaneClick={() => { s.select(null); s.selectEdge(null); if (s.cause) s.showCause(null); }}
-            onEdgeMouseEnter={(_, e) => setHoverEdge(e.id)} onEdgeMouseLeave={() => setHoverEdge(null)}
-            onEdgeClick={(_, e) => pickEdge(e.id)}
-            onNodeDoubleClick={(_, n) => { if (n.id.startsWith("frame:")) s.setFocusGroup(n.id.slice(6)); }}
-            deleteKeyCode={drawer || cmdOpen ? null : ["Backspace", "Delete"]}
-            multiSelectionKeyCode={["Meta", "Control"]}
+            onNodeClick={rfOn.onNodeClick}
+            onPaneClick={rfOn.onPaneClick}
+            onEdgeMouseEnter={rfOn.onEdgeMouseEnter} onEdgeMouseLeave={rfOn.onEdgeMouseLeave}
+            onEdgeClick={rfOn.onEdgeClick}
+            onNodeDoubleClick={rfOn.onNodeDoubleClick}
+            deleteKeyCode={drawer || cmdOpen ? null : DELETE_KEYS}
+            multiSelectionKeyCode={MULTI_SELECT_KEYS}
             selectionMode={SelectionMode.Partial}
             ariaLabelConfig={ARIA_KO}
-            defaultEdgeOptions={{ type: PG_WIRE_TYPE }}
+            defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             fitView
-            fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
-            proOptions={{ hideAttribution: true }}
+            fitViewOptions={FIT_VIEW_OPTIONS}
+            proOptions={PRO_OPTIONS}
           >
             {/* CF0 — v12 는 점을 칸 가운데로 옮긴다(offset 0 = 칸 절반). v11 처럼 칸 모서리에 두려면 (점 크기 − 칸) / 2. */}
             {/* CF4a — 격자 두 겹: 점(22)을 ★먼저★(바탕 대비 테스트가 첫 무늬를 잰다) · 큰 칸 선(110 = 점 다섯 칸, 점 자리를 지난다). */}

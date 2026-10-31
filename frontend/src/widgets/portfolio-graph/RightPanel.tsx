@@ -3,7 +3,7 @@
  * 오른쪽 창 — 폭 손잡이 · 고른 것의 이름 · 탭(이야기·설정·자세히·갈래·선) · 고른 것에게 묻기
  * (CF 3부 E2b — `PortfolioCanvas.tsx` 의 `<aside className="pg-side">` 를 그대로 옮김 · 동작 불변).
  */
-import type { Dispatch, MutableRefObject, SetStateAction } from "react";
+import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { Edge } from "@xyflow/react";
 import { PanelRightClose } from "lucide-react";
 import { COL, portfolioGraphApi, toDoc, type AskTarget, type NodeCatalogEntry, type NodeRunResult, type PgNode, type WorkflowStage } from "@/entities/portfolio-graph";
@@ -47,6 +47,9 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
   swapTo: (id: string, kind: string) => void;
   runTo: (id: string) => Promise<void>;
 }) {
+  // 이야기 단계의 '숫자 자세히 보기' — 늘 같은 함수(R8 — 새 함수면 이야기 단계가 끌기 한 걸음마다 모두 다시 그려졌다).
+  const setTab = s.setTab;
+  const onStoryDetail = useCallback((id: string) => { focusNode(id); setTab("detail"); }, [focusNode, setTab]);
   return (
     <aside className="pg-side" aria-label="설명과 설정" hidden={!rightShown}>
       <SideResize width={panels.rightW} onChange={(w, done) => (done ? updatePanels : setPanels)((p) => ({ ...p, rightW: w }))} />
@@ -72,7 +75,7 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
         {s.tab === "story" && (
           <StoryPanel order={order} nodes={s.nodes} catalog={s.catalog ?? []} results={s.report?.nodes ?? null}
                       staleIds={staleSet} selectedId={s.selectedId} onSelect={focusNode}
-                      onDetail={(id) => { focusNode(id); s.setTab("detail"); }}
+                      onDetail={onStoryDetail}
                       top={<AiStory session={session} story={aiStory} badge={nodeBadge} onSelect={focusNode} />} />
         )}
         {s.tab === "branches" && (

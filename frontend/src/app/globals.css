@@ -4825,7 +4825,11 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-legacy .pg-btn { padding: 4px 10px; font-size: 12.5px; background: var(--pg-paper); }
 
 /* ── BM C1 · 결과가 캔버스에 — 확대 3단계 · 작은 그림 · 증거 선 · 원인 경로 ─────────────────────────
-   캔버스 요소의 data-zoom(far|mid|near)·--pg-z 를 ZoomWatch 가 쓴다. 노드는 다시 그리지 않고 CSS 가 보이고 숨긴다. */
+   캔버스 요소의 data-zoom(far|mid|near)·--pg-z 를 ZoomWatch 가 쓴다. 노드는 다시 그리지 않고 CSS 가 보이고 숨긴다.
+   R8 — --pg-z 는 ★물려받지 않는다★: 캔버스에 쓴 값을 모두가 물려받으면 휠 한 칸마다 캔버스 아래 모든 요소의 스타일을 다시 계산했다
+   (200노드 확대 20칸 = 약 5초 — 재서 찾음). ZoomWatch 가 쓰는 요소(zoomVar.ts 의 PG_Z_USERS)에만 같은 값을 놓는다 —
+   여기서 var(--pg-z 를 새로 쓰면 그 목록에 더한다(e2e/canvas-perf 가 잰다). */
+@property --pg-z { syntax: "<number>"; inherits: false; initial-value: 1; }
 .pg-node-far { display: none; }
 .pg-node-glance, .pg-node-time { display: none; }
 .pg-canvas[data-zoom="near"] .pg-node-glance, .pg-node--pinned .pg-node-glance { display: block; }

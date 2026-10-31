@@ -5,7 +5,7 @@
  * 원인 경로 · 흐리기(들어가기·필터·절차) · 접힌 상자의 대리 포트 · 전략 띠 색과 몫 · 갈래 틀 · 선 모양과 표시.
  * 계산은 전부 스토어 상태에서 — 서버 결과의 값만 읽고 지어내지 않는다.
  */
-import { useCallback, useMemo, type MutableRefObject } from "react";
+import { useCallback, useMemo, useRef, type MutableRefObject } from "react";
 import type { Node } from "@xyflow/react";
 import { BRANCH_HEAD, PORTFOLIO_NODE, boxAria, branchAria, cardState, edgeAria, fieldsOf, frameRect, nodeAria, nodeIssues, viaOf,
          type ProcedureSuggestion } from "@/entities/portfolio-graph";
@@ -16,6 +16,7 @@ import { PG_WIRE_TYPE, wireOf } from "./EvidenceEdge";
 import { PORT_PLAIN } from "./GraphNode";
 import { PG_GROUP_TYPE, type GroupFrameData } from "./GroupFrame";
 import { toggle, type Panels } from "./panels";
+import { keepSame } from "./keepSame";
 import { usePortfolioGraph, type PgState } from "./store";
 import { collapsedMembers } from "./storeShared";
 import { wireFlag, wireLook } from "./wireStyle";
@@ -31,6 +32,14 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
   const { runToRef, previewRef, runStrategyRef, branchStrategyRef, wireToolRef } = refs;
   /** 선 도구줄(R5) — 캔버스가 지금 가진 동작으로(우클릭 메뉴와 같은 길). */
   const onTool = useCallback<WireToolFn>((id, a, arg) => wireToolRef.current(id, a, arg), [wireToolRef]);
+  // 카드·상자에 넘기는 동작은 ref 를 거쳐 늘 같은 함수로(R8) — `ref.current` 는 그릴 때마다 새 함수라 카드가 모두 다시 그려졌다.
+  const onRunTo = useCallback((id: string) => runToRef.current(id), [runToRef]);
+  const onPreviewRunTo = useCallback((id: string | null) => previewRef.current(id), [previewRef]);
+  const onRunStrategy = useCallback((g: string) => runStrategyRef.current(g), [runStrategyRef]);
+  const onBranchStrategy = useCallback((g: string) => branchStrategyRef.current(g), [branchStrategyRef]);
+  /** 값이 같으면 앞의 노드·선 객체 그대로(R8 · `keepSame`) — 끌기 한 걸음에 움직인 카드와 그 선만 다시 그린다. */
+  const prevNodes = useRef(new Map<string, unknown>());
+  const prevEdges = useRef(new Map<string, unknown>());
   const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
   const live = useMemo(() => (s.report
@@ -117,7 +126,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
                   keep && !keep.has(n.id) && "pg-dim",
                   cause && causeSet.has(n.id) && "pg-on-cause",
                   cause?.roots.includes(n.id) && "pg-cause-root"].filter(Boolean).join(" ") || undefined,
-      data: { ...n.data, num: num.get(n.id), onRunTo: runToRef.current, onPreviewRunTo: previewRef.current, onNeed, onFix, onSocket },
+      data: { ...n.data, num: num.get(n.id), onRunTo, onPreviewRunTo, onNeed, onFix, onSocket },
     }));
     const frames: Node<GroupFrameData>[] = s.groups.flatMap((g) => {
       const ms = s.nodes.filter((n) => g.members.includes(n.id));
@@ -150,7 +159,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
                        kind: g.kind === "strategy" ? "strategy" : "group", color: g.color ?? 0,
                        output: g.kind === "strategy" ? g.output ?? null : null, proxyIn, proxyOut: [...outs.values()],
                        ...(strat ? shareOf(g.output ?? null) : { share: null, linked: false, rebalance: null }),
-                       onRunStrategy: runStrategyRef.current, onBranchStrategy: branchStrategyRef.current } }];
+                       onRunStrategy, onBranchStrategy } }];
     });
     // 갈래 틀(BM C3) — 복제 노드를 감싼 점선 상자. 바꾼 설정만 칩으로.
     const branchFrames: Node<BranchFrameData>[] = s.branches.flatMap((b) => {
@@ -163,9 +172,9 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
                 data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []),
                         rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
     });
-    return [...frames, ...branchFrames, ...cards];
+    return keepSame(prevNodes.current, [...frames, ...branchFrames, ...cards]);
   }, [s.nodes, s.groups, s.edges, num, plainOf, s.selectedId, s.picked, path, collapsedOf, keep, cause, causeSet, portColor, s.branches, s.catalog, shareOf, onNeed, onFix, onSocket,
-      runToRef, previewRef, runStrategyRef, branchStrategyRef, s.report, staleSet, s.validation, s.running, s.runningIds]);
+      onRunTo, onPreviewRunTo, onRunStrategy, onBranchStrategy, s.report, staleSet, s.validation, s.running, s.runningIds]);
   /** 전달 점검 칩을 누르면(CF3b2) — 선을 누른 것과 같은 길(선 판) + 문제 줄로 내린다. */
   const onFlag = useCallback((edgeId: string) => {
     usePortfolioGraph.getState().selectEdge(edgeId);
@@ -177,7 +186,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
   const edgesStyled = useMemo(() => {
     // 선 요약은 ★원천 포트의 요약★이다 — 한 포트에서 여러 선이 나가면 같은 글이 겹쳐 쌓였다. 포트마다 한 번만(BS2).
     const briefed = new Set<string>();
-    return s.edges.map((e) => {
+    return keepSame(prevEdges.current, s.edges.map((e) => {
     const kind = s.nodes.find((n) => n.id === e.source)?.data.kind;
     const out = s.catalog?.find((c) => c.type === kind)?.outputs.find((p) => p.name === e.sourceHandle);
     const tkind = s.nodes.find((n) => n.id === e.target)?.data.kind;
@@ -214,7 +223,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
              className: cls + (e.id === s.selectedEdge ? " pg-wire--picked" : "") + (e.id === dropWire ? " pg-wire--drop" : ""),
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
                       strokeWidth: look.width } };
-    });
+    }));
   }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire, onTool, num, plainOf]);
   return { cause, live, stageOfNode, mmMark, bandOf, numbered, onFlag, edgesStyled };
 }
