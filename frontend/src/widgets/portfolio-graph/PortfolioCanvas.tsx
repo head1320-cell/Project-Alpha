@@ -59,6 +59,7 @@ import {
   COMPARE_KIND,
   RECORD_KIND,
   toolOf,
+  viaOf,
   type GuideId,
   type GuideState,
   type Box,
@@ -84,6 +85,7 @@ import { ContextMenu, FindBar, NoteLine, QuickAdd, ShortcutSheet, type QuickAddS
 import { NodePalette, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
 import { floatInsets, toggle } from "./panels";
+import { drawnWire, type WireToolFn } from "./WireToolbar";
 import type { LegacyScreen } from "@/entities/portfolio-graph/legacyScreens";
 import { Sheet } from "@/shared/ui/tx";
 import { SimpleView } from "./SimpleView";
@@ -99,7 +101,8 @@ import { RightPanel } from "./RightPanel";
 import { useCanvasCommands } from "./useCanvasCommands";
 import { useRunActions } from "./useRunActions";
 import { useCanvasDrop } from "./useCanvasDrop";
-import { useQuickAdd } from "./useQuickAdd";
+import { useQuickAdd, type CtxAt } from "./useQuickAdd";
+import { insertAt, snapPt } from "./wirePath";
 import { useDocSync } from "./useDocSync";
 import { useCanvasGraph } from "./useCanvasGraph";
 import { useCanvasAi } from "./useCanvasAi";
@@ -151,7 +154,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const [welcome, setWelcome] = useState(false);
   // 캔버스 손길(BN N3) — 선 끌어 놓기 빠른 추가 · 우클릭 메뉴 · 찾기 · 단축키 한 장.
   const [quick, setQuick] = useState<QuickAddState | null>(null);
-  const [ctx, setCtx] = useState<{ x: number; y: number; clientX: number; clientY: number; nodeId: string | null } | null>(null);
+  const [ctx, setCtx] = useState<CtxAt | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   const connectFrom = useRef<QuickAddState["from"]>(null);
@@ -176,6 +179,8 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const focusRef = useRef<(id: string) => void>(() => {});
   const runStrategyRef = useRef<(groupId: string) => void>(() => {});
   const branchStrategyRef = useRef<(groupId: string) => void>(() => {});
+  /** 선 도구줄·선 우클릭(R5)의 동작 — 아래에서 지금 가진 것으로 채운다. */
+  const wireToolRef = useRef<WireToolFn>(() => {});
   const [announce, setAnnounce] = useState("");
   const { panels, setPanels, updatePanels, tight, leftShown, rightShown, fit, fitIds, zoomBy } = useCanvasView(rf, canvasEl, !!s.catalog);
 
@@ -192,7 +197,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const { session, ai, aiStory, askTarget, aiQ, askFocus, draftQ, sayInput, draftAt, openSay, acceptDraft } =
     useCanvasAi(s, doc, order, staleSet, rf, canvasEl, updatePanels, setLeftTab, fitIds);
   const { cause, live, stageOfNode, mmMark, bandOf, numbered, onFlag, edgesStyled } =
-    useCanvasGraph(s, order, path, staleSet, { runToRef, previewRef, runStrategyRef, branchStrategyRef }, onNeed, onFix, onSocket,
+    useCanvasGraph(s, order, path, staleSet, { runToRef, previewRef, runStrategyRef, branchStrategyRef, wireToolRef }, onNeed, onFix, onSocket,
                    updatePanels, hoverEdge, dropWire);
   /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
   const strategySources = useMemo(() => {
@@ -287,7 +292,24 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const { isValidConnection, onReconnectStart, onReconnect, onReconnectEnd } = useWireHandlers();
 
   const { addAt, onConnectStart, onConnectEnd, quickPick, compareCheck, pickedIsOneGroup, ctxItems } =
-    useQuickAdd(s, rf, canvasEl, addCount, connectFrom, quick, setQuick, ctx, fit, setFindOpen, runToRef);
+    useQuickAdd(s, rf, canvasEl, addCount, connectFrom, quick, setQuick, ctx, setCtx, fit, setFindOpen, runToRef, wireToolRef);
+  // 선 도구줄·선 우클릭(R5) — 끊기는 Delete 키와 같은 길·같은 문장(R2) · 넣기는 선 탭과 같은 후보 · 꺾는 점은 그린 선 가운데 · 묻기는 명령 `ask-here` 와 같은 길.
+  wireToolRef.current = (edgeId, action, arg) => {
+    const st = usePortfolioGraph.getState();
+    if (action === "cut") st.act(() => deleteNote(st.deleteElements([], [edgeId])));
+    else if (action === "insert" && arg) st.act(() => (st.insertOnEdge(edgeId, arg.kind, arg.inPort, arg.outPort) ? "선 사이에 노드를 넣었어요." : null));
+    else if (action === "waypoint") {
+      const w = drawnWire(edgeId);
+      const e = st.edges.find((x) => x.id === edgeId);
+      if (!w || !e) return;
+      const p = snapPt(w.mid);
+      st.addWaypoint(edgeId, insertAt(w.src, w.tgt, viaOf(e), p), p);
+    } else if (action === "ask") {
+      st.selectEdge(edgeId);
+      updatePanels((p) => (p.right ? p : toggle(p, "right")));
+      window.setTimeout(() => askFocus.current(), 60);
+    }
+  };
 
 
   const { applyLoad, loadTemplate, onDragOverCanvas, onDrop } = useCanvasDrop(rf, setFileNote, fit, setDragOver, setDropWire, addAt);
@@ -592,6 +614,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
               st.act(() => deleteNote(st.deleteElements(nodes.map((x) => x.id).filter((id) => !id.includes(":")), edges.map((x) => x.id))));
               return false;
             }}
+            onEdgeContextMenu={(e, edge) => {
+              // 선 우클릭(R5) — 그 선을 고르고 선 메뉴(도구줄과 같은 넷 · 접힌 상자의 대리 선이면 까닭 + 펼치기).
+              e.preventDefault();
+              usePortfolioGraph.getState().selectEdge(edge.id);
+              const box = canvasEl.current?.getBoundingClientRect();
+              setCtx({ x: e.clientX - (box?.left ?? 0), y: e.clientY - (box?.top ?? 0), clientX: e.clientX, clientY: e.clientY, nodeId: null, edgeId: edge.id, mode: "edge" });
+            }}
             onPaneContextMenu={(e) => {
               e.preventDefault();
               const box = canvasEl.current?.getBoundingClientRect();
@@ -785,7 +814,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
           )}
           {ctx && (
             <ContextMenu x={ctx.x} y={ctx.y} box={canvasEl.current?.getBoundingClientRect()} inset={floatInsets(canvasEl.current)} items={ctxItems}
-                         label={ctx.nodeId ? "노드 메뉴" : "캔버스 메뉴"} onClose={() => setCtx(null)} />
+                         label={ctx.edgeId ? "선 메뉴" : ctx.nodeId ? "노드 메뉴" : "캔버스 메뉴"} onClose={() => setCtx(null)} />
           )}
           {findOpen && (
             <FindBar onPick={(id) => focusRef.current(id)} onClose={() => setFindOpen(false)}

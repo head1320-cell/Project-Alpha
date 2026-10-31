@@ -6175,6 +6175,22 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
 .pg-wire-type { position: absolute; pointer-events: none; padding: 2px 8px; border-radius: 10px; background: var(--pg-ink); color: var(--pg-paper);
   font-size: 12px; font-weight: 700; white-space: nowrap; z-index: 5; }
 .react-flow__edge.pg-wire--picked .react-flow__edge-path { stroke-width: 4 !important; filter: drop-shadow(0 0 3px rgb(49 130 246 / 55%)); }
+/* 선 도구줄(R5) — 고른 선 가운데 · 종류 알약 위 · 카드 위층(ViewportPortal). 확대해도 화면 크기 같다(변환이 1/확대). 글자 단추(툴팁 없음).
+   z-index 10 이 맨 위를 지킨다 — React Flow 층 상자는 쌓임 맥락을 만들지 않아 카드(z 0)와 선 글자층의 알약(z 5)이 한 판에서 겨룬다(빼면 알약이 넣기 목록 위로 — R5 사진). */
+.pg-edge-tb { position: absolute; left: 0; top: 0; display: flex; gap: 2px; padding: 4px; transform-origin: 0 0; pointer-events: all; z-index: 10;
+  background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 12px; box-shadow: var(--pg-shadow); white-space: nowrap; }
+.pg-theme .pg-edge-tb-b { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--pg-ink); background: none; border: 0; border-radius: 8px; cursor: pointer; }
+.pg-theme .pg-edge-tb-b:hover, .pg-theme .pg-edge-tb-b:focus-visible, .pg-theme .pg-edge-tb-b[aria-expanded="true"] { background: var(--pg-soft); outline: none; }
+.pg-theme .pg-edge-tb-b[data-action="cut"] { color: var(--pg-fail); }
+/* 사이에 넣기 목록 — 도구줄 바로 아래(절대 위치라 도구줄 자리를 밀지 않는다) · 여섯 줄 넘으면 스크롤. */
+.pg-edge-tb-list { position: absolute; top: calc(100% + 6px); left: 50%; width: 260px; max-height: 280px; overflow: auto; padding: 6px; transform: translateX(-50%);
+  background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 12px; box-shadow: var(--pg-shadow); white-space: normal; }
+.pg-theme .pg-edge-tb-item { display: grid; gap: 2px; width: 100%; padding: 7px 9px; font: inherit; text-align: left; background: none; border: 0; border-radius: 8px; cursor: pointer; }
+.pg-theme .pg-edge-tb-item b { font-size: 13px; color: var(--pg-ink); }
+.pg-theme .pg-edge-tb-item span { font-size: 12px; line-height: 1.4; color: var(--pg-body); }
+.pg-theme .pg-edge-tb-item:hover, .pg-theme .pg-edge-tb-item:focus-visible { background: var(--pg-soft); outline: none; }
+.pg-edge-tb-empty { margin: 0; padding: 7px 9px; font-size: 12.5px; line-height: 1.5; color: var(--pg-body); }
 .pg-wire-sheet { display: flex; flex-direction: column; gap: 14px; }
 .pg-wire-row h3 { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--pg-mute); }
 .pg-wire-row p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--pg-ink); word-break: keep-all; overflow-wrap: anywhere; }

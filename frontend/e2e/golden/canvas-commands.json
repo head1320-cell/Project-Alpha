@@ -488,6 +488,16 @@
   "layout | 자동 정리 | ",
   "find | 노드 찾기 (Ctrl+F) | "
  ],
+ "ctx:edge": [
+  "cut | 선 끊기 | ",
+  "insert | 사이에 넣기… | ",
+  "waypoint | 꺾는 점 넣기 | ",
+  "ask | 이 선에게 묻기 | "
+ ],
+ "ctx:edge-insert": [
+  "insert:screener | 조건으로 종목 거르기 | ",
+  "back | 뒤로 | "
+ ],
  "menu:view": [
   "lanes | 단계 레인 보기 | ",
   "ghosts | 추천 보기 | ",

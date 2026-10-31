@@ -240,8 +240,6 @@ export interface PgState {
   applyDraft: (d: DraftBody, at: Record<string, { x: number; y: number }>) => { added: number; connected: number; set: number } | null;
   /** 선을 골라 "선" 탭을 연다(BT4). null 이면 닫는다. */
   selectEdge: (id: string | null) => void;
-  /** 선을 끊는다(BT4) — 되돌리기 한 번. */
-  cutEdge: (id: string) => void;
   /** 선 사이에 노드를 끼운다(BT4) — 원래 선을 지우고 보내는 쪽 → 새 노드 → 받는 쪽으로 잇는다. 되돌리기 한 번. */
   insertOnEdge: (edgeId: string, kind: string, inPort: string, outPort: string, at?: { x: number; y: number }) => string | null;
   /** 이 노드와 같은 전략 안의 하류를 복제해 갈래를 만든다 — 한 뿌리에 최대 4개. 돌려주는 값은 한 줄 안내.

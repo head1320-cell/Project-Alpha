@@ -5,19 +5,25 @@
  */
 import { useCallback, useMemo, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
-import { ClipboardPaste, Copy, GitBranch, LayoutGrid, Pin, PinOff, Play, Plus, Replace, Route, Scale, Search as SearchIcon, Trash2 } from "lucide-react";
-import { COL, compareTargets, swapCandidates } from "@/entities/portfolio-graph";
+import { ArrowLeft, ChevronsUpDown, ClipboardPaste, Copy, GitBranch, Info, LayoutGrid, ListPlus, MessageCircleQuestion, Pin, PinOff, Play, Plus, Replace, Route, Scale, Scissors, Search as SearchIcon, Spline, Trash2 } from "lucide-react";
+import { COL, compareTargets, insertCandidates, swapCandidates, type InsertCandidate } from "@/entities/portfolio-graph";
 import type { MenuItem, QuickAddState } from "./CanvasAssist";
 import { deleteNote, SAME_SIDE, wireProblem } from "./canvasRules";
 import { usePortfolioGraph, type PgState } from "./store";
+import { collapsedMembers } from "./storeShared";
+import { insertNone, wireType, type WireAction, type WireToolFn } from "./WireToolbar";
 
 /** 우클릭한 자리 — 캔버스 안 좌표와 화면 좌표, 누른 노드(빈 곳이면 null). */
-export type CtxAt = { x: number; y: number; clientX: number; clientY: number; nodeId: string | null };
+export type CtxAt = { x: number; y: number; clientX: number; clientY: number; nodeId: string | null;
+                      /** 선 우클릭(R5) — 그 선과 메뉴 단계(선 동작 넷 · 사이에 넣을 후보). */
+                      edgeId?: string | null; mode?: "edge" | "insert" };
 
 export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>,
                             addCount: MutableRefObject<number>, connectFrom: MutableRefObject<QuickAddState["from"]>,
                             quick: QuickAddState | null, setQuick: Dispatch<SetStateAction<QuickAddState | null>>, ctx: CtxAt | null,
-                            fit: () => void, setFindOpen: (v: boolean) => void, runToRef: MutableRefObject<(id: string) => void>) {
+                            setCtx: Dispatch<SetStateAction<CtxAt | null>>,
+                            fit: () => void, setFindOpen: (v: boolean) => void, runToRef: MutableRefObject<(id: string) => void>,
+                            wireToolRef: MutableRefObject<WireToolFn>) {
   // 클릭으로 추가하면 **보이는 캔버스의 가운데**에, 겹치지 않게 조금씩 비껴 놓는다.
   const addAt = useCallback((kind: string, pos?: { x: number; y: number }) => {
     let at = pos;
@@ -111,6 +117,36 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
   const ctxItems = useMemo((): MenuItem[] => {
     if (!ctx) return [];
     const st = usePortfolioGraph.getState();
+    if (ctx.edgeId) {
+      // 선 메뉴(R5) — 도구줄과 같은 넷 · 같은 길(`wireToolRef`). 접힌 상자의 대리 선은 실제 끝이 숨어 있어 고치지 않고 까닭 + 펼치기.
+      const id = ctx.edgeId;
+      const e = st.edges.find((x) => x.id === id);
+      if (!e) return [];
+      const folded = collapsedMembers(st.groups, st.focusGroup);
+      const gid = folded.get(e.source) ?? folded.get(e.target);
+      if (gid) {
+        return [
+          { key: "proxy-why", label: "접힌 상자에 걸린 선이에요 — 상자를 펼치면 고칠 수 있어요", icon: <Info size={14} aria-hidden="true" />, disabled: true, run: () => {} },
+          { key: "unfold", label: "상자 펼치기", icon: <ChevronsUpDown size={14} aria-hidden="true" />, run: () => usePortfolioGraph.getState().toggleGroup(gid) },
+        ];
+      }
+      const { type, plain } = wireType(st, id);
+      const cands = insertCandidates(type, st.catalog ?? []);
+      const tool = (a: WireAction, arg?: InsertCandidate) => wireToolRef.current(id, a, arg);
+      if (ctx.mode === "insert") {
+        return [
+          ...cands.map((c) => ({ key: `insert:${c.kind}`, label: c.label, icon: <ListPlus size={14} aria-hidden="true" />, run: () => tool("insert", c) })),
+          { key: "back", label: "뒤로", icon: <ArrowLeft size={14} aria-hidden="true" />, run: () => setCtx({ ...ctx, mode: "edge" }) },
+        ];
+      }
+      return [
+        { key: "cut", label: "선 끊기", icon: <Scissors size={14} aria-hidden="true" />, danger: true, run: () => tool("cut") },
+        { key: "insert", label: cands.length ? "사이에 넣기…" : `사이에 넣기 — ${insertNone(plain)}`, icon: <ListPlus size={14} aria-hidden="true" />,
+          disabled: !cands.length, run: () => setCtx({ ...ctx, mode: "insert" }) },
+        { key: "waypoint", label: "꺾는 점 넣기", icon: <Spline size={14} aria-hidden="true" />, run: () => tool("waypoint") },
+        { key: "ask", label: "이 선에게 묻기", icon: <MessageCircleQuestion size={14} aria-hidden="true" />, run: () => tool("ask") },
+      ];
+    }
     if (!ctx.nodeId) {
       return [
         { key: "add-here", label: "여기에 노드 추가", icon: <Plus size={14} aria-hidden="true" />,

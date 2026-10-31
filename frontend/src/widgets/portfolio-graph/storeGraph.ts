@@ -11,7 +11,7 @@ import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, pruneRemoved, type Slic
 let lastParamEdit: { id: string; at: number } | null = null;
 let dragging = false;
 
-type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "cutEdge" | "insertOnEdge" | "addNode" | "updateParams" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "resizeSlot" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
+type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "insertOnEdge" | "addNode" | "updateParams" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "resizeSlot" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
 
 export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
   setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
@@ -147,12 +147,6 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
 
   selectEdge: (id) => set((s) => (id ? { selectedEdge: id, tab: "wire", selectedId: null, picked: [], pickedByUser: false }
                                      : { selectedEdge: null, tab: s.tab === "wire" ? "story" : s.tab })),
-
-  cutEdge: (id) => {
-    push();
-    set((s) => ({ edges: s.edges.filter((e) => e.id !== id), selectedEdge: s.selectedEdge === id ? null : s.selectedEdge,
-                  tab: s.selectedEdge === id && s.tab === "wire" ? "story" : s.tab }));
-  },
 
   insertOnEdge: (edgeId, kind, inPort, outPort, at) => {
     const s = get();

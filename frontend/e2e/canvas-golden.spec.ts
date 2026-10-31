@@ -379,6 +379,14 @@ test("명령 골든 — 명령 찾기 · 우클릭 메뉴 · 단축키 · 보기
   await page.locator(".react-flow__pane").click({ position: { x: 700, y: 640 }, button: "right" });
   got["ctx:pane"] = await items(".pg-ctx .pg-ctx-item");
   await page.keyboard.press("Escape");
+  // 선 우클릭(R5) — 선 메뉴와 그 '사이에 넣기…' 후보 단계
+  const wr = await onWire(page, W_UR, 0.5);
+  await page.mouse.click(wr.x, wr.y, { button: "right" });
+  got["ctx:edge"] = await items(".pg-ctx .pg-ctx-item");
+  await page.locator('.pg-ctx [data-action="insert"]').click();
+  got["ctx:edge-insert"] = await items(".pg-ctx .pg-ctx-item");
+  await page.keyboard.press("Escape");
+  await blank(page);
 
   await page.locator(".pg-view-open").click();
   got["menu:view"] = await items(".pg-view-menu button");
@@ -389,7 +397,7 @@ test("명령 골든 — 명령 찾기 · 우클릭 메뉴 · 단축키 · 보기
     `${el.querySelector("dt")?.textContent?.trim()} | ${el.querySelector("dd")?.textContent?.trim()}`));
   await page.keyboard.press("Escape");
 
-  for (const k of ["ctx:node", "ctx:pane", "menu:view", "menu:align", "keys"]) {
+  for (const k of ["ctx:node", "ctx:pane", "ctx:edge", "ctx:edge-insert", "menu:view", "menu:align", "keys"]) {
     expect(got[k].length, `${k} 항목이 비었다`).toBeGreaterThan(1);
   }
   golden("commands", got);

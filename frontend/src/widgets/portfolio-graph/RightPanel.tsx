@@ -89,7 +89,7 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                      recordGap={!s.report ? null : staleSet.has(selEdge.target) ? "받는 노드가 예전 결과예요 — 다시 계산하면 점검해요."
                        : s.report.nodes[selEdge.source]?.status !== "ok" ? "보내는 노드가 계산되지 않아 점검하지 않았어요."
                        : "받는 노드를 이번에 계산하지 않아 점검하지 않았어요."}
-                     onCut={() => { const st = usePortfolioGraph.getState(); st.act(() => { st.cutEdge(selEdge.id); return "선을 끊었어요."; }); }}
+                     onCut={() => { const st = usePortfolioGraph.getState(); st.act(() => deleteNote(st.deleteElements([], [selEdge.id]))); }}
                      onInsert={(k, i, o) => { const st = usePortfolioGraph.getState();
                        st.act(() => { st.insertOnEdge(selEdge.id, k, i, o); return "선 사이에 노드를 넣었어요."; }); }} />
         )}

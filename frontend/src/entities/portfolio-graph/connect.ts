@@ -63,3 +63,15 @@ export function sourcesFor(targetId: string, port: CatalogPort, nodes: ConnNode[
       .map((o) => ({ node: n.id, port: o.name, label: e?.plain_label ?? n.data.kind }));
   });
 }
+
+/** 선 사이에 넣을 수 있는 노드(BT4 · R5) — 그 선의 값(`outType`)을 받아 같은 값을 내는 노드만, 카탈로그 순서 그대로.
+ *  선 탭 · 선 도구줄 · 선 우클릭 메뉴가 같은 목록을 쓴다. */
+export interface InsertCandidate { kind: string; label: string; sub: string; inPort: string; outPort: string }
+export function insertCandidates(outType: string | null | undefined, catalog: NodeCatalogEntry[]): InsertCandidate[] {
+  if (!outType) return [];
+  return catalog.flatMap((c) => {
+    const i = c.inputs.find((x) => x.type === outType);
+    const o = c.outputs.find((x) => x.type === outType);
+    return i && o ? [{ kind: c.type, label: c.plain_label, sub: c.plain_description, inPort: i.name, outPort: o.name }] : [];
+  });
+}

@@ -18,14 +18,18 @@ import { toggle, type Panels } from "./panels";
 import { usePortfolioGraph, type PgState } from "./store";
 import { collapsedMembers } from "./storeShared";
 import { wireFlag, wireLook } from "./wireStyle";
+import type { WireToolFn } from "./WireToolbar";
 
 export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, staleSet: Set<string>,
                                refs: { runToRef: MutableRefObject<(id: string) => void>; previewRef: MutableRefObject<(id: string | null) => void>;
-                                       runStrategyRef: MutableRefObject<(groupId: string) => void>; branchStrategyRef: MutableRefObject<(groupId: string) => void> },
+                                       runStrategyRef: MutableRefObject<(groupId: string) => void>; branchStrategyRef: MutableRefObject<(groupId: string) => void>;
+                                       wireToolRef: MutableRefObject<WireToolFn> },
                                onNeed: (id: string, port: string, type: string) => void, onFix: (sug: ProcedureSuggestion) => void,
                                onSocket: (id: string, port: string, type: string, side: "in" | "out") => void,
                                updatePanels: (f: (p: Panels) => Panels) => void, hoverEdge: string | null, dropWire: string | null) {
-  const { runToRef, previewRef, runStrategyRef, branchStrategyRef } = refs;
+  const { runToRef, previewRef, runStrategyRef, branchStrategyRef, wireToolRef } = refs;
+  /** 선 도구줄(R5) — 캔버스가 지금 가진 동작으로(우클릭 메뉴와 같은 길). */
+  const onTool = useCallback<WireToolFn>((id, a, arg) => wireToolRef.current(id, a, arg), [wireToolRef]);
   const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
   const live = useMemo(() => (s.report
@@ -188,12 +192,12 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
     const typeLabel = out ? (s.catalogMeta?.portPlain ?? PORT_PLAIN)[out.type] ?? out.type : null;
     return { ...e, ...remap, type: PG_WIRE_TYPE, data: { ...wire, typeLabel, hover: hoverEdge === e.id, flow: look.flow,
                                                          flag: wireFlag(s.report?.edges?.[e.id], staleSet.has(e.target)), onFlag,
-                                                         waypoints: gs || gt ? [] : viaOf(e) },
+                                                         waypoints: gs || gt ? [] : viaOf(e), proxy: !!(gs || gt), onTool },
              selected: e.id === s.selectedEdge,
              className: cls + (e.id === s.selectedEdge ? " pg-wire--picked" : "") + (e.id === dropWire ? " pg-wire--drop" : ""),
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
                       strokeWidth: look.width } };
     });
-  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire]);
+  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire, onTool]);
   return { cause, live, stageOfNode, mmMark, bandOf, numbered, onFlag, edgesStyled };
 }

@@ -11,7 +11,7 @@
  * - (CF3b2) 맨 위 관계 문장(서버) · 건너간 것(잰 값만) · 빠지거나 바뀐 것(전달 점검) — ★`[]` 은 "점검했고 찾지 못함", `null` 은 사유★.
  */
 import type { Edge } from "@xyflow/react";
-import { josa, type EdgeRecord, type EdgeRelation, type GraphError, type IssueLevel, type NodeCatalogEntry, type NodeRunResult,
+import { insertCandidates, josa, type EdgeRecord, type EdgeRelation, type GraphError, type IssueLevel, type NodeCatalogEntry, type NodeRunResult,
          type PgNode } from "@/entities/portfolio-graph";
 import { descendantsOf } from "./store";
 
@@ -58,7 +58,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
   const required = inp?.required !== false;
   const stops = required ? [edge.target, ...descendantsOf([edge.target], edges)] : [];
   const problem = errors.find((e) => e.edge_id === edge.id && e.code === "needs_unmet");
-  const inserts = out ? catalog.filter((c) => c.inputs.some((i) => i.type === out.type) && c.outputs.some((o) => o.type === out.type)) : [];
+  const inserts = insertCandidates(out?.type, catalog);
 
   return (
     <section className="pg-wire-sheet" aria-label="선">
@@ -137,17 +137,13 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
           <h3>사이에 넣기</h3>
           <p className="pg-wire-muted">{josa(typeName, ["을", "를"])} 받아 {josa(typeName, ["을", "를"])} 내는 노드만 보여요.</p>
           <ul className="pg-wire-inserts">
-            {inserts.map((c) => {
-              const i = c.inputs.find((x) => x.type === out!.type)!;
-              const o = c.outputs.find((x) => x.type === out!.type)!;
-              return (
-                <li key={c.type}>
-                  <button type="button" className="pg-wire-insert" data-kind={c.type} onClick={() => onInsert(c.type, i.name, o.name)}>
-                    <b>{c.plain_label}</b><span>{c.plain_description}</span>
-                  </button>
-                </li>
-              );
-            })}
+            {inserts.map((c) => (
+              <li key={c.kind}>
+                <button type="button" className="pg-wire-insert" data-kind={c.kind} onClick={() => onInsert(c.kind, c.inPort, c.outPort)}>
+                  <b>{c.label}</b><span>{c.sub}</span>
+                </button>
+              </li>
+            ))}
           </ul>
         </div>
       )}

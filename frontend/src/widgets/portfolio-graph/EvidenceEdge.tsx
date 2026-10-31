@@ -17,6 +17,7 @@ import { BRIEF_DX, FLAG_DX, type NodeLineage, type NodeStatus } from "@/entities
 import type { WireFlag } from "./wireStyle";
 import { insertAt, snapPt, wirePath, type Pt } from "./wirePath";
 import { usePortfolioGraph } from "./store";
+import { WireToolbar, type WireToolFn } from "./WireToolbar";
 
 export const PG_WIRE_TYPE = "pgWire";
 
@@ -37,6 +38,10 @@ export type WireData = {
   onFlag?: (edgeId: string) => void;
   /** 경유점(CF4c) — 문서의 `edges[].waypoints`. 접힌 상자의 대리 선에는 싣지 않는다(끝이 바뀌었다). */
   waypoints?: Pt[];
+  /** 접힌 상자의 대리 선(R5) — 실제 끝이 상자 안에 숨어 있어 도구줄을 띄우지 않는다. */
+  proxy?: boolean;
+  /** 선 도구줄 동작(R5) — 우클릭 메뉴와 같은 길로 캔버스가 받는다. */
+  onTool?: WireToolFn;
 }
 
 /** 원천 노드 결과 → 선 모양. 결과가 없거나 낡았으면 `null`(모양 없음). */
@@ -132,6 +137,7 @@ function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePositi
           </div>
         </EdgeLabelRenderer>
       )}
+      {selected && !data?.proxy && data?.onTool && <WireToolbar id={id} at={mid} via={via} onTool={data.onTool} />}
     </>
   );
 }
