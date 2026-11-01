@@ -40,6 +40,19 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
   /** 값이 같으면 앞의 노드·선 객체 그대로(R8 · `keepSame`) — 끌기 한 걸음에 움직인 카드와 그 선만 다시 그린다. */
   const prevNodes = useRef(new Map<string, unknown>());
   const prevEdges = useRef(new Map<string, unknown>());
+  // R8b — id → 노드 · 종류 → 카탈로그 항목(처음 것 — 예전 `find` 와 같다). 끌기 한 걸음마다 노드·선마다 목록을 처음부터 찾았다
+  // (200노드 · 선 200 = 걸음마다 수만 번 — 재서 찾음). 값은 그대로.
+  const byId = useMemo(() => {
+    const m = new Map<string, PgState["nodes"][number]>();
+    for (const n of s.nodes) if (!m.has(n.id)) m.set(n.id, n);
+    return m;
+  }, [s.nodes]);
+  const catOf = useMemo(() => {
+    const m = new Map<string, NonNullable<PgState["catalog"]>[number]>();
+    for (const c of s.catalog ?? []) if (!m.has(c.type)) m.set(c.type, c);
+    return m;
+  }, [s.catalog]);
+  const entryOf = useCallback((kind: string | undefined) => (kind === undefined ? undefined : catOf.get(kind)), [catOf]);
   const cause = s.cause && staleSet.has(s.cause.from) ? null : s.cause;
   const causeSet = useMemo(() => new Set(cause?.path ?? []), [cause]);
   const live = useMemo(() => (s.report
@@ -47,8 +60,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
     : null), [s.report, staleSet]);
   // 미니맵 칸(CF5b) — 노드 단계(카탈로그)와 표시(고름 > 실패 > 막힘, 지금 결과만).
   const stageOfNode = (id: string) => {
-    const kind = s.nodes.find((x) => x.id === id)?.data.kind;
-    return s.catalog?.find((c) => c.type === kind)?.stage ?? null;
+    return entryOf(byId.get(id)?.data.kind)?.stage ?? null;
   };
   const mmMark = (id: string): "picked" | "failed" | "blocked" | null =>
     s.picked.includes(id) || s.selectedId === id ? "picked"
@@ -72,11 +84,10 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
   /** 노드 → 그 노드가 든 접힌 상자(대리 포트로 선을 다시 그린다). */
   const collapsedOf = useMemo(() => collapsedMembers(s.groups, s.focusGroup), [s.groups, s.focusGroup]);
   const portColor = useCallback((nodeId: string, handle: string | null | undefined, side: "in" | "out") => {
-    const kind = s.nodes.find((n) => n.id === nodeId)?.data.kind;
-    const entry = s.catalog?.find((c) => c.type === kind);
+    const entry = entryOf(byId.get(nodeId)?.data.kind);
     const p = (side === "out" ? entry?.outputs : entry?.inputs)?.find((x) => x.name === handle);
     return { color: portTypeColor(p?.type), plain: p ? PORT_PLAIN[p.type] ?? p.name : handle ?? "?" };
-  }, [s.nodes, s.catalog]);
+  }, [byId, entryOf]);
   const bandOf = useMemo(() => {
     const m = new Map<string, number>();
     for (const g of s.groups) if (g.kind === "strategy") for (const id of g.members) m.set(id, g.color ?? 0);
@@ -106,9 +117,9 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
   // 카드 번호 배지 = 흐름 순서(선 탭 '1. 종목 고르기' 와 같음) — 노드·선의 접근 이름(R6)도 같은 번호를 쓴다.
   const num = useMemo(() => new Map(order.map((id, i) => [id, i + 1])), [order]);
   const plainOf = useCallback((id: string) => {
-    const kind = s.nodes.find((x) => x.id === id)?.data.kind;
-    return s.catalog?.find((c) => c.type === kind)?.plain_label ?? kind ?? id;
-  }, [s.nodes, s.catalog]);
+    const kind = byId.get(id)?.data.kind;
+    return entryOf(kind)?.plain_label ?? kind ?? id;
+  }, [byId, entryOf]);
   const numbered = useMemo(() => {
     const picked = new Set(s.picked);
     // 접근 이름(R6) — 번호 · 이름 · 상태 · 확인할 곳. 상태 말은 카드와 같은 `cardState`, 문제 수는 카드와 같은 `nodeIssues`.
@@ -187,10 +198,8 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
     // 선 요약은 ★원천 포트의 요약★이다 — 한 포트에서 여러 선이 나가면 같은 글이 겹쳐 쌓였다. 포트마다 한 번만(BS2).
     const briefed = new Set<string>();
     return keepSame(prevEdges.current, s.edges.map((e) => {
-    const kind = s.nodes.find((n) => n.id === e.source)?.data.kind;
-    const out = s.catalog?.find((c) => c.type === kind)?.outputs.find((p) => p.name === e.sourceHandle);
-    const tkind = s.nodes.find((n) => n.id === e.target)?.data.kind;
-    const inp = s.catalog?.find((c) => c.type === tkind)?.inputs.find((p) => p.name === e.targetHandle);
+    const out = entryOf(byId.get(e.source)?.data.kind)?.outputs.find((p) => p.name === e.sourceHandle);
+    const inp = entryOf(byId.get(e.target)?.data.kind)?.inputs.find((p) => p.name === e.targetHandle);
     const lit = path.has(e.source) && path.has(e.target);
     const src = live?.[e.source];
     const portKey = `${e.source}|${e.sourceHandle}`;
@@ -224,6 +233,6 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
              style: { stroke: wire.evidence === "blocked" ? "var(--pg-wire-off)" : portTypeColor(out?.type),
                       strokeWidth: look.width } };
     }));
-  }, [s.edges, s.nodes, s.catalog, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire, onTool, num, plainOf]);
+  }, [s.edges, byId, entryOf, path, s.running, s.runningIds, s.report, staleSet, onFlag, live, cause, causeSet, keep, collapsedOf, faintOthers, hoverEdge, s.selectedEdge, s.catalogMeta, dropWire, onTool, num, plainOf]);
   return { cause, live, stageOfNode, mmMark, bandOf, numbered, onFlag, edgesStyled };
 }

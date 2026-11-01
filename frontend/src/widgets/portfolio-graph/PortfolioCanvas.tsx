@@ -437,7 +437,13 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     if (!seen) rf.current.setCenter((l + r) / 2 + (ins.right - ins.left) / 2 / zoom, (t + bt) / 2 + ins.bottom / 2 / zoom, { zoom, duration: 250 });
   }, [ai.ai]);
   // AI5 — 길잡이(아래 바 세 번째 자리). 상태는 화면이 센 수·참거짓 — 서버로도 간다(설정값·종목 없음).
-  const kindOf = useCallback((id: string) => s.nodes.find((n) => n.id === id)?.data.kind, [s.nodes]);
+  // R8b — id → 노드(처음 것). 길잡이 상태가 노드마다 종류를 찾아(isWeight) 끌기 한 걸음마다 노드 수의 제곱만큼 돌았다.
+  const nodeById = useMemo(() => {
+    const m = new Map<string, PgNode>();
+    for (const n of s.nodes) if (!m.has(n.id)) m.set(n.id, n);
+    return m;
+  }, [s.nodes]);
+  const kindOf = useCallback((id: string) => nodeById.get(id)?.data.kind, [nodeById]);
   const isWeight = useCallback((id: string) => !!s.catalog?.find((c) => c.type === kindOf(id))?.outputs.some((o) => o.type === "Weights"),
     [s.catalog, kindOf]);
   const guideState = useMemo<GuideState>(() => {

@@ -53,8 +53,23 @@ export const BRIEF_MAX_W = 48;
 export const FLAG_DX = 12;
 export const FLAG_W = 16;
 
-/** 배치·카드가 함께 쓰는 카드 높이 — 확대와 무관한 한 상자. */
+/** 카탈로그(배열 그 자체)마다 종류 → 높이. 카탈로그는 바꿀 때 새 배열로 갈아 끼운다(제자리에서 고치지 않는다) — 새 배열이면 새로 잰다. */
+const heightMemo = new WeakMap<object, Map<string, number>>();
+const NO_CATALOG = {};
+/** 배치·카드가 함께 쓰는 카드 높이 — 확대와 무관한 한 상자.
+ *  R8b — 같은 카탈로그·종류면 앞서 잰 값(재서 찾음: 200노드 카드 끌기 한 걸음마다 겹침 검사·유령 자리·정렬선이 노드마다 불러
+ *  매번 설정 스키마를 풀었다). 값은 예전 식 그대로(`cardHeightOf`). */
 export function cardHeight(kind: string, catalog: NodeCatalogEntry[] | null | undefined): number {
+  const key = catalog ?? NO_CATALOG;
+  let memo = heightMemo.get(key);
+  if (!memo) heightMemo.set(key, (memo = new Map()));
+  const hit = memo.get(kind);
+  if (hit !== undefined) return hit;
+  const h = cardHeightOf(kind, catalog);
+  memo.set(kind, h);
+  return h;
+}
+function cardHeightOf(kind: string, catalog: NodeCatalogEntry[] | null | undefined): number {
   const e = catalog?.find((c) => c.type === kind);
   const combine = kind === "portfolio_combine";
   const rows = combine ? COMBINE_ROWS : e ? Math.max(e.inputs.length, e.outputs.length) : 0;

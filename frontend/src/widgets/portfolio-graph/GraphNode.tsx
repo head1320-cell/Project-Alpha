@@ -18,6 +18,7 @@ import { NodeWidgets } from "./NodeWidgets";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
 import { usePortfolioGraph } from "./store";
+import { inKeyOf, outKeyOf } from "./edgeKeys";
 import { SlotGrip } from "./SlotGrip";
 import { parsePlace, placeToolbar } from "./toolbarPlace";
 
@@ -145,8 +146,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   const folded = usePortfolioGraph((s) => s.folded.includes(id));
   const toggleFold = usePortfolioGraph((s) => s.toggleFold);
   const catalog = usePortfolioGraph((s) => s.catalog);
-  // 나가는 선 수(CF2) — 출력 소켓마다. 같은 내용이면 다시 그리지 않게 글자로.
-  const outKey = usePortfolioGraph((s) => s.edges.filter((e) => e.source === id).map((e) => e.sourceHandle ?? "").join("|"));
+  // 나가는 선 수(CF2) — 출력 소켓마다. 같은 내용이면 다시 그리지 않게 글자로. 선 목록마다 한 번 만든 색인에서 꺼낸다(R8b — `edgeKeys`).
+  const outKey = usePortfolioGraph((s) => outKeyOf(s.edges, id));
   const showCause = usePortfolioGraph((s) => s.showCause);
   // 갈래(BM C3) — 이 노드가 복제본이면 원본 id. 원본 대비 Δ 는 헤드라인 이름·단위가 같을 때만.
   const origId = usePortfolioGraph((s) => s.branches.find((b) => id in b.map)?.map[id] ?? null);
@@ -164,7 +165,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   // 필수 입력이 비었는데 서버가 이미 말한 것(missing_input)은 아래 "이어 주세요" 한 줄로 쉽게 바꿔 보인다(같은 사실 — BN N3).
   const errors = nodeIssues(validation?.errors, id);
   // 비어 있는 필수 입력 — 연결 규칙과 같은 판정(필수 · 들어오는 선 없음). 포트에 고리, 제목 아래 한 줄.
-  const linkedIn = usePortfolioGraph((s) => s.edges.filter((e) => e.target === id).map((e) => e.targetHandle).join("|"));
+  const linkedIn = usePortfolioGraph((s) => inKeyOf(s.edges, id));
   const runningHere = usePortfolioGraph((s) => s.running && !!s.runningIds?.includes(id));
 
   const unknown = !!data.unknownReason || !entry;
@@ -238,7 +239,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
          data-node-id={id} data-kind={data.kind}
          style={{ minHeight: folded ? undefined : boxH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
                   ["--pg-i" as string]: data.num ?? 0, ["--pg-rows" as string]: rows }}>
-      <NodeToolbar isVisible={selected && single} position={place.position} align={place.align} offset={8}>
+      {/* R8b — 보일 때만 단다. React Flow 의 NodeToolbar 는 안 보여도 스토어를 구독해(화면 이동마다 · 노드 목록을 거름) 카드 200장이면
+          200개가 걸음마다 다시 그려졌다(재서 찾음). 보일 때의 모양은 그대로(isVisible 도 그대로). */}
+      {selected && single && <NodeToolbar isVisible={selected && single} position={place.position} align={place.align} offset={8}>
         {/* 촘촘한 격자(BS2)에서 도구줄이 옆 카드를 덮지 않게 짧게 — 주 동작만 글, 나머지는 아이콘 + 이름(aria-label·title).
             예전 386px(단축키 글·세 단추 글)은 확대 0.64 에서 카드 네 장 폭이었다. 단축키는 title·aria-keyshortcuts 로. */}
         <button type="button" className="pg-run-to" disabled={running} title="여기까지 계산 (Shift+Enter)" aria-keyshortcuts="Shift+Enter"
@@ -257,7 +260,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
                 title={pinned ? "그림 고정 풀기" : "그림 고정 — 멀리서 볼 때도 이 노드의 작은 그림을 보여요"}>
           {pinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />}
         </button>
-      </NodeToolbar>
+      </NodeToolbar>}
       <div className="pg-node-k">
         <i className="pg-node-num" style={{ background: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)" }}>{data.num ?? "·"}</i>
         <span className="pg-node-plain">{entry.plain_label}</span>

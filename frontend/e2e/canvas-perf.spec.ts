@@ -1,6 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { keepSame, sameValue } from "../src/widgets/portfolio-graph/keepSame";
+import { edgeKeys, inKeyOf, outKeyOf } from "../src/widgets/portfolio-graph/edgeKeys";
+import { cardHeight } from "../src/entities/portfolio-graph/size";
+import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 import { PG_Z_USERS, pgZRule } from "../src/widgets/portfolio-graph/zoomVar";
 
 /**
@@ -20,6 +23,17 @@ const STEPS = 60;
 /** 잴 동작만 고르기(탐침용 — 기본은 셋 모두). */
 const ACTIONS = new Set((process.env.CANVAS_PERF_ACTIONS ?? "drag,pan,wheel").split(","));
 const WHEELS = 20;
+/** R8b — 나누기 회(시간 재기와 다른 회): 동작 구간의 CPU 표본(CDP Profiler · 200µs) + 커밋마다 일을 한 컴포넌트(형별 수·커밋 수·자기 그리기 시간 —
+ *  `next build --profile` 빌드에서만 시간이 있다). 표본기가 프레임을 늦추므로 이 회의 시간 숫자는 표로 쓰지 않는다. */
+const PROFILE = process.env.CANVAS_PERF_PROFILE === "1";
+// R8b — 재는 회(CANVAS_PERF=1)에는 Playwright 기록(trace)을 끈다. 켜 두면 걸음마다(마우스·evaluate) 페이지 DOM 사진을 찍어, 200노드 끌기에서
+// 표본기로 잰 메인 스레드 시간의 약 73% 가 그 사진 찍기였다(시험 도구의 일 — 재는 대상이 아님). 게이트·전체 E2E 는 설정 그대로.
+// (`trace` 는 묶음 안에서 바꿀 수 없어 파일 맨 위에서만 — 재는 회에는 이 파일의 다른 시험도 기록 없이 돈다.)
+if (PERF) test.use({ trace: "off" });
+/** 화면 밖 카드를 DOM 에 두지 않는 빌드를 잰다(R8b `onlyRenderVisibleElements` 탐침) — 열 때 카드 N 장 대신 문서가 실린 것(보존된 문서의 노드 수)을 기다린다. */
+const VISIBLE_ONLY = process.env.CANVAS_PERF_VISIBLE_ONLY === "1";
+/** 미니맵을 켜고 잰다(R8b — 켠 사람만의 길). 기본은 끔(보기 기본값 그대로). */
+const MINIMAP = process.env.CANVAS_PERF_MINIMAP === "1";
 
 type Doc = { format: string; version: number; meta: { name: string }; nodes: object[]; edges: { id: string; source: string; target: string }[] };
 /** 사슬 k개(종목 → 수익률 → 기대 수익 추정 → 비중 계산 · 선 4)를 가로 5사슬 격자로 — 서버 값 0(계산 전). */
@@ -39,9 +53,11 @@ function chainDoc(k: number, row = 640): Doc {
 }
 
 /** 페이지 안 계기 — rAF 간격 · long task · 문서 보존 쓰기(수·시간·바이트) · React 커밋 수. `__pf.on` 인 동안만 센다. */
-function instrument() {
-  type PF = { on: boolean; frames: number[]; lt: { s: number; d: number }[]; wip: { n: number; ms: number; bytes: number }; commits: number };
-  const pf: PF = { on: false, frames: [], lt: [], wip: { n: 0, ms: 0, bytes: 0 }, commits: 0 };
+function instrument(profile = false) {
+  type Comp = { label: string; n: number; commits: number; ms: number };
+  type PF = { on: boolean; frames: number[]; lt: { s: number; d: number }[]; wip: { n: number; ms: number; bytes: number }; commits: number;
+              marks: { t: number; z: string }[]; comps: Map<unknown, Comp>; renderMs: number };
+  const pf: PF = { on: false, frames: [], lt: [], wip: { n: 0, ms: 0, bytes: 0 }, commits: 0, marks: [], comps: new Map(), renderMs: 0 };
   (window as unknown as { __pf: PF }).__pf = pf;
   const set = Storage.prototype.setItem;
   Storage.prototype.setItem = function (k: string, v: string) {
@@ -60,10 +76,47 @@ function instrument() {
   // 다시 그린 카드·선 세기(R8 계약 시험) — 커밋마다 섬유 나무를 걸어, 앞 커밋에 없던 섬유 중 함수 컴포넌트를 실제로 부른 것(PerformedWork)만.
   // 카드 = React Flow 가 넘긴 노드 props(positionAbsoluteX) + 우리 data.kind · 선 = 선 props(sourceX) + 우리 data.typeLabel ·
   // 감싸개 = React Flow 의 노드·선 감싸개(props 에 nodeTypes·edgeTypes) · 이야기 단계 = 오른쪽 창 단계(props 에 n·node·current).
-  type F = { child: F | null; sibling: F | null; flags: number; type: unknown; memoizedProps: Record<string, unknown> | null };
+  type F = { child: F | null; sibling: F | null; flags: number; type: unknown; tag: number; memoizedProps: Record<string, unknown> | null;
+             stateNode: unknown; selfBaseDuration?: number };
   const rec = { track: false, prev: new WeakSet<object>(), cards: [] as string[], edges: [] as string[], wraps: [] as string[], wrapEdges: [] as string[],
-                steps: [] as string[], root: null as { current: F } | null };
+                steps: [] as string[], toolbars: 0, root: null as { current: F } | null };
   (window as unknown as { __rr: typeof rec }).__rr = rec;
+  /** 형의 이름 대신(운영 빌드는 이름이 줄어든다) 처음 그린 DOM 요소의 클래스 두 개 — 없으면 태그. */
+  const labelOf = (f: F) => {
+    let c: F | null = f;
+    for (let i = 0; c && i < 40; i++, c = c.child) {
+      if (c.tag === 5 && c.stateNode instanceof Element) {
+        const cls = (c.stateNode.getAttribute("class") ?? "").split(/\s+/).filter(Boolean).slice(0, 2).join(".");
+        return cls ? `.${cls}` : c.stateNode.tagName.toLowerCase();
+      }
+    }
+    return "(DOM 없음)";
+  };
+  /** 나누기 회 — 이번 커밋에 일을 한(PerformedWork) 함수 컴포넌트를 형별로 센다. 통째로 건너뛴 가지는 앞 커밋의 섬유가 그대로 남아
+   *  예전 깃발을 지니므로 앞 커밋 나무에 있던 섬유는 뺀다(R8 세기와 같은 규칙). */
+  let tallyPrev = new WeakSet<object>();
+  const tally = (root: F) => {
+    const once = new Set<unknown>();
+    const seen = new WeakSet<object>();
+    const stack: (F | null)[] = [root];
+    while (stack.length) {
+      const f = stack.pop();
+      if (!f) continue;
+      seen.add(f);
+      if (!tallyPrev.has(f) && (f.flags & 1) && typeof f.type === "function") {
+        let c = pf.comps.get(f.type);
+        if (!c) pf.comps.set(f.type, (c = { label: labelOf(f), n: 0, commits: 0, ms: 0 }));
+        c.n++;
+        if (!once.has(f.type)) { once.add(f.type); c.commits++; }
+        c.ms += f.selfBaseDuration ?? 0;
+        pf.renderMs += f.selfBaseDuration ?? 0;
+      }
+      stack.push(f.sibling, f.child);
+    }
+    tallyPrev = seen;
+  };
+  /** 재기 직전 — 지금 나무를 '앞 커밋'으로 삼고 셈을 비운다. */
+  (window as unknown as { __tallyBase: () => void }).__tallyBase = () => { if (rec.root) tally(rec.root.current); pf.comps.clear(); pf.renderMs = 0; };
   const walk = (root: F, count: boolean) => {
     const seen = new WeakSet<object>();
     const stack: (F | null)[] = [root];
@@ -78,14 +131,20 @@ function instrument() {
         else if ("nodeTypes" in p && typeof p.id === "string") rec.wraps.push(p.id);
         else if ("edgeTypes" in p && typeof p.id === "string") rec.wrapEdges.push(p.id);
         else if (typeof p.n === "number" && "node" in p && "current" in p && typeof p.id === "string") rec.steps.push(p.id);
+        // React Flow 노드 도구줄(R8b) — props 에 isVisible·position·align·offset
+        else if (typeof p.isVisible === "boolean" && "position" in p && "align" in p && typeof p.offset === "number") rec.toolbars++;
       }
       stack.push(f.sibling, f.child);
     }
     rec.prev = seen;
   };
-  (window as unknown as { __rrStart: () => void }).__rrStart = () => { rec.cards = []; rec.edges = []; rec.wraps = []; rec.wrapEdges = []; rec.steps = []; if (rec.root) walk(rec.root.current, false); rec.track = true; };
+  (window as unknown as { __rrStart: () => void }).__rrStart = () => { rec.cards = []; rec.edges = []; rec.wraps = []; rec.wrapEdges = []; rec.steps = []; rec.toolbars = 0; if (rec.root) walk(rec.root.current, false); rec.track = true; };
   const hook = (window as unknown as { __REACT_DEVTOOLS_GLOBAL_HOOK__: { onCommitFiberRoot: (id: number, root: { current: F }) => void } }).__REACT_DEVTOOLS_GLOBAL_HOOK__;
-  hook.onCommitFiberRoot = (_id, root) => { if (pf.on) pf.commits++; rec.root = root; if (rec.track) walk(root.current, true); };
+  hook.onCommitFiberRoot = (_id, root) => {
+    if (pf.on) { pf.commits++; if (profile) tally(root.current); }
+    rec.root = root;
+    if (rec.track) walk(root.current, true);
+  };
   const loop = (t: number) => { if (pf.on) pf.frames.push(t); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
   try { new PerformanceObserver((l) => { for (const x of l.getEntries()) pf.lt.push({ s: x.startTime, d: x.duration }); }).observe({ type: "longtask" }); } catch { /* */ }
@@ -93,24 +152,36 @@ function instrument() {
 
 async function open(page: Page, doc: Doc, trackBoot = false) {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.addInitScript(instrument);
+  await page.addInitScript(instrument, PROFILE);
   if (trackBoot) await page.addInitScript(() => { (window as never as { __rr: { track: boolean } }).__rr.track = true; });
-  await page.addInitScript((d) => {
+  await page.addInitScript(([d, minimap]) => {
     try {
       if (sessionStorage.getItem("r8_seeded")) return;
       sessionStorage.setItem("r8_seeded", "1");
       for (const k of ["alpha_pg_panels", "alpha_pg_view", "alpha_pg_left_tab"]) localStorage.removeItem(k);
+      if (minimap) localStorage.setItem("alpha_pg_view", JSON.stringify({ minimap: true }));
       localStorage.setItem("alpha_pg_welcomed", "1");
       sessionStorage.setItem("alpha_pg_wip", JSON.stringify(d));
     } catch { /* */ }
-  }, doc);
+  }, [doc, MINIMAP] as const);
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(".pg-node")).toHaveCount(doc.nodes.length, { timeout: 60_000 });
-  await settle(page, 800);
+  if (VISIBLE_ONLY) {
+    await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 60_000 });
+    await settle(page, 1500);
+  } else {
+    await expect(page.locator(".pg-node")).toHaveCount(doc.nodes.length, { timeout: 60_000 });
+    await settle(page, 800);
+  }
 }
 /** 확대 — React Flow 화면 변환에서 읽는다(우리 CSS 변수와 무관하게 — 탐침이 그 변수를 꺼도 잰다). */
 const zoomOf = (page: Page) => page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).a);
 const frame = (page: Page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+/** 한 프레임 기다린 뒤 표를 남긴다(때 · 확대 단계 `data-zoom`) — 휠 프레임 나누기용. */
+const frameMark = (page: Page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => {
+  const pf = (window as never as { __pf: { on: boolean; marks: { t: number; z: string }[] } }).__pf;
+  if (pf.on) pf.marks.push({ t: performance.now(), z: document.querySelector<HTMLElement>(".pg-canvas")?.dataset.zoom ?? "" });
+  r(null);
+})));
 async function settle(page: Page, ms = 500) { await page.waitForTimeout(ms); await frame(page); await frame(page); }
 async function view(page: Page, v: "fit" | "1x") {
   await page.locator(".react-flow__controls-fitview").click();
@@ -148,29 +219,60 @@ async function measure(page: Page, row: Record<string, unknown>, act: () => Prom
   await cdp.send("Performance.enable");
   const m0 = Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((x) => [x.name, x.value]));
   const z0 = await zoomOf(page);
-  const t0 = await page.evaluate(() => { const pf = (window as never as { __pf: { on: boolean; frames: number[]; commits: number; wip: { n: number; ms: number; bytes: number } } }).__pf;
-    pf.frames = []; pf.commits = 0; pf.wip = { n: 0, ms: 0, bytes: 0 }; pf.on = true; return performance.now(); });
+  if (PROFILE) {
+    await cdp.send("Profiler.enable");
+    await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
+    await page.evaluate(() => (window as never as { __tallyBase: () => void }).__tallyBase());
+  }
+  const t0 = await page.evaluate(() => { const pf = (window as never as { __pf: { on: boolean; frames: number[]; commits: number; marks: unknown[]; wip: { n: number; ms: number; bytes: number } } }).__pf;
+    pf.frames = []; pf.commits = 0; pf.marks = []; pf.wip = { n: 0, ms: 0, bytes: 0 }; pf.on = true; return performance.now(); });
+  if (PROFILE) await cdp.send("Profiler.start");
   const w0 = Date.now();
   await act();
   await frame(page);
   const wall = Date.now() - w0;
+  const prof = PROFILE ? (await cdp.send("Profiler.stop")).profile : null;
   await page.waitForTimeout(300);                                          // long task 기록이 늦게 온다
   const r = await page.evaluate((t: number) => {
     const pf = (window as never as { __pf: { on: boolean; frames: number[]; lt: { s: number; d: number }[]; commits: number; wip: { n: number; ms: number; bytes: number } } }).__pf;
     pf.on = false;
     const lt = pf.lt.filter((x) => x.s >= t);
-    return { frames: pf.frames, ltN: lt.length, ltMs: lt.reduce((a, x) => a + x.d, 0), commits: pf.commits, wip: pf.wip };
+    const all = (pf as never as { comps: Map<unknown, { label: string; n: number; commits: number; ms: number }> }).comps;
+    const comps = [...all.values()].sort((a, b) => b.ms - a.ms || b.n - a.n).slice(0, 40)
+      .map((c) => ({ ...c, ms: +c.ms.toFixed(1) }));
+    return { frames: pf.frames, ltN: lt.length, ltMs: lt.reduce((a, x) => a + x.d, 0), commits: pf.commits, wip: pf.wip,
+             marks: (pf as never as { marks: { t: number; z: string }[] }).marks, comps,
+             renderMs: +(pf as never as { renderMs: number }).renderMs.toFixed(1) };
   }, t0);
   const m1 = Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((x) => [x.name, x.value]));
   await cdp.detach();
   const iv = r.frames.slice(1).map((t, i) => t - r.frames[i]);
   const ms = (k: string) => Math.round((m1[k] - m0[k]) * 1000);
+  // 휠 — 걸음마다 남긴 표(때 · 확대 단계)로 프레임을 '단계 넘김'·'단계 안'으로 나눈다. 걸음 i 의 창 = [표 i−1, 표 i] 안에서 끝난 rAF 간격 중 가장 긴 것.
+  const steps: { cross: boolean; ms: number }[] = [];
+  for (let i = 1; i < r.marks.length; i++) {
+    const [a, b] = [r.marks[i - 1], r.marks[i]];
+    const inWin = r.frames.slice(1).map((t, k) => ({ t, d: t - r.frames[k] })).filter((x) => x.t > a.t && x.t <= b.t).map((x) => x.d);
+    steps.push({ cross: a.z !== b.z, ms: inWin.length ? Math.max(...inWin) : NaN });
+  }
+  const sum = (d: number[]) => ({ n: d.length, p50: +q(d, 0.5).toFixed(1), p95: +q(d, 0.95).toFixed(1), max: d.length ? +Math.max(...d).toFixed(1) : NaN });
+  const part = (cross: boolean) => sum(steps.filter((x) => x.cross === cross).map((x) => x.ms));
+  /** 걸음마다 가장 긴 프레임(R8b) — rAF 간격 p95 는 기다리는 동안의 빈 프레임이 섞여 시험 도구의 빠르기에 따라 바뀐다. 걸음 단위는 그렇지 않다. */
+  const stepSum = steps.length ? sum(steps.map((x) => x.ms)) : undefined;
+  const wheelSplit = steps.length && row.action === "wheel" ? { inLevel: part(false), crossing: part(true) } : undefined;
+  if (prof) {
+    mkdirSync(OUT, { recursive: true });
+    writeFileSync(`${OUT}/prof_${LABEL}_${RUN}_${row.n}_${row.view}_${row.action}.cpuprofile`, JSON.stringify(prof));
+  }
   const out = {
-    ...row, label: LABEL, run: RUN, wallMs: wall, frames: iv.length,
+    ...row, ...(MINIMAP ? { minimap: true } : {}), label: LABEL, run: RUN, wallMs: wall, frames: iv.length,
     p50: +q(iv, 0.5).toFixed(1), p95: +q(iv, 0.95).toFixed(1), max: +Math.max(...iv).toFixed(1), over50: iv.filter((x) => x > 50).length,
     longN: r.ltN, longMs: Math.round(r.ltMs), scriptMs: ms("ScriptDuration"), layoutMs: ms("LayoutDuration"), styleMs: ms("RecalcStyleDuration"), taskMs: ms("TaskDuration"),
     commits: r.commits, wipN: r.wip.n, wipMs: +r.wip.ms.toFixed(1), wipBytes: r.wip.bytes, zoom0: +z0.toFixed(3), zoom1: +(await zoomOf(page)).toFixed(3),
     dom: await page.locator(".react-flow__node").count(),
+    ...(stepSum ? { step: stepSum } : {}),
+    ...(wheelSplit ? { wheelSplit } : {}),
+    ...(PROFILE ? { profile: true, renderMs: r.renderMs, comps: r.comps } : {}),
   };
   mkdirSync(OUT, { recursive: true });
   appendFileSync(`${OUT}/perf.jsonl`, JSON.stringify(out) + "\n");
@@ -196,10 +298,11 @@ test("R8 · 전제 — 잴 200노드 문서는 서버 검증 문제 0 · 노드�
 
 const rrStart = (page: Page) => page.evaluate(() => (window as never as { __rrStart: () => void }).__rrStart());
 const rrTake = (page: Page) => page.evaluate(() => {
-  const r = (window as never as { __rr: { track: boolean; cards: string[]; edges: string[]; wraps: string[]; wrapEdges: string[]; steps: string[] } }).__rr;
+  const r = (window as never as { __rr: { track: boolean; cards: string[]; edges: string[]; wraps: string[]; wrapEdges: string[]; steps: string[]; toolbars: number } }).__rr;
   const u = (a: string[]) => [...new Set(a)].sort();
   r.track = false;
-  return { cards: u(r.cards), edges: u(r.edges), wraps: u(r.wraps.filter((id) => !id.includes(":"))), wrapEdges: u(r.wrapEdges), steps: u(r.steps), cardRenders: r.cards.length };
+  return { cards: u(r.cards), edges: u(r.edges), wraps: u(r.wraps.filter((id) => !id.includes(":"))), wrapEdges: u(r.wrapEdges), steps: u(r.steps), cardRenders: r.cards.length,
+           toolbars: r.toolbars };
 });
 
 test("R8 · 고른 카드를 끄는 걸음마다 다시 그리는 카드는 그 카드 하나 · 선은 그 카드에 닿은 선만 (짝: 고른 카드를 바꾸면 고름이 바뀐 카드는 다시 그린다 · 계기는 처음 열 때 카드를 모두 센다)", async ({ page }) => {
@@ -279,6 +382,88 @@ test("R8 · keepSame — 값이 같으면 앞 객체 그대로 (짝: 자리·dat
   expect(sameValue({ a: 1, b: undefined }, { a: 1, c: undefined })).toBe(false);
   expect(sameValue({ a: { b: { c: { d: { e: 1 } } } } }, { a: { b: { c: { d: { e: 1 } } } } })).toBe(false);
   expect(sameValue(new Date(0), new Date(0))).toBe(false);                   // 평범한 객체가 아니면 같은 것일 때만
+});
+
+// ── 규칙(브라우저 없이) — 카드 높이 기억 · 선 열쇠 색인(R8b) ─────────────────────────────────
+test("R8b · 카드 높이 기억 · 카드의 선 열쇠 색인 — 예전 식과 같은 값 (짝: 다른 카탈로그 배열·다른 선 목록이면 새로 잰다)", () => {
+  const entry = (inputs: number, fields: number, type = "k"): NodeCatalogEntry => ({
+    type, label: type, plain_label: type, stage: "data", description: "", category: "data",
+    inputs: Array.from({ length: inputs }, (_, i) => ({ name: `i${i}`, type: "Returns", required: true })),
+    outputs: [{ name: "o", type: "Returns" }],
+    params_schema: { type: "object", properties: Object.fromEntries(Array.from({ length: fields }, (_, i) => [`f${i}`, { type: "number", default: 1 }])) },
+  } as unknown as NodeCatalogEntry);
+  const a = [entry(1, 0)], b = [entry(4, 2)];
+  const ha = cardHeight("k", a);
+  expect(cardHeight("k", a)).toBe(ha);                                       // 같은 카탈로그 · 같은 종류 = 같은 값
+  const hb = cardHeight("k", b);
+  expect(hb).toBeGreaterThan(ha);                                            // 짝: 다른 카탈로그 배열(포트·위젯이 많음)이면 그 값으로 — 앞 값을 쓰지 않는다
+  expect(cardHeight("k", a)).toBe(ha);                                       //      그리고 앞 카탈로그는 앞 값 그대로
+  expect(cardHeight("k", [...a])).toBe(ha);                                  //      새 배열이어도 내용이 같으면 같은 값(다시 잼)
+  expect(cardHeight("none", null)).toBe(cardHeight("none", undefined));      // 카탈로그 없음
+  expect(cardHeight("none", null)).not.toBe(ha);
+  // 짝: 한 카탈로그 안에서도 종류마다 제 값 — 앞에 물은 종류의 값을 돌려주지 않는다(새 배열로 다시 잰 값과 같다)
+  const two = [entry(1, 0, "small"), entry(5, 3, "big")];
+  const small = cardHeight("small", two), big = cardHeight("big", two);
+  expect(big).toBeGreaterThan(small);
+  expect(big).toBe(cardHeight("big", [...two]));
+  expect(cardHeight("small", two)).toBe(cardHeight("small", [...two]));
+  // 선 열쇠 — 예전 식(카드마다 선 목록을 거름)과 같다: 순서 · 빈 손잡이(null·undefined) · 선 없는 카드
+  const naiveOut = (es: typeof edges, id: string) => es.filter((e) => e.source === id).map((e) => e.sourceHandle ?? "").join("|");
+  const naiveIn = (es: typeof edges, id: string) => es.filter((e) => e.target === id).map((e) => e.targetHandle).join("|");
+  const ids = ["a", "b", "c", "d", "e"];
+  let seed = 7;
+  const rnd = (n: number) => { seed = (seed * 48271) % 2147483647; return seed % n; };
+  const hand = () => [null, undefined, "p", "q", "r"][rnd(5)];
+  const edges = Array.from({ length: 40 }, () => ({ source: ids[rnd(4)], target: ids[rnd(5)], sourceHandle: hand(), targetHandle: hand() }));
+  for (const id of ids) {
+    expect(outKeyOf(edges, id), `나가는 ${id}`).toBe(naiveOut(edges, id));
+    expect(inKeyOf(edges, id), `들어오는 ${id}`).toBe(naiveIn(edges, id));
+  }
+  expect(naiveOut(edges, "e")).toBe("");                                     // 'e' 는 원천이 아니다 — 빈 열쇠도 견줌
+  expect(edgeKeys(edges)).toBe(edgeKeys(edges));                             // 같은 목록이면 같은 색인
+  const more = [...edges, { source: "a", target: "e", sourceHandle: "z", targetHandle: "y" }];
+  expect(outKeyOf(more, "a")).toBe(naiveOut(more, "a"));                     // 짝: 새 목록이면 새 색인(앞 목록의 열쇠를 쓰지 않는다)
+  expect(outKeyOf(more, "a")).not.toBe(outKeyOf(edges, "a"));
+  expect(inKeyOf(more, "e")).toBe(naiveIn(more, "e"));
+});
+
+test("R8b · 노드 도구줄은 고른 카드에만 단다 — 화면 이동 걸음마다 다시 그리는 도구줄은 하나 (짝: 고른 카드의 도구줄은 보이고 · 고르기를 풀면 사라지고 · 다른 카드를 고르면 그 카드에)", async ({ page }) => {
+  const doc = chainDoc(10);                                                // 40노드
+  await open(page, doc);
+  await view(page, "fit");
+  const r0 = (await page.locator('.pg-node[data-node-id="r0"]').boundingBox())!;
+  await page.mouse.click(r0.x + r0.width / 2, r0.y + 14);
+  await expect(page.locator('.react-flow__node[data-id="r0"]')).toHaveClass(/selected/);
+  await expect(page.locator(".react-flow__node-toolbar .pg-run-to")).toHaveCount(1);
+  await expect(page.locator(".react-flow__node-toolbar .pg-run-to")).toBeVisible();
+  await settle(page, 300);
+  const p = await panePoint(page);
+  expect(p).not.toBeNull();
+  await rrStart(page);
+  await page.mouse.move(p!.x, p!.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) { await page.mouse.move(p!.x - i * 5, p!.y - i * 3); await frame(page); }
+  await page.mouse.up();
+  await settle(page, 300);
+  const pan = await rrTake(page);
+  // 계기가 센다 — 고른 카드의 도구줄은 화면 이동마다 자리를 다시 잡는다(0 이면 '하나'가 늘 통과).
+  expect(pan.toolbars, "고른 카드의 도구줄은 걸음마다 다시 그려진다").toBeGreaterThanOrEqual(6);
+  expect(pan.toolbars, `다시 그린 도구줄 ${pan.toolbars} — 걸음(12)당 하나`).toBeLessThanOrEqual(14);
+  // 짝 — 빈 곳을 누르면 고르기가 풀리고 도구줄이 사라진다 · 다른 카드를 고르면 그 카드에 뜬다
+  const q = await panePoint(page);
+  await page.mouse.click(q!.x, q!.y);
+  await expect(page.locator('.react-flow__node[data-id="r0"]')).not.toHaveClass(/selected/);
+  await expect(page.locator(".react-flow__node-toolbar .pg-run-to")).toHaveCount(0);
+  const u6 = (await page.locator('.pg-node[data-node-id="u6"]').boundingBox())!;
+  await page.mouse.click(u6.x + u6.width / 2, u6.y + 14);
+  await expect(page.locator('.react-flow__node[data-id="u6"]')).toHaveClass(/selected/);
+  await expect(page.locator(".react-flow__node-toolbar .pg-run-to")).toHaveCount(1);
+  await expect(page.locator(".react-flow__node-toolbar")).toHaveAttribute("data-id", "u6");   // React Flow 가 단 노드 id
+  const tb = (await page.locator(".react-flow__node-toolbar").boundingBox())!;
+  const u6b = (await page.locator('.pg-node[data-node-id="u6"]').boundingBox())!;
+  // 자리는 덜 덮는 쪽(위·아래 · 가운데·왼쪽·오른쪽 끝 맞춤 — toolbarPlace)이라 가로로 카드와 겹치고, 세로로 카드 바로 위나 아래에 붙는다.
+  expect(tb.x < u6b.x + u6b.width && u6b.x < tb.x + tb.width, "도구줄과 u6 가 가로로 겹친다").toBe(true);
+  expect(Math.min(Math.abs(tb.y + tb.height - u6b.y), Math.abs(tb.y - (u6b.y + u6b.height))), "도구줄은 u6 바로 위나 아래").toBeLessThan(16);
 });
 
 // ── 확대 값 --pg-z 는 쓰는 곳에만(R8) ─────────────────────────────────────────────────
@@ -364,7 +549,8 @@ for (const k of [25, 50]) {
       const drag = await measure(page, { ...base, action: "drag" }, async () => {
         await page.mouse.move(c!.x, c!.y);
         await page.mouse.down();
-        for (let i = 1; i <= STEPS; i++) { await page.mouse.move(c!.x + i * 4, c!.y + i * 2); await frame(page); }
+        await frameMark(page);
+        for (let i = 1; i <= STEPS; i++) { await page.mouse.move(c!.x + i * 4, c!.y + i * 2); await frameMark(page); }
         await page.mouse.up();
       });
       expect(drag.wipN, "놓은 뒤에는 문서가 한 번은 보존돼야 한다(끌기가 정말 일어났는지)").toBeGreaterThan(0);
@@ -377,7 +563,8 @@ for (const k of [25, 50]) {
       await measure(page, { ...base, action: "pan" }, async () => {
         await page.mouse.move(p!.x, p!.y);
         await page.mouse.down();
-        for (let i = 1; i <= STEPS; i++) { await page.mouse.move(p!.x - i * 5, p!.y - i * 3); await frame(page); }
+        await frameMark(page);
+        for (let i = 1; i <= STEPS; i++) { await page.mouse.move(p!.x - i * 5, p!.y - i * 3); await frameMark(page); }
         await page.mouse.up();
       });
       }
@@ -387,8 +574,9 @@ for (const k of [25, 50]) {
       let mid = 0;
       const zr = await measure(page, { ...base, action: "wheel" }, async () => {
         await page.mouse.move(720, 450);
+        await frameMark(page);
         for (let i = 0; i < WHEELS; i++) {
-          await page.mouse.wheel(0, i < WHEELS / 2 ? -100 : 100); await frame(page);
+          await page.mouse.wheel(0, i < WHEELS / 2 ? -100 : 100); await frameMark(page);
           if (i === WHEELS / 2 - 1) mid = await zoomOf(page);
         }
       });
