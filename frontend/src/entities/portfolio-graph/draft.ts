@@ -6,12 +6,45 @@ import { placeSuggestion, type Box, type PlaceNode } from "./ghost";
 import { NEW_NODE } from "./procedure";
 import { cardHeight, NODE_W } from "./size";
 import { stableJson } from "./staleness";
-import type { DraftBody, GraphDoc, NodeCatalogEntry } from "./types";
+import type { DraftAdd, DraftBody, DraftConnect, DraftSet, GraphDoc, NodeCatalogEntry } from "./types";
 
 /** 초안이 기댄 문서 — 노드(id·종류·설정)와 선. ★위치는 넣지 않는다★(옮기기만 하면 초안은 그대로, 설정을 바꾸면 지운다). */
 export function draftSig(doc: GraphDoc): string {
   return stableJson([doc.nodes.map((n) => [n.id, n.type, n.params]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
                      doc.edges.map((e) => [e.source, e.source_port, e.target, e.target_port].join("|")).sort()]);
+}
+
+/** 초안 줄의 열쇠(U5) — 더하기 `add:<id>` · 잇기 `connect:<id>` · 값 `set:<노드>.<칸>`. */
+export const draftKey = {
+  add: (a: DraftAdd) => `add:${a.id}`,
+  connect: (c: DraftConnect) => `connect:${c.id}`,
+  set: (x: DraftSet) => `set:${x.node}.${x.field}`,
+};
+
+/**
+ * 초안 일부만 받기(U5 — 사용자 결정 2026-11-01 "줄마다 고르기") — 뺀 줄(`off`)을 뺀 본문. 잇기는 두 끝이 모두 있어야 하고(지금 노드이거나
+ * 고른 새 노드) 값은 그 노드가 있어야 한다 — 기대는 새 노드를 빼면 그 줄은 ★막힘★(까닭 한 줄)이 되어 본문에 들지 않는다(조용히 빼지 않는다).
+ * `summary`·`empty` 는 안내라 그대로. `n` = 받을 줄 수. 순수 — 시험이 직접 부른다.
+ */
+export function pickDraft(d: DraftBody, off: ReadonlySet<string>, existing: ReadonlySet<string>):
+  { body: DraftBody; blocked: Map<string, string>; n: number } {
+  const add = d.add.filter((a) => !off.has(draftKey.add(a)));
+  const label = new Map(d.add.map((a) => [a.id, a.label]));
+  const kept = new Set(add.map((a) => a.id));
+  const has = (id: string) => existing.has(id) || kept.has(id);
+  const gone = (id: string) => `‘${label.get(id) ?? id}(새)’를 빼서`;
+  const blocked = new Map<string, string>();
+  const connect = d.connect.filter((c) => {
+    const k = draftKey.connect(c), miss = [c.source, c.target].find((id) => !has(id));
+    if (miss !== undefined) { blocked.set(k, `${gone(miss)} 이 선을 이을 수 없어요`); return false; }
+    return !off.has(k);
+  });
+  const set = d.set.filter((x) => {
+    const k = draftKey.set(x);
+    if (!has(x.node)) { blocked.set(k, `${gone(x.node)} 이 값을 넣을 곳이 없어요`); return false; }
+    return !off.has(k);
+  });
+  return { body: { ...d, add, connect, set }, blocked, n: add.length + connect.length + set.length };
 }
 
 /** 값이 바뀔 ★지금★ 노드 — 새 노드는 유령 카드가 말한다. */

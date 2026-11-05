@@ -730,7 +730,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
               <GhostLayer ghosts={ghosts} catalog={s.catalog} shape={s.wireShape} hot={ghostHot} gateLabel={gateLabel}
                           onApply={applySuggestion} onDismiss={dismiss} onDrop={applySuggestion} />
             )}
-            {draftQ.draft && <DraftLayer draft={draftQ.draft} at={draftAt} catalog={s.catalog} shape={s.wireShape} />}
+            {draftQ.draft && <DraftLayer draft={draftQ.picked?.body ?? draftQ.draft} at={draftAt} catalog={s.catalog} shape={s.wireShape} />}
             <ZoomWatch el={canvasEl} />
             {focused && (
               <Panel position="top-center" className="pg-crumb" aria-label="지금 보는 곳">

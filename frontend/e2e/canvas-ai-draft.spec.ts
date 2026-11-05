@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { contrastAudit, type AuditResult } from "./helpers";
+import { draftKey, pickDraft } from "../src/entities/portfolio-graph/draft";
+import type { DraftBody } from "../src/entities/portfolio-graph/types";
 
 /**
  * AI4 · 말로 설계 — 왼쪽 창 '말로' 탭 + 캔버스 유령(스펙 §AI4 설계, 사용자 결정 2026-10-23)
@@ -369,4 +371,105 @@ test.describe("두 창을 연 1024", () => {
       expect(b.x + b.width).toBeLessThanOrEqual(pal.x + pal.width + 1);
     }
   });
+});
+
+// ── U5 · 줄마다 고르기 (스펙 §8.4 결정 3 — 사용자 결정 2026-11-01) ─────────────────────────────
+const KEYS = { add: "add:backtest", w: "connect:optimizer.weights->backtest.weights", r: "connect:returns.returns->backtest.returns",
+               look: "set:returns.lookback_days", cost: "set:backtest.cost_bps" };
+const EXIST = new Set(["universe", "returns", "estimate", "optimizer"]);
+
+test("U5 규칙 · pickDraft — 뺀 줄은 빠지고, 뺀 새 노드에 기대는 잇기·값은 막힘(까닭) · 지금 노드에 기대는 줄은 그대로 (짝: 아무것도 안 빼면 초안 그대로)", () => {
+  const D = DRAFT as unknown as DraftBody;
+  expect([...D.add.map(draftKey.add), ...D.connect.map(draftKey.connect), ...D.set.map(draftKey.set)]).toEqual(
+    [KEYS.add, KEYS.w, KEYS.r, KEYS.look, KEYS.cost]);
+  const all = pickDraft(D, new Set(), EXIST);
+  expect(all.body).toEqual(D);
+  expect(all.n).toBe(5);
+  expect(all.blocked.size).toBe(0);
+  const noAdd = pickDraft(D, new Set([KEYS.add]), EXIST);
+  expect(noAdd.body.add).toEqual([]);
+  expect(noAdd.body.connect).toEqual([]);
+  expect(noAdd.body.set.map((x) => x.node)).toEqual(["returns"]);
+  expect(noAdd.n).toBe(1);
+  expect(noAdd.blocked.get(KEYS.w)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없어요");
+  expect(noAdd.blocked.get(KEYS.r)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없어요");
+  expect(noAdd.blocked.get(KEYS.cost)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없어요");
+  expect(noAdd.blocked.has(KEYS.look)).toBe(false);
+  const noLook = pickDraft(D, new Set([KEYS.look]), EXIST);
+  expect(noLook.body.set.map((x) => x.node)).toEqual(["backtest"]);
+  expect(noLook.n).toBe(4);
+  expect(noLook.blocked.size).toBe(0);
+  const oneWire = pickDraft(D, new Set([KEYS.w]), EXIST);
+  expect(oneWire.body.connect.map((c) => c.id)).toEqual(["returns.returns->backtest.returns"]);
+  expect(oneWire.body.add).toHaveLength(1);
+  // 잇기의 끝이 지금 문서에도 초안에도 없으면(서버가 막지만) 막힘 — 지어 잇지 않는다
+  const gone = pickDraft(D, new Set(), new Set(["universe", "returns", "estimate"]));
+  expect(gone.blocked.has(KEYS.w)).toBe(true);
+  expect(gone.body.connect.map((c) => c.id)).toEqual(["returns.returns->backtest.returns"]);
+});
+
+const pickBox = (page: Page, k: string) => panel(page).locator(`.pg-say-pick[data-key="${k}"] input`);
+
+test("U5 · 새 노드를 빼면 그 노드의 잇기·값 줄이 꺼지고 까닭 · 캔버스 유령도 그 노드만 사라짐 · 받기 → 고른 것만 · 되돌리기 한 번 (짝: 다시 켜면 돌아옴)", async ({ page }) => {
+  await signIn(page);
+  await answer(page, ok());
+  await openWith(page, CORE);
+  await openTab(page);
+  await say(page);
+  await expect(panel(page).locator(".pg-say-pick input")).toHaveCount(5);
+  for (const k of Object.values(KEYS)) await expect(pickBox(page, k)).toBeChecked();
+  await expect(panel(page).locator(".pg-say-accept")).toContainText("5개");
+  await pickBox(page, KEYS.add).uncheck();
+  for (const k of [KEYS.w, KEYS.r, KEYS.cost]) {
+    await expect(pickBox(page, k)).toBeDisabled();
+    await expect(pickBox(page, k)).not.toBeChecked();
+  }
+  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.w}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없어요");
+  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.cost}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없어요");
+  await expect(pickBox(page, KEYS.look)).toBeEnabled();
+  await expect(pickBox(page, KEYS.look)).toBeChecked();
+  await expect(page.locator(".pg-draft-node")).toHaveCount(0);
+  await expect(page.locator(".pg-draft-wire")).toHaveCount(0);
+  await expect(page.locator('.pg-draft-touched[data-node-id="returns"]')).toBeVisible();
+  await expect(panel(page).locator(".pg-say-accept")).toContainText("1개");
+  // 짝 — 다시 켜면 줄·유령이 돌아온다
+  await pickBox(page, KEYS.add).check();
+  for (const k of [KEYS.w, KEYS.r, KEYS.cost]) await expect(pickBox(page, k)).toBeChecked();
+  await expect(page.locator(".pg-draft-node")).toHaveCount(1);
+  await expect(page.locator(".pg-draft-wire")).toHaveCount(2);
+  await expect(panel(page).locator(".pg-say-accept")).toContainText("5개");
+  // 다시 빼고 받기 → 고른 것(수익률 기간)만
+  await pickBox(page, KEYS.add).uncheck();
+  await panel(page).locator(".pg-say-accept").click();
+  await expect(page.locator(".pg-note")).toContainText("노드 0개 더함 · 선 0개 이음 · 값 1개 넣음");
+  let d = await wip(page);
+  expect(d.nodes).toHaveLength(4);
+  expect(d.edges).toHaveLength(4);
+  expect(nodeOf(d, "returns")!.params).toEqual({ lookback_days: 1260 });
+  await page.locator(".react-flow__pane").click({ position: { x: 700, y: 120 } });
+  await page.keyboard.press("Control+z");
+  await expect.poll(async () => nodeOf(await wip(page), "returns")!.params).toEqual({});
+  d = await wip(page);
+  expect(d.nodes).toHaveLength(4);
+});
+
+test("U5 · 짝 — 값 줄만 끄면 그 값은 그대로(나머지는 받음) · 모두 끄면 [받아들이기] 꺼짐", async ({ page }) => {
+  await signIn(page);
+  await answer(page, ok());
+  await openWith(page, CORE);
+  await openTab(page);
+  await say(page);
+  for (const k of [KEYS.add, KEYS.look]) await pickBox(page, k).uncheck();
+  await expect(panel(page).locator(".pg-say-accept")).toBeDisabled();
+  await expect(panel(page).locator(".pg-say-accept")).toContainText("0개");
+  await pickBox(page, KEYS.add).check();
+  for (const k of [KEYS.w, KEYS.r, KEYS.cost]) await pickBox(page, k).check();
+  await expect(panel(page).locator(".pg-say-accept")).toContainText("4개");
+  await expect(page.locator('.pg-draft-touched[data-node-id="returns"]')).toHaveCount(0);   // 값 줄을 끈 지금 노드는 표시가 없다
+  await panel(page).locator(".pg-say-accept").click();
+  await expect.poll(async () => (await wip(page)).nodes.length).toBe(5);
+  const d = await wip(page);
+  expect(nodeOf(d, "returns")!.params, "끈 값은 넣지 않는다").toEqual({});
+  expect(nodeOf(d, "backtest")!.params).toEqual({ cost_bps: 30 });
+  expect(d.edges).toHaveLength(6);
 });

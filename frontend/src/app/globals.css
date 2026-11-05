@@ -6149,6 +6149,14 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
   color: var(--pg-blue-ink); background: var(--pg-blue-soft); }
 .pg-q .pg-said { margin-left: 6px; vertical-align: 1px; }
 .pg-say-acts { display: flex; justify-content: flex-end; gap: 8px; }
+/* U5 — 초안 줄마다 고르기: 줄 전체가 체크의 이름(누르면 켬/끔) · 막힌 줄은 흐리고 까닭이 아래 한 줄. */
+.pg-say-pick { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 100%; min-width: 0; cursor: pointer; }
+.pg-say-pick input { flex: none; margin: 3px 0 0; accent-color: var(--pg-blue); }
+.pg-say-pick-t { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; flex: 1; min-width: 0; }
+.pg-say-pick:has(input:disabled) { cursor: default; color: var(--pg-body); }
+.pg-say-pick:has(input:not(:checked)) { color: var(--pg-body); }
+.pg-say-why { flex-basis: 100%; padding-left: 22px; font-size: 12px; line-height: 1.4; color: var(--pg-body); }
+.pg-say-accept:disabled { opacity: 0.5; cursor: not-allowed; }
 /* 받아들이기·버리기는 왼쪽 창 맨 아래에 붙어 늘 보인다(PNG 검토에서 찾음: 바뀐 점이 길면 단추가 창 밖으로 밀려 1024·1440·390 모두 스크롤해야 했다). */
 .pg-say-result .pg-say-acts { position: sticky; bottom: -14px; z-index: 1; margin: 0 -12px -14px; padding: 10px 12px 14px;
   background: var(--pg-paper); border-top: 1px solid var(--pg-line); }

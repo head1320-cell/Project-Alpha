@@ -10,7 +10,7 @@
  */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { draftSig, portfolioGraphApi, type AssistDraft, type DraftBody, type GraphDoc, type NodeCatalogEntry } from "@/entities/portfolio-graph";
+import { draftKey, draftSig, pickDraft, portfolioGraphApi, type AssistDraft, type DraftBody, type GraphDoc, type NodeCatalogEntry } from "@/entities/portfolio-graph";
 import type { Session } from "@/entities/session";
 import { STAGE_VAR } from "./GraphNode";
 
@@ -32,6 +32,8 @@ export const draftHasChanges = (d: DraftBody | null) => !!d && d.add.length + d.
 export function useDraft(doc: GraphDoc, session: Session) {
   const sig = useMemo(() => draftSig(doc), [doc]);
   const [st, setSt] = useState<DraftState>({ state: "idle", note: null });
+  // U5 — 뺀 줄(초안 줄 열쇠). 새 초안·지우기에서 비운다.
+  const [off, setOff] = useState<ReadonlySet<string>>(() => new Set());
   const live = useRef({ sig, doc, session });
   live.current = { sig, doc, session };
   useEffect(() => {
@@ -47,12 +49,17 @@ export function useDraft(doc: GraphDoc, session: Session) {
     const res = await portfolioGraphApi.assistDraft(now.doc, words);
     if (live.current.sig !== asked) { setSt({ state: "idle", note: STALE }); return; }
     if (!res.available) { setSt({ state: "idle", note: `초안을 보여 줄 수 없어요: ${res.reason}` }); return; }
+    setOff(new Set());
     setSt({ state: "ready", sig: asked, sentence: words, res });
   }, []);
-  const clear = useCallback((note: string | null = null) => setSt({ state: "idle", note }), []);
+  const clear = useCallback((note: string | null = null) => { setOff(new Set()); setSt({ state: "idle", note }); }, []);
+  const toggle = useCallback((k: string) => setOff((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; }), []);
   /** 캔버스에 보일 초안 — 이해했고 받아들일 것이 있을 때만. */
   const draft = st.state === "ready" && st.res.understood && draftHasChanges(st.res.draft) ? st.res.draft : null;
-  return { st, send, clear, draft, busy: st.state === "loading" };
+  /** U5 — 고른 줄만의 본문(캔버스 유령·받기). 자리는 전체 초안으로 정한 그대로라 줄을 빼도 남은 유령이 움직이지 않는다. */
+  const existing = useMemo(() => new Set(doc.nodes.map((n) => n.id)), [doc]);
+  const picked = useMemo(() => (draft ? pickDraft(draft, off, existing) : null), [draft, off, existing]);
+  return { st, send, clear, draft, picked, off, toggle, busy: st.state === "loading" };
 }
 
 function Sec({ k, title, n, children }: { k: string; title: string; n: number; children: ReactNode }) {
@@ -77,7 +84,20 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
   onAccept: (draft: DraftBody) => void;
   inputRef?: MutableRefObject<HTMLTextAreaElement | null>;
 }) {
-  const { st, send, clear, busy } = d;
+  const { st, send, clear, busy, picked, off, toggle } = d;
+  /** 줄 고르기(U5) — 체크와 그 줄의 글 · 막힌 줄은 꺼지고 까닭이 한 줄. 부품이 아니라 함수로 그린다(누를 때마다 다시 만들어지면 초점을 잃는다). */
+  const pick = (k: string, children: ReactNode) => {
+    const why = picked?.blocked.get(k);
+    return (
+      <>
+        <label className="pg-say-pick" data-key={k}>
+          <input type="checkbox" checked={!why && !off.has(k)} disabled={!!why} onChange={() => toggle(k)} />
+          <span className="pg-say-pick-t">{children}</span>
+        </label>
+        {why && <span className="pg-say-why">{why}</span>}
+      </>
+    );
+  };
   const [text, setText] = useState("");
   const entryOf = (kind: string) => catalog?.find((c) => c.type === kind);
   const submit = () => {
@@ -133,8 +153,10 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
               <Sec k="add" title="더할 노드" n={dr.add.length}>
                 {dr.add.map((a) => (
                   <li key={a.id} className="pg-say-item">
-                    <i className="pg-say-dot" style={{ background: STAGE_VAR[entryOf(a.kind)?.stage ?? ""] ?? "var(--pg-mute)" }} aria-hidden="true" />
-                    {a.label}
+                    {pick(draftKey.add(a), <>
+                      <i className="pg-say-dot" style={{ background: STAGE_VAR[entryOf(a.kind)?.stage ?? ""] ?? "var(--pg-mute)" }} aria-hidden="true" />
+                      {a.label}
+                    </>)}
                   </li>
                 ))}
               </Sec>
@@ -142,7 +164,9 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
             {dr.connect.length > 0 && (
               <Sec k="connect" title="이을 선" n={dr.connect.length}>
                 {dr.connect.map((c) => (
-                  <li key={c.id} className="pg-say-item">{name(c.source)} → {name(c.target)} · {portName(c.target, c.target_port)}</li>
+                  <li key={c.id} className="pg-say-item">
+                    {pick(draftKey.connect(c), <>{name(c.source)} → {name(c.target)} · {portName(c.target, c.target_port)}</>)}
+                  </li>
                 ))}
               </Sec>
             )}
@@ -150,8 +174,10 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
               <Sec k="set" title="넣을 값" n={dr.set.length}>
                 {dr.set.map((x) => (
                   <li key={`${x.node}.${x.field}`} className="pg-say-item">
-                    <span className="pg-say-what">{name(x.node)} · {x.label} <b>{x.display}</b></span>
-                    <span className="pg-said-chip">말씀에서 ‘{x.quote}’</span>
+                    {pick(draftKey.set(x), <>
+                      <span className="pg-say-what">{name(x.node)} · {x.label} <b>{x.display}</b></span>
+                      <span className="pg-said-chip">말씀에서 ‘{x.quote}’</span>
+                    </>)}
                   </li>
                 ))}
               </Sec>
@@ -170,7 +196,10 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
         )}
         <div className="pg-say-acts">
           {res.understood && any && (
-            <button type="button" className="pg-say-accept" onClick={() => { clear(); onAccept(dr); }}>받아들이기</button>
+            <button type="button" className="pg-say-accept" disabled={!picked || picked.n === 0}
+                    onClick={() => { const body = picked?.body; clear(); if (body) onAccept(body); }}>
+              받아들이기 <span className="pg-say-accept-n">{picked?.n ?? 0}개</span>
+            </button>
           )}
           <button type="button" className="pg-say-discard" onClick={() => clear()}>{res.understood && any ? "버리기" : "닫기"}</button>
         </div>
