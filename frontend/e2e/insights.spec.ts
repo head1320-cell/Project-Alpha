@@ -926,3 +926,33 @@ test("돈 버는 힘·위험·같은 업종·팩터·AI — em-dash 0 · 영어 
   });
   expect(over).toBeLessThanOrEqual(0);
 });
+
+// ── U9 · 목차로 고른 절은 화면에 들기를 기다리지 않는다 (스펙 §8.4 결정 7 · 사용자 결정 2026-11-01) ──────────────────────
+// E4 가 찾은 것: 부하에서 위쪽 절이 늦게 차올라 자리를 밀면(2초 붙잡기 뒤) '같은 업종' 절이 한 번도 화면에 들지 않아 관계도를 부르지 않았다.
+// 부하는 흔들리므로 그 끝 상태를 결정적으로 만든다 — 절(.ci-sec)에 대한 '화면에 듦' 알림이 오지 않는 브라우저.
+async function noSeen(page: Page) {
+  await page.addInitScript(() => {
+    const Real = window.IntersectionObserver;
+    class OnlyOthers {
+      private real: IntersectionObserver;
+      constructor(cb: IntersectionObserverCallback, opts?: IntersectionObserverInit) { this.real = new Real(cb, opts); }
+      observe(el: Element) { if (!el.classList.contains("ci-sec")) this.real.observe(el); }
+      unobserve(el: Element) { this.real.unobserve(el); }
+      disconnect() { this.real.disconnect(); }
+      takeRecords() { return this.real.takeRecords(); }
+    }
+    (window as unknown as { IntersectionObserver: unknown }).IntersectionObserver = OnlyOthers;
+  });
+}
+
+test("U9 · 목차로 '같은 업종'을 고르면 그 절이 화면에 들지 않아도 관계도를 부른다 (짝: 목차를 누르지 않으면 부르지 않는다 — 게으름 그대로)", async ({ page }) => {
+  await noSeen(page);
+  const rel: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("/screener/graph-relations/")) rel.push(r.url()); });
+  await open(page);
+  await page.waitForTimeout(1500);
+  expect(rel, "목차를 누르기 전에는 관계도를 부르지 않는다").toHaveLength(0);
+  await page.locator(".ci-toc-item", { hasText: "같은 업종" }).first().click();
+  await expect.poll(() => rel.length, { timeout: 15_000, message: "목차로 고른 절은 늦은 내용을 부른다" }).toBeGreaterThan(0);
+  await expect(sec(page, "peers").locator(".ci-net")).toBeVisible({ timeout: 30_000 });
+});

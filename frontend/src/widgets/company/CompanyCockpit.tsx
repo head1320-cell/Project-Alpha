@@ -58,8 +58,11 @@ const show = (v: number | null | undefined, f: (x: number) => string) => (v == n
 const SIGNAL_KO: Record<string, string> = { buy: "사는 쪽", strong_buy: "강하게 사는 쪽", sell: "파는 쪽", strong_sell: "강하게 파는 쪽", hold: "지켜보는 쪽", neutral: "지켜보는 쪽" };
 const signalKo = (a?: string) => (a ? SIGNAL_KO[a.toLowerCase()] ?? a : UNKNOWN_TEXT);
 
-/** 한 번 화면에 들어오면 true (무거운 절을 그때 부른다). */
-function useSeen(ref: React.RefObject<HTMLElement>) {
+/** 목차로 간 절을 붙잡는 시간(BU6b) — U9 는 이 시간이 끝날 때까지 화면에 들지 않은 고른 절을 부른다. */
+const PIN_MS = 2000;
+
+/** 한 번 화면에 들어오면 true (무거운 절을 그때 부른다). `chosen` = 목차로 고른 절(U9) — 붙잡기가 끝나면 화면에 들기를 기다리지 않는다. */
+function useSeen(ref: React.RefObject<HTMLElement>, chosen = false) {
   const [seen, setSeen] = useState(false);
   useEffect(() => {
     const el = ref.current;
@@ -68,7 +71,7 @@ function useSeen(ref: React.RefObject<HTMLElement>) {
     io.observe(el);
     return () => io.disconnect();
   }, [ref, seen]);
-  return seen;
+  return seen || chosen;
 }
 
 export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
@@ -107,9 +110,16 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  const riskSeen = useSeen(refs.risk);
-  const moneySeen = useSeen(refs.money);
-  const peersSeen = useSeen(refs.peers);
+  // U9 — 목차로 고른 절은 붙잡기(PIN_MS)가 끝날 때까지 화면에 들지 않았어도 늦은 내용을 부른다. 화면에 드는 것에만 기대면, 위쪽 절이 늦게 차올라
+  // 자리를 밀 때(2초 붙잡기 뒤 — 부하에서 관측) 그 절이 한 번도 화면에 들지 않아 사용자가 스크롤하기 전까지 관계도 등이 불리지 않았다(E4 가 찾음).
+  // ★누를 때 바로가 아니라 붙잡기 끝에★ — 그 전에 화면에 들면 지금처럼 그때 부른다. 바로 부르면 내용이 붙잡기 안에 차올라 붙잡기가 그 절로 되감아
+  // 그 사이의 스크롤을 빼앗았다(insights '붙는 목차' 시험이 찾음 · 5/5).
+  const [chosen, setChosen] = useState<ReadonlySet<SecId>>(() => new Set());
+  const chooseT = useRef<number[]>([]);
+  useEffect(() => () => chooseT.current.forEach((t) => window.clearTimeout(t)), []);
+  const riskSeen = useSeen(refs.risk, chosen.has("risk"));
+  const moneySeen = useSeen(refs.money, chosen.has("money"));
+  const peersSeen = useSeen(refs.peers, chosen.has("peers"));
 
   // 종목이 바뀌면 절마다 늦게 부른 것을 비운다(옛 종목 값이 남지 않게).
   useEffect(() => { setNetwork(undefined); setRisk(undefined); setNarr(undefined); }, [c.code]);
@@ -179,7 +189,8 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   const go = (id: SecId) => {
     setActive(id);
     clickLock.current = Date.now() + 900;
-    pin.current = { id, until: Date.now() + 2000 };
+    pin.current = { id, until: Date.now() + PIN_MS };
+    chooseT.current.push(window.setTimeout(() => setChosen((s) => (s.has(id) ? s : new Set(s).add(id))), PIN_MS));
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     refs[id].current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   };
