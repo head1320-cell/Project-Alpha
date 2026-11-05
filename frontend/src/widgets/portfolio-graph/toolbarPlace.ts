@@ -16,6 +16,8 @@ export type ToolbarAlign = "start" | "center" | "end";
 export interface ToolbarPlace { position: Position; align: ToolbarAlign }
 
 type Rect = { l: number; t: number; r: number; b: number };
+/** 넓은 틀의 머리 띠 높이(캔버스 px) — 상자 머리 36 · 갈래 머리 30+4 를 덮는다. */
+export const FRAME_HEAD_BAND = 40;
 const area = (a: Rect, b: Rect) =>
   Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
 
@@ -43,24 +45,32 @@ export function placeToolbar(st: ReactFlowState, ids: string[], w: number, h: nu
   if (!mine.length) return `${prefer}|center`;
   const sel: Rect = { l: Math.min(...mine.map((x) => x.l)), t: Math.min(...mine.map((x) => x.t)),
                       r: Math.max(...mine.map((x) => x.r)), b: Math.max(...mine.map((x) => x.b)) };
-  const others: Rect[] = [];
+  const others: Rect[] = [], heads: Rect[] = [];
   for (const [id] of st.nodeLookup) {
     if (ids.includes(id)) continue;
     const b = box(id);
-    // 틀(그룹·갈래 띠)은 카드가 아니다 — 폭이 아주 넓은 것은 덮어도 누를 것을 가리지 않는다.
-    if (b && b.r - b.l < 400 * Math.max(zoom, 0.3)) others.push(b);
+    if (!b) continue;
+    // 틀(그룹·갈래 띠)은 카드가 아니다 — 폭이 아주 넓은 것은 몸통을 덮어도 누를 것을 가리지 않는다.
+    // 그 ★머리 띠(단추가 있는 줄)는 둘째로 피한다★ — 카드를 덮지 않는 자리들 사이에서만 고른다(카드가 먼저 — BS2). 갈래 뿌리 복제의 도구줄이
+    // '이 갈래를 원본으로' 를 덮었다(U6 관측 · 1280×720 맞춰 보기에서 잼).
+    if (b.r - b.l < 400 * Math.max(zoom, 0.3)) others.push(b);
+    else heads.push({ l: b.l, t: b.t, r: b.r, b: Math.min(b.b, b.t + FRAME_HEAD_BAND * zoom) });
   }
   const ins = floatInsets(st.domNode ?? null);
   const view: Rect = { l: ins.left, t: 0, r: st.width - ins.right, b: st.height - ins.bottom };
-  let best = `${prefer}|center`, bestCost = Infinity;
+  let best = `${prefer}|center`, bestCost = Infinity, bestHead = Infinity;
   for (const c of candidates(prefer)) {
     const top = c.position === Position.Top ? sel.t - offset - h : sel.b + offset;
     const left = c.align === "center" ? (sel.l + sel.r) / 2 - w / 2 : c.align === "start" ? sel.l : sel.r - w;
     const r: Rect = { l: left, t: top, r: left + w, b: top + h };
     const outside = w * h - area(r, view);
     const cost = others.reduce((s, o) => s + area(r, o), 0) + outside * 4;
-    if (cost < bestCost - 0.5) { best = `${c.position}|${c.align}`; bestCost = cost; }
-    if (cost <= 0.5) break;
+    const head = heads.reduce((s, o) => s + area(r, o), 0);
+    // 먼저 카드·화면 밖(예전 그대로) · 같으면 틀 머리를 덜 덮는 자리 · 그것도 같으면 앞 후보(= 예전 자리).
+    if (cost < bestCost - 0.5 || (Math.abs(cost - bestCost) <= 0.5 && head < bestHead - 0.5)) {
+      best = `${c.position}|${c.align}`; bestCost = cost; bestHead = head;
+    }
+    if (cost <= 0.5 && head <= 0.5) break;
   }
   return best;
 }
