@@ -96,7 +96,7 @@ import { DRAWERS, FILTERS, LEFT_TAB_KEY, markWelcomed, matchFilter, welcomeSeen,
 import { MIN_ZOOM, SNAP, fitClear } from "./canvasGeometry";
 import { deleteNote, overlapping, useWireHandlers } from "./canvasRules";
 import { WireDragLine } from "./WireDragLine";
-import { useCanvasView, useViewFollow } from "./useCanvasView";
+import { holdFollow, useCanvasView, useViewFollow } from "./useCanvasView";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { RightPanel } from "./RightPanel";
 import { useCanvasCommands } from "./useCanvasCommands";
@@ -370,11 +370,16 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       const ins = floatInsets(canvasEl.current);
       // 카드 가운데(CF1 — 자리 고정 상자: 폭·높이는 카탈로그로 정한 값. 예전 +90/+60 은 폭 150 카드의 가운데였다).
       const cx = n.position.x + cardWidth(n.data.kind) / 2, cy = n.position.y + nodeHeight(n.data.kind, usePortfolioGraph.getState().catalog, n.data.slotH) / 2;
+      holdFollow(280);
       rf.current.setCenter(cx + (ins.right - ins.left) / 2 / z, cy + ins.bottom / 2 / z, { zoom: z, duration: 250 });
     }
     const entry = usePortfolioGraph.getState().catalog?.find((c) => c.type === n?.data.kind);
     setAnnounce(n ? `${entry?.plain_label ?? n.data.kind} 노드를 골랐어요` : "");
   }, []);
+  // U3 — 미니맵 칸을 누르면 그 카드를 고르고 떠 있는 판 사이 가운데로(확대 그대로 — 찾기와 같은 `focusNode`). 상자·갈래 틀은 미니맵에 칸이
+  // 없다(React Flow 에 크기를 주지 않아 그리지 않음 — 재서 확인). 늘 같은 함수(U1 — 미니맵은 받은 손잡이가 바뀌면 칸을 모두 다시 그린다).
+  // 미니맵 끌기·휠(화면 옮기기·확대)은 그대로.
+  const mmClick = useCallback((_: ReactMouseEvent, n: Node) => focusNode(n.id), [focusNode]);
 
   // ── BT2 절차 탭 ─────────────────────────────────────────────────────────
   const stageOf = useCallback((kind: string) => s.catalog?.find((c) => c.type === kind)?.stage, [s.catalog]);
@@ -815,7 +820,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
               <>
                 {/* CF5b — 칸 = 단계색(전략 띠 구성원은 띠 색) · 테두리 = 고름 파랑 > 실패 빨강 > 막힘 주황(지금 결과만 — 낡은 결과는 칠하지 않는다). */}
                 <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap" nodeStrokeWidth={24}
-                         nodeColor={mmFill} nodeStrokeColor={mmStroke} nodeClassName={mmClass} />
+                         nodeColor={mmFill} nodeStrokeColor={mmStroke} nodeClassName={mmClass} onNodeClick={mmClick} />
                 <button type="button" className="pg-minimap-fold nodrag nopan" aria-label="미니맵 접기" title="미니맵 접기" onClick={toggleMinimap}>
                   <X size={13} aria-hidden="true" />
                 </button>

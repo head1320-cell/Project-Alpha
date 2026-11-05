@@ -73,6 +73,11 @@ export function useCanvasView(rf: RefObject<ReactFlowInstance | null>, canvasEl:
   return { panels, setPanels, updatePanels, tight, leftShown, rightShown, fit, fitIds, zoomBy };
 }
 
+/** 코드가 시작한 화면 옮기기가 끝나는 시각(ms · U3) — 그 전에는 '고른 노드 보이기'가 재지 않는다. 캔버스는 화면에 하나뿐이다. */
+let followHold = 0;
+/** 화면을 `ms` 동안 옮기기 시작할 때 부른다(focusNode) — 그동안의 화면은 옮기는 도중이라 재지 않는다. */
+export const holdFollow = (ms: number) => { followHold = Date.now() + ms; };
+
 /** 화면이 따라가기 — 상자에 들어가기 · 고른 노드가 판 밑이면 판만 옮기기 · 고르면 오른쪽 창 열기 · 갈래를 만들면 함께 보이기(본체의 같은 자리에서 부른다). */
 export function useViewFollow(s: PgState, rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>, ctx: unknown,
                               leftShown: boolean, rightShown: boolean, setPanels: Dispatch<SetStateAction<Panels>>) {
@@ -91,7 +96,8 @@ export function useViewFollow(s: PgState, rf: RefObject<ReactFlowInstance | null
     const id = s.selectedId;
     // 우클릭으로 고른 경우엔 움직이지 않는다 — 메뉴가 그 자리에 떠 있는데 판이 밀리면 가리키던 곳이 어긋난다(도구줄도 안 보인다).
     if (!inst || !id || s.picked.length > 1 || ctx) return;
-    // 창이 막 열린 뒤의 폭을 재도록 한 박자 늦게.
+    // 창이 막 열린 뒤의 폭을 재도록 한 박자 늦게 — 노드로 옮기는 중(`holdFollow` — focusNode)이면 옮기기가 끝난 뒤에 잰다(U3: 옮기는 도중의
+    // 화면을 재고 또 옮기면 첫 옮기기의 확대 보간이 중간에서 멈춰 확대가 바뀌었다 — 미니맵·찾기로 먼 노드에 갈 때).
     const t = setTimeout(() => {
       const n = inst.getInternalNode(id);
       const el = canvasEl.current;
@@ -108,7 +114,7 @@ export function useViewFollow(s: PgState, rf: RefObject<ReactFlowInstance | null
       if (right > maxRight) dx = maxRight - right;
       if (left + dx < ins.left + 16) dx = ins.left + 16 - left;
       if (dx || dy) inst.setViewport({ ...vp, x: vp.x + dx, y: vp.y + dy }, { duration: 200 });
-    }, 0);
+    }, Math.max(0, followHold - Date.now()));
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 고를 때·창이 열리고 닫힐 때만
   }, [s.selectedId, rightShown, leftShown]);
