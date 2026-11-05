@@ -17,7 +17,7 @@ function strategyBox(groups: PgState["groups"], members: string[], output: strin
            kind: "strategy", color, output };
 }
 
-type LayoutSlice = Pick<PgState, "autoLayout" | "alignPicked" | "addWaypoint" | "moveWaypoint" | "removeWaypoint" | "fitToLanes" | "groupPicked" | "strategyPicked" | "comparePicked" | "addStrategy" | "insertBlock" | "ungroup" | "toggleGroup" | "renameGroup" | "moveGroup" | "setDropGroups" | "applyBoxMembership" | "makeBranch" | "branchPicked" | "removeBranch" | "promoteBranch" | "branchStrategy" | "loadBlocks" | "saveBlock" | "removeBlock">;
+type LayoutSlice = Pick<PgState, "autoLayout" | "alignPicked" | "addWaypoint" | "moveWaypoint" | "removeWaypoint" | "fitToLanes" | "groupPicked" | "strategyPicked" | "comparePicked" | "addStrategy" | "insertBlock" | "ungroup" | "toggleGroup" | "renameGroup" | "moveGroup" | "moveNodes" | "setDropGroups" | "applyBoxMembership" | "makeBranch" | "branchPicked" | "removeBranch" | "promoteBranch" | "branchStrategy" | "loadBlocks" | "saveBlock" | "removeBlock">;
 
 /** 같은 상자 이름을 잇달아 고친 때 — 이어 친 글자는 한 단계(R1 · `updateParams` 와 같은 규칙). */
 let lastRename: { id: string; at: number } | null = null;
@@ -274,9 +274,12 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
   },
   moveGroup: (id, dx, dy, record = false) => {
     const g = get().groups.find((x) => x.id === id);
-    if (!g || (!dx && !dy)) return false;
+    return g ? get().moveNodes(g.members, dx, dy, record) : false;
+  },
+  moveNodes: (ids, dx, dy, record = false) => {
+    if (!ids.length || (!dx && !dy)) return false;
     if (record) push();
-    const m = new Set(g.members);
+    const m = new Set(ids);
     set((s) => ({ nodes: s.nodes.map((n) => (m.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n)) }));
     return true;
   },

@@ -4537,6 +4537,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-lane-head { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: baseline; gap: 0.5em; padding: 10px 16px;
   border-top: 3px solid var(--pg-lane-c); font-size: min(30px, calc(13px / var(--pg-z, 1))); line-height: 1.3; white-space: nowrap; overflow: hidden; }
 .pg-lane-name { font-weight: 700; color: var(--pg-ink); }
+/* U7 — 띠 머리만 잡을 수 있다(그 단계 노드를 위아래로 함께 · 띠 바탕은 그대로 캔버스로). */
+.pg-lane-head { pointer-events: auto; cursor: ns-resize; touch-action: none; }
 .pg-lane-n { font-weight: 600; color: var(--pg-body); }
 /* '보기' 메뉴 — 도구줄 단추 아래 글자 항목(켬/끔은 체크 표시). */
 .pg-view-wrap { position: relative; display: inline-flex; }

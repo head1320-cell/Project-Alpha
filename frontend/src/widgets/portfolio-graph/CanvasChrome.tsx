@@ -5,11 +5,11 @@
  * 확대 표시 · 고른 노드 막대 · 열린 메뉴 닫기 · 정렬 메뉴 · 확대율 · 보기 메뉴 · 이름 + 목표 칩 · 단계 레인 · 오른쪽 창 폭 손잡이.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
-import { ControlButton, NodeToolbar, Position, ViewportPortal, useStore } from "@xyflow/react";
+import { ControlButton, NodeToolbar, Position, ViewportPortal, useStore, useStoreApi } from "@xyflow/react";
 import { AlignStartVertical, Check, Eye, Target } from "lucide-react";
 import { GOALS, nodeHeight, type GoalKey, type WorkflowStage } from "@/entities/portfolio-graph";
 import { laneLayout } from "@/entities/portfolio-graph/lanes";
-import { SELBAR_ROOM, SELBAR_W, zoomLevel } from "./canvasGeometry";
+import { SELBAR_ROOM, SELBAR_W, SNAP, zoomLevel } from "./canvasGeometry";
 import { STAGE_VAR } from "./GraphNode";
 import { ALIGN_ITEMS, type AlignKind } from "./guides";
 import { pgZRule } from "./zoomVar";
@@ -235,22 +235,50 @@ export function StageLanes({ stages }: { stages: WorkflowStage[] }) {
   const nodes = usePortfolioGraph((st) => st.nodes);
   const edges = usePortfolioGraph((st) => st.edges);
   const catalog = usePortfolioGraph((st) => st.catalog);
+  // U7(사용자 결정 2026-11-01 "띠 머리로 그 단계 한꺼번에 · 세로만") — 머리를 잡아 끌면 그 단계 노드가 위아래로 함께 움직인다(격자 배수 ·
+  // 첫 움직임에 되돌리기 한 단계). 띠의 가로 자리는 문서·카탈로그로 정해져 가로 움직임은 버린다. 띠 바탕은 지금처럼 누름을 캔버스에 넘긴다.
+  const api = useStoreApi();
+  const grab = useRef<{ ids: string[]; y: number; zoom: number; applied: number } | null>(null);
   const geo = useMemo(() => {
     if (!catalog || !stages.length) return null;
-    const { lanes } = laneLayout(nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), edges, catalog, stages);
+    const { lanes, slot } = laneLayout(nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), edges, catalog, stages);
     const h = (n: (typeof nodes)[number]) => measuredH(n) || nodeHeight(n.data.kind, catalog, n.data.slotH);
     const top = Math.min(0, ...nodes.map((n) => n.position.y)) - LANE_HEAD;
     const bottom = Math.max(0, ...nodes.map((n) => n.position.y + h(n))) + 40;
-    return { lanes, top, h: bottom - top };
+    const idsOf = (key: string) => nodes.filter((n) => slot.get(n.id)?.lane === key && !n.hidden).map((n) => n.id);
+    return { lanes, top, h: bottom - top, idsOf };
   }, [nodes, edges, catalog, stages]);
   if (!geo) return null;
+  const headProps = (key: string) => ({
+    onPointerDown: (ev: ReactPointerEvent<HTMLDivElement>) => {
+      if (ev.button !== 0) return;
+      ev.stopPropagation();
+      ev.currentTarget.setPointerCapture(ev.pointerId);
+      grab.current = { ids: geo.idsOf(key), y: ev.clientY, zoom: api.getState().transform[2] || 1, applied: 0 };
+    },
+    onPointerMove: (ev: ReactPointerEvent<HTMLDivElement>) => {
+      const g = grab.current;
+      if (!g) return;
+      const want = Math.round((ev.clientY - g.y) / g.zoom / SNAP) * SNAP;
+      if (want === g.applied) return;
+      usePortfolioGraph.getState().moveNodes(g.ids, 0, want - g.applied, g.applied === 0);
+      g.applied = want;
+    },
+    onPointerUp: (ev: ReactPointerEvent<HTMLDivElement>) => {
+      if (ev.currentTarget.hasPointerCapture(ev.pointerId)) ev.currentTarget.releasePointerCapture(ev.pointerId);
+      grab.current = null;
+    },
+    onPointerCancel: () => { grab.current = null; },
+  });
   return (
     <ViewportPortal>
       <div className="pg-lanes" aria-hidden="true">
         {geo.lanes.map((l) => (
           <div key={l.key} className="pg-lane" data-stage={l.key} data-count={l.count}
                style={{ left: l.x, top: geo.top, width: l.w, height: geo.h, ["--pg-lane-c" as string]: STAGE_VAR[l.key] ?? "var(--pg-st-data)" }}>
-            <div className="pg-lane-head"><span className="pg-lane-name">{l.label}</span><span className="pg-lane-n">{l.count}개</span></div>
+            <div className="pg-lane-head nodrag nopan" title="끌어서 이 단계의 노드를 위아래로 함께 옮겨요" {...headProps(l.key)}>
+              <span className="pg-lane-name">{l.label}</span><span className="pg-lane-n">{l.count}개</span>
+            </div>
           </div>
         ))}
       </div>

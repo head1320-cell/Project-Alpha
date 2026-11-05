@@ -195,6 +195,8 @@ export interface PgState {
   renameGroup: (id: string, label: string) => void;
   /** 상자째 옮기기 — `record` 면 이번에 되돌리기 칸에 넣는다(끌기 시작 · R1). 움직였으면 true. */
   moveGroup: (id: string, dx: number, dy: number, record?: boolean) => boolean;
+  /** 노드 여럿을 함께 옮긴다(U7 — 단계 띠 머리 끌기) · `record` 면 되돌리기 한 단계를 연다(끌기 시작에 한 번). */
+  moveNodes: (ids: string[], dx: number, dy: number, record?: boolean) => boolean;
   setDropGroups: (ids: string[]) => void;
   /** 끌어 넣기·빼기 결과를 상자 멤버에 옮긴다(R4) — 되돌리기 칸에는 넣지 않는다(끌기 시작에 이미 한 단계). 돌려주는 값은 안내 한 줄(할 일이 없으면 null). */
   applyBoxMembership: (plan: BoxPlan) => string | null;

@@ -383,3 +383,94 @@ for (const scheme of ["light", "dark"] as const) {
     expect(a.low, `${scheme} 띠 머리`).toEqual([]);
   });
 }
+
+// ── U7 · 단계 띠 머리 끌기 — 세로만 (스펙 §8.4 결정 6 · 사용자 결정 2026-11-01 "세로만") ─────────────
+const zoomOf = (page: Page) => page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).a);
+/** 띠 머리 안에서 머리가 실제로 누름을 받는 한 점(위에 떠 있는 판·관문 줄이 없는 곳). 못 찾으면 null. */
+async function laneHeadPoint(page: Page, stage: string) {
+  const b = (await page.locator(`.pg-lane[data-stage="${stage}"] .pg-lane-head`).boundingBox())!;
+  return page.evaluate(([x, y, w, h]) => {
+    for (let fx = 0.2; fx < 0.95; fx += 0.05) {
+      const px = x + w * fx, py = y + h / 2;
+      if (document.elementFromPoint(px, py)?.closest(".pg-lane-head")) return { x: px, y: py };
+    }
+    return null;
+  }, [b.x, b.y, b.width, b.height]);
+}
+async function dragLane(page: Page, stage: string, dx: number, dy: number) {
+  const p = await laneHeadPoint(page, stage);
+  expect(p, `${stage} 띠 머리를 누를 수 있다`).not.toBeNull();
+  await page.mouse.move(p!.x, p!.y);
+  await page.mouse.down();
+  await page.mouse.move(p!.x + dx / 2, p!.y + dy / 2, { steps: 5 });
+  await page.mouse.move(p!.x + dx, p!.y + dy, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+}
+async function lanesReady(page: Page) {
+  await openWith(page, STACK);
+  await lanesOn(page, true);
+  // 맨 위 머리가 위쪽 막대 밑에 들지 않게 한 칸 줄여 본다
+  const c = (await page.locator(".pg-canvas").boundingBox())!;
+  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(400);
+}
+
+test("U7 · 띠 머리를 아래로 끌면 그 단계 노드만 함께 내려간다(격자) · 되돌리기 한 번 (짝: 다른 단계 그대로 · 가로로 끌어도 x 그대로 · 두 번 끌면 두 단계)", async ({ page }) => {
+  await lanesReady(page);
+  const stages = await stagesOf(page);
+  const k = stages[0].key;                                                      // universe·returns 의 단계
+  const ids = STACK.nodes.map((x) => x.id);
+  const before = Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await pos(page, id)] as const)));
+  const z = await zoomOf(page);
+  await dragLane(page, k, 80, 110 * z);                                         // 가로 80px 도 함께 — 버려야 한다
+  for (const id of ["universe", "returns"]) {
+    const p = await pos(page, id);
+    expect(p.x, `${id} 가로는 그대로`).toBe(before[id].x);
+    expect(p.y, `${id} 세로 +110`).toBe(before[id].y + 110);
+  }
+  for (const id of ["optimizer", "scenario", "corr"]) expect(await pos(page, id), `${id} 다른 단계는 그대로`).toEqual(before[id]);
+  await page.keyboard.press("Control+z");
+  for (const id of ids) expect(await pos(page, id)).toEqual(before[id]);
+  // 짝 — 두 번 끌면 되돌리기 두 번 · 격자에 맞춘다: 50 을 끌면 55(11 의 배수 · 변이 '격자 맞춤 없음' 은 50)
+  await dragLane(page, k, 0, 50 * z);
+  await dragLane(page, k, 0, 50 * z);
+  expect((await pos(page, "universe")).y).toBe(before.universe.y + 110);
+  await page.keyboard.press("Control+z");
+  expect((await pos(page, "universe")).y).toBe(before.universe.y + 55);
+  await page.keyboard.press("Control+z");
+  expect((await pos(page, "universe")).y).toBe(before.universe.y);
+});
+
+test("U7 · 짝 — 띠 바탕(머리 밖) 끌기는 화면 이동(노드 그대로) · 레인을 끄면 머리도 없다", async ({ page }) => {
+  await lanesReady(page);
+  const ids = STACK.nodes.map((x) => x.id);
+  const before = await Promise.all(ids.map((id) => pos(page, id)));
+  const lane = (await page.locator('.pg-lane[data-stage="belief"]').boundingBox())!;
+  const c = (await page.locator(".pg-canvas").boundingBox())!;
+  const p = { x: center(lane), y: Math.min(lane.y + lane.height / 2, c.y + c.height - 140) };
+  // 띠 바탕 위 점의 맨 위 요소는 빈 캔버스(pane) ★그 자체★ — 띠는 화면층(pane 안)에 그려져 closest 로는 늘 참이다(U4 변이 G5 가 가르쳐 줌)
+  expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.classList.contains("react-flow__pane") ?? false, [p.x, p.y] as const),
+         "띠 바탕 위 점 = 빈 캔버스").toBe(true);
+  // 동작으로: 비중 계산 출력에서 끈 선을 띠 바탕에 놓으면 빈 곳처럼 빠른 추가가 열린다
+  const hd = (await page.locator('.react-flow__node[data-id="optimizer"] .react-flow__handle.source[data-handleid="weights"]').boundingBox())!;
+  await page.mouse.move(hd.x + hd.width / 2, hd.y + hd.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(p.x, p.y, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.locator(".pg-quick"), "띠 바탕에 놓은 선 = 빈 곳에 놓은 선").toHaveAttribute("data-type", "Weights");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".pg-quick")).toHaveCount(0);
+  const v0 = await page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).f);
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  await page.mouse.move(p.x, p.y + 60, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const v1 = await page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).f);
+  expect(Math.abs(v1 - v0 - 60), "띠 바탕 끌기는 화면을 옮긴다").toBeLessThanOrEqual(3);
+  expect(await Promise.all(ids.map((id) => pos(page, id)))).toEqual(before);
+  await lanesOn(page, false);
+  await expect(page.locator(".pg-lane-head")).toHaveCount(0);
+});
