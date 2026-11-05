@@ -34,6 +34,33 @@ export function strategyOutput(members: string[], nodes: N[], edges: E[], catalo
   return [...order].reverse().find(weightsOut) ?? null;
 }
 
+/**
+ * 범위 안 흐름의 끝(U6 — 결정 5 '출력을 정할 수 없으면 까닭') — 구성원 중 Weights 를 내고, 하류(범위 밖 노드를 거쳐도)에 Weights 를 내는 다른 ★구성원★이 없는 노드들(흐름 순서).
+ * 하나면 그것이 전략 출력(`strategyOutput` 과 같다) · 둘 이상이면 출력을 정할 수 없다 · 없으면 비중이 없다. 순수 — 시험이 직접 부른다.
+ */
+export function strategyEnds(members: string[], nodes: N[], edges: E[], catalog: NodeCatalogEntry[]): string[] {
+  const inside = new Set(members);
+  const kindOf = new Map(nodes.map((n) => [n.id, n.data.kind] as const));
+  const weights = (id: string) => !!catalog.find((c) => c.type === kindOf.get(id))?.outputs.some((o) => o.type === "Weights");
+  const order = topoOrder(nodes.map((n) => n.id), edges).filter((id) => inside.has(id));
+  const makers = new Set(order.filter(weights));
+  const feedsMaker = (from: string) => {
+    const seen = new Set([from]);
+    const stack = [from];
+    while (stack.length) {
+      const id = stack.pop()!;
+      for (const e of edges) {
+        if (e.source !== id || seen.has(e.target)) continue;
+        if (makers.has(e.target)) return true;
+        seen.add(e.target);
+        stack.push(e.target);
+      }
+    }
+    return false;
+  };
+  return order.filter((id) => makers.has(id) && !feedsMaker(id));
+}
+
 /** 포트폴리오 레인 — 전략 밖의 `portfolio_combine` 노드와 그 하류. */
 export function portfolioLane(nodes: N[], edges: E[], groups: GraphGroup[]): Set<string> {
   const inGroup = new Set(groups.filter((g) => g.kind === "strategy").flatMap((g) => g.members));

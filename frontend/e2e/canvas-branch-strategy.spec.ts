@@ -1,4 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
+import { strategyEnds } from "../src/entities/portfolio-graph/strategy";
+import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 
 /**
  * CF 3부 U6 · 갈래와 전략 상자 (스펙 §8.4 결정 5 — 사용자 결정 2026-11-01 "원본이 전략이면 자동 + 그 밖엔 단추")
@@ -153,4 +155,54 @@ test("U6 · 짝 — 전략째 갈래를 원본으로 올리면 갈래의 상자�
   expect((doc.groups ?? []).filter((g) => g.members.length === 0), "빈 상자가 남지 않는다").toEqual([]);
   expect(strategiesOf(doc).map((g) => g.id)).toEqual(before.map((g) => g.id));
   await expect(page.locator(".pg-group--strategy")).toHaveCount(2);
+});
+
+// ── U6 이어서 · 결정 5 '출력을 정할 수 없으면(범위 안 흐름 끝이 둘 이상) 까닭' (사용자 결정 2026-11-01 그대로 — U6 이 남긴 것) ──────────
+const W = (type: string, ins: string[], outs: string[]) => ({ type, inputs: ins.map((t) => ({ type: t })), outputs: outs.map((t) => ({ type: t })) });
+const CAT = [W("returns", [], ["Returns"]), W("optimizer", ["Returns"], ["Weights"]), W("neutralize", ["Weights"], ["Weights"]), W("backtest", ["Weights"], ["Metrics"]), W("mid", ["Weights"], ["Returns"])] as unknown as NodeCatalogEntry[];
+const nd = (id: string, kind: string) => ({ id, position: { x: 0, y: 0 }, data: { kind } });
+const ed = (source: string, target: string) => ({ source, target });
+
+test("U6 규칙 · strategyEnds — 범위 안에서 비중을 내고 그 뒤에 비중을 내는 구성원이 없는 끝들 (짝: 줄로 이어지면 끝은 하나 · 고르지 않은 노드를 거쳐도 이어진 것 · 비중이 없으면 0 · 범위 밖 하류는 세지 않음)", () => {
+  const nodes = [nd("r", "returns"), nd("a", "optimizer"), nd("b", "optimizer"), nd("n", "neutralize"), nd("t", "backtest")];
+  const par = [ed("r", "a"), ed("r", "b")];
+  expect(strategyEnds(["a", "b"], nodes, par, CAT), "나란한 비중 계산 둘 = 끝 둘").toEqual(["a", "b"]);
+  const ser = [ed("r", "a"), ed("a", "n"), ed("n", "t")];
+  expect(strategyEnds(["a", "n", "t"], nodes, ser, CAT), "비중 → 치우침 없애기 → 돌려 보기 = 끝 하나(뒤쪽)").toEqual(["n"]);
+  expect(strategyEnds(["a", "t"], nodes, [ed("a", "t")], CAT), "비중을 받기만 하는 노드는 끝이 아니다").toEqual(["a"]);
+  expect(strategyEnds(["r"], nodes, par, CAT)).toEqual([]);
+  expect(strategyEnds(["a"], nodes, ser, CAT), "범위 밖 하류(n)는 세지 않는다").toEqual(["a"]);
+  // 고르지 않은 노드를 거쳐 이어져도 흐름은 흐름 — 비중 계산 → (고르지 않은 m) → 비중 계산 = 끝 하나(뒤쪽)
+  const via = [...nodes, nd("m", "mid")];
+  expect(strategyEnds(["a", "b"], via, [ed("r", "a"), ed("a", "m"), ed("m", "b")], CAT), "범위 밖을 거쳐 이어진 둘 = 끝 하나").toEqual(["b"]);
+});
+
+test("U6 · 끝이 둘인 갈래는 [전략으로 묶기]가 까닭을 말하고 상자를 만들지 않는다 (짝: 줄로 이어진 갈래는 묶이고 출력 = 뒤쪽 끝의 복제)", async ({ page }) => {
+  const PAR = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }), n("returns", "returns", 330, 0),
+                              n("optA", "optimizer", 660, 0), n("optB", "optimizer", 990, 0, { model: "risk_parity" })],
+                edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "optA", "returns"), e("returns", "returns", "optB", "returns")] };
+  await openWith(page, PAR);
+  await pickByCmd(page, ["optA", "optB"], "branch-picked", "고른 노드째 갈래");
+  await expect(page.locator(".pg-branch")).toHaveCount(1);
+  const br = (await wip(page)).branches![0];
+  await page.locator(".react-flow__controls-fitview").click();
+  await page.waitForTimeout(400);
+  await page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-strategy`).click();
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 끝이 2개");
+  expect(strategiesOf(await wip(page)), "끝이 둘이면 상자 없음").toHaveLength(0);
+
+  // 짝 — 비중 계산 → 치우침 없애기(줄)는 끝 하나: 묶이고 출력 = 치우침 없애기의 복제
+  const SER = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }), n("returns", "returns", 330, 0),
+                              n("opt", "optimizer", 660, 0), n("neu", "neutralize", 990, 0)],
+                edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "opt", "returns"), e("opt", "weights", "neu", "weights")] };
+  const other = await page.context().newPage();
+  await openWith(other, SER);
+  await pickByCmd(other, ["opt", "neu"], "branch-picked", "고른 노드째 갈래");
+  const br2 = (await wip(other)).branches![0];
+  await other.locator(".react-flow__controls-fitview").click();
+  await other.waitForTimeout(400);
+  await other.locator(`.pg-branch[data-branch-id="${br2.id}"] .pg-branch-strategy`).click();
+  await expect.poll(async () => strategiesOf(await wip(other)).length).toBe(1);
+  const [box] = strategiesOf(await wip(other));
+  expect(br2.map[box.output!], "출력 = 뒤쪽 끝(치우침 없애기)의 복제").toBe("neu");
 });

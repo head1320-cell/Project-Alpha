@@ -2,7 +2,7 @@
  * 캔버스 상태 조각 — 배치·묶음·전략·갈래·블록·경유점 (CF 3부 E3 — `store.ts` 에서 옮김 · 동작 불변)
  */
 import { addEdge, type Edge } from "@xyflow/react";
-import { fromDoc, GRAPH_FORMAT, GRAPH_VERSION, blockFromGroup, branchScope, MAX_BRANCHES, nextBranchLetter, insertDoc, mapLayout, paramDiff, readBlocks, toDoc, writeBlocks, PG_NODE_TYPE, PORTFOLIO_NODE, PORTFOLIO_PORTS, portfolioLane, STRATEGY_COLORS, strategyOutput, compareTargets, COL, COMBINE_W, NODE_W, ROW_GAP, nodeHeight, cardWidth, topoOrder, type GraphBranch, type PgNode } from "@/entities/portfolio-graph";
+import { fromDoc, GRAPH_FORMAT, GRAPH_VERSION, blockFromGroup, branchScope, MAX_BRANCHES, nextBranchLetter, insertDoc, mapLayout, paramDiff, readBlocks, toDoc, writeBlocks, PG_NODE_TYPE, PORTFOLIO_NODE, PORTFOLIO_PORTS, portfolioLane, STRATEGY_COLORS, strategyOutput, strategyEnds, compareTargets, COL, COMBINE_W, NODE_W, ROW_GAP, nodeHeight, cardWidth, topoOrder, type GraphBranch, type PgNode } from "@/entities/portfolio-graph";
 import { fitLanes } from "@/entities/portfolio-graph/lanes";
 import { viaOf } from "@/entities/portfolio-graph/format";
 import { alignRects } from "./guides";
@@ -375,8 +375,14 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     if (!b) return "갈래를 찾지 못했어요.";
     const copies = Object.keys(b.map).filter((c) => s.nodes.some((n) => n.id === c));
     if (copies.length && s.groups.some((g) => g.kind === "strategy" && copies.every((c) => g.members.includes(c)))) return `‘${b.label}’는 이미 전략 상자예요.`;
-    const output = strategyOutput(copies, s.nodes, s.edges, s.catalog ?? []);
-    if (!output) return `‘${b.label}’에 비중을 내는 노드가 없어요 — 전략은 비중을 내야 포트폴리오에 합칠 수 있어요.`;
+    // 결정 5 — 출력을 정할 수 없으면(범위 안 흐름 끝이 둘 이상) 까닭. 끝이 하나면 그것이 출력(`strategyOutput` 과 같은 노드).
+    const ends = strategyEnds(copies, s.nodes, s.edges, s.catalog ?? []);
+    if (!ends.length) return `‘${b.label}’에 비중을 내는 노드가 없어요 — 전략은 비중을 내야 포트폴리오에 합칠 수 있어요.`;
+    if (ends.length > 1) {
+      const name = (id: string) => (s.catalog ?? []).find((c) => c.type === s.nodes.find((n) => n.id === id)?.data.kind)?.plain_label ?? id;
+      return `‘${b.label}’에 비중을 내는 끝이 ${ends.length}개예요(${ends.map((id) => `‘${name(id)}’`).join("·")}) — 전략의 출력을 하나로 정할 수 없어요. 하나를 지우거나 ‘묶음 합치기’로 모아 주세요.`;
+    }
+    const output = ends[0];
     push();
     // 한 노드는 한 상자 — 복제가 다른 상자에 들어 있으면 거기서 뺀다(`strategyPicked` 와 같다).
     const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.includes(m)) })).filter((g) => g.members.length);
