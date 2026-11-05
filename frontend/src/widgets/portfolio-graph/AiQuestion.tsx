@@ -15,6 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import { askScope, portfolioGraphApi, type AskAnswer, type AskFactRef, type AskRecord, type AskTarget, type AssistAsk,
          type GraphDoc, type NarrateFact, type NodeRunResult, type RunReport } from "@/entities/portfolio-graph";
 import type { Session } from "@/entities/session";
+import { ChevronDown } from "lucide-react";
+import { SHORT_Q } from "./panels";
 
 const KEEP = 5;
 const MAX_PREV = 1200;
@@ -130,7 +132,25 @@ export function AiQuestion({ q, session, target, badge, onRunTo, onGotoNode, onG
   const [open, setOpen] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const turnsEl = useRef<HTMLOListElement>(null);
-  focusRef.current = () => area.current?.focus();
+  // U8 이어서 — 짧은 창(높이 420 미만 · `SHORT_Q`)에서는 머리 한 줄로 접힌 채 시작한다: 판이 하나뿐인 짧은 창에서 이 칸이 오른쪽 판의 절반 가까이를
+  // 차지해 이야기가 한두 줄만 보였다(U8 PNG 가 찾음 · AI3 '자리는 UI/UX 판단'). 머리를 누르면 펼침. 긴 창은 예전 그대로(머리는 단추가 아님).
+  const [short, setShort] = useState(false);
+  const [folded, setFolded] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia?.(SHORT_Q);
+    if (!mq) return;
+    const on = () => setShort(mq.matches);
+    on();
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  const fold = short && folded;
+  // 명령(묻기 칸으로 가기)은 접혀 있으면 먼저 펼친다.
+  focusRef.current = () => {
+    if (!fold) { area.current?.focus(); return; }
+    setFolded(false);
+    requestAnimationFrame(() => area.current?.focus());
+  };
   const tkey = keyOf(target);
   useEffect(() => { setOpen(null); }, [tkey]);
   const nTurns = thread?.turns.length ?? 0;
@@ -202,8 +222,16 @@ export function AiQuestion({ q, session, target, badge, onRunTo, onGotoNode, onG
   }
 
   return (
-    <section className="pg-ask" aria-label="AI 에게 묻기">
-      <h3 className="pg-ask-to">{head}</h3>
+    <section className={`pg-ask${fold ? " pg-ask--folded" : ""}`} aria-label="AI 에게 묻기">
+      {short ? (
+        <h3 className="pg-ask-to">
+          <button type="button" className="pg-ask-fold" aria-expanded={!fold} onClick={() => setFolded(!fold)}>
+            <span className="pg-ask-fold-t">{head}</span>
+            <ChevronDown size={15} aria-hidden="true" className="pg-ask-fold-i" />
+          </button>
+        </h3>
+      ) : <h3 className="pg-ask-to">{head}</h3>}
+      {!fold && <>
       {scopeText && <p className="pg-ask-scope">{scopeText}</p>}
       {thread?.stale && !nTurns && <p className="pg-ask-stale" role="status">계산 결과가 바뀌어 답을 지웠어요</p>}
       {nTurns > 0 && (
@@ -261,6 +289,7 @@ export function AiQuestion({ q, session, target, badge, onRunTo, onGotoNode, onG
         </ol>
       )}
       {composer}
+      </>}
     </section>
   );
 }

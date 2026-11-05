@@ -162,6 +162,9 @@ export function contrastAudit(rootSelector: string): string {
   for (const el of [root, ...root.querySelectorAll("*")]) {
     const cs = getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden") continue;
+    // 닫힌 <details> 의 내용(머리 summary 제외)은 그려지지 않는다 — 그 안은 색 전환도 돌지 않아 낡은 색이 남는다(U8 이어서가 찾음: 다크로 바꾼 뒤에도 라이트 글자색).
+    const closed = el.closest("details:not([open])");
+    if (closed && closed !== el && !el.closest("summary")) continue;
     const own = parse(cs.backgroundColor);
     const tag = el.tagName + "." + (el.getAttribute("class") || "").split(" ").slice(0, 2).join(".");
     if (own && own.a > 0.5 && lum(own.r, own.g, own.b) > 0.6) bright.push(tag + " bg=" + cs.backgroundColor);

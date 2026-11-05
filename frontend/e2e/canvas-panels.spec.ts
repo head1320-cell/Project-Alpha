@@ -474,3 +474,55 @@ test("U8 · 짝 — 1440×900(짧지 않음)은 저장값대로 두 판 열린 �
   await page.keyboard.press("[");
   await expect.poll(() => shown(page), "넓은 창은 둘 다 열린다").toEqual({ left: true, right: true });
 });
+
+test("U8 이어서 · 844×390 — 노드를 고르면 'AI 에게 묻기' 는 머리 한 줄로 접힌 채(판 높이의 1/4 이하) · 누르면 펼쳐 로그인 안내 · 다시 누르면 접힘 · 대비 AA 미달 0(라이트·다크) (짝: 1440×900 은 접기 단추 없이 펼친 채)", async ({ page }) => {
+  await openShort(page, 844, 390);
+  await page.locator(".react-flow__controls-fitview").click();
+  await page.waitForTimeout(400);
+  await page.locator(".pg-node").first().click({ position: { x: 30, y: 14 } });
+  await expect(page.locator(".pg-side")).toBeVisible();
+  const ask = page.locator(".pg-side .pg-ask");
+  const fold = ask.locator(".pg-ask-fold");
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(ask.locator(".pg-ask-login")).toHaveCount(0);
+  const a = (await ask.boundingBox())!;
+  const side = (await page.locator(".pg-side").boundingBox())!;
+  expect(a.height, `접힌 칸 ${a.height} · 판 ${side.height}`).toBeLessThanOrEqual(side.height / 4);
+  for (const scheme of ["light", "dark"] as const) {
+    if (scheme === "dark") {
+      await page.evaluate(() => document.documentElement.classList.add("dark"));
+      await page.waitForTimeout(500);                       // 색 바뀜 전환(shadcn Badge 의 transition-colors)이 끝나게 — 중간 색을 재지 않는다
+    }
+    const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-root"));
+    expect(audit.checked).toBeGreaterThan(20);
+    expect(audit.low, `${scheme} 짧은 창 AA 미달`).toEqual([]);
+  }
+  // 짝 — 닫힌 상자 안을 건너뛴 것이 실제 미달을 숨기지 않는다: 케이스 상자를 열고(다크) 그 판을 잰다
+  await page.locator(".pg-casebox > summary").click();
+  await expect(page.locator(".pg-casebox")).toHaveAttribute("open", "");
+  await page.waitForTimeout(400);
+  const caseAudit = await page.evaluate<AuditResult>(contrastAudit(".pg-casebox"));
+  expect(caseAudit.checked, "열린 케이스 상자를 잰다").toBeGreaterThan(3);
+  expect(caseAudit.low, "열린 케이스 상자(다크) AA 미달").toEqual([]);
+  await page.locator(".pg-casebox > summary").click();
+  await fold.click();
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+  await expect(ask.locator(".pg-ask-login")).toBeVisible();
+  await fold.click();
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(ask.locator(".pg-ask-login")).toHaveCount(0);
+  // 명령 '고른 노드에게 묻기'(Ctrl+K)는 접힌 칸을 먼저 펼친다
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("명령 찾기").last().fill("고른 노드에게 묻기");
+  await expect(page.locator('.pg-cmd-item[data-cmd="ask-here"]')).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(fold, "명령이 묻기 칸을 펼친다").toHaveAttribute("aria-expanded", "true");
+
+  // 짝 — 긴 창은 예전 그대로: 접기 단추 없이 펼친 채
+  const tall = await page.context().newPage();
+  await openShort(tall, 1440, 900);
+  await tall.locator(".pg-node").first().click({ position: { x: 30, y: 14 } });
+  await expect(tall.locator(".pg-side .pg-ask")).toBeVisible();
+  await expect(tall.locator(".pg-side .pg-ask-fold")).toHaveCount(0);
+  await expect(tall.locator(".pg-side .pg-ask-login")).toBeVisible();
+});

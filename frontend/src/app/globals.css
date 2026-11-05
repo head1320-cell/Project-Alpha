@@ -3968,6 +3968,14 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-root { display: flex; flex-direction: column; height: calc(100vh - 64px); min-height: 420px; background: var(--pg-canvas); }
 /* U8 — 높이 420 미만 창(휴대폰 가로 등)은 캔버스가 창에 맞춰 줄어 확대 단추·안내가 창 안에 있다(판은 하나만 — panels.ts `onePanel`). */
 @media (max-height: 419px) { .pg-root { min-height: 0; } }
+/* U8 이어서 — 짧은 창의 'AI 에게 묻기' 는 머리 한 줄(단추)로 접힌 채 시작한다(AiQuestion). 펼친 머리와 접힌 머리는 같은 줄. */
+.pg-ask-fold { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.pg-ask-fold-t { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+.pg-ask-fold-i { flex: none; color: var(--pg-body); transition: transform .15s; }
+.pg-ask-fold[aria-expanded="true"] .pg-ask-fold-i { transform: rotate(180deg); }
+.pg-ask-fold:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; border-radius: 4px; }
+.pg-ask--folded { padding-top: 10px; padding-bottom: 10px; }
+@media (prefers-reduced-motion: reduce) { .pg-ask-fold-i { transition: none; } }
 .pg-theme button { font: inherit; }
 .pg-theme :focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 
@@ -4206,7 +4214,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-step::before { content: ""; position: absolute; left: 11px; top: 28px; bottom: 0; width: 2px; background: var(--pg-line); }
 .pg-step:last-child::before { display: none; }
 .pg-step-num { z-index: 1; width: 24px; height: 24px; padding: 0; font-size: 12px; font-weight: 700; color: var(--pg-body); background: var(--pg-soft); border: 0; border-radius: 50%; cursor: pointer; }
-.pg-step--cur .pg-step-num { color: #fff; background: var(--pg-blue); }
+/* 지금 단계 번호 — 흰 글자는 CTA 파랑 위(5.41:1). 예전 --pg-blue 는 라이트 3.71 · 다크 3.0 으로 AA 미달이었다(U8 이어서의 짧은 창 대비 검사가 찾음 — 노드를 고른 상태라 크기와 무관). */
+.pg-step--cur .pg-step-num { color: #fff; background: var(--pg-cta); }
 .pg-step--failed .pg-step-num { color: #fff; background: var(--pg-fail); }
 .pg-step--blocked .pg-step-num { color: var(--pg-assume); background: var(--pg-assume-soft); }
 .pg-step-title { margin: 1px 0 0; font-size: 16px; font-weight: 700; line-height: 1.45; }
