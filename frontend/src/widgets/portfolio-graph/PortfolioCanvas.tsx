@@ -81,7 +81,7 @@ import { GoalStart } from "./GoalStart";
 import { GraphNode, PORT_PLAIN, STAGE_VAR } from "./GraphNode";
 import { GroupFrame, PG_GROUP_TYPE } from "./GroupFrame";
 import { measuredH, measuredW } from "./toolbarPlace";
-import { snapToGuides, type Guide } from "./guides";
+import { snapGroup, type Guide } from "./guides";
 import { ContextMenu, FindBar, NoteLine, QuickAdd, ShortcutSheet, type QuickAddState } from "./CanvasAssist";
 import { NodePalette, type LeftTab } from "./NodePalette";
 import { ProcedurePanel } from "./ProcedurePanel";
@@ -268,24 +268,25 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
     const rest: NodeChange[] = [];
-    // CF4a — 카드 하나를 끄는 중이면 다른 카드의 가장자리·가운데에 붙인다(여럿·묶음 상자는 붙이지 않는다). 위치는 격자(11)에 맞춘 뒤 오므로
+    // CF4a — 카드를 끄는 중이면 다른 카드의 가장자리·가운데에 붙인다(묶음 상자는 붙이지 않는다). 위치는 격자(11)에 맞춘 뒤 오므로
     // 문턱은 화면 6px 에 격자 반 칸을 더한다 — 손이 6px 안으로 가져간 자리는 격자로 밀려도 붙는다.
     // 놓을 때(dragging false) React Flow 는 끌기 자리를 다시 보낸다 — 그 자리도 같은 규칙으로 붙여야 놓은 뒤 격자로 되밀리지 않는다.
     // 정렬선 붙이기는 ★마우스 끌기만★(R6) — 화살표 이동도 dragging false 로 와서, 줄 맞은 노드가 한 칸을 못 가고 다른 카드 선에 붙었다(관측 y 0 → 8).
     if (changes.some((c) => c.type === "position" && c.dragging === true)) pointerDrag.current = true;
     const drags = pointerDrag.current
       ? changes.filter((c) => c.type === "position" && typeof c.dragging === "boolean" && c.position && !c.id.includes(":")) : [];
-    const c = drags.length === 1 ? drags[0] : null;
-    if (c && c.type === "position" && c.position) {
-      const at = c.position;
-      const me = st.nodes.find((x) => x.id === c.id);
-      if (me) {
-        const box = (x: typeof me) => ({ w: measuredW(x) || cardWidth(x.data.kind), h: measuredH(x) || nodeHeight(x.data.kind, st.catalog, x.data.slotH) });
-        const others = st.nodes.filter((x) => x.id !== c.id).map((x) => ({ x: x.position.x, y: x.position.y, ...box(x) }));
-        const r = snapToGuides({ x: at.x, y: at.y, ...box(me) }, others, 6 / (rf.current?.getZoom() ?? 1) + SNAP / 2);
-        c.position = { x: r.x, y: r.y };
-        setGuides(c.dragging ? r.guides : []);
-      }
+    // U2 — 여럿을 함께 끌면 끌리는 카드들의 테두리를 한 상자로 보고 붙인다(같은 dx·dy 를 모두에 — 서로의 간격은 그대로). 하나면 예전과 같다.
+    const snapping = drags.flatMap((c) => {
+      const me = c.type === "position" && c.position ? st.nodes.find((x) => x.id === c.id) : undefined;
+      return me && c.type === "position" && c.position ? [{ c, me, at: c.position }] : [];
+    });
+    if (snapping.length) {
+      const box = (x: (typeof snapping)[number]["me"]) => ({ w: measuredW(x) || cardWidth(x.data.kind), h: measuredH(x) || nodeHeight(x.data.kind, st.catalog, x.data.slotH) });
+      const ids = new Set(snapping.map((m) => m.me.id));
+      const others = st.nodes.filter((x) => !ids.has(x.id)).map((x) => ({ x: x.position.x, y: x.position.y, ...box(x) }));
+      const r = snapGroup(snapping.map((m) => ({ x: m.at.x, y: m.at.y, ...box(m.me) })), others, 6 / (rf.current?.getZoom() ?? 1) + SNAP / 2);
+      for (const m of snapping) if (m.c.type === "position") m.c.position = { x: m.at.x + r.dx, y: m.at.y + r.dy };
+      setGuides(snapping[0].c.type === "position" && snapping[0].c.dragging ? r.guides : []);
     } else if (changes.some((c) => c.type === "position" && c.dragging === false)) {
       setGuides([]);
     }

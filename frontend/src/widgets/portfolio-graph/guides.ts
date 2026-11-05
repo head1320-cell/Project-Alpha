@@ -44,12 +44,27 @@ export function snapToGuides(moving: Rect, others: Rect[], threshold: number): {
   return { x: m.x, y: m.y, guides };
 }
 
-/** 정렬·간격(CF4a) — 고른 카드들의 새 위치. 간격 맞추기는 셋 이상일 때만(양 끝은 그대로, 사이를 똑같이). */
-export type AlignKind = "left" | "center" | "top" | "hspace" | "vspace";
+/**
+ * 여럿 끌기 정렬선(U2) — 끌리는 카드들의 테두리를 한 상자로 보고 `snapToGuides` 에 넣는다. 돌려준 dx·dy 를 끌리는 카드 모두에 더하면
+ * 서로의 간격은 그대로 묶음 가장자리·가운데가 다른 카드에 붙는다. 하나면 `snapToGuides` 와 같다.
+ */
+export function snapGroup(moving: Rect[], others: Rect[], threshold: number): { dx: number; dy: number; guides: Guide[] } {
+  if (!moving.length) return { dx: 0, dy: 0, guides: [] };
+  const x = Math.min(...moving.map((r) => r.x)), y = Math.min(...moving.map((r) => r.y));
+  const u: Rect = { x, y, w: Math.max(...moving.map((r) => r.x + r.w)) - x, h: Math.max(...moving.map((r) => r.y + r.h)) - y };
+  const r = snapToGuides(u, others, threshold);
+  return { dx: r.x - u.x, dy: r.y - u.y, guides: r.guides };
+}
+
+/** 정렬·간격(CF4a · U2 오른쪽·세로 가운데·아래) — 고른 카드들의 새 위치. 간격 맞추기는 셋 이상일 때만(양 끝은 그대로, 사이를 똑같이). */
+export type AlignKind = "left" | "center" | "right" | "top" | "middle" | "bottom" | "hspace" | "vspace";
 export const ALIGN_ITEMS: { kind: AlignKind; label: string; min: number }[] = [
   { kind: "left", label: "왼쪽 맞추기", min: 2 },
   { kind: "center", label: "가운데 맞추기", min: 2 },
+  { kind: "right", label: "오른쪽 맞추기", min: 2 },
   { kind: "top", label: "위 맞추기", min: 2 },
+  { kind: "middle", label: "세로 가운데 맞추기", min: 2 },
+  { kind: "bottom", label: "아래 맞추기", min: 2 },
   { kind: "hspace", label: "가로 간격 똑같이", min: 3 },
   { kind: "vspace", label: "세로 간격 똑같이", min: 3 },
 ];
@@ -63,7 +78,10 @@ export function alignRects(rects: (Rect & { id: string })[], kind: AlignKind): M
   const maxB = Math.max(...rects.map((r) => r.y + r.h));
   if (kind === "left") for (const r of rects) out.set(r.id, { x: minX, y: r.y });
   if (kind === "center") for (const r of rects) out.set(r.id, { x: Math.round((minX + maxR) / 2 - r.w / 2), y: r.y });
+  if (kind === "right") for (const r of rects) out.set(r.id, { x: maxR - r.w, y: r.y });
   if (kind === "top") for (const r of rects) out.set(r.id, { x: r.x, y: minY });
+  if (kind === "middle") for (const r of rects) out.set(r.id, { x: r.x, y: Math.round((minY + maxB) / 2 - r.h / 2) });
+  if (kind === "bottom") for (const r of rects) out.set(r.id, { x: r.x, y: maxB - r.h });
   if (kind === "hspace" || kind === "vspace") {
     const h = kind === "hspace";
     const sorted = [...rects].sort((a, b) => (h ? a.x - b.x : a.y - b.y));

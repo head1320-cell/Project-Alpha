@@ -133,7 +133,7 @@ async function pick(page: Page, ids: string[]) {
 }
 async function align(page: Page, label: string) {
   await page.locator(".pg-align-open").click();
-  await page.locator(".pg-align-menu [role=menuitem]", { hasText: label }).click();
+  await page.getByRole("menuitem", { name: label, exact: true }).click();
 }
 
 test("정렬 메뉴는 캔버스 안에 다 보이고 가리지 않는 쪽으로 열린다 — 막대가 카드 위에 있어도 · 위쪽 카드 둘이어도", async ({ page }) => {
@@ -190,7 +190,7 @@ test("간격: 셋이면 가로·세로 간격이 똑같고 양 끝은 그대로 
   const ids = ["a", "b", "c"];
   await pick(page, ids);
   await page.locator(".pg-align-open").click();
-  await expect(page.locator(".pg-align-menu [role=menuitem]")).toHaveCount(5);
+  await expect(page.locator(".pg-align-menu [role=menuitem]")).toHaveCount(8);
   await page.keyboard.press("Escape");
   await align(page, "가로 간격 똑같이");
   await page.waitForTimeout(200);
@@ -211,7 +211,7 @@ test("간격: 셋이면 가로·세로 간격이 똑같고 양 끝은 그대로 
 
   await pick(page, ["a", "b"]);
   await page.locator(".pg-align-open").click();
-  await expect(page.locator(".pg-align-menu [role=menuitem]")).toHaveCount(3);
+  await expect(page.locator(".pg-align-menu [role=menuitem]")).toHaveCount(6);
   await expect(page.locator(".pg-align-menu")).not.toContainText("간격");
 });
 
