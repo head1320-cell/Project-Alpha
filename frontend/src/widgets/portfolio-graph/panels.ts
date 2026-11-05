@@ -5,6 +5,8 @@
 export const PANELS_KEY = "alpha_pg_panels";
 export const RIGHT_W = { min: 300, max: 600, def: 392, defCompact: 344, step: 16 } as const;
 export const NARROW_Q = "(max-width: 820px)";
+/** 짧은 창(U8 — 높이 420 미만, 예: 휴대폰 가로 844×390) — 판은 하나만 열리고 처음엔 둘 다 닫힌다. 저장값은 덮지 않는다. */
+export const SHORT_Q = "(max-height: 419px)";
 
 export interface Panels {
   left: boolean;
@@ -18,9 +20,9 @@ export const DEFAULT_PANELS: Panels = { left: true, right: true, rightW: RIGHT_W
 export const clampW = (w: number) => Math.round(Math.min(RIGHT_W.max, Math.max(RIGHT_W.min, w)));
 
 /** `wide` = 1440px 이상 — 그보다 좁으면 처음 폭을 344px 로(가운데 캔버스가 예전 3열과 비슷하게 남도록). */
-export function readPanels(narrow: boolean, wide = true): Panels {
+export function readPanels(narrow: boolean, wide = true, short = false): Panels {
   const base = { ...DEFAULT_PANELS, rightW: wide ? RIGHT_W.def : RIGHT_W.defCompact };
-  if (narrow) return { ...base, left: false, right: false };
+  if (narrow || short) return { ...base, left: false, right: false };
   try {
     const raw = typeof window === "undefined" ? null : localStorage.getItem(PANELS_KEY);
     if (!raw) return base;
@@ -39,6 +41,15 @@ export function readPanels(narrow: boolean, wide = true): Panels {
 export function savePanels(p: Panels) {
   try { localStorage.setItem(PANELS_KEY, JSON.stringify({ left: p.left, right: p.right, rightW: p.rightW })); }
   catch { /* 적을 수 없으면 이번 방문에만 */ }
+}
+
+/**
+ * 짧은 창의 판 하나(U8 — 사용자 결정 2026-11-01 "판 하나만 · 두 판 닫고 시작") — 바꾼 뒤 둘 다 열려 있으면 ★새로 연 쪽★만 남긴다
+ * (둘 다 새로 열렸으면 오른쪽 — 노드를 고르면 열리는 쪽). 짧지 않거나 집중 모드면 그대로. 순수 — 시험이 직접 부른다.
+ */
+export function onePanel(prev: Panels, next: Panels, short: boolean): Panels {
+  if (!short || next.focus || !(next.left && next.right)) return next;
+  return prev.right && !prev.left ? { ...next, right: false } : { ...next, left: false };
 }
 
 /** 여닫기 — 집중 모드에서 한쪽을 열면 집중을 끝내고 그쪽만 연다. */

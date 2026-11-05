@@ -3966,6 +3966,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-loading { display: flex; align-items: center; gap: 8px; padding: 24px; font-size: 13px; color: var(--muted-foreground); }
 /* 바닥 420(R3) — 예전 600 은 창이 664 보다 낮으면 캔버스 아래(확대 단추·맞춤·안내 줄·미니맵)를 잘라 누를 수 없게 했다. */
 .pg-root { display: flex; flex-direction: column; height: calc(100vh - 64px); min-height: 420px; background: var(--pg-canvas); }
+/* U8 — 높이 420 미만 창(휴대폰 가로 등)은 캔버스가 창에 맞춰 줄어 확대 단추·안내가 창 안에 있다(판은 하나만 — panels.ts `onePanel`). */
+@media (max-height: 419px) { .pg-root { min-height: 0; } }
 .pg-theme button { font: inherit; }
 .pg-theme :focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 

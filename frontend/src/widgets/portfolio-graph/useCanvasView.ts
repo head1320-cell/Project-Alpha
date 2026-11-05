@@ -8,15 +8,27 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject
 import type { ReactFlowInstance } from "@xyflow/react";
 import { NODE_W } from "@/entities/portfolio-graph";
 import { MAX_ZOOM, MIN_ZOOM, TIGHT_MIDDLE, TOOLBAR_H, fitClear, fitTop } from "./canvasGeometry";
-import { DEFAULT_PANELS, NARROW_Q, floatInsets, readPanels, savePanels, type Panels } from "./panels";
+import { DEFAULT_PANELS, NARROW_Q, SHORT_Q, floatInsets, onePanel, readPanels, savePanels, type Panels } from "./panels";
 import { usePortfolioGraph, type PgState } from "./store";
 import { readView } from "./view";
 
 export function useCanvasView(rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>, catalogReady: boolean) {
   // 떠 있는 판(BQ Q1) — 여닫기·폭. 넓은 화면에서 바꾼 것만 이 브라우저에 남긴다(좁은 화면은 늘 닫힌 채 시작).
-  const [panels, setPanels] = useState<Panels>(DEFAULT_PANELS);
+  const [panels, setPanelsRaw] = useState<Panels>(DEFAULT_PANELS);
   const narrowNow = () => typeof window !== "undefined" && !!window.matchMedia?.(NARROW_Q).matches;
-  useEffect(() => { setPanels(readPanels(narrowNow(), window.innerWidth >= 1440)); }, []);
+  const shortNow = () => typeof window !== "undefined" && !!window.matchMedia?.(SHORT_Q).matches;
+  // U8 — 짧은 창에서는 판이 하나만: 판을 바꾸는 모든 길(여닫기 · 노드를 고르면 오른쪽 · 폭 끌기)이 이 둘을 지난다.
+  const setPanels = useCallback<Dispatch<SetStateAction<Panels>>>((v) =>
+    setPanelsRaw((p) => onePanel(p, typeof v === "function" ? v(p) : v, shortNow())), []);
+  useEffect(() => { setPanelsRaw(readPanels(narrowNow(), window.innerWidth >= 1440, shortNow())); }, []);
+  // 창이 짧아지면(가로로 돌리기 등) 둘 다 열린 판을 하나로 — 오른쪽을 남긴다.
+  useEffect(() => {
+    const mq = window.matchMedia?.(SHORT_Q);
+    if (!mq) return;
+    const on = () => { if (mq.matches) setPanelsRaw((p) => (p.left && p.right && !p.focus ? { ...p, left: false } : p)); };
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
   useEffect(() => {
     const v = readView(), g = usePortfolioGraph.getState();
     g.setLanes(v.lanes);
@@ -25,7 +37,8 @@ export function useCanvasView(rf: RefObject<ReactFlowInstance | null>, canvasEl:
     g.setShowGhosts(v.ghosts);                        // CF6 — 기본 켬
   }, []);
   const updatePanels = useCallback((f: (p: Panels) => Panels) => {
-    setPanels((p) => { const n = f(p); if (!narrowNow()) savePanels(n); return n; });
+    // 좁은 화면·짧은 창에서 바꾼 것은 남기지 않는다(넓은 창의 설정을 덮지 않게).
+    setPanelsRaw((p) => { const n = onePanel(p, f(p), shortNow()); if (!narrowNow() && !shortNow()) savePanels(n); return n; });
   }, []);
   // 판 사이 가운데가 좁으면(알약 + 선 범례 + 걸러 보기가 한 줄에 안 듦) 범례·걸러 보기를 한 줄 아래로(BQ Q2).
   const [tight, setTight] = useState(false);

@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { contrastAudit, type AuditResult } from "./helpers";
+import { onePanel, type Panels } from "../src/widgets/portfolio-graph/panels";
 
 /**
  * BQ Q1 · 떠 있는 패널 — 캔버스가 판 뒤까지 넓어지고, 왼쪽 목록·오른쪽 창은 그 위에 떠서 여닫는다.
@@ -405,4 +406,71 @@ test("짧은 창(R3): 창이 664 보다 낮아도 확대 단추·맞춤·안내 
   expect(await bottom(".react-flow__controls-fitview")).toBeLessThanOrEqual(420);
   await page.locator(".react-flow__controls-fitview").click({ timeout: 3_000 });
   expect(await page.evaluate(() => document.querySelector(".terminal-main")!.scrollLeft), "가로로는 밀리지 않는다").toBe(0);
+});
+
+// ── U8 · 짧은 창(높이 420 미만) — 판 하나만 · 두 판 닫고 시작 (스펙 §8.4 결정 2 · 사용자 결정 2026-11-01) ─────────────
+const P = (left: boolean, right: boolean, focus = false): Panels => ({ left, right, rightW: 392, focus });
+test("U8 규칙 · onePanel — 짧으면 새로 연 쪽만 남긴다 · 둘 다 새로 열렸으면 오른쪽 (짝: 짧지 않거나 집중 모드면 그대로 · 하나면 그대로)", () => {
+  expect(onePanel(P(true, false), P(true, true), true)).toEqual(P(false, true));    // 오른쪽을 새로 열면 왼쪽 접힘
+  expect(onePanel(P(false, true), P(true, true), true)).toEqual(P(true, false));    // 왼쪽을 새로 열면 오른쪽 접힘
+  expect(onePanel(P(false, false), P(true, true), true)).toEqual(P(false, true));   // 둘 다 새로 — 오른쪽
+  expect(onePanel(P(true, false), P(true, true), false)).toEqual(P(true, true));    // 짧지 않으면 그대로
+  expect(onePanel(P(true, true, true), P(true, true, true), true)).toEqual(P(true, true, true));
+  expect(onePanel(P(false, false), P(false, true), true)).toEqual(P(false, true));
+});
+
+async function openShort(page: Page, w: number, h: number) {
+  await page.setViewportSize({ width: w, height: h });
+  await page.addInitScript(() => {
+    try {
+      if (sessionStorage.getItem("u8_seeded")) return;
+      sessionStorage.setItem("u8_seeded", "1");
+      localStorage.setItem("alpha_pg_panels", JSON.stringify({ left: true, right: true, rightW: 392 }));   // 넓은 창에서 남긴 값
+    } catch { /* */ }
+  });
+  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node").first()).toBeAttached({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+}
+const shown = async (page: Page) => ({ left: await page.locator(".pg-palette").isVisible(), right: await page.locator(".pg-side").isVisible() });
+
+for (const [w, h] of [[844, 390], [1024, 400], [1440, 380]] as const) {
+  test(`U8 · ${w}×${h} — 두 판 닫힌 채 시작 · 하나를 열면 다른 하나는 접힘 · 노드를 고르면 오른쪽만 · 확대 단추가 창 안 · 페이지 스크롤 0 · 관문 레일 × 오른쪽 창 머리 겹침 0`, async ({ page }) => {
+    await openShort(page, w, h);
+    expect(await shown(page), "두 판 닫힌 채 시작").toEqual({ left: false, right: false });
+    expect(await page.locator(".terminal-main").evaluate((m) => m.scrollHeight - m.clientHeight), "페이지 세로 스크롤 0").toBe(0);
+    expect(await page.locator(".react-flow__controls-fitview").evaluate((e) => e.getBoundingClientRect().bottom), "맞춤 단추가 창 안").toBeLessThanOrEqual(h);
+    await page.locator(".react-flow__controls-zoomin").click({ timeout: 3_000 });                 // 실제로 눌린다
+    { const ep = await emptyPoint(page); await page.mouse.click(ep.x, ep.y); }
+    await page.keyboard.press("[");
+    await expect.poll(() => shown(page)).toEqual({ left: true, right: false });
+    await page.keyboard.press("]");
+    await expect.poll(() => shown(page), "오른쪽을 열면 왼쪽이 접힌다").toEqual({ left: false, right: true });
+    await page.keyboard.press("[");
+    await expect.poll(() => shown(page), "왼쪽을 열면 오른쪽이 접힌다").toEqual({ left: true, right: false });
+    // 노드를 고르면 오른쪽 창이 열리고 왼쪽은 접힌다
+    await page.locator(".react-flow__controls-fitview").click();
+    await page.waitForTimeout(400);
+    await page.locator(".pg-node").first().click({ position: { x: 30, y: 14 } });
+    await expect.poll(() => shown(page)).toEqual({ left: false, right: true });
+    const rail = await page.locator(".pg-rail-wrap").boundingBox();
+    const head = (await page.locator(".pg-side-head").boundingBox())!;
+    if (rail) {
+      const ov = Math.max(0, Math.min(rail.x + rail.width, head.x + head.width) - Math.max(rail.x, head.x)) *
+                 Math.max(0, Math.min(rail.y + rail.height, head.y + head.height) - Math.max(rail.y, head.y));
+      expect(ov, "관문 레일 × 오른쪽 창 머리").toBe(0);
+    }
+    // 짧은 창에서 바꾼 판은 넓은 창의 저장값을 덮지 않는다
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("alpha_pg_panels") ?? "{}"))).toMatchObject({ left: true, right: true });
+  });
+}
+
+test("U8 · 짝 — 1440×900(짧지 않음)은 저장값대로 두 판 열린 채 · 둘 다 함께 열 수 있다", async ({ page }) => {
+  await openShort(page, 1440, 900);
+  expect(await shown(page)).toEqual({ left: true, right: true });
+  { const ep = await emptyPoint(page); await page.mouse.click(ep.x, ep.y); }
+  await page.keyboard.press("[");
+  await expect.poll(() => shown(page)).toEqual({ left: false, right: true });
+  await page.keyboard.press("[");
+  await expect.poll(() => shown(page), "넓은 창은 둘 다 열린다").toEqual({ left: true, right: true });
 });
