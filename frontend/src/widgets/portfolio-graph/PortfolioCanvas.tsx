@@ -391,10 +391,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     if (ids.length === 1) { focusNode(ids[0]); return; }
     rf.current.fitView({ nodes: ids.map((id) => ({ id })), padding: 0.35, duration: 250, maxZoom: 1.1 });
   }, [focusNode]);
-  const applySuggestion = useCallback((sug: ProcedureSuggestion) => {
+  const applySuggestion = useCallback((sug: ProcedureSuggestion, dropAt?: { x: number; y: number }) => {
     const st = usePortfolioGraph.getState();
-    // 유령이 보인 자리에 놓는다(CF6) — 바·절차 판·유령 어느 쪽에서 붙여도 같은 자리.
-    const at = ghostsRef.current.find((g) => g.key === suggestionKey(sug))?.at ?? undefined;
+    // 유령이 보인 자리에 놓는다(CF6) — 바·절차 판·유령 어느 쪽에서 붙여도 같은 자리. U4 — 유령을 끌어 놓았으면 놓은 자리(격자).
+    const at = dropAt ? snapPt(dropAt) : ghostsRef.current.find((g) => g.key === suggestionKey(sug))?.at ?? undefined;
     st.act(() => {
       const id = st.applySuggestion(sug, at);
       return id ? `‘${sug.label}’를 붙이고 이었어요.` : "선을 이었어요.";
@@ -728,7 +728,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             {s.showLanes && <StageLanes stages={stages} />}
             {ghosts.length > 0 && (
               <GhostLayer ghosts={ghosts} catalog={s.catalog} shape={s.wireShape} hot={ghostHot} gateLabel={gateLabel}
-                          onApply={applySuggestion} onDismiss={dismiss} />
+                          onApply={applySuggestion} onDismiss={dismiss} onDrop={applySuggestion} />
             )}
             {draftQ.draft && <DraftLayer draft={draftQ.draft} at={draftAt} catalog={s.catalog} shape={s.wireShape} />}
             <ZoomWatch el={canvasEl} />

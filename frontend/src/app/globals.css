@@ -4504,6 +4504,10 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-ghost-lead.pg-ghost-wire--hot { stroke: var(--pg-blue); }
 .pg-ghost--hot { border-style: solid; border-color: var(--pg-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pg-blue) 22%, transparent); }
 .pg-ghost-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* U4 — 붙이는 유령의 머리는 잡을 수 있다(끌어 놓으면 그 자리에 붙음). 몸통은 그대로 누름을 넘긴다. */
+.pg-ghost:not(.pg-ghost--connect) > .pg-ghost-head { pointer-events: auto; cursor: grab; touch-action: none; }
+.pg-ghost--dragging { border-style: solid; border-color: var(--pg-blue); opacity: 0.9; z-index: 1; }
+.pg-ghost--dragging > .pg-ghost-head { cursor: grabbing; }
 .pg-ghost-chip { flex: none; align-self: flex-start; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--pg-ink);
   background: var(--pg-soft); border: 1px solid var(--pg-card-line); }
 .pg-ghost-name { min-width: 0; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

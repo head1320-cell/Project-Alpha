@@ -24770,3 +24770,22 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
 - 게이트: 새 시험 2 + `canvas-minimap` 4 · `canvas-perf` 9(재기 4 건너뜀) · `canvas-golden` 3 · 초점 옮기기 이웃(`canvas-workspace` 83 · `canvas-panels` 15 ·
   `canvas-ai-story` 11 · `canvas-procedure` 17 · `canvas-a11y` 11) ★실패 0★ · 프런트를 읽는 pytest 580 통과 · tsc · eslint 0 · 골든 셋 그대로.
 - 하지 않음: 미니맵 크기 조절 · 미니맵에서 여럿 고르기 · 미니맵 칸 키보드 초점.
+
+## CF 3부 · U4 유령 끌어 놓기 — 머리를 잡아 놓은 자리에 바로 붙인다 (2026-11-01)
+
+- 왜: U0 결정 4(사용자 결정 2026-11-01 "끌어 놓으면 바로 붙이기"). 유령은 [붙이기]를 누르면 정해진 자리(`placeSuggestion`)에만 들어갔다(CF6·AI1 이 '하지 않음' 으로 남김).
+- 무엇(화면 코드만): `GhostLayer.tsx` — 붙이는 유령의 `.pg-ghost-head` 에 포인터 잡기(왼쪽 단추) · 화면 이동량 ÷ 확대 = 캔버스 이동량으로 그 유령만 따라옴(`pg-ghost--dragging` ·
+  그 유령의 점선 숨김) · 화면 4px 넘게 움직였으면 놓을 때 `onDrop(g, 유령 자리 + 이동량)` · 짧은 누름은 아무것도 안 함 · Esc·pointercancel 취소. `PortfolioCanvas.applySuggestion(sug, dropAt?)` —
+  놓은 자리가 있으면 격자(`snapPt`)에 맞춰 그 자리(없으면 예전처럼 유령 자리). `globals.css` — 붙이는 유령의 머리만 `pointer-events: auto` · `cursor: grab`.
+- 시험: 새 `e2e/canvas-ghost-drag.spec.ts` 4(★실제 서버 · 규칙 유령★ 셋 + AI 유령 하나는 `canvas-ai-suggest` 와 같은 경로 대역) — 머리 끌어 놓기(빨강 확인: 고치기 전 빌드에서 '끄는 중' 표시 없음) → 놓은 자리 = 격자에 맞춘 (유령 자리 + 이동량/확대) ·
+  유령 자리가 아님 · 선은 [붙이기]와 같음(belief → 비중 계산) · 되돌리기 한 번에 노드 3 · 선 2 · 끄는 동안 유령이 손을 따라옴(±2px) / 짝: 짧은 누름(2px)은 붙이지 않음 · 끄는 중 Esc 는 취소
+  (유령 제자리 · 놓아도 안 붙음) · 몸통(글 줄) 위 점의 맨 위 요소 = 빈 캔버스 ★그 자체★(짝: 머리 위 점 = 유령 머리) · 비중 계산 출력에서 끈 선을 몸통 위에 놓으면 빈 곳처럼 빠른 추가가 열림 · 몸통 위 끌기는 화면을 그만큼 옮김 /
+  짝: 잇기만 하는 유령(칩)은 잡을 머리가 없고 끌어도 잇지 않음 / AI 유령(흔들림 나눠 보기)도 같은 길 — 놓은 자리(격자) · 선은 AI 추천의 attach(비중 → 흔들림) · 되돌리기 한 번.
+- 골든: 화면 골든만 다시 얼림 — 17 상태에서 `div.pg-ghost-head` → `div.nodrag.nopan.pg-ghost-head`(그것뿐). 문서·명령 골든 그대로.
+- 변이(작업 트리 3300 · 모두 죽음 6/6): 놓은 자리 무시 · 격자 맞춤 빼기 · 문턱 0 · Esc 무시 · ★유령 전체가 누름을 잡음★ · 놓을 때 두 번 붙임. AI 유령 시험 하나만으로도 놓은 자리 무시·격자 빼기·두 번 붙임이 죽음.
+  ★유령 전체가 누름을 잡음은 처음 두 번 살아남았다★ — 첫 시험(몸통 위 끌기 = 화면 이동)은 몸통이 누름을 받아도 끌기가 캔버스로 올라가 그대로 돈다. 둘째로 더한
+  `elementFromPoint(...).closest(".react-flow__pane")` 도 살았다: React Flow 의 화면층(`.react-flow__viewport`)이 `.react-flow__pane` ★안★에 있어 유령 몸통에서도 참이다(구조 —
+  RF 12 의 Pane 이 Viewport 를 감싼다 · 잰 것은 바꾼 빌드의 몸통 점 맨 위 요소 = pane 그 자체 하나뿐, 변이 빌드의 맨 위 요소는 재지 않음). 그래서 '맨 위 요소가 pane 그 자체' + 동작(몸통 위에 놓은 선 → 빠른 추가 — `useQuickAdd` 가 놓은 곳이 pane 그 자체일 때만 연다)으로 바꾸자 죽었다.
+- 게이트: 새 시험 4 · 이웃 canvas-ghost·canvas-ghost-logic·canvas-golden 27 · canvas-ai-suggest 12 · canvas-ai-draft 15 · canvas-guide 13 · canvas-workspace 83 통과 · 화면을 읽는 pytest 580 통과 · 1 건너뜀 · tsc 0 · eslint(바꾼 파일) 0.
+- 화면(PNG 보냄 — "보내고 계속"): 끄는 중 라이트 · 놓은 뒤 다크.
+- 하지 않음: 유령 몸통 끌기 · 잇기 칩 끌기 · 여러 유령 한꺼번에 · 키보드로 유령 옮기기([붙이기] 단추가 키보드 길) · AI 초안 유령(`DraftLayer` — U5 의 줄 고르기가 그 길). 손가락(터치) 끌기는 재지 않음(미검증 — 포인터 이벤트라 같은 길이지만 실제 기기 없음).
