@@ -5152,6 +5152,10 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-theme .pg-branch-promote { display: inline-flex; align-items: center; gap: 4px; height: 26px; margin-left: auto; padding: 0 9px; font: inherit; font-size: 12px; font-weight: 700;
   color: var(--pg-blue-ink); background: var(--pg-blue-soft); border: 0; border-radius: 8px; cursor: pointer; white-space: nowrap; }
 .pg-theme .pg-branch-promote:disabled { opacity: .5; cursor: default; }
+/* U6 — 갈래를 전략 상자로 묶기(갈래 머리 · 원본으로 올리기와 같은 모양, 바탕만 조용히). */
+.pg-theme .pg-branch-strategy { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--pg-ink); background: var(--pg-paper); border: 1px solid var(--pg-card-line); border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.pg-branch-strategy:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 .pg-field-help { display: block; margin-top: 4px; font-size: 12.5px; line-height: 1.5; color: var(--pg-body); }
 .pg-ticker-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--pg-assume); }
 

@@ -11,7 +11,7 @@
  */
 import { memo, useEffect, useState } from "react";
 import type { Node, NodeProps } from "@xyflow/react";
-import { ArrowUpToLine, Trash2 } from "lucide-react";
+import { ArrowUpToLine, Boxes, Trash2 } from "lucide-react";
 import {
   fieldsOf,
   paramDiff,
@@ -27,7 +27,9 @@ import { usePortfolioGraph } from "./store";
 
 export const PG_BRANCH_TYPE = "pgBranch";
 
-export type BranchFrameData = { branchId: string; label: string; width: number; height: number; diffs: string[]; rootName: string };
+export type BranchFrameData = { branchId: string; label: string; width: number; height: number; diffs: string[]; rootName: string;
+  /** U6 — 복제가 이미 전략 상자 안이면 [전략으로 묶기] 를 보이지 않는다. */
+  boxed: boolean };
 
 function fieldLabel(entry: NodeCatalogEntry | undefined, key: string): string {
   return fieldsOf(entry?.params_schema ?? null).find((f) => f.name === key)?.ui.label ?? key;
@@ -60,6 +62,12 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
                 onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.promoteBranch(data.branchId)); }}>
           <ArrowUpToLine size={13} aria-hidden="true" /> 이 갈래를 원본으로
         </button>
+        {!data.boxed && (
+          <button type="button" className="pg-branch-strategy nodrag" title="이 갈래를 전략 상자로 묶어요 — 비중을 내는 노드가 있어야 해요 (되돌리기 가능)"
+                  onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.branchStrategy(data.branchId)); }}>
+            <Boxes size={13} aria-hidden="true" /> 전략으로 묶기
+          </button>
+        )}
         <button type="button" className="pg-group-x pg-branch-x nodrag" aria-label={`${data.label} 지우기`}
                 title="갈래와 복제한 노드를 지워요" onClick={() => remove(data.branchId)}>
           <Trash2 size={14} aria-hidden="true" />

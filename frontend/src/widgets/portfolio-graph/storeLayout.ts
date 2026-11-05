@@ -7,9 +7,17 @@ import { fitLanes } from "@/entities/portfolio-graph/lanes";
 import { viaOf } from "@/entities/portfolio-graph/format";
 import { alignRects } from "./guides";
 import type { PgState } from "./store";
-import { uniqueLabel, nextSeq, newId, INSERT_GAP, bare, boxH, COALESCE_MS, type SliceCtx } from "./storeShared";
+import { uniqueLabel, nextSeq, newId, INSERT_GAP, bare, boxH, COALESCE_MS, pruneRemoved, type SliceCtx } from "./storeShared";
 
-type LayoutSlice = Pick<PgState, "autoLayout" | "alignPicked" | "addWaypoint" | "moveWaypoint" | "removeWaypoint" | "fitToLanes" | "groupPicked" | "strategyPicked" | "comparePicked" | "addStrategy" | "insertBlock" | "ungroup" | "toggleGroup" | "renameGroup" | "moveGroup" | "setDropGroups" | "applyBoxMembership" | "makeBranch" | "branchPicked" | "removeBranch" | "promoteBranch" | "loadBlocks" | "saveBlock" | "removeBlock">;
+/** 새 전략 상자(U6) — 비어 있는 띠 색 · 이름이 겹치면 뒤에 번호(`strategyPicked` 와 같은 규칙). */
+function strategyBox(groups: PgState["groups"], members: string[], output: string | null, label: string): PgState["groups"][number] {
+  const used = new Set(groups.filter((g) => g.kind === "strategy").map((g) => g.color ?? 0));
+  const color = [...Array(STRATEGY_COLORS).keys()].find((c) => !used.has(c)) ?? groups.length % STRATEGY_COLORS;
+  return { id: `grp_${Date.now().toString(36)}${nextSeq().toString(36)}`, label: uniqueLabel(label, groups), members, collapsed: false,
+           kind: "strategy", color, output };
+}
+
+type LayoutSlice = Pick<PgState, "autoLayout" | "alignPicked" | "addWaypoint" | "moveWaypoint" | "removeWaypoint" | "fitToLanes" | "groupPicked" | "strategyPicked" | "comparePicked" | "addStrategy" | "insertBlock" | "ungroup" | "toggleGroup" | "renameGroup" | "moveGroup" | "setDropGroups" | "applyBoxMembership" | "makeBranch" | "branchPicked" | "removeBranch" | "promoteBranch" | "branchStrategy" | "loadBlocks" | "saveBlock" | "removeBlock">;
 
 /** 같은 상자 이름을 잇달아 고친 때 — 이어 친 글자는 한 단계(R1 · `updateParams` 와 같은 규칙). */
 let lastRename: { id: string; at: number } | null = null;
@@ -334,8 +342,11 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     });
     const branch: GraphBranch = { id: `br_${Date.now().toString(36)}${nextSeq().toString(36)}`, label: `갈래 ${letter}`,
       root: idOf.get(ofRoot)!, of_root: ofRoot, map: Object.fromEntries(scope.map((id) => [idOf.get(id)!, id])) };
+    // U6(사용자 결정 2026-11-01 "원본이 전략이면 자동") — 전략 상자째 갈래면 복제도 새 전략 상자(출력 = 원본 출력의 복제) · 같은 되돌리기 한 단계.
+    const box = strat ? strategyBox(s.groups, scope.filter((id) => strat.members.includes(id)).map((id) => idOf.get(id)!),
+                                    strat.output ? idOf.get(strat.output) ?? null : null, `${strat.label} · ${branch.label}`) : null;
     set({ nodes: [...s.nodes, ...copies], edges: [...s.edges, ...newEdges], branches: [...s.branches, branch],
-          selectedId: branch.root, picked: [branch.root], tab: "settings" });
+          ...(box ? { groups: [...s.groups, box] } : {}), selectedId: branch.root, picked: [branch.root], tab: "settings" });
     return `‘${branch.label}’를 만들었어요 — 노드 ${scope.length}개를 복제했어요. 설정을 바꾸고 계산하면 원본과 다른 값만 나란히 보여요.`;
   },
   branchPicked: () => {
@@ -351,9 +362,24 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const b = s.branches.find((x) => x.id === id);
     if (!b) return;
     push();
-    const ids = new Set(Object.keys(b.map));
-    set({ nodes: s.nodes.filter((n) => !ids.has(n.id)), edges: s.edges.filter((e) => !ids.has(e.source) && !ids.has(e.target)),
-          branches: s.branches.filter((x) => x.id !== id), selectedId: s.selectedId && ids.has(s.selectedId) ? null : s.selectedId, picked: [] });
+    // U6 — 지우기 한 길(R1 `pruneRemoved`): 복제를 담은 상자(갈래의 전략 상자)도 함께 사라진다(예전엔 빈 상자가 남았다).
+    const pr = pruneRemoved(s, new Set(Object.keys(b.map)), new Set());
+    set({ ...pr, branches: (pr.branches ?? s.branches).filter((x) => x.id !== id), picked: [] });
+  },
+  branchStrategy: (id) => {
+    const s = get();
+    const b = s.branches.find((x) => x.id === id);
+    if (!b) return "갈래를 찾지 못했어요.";
+    const copies = Object.keys(b.map).filter((c) => s.nodes.some((n) => n.id === c));
+    if (copies.length && s.groups.some((g) => g.kind === "strategy" && copies.every((c) => g.members.includes(c)))) return `‘${b.label}’는 이미 전략 상자예요.`;
+    const output = strategyOutput(copies, s.nodes, s.edges, s.catalog ?? []);
+    if (!output) return `‘${b.label}’에 비중을 내는 노드가 없어요 — 전략은 비중을 내야 포트폴리오에 합칠 수 있어요.`;
+    push();
+    // 한 노드는 한 상자 — 복제가 다른 상자에 들어 있으면 거기서 뺀다(`strategyPicked` 와 같다).
+    const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.includes(m)) })).filter((g) => g.members.length);
+    const box = strategyBox(groups, copies, output, `${b.label} 전략`);
+    set({ groups: [...groups, box] });
+    return `‘${b.label}’를 ‘${box.label}’로 묶었어요 — 포트폴리오에 합치려면 비중 출력을 ‘전략 합치기’에 이어요.`;
   },
   promoteBranch: (id) => {
     const s = get();
@@ -370,7 +396,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       return { ...n, data: { ...n.data, params: structuredClone(c.data.params ?? {}), said: c.data.said ? { ...c.data.said } : undefined } };
     });
     set({ nodes, edges: s.edges.filter((e) => !copies.has(e.source) && !copies.has(e.target)),
-          groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.has(m)) })),
+          groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.has(m)) })).filter((g) => g.members.length > 0),
           branches: s.branches.filter((x) => x.id !== id), pinned: s.pinned.filter((p) => !copies.has(p)),
           selectedId: s.selectedId && copies.has(s.selectedId) ? null : s.selectedId, picked: [] });
     return moved

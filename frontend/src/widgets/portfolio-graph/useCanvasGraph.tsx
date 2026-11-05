@@ -173,14 +173,24 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
                        onRunStrategy, onBranchStrategy } }];
     });
     // 갈래 틀(BM C3) — 복제 노드를 감싼 점선 상자. 바꾼 설정만 칩으로.
+    const BRANCH_INSET = 14;
     const branchFrames: Node<BranchFrameData>[] = s.branches.flatMap((b) => {
       const ms = s.nodes.filter((n) => n.id in b.map);
       if (!ms.length) return [];
-      const { x0, y0, x1, y1 } = frameRect(ms, s.catalog, BRANCH_HEAD)!;
+      let { x0, y0, x1, y1 } = frameRect(ms, s.catalog, BRANCH_HEAD)!;
+      // U6 — 갈래 안에 상자(갈래의 전략 상자)가 있으면 그 상자 틀을 한 겹 더 감싼다 — 두 머리가 겹치지 않게(상자 머리 위로 갈래 머리).
+      const inner = s.groups.filter((g) => g.members.length > 0 && g.members.every((m) => m in b.map));
+      for (const g of inner) {
+        const r = frameRect(s.nodes.filter((n) => g.members.includes(n.id)), s.catalog);
+        if (!r) continue;
+        x0 = Math.min(x0, r.x0 - BRANCH_INSET); y0 = Math.min(y0, r.y0 - BRANCH_HEAD - BRANCH_INSET / 2);
+        x1 = Math.max(x1, r.x1 + BRANCH_INSET); y1 = Math.max(y1, r.y1 + BRANCH_INSET);
+      }
+      const boxed = inner.some((g) => g.kind === "strategy");
       const root = s.nodes.find((n) => n.id === b.of_root);
       return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
                 className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined, ariaLabel: branchAria(b.label, ms.length),
-                data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []),
+                data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []), boxed,
                         rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
     });
     return keepSame(prevNodes.current, [...frames, ...branchFrames, ...cards]);

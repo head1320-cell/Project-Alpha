@@ -251,6 +251,8 @@ export interface PgState {
   removeBranch: (id: string) => void;
   /** 갈래 승격(BN N2) — 복제의 설정을 원본으로 옮기고 갈래·복제를 지운다(되돌리기 한 번). 돌려주는 값은 한 줄 안내. */
   promoteBranch: (id: string) => string;
+  /** U6 — 갈래의 복제를 전략 상자로(출력 = 비중을 내는 복제). 이미 상자거나 비중 노드가 없으면 까닭만. */
+  branchStrategy: (id: string) => string;
   setSimple: (v: boolean) => void;
   setGrowing: (v: boolean) => void;
 }
