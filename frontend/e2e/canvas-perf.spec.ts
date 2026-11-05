@@ -79,7 +79,7 @@ function instrument(profile = false) {
   type F = { child: F | null; sibling: F | null; flags: number; type: unknown; tag: number; memoizedProps: Record<string, unknown> | null;
              stateNode: unknown; selfBaseDuration?: number };
   const rec = { track: false, prev: new WeakSet<object>(), cards: [] as string[], edges: [] as string[], wraps: [] as string[], wrapEdges: [] as string[],
-                steps: [] as string[], toolbars: 0, root: null as { current: F } | null };
+                steps: [] as string[], toolbars: 0, mm: [] as string[], root: null as { current: F } | null };
   (window as unknown as { __rr: typeof rec }).__rr = rec;
   /** 형의 이름 대신(운영 빌드는 이름이 줄어든다) 처음 그린 DOM 요소의 클래스 두 개 — 없으면 태그. */
   const labelOf = (f: F) => {
@@ -133,12 +133,14 @@ function instrument(profile = false) {
         else if (typeof p.n === "number" && "node" in p && "current" in p && typeof p.id === "string") rec.steps.push(p.id);
         // React Flow 노드 도구줄(R8b) — props 에 isVisible·position·align·offset
         else if (typeof p.isVisible === "boolean" && "position" in p && "align" in p && typeof p.offset === "number") rec.toolbars++;
+        // 미니맵 칸 감싸개(U1) — React Flow 가 칸마다 두는 것(props 에 nodeColorFunc · id). 받는 함수가 바뀌면 모두 다시 그린다.
+        else if ("nodeColorFunc" in p && typeof p.id === "string") rec.mm.push(p.id);
       }
       stack.push(f.sibling, f.child);
     }
     rec.prev = seen;
   };
-  (window as unknown as { __rrStart: () => void }).__rrStart = () => { rec.cards = []; rec.edges = []; rec.wraps = []; rec.wrapEdges = []; rec.steps = []; rec.toolbars = 0; if (rec.root) walk(rec.root.current, false); rec.track = true; };
+  (window as unknown as { __rrStart: () => void }).__rrStart = () => { rec.cards = []; rec.edges = []; rec.wraps = []; rec.wrapEdges = []; rec.steps = []; rec.toolbars = 0; rec.mm = []; if (rec.root) walk(rec.root.current, false); rec.track = true; };
   const hook = (window as unknown as { __REACT_DEVTOOLS_GLOBAL_HOOK__: { onCommitFiberRoot: (id: number, root: { current: F }) => void } }).__REACT_DEVTOOLS_GLOBAL_HOOK__;
   hook.onCommitFiberRoot = (_id, root) => {
     if (pf.on) { pf.commits++; if (profile) tally(root.current); }
@@ -150,7 +152,7 @@ function instrument(profile = false) {
   try { new PerformanceObserver((l) => { for (const x of l.getEntries()) pf.lt.push({ s: x.startTime, d: x.duration }); }).observe({ type: "longtask" }); } catch { /* */ }
 }
 
-async function open(page: Page, doc: Doc, trackBoot = false) {
+async function open(page: Page, doc: Doc, trackBoot = false, minimap = MINIMAP) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(instrument, PROFILE);
   if (trackBoot) await page.addInitScript(() => { (window as never as { __rr: { track: boolean } }).__rr.track = true; });
@@ -163,7 +165,7 @@ async function open(page: Page, doc: Doc, trackBoot = false) {
       localStorage.setItem("alpha_pg_welcomed", "1");
       sessionStorage.setItem("alpha_pg_wip", JSON.stringify(d));
     } catch { /* */ }
-  }, [doc, MINIMAP] as const);
+  }, [doc, minimap] as const);
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   if (VISIBLE_ONLY) {
     await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 60_000 });
@@ -298,11 +300,11 @@ test("R8 · 전제 — 잴 200노드 문서는 서버 검증 문제 0 · 노드�
 
 const rrStart = (page: Page) => page.evaluate(() => (window as never as { __rrStart: () => void }).__rrStart());
 const rrTake = (page: Page) => page.evaluate(() => {
-  const r = (window as never as { __rr: { track: boolean; cards: string[]; edges: string[]; wraps: string[]; wrapEdges: string[]; steps: string[]; toolbars: number } }).__rr;
+  const r = (window as never as { __rr: { track: boolean; cards: string[]; edges: string[]; wraps: string[]; wrapEdges: string[]; steps: string[]; toolbars: number; mm: string[] } }).__rr;
   const u = (a: string[]) => [...new Set(a)].sort();
   r.track = false;
   return { cards: u(r.cards), edges: u(r.edges), wraps: u(r.wraps.filter((id) => !id.includes(":"))), wrapEdges: u(r.wrapEdges), steps: u(r.steps), cardRenders: r.cards.length,
-           toolbars: r.toolbars };
+           toolbars: r.toolbars, mm: u(r.mm), mmRenders: r.mm.length };
 });
 
 test("R8 · 고른 카드를 끄는 걸음마다 다시 그리는 카드는 그 카드 하나 · 선은 그 카드에 닿은 선만 (짝: 고른 카드를 바꾸면 고름이 바뀐 카드는 다시 그린다 · 계기는 처음 열 때 카드를 모두 센다)", async ({ page }) => {
@@ -464,6 +466,86 @@ test("R8b · 노드 도구줄은 고른 카드에만 단다 — 화면 이동 �
   // 자리는 덜 덮는 쪽(위·아래 · 가운데·왼쪽·오른쪽 끝 맞춤 — toolbarPlace)이라 가로로 카드와 겹치고, 세로로 카드 바로 위나 아래에 붙는다.
   expect(tb.x < u6b.x + u6b.width && u6b.x < tb.x + tb.width, "도구줄과 u6 가 가로로 겹친다").toBe(true);
   expect(Math.min(Math.abs(tb.y + tb.height - u6b.y), Math.abs(tb.y - (u6b.y + u6b.height))), "도구줄은 u6 바로 위나 아래").toBeLessThan(16);
+});
+
+// ── U1 — 미니맵 칸 · 도구줄 자리 ────────────────────────────────────────────────────────
+/** 미니맵 칸 — React Flow 는 칸(rect)의 x·y 를 노드의 캔버스 자리로 쓴다. */
+const mmCell = (page: Page, x: number, y: number) => page.locator(`.pg-minimap rect.react-flow__minimap-node[x="${x}"][y="${y}"]`);
+
+test("U1 · 미니맵을 켜도 카드를 끄는 걸음마다 다시 그리는 미니맵 칸은 그 카드 하나 (짝: 처음 열 때 칸을 모두 센다 · 다른 카드를 고르면 그 칸 테두리가 파랑 · 고른 노드를 전략으로 묶으면 그 칸이 띠 색)", async ({ page }) => {
+  const doc = chainDoc(10);                                                // 40노드
+  await open(page, doc, true, true);
+  const boot = await rrTake(page);
+  expect(boot.mm, "계기가 미니맵 칸 감싸개를 센다 — 처음 열 때 40칸").toHaveLength(40);
+  await expect(page.locator(".pg-minimap rect.react-flow__minimap-node")).toHaveCount(40);
+  await view(page, "fit");
+  const b0 = (await page.locator('.pg-node[data-node-id="r0"]').boundingBox())!;
+  await page.mouse.click(b0.x + b0.width / 2, b0.y + b0.height * 0.15);
+  await expect(page.locator('.react-flow__node[data-id="r0"]')).toHaveClass(/selected/);
+  await settle(page, 300);
+  const b = (await page.locator('.pg-node[data-node-id="r0"]').boundingBox())!;
+  const x = b.x + b.width / 2, y = b.y + b.height / 2;
+  await rrStart(page);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) { await page.mouse.move(x + i * 6, y + i * 3); await frame(page); }
+  await page.mouse.up();
+  await settle(page, 300);
+  const drag = await rrTake(page);
+  expect(drag.mmRenders, "끈 카드의 칸은 걸음마다 다시 그려진다(계기가 끄는 동안에도 센다)").toBeGreaterThan(3);
+  expect(drag.mm, `다시 그린 미니맵 칸 ${drag.mm.length}개`).toEqual(["r0"]);
+  // 짝 — 고름이 바뀌면 그 칸 테두리가 바뀐다(낡은 테두리가 남지 않음): u6(1320, 640)을 누르면 u6 칸이 파랑, r0 칸은 풀림
+  const u6 = (await page.locator('.pg-node[data-node-id="u6"]').boundingBox())!;
+  await page.mouse.click(u6.x + u6.width / 2, u6.y + u6.height * 0.15);
+  await expect(page.locator('.react-flow__node[data-id="u6"]')).toHaveClass(/selected/);
+  await expect(mmCell(page, 1320, 640)).toHaveClass(/pg-mm--picked/);
+  await expect(page.locator(".pg-minimap rect.pg-mm--picked")).toHaveCount(1);
+  // 짝 — 전략으로 묶으면(o6 = 비중 계산 · 2310, 640) 그 칸이 단계 색에서 전략 띠 색으로 바뀐다
+  const o6 = (await page.locator('.pg-node[data-node-id="o6"]').boundingBox())!;
+  await page.mouse.click(o6.x + o6.width / 2, o6.y + o6.height * 0.15);
+  await expect(page.locator('.react-flow__node[data-id="o6"]')).toHaveClass(/selected/);
+  const fillBefore = await mmCell(page, 2310, 640).evaluate((el) => (el as SVGElement).style.fill);
+  expect(fillBefore).not.toContain("--pg-band-");
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
+  await expect(page.locator('.pg-cmd-item[data-cmd="strategy-picked"]')).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".pg-group")).toHaveCount(1);
+  await expect.poll(() => mmCell(page, 2310, 640).evaluate((el) => (el as SVGElement).style.fill)).toContain("--pg-band-");
+});
+
+test("U1 · 고른 카드의 도구줄은 제 카드를 덮지 않는다 — 200노드 맞춰 보기(카드 셋)·1배(판 사이 카드) (짝: 도구줄은 실제로 보인다)", async ({ page }, info) => {
+  await open(page, chainDoc(50));
+  for (const v of ["fit", "1x"] as const) {
+    await view(page, v);
+    // 화면 가운데에 가까운, 판 사이에 들고 머리가 화면 안인 카드 셋(1배에서는 카드가 창보다 길 수 있다)
+    const ids = await page.evaluate(() => {
+      const side = document.querySelector(".pg-side")?.getBoundingClientRect(), pal = document.querySelector(".pg-palette")?.getBoundingClientRect();
+      const W = innerWidth, H = innerHeight;
+      return [...document.querySelectorAll<HTMLElement>(".pg-node")].map((el) => ({ id: el.dataset.nodeId!, b: el.getBoundingClientRect() }))
+        .filter(({ b }) => b.width && b.left > (pal?.right ?? 0) + 8 && b.right < (side?.left ?? W) - 8 && b.top > 140 && b.top < H - 240)
+        .sort((a, c) => Math.hypot(a.b.x - W / 2, a.b.y - H / 2) - Math.hypot(c.b.x - W / 2, c.b.y - H / 2)).slice(0, 3).map((x) => x.id);
+    });
+    // 1배에서는 판 사이(약 800px)에 폭 240 카드가 하나 남짓 든다 — 맞춰 보기는 셋.
+    expect(ids.length, `${v} — 판 사이에 머리가 보이는 카드 ${ids.join(", ")}`).toBeGreaterThanOrEqual(v === "fit" ? 3 : 1);
+    for (const id of ids) {
+      const before = (await page.locator(`.pg-node[data-node-id="${id}"]`).boundingBox())!;
+      await page.mouse.click(before.x + before.width / 2, before.y + before.height * 0.15);
+      await expect(page.locator(`.react-flow__node[data-id="${id}"]`)).toHaveClass(/selected/);
+      await settle(page, 400);
+      const card = (await page.locator(`.pg-node[data-node-id="${id}"]`).boundingBox())!;
+      const tb = (await page.locator(".react-flow__node-toolbar").boundingBox())!;
+      expect(tb.width * tb.height, `${v} ${id} — 도구줄이 보인다`).toBeGreaterThan(0);
+      const ov = Math.max(0, Math.min(tb.x + tb.width, card.x + card.width) - Math.max(tb.x, card.x)) *
+                 Math.max(0, Math.min(tb.y + tb.height, card.y + card.height) - Math.max(tb.y, card.y));
+      expect(ov, `${v} ${id} — 도구줄 × 제 카드 겹친 넓이`).toBe(0);
+      // 관측 기록 — 고르기 전후 카드 화면 자리(화면이 옮겨지는지)
+      info.annotations.push({ type: "U1-toolbar", description: `${v} ${id} dx=${Math.round(card.x - before.x)} dy=${Math.round(card.y - before.y)} tb=${Math.round(tb.y)}..${Math.round(tb.y + tb.height)} card=${Math.round(card.y)}..${Math.round(card.y + card.height)}` });
+      const p = await panePoint(page);
+      await page.mouse.click(p!.x, p!.y);
+      await expect(page.locator(".react-flow__node-toolbar")).toHaveCount(0);
+    }
+  }
 });
 
 // ── 확대 값 --pg-z 는 쓰는 곳에만(R8) ─────────────────────────────────────────────────

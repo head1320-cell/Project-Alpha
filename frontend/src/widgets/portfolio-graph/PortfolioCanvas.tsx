@@ -210,6 +210,23 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const { cause, live, stageOfNode, mmMark, bandOf, numbered, onFlag, edgesStyled } =
     useCanvasGraph(s, order, path, staleSet, { runToRef, previewRef, runStrategyRef, branchStrategyRef, wireToolRef }, onNeed, onFix, onSocket,
                    updatePanels, hoverEdge, dropWire);
+  // U1 — 미니맵 칸의 색·테두리·클래스(CF5b 규칙 그대로)를 ★위치와 무관한 표★로 넘긴다. 그릴 때마다 새 함수를 넘기면 React Flow 가
+  // 미니맵 칸 감싸개를 모두 다시 그린다(200노드 끌기 한 걸음마다 약 100개 — R8b 에서 잼). 표의 열쇠는 칸 모양을 정하는 값(id · 종류 ·
+  // 단계 · 전략 띠 · 표시)뿐이라 끌기·화면 이동에는 같은 함수가 남고, 고름·결과·전략이 바뀌면 새 함수로 칸을 다시 칠한다(낡은 색이 남지 않음).
+  const mmKey = numbered.map((n) => `${n.id}\t${n.type === PG_GROUP_TYPE ? "g" : ""}\t${stageOfNode(n.id) ?? ""}\t${bandOf.get(n.id) ?? ""}\t${mmMark(n.id) ?? ""}`).join("\n");
+  const mm = useMemo(() => {
+    const m = new Map<string, { fill: string; stroke: string; cls: string }>();
+    for (const row of mmKey ? mmKey.split("\n") : []) {
+      const [id, group, st, band, k] = row.split("\t");
+      m.set(id, { fill: group ? "transparent" : band !== "" ? `var(--pg-band-${band})` : STAGE_VAR[st] ?? "var(--pg-line)",
+                  stroke: k === "picked" ? "var(--pg-blue)" : k === "failed" ? "var(--pg-fail)" : k === "blocked" ? "var(--pg-assume)" : "transparent",
+                  cls: ["pg-mm", st && `pg-mm--stage-${st}`, k && `pg-mm--${k}`].filter(Boolean).join(" ") });
+    }
+    return m;
+  }, [mmKey]);
+  const mmFill = useCallback((n: Node) => mm.get(n.id)?.fill ?? "var(--pg-line)", [mm]);
+  const mmStroke = useCallback((n: Node) => mm.get(n.id)?.stroke ?? "transparent", [mm]);
+  const mmClass = useCallback((n: Node) => mm.get(n.id)?.cls ?? "pg-mm", [mm]);
   /** 전략 추가 메뉴의 재료 — 비중을 내는 템플릿과 내 블록 중 전략. */
   const strategySources = useMemo(() => {
     const cat = s.catalog ?? [];
@@ -797,12 +814,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
               <>
                 {/* CF5b — 칸 = 단계색(전략 띠 구성원은 띠 색) · 테두리 = 고름 파랑 > 실패 빨강 > 막힘 주황(지금 결과만 — 낡은 결과는 칠하지 않는다). */}
                 <MiniMap pannable zoomable ariaLabel="미니맵" className="pg-minimap" nodeStrokeWidth={24}
-                         nodeColor={(n) => (n.type === PG_GROUP_TYPE ? "transparent"
-                           : bandOf.has(n.id) ? `var(--pg-band-${bandOf.get(n.id)})` : STAGE_VAR[stageOfNode(n.id) ?? ""] ?? "var(--pg-line)")}
-                         nodeStrokeColor={(n) => { const k = mmMark(n.id); return k === "picked" ? "var(--pg-blue)" : k === "failed" ? "var(--pg-fail)"
-                           : k === "blocked" ? "var(--pg-assume)" : "transparent"; }}
-                         nodeClassName={(n) => { const st = stageOfNode(n.id), k = mmMark(n.id);
-                           return ["pg-mm", st && `pg-mm--stage-${st}`, k && `pg-mm--${k}`].filter(Boolean).join(" "); }} />
+                         nodeColor={mmFill} nodeStrokeColor={mmStroke} nodeClassName={mmClass} />
                 <button type="button" className="pg-minimap-fold nodrag nopan" aria-label="미니맵 접기" title="미니맵 접기" onClick={toggleMinimap}>
                   <X size={13} aria-hidden="true" />
                 </button>
