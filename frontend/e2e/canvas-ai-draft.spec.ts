@@ -241,6 +241,12 @@ test("캔버스가 바뀌면 초안을 지우고 말한다 — 짝: 노드를 �
   await openTab(page);
   await say(page);
   await expect(page.locator(".pg-draft-node")).toHaveCount(1);
+  // 화면이 멈춘 뒤에 잰다 — 초안이 오면 화면이 초안 쪽으로 옮겨지는데, 그 도중에 재고 끌면 끄는 동안 화면이 움직여 카드가 옆으로 밀려
+  // '비중 계산' 카드 위에 얹혔다(2026-11-07 전체 E2E 끝 무렵 한 번 — 아래로만 끌었는데 오른쪽으로 약 240 캔버스 px).
+  const tf = () => page.locator(".react-flow__viewport").evaluate((el) => getComputedStyle(el).transform);
+  let last = "";
+  await expect.poll(async () => { const now = await tf(); const same = now === last; last = now; return same; },
+                    { intervals: [200, 200, 200, 300, 500], timeout: 10_000, message: "화면이 멈춘다" }).toBe(true);
   const b = (await page.locator('.react-flow__node[data-id="estimate"]').boundingBox())!;
   await page.mouse.move(b.x + b.width / 2, b.y + 14);
   await page.mouse.down();
