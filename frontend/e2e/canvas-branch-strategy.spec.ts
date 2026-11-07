@@ -206,3 +206,48 @@ test("U6 · 끝이 둘인 갈래는 [전략으로 묶기]가 까닭을 말하고
   const [box] = strategiesOf(await wip(other));
   expect(br2.map[box.output!], "출력 = 뒤쪽 끝(치우침 없애기)의 복제").toBe("neu");
 });
+
+test("U6 이어서 · Ctrl+K '전략으로 묶기' 도 끝이 둘이면 까닭을 말하고 묶지 않는다 — 하나를 말없이 고르지 않음 (짝: 줄로 이어진 둘은 묶이고 출력 = 뒤쪽 끝)", async ({ page }) => {
+  const PAR = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }), n("returns", "returns", 330, 0),
+                              n("optA", "optimizer", 660, 0), n("optB", "optimizer", 990, 0, { model: "risk_parity" })],
+                edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "optA", "returns"), e("returns", "returns", "optB", "returns")] };
+  await openWith(page, PAR);
+  await pickByCmd(page, ["optA", "optB"], "strategy-picked", "전략으로 묶기");
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 끝이 2개");
+  expect(strategiesOf(await wip(page)), "끝이 둘이면 상자 없음").toHaveLength(0);
+
+  const SER = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }), n("returns", "returns", 330, 0),
+                              n("opt", "optimizer", 660, 0), n("neu", "neutralize", 990, 0)],
+                edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "opt", "returns"), e("opt", "weights", "neu", "weights")] };
+  const other = await page.context().newPage();
+  await openWith(other, SER);
+  await pickByCmd(other, ["opt", "neu"], "strategy-picked", "전략으로 묶기");
+  await expect.poll(async () => strategiesOf(await wip(other)).length).toBe(1);
+  const [box] = strategiesOf(await wip(other));
+  expect(box.output, "출력 = 뒤쪽 끝(치우침 없애기)").toBe("neu");
+  expect([...box.members].sort()).toEqual(["neu", "opt"]);
+});
+
+test("U6 이어서 · '전략 추가' 가 지금 흐름을 '전략 1' 로 묶을 때도 끝이 둘이면 묶지 않고 까닭 — 새 전략은 그대로 들어간다 (짝: 끝이 하나인 흐름은 예전처럼 묶임)", async ({ page }) => {
+  const PAR = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }), n("returns", "returns", 330, 0),
+                              n("optA", "optimizer", 660, 0), n("optB", "optimizer", 990, 0, { model: "risk_parity" })],
+                edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "optA", "returns"), e("returns", "returns", "optB", "returns")] };
+  await openWith(page, PAR);
+  await page.locator(".pg-strat-add").click();
+  await page.locator('.pg-strat-item[data-source="tpl:stress"]').click();
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 끝이 2개라");
+  await expect(page.locator(".pg-note")).toContainText("묶지 않았어요");
+  const doc = await wip(page);
+  const ss = strategiesOf(doc);
+  expect(ss, "새 전략 하나만 — 지금 흐름은 묶지 않음").toHaveLength(1);
+  expect(ss[0].members.some((m) => ["optA", "optB", "universe", "returns"].includes(m)), "지금 흐름의 노드는 상자 밖").toBe(false);
+
+  // 짝 — 끝이 하나인 흐름(CORE: 비중 계산 하나)은 예전처럼 '전략 1' 로 묶이고 새 전략과 둘
+  const other = await page.context().newPage();
+  await openWith(other, CORE);
+  await other.locator(".pg-strat-add").click();
+  await other.locator('.pg-strat-item[data-source="tpl:stress"]').click();
+  await expect.poll(async () => strategiesOf(await wip(other)).length).toBe(2);
+  const wrapped = strategiesOf(await wip(other)).find((g) => g.members.includes("optimizer"))!;
+  expect(wrapped.output).toBe("optimizer");
+});

@@ -9,6 +9,10 @@ import { alignRects } from "./guides";
 import type { PgState } from "./store";
 import { uniqueLabel, nextSeq, newId, INSERT_GAP, bare, boxH, COALESCE_MS, pruneRemoved, type SliceCtx } from "./storeShared";
 
+/** 흐름 끝 노드 이름들(까닭 문장용) — ‘비중 계산’·‘비중 계산’. */
+const endNames = (s: PgState, ids: string[]) =>
+  ids.map((id) => `‘${(s.catalog ?? []).find((c) => c.type === s.nodes.find((n) => n.id === id)?.data.kind)?.plain_label ?? id}’`).join("·");
+
 /** 새 전략 상자(U6) — 비어 있는 띠 색 · 이름이 겹치면 뒤에 번호(`strategyPicked` 와 같은 규칙). */
 function strategyBox(groups: PgState["groups"], members: string[], output: string | null, label: string): PgState["groups"][number] {
   const used = new Set(groups.filter((g) => g.kind === "strategy").map((g) => g.color ?? 0));
@@ -120,8 +124,11 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const s = get();
     const ids = s.picked.filter((id) => s.nodes.some((n) => n.id === id));
     if (!ids.length) return "전략으로 묶을 노드를 먼저 골라 주세요.";
-    const output = strategyOutput(ids, s.nodes, s.edges, s.catalog ?? []);
-    if (!output) return "고른 노드에 비중을 내는 노드가 없어요 — 전략은 비중을 내야 포트폴리오에 합칠 수 있어요. 그냥 묶으려면 Ctrl+G 를 써요.";
+    // 출력을 정할 수 없으면(흐름 끝이 둘 이상) 하나를 말없이 고르지 않고 까닭(U6 이어서 — 갈래의 [전략으로 묶기]와 같은 규칙 · CLAUDE.md 침묵 폴백 금지).
+    const ends = strategyEnds(ids, s.nodes, s.edges, s.catalog ?? []);
+    if (!ends.length) return "고른 노드에 비중을 내는 노드가 없어요 — 전략은 비중을 내야 포트폴리오에 합칠 수 있어요. 그냥 묶으려면 Ctrl+G 를 써요.";
+    if (ends.length > 1) return `고른 노드에 비중을 내는 끝이 ${ends.length}개예요(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없어요. 하나만 고르거나 ‘묶음 합치기’로 모아 주세요.`;
+    const output = ends[0];
     push();
     const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.includes(m)) })).filter((g) => g.members.length);
     const used = new Set(groups.filter((g) => g.kind === "strategy").map((g) => g.color ?? 0));
@@ -163,12 +170,15 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     if (!groups.some((g) => g.kind === "strategy")) {
       const lane = portfolioLane(nodes, edges, groups);
       const free = nodes.filter((n) => !groups.some((g) => g.members.includes(n.id)) && !lane.has(n.id)).map((n) => n.id);
-      const out = strategyOutput(free, nodes, edges, catalog);
-      if (out) {
+      // 흐름 끝이 둘 이상이면 하나를 말없이 고르지 않고 묶지 않은 채 까닭(U6 이어서 — 침묵 폴백 금지). 하나면 예전 그대로.
+      const ends = strategyEnds(free, nodes, edges, catalog);
+      if (ends.length === 1) {
         const label = uniqueLabel(s.name.trim() || "전략 1", groups);
         groups.push({ id: `grp_${Date.now().toString(36)}${nextSeq().toString(36)}`, label, members: free, collapsed: false,
-                      kind: "strategy", color: 0, output: out });
+                      kind: "strategy", color: 0, output: ends[0] });
         wrapped = `지금 흐름을 ‘${label}’로 묶고, `;
+      } else if (ends.length > 1) {
+        wrapped = `지금 흐름은 비중을 내는 끝이 ${ends.length}개라(${endNames(s, ends)}) 전략으로 묶지 않았어요 — 출력을 하나로 정할 수 없어요. `;
       }
     }
     // ② 새 전략을 가장 아래 카드의 ★바닥★ 밑에 넣는다(CF1 — 카드 높이가 카탈로그로 정해져 예전 "맨 위 y + 300" 은 겹쳤다).
@@ -210,7 +220,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       nodes = nodes.map((n) => (n.id === pid ? { ...n, data: { ...n.data, params: { ...n.data.params, labels } } } : n));
     }
     set({ nodes, edges, groups, selectedId: null, picked: [] });
-    if (!output) return `‘${label}’을 넣었어요. 이 전략에는 비중을 내는 노드가 없어 포트폴리오에 잇지 않았어요.`;
+    if (!output) return `${wrapped}‘${label}’을 넣었어요. 이 전략에는 비중을 내는 노드가 없어 포트폴리오에 잇지 않았어요.`;
     if (unwired) return `${wrapped}‘${label}’을 넣었어요. 포트폴리오 노드의 빈 자리(최대 ${PORTFOLIO_PORTS.length}개)가 없어 ${unwired}개는 잇지 못했어요.`;
     return `${wrapped}‘${label}’을 넣어 ‘전략 합치기’에 이었어요. 계산하면 전략별 몫이 보여요.`;
   },
@@ -378,10 +388,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     // 결정 5 — 출력을 정할 수 없으면(범위 안 흐름 끝이 둘 이상) 까닭. 끝이 하나면 그것이 출력(`strategyOutput` 과 같은 노드).
     const ends = strategyEnds(copies, s.nodes, s.edges, s.catalog ?? []);
     if (!ends.length) return `‘${b.label}’에 비중을 내는 노드가 없어요 — 전략은 비중을 내야 포트폴리오에 합칠 수 있어요.`;
-    if (ends.length > 1) {
-      const name = (id: string) => (s.catalog ?? []).find((c) => c.type === s.nodes.find((n) => n.id === id)?.data.kind)?.plain_label ?? id;
-      return `‘${b.label}’에 비중을 내는 끝이 ${ends.length}개예요(${ends.map((id) => `‘${name(id)}’`).join("·")}) — 전략의 출력을 하나로 정할 수 없어요. 하나를 지우거나 ‘묶음 합치기’로 모아 주세요.`;
-    }
+    if (ends.length > 1) return `‘${b.label}’에 비중을 내는 끝이 ${ends.length}개예요(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없어요. 하나를 지우거나 ‘묶음 합치기’로 모아 주세요.`;
     const output = ends[0];
     push();
     // 한 노드는 한 상자 — 복제가 다른 상자에 들어 있으면 거기서 뺀다(`strategyPicked` 와 같다).

@@ -44,7 +44,17 @@ async function sheetPage(page: Page): Promise<{ cid: string; url: string }> {
   await page.locator(".pg-run").click();
   await expect(page.locator(".pg-summary:not(.pg-summary--err):not(.pg-summary--stale)")).toContainText("완료", { timeout: 60_000 });
   await page.locator(".pg-client-chip .pg-client-sheet").click();
-  await expect(page).toHaveURL(/\/clients\/cl_[0-9a-f]+\/sheets\/sh_[0-9a-f]+$/, { timeout: 30_000 });
+  // 30초 안에 한 장 주소로 가지 않으면 그때의 안내·칩·단추를 실패 문장에 담는다 — 전체 실행 끝(1,091번째)에서 한 번 넘어가지 않았는데(2026-11-05)
+  // 다시 돌리며 실패 사진이 지워져 원인을 몰랐다(그 파일만 9/9 · 5번 되풀이 45/45 통과). 다음에 나면 로그만으로 까닭이 보이게.
+  try {
+    await expect(page).toHaveURL(/\/clients\/cl_[0-9a-f]+\/sheets\/sh_[0-9a-f]+$/, { timeout: 30_000 });
+  } catch (err) {
+    const notes = await page.locator(".pg-note").allInnerTexts().catch(() => [] as string[]);
+    const chip = await page.locator(".pg-client-chip").getAttribute("data-state").catch(() => null);
+    const btn = await page.locator(".pg-client-chip .pg-client-sheet")
+      .evaluate((b) => ({ disabled: (b as HTMLButtonElement).disabled, title: b.getAttribute("title") })).catch(() => null);
+    throw new Error(`한 장 주소로 가지 않음 — 안내 ${JSON.stringify(notes)} · 칩 ${chip} · 단추 ${JSON.stringify(btn)}\n${String(err)}`);
+  }
   await expect(page.locator(".cs-share")).toBeVisible();
   return { cid, url: page.url() };
 }
