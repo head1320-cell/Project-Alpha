@@ -265,6 +265,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     updatePanels((p) => (p.right ? p : toggle(p, "right")));
   }, [updatePanels]);
   /** 묶음 상자를 끌면 안의 노드가 함께 움직인다 — 상자 자리는 노드에서 계산하므로 차이만 옮긴다. */
+  // U 이어서 4 — 사람이 캔버스를 누르면 진행 중인 화면 옮기기(초안·AI 유령 보이기 · 미니맵·찾기로 가기의 250ms)를 그 자리에서 멈춘다.
+  // 카드 끌기는 d3 확대·이동을 거치지 않아 옮기기가 계속됐고, 끄는 동안 화면이 움직여 카드가 옆으로 밀렸다(전체 E2E 가 찾음 · 시험으로 재현 385~473 캔버스 px).
+  // 길이 0 의 setViewport = d3-zoom 의 selection.interrupt() — 지금 자리 그대로 멈춘다. 빈 캔버스 누름은 d3 가 이미 멈추게 한다(같은 결과).
+  const stopViewMotion = useCallback(() => { const r = rf.current; if (r) void r.setViewport(r.getViewport()); }, []);
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const st = usePortfolioGraph.getState();
     const rest: NodeChange[] = [];
@@ -669,6 +673,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
         )}
         <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}${s.growing ? " pg-growing" : ""}`}
              style={{ "--pg-node-w": NODE_W, "--pg-brief-w": `${BRIEF_MAX_W}px` } as React.CSSProperties}
+             onPointerDownCapture={stopViewMotion}
              onDragOver={onDragOverCanvas}
              onDragLeave={() => { setDragOver(false); setDropWire(null); }}
              onDrop={onDrop}>

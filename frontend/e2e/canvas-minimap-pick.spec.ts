@@ -102,3 +102,42 @@ test("U3 · 짝 — 찾기(Ctrl+F)로 먼 노드에 가도 확대 그대로 (같
   expect((await vp(page)).z, "확대 그대로").toBeCloseTo(before.z, 3);
   await expect(page.locator('.pg-node[data-node-id="z"]')).toBeInViewport();
 });
+
+test("U 이어서 4 · 화면이 옮겨지는 도중에 카드를 누르면 옮기기가 그 자리에서 멈춘다 — 아래로만 끈 카드는 가로 자리 그대로 (짝: 누르지 않으면 옮기기는 끝까지 · 놓은 뒤 화면은 더 움직이지 않는다)", async ({ page }) => {
+  // 묶음 없는 셋 — z 는 오른쪽 아래 가까이. 미니맵 칸을 누르면 화면이 250ms 동안 z 를 판 사이 가운데로 옮긴다(누르는 순간 카드가 아직 손 밑에 있을 만큼만).
+  const FREE = { ...F, nodes: [n("a", "universe", 0, 0, { tickers: ["005930"] }), n("b", "returns", 330, 0), n("z", "estimate", 990, 660)], edges: [] };
+  await openWith(page, FREE);
+  await page.locator(".react-flow__controls-fitview").click();                // 맞춰 보기 — 카드가 모두 보인다
+  await page.waitForTimeout(500);
+  const pos = async (id: string) => (await page.evaluate(() => JSON.parse(sessionStorage.getItem("alpha_pg_wip") ?? "{}")) as
+    { nodes: { id: string; position: { x: number; y: number } }[] }).nodes.find((x) => x.id === id)!.position;
+
+  // 짝 — 누르지 않으면 끝까지 옮긴다(이 옮기기가 실제로 크다는 것도 잰다)
+  const s0 = await vp(page);
+  await cell(page, 990, 660).click();
+  await page.waitForTimeout(500);
+  const s1 = await vp(page);
+  expect(Math.abs(s1.x - s0.x) + Math.abs(s1.y - s0.y), "옮기기가 크다(짝이 실제로 무언가를 잰다)").toBeGreaterThan(150);
+  // 처음 자리로 되돌려 다시
+  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node")).toHaveCount(3, { timeout: 30_000 });
+  await page.waitForTimeout(500);
+  await page.locator(".react-flow__controls-fitview").click();
+  await page.waitForTimeout(500);
+
+  const before = await pos("b");
+  const card = (await page.locator('.pg-node[data-node-id="b"]').boundingBox())!;
+  const at = { x: card.x + card.width / 2, y: card.y + 14 };                  // 이름 줄(끌 수 있는 곳)
+  await page.mouse.move(at.x, at.y);
+  await cell(page, 990, 660).dispatchEvent("click");                           // 옮기기 시작(250ms) — 손은 카드 위에 둔 채
+  await page.mouse.down();
+  await page.mouse.move(at.x, at.y + 44, { steps: 4 });
+  await page.mouse.move(at.x, at.y + 88, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await pos("b")).y, { message: "끈 만큼 아래로" }).toBeGreaterThan(before.y + 40);
+  const after = await pos("b");
+  expect(Math.abs(after.x - before.x), `가로 자리 그대로 — 끄는 동안 화면이 옮겨지면 카드가 옆으로 밀린다 (전 ${before.x} · 후 ${after.x})`).toBeLessThanOrEqual(11);
+  const v0 = await vp(page);
+  await page.waitForTimeout(400);
+  expect(await vp(page), "놓은 뒤 화면은 더 움직이지 않는다").toEqual(v0);
+});
