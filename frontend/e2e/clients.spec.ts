@@ -188,19 +188,28 @@ test("PB3 · 목록을 읽는 사이 보관·다시 꺼내기를 해도 목록�
 test("PB3 · 목록을 읽는 사이 더한 고객도 목록에 보인다(처음 읽기와 겹침)", async ({ page }) => {
   await login(page);
   const alias = `PB3 겹쳐 더함 ${tag()}`;
+  // 처음 목록 읽기를 ★더하기가 끝날 때까지★ 붙잡았다가 그 옛 목록을 돌려준다 — 겹침을 시간이 아니라 순서로 만든다.
+  // 예전에는 1.5초 붙잡기 + 1.8초 기다림이라, 붙잡은 읽기가 0.3초를 넘으면(시험 DB 가 커진 긴 실행 · 2026-11-07 0.48초)
+  // 옛 목록이 시험이 끝난 뒤에 나가 route.fulfill 이 실패했다(단언은 이미 통과).
   let first = true;
+  let release!: () => void;
+  const held = new Promise<void>((ok) => { release = ok; });
+  let served: Promise<void> | undefined;
   await page.route("**/api/v1/pb/clients", async (r) => {
     if (r.request().method() === "GET" && first) {
       first = false;
-      const res = await r.fetch();
-      await new Promise((ok) => setTimeout(ok, 1500));
-      await r.fulfill({ response: res });
+      served = (async () => { const res = await r.fetch(); await held; await r.fulfill({ response: res }); })();
+      await served;
     } else await r.continue();
   });
   await page.goto("/clients", { waitUntil: "domcontentloaded" });
   await page.locator(".cl-add-alias").fill(alias);
+  await expect.poll(() => served !== undefined, { message: "처음 목록 읽기를 붙잡음" }).toBe(true);
+  const added = page.waitForResponse((res) => res.request().method() === "POST" && new URL(res.url()).pathname.endsWith("/api/v1/pb/clients"));
   await page.locator(".cl-add-go").click();              // 처음 목록이 아직 오는 중
-  await page.waitForTimeout(1800);
+  expect((await added).ok(), "더하기가 끝남").toBe(true);
+  release();                                             // 그제서야 옛 목록이 도착한다
+  await served;
   await expect(row(page, alias)).toBeVisible();
 });
 
