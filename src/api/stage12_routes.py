@@ -13,10 +13,70 @@ Usage (main_api.py):
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.engine.multistrategy_availability import http_unavailable, http_unsupported
+
 router = APIRouter(prefix="/api/v1/realism", tags=["realism"])
+
+#: 비용 요율의 런타임 출처를 말하는 문 이름 (BB) — ★문마다 달라야 한다★
+_DOOR_REALISM_BACKTEST = "realism/backtest"
+#: ★이 엔진은 시장충격을 **기본으로** 부과한다★ — 세금·스프레드만 없다.
+_SUPPORTED = ("commission", "slippage", "impact")
+#: 이 엔진의 충격은 메인 엔진의 `k·√참여율` 과 **다른 모델**이다(실측
+#: `realism_engine.py` 의 `turnover_based_impact(... avg_volatility=0.018 ...)`).
+_IMPACT_NOTE = ("이 엔진의 시장충격은 회전율 기반 모델(`turnover_based_impact`)"
+                "입니다 — ADV 는 요청의 `avg_adv_krw` ★가정값★이고 변동성은 "
+                "0.018 로 고정돼 있어 ★참여율을 잰 것이 아니라 가정한 것★ 입니다.")
+
+
+def _cost_block(req: BaseModel, out: dict) -> dict:
+    """★엔진에 넘긴 그 요율★로 `cost_model` 블록을 만든다. 엔진 내부는 불변."""
+    from src.domain.cost_provenance import door_cost_block
+    stats = out.get("realism_stats") or {}
+    impact = stats.get("total_market_impact_cost")
+    return door_cost_block(
+        commission_rate=req.commission_rate, slippage_rate=req.slippage_rate,
+        cost_door=_DOOR_REALISM_BACKTEST,
+        cost_explicit_fields=frozenset(req.model_fields_set),
+        cost_available_fields=frozenset(type(req).model_fields),
+        engine="realism_engine", supported=_SUPPORTED,
+        charge_impact=req.enable_market_impact,
+        notes={"impact": _IMPACT_NOTE},
+        # ★엔진이 실제로 센 것만★ — 수수료·슬리피지는 이 엔진이 따로 안 센다.
+        totals=({"impact": impact}
+                if req.enable_market_impact and impact is not None else None))
+
+
+_SYSTEMIC_UNKNOWN = (
+    "systemic_risk 미상(R4 전) — 매크로 피드·국면 분류기가 없어 위험 점수를 한 번도 "
+    "받지 못했습니다. 적응 모드(normal·cautious·defensive)는 전략 수익률의 상관붕괴 "
+    "진단만으로 정해졌습니다.")
+
+
+def _regime_adaptive_block(req, out: dict) -> dict:
+    """★적응 모드가 무엇으로 정해졌는가★ (BG5) — 선언이 아니라 일별 기록에서 센다.
+
+    `systemic_risk` 를 받은 날이 0 이면 모드는 상관붕괴 진단만으로 정해진 것이다.
+    받은 날이 있으면(R4 뒤) 두 근거가 함께 쓰였다고 말한다.
+    """
+    if not req.enable_regime_adaptive:
+        return {"enabled": False, "basis": "off", "n_days_with_systemic_risk": None,
+                "reason": "enable_regime_adaptive=false — 적응 모드를 쓰지 않았습니다."}
+    days = out.get("daily_records") or []
+    n = sum(1 for r in days if r.get("systemic_risk") is not None)
+    stats = out.get("realism_stats") or {}
+    return {
+        "enabled": True,
+        "basis": "correlation_only" if n == 0 else "systemic_risk_and_correlation",
+        "n_days_with_systemic_risk": n,
+        "n_days": len(days),
+        "mode_distribution_pct": stats.get("mode_distribution_pct"),
+        "reason": _SYSTEMIC_UNKNOWN if n == 0 else None,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -39,6 +99,8 @@ class RealismBacktestRequest(BaseModel):
     max_weight:            float = Field(default=0.50, gt=0, le=1)
     min_weight:            float = Field(default=0.02, ge=0, lt=1)
     run_name:              str | None = None
+    #: ★국면 판정 시장★ (BH3)
+    regime_market:         Literal["kr", "us"] = Field(default="kr")
 
     # ─ Stage 12 신규 토글 ──────────────────────────────────────────────
     enable_market_impact:       bool = Field(default=True)
@@ -61,13 +123,27 @@ class RealismBacktestRequest(BaseModel):
 @router.post("/backtest")
 def realism_backtest(req: RealismBacktestRequest):
     """5가지 realism hook 통합 백테스트."""
+    # ★코어가 없으면 503 · 없는 기능을 고르면 422★ (BF·BG4) — `try:` 앞이어야 한다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
+    if (unsupported := http_unsupported(allocation_method=req.allocation_method,
+                                        rebalance_policy=req.rebalance_policy)) is not None:
+        raise unsupported
     try:
         from src.database import get_sync_engine
         from src.engine.realism_engine import RealismConfig, RealisticBacktester
 
         bt = RealisticBacktester(get_sync_engine())
         config = RealismConfig(**req.model_dump())
-        return bt.run(config)
+        out = bt.run(config)
+        # ★돌지 않은 실행에 "부과했다" 를 붙이지 않는다★
+        if isinstance(out, dict) and out.get("success"):
+            out["cost_model"] = _cost_block(req, out)
+            out["regime_adaptive"] = _regime_adaptive_block(req, out)
+            # ★라벨은 원천 실행들의 mock 여부로★ (BG5) — multibacktest 와 같은 파생.
+            from src.api.stage11_routes import _attach_sources
+            _attach_sources(out, get_sync_engine(), req.strategy_ids)
+        return out
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -139,12 +215,15 @@ def realism_cash_rate(
         from src.engine.cash_management import CashRateProvider
         provider = CashRateProvider(get_sync_engine())
         ts = pd.to_datetime(as_of_date) if as_of_date else pd.Timestamp.now()
-        rate = provider.get_rate(ts)
+        rate, source = provider.get_rate_with_source(ts)
         return {
             "as_of_date":      str(ts.date()) if hasattr(ts, "date") else str(ts),
             "rf_annual":       round(rate, 5),
             "rf_annual_pct":   round(rate * 100, 3),
             "rf_daily":        round(rate / 252, 8),
+            # ★관측인지 기본값인지★ (BL3 M7)
+            "rf_source":       source,
+            "rf_is_assumed":   source in ("default", "error"),
         }
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -264,6 +343,9 @@ class CorrelationHealthRequest(BaseModel):
 @router.post("/correlation-health")
 def realism_correlation_health(req: CorrelationHealthRequest):
     """상관관계 매트릭스 건강도 분석 (breakdown 감지)."""
+    # ★없는 서브시스템은 503 + 사유★ (BF) — `try:` 앞이어야 아래 500 이 삼키지 않는다.
+    if (unavailable := http_unavailable()) is not None:
+        raise unavailable
     try:
         from src.database import get_sync_engine
         from src.engine.regime_adaptive_allocator import RegimeAdaptiveAllocator

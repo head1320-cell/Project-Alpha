@@ -1,5 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // 다크는 `.dark` 클래스로만 켠다 — 매체 질의(media)로 두면 OS 설정만으로
+  // 아직 대응되지 않은 라우트까지 다크로 넘어가 버린다(globals.css §47 참고).
+  darkMode: "class",
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {

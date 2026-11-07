@@ -203,30 +203,20 @@ class FundamentalsStore(DeterministicMockStore):
 
         재무시계열 적재분을 스크리너 펀더멘털 원천으로 재사용 → DART 쿼터 무소모로
         전종목 팩터 확보. 핵심값(매출·자산) 없으면 None(상장 전 연도 등)."""
+        # ★매핑은 `dart_history.statement_from_row` 한 벌만 있다★ 예전에는 이
+        # 함수 안에 필드 복사와 회계 항등식 보완이 직접 들어 있었고, as-of 경로가
+        # 같은 산수를 다시 쓰면 두 벌이 갈라졌을 것이다(U1 에서 올렸다).
+        # 그 매핑이 고친 결함도 함께 옮겨 갔다 — `capex` 가 `financials_history`
+        # 에 **있는데도** 복사되지 않아 `_real_raw_financials` 가 `revenue * 0.05`
+        # 로 지어내던 것.
         try:
-            from src.data.dart_client import FinancialStatement
-            from src.data.dart_history import history_snapshot
-            snap = history_snapshot(str(stock_code), str(year), "11011")
+            from src.data import dart_history as dh
+            snap = dh.history_snapshot(str(stock_code), str(year), "11011")
         except Exception:
             return None
-        if not snap or (snap.get("revenue") is None and snap.get("total_assets") is None):
-            return None
-        fs = FinancialStatement(corp_code="", corp_name="", bsns_year=str(year), reprt_code="11011")
-        for f in ("revenue", "operating_profit", "net_income", "gross_profit",
-                  "total_assets", "total_liabilities", "total_equity",
-                  "current_assets", "current_liabilities", "operating_cf",
-                  "shares_outstanding", "dps"):
-            v = snap.get(f)
-            if v is not None:
-                setattr(fs, f, v)
-        # 회계 항등식으로 결측 보완(정확 — 날조 아님): 자본총계=자산총계-부채총계.
-        # DART 일부 공시가 자본총계 라인을 누락(자산·부채만) → 자본 결측만으로 팩터 전체가
-        # 탈락하던 것을 방지. 역방향(부채=자산-자본)도 동일.
-        if fs.total_equity is None and fs.total_assets is not None and fs.total_liabilities is not None:
-            fs.total_equity = fs.total_assets - fs.total_liabilities
-        if fs.total_liabilities is None and fs.total_assets is not None and fs.total_equity is not None:
-            fs.total_liabilities = fs.total_assets - fs.total_equity
-        return fs  # is_mock=False 유지 → 실데이터 판별 통과
+        # is_mock 은 건드리지 않는다 → 실데이터 판별 통과.
+        return dh.statement_from_row(snap or {}, bsns_year=str(year),
+                                     reprt_code="11011")
 
     def _market_snapshot(self, stock_code: str) -> dict:
         """실측 시총(억, KIS master)+최근 종가(원, daily_prices) — 주식수 파생·시총 단일화용.
@@ -319,36 +309,53 @@ class FundamentalsStore(DeterministicMockStore):
         # 시총 (item 우선, KIS에서 주입됐을 수 있음)
         mcap = getattr(item, "market_cap_억", None) if item else None
 
+        # ★★ 미상은 다른 값의 비율이 아니다 ★★
+        # 이 아래 전부, DART 가 주지 않은 값은 `None` 이다. 예전에는 하드코딩된
+        # 비율로 지어냈다(`gross_profit = revenue*0.3` 등 27곳). 실측: DART 가 실수
+        # 6개만 준 종목에서 파생 팩터 64개 중 57개에 값이 나갔고, `pbr` 은 가정 상수
+        # 1.2 그대로, `revenue_growth_yoy` 는 **어떤 종목이든 +5.26%** 였다.
+        # 스크리너가 그 위에서 순위를 매겼다. CLAUDE.md §6 정면 위반이었다.
         revenue = to_억(fs.revenue)
-        gross_profit = to_억(fs.gross_profit) if fs.gross_profit is not None else (revenue * 0.3 if revenue else None)
+        gross_profit = to_억(fs.gross_profit) if fs.gross_profit is not None else None
         operating_profit = to_억(fs.operating_profit)
         net_income = to_억(fs.net_income)
         total_assets = to_억(fs.total_assets)
         total_equity = to_억(fs.total_equity)
         total_liabilities = to_억(fs.total_liabilities)
-        current_assets = to_억(fs.current_assets) if fs.current_assets else (total_assets * 0.4 if total_assets else None)
-        current_liabilities = to_억(fs.current_liabilities) if fs.current_liabilities else (total_liabilities * 0.5 if total_liabilities else None)
-        inventory = to_억(fs.inventory) if fs.inventory else (current_assets * 0.2 if current_assets else 0)
-        operating_cf = to_억(fs.operating_cf) if fs.operating_cf else (operating_profit * 1.1 if operating_profit else None)
-        capex = abs(to_억(fs.investing_cf) * 0.5) if fs.investing_cf else (revenue * 0.05 if revenue else 0)
+        current_assets = to_억(fs.current_assets) if fs.current_assets else None
+        current_liabilities = to_억(fs.current_liabilities) if fs.current_liabilities else None
+        inventory = to_억(fs.inventory) if fs.inventory else None
+        operating_cf = to_억(fs.operating_cf) if fs.operating_cf else None
+        # capex: 적재된 실측을 먼저 본다(`financials_history.capex`). 없으면 투자CF 의
+        # 절반이라는 **관행적 근사**가 아니라 미상이다.
+        _capex_real = getattr(fs, "capex", None)
+        if _capex_real is not None:
+            capex = abs(to_억(_capex_real))
+        elif fs.investing_cf:
+            capex = abs(to_억(fs.investing_cf) * 0.5)
+        else:
+            capex = None
         fcf = (operating_cf - capex) if (operating_cf is not None and capex is not None) else None
 
         # 결측 핵심값 방어
         if None in (revenue, operating_profit, net_income, total_assets, total_equity):
             return None
-        if not mcap or mcap <= 0:
-            # 시총 미주입 시 PBR≈1.2 가정으로 근사 (실데이터 결합 전까지)
-            mcap = total_equity * 1.2
+        # ★시총을 자본총계로 추정하지 않는다★ 예전에는 `total_equity * 1.2`(PBR≈1.2
+        # 가정)로 만들어, 시총 미상 종목이 전부 **PBR 정확히 1.2** 로 스크리닝됐다.
+        if mcap is not None and mcap <= 0:
+            mcap = None
 
-        interest_expense = total_liabilities * 0.03 if total_liabilities else 0
-        buyback = 0
+        # 이자비용: 부채의 3% 라는 가정을 쓰지 않는다. 미상이면 미상이다 —
+        # 0 으로 두면 `interest_coverage` 가 **"이자를 못 갚는다"** 로 읽힌다.
+        interest_expense = None
+        buyback = 0            # 자사주 매입: 미적재 = 0(무매입)로 본다 — 기존 의미 유지
 
-        # 전년/3년전
-        revenue_prev = to_억(fs_prev.revenue) if (fs_prev and fs_prev.revenue) else (revenue * 0.95)
-        op_prev = to_억(fs_prev.operating_profit) if (fs_prev and fs_prev.operating_profit) else (operating_profit * 0.93)
-        ni_prev = to_억(fs_prev.net_income) if (fs_prev and fs_prev.net_income) else (net_income * 0.94)
-        revenue_3y_ago = to_억(fs_3y.revenue) if (fs_3y and fs_3y.revenue) else (revenue * 0.8)
-        ni_3y_ago = to_억(fs_3y.net_income) if (fs_3y and fs_3y.net_income) else (net_income * 0.78)
+        # 전년/3년전 — ★없는 해를 당해의 95% 로 복사하지 않는다★
+        revenue_prev = to_억(fs_prev.revenue) if (fs_prev and fs_prev.revenue) else None
+        op_prev = to_억(fs_prev.operating_profit) if (fs_prev and fs_prev.operating_profit) else None
+        ni_prev = to_억(fs_prev.net_income) if (fs_prev and fs_prev.net_income) else None
+        revenue_3y_ago = to_억(fs_3y.revenue) if (fs_3y and fs_3y.revenue) else None
+        ni_3y_ago = to_억(fs_3y.net_income) if (fs_3y and fs_3y.net_income) else None
 
         # ── 발행주식수 정규화(만주) — CIO 실사 "BPS ₩566만" 버그의 근본 수정 ──
         # 원인 2중: ① financials_history의 shares_outstanding은 대부분 NULL(DART 재무제표
@@ -368,8 +375,10 @@ class FundamentalsStore(DeterministicMockStore):
                     max(shares, derived) / max(1e-9, min(shares, derived)) > 2:
                 shares = derived
         if not shares or shares <= 0:
-            shares = 10000  # 최후 근사 (마스터·주가 모두 미적재)
-        # 시총도 실측 우선: item(KIS 주입) > master 실측 > PBR≈1.2 근사(기존)
+            # ★10000 만주 폴백을 없앤다★ 그것이 "BPS ₩566만" 버그의 절반이었고
+            # (자본총계가 그대로 BPS 로 노출), 미상을 그럴듯한 수로 위장했다.
+            shares = None
+        # 시총은 실측만: item(KIS 주입) > master 실측. 없으면 미상이다.
         if (not getattr(item, "market_cap_억", None) if item else True) and snap["mcap_억"]:
             mcap = snap["mcap_억"]
 
@@ -377,24 +386,31 @@ class FundamentalsStore(DeterministicMockStore):
         # '무배당(0)'과 '미상(None)'을 구분(정직): dividend_yield/payout이 None으로 전파.
         _dps = getattr(fs, "dps", None)
         dividend = (_dps * shares / 1e4) if (_dps is not None and shares) else None
-        eps = fs.eps if fs.eps else (net_income / shares * 10000 if shares else None)
-        eps_prev = (ni_prev / shares * 10000) if shares else None
-        eps_3y_ago = (ni_3y_ago / shares * 10000) if shares else None
+        # EPS 는 실측 우선, 없으면 순이익÷주식수 — 이것은 **정의에 의한 도출**이지
+        # 가정이 아니다(둘 다 실측일 때만 성립하므로 주식수 미상이면 None).
+        eps = fs.eps if fs.eps else ((net_income / shares * 10000) if shares else None)
+        eps_prev = (ni_prev / shares * 10000) if (shares and ni_prev is not None) else None
+        eps_3y_ago = (ni_3y_ago / shares * 10000) if (shares and ni_3y_ago is not None) else None
 
-        # ── 확장 원천 (기본 DART FS에 없는 항목 → 실 값 기반 근사) ──
-        cash = current_assets * 0.25 if current_assets else 0
-        receivables = current_assets * 0.25 if current_assets else 0
-        rnd = revenue * 0.03 if revenue else 0
-        sga = revenue * 0.12 if revenue else 0
-        depreciation = revenue * 0.04 if revenue else 0
-        tax = max(0.0, operating_profit * 0.25) if (operating_profit and operating_profit > 0) else 0.0
-        ta_prev = to_억(fs_prev.total_assets) if (fs_prev and fs_prev.total_assets) else (total_assets * 0.95)
-        ca_prev = to_억(fs_prev.current_assets) if (fs_prev and fs_prev.current_assets) else ((current_assets or 0) * 0.95)
-        cl_prev = to_억(fs_prev.current_liabilities) if (fs_prev and fs_prev.current_liabilities) else ((current_liabilities or 0) * 0.95)
-        inventory_prev = to_억(fs_prev.inventory) if (fs_prev and fs_prev.inventory) else ((inventory or 0) * 0.95)
-        receivables_prev = receivables * 0.95
-        equity_prev = to_억(fs_prev.total_equity) if (fs_prev and fs_prev.total_equity) else (total_equity * 0.95)
-        gross_profit_prev = (revenue_prev * (gross_profit / revenue)) if (revenue_prev and revenue and gross_profit) else ((gross_profit or 0) * 0.95)
+        # ── 확장 원천 — ★DART FS 에 없는 항목을 매출의 몇 %로 지어내지 않는다★ ──
+        # 예전에는 현금=유동자산×0.25 · R&D=매출×0.03 · 판관비=매출×0.12 ·
+        # 감가상각=매출×0.04 · 법인세=영업이익×0.25 였다. 전부 미상이다.
+        cash = None
+        receivables = None
+        rnd = None
+        sga = None
+        depreciation = None
+        tax = None
+        ta_prev = to_억(fs_prev.total_assets) if (fs_prev and fs_prev.total_assets) else None
+        ca_prev = to_억(fs_prev.current_assets) if (fs_prev and fs_prev.current_assets) else None
+        cl_prev = to_억(fs_prev.current_liabilities) if (fs_prev and fs_prev.current_liabilities) else None
+        inventory_prev = to_억(fs_prev.inventory) if (fs_prev and fs_prev.inventory) else None
+        receivables_prev = None
+        equity_prev = to_억(fs_prev.total_equity) if (fs_prev and fs_prev.total_equity) else None
+        # 전년 매출총이익: 전년 매출 × 당해 매출총이익률 — 마진 불변 가정이지만 두 항이
+        # 모두 실측일 때만 성립한다. 하나라도 없으면 미상(예전엔 당해값×0.95 였다).
+        gross_profit_prev = ((revenue_prev * (gross_profit / revenue))
+                             if (revenue_prev and revenue and gross_profit) else None)
         # 분기(QoQ): 연간/4 근사는 YoY와 수치가 완전히 같아지는 복사버그(CIO 실사 지적) —
         # 실 분기 원천(financials_history 분기 보고서) 없이는 None(정직). 적재 시 후속 연결.
         rev_q = None
@@ -408,12 +424,14 @@ class FundamentalsStore(DeterministicMockStore):
             operating_profit=operating_profit, net_income=net_income,
             total_assets=total_assets, total_equity=total_equity,
             total_liabilities=total_liabilities, current_assets=current_assets,
-            current_liabilities=current_liabilities, inventory=inventory or 0,
+            current_liabilities=current_liabilities, inventory=inventory,
             operating_cf=operating_cf, capex=capex, fcf=fcf,
             interest_expense=interest_expense, dividend=dividend, buyback=buyback,
             revenue_prev=revenue_prev, op_prev=op_prev, ni_prev=ni_prev,
             revenue_3y_ago=revenue_3y_ago, ni_3y_ago=ni_3y_ago,
-            eps=eps or 0, eps_prev=eps_prev or 0, eps_3y_ago=eps_3y_ago or 0,
+            # ★`or 0` 을 걷어낸다★ 여기가 미상을 0 으로 되돌리던 마지막 관문이었다.
+            # EPS 0 원(적자·무이익)과 EPS 미상은 다른 사실이다.
+            eps=eps, eps_prev=eps_prev, eps_3y_ago=eps_3y_ago,
             cash=cash, receivables=receivables, rnd=rnd, sga=sga,
             depreciation=depreciation, tax=tax,
             ta_prev=ta_prev, ca_prev=ca_prev, cl_prev=cl_prev,
@@ -525,6 +543,38 @@ class FundamentalsStore(DeterministicMockStore):
         def pct(x):
             return round(x * 100, 2) if x is not None else None
 
+        def _r2(x, nd: int = 2):
+            """반올림 — 미상은 미상으로 통과. `round(x or 0, 2)` 를 대체한다.
+
+            비율·배수에 `or 0` 을 쓰면 미상이 **의미 있는 틀린 수**가 된다:
+            `EV/EBITDA = 0` 은 "극도로 싸다", `interest_coverage = 0` 은
+            "이자를 못 갚는다" 로 읽힌다.
+            """
+            return round(x, nd) if x is not None else None
+
+        def sub(a, b):
+            """a - b — 한쪽이라도 미상이면 미상. `safe_div` 와 같은 규약.
+
+            ★이 헬퍼가 없어서 조용한 실종이 가능했다★ `_derive_factors` 의 뺄셈은
+            전부 가드가 없었는데, 원천이 항상 조작값으로 채워져 있어 터지지 않았을
+            뿐이다. `attach_fundamentals` 는 종목별로 예외를 삼키고 `continue` 하므로
+            (`실패 [{code}] — 이 종목만 건너뜀`), 여기서 `TypeError` 가 나면 그 종목이
+            **아무 흔적 없이 유니버스에서 사라진다.**
+            """
+            return None if (a is None or b is None) else a - b
+
+        def add(a, b):
+            """a + b — 한쪽이라도 미상이면 미상."""
+            return None if (a is None or b is None) else a + b
+
+        def gt(x, y) -> bool:
+            """x > y — 미상이면 **참이 아니다**(단, 거짓이라고 주장하지도 않는다).
+
+            F-score 같은 가점식에서 미상 항목은 점수를 얻지 못한다. 이것은
+            '조건 미충족' 과 같은 처리라 완벽하지 않지만, 사용자 지시대로
+            ★점수 계산식 자체는 건드리지 않는다★."""
+            return x is not None and y is not None and x > y
+
         rev = r["revenue"]; mcap = r["market_cap"]; ni = r["net_income"]
         op = r["operating_profit"]; ta = r["total_assets"]; te = r["total_equity"]
         # 실데이터 경로 여부 — mock 난수 성분(모멘텀·PEAD·결측시뮬 등)을 실팩터에 섞지 않음(CIO 실사)
@@ -534,51 +584,63 @@ class FundamentalsStore(DeterministicMockStore):
         operating_margin = pct(safe_div(op, rev))
         net_margin = pct(safe_div(ni, rev))
         gross_margin = pct(safe_div(r["gross_profit"], rev))
-        gp_to_assets = round(safe_div(r["gross_profit"], ta) or 0, 3)
+        # ★`or 0` 을 걷어낸다★ 0 은 "최악의 퀄리티" 로 QMJ 에 전파된다.
+        _gpa = safe_div(r["gross_profit"], ta)
+        gp_to_assets = round(_gpa, 3) if _gpa is not None else None
         nopat = op * 0.75  # 세후영업이익 (세율 25% 가정)
-        invested_capital = te + r["total_liabilities"] * 0.6  # 이자부부채 근사
+        invested_capital = add(te, r["total_liabilities"] * 0.6) if r["total_liabilities"] is not None else None  # 이자부부채 근사
         roic = pct(safe_div(nopat, invested_capital))
-        asset_turnover = round(safe_div(rev, ta) or 0, 2)
-        equity_multiplier = round(safe_div(ta, te) or 0, 2)
+        asset_turnover = _r2(safe_div(rev, ta))
+        equity_multiplier = _r2(safe_div(ta, te))
         fcf_margin = pct(safe_div(r["fcf"], rev))
 
         # ── Phase B: 밸류에이션 ──
         ebitda = op + rev * 0.05  # 감가상각 근사 5%
-        ev = mcap + r["total_liabilities"] * 0.6 - r.get("cash", rev * 0.1)  # EV 근사
-        ev = max(ev, mcap * 0.5)
-        ev_ebitda = round(safe_div(ev, ebitda) or 0, 2)
-        ev_sales = round(safe_div(ev, rev) or 0, 2)
-        ev_fcf = round(safe_div(ev, r["fcf"]) or 0, 2) if r["fcf"] > 0 else None
-        psr = round(safe_div(mcap, rev) or 0, 2)
-        pcr = round(safe_div(mcap, r["operating_cf"]) or 0, 2) if r["operating_cf"] > 0 else None
-        eps_growth = safe_div(r["eps"] - r["eps_prev"], abs(r["eps_prev"]))
+        # EV 근사 — 구성요소가 하나라도 미상이면 EV 도 미상이다.
+        _ev_parts = (mcap, r["total_liabilities"], r.get("cash"))
+        ev = None if any(x is None for x in _ev_parts) else max(
+            mcap + r["total_liabilities"] * 0.6 - r["cash"], mcap * 0.5)
+        # ★EV 배수에 `or 0` 을 남기면 안 된다★ `EV/EBITDA = 0` 은 "극도로 싸다" 로
+        # 읽힌다 — EV 미상에서 **저평가 신호를 제조**하는 셈이다. (내가 이 슬라이스
+        # 초안에서 실제로 만든 버그다: 완전 적재 대조에서 셋이 0 으로 나왔다.)
+        ev_ebitda = _r2(safe_div(ev, ebitda))
+        ev_sales = _r2(safe_div(ev, rev))
+        ev_fcf = _r2(safe_div(ev, r["fcf"])) if gt(r["fcf"], 0) else None
+        psr = _r2(safe_div(mcap, rev))
+        pcr = round(safe_div(mcap, r["operating_cf"]) or 0, 2) if gt(r["operating_cf"], 0) else None
+        eps_growth = (safe_div(sub(r["eps"], r["eps_prev"]), abs(r["eps_prev"]))
+                      if r["eps_prev"] is not None else None)
         per_implied = safe_div(mcap, ni) if ni > 0 else None
         peg = round(safe_div(per_implied, (eps_growth * 100)) or 0, 2) if (per_implied and eps_growth and eps_growth > 0) else None
         fcf_yield = pct(safe_div(r["fcf"], mcap))
         earnings_yield = pct(safe_div(ni, mcap))
-        acquirers_multiple = round(safe_div(ev, op) or 0, 2) if op > 0 else None
+        acquirers_multiple = round(safe_div(ev, op) or 0, 2) if (ev is not None and op > 0) else None
         # 배당 미상(None)이면 주주환원도 미상 — 0%로 단정하지 않음(정직)
         _div_total = (r["dividend"] + r["buyback"]) if r["dividend"] is not None else None
         shareholder_yield = pct(safe_div(_div_total, mcap))
 
         # ── Phase C: 성장성 ──
-        revenue_growth_yoy = pct(safe_div(rev - r["revenue_prev"], abs(r["revenue_prev"])))
-        op_growth_yoy = pct(safe_div(op - r["op_prev"], abs(r["op_prev"])))
+        # ★미상이면 성장률도 미상★ 예전엔 전년도를 당해×0.95 로 지어내 **어떤
+        # 종목이든 정확히 +5.26%** 가 나왔다. 스크리너가 그 상수를 걸렀다.
+        revenue_growth_yoy = (pct(safe_div(sub(rev, r["revenue_prev"]), abs(r["revenue_prev"])))
+                              if r["revenue_prev"] is not None else None)
+        op_growth_yoy = (pct(safe_div(sub(op, r["op_prev"]), abs(r["op_prev"])))
+                         if r["op_prev"] is not None else None)
         eps_growth_yoy = pct(eps_growth)
         # CAGR: 비율이 양수일 때만 3제곱근이 실수. 부호 전환(적자→흑자/흑자→적자)이면
         #   비율<0 → (음수)**(1/3)=복소수 → round() 크래시. 실데이터 적자기업에서 터지던
         #   버그(mock eps는 항상 양수라 미검출) → 비율≤0이면 CAGR 미정의로 None(정직).
         _rev_ratio = safe_div(rev, r["revenue_3y_ago"])
-        revenue_cagr_3y = pct(_rev_ratio ** (1/3) - 1) if (r["revenue_3y_ago"] > 0 and _rev_ratio and _rev_ratio > 0) else None
+        revenue_cagr_3y = pct(_rev_ratio ** (1/3) - 1) if (gt(r["revenue_3y_ago"], 0) and _rev_ratio and _rev_ratio > 0) else None
         _eps_ratio = safe_div(r["eps"], r["eps_3y_ago"])
-        eps_cagr_3y = pct(_eps_ratio ** (1/3) - 1) if (r["eps_3y_ago"] > 0 and _eps_ratio and _eps_ratio > 0) else None
+        eps_cagr_3y = pct(_eps_ratio ** (1/3) - 1) if (gt(r["eps_3y_ago"], 0) and _eps_ratio and _eps_ratio > 0) else None
         # 실데이터: 모멘텀은 가격팩터 momentum_12_1(실측)이 담당, PEAD는 컨센서스 필요 → None
         price_momentum_12_1 = None if is_real else round(self._normal(stock_code, "mom121", mu=8, sigma=22), 1)
         pead_score = None if is_real else round(self._normal(stock_code, "pead", mu=0.2, sigma=1.0), 2)
 
         # ── Phase D: 안정성 ──
         # Altman Z (제조업 모델): 1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5
-        wc = r["current_assets"] - r["current_liabilities"]
+        wc = sub(r["current_assets"], r["current_liabilities"])
         x1 = safe_div(wc, ta) or 0
         x2 = safe_div(ni * 0.6, ta) or 0  # 이익잉여금 근사
         x3 = safe_div(op, ta) or 0
@@ -597,33 +659,37 @@ class FundamentalsStore(DeterministicMockStore):
             gmi = self._uniform(stock_code, "gmi", lo=0.9, hi=1.2)
             aqi = self._uniform(stock_code, "aqi", lo=0.95, hi=1.15)
         sgi = 1 + (revenue_growth_yoy or 0) / 100
-        accr = safe_div(ni - r["operating_cf"], ta) or 0
+        accr = safe_div(sub(ni, r["operating_cf"]), ta) or 0
         beneish_m = round(-4.84 + 0.92*dsri + 0.528*gmi + 0.404*aqi + 0.892*sgi + 4.679*accr, 2)
         current_ratio = pct(safe_div(r["current_assets"], r["current_liabilities"]))
-        quick_ratio = pct(safe_div(r["current_assets"] - r["inventory"], r["current_liabilities"]))
-        interest_coverage = round(safe_div(op, r["interest_expense"]) or 0, 2)
+        quick_ratio = pct(safe_div(sub(r["current_assets"], r["inventory"]), r["current_liabilities"]))
+        # ★`or 0` 을 걷어낸다★ 0 은 "이자를 못 갚는다" 는 **주장**이다 —
+        # 이자비용 미상에서 부실 신호를 제조하면 안 된다.
+        _ic = safe_div(op, r["interest_expense"])
+        interest_coverage = round(_ic, 2) if _ic is not None else None
         accruals = pct(accr)
-        debt_to_equity = round(safe_div(r["total_liabilities"], te) or 0, 2)
+        _dte = safe_div(r["total_liabilities"], te)
+        debt_to_equity = round(_dte, 2) if _dte is not None else None
 
         # ── Phase E: 종합 ──
         # Piotroski F-Score (9개 항목)
         f = 0
         if ni > 0: f += 1                                    # 1. 순이익 양수
-        if r["operating_cf"] > 0: f += 1                     # 2. 영업CF 양수
+        if gt(r["operating_cf"], 0): f += 1                  # 2. 영업CF 양수
         if safe_div(ni, ta) and safe_div(r["ni_prev"], ta): # 3. ROA 개선
             if safe_div(ni, ta) > safe_div(r["ni_prev"], ta): f += 1
-        if r["operating_cf"] > ni: f += 1                    # 4. 영업CF > 순이익 (이익의 질)
+        if gt(r["operating_cf"], ni): f += 1                 # 4. 영업CF > 순이익 (이익의 질)
         if (revenue_growth_yoy or 0) > 0: f += 1             # 5. 매출 성장
         if (gross_margin or 0) > 30: f += 1                  # 6. 매출총이익률 양호
         if (op_growth_yoy or 0) > 0: f += 1                  # 7. 영업이익 성장
-        if debt_to_equity < 1.5: f += 1                      # 8. 낮은 레버리지
+        if debt_to_equity is not None and debt_to_equity < 1.5: f += 1   # 8. 낮은 레버리지
         if (current_ratio or 0) > 100: f += 1                # 9. 유동성 양호
         piotroski_f = f
 
         # QMJ (Quality Minus Junk) — 수익성+성장+안전+배당 정규화 합산 (0~100)
-        prof_z = min(1, max(-1, (gp_to_assets - 0.3) / 0.3))
+        prof_z = min(1, max(-1, (gp_to_assets - 0.3) / 0.3)) if gp_to_assets is not None else 0.0
         growth_z = min(1, max(-1, (revenue_growth_yoy or 0) / 30))
-        safety_z = min(1, max(-1, (altman_z - 3) / 2))
+        safety_z = min(1, max(-1, (altman_z - 3) / 2)) if altman_z is not None else 0.0
         payout_z = min(1, max(-1, (shareholder_yield or 0) / 5))
         qmj_score = round((prof_z + growth_z + safety_z + payout_z + 4) / 8 * 100, 1)
 
@@ -634,30 +700,43 @@ class FundamentalsStore(DeterministicMockStore):
         # ══════════════════════════════════════════════════════════════════════
         # 확장 팩터 (DART 원천 파생 — 추가 API 불필요)
         # ══════════════════════════════════════════════════════════════════════
-        cash = r.get("cash", 0)
-        rnd = r.get("rnd", 0); sga = r.get("sga", 0); dep = r.get("depreciation", 0)
+        # ★`.get(k, 0)` 은 여기서 기본값이 먹지 않는다★ 키는 **있고** 값이 None 이라
+        # 0 이 아니라 None 이 온다. 그리고 그것이 옳다 — 이 넷은 DART FS 가 주지
+        # 않는 항목이라 미상이고, 예전에는 매출의 몇 %로 지어냈다.
+        cash = r.get("cash")
+        rnd = r.get("rnd"); sga = r.get("sga"); dep = r.get("depreciation")
 
         # ── 수익성 심화 (quality) ──
         roe = pct(safe_div(ni, te))                                      # 자기자본이익률
         roa = pct(safe_div(ni, ta))                                      # 총자산이익률
         # 듀폰 3분해: ROE = 순이익률 × 자산회전율 × 재무레버리지
-        ebitda_margin = pct(safe_div(op + dep, rev))                     # EBITDA 마진
-        ocf_to_ni = round(safe_div(r["operating_cf"], ni) or 0, 2) if ni > 0 else None  # 이익의 질
-        cash_conversion = round(safe_div(r["fcf"], ni) or 0, 2) if ni > 0 else None     # 현금전환율
+        ebitda_margin = pct(safe_div(add(op, dep), rev))                 # EBITDA 마진
+        _ocf_ni = safe_div(r["operating_cf"], ni) if ni > 0 else None
+        ocf_to_ni = round(_ocf_ni, 2) if _ocf_ni is not None else None   # 이익의 질
+        _cc = safe_div(r["fcf"], ni) if ni > 0 else None
+        cash_conversion = round(_cc, 2) if _cc is not None else None     # 현금전환율
         rnd_intensity = pct(safe_div(rnd, rev))                          # R&D 집약도
         sga_to_revenue = pct(safe_div(sga, rev))                         # 판관비율
         capex_intensity = pct(safe_div(r["capex"], rev))                 # 설비투자 집약도
-        roe_dupont = pct((safe_div(ni, rev) or 0) * (safe_div(rev, ta) or 0) * (safe_div(ta, te) or 0))
+        _d1, _d2, _d3 = safe_div(ni, rev), safe_div(rev, ta), safe_div(ta, te)
+        roe_dupont = (pct(_d1 * _d2 * _d3)
+                      if None not in (_d1, _d2, _d3) else None)
 
         # ── 밸류에이션 심화 (valuation) ──
-        per = round(safe_div(mcap, ni) or 0, 2) if ni > 0 else None      # PER
-        pbr = round(safe_div(mcap, te) or 0, 2) if te > 0 else None      # PBR
-        ev_ic = round(safe_div(ev, invested_capital) or 0, 2)           # EV/투하자본
+        per = _r2(safe_div(mcap, ni)) if ni > 0 else None                # PER
+        pbr = _r2(safe_div(mcap, te)) if te > 0 else None                # PBR
+        _evic = safe_div(ev, invested_capital)
+        ev_ic = round(_evic, 2) if _evic is not None else None          # EV/투하자본
         dividend_yield = pct(safe_div(r["dividend"], mcap))             # 배당수익률
         payout_ratio = pct(safe_div(r["dividend"], ni)) if ni > 0 else None  # 배당성향
-        bps = round(safe_div(te * 1e8, r["shares"] * 1e4) or 0, 0)      # 주당순자산(원)
-        book_to_market = round(safe_div(te, mcap) or 0, 3)             # 장부/시장 (가치주 지표)
-        ncav_to_mcap = round(safe_div(r["current_assets"] - r["total_liabilities"], mcap) or 0, 3)  # 그레이엄 NCAV
+        # ★주식수 미상이면 BPS 도 미상★ 예전엔 10000 만주 폴백 탓에 자본총계가
+        # 그대로 BPS 로 노출됐다("BPS ₩566만" 버그).
+        _bps = safe_div(te * 1e8, r["shares"] * 1e4) if r["shares"] else None
+        bps = round(_bps, 0) if _bps is not None else None              # 주당순자산(원)
+        _btm = safe_div(te, mcap)
+        book_to_market = round(_btm, 3) if _btm is not None else None  # 장부/시장
+        _ncav = safe_div(sub(r["current_assets"], r["total_liabilities"]), mcap)
+        ncav_to_mcap = round(_ncav, 3) if _ncav is not None else None   # 그레이엄 NCAV
 
         # ── 성장성 심화 (growth) ──
         # 분기 QoQ: 실 분기 원천 없으면 None (연간/4 근사는 YoY 복사값이 되던 버그 — CIO 실사)
@@ -666,24 +745,34 @@ class FundamentalsStore(DeterministicMockStore):
         # 성장 가속도: 전기 성장률 원천(t-2 매출) 미보유 → 실데이터는 None(정직), mock은 기존
         growth_acceleration = None if is_real else \
             round((revenue_growth_yoy or 0) - (self._normal(stock_code, "g_accel", mu=5, sigma=10)), 2)
-        sustainable_growth = pct((safe_div(ni, te) or 0) * (1 - (safe_div(r["dividend"], ni) or 0)))  # 지속가능성장률 g=ROE×유보율
+        # ★배당 미상을 무배당(유보율 100%)으로 단정하지 않는다★ 같은 파일의
+        # `shareholder_yield` 가 이미 그렇게 처리한다 — 그 어휘를 따른다.
+        _roe_r, _payout = safe_div(ni, te), safe_div(r["dividend"], ni)
+        sustainable_growth = (pct(_roe_r * (1 - _payout))
+                              if (_roe_r is not None and _payout is not None) else None)
         # FCF 성장: 영업이익 성장률을 프록시로 사용 (FCF 전년값 미보유)
         _fcf_g = (op_growth_yoy or 0) / 100
         fcf_growth = round((op_growth_yoy or 0) * self._uniform(stock_code, "fcfg", lo=0.7, hi=1.2), 2) if op_growth_yoy is not None else None
 
         # ── 안전성 심화 (safety) ──
-        net_debt_to_ebitda = round(safe_div(r["total_liabilities"] - cash, op + dep) or 0, 2) if (op + dep) > 0 else None
+        _ebitda_d = add(op, dep)
+        _ndte = (safe_div(sub(r["total_liabilities"], cash), _ebitda_d)
+                 if gt(_ebitda_d, 0) else None)
+        net_debt_to_ebitda = round(_ndte, 2) if _ndte is not None else None
         cash_ratio = pct(safe_div(cash, r["current_liabilities"]))      # 현금비율
         equity_ratio = pct(safe_div(te, ta))                            # 자기자본비율
         pct(safe_div(r["total_liabilities"], ta))    # 부채비율(총자산대비)
         # Sloan 발생액 (운전자본 변화 기반)
-        delta_wc = (r["current_assets"] - r["ca_prev"]) - (r["current_liabilities"] - r["cl_prev"])
-        sloan_accruals = pct(safe_div(delta_wc - dep, ta))
-        debt_to_assets = round(safe_div(r["total_liabilities"], ta) or 0, 2)
+        delta_wc = sub(sub(r["current_assets"], r["ca_prev"]),
+                       sub(r["current_liabilities"], r["cl_prev"]))
+        sloan_accruals = pct(safe_div(sub(delta_wc, dep), ta))
+        _dta = safe_div(r["total_liabilities"], ta)
+        debt_to_assets = round(_dta, 2) if _dta is not None else None
 
         # ── 종합 심화 (composite) ──
         # Graham Number = sqrt(22.5 × EPS × BPS) — 적정주가
-        graham_number = round((22.5 * max(0, r["eps"]) * max(0, bps)) ** 0.5, 0) if (r["eps"] > 0 and bps > 0) else None
+        graham_number = (round((22.5 * max(0, r["eps"]) * max(0, bps)) ** 0.5, 0)
+                         if (gt(r["eps"], 0) and gt(bps, 0)) else None)
         # Greenblatt 결합 점수 (이익수익률 + ROIC, 0~100)
         greenblatt_score = round(min(100, max(0, (earnings_yield or 0) * 2 + (roic or 0))), 1)
         # 종합 가치점수 (저평가 + 우량) — 자체 콤보

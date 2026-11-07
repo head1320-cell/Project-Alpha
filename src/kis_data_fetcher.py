@@ -12,6 +12,7 @@ KIS strategy_builder/core/data_fetcher.py 의 PostgreSQL 어댑터 버전.
 """
 
 import logging
+from contextvars import ContextVar
 from datetime import date as _date
 from datetime import timedelta
 
@@ -19,6 +20,48 @@ import pandas as pd
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 백테스트 봉 컨텍스트 (P0-1)
+# ─────────────────────────────────────────────────────────────────────────────
+# ★왜 ContextVar 인가★
+# 예전에는 백테스트 엔진이 이 모듈의 `get_daily_prices`/`get_current_price` 를 **전역
+# 대입으로 덮어썼다**(`kis_backtest_engine._generate_signal_as_of`). 되돌릴 값을
+# "진입 시점의 전역" 에서 읽었기 때문에, 두 실행이 겹치면 서로의 람다를 '원본' 으로
+# 저장하고 복원했다. 실측 결과 두 실행이 **정상 종료한 뒤에도 전역이 오염된 채**
+# 남았고(`scripts/bench_backtest.py --race`), 그 프로세스의 이후 모든 조회가 완료된
+# 실행의 얼어붙은 DataFrame 을 받았다. 오류는 한 건도 나지 않았다 — 조용히 틀렸다.
+#
+# ContextVar 는 **스레드마다 별개**이고 `set()` 이 준 토큰으로 정확히 복원된다.
+# 교차 오염과 영구 누수가 규율이 아니라 **구조로** 막힌다.
+#
+# ★한계를 여기 적어 둔다★
+# 컨텍스트는 **밀어 넣은 그 스레드**에서만 보인다. 지금 시뮬레이션 루프는 순차라
+# (`BacktestEngine.run()` 단일 스레드) 성립한다. 나중에 신호 생성을 스레드풀로
+# 병렬화하면 컨텍스트가 따라가지 않고 **조용히 라이브 DB 경로로 떨어진다** — 그러면
+# 슬라이스가 아닌 전체 이력이 돌아와 룩어헤드가 된다.
+#
+# "컨텍스트가 없으면 예외" 로 막고 싶어지지만 **막으면 안 된다**: `uvicorn --workers 1`
+# 이라 백테스트가 도는 동안 들어온 **라이브 신호 요청**이 같은 프로세스의 같은 함수를
+# 부른다. 프로세스 전역 플래그로 거부하면 프로덕션 요청이 깨진다. 진짜 해법은
+# 실행을 별도 프로세스로 빼는 것(P0-2)이다.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_BAR_CONTEXT: ContextVar[tuple | None] = ContextVar("kis_bar_context", default=None)
+
+
+def push_bar_context(bars, price_info):
+    """이 스레드의 조회를 `bars`/`price_info` 로 고정하고 복원용 토큰을 돌려준다."""
+    return _BAR_CONTEXT.set((bars, price_info))
+
+
+def pop_bar_context(token) -> None:
+    """`push_bar_context` 가 준 토큰으로 **정확히 이전 상태**로 되돌린다.
+
+    `set(None)` 이 아니라 `reset(token)` 이어야 중첩 호출이 안전하다.
+    """
+    _BAR_CONTEXT.reset(token)
 
 
 def _get_engine():
@@ -58,6 +101,10 @@ def get_daily_prices(
     Returns:
         DataFrame — 비어있으면 전략이 HOLD 반환
     """
+    # 백테스트 봉 컨텍스트가 있으면 그것이 진실이다(위 블록 참조).
+    _ctx = _BAR_CONTEXT.get()
+    if _ctx is not None:
+        return _ctx[0]
     engine = _get_sync_engine()
     if engine is None:
         logger.warning(f"DB unavailable for {stock_code}")
@@ -115,6 +162,9 @@ def get_current_price(
     Returns:
         dict: price, high, low, volume, change_rate, w52_high, w52_low
     """
+    _ctx = _BAR_CONTEXT.get()
+    if _ctx is not None:
+        return _ctx[1]
     engine = _get_sync_engine()
     if engine is None:
         return {}

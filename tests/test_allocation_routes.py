@@ -15,12 +15,15 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 import src.api.allocation_routes as ar  # noqa: E402
+import src.api.allocation_stress_routes as sr  # noqa: E402
 from src.api.allocation_routes import (  # noqa: E402
     AnalyzeRequest,
+    allocation_analyze,
+)
+from src.api.allocation_stress_routes import (  # noqa: E402
     SensitivityRequest,
     StressRequest,
     XrayRequest,
-    allocation_analyze,
     allocation_factor_xray,
     allocation_sensitivity,
     allocation_stress,
@@ -221,11 +224,13 @@ def test_xray_size_omitted_without_caps(monkeypatch):
 # ── /stress ──────────────────────────────────────────────────────────────────
 
 def test_stress_hypothetical_weighted_sum(monkeypatch):
-    monkeypatch.setattr(ar, "_shock_inputs", lambda code: __import__("types").SimpleNamespace(
+    # ★패치는 호출부가 있는 모듈을 겨눈다 (P8 ③)★ 옛 경로를 겨누면
+    # 예외 없이 조용히 빗나간다.
+    monkeypatch.setattr(sr, "_shock_inputs", lambda code: __import__("types").SimpleNamespace(
         stock_code=code, corp_name=code, debt_ratio_pct=100, per=15,
         dividend_yield_pct=2, roe_pct=8, beta_1y=None, composite_score=50))
     from src.engine.stress_test_analyzer import _stock_shock
-    ns = ar._shock_inputs("005930")
+    ns = sr._shock_inputs("005930")
     unit_shock = _stock_shock(ns, "rate_hike_200bp")
     out = allocation_stress(StressRequest(
         holdings={"005930": 60, "000660": 40}, scenario="rate_hike_200bp"))
@@ -239,7 +244,9 @@ def test_stress_historical_unavailable_when_no_data(monkeypatch):
     # 운영 경로 재현 — mock 합성 폴백 차단 시 정직 unavailable
     monkeypatch.setattr("src.kis_portfolio_analyzer.load_returns",
                         lambda tickers, start, end: pd.DataFrame())
-    monkeypatch.setattr(ar, "_mock_returns_fallback", lambda *a, **k: None)
+    # ★`allocation_stress` 는 **자기 모듈의** 이름을 부른다 (P8 ③)★ 아래 두
+    # 자매 테스트는 `_load_clean_returns`(라우트에 남음) 경유라 `ar` 그대로다.
+    monkeypatch.setattr(sr, "_mock_returns_fallback", lambda *a, **k: None)
     out = allocation_stress(StressRequest(
         holdings={"005930": 100}, scenario="hist_2008_gfc"))
     assert out["mode"] == "historical"

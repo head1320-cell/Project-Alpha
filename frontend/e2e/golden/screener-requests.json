@@ -1,0 +1,81 @@
+{
+ "steps": {
+  "01 첫 화면": [
+   "GET /api/v1/screener/factor-field-map",
+   "GET /api/v1/screener/fields",
+   "GET /api/v1/screener/indicators",
+   "GET /api/v1/screener/universes",
+   "POST /api/v1/screener/run-advanced {\"ascending\":false,\"filter_ast\":{\"conditions\":[],\"groups\":[],\"logic\":\"AND\"},\"limit\":300,\"liquidity_floor\":\"off\",\"sort_by\":\"composite_score\",\"universe\":\"kospi200\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[],\"groups\":[],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"off\",\"sort_by\":\"composite_score\",\"universe\":\"kospi200\"}"
+  ],
+  "02 유니버스 코스닥 150": [
+   "POST /api/v1/screener/run-advanced {\"ascending\":false,\"filter_ast\":{\"conditions\":[],\"groups\":[],\"logic\":\"AND\"},\"limit\":300,\"liquidity_floor\":\"off\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[],\"groups\":[],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"off\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "03 팩터 시가총액": [
+   "GET /api/v1/screener/condition-tokens",
+   "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":0}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"off\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":0}],\"groups\":[],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"off\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "04 연산자 ≤": [
+   "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":0}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"off\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":0}],\"groups\":[],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"off\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "05 값 500000": [
+   "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"off\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000}],\"groups\":[],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"off\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "06 유동성 게이트 켜기": [
+   "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"relaxed\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced {\"ascending\":false,\"filter_ast\":{\"conditions\":[],\"groups\":[],\"logic\":\"AND\"},\"limit\":300,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000}],\"groups\":[],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "07 시총 첫 프리셋": [
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":10000}],\"groups\":[{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000}],\"groups\":[],\"logic\":\"AND\"}],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "08 팩터 PER": [
+   "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"relaxed\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"relaxed\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":10000}],\"groups\":[{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000},{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"AND\"}],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "09 조건식 팩터1 or 팩터2": [
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":10000}],\"groups\":[{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000},{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"OR\"}],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ],
+  "10 팩터1 지우기": [
+   "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"relaxed\",\"universe\":\"kosdaq150\"}",
+   "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":10000}],\"groups\":[{\"conditions\":[{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"AND\"}],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
+  ]
+ },
+ "handoff": {
+  "conditionSummary": [
+   "PER ≤ 50"
+  ],
+  "filterAst": {
+   "conditions": [
+    {
+     "field": "market_cap_억",
+     "kind": "field",
+     "op": "gte",
+     "value": 10000
+    }
+   ],
+   "groups": [
+    {
+     "conditions": [
+      {
+       "field": "per",
+       "kind": "field",
+       "op": "lte",
+       "value": 50
+      }
+     ],
+     "groups": [],
+     "logic": "AND"
+    }
+   ],
+   "logic": "AND"
+  },
+  "resultCount": 0,
+  "universe": "kosdaq150"
+ }
+}

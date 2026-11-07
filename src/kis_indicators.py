@@ -10,6 +10,44 @@ Applied Skills: skills/investment-strategy-framework.md
 import numpy as np
 import pandas as pd
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 백테스트 인과 캐시 (P1-1)
+# ─────────────────────────────────────────────────────────────────────────────
+# 백테스트는 같은 종목의 **접두사 슬라이스**로 지표를 봉마다 다시 계산한다. 실측
+# (small, GoldenCross): `calc_ma` 가 7,280회 3.29초로 실행의 45% 였다 — 전략은 마지막
+# 두 값만 쓰는데 매번 전체 구간을 다시 굴린다.
+#
+# 여기 있는 지표는 전부 **인과적**이다(위치 i 의 값이 [0..i] 에만 의존).
+# `ewm(adjust=False)` 도 처음부터의 재귀라 마찬가지다. 따라서
+#
+#     f(full)[:k]  ==  f(full[:k])
+#
+# 이 성립하고, 전체에서 한 번 계산해 앞부분을 자르면 된다.
+#
+# ★캐시는 백테스트 엔진이 붙여 줄 때만 쓴다★ 라이브 경로의 DataFrame 에는 이 표식이
+# 없으므로 기존 코드가 그대로 돈다 — 동작이 바뀌지 않는다.
+#
+# ★길이 가드를 캐시보다 먼저 본다★ 원래 함수들은 `len(df) < period` 면 **빈 Series**
+# 를 돌려준다. 캐시는 전체 길이로 계산하므로 그 분기를 건너뛰면 빈 Series 대신
+# NaN 이 채워진 값이 나가고, 호출부의 `.iloc[-2]` 가 IndexError 대신 NaN 을 받는다.
+# 조용한 동작 변경이므로 가드를 먼저 통과시킨다.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_BT_CACHE_ATTR = "_bt_causal_cache"
+
+
+def _causal(df: pd.DataFrame, key: tuple, compute) -> pd.Series | None:
+    """인과 지표를 전체에서 한 번 계산해 재사용. 캐시가 없으면 None(= 기존 경로)."""
+    cache = df.attrs.get(_BT_CACHE_ATTR)
+    if cache is None:
+        return None
+    memo = cache["memo"]
+    s = memo.get(key)
+    if s is None:
+        s = compute(cache["full"])
+        memo[key] = s
+    return s.iloc[:len(df)]
+
 
 def calc_ma(df: pd.DataFrame, period: int, column: str = "close") -> pd.Series:
     """
@@ -26,7 +64,9 @@ def calc_ma(df: pd.DataFrame, period: int, column: str = "close") -> pd.Series:
     if df.empty or len(df) < period:
         return pd.Series(dtype=float)
 
-    return df[column].rolling(window=period).mean()
+    cached = _causal(df, ("ma", period, column),
+                     lambda d: d[column].rolling(window=period).mean())
+    return cached if cached is not None else df[column].rolling(window=period).mean()
 
 
 def calc_std(df: pd.DataFrame, period: int, column: str = "close") -> pd.Series:
@@ -61,7 +101,9 @@ def calc_returns(df: pd.DataFrame, period: int) -> pd.Series:
     if df.empty or len(df) < period:
         return pd.Series(dtype=float)
 
-    return df["close"].pct_change(periods=period)
+    cached = _causal(df, ("returns", period),
+                     lambda d: d["close"].pct_change(periods=period))
+    return cached if cached is not None else df["close"].pct_change(periods=period)
 
 
 def calc_disparity(df: pd.DataFrame, period: int = 20) -> pd.Series:
@@ -98,6 +140,10 @@ def calc_volatility(df: pd.DataFrame, period: int = 10) -> pd.Series:
     if df.empty or len(df) < period + 1:
         return pd.Series(dtype=float)
 
+    cached = _causal(df, ("volatility", period),
+                     lambda d: d["close"].pct_change().rolling(window=period).std())
+    if cached is not None:
+        return cached
     daily_returns = df["close"].pct_change()
     return daily_returns.rolling(window=period).std()
 

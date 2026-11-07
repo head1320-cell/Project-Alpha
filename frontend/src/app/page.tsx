@@ -1,210 +1,166 @@
 /**
- * Landing — 루트(/) 첫 화면. Variant "Institutional Terminal" 랜딩 (레퍼런스 3종 합성):
- *   ① 미니멀 헤더(브랜드 + 앵커 내비) ② 분할 히어로(+ 라이브 백테스터 덱)
- *   ③ INTEGRATED TOOLSET — 5모듈 컬럼(설명 + mono 메트릭 + 미니 비주얼)
- *   ④ 플랫폼 지표 스트립(실제 수치) ⑤ 푸터(시스템 상태 + ©)
- * 셸(TerminalShell)은 "/"에서 렌더하지 않음 — 풀블리드. CTA → /dashboard.
- * 구조·데이터·카피는 정적(서버 컴포넌트). 모션은 소형 클라이언트 아일랜드(Reveal/CountUp/HeroDeckLive)
- * + globals.css 로만 — 모션 없어도(또는 reduced-motion) 현재 정적 디자인으로 완전 동작.
+ * 첫 화면(/) — BU8a (계획 "BU8 상세" · ADR-003). 셸 밖 브랜드 페이지, 서버 컴포넌트 + 움직이는 섬.
+ * ==========================================================================
+ * 사용자 결정: 히어로 = 서버가 지금 내는 답 한 문장 · 노란 연습용 띠는 영구 제거 · 남기는 띠는 히어로 · 스튜디오 · 리서치 경로뿐 ·
+ * ★포트폴리오 설계 스튜디오(캔버스)가 메인 도구라는 것을 설명하는 페이지★ · 모션·그래픽 대폭 강화(핀트·솔루션퀀트 같은 제품 랜딩) ·
+ * 개정 2: "더 다양하게 꾸미고, 히어로의 글·그림·바탕·움직임을 더 다듬어 줘".
+ *
+ *  ① 히어로 — 한 문장 + 단추 둘 + 근거 짚기 + 서버가 지금 내는 답(홈과 같은 `MacroAnswer`) + 아래로 걸친 스튜디오 기본 흐름 그림
+ *     (`HeroCanvas` — 노드 이름·선·관문은 서버 카탈로그 그대로, 숫자 없음). 바탕은 캔버스 점 무늬 + 포인터를 따라 밝아지는 점(`HeroFx`).
+ *  ② 스튜디오 둘러보기 — 실제 스튜디오 캡처 위에서 네 단계를 비추며 다가간다(`StudioTour`).
+ *  ③ 도구 허브(어두운 띠) — 다섯 도구가 실제 캔버스 노드 이름과 함께 스튜디오로 이어진다(`ToolHub`).
+ *  ④ 리서치 경로 — 참인 순서 1~7, 선이 그려지며 차례로 나타난다. 저장소 용어는 닫힌 자세히 안에만. 끝은 파란 마무리 카드.
+ * 모션은 전부 transform·opacity·선 그리기 · 스크롤 이벤트를 듣지 않는다(IntersectionObserver) · 감속 모션이면 처음부터 다 보인 채로 멈춰 있다.
  */
 
 import Link from "next/link";
-import Reveal from "@/components/landing/Reveal";
-import CountUp from "@/components/landing/CountUp";
-import HeroDeckLive from "@/components/landing/HeroDeckLive";
+import { MacroAnswer } from "@/widgets/home/MacroAnswer";
+import { EvidencePointer, HeroCanvas, HeroFx, InView, StudioTour, ToolHub } from "@/widgets/landing";
 
-const MODULES = [
-  {
-    n: "01", code: "SCREENER", title: "Screener", href: "/screener",
-    desc: "전 주권 ~2,700종목을 290+ 팩터로 멀티팩터 필터링. 자연어 검색(nl2ast)과 실시간 라이브 카운트.",
-    metrics: [["FACTORS", "290+"], ["UNIVERSE", "~2,700"], ["LIQUIDITY GATE", "3-LAYER"]],
-    visual: "bars",
-  },
-  {
-    n: "02", code: "BACKTEST", title: "Backtester", href: "/backtest",
-    desc: "룰 기반 조건식 엔진 — 팩터 함수 19종, 논리식(every·any·before), 체결가 13종, 시그널 벡터화.",
-    metrics: [["FILL MODELS", "13"], ["VECTORIZED", "142×"], ["SIGNAL BASIS", "T-1 / T"]],
-    visual: "line",
-  },
-  {
-    n: "03", code: "MACRO", title: "Macro Analysis", href: "/macro",
-    desc: "4-국면 매크로 레짐 + 금리·환율 실데이터(ECOS·FRED). 마켓타이밍 게이트로 백테스터와 직결.",
-    metrics: [["SOURCES", "ECOS·FRED"], ["REGIME", "4-QUADRANT"]],
-    visual: "heat",
-  },
-  {
-    n: "04", code: "COMPANY", title: "Company Analysis", href: "/insights",
-    desc: "DART 재무 PIT(공시시차 반영) 기반 심층 분석. RIM·DCF·DDM 내재가치와 점수 분해.",
-    metrics: [["FINANCIALS", "DART PIT"], ["VALUATION", "RIM·DCF·DDM"]],
-    visual: "rows",
-  },
-  {
-    n: "05", code: "RISK", title: "Risk Analysis", href: "/risk-tools",
-    desc: "시나리오 스트레스 테스트와 생존율 분석. 취약 종목 식별로 꼬리위험을 사전에 점검.",
-    metrics: [["SCENARIOS", "10+"], ["STRESS TEST", "LIVE"]],
-    visual: "gauge",
-  },
+/**
+ * 리서치 경로(스펙 v2.1 §5 의 근거 경로) — 실제로 순서가 있는 일이라 번호를 쓴다.
+ * `rec` 은 그 단계가 다음 단계로 넘기는 **신원**이다(값이 아니다). 저장소 용어라 닫힌 자세히 안에만 보인다.
+ */
+const PATH: { t: string; d: string; href?: string; rec: string }[] = [
+  { t: "지금 국면 보기", d: "경기와 물가가 어느 쪽으로 가는지 판정해요", href: "/macro", rec: "판정한 시각" },
+  { t: "판정 고정하기", d: "그때 본 판정을 기록으로 남겨요", rec: "snapshot_id" },
+  { t: "설계에서 불러오기", d: "값을 베끼지 않고 남긴 기록을 가리켜요", href: "/allocation?from=macro", rec: "값 대신 snapshot_id 를 가리켜요" },
+  { t: "타이밍 규칙", d: "언제 비중을 늘리고 줄일지 정해요", href: "/allocation?from=timing", rec: "name@version" },
+  { t: "충격 견뎌 보기", d: "정해 둔 충격 시나리오에 넣어 봐요", href: "/allocation?from=stress", rec: "pack_id@해시" },
+  { t: "비중 계산하고 돌려 보기", d: "비중을 정하고 지난 데이터로 돌려 봐요", href: "/allocation?from=optimize", rec: "run_id" },
+  { t: "결정 기록하기", d: "왜 그렇게 정했는지 남기고 나중에 되짚어요", href: "/allocation?from=journal", rec: "결정 → run_id → snapshot_id 사슬" },
 ];
 
-// 플랫폼 실측 지표 — 과장 없이 코드베이스에서 나온 수치
-const PLATFORM_STATS: Array<[string, string, string]> = [
-  ["SUPPORTED FACTORS", "290+", "카탈로그 344 중 220 + 자체 73"],
-  ["FILL PRICE MODELS", "13", "종가·시가·전일가·피벗·TWAP"],
-  ["CONDITION FUNCTIONS", "19", "+ 논리식 and·or·not·every·any·before"],
-  ["SIGNAL ENGINE", "142×", "전 봉 사전계산 벡터화 실측"],
-  ["TEST SUITE", "470", "passed — 등가성·회귀 고정"],
-  ["DATA SOURCES", "5", "KRX·DART·KIS·ECOS·FRED (무료)"],
-];
-
-// ─── 모듈 카드 미니 비주얼 (refs의 sparkline/heatmap/gauge 재현, 순수 SVG) ───
-// 요소에 lp-v* 클래스 → globals.css 가 .lp-module:hover 에서 작동시킴.
-function Visual({ kind }: { kind: string }) {
-  if (kind === "bars") {
-    const hs = [9, 14, 7, 18, 12, 22, 16, 27, 20, 31];
-    return (
-      <svg className="lp-visual" viewBox="0 0 120 36">
-        {hs.map((h, i) => (
-          <rect key={i} className="lp-vbar" x={i * 12 + 2} y={36 - h} width="7" height={h}
-            fill={i === hs.length - 1 ? "var(--bs-primary)" : "#d4d4d8"} />
-        ))}
-      </svg>
-    );
-  }
-  if (kind === "line") {
-    return (
-      <svg className="lp-visual" viewBox="0 0 120 36">
-        <polyline className="lp-vline2" points="2,32 22,31 42,32 62,28 82,29 102,24 118,26"
-          fill="none" stroke="#d4d4d8" strokeWidth="1.2" pathLength={1} />
-        <polyline className="lp-vline" points="2,30 22,26 42,29 62,18 82,21 102,10 118,13"
-          fill="none" stroke="var(--bs-primary)" strokeWidth="1.6" pathLength={1} />
-      </svg>
-    );
-  }
-  if (kind === "heat") {
-    const cells = [0.35, 0.7, 1, 0.25, 0.5, 0.2, 1, 0.45, 0.3, 0.6, 0.15, 0.4];
-    return (
-      <svg className="lp-visual" viewBox="0 0 120 36">
-        {cells.map((o, i) => (
-          <rect key={i} className="lp-vheat" x={(i % 4) * 30 + 1} y={Math.floor(i / 4) * 12 + 1}
-            width="27" height="10" fill="var(--bs-primary)" opacity={0.12 + o * 0.55} />
-        ))}
-      </svg>
-    );
-  }
-  if (kind === "rows") {
-    return (
-      <svg className="lp-visual" viewBox="0 0 120 36">
-        {[6, 16, 26].map((y, i) => (
-          <g key={i}>
-            <rect x="2" y={y} width={86 - i * 18} height="3.5" fill="#e4e4e7" />
-            <rect className="lp-vrow" x="2" y={y} width={40 - i * 8} height="3.5" fill="var(--bs-primary)" opacity="0.65" />
-          </g>
-        ))}
-      </svg>
-    );
-  }
-  // gauge
+function Brand() {
   return (
-    <svg className="lp-visual" viewBox="0 0 120 36">
-      <circle cx="60" cy="18" r="13" fill="none" stroke="#e4e4e7" strokeWidth="2.5" />
-      <path className="lp-vgauge" d="M 60 5 A 13 13 0 0 1 72.3 22" fill="none" stroke="var(--bs-primary)" strokeWidth="2.5" pathLength={1} />
-    </svg>
+    <span className="ld-brand">
+      <span className="ld-logo" aria-hidden>
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
+      </span>
+      Project Alpha
+    </span>
   );
 }
 
 export default function Landing() {
   return (
-    <div className="lp-root">
-      {/* JS 비활성 시 등장 애니메이션 콘텐츠가 숨겨지지 않도록 폴백 */}
-      <noscript>
-        <style>{".lp-reveal,.lp-stagger>*{opacity:1!important;transform:none!important}"}</style>
-      </noscript>
-
-      {/* ─── Header ─── */}
-      <header className="lp-header">
-        <div className="lp-brand">
-          <span className="lp-logo" aria-hidden>
-            <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
-          </span>
-          Project Alpha
+    <div className="ld">
+      <header className="ld-head">
+        <div className="ld-wrap ld-head-in">
+          <Brand />
+          <Link href="/login" className="ld-login">로그인</Link>
         </div>
-        <nav className="lp-nav">
-          <a href="#toolset">MODULES</a>
-          <a href="#metrics">METRICS</a>
-        </nav>
       </header>
 
-      {/* ─── Hero ─── */}
-      <section className="lp-hero">
-        <Reveal className="lp-hero-left" stagger>
-          <div className="lp-eyebrow lp-mono">KOREAN EQUITY / QUANT ACCESS</div>
-          <h1>
-            The operating<br />system for<br />quantitative<br />research.<i className="lp-caret" aria-hidden />
-          </h1>
-          <div className="lp-cta-row">
-            <Link href="/dashboard" className="lp-launch">
-              Dashboard<span className="lp-launch-arrow" aria-hidden>→</span>
-            </Link>
-          </div>
-        </Reveal>
-        <div className="lp-hero-visual">
-          <span className="lp-hero-glow" aria-hidden />
-          <HeroDeckLive />
-        </div>
-      </section>
-
-      {/* ─── Integrated Toolset ─── */}
-      <section className="lp-toolset" id="toolset">
-        <div className="lp-section-head">
-          <span className="lp-mono">INTEGRATED TOOLSET</span>
-          <span className="lp-mono">01 — 05</span>
-        </div>
-        <Reveal className="lp-modules" stagger>
-          {MODULES.map((m) => (
-            <Link key={m.n} href={m.href} className="lp-module">
-              <div className="lp-mono lp-module-code">{m.n}/{m.code}</div>
-              <h3>{m.title}</h3>
-              <p>{m.desc}</p>
-              <div className="lp-module-metrics">
-                {m.metrics.map(([k, v]) => (
-                  <div key={k} className="lp-metric-row lp-mono">
-                    <span>{k}</span><span className="lp-metric-val">{v}</span>
-                  </div>
-                ))}
+      <main>
+        {/* ① 히어로 — 처음 열 때 한 번 차례로 떠오른다(제목 낱말 → 설명 → 단추 → 근거 짚기 → 답 카드 → 아래 스튜디오 그림이 그려진다). */}
+        <section className="ld-hero" aria-labelledby="ld-h1">
+          <HeroFx />
+          <div className="ld-wrap">
+            <div className="ld-hero-in">
+              <div className="ld-hero-copy">
+                <h1 id="ld-h1">
+                  <span className="ld-line"><span style={{ ["--i" as string]: 0 }}>근거가</span> <span style={{ ["--i" as string]: 1 }}>보이는</span></span>
+                  <span className="ld-line"><span style={{ ["--i" as string]: 2 }}>포트폴리오</span> <span style={{ ["--i" as string]: 3 }}>설계</span></span>
+                </h1>
+                <p className="ld-lede ld-rise" style={{ ["--i" as string]: 3 }}>
+                  종목 고르기부터 위험 점검까지 노드를 선으로 이어 하나의 설계로 만들어요. 숫자마다 어디서 왔고 무엇을 재지 않았는지 함께 붙어요.
+                </p>
+                <div className="ld-hero-cta ld-rise" style={{ ["--i" as string]: 4 }}>
+                  <Link href="/allocation" className="tx-btn tx-btn--main ld-btn">포트폴리오 설계 시작</Link>
+                  <Link href="/dashboard" className="tx-btn tx-btn--sub ld-btn">홈으로</Link>
+                </div>
+                <EvidencePointer className="ld-rise" style={{ ["--i" as string]: 5 }} />
               </div>
-              <Visual kind={m.visual} />
-              <span className="lp-module-open lp-mono" aria-hidden>OPEN ↗</span>
-            </Link>
-          ))}
-        </Reveal>
-      </section>
-
-      {/* ─── Platform Metrics ─── */}
-      <section className="lp-stats" id="metrics">
-        <div className="lp-section-head">
-          <span className="lp-mono">PLATFORM METRICS</span>
-          <span className="lp-mono">MEASURED, NOT MARKETED</span>
-        </div>
-        <Reveal className="lp-stats-grid" stagger>
-          {PLATFORM_STATS.map(([k, v, sub]) => (
-            <div key={k} className="lp-stat">
-              <div className="lp-mono lp-stat-key">{k}</div>
-              <div className="lp-stat-val"><CountUp value={v} /></div>
-              <div className="lp-stat-sub">{sub}</div>
+              <div className="ld-live-wrap">
+                <div className="ld-live ld-rise" style={{ ["--i" as string]: 5 }}>
+                  <p className="ld-live-k"><span className="ld-live-dot" aria-hidden />지금 서버가 내는 답</p>
+                  <MacroAnswer className="ld-live-a" action={<Link href="/macro" className="tx-btn tx-btn--sub">매크로 분석 보기</Link>} />
+                  <p className="ld-live-note">홈·매크로 분석과 같은 계산이에요. 이 화면을 열 때마다 서버에 다시 물어봐요.</p>
+                </div>
+              </div>
             </div>
-          ))}
-        </Reveal>
-      </section>
+            <HeroCanvas />
+          </div>
+        </section>
 
-      {/* ─── Footer ─── */}
-      <Reveal as="footer" className="lp-footer" stagger>
-        <div className="lp-mono lp-footer-left">
-          <i className="lp-status-dot" aria-hidden />SYSTEM OPERATIONAL · PROJECT ALPHA
-        </div>
-        <div className="lp-mono lp-footer-right">
-          © 2026 PROJECT ALPHA SYSTEMS · BUILT FOR ACCURACY
-        </div>
-      </Reveal>
+        {/* ② 스튜디오 둘러보기 — 메인 도구를 실제 화면으로 설명한다. */}
+        <section className="ld-band ld-studio" aria-labelledby="ld-studio-h">
+          <div className="ld-wrap">
+            <InView className="ld-hg">
+              <h2 id="ld-studio-h" className="ld-h2">포트폴리오 설계 스튜디오</h2>
+              <p className="ld-sub">종목부터 점검까지 노드로 이어 하나의 설계를 만들어요. 네 단계를 실제 화면에서 짚어 볼게요.</p>
+            </InView>
+            <StudioTour />
+          </div>
+        </section>
+
+        {/* ③ 도구 허브 — 어두운 띠. 다섯 도구가 스튜디오로 이어진다(실제 캔버스 노드 이름과 함께). */}
+        <section className="ld-band ld-band--ink" aria-labelledby="ld-hub-h">
+          <div className="ld-wrap">
+            <InView className="ld-hg">
+              <h2 id="ld-hub-h" className="ld-h2">모든 도구가 스튜디오로 이어져요</h2>
+              <p className="ld-sub">다섯 도구는 따로 써도 되고, 스튜디오에서는 노드 하나로 들어가요.</p>
+            </InView>
+            <ToolHub />
+          </div>
+        </section>
+
+        {/* ④ 리서치 경로 — 참인 순서(1~7). 화면에 들어오면 선이 그려지며 단계가 차례로 나타난다. */}
+        <section className="ld-band ld-path" aria-labelledby="ld-path-h">
+          <div className="ld-wrap">
+            <InView className="ld-hg">
+              <h2 id="ld-path-h" className="ld-h2">리서치는 이렇게 흘러가요</h2>
+              <p className="ld-sub">앞 단계는 값을 베껴 넘기지 않고 기록 번호만 넘겨요. 그래서 나중에 열어도 그때 본 근거를 가리켜요.</p>
+            </InView>
+            <InView as="ol" className="ld-steps">
+              {PATH.map((s, i) => {
+                const inner = (
+                  <>
+                    <span className="ld-step-n">{i + 1}</span>
+                    <span className="ld-step-t">{s.t}</span>
+                    <span className="ld-step-d">{s.d}</span>
+                  </>
+                );
+                return (
+                  <li key={s.t} className="ld-step" style={{ ["--i" as string]: i }}>
+                    {s.href ? <Link href={s.href} className="ld-step-a">{inner}</Link> : <div className="ld-step-a">{inner}</div>}
+                  </li>
+                );
+              })}
+            </InView>
+            <p className="ld-note">경제 판단이 타이밍 규칙을 덮어쓰지 않아요. 한 방향으로만 얹혀서, 끄면 결과가 원래대로 돌아와요.</p>
+            <details className="ld-rec">
+              <summary>단계마다 남는 기록 보기</summary>
+              <dl className="ld-rec-list">
+                {PATH.map((s) => (
+                  <div key={s.t} className="ld-rec-row"><dt>{s.t}</dt><dd><code>{s.rec}</code></dd></div>
+                ))}
+              </dl>
+            </details>
+            {/* 마무리 카드 — 같은 주 단추(같은 이름 · 같은 곳). 오른쪽 작은 흐름 그림은 장식이다(aria-hidden). */}
+            <InView className="ld-end">
+              <div className="ld-end-copy">
+                <h3 className="ld-end-t">종목 하나부터 설계를 시작해 보세요</h3>
+                <p className="ld-end-d">노드 하나를 놓으면 절차 탭이 다음에 붙일 것을 알려 줘요. 숫자마다 근거가 함께 남아요.</p>
+                <Link href="/allocation" className="tx-btn tx-btn--main ld-btn">포트폴리오 설계 시작</Link>
+              </div>
+              <svg className="ld-end-art" viewBox="0 0 260 140" aria-hidden>
+                <path className="ld-end-w" d="M 52 40 C 100 40, 100 92, 148 92" pathLength={1} />
+                <path className="ld-end-w" d="M 52 104 C 100 104, 100 92, 148 92" pathLength={1} />
+                <path className="ld-end-w" d="M 172 92 C 196 92, 196 70, 220 70" pathLength={1} />
+                <path className="ld-end-p" d="M 52 40 C 100 40, 100 92, 148 92" pathLength={1} />
+                <path className="ld-end-p" d="M 52 104 C 100 104, 100 92, 148 92" pathLength={1} style={{ animationDelay: "1.1s" }} />
+                <path className="ld-end-p" d="M 172 92 C 196 92, 196 70, 220 70" pathLength={1} style={{ animationDelay: "0.6s" }} />
+                <rect className="ld-end-n" x="14" y="26" width="38" height="28" rx="9" />
+                <rect className="ld-end-n" x="14" y="90" width="38" height="28" rx="9" />
+                <rect className="ld-end-n ld-end-n--core" x="148" y="76" width="24" height="32" rx="9" />
+                <rect className="ld-end-n" x="220" y="56" width="30" height="28" rx="9" />
+              </svg>
+            </InView>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

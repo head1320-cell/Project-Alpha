@@ -28,6 +28,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      args:
+        # 빌드 식별자 (AM6). `.dockerignore` 가 `.git` 을 빼므로 컨테이너 안에서는
+        # 측정이 불가능하고, 이 주입이 유일한 경로다. 비워 두면 기록이 미상으로
+        # 남는다 — ★조용한 "dev" 로 남지는 않는다★.
+        #   GIT_SHA=$(git rev-parse HEAD) docker compose build backend
+        GIT_SHA: ${GIT_SHA:-}
     container_name: ficc_backend
     restart: unless-stopped
     ports:

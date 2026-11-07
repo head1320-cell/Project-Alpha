@@ -306,14 +306,19 @@ class LiquidityCapacityEstimator:
 
     @staticmethod
     def _fallback_capacity(sid) -> dict:
-        """capacity 추정 실패 시 무한대 가정 (제약 없음)."""
+        """capacity 를 잴 수 없을 때 — ★무한대가 아니라 모름★ (BL3 M8).
+
+        예전에는 `capacity_krw: inf` 였다(엄격한 JSON 이 아니어서 `/capacity/estimate` 응답이 깨지고, 값 자체가 '무제약' 을
+        지어냈다). 소비자(`apply_capacity_to_weights`·`realism_engine`)는 `available` 을 먼저 보고 건너뛰므로 동작은 같다.
+        """
         return {
             "strategy_id":         sid,
-            "capacity_krw":        float("inf"),
+            "capacity_krw":        None,
             "n_universe_tickers":  0,
-            "avg_adv_krw":         0,
+            "avg_adv_krw":         None,
             "available":           False,
-            "message":             "capacity 데이터 부족 — 무제약 가정",
+            "message":             "capacity 데이터 부족 — 제약을 걸지 않았어요(용량 모름)",
+            "reason":              "전략의 종목 목록이나 거래대금(ADV)을 찾지 못했어요.",
         }
 
     @staticmethod

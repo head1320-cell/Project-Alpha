@@ -21,7 +21,7 @@ def test_factors_ingest_dedups_codes(monkeypatch):
 
     monkeypatch.setattr(sdb, "ingest_universe", fake_ingest)
 
-    from main_api import _ingest_run
+    from src.api.data_routes import _ingest_run
     _ingest_run("factors")
 
     flat = [c for call in seen_calls for c in call]

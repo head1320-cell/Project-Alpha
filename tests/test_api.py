@@ -12,6 +12,20 @@ from scipy.stats import norm
 client = TestClient(app)
 
 
+# ─── 인증 (P-1) ──────────────────────────────────────────────────────────────
+# 돈·주문 라우트는 이제 admin 토큰을 요구한다. ★테스트 전용 우회문을 만들지 않는다★ —
+# `SKIP_AUTH` 같은 환경변수를 두면 그것이 곧 운영의 뒷문이 된다. 테스트도 진짜로
+# 로그인한다. 토큰이 없으면 401 이 나므로 이 헬퍼가 실패하면 그 자체가 신호다.
+def admin_headers() -> dict[str, str]:
+    """부트스트랩된 admin 으로 로그인해 Bearer 헤더를 만든다."""
+    import src.database as _dbmod
+    _dbmod.init_db()  # idempotent — admin 이 없으면 만든다
+    res = client.post("/api/v1/auth/login",
+                      json={"username": "admin", "password": _dbmod.ADMIN_PASSWORD})
+    assert res.status_code == 200, f"테스트용 로그인 실패: {res.status_code} {res.text}"
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
 # ─── Health ──────────────────────────────────────────────────────────────────
 def test_root():
     res = client.get("/")
@@ -112,12 +126,12 @@ def test_aggregate_var():
 # ─── Auto-trading toggle ─────────────────────────────────────────────────────
 def test_auto_trading_toggle():
     payload = {"auto_mode": True, "var_limit": 3_000_000, "username": "admin"}
-    res = client.post("/toggle-auto-trading", json=payload)
+    res = client.post("/toggle-auto-trading", json=payload, headers=admin_headers())
     assert res.status_code == 200
     assert res.json()["auto_mode"] is True
 
     payload["auto_mode"] = False
-    res = client.post("/toggle-auto-trading", json=payload)
+    res = client.post("/toggle-auto-trading", json=payload, headers=admin_headers())
     assert res.json()["auto_mode"] is False
 
 
@@ -127,7 +141,7 @@ def test_account_holdings_uses_sanctioned_client(monkeypatch):
     import src.execution.kis_client as kis_mod
     mock_client = kis_mod.MockKISClient()
     monkeypatch.setattr(kis_mod, "get_kis_client", lambda: mock_client)
-    res = client.get("/api/v1/account/holdings")
+    res = client.get("/api/v1/account/holdings", headers=admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert data["mode"] == "mock"
@@ -140,7 +154,7 @@ def test_account_balance_uses_sanctioned_client(monkeypatch):
     import src.execution.kis_client as kis_mod
     mock_client = kis_mod.MockKISClient(initial_cash=50_000_000)
     monkeypatch.setattr(kis_mod, "get_kis_client", lambda: mock_client)
-    res = client.get("/api/v1/account/balance")
+    res = client.get("/api/v1/account/balance", headers=admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert data["mode"] == "mock"
@@ -175,7 +189,7 @@ def test_orders_execute_dry_run_never_places_real_order(monkeypatch):
 
     res = client.post("/api/v1/orders/execute", json={
         "stock_code": "005930", "stock_name": "삼성전자", "action": "buy", "strength": 1.0,
-    })
+    }, headers=admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert data["mode"] == "dry_run"
@@ -190,7 +204,8 @@ def test_orders_execute_hold_action_blocked(monkeypatch):
     import src.execution.kis_client as kis_mod
     monkeypatch.setattr(kis_mod, "get_kis_client", lambda: kis_mod.MockKISClient())
 
-    res = client.post("/api/v1/orders/execute", json={"stock_code": "005930", "action": "hold"})
+    res = client.post("/api/v1/orders/execute", json={"stock_code": "005930", "action": "hold"},
+                      headers=admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert data["blocked_by"] == "hold"
@@ -204,7 +219,7 @@ def test_orders_batch_dry_run(monkeypatch):
     res = client.post("/api/v1/orders/batch", json={"orders": [
         {"stock_code": "005930", "action": "buy", "strength": 1.0},
         {"stock_code": "000660", "action": "buy", "strength": 1.0},
-    ]})
+    ]}, headers=admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert data["total"] == 2

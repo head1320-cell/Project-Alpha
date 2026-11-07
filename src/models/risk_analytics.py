@@ -184,19 +184,27 @@ def rolling_sharpe(
 
     rolling_mean = excess.rolling(window).mean()
     rolling_std = returns.rolling(window).std()
-    rolling_sh = (rolling_mean / rolling_std * np.sqrt(252)).dropna()
+    rolling_sh = (rolling_mean / rolling_std * np.sqrt(252)).replace([np.inf, -np.inf], np.nan).dropna()
 
     dates = rolling_sh.index.strftime("%Y-%m-%d").tolist() \
         if hasattr(rolling_sh.index, "strftime") else list(range(len(rolling_sh)))
+
+    # ★값이 없으면 0 이 아니라 '없음' + 사유★ (BL3 M3) — 예전에는 창보다 짧은 계열에 `current: 0` 을 냈다.
+    if len(rolling_sh) == 0:
+        reason = (f"수익률이 {len(returns)}일이라 {window}일 창을 한 번도 채우지 못했어요." if len(returns) < window
+                  else "창마다 변동성이 0 이라 샤프 비율을 정의할 수 없어요.")
+        return {"dates": [], "values": [], "window": window,
+                "current": None, "mean": None, "min": None, "max": None, "reason": reason}
 
     return {
         "dates": dates,
         "values": [round(float(v), 4) for v in rolling_sh.values],
         "window": window,
-        "current": round(float(rolling_sh.iloc[-1]), 4) if len(rolling_sh) > 0 else 0,
+        "current": round(float(rolling_sh.iloc[-1]), 4),
         "mean": round(float(rolling_sh.mean()), 4),
         "min": round(float(rolling_sh.min()), 4),
         "max": round(float(rolling_sh.max()), 4),
+        "reason": None,
     }
 
 

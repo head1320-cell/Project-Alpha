@@ -1,0 +1,4261 @@
+{
+ "steps": {
+  "01-load": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe"
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    }
+   ]
+  },
+  "01b-waypoint": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    }
+   ]
+  },
+  "01c-resize": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    }
+   ]
+  },
+  "02-duplicate": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 996,
+      "y": 546
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    }
+   ]
+  },
+  "03-add": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 996,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 759,
+      "y": 231
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    }
+   ]
+  },
+  "03b-layout": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    }
+   ]
+  },
+  "04-connect": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  "05-param": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  "06-align": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  "07-group": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  "08-branch": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "branches": [
+    {
+     "id": "br_mvk7e2o04",
+     "label": "갈래 B",
+     "root": "estimate__b",
+     "of_root": "estimate",
+     "map": {
+      "estimate__b": "estimate",
+      "optimizer__b": "optimizer",
+      "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+     }
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    },
+    {
+     "id": "estimate__b",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 1108
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1108
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1526
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02__b",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 1526
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->estimate__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+     "source": "optimizer__b",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02__b",
+     "target_port": "weights"
+    }
+   ]
+  },
+  "09-paste": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "branches": [
+    {
+     "id": "br_mvk7e2o04",
+     "label": "갈래 B",
+     "root": "estimate__b",
+     "of_root": "estimate",
+     "map": {
+      "estimate__b": "estimate",
+      "optimizer__b": "optimizer",
+      "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+     }
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    },
+    {
+     "id": "estimate__b",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 1108
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1108
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1526
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02__b",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 1526
+     }
+    },
+    {
+     "id": "universe_mvk7e2o05",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 48,
+      "y": 48
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->estimate__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+     "source": "optimizer__b",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02__b",
+     "target_port": "weights"
+    }
+   ]
+  },
+  "11-draft": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "branches": [
+    {
+     "id": "br_mvk7e2o04",
+     "label": "갈래 B",
+     "root": "estimate__b",
+     "of_root": "estimate",
+     "map": {
+      "estimate__b": "estimate",
+      "optimizer__b": "optimizer",
+      "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+     }
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    },
+    {
+     "id": "estimate__b",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 1108
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1108
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1526
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02__b",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 1526
+     }
+    },
+    {
+     "id": "universe_mvk7e2o05",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 48,
+      "y": 48
+     }
+    },
+    {
+     "id": "backtest",
+     "type": "backtest",
+     "params": {
+      "cost_bps": 30
+     },
+     "position": {
+      "x": 640,
+      "y": 512
+     },
+     "said": {
+      "cost_bps": "0.3%"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->estimate__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+     "source": "optimizer__b",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02__b",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->backtest.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "backtest",
+     "target_port": "returns"
+    }
+   ]
+  },
+  "12-layout": {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "branches": [
+    {
+     "id": "br_mvk7e2o04",
+     "label": "갈래 B",
+     "root": "estimate__b",
+     "of_root": "estimate",
+     "map": {
+      "estimate__b": "estimate",
+      "optimizer__b": "optimizer",
+      "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+     }
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 1280,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate__b",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 986
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1092
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1638
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02__b",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 1280,
+      "y": 394
+     }
+    },
+    {
+     "id": "universe_mvk7e2o05",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    },
+    {
+     "id": "backtest",
+     "type": "backtest",
+     "params": {
+      "cost_bps": 30
+     },
+     "position": {
+      "x": 640,
+      "y": 512
+     },
+     "said": {
+      "cost_bps": "0.3%"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->estimate__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+     "source": "optimizer__b",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02__b",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->backtest.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "backtest",
+     "target_port": "returns"
+    }
+   ]
+  }
+ },
+ "ladder": [
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "branches": [
+    {
+     "id": "br_mvk7e2o04",
+     "label": "갈래 B",
+     "root": "estimate__b",
+     "of_root": "estimate",
+     "map": {
+      "estimate__b": "estimate",
+      "optimizer__b": "optimizer",
+      "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+     }
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    },
+    {
+     "id": "estimate__b",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 1108
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1108
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1526
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02__b",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 1526
+     }
+    },
+    {
+     "id": "universe_mvk7e2o05",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 48,
+      "y": 48
+     }
+    },
+    {
+     "id": "backtest",
+     "type": "backtest",
+     "params": {
+      "cost_bps": 30
+     },
+     "position": {
+      "x": 640,
+      "y": 512
+     },
+     "said": {
+      "cost_bps": "0.3%"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->estimate__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+     "source": "optimizer__b",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02__b",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->backtest.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "backtest",
+     "target_port": "returns"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "branches": [
+    {
+     "id": "br_mvk7e2o04",
+     "label": "갈래 B",
+     "root": "estimate__b",
+     "of_root": "estimate",
+     "map": {
+      "estimate__b": "estimate",
+      "optimizer__b": "optimizer",
+      "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+     }
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    },
+    {
+     "id": "estimate__b",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 1108
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1108
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1526
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02__b",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 1526
+     }
+    },
+    {
+     "id": "universe_mvk7e2o05",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 48,
+      "y": 48
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->estimate__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+     "source": "optimizer__b",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02__b",
+     "target_port": "weights"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "branches": [
+    {
+     "id": "br_mvk7e2o04",
+     "label": "갈래 B",
+     "root": "estimate__b",
+     "of_root": "estimate",
+     "map": {
+      "estimate__b": "estimate",
+      "optimizer__b": "optimizer",
+      "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+     }
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    },
+    {
+     "id": "estimate__b",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 1108
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1108
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01__b",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 1526
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02__b",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 1526
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    },
+    {
+     "id": "returns.returns->estimate__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+     "source": "estimate__b",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01__b",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+     "source": "optimizer__b",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02__b",
+     "target_port": "weights"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "groups": [
+    {
+     "id": "grp_mvk7e2o03",
+     "label": "묶음 1",
+     "members": [
+      "optimizer_mvk7e2o01",
+      "risk_mvk7e2o02"
+     ],
+     "collapsed": false
+    }
+   ],
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 418
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {
+      "lookback_days": 1260
+     },
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    },
+    {
+     "id": "optimizer.weights->risk_mvk7e2o02.weights",
+     "source": "optimizer",
+     "source_port": "weights",
+     "target": "risk_mvk7e2o02",
+     "target_port": "weights"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 0,
+      "y": 418
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 996,
+      "y": 546
+     }
+    },
+    {
+     "id": "risk_mvk7e2o02",
+     "type": "risk",
+     "params": {},
+     "position": {
+      "x": 759,
+      "y": 231
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer_mvk7e2o01",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 996,
+      "y": 546
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    },
+    {
+     "id": "returns.returns->optimizer_mvk7e2o01.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer_mvk7e2o01",
+     "target_port": "belief"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     },
+     "size": {
+      "slot_h": 266
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe",
+     "waypoints": [
+      {
+       "x": 275,
+       "y": 55
+      }
+     ]
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    }
+   ]
+  },
+  {
+   "format": "project-alpha.portfolio-graph",
+   "version": 1,
+   "nodes": [
+    {
+     "id": "universe",
+     "type": "universe",
+     "params": {
+      "tickers": [
+       "005930",
+       "000660"
+      ]
+     },
+     "position": {
+      "x": 0,
+      "y": 0
+     }
+    },
+    {
+     "id": "returns",
+     "type": "returns",
+     "params": {},
+     "position": {
+      "x": 320,
+      "y": 0
+     }
+    },
+    {
+     "id": "estimate",
+     "type": "estimate",
+     "params": {},
+     "position": {
+      "x": 640,
+      "y": 0
+     }
+    },
+    {
+     "id": "optimizer",
+     "type": "optimizer",
+     "params": {},
+     "position": {
+      "x": 960,
+      "y": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "universe.universe->returns.universe",
+     "source": "universe",
+     "source_port": "universe",
+     "target": "returns",
+     "target_port": "universe"
+    },
+    {
+     "id": "returns.returns->estimate.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "estimate",
+     "target_port": "returns"
+    },
+    {
+     "id": "returns.returns->optimizer.returns",
+     "source": "returns",
+     "source_port": "returns",
+     "target": "optimizer",
+     "target_port": "returns"
+    },
+    {
+     "id": "estimate.belief->optimizer.belief",
+     "source": "estimate",
+     "source_port": "belief",
+     "target": "optimizer",
+     "target_port": "belief"
+    }
+   ]
+  }
+ ],
+ "export": {
+  "format": "project-alpha.portfolio-graph",
+  "version": 1,
+  "meta": {
+   "exported_at": "2026-10-23T00:00:00.000Z"
+  },
+  "groups": [
+   {
+    "id": "grp_mvk7e2o03",
+    "label": "묶음 1",
+    "members": [
+     "optimizer_mvk7e2o01",
+     "risk_mvk7e2o02"
+    ],
+    "collapsed": false
+   }
+  ],
+  "branches": [
+   {
+    "id": "br_mvk7e2o04",
+    "label": "갈래 B",
+    "root": "estimate__b",
+    "of_root": "estimate",
+    "map": {
+     "estimate__b": "estimate",
+     "optimizer__b": "optimizer",
+     "optimizer_mvk7e2o01__b": "optimizer_mvk7e2o01",
+     "risk_mvk7e2o02__b": "risk_mvk7e2o02"
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "universe",
+    "type": "universe",
+    "params": {
+     "tickers": [
+      "005930",
+      "000660"
+     ]
+    },
+    "position": {
+     "x": 0,
+     "y": 0
+    }
+   },
+   {
+    "id": "returns",
+    "type": "returns",
+    "params": {
+     "lookback_days": 1260
+    },
+    "position": {
+     "x": 320,
+     "y": 0
+    }
+   },
+   {
+    "id": "estimate",
+    "type": "estimate",
+    "params": {},
+    "position": {
+     "x": 640,
+     "y": 0
+    },
+    "size": {
+     "slot_h": 266
+    }
+   },
+   {
+    "id": "optimizer",
+    "type": "optimizer",
+    "params": {},
+    "position": {
+     "x": 960,
+     "y": 0
+    }
+   },
+   {
+    "id": "optimizer_mvk7e2o01",
+    "type": "optimizer",
+    "params": {},
+    "position": {
+     "x": 960,
+     "y": 546
+    }
+   },
+   {
+    "id": "risk_mvk7e2o02",
+    "type": "risk",
+    "params": {},
+    "position": {
+     "x": 1280,
+     "y": 0
+    }
+   },
+   {
+    "id": "estimate__b",
+    "type": "estimate",
+    "params": {},
+    "position": {
+     "x": 640,
+     "y": 986
+    },
+    "size": {
+     "slot_h": 266
+    }
+   },
+   {
+    "id": "optimizer__b",
+    "type": "optimizer",
+    "params": {},
+    "position": {
+     "x": 960,
+     "y": 1092
+    }
+   },
+   {
+    "id": "optimizer_mvk7e2o01__b",
+    "type": "optimizer",
+    "params": {},
+    "position": {
+     "x": 960,
+     "y": 1638
+    }
+   },
+   {
+    "id": "risk_mvk7e2o02__b",
+    "type": "risk",
+    "params": {},
+    "position": {
+     "x": 1280,
+     "y": 394
+    }
+   },
+   {
+    "id": "universe_mvk7e2o05",
+    "type": "universe",
+    "params": {
+     "tickers": [
+      "005930",
+      "000660"
+     ]
+    },
+    "position": {
+     "x": 0,
+     "y": 418
+    }
+   },
+   {
+    "id": "backtest",
+    "type": "backtest",
+    "params": {
+     "cost_bps": 30
+    },
+    "position": {
+     "x": 640,
+     "y": 512
+    },
+    "said": {
+     "cost_bps": "0.3%"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "id": "universe.universe->returns.universe",
+    "source": "universe",
+    "source_port": "universe",
+    "target": "returns",
+    "target_port": "universe",
+    "waypoints": [
+     {
+      "x": 275,
+      "y": 55
+     }
+    ]
+   },
+   {
+    "id": "returns.returns->estimate.returns",
+    "source": "returns",
+    "source_port": "returns",
+    "target": "estimate",
+    "target_port": "returns"
+   },
+   {
+    "id": "returns.returns->optimizer.returns",
+    "source": "returns",
+    "source_port": "returns",
+    "target": "optimizer",
+    "target_port": "returns"
+   },
+   {
+    "id": "estimate.belief->optimizer.belief",
+    "source": "estimate",
+    "source_port": "belief",
+    "target": "optimizer",
+    "target_port": "belief"
+   },
+   {
+    "id": "returns.returns->optimizer_mvk7e2o01.returns",
+    "source": "returns",
+    "source_port": "returns",
+    "target": "optimizer_mvk7e2o01",
+    "target_port": "returns"
+   },
+   {
+    "id": "estimate.belief->optimizer_mvk7e2o01.belief",
+    "source": "estimate",
+    "source_port": "belief",
+    "target": "optimizer_mvk7e2o01",
+    "target_port": "belief"
+   },
+   {
+    "id": "optimizer.weights->risk_mvk7e2o02.weights",
+    "source": "optimizer",
+    "source_port": "weights",
+    "target": "risk_mvk7e2o02",
+    "target_port": "weights"
+   },
+   {
+    "id": "returns.returns->estimate__b.returns",
+    "source": "returns",
+    "source_port": "returns",
+    "target": "estimate__b",
+    "target_port": "returns"
+   },
+   {
+    "id": "returns.returns->optimizer__b.returns",
+    "source": "returns",
+    "source_port": "returns",
+    "target": "optimizer__b",
+    "target_port": "returns"
+   },
+   {
+    "id": "estimate__b.belief->optimizer__b.belief",
+    "source": "estimate__b",
+    "source_port": "belief",
+    "target": "optimizer__b",
+    "target_port": "belief"
+   },
+   {
+    "id": "returns.returns->optimizer_mvk7e2o01__b.returns",
+    "source": "returns",
+    "source_port": "returns",
+    "target": "optimizer_mvk7e2o01__b",
+    "target_port": "returns"
+   },
+   {
+    "id": "estimate__b.belief->optimizer_mvk7e2o01__b.belief",
+    "source": "estimate__b",
+    "source_port": "belief",
+    "target": "optimizer_mvk7e2o01__b",
+    "target_port": "belief"
+   },
+   {
+    "id": "optimizer__b.weights->risk_mvk7e2o02__b.weights",
+    "source": "optimizer__b",
+    "source_port": "weights",
+    "target": "risk_mvk7e2o02__b",
+    "target_port": "weights"
+   },
+   {
+    "id": "returns.returns->backtest.returns",
+    "source": "returns",
+    "source_port": "returns",
+    "target": "backtest",
+    "target_port": "returns"
+   }
+  ]
+ },
+ "ids": {
+  "dup": "optimizer_mvk7e2o01",
+  "risk": "risk_mvk7e2o02"
+ }
+}

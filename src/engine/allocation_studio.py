@@ -6,7 +6,8 @@ Two Sigma Venn 벤치마킹 "Allocation Studio" 탭의 순수 함수 엔진.
   - risk_allocations의 _cov(Ledoit-Wolf)/_opt(SLSQP)/_hrp_weights/_pct 헬퍼를
     커스텀 수익률 행렬 R로 호출 — 8-ETF 하드와이어는 s_* 래퍼에만 있고
     헬퍼 자체는 행렬 인자를 받는다.
-  - BL posterior 공식은 risk_allocations.s_black_litterman(331-333행)과 동일:
+  - BL 은 `black_litterman` 단일 출처에 위임한다 (P2′). 예전에는 이 모듈과
+    risk_allocations 가 각자 구현했고 Ω 가 달라 9%p 갈라졌다:
     μ_bl = ((τΣ)⁻¹ + PᵀΩ⁻¹P)⁻¹ ((τΣ)⁻¹π + PᵀΩ⁻¹Q), π = δ·Σ·w_mkt
   - 시가총액 prior: stock_master.get_market_cap (KIS master, 억원)
 
@@ -32,7 +33,14 @@ logger = logging.getLogger(__name__)
 DELTA_DEFAULT = 2.5   # 위험회피(균형 기대수익 스케일) — risk_allocations와 동일
 TAU_DEFAULT = 0.05    # prior 불확실성 — risk_allocations와 동일
 
-MODELS = ("mvo", "bl", "risk_parity", "hrp", "min_var")
+MODELS = ("mvo", "bl", "ep", "risk_parity", "hrp", "min_var", "max_div", "min_cvar",
+          "robust", "mv_utility")
+
+#: 평균-분산 효용 `max wᵀμ − (λ/2)·wᵀΣw` 의 위험 회피 λ 기본값 (BO O1 — 사용자 승인 변경).
+#: ★관례적인 값이지 이 사용자에게 맞는 값이 아니다★ — 주지 않고 쓰면 응답이 `source: "default"` 로
+#: 가정임을 밝힌다. 화면 프리셋 "보통" 과 같은 값이다(`OptimizerParams.risk_aversion`).
+#: 합성 목(mock) 유니버스에서 1.5~10 사이에서 비중이 뚜렷이 달라지는 것을 실측해 프리셋을 골랐다.
+RISK_AVERSION_DEFAULT = 4.0
 
 
 # ── 시가총액 prior ────────────────────────────────────────────────────────────
@@ -68,43 +76,157 @@ def build_user_views(views: list[dict] | None, names: list[str],
     P행은 대상 자산 균등가중 피킹(그룹 뷰 지원). 유니버스에 없는 자산만
     지정한 뷰·크기 0 뷰는 조용히 버리지 않고 스킵 목록으로 보고.
     """
-    idx = {t: i for i, t in enumerate(names)}
-    rows, q, scales, skipped = [], [], [], []
-    for v in views or []:
-        assets = [a for a in (v.get("assets") or []) if a in idx]
-        mag = abs(float(v.get("magnitude_pct") or 0.0)) / 100.0
-        if not assets or mag == 0.0:
-            skipped.append({"view": v, "reason": "대상 자산 없음 또는 크기 0"})
-            continue
-        direction = 1.0 if float(v.get("direction", 1)) >= 0 else -1.0
+    # ★행 생성은 `view_rows` 가 단일 출처다★ 예전에는 같은 규칙이 BL·EP·
+    # risk_allocations 세 곳에 손으로 구현돼 있었고, 그래서 부호 있는 가중치를
+    # 넣을 자리가 없었다(T3 §5).
+    from src.engine.view_rows import build_view_rows
+    built, skipped = build_view_rows(views, names)
+    rows, q, confs = [], [], []
+    for vr, v in zip(built, [v for v in (views or [])
+                             if not any(sk["view"] is v for sk in skipped)],
+                     strict=False):
         conf = min(max(float(v.get("confidence", 50)), 0.0), 100.0)
-        row = np.zeros(len(names))
-        for a in assets:
-            row[idx[a]] = 1.0 / len(assets)
-        rows.append(row)
-        q.append(direction * mag)
-        # conf 50 → 1.0(Idzorek 기본) · conf→100 → ~0(뷰 강제) · conf→0 → 매우 큼(뷰 무시)
-        scales.append((100.0 - conf) / max(conf, 1.0))
+        rows.append(vr.row)
+        q.append(vr.direction * vr.magnitude)
+        # conf 50 → 배율 1.0(Idzorek 기본) · conf→100 → ~0(뷰 강제) ·
+        # conf→0 → 매우 큼(뷰 무시). ★배율 계산은 `bl_omega` 가 한다★ —
+        # 여기서 배율로 바꿔 넘기면 conf<1 에서 되돌릴 수 없어 값이 어긋난다.
+        confs.append(conf)
     if not rows:
         return None, None, None, skipped
     P = np.array(rows)
     Q = np.array(q)
-    base = np.maximum(np.diag(P @ (tau * sigma) @ P.T).copy(), 1e-10)
-    omega = np.diag(base * np.maximum(np.array(scales), 1e-4)) + np.eye(len(q)) * 1e-10
+    # ★Ω 는 단일 출처가 만든다 (P2′)★ 예전에는 여기와 `risk_allocations` 가
+    # 각자 Ω 를 만들었고, 신뢰도 스케일링 유무 때문에 같은 뷰에서 9%p 다른
+    # 비중이 나왔다 — 독스트링은 "동일 공식" 이라고 적고 있었다.
+    from src.engine.black_litterman import bl_omega
+    omega = bl_omega(P, sigma, tau=tau, confidences=confs)
     return P, Q, omega, skipped
 
 
 def bl_posterior(pi: np.ndarray, sigma: np.ndarray, P: np.ndarray,
                  Q: np.ndarray, omega: np.ndarray, tau: float = TAU_DEFAULT) -> np.ndarray:
-    """BL posterior 기대수익 — risk_allocations.s_black_litterman과 동일 공식."""
-    tauS = tau * sigma
-    inv_tauS = np.linalg.inv(tauS)
-    inv_om = np.linalg.inv(omega)
-    return np.linalg.solve(inv_tauS + P.T @ inv_om @ P,
-                           inv_tauS @ pi + P.T @ inv_om @ Q)
+    """BL posterior 기대수익 — ★단일 출처에 위임한다 (P2′)★.
+
+    이 독스트링은 예전에 "risk_allocations.s_black_litterman 과 동일 공식" 이라고
+    적혀 있었는데 **틀렸다** — Ω 구성이 달라 같은 뷰에서 9%p 다른 비중이 나왔다.
+    이제 공식도 Ω 도 `black_litterman` 이 단일 출처로 만든다.
+    """
+    from src.engine.black_litterman import bl_posterior_mean
+    return bl_posterior_mean(pi, sigma, P, Q, omega, tau=tau)
 
 
 # ── 모델 스위치 ───────────────────────────────────────────────────────────────
+def _portfolio_variance(w: np.ndarray, S: np.ndarray) -> float:
+    """wᵀΣw — ★미세 음수를 클램프한다 (CLAUDE.md §6)★
+
+    PSD 행렬이어도 부동소수 상쇄로 `wᵀΣw` 가 −1e-18 처럼 나올 수 있고, 그대로
+    `sqrt` 하면 NaN 이 되어 조용히 퍼진다. 음수는 0 으로 접되 **0 을 측정값으로
+    쓰지는 않는다** — 호출부가 미상으로 처리한다.
+    """
+    var = float(np.asarray(w, dtype=float) @ np.asarray(S, dtype=float)
+                @ np.asarray(w, dtype=float))
+    return var if (np.isfinite(var) and var > 0) else 0.0
+
+
+def _variance_floor(S: np.ndarray) -> float:
+    """의미 있는 분산의 하한 — ★데이터 규모에 상대적으로★ 잡는다.
+
+    절대 상수는 단위가 바뀌면(일간 vs 연율, % vs 소수) 무의미해진다.
+    """
+    S = np.asarray(S, dtype=float)
+    if S.size == 0:
+        return 1e-24
+    scale = float(np.max(np.abs(np.diag(S))))
+    return max(1e-24, scale * 1e-18)
+
+
+def risk_contributions(w, S) -> dict:
+    """오일러 리스크 분해 — ★누가 이 포트폴리오의 위험을 지고 있는가★ (P4-b).
+
+        marginal[i]     = (Σw)ᵢ / σ_p        = ∂σ_p/∂wᵢ
+        contribution[i] = wᵢ · marginal[i]
+        pct[i]          = contribution[i] / σ_p
+
+    ★Σ contribution = σ_p 가 **정확히** 성립한다★ σ_p 가 w 에 대해 1차 동차
+    이므로(오일러 정리) 이 항등식이 이 함수의 계약이다 — 공식이 조금이라도
+    어긋나면 깨진다.
+
+    ★σ_p 를 못 구하면 기여는 0 이 아니라 미상이다★ 예전
+    `kis_portfolio_analyzer` 는 `σ_p <= 0` 에서 `pd.Series(0.0)` 을 냈다 —
+    "아무도 위험을 지지 않는다" 는 관측된 적 없는 주장이다.
+    """
+    w = np.asarray(w, dtype=float)
+    S = np.asarray(S, dtype=float)
+    unknown = {"portfolio_volatility": None, "marginal": None,
+               "contribution": None, "pct": None, "hhi": None, "max_pct": None}
+    var = _portfolio_variance(w, S)
+    if var <= _variance_floor(S):
+        return {**unknown,
+                "reason": ("포트폴리오 분산이 산출되지 않습니다(wᵀΣw ≤ 0) — "
+                           "특이 공분산이거나 상쇄 포지션입니다. "
+                           "기여는 0 이 아니라 ★미상★ 입니다")}
+    sigma = float(np.sqrt(var))
+    marginal = (S @ w) / sigma
+    contribution = w * marginal
+    pct = contribution / sigma
+    return {
+        "portfolio_volatility": sigma,
+        "marginal": marginal,
+        "contribution": contribution,
+        "pct": pct,
+        "hhi": float(np.sum(pct ** 2)),
+        "max_pct": float(np.max(pct)),
+        "reason": None,
+    }
+
+
+def enb_report(w, S) -> dict:
+    """Meucci ENB + ★산출 못 했으면 사유★ (P4-b).
+
+    Σ의 고유분해로 주성분 포트폴리오의 분산 기여 분포 엔트로피
+    = exp(-Σ pᵢ ln pᵢ). HHI/Neff와 달리 상관을 반영한다. 무상관·등리스크면
+    ENB=N, 완전집중이면 →1. (1 ≤ ENB ≤ N)
+
+    ★예전에는 실패하면 `float(n)` 을 돌려줬다★ — 계산이 안 됐는데 **완전히
+    분산됐다**고 주장하는 값이고, 오류 방향으로는 가장 위험한 쪽이다(집중
+    위험을 못 보게 만든다). 이제 미상은 `None` + 사유다.
+    """
+    w = np.asarray(w, dtype=float)
+    S = np.asarray(S, dtype=float)
+    # ★고유값 바닥이 스스로 답을 지어내지 못하게 막는다★ 아래 `maximum(vals,
+    # 1e-16)` 은 특이 행렬에서도 **양수** 기여를 만들어 내므로, 영행렬을 주면
+    # "완벽히 분산됨(ENB=N)" 이 나온다 — `float(n)` 폴백과 똑같은 거짓말이
+    # 다른 문으로 들어오는 것이다. ENB 는 **분산의 분해**이므로 분해할 분산이
+    # 없으면 답이 없다.
+    try:
+        if _portfolio_variance(w, S) <= _variance_floor(S):
+            return {"enb": None,
+                    "reason": ("포트폴리오 분산이 산출되지 않아 ENB 를 정의할 수 "
+                               "없습니다 — 분산이 최대라는 뜻이 아니라 미상입니다")}
+        vals, vecs = np.linalg.eigh(S)
+        vals = np.maximum(vals, 1e-16)
+        expo = vecs.T @ w                        # 주성분 노출
+        contrib = (expo ** 2) * vals            # 주성분별 분산 기여
+        tot = contrib.sum()
+        if not np.isfinite(tot) or tot <= 0:
+            return {"enb": None,
+                    "reason": ("주성분 분산 기여의 합이 0 이하라 ENB 를 정의할 수 "
+                               "없습니다 — 분산이 최대라는 뜻이 아니라 미상입니다")}
+        p = contrib / tot
+        p = p[p > 1e-12]
+        ent = -float(np.sum(p * np.log(p)))
+        return {"enb": float(np.exp(ent)), "reason": None}
+    except Exception as e:                       # noqa: BLE001
+        return {"enb": None,
+                "reason": f"ENB 산출에 실패했습니다 — {type(e).__name__}: {e}"}
+
+
+def effective_number_of_bets(w: np.ndarray, S: np.ndarray) -> float | None:
+    """`enb_report` 의 얇은 위임 — ★미상이면 `None`★ (예전에는 `N` 이었다)."""
+    return enb_report(w, S)["enb"]
+
+
 def _inverse_vol_w(R: np.ndarray) -> np.ndarray:
     vol = R.std(axis=0)
     vol = np.where(vol > 1e-9, vol, 1e-9)
@@ -137,16 +259,46 @@ def _max_sharpe_w(mu: np.ndarray, S: np.ndarray, n: int) -> np.ndarray | None:
     return _opt(neg_sharpe, n)
 
 
-def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
-                      S_annual: np.ndarray | None = None) -> np.ndarray:
-    """모델 → long-only 합1 가중치 벡터. 최적화 실패/부재 시 inverse-vol 폴백.
+def model_availability() -> dict[str, dict]:
+    """모델 → `{available, reason}`. **폴백이 가리는 것을 먼저 본다.**
 
-    mvo: 트레일링 평균 max-sharpe · bl: mu_override(BL posterior) max-sharpe ·
-    risk_parity: ERC · hrp: 계층적 · min_var: 최소분산.
+    `weights_for_model` 은 최적화가 실패하거나 라이브러리가 없으면 조용히
+    inverse-vol 로 떨어진다. 단일 모델을 고른 사용자에게는 그것이 합리적인
+    안전장치지만, **여러 모델의 산포를 재는 자리에서는 거짓말이 된다** —
+    "min_var 는 이렇게 말한다" 는 라벨 아래 실은 inverse-vol 이 들어앉는다.
+    그래서 산포를 재기 전에 어느 모델이 실제로 돌 수 있는지 여기서 묻는다.
+    """
+    from src.engine.risk_allocations import _HAS_HCLUST, _HAS_OPT
+    opt_ok = {"available": _HAS_OPT,
+              "reason": None if _HAS_OPT else "scipy.optimize 가 없어 최적화를 풀 수 없습니다"}
+    return {
+        "mvo": dict(opt_ok), "bl": dict(opt_ok), "ep": dict(opt_ok),
+        "min_var": dict(opt_ok), "max_div": dict(opt_ok), "min_cvar": dict(opt_ok),
+        # 로버스트도 SLSQP 를 쓴다 — scipy 가 없으면 못 푼다.
+        "robust": dict(opt_ok),
+        "mv_utility": dict(opt_ok),
+        # ERC 는 순수 numpy 반복이라 scipy 없이도 돈다.
+        "risk_parity": {"available": True, "reason": None},
+        "hrp": {"available": _HAS_HCLUST,
+                "reason": None if _HAS_HCLUST else
+                          "scipy.cluster 가 없어 계층적 군집을 만들 수 없습니다"},
+    }
+
+
+def _raw_weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None,
+                           S: np.ndarray, risk_aversion: float | None = None) -> np.ndarray | None:
+    """모델의 **원 출력** — 실패하면 `None`. 폴백은 호출부가 결정한다.
+
+    `risk_aversion` 은 `mv_utility` 만 읽는다 — 다른 방식에는 들어가지 않는다.
     """
     n = R.shape[1]
-    S = S_annual if S_annual is not None else _cov(R) * 252.0
-    if model == "min_var":
+    if model == "mv_utility":
+        # 평균-분산 효용 (BO O1). max-sharpe(`mvo`)는 위험 크기를 상쇄해 λ 가 비중을 못 움직이지만,
+        # 효용은 λ 가 클수록 분산을 더 무겁게 벌해 최소분산 쪽으로, 작을수록 기대수익 쪽으로 간다.
+        mu = mu_override if mu_override is not None else R.mean(axis=0) * 252.0
+        lam = RISK_AVERSION_DEFAULT if risk_aversion is None else float(risk_aversion)
+        w = _opt(lambda x: -(float(x @ mu) - 0.5 * lam * float(x @ S @ x)), n)
+    elif model == "min_var":
         w = _opt(lambda x: float(x @ S @ x), n)
     elif model == "risk_parity":
         w = _erc_weights(S)
@@ -156,38 +308,134 @@ def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None 
             w = _hrp_weights(S) if _HAS_HCLUST else None
         except Exception:
             w = None
+    elif model == "max_div":
+        # 최대분산(TOBAM): maximize (wᵀσ)/√(wᵀΣw) — risk_allocations.s_max_div 로직 재사용
+        sig = np.sqrt(np.maximum(np.diag(S), 1e-12))
+        w = _opt(lambda x: -(x @ sig) / (np.sqrt(x @ S @ x) + 1e-12), n)
+    elif model == "robust":
+        # 로버스트 평균-분산 (Brief §8.3) — μ 의 추정오차를 타원체 불확실성 집합으로
+        # 넣는다. ★μ 를 못 믿을수록 등가중으로 수렴한다★ 실측 HHI 0.616 → 0.264.
+        from src.engine.robust_opt import robust_weights
+        out = robust_weights([str(i) for i in range(n)], R, s_override=S)
+        w = out["weights"] if out["available"] else None
+    elif model == "min_cvar":
+        # 최소 CVaR (Rockafellar-Uryasev) — 히스토리컬 최악 α% 평균손실 최소화
+        alpha = 0.05
+        k = max(1, int(np.ceil(alpha * R.shape[0])))
+
+        def _cvar(x):
+            pl = R @ x                        # 포트 일별 수익
+            worst = np.sort(pl)[:k]           # 최악 α%
+            return -float(worst.mean())       # 손실(음수수익)의 크기 최소화
+        w = _opt(_cvar, n)
     else:  # "mvo" | "bl"
         mu = mu_override if mu_override is not None else R.mean(axis=0) * 252.0
         w = _max_sharpe_w(mu, S, n)
     if w is None or not np.all(np.isfinite(w)) or w.sum() <= 0:
-        return _inverse_vol_w(R)
+        return None
     w = np.maximum(np.asarray(w, dtype=float), 0.0)
     return w / w.sum()
 
 
+def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
+                      S_annual: np.ndarray | None = None,
+                      risk_aversion: float | None = None) -> np.ndarray:
+    """모델 → long-only 합1 가중치 벡터. 최적화 실패/부재 시 inverse-vol 폴백.
+
+    mvo: 트레일링 평균 max-sharpe · bl: mu_override(BL posterior) max-sharpe ·
+    risk_parity: ERC · hrp: 계층적 · min_var: 최소분산 ·
+    mv_utility: 평균-분산 효용(위험 회피 λ = `risk_aversion`, 없으면 기본값).
+    """
+    return weights_for_model_traced(model, R, mu_override, S_annual, risk_aversion)[0]
+
+
+#: 대체 사유 — 풀이가 왜 답을 못 냈는지는 `_raw_weights_for_model` 이 말하지 않는다(그 함수는 점수→비중과 함께 쓴다).
+_NO_ANSWER = "풀이가 수렴하지 않았거나 쓸 수 없는 값을 냈어요(어느 쪽인지는 기록하지 않았어요)."
+
+
+def weights_for_model_traced(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
+                             S_annual: np.ndarray | None = None,
+                             risk_aversion: float | None = None) -> tuple[np.ndarray, dict | None]:
+    """`weights_for_model` 과 같은 값 + ★대체했으면 그 기록★ (CF3 — 드러내기만, 사용자 결정 2026-10-17).
+
+    기록 `{used: "inverse_vol", model, reason}` · 풀리면 `None`. 값을 바꾸는 일은 하지 않는다.
+    """
+    S = S_annual if S_annual is not None else _cov(R) * 252.0
+    w = _raw_weights_for_model(model, R, mu_override, S, risk_aversion)
+    if w is not None:
+        return w, None
+    why = (model_availability().get(model) or {}).get("reason") or _NO_ANSWER
+    return _inverse_vol_w(R), {"used": "inverse_vol", "model": model, "reason": why}
+
+
 # ── 전체 파이프라인 (API가 호출하는 단일 진입점) ──────────────────────────────
+def _company_source() -> str:
+    """회사 뷰 출처 라벨의 **단일 출처** — 문자열을 두 곳에 두지 않는다."""
+    from src.engine.company_views import SOURCE
+    return SOURCE
+
+
+def _used_by_source(pool: list[dict] | None, source: str,
+                    skipped: list[dict]) -> int:
+    """그 출처의 뷰 중 **실제로 P 행이 된** 수."""
+    n = sum(1 for v in (pool or []) if (v or {}).get("source") == source)
+    return n - sum(1 for sk in skipped
+                   if (sk.get("view") or {}).get("source") == source)
+
+
 def optimize(model: str, names: list[str], R: np.ndarray,
              views: list[dict] | None = None,
-             delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT) -> dict:
+             delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT,
+             s_override: np.ndarray | None = None,
+             extra_views: list[dict] | None = None,
+             company_views: list[dict] | None = None,
+             risk_aversion: float | None = None) -> dict:
     """모델+뷰 → 최종 가중치 + Sankey 3단계(시장→뷰반영→최적화) + 메타.
 
     flow 의미: market = 시가총액 캡가중 · view_applied = 뷰가 있으면 BL
     posterior max-sharpe(없으면 market과 동일) · optimized = 선택 모델 출력.
     뷰는 BL 경로에서만 기대수익에 반영 — 공분산 전용 모델(risk_parity/hrp/
     min_var)을 선택한 경우에도 view_applied 열은 참고용으로 계산해 보여준다.
+
+    P2.5 선택 인자 (**둘 다 기본 `None` 이라 기존 호출은 한 글자도 안 바뀐다**):
+      s_override:  Σ 를 통째로 대체한다 (국면조건부 공분산). 이미 **연율**이어야 한다.
+      extra_views: 사용자 뷰 뒤에 덧붙일 뷰. 국면조건부 μ 가 여기로 들어온다.
+
+    S5 선택 인자 (**기본 `None` 이라 기존 호출은 한 글자도 안 바뀐다**):
+      company_views: 기업 밸류에이션 뷰(`engine.company_views`). ★`extra_views` 와
+        같은 목록에 섞지 않고 **따로 받는다**★ — 호출자의 의도가 코드에 드러나고,
+        조건부 공시(`extra_views_used`)가 회사 뷰를 세는 사고를 구조로 막는다.
+        계산 경로는 완전히 같다(둘 다 `all_views` 로 합쳐져 같은 Ω 를 탄다).
+
+    ★조건부 μ 를 여기에 직접 대입하지 않는 이유★
+    최적화기에 μ 를 그냥 넣으면 "매크로 신호 → 비중" 이라는 기존 구조를 이름만
+    바꿔 되풀이한다. 뷰로 태우면 불확실성이 Ω 에 명시되고, 뷰가 사전분포보다
+    강하면 그 사실이 드러난다. 그래서 인자 이름이 `mu_override` 가 아니라
+    `extra_views` 다 — 이름이 정책을 강제한다.
     """
     if model not in MODELS:
         model = "mvo"
     n = len(names)
-    S = _cov(R) * 252.0  # 연율화 — 뷰(연간 %)·μ와 단위 일치
+    # 연율화 — 뷰(연간 %)·μ와 단위 일치. 국면조건부 Σ 가 주어지면 그것으로 대체한다.
+    S = (np.asarray(s_override, dtype=float) if s_override is not None
+         else _cov(R) * 252.0)
     w_mkt, cap_missing = market_cap_weights(names)
+
+    # 사용자 뷰 + 조건부 뷰. 조건부 뷰는 `source` 태그를 달고 오므로 skipped 보고에서
+    # 어느 쪽이 버려졌는지 구분된다.
+    all_views = (list(views or []) + list(extra_views or [])
+                 + list(company_views or []))
 
     mu_bl = None
     skipped_views: list[dict] = []
     w_view = w_mkt
-    if views:
+    #: 대체 기록(CF3) — 무엇을 무엇으로 대신했는지. 비어 있으면 응답에 키가 없다.
+    fallbacks: list[dict] = []
+    #: 사후는 됐는데 그 기대 수익으로 max-sharpe 비중을 풀지 못했는가(K1 — `views_applied` 가 이걸 본다).
+    view_solve_failed = False
+    if all_views:
         pi = delta * S @ w_mkt
-        P, Q, omega, skipped_views = build_user_views(views, names, S, tau)
+        P, Q, omega, skipped_views = build_user_views(all_views, names, S, tau)
         if P is not None:
             try:
                 mu_bl = bl_posterior(pi, S, P, Q, omega, tau)
@@ -195,42 +443,224 @@ def optimize(model: str, names: list[str], R: np.ndarray,
                 if wv is not None and np.all(np.isfinite(wv)) and wv.sum() > 0:
                     w_view = np.maximum(wv, 0.0)
                     w_view = w_view / w_view.sum()
+                else:
+                    # 사후는 됐지만 비중은 시장 비중 그대로다(CF3 기록 · K1 라벨 — 아래 `views_applied`).
+                    view_solve_failed = True
+                    fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
+                                      "reason": "생각을 넣은 기대 수익으로 비중을 풀지 못해 시장 비중을 그대로 썼어요.",
+                                      "affects_weights": model == "bl"})
             except Exception as e:  # 특이 공분산 등 — prior 폴백(정직 보고)
                 logger.warning(f"BL posterior 실패, prior 폴백: {e}")
                 mu_bl = None
+                fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
+                                  "reason": f"생각을 넣은 기대 수익을 계산하지 못했어요({type(e).__name__}).",
+                                  "affects_weights": model == "bl"})
+
+    ep_report: dict | None = None
+    mu_ep = None
+    if model == "ep":
+        # ★세 번째 μ 엔진 (M2-A)★ `mvo` 는 트레일링 평균, `bl` 은 BL 사후, `ep` 는
+        # KL 최소화 사후 기대수익. **새 최적화기가 아니라 μ 를 바꾸는 것**이므로 아래
+        # `weights_for_model` 의 max-sharpe 경로를 그대로 탄다.
+        # 실현 불가·산출 불가는 `EPUnavailable` 로 올라간다 — 조용히 다른 엔진으로
+        # 떨어지면 화면은 "뷰가 반영된 EP" 를 보여 주는데 실제로는 아니다.
+        from src.engine.entropy_views import ep_mu_or_raise
+        mu_ep, ep_report = ep_mu_or_raise(all_views, names, R)
 
     if model == "bl":
         # BL 모델: 뷰 있으면 posterior max-sharpe(=w_view), 뷰 없으면 시장균형
         # (레퍼런스 s_black_litterman과 동일 — 뷰 없는 BL은 캡가중 prior 그대로)
         w_final = w_view if mu_bl is not None else w_mkt
     else:
-        w_final = weights_for_model(model, R, mu_override=None, S_annual=S)
+        if model == "ep":
+            w_final, fb = weights_for_model_traced("mvo", R, mu_override=mu_ep, S_annual=S)
+        elif model == "mv_utility":
+            w_final, fb = weights_for_model_traced(model, R, mu_override=None, S_annual=S,
+                                                   risk_aversion=risk_aversion)
+        else:
+            w_final, fb = weights_for_model_traced(model, R, mu_override=None, S_annual=S)
+        if fb:
+            fallbacks.append({"stage": "optimized", **fb, "model": model, "affects_weights": True})
 
-    return {
+    mu_used = (mu_ep if mu_ep is not None
+               else (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0))
+    out = {
         "names": names,
         "weights": w_final,
         "flow": {"market": w_mkt, "view_applied": w_view, "optimized": w_final},
-        "views_applied": mu_bl is not None,
+        # ★생각이 BL 비중에 닿았는가★ (K1) — 사후를 풀지 못해 시장 비중을 쓴 BL 이면 거짓이다. 다른 방식의 비중은
+        # 생각 열을 쓰지 않으므로 뜻이 예전 그대로다(생각을 넣은 기대 수익을 계산했다 — EP 는 자기 μ 로 생각을 쓴다).
+        # 제약을 걸면 `_apply_constraints` 가 사후 μ 로 다시 풀어 생각이 비중에 닿는다 — 그 라우트가 참으로 되돌린다.
+        "views_applied": mu_bl is not None and not (model == "bl" and view_solve_failed),
         "skipped_views": skipped_views,
         "cap_missing": cap_missing,
         "mu_annual": (R.mean(axis=0) * 252.0),
-        "mu_used": (mu_bl if mu_bl is not None else R.mean(axis=0) * 252.0),
+        "mu_used": mu_used,
         "sigma_annual": S,
+        # ★어느 엔진이 이 숫자를 냈는지 항상 밝힌다★ 화면이 라벨을 지어내지 않도록
+        # 서버가 답한다. `ep` 진단(feasible·ENS·위반·신뢰도 미사용)은 EP 일 때만.
+        "mu_engine": ("ep" if mu_ep is not None
+                      else ("bl" if mu_bl is not None else "mvo")),
+        "ep": ep_report,
+        # ★Σ 가 어디서 왔는지 서버가 답한다★ 화면이 "국면조건부" 라벨을 지어내지
+        # 못하게 하려는 것이고, `mu_engine` 과 같은 이유의 필드다.
+        "sigma_source": "conditional" if s_override is not None else "trailing",
+        # ★출처로 센다 — 길이로 세지 않는다★ 예전에는 `len(extra_views)` 였고,
+        # 회사 뷰(S5)가 같은 목록에 실리는 순간 이 수가 회사 뷰까지 세게 된다.
+        # 그런데 이 숫자를 받는 문장이 "조건부 μ 를 자산 N개의 절대 뷰로
+        # 태웠습니다" 다 — 매크로가 하지 않은 일을 했다고 적는 조용한 거짓말이다.
+        # 회사 뷰를 별도 인자로 받는 것(위)이 1차 방어이고, 이것이 2차 방어다:
+        # 누가 나중에 다시 섞어 넣어도 공시가 오염되지 않는다.
+        # ★`all_views` 를 센다 — 인자별로 세지 않는다★ 그래야 누가 회사 뷰를
+        # `extra_views` 에 섞어 넣어도 각 공시가 제 몫만 센다. 사용자 뷰는
+        # `source` 칸 자체가 없으므로(`AllocationView` 에 그 필드가 없다) 어느
+        # 쪽에도 잡히지 않는다.
+        "extra_views_used": _used_by_source(all_views, "conditional", skipped_views),
+        "company_views_used": _used_by_source(
+            all_views, _company_source(), skipped_views),
+    }
+    if model == "mv_utility":
+        # ★λ 는 쓴 방식에서만 공시한다★ 다른 방식의 응답 모양은 한 글자도 바뀌지 않는다. 주지 않았으면
+        # 관례값을 **가정**으로 밝힌다 — 화면이 "나에게 맞춘 값" 처럼 보이지 않게.
+        out["risk_aversion"] = (
+            {"value": RISK_AVERSION_DEFAULT, "source": "default"} if risk_aversion is None
+            else {"value": float(risk_aversion), "source": "user"})
+    if fallbacks:
+        out["fallbacks"] = fallbacks
+    return out
+
+
+# ── Target Weight Range (모델 산포) ──────────────────────────────────────────
+# 같은 입력을 여러 모델로 풀었을 때 자산별 비중이 어디까지 벌어지는가.
+# 공분산 구동 모델들 — 전부 같은 Σ 를 받으므로 차이는 **목적함수에서만** 온다.
+RANGE_MODELS = ("mvo", "risk_parity", "hrp", "min_var", "max_div")
+
+
+def target_weight_range(names: list[str], R: np.ndarray, *,
+                        s_annual: np.ndarray | None = None,
+                        mu_bl: np.ndarray | None = None,
+                        models: tuple[str, ...] = RANGE_MODELS) -> dict:
+    """자산별 `[min, max]` 목표 비중 + 모델별 원값.
+
+    ★`disagreement()` 를 쓰지 않는다★ 설계 문서 §3 은 이 자리에서
+    `macro_models.ensemble.disagreement()` 를 재사용한다고 적었는데 **틀렸다** —
+    그 함수는 범주형 판정(`list[str]`)의 정규화 엔트로피다. 가중치 산포는 수치이므로
+    그 함수로 잴 수 없다. 여기서는 자산별 [min, max] 와 산포 스칼라를 직접 낸다.
+
+    ★평균으로 접지 않는다★ 모델별 원값을 `by_model` 로 함께 남긴다. 다섯 모델의
+    평균 비중은 어떤 모델도 추천하지 않은 포트폴리오이고, 그것을 단일 숫자로
+    내놓으면 산포를 재려던 목적 자체가 사라진다.
+
+    ★모델이 하나뿐이면 구간을 만들지 않는다★ 한 점에서 [min, max] 를 뽑으면
+    폭 0 의 "구간" 이 나오는데, 그것은 모델들이 합의했다는 뜻이 아니라 **비교할
+    상대가 없었다는 뜻**이다. 둘을 구분하지 못하는 숫자는 내지 않는다.
+    """
+    S = (np.asarray(s_annual, dtype=float) if s_annual is not None
+         else _cov(R) * 252.0)
+    avail = model_availability()
+    order = list(models) + (["bl"] if mu_bl is not None and "bl" not in models else [])
+
+    by_model: dict[str, np.ndarray] = {}
+    skipped: list[dict] = []
+    for m in order:
+        info = avail.get(m) or {"available": False, "reason": f"알 수 없는 모델: {m}"}
+        if not info["available"]:
+            skipped.append({"model": m, "reason": info["reason"]})
+            continue
+        # ★폴백을 쓰지 않는다★ `weights_for_model` 은 실패 시 inverse-vol 로 떨어지는데,
+        # 그 값이 "min_var 의 답" 으로 표에 앉으면 산포가 조작된다. 원 출력만 받는다.
+        w = _raw_weights_for_model(m, R, mu_bl if m == "bl" else None, S)
+        if w is None:
+            skipped.append({"model": m, "reason": "최적화가 수렴하지 않았습니다"})
+            continue
+        by_model[m] = w
+
+    if len(by_model) < 2:
+        return {
+            "available": False,
+            "names": names,
+            "by_model": {m: [round(float(x) * 100.0, 2) for x in w]
+                         for m, w in by_model.items()},
+            "range": [], "dispersion_pct": None, "max_spread_pct": None,
+            "models_used": list(by_model), "skipped": skipped,
+            "reason": (f"비교 가능한 모델이 {len(by_model)}개뿐이라 목표 구간을 "
+                       "만들지 않았습니다 — 한 점에서 뽑은 구간은 폭이 0 이 되어 "
+                       "'모델들이 합의했다' 로 잘못 읽힙니다."),
+        }
+
+    W = np.vstack([by_model[m] for m in by_model])       # [models, assets]
+    lo = W.min(axis=0) * 100.0
+    hi = W.max(axis=0) * 100.0
+    spread = hi - lo
+    return {
+        "available": True,
+        "names": names,
+        "by_model": {m: [round(float(x) * 100.0, 2) for x in w]
+                     for m, w in by_model.items()},
+        "range": [{"name": names[i],
+                   "min_pct": round(float(lo[i]), 2),
+                   "max_pct": round(float(hi[i]), 2),
+                   "spread_pct": round(float(spread[i]), 2)} for i in range(len(names))],
+        "dispersion_pct": round(float(spread.mean()), 2),
+        "max_spread_pct": round(float(spread.max()), 2),
+        "models_used": list(by_model), "skipped": skipped, "reason": None,
+        "note": ("같은 Σ 를 받은 모델들의 비중 산포입니다 — 차이는 목적함수에서만 "
+                 "옵니다. 평균은 내지 않습니다(어떤 모델도 추천하지 않은 값입니다)."),
     }
 
 
 # ── Sensitivity Heatmap (Robustness 재정의 — 기댓값 변동 → Weight 민감도) ──────
+#: 무제약이면 비중이 기대 수익을 읽지 않는 방식(K3) — 흔들어도 비중이 같다.
+_MU_FREE = frozenset({"min_var", "risk_parity", "hrp", "max_div", "min_cvar"})
+#: 제약을 걸어도 읽지 않는 방식 — `constrained_solve` 가 분산(min_var)·근사 투영(risk_parity·hrp)으로 푼다.
+#: 나머지는 제약이 걸리면 `constrained_solve` 의 기대 수익 목적함수(샤프·효용)로 풀린다 — '비중 계산' 과 같은 길이다.
+_MU_FREE_CONSTRAINED = frozenset({"min_var", "risk_parity", "hrp"})
+
+
+def _mu_reach(model: str, has_views: bool, constrained: bool) -> str:
+    """흔든 기대 수익이 비중에 닿는가 — `reads` 닿는다 · `none` 그 방식은 기대 수익을 쓰지 않는다 · `own` 스스로 다시 추정한다."""
+    if constrained:
+        return "none" if model in _MU_FREE_CONSTRAINED else "reads"
+    if model == "bl":
+        return "reads" if has_views else "none"
+    if model == "robust":
+        return "own"
+    return "none" if model in _MU_FREE else "reads"
+
+
+_STILL = {
+    "none": "이 방식은 기대 수익을 쓰지 않아 기대 수익을 흔들어도 비중이 움직이지 않아요.",
+    "none_bl": ("생각(뷰)이 없으면 이 방식의 비중은 시가총액 비중이라 기대 수익을 쓰지 않아 기대 수익을 흔들어도 "
+                "비중이 움직이지 않아요."),
+    "none_bl_failed": ("생각을 넣은 기대 수익을 계산하지 못해 이 방식의 비중이 시가총액 비중이라, 기대 수익을 쓰지 않아 "
+                       "기대 수익을 흔들어도 비중이 움직이지 않아요."),
+    "own": ("이 방식은 기대 수익을 수익률에서 스스로 다시 추정해서, 여기서 흔든 기대 수익이 들어가지 않아 "
+            "비중이 움직이지 않아요."),
+}
+
+
 def sensitivity_matrix(names: list[str], R: np.ndarray,
                        views: list[dict] | None = None,
                        delta: float = DELTA_DEFAULT, tau: float = TAU_DEFAULT,
-                       bump_pct: float = 2.0) -> dict:
+                       bump_pct: float = 2.0, *,
+                       model: str | None = None, constraints=None,
+                       risk_aversion: float | None = None,
+                       w_current=None, bench_returns: np.ndarray | None = None,
+                       groups_of: dict[str, str] | None = None) -> dict:
     """자산 i의 기대수익 μ_i에 +bump(연 %p) 충격 → max-sharpe 재최적화 →
     matrix[i][j] = w_j(shock i) − w_j(base) (%p, N×N).
 
     base μ는 optimize()와 동일 경로(뷰 있으면 BL posterior, 없으면 히스토리컬
     연율 평균) — Robustness가 검증하는 대상이 실제 사용 중인 기대수익이 되도록.
     행별 Δ 합은 합1 제약으로 ≈0. SLSQP N회(N≤30)라 수 초 내.
+
+    ★`model` 을 주면(K3) 그 방식·제약·λ 로 '비중 계산' 과 같은 길을 탄다★ — `_sensitivity_for_model`.
+    주지 않으면 아래 예전 길 그대로다(`/sensitivity` 라우트 — 바이트 불변).
     """
+    if model is not None:
+        return _sensitivity_for_model(names, R, views, delta, tau, bump_pct, model=model,
+                                      constraints=constraints, risk_aversion=risk_aversion,
+                                      w_current=w_current, bench_returns=bench_returns, groups_of=groups_of)
     n = len(names)
     base = optimize("bl" if views else "mvo", names, R, views=views,
                     delta=delta, tau=tau)
@@ -257,4 +687,83 @@ def sensitivity_matrix(names: list[str], R: np.ndarray,
         "matrix": matrix,           # 행=충격 자산, 열=반응 비중 Δ%p
         "bump_pct": bump_pct,
         "views_applied": base["views_applied"],
+    }
+
+
+def _sensitivity_for_model(names, R, views, delta, tau, bump_pct, *, model, constraints, risk_aversion,
+                           w_current, bench_returns, groups_of) -> dict:
+    """고른 방식의 민감도(K3) — 기준 비중은 '비중 계산' 노드와 같은 길(`optimize` → 제약이면 `constrained_solve`,
+    못 풀면 제약 없는 비중 — `_apply_constraints` 와 같다). 흔든 기대 수익마다 같은 길로 다시 푼다.
+
+    흔드는 기대 수익은 그 방식이 실제로 쓰는 것이다: 제약 해·BL·EP 는 `mu_used`(사후 μ 포함), 나머지 무제약 방식은 과거 평균.
+    흔든 μ 로 풀지 못한 줄은 0 이 아니라 `None` 이고 `failed_rows` 로 센다(조용한 무반응 금지).
+    """
+    n = len(names)
+    R = np.asarray(R, dtype=float)
+    base = optimize(model, names, R, views=views, delta=delta, tau=tau, risk_aversion=risk_aversion)
+    S = np.asarray(base["sigma_annual"], dtype=float)
+    w0 = np.asarray(base["weights"], dtype=float)
+    active = constraints is not None and constraints.any_active()
+    applied, reason = False, None
+
+    def _constrained(mu):
+        from src.engine.constrained_opt import constrained_solve
+        return constrained_solve(model, names, R, mu=mu, S=S, constraints=constraints, w_current=w_current,
+                                 groups_of=groups_of or {}, bench_returns=bench_returns, risk_aversion=risk_aversion)
+
+    if active:
+        sol = _constrained(np.asarray(base["mu_used"], dtype=float))
+        if sol["status"] != "infeasible" and sol.get("weights") is not None:
+            applied, w0 = True, np.asarray(sol["weights"], dtype=float)
+        else:
+            reason = sol.get("reason")
+    from_posterior = base.get("mu_engine") in ("bl", "ep") and (applied or model in ("bl", "ep"))
+    mu0 = (np.asarray(base["mu_used"], dtype=float) if applied or model in ("bl", "ep")
+           else R.mean(axis=0) * 252.0)
+    has_views = bool(views) and base.get("mu_engine") == "bl"
+    w_mkt = np.asarray(base["flow"]["market"], dtype=float)
+
+    def _solve(mu):
+        if applied:
+            sol = _constrained(mu)
+            return (np.asarray(sol["weights"], dtype=float)
+                    if sol["status"] != "infeasible" and sol.get("weights") is not None else None)
+        if model == "bl":
+            if not has_views:
+                return w_mkt
+            w = _max_sharpe_w(mu, S, n)
+            if w is None or not np.all(np.isfinite(w)) or w.sum() <= 0:
+                return None
+            w = np.maximum(np.asarray(w, dtype=float), 0.0)
+            return w / w.sum()
+        return _raw_weights_for_model("mvo" if model == "ep" else model, R, mu, S, risk_aversion)
+
+    bump = float(bump_pct) / 100.0
+    matrix: list[list[float] | None] = []
+    failed = 0
+    for i in range(n):
+        mu = mu0.copy()
+        mu[i] += bump
+        w = _solve(mu)
+        if w is None:
+            matrix.append(None)
+            failed += 1
+            continue
+        matrix.append([round(float((w[j] - w0[j]) * 100.0), 2) for j in range(n)])
+    reach = _mu_reach(model, has_views, applied)
+    still = ((_STILL["none_bl_failed"] if views else _STILL["none_bl"]) if reach == "none" and model == "bl" and not applied
+             else _STILL.get(reach))
+    return {
+        "names": names,
+        "base_weights": [round(float(x) * 100.0, 2) for x in w0],
+        "matrix": matrix,
+        "bump_pct": bump_pct,
+        "views_applied": base["views_applied"],
+        "model": model,
+        "mu_reach": reach,
+        "still": still,
+        "failed_rows": failed,
+        "views_used": bool(from_posterior and views),
+        "constraints_applied": applied if active else None,
+        "constraints_reason": reason,
     }

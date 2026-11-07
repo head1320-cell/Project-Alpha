@@ -1,0 +1,30 @@
+{
+ "01 첫 화면": {
+  "writes": [],
+  "reads": []
+ },
+ "02 전략 없이 계산하기": {
+  "writes": [],
+  "reads": [
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "03 계산하기": {
+  "writes": [
+   "POST /api/v1/realism/backtest {\"allocation_method\":\"hrp\",\"enable_buying_power_check\":false,\"enable_capacity_constraint\":false,\"enable_cash_yield\":false,\"enable_market_impact\":false,\"enable_regime_adaptive\":false,\"end_date\":\"2024-12-31\",\"initial_capital\":10000000000,\"macro_overlay_enabled\":false,\"rebalance_policy\":\"monthly\",\"start_date\":\"2023-01-01\",\"strategy_ids\":[1,2]}",
+   "POST /api/v1/realism/backtest {\"allocation_method\":\"hrp\",\"enable_buying_power_check\":true,\"enable_cash_yield\":true,\"enable_market_impact\":true,\"enable_regime_adaptive\":true,\"end_date\":\"2024-12-31\",\"initial_capital\":10000000000,\"macro_overlay_enabled\":false,\"rebalance_policy\":\"monthly\",\"start_date\":\"2023-01-01\",\"strategy_ids\":[1,2]}"
+  ],
+  "reads": [
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ },
+ "04 다시 계산하기": {
+  "writes": [
+   "POST /api/v1/realism/backtest {\"allocation_method\":\"hrp\",\"enable_buying_power_check\":false,\"enable_capacity_constraint\":false,\"enable_cash_yield\":false,\"enable_market_impact\":false,\"enable_regime_adaptive\":false,\"end_date\":\"2024-12-31\",\"initial_capital\":10000000000,\"macro_overlay_enabled\":false,\"rebalance_policy\":\"monthly\",\"start_date\":\"2023-01-01\",\"strategy_ids\":[1,2]}",
+   "POST /api/v1/realism/backtest {\"allocation_method\":\"hrp\",\"enable_buying_power_check\":true,\"enable_cash_yield\":true,\"enable_market_impact\":true,\"enable_regime_adaptive\":true,\"end_date\":\"2024-12-31\",\"initial_capital\":10000000000,\"macro_overlay_enabled\":false,\"rebalance_policy\":\"monthly\",\"start_date\":\"2023-01-01\",\"strategy_ids\":[1,2]}"
+  ],
+  "reads": [
+   "GET /api/v1/multibacktest/strategies?active_only=true"
+  ]
+ }
+}

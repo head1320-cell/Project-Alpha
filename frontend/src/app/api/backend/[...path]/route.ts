@@ -18,6 +18,7 @@
  * unbuffered.
  */
 import { type NextRequest } from "next/server";
+import { startTrace } from "./trace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,6 +68,8 @@ function isTimeoutError(e: unknown): boolean {
 
 async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   const target = `${backendBase()}/${(path || []).join("/")}${req.nextUrl.search || ""}`;
+  // Diagnostic stage trace — writes nothing unless PROXY_TRACE_LOG is set (see ./trace.ts).
+  const tr = startTrace(`${req.method} /${(path || []).join("/")}${req.nextUrl.search || ""}`);
 
   const headers = new Headers(req.headers);
   headers.delete("host");
@@ -80,11 +83,16 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   // hang is the actual failure we want to surface as a clean 504.
   const isStream = (path || []).join("/").includes("stream");
   const timeoutMs = proxyTimeoutMs();
+  // ★The browser leaving ends the backend call too.★ Next aborts `req.signal` when the browser's connection
+  // closes before the response finished. Before, that signal was not passed on: if the browser left while we
+  // were still waiting for the backend's headers (page change, closed tab), Next later saw a closed socket and
+  // returned without reading or cancelling the body — the backend response stayed open, up to the 300s deadline
+  // for unary calls and with no end at all for streams (measured 2026-11-07, see HISTORY).
   const init: RequestInit = {
     method: req.method,
     headers,
     redirect: "manual",
-    ...(isStream ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
+    signal: isStream ? req.signal : AbortSignal.any([req.signal, AbortSignal.timeout(timeoutMs)]),
   };
   if (req.method !== "GET" && req.method !== "HEAD") {
     init.body = await req.arrayBuffer();
@@ -92,23 +100,38 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
 
   let upstream: Response;
   try {
+    tr.stage("fetch");
     upstream = await fetch(target, init);
+    tr.stage("headers", String(upstream.status));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    // The browser left first → 499 ("client closed request"). Nobody will read it, but it must not be
+    // reported as a timeout (504) or an unreachable backend (502). Checked before the timeout test: Next aborts
+    // with a `ResponseAborted` reason, but an abort without a reason surfaces as a plain AbortError, which
+    // isTimeoutError would otherwise call a timeout.
+    if (req.signal.aborted) {
+      tr.done("client-gone", "499");
+      return new Response(
+        JSON.stringify({ error: true, detail: "브라우저가 요청을 거두어 백엔드 호출을 멈췄어요." }),
+        { status: 499, headers: { "content-type": "application/json" } },
+      );
+    }
     // Timed out → 504 with an actionable message (not a misleading "unreachable").
     if (isTimeoutError(e)) {
+      tr.done("fetch-error", `${e instanceof Error ? e.name : "?"} 504`);
       return new Response(
         JSON.stringify({
           error: true,
-          detail: `분석이 너무 오래 걸려 시간이 초과되었습니다 (>${Math.round(timeoutMs / 1000)}초). `
+          detail: `분석이 너무 오래 걸려 시간이 초과되었어요 (>${Math.round(timeoutMs / 1000)}초). `
             + `유니버스 범위(종목 수)나 조건을 줄여 다시 시도하세요.`,
         }),
         { status: 504, headers: { "content-type": "application/json" } },
       );
     }
     // Genuinely unreachable backend → clear 502 (not a confusing generic 500).
+    tr.done("fetch-error", `${e instanceof Error ? e.name : "?"} ${(e as { cause?: { code?: string } })?.cause?.code ?? ""} 502`.replace(/\s+/g, " "));
     return new Response(
-      JSON.stringify({ error: true, detail: `백엔드에 연결할 수 없습니다 (${backendBase()}): ${msg}` }),
+      JSON.stringify({ error: true, detail: `백엔드에 연결할 수 없어요 (${backendBase()}): ${msg}` }),
       { status: 502, headers: { "content-type": "application/json" } },
     );
   }
@@ -123,7 +146,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
     respHeaders.set("cache-control", "no-cache, no-transform");
   }
 
-  return new Response(upstream.body, {
+  return new Response(tr.wrap(upstream.body), {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: respHeaders,

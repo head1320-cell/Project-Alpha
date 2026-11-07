@@ -34,6 +34,20 @@ DISCLOSURE_LAG_DAYS = 45
 # 연간(사업보고서)은 결산 후 90일 이내 제출 — 보수적으로 90일 시차 적용
 ANNUAL_LAG_DAYS = 90
 
+#: 접수 **당일** 봉/스냅샷에는 쓰지 않는다.
+#:
+#: DART 는 18시까지 접수를 받고 한국 장은 15:30 에 닫는다. 우리는 접수 **시각**을
+#: 모른다(★미상★) — 장마감 뒤 접수분이 같은 날에 섞일 수 있다. V3 의
+#: `dart_history.vintages_as_of` 가 *"그 안전 여유는 호출자가 **보이는 자리에서**
+#: 준다"* 라고 적어 뒀고, 실측 접수일을 쓰는 소비자들이 그 호출자다.
+#:
+#: ★상수에 이름이 있고 결과 메타에도 실린다★ — 몰래 하루를 빼면 반대로
+#: "왜 하루 늦나" 를 아무도 찾지 못한다.
+#:
+#: ★위 두 상수와 같은 자리에 둔다★ 셋 다 "언제부터 그 재무를 알 수 있었나" 를
+#: 정하는 규칙이고, 흩어 두면 한쪽만 바뀌어도 아무도 모른다.
+FILING_SAME_DAY_GUARD_DAYS = 1
+
 # DART 보고서 코드
 REPRT_ANNUAL, REPRT_HALF, REPRT_Q1, REPRT_Q3 = "11011", "11012", "11013", "11014"
 
@@ -186,6 +200,49 @@ class PITStore:
             self._cache[cache_key] = (time.time(), snapshot)
         return snapshot
 
+    @staticmethod
+    def _filing_cutoff(as_of_date: str) -> str | None:
+        """접수 당일 가드를 적용한 조회 기준일. 형식이 틀리면 `None`.
+
+        ★가드를 여기서 다시 정의하지 않는다★ 백테스트 봉 경로
+        (`condition_strategy._build_pit_base`)와 **같은 상수**를 쓴다 — 두 경로가
+        갈리면 스크리너와 백테스트가 다른 날짜를 "공시일" 이라 부르게 된다.
+
+        ★형식 검증을 여기서 한다★ `history_as_of` 는 문자열 비교라, 잘못된
+        as_of 는 조용히 전부 또는 전무가 된다(V3 가 그래서 거절한다). 그 전에
+        걸러 리더를 부르지도 않는다.
+        """
+        try:
+            d = datetime.strptime(str(as_of_date), "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
+        return (d - timedelta(days=FILING_SAME_DAY_GUARD_DAYS)).strftime("%Y-%m-%d")
+
+    def _vintage_snapshot(self, stock_code: str, as_of_date: str, pack) -> dict | None:
+        """실측 접수일 기준 스냅샷. 없으면 `None` — 호출자가 추정 경로로 내려간다.
+
+        ★못 읽은 것과 없는 것을 로그에서 가른다★ V3 가 `(None, 사유)` 와
+        `([], None)` 를 구별해 주므로, 여기서 뭉개면 그 구별이 사라진다.
+        """
+        cutoff = PITStore._filing_cutoff(as_of_date)
+        if cutoff is None:
+            return None
+        try:
+            from src.data.dart_history import history_as_of
+            rows, reason = history_as_of(stock_code, cutoff)
+        except Exception as e:  # noqa: BLE001 — 빈티지 실패가 스크리너를 죽이지 않는다
+            logger.debug(f"빈티지 조회 실패 ({stock_code}@{cutoff}) — 추정 시차 "
+                         f"경로로 내려갑니다: {e}")
+            return None
+        if rows is None:
+            logger.debug(f"빈티지를 읽지 못해 추정 시차 경로로 내려갑니다 "
+                         f"({stock_code}@{cutoff}): {reason}")
+            return None
+        if not rows:
+            return None
+        row = max(rows, key=lambda r: r.get("seq") or 0)
+        return pack(row, "pit_vintage", str(row.get("year")), str(row.get("reprt")))
+
     def _dart_snapshot(self, stock_code: str, as_of_date: str) -> dict | None:
         """실데이터 PIT 스냅샷 — ① 적재된 financials_history(DB, 키 불필요·즉시)
         ② 실시간 DART(키 필요) 순. 둘 다 실패 시 None(mock 폴백).
@@ -193,12 +250,7 @@ class PITStore:
         재무제표에서 직접 산출 가능한 비율(ROE/ROA/부채비율)만 실값으로 채운다.
         가격 의존 지표(PER/PBR/배당수익률/시총)는 역사 시세 미연동이라 None —
         소비자(screener._apply_pit)는 None 필드를 교체하지 않으므로 부분 적용된다."""
-        period = _period_asof(as_of_date)
-        if period is None:
-            return None
-        year, reprt = period
-
-        def _pack(row: dict, source: str) -> dict | None:
+        def _pack(row: dict, source: str, year: str, reprt: str) -> dict | None:
             """재무 행 + as_of 시총([C] KRX 적재) → PIT 스냅샷.
 
             손익은 연환산(분기 누적 보정) — ROE/PER이 연간 기준과 비교 가능.
@@ -237,12 +289,29 @@ class PITStore:
                 "_source": source,
             }
 
+        # ⓪ ★실측 접수일 기반 빈티지★ — 두 축을 한 번에 답한다
+        #
+        # 아래 ①은 **두 축이 함께 틀려** 있다: 날짜는 정적 시차 추정이고, 값은
+        # `financials_history`(정정이 원본을 덮은 표)에서 온다. V3 의
+        # `history_as_of` 는 "그 시점에 접수된 것 중 기간별 최신 빈티지" 를
+        # 돌려주므로 둘 다 실측이 된다.
+        #
+        # ★전환이 아니다★ 빈티지가 없으면(지금 DB 가 그렇다) 그대로 ①로 내려간다.
+        snap = self._vintage_snapshot(stock_code, as_of_date, _pack)
+        if snap is not None:
+            return snap
+
+        period = _period_asof(as_of_date)
+        if period is None:
+            return None
+        year, reprt = period
+
         # ① DB 적재분 (dart_history 백필 후 — DART 키·쿼터 무소모)
         try:
             from src.data.dart_history import history_snapshot
             row = history_snapshot(stock_code, year, reprt)
             if row is not None:
-                snap = _pack(row, "pit_db")
+                snap = _pack(row, "pit_db", year, reprt)
                 if snap is not None:
                     return snap
         except Exception as e:
@@ -262,7 +331,7 @@ class PITStore:
                 return None
             row = {"net_income": fs.net_income, "total_equity": fs.total_equity,
                    "total_assets": fs.total_assets, "total_liabilities": fs.total_liabilities}
-            return _pack(row, "pit_dart")
+            return _pack(row, "pit_dart", year, reprt)
         except Exception as e:
             logger.debug(f"PIT DART snapshot 실패 ({stock_code}@{as_of_date}): {e}")
             return None

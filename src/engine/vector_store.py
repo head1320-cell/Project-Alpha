@@ -37,14 +37,25 @@ class VectorStore(DeterministicMockStore):
             cls._singleton = cls()
         return cls._singleton
 
-    def get_embedding(self, stock_code: str, item=None) -> list[float]:
-        """
-        종목의 임베딩 벡터 (8차원).
+    def get_embedding(self, stock_code: str, item=None) -> list[float] | None:
+        """종목의 임베딩 벡터 (8차원). 만들 수 없으면 `None`.
 
-        item이 있으면 실제 재무 특성을 반영, 없으면 코드 기반 결정론적.
-        실제로는 재무 시계열 + 가격 패턴 임베딩 모델 사용.
+        ★이 스토어는 혼종이다★ `item` 이 있으면 **실 재무**(per·pbr·roe·roa·
+        부채비율·배당·괴리·시총)에서 벡터를 만든다 — 합성이 아니다. 합성인 것은
+        둘뿐이었다:
+
+          ⑴ `item` 이 없을 때의 **코드 해시 폴백** — 운영에서 `None`.
+             ★"지어낸 벡터와 비교" 보다 "비교 못 함" 이 정직하다★
+             (`eval_vector_sim` 이 `None` 을 매칭하지 않는다.)
+          ⑵ `_embed_from_financials` 가 더하던 **노이즈** — 아래 참조.
+
+        ★캐시 키에 모드를 붙인다★ 예전에는 `embed:{code}` 였다. 그래서 개발
+        모드에서 만든 **합성 벡터가 운영 모드에서 그대로 서빙**될 수 있었다 —
+        `mock_base._scoped` 독스트링이 기록한 바로 그 결함이다.
         """
-        cache_key = f"embed:{stock_code}"
+        from src.data.mock_gate import mock_allowed
+
+        cache_key = self._scoped(f"embed:{stock_code}")
         cached = self._cache.get(cache_key)
         if cached and item is None:
             import time
@@ -52,11 +63,13 @@ class VectorStore(DeterministicMockStore):
                 return cached[1]
 
         if item is not None:
-            # 재무 특성을 정규화하여 임베딩 구성 (의미있는 유사도)
+            # 재무 특성을 정규화하여 임베딩 구성 (의미있는 유사도) — 실데이터
             vec = self._embed_from_financials(stock_code, item)
-        else:
-            # 코드 기반 결정론적 임베딩
+        elif mock_allowed():
+            # 코드 기반 결정론적 임베딩 — 개발/샌드박스/CI 전용
             vec = [self._normal(stock_code, f"dim{i}", mu=0, sigma=1) for i in range(EMBED_DIM)]
+        else:
+            return None
 
         vec = self._normalize(vec)
         import time
@@ -81,7 +94,15 @@ class VectorStore(DeterministicMockStore):
             norm(getattr(item, "gap_pct", None), -50, 50),
             norm(math.log10((getattr(item, "market_cap_억", None) or 1000) + 1), 2, 6),
         ]
-        # 약간의 종목 고유 노이즈 (동일 재무라도 미세 차이)
+        # ★운영에서는 노이즈를 더하지 않는다★
+        # 이 항은 유사도 점수의 **지어낸 성분**이다 — 8차원 정규화 벡터에
+        # `sigma=0.15` 는 임계값 근처 판정을 실제로 뒤집는다. 운영에서 두 종목의
+        # 유사도가 재무가 아니라 **종목코드 해시**로 갈리면 안 된다.
+        # 개발 모드에서는 유지한다(기존 화면·골든 불변).
+        from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
+            return base
+        # 약간의 종목 고유 노이즈 (동일 재무라도 미세 차이) — mock 전용
         noise = [self._normal(stock_code, f"vn{i}", mu=0, sigma=0.15) for i in range(EMBED_DIM)]
         return [b + n for b, n in zip(base, noise)]
 
@@ -144,14 +165,17 @@ def build_vector_context(group, items) -> dict:
         code = getattr(it, "stock_code", None)
         if not code:
             continue
-        vctx[code] = store.get_embedding(code, it)
+        emb = store.get_embedding(code, it)
+        if emb is not None:
+            vctx[code] = emb
         if code == target:
             target_item = it
 
     # 기준 종목 임베딩 (후보에 있으면 그 임베딩, 없으면 코드 기반)
-    if target_item is not None:
+    if target_item is not None and target in vctx:
         vctx["_target"] = vctx[target]
     else:
+        # 운영에서 기준 종목이 후보에 없으면 `None` — ★지어내지 않는다★
         vctx["_target"] = store.get_embedding(target)
 
     return {"_vector": vctx}

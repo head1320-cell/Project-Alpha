@@ -95,6 +95,28 @@ class UnifiedValuation:
     is_mock:                bool = False   # True면 재무 원천이 합성(mock) 데이터 — 운영에선 발생 안 함
 
 
+def weighted_intrinsic(models: list, params: ValuationParams) -> float:
+    """모델별 적정가 → 가중 평균. 산출 불가·0 이하 모델은 가중치에서 빠진다.
+
+    ★왜 따로 뽑았나 (P2-3)★
+    `evaluate` 안에만 있던 열 줄이다. 확률적 밸류에이션은 파라미터 표본마다 이
+    가중평균을 다시 내야 하는데, 표본 루프에서 `evaluate` 를 통째로 부르면
+    `financial_summary`·판정 문자열까지 매번 다시 만든다. 그렇다고 가중 로직을
+    복사하면 **같은 산수가 두 곳**에 생긴다 — 이 저장소가 A1·R0 에서 두 번 값을
+    치른 실수다. 그래서 여기 한 벌만 둔다.
+    """
+    weights = {"RIM": params.weight_rim, "DCF": params.weight_dcf,
+               "DDM": params.weight_ddm}
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for m in models:
+        if m.available and m.intrinsic_value_per_share > 0:
+            w = weights[m.model]
+            weighted_sum += m.intrinsic_value_per_share * w
+            total_weight += w
+    return (weighted_sum / total_weight) if total_weight > 0 else 0
+
+
 def compute_gap_pct(current_price: float, intrinsic: float) -> float:
     """괴리율 = (현재가 - 적정가) / 적정가 × 100. 적정가 없으면 0(정의 불가)."""
     return ((current_price - intrinsic) / intrinsic * 100) if intrinsic > 0 else 0
@@ -418,21 +440,58 @@ class ValuationEngine:
     def __init__(self, dart_client: DARTClient | None = None):
         self.dart = dart_client or DARTClient()
 
-    def evaluate(
+    @staticmethod
+    def prepare_statement(fs, current_price: float, *,
+                          market_cap: float | None = None):
+        """수집된 `FinancialStatement` 를 **평가 입력으로** 손질한다.
+
+        ★이 구간을 복제하면 조용히 갈라진다★ — `load_statement` 의 독스트링이
+        이미 그 실수를 이름까지 적어 뒀고(*"같은 산수를 두 곳에 두면 반드시
+        갈라지고 갈라져도 타입 에러가 나지 않는다"*), U 에서 **실제로 겪었다**:
+        as-of 경로가 이 손질 없이 `fs` 를 넘겼더니 `eps`·`bps` 가 비어 정정 전/후
+        재무가 달라도 적정가가 **한 자리도 안 바뀌었다**(p50 이 양쪽 169.0).
+        단위 테스트는 분포 함수를 가짜로 바꿔 놓아 그 사실을 보지 못했고,
+        목업으로 **눈으로 돌려 본 뒤에야** 드러났다.
+
+        Args:
+            market_cap: 억원. DART 가 발행주식수를 안 줄 때 시총/주가로 도출한다.
+        """
+        # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
+        if (not fs.shares_outstanding) and market_cap and current_price and current_price > 0:
+            fs.shares_outstanding = int(market_cap * 1e8 / current_price)
+        # capex 보강: 미파싱 시 투자활동현금흐름으로 근사 → FCF(=영업CF-capex) 확보 → DCF 활성
+        if fs.capex is None and fs.investing_cf is not None:
+            fs.capex = abs(fs.investing_cf) * 0.5
+        fs.compute_ratios(current_price)
+        return fs
+
+    def load_statement(
         self,
         stock_code: str,
         current_price: float,
-        params: ValuationParams | None = None,
+        *,
         bsns_year: str | None = None,
         market_cap: float | None = None,
-    ) -> UnifiedValuation:
-        """종목 코드 → 재무 데이터 수집 → 3 모델 평가 → 통합 결과.
+    ) -> dict:
+        """종목 코드 → **평가 준비가 끝난** FinancialStatement.
 
-        market_cap(억원)을 받으면 DART가 발행주식수를 안 줘도 시총/주가로 도출해
-        BPS·EPS를 채운다 → RIM·DCF가 활성화됨(이게 없으면 '재무 데이터 부족').
+        ★왜 따로 뽑았나 (P2-2)★
+        `evaluate` 안에만 있던 준비 구간이다 — corp_code 해석 · 회계연도 기본값 ·
+        DART 수집 · **mock 게이트** · 발행주식수/capex 보강 · `compute_ratios`.
+        역DCF 가 같은 `fs` 를 필요로 하는데, 자기가 다시 불러오면 이 손질을
+        **복제**하게 된다. 같은 산수를 두 곳에 두면 반드시 갈라지고 갈라져도 타입
+        에러가 나지 않는다 — 이 저장소가 A1(`currentSig`/`req`)과 R0(오버레이
+        컴파일)에서 두 번 값을 치른 실수다.
+
+        ★mock 게이트가 여기 함께 있는 것이 핵심이다★ 운영(`mock_allowed()=False`)에서
+        DART 가 실패해 합성 재무로 폴백하면 RIM/DCF/DDM 이 **조용히** 계산되던 버그가
+        있었고, 그 방어가 이 함수 안에 있다. 역DCF 가 이 함수를 타는 한 같은 방어를
+        공짜로 받는다 — 새 경로가 그 구멍을 다시 열지 않는다.
+
+        Returns:
+            `{available, fs, corp_name, is_mock, reason}`.
+            `available:false` 면 `fs` 는 `None` 이고 `reason` 이 이유를 말한다.
         """
-        params = params or ValuationParams()
-
         # 1. Corp code 변환
         corp_code = get_corp_code(stock_code)
         if not corp_code:
@@ -445,13 +504,10 @@ class ValuationEngine:
 
         fs = self.dart.get_financial_statement_full(corp_code, bsns_year)
         if not fs:
-            from src.data.stock_master import get_stock_name
-            return UnifiedValuation(
-                ticker=stock_code, corp_name=get_stock_name(stock_code) or stock_code,
-                current_price=current_price,
-                intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
-                models=[],
-            )
+            return {"available": False, "fs": None, "corp_name": None,
+                    "is_mock": False,
+                    "reason": f"{bsns_year} 회계연도 재무제표를 가져오지 못했습니다"}
+
         # DART가 실패해(키미설정/쿼터초과/네트워크 에러 등) 내부적으로 mock 재무제표로 폴백한
         # 경우 — fundamentals_store.py는 이미 이 플래그를 방어하지만(is_mock 체크 후 8년 재탐색
         # + mock_gate 게이트), 이 밸류에이션 엔진에는 동일 방어가 없어 운영(KIS_USE_MOCK=0)에서도
@@ -462,24 +518,52 @@ class ValuationEngine:
         from src.data.mock_gate import mock_allowed
         fs_is_mock = bool(getattr(fs, "is_mock", False))
         if fs_is_mock and not mock_allowed():
+            return {"available": False, "fs": None, "corp_name": None,
+                    "is_mock": True,
+                    "reason": ("DART 재무를 가져오지 못해 합성 재무로 폴백했고, "
+                               "이 환경은 mock 을 허용하지 않습니다 — 계산하지 않습니다")}
+
+        self.prepare_statement(fs, current_price, market_cap=market_cap)
+        corp_info = self.dart.get_corp_info(corp_code)
+        corp_name = corp_info.corp_name if corp_info else fs.corp_name
+        return {"available": True, "fs": fs, "corp_name": corp_name,
+                "is_mock": fs_is_mock, "reason": None}
+
+    def evaluate(
+        self,
+        stock_code: str,
+        current_price: float,
+        params: ValuationParams | None = None,
+        bsns_year: str | None = None,
+        market_cap: float | None = None,
+        *,
+        statement: dict | None = None,
+    ) -> UnifiedValuation:
+        """종목 코드 → 재무 데이터 수집 → 3 모델 평가 → 통합 결과.
+
+        market_cap(억원)을 받으면 DART가 발행주식수를 안 줘도 시총/주가로 도출해
+        BPS·EPS를 채운다 → RIM·DCF가 활성화됨(이게 없으면 '재무 데이터 부족').
+
+        statement: `load_statement` 의 결과를 이미 갖고 있으면 넘긴다 (P2-2).
+            CompanySnapshot 이 밸류에이션과 역DCF 를 **한 번의 재무 읽기**로 만들기
+            위한 경로다 — P2-1 이 실측한 "딥 탭 재무이력 3회 읽기" 를 스냅샷 안에서
+            되풀이하지 않는다. 안 넘기면 동작은 이전과 한 글자도 같다.
+        """
+        params = params or ValuationParams()
+
+        loaded = statement or self.load_statement(
+            stock_code, current_price, bsns_year=bsns_year, market_cap=market_cap)
+        if not loaded["available"]:
             from src.data.stock_master import get_stock_name
             return UnifiedValuation(
                 ticker=stock_code, corp_name=get_stock_name(stock_code) or stock_code,
                 current_price=current_price,
                 intrinsic_value=0, gap_pct=0, verdict="데이터 없음",
-                models=[], is_mock=True,
+                models=[], is_mock=loaded["is_mock"],
             )
-
-        # 발행주식수 보강: DART 미제공 시 시총/주가로 도출 → compute_ratios가 BPS·EPS 계산
-        if (not fs.shares_outstanding) and market_cap and current_price and current_price > 0:
-            fs.shares_outstanding = int(market_cap * 1e8 / current_price)
-        # capex 보강: 미파싱 시 투자활동현금흐름으로 근사 → FCF(=영업CF-capex) 확보 → DCF 활성
-        if fs.capex is None and fs.investing_cf is not None:
-            fs.capex = abs(fs.investing_cf) * 0.5
-
-        fs.compute_ratios(current_price)
-        corp_info = self.dart.get_corp_info(corp_code)
-        corp_name = corp_info.corp_name if corp_info else fs.corp_name
+        fs = loaded["fs"]
+        fs_is_mock = loaded["is_mock"]
+        corp_name = loaded["corp_name"]
 
         # 3. 3 모델 실행
         rim_result = compute_rim(fs, params)
@@ -489,24 +573,7 @@ class ValuationEngine:
         models = [rim_result, dcf_result, ddm_result]
 
         # 4. 가중 평균 적정가
-        total_weight = 0
-        weighted_sum = 0
-        weights = {
-            "RIM": params.weight_rim,
-            "DCF": params.weight_dcf,
-            "DDM": params.weight_ddm,
-        }
-
-        for m in models:
-            if m.available and m.intrinsic_value_per_share > 0:
-                w = weights[m.model]
-                weighted_sum += m.intrinsic_value_per_share * w
-                total_weight += w
-
-        if total_weight > 0:
-            intrinsic = weighted_sum / total_weight
-        else:
-            intrinsic = 0
+        intrinsic = weighted_intrinsic(models, params)
 
         # 5. 괴리율 + 판정
         gap_pct = compute_gap_pct(current_price, intrinsic)

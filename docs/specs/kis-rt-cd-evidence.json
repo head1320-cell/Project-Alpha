@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "note": "KIS 업무 응답 코드(rt_cd/msg_cd)의 뜻과 책임 소재 — ★관측이 코드를 모으고, 뜻은 사람이 적는다.★ 코드를 100번 본다고 그 뜻을 알게 되지는 않는다. 그래서 수집기가 만드는 등급 K1 은 적용선 아래에 있고, fault 는 사람이 KIS 문서를 보고 K2 이상으로 적기 전까지 unknown 이다. 관측을 모으는 방법은 scripts/collect_kis_rt_cd.py --write. outage 칸은 이 코드를 breaker 카운트에서 뺄 수 있는지 판정하는 문이 읽는다 — 채우기 전까지 어느 코드도 그 문을 통과하지 못한다.",
+  "why_empty": "이 환경은 KIS 자격증명이 없고 apiportal.koreainvestment.com·openapi.koreainvestment.com 이 프록시 CONNECT 403(정책 거부)이라 공식 문서도 실계좌·모의계좌 응답도 얻을 수 없다(2026-09-21 실측). 비어 있는 것이 결함이 아니라 정직한 현재 상태다 — 채워진 척하면 추측이 검증된 사실과 구분되지 않는다. 참고로 MockKISClient 는 언제나 rt_cd=0 을 돌려주므로 mock 모드에서는 수집기가 영원히 빈손이다. 근거: docs/HISTORY.md 의 AS 항목.",
+  "min_grade_to_apply": "K2",
+  "grades": {
+    "K0": "증거 없음 — 추측. 이 파일에 쓰지 않는다",
+    "K1": "관측 — 이 코드를 응답에서 봤다. 뜻은 모른다",
+    "K2": "KIS 공식 문서에 근거",
+    "K3": "문서 + 실계좌 응답 교차 확인"
+  },
+  "fields": {
+    "rt_cd": "KIS 응답의 rt_cd (문자열)",
+    "msg_cd": "KIS 응답의 msg_cd. null 은 미상 — 이 저장소는 응답 봉투에 그 필드가 있는지 확인한 적이 없다",
+    "meaning": "사람이 적는다. 이 코드가 무엇을 뜻하는가",
+    "fault": "provider | self | unknown. 사람이 적는다 — 관측은 이것을 주지 않는다",
+    "outage": "true | false | null. 사람이 적는다 — 이 코드가 KIS 장애를 뜻하는가. fault 와 다른 축이다: fault 는 '누구의 문제인가'(provider·self·unknown)라 '장 종료' 처럼 아무의 문제도 아닌 응답에 맞는 값이 없다. null 은 미상이고 미상은 통과가 아니다 — breaker 카운트에서 빼려면 false 여야 한다(src/domain/breaker_change_gate.py)",
+    "grade": "K0~K3",
+    "evidence_source": "어디서 나왔는가 (KIS 문서의 어느 쪽, 또는 어느 응답)",
+    "probed_at": "언제 확인했는가",
+    "observed": "수집기가 채운다. count · first_seen · last_seen · execution_mode · sample_msg1"
+  },
+  "codes": {}
+}

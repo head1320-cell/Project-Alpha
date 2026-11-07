@@ -30,6 +30,13 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from src.domain.kis_failure import failure_label
+from src.execution.api_failure_probe import observe_into
+from src.execution.client_realism import client_is_simulated
+from src.execution.drawdown import REASON_FETCH_FAILED, Drawdown, drawdown_from_history
+from src.execution.kis_client import KISCallError
+from src.execution.live_schemas import account_scope
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,6 +64,18 @@ class ExecutorState:
 # ═══════════════════════════════════════════════════════════════════════════════
 # OrderExecutor
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def _append_audit(audit_ids: list, audit_id) -> bool:
+    """감사 ID 를 목록에 넣는다. ★`None` 은 넣지 않는다★ — 반환값이 성공 여부.
+
+    `AuditTrail.log()` 는 기록 실패 시 `None` 을 준다(Y1-②). `None` 을 그대로
+    append 하면 "감사 ID 가 있다" 는 거짓 신호가 응답에 실린다.
+    """
+    if audit_id:
+        audit_ids.append(audit_id)
+        return True
+    return False
+
 
 class OrderExecutor:
     """
@@ -90,6 +109,10 @@ class OrderExecutor:
                            confirm_token="EXPLICIT_LIVE_CONFIRMED")
     """
 
+    #: 운영자 계좌(`None`)가 기본 — `__init__` 을 거치지 않고 만든 인스턴스도 운영자 범위다(BV6).
+    account_id: str | None = None
+
+
     def __init__(
         self,
         engine,
@@ -98,7 +121,10 @@ class OrderExecutor:
         audit_trail,
         kill_switch,
         mode: str = ExecutionMode.SHADOW,
+        account_id: str | None = None,
     ):
+        #: 사용자 증권 계좌(BV6). `None` = 운영자 `.env` 계좌. 주문을 쓰고 읽을 때 이 계좌 것만 본다.
+        self.account_id = account_id
         self.engine = engine
         self.kis = kis_client
         self.risk = risk_gateway
@@ -119,9 +145,14 @@ class OrderExecutor:
         signal: dict,
         account_state: dict | None = None,
         regime_state: dict | None = None,
+        *,
+        actor: str = "system",
     ) -> dict:
         """
         신호 → 위험 검증 → 모드 라우팅 → 실행 → 기록.
+
+        `actor` — 이 신호를 낸 사람(BV5). 신호 감사 행에만 적는다 — 위험 판정·제출·체결은 시스템이 한 일이다.
+        사람이 내지 않은 경로(자동)는 기본값 `"system"` 그대로.
 
         Returns:
             {
@@ -143,8 +174,9 @@ class OrderExecutor:
             context={"price": signal.get("price"),
                       "order_type": signal.get("order_type"),
                       "mode": self.state.mode},
+            actor=actor,
         )
-        audit_ids.append(sig_audit)
+        _append_audit(audit_ids, sig_audit)
 
         # ── 2. Kill switch 우선 확인 ─────────────────────────────────
         if self.kill_switch.is_active():
@@ -171,7 +203,7 @@ class OrderExecutor:
 
         risk_result = self.risk.check(signal, account_state, regime_state)
         risk_audit = self.audit.log_risk_decision(risk_result, signal)
-        audit_ids.append(risk_audit)
+        _append_audit(audit_ids, risk_audit)
 
         if not risk_result.approved:
             return self._reject_order(
@@ -223,7 +255,22 @@ class OrderExecutor:
         }
 
     def _execute_paper(self, client_order_id, signal, audit_ids) -> dict:
-        """PAPER: KIS 모의투자 또는 MockKISClient로 가상 거래."""
+        """PAPER: KIS 모의투자 또는 MockKISClient로 가상 거래.
+
+        ★모드 이름이 아니라 클라이언트가 판정 근거다★ — 예전에는 여기서 바로
+        `place_order` 를 불렀고, `KIS_USE_MOCK=0` + `KIS_IS_PAPER=0` 조합에서는
+        **PAPER 모드가 실주문을 냈다**(Y1-①). 판정 불가도 거부다.
+        """
+        simulated, why = client_is_simulated(self.kis)
+        if not simulated:
+            return self._reject_order(
+                client_order_id, signal,
+                reason="paper_mode_real_client",
+                message=(f"PAPER 모드인데 클라이언트가 모의가 아닙니다({why}) — "
+                         f"주문을 발송하지 않았습니다. 실거래는 LIVE 모드에서 "
+                         f"확인 토큰과 함께만 가능합니다."),
+                audit_ids=audit_ids,
+            )
         try:
             kis_resp = self.kis.place_order(
                 ticker=signal["ticker"], side=signal["side"],
@@ -233,13 +280,13 @@ class OrderExecutor:
             )
 
             order_audit = self.audit.log_order_submitted(
-                client_order_id, signal, kis_resp,
+                client_order_id, signal, kis_resp, simulated_by=why,
             )
-            audit_ids.append(order_audit)
+            audit_ok = _append_audit(audit_ids, order_audit)
 
             self._update_order_submitted(client_order_id, kis_resp)
 
-            return {
+            out = {
                 "client_order_id": client_order_id,
                 "status":          "SUBMITTED",
                 "mode":            ExecutionMode.PAPER,
@@ -248,10 +295,16 @@ class OrderExecutor:
                 "audit_ids":       audit_ids,
                 "message":         "PAPER mode — KIS 모의투자 발주 완료",
             }
+            if not audit_ok:
+                # ★감사 기록이 없다는 사실을 응답이 말한다★
+                out["audit_failed"] = True
+            return out
         except Exception as e:
             return self._fail_order(
                 client_order_id, signal, str(e), audit_ids,
                 mode=ExecutionMode.PAPER,
+                # ★예외를 넘긴다★ — 종류가 기록까지 가려면 문자열로는 안 된다(AR3).
+                exc=e,
             )
 
     def _execute_live(self, client_order_id, signal, audit_ids) -> dict:
@@ -281,7 +334,7 @@ class OrderExecutor:
             order_audit = self.audit.log_order_submitted(
                 client_order_id, signal, kis_resp,
             )
-            audit_ids.append(order_audit)
+            _append_audit(audit_ids, order_audit)
 
             self._update_order_submitted(client_order_id, kis_resp)
 
@@ -298,6 +351,8 @@ class OrderExecutor:
             return self._fail_order(
                 client_order_id, signal, str(e), audit_ids,
                 mode=ExecutionMode.LIVE,
+                # ★예외를 넘긴다★ — 종류가 기록까지 가려면 문자열로는 안 된다(AR3).
+                exc=e,
             )
 
     # ═════════════════════════════════════════════════════════════════════
@@ -320,6 +375,15 @@ class OrderExecutor:
                 raise ValueError(
                     "LIVE 모드 진입은 confirm_token='EXPLICIT_LIVE_CONFIRMED' 필요"
                 )
+            # ★실계좌 관문(BV7)★ — 토큰만으로는 열리지 않는다. 운영자가 선언한 기록에 이 사람의 이름이 있어야 한다.
+            if self.account_id is not None:
+                # 사용자 계좌의 LIVE 는 계좌별 대조 감시가 생길 때 연다(경로도 먼저 거절한다 — 두 겹).
+                raise ValueError("사용자 계좌의 실계좌 주문은 아직 열리지 않았어요.")
+            from src.domain.live_gate import LIVE_ALLOWED, live_gate
+            from src.execution import live_gate_store
+            gate = live_gate(live_gate_store.current(), actor)
+            if gate["state"] != LIVE_ALLOWED:
+                raise ValueError(gate["reason"])
 
         self.state.mode = new_mode
         self.state.last_mode_change = datetime.now()
@@ -354,8 +418,8 @@ class OrderExecutor:
         ticker: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
-        sql = "SELECT * FROM live_orders WHERE 1=1"
-        params: dict = {}
+        scope, params = account_scope(self.account_id)
+        sql = f"SELECT * FROM live_orders WHERE {scope}"
         if status:
             sql += " AND status = :st"; params["st"] = status
         if strategy_id:
@@ -370,10 +434,11 @@ class OrderExecutor:
         return [dict(r._mapping) for r in rows]
 
     def get_order(self, client_order_id: str) -> dict | None:
+        scope, params = account_scope(self.account_id)
         with self.engine.connect() as conn:
             row = conn.execute(text(
-                "SELECT * FROM live_orders WHERE client_order_id = :coid"
-            ), {"coid": client_order_id}).fetchone()
+                "SELECT * FROM live_orders WHERE client_order_id = :coid AND " + scope
+            ), {"coid": client_order_id, **params}).fetchone()
             if not row:
                 return None
             order = dict(row._mapping)
@@ -427,14 +492,16 @@ class OrderExecutor:
         try:
             balance = self.kis.get_balance()
 
-            # 오늘 turnover
+            # 오늘 turnover — ★이 계좌 것만★(BV6)
+            scope, params = account_scope(self.account_id)
             with self.engine.connect() as conn:
-                row = conn.execute(text("""
+                row = conn.execute(text(f"""
                     SELECT COALESCE(SUM(quantity * COALESCE(avg_fill_price, price, 0)), 0) AS turnover
                     FROM live_orders
                     WHERE date(created_at) = date('now')
                       AND status IN ('FILLED', 'PARTIAL_FILL', 'SUBMITTED')
-                """)).fetchone()
+                      AND {scope}
+                """), params).fetchone()
                 daily_turnover = float(row._mapping["turnover"]) if row else 0
 
             positions = {
@@ -447,21 +514,37 @@ class OrderExecutor:
                 for p in balance.get("positions", [])
             }
 
-            return {
+            # ★드로다운은 재거나 모르거나다★ — 예전에는 0 을 박아 두어(TODO 주석과
+            # 함께) 킬스위치의 `auto_dd`/`auto_cb` 와 게이트웨이 ⑨ 서킷브레이커가
+            # **구조적으로 발동할 수 없었다**. 이제 못 재면 `None` + 사유다(P1-a).
+            # 에쿼티 이력은 운영자 계좌의 것이다 — 계좌 실행기는 빌려 쓰지 않는다(BV6, 계좌별 이력은 아직 없다).
+            dd = (drawdown_from_history(self.engine) if self.account_id is None else
+                  Drawdown(None, None, "계좌별 자산 이력은 아직 기록하지 않아요 — 드로다운을 잴 수 없어요."))
+            # ★`auto_api` 의 재료★(AQ) — 연속 실패 횟수는 이미 `CircuitBreaker` 가
+            # 세고 있었다. 세는 로직은 0줄 바뀌지 않고, 여기서 **읽어 실을** 뿐이다.
+            return observe_into({
                 "equity_krw":            balance.get("evaluated_total", 0),
                 "cash_krw":              balance.get("cash_krw", 0),
                 "positions":             positions,
                 "daily_turnover_krw":    daily_turnover,
-                "current_drawdown_pct":  0,    # TODO: live monitor에서 계산
-                "cumulative_dd_pct":     0,    # TODO: live monitor에서 계산
-            }
+                "current_drawdown_pct":  dd.intraday_pct,
+                "cumulative_dd_pct":     dd.cumulative_pct,
+                "drawdown_reason":       dd.reason,
+            }, self.kis)
         except Exception as e:
             logger.error(f"Account state fetch 실패: {e}")
-            return {
-                "equity_krw": 0, "cash_krw": 0,
-                "positions": {}, "daily_turnover_krw": 0,
-                "current_drawdown_pct": 0, "cumulative_dd_pct": 0,
-            }
+            # ★조회 실패와 "잔고가 0" 은 다른 사실이다★ — 0 을 돌려주면 한도 검사가
+            # 전부 "여유 있음" 으로 읽히고, 실패가 **완전히 무음**이 된다.
+            # ★조회가 실패한 순간이야말로 이 숫자가 가장 필요하다★(AQ) — KIS 가
+            # 죽어서 실패한 것이라면 그 실패는 방금 breaker 에 기록됐다. 여기서
+            # 싣지 않으면 `auto_api` 가 **정작 장애 중에** 미상으로 남는다.
+            return observe_into({
+                "equity_krw": None, "cash_krw": None,
+                "positions": {}, "daily_turnover_krw": None,
+                "current_drawdown_pct": None, "cumulative_dd_pct": None,
+                "drawdown_reason": f"{REASON_FETCH_FAILED}: {e}",
+                "state_reason": f"{REASON_FETCH_FAILED}: {e}",
+            }, self.kis)
 
     def _insert_pending_order(self, client_order_id, signal, risk_result):
         try:
@@ -471,11 +554,11 @@ class OrderExecutor:
                         client_order_id, strategy_id, signal_source, execution_mode,
                         ticker, side, order_type, quantity, price,
                         status, risk_check_id, expected_slippage_bps,
-                        market_impact_estimate_krw, reason_code
+                        market_impact_estimate_krw, reason_code, account_id
                     ) VALUES (
                         :coid, :sid, :src, :mode,
                         :tk, :sd, :ot, :qty, :pr,
-                        'PENDING', :rcid, :sl, :mi, :rc
+                        'PENDING', :rcid, :sl, :mi, :rc, :acct
                     )
                 """), {
                     "coid": client_order_id,
@@ -489,6 +572,7 @@ class OrderExecutor:
                     "sl":   risk_result.metadata.get("market_impact_bps"),
                     "mi":   None,
                     "rc":   "approved",
+                    "acct": self.account_id,
                 })
         except Exception as e:
             logger.error(f"PENDING 주문 INSERT 실패: {e}")
@@ -512,16 +596,39 @@ class OrderExecutor:
 
     def _reject_order(self, client_order_id, signal, reason, message, audit_ids,
                        check_id=None):
+        """거부를 기록한다. ★행이 이미 있으면 갱신한다★
+
+        예전에는 INSERT 만 했다. 그래서 `_insert_pending_order` 뒤에 거부가 나면
+        `client_order_id` UNIQUE 충돌이 나고 그 예외를 아래 `except` 가 삼켜,
+        **DB 에는 `PENDING` 인데 호출자에게는 `REJECTED`** 가 돌아갔다. 거부가
+        발주 이전 단계에서만 일어나던 동안에는 드러나지 않던 결함이고, PAPER
+        가드(Y1-①)가 발주 직전에 거부하면서 드러났다.
+        """
         try:
             with self.engine.begin() as conn:
+                updated = conn.execute(text("""
+                    UPDATE live_orders
+                    SET status = 'REJECTED', reason_code = :rc, error_message = :em,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE client_order_id = :coid
+                """), {"coid": client_order_id, "rc": reason, "em": message}).rowcount
+                if updated:
+                    return {
+                        "client_order_id": client_order_id,
+                        "status":          "REJECTED",
+                        "mode":            self.state.mode,
+                        "reason":          reason,
+                        "message":         message,
+                        "audit_ids":       audit_ids,
+                    }
                 conn.execute(text("""
                     INSERT INTO live_orders (
                         client_order_id, strategy_id, execution_mode,
                         ticker, side, quantity, price,
-                        status, reason_code, error_message, risk_check_id
+                        status, reason_code, error_message, risk_check_id, account_id
                     ) VALUES (
                         :coid, :sid, :mode, :tk, :sd, :qty, :pr,
-                        'REJECTED', :rc, :em, :rcid
+                        'REJECTED', :rc, :em, :rcid, :acct
                     )
                 """), {
                     "coid": client_order_id,
@@ -531,6 +638,7 @@ class OrderExecutor:
                     "qty":  signal["quantity"], "pr": signal.get("price"),
                     "rc":   reason, "em": message,
                     "rcid": check_id,
+                    "acct": self.account_id,
                 })
         except Exception:
             pass
@@ -544,16 +652,27 @@ class OrderExecutor:
             "audit_ids":       audit_ids,
         }
 
-    def _fail_order(self, client_order_id, signal, error, audit_ids, mode):
+    def _fail_order(self, client_order_id, signal, error, audit_ids, mode, exc=None):
+        """주문 실패를 기록한다. ★무엇이 일어났는지를 적는다★ (AR3)
+
+        예전에는 `reason_code` 가 **무엇이 일어났든** 상수 `"api_error"` 였다 —
+        전송 오류도, 장 종료 같은 업무 응답도, 토큰 실패도 한 글자로 같았다.
+        ★상수가 관측 행세를 한다★(AL 의 `selection_effect=0`, AM 의 `"dev"`,
+        AP 의 `dd_at_trigger=0` 과 같은 모양). 이제 예외가 들고 온 **종류**를
+        적고, 종류를 모르는 예외는 `unknown` 이다(상수가 아니다).
+        """
+        label = exc.label() if isinstance(exc, KISCallError) else failure_label(None)
+        kind = label["kind"]
+
         try:
             with self.engine.begin() as conn:
                 conn.execute(text("""
                     UPDATE live_orders
                     SET status = 'FAILED', error_message = :em,
-                        reason_code = 'api_error',
+                        reason_code = :rc,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE client_order_id = :coid
-                """), {"coid": client_order_id, "em": error})
+                """), {"coid": client_order_id, "em": error, "rc": kind})
         except Exception:
             pass
 
@@ -564,11 +683,14 @@ class OrderExecutor:
             severity=Severity.ERROR,
             client_order_id=client_order_id,
             ticker=signal["ticker"],
-            reason_code="api_error",
-            context={"error": error},
+            reason_code=kind,
+            # ★원자료를 함께 남긴다★ — 책임 소재는 단정하지 않는다(rt_cd 표 없음).
+            # ★실행 모드도 남긴다★(AS1) — `live_audit_trail` 에는 모드 칸이
+            # 없어서, 없으면 나중에 모의와 실계좌 관측이 조용히 합쳐진다.
+            context={"error": error, "failure": label, "execution_mode": mode},
             message=f"주문 실패: {error}",
         )
-        audit_ids.append(fail_audit)
+        _append_audit(audit_ids, fail_audit)
 
         return {
             "client_order_id": client_order_id,

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "note": "ECOS 계열의 공표 주기 — ★프로브가 채운다. 손으로 적지 않는다.★ 각 항목은 추론이 아니라 관측의 기록이며, 어떤 응답에서 나왔는지(evidence_source)와 언제 봤는지(probed_at)를 함께 남긴다. 채우는 방법은 scripts/verify_ecos_meta.py --write.",
+  "why_empty": "이 환경은 BOK_API_KEY 가 없고 ecos.bok.or.kr 이 프록시 CONNECT 403 이라 라이브 검증이 불가능하다. 비어 있는 것이 결함이 아니라 정직한 현재 상태다 — 채워진 척하면 추측이 검증된 사실과 구분되지 않는다. 근거: docs/specs/2026-08-27-ecos-data-contract-audit.md",
+  "min_grade_to_apply": "E2",
+  "grades": {
+    "E0": "증거 없음 — 코드/문서의 가정",
+    "E1": "간접 증거 — 값이 오는 것은 봤으나 주기를 기록하지 않음",
+    "E2": "메타 API 응답에서 관측",
+    "E3": "메타 + 실제 TIME 값으로 교차 확인"
+  },
+  "series": {}
+}

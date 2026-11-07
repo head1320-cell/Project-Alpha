@@ -25,6 +25,7 @@ Anthropic Claude API 통합 클라이언트.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import threading
@@ -37,26 +38,45 @@ logger = logging.getLogger(__name__)
 
 # Anthropic SDK는 optional dependency
 try:
-    from anthropic import Anthropic, APIError, RateLimitError
+    from anthropic import Anthropic, APIConnectionError, APIError, APIStatusError, RateLimitError
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     Anthropic = None
     APIError = Exception
     RateLimitError = Exception
+    APIStatusError = Exception
+    APIConnectionError = Exception
     ANTHROPIC_AVAILABLE = False
     logger.info("anthropic SDK 미설치 — Mock 모드로 동작 (pip install anthropic)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Pricing (USD per 1M tokens) — 2025년 기준 Claude Sonnet 4
+# Pricing (USD per 1M tokens) — Anthropic 1st-party 표(claude-api 스킬, 2026-10-06 캐시)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 MODEL_PRICING = {
+    "claude-fable-5-1":       {"input": 10.00, "output": 50.00},
+    "claude-fable-5":         {"input": 10.00, "output": 50.00},
+    "claude-opus-5-5":        {"input": 4.00,  "output": 20.00},
+    "claude-opus-5":          {"input": 5.00,  "output": 25.00},
+    "claude-opus-4-8":        {"input": 5.00,  "output": 25.00},
+    "claude-opus-4-7":        {"input": 5.00,  "output": 25.00},
+    "claude-opus-4-6":        {"input": 5.00,  "output": 25.00},
+    "claude-sonnet-5-5":      {"input": 2.00,  "output": 10.00},
+    "claude-sonnet-5":        {"input": 2.00,  "output": 10.00},
     "claude-sonnet-4-6":      {"input": 3.00,  "output": 15.00},
     "claude-sonnet-4-5":      {"input": 3.00,  "output": 15.00},
-    "claude-opus-4-6":        {"input": 15.00, "output": 75.00},
-    "claude-haiku-4-5":       {"input": 0.80,  "output": 4.00},
+    "claude-haiku-5-5":       {"input": 0.10,  "output": 0.50},   # 100K 토큰 이하 프롬프트 값
+    "claude-haiku-4-5":       {"input": 1.00,  "output": 5.00},
 }
+
+#: 구조화 호출이 거절에 대비해 서버 대체 모델을 쓰게 하는 beta(`fallbacks: "default"` 와 짝).
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+
+def price_of(model: str | None) -> dict | None:
+    """가격표에 있는 모델만 — 모르는 모델을 다른 모델 값으로 메우지 않는다(비용 미상 ≠ 0)."""
+    return MODEL_PRICING.get(model or "")
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 USD_TO_KRW = 1400
@@ -72,7 +92,7 @@ class NarrativeRequest:
     system_prompt:   str
     user_prompt:     str
     max_tokens:      int = 2000
-    temperature:     float = 0.3       # 분석용 → 보수적
+    temperature:     float = 0.3       # ★보내지 않는다★(API 2026-10-21 은 400) — 부르는 쪽이 깨지지 않게 칸만 남김
     model:           str | None = None
     metadata:        dict = field(default_factory=dict)
 
@@ -91,6 +111,21 @@ class NarrativeResponse:
     cached:          bool = False
     error:           str | None = None
     timestamp:       str = field(default_factory=lambda: datetime.now().isoformat())
+
+
+@dataclass
+class StructuredResponse:
+    """JSON 스키마 구조화 호출의 결과 — ★데모 응답이 없다★: 실패면 `data=None` + `error` 코드."""
+    data:            dict | None
+    model:           str                    # 요청한 모델
+    served_model:    str | None = None      # 실제로 답한 모델(서버 대체 모델이면 그 모델)
+    input_tokens:    int = 0
+    output_tokens:   int = 0
+    cost_usd:        float | None = None    # 가격표에 없는 모델이면 None + cost_note
+    cost_note:       str | None = None
+    error:           str | None = None      # no_key·sdk_missing·client_init_failed·circuit_open·refusal·max_tokens·…
+    detail:          str | None = None      # 거절 분류·HTTP 상태 등(키 값은 싣지 않는다)
+    elapsed_seconds: float = 0.0
 
 
 @dataclass
@@ -290,7 +325,10 @@ class ClaudeClient:
                 start=start,
             )
 
-        # Mock fallback (API key 없거나 SDK 미설치)
+        # 키는 있는데 SDK·클라이언트가 없다 — 데모 글을 정상처럼 내지 않는다(오류로 말한다).
+        if not self.is_configured and self.api_key:
+            return self._error_response(req, model, self._missing_client_code(), start)
+        # Mock fallback (API key 없음)
         if not self.is_configured:
             return self._mock_response(req, model, start=start)
 
@@ -298,10 +336,10 @@ class ClaudeClient:
         with self._semaphore:
             for attempt in range(1, self.max_retries + 1):
                 try:
+                    # temperature 는 보내지 않는다 — API 2026-10-21 은 모든 모델에서 400(SDK 2.1 은 인자가 없다).
                     response = self._client.messages.create(
                         model=model,
                         max_tokens=req.max_tokens,
-                        temperature=req.temperature,
                         system=req.system_prompt,
                         messages=[{"role": "user", "content": req.user_prompt}],
                     )
@@ -375,6 +413,11 @@ class ClaudeClient:
             yield mock.content
             return mock
 
+        if not self.is_configured and self.api_key:
+            err = self._error_response(req, model, self._missing_client_code(), start)
+            yield err.content
+            return err
+
         if not self.is_configured:
             mock = self._mock_response(req, model, start=start)
             yield mock.content
@@ -384,10 +427,9 @@ class ClaudeClient:
             full_content = []
             input_tok = output_tok = 0
             try:
-                with self._client.messages.stream(
+                with self._client.messages.stream(        # temperature 없음(위 invoke 와 같은 이유)
                     model=model,
                     max_tokens=req.max_tokens,
-                    temperature=req.temperature,
                     system=req.system_prompt,
                     messages=[{"role": "user", "content": req.user_prompt}],
                 ) as stream:
@@ -417,6 +459,123 @@ class ClaudeClient:
                 err_resp = self._error_response(req, model, str(e), start)
                 yield f"\n\n⚠ 스트리밍 중단: {e}"
                 return err_resp
+
+    # ─────────────────────────────────────────────────────────────────────
+    # 구조화 호출 (JSON 스키마) — 캔버스 AI 추천 등. ★데모 응답 없음★
+    # ─────────────────────────────────────────────────────────────────────
+
+    def unavailable_reason(self) -> str | None:
+        """지금 부를 수 없는 이유 코드 — 부를 수 있으면 None. 부르기 전에 묻는다(한도·캐시보다 먼저)."""
+        if not self.api_key:
+            return "no_key"
+        if not self.is_configured:
+            return self._missing_client_code()
+        if not self.circuit.call_allowed():
+            return "circuit_open"
+        return None
+
+    def invoke_structured(self, system: str, user: str, schema: dict, *, model: str | None = None,
+                          effort: str = "medium", max_tokens: int = 16000) -> StructuredResponse:
+        """`output_config.format`(json_schema) 로 한 번 부른다. 거절에 대비해 서버 대체 모델(`fallbacks: "default"`)을 켠다.
+
+        실패는 모두 `data=None` + `error` 코드다 — 키 없음·SDK 없음·차단기·거절·잘림·형식 오류에 글을 지어내지 않는다.
+        SDK 가 429·5xx·연결 오류를 스스로 다시 시도한다(기본 2번) — 여기서 따로 되풀이하지 않는다.
+        """
+        start = time.time()
+        model = model or self.model
+        why = self.unavailable_reason()
+        if why:
+            return StructuredResponse(data=None, model=model, error=why, elapsed_seconds=round(time.time() - start, 3))
+        try:
+            with self._semaphore:
+                msg = self._client.beta.messages.create(
+                    model=model, max_tokens=max_tokens, system=system,
+                    messages=[{"role": "user", "content": user}],
+                    output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
+                    betas=[FALLBACK_BETA], fallbacks="default",
+                )
+        except Exception as e:  # noqa: BLE001 — 어떤 실패든 코드로 돌려준다(글을 지어내지 않는다)
+            self.circuit.record_failure()
+            code, detail = self._failure_code(e)
+            logger.warning("Claude 구조화 호출 실패(%s): %s", code, self._redact(f"{type(e).__name__}: {e}"))
+            with self._usage_lock:
+                self.usage.total_failures += 1
+            return StructuredResponse(data=None, model=model, error=code, detail=detail,
+                                      elapsed_seconds=round(time.time() - start, 3))
+        self.circuit.record_success()
+
+        usage = getattr(msg, "usage", None)
+        iters = list(getattr(usage, "iterations", None) or [])
+        served = next((getattr(it, "model", None) for it in iters if getattr(it, "type", None) == "fallback_message"),
+                      None) or getattr(msg, "model", None) or model
+        cost, note = self._structured_cost(model, served, usage, iters)
+        out = StructuredResponse(data=None, model=model, served_model=served,
+                                 input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
+                                 output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+                                 cost_usd=cost, cost_note=note, elapsed_seconds=round(time.time() - start, 3))
+        with self._usage_lock:
+            self.usage.total_calls += 1
+            self.usage.total_input_tokens += out.input_tokens
+            self.usage.total_output_tokens += out.output_tokens
+            self.usage.total_cost_usd += cost or 0.0
+            self.usage.total_cost_krw += (cost or 0.0) * USD_TO_KRW
+            self.usage.last_call_at = datetime.now().isoformat()
+
+        stop = getattr(msg, "stop_reason", None)
+        if stop == "refusal":                     # ★내용보다 먼저★ — 거절은 스키마와 맞지 않을 수 있다
+            out.error, out.detail = "refusal", getattr(getattr(msg, "stop_details", None), "category", None)
+            return out
+        if stop == "max_tokens":
+            out.error = "max_tokens"
+            return out
+        if stop not in ("end_turn", "stop_sequence"):
+            out.error, out.detail = "incomplete", str(stop)
+            return out
+        # 대체 모델이 이어 답했으면 마지막 경계(fallback 블록) 뒤의 글만 그 모델의 답이다.
+        blocks = list(getattr(msg, "content", None) or [])
+        cut = max((i for i, b in enumerate(blocks) if getattr(b, "type", None) == "fallback"), default=-1)
+        text = "".join(getattr(b, "text", "") for b in blocks[cut + 1:] if getattr(b, "type", None) == "text")
+        try:
+            data = json.loads(text)
+        except ValueError:
+            out.error = "bad_json"
+            return out
+        if not isinstance(data, dict):
+            out.error = "bad_json"
+            return out
+        out.data = data
+        return out
+
+    @staticmethod
+    def _missing_client_code() -> str:
+        return "sdk_missing" if not ANTHROPIC_AVAILABLE else "client_init_failed"
+
+    @staticmethod
+    def _failure_code(e: Exception) -> tuple[str, str | None]:
+        if ANTHROPIC_AVAILABLE and isinstance(e, RateLimitError):
+            return "api_rate_limited", None
+        if ANTHROPIC_AVAILABLE and isinstance(e, APIStatusError):
+            return "api_status", str(getattr(e, "status_code", "") or "")
+        if ANTHROPIC_AVAILABLE and isinstance(e, APIConnectionError):
+            return "network", None
+        return "unexpected", None
+
+    def _redact(self, text: str) -> str:
+        """로그로 나가는 글에서 키 값을 지운다 — 예외 문장에 키가 섞여 들어와도 새지 않게."""
+        return text.replace(self.api_key, "[키]") if self.api_key else text
+
+    @staticmethod
+    def _structured_cost(model: str, served: str, usage, iters: list) -> tuple[float | None, str | None]:
+        """대체 모델이 섞이면 한 걸음(iteration)마다 그 모델 값으로 더한다. 가격표에 없는 모델이 하나라도 있으면 None + 사유."""
+        hops = [(getattr(it, "model", None) or model, it) for it in iters] or [(served, usage)]
+        total = 0.0
+        for m, u in hops:
+            p = price_of(m)
+            if p is None:
+                return None, f"가격표에 없는 모델 {m} — 비용을 계산하지 않았어요"
+            total += (int(getattr(u, "input_tokens", 0) or 0) * p["input"]
+                      + int(getattr(u, "output_tokens", 0) or 0) * p["output"]) / 1_000_000
+        return total, None
 
     # ─────────────────────────────────────────────────────────────────────
     # Usage tracking
