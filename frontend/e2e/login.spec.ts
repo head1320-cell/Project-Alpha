@@ -224,9 +224,11 @@ test("★지금 이 서버 칩: 데이터 출처는 connection-status 로만 · 
 test("감속 모션이면 지도가 처음부터 다 보인다(숨는 층 없음)", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/login", { waitUntil: "domcontentloaded" });
-  const els = await page.locator(".lg-form, .lg-map, .lg-tier, .lg-tier-n").all();
-  expect(els.length).toBeGreaterThan(6);
-  for (const el of els) expect(await el.evaluate((e) => parseFloat(getComputedStyle(e).opacity))).toBeGreaterThan(0.9);
+  // 그려질 때까지 기다린 뒤 센다 — 로그인 화면은 Suspense 안이라 스크립트가 돈 뒤에야 생긴다. `.all()` 은 기다리지 않아,
+  // 스크립트가 늦은 긴 실행에서 0 개를 셌다(2026-11-07 전체 E2E · 스크립트를 1.2초 늦추면 3/3 재현).
+  const all = page.locator(".lg-form, .lg-map, .lg-tier, .lg-tier-n");
+  await expect.poll(() => all.count(), { message: "양식·지도가 그려짐" }).toBeGreaterThan(6);
+  for (const el of await all.all()) expect(await el.evaluate((e) => parseFloat(getComputedStyle(e).opacity))).toBeGreaterThan(0.9);
 });
 
 for (const theme of ["light", "dark"] as const) {
