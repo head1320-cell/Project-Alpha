@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Locator } from "@playwright/test";
+import { test, expect, type Page, type Locator } from "./fixtures";
 import { contrastAudit, type AuditResult } from "./helpers";
 import { onePanel, type Panels } from "../src/widgets/portfolio-graph/panels";
 

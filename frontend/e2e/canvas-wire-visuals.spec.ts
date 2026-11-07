@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF3b1 · 선 모습 — 무엇을 잇는지(필수·선택) · 결과가 지금 것인지(예전 결과) · 계산 중인지(흐름)를 선이 말한다. 계산 0.

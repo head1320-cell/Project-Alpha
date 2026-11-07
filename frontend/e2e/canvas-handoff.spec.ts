@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF3b2 · 전달 점검 화면 — 선마다 무엇이 건너갔고 무엇이 빠지거나 바뀌었는지(서버 `edges`)를 선과 선 판이 말한다.

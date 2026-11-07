@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { contrastAudit, type AuditResult } from "./helpers";
 import { GATE_OPEN, liveState, routeConnection, routeGate, routeLive, signIn, type GateRecord, type GateState } from "./fixtures/admin";
 

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * BT6 · 부품 — 바꿔 끼우기 · 혼자 쓰는 도구 · 팔레트가 그래프를 안다

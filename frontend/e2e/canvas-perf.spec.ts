@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { keepSame, sameValue } from "../src/widgets/portfolio-graph/keepSame";
 import { edgeKeys, inKeyOf, outKeyOf } from "../src/widgets/portfolio-graph/edgeKeys";

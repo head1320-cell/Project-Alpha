@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page, type Route } from "./fixtures";
 import { completedRun, STUB_RUN_ID } from "./helpers";
 
 /**

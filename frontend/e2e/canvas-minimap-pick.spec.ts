@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF 3부 U3 · 미니맵 눌러 고르기 (스펙 §8.4 — 관례로 정해 승인: 누른 카드를 고르고 확대 그대로 떠 있는 판 사이 가운데로)

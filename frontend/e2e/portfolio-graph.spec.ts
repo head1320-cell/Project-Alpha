@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { readFileSync } from "node:fs";
 import { contrastAudit, trackErrors, uniq, type AuditResult } from "./helpers";
 import { TEMPLATES } from "../src/entities/portfolio-graph/templates";

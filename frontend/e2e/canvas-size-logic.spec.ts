@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { fromDoc, parseFile, toDoc } from "../src/entities/portfolio-graph/format";
 import { placeSuggestion } from "../src/entities/portfolio-graph/ghost";
 import { cardHeight, cardsOverlap, COL, COMBINE_SLOT_H, nodeHeight, restackColumns, ROW_GAP, SLOT_H, SLOT_MAX_K, slotBase, slotHeight } from "../src/entities/portfolio-graph/size";

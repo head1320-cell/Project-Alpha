@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * 도구줄 × 틀 머리 (U 이어서 — U6 이 관측으로 남긴 것) — 고른 카드의 도구줄('여기까지 계산 · 갈래 · 고정')은 넓은 틀(갈래 틀·상자 틀)의

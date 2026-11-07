@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page, type Route } from "./fixtures";
 import { contrastAudit, type AuditResult } from "./helpers";
 
 /**

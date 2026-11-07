@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { completedRun, contrastAudit, STUB_RUN_ID, type AuditResult } from "./helpers";
 
 /**

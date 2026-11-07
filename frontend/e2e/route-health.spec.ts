@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { trackErrors, uniq, STUB_RUN_ID, stubCompletedRun } from "./helpers";
 import { LEGACY_SCREENS } from "../src/entities/portfolio-graph/legacyScreens";
 

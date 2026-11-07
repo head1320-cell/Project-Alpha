@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page, type Route } from "./fixtures";
 import { contrastAudit, type AuditResult } from "./helpers";
 import { draftKey, pickDraft } from "../src/entities/portfolio-graph/draft";
 import type { DraftBody } from "../src/entities/portfolio-graph/types";

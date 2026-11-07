@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF 3부 U4 · 유령 끌어 놓기 (스펙 §8.4 결정 4 — 사용자 결정 2026-11-01 "끌어 놓으면 바로 붙이기")

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CF 3부 PB1 · 고객·계좌·목표·보유 진단 노드 — ★관측만(비중을 바꾸지 않는다)★

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 반응형 — 행동 계약 (UI/UX 현대화 P10)

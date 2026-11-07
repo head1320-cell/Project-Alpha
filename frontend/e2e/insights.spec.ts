@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { readFileSync } from "fs";
 import path from "path";
 import { contrastAudit, type AuditResult } from "./helpers";

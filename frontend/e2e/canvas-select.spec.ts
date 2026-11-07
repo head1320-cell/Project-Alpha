@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF 3부 R2 · 고르기·지우기 쓰기 (스펙 §8.3 결정 2·3)

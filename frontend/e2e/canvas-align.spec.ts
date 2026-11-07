@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { ALIGN_ITEMS, alignRects, snapGroup, snapToGuides, type Rect } from "../src/widgets/portfolio-graph/guides";
 
 /**

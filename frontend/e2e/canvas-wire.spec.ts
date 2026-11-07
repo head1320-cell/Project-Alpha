@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * BT4 · 링크 = 관계 — 선을 누르면 무엇이·어디서 어디로·무엇에 쓰이려고 흐르는지 말한다.

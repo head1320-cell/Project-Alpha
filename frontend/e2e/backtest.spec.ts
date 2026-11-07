@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 // A12: Recharts 애니메이션만 끈다 — CSS 모션(§62/§63)은 그대로 둔다.
 // `reducedMotion:'reduce'` 를 쓰면 CSS 까지 꺼져 모션 가드가 공허해진다.

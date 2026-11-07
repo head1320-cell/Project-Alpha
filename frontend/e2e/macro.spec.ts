@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { trackErrors, uniq } from "./helpers";
 
 // Macro Analysis regression — locks in the healthy state so a future regression (the

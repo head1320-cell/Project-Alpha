@@ -25091,3 +25091,29 @@ E2E `canvas-detail.spec.ts` 5 — 프런트 변이 4/4 죽음(칩을 문구 부�
   범위 밖이고, 제품 길(Next→백엔드)은 undici 가 4초에 빈 연결을 놓아 서버 5초보다 짧다(두 실행 모두 백엔드 연결 오류 0). 결정 거리로 남김.
 - 게이트(고친 시험 · 실제 빌드 `restart.sh`): clients 10 · 겹침 시험 5번 되풀이(제목 일치 2 × 5 = 10) · proxy-abort + login 25 통과 · eslint(바꾼 파일) 0.
 - 하지 않음: 원래 증상의 원인은 여전히 모른다(U 이어서 5) · 시험 DB 를 실행마다 비우지 않는다(쌓이는 것이 이번 경합을 드러냈다 — 그대로 둠).
+
+## CF 3부 · U 이어서 6 — 시험의 API 클라이언트가 쉰 연결을 다시 쓰지 않는다 (2026-11-07)
+
+- 왜: 사용자 결정(2026-11-07 "추천대로 진행해") — U 이어서 5b 의 portfolio-graph 실패(정리 `DELETE` 가 5,007ms 쉰 연결로 `socket hang up`)를 ★시험 쪽에서★ 막는다
+  (서버의 연결 유지 시한은 배포 설정이라 건드리지 않음).
+- 잰 것(범위를 정함): ① Next 는 `Keep-Alive: timeout=5` 를 보내고 uvicorn 은 힌트가 없다. ② 그런데 Node 22 의 에이전트는 서버 힌트를 ★에이전트에 시한이 있을 때만★ 줄이는 데
+  쓴다(`keepSocketAlive` — `serverHintTimeout < agentTimeout`). Playwright 의 API 클라이언트는 프로세스 전체가 하나의 keep-alive 에이전트(`HttpHappyEyeballsAgent({ keepAlive: true })`
+  · 시한 없음)를 쓰므로 힌트는 무시된다 — 빈 연결 시한은 0(직접 잼) · ★백엔드(8000) 직접 호출뿐 아니라 Next(3000)를 거치는 page.request 도 같은 5초 경합에 놓인다★.
+  ③ Playwright 로 직접: 맨 호출 세 번은 한 연결(같은 포트)을 다시 쓰고, `connection: close` 를 붙이면 머리글이 서버에 닿고 그 뒤 연결을 다시 쓰지 않는다.
+  ④ 모든 동사(get·post·put·patch·delete·head·fetch)와 `route.fetch()` 가 클라이언트의 `_innerFetch` 한 곳을 지난다(playwright-core 1.61.1).
+- 무엇(시험만): 새 `e2e/fixtures.ts` — `@playwright/test` 를 그대로 다시 내보내고(`export *`) `test` 만 넓힌다: `browser.newContext` 를 감싸 만든 맥락의 `request` 를,
+  `request` 고정을 고친다(기본 맥락도 `browser.newContext` 로 만들어진다). 고친 클라이언트는 `_innerFetch` 에서 `connection: close` 를 더한다 — 요청마다 연결을 한 번만 쓴다.
+  route.fetch 는 가로챈 브라우저 요청의 머리글을 그대로 두고 connection 만 더한다. ★재시도로 덮지 않는다★(Playwright 의 `maxRetries` 는 ECONNRESET 을 다시 보내 POST 를 두 번
+  보낼 수 있다). ★브라우저 요청은 건드리지 않는다★(`extraHTTPHeaders` 는 브라우저에도 가서 쓰지 않음). `_innerFetch` 가 없어지면(버전 변경) 조용히 넘어가지 않고 까닭과 함께 실패.
+  스펙 94 개의 가져오기 한 줄을 `"@playwright/test"` → `"./fixtures"` 로(기계적 · 다른 줄 0).
+- 시험 새 `e2e/api-no-reuse.spec.ts`(6) — 가짜 서버가 ★같은 연결로 온 두 번째 요청에서 연결을 끊는다★(= 다시 쓰는 순간 서버가 닫음 · 경합을 결정적으로): page.request 동사 8번
+  모두 200 + 연결 8개 + `connection: close` + 제 머리글 그대로 · request 고정 · route.fetch(브라우저 머리글 그대로) · 시험 안에서 만든 맥락 / 짝(전제): 고정을 거치지 않은 맨
+  클라이언트는 두 번째 요청에서 `socket hang up` · 모든 스펙이 `./fixtures` 에서 가져옴(스펙 > 90 개를 실제로 읽음 · 검사식이 나쁜 줄을 잡고 좋은 줄을 통과시킴).
+  빨강: 고정이 다시 내보내기만 할 때 5 실패(네 클라이언트 모두 `socket hang up` · 가져오기 검사) · 짝 1 통과.
+- 변이(작업 트리 · 모두 죽음 5/5): request 고정을 고치지 않음 · browser.newContext 를 고치지 않음(3 실패 — 기본 맥락·route.fetch·시험 안 맥락) · route.fetch 의 브라우저 머리글을 버림 ·
+  connection 을 keep-alive 로 · 스펙 하나가 바로 가져옴. ★살아남은 변이 하나 → 코드를 뺐다★: 처음에는 `context` 고정도 따로 고쳤는데 지워도 통과했다(기본 맥락이
+  `browser.newContext` 로 만들어져 이미 고쳐짐) — 지워도 통과하는 줄이라 뺐다.
+- 게이트: ★전체 E2E 1,223: 1,219 통과 · 4 건너뜀(R8 재기) · 실패 0 · 재시도 0★(1.0시간 — 앞 두 실행과 같은 시간, 요청마다 새 연결로 느려진 것은 보이지 않음 · 이 세션의
+  첫 실패 0 전체 실행) · api-no-reuse 6 × 3번 되풀이 18 · 화면을 읽는 pytest 580 통과 · 1 건너뜀 · tsc 0 · eslint(새 파일) 0.
+- 하지 않음: 서버의 연결 유지 시한 · 브라우저 연결 · `playwright.request.newContext()` 로 따로 만든 클라이언트(스펙에 없음 — 짝 시험만 일부러 씀) · 요청마다 새 연결이라 느려졌는지는
+  전체 실행 시간으로만 봄(위).

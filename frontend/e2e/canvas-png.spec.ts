@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { readFileSync } from "node:fs";
 import {
   bandHeight, captionLines, EXPORT_MAX_PX, EXPORT_PAD, EXPORT_SKIP, EXPORT_VIEW_STATE, exportNote, exportSize, keepForExport, pickFontFaces, pngFileName,

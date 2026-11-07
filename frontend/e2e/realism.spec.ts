@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { cardsOverflow, contrastAudit, type AuditResult } from "./helpers";
 import { liveState, realismState, routeConnection, routeGate, routeLive, routeRealism, signIn, type RealismState } from "./fixtures/admin";
 import REALISM from "./fixtures/realism.json";

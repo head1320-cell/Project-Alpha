@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { CHIP_H, ghostSuggestions, placeConnectChip, placeSuggestion, MAX_GHOSTS, withAiGhosts, type PlaceNode } from "../src/entities/portfolio-graph/ghost";
 import { cardHeight, COL, NODE_W, PORT_TOP, ROW_GAP } from "../src/entities/portfolio-graph/size";
 import type { AiSuggestion, AttachEdge, Procedure, ProcedureSuggestion } from "../src/entities/portfolio-graph/types";

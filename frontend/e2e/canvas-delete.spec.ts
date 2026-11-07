@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF 3부 R1 · 캔버스 고침 — 지우기·우클릭·상자 끌기·되돌리기 (스펙 §8.3 점검의 기존 버그)

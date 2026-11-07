@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF 3부 E1 · 캔버스 골든 — ★`PortfolioCanvas`·`store` 를 나누기(E2·E3) 전후로 동작이 같다는 것을 못 박는다★ (스펙 §8.1)

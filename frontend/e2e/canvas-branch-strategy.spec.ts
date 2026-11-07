@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { strategyEnds } from "../src/entities/portfolio-graph/strategy";
 import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * CF4c · 경유점 · 선 모양 — ★선은 노드와 노드의 관계를 보여 준다 — 길을 사람이 고를 수 있게★

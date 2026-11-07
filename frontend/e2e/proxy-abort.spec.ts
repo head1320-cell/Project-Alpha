@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { NextRequest } from "next/server";

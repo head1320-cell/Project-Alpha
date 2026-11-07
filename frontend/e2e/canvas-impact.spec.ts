@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 /**
  * BT5 · 영향 — ★바뀐 곳과 그 하류만 낡는다★ (예전엔 설정 하나만 바꿔도 모든 카드가 "예전 결과" 였다)

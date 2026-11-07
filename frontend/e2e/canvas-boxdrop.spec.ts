@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { boxDropPlan, frameRect } from "../src/entities/portfolio-graph/boxdrop";
 import { GROUP_PAD, NODE_W, nodeHeight } from "../src/entities/portfolio-graph/size";
 import type { GraphGroup } from "../src/entities/portfolio-graph/types";

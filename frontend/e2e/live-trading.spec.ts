@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { cardsOverflow, contrastAudit, type AuditResult } from "./helpers";
 import {
   GATE_OPEN, LIVE_BALANCE, LIVE_REFUSED, liveState, routeConnection, routeGate, routeLive, signIn, type LiveState,

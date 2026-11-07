@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { defaultAriaLabelConfig } from "@xyflow/system";
 import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 import { ARIA_KO } from "../src/entities/portfolio-graph/aria";
