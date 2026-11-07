@@ -18,6 +18,7 @@
  * unbuffered.
  */
 import { type NextRequest } from "next/server";
+import { startTrace } from "./trace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,6 +68,8 @@ function isTimeoutError(e: unknown): boolean {
 
 async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   const target = `${backendBase()}/${(path || []).join("/")}${req.nextUrl.search || ""}`;
+  // Diagnostic stage trace — writes nothing unless PROXY_TRACE_LOG is set (see ./trace.ts).
+  const tr = startTrace(`${req.method} /${(path || []).join("/")}${req.nextUrl.search || ""}`);
 
   const headers = new Headers(req.headers);
   headers.delete("host");
@@ -97,7 +100,9 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
 
   let upstream: Response;
   try {
+    tr.stage("fetch");
     upstream = await fetch(target, init);
+    tr.stage("headers", String(upstream.status));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // The browser left first → 499 ("client closed request"). Nobody will read it, but it must not be
@@ -105,6 +110,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
     // with a `ResponseAborted` reason, but an abort without a reason surfaces as a plain AbortError, which
     // isTimeoutError would otherwise call a timeout.
     if (req.signal.aborted) {
+      tr.done("client-gone", "499");
       return new Response(
         JSON.stringify({ error: true, detail: "브라우저가 요청을 거두어 백엔드 호출을 멈췄어요." }),
         { status: 499, headers: { "content-type": "application/json" } },
@@ -112,6 +118,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
     }
     // Timed out → 504 with an actionable message (not a misleading "unreachable").
     if (isTimeoutError(e)) {
+      tr.done("fetch-error", `${e instanceof Error ? e.name : "?"} 504`);
       return new Response(
         JSON.stringify({
           error: true,
@@ -122,6 +129,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
       );
     }
     // Genuinely unreachable backend → clear 502 (not a confusing generic 500).
+    tr.done("fetch-error", `${e instanceof Error ? e.name : "?"} ${(e as { cause?: { code?: string } })?.cause?.code ?? ""} 502`.replace(/\s+/g, " "));
     return new Response(
       JSON.stringify({ error: true, detail: `백엔드에 연결할 수 없어요 (${backendBase()}): ${msg}` }),
       { status: 502, headers: { "content-type": "application/json" } },
@@ -138,7 +146,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
     respHeaders.set("cache-control", "no-cache, no-transform");
   }
 
-  return new Response(upstream.body, {
+  return new Response(tr.wrap(upstream.body), {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: respHeaders,
