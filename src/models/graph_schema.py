@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Node Data Models — Discriminated Union (태그된 유니온)
@@ -107,8 +107,7 @@ class GraphNode(BaseModel):
     height: float | None = None
     measured: dict[str, Any] | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")   # React Flow 가 덧붙이는 낯선 필드는 버린다
 
     def parse_data(self) -> Union[DataSourceNodeData, IndicatorNodeData,
                                    ConditionNodeData, ActionNodeData]:
@@ -147,8 +146,7 @@ class GraphEdge(BaseModel):
     style: dict[str, Any] | None = None
     markerEnd: dict[str, Any] | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")   # React Flow 가 덧붙이는 낯선 필드는 버린다
 
     @model_validator(mode="after")
     def no_self_loop(self):
@@ -173,8 +171,7 @@ class GraphBacktestRequest(BaseModel):
     start_date: str | None = None
     end_date: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")   # React Flow 가 덧붙이는 낯선 필드는 버린다
 
     @model_validator(mode="after")
     def validate_node_ids_unique(self):

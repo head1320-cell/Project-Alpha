@@ -25476,3 +25476,14 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   요구하지 않는다. 쓰지 않는 의존성은 설치·보안 점검 대상만 늘린다.
 - 검증: `node_modules` 에서 빠진 상태로 tsc · eslint · `next build` 통과(import 가 있었다면 여기서 깨진다) · `npm audit --omit=dev` 0.
 - 하지 않음: 전체 E2E(쓰는 곳이 없어 빌드·타입 검사가 그 사실을 건다) · 다른 의존성 정리.
+
+## Pydantic v1 방식 설정 3곳 → `ConfigDict` (2026-11-08 · 올린 판을 실제로 쓰기 ②)
+
+- 무엇: `src/models/graph_schema.py` 의 `GraphNode`·`GraphEdge`·`GraphBacktestRequest` 에 남아 있던 `class Config: extra = "ignore"` 를
+  `model_config = ConfigDict(extra="ignore")` 로. 저장소에 v1 방식 설정은 이 셋뿐이었다(`grep "class Config" src` → 0).
+- 왜: Pydantic 2 에서 v1 방식은 모듈을 읽을 때마다 `PydanticDeprecatedSince20` 경고를 내고 v3 에서 없어진다.
+- 시험(새 `tests/test_graph_schema_config.py`): 모듈을 다시 읽을 때 폐기 경고 0(고치기 전 3개로 실패) · ★짝★ React Flow 가 덧붙이는 낯선 필드
+  (`zIndex`·`interactionWidth`·`viewport`)는 오류 없이 받되 모델에 남기지 않는다 · 실제 검사(자기 자신으로 가는 선 거부)는 그대로.
+  변이 `extra="forbid"`·`extra="allow"` → 각각 실패.
+- 게이트: `make all`(3.14 · Node 24) 통과 — pytest 8903 통과(새 시험 3) · ruff · eslint · tsc · 빌드.
+- 하지 않음: 모델의 검사 규칙 변경 · 다른 Pydantic v1 잔재 찾기(이번 경고 목록에 없었다).
