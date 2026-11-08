@@ -176,3 +176,45 @@ React 19 를 요구해 피할 수 없다 → ★사용자 결정(2026-11-08): �
 | 첫 화면 JS | 214 · 237 · 344 · 366 · 225 kB | 217 · 252 · 352 · 390 · 230 kB | ★나빠짐 +2~24 kB★ |
 
 ★결론★ — 계획의 조건("다시 그리기가 줄 때만 켠다")을 채우지 못했다: 컴파일러가 줄일 몫이 재어지지 않았다(추론 · 가르지 않음: 캔버스는 R8 에서 손으로 메모해 둔 곳이 많고 남은 비용은 xyflow 의 그리기일 것). 빌드와 번들 비용만 늘어 켜지 않는다. (lint 경고 94건 — 컴파일러가 건너뛰는 컴포넌트 — 는 그대로 경고로 둔다.)
+
+### 5d단계 — Tailwind 4.3 + tailwind-merge 3 — ★이행은 됐지만 되돌림(멈춤 규칙)★
+
+**결과** — 모양은 v3 와 같게 옮겼고(아래 비교), 빌드 시간도 같다(31.7 s vs 32.2 s · 회 1). 그러나 화면마다 CSS 가 gzip **+1.9 kB(106.1 → 108.0 kB, +1.8%)** 늘었다.
+늘어난 몫은 v4 의 구조(테마 변수 층 0.3 · `@property` 55개 0.5 · 그 대체 층 0.5 kB − v3 의 `--tw-*` 기본값 0.4 kB · 나머지는 `calc(var(--spacing)*n)` 같은 표기)라
+줄일 여지가 거의 없다. 보안 공지도 없고 얻은 성능도 없어, recharts 3 과 같은 기준으로 **되돌렸다**(Tailwind 3.4.19 · tailwind-merge 2.6.1 유지).
+
+**모양 비교**(되돌리기 전 · `scratch stk/styles.js`): v3 빌드(5b 커밋)와 v4 빌드를 18개 경로 × 라이트·다크로 열고 모든 요소(태그·클래스 서명이 같은 같은 자리)의
+계산 스타일 50개 속성을 견줌 — 23,441 요소 중 남은 차이 52개는 모두 ① 애니메이션 도중 값(`/` 의 진행 표시 · 회전 아이콘) ② 시각을 보여 주는 칩의 글자 폭
+③ v4 의 표기 차이(`space-y` 가 위 대신 아래 여백 — 부모 높이 같음 · `rounded-full` = `calc(infinity*1px)`). 실제 모양 차이 0.
+
+**다시 할 때의 방법**(이번에 확인한 것 — 공식 도구를 그대로 쓰지 말 것):
+- ★공식 `@tailwindcss/upgrade` 의 함정 둘★ ① `globals.css` 9,990줄 전체를 다시 서식화하고 블록을 옮긴다(+18k/−5.9k 줄 — 검토 불가) ② 클래스가 아닌
+  **데이터 문자열**을 바꾼다 — 주문 필터 키·실적 종류 `"shadow"` → `"shadow-sm"`(5곳) · 단추 variant `"outline"` → `"outline-solid"`(2곳). 받았다면 필터가 깨졌다.
+- 손으로 할 것: ① `postcss.config.js` 를 `"@tailwindcss/postcss"` 로 ② `globals.css` 머리의 `@tailwind base/components/utilities` 세 줄을 아래로(★v4 기본
+  `@import "tailwindcss"` 는 유틸리티를 CSS `@layer` 에 넣어, 레이어 밖에 있는 이 파일의 규칙이 특이도와 무관하게 늘 이기게 바꾼다★) ③ 220줄·5678줄 근처
+  `@layer utilities {…}` 껍데기를 걷고(v4 에서는 진짜 레이어라 늘 진다) `@apply card`·`@apply input` 을 선택자 목록(`.card, .card-md` · `.input, .select` ·
+  `.input:focus, .select:focus`)으로 ④ 180줄의 `* { box-sizing; margin; padding }` 을 유틸리티 앞으로(v4 `space-*`·`divide-*` 는 특이도 0 이라 뒤의 `*` 에 진다)
+  ⑤ 템플릿 6곳: `focus-visible:outline-none` → `outline-hidden`(3) · `[&>tr]:last:` → `last:[&>tr]:`(변이 순서 · 선택자 `:last-child>tr` 그대로) ·
+  `flex-grow` → `grow` · `hover:shadow-sm` → `hover:shadow-xs` ⑥ tailwind-merge 3.
+
+```css
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css";
+@config "../../tailwind.config.js";
+/* v3 preflight·브라우저 기본값 맞추기 — v4 는 테두리색 currentcolor · placeholder 반투명 글자색 · 단추 기본 커서 · 입력칸 배경 투명으로 바뀌었다. 같은 자리에서 v3 값으로.
+   (입력칸 배경: v3 는 건드리지 않아 브라우저 기본 Field — 계산 스타일 비교에서 흰색 → 투명으로 잡혔다. v3 에서 투명이던 종류(단추형·파일·체크·라디오·색·이미지)는 뺀다 — 같은 비교로 확인 · 범위 입력은 v3 에서 흰색이었다.) */
+*, ::after, ::before, ::backdrop, ::file-selector-button { border-color: #e5e7eb; }
+input:where(:not([type="button"], [type="reset"], [type="submit"], [type="file"], [type="checkbox"], [type="radio"], [type="color"], [type="image"])),
+select, textarea { background-color: Field; }
+/* v4 preflight 의 `font: inherit` 는 단추·입력칸이 부모의 글꼴 변이(tabular-nums 등)까지 물려받게 한다. v3 에서는 브라우저 기본 `font` 가 그것을 normal 로
+   되돌렸다(실측: 매크로 지표 단추 안 숫자가 tabular-nums 로 바뀌어 폭이 달라짐). 검색 입력의 모양도 v3 preflight 값으로. */
+button, input, select, optgroup, textarea { font-style: normal; font-variant: normal; font-stretch: normal; }
+[type="search"] { -webkit-appearance: textfield; appearance: textfield; outline-offset: -2px; }
+input::placeholder, textarea::placeholder { opacity: 1; color: #9ca3af; }
+button, [role="button"] { cursor: pointer; }
+:disabled { cursor: default; }
+/* 전체 초기화 — 예전에는 :root 뒤(180줄 근처)에 있었다. v4 의 `space-*`·`divide-*` 는 특이도 0 인 `:where()` 로 나오므로, 같은 특이도의 이 규칙이
+   유틸리티 **뒤**에 있으면 그 여백을 지운다(실측: `space-y-2` 자식 간격 7px → 0). preflight 와 같은 내용이라 앞으로 옮겨도 다른 것은 그대로다. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+@tailwind utilities;
+```

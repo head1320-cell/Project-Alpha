@@ -262,3 +262,11 @@ predates this decision and 46 components depend on it.
 - [x] Baseline preserved: **42/42 Playwright · 1061 passed/10 skipped pytest · tsc 0 · eslint 0**
       (the original text said 33/1003 — true at Phase 0, never refreshed; corrected here)
 - [x] Per-route bundle table diffed; every delta ≥4 kB explained or reverted
+
+---
+
+## 6. Tailwind 4 (2026-11-08) — 옮겨 보고 되돌림
+
+Tailwind 4.3 으로 모양 차이 0(계산 스타일 23,441 요소 비교)까지 옮겼지만 화면마다 CSS gzip +1.9 kB 에 얻은 성능이 없어 3.4.19 에 머문다.
+다시 할 때의 방법(★v4 기본 import 는 유틸리티를 CSS 레이어에 넣어 이 저장소의 레이어 밖 규칙과 캐스케이드가 뒤바뀐다★ · 공식 도구가 데이터 문자열까지
+바꾼다)은 `docs/plans/2026-11-08-stack-upgrade.md` 5d 절.
