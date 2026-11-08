@@ -25278,3 +25278,11 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 관련 E2E: `canvas-layout`·`canvas-branch-strategy`·`canvas-toolbar-frame`·`canvas-selbranch`·`canvas-delete` 통과.
 - 게이트: `make all` 통과(pytest 8894 · 11 건너뜀 · tsc · 다크 모듈 · next build) · 그 빌드로 위 다섯 묶음 56 통과.
 - 하지 않음: 전체 E2E(바뀐 곳은 갈래 틀 머리 CSS·단추 글자 감쌈뿐) · 묶음 상자(`.pg-group-head`) 머리는 이름이 입력 칸이라 이 현상이 없어 손대지 않음.
+
+## 기술 스택 최신화 1단계 — 기준선 측정 (2026-11-08)
+
+- 사용자 요청 "기술스택이 최신인지 확인 후 최신으로 성능을 높여줘" · 결정(모두 추천안): 단계별로 전부(단계마다 측정·게이트·커밋, 문제면 멈춤) · 수치가 바뀌면 골든 허용오차 안이면 진행 ·
+  FastAPI 고정은 원인을 고친 뒤 최신으로 · Python 3.14 · Node 24 LTS. 조사(레지스트리 직접): Next 14.2.5 에 치명 보안 공지(14.2.35 에서 고침) · 대부분 메이저 1~2 단계 뒤.
+- 무엇: `docs/plans/2026-11-08-stack-upgrade.md` — 재는 것·명령·기준선(API 4 · 백테스트 엔진 · 종목 화면 · 캔버스 그리기 R8 · 타입 검사 · 빌드 · 번들 · pytest)과 회별 잡음.
+  측정 도구는 기존 것(`scripts/bench_backtest.py`·`bench_company.py`·`canvas-perf` 의 '재기')에 API 왕복만 scratch 스크립트로 더함(저장소에 넣지 않음).
+- 하지 않음: 전체 E2E 걸린 시간 기준선(지난 R8b 전체 1.1h 를 참고로만) · 실데이터·Postgres 쿼리 시간(이 환경에서 잴 수 없음).
