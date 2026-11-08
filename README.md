@@ -186,7 +186,7 @@
 ### 내 계좌
 ![내 계좌: 주문 집행 경로(비상 정지, 위험 검사, 실행 모드, 보내는 곳), 잔고, 주문 입력](docs/images/readme/my-account.png)
 
-- **기능** 본인의 한국투자증권 계좌로 주문을 연습합니다. 서버가 주문을 처리하는 순서(킬 스위치 → 위험 검사 → 실행 모드 → 전송처)를 그대로 시각화해, 주문이 어느 단계에서 멈췄는지 표시합니다.
+- **기능** 연결한 본인의 증권 계좌로 주문을 연습합니다. 서버가 주문을 처리하는 순서(킬 스위치 → 위험 검사 → 실행 모드 → 전송처)를 그대로 시각화해, 주문이 어느 단계에서 멈췄는지 표시합니다.
 - **활용** 설계한 포트폴리오를 실자금 없이 집행 단계까지 점검할 때 사용합니다.
 - **사용법** 먼저 **설정 → 내 증권 계좌**에서 계좌를 연결합니다(자격 증명은 서버에 암호화해 저장하며 화면에는 끝 네 자리만 표시합니다). 실행 모드는 SHADOW(기록만)가 기본이며 PAPER(모의 체결) 전환에는 확인 단계를 거칩니다. LIVE는 잠겨 있고 남은 준비 항목을 목록으로 보여 줍니다. 필요 시 "비상 정지"로 신규 주문과 미체결 주문을 즉시 중단합니다.
 
@@ -221,7 +221,7 @@ uvicorn main_api:app --reload --port 8000
 cd frontend && npm install && npm run dev          # 별도 터미널
 ```
 
-실데이터를 사용하려면 `.env`에 키를 입력하고 `KIS_USE_MOCK=0`으로 바꿉니다. 주요 키는 한국투자증권(`KIS_APP_KEY`·`KIS_APP_SECRET`), 전자공시(`DART_API_KEY`), 한국거래소(`KRX_API_KEY`), 한국은행·미국 연준 경제자료(`BOK_API_KEY`·`FRED_API_KEY`)이고, Claude 설계 보조에는 `ANTHROPIC_API_KEY`가 필요합니다. 전체 목록과 설명은 [`.env.example`](./.env.example)에 있습니다. `KIS_IS_PAPER=0`은 실계좌이므로 실제 자금이 거래됩니다.
+실데이터를 사용하려면 `.env`에 키를 입력하고 `KIS_USE_MOCK=0`으로 바꿉니다. 주요 키는 증권사 Open API(`KIS_APP_KEY`·`KIS_APP_SECRET`), 전자공시(`DART_API_KEY`), 한국거래소(`KRX_API_KEY`), 한국은행·미국 연준 경제자료(`BOK_API_KEY`·`FRED_API_KEY`)이고, Claude 설계 보조에는 `ANTHROPIC_API_KEY`가 필요합니다. 전체 목록과 설명은 [`.env.example`](./.env.example)에 있습니다. `KIS_IS_PAPER=0`은 실계좌이므로 실제 자금이 거래됩니다.
 
 검증은 `make all`(린트, 테스트, 타입 검사, 빌드. CI와 동일)로 수행하며, 화면 테스트는 `cd frontend && npx playwright test`로 실행합니다. 이 문서의 화면 그림은 `cd frontend && npx next build && node scripts/readme-shots/shoot.mjs`로 다시 찍습니다(쓰는 법은 [`frontend/scripts/readme-shots/README.md`](./frontend/scripts/readme-shots/README.md)). 프론트 중계에서 응답이 멈출 때 어느 층이 붙잡았는지 가르는 진단 도구는 [`frontend/scripts/proxy-probe/README.md`](./frontend/scripts/proxy-probe/README.md)에 있습니다.
 
@@ -230,7 +230,7 @@ cd frontend && npm install && npm run dev          # 별도 터미널
 - **프론트엔드** Next.js 14 · React · TypeScript · React Flow 12(`@xyflow/react`, 캔버스) · Recharts · TanStack Query · Pretendard
 - **백엔드** Python 3.11 · FastAPI · SQLAlchemy · PostgreSQL(미설정 시 SQLite) · NumPy · pandas · SciPy
 - **AI** Anthropic Claude API(캔버스 설계 보조, 구조화 출력과 서버 측 검사)
-- **데이터** 한국투자증권 Open API · OpenDART · 한국거래소 · 한국은행 ECOS · FRED
+- **데이터** 증권사 Open API(시세·주문) · OpenDART · 한국거래소 · 한국은행 ECOS · FRED
 - **검증** pytest · Playwright · GitHub Actions · Docker Compose
 
 ## 문서
