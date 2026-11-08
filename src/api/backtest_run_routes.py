@@ -128,15 +128,24 @@ def _reset_pool() -> None:
     표시하고 이후 모든 `submit()` 이 즉시 실패한다. 예전에는 `_POOL` 을 앱 종료
     외에 재설정하지 않아서, 한 번 죽으면 **API 를 재시작할 때까지 모든 백테스트가
     실패했다** — 사용자가 말한 "계속 일어난다" 가 그것이다.
+
+    ★닫기는 다른 스레드에서★ Python 3.14 부터 broken 풀의 done-콜백(`_on_worker_done`)은
+    관리 스레드가 그 풀의 `_shutdown_lock`(재진입 불가)을 쥔 채로 부른다. 여기서 바로
+    `shutdown()` 을 부르면 같은 락을 다시 잡으려다 영원히 멈춘다(실측 — 실행이 queued 로
+    남았다). 새 풀로 바꾸는 것은 즉시, 옛 풀을 닫는 것은 락이 풀린 뒤에 한다.
     """
     global _POOL
     with _POOL_LOCK:
         pool, _POOL = _POOL, None
     if pool is not None:
-        try:
-            pool.shutdown(wait=False, cancel_futures=True)
-        except Exception:                       # noqa: BLE001
-            logger.debug("broken 풀 정리 중 오류(무시)", exc_info=True)
+        threading.Thread(target=_close_pool, args=(pool,), name="bt-pool-close", daemon=True).start()
+
+
+def _close_pool(pool: ProcessPoolExecutor) -> None:
+    try:
+        pool.shutdown(wait=False, cancel_futures=True)
+    except Exception:                           # noqa: BLE001
+        logger.debug("broken 풀 정리 중 오류(무시)", exc_info=True)
 
 
 def _on_worker_done(run_id: str | None, fut) -> None:

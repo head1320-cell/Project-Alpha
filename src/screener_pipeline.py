@@ -17,7 +17,7 @@ import asyncio
 import logging
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 from sqlalchemy import text
@@ -157,7 +157,7 @@ async def fetch_equity_snapshot() -> list[dict]:
                             "return_3m": round(r3m, 2),
                             "beta": _safe_float(info.get("beta")),
                             "volatility_annual": round(vol_ann, 2),
-                            "updated_at": datetime.utcnow(),
+                            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
                         })
 
                     except Exception as e:
@@ -206,7 +206,7 @@ def _generate_mock_equity_data() -> list[dict]:
             "return_3m": round(float(np.random.normal(3, 15)), 2),
             "beta": round(float(np.random.normal(1.0, 0.4)), 2),
             "volatility_annual": round(float(np.random.normal(25, 10)), 2),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
         })
     return rows
 
@@ -248,7 +248,7 @@ async def fetch_ficc_snapshot() -> list[dict]:
             # FX fields NULL
             "daily_vol": None, "carry_annual": None, "momentum_12m": None,
             "ppp_deviation": None, "real_rate_diff": None,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
         })
 
     # Options
@@ -281,7 +281,7 @@ async def fetch_ficc_snapshot() -> list[dict]:
                         # FX fields NULL
                         "daily_vol": None, "carry_annual": None, "momentum_12m": None,
                         "ppp_deviation": None, "real_rate_diff": None,
-                        "updated_at": datetime.utcnow(),
+                        "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
                     })
 
     # FX
@@ -305,7 +305,7 @@ async def fetch_ficc_snapshot() -> list[dict]:
             "momentum_12m": round(float(np.random.normal(0, 8)), 2),
             "ppp_deviation": round(float(np.random.normal(0, 15)), 2),
             "real_rate_diff": round(float(np.random.normal(0, 3)), 2),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
         })
 
     return rows
@@ -351,7 +351,7 @@ def _bulk_refresh_table(engine, table_name: str, rows: list[dict]):
 async def refresh_all_snapshots(engine) -> dict:
     """Refresh both equity and FICC snapshot tables."""
     logger.info("Starting market snapshot refresh...")
-    start = datetime.utcnow()
+    start = datetime.now(timezone.utc).replace(tzinfo=None)
 
     try:
         eq_rows = await fetch_equity_snapshot()
@@ -367,12 +367,12 @@ async def refresh_all_snapshots(engine) -> dict:
         logger.error(f"FICC refresh failed: {e}")
         ficc_count = 0
 
-    elapsed = (datetime.utcnow() - start).total_seconds()
+    elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds()
     result = {
         "equity_rows": eq_count,
         "ficc_rows": ficc_count,
         "elapsed_sec": round(elapsed, 2),
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }
     logger.info(f"Snapshot refresh complete: {result}")
     return result

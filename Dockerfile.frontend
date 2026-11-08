@@ -1,16 +1,16 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # FICC Frontend — Next.js 14 + TypeScript
-# node:18-alpine + Next.js (port 3000)
+# node:24-alpine(LTS) + Next.js (port 3000)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── deps: 런타임용 production 의존성만 (최종 이미지 경량화) ──
-FROM node:18-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
 
 # ── builder: 빌드용 — devDependencies(typescript/tailwind/postcss 등)까지 전부 설치 ──
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Next.js는 빌드 타임에 환경변수를 주입해야 함
@@ -27,7 +27,7 @@ RUN mkdir -p public
 RUN npm run build
 
 # ── runner: 경량 production 이미지 ──
-FROM node:18-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

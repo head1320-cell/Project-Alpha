@@ -239,6 +239,48 @@ def test_reset_pool_actually_replaces_the_pool():
         brr.shutdown_pool()
 
 
+def test_resetting_a_pool_never_waits_on_that_pools_own_lock():
+    """★Python 3.14 에서 실제로 멈췄다★ (2026-11-08 · 런타임 업그레이드 4단계)
+
+    3.14 의 `ProcessPoolExecutor` 는 자식이 죽으면 관리 스레드가 풀의 `_shutdown_lock`
+    (재진입 불가)을 **쥔 채로** 남은 Future 에 예외를 넣고, 그 자리에서 done-콜백
+    (`_on_worker_done`)을 부른다. 콜백이 `_reset_pool()` → `pool.shutdown()` 을 부르면
+    `shutdown` 이 같은 락을 다시 잡으려다 **영원히 멈춘다** — 실행은 queued 로 남고
+    `RunMonitor` 가 계속 폴링한다(faulthandler 덤프: process.py `shutdown` ← `_reset_pool`
+    ← `_on_worker_done` ← `terminate_broken`). 3.11 은 락 밖에서 불러 드러나지 않았다.
+
+    이 시험은 그 상황을 **해석기 판과 무관하게** 만든다: 풀의 락을 쥔 채 재설정을 부른다.
+    (`_shutdown_lock` 은 CPython 내부 이름이다 — 이름이 바뀌면 이 시험이 AttributeError 로
+    알려 준다. 종단 경로는 위의 SIGKILL 시험이 건다.)
+    """
+    import threading
+
+    brr.shutdown_pool()
+    pool = brr._get_pool()
+    lock = pool._shutdown_lock
+    lock.acquire()
+    returned = threading.Event()
+    try:
+        threading.Thread(target=lambda: (brr._reset_pool(), returned.set()), daemon=True).start()
+        assert returned.wait(5), (
+            "풀의 락을 쥔 문맥(3.14 의 broken 콜백)에서 재설정이 돌아오지 않는다 — "
+            "죽은 워커의 실행이 queued 로 영원히 남는다")
+        assert brr._POOL is not pool, "재설정이 broken 풀을 버리지 않았다"
+    finally:
+        lock.release()
+    try:
+        # ★짝★ 기다리지 않는다고 **닫지도 않으면** 안 된다 — 락이 풀리면 옛 풀은 실제로 닫혀야 한다
+        # (버려 두면 관리 스레드·파이프가 남는다). 닫히면 `submit` 이 RuntimeError 를 낸다.
+        t0 = time.perf_counter()
+        while not pool._shutdown_thread and time.perf_counter() - t0 < 5:
+            time.sleep(0.05)
+        assert pool._shutdown_thread, "버린 풀을 끝내 닫지 않았다"
+        with pytest.raises(RuntimeError):
+            pool.submit(_fine, "rid")
+    finally:
+        brr.shutdown_pool()
+
+
 def test_a_dead_child_triggers_a_pool_reset(monkeypatch):
     """★B2b 를 따로 건다★ 자식 사망(BrokenProcessPool)이면 풀을 버려야 한다."""
     from concurrent.futures.process import BrokenProcessPool

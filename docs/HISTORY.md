@@ -25326,3 +25326,31 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   카드와 겹친다' 는 예전 수치 백엔드에서도 5/5 실패 · 2단계 전 프론트 빌드(`626454c`)에서도 3/5 실패 → 역시 이전부터(유령 자리를 정한 뒤 카드가 안내 블록으로
   382px 까지 길어짐). 별도 할 일(여섯 항목)에 더했다. 미니맵 찾기·빈 필수 입력은 이번에는 통과(흔들림).
 - 측정(같은 종류 venv 에서 수치 라이브러리만 바꿈): API·종목 화면 변화 없음 · 백테스트 6.24 → 6.54 s(+5%, 잡음 경계) · 메모리 41.0 → 43.7 MB — ★빨라진 것 없음★.
+
+## 기술 스택 최신화 4단계 — 런타임 Python 3.14 · Node 24 (2026-11-08)
+
+- 무엇: CI(`ci.yml` 백엔드·프론트 두 작업) Python 3.11 → **3.14** · Node 20 → **24**(LTS) · `Dockerfile.backend` python:3.14-slim · `Dockerfile.frontend` node:18 → 24 ·
+  `frontend/Dockerfile` node:20 → 24 · `requirements.txt` numpy 2.4.6 → **2.5.4** · scipy 1.17.1 → **1.18.1**(둘 다 3.12 이상 전용이라 이 단계에서) ·
+  `pyproject.toml` `requires-python >=3.12`. ruff `target-version` 은 py310 그대로(올리면 무관한 현대화 지적 39개 — 범위 밖). 로컬은 `uv python install 3.14`(3.14.6) ·
+  `nvm install 24`(24.22.2).
+- ★3.14 에서 실제로 멈춘 것★: `tests/test_backtest_worker_death.py::test_a_killed_worker_closes_its_run_instead_of_hanging` — 워커를 SIGKILL 하면 실행이 queued 로 남았다.
+  faulthandler 덤프: 관리 스레드 `terminate_broken` → Future `set_exception` → done-콜백 `_on_worker_done` → `_reset_pool` → `pool.shutdown()` 이 `_shutdown_lock` 에서 멈춤.
+  3.14 의 `ProcessPoolExecutor.terminate_broken` 은 그 락(재진입 불가)을 **쥔 채로** Future 에 예외를 넣고 콜백을 그 자리에서 부른다 — 같은 스레드가 같은 락을 다시 잡아
+  영원히 멈춘다. 3.11 은 락 밖에서 불러 드러나지 않았다. 운영에서는 "워커가 죽은 백테스트가 끝나지 않고 프런트가 계속 폴링" 이 된다.
+  고침(`src/api/backtest_run_routes.py`): `_reset_pool` 은 `_POOL` 교체만 즉시 하고 옛 풀 닫기(`shutdown(wait=False, cancel_futures=True)`)는 짧은 데몬 스레드
+  (`_close_pool`)에 넘긴다 — 락이 풀리면 그때 닫힌다.
+  새 시험 `test_resetting_a_pool_never_waits_on_that_pools_own_lock`: 풀의 락을 쥔 채 재설정을 불러 5초 안에 돌아오는지(해석기 판과 무관하게 재현 — 3.11·3.14 둘 다
+  빨강 확인) + 짝: 락이 풀리면 옛 풀이 실제로 닫힌다(`submit` 이 RuntimeError). 변이: ① 동기 닫기로 되돌림 → 새 시험(3.11)·SIGKILL 종단 시험(3.14) 둘 다 죽음
+  ② 닫지 않음 → 짝이 죽음.
+- 경고 정리: 3.14 pytest 를 `-W always` 로 돌리니 경고 51만 건 — ① 31만: FastAPI 0.111·Starlette 의 `asyncio.iscoroutinefunction`(3.16 에서 삭제 예정) → 6단계
+  (FastAPI 최신)에서 해소 ② 19만: 우리 코드의 `datetime.utcnow()`(3.12 부터 폐기 예고) 16곳(`screener_pipeline` · `data_sync` · `kis_master_parser`) →
+  `datetime.now(timezone.utc).replace(tzinfo=None)` — ★naive UTC 그대로★ 둬서 DB 열·`isoformat()` 문자열이 바뀌지 않는다. 되돌아오지 않게 ruff 에 `DTZ003` 하나만 켬
+  (고치기 전 16건 → 0). 남긴 것: Pydantic class-based `config`(기존부터) · statsmodels VECM 내부 ComplexWarning(라이브러리 안) · SciPy `anderson` 예고(3단계 기록).
+- 게이트(3.14 venv + Node 24): `make all` 통과 — pytest 8895 통과(새 시험 1개 더) · 경고 28(기본 집계) · tsc · 다크 모듈 · next build.
+- E2E: 전체 E2E(백엔드 3.14 · `next start` Node 24): 1240 중 1231 통과 · 5 실패 — 셋(화면 골든 Esc 경합 · AI 유령 겹침 · realism ST3c)은 2·3단계에서 이전부터 있던 것으로
+  확인한 것 · 둘은 ★시험 쪽 경합★(따로 4번 돌리면 `risk-tools` 4/4 통과 · `canvas-workspace` 내 블록 3/4): ① `canvas-workspace:692` 블록 파일을 넣은 직후 `sessionStorage` 를
+  기다리지 않고 한 번만 읽는다(파일 읽기·저장은 비동기) ② `risk-tools:159` 응답 처리기가 `await r.json()` 뒤에 채우는 값을 표가 보이자마자 읽는다 → 다음 커밋에서 기다리게 고침.
+- 측정: `docs/plans/2026-11-08-stack-upgrade.md` 4단계 표 — 백테스트 small 6.54 → **4.77 s(−27%)** · 스크리너 API 16.9 → 12.4 ms · 타입 검사 21.5 → 18.5 s ·
+  빌드 58.2 → 51.6 s · 나머지는 잡음 안 · 메모리 +4%. ★원인 가름★: 3.14 에 3단계 numpy·scipy 를 깐 venv 로 백테스트 5.01 s → 빨라진 것은 해석기 몫(numpy 2.5·scipy 1.18 아님).
+- 하지 않음: Docker 이미지 빌드는 이 환경에 docker 가 없어 ★돌려 보지 않았다★(베이스 이미지 태그만 바꿈 — CI 나 배포 기계에서 처음 빌드됨) · Python 3.15(arch 휠 없음) ·
+  `pytest` 9 · ruff target 올리기.
