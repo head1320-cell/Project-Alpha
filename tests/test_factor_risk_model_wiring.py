@@ -13,6 +13,8 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
+from tests.route_walk import flat_routes  # noqa: E402
+
 URL = "/api/v1/allocation/rebalance-decision"
 TICKERS = ["005930", "000660", "035420"]
 HOLDINGS = {"005930": 50.0, "000660": 30.0, "035420": 20.0}
@@ -153,7 +155,7 @@ def test_each_asset_reports_its_own_dof_and_factor_share(client):
 
 
 def test_the_neighbours_are_untouched(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     for p in ("/api/v1/allocation/analyze", "/api/v1/allocation/exposures",
               "/api/v1/allocation/implement", URL):
         assert p in paths, p

@@ -29,6 +29,7 @@ from src.api.protected_routes import (
     looks_like_money_route,
 )
 from src.domain.auth_identity import ROLE_ANALYST
+from tests.route_walk import flat_routes
 
 _SECRET = "broker-routes-test-secret-0123456789abcdef"
 
@@ -103,7 +104,7 @@ def test_the_removed_operator_routes_are_gone_from_app_and_registry():
     """ST1 — 지운 경로가 앱에도 보호 목록에도 없다. 짝: 남긴 경로(`/live/orders`)는 있다."""
     from src.app_factory import create_app
 
-    have = {(m, r.path) for r in create_app().routes for m in (getattr(r, "methods", None) or ())}
+    have = {(m, r.path) for r in flat_routes(create_app()) for m in (getattr(r, "methods", None) or ())}
     for key in REMOVED_ST1:
         assert key not in have, f"{key} 가 아직 앱에 있다"
         assert key not in PROTECTED, f"{key} 가 아직 보호 목록에 있다"
@@ -132,7 +133,7 @@ def test_the_detector_sees_every_live_trading_route():
     from src.app_factory import create_app
 
     live = sorted({
-        getattr(r, "path", "") for r in create_app().routes
+        getattr(r, "path", "") for r in flat_routes(create_app())
         if getattr(r, "path", "").startswith("/api/v1/live/")
     })
     assert len(live) >= 15, f"실거래 경로가 너무 적다 — 앱 구성이 바뀌었나: {live}"

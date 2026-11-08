@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 import src.database as dbmod
 from src.domain.auth_identity import ROLE_ADMIN, ROLE_ANALYST
+from tests.route_walk import flat_routes
 
 _SECRET = "account-security-test-secret-0123456789ab"
 _ME = "/api/v1/auth/me"
@@ -281,7 +282,7 @@ def test_a_token_for_an_account_that_no_longer_exists_is_refused(client):
 # ── 공개 가입은 없다 ─────────────────────────────────────────────────────────
 
 def test_there_is_no_public_sign_up_route(client):
-    paths = {getattr(r, "path", "") for r in client.app.routes}
+    paths = {getattr(r, "path", "") for r in flat_routes(client.app)}
     assert not any(k in p for p in paths for k in ("signup", "sign-up", "register"))
     assert client.post("/api/v1/auth/signup", json={"username": "z", "password": "zzzzzzzz"}).status_code in (404, 405)
 

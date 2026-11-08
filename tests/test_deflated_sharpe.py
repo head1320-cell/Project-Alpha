@@ -18,6 +18,7 @@ import pytest
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
 from src.engine import deflated_sharpe as ds  # noqa: E402
+from tests.route_walk import flat_routes  # noqa: E402
 
 
 def _series(mu: float, sd: float = 0.01, T: int = 500, seed: int = 0) -> np.ndarray:
@@ -147,7 +148,7 @@ def test_route_broken_curve_is_a_row_reason_not_a_crash():
 
 def test_route_path_has_no_distribution_marker():
     from src.api.allocation_graph_routes import router
-    paths = [r.path for r in router.routes if "branch-evidence" in r.path]
+    paths = [r.path for r in flat_routes(router) if "branch-evidence" in r.path]
     assert paths
     for m in ("marketplace", "subscribe", "provider", "publish", "storefront", "/share", "entitlement", "billing"):
         assert all(m not in p for p in paths)

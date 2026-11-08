@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 import src.data.company_snapshots as cs  # noqa: E402
 import src.engine.company_snapshot_builder as bld  # noqa: E402
 from src.engine.company_thesis import TIER_SCREEN_ONLY  # noqa: E402
+from tests.route_walk import flat_routes  # noqa: E402
 
 CODE = "005930"
 PRICE = 71000.0
@@ -61,7 +62,7 @@ def _snap(**kw) -> dict:
 
 # ── 1. 라우트 ───────────────────────────────────────────────────────────────
 def test_the_route_is_registered_alongside_the_existing_six(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     assert "/api/v1/company/{code}/thesis-check" in paths
     for p in ("/api/v1/company/{code}/valuation-sandbox",
               "/api/v1/company/{code}/financial-deep",

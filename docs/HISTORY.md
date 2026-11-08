@@ -25439,3 +25439,23 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   줄일 여지가 거의 없고, 빌드 시간은 같았다(31.7 vs 32.2 s). 보안 공지도 얻은 성능도 없다 → recharts 3 과 같은 기준. 전체 E2E 는 결정을 바꾸지 못해
   중간에 멈췄다(되돌린 코드라 남길 결과 없음).
 - 남긴 것: 다시 할 때의 방법과 CSS 머리 전체(`docs/plans/2026-11-08-stack-upgrade.md` 5d 절) · ADR-001 §6 한 단락. 코드·의존성 변경 없음.
+
+## 기술 스택 최신화 6단계 — FastAPI 0.162 · uvicorn 0.54 · httpx 0.28 (고정의 원인을 찾아 풂 · 2026-11-08)
+
+- ★고정 사유의 실체★: CLAUDE.md §6 은 "`fastapi==0.111.0`(상위에서 `include_router` 가 깨짐)" 이라 했고 HISTORY:1462 는 "0.139 에서 라우터 94/221 만 등록" 이라
+  적었다 — 근본 원인은 미상이었다. 최신 0.162 에서 재 보니 라우터 51/51 이 모두 등록된다. 깨진 것은 등록이 아니라 ★세는 쪽★이었다: 0.16x 의 `include_router` 는
+  라우트를 앱에 복사하지 않고 `_IncludedRouter` 하나를 끼우므로 `app.routes` 를 그대로 돌면 `APIRoute` 를 0개 본다(0.111 에서 390개).
+  ★위험★: 라우트 표에 기대는 안전 계약 시험이 그대로 두면 **아무것도 안 보고 통과**한다 — 새 FastAPI 에서 고치기 전에 돌려 보니 유통 형태 경로 전수
+  (`test_every_distribution_shaped_route_is_registered`) · 돈 관련 경로가 몰래 열리지 않음(`test_no_money_shaped_route_is_silently_open`) · 그림자 경로 0 이 PASSED.
+- 고침: ① `tests/route_walk.py::flat_routes()` — FastAPI 가 OpenAPI 를 만들 때 쓰는 `iter_route_contexts` 로 중첩 라우터까지 펼친다. 라우트 표를 보던 시험
+  19개 파일을 모두 이것으로(`app.routes`·`client.app.routes`·`create_app().routes`·`router.routes`). ② 새 시험 `test_route_walk.py` — 훑기가 FastAPI 자신의 OpenAPI
+  목록을 빠짐없이 보는지(100개 넘게 · 빠진 것 0) + 짝: 라우터 안 라우터(접두어 둘)의 전체 경로 + 목록을 넘겨도 같은 답. 변이(훑기를 평평한 `app.routes` 로) → 3 실패.
+  ③ Starlette 1.x 에서 `app.add_event_handler` 가 없어져 앱이 만들어지지도 않았다(AttributeError) → 같은 두 훅(뜰 때 `run_startup` · 내려갈 때 `shutdown_pool`)을
+  lifespan 으로. 새 시험 `test_app_lifespan.py` — 뜰 때 한 번·내려갈 때 한 번 · 짝: 만들기만 하면 아무것도 안 돈다(옛 FastAPI 에서도 통과 — 동작을 못 박는 시험).
+  변이(종료 훅 뺌 · 만들 때 바로 기동) → 각각 실패. ④ `requirements.txt` · CLAUDE.md §6 문구를 새 사실로.
+- `uvicorn --workers 1` 은 그대로(사유 같음).
+- 게이트: `make all`(3.14 · FastAPI 0.162 · Node 24) 통과 — pytest 8900 통과(새 시험 5 · 웹소켓 라우트의 `methods=None` 을 다루게 고친 시험 1) · ruff · tsc · 빌드.
+- E2E: 전체 1240 중 1233 통과 · 실패 3 은 모두 이전부터의 것(화면 골든 Esc 경합 · 미니맵 찾기 확대 멈춤 · realism ST3c). 옛 빌드로 띄워도 같은 기동 로그(KIS async DB 이름 풀기 실패 — 모의 환경) 확인.
+- 측정: `docs/plans/2026-11-08-stack-upgrade.md` 6단계 표 — 실제 서버 API 는 옛·새 번갈아 A/B 로 변화 없음 · ★갓 띄운 서버의 첫 요청 한 번 +50~75 ms★ ·
+  `bench_company`(앱 안 TestClient) 첫 로딩 63 → 244 ms · 다시 37 → 50 ms 로 나빠졌는데, 같은 TestClient 로 가장 가벼운 경로를 재면 첫 호출 +105 ms ·
+  호출당 +1.8 ms 라 측정 경로(TestClient) 몫이다 — 실제 서버 호출당 시간은 같다. 폐기 예고 경고 97,008 → 0(`test_auth_enforcement` 하나 · `-W always`).

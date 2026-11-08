@@ -87,7 +87,7 @@ TDD 구현 → **전체 게이트**(`make all` = lint+test+typecheck+build, CI�
 `ValuationScreener`·백테스트 엔진은 리팩터링 대상이 아닙니다. `filter_ast.py` 의
 `FIELD_BY_ID` 가 단일 레지스트리 — 새 kind 는 `validate()` bypass 튜플에 등록.
 
-**버전·프로세스 고정** — `fastapi==0.111.0`(상위에서 `include_router` 가 깨짐) ·
+**버전·프로세스 고정** — FastAPI 0.16x 의 `include_router` 는 라우트를 복사하지 않아 `app.routes` 가 비어 보인다 — 라우트 표는 `tests/route_walk.py::flat_routes()` 로만 훑을 것(직접 돌면 안전 시험이 공허하게 통과) ·
 `uvicorn --workers 1`(캐시·쿼터·적재 상태가 프로세스 로컬).
 
 **수치 안전** — 분수승·로그·제곱근에 음수가 들어갈 수 있는 파생식은 반드시 가드

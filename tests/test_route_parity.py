@@ -9,6 +9,7 @@
 전체를 고정한다(CLAUDE.md: 개수는 세지 말고 레지스트리를 읽을 것).
 """
 from src.app_factory import create_app
+from tests.route_walk import flat_routes
 
 #: 이 경로들은 프론트엔드 클라이언트·E2E·저장된 룰셋이 직접 참조한다. 모듈을 어디로 옮기든
 #: 이 목록은 그대로여야 한다. `timing_routes.py` 분리의 유일한 성공 조건이기도 하다.
@@ -65,7 +66,7 @@ ALLOCATION_PATHS: tuple[tuple[str, str], ...] = (
 def _route_set(app) -> set[tuple[str, str]]:
     """{(메서드, 경로)} — HEAD/OPTIONS 같은 자동 생성 메서드는 뺀다."""
     out: set[tuple[str, str]] = set()
-    for r in app.routes:
+    for r in flat_routes(app):
         path = getattr(r, "path", None)
         methods = getattr(r, "methods", None) or set()
         if not path:
@@ -98,7 +99,7 @@ def test_timing_paths_are_registered_exactly_once():
     """
     app = create_app()
     for method, path in TIMING_PATHS:
-        n = sum(1 for r in app.routes
+        n = sum(1 for r in flat_routes(app)
                 if getattr(r, "path", None) == path and method in (getattr(r, "methods", None) or set()))
         assert n == 1, f"{method} {path} 가 {n}번 등록됐다(중복 등록은 그림자 라우트를 만든다)"
 
@@ -143,7 +144,7 @@ def test_allocation_paths_are_registered_exactly_once():
     """★원본에서 지우지 않고 새 모듈에 추가하면 그림자 라우트가 된다★ — 조용히."""
     app = create_app()
     for method, path in ALLOCATION_PATHS:
-        n = sum(1 for r in app.routes
+        n = sum(1 for r in flat_routes(app)
                 if getattr(r, "path", None) == path
                 and method in (getattr(r, "methods", None) or set()))
         assert n == 1, f"{method} {path} 가 {n}번 등록됐다(중복 등록은 그림자 라우트를 만든다)"

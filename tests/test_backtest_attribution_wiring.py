@@ -13,6 +13,7 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 import pytest  # noqa: E402
 
 import src.data.backtest_runs as br  # noqa: E402
+from tests.route_walk import flat_routes  # noqa: E402
 
 LEGACY = ("/api/v1/backtest/runs",
           "/api/v1/backtest/runs/{run_id}",
@@ -62,7 +63,7 @@ def _url(rid: str) -> str:
 
 # ── 1. 라우트 ───────────────────────────────────────────────────────────────
 def test_the_route_is_registered_and_the_legacy_seven_are_intact(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     assert "/api/v1/backtest/runs/{run_id}/factor-attribution" in paths
     for p in LEGACY:
         assert p in paths, p

@@ -16,6 +16,7 @@ from src.engine.rebalance_policy import (  # noqa: E402
     DECISION_TRADE,
     DECISION_UNDETERMINED,
 )
+from tests.route_walk import flat_routes  # noqa: E402
 
 URL = "/api/v1/allocation/rebalance-decision"
 TICKERS = ["005930", "000660", "035420"]
@@ -45,7 +46,7 @@ def _post(client, **kw) -> dict:
 
 # ── 1. 라우트 ───────────────────────────────────────────────────────────────
 def test_the_route_is_registered_and_the_neighbours_are_untouched(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     assert URL in paths
     for p in ("/api/v1/allocation/analyze", "/api/v1/allocation/target-versions"):
         assert p in paths, p

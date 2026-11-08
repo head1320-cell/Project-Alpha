@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from starlette.routing import Match  # noqa: E402
 
 from src.app_factory import create_app  # noqa: E402
+from tests.route_walk import flat_routes  # noqa: E402
 
 
 def _shadowed(routes) -> list[tuple[str, str, str]]:
@@ -31,7 +32,7 @@ def _shadowed(routes) -> list[tuple[str, str, str]]:
 
 
 def test_no_route_is_swallowed_by_an_earlier_path_parameter():
-    assert _shadowed(create_app().routes) == []
+    assert _shadowed(flat_routes(create_app())) == []
 
 
 def test_the_detector_sees_a_swallowed_route():
@@ -40,5 +41,5 @@ def test_the_detector_sees_a_swallowed_route():
     r = APIRouter()
     r.get("/x/{id}")(lambda id: id)
     r.get("/x/active")(lambda: 1)
-    assert _shadowed(r.routes) == [("GET", "/x/active", "/x/{id}")]
+    assert _shadowed(flat_routes(r)) == [("GET", "/x/active", "/x/{id}")]
 

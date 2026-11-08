@@ -21,6 +21,7 @@ import pytest
 
 from src.api.distribution_surface import CLOSES, DISTRIBUTION_SURFACE, OPENS
 from src.domain.distribution_gate import DISTRIBUTION_BLOCKED, distribution_gate
+from tests.route_walk import flat_routes
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -46,7 +47,7 @@ def app():
 
 def _routes(app) -> list[tuple[str, str]]:
     out = []
-    for r in app.routes:
+    for r in flat_routes(app):
         path = getattr(r, "path", "") or ""
         for method in sorted(getattr(r, "methods", None) or []):
             if method not in {"HEAD", "OPTIONS"}:

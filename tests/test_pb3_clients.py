@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 import src.database as dbmod
 from src.api.protected_routes import PROTECTED, REQUIRE_LOGIN, looks_like_money_route
 from src.domain.auth_identity import ROLE_ANALYST
+from tests.route_walk import flat_routes
 
 _SECRET = "pb3-clients-routes-secret-0123456789abcdef"
 BASE = "/api/v1/pb/clients"
@@ -254,7 +255,7 @@ def test_doc_size_limit(client):
 # ── ⑥ 등록부 · 표지 · 보존 ───────────────────────────────────────────────
 
 def test_every_pb_route_is_registered_login_only(client):
-    real = sorted((m, r.path) for r in client.app.routes if getattr(r, "path", "").startswith("/api/v1/pb/")
+    real = sorted((m, r.path) for r in flat_routes(client.app) if getattr(r, "path", "").startswith("/api/v1/pb/")
                   for m in (r.methods or []) if m not in {"HEAD", "OPTIONS"})
     assert len(real) >= 14
     for key in real:

@@ -10,8 +10,10 @@ main_api.py는 이 팩토리를 호출하는 얇은 진입점일 뿐이다(`uvic
 from __future__ import annotations
 
 import importlib
+import inspect
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -119,11 +121,30 @@ def register_routers(app: FastAPI) -> int:
     return n
 
 
+async def _call(fn) -> None:
+    r = fn()
+    if inspect.isawaitable(r):
+        await r
+
+
 def create_app() -> FastAPI:
+    # 뜰 때·내려갈 때의 훅 — 아래에서 예전과 같은 순서로 정해 넣는다. Starlette 1.x(FastAPI 0.162)에서 `app.add_event_handler` 가
+    # 없어져 lifespan 으로 옮겼다(동작 같음 — `tests/test_app_lifespan.py`).
+    hooks: dict[str, object] = {}
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):
+        if "startup" in hooks:
+            await _call(hooks["startup"])
+        yield
+        if "shutdown" in hooks:
+            await _call(hooks["shutdown"])
+
     app = FastAPI(
         title="FICC Risk Management API",
         version="2.0.0",
         description="Full-stack quantitative risk platform: VaR, Greeks, Hedging, AI Forecasting",
+        lifespan=_lifespan,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -151,7 +172,7 @@ def create_app() -> FastAPI:
         logging.getLogger(__name__).warning(f"인증 상태 확인 실패(계속 진행): {e}")
 
     from src.startup.lifecycle import run_startup
-    app.add_event_handler("startup", run_startup)
+    hooks["startup"] = run_startup
 
     # 백테스트 워커 풀 종료 (P0-2) — ★기다리지 않는다★
     # 진행 중인 실행을 기다리면 uvicorn 종료가 최대 19분 막힌다(large 실측). 예전
@@ -159,7 +180,7 @@ def create_app() -> FastAPI:
     # `sweep_orphaned()` 가 failed 로 확정한다.
     try:
         from src.api.backtest_run_routes import shutdown_pool
-        app.add_event_handler("shutdown", shutdown_pool)
+        hooks["shutdown"] = shutdown_pool
     except Exception as e:
         logging.getLogger(__name__).warning(f"워커 풀 종료 훅 등록 실패(계속 진행): {e}")
 
