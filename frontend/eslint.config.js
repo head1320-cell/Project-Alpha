@@ -81,6 +81,12 @@ module.exports = [
       "react-hooks/purity": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
       "react-hooks/use-memo": "warn",
+
+      // React 19(2026-11-08): 함수 컴포넌트가 `ref` 를 prop 으로 받는다 — forwardRef 는 필요 없고 앞으로 폐기된다. 되돌아오지 않게 막는다.
+      "no-restricted-syntax": ["error", {
+        selector: "CallExpression[callee.name='forwardRef'], CallExpression[callee.property.name='forwardRef']",
+        message: "React 19 에서는 forwardRef 대신 `ref` 를 prop 으로 받으세요(function X({ ref, ...props }: React.ComponentProps<...>)).",
+      }],
     },
   },
   {

@@ -25487,3 +25487,14 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   변이 `extra="forbid"`·`extra="allow"` → 각각 실패.
 - 게이트: `make all`(3.14 · Node 24) 통과 — pytest 8903 통과(새 시험 3) · ruff · eslint · tsc · 빌드.
 - 하지 않음: 모델의 검사 규칙 변경 · 다른 Pydantic v1 잔재 찾기(이번 경고 목록에 없었다).
+
+## shadcn 부품 9개 — `forwardRef` 대신 `ref` prop (React 19 · 2026-11-08 · 올린 판을 실제로 쓰기 ③)
+
+- 무엇: `frontend/src/shared/ui/shadcn/` 의 button·card·dialog·input·popover·progress·slider·table·toggle-group 에서 `React.forwardRef` 를 걷어 내고
+  함수 컴포넌트가 `ref` 를 prop 으로 받게. `React.ElementRef`(폐기 예고) 대신 `React.ComponentRef`. cva·`asChild`/Slot·`cn()`·`displayName`·class 이름은 그대로.
+- 왜: React 19 에서 `forwardRef` 는 필요 없고 앞으로 폐기된다. 감싸는 층이 하나 준다(성능 차이는 재지 않음 — 잴 만한 크기가 아니다).
+- 되돌아옴 막기: `eslint.config.js` 에 `no-restricted-syntax` 오류(`forwardRef(...)`·`React.forwardRef(...)` 호출). 고치기 전 이 규칙으로 9개 파일 25건 오류 → 0.
+  shadcn 밖에는 `forwardRef` 가 없었다(규칙이 `src` 전체를 본다).
+- 검증: tsc(ref 타입) · lint · 동작은 E2E — Radix 의 dialog·popover·slider 는 ref 로 위치·포커스를 잡는다. 전체 1242 중 1235 통과 · 건너뜀 4 · 실패 3 — 둘은 이전부터(화면 골든 Esc 경합 · 미니맵 찾기 확대 멈춤), 하나는 nav 머리 시험의 경합(아래 항목 — 고침). realism ST3c 는 이번엔 통과.
+- 게이트: `make all`(3.14 · Node 24) 통과 — pytest 8903 통과(새 시험 3) · ruff · eslint · tsc · 빌드.
+- 하지 않음: 부품 모양·class 이름(E2E 계약) · ADR-001 §2.3 본문(그때 기록 — 새 사실은 ADR-001 §7).

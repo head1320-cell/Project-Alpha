@@ -17,16 +17,13 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 const PopoverAnchor = PopoverPrimitive.Anchor;
 const PopoverClose = PopoverPrimitive.Close;
 
-const PopoverContent = React.forwardRef<
-  React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "start", sideOffset = 6, ...props }, ref) => (
+const PopoverContent = ({ className, align = "start", sideOffset = 6, ref, ...props }: React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & { ref?: React.Ref<React.ComponentRef<typeof PopoverPrimitive.Content>> }) => (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref} align={align} sideOffset={sideOffset}
       className={cn("shad-popover", className)} {...props} />
   </PopoverPrimitive.Portal>
-));
+);
 PopoverContent.displayName = "PopoverContent";
 
 export { Popover, PopoverTrigger, PopoverAnchor, PopoverClose, PopoverContent };

@@ -34,32 +34,28 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   asChild?: boolean;
 }
 
-const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "div";
-    return (
-      <Comp
-        ref={ref}
-        className={cn(
-          "rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)]",
-          className,
-        )}
-        {...props}
-      />
-    );
-  },
-);
+const Card = ({ className, asChild = false, ref, ...props }: CardProps & { ref?: React.Ref<HTMLDivElement> }) => {
+  const Comp = asChild ? Slot : "div";
+  return (
+    <Comp
+      ref={ref}
+      className={cn(
+        "rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)]",
+        className,
+      )}
+      {...props}
+    />
+  );
+};
 Card.displayName = "Card";
 
 /** 헤더는 본문보다 한 단계 더 조인다 — 제목 한 줄에 24px 을 쓸 이유가 없다. */
-const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("flex flex-col gap-0.5 border-b border-[var(--border)] px-3 py-2", className)}
-      {...props}
-    />
-  ),
+const CardHeader = ({ className, ref, ...props }: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col gap-0.5 border-b border-[var(--border)] px-3 py-2", className)}
+    {...props}
+  />
 );
 CardHeader.displayName = "CardHeader";
 
@@ -73,39 +69,31 @@ type CardTitleTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 export interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
   as?: CardTitleTag;
 }
-const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
-  ({ className, as: Tag = "h3", ...props }, ref) => (
-    <Tag
-      ref={ref}
-      className={cn("text-sm font-semibold leading-tight tracking-tight", className)}
-      {...props}
-    />
-  ),
+const CardTitle = ({ className, as: Tag = "h3", ref, ...props }: CardTitleProps & { ref?: React.Ref<HTMLHeadingElement> }) => (
+  <Tag
+    ref={ref}
+    className={cn("text-sm font-semibold leading-tight tracking-tight", className)}
+    {...props}
+  />
 );
 CardTitle.displayName = "CardTitle";
 
-const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
-  ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn("text-xs leading-snug text-[var(--muted-foreground)]", className)} {...props} />
-  ),
+const CardDescription = ({ className, ref, ...props }: React.HTMLAttributes<HTMLParagraphElement> & { ref?: React.Ref<HTMLParagraphElement> }) => (
+  <p ref={ref} className={cn("text-xs leading-snug text-[var(--muted-foreground)]", className)} {...props} />
 );
 CardDescription.displayName = "CardDescription";
 
-const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("p-3", className)} {...props} />
-  ),
+const CardContent = ({ className, ref, ...props }: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
+  <div ref={ref} className={cn("p-3", className)} {...props} />
 );
 CardContent.displayName = "CardContent";
 
-const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("flex items-center gap-2 border-t border-[var(--border)] px-3 py-2", className)}
-      {...props}
-    />
-  ),
+const CardFooter = ({ className, ref, ...props }: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
+  <div
+    ref={ref}
+    className={cn("flex items-center gap-2 border-t border-[var(--border)] px-3 py-2", className)}
+    {...props}
+  />
 );
 CardFooter.displayName = "CardFooter";
 
