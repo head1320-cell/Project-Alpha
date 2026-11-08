@@ -40,6 +40,22 @@ export function krUnit(v: N): string {
   return `${s}${group(Math.round(a / 1e11) / 10, 1)}조`;
 }
 
+/**
+ * 차트 축 눈금 — ★한 축은 한 단위★. 축에 그릴 값의 가장 큰 절댓값으로 단위(조·억·만·없음)를 한 번 정하고, 눈금마다 그 단위로
+ * 소수 둘째 자리까지(끝의 0 은 뺀다) 쓴다. 0 은 단위 없이 "0". `krUnit` 은 억·만을 정수로 반올림해 1.2억·1.4억이 둘 다 "1억" 이
+ * 되므로 축에 쓰지 않는다. krAxisTick(1.12e8)(1.05e8) = "1.05억" · krAxisTick(5.6e7)(6e7) = "6,000만" · krAxisTick(112)(30) = "30"
+ */
+export function krAxisTick(maxAbs: N): (v: number) => string {
+  const m = ok(maxAbs) ? Math.abs(maxAbs) : 0;
+  const [div, unit] = m >= 1e12 ? [1e12, "조"] : m >= 1e8 ? [1e8, "억"] : m >= 1e4 ? [1e4, "만"] : [1, ""];
+  return (v: number) => {
+    if (!ok(v)) return UNKNOWN_TEXT;
+    const r = Number(Math.abs(v / div).toFixed(2));
+    if (r === 0) return "0";
+    return (v < 0 ? MINUS : "") + r.toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + unit;
+  };
+}
+
 /** 원 — 만 이상은 한국식 단위(3,400억원), 그 아래는 그대로(1,234원). */
 export function won(v: N): string {
   if (!ok(v)) return UNKNOWN_TEXT;

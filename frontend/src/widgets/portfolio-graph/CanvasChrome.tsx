@@ -10,7 +10,9 @@ import { AlignStartVertical, Check, Eye, Target } from "lucide-react";
 import { GOALS, nodeHeight, type GoalKey, type WorkflowStage } from "@/entities/portfolio-graph";
 import { laneLayout } from "@/entities/portfolio-graph/lanes";
 import { SELBAR_ROOM, SELBAR_W, SNAP, zoomLevel } from "./canvasGeometry";
+import { PG_BRANCH_TYPE } from "./Branches";
 import { STAGE_VAR } from "./GraphNode";
+import { PG_GROUP_TYPE } from "./GroupFrame";
 import { ALIGN_ITEMS, type AlignKind } from "./guides";
 import { pgZRule } from "./zoomVar";
 import { RIGHT_W, clampW, floatCorner, floatInsets } from "./panels";
@@ -226,6 +228,8 @@ export function NameWithGoal({ name, onName, goal, onGoal }: { name: string; onN
 
 /** 띠 머리 높이(캔버스 좌표) — 맨 위 노드 위로 이만큼 띠를 늘려 이름을 둔다. */
 const LANE_HEAD = 72;
+/** 상자·갈래 틀 — 멤버 카드 위로 머리만큼 올라온다(상자 여백 28 + 머리 30 · 갈래 머리 56). */
+const FRAME_TYPES = new Set([PG_GROUP_TYPE, PG_BRANCH_TYPE]);
 
 /**
  * 단계 레인(CF4b) — 서버 단계 순서대로 왼→오 세로 띠 여섯. ★노드가 아니다★(끌 수도 고를 수도 없다 · 누르기는 캔버스로 간다).
@@ -239,15 +243,18 @@ export function StageLanes({ stages }: { stages: WorkflowStage[] }) {
   // 첫 움직임에 되돌리기 한 단계). 띠의 가로 자리는 문서·카탈로그로 정해져 가로 움직임은 버린다. 띠 바탕은 지금처럼 누름을 캔버스에 넘긴다.
   const api = useStoreApi();
   const grab = useRef<{ ids: string[]; y: number; zoom: number; applied: number } | null>(null);
+  // 띠 머리는 그려진 상자·갈래 틀 머리보다 위에 둔다 — 노드 위치로만 정하면 맨 위 노드가 상자 안일 때 띠 머리('데이터')가 상자 머리
+  // ('기본 사슬')와 같은 자리에 겹쳤다(2026-11-08). 캔버스가 그린 틀 노드의 맨 위를 숫자 하나로 읽는다(숫자라 바뀔 때만 다시 그린다).
+  const frameTop = useStore((st) => st.nodes.reduce((m, n) => (FRAME_TYPES.has(n.type ?? "") ? Math.min(m, n.position.y) : m), Infinity));
   const geo = useMemo(() => {
     if (!catalog || !stages.length) return null;
     const { lanes, slot } = laneLayout(nodes.map((n) => ({ id: n.id, kind: n.data.kind, position: n.position })), edges, catalog, stages);
     const h = (n: (typeof nodes)[number]) => measuredH(n) || nodeHeight(n.data.kind, catalog, n.data.slotH);
-    const top = Math.min(0, ...nodes.map((n) => n.position.y)) - LANE_HEAD;
+    const top = Math.min(0, frameTop, ...nodes.map((n) => n.position.y)) - LANE_HEAD;
     const bottom = Math.max(0, ...nodes.map((n) => n.position.y + h(n))) + 40;
     const idsOf = (key: string) => nodes.filter((n) => slot.get(n.id)?.lane === key && !n.hidden).map((n) => n.id);
     return { lanes, top, h: bottom - top, idsOf };
-  }, [nodes, edges, catalog, stages]);
+  }, [nodes, edges, catalog, stages, frameTop]);
   if (!geo) return null;
   const headProps = (key: string) => ({
     onPointerDown: (ev: ReactPointerEvent<HTMLDivElement>) => {

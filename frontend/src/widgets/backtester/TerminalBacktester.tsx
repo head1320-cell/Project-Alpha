@@ -17,7 +17,7 @@ import SellConditionPanel from "./panels/SellConditionPanel";
 import UniversePanel from "./panels/UniversePanel";
 import CapitalPanel from "./panels/CapitalPanel";
 import ConditionSummary, { stepGroups, type StepId } from "./panels/ConditionSummary";
-import { applyMacroConfig, initialStrategy, strategyToRun } from "./strategyModel";
+import { applyMacroConfig, initialStrategy, runLabel, strategyToRun } from "./strategyModel";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 백테스트 편집기 (BU3 · ADR-003) — 설계 순서 넷 → 고른 단계만 펼침 → 오른쪽 요약 · 실행 하나
@@ -92,8 +92,7 @@ export default function TerminalBacktester() {
     setLoading(true); setErr(null);
     try {
       const config = strategyToRun(s, handoff, macroHandoff?.config ?? null) as unknown as Record<string, unknown>;
-      const stratName = String(config.strategy_name ?? handoff?.conditionSummary?.[0] ?? "백테스트").slice(0, 100);
-      const { run_id } = await backtestRunApi.create({ config, strategy_name: stratName });
+      const { run_id } = await backtestRunApi.create({ config, strategy_name: runLabel(s) });
       router.push(`/backtest/runs/${run_id}/loading`);
     } catch (e) {
       setErr((e as Error).message || "백테스트 생성 실패");

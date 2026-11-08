@@ -153,6 +153,61 @@ test("등락은 부호 + 한국식 색 — 오름 --tx-up-ink · 내림 --tx-dow
   expect(await v.evaluate((e) => getComputedStyle(e).color)).toBe(await tokenRgb(page, "--tx-down-ink"));
 });
 
+// ── 자산곡선 세로축 — ★실제 실행의 곡선은 원 단위다★ ─────────────────────────────────────────────
+// 투자 금액이 1억이면 곡선은 1억 언저리다. 기본 픽스처(100 언저리)로는 한 번도 안 보였고, README 촬영 때 눈금이
+// 고정 폭(48px) 밖으로 밀려 '000000' 만 남은 것을 봤다(2026-11-08). 눈금은 ① 잘리지 않고 ② 서로 다르고
+// ③ 아래에서 위로 커지고 ④ 맨 위가 곡선 최댓값 이상이어야 한다 — 글자를 다시 숫자로 읽어 값까지 맞는지 본다.
+type Tick = { text: string; left: number; svgLeft: number; y: number };
+async function equityTicks(page: Page): Promise<Tick[]> {
+  const card = page.locator(".brun-card").filter({ has: page.getByRole("heading", { name: /^자산곡선/ }) });
+  await expect(card.locator(".recharts-yAxis .recharts-cartesian-axis-tick-value").first()).toBeVisible();
+  return card.evaluate((el) => {
+    const svg = el.querySelector("svg.recharts-surface")!.getBoundingClientRect();
+    return [...el.querySelectorAll(".recharts-yAxis .recharts-cartesian-axis-tick-value")].map((t) => {
+      const r = t.getBoundingClientRect();
+      return { text: (t.textContent ?? "").trim(), left: r.left, svgLeft: svg.left, y: r.top + r.height / 2 };
+    });
+  });
+}
+/** 눈금 글자 → 원. "1.05억" · "3,500만" · "−0.3억" · "120". 못 읽으면 NaN(→ 단언이 실패한다). */
+const readKr = (s: string) => {
+  const m = s.replace(/,/g, "").replace("−", "-").match(/^(-?\d+(?:\.\d+)?)(억|만)?$/);
+  return m ? Number(m[1]) * (m[2] === "억" ? 1e8 : m[2] === "만" ? 1e4 : 1) : NaN;
+};
+function checkAxis(ticks: Tick[], max: number) {
+  expect(ticks.length, "눈금이 셋 이상 있어야 이 검사가 공허하지 않다").toBeGreaterThanOrEqual(3);
+  for (const t of ticks) expect(t.left, `눈금 '${t.text}' 이 차트 왼쪽 밖으로 잘렸다`).toBeGreaterThanOrEqual(t.svgLeft - 0.5);
+  const texts = ticks.map((t) => t.text);
+  expect(new Set(texts).size, `눈금 글자가 겹친다: ${texts.join(" | ")}`).toBe(texts.length);
+  const vals = [...ticks].sort((a, b) => b.y - a.y).map((t) => readKr(t.text));   // 아래 → 위
+  for (const v of vals) expect(Number.isFinite(v), `읽을 수 없는 눈금: ${texts.join(" | ")}`).toBe(true);
+  for (let i = 1; i < vals.length; i++) expect(vals[i], `아래에서 위로 커져야 한다: ${texts.join(" | ")}`).toBeGreaterThan(vals[i - 1]);
+  expect(vals[vals.length - 1], "맨 위 눈금은 곡선 최댓값 이상").toBeGreaterThanOrEqual(max);
+  expect(vals[vals.length - 1], "맨 위 눈금이 터무니없이 크지 않다").toBeLessThan(max * 3);
+  return texts;
+}
+
+// 편집기 기본 투자 금액은 5,000만 원(`initialStrategy().capital` 5000 × 1만) — 기본 실행은 '만' 규모, 1억이면 '억' 규모.
+for (const [label, start, unit] of [["기본 투자 금액 5,000만", 50_000_000, "만"], ["1억", 100_000_000, "억"]] as const) {
+  test(`자산곡선 세로축 — 원 단위 곡선(${label} 언저리)의 눈금이 잘리지 않고 값이 맞다`, async ({ page }) => {
+    const k = start / 100;
+    const eq = [100, 103, 98, 108, 112].map((v) => v * k);
+    await openResults(page, (f) => {
+      const b = bt(f) as { equity_curve: number[]; benchmark: { curve: number[] } };
+      b.equity_curve = eq;
+      b.benchmark.curve = [100, 101, 100, 104, 106].map((v) => v * k);
+    });
+    const texts = checkAxis(await equityTicks(page), Math.max(...eq));
+    expect(texts.some((t) => t.endsWith(unit)), `${unit} 규모 곡선은 ${unit}으로 읽힌다: ${texts.join(" | ")}`).toBe(true);
+  });
+}
+
+test("짝: 작은 수 곡선(100 언저리)은 단위를 붙이지 않는다 — 억을 무턱대고 붙이지 않는다", async ({ page }) => {
+  await openResults(page);
+  const texts = checkAxis(await equityTicks(page), 112);
+  expect(texts.filter((t) => /[억만]/.test(t)), "100 언저리에 억·만이 붙었다").toEqual([]);
+});
+
 test("결과 화면 주 단추는 하나", async ({ page }) => {
   await openResults(page);
   await expect(page.locator(".terminal-main .tx-btn--main")).toHaveCount(1);

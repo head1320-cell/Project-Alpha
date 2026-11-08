@@ -355,20 +355,30 @@ test("레인 켬은 이 브라우저에 남는다 — 새로고침 뒤에도 켜
   await expect(page.locator(".pg-lane")).toHaveCount(0);
 });
 
+// Esc 로 닫힌 대화상자의 close 사건(다음 차례)이 '열림' 상태를 끄기 전에 누른 Ctrl+K 는 무시된다 — 화면에서 닫힘(toBeHidden)만으로는
+// 그 사건이 지났는지 알 수 없고, 부하가 크면 틈이 길어진다(2026-11-08 전체 실행에서 한 번 — 숨은 칸에 앞 검색어가 그대로였다).
+// 사람이 다시 누르듯 열릴 때까지 다시 누른다 — 끝내 안 열리면 15초 뒤 실패한다.
+async function openCmd(page: Page) {
+  await expect(async () => {
+    if (!(await page.locator("dialog.pg-cmd").isVisible())) await page.keyboard.press("Control+k");
+    await expect(page.locator("dialog.pg-cmd")).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
+}
+
 test("명령 찾기(Ctrl+K)에도 같은 항목 — 레인 켜기 · 레인에 맞추기", async ({ page }) => {
   await openWith(page, STACK);
-  await page.keyboard.press("Control+k");
+  await openCmd(page);
   await page.getByLabel("명령 찾기").last().fill("단계 레인");
   await expect(page.locator('.pg-cmd-item[data-cmd="lanes"]')).toContainText("단계 레인 보기");
   await page.keyboard.press("Enter");
   await expect(page.locator(".pg-lane")).toHaveCount(6);
-  await page.keyboard.press("Control+k");
+  await openCmd(page);
   await page.getByLabel("명령 찾기").last().fill("레인에 맞추기");
   await expect(page.locator('.pg-cmd-item[data-cmd="fit-lanes"]')).toHaveCount(1);
   await page.keyboard.press("Escape");
   // 기본 대화상자의 close 사건은 Esc 다음 차례에 온다 — 닫히기 전에 Ctrl+K 를 누르면 '이미 열림' 으로 무시돼 다시 열리지 않는다.
   await expect(page.locator("dialog.pg-cmd")).toBeHidden();
-  await page.keyboard.press("Control+k");
+  await openCmd(page);
   await page.getByLabel("명령 찾기").last().fill("단계 레인");
   await expect(page.locator('.pg-cmd-item[data-cmd="lanes"]')).toContainText("단계 레인 끄기");
 });
@@ -473,4 +483,59 @@ test("U7 · 짝 — 띠 바탕(머리 밖) 끌기는 화면 이동(노드 그대
   expect(await Promise.all(ids.map((id) => pos(page, id)))).toEqual(before);
   await lanesOn(page, false);
   await expect(page.locator(".pg-lane-head")).toHaveCount(0);
+});
+
+// ── 띠 머리 ⟂ 상자·갈래 틀 머리 (2026-11-08) ────────────────────────────────────────────────
+// 상자·갈래 틀은 멤버 카드 위로 머리만큼 올라온다(상자 여백 28 + 머리 30 · 갈래 머리 56). 띠 위쪽 끝을 노드 위치로만 정해
+// 맨 위 노드가 상자 안에 있으면 띠 머리('데이터')와 상자 머리('기본 사슬')가 같은 자리에 겹쳐 읽혔다(README 촬영 때 봄).
+// 거는 것: 켠 띠의 머리는 어떤 상자·갈래 틀 머리와도 겹치지 않고 그 위에 있다. 짝: 둘이 가로로는 겹친다(세로로만 비켜야 하는 경우 —
+// 아니면 이 검사는 공허하다) · 틀이 없는 문서의 띠 위쪽 끝은 그대로(맨 위 노드 − 72).
+const BOXED = {
+  ...F,
+  nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660", "035420"] }), n("returns", "returns", 320, 0),
+          n("optimizer", "optimizer", 640, 0, { model: "risk_parity" }), n("corr", "corr_stress", 960, 0), n("corr_b", "corr_stress", 1280, 0)],
+  edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "optimizer", "returns"),
+          e("returns", "returns", "corr", "returns"), e("optimizer", "weights", "corr", "weights"),
+          e("returns", "returns", "corr_b", "returns"), e("optimizer", "weights", "corr_b", "weights")],
+  groups: [{ id: "s1", label: "기본 사슬", kind: "strategy", color: 0, members: ["universe", "returns", "optimizer"], output: "optimizer" }],
+  branches: [{ id: "br1", label: "갈래 B", root: "corr_b", of_root: "corr", map: { corr_b: "corr" } }],
+};
+type R = { x: number; y: number; width: number; height: number };
+const xMeet = (a: R, b: R) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+const yMeet = (a: R, b: R) => Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+const rects = (page: Page, sel: string) => page.locator(sel).evaluateAll((els) => els.map((el) => {
+  const r = el.getBoundingClientRect();
+  return { x: r.x, y: r.y, width: r.width, height: r.height, text: (el.querySelector("input") as HTMLInputElement | null)?.value || (el.textContent ?? "").trim() };
+}));
+
+// 셋 다 따로 — 둘이 함께면 더 높은 틀(갈래)이 띠를 올려 다른 틀(상자)을 빼먹어도 지나간다(변이로 확인).
+const { branches: _b, ...BOX_ONLY } = BOXED;
+const { groups: _g, ...BRANCH_ONLY } = BOXED;
+for (const [name, doc, boxes, forks] of [["상자만", BOX_ONLY, 1, 0], ["갈래만", BRANCH_ONLY, 0, 1], ["상자 + 갈래", BOXED, 1, 1]] as const)
+test(`띠 머리는 상자·갈래 틀 머리와 겹치지 않고 그 위에 있다 — ${name}(짝: 가로로는 겹치는 쌍이 있다 · 틀 머리가 보인다)`, async ({ page }) => {
+  await openWith(page, doc);
+  await expect(page.locator(".pg-group-head")).toHaveCount(boxes);
+  await expect(page.locator(".pg-branch-head")).toHaveCount(forks);
+  await lanesOn(page, true);
+  await expect(page.locator(".pg-lane")).toHaveCount(6);
+  const lanes = await rects(page, ".pg-lane-head");
+  const heads = [...await rects(page, ".pg-group-head"), ...await rects(page, ".pg-branch-head")];
+  let sideBySide = 0;
+  for (const h of heads) for (const l of lanes) {
+    if (xMeet(l, h) <= 0) continue;
+    sideBySide += 1;
+    expect(yMeet(l, h), `띠 머리 '${l.text}' 와 틀 머리 '${h.text}' 가 겹친다`).toBeLessThanOrEqual(0);
+    expect(l.y + l.height, `띠 머리 '${l.text}' 는 틀 머리 '${h.text}' 위에 있다`).toBeLessThanOrEqual(h.y + 0.5);
+  }
+  expect(sideBySide, "가로로 겹치는 (띠 머리, 틀 머리) 쌍이 있어야 이 검사가 공허하지 않다").toBeGreaterThanOrEqual(boxes + forks);
+});
+
+test("짝: 상자·갈래 틀이 없으면 띠 위쪽 끝은 그대로 — 맨 위 노드에서 72 위", async ({ page }) => {
+  await openWith(page, LOOSE);
+  await lanesOn(page, true);
+  await expect(page.locator(".pg-lane")).toHaveCount(6);
+  const zoom = await page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+  const lane = (await page.locator(".pg-lane").first().boundingBox())!;
+  const top = (await card(page, "a").boundingBox())!;                            // LOOSE 의 맨 위 노드(y 0)
+  expect(Math.abs((top.y - lane.y) / zoom - 72), "띠 위쪽 끝 = 맨 위 노드 − 72(캔버스 단위)").toBeLessThan(1.5);
 });

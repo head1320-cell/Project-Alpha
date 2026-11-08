@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/car
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import { Notice, PageHead } from "@/shared/ui/tx";
+import { krAxisTick } from "@/shared/lib/krFormat";
 
 import { RegisterAsStrategy } from "./RegisterAsStrategy";
 
@@ -417,6 +418,10 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
     i, date: bt.equity_dates?.[i] ?? String(i), equity: v,
     bench: bt.benchmark?.curve?.[i] ?? null, dd: bt.drawdown_curve?.[i] ?? null,
   })), [bt]);
+  // 자산곡선 세로축 — 곡선은 원 단위(기본 5,000만 원이면 5,000만 언저리)라 날 숫자로는 고정 폭 밖으로 잘렸다('000000').
+  // 한 축 한 단위(만·억)로 줄여 쓰고, 그 단위의 가장 긴 글자("9,999만")가 들어가는 폭을 준다.
+  const equityTick = useMemo(() => krAxisTick(equity.reduce((m, d) =>
+    Math.max(m, Number.isFinite(d.equity) ? Math.abs(d.equity) : 0, d.bench != null && Number.isFinite(d.bench) ? Math.abs(d.bench) : 0), 0)), [equity]);
   const monthly = useMemo(() => (bt.monthly_returns || []).map((m, i) =>
     typeof m === "number" ? { month: String(i + 1), return_pct: m } : (m as MonthlyReturn)), [bt.monthly_returns]);
   const roundTrips = bt.round_trips && bt.round_trips.length ? bt.round_trips : bt.trades || [];
@@ -500,7 +505,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
             <LineChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="2 3" stroke="var(--tx-line)" vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 12, fill: "var(--tx-sub)" }} minTickGap={60} stroke="var(--tx-line)" />
-              <YAxis tick={{ fontSize: 12, fill: "var(--tx-sub)" }} width={48} stroke="var(--tx-line)" />
+              <YAxis tick={{ fontSize: 12, fill: "var(--tx-sub)" }} width={64} tickFormatter={equityTick} stroke="var(--tx-line)" />
               <Tooltip formatter={(v: number) => v?.toLocaleString("ko-KR")} labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 13, borderRadius: 10 }} />
               <Line isAnimationActive={anim} type="monotone" dataKey="equity" stroke="var(--tx-blue)" dot={false} strokeWidth={2} name="이 전략" />
               {bt.benchmark && <Line isAnimationActive={anim} type="monotone" dataKey="bench" stroke="var(--tx-mute)" dot={false} strokeDasharray="4 3" strokeWidth={1.4} name={bt.benchmark.label} />}

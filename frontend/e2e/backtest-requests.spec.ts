@@ -178,6 +178,32 @@ test("백테스트 요청 골든: 스크리너·매크로에서 넘어온 설정
   expect(out).toEqual(JSON.parse(fs.readFileSync(GOLDEN, "utf8"))[key]);
 });
 
+// ★실행 이름 = 편집기의 전략 이름★ — 결과 화면 제목·비교 목록·진행 화면이 이 이름을 쓴다. 전에는 엔진 키
+// (`config.strategy_name` = "Condition")가 이름 자리에 들어가 결과 제목이 영어 "Condition" 이었다(2026-11-08 README 촬영).
+// 짝: 엔진 키는 config 안에 그대로 — 이름을 고쳐도 계산 요청은 바뀌지 않는다.
+test("실행 이름은 편집기의 전략 이름 — 엔진 키 'Condition' 이 아니다(짝: config 의 엔진 키는 그대로 · 빈 이름은 '백테스트')", async ({ page }) => {
+  test.setTimeout(150_000);
+  const runs = await setup(page);
+  const read = (s: string) => JSON.parse(s) as { strategy_name: string; config: { strategy_name: string } };
+
+  const name0 = await act(page, "strategy-name").inputValue();
+  expect(name0.trim(), "기본 전략 이름이 있어야 이 시험이 공허하지 않다").not.toBe("");
+  let b = read(await runOnce(page, runs));
+  expect(b.strategy_name).toBe(name0.trim());
+  expect(b.config.strategy_name, "엔진 키는 그대로").toBe("Condition");
+
+  await back(page);
+  await act(page, "strategy-name").fill("분기 모멘텀");
+  b = read(await runOnce(page, runs));
+  expect(b.strategy_name).toBe("분기 모멘텀");
+  expect(b.config.strategy_name, "엔진 키는 그대로").toBe("Condition");
+
+  await back(page);
+  await act(page, "strategy-name").fill("   ");
+  b = read(await runOnce(page, runs));
+  expect(b.strategy_name, "빈 이름은 엔진 키가 아니라 '백테스트'").toBe("백테스트");
+});
+
 test("짝: 비교기는 공허하지 않다 — 기본 투자 금액 하나만 바꿔도 다르다고 본다", async () => {
   const want = JSON.parse(fs.readFileSync(GOLDEN, "utf8")) as Record<string, string>;
   const base = want["01 기본값"];
