@@ -25286,3 +25286,21 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 무엇: `docs/plans/2026-11-08-stack-upgrade.md` — 재는 것·명령·기준선(API 4 · 백테스트 엔진 · 종목 화면 · 캔버스 그리기 R8 · 타입 검사 · 빌드 · 번들 · pytest)과 회별 잡음.
   측정 도구는 기존 것(`scripts/bench_backtest.py`·`bench_company.py`·`canvas-perf` 의 '재기')에 API 왕복만 scratch 스크립트로 더함(저장소에 넣지 않음).
 - 하지 않음: 전체 E2E 걸린 시간 기준선(지난 R8b 전체 1.1h 를 참고로만) · 실데이터·Postgres 쿼리 시간(이 환경에서 잴 수 없음).
+
+## 기술 스택 최신화 2단계 — 보안·같은 메이저 (2026-11-08)
+
+- 프론트: `next`·`eslint-config-next` 14.2.5 → **14.2.35**(14 줄 마지막 · 치명 공지 일부 해소) · `@xyflow/react` 12.12.0 → 12.12.1 · `npm update`(범위 안 — radix 1.3·react-query 5.107·
+  js-yaml 4.3.2·postcss 8.5.32·autoprefixer 10.6 등) · `npm audit fix`(메이저 없이). ★`@playwright/test` 는 1.61.1 로 정확 고정★ — `npm update` 가 1.65 로 올렸는데 로컬
+  크로미움(chromium-1194)과 짝이 깨진다 · ★`html-to-image` 는 1.11.11 그대로★ — 1.11.13 은 PNG 내보내기에서 선이 모두 빠진다(HISTORY 24514, 그것을 잡는 시험이 있음).
+- 백엔드(같은 메이저): SQLAlchemy 2.0.57 · requests 2.34.2 · httpx 0.27.2 · yfinance 0.2.66 · websocket-client 1.9.2 · python-dotenv 1.2.4 · xlsxwriter 3.3.1 · pytest 8.4.2.
+  FastAPI·uvicorn 은 6단계, 수치 라이브러리는 3단계. 검증은 CI 와 같은 새 venv(`pip install -r requirements.txt ruff==0.15.8`)에서 — 기준선용 시스템 환경은 그대로 둠.
+- ★남은 보안 공지★: `npm audit --omit=dev` 에 next(치명)·next 안의 postcss(높음)가 남는다 — 14 줄에는 더 고침이 없고 15.5.x/16 에서만 고쳐진다 → 5a단계(Next 16)에서 해소.
+  js-yaml·nanoid·source-map-js 는 이번에 해소.
+- 게이트: `make all`(venv) 통과 — pytest 8894(기준선과 같은 수) · tsc · next build. 전체 E2E 1236 중 1231 통과 · 5 실패.
+- ★실패 5개는 2단계 이전부터 있던 것★(증거): 같은 시험을 2단계 전 커밋 `626454c` 의 작업 트리(그 lockfile 로 `npm ci`)에서 돌려도 실패 —
+  ① `canvas-golden` 화면 골든: Ctrl+K 창을 Esc 로 닫자마자 '?' 를 누르면 브라우저가 창을 다 닫기 전이라 초점이 창 안 입력 칸에 있고, 캔버스 단축키는 대화상자 안 키를
+  무시하므로 '?' 가 버려진다(기록을 켜면 느려져 통과 — 둘 사이에 초점을 읽는 평가 한 번만 넣어도 통과) · Playwright 실패 그림은 첫 탭(빈 문서)이라 '빈 캔버스' 로 오해하기 쉽다.
+  ② `canvas-minimap-pick` U3 짝: 찾기(Ctrl+F)로 간 뒤 확대가 1 이 아니라 0.992 에서 ★멈춘다★(2초 뒤에도 그대로 — 아직 움직이는 중이 아님) — 실제 화면 결함 ·
+  `3de7372`(누르면 옮기기 멈춤) 이전 `0a349cf` 에서도 6 중 4 실패 ③ realism ST3c(대비 감사가 3 요소만 — 내용이 그려지기 전) ④ 빈 필수 입력(끈 선이 가끔 안 이어짐)
+  ⑤ nav(이동으로 끊긴 요청 ERR_ABORTED 를 오류로 셈) — 2단계 전 커밋에서 각각 1/3·1/3·2/6 실패. Next·@xyflow 를 하나씩 되돌려도 ①② 는 그대로였다.
+  이 다섯은 업그레이드 범위 밖이라 고치지 않고 별도 할 일로 제안했다(원인·증거 포함).
