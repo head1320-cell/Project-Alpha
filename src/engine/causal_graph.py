@@ -67,7 +67,7 @@ def granger_edges(series_map: dict) -> dict:
             if n < _MIN_OBS:
                 continue
             try:
-                res = grangercausalitytests(x, maxlag=_MAX_LAG, verbose=False)
+                res = grangercausalitytests(x, maxlag=_MAX_LAG)      # statsmodels 0.15: verbose 인자 삭제(출력도 안 함)
                 best_lag, best_p = None, 1.0
                 for lag, r in res.items():
                     p = r[0]["ssr_ftest"][1]

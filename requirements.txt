@@ -16,18 +16,17 @@ pydantic>=2.0.0
 httpx==0.27.2
 
 # ─── 데이터 / 수치 연산 ───
-pandas==2.2.2
-numpy==1.26.4
-scipy==1.13.1
-scikit-learn==1.5.0
+pandas==3.1.1
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.9.1
 
 # ─── 정량 모델 (VaR / GARCH / 파생) ───
 arch>=6.0.0
-# ★상한을 고정한다★ (AP, 2026-09-21 실측) — 0.15 가 `grangercausalitytests()` 의
-# `verbose` 인자를 **제거**했다. `causal_graph.granger_edges` 가 그 `TypeError` 를
-# `except Exception` 으로 삼켜 ★엣지 0개를 조용히 돌려준다★ — 크래시가 "인과 없음"
-# 으로 보인다. `fastapi==0.111.0` 과 같은 이유의 고정이다(CLAUDE.md §6).
-statsmodels>=0.14.0,<0.15
+# 0.15 는 `grangercausalitytests()` 의 `verbose` 인자를 제거했다 — `causal_graph.granger_edges` 는
+# 2026-11-08 에 그 인자를 빼고 0.15 로 올렸다(그 전 AP 2026-09-21 에는 `except Exception` 이 TypeError 를
+# 삼켜 ★엣지 0개를 조용히 돌려줘★ <0.15 로 묶었었다). `test_granger_detects_lagged_dependency` 가 그 침묵을 잡는다.
+statsmodels==0.15.0
 QuantLib>=1.30
 networkx>=3.0
 
