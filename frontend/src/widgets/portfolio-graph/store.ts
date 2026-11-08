@@ -277,7 +277,8 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     const same = staleIds.length === s.staleIds.length && staleIds.every((x, i) => x === s.staleIds[i]);
     if (!same || s.reportStale !== staleIds.length > 0) rawSet({ staleIds: same ? s.staleIds : staleIds, reportStale: staleIds.length > 0 });
   };
-  const set: typeof rawSet = (...a: Parameters<typeof rawSet>) => { rawSet(...a); derive(); };
+  // zustand 5 의 set 은 겹친 형(replace 있음·없음)이라 그대로 넘기는 이 감싸기는 형 단언으로 둔다 — 동작 그대로.
+  const set = ((...a: Parameters<typeof rawSet>) => { rawSet(...a); derive(); }) as typeof rawSet;
   /** 지금 상태를 되돌리기 칸에 넣는다 — 바꾸기 **직전**에 부른다. */
   const push = () => set((s) => ({
     past: [...s.past, { nodes: clean(s.nodes), edges: s.edges, groups: s.groups, branches: s.branches }].slice(-HISTORY),
