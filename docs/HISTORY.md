@@ -25459,3 +25459,12 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 측정: `docs/plans/2026-11-08-stack-upgrade.md` 6단계 표 — 실제 서버 API 는 옛·새 번갈아 A/B 로 변화 없음 · ★갓 띄운 서버의 첫 요청 한 번 +50~75 ms★ ·
   `bench_company`(앱 안 TestClient) 첫 로딩 63 → 244 ms · 다시 37 → 50 ms 로 나빠졌는데, 같은 TestClient 로 가장 가벼운 경로를 재면 첫 호출 +105 ms ·
   호출당 +1.8 ms 라 측정 경로(TestClient) 몫이다 — 실제 서버 호출당 시간은 같다. 폐기 예고 경고 97,008 → 0(`test_auth_enforcement` 하나 · `-W always`).
+
+## 기술 스택 최신화 7단계 — 마무리: 배지·문서·최종 요약 (2026-11-08)
+
+- README 배지(Python 3.14 · TypeScript 6 · FastAPI 0.162 · Next.js 16.4 · React 19 · pandas 3.1 · SciPy 1.18)와 기술 스택 두 줄 · `docs/specs/architecture.md` §4 판 ·
+  `docs/Project_Alpha_CTO_QuantPM_Master_Prompt.md` 의 "FastAPI 0.111.0 is fixed" 를 새 사실로. 감사 스펙(`2026-08-22-…-audit.md`)의 옛 판은 그때의 기록이라 둠.
+- `docs/plans/2026-11-08-stack-upgrade.md` 끝에 기준선 → 마지막 요약표. ★성능이 실제로 오른 것은 백테스트 계산(−28% · 해석기) · 빌드(−49%) · pytest(−7%)★ ·
+  화면 첫 로딩은 Next 16·React 19 로 조금 나빠짐(보안 때문에 사용자 결정으로 유지) · 캔버스 그리기와 API 는 변화 없음 · 갓 띄운 서버의 첫 요청 +50~75 ms.
+- 올리지 않은 것과 까닭: TypeScript 7 · ESLint 10 · recharts 3 · React Compiler · Tailwind 4 · Playwright(요약표 아래).
+- 하지 않음: Docker 이미지 빌드(이 환경에 docker 없음 — 4단계 기록) · 이전부터의 E2E 실패 셋(화면 골든 Esc 경합 · 미니맵 찾기 확대 멈춤 · realism ST3c — 별도 할 일).

@@ -5,7 +5,7 @@
 
 이태호 · 개인 프로젝트 · [taeho2267@gmail.com](mailto:taeho2267@gmail.com)
 
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-14.2-000000?logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black) [![React Flow 12](https://img.shields.io/badge/React_Flow-12-black?logo=react&logoColor=blue)](https://reactflow.dev/) [![Claude](https://img.shields.io/badge/Anthropic-Claude_API-D97757?logo=anthropic&logoColor=white)](https://docs.anthropic.com/) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-SQLAlchemy%202.0-4169E1?logo=postgresql&logoColor=white) ![pandas](https://img.shields.io/badge/pandas-2.2-150458?logo=pandas&logoColor=white) ![SciPy](https://img.shields.io/badge/SciPy-1.13-8CAAE6?logo=scipy&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white) ![Playwright](https://img.shields.io/badge/Playwright-E2E-2EAD33?logo=playwright&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.162-009688?logo=fastapi&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-16.4-000000?logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black) [![React Flow 12](https://img.shields.io/badge/React_Flow-12-black?logo=react&logoColor=blue)](https://reactflow.dev/) [![Claude](https://img.shields.io/badge/Anthropic-Claude_API-D97757?logo=anthropic&logoColor=white)](https://docs.anthropic.com/) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-SQLAlchemy%202.0-4169E1?logo=postgresql&logoColor=white) ![pandas](https://img.shields.io/badge/pandas-3.1-150458?logo=pandas&logoColor=white) ![SciPy](https://img.shields.io/badge/SciPy-1.18-8CAAE6?logo=scipy&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white) ![Playwright](https://img.shields.io/badge/Playwright-E2E-2EAD33?logo=playwright&logoColor=white)
 
 ![포트폴리오 설계 캔버스: 노드마다 계산 결과가 바로 보이고, 위에는 증거 관문, 아래에는 길잡이 줄, 오른쪽에는 단계별 해설과 'AI 가 풀어 쓴 글'](docs/images/readme/canvas.png)
 
@@ -227,8 +227,8 @@ cd frontend && npm install && npm run dev          # 별도 터미널
 
 ## 기술 스택
 
-- **프론트엔드** Next.js 14 · React · TypeScript · React Flow 12(`@xyflow/react`, 캔버스) · Recharts · TanStack Query · Pretendard
-- **백엔드** Python 3.11 · FastAPI · SQLAlchemy · PostgreSQL(미설정 시 SQLite) · NumPy · pandas · SciPy
+- **프론트엔드** Next.js 16 · React 19 · TypeScript 6 · React Flow 12(`@xyflow/react`, 캔버스) · Recharts · TanStack Query · Pretendard
+- **백엔드** Python 3.14 · FastAPI · SQLAlchemy · PostgreSQL(미설정 시 SQLite) · NumPy · pandas · SciPy
 - **AI** Anthropic Claude API(캔버스 설계 보조, 구조화 출력과 서버 측 검사)
 - **데이터** 증권사 Open API(시세·주문) · OpenDART · 한국거래소 · 한국은행 ECOS · FRED
 - **검증** pytest · Playwright · GitHub Actions · Docker Compose

@@ -67,11 +67,12 @@ CSS** · 선행 `:root` 블록 불변(EOF 의 shadcn 브리지가 마지막 — 
 
 ## 4. 기술 스택
 
-- **백엔드** Python 3.11 · FastAPI **0.111.0(고정)** · SQLAlchemy 2.0.30 · pandas ·
-  numpy · scipy · scikit-learn · statsmodels · QuantLib · pytest · ruff
-- **프론트** Node 20 · Next 14.2.5 · React 18 · TypeScript 5(strict) ·
-  @tanstack/react-query 5 · zustand 4 · recharts · reactflow · 순수 CSS + Tailwind ·
+- **백엔드** Python 3.14 · FastAPI 0.162(라우트 표는 `tests/route_walk.py` 로만 훑는다 — CLAUDE.md §6) · SQLAlchemy 2.0 · pandas 3 ·
+  numpy 2.5 · scipy 1.18 · scikit-learn · statsmodels 0.15 · QuantLib · pytest · ruff
+- **프론트** Node 24 · Next 16(Turbopack 빌드) · React 19 · TypeScript 6(strict) · ESLint 9(flat) ·
+  @tanstack/react-query 5 · zustand 5 · recharts 2 · @xyflow/react 12 · 순수 CSS + Tailwind 3 ·
   Playwright
+- 판과 고르지 않은 것의 까닭(TS 7 · ESLint 10 · recharts 3 · Tailwind 4 · React Compiler)은 `docs/plans/2026-11-08-stack-upgrade.md`.
 - **데이터 소스** DART(재무) · KIS(시세·주문) · KRX(장기 일봉) · ECOS(한국 매크로) ·
   FRED/ALFRED(미국 매크로·빈티지)
 

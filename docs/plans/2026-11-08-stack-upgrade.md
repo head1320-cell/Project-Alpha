@@ -236,3 +236,28 @@ button, [role="button"] { cursor: pointer; }
 표 만들기가 그대로 더해진다. 실제 서버로 잰 호출당 시간은 옛·새가 같다. 사용자가 겪는 차이는 ★서버를 새로 띄운 뒤 첫 요청 한 번 +50~75 ms★ 뿐이다.
 이 단계는 사용자 결정("원인을 고친 뒤 최신으로")이고, 옛 판이 Python 3.16 에서 깨질 API 에 기대므로 유지한다 — 첫 요청 비용은 기동 때 미리 표를
 만드는 식으로 없앨 수 있지만 재어진 이득(60 ms · 재시작마다 한 번)에 비해 FastAPI 내부에 기대는 코드가 늘어 하지 않았다.
+
+## 최종 요약 — 기준선(1단계) → 마지막(6단계)
+
+| 무엇 | 기준선 | 마지막 | 판정 · 까닭 |
+|---|---|---|---|
+| 백테스트 small wall | 6.96 s | 5.04 s | ★−28%★ — Python 3.11 → 3.14(4단계 A/B 로 해석기 몫 확인) |
+| 프론트 빌드(캐시 없이) | 63.3 s | 32.6 s | ★−49%★ — Node 24(−11%) · Next 16 Turbopack(−30%) |
+| 타입 검사(캐시 없이) | 20.5 s | 19.3 s | −6%(잡음 경계) |
+| pytest 전체 | 1530 s | 1429 s | −7%(회 1) |
+| API 왕복(캔버스 · 노드 목록 · 스크리너 · 매크로) | 51.2 · 69.6 · 16.2 · 3.5 ms | 44.3 · 47.7 · 13.8 · 3.4 ms | ★주장하지 않음★ — 같은 백엔드를 세션을 바꿔 재면 이만큼 흔들린다(5a 정정). 같은 세션 A/B(6단계)는 변화 없음 |
+| 갓 띄운 서버의 첫 요청 | 285~289 ms | 337~362 ms | ★나빠짐 +50~75 ms(재시작마다 한 번)★ — FastAPI 0.16x |
+| 첫 화면 JS(초기 HTML script · gzip · 같은 방법) | /allocation 177 · /backtest 201 · 결과 306 · /macro 330 kB(Next 14.2.35) | 214 · 237 · 344 · 366 kB | ★나빠짐 +35 kB★ — Next 16 런타임·react-dom 19 · 사용자 결정으로 유지(보안) |
+| /allocation 쓸 수 있기까지(LAN) | 550~557 ms(Next 14) | 576~595 ms | ★+25~45 ms(≈+5%)★ — 위와 같은 까닭 |
+| 캔버스 그리기(프레임 p95 · 12 경우) | 표 1단계 | 모든 단계에서 같은 값 | 변화 없음 |
+| 종목 화면 백엔드(`bench_company` · 앱 안 TestClient) | 65.4 · 36.6 ms | 243.5 · 50.3 ms | ★나빠짐(측정 경로 몫)★ — TestClient 첫 호출 +105 ms · 호출당 +1.8 ms · 실제 서버는 같음 |
+| `npm audit --omit=dev` | 치명 1 · 높음 4 | 0 | 해소 |
+| pytest 경고(`-W always`) | 3.14 에서 51만 건(`utcnow` 19만 · FastAPI·Starlette 31만) | `utcnow` 는 ruff DTZ003 으로 0 · FastAPI 는 대표 시험 하나에서 97,008 → 0(전체를 다시 세지는 않음) | 남은 것: Pydantic class config · statsmodels 안 · SciPy `anderson` 예고 |
+
+**올린 것** Python 3.14 · Node 24 · numpy 2.5 · pandas 3.1 · scipy 1.18 · scikit-learn 1.9 · statsmodels 0.15 · SQLAlchemy 2.0.57 · FastAPI 0.162 · uvicorn 0.54 ·
+httpx 0.28 · Next 16.4 · React 19.3 · TypeScript 6.0 · ESLint 9 · zustand 5 · lucide-react 1.
+**재 보고 올리지 않은 것** TypeScript 7(컴파일러 JS API 없음) · ESLint 10(플러그인 peer) · recharts 3(차트 화면 JS +16~22 kB · 타입 검사 +13%) ·
+React Compiler(다시 그리기 준 것 없음 · 빌드 +36%) · Tailwind 4(모양 같게 옮겼지만 CSS +1.9 kB · 이득 없음). **그대로 둔 것** Playwright 1.61(로컬 크로미움과 짝).
+
+★정직하게★ — "최신으로 올려 성능을 높인다" 중 성능이 실제로 오른 것은 ① 백테스트 계산(해석기) ② 빌드 시간 ③ pytest 시간이다. 화면 쪽 첫 로딩은
+Next 16·React 19 때문에 조금 나빠졌고(보안 때문에 유지), 캔버스 그리기와 API 응답은 변하지 않았다.
