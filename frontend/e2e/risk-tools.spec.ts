@@ -60,6 +60,8 @@ test("네 충격 한눈에 — 줄 = 시나리오 수 · 생존 막대 폭 = 서
   const rows = page.locator(".rk-sum-row");
   await expect(rows).toHaveCount(4, { timeout: 40_000 });
   await expect(page.locator(".rk-sum-bar i")).toHaveCount(4, { timeout: 40_000 });
+  // 처리기는 `await r.json()` 뒤에 채운다 — 넷이 다 오기 전에 돌면 덜 견주고 통과한다(공허한 단언).
+  await expect.poll(() => Object.keys(got).length).toBe(4);
   for (const sc of Object.keys(got)) {
     const s = got[sc];
     const w = await page.locator(`.rk-sum-row[data-sc="${sc}"] .rk-sum-bar i`).evaluate((e) => parseFloat((e as HTMLElement).style.width));
@@ -115,7 +117,8 @@ test("종목 × 충격 칸 지도 — 값 = 서버 점수 충격(부호) · ★�
   await open(page);
   const map = page.locator(".rk-map");
   await expect(map.locator(".rk-cell").first()).toBeVisible({ timeout: 40_000 });
-  expect(first).not.toBeNull();
+  // 처리기는 `await r.json()` 뒤에 값을 채운다 — 칸이 먼저 그려질 수 있다(5b 전체 실행에서 실측 null).
+  await expect.poll(() => first).not.toBeNull();
   const f = first as unknown as { code: string; shock: number };
   const cell = map.locator(`.rk-cell[data-sc="rate_hike_200bp"][data-code="${f.code}"]`);
   await expect(cell).toHaveAttribute("data-v", String(f.shock));
