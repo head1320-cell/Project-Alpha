@@ -539,3 +539,76 @@ test("짝: 상자·갈래 틀이 없으면 띠 위쪽 끝은 그대로 — 맨 �
   const top = (await card(page, "a").boundingBox())!;                            // LOOSE 의 맨 위 노드(y 0)
   expect(Math.abs((top.y - lane.y) / zoom - 72), "띠 위쪽 끝 = 맨 위 노드 − 72(캔버스 단위)").toBeLessThan(1.5);
 });
+
+// ── 갈래 틀 머리 — 좁은 틀 (2026-11-08) ─────────────────────────────────────────────────────
+// 카드 하나짜리 갈래 틀(폭 296)에서 단추 둘('이 갈래를 원본으로' · '전략으로 묶기')에 밀려 이름이 한 글자 폭으로 줄고, 한글은 글자마다 줄이 바뀌어
+// '갈 / 래 / B' 로 세로로 쪼개져 틀 아래로 흘렀다(띠 시험 그림에서 봄). 거는 것: 좁은 틀에서도 이름은 한 줄 · 머리 안 요소가 틀 밖으로 넘치지 않음 ·
+// 단추는 역할·이름으로 찾아짐. 짝: 넓은 틀(카드 둘)에서는 단추 글자가 그대로 보인다(늘 숨기는 고침 배제).
+const WIDE_BRANCH = {
+  ...F,
+  nodes: [...BOXED.nodes.filter((x) => x.id !== "corr_b"), n("opt_b", "optimizer", 1280, 0, { model: "min_var" }), n("corr_b", "corr_stress", 1600, 0)],
+  edges: [...BOXED.edges.filter((x) => !x.id.includes("corr_b")), e("returns", "returns", "opt_b", "returns"),
+          e("returns", "returns", "corr_b", "returns"), e("opt_b", "weights", "corr_b", "weights")],
+  branches: [{ id: "br1", label: "갈래 B", root: "opt_b", of_root: "optimizer", map: { opt_b: "optimizer", corr_b: "corr" } }],
+};
+const textLines = (loc: import("@playwright/test").Locator) => loc.evaluate((el) => {
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  return new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size;
+});
+
+test("갈래 틀 머리 — 카드 하나짜리 좁은 틀에서도 이름은 한 줄 · 머리가 틀 밖으로 넘치지 않음 · 단추는 이름으로 찾아짐", async ({ page }) => {
+  await openWith(page, BRANCH_ONLY);
+  const frame = page.locator('.pg-branch[data-branch-id="br1"]');
+  await expect(frame).toBeVisible();
+  const fb = (await frame.boundingBox())!;
+  const zoom = await page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+  expect(fb.width / zoom, "카드 하나짜리 틀 = 좁은 틀(296)").toBeLessThan(320);
+  const name = frame.locator(".pg-branch-name");
+  await expect(name).toHaveText("갈래 B");
+  expect(await textLines(name), "갈래 이름은 한 줄").toBe(1);
+  const over = await frame.locator(".pg-branch-head").evaluate((head) => {
+    const box = head.closest(".pg-branch")!.getBoundingClientRect();
+    return [...head.children].map((c) => ({ c: c.className, out: c.getBoundingClientRect().right - box.right })).filter((x) => x.out > 0.5);
+  });
+  expect(over, "머리 안 요소가 틀 오른쪽 밖으로 넘친다").toEqual([]);
+  await expect(frame.getByRole("button", { name: "이 갈래를 원본으로" })).toBeVisible();
+  await expect(frame.getByRole("button", { name: "전략으로 묶기" })).toBeVisible();
+  await expect(frame.getByRole("button", { name: "갈래 B 지우기" })).toBeVisible();
+  // 멀리 보기 — 이름 글자가 화면 크기 바닥을 지키려 캔버스 단위로 커져(최대 40) 좁은 틀에서 다시 밀린다. 거기서도 한 줄(말줄임).
+  for (let i = 0; i < 12 && (await page.locator(".pg-canvas").getAttribute("data-zoom")) !== "far"; i++) {
+    await page.locator(".react-flow__controls-zoomout").click();
+    await page.waitForTimeout(120);
+  }
+  await expect(page.locator(".pg-canvas")).toHaveAttribute("data-zoom", "far");
+  expect(await textLines(name), "멀리 보기에서도 갈래 이름은 한 줄").toBe(1);
+});
+
+// 앱이 만드는 이름은 '갈래 A~D' 지만 문서 불러오기는 문서에 적힌 이름을 그대로 받는다(`format.ts`) — 긴 이름도 한 줄 · 말줄임 · 틀 안.
+test("갈래 틀 머리 — 불러온 문서의 긴 갈래 이름도 좁은 틀에서 한 줄(말줄임) · 머리가 틀 밖으로 넘치지 않음", async ({ page }) => {
+  const label = "갈래 B 위험을 낮춘 비중 비교안";
+  await openWith(page, { ...BRANCH_ONLY, branches: [{ ...BRANCH_ONLY.branches[0], label }] });
+  const frame = page.locator('.pg-branch[data-branch-id="br1"]');
+  const name = frame.locator(".pg-branch-name");
+  await expect(name).toHaveText(label);
+  expect(await textLines(name), "긴 갈래 이름도 한 줄").toBe(1);
+  expect(await name.evaluate((el) => el.scrollWidth > el.clientWidth), "좁은 틀에서는 말줄임(잘린 만큼 숨김)").toBe(true);
+  const over = await frame.locator(".pg-branch-head").evaluate((head) => {
+    const box = head.closest(".pg-branch")!.getBoundingClientRect();
+    return [...head.children].map((c) => ({ c: c.className, out: c.getBoundingClientRect().right - box.right })).filter((x) => x.out > 0.5);
+  });
+  expect(over, "머리 안 요소가 틀 오른쪽 밖으로 넘친다").toEqual([]);
+});
+
+test("짝: 넓은 갈래 틀(카드 둘)에서는 단추 글자가 그대로 보이고 이름도 한 줄", async ({ page }) => {
+  await openWith(page, WIDE_BRANCH);
+  const zoom = await page.locator(".react-flow__viewport").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+  const wide = page.locator('.pg-branch[data-branch-id="br1"]');
+  await expect(wide).toBeVisible();
+  expect((await wide.boundingBox())!.width / zoom, "카드 둘 = 넓은 틀").toBeGreaterThan(560);
+  for (const label of ["이 갈래를 원본으로", "전략으로 묶기"]) {
+    const b = wide.getByRole("button", { name: label });
+    expect((await b.boundingBox())!.width / zoom, `넓은 틀에서 '${label}' 글자가 보인다(아이콘만이 아님)`).toBeGreaterThan(70);
+  }
+  expect(await textLines(wide.locator(".pg-branch-name"))).toBe(1);
+});

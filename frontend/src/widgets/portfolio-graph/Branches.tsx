@@ -60,12 +60,12 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
         <button type="button" className="pg-branch-promote nodrag" disabled={data.diffs.length === 0}
                 title="이 갈래의 바꾼 설정을 원본에 옮기고 갈래를 지워요 (되돌리기 가능)"
                 onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.promoteBranch(data.branchId)); }}>
-          <ArrowUpToLine size={13} aria-hidden="true" /> 이 갈래를 원본으로
+          <ArrowUpToLine size={13} aria-hidden="true" /><span className="pg-branch-btn-t">이 갈래를 원본으로</span>
         </button>
         {!data.boxed && (
           <button type="button" className="pg-branch-strategy nodrag" title="이 갈래를 전략 상자로 묶어요 — 비중을 내는 노드가 있어야 해요 (되돌리기 가능)"
                   onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.branchStrategy(data.branchId)); }}>
-            <Boxes size={13} aria-hidden="true" /> 전략으로 묶기
+            <Boxes size={13} aria-hidden="true" /><span className="pg-branch-btn-t">전략으로 묶기</span>
           </button>
         )}
         <button type="button" className="pg-group-x pg-branch-x nodrag" aria-label={`${data.label} 지우기`}
