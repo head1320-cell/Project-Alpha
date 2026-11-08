@@ -155,6 +155,8 @@ test("자세히 — 취약 종목 표(.trisk-table) 행을 누르면 기업 분�
   await open(page);
   const d = page.locator(".rk-detail");
   await expect(d.locator(".trisk-table tbody tr").first()).toBeVisible({ timeout: 40_000 });
+  // 처리기는 `await r.json()` 뒤에 값을 채운다 — 표가 먼저 그려질 수 있다(전체 실행에서 실측 null).
+  await expect.poll(() => s0).not.toBeNull();
   const s = s0 as unknown as Stress;
   await expect(d.locator(".tstat").first()).toContainText(`${s.n_survivors}/${s.n_stocks}`);
   await expect(d).toContainText("8%");

@@ -689,7 +689,8 @@ test("내 블록(BM C2): 저장 → 새로고침해도 남음('이 브라우저�
   // 받은 블록 파일은 다시 넣을 수 있다(왕복).
   await page.locator(".pg-block-input").setInputFiles({ name: "충격_블록.pgblock.json", mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(file)) });
-  expect((await wip(page)).nodes.length).toBeGreaterThan(n0);
+  // 파일 읽기·문서 저장은 비동기 — 한 번만 읽으면 저장 전 값을 볼 수 있다(전체 실행에서 실측 1/4 실패).
+  await expect.poll(async () => (await wip(page)).nodes.length).toBeGreaterThan(n0);
 });
 
 test("내 블록: 이 브라우저에 저장할 수 없으면 '없음' 이 아니라 '저장할 수 없음' 이라 말하고, 파일로는 받는다(BM C2)", async ({ page }) => {
