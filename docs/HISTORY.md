@@ -25507,3 +25507,23 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   8번 중 5번 실패. 경합은 전부터 있었고 이번에 잦아졌다.
 - 검증: 새 빌드에서 16번 모두 통과 · 변이(`/macro/regime` 이 500) → `[500]` 으로 실패. 기다림은 검사를 약하게 하지 않는다 — 끊기던 요청의 응답 상태까지 본다.
 - 하지 않음: 공용 `trackErrors` 에서 `ERR_ABORTED` 를 빼기(19개 스펙이 쓴다 — 앱 쪽의 진짜 끊김까지 가린다).
+
+## 숫자·티커 글꼴 JetBrains Mono 를 같은 서버에서 — Google Fonts 요청 없앰 (2026-11-08 · 올린 판을 실제로 쓰기 ①)
+
+- 무엇: `globals.css` 첫 줄의 Google Fonts `@import` 를 지우고 npm `@fontsource-variable/jetbrains-mono`(5.3.0 · OFL-1.1)의 `wght.css` 를 `layout.tsx` 에서
+  import — Pretendard(ADR-003)와 같은 방식. 글꼴 이름 'JetBrains Mono Variable' 을 `--t-mono`·`--bs-font-mono`·tailwind `mono` 맨 앞에(뒤의 'JetBrains Mono' 는
+  둠 — 파일을 못 받을 때 컴퓨터에 깔린 글꼴을 쓰게).
+- 왜: 화면마다 외부 두 곳(fonts.googleapis.com 의 CSS → fonts.gstatic.com 의 파일)으로 요청이 나갔고, CSS 안의 `@import` 라 그리기를 막는 사슬이었다.
+  외부가 막힌 사내망에서는 숫자 글꼴이 대체 글꼴로 바뀐다. 이제 `/_next/static/media/` 의 해시 붙은 파일(오래 캐시).
+- ★처음 계획에서 바꾼 것★: `next/font/local` 로 하려 했으나 그 방식은 `unicode-range` 를 싣지 못해 라틴 파일 하나만 남는다 — 고정폭 자리에 쓰는 σ·β·μ·Δ
+  (소스 약 30곳)가 대체 글꼴로 바뀐다. fontsource CSS 는 Google 과 같은 6개 글자 범위(라틴·라틴 확장·그리스·키릴 둘·베트남)로 나뉘어 쓰는 범위만 받는다.
+- 시험(새 `e2e/fonts-self-hosted.spec.ts`): 네 화면에서 외부 글꼴 요청 0 · ★짝★ 종목코드 칸(`.scr-code` — `var(--t-mono)` 를 그대로 씀)의 첫 글꼴을
+  실제로 받아 썼고 · 그 `@font-face` 가 같은 서버 스타일시트에 있고 · 그 파일을 같은 서버에서 200 으로 받았고 · 숫자와 그리스 글자가 그 범위 안.
+  고치기 전 둘 다 실패. 변이(빌드마다): 글꼴 import 뺌 → "받아 썼어야" 실패(외부 요청 0 시험은 통과 — 짝이 필요한 까닭) · 라틴 파일 하나만 → 그리스 글자 실패 ·
+  Google `@import` 되살림 → 외부 요청 실패.
+- 발견(고치지 않음): `.num` 은 화면마다 덮어쓰는 규칙이 있어 스크리너에서는 Pretendard 로 그려진다 — 모양 계약이라 그대로 두고 시험 대상을 `.scr-code` 로.
+- 측정: 외부 글꼴 요청 화면마다 2 → 0. 라틴 파일 Google 31,432 B → 40,404 B(+9 KB) — Google 은 굵기 400~600 만 잘라 주고 이 파일은 100~800 전체라
+  700 을 쓰는 자리(`.ca-gauge-num` 등)가 이제 흉내 굵게가 아니라 진짜 굵기로 그려진다.
+- E2E: 전체 1242 중 1235 통과 · 건너뜀 4 · 실패 3 — 둘은 이전부터(화면 골든 Esc 경합 · 미니맵 찾기 확대 멈춤), 하나는 nav 머리 시험의 경합(아래 항목 — 고침). realism ST3c 는 이번엔 통과.
+- 게이트: `make all`(3.14 · Node 24) 통과 — pytest 8903 통과(새 시험 3) · ruff · eslint · tsc · 빌드.
+- 하지 않음: 글꼴 미리 받기(preload — 쓰지 않는 화면에서 경고가 난다) · `.num` 글꼴 규칙 · 옛 설계 문서(2026-09-30 BU 스펙의 "Google `@import` 는 남기고")는 그때 기록이라 둠.

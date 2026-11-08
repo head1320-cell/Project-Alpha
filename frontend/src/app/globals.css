@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -119,7 +118,7 @@
   --bs-body-color-rgb: 17, 17, 17;
   --bs-body-bg: #fff;
   --bs-body-font-family: var(--tx-font);
-  --bs-font-mono: 'JetBrains Mono', ui-monospace, "SF Mono", monospace;
+  --bs-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, "SF Mono", monospace;
   --bs-body-font-size: 0.875rem;       /* 14px */
   --bs-body-font-weight: 400;
   --bs-body-line-height: 1.3125;
@@ -504,7 +503,7 @@ h6 { font-size: 1rem; }
   --t-sidebar-w: 260px;
   --t-rail-w: 56px;
   --t-header-h: 64px;
-  --t-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --t-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;  /* 같은 서버의 npm 글꼴(layout.tsx) — 외부 글꼴 서버 없음 */
 }
 
 .terminal-root {
