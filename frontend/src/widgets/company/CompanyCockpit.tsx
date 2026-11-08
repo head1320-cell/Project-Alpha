@@ -62,7 +62,7 @@ const signalKo = (a?: string) => (a ? SIGNAL_KO[a.toLowerCase()] ?? a : UNKNOWN_
 const PIN_MS = 2000;
 
 /** 한 번 화면에 들어오면 true (무거운 절을 그때 부른다). `chosen` = 목차로 고른 절(U9) — 붙잡기가 끝나면 화면에 들기를 기다리지 않는다. */
-function useSeen(ref: React.RefObject<HTMLElement>, chosen = false) {
+function useSeen(ref: React.RefObject<HTMLElement | null>, chosen = false) {
   const [seen, setSeen] = useState(false);
   useEffect(() => {
     const el = ref.current;
@@ -96,7 +96,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   const refs = {
     value: useRef<HTMLElement>(null), models: useRef<HTMLElement>(null), numbers: useRef<HTMLElement>(null), money: useRef<HTMLElement>(null),
     risk: useRef<HTMLElement>(null), peers: useRef<HTMLElement>(null), factors: useRef<HTMLElement>(null), ai: useRef<HTMLElement>(null),
-  } as Record<SecId, React.RefObject<HTMLElement>>;
+  } as Record<SecId, React.RefObject<HTMLElement | null>>;
   // 여러 모형(BU6a+) — 가치 샌드박스가 끝난 뒤 부른다(첫 화면과 무거운 요청이 겹치지 않게). 모형 한눈에·레일·카드·위험 절이 같은 응답을 쓴다.
   const models = useCompanyModels(c.code, c.price, c.mktcap, sb.isSuccess || sb.isError);
   const ladder = buildLadderRows(sb, models);

@@ -25362,3 +25362,30 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 왜: 4단계 전체 E2E 에서 각각 실패(`Received 22` · `n_survivors of null`) — 따로 돌리면 3/4 · 4/4 통과하는 흔들림이고 화면 결함이 아니다. 앱 코드는 바꾸지 않았다.
 - 검증: 두 시험 8번씩 16/16 통과(3.14 백엔드 · Node 24) · tsc.
 - 하지 않음: 이전부터 있던 다섯(화면 골든 Esc 경합 · 미니맵 찾기 확대 멈춤 · realism ST3c · nav ERR_ABORTED · AI 유령 겹침)은 별도 할 일로 제안해 둔 그대로.
+
+## 기술 스택 최신화 5a단계 — Next 16 · React 19 · ESLint 9 flat · TypeScript 6 (2026-11-08)
+
+- 무엇: `next`·`eslint-config-next` 14.2.35 → **16.4.5**(정확 고정 유지) · `react`·`react-dom` 18.3 → **19.3.1** · `@types/react(-dom)` 19 · `@types/node` 24 ·
+  `eslint` 8 → **9.39** · `typescript` 5 → **6.0.3**.
+- ★고르지 않은 것과 까닭★: TypeScript **7.0**(네이티브) — 패키지가 컴파일러 JS API 를 내보내지 않는다(`exports` 가 `version` 과 `unstable/*` 뿐) — Next 빌드의
+  타입 검사와 typescript-eslint(`typescript <6.1`)가 그 API 를 쓴다 → 6.0.3. **ESLint 10** — eslint-config-next 16 이 데려오는 eslint-plugin-import 2.32 ·
+  eslint-plugin-react 7.37 · jsx-a11y 6.10 의 peer 가 9 에서 멈춘다(FSD 가드 `import/no-restricted-paths` 가 import 플러그인이다) → 9.39(npm 은 9 를 '지원 끝' 으로
+  표시한다 — 플러그인이 10 을 받으면 올린다).
+- 코드: ① `.eslintrc.js` → `eslint.config.js`(flat · CommonJS · zone 생성 그대로) · `package.json`·CI 의 `--ext` 삭제(flat 에서 없어짐) ② React 19 의
+  `useRef<T>(null)` 은 `RefObject<T | null>` — 받는 쪽 타입 11곳에 `| null`(8 파일 · 동작 그대로) ③ Next 16 은 동적 세그먼트를 Promise 로만 준다 — 중계
+  `api/backend/[...path]/route.ts`(`(await params).path`) · `clients/[cid]/sheets/[sid]/page.tsx`(async) · 그 중계를 직접 부르는 `proxy-abort`·`proxy-trace` 시험도
+  `Promise.resolve` 로. 중계의 런타임 `BACKEND_URL`·`req.signal` 계약은 그대로(두 시험 통과) ④ Next 가 tsconfig 를 고침(`jsx: react-jsx` 필수 · dev 타입 포함)·
+  `next-env.d.ts` 가 `.next/types` 를 가져온다 — `.next` 없는 새 checkout 에서도 `tsc` 통과 확인(CI 는 빌드 전에 tsc 를 돈다).
+- ★린트★: Next 16 의 eslint-plugin-react-hooks 7 이 React Compiler 규칙을 오류로 가져와 기존 코드에서 94건(set-state-in-effect 47 · refs 33 · immutability 7 ·
+  static-components 3 · purity 2 · preserve-manual-memoization 1 · use-memo 1). 설정의 기존 원칙(무관한 기존 항목은 경고로 보이게만)대로 ★지금 걸리는 일곱 규칙만★
+  경고로 — 걸리는 게 없는 나머지 컴파일러 규칙은 오류 그대로(새 코드는 막힘). 예전(ESLint 8) 0 오류 · 경고 2 → 0 오류 · 경고 97(새 컴파일러 규칙 94 + Next 규칙 1).
+  FSD 가드 변이(위로 import 두 방식 · 같은 계층 다른 슬라이스 두 방식): ESLint 8·9 모두 같은 4건 오류.
+- 보안: `npm audit --omit=dev` **0**(2단계에서 남았던 Next 치명·높음 해소). 개발 도구에만 중간 1묶음(typescript-eslint 안 minimatch — 린트 시점 glob DoS).
+- E2E: 먼저 묶음(중계 두 시험 · 고객 한 장 · 백테스트 결과·요청 · 경로 · 로그인) 80/80 → 전체 1240 중 1231 통과 · 5 실패는 모두 이전부터의 것
+  (AI 유령 겹침 · 화면 골든 Esc 경합 · nav ERR_ABORTED · realism ST3c 라이트·다크). 4단계에서 고친 두 경합 시험은 통과.
+- 측정: `docs/plans/2026-11-08-stack-upgrade.md` 5a 표 — 빌드 51.6 → **36.1 s(−30%, Turbopack)** · 타입 검사·캔버스 그리기 변화 없음 ·
+  ★나빠진 것★: 첫 화면 JS(초기 HTML script · gzip) 경로마다 +35 kB(+11~20%) — Next 런타임 32 → 67 kB · react-dom 54 → 64 kB(페이지 조각은 조금 작아짐) ·
+  `--webpack` 빌드도 같은 크기라 Turbopack 탓이 아님 · /allocation 을 쓸 수 있기까지 LAN +25~45 ms(≈+5%) · 느린 4G 는 캔버스 0.5 s 빨리·노드 목록 0.5 s 늦게.
+  ★사용자 결정(2026-11-08): 비용을 기록하고 Next 16 유지★ — 보안 공지를 고친 Next ≥15.5 는 모두 React 19 를 요구해 이 비용을 피할 수 없다(멈춤 규칙의 예외).
+  ★4단계 정정★: 백엔드를 안 바꾼 5a 에서 API 가 46.7 · 61.8 · 16.1 ms — 세션 사이 흔들림이 회 안 흔들림보다 커서 4단계 표의 API 개선은 주장하지 않는다(백테스트 개선은 유지).
+- 하지 않음: React Compiler(5c) · 컴파일러 규칙 94건 고치기 · 프론트 메이저 나머지(5b·5d) · `date-fns` 는 `src` 어디에서도 쓰지 않는다(5b 에서 다룸).

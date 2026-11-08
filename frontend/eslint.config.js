@@ -9,6 +9,8 @@
 // (import/no-restricted-paths 는 eslint-config-next 가 가져오는 eslint-plugin-import 제공.
 //  새 의존성 없음.)
 //
+// ESLint 9 flat config(2026-11-08 · Next 16 — `next lint` 와 `.eslintrc` 가 없어졌다). 규칙·zone 은 예전 `.eslintrc.js` 그대로.
+//
 // 한계: 이 규칙은 type-only import 를 구분하지 못한다(@typescript-eslint 미설치).
 // entity 간 **타입만** 참조하는 두 곳은 런타임 결합이 없어 허용하고, 해당 줄에
 // eslint-disable 주석으로 근거를 남겼다. 런타임 peer import 는 전부 막힌다.
@@ -55,25 +57,37 @@ SLICED.forEach((layer) => {
   });
 });
 
-module.exports = {
-  root: true,
-  extends: ["next/core-web-vitals"],
-  rules: {
-    "import/no-restricted-paths": ["error", { zones }],
+const nextCoreWebVitals = require("eslint-config-next/core-web-vitals");
 
-    // 이 저장소는 lint 를 한 번도 돌린 적이 없어 기존 위반이 쌓여 있다.
-    // FSD 가드레일을 CI 에 넣는 것이 이번 목적이므로, 무관한 기존 항목은 경고로 남겨
-    // 보이게만 하고 차단하지 않는다(12건 JSX 따옴표 · 16건 hook deps).
-    // exhaustive-deps 를 기계적으로 "고치면" 동작이 바뀔 수 있어 별도 작업으로 둔다.
-    "react/no-unescaped-entities": "warn",
-  },
-  overrides: [
-    {
-      // app/ 은 Next 라우팅 계층 — 모든 하위 계층을 조립하는 것이 역할이므로 peer 개념이 없다.
-      files: ["src/app/**"],
-      rules: { "import/no-restricted-paths": "off" },
+module.exports = [
+  ...nextCoreWebVitals,
+  {
+    rules: {
+      "import/no-restricted-paths": ["error", { zones }],
+
+      // 이 저장소는 lint 를 한 번도 돌린 적이 없어 기존 위반이 쌓여 있다.
+      // FSD 가드레일을 CI 에 넣는 것이 이번 목적이므로, 무관한 기존 항목은 경고로 남겨
+      // 보이게만 하고 차단하지 않는다(12건 JSX 따옴표 · 16건 hook deps).
+      // exhaustive-deps 를 기계적으로 "고치면" 동작이 바뀔 수 있어 별도 작업으로 둔다.
+      "react/no-unescaped-entities": "warn",
+
+      // ★Next 16 의 eslint-plugin-react-hooks 7 이 새로 가져온 React Compiler 규칙★ — 올리자마자 기존 코드에서 94건(2026-11-08).
+      // 위와 같은 원칙으로 **지금 걸리는 일곱 규칙만** 경고로 둔다(보이게 · 차단 안 함). 기계적으로 고치면 동작이 바뀔 수 있다.
+      // 걸리는 것이 없는 나머지 컴파일러 규칙은 오류 그대로 — 새 코드는 막힌다. 이 경고들은 컴파일러가 그 컴포넌트를 건너뛰는 자리다(5c).
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/static-components": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/use-memo": "warn",
     },
-    // (BL4) AAS 컨텍스트 슬라이스 경계 규칙은 마법사(`src/widgets/allocation/slices`)와 함께 지웠다 — 캔버스 상태는
-    // `widgets/portfolio-graph/store` 하나(zustand)라 슬라이스가 없다.
-  ],
-};
+  },
+  {
+    // app/ 은 Next 라우팅 계층 — 모든 하위 계층을 조립하는 것이 역할이므로 peer 개념이 없다.
+    files: ["src/app/**"],
+    rules: { "import/no-restricted-paths": "off" },
+  },
+  // (BL4) AAS 컨텍스트 슬라이스 경계 규칙은 마법사(`src/widgets/allocation/slices`)와 함께 지웠다 — 캔버스 상태는
+  // `widgets/portfolio-graph/store` 하나(zustand)라 슬라이스가 없다.
+];

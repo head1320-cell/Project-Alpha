@@ -98,7 +98,7 @@ export function SettingsView() {
 }
 
 function PasswordForm({ formRef, username, onChanged, adminWarning }: {
-  formRef: React.RefObject<HTMLFormElement>; username: string; onChanged: () => void; adminWarning: string | null;
+  formRef: React.RefObject<HTMLFormElement | null>; username: string; onChanged: () => void; adminWarning: string | null;
 }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");

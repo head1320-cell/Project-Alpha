@@ -18,7 +18,7 @@ export interface CardRefs {
   previewRef: MutableRefObject<(id: string | null) => void>;
 }
 
-export function useRunActions(s: PgState, stages: WorkflowStage[], rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>,
+export function useRunActions(s: PgState, stages: WorkflowStage[], rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement | null>,
                               setQuick: Dispatch<SetStateAction<QuickAddState | null>>, setGoalOpen: (v: boolean) => void, fit: () => void,
                               refs: CardRefs) {
   const { needRef, socketRef, runToRef, runStrategyRef, branchStrategyRef, previewRef } = refs;

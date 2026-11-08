@@ -12,7 +12,7 @@ import { DEFAULT_PANELS, NARROW_Q, SHORT_Q, floatInsets, onePanel, readPanels, s
 import { usePortfolioGraph, type PgState } from "./store";
 import { readView } from "./view";
 
-export function useCanvasView(rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>, catalogReady: boolean) {
+export function useCanvasView(rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement | null>, catalogReady: boolean) {
   // 떠 있는 판(BQ Q1) — 여닫기·폭. 넓은 화면에서 바꾼 것만 이 브라우저에 남긴다(좁은 화면은 늘 닫힌 채 시작).
   const [panels, setPanelsRaw] = useState<Panels>(DEFAULT_PANELS);
   const narrowNow = () => typeof window !== "undefined" && !!window.matchMedia?.(NARROW_Q).matches;
@@ -92,7 +92,7 @@ let followHold = 0;
 export const holdFollow = (ms: number) => { followHold = Date.now() + ms; };
 
 /** 화면이 따라가기 — 상자에 들어가기 · 고른 노드가 판 밑이면 판만 옮기기 · 고르면 오른쪽 창 열기 · 갈래를 만들면 함께 보이기(본체의 같은 자리에서 부른다). */
-export function useViewFollow(s: PgState, rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>, ctx: unknown,
+export function useViewFollow(s: PgState, rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement | null>, ctx: unknown,
                               leftShown: boolean, rightShown: boolean, setPanels: Dispatch<SetStateAction<Panels>>) {
   // 들어가기 — 그 상자에 맞춰 확대하고, 나오면 전체로.
   useEffect(() => {

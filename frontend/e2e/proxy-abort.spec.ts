@@ -44,7 +44,7 @@ function browserGone() {
 
 function callRoute(path: string[], signal?: AbortSignal) {
   const req = new NextRequest(`http://localhost:3000/api/backend/${path.join("/")}`, signal ? { signal } : undefined);
-  return GET(req, { params: { path } });
+  return GET(req, { params: Promise.resolve({ path }) });
 }
 
 /** ms 안에 끝나면 그 값, 아니면 "아직 기다림" — 멈춘 중계가 시험을 붙잡지 않게. */

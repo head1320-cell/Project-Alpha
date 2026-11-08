@@ -18,7 +18,7 @@ export type CtxAt = { x: number; y: number; clientX: number; clientY: number; no
                       /** 선 우클릭(R5) — 그 선과 메뉴 단계(선 동작 넷 · 사이에 넣을 후보). */
                       edgeId?: string | null; mode?: "edge" | "insert" };
 
-export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>,
+export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement | null>,
                             addCount: MutableRefObject<number>, connectFrom: MutableRefObject<QuickAddState["from"]>,
                             quick: QuickAddState | null, setQuick: Dispatch<SetStateAction<QuickAddState | null>>, ctx: CtxAt | null,
                             setCtx: Dispatch<SetStateAction<CtxAt | null>>,

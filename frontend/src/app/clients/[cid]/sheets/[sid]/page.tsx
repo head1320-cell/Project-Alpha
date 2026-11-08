@@ -6,6 +6,7 @@ export const metadata = {
 };
 
 /** /clients/<cid>/sheets/<sid> (CF 3부 PB4) — 화면은 `widgets/clients/SheetView`. */
-export default function ClientSheetPage({ params }: { params: { cid: string; sid: string } }) {
-  return <SheetView cid={params.cid} sid={params.sid} />;
+export default async function ClientSheetPage({ params }: { params: Promise<{ cid: string; sid: string }> }) {
+  const { cid, sid } = await params;                 // Next 15+ — 동적 세그먼트는 Promise
+  return <SheetView cid={cid} sid={sid} />;
 }

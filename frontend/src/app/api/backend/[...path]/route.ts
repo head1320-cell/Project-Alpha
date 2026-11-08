@@ -153,12 +153,13 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   });
 }
 
-type Ctx = { params: { path?: string[] } };
+// Next 15+ 는 동적 세그먼트를 Promise 로 넘긴다(16 에서 동기 접근이 없어졌다 — 2026-11-08).
+type Ctx = { params: Promise<{ path?: string[] }> };
 
-export async function GET(req: NextRequest, { params }: Ctx) { return proxy(req, params.path ?? []); }
-export async function POST(req: NextRequest, { params }: Ctx) { return proxy(req, params.path ?? []); }
-export async function PUT(req: NextRequest, { params }: Ctx) { return proxy(req, params.path ?? []); }
-export async function PATCH(req: NextRequest, { params }: Ctx) { return proxy(req, params.path ?? []); }
-export async function DELETE(req: NextRequest, { params }: Ctx) { return proxy(req, params.path ?? []); }
-export async function HEAD(req: NextRequest, { params }: Ctx) { return proxy(req, params.path ?? []); }
-export async function OPTIONS(req: NextRequest, { params }: Ctx) { return proxy(req, params.path ?? []); }
+export async function GET(req: NextRequest, { params }: Ctx) { return proxy(req, (await params).path ?? []); }
+export async function POST(req: NextRequest, { params }: Ctx) { return proxy(req, (await params).path ?? []); }
+export async function PUT(req: NextRequest, { params }: Ctx) { return proxy(req, (await params).path ?? []); }
+export async function PATCH(req: NextRequest, { params }: Ctx) { return proxy(req, (await params).path ?? []); }
+export async function DELETE(req: NextRequest, { params }: Ctx) { return proxy(req, (await params).path ?? []); }
+export async function HEAD(req: NextRequest, { params }: Ctx) { return proxy(req, (await params).path ?? []); }
+export async function OPTIONS(req: NextRequest, { params }: Ctx) { return proxy(req, (await params).path ?? []); }

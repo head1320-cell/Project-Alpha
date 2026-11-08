@@ -28,7 +28,7 @@ async function fakeBackend(onReq: (req: http.IncomingMessage, res: http.ServerRe
 }
 
 const call = (p: string[], signal?: AbortSignal) =>
-  GET(new NextRequest(`http://localhost:3000/api/backend/${p.join("/")}`, signal ? { signal } : undefined), { params: { path: p } });
+  GET(new NextRequest(`http://localhost:3000/api/backend/${p.join("/")}`, signal ? { signal } : undefined), { params: Promise.resolve({ path: p }) });
 
 const tmpLog = () => path.join(mkdtempSync(path.join(os.tmpdir(), "px-")), "route.log");
 /** 그 요청(시작 줄의 id)의 단계 이름만 차례로. */

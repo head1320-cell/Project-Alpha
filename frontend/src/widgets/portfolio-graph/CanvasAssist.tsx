@@ -15,7 +15,7 @@ import { PORT_PLAIN } from "./GraphNode";
 import { usePortfolioGraph } from "./store";
 
 /** 판 바깥을 누르거나 Esc 면 닫는다. */
-function useDismiss(ref: React.RefObject<HTMLElement>, onClose: () => void) {
+function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
   useEffect(() => {
     const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
@@ -287,7 +287,7 @@ export function MoreMenu({ drawers, onDrawer, onImport, getDoc, canExport }: {
   );
 }
 
-function useDismissWhen(on: boolean, ref: React.RefObject<HTMLElement>, onClose: () => void) {
+function useDismissWhen(on: boolean, ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
   useEffect(() => {
     if (!on) return;
     const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };

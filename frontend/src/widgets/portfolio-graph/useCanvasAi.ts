@@ -17,7 +17,7 @@ import { floatInsets, toggle, type Panels } from "./panels";
 import { usePortfolioGraph, type PgState } from "./store";
 
 export function useCanvasAi(s: PgState, doc: GraphDoc, order: string[], staleSet: Set<string>,
-                            rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement>,
+                            rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement | null>,
                             updatePanels: (f: (p: Panels) => Panels) => void, setLeftTab: (t: LeftTab) => void,
                             fitIds: (ids: string[]) => void) {
   // AI1 — 누를 때만 묻는 AI 노드 추천. 로그인 판정은 서버가 하고, 화면은 로그아웃이면 묻지 않는다(요청 0).
