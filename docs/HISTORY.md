@@ -25468,3 +25468,11 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   화면 첫 로딩은 Next 16·React 19 로 조금 나빠짐(보안 때문에 사용자 결정으로 유지) · 캔버스 그리기와 API 는 변화 없음 · 갓 띄운 서버의 첫 요청 +50~75 ms.
 - 올리지 않은 것과 까닭: TypeScript 7 · ESLint 10 · recharts 3 · React Compiler · Tailwind 4 · Playwright(요약표 아래).
 - 하지 않음: Docker 이미지 빌드(이 환경에 docker 없음 — 4단계 기록) · 이전부터의 E2E 실패 셋(화면 골든 Esc 경합 · 미니맵 찾기 확대 멈춤 · realism ST3c — 별도 할 일).
+
+## `date-fns` 의존성 뺌 (2026-11-08 · 사용자 요청)
+
+- 무엇: `frontend/package.json` 의 `date-fns ^3.6.0` 을 `npm uninstall` 로 뺌(lock 에서도 그 항목 12줄만 빠짐 — 다른 패키지 판 변화 없음).
+- 왜: 5b단계에서 `src`·e2e·scripts·설정 어디에서도 import 하지 않는 것을 확인했고(위 5a·5b 항목), lock 의 어떤 패키지도 dependencies·peerDependencies 로
+  요구하지 않는다. 쓰지 않는 의존성은 설치·보안 점검 대상만 늘린다.
+- 검증: `node_modules` 에서 빠진 상태로 tsc · eslint · `next build` 통과(import 가 있었다면 여기서 깨진다) · `npm audit --omit=dev` 0.
+- 하지 않음: 전체 E2E(쓰는 곳이 없어 빌드·타입 검사가 그 사실을 건다) · 다른 의존성 정리.
