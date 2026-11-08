@@ -121,11 +121,15 @@ test("Shell header(BR R3): 오른쪽 슬롯은 회원 프로필 동그라미 —
   // 짝 — 예전 계약(국면 배지 = /macro 링크)이 머리 줄에 남아 있지 않다.
   await expect(slot.locator('a[href="/macro"]')).toHaveCount(0);
   await expect(slot.locator(".skeleton")).toHaveCount(0);
+  // 떠나기 전에 이 화면의 요청이 끝나기를 기다린다 — 아니면 브라우저가 진행 중인 요청을 끊고(ERR_ABORTED) 그것이 오류로 잡힌다(2026-11-08 경합).
+  // 기다리면 요청마다 응답 상태를 실제로 보게 되어 아래 "4xx/5xx 없음" 이 더 엄격해진다.
+  await page.waitForLoadState("networkidle");
 
   // 셸에 붙었으므로 다른 탭에서도 같다 · 국면은 /macro 화면에 그대로 있다.
   await page.goto("/screener", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".terminal-header .header-actions .pf-avatar")).toBeVisible();
   await expect(page.locator('.terminal-header .header-actions a[href="/macro"]')).toHaveCount(0);
+  await page.waitForLoadState("networkidle");   // 같은 까닭 — 시험이 끝나며 페이지를 닫기 전에
 
   expect(uniq(sink.pageErrors), "shell header page errors").toEqual([]);
   expect(uniq([...sink.api404, ...sink.apiOther4xx5xx]), "토큰이 없으면 /auth/me 도 부르지 않는다 — 4xx/5xx 없음").toEqual([]);
