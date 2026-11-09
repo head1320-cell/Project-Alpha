@@ -298,6 +298,9 @@ BACKTEST_KEYS = {
     # ★룩어헤드를 어디까지 통제했나★ (E1) — 예전엔 화면이 상수로 단정했다.
     "lookahead_evidence",
     "metrics", "n_rebalances", "rebalances", "summary", "turnover_avg_pct",
+    # ★해마다·달마다 수익 · 큰 낙폭 사건★ (2026-11-09 성과 그림 문법) — 같은 곡선에서 옮긴 값(`quant_metrics.period_returns`·
+    # `drawdown_episodes` · 값은 `tests/test_quant_periods.py`·`tests/test_perf_periods_wiring.py` 가 건다).
+    "periods", "drawdowns",
 }
 
 

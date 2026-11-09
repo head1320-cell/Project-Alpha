@@ -21,10 +21,20 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from src.api import screener_routes as _sr
-from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _pct, _practice, _signed_pct, _t
+from src.api.allocation_graph_explain import (
+    ASSUMED,
+    CONFIRMED,
+    UNKNOWN,
+    _pct,
+    _practice,
+    _signed_pct,
+    _t,
+    drawdown_fact,
+)
 from src.api.allocation_graph_nodes import _FORBID, _pydantic_reason, _ui
 from src.api.allocation_graph_nodes_signal import _presets_filter
 from src.engine import portfolio_graph as pg
+from src.engine.quant_metrics import drawdown_episodes, period_returns
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +172,13 @@ def _load(inputs: dict, p: LoadParams) -> pg.NodeOutput:
     bt = result.get("backtest") if isinstance(result.get("backtest"), dict) else result
     view = {"run_id": p.run_id, "strategy_name": r.get("strategy_name"), "statistics": bt.get("statistics") or {},
             "equity": {"dates": bt.get("equity_dates") or [], "values": bt.get("equity_curve") or []},
+            # 저장된 결과의 낙폭 곡선 — 엔진은 비율(−0.15)로 저장하고 통계 `max_drawdown_pct` 는 %(14.9)다. 7번 `drawdown_curve` 와 같은
+            # 단위(%)로 옮겨 이름에 단위를 적는다(화면이 단위를 추측하지 않게). 없으면 None — 화면이 "낙폭 곡선 없음" 이라 말한다.
+            "drawdown_pct": ([None if d is None else round(float(d) * 100.0, 4) for d in bt["drawdown_curve"]]
+                             if bt.get("drawdown_curve") else None),
+            # 해마다·달마다 수익 · 큰 낙폭 사건 — 저장된 곡선에서 옮기기만(2026-11-09 · 화면은 새 수를 만들지 않는다).
+            "periods": period_returns(bt.get("equity_dates") or [], bt.get("equity_curve") or []),
+            "drawdowns": drawdown_episodes(bt.get("equity_dates") or [], bt.get("equity_curve") or [], top=3),
             "benchmark": bt.get("benchmark"), "screened_count": result.get("screened_count"),
             "input": r.get("input_snapshot") or {}, "execution_assumption": r.get("execution_assumption"),
             "is_mock_data": r.get("is_mock_data"), "is_pit_verified": r.get("is_pit_verified")}
@@ -187,7 +204,8 @@ def _explain_load(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(UNKNOWN, "시점 정합을 확인하지 못했어요 — 그때 알 수 없던 값이 섞였을 수 있어요."))
     return {"title": f"백테스트 {view.get('run_id')}의 결과를 불러왔어요",
             "headline": ({"label": "총수익", "value": tr, "unit": "%", "text": _signed_pct(float(tr))} if tr is not None else None),
-            "facts": [f"{lab} {s.get(k)}{u}" for k, lab, u in _STAT_KO[1:4] if s.get(k) is not None],
+            "facts": [f"{lab} {s.get(k)}{u}" for k, lab, u in _STAT_KO[1:4] if s.get(k) is not None]
+                     + ([drawdown_fact(view)] if drawdown_fact(view) else []),
             "trust": trust, "unmeasured": ["표본 밖 성과", "실제 체결(모의·실계좌)"]}
 
 

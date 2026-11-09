@@ -22,13 +22,14 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _practice, _t
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _practice, _t, drawdown_fact
 from src.api.allocation_graph_nodes import _pydantic_reason, _subset, _ui
 from src.api.stage11_routes import MultiBacktestRunRequest
 from src.api.valuation_routes import EvaluateRequest
 from src.data.mock_gate import mock_allowed
 from src.engine import portfolio_graph as pg
 from src.engine.allocator import METHODS
+from src.engine.quant_metrics import drawdown_episodes, period_returns
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,9 @@ def _strategy_backtest(inputs: dict, p) -> pg.NodeOutput:
         "period": {"start": start, "end": end, "whole_record": span is not None},
         "method": p.allocation_method, "policy": p.rebalance_policy,
         "curve": [{"date": r["date"], "equity": r["portfolio_equity"], "dd": r["drawdown_pct"]} for r in recs],
+        # 해마다·달마다 수익 · 큰 낙폭 사건 — 같은 곡선에서 옮기기만(2026-11-09 · 화면은 새 수를 만들지 않는다).
+        "periods": period_returns([r["date"] for r in recs], [r["portfolio_equity"] for r in recs]),
+        "drawdowns": drawdown_episodes([r["date"] for r in recs], [r["portfolio_equity"] for r in recs], top=3),
         "last_weights": {str(k): v for k, v in (recs[-1]["weights"] if recs else {}).items()},
     }
     strategies = (out.get("sources") or {}).get("strategies") or []
@@ -152,6 +156,9 @@ def _explain_strategy(view: dict, prov: dict, params: Any) -> dict:
              f"기간은 {per.get('start')} ~ {per.get('end')}" + (" (함께 기록된 전체)" if per.get("whole_record") else "") + "예요."]
     if s.get("max_drawdown_pct") is not None:
         facts.append(f"가장 크게 빠진 폭은 {abs(float(s['max_drawdown_pct'])):.1f}%예요.")
+    dd_fact = drawdown_fact(view)
+    if dd_fact:
+        facts.append(dd_fact)
     trust = [_t(CONFIRMED, "기록하지 않고 계산만 했어요 — 실행 기록은 남지 않아요.")]
     srcs = (view.get("sources") or {}).get("strategies") or []
     if any(x.get("is_mock_data") is True for x in srcs):

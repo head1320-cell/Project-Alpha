@@ -319,3 +319,142 @@ def compute_metrics(
                                     periods_per_year=periods_per_year,
                                     risk_free=risk_free))
     return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 기간별 수익 · 큰 낙폭 사건 — 자본곡선에서 ★옮기기만★ 한다 (2026-11-09 · 캔버스 성과 그림 문법)
+# ─────────────────────────────────────────────────────────────────────────────
+# 설계: `docs/superpowers/specs/2026-11-09-canvas-performance-viz-design.md` §4.5. 화면은 새 수를 만들지 않으므로(BJ 원칙)
+# 해마다·달마다 수익과 낙폭 사건은 서버가 낸다. 둘 다 같은 자본곡선의 두 수준을 나눈 것이라 ★연환산하지 않는다★ — 3개월짜리
+# 해를 "연 수익" 처럼 보이면 거짓이다. 부분 기간은 `partial` 로 표시만 한다. 값을 모르는 날(None/NaN)은 건너뛴다 — 0 으로 두면
+# −100% 낙폭을 지어낸다. 회복 못 한 낙폭의 회복일은 `None` 이다(오늘도 0 도 아니다). 시험: `tests/test_quant_periods.py`.
+# ═══════════════════════════════════════════════════════════════════════════════
+import datetime as _dt
+
+
+def _as_date(d: Any) -> _dt.date | None:
+    """날짜 문자열("YYYY-MM-DD…")·date·datetime·pandas Timestamp → date. 못 읽으면 None(그 점은 건너뛴다)."""
+    if d is None:
+        return None
+    if isinstance(d, _dt.datetime):
+        return d.date()
+    if isinstance(d, _dt.date):
+        return d
+    if hasattr(d, "to_pydatetime"):
+        return d.to_pydatetime().date()
+    try:
+        return _dt.date.fromisoformat(str(d)[:10])
+    except ValueError:
+        return None
+
+
+def _curve_points(dates: Any, equity: Any) -> list[tuple[_dt.date, float]]:
+    """(날짜, 값) 중 날짜를 읽을 수 있고 값이 유한한 점만, 날짜순으로."""
+    pts: list[tuple[_dt.date, float]] = []
+    # numpy 배열은 `or` 에 넣으면 참·거짓이 모호하다 — None 만 빈 것으로 본다.
+    for d, v in zip(list(dates) if dates is not None else [], list(equity) if equity is not None else []):
+        day = _as_date(d)
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            continue
+        if day is None or not math.isfinite(x):
+            continue
+        pts.append((day, x))
+    pts.sort(key=lambda p: p[0])
+    return pts
+
+
+def _period_rows(pts: list[tuple[_dt.date, float]], key) -> list[tuple[Any, float | None, list[tuple[_dt.date, float]]]]:
+    """곡선을 `key(날짜)` 가 같은 구간으로 자른다 → (키, 직전 구간의 마지막 값, 그 구간의 점들)."""
+    rows: list[tuple[Any, float | None, list[tuple[_dt.date, float]]]] = []
+    prev_last: float | None = None
+    cur_key: Any = None
+    cur: list[tuple[_dt.date, float]] = []
+    for d, v in pts:
+        k = key(d)
+        if k != cur_key and cur:
+            rows.append((cur_key, prev_last, cur))
+            prev_last = cur[-1][1]
+            cur = []
+        cur_key = k
+        cur.append((d, v))
+    if cur:
+        rows.append((cur_key, prev_last, cur))
+    return rows
+
+
+def _period_return_pct(prev_last: float | None, group: list[tuple[_dt.date, float]]) -> float:
+    """구간 수익 = 구간 마지막 값 ÷ (직전 구간의 마지막 값, 없으면 이 구간의 첫 값) − 1. 연환산 없음."""
+    base = prev_last if prev_last is not None else group[0][1]
+    return (group[-1][1] / base - 1.0) * 100.0 if base > 0 else 0.0
+
+
+def _within_max_drawdown_pct(group: list[tuple[_dt.date, float]]) -> float:
+    """그 구간 안의 최고점 대비 가장 크게 빠진 폭 — 다른 구간의 고점을 끌어오지 않는다."""
+    peak = -math.inf
+    worst = 0.0
+    for _, v in group:
+        peak = max(peak, v)
+        if peak > 0:
+            worst = min(worst, v / peak - 1.0)
+    return worst * 100.0
+
+
+def period_returns(dates: Any, equity: Any) -> dict[str, list[dict[str, Any]]]:
+    """해마다·달마다 수익(%) — ★연환산하지 않는다★.
+
+    yearly: `{year, return_pct, max_drawdown_pct, n_days, partial}` — `partial` 은 그 해에 1월과 12월 점이 모두 있지 않을 때.
+    monthly: `{year, month, return_pct, n_days, partial}` — `partial` 은 곡선의 첫 달·마지막 달(가운데서 시작·끝났을 수 있는데
+    거래 달력이 없어 더 정확히는 모른다). 점이 둘 미만이면 둘 다 빈 목록(0 이 아니다).
+    """
+    pts = _curve_points(dates, equity)
+    if len(pts) < 2:
+        return {"yearly": [], "monthly": []}
+    yearly = []
+    for year, prev_last, group in _period_rows(pts, lambda d: d.year):
+        months = {d.month for d, _ in group}
+        yearly.append({"year": int(year), "return_pct": round(_period_return_pct(prev_last, group), 4),
+                       "max_drawdown_pct": round(_within_max_drawdown_pct(group), 4),
+                       "n_days": len(group), "partial": not (1 in months and 12 in months)})
+    month_rows = _period_rows(pts, lambda d: (d.year, d.month))
+    monthly = []
+    for i, ((year, month), prev_last, group) in enumerate(month_rows):
+        monthly.append({"year": int(year), "month": int(month), "return_pct": round(_period_return_pct(prev_last, group), 4),
+                        "n_days": len(group), "partial": i == 0 or i == len(month_rows) - 1})
+    return {"yearly": yearly, "monthly": monthly}
+
+
+def drawdown_episodes(dates: Any, equity: Any, top: int = 3) -> list[dict[str, Any]]:
+    """큰 낙폭 사건 — 고점에서 바닥까지, 그리고 고점을 되찾은 날까지. 깊이순(같으면 먼저 일어난 것) 상위 `top` 개.
+
+    `{peak_date, trough_date, recovery_date|None, depth_pct, days_to_trough, days_to_recover|None}` — 날짜는 ISO 문자열,
+    일수는 달력일. 회복 못 했으면 `recovery_date`·`days_to_recover` 는 None.
+    """
+    pts = _curve_points(dates, equity)
+    episodes: list[dict[str, Any]] = []
+    peak: tuple[_dt.date, float] | None = None
+    trough: tuple[_dt.date, float] | None = None
+
+    def close(recovery: _dt.date | None) -> None:
+        assert peak is not None and trough is not None
+        episodes.append({
+            "peak_date": peak[0].isoformat(), "trough_date": trough[0].isoformat(),
+            "recovery_date": recovery.isoformat() if recovery else None,
+            "depth_pct": round((trough[1] / peak[1] - 1.0) * 100.0, 4),
+            "days_to_trough": (trough[0] - peak[0]).days,
+            "days_to_recover": (recovery - peak[0]).days if recovery else None,
+        })
+
+    for d, v in pts:
+        if peak is None or v >= peak[1]:
+            if trough is not None:
+                close(d)
+                trough = None
+            peak = (d, v)
+        elif trough is None or v < trough[1]:
+            trough = (d, v)
+    if trough is not None:
+        close(None)
+    episodes.sort(key=lambda e: (e["depth_pct"], e["peak_date"]))
+    return episodes[:max(0, int(top))]

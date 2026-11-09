@@ -258,6 +258,23 @@ def explain_risk(view: dict, prov: dict, params: Any) -> dict:
             "trust": [_t(ASSUMED, "과거에 종목들이 함께 움직인 방식이 이어진다고 가정해요.")]}
 
 
+def drawdown_fact(view: dict) -> str | None:
+    """가장 깊은 낙폭 사건 한 문장 (2026-11-09 · 캔버스 성과 그림 문법) — `view["drawdowns"]` 의 첫 사건(깊이순).
+
+    회복했으면 며칠 걸렸는지, 못 했으면 "아직" 이라고. ★사건이 없으면 None★ — 0 일·0% 를 지어내지 않는다.
+    """
+    eps = view.get("drawdowns") or []
+    if not eps:
+        return None
+    e = eps[0]
+    depth, peak, to_trough = e.get("depth_pct"), e.get("peak_date"), e.get("days_to_trough")
+    if depth is None or not peak or to_trough is None:
+        return None
+    head = f"가장 깊은 낙폭은 {peak} 고점에서 {int(to_trough)}일 만에 {abs(float(depth)):.1f}% 빠진 것이었고, "
+    rec = e.get("days_to_recover")
+    return head + (f"고점을 되찾기까지 {int(rec)}일 걸렸어요." if rec is not None else "아직 고점을 되찾지 못했어요.")
+
+
 def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
     s = view.get("summary") or {}
     cfg = view.get("config") or {}
@@ -267,6 +284,9 @@ def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
     facts = []
     if mdd is not None:
         facts.append(f"가장 크게 떨어졌을 때는 {_pct(float(mdd))}였어요.")
+    dd_fact = drawdown_fact(view)
+    if dd_fact:
+        facts.append(dd_fact)
     if view.get("n_rebalances") is not None:
         facts.append(f"리밸런싱을 {view['n_rebalances']}번 했어요.")
     trust = []

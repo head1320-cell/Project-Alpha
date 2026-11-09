@@ -39,7 +39,10 @@ GOLDEN = Path(__file__).parent / "golden" / "cf3_weights.json"
 #: CF3 가 더하는 관측 키 — 비교에서 뺀다(어느 깊이에 있든).
 NEW_KEYS = {"alignment", "fallbacks", "view_legs_dropped", "sigma_missing", "dropped_zero",
             # CF 3부 P1 — 엔진이 말없이 건너뛴 업종 상한(보고만 · `tests/test_p1_constraints_report.py`)
-            "unapplied"}
+            "unapplied",
+            # 성과 그림 문법(2026-11-09) — 백테스트가 같은 곡선에서 옮긴 해마다·달마다 수익과 큰 낙폭 사건. 곡선·지표는 한 자리도
+            # 안 바뀌고(아래 비교가 건다) 이 둘의 값은 `tests/test_perf_periods_wiring.py` 가 곡선에서 다시 계산해 건다.
+            "periods", "drawdowns"}
 
 T5 = ["005930", "000660", "035420", "051910", "068270"]
 LATE, HOLEY = "068270", "051910"

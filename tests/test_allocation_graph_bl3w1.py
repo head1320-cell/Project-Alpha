@@ -155,6 +155,25 @@ def test_a_finished_run_loads_like_the_route_with_its_performance_label(runs):
     assert r["lineage"]["practice"] is True                              # 연습용 데이터 실행
 
 
+def test_a_loaded_run_ships_its_drawdown_in_percent_and_period_returns_from_the_same_curve(runs):
+    """★낙폭은 % 로★ (2026-11-09 성과 그림 문법) — 저장된 결과의 `drawdown_curve` 는 비율(−0.15)이고 통계의 `max_drawdown_pct` 는
+    %(14.9)다. 뷰는 % 로 옮긴 `drawdown_pct` 를 싣는다(화면이 단위를 추측하지 않게 · 7번 `drawdown_curve` 와 같은 단위). 해마다 수익·
+    낙폭 사건은 같은 곡선에서 다시 계산한 값과 같고, 단위 없는 이름 `drawdown` 은 없다."""
+    from src.api.backtest_run_routes import run_full
+    from src.engine.quant_metrics import drawdown_episodes, period_returns
+    r = _run(_g([_load("run_ok")]))["nodes"]["l"]
+    assert r["status"] == "ok", r["reason"]
+    bt = run_full("run_ok")["result"]["backtest"]
+    dd = bt["drawdown_curve"]
+    assert dd and min(dd) < 0, "픽스처에 낙폭이 있어야 이 시험이 공허하지 않다"
+    view = r["view"]
+    assert "drawdown" not in view
+    assert view["drawdown_pct"] == pytest.approx([d * 100 for d in dd], abs=1e-3)
+    assert abs(min(view["drawdown_pct"])) == pytest.approx(abs(bt["statistics"]["max_drawdown_pct"]), abs=0.05)
+    assert view["periods"] == period_returns(bt["equity_dates"], bt["equity_curve"])
+    assert view["drawdowns"] == drawdown_episodes(bt["equity_dates"], bt["equity_curve"], top=3)
+
+
 @pytest.mark.parametrize("rid,words", [
     ("run_busy", ("아직", "45%")),
     ("run_bad", ("실패", "오류가 발생")),

@@ -629,7 +629,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
     bench_aligned = plan.bench_aligned
     bench_curve = plan.bench_curve
 
-    from src.engine.quant_metrics import compute_metrics
+    from src.engine.quant_metrics import compute_metrics, drawdown_episodes, period_returns
     metrics = compute_metrics(port, eq, periods_per_year=252,
                               benchmark_returns=bench_aligned, risk_free=_RF)
 
@@ -716,6 +716,10 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
         "equity_curve": list(np.round(eq, 5)),
         "bench_curve": bench_curve,
         "drawdown_curve": list(np.round(dd * 100, 3)),
+        # 해마다·달마다 수익 · 큰 낙폭 사건 — ★실린 곡선(소수 5자리)★ 에서 옮기기만(연환산 없음 · 화면은 새 수를 만들지 않는다 ·
+        # 2026-11-09). 화면이 보는 곡선과 같은 수에서 나와야 둘이 어긋나지 않는다.
+        "periods": period_returns(plan.sim_date_strs, np.round(eq, 5)),
+        "drawdowns": drawdown_episodes(plan.sim_date_strs, np.round(eq, 5), top=3),
         "rebalances": rebalances,
         "n_rebalances": len(rebalances),
         # ★절단을 주장이 아니라 기록으로 증명한다★
