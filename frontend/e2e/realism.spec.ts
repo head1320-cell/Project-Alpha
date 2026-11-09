@@ -146,7 +146,11 @@ for (const scheme of ["light", "dark"] as const) {
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.locator(".rl-calc").click();
+      // 두 번째 누름은 결과를 잠시 내렸다가 다시 그린다 — 단추 글이 돌아오고 틈 그림까지 그려진 뒤에 재야 '3 요소만' 감사가 안 난다
+      // (이전부터의 간헐 원인 · HISTORY 2026-11-08). 2026-11-09 틈 그림이 서버 `/perf/compare` 를 한 번 더 기다리므로 그것도 기다린다.
+      await expect(page.locator(".rl-calc")).toHaveText("다시 계산하기", { timeout: 20_000 });
       await expect(sec(page, "capacity")).toBeVisible({ timeout: 20_000 });
+      await expect(sec(page, "gap").locator(".pf-cmp")).toBeVisible({ timeout: 20_000 });
       const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(over, `${width}px 가로 넘침`).toBeLessThanOrEqual(0);
       expect(await page.evaluate<string[]>(cardsOverflow(".rl .tx-sec")), `${width}px 카드 밖`).toEqual([]);
@@ -166,3 +170,29 @@ for (const scheme of ["light", "dark"] as const) {
     }
   });
 }
+
+// ── 둘 겹쳐 보기 (2026-11-09 · 성과 그림 문법 ③) — 틈 그림은 서버 `/perf/compare` 가 맞춘 두 곡선 + 차이 띠 ──────────────
+test("ST3c: 틈 그림 = 두 곡선 + 차이 띠 · 읽는 줄 차이 %p 는 서버 값 · 연습용 빗금 · '현실' 강조(짝: 둘 다) · recharts 0", async ({ page }) => {
+  await open(page);
+  await page.locator(".rl-calc").click();
+  const gap = sec(page, "gap");
+  const fig = gap.locator(".rl-chart .pf-cmp");
+  await expect(fig).toBeVisible({ timeout: 20_000 });
+  await expect(fig.locator(".pf-line-a")).toHaveCount(1);
+  await expect(fig.locator(".pf-line-b")).toHaveCount(1);
+  await expect(fig.locator(".pf-diff-line")).toHaveCount(1);
+  // 마지막 날 차이 = (현실 끝/현실 처음 − 이상 끝/이상 처음) × 100 — 픽스처에서 셈한 값과 서버가 뺀 값이 같아야 한다.
+  const i = REALISM.ideal.daily_records; const r = REALISM.real.daily_records;
+  const want = (r[r.length - 1].portfolio_equity / r[0].portfolio_equity - i[i.length - 1].portfolio_equity / i[0].portfolio_equity) * 100;
+  await expect(fig.locator(".pf-read-diff")).toContainText(`${want >= 0 ? "+" : "−"}${Math.abs(want).toFixed(1)}%p`);
+  await expect(fig.locator(".pf-read-date")).toHaveText(i[i.length - 1].date);
+  await expect(fig.locator(".pf-strip-legend-practice")).toContainText("연습용 데이터");       // 픽스처 perf_label.data_real = false
+  await expect(fig.locator(".pf-strip-legend-align")).toHaveCount(0);                         // 같은 날짜 — 순번 아님
+  await expect(fig.locator(".pf-strip-legend-missing")).toHaveCount(0);
+  await expect(fig).toHaveAttribute("data-alignment", "date");
+  await expect(gap.locator(".recharts-wrapper")).toHaveCount(0);
+  await gap.getByRole("radio", { name: "현실" }).click();
+  await expect(fig).toHaveClass(/pf-cmp--focus-b/);
+  await gap.getByRole("radio", { name: "둘 다" }).click();
+  await expect(fig).toHaveClass(/pf-cmp--focus-both/);
+});

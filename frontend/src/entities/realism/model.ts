@@ -22,7 +22,8 @@ export const REAL_FLAGS = {
   enable_market_impact: true, enable_cash_yield: true, enable_buying_power_check: true, enable_regime_adaptive: true,
 } as const;
 
-export type RealismRecord = { date: string; portfolio_equity: number | null; weights?: Record<string, number> | null };
+export type RealismRecord = { date: string; portfolio_equity: number | null; cumulative_return?: number | null; drawdown_pct?: number | null;
+  weights?: Record<string, number> | null };
 export type RealismStats = {
   total_market_impact_cost?: number | null; total_cash_yield?: number | null;
   total_buying_power_truncations?: number | null; total_capacity_reallocations?: number | null;
@@ -55,21 +56,6 @@ export async function runRealism(strategyIds: number[], flags: Record<string, bo
   }
 }
 
-/** 두 곡선을 ★날짜로★ 맞춘다(옛 화면은 순번으로 맞췄다). 한쪽에만 있는 날은 다른 쪽이 null. */
-export type Joined = { date: string; ideal: number | null; real: number | null; band: [number, number] | null };
-export function joinByDate(ideal: RealismRecord[], real: RealismRecord[]): { rows: Joined[]; missingReal: number; missingIdeal: number } {
-  const a = new Map(ideal.map((r) => [r.date, r.portfolio_equity]));
-  const b = new Map(real.map((r) => [r.date, r.portfolio_equity]));
-  const dates = [...new Set([...a.keys(), ...b.keys()])].sort();
-  let missingReal = 0; let missingIdeal = 0;
-  const rows = dates.map((d) => {
-    const i = a.get(d) ?? null; const r = b.get(d) ?? null;
-    if (i === null) missingIdeal += 1;
-    if (r === null) missingReal += 1;
-    return { date: d, ideal: i, real: r, band: i !== null && r !== null ? [Math.min(i, r), Math.max(i, r)] as [number, number] : null };
-  });
-  return { rows, missingReal, missingIdeal };
-}
 
 /**
  * 원화 폭포 — 이상 끝 → 시장 충격 비용 → 현금 이자 → 나머지 → 현실 끝. ★서버가 센 두 원화만 따로 세운다★.

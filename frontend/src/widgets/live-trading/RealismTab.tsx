@@ -5,19 +5,21 @@
  * 옛 `/admin/realism`(어두운 조종석 · 계산 전에 MOCK 숫자를 결과처럼 · 유동성 그림은 늘 MOCK · 클라이언트 상수 분배)을 옮겼다.
  * ★[계산하기] 전 요청 0★ → 등록 전략 목록 → 같은 `/realism/backtest` 를 이상(조건 전부 끔)·현실(넷 켬)로 두 번.
  * 숫자는 서버 값만. 한쪽이 실패하면 그쪽 사유만 보이고 견주는 그림은 그리지 않는다.
- * 그림 다섯(옛 화면과 같은 수): 이상과 현실 사이(날짜로 맞춘 두 곡선 + 틈) · 어디서 달라졌나(원화 폭포) ·
+ * 그림 다섯(옛 화면과 같은 수): 이상과 현실 사이(★서버 `/perf/compare` 가 날짜로 맞춘 두 곡선 + 차이 띠★ — 성과 그림 문법 ③) · 어디서 달라졌나(원화 폭포) ·
  * 현실 조건이 한 일(카드 넷) · 적응 모드 나눔 막대 · 유동성·수용량(틀 + 몰라요 사유).
  */
 import Link from "next/link";
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Area, ComposedChart, Line, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { multibacktestApi } from "@/entities/multibacktest";
+import { perfApi } from "@/entities/perf/api";
 import {
-  IDEAL_FLAGS, REAL_FLAGS, RECIPE, erosionKrw, joinByDate, runRealism, type RealismRun, type Side,
+  IDEAL_FLAGS, REAL_FLAGS, RECIPE, erosionKrw, runRealism, type RealismRun, type Side,
 } from "@/entities/realism";
 import { num, priceWon } from "@/shared/lib/krFormat";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
+import { PerfCompare, type CompareFocus } from "@/shared/ui/perf/PerfCompare";
+import { compareViewOf } from "@/shared/ui/perf/perfView";
 import { Notice, Segmented } from "@/shared/ui/tx";
 
 type Outcome = { kind: "no-strategies" } | { kind: "ran"; names: Record<string, string>; ideal: Side; real: Side };
@@ -125,40 +127,44 @@ function Compared({ i, r, names }: { i: RealismRun; r: RealismRun; names: Record
 // ── ① 이상과 현실 사이 ──────────────────────────────────────────────────────
 
 type Focus = "both" | "ideal" | "real";
+const FOCUS_OF: Record<Focus, CompareFocus> = { both: "both", ideal: "a", real: "b" };
+/** 이상(A)·현실(B) 두 곡선을 ★서버가★ 날짜 합집합으로 맞추고 뺀다 — 화면은 서식만(옛 `joinByDate` 는 지웠다). */
 function GapChart({ i, r }: { i: RealismRun; r: RealismRun }) {
   const [focus, setFocus] = useState<Focus>("both");
-  const { rows, missingReal, missingIdeal } = joinByDate(i.daily_records, r.daily_records);
-  const dim = (k: Focus) => (focus === "both" || focus === k ? 1 : 0.25);
+  const side = (run: RealismRun, label: string) => ({
+    label, dates: run.daily_records.map((d) => d.date), equity: run.daily_records.map((d) => d.portfolio_equity),
+  });
+  const cmpQ = useQuery({
+    queryKey: ["perf", "compare", "realism", i.daily_records.length, r.daily_records.length, i.daily_records[0]?.date, r.daily_records[0]?.date,
+               i.summary.final_equity, r.summary.final_equity],
+    queryFn: () => perfApi.compare({ a: side(i, "이상"), b: side(r, "현실"), base: 1 }),
+    staleTime: Infinity, retry: 1,
+  });
+  const view = cmpQ.data
+    ? compareViewOf(cmpQ.data, { unit: "x", labelA: "이상", labelB: "현실", perfLabelA: i.perf_label ?? null, perfLabelB: r.perf_label ?? null,
+                                 question: "현실 조건이 같은 전략의 성과를 얼마나 바꾸나" })
+    : null;
+  const missingReal = cmpQ.data?.curves.missing_b ?? 0;
+  const missingIdeal = cmpQ.data?.curves.missing_a ?? 0;
   return (
     <section className="tx-sec rl-sec" data-sec="gap" aria-labelledby="rl-gap-h">
       <header className="tx-sec-head"><div>
         <h2 className="tx-sec-t" id="rl-gap-h">이상과 현실 사이</h2>
-        <p className="tx-sec-sub">두 자산 곡선을 같은 날짜끼리 맞췄어요. 사이 음영이 현실 조건이 만든 틈이에요.</p>
+        <p className="tx-sec-sub">두 자산 곡선을 같은 날짜끼리 맞췄어요(각자 처음을 1로). 아래 띠가 현실 조건이 만든 차이예요.</p>
       </div>
       <div className="tx-sec-aside">
         <Segmented label="강조할 곡선" value={focus} onChange={setFocus}
                    options={[{ value: "both", label: "둘 다" }, { value: "ideal", label: "이상" }, { value: "real", label: "현실" }]} />
       </div></header>
       <div className="tx-sec-body">
-        <div className="rl-chart" role="img" aria-label={`이상과 현실 자산 곡선 ${rows.length}일`} data-days={rows.length}>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "var(--tx-sub)" }} minTickGap={48} />
-              <YAxis width={64} tick={{ fontSize: 12, fill: "var(--tx-sub)" }} domain={["auto", "auto"]}
-                     tickFormatter={(v: number) => `${Math.round(v / 1e8)}억`} />
-              <Area dataKey="band" stroke="none" fill="var(--tx-blue)" fillOpacity={0.12} isAnimationActive={false} />
-              <Line dataKey="ideal" name="이상" dot={false} stroke="var(--tx-mute)" strokeWidth={2} strokeDasharray="5 4"
-                    strokeOpacity={dim("ideal")} isAnimationActive={false} />
-              <Line dataKey="real" name="현실" dot={false} stroke="var(--tx-blue)" strokeWidth={2.5}
-                    strokeOpacity={dim("real")} isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
+        <div className="rl-chart" data-days={view ? String(view.x.length) : ""}>
+          {cmpQ.isPending ? <p className="tx-sec-sub rl-aligning">두 곡선을 맞추는 중이에요</p> : null}
+          {cmpQ.isError ? (
+            <Notice tone="danger" title="두 곡선을 맞추지 못했어요"><span data-server>{(cmpQ.error as Error).message}</span>
+              <button type="button" className="tx-btn tx-btn--sub" onClick={() => void cmpQ.refetch()}>다시 시도</button></Notice>
+          ) : null}
+          {view ? <PerfCompare view={view} height={260} focus={FOCUS_OF[focus]} title="이상과 현실 자산 곡선" /> : null}
         </div>
-        <ul className="rl-legend">
-          <li data-k="ideal"><span aria-hidden className="rl-sw rl-sw--ideal" /> 이상(현실 조건 없이)</li>
-          <li data-k="real"><span aria-hidden className="rl-sw rl-sw--real" /> 현실(조건 넣고)</li>
-          <li data-k="gap"><span aria-hidden className="rl-sw rl-sw--gap" /> 둘 사이의 틈</li>
-        </ul>
         {missingReal || missingIdeal ? (
           <p className="tx-sec-sub rl-missing">한쪽에만 있는 날: 현실 쪽에 없는 날 {num(missingReal)}일 · 이상 쪽에 없는 날 {num(missingIdeal)}일.</p>
         ) : null}
