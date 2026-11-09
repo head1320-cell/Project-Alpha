@@ -69,3 +69,21 @@ def test_existing_keys_are_untouched(monkeypatch):
     for k, v in row.items():
         assert body[k] == v, f"{k} 가 바뀌었다"
     assert body["result"]["backtest"]["drawdown_curve"] == DD, "저장 결과는 그대로(비율) — 바꾼 것이 아니라 더한 것"
+
+
+# ── 경로 배선 — ★E2E 가 잡은 결함(2026-11-09)★ ───────────────────────────────
+# `_perf_block` 을 `@router.get("/runs/{run_id}")` 와 `run_full` 사이에 끼워 넣어 데코레이터가 헬퍼를 받았다 — GET 이 body 를
+# 요구해 422 를 내고 `run_full` 은 경로에서 빠졌다. 함수를 직접 부르는 위 시험은 전부 통과했다(라우트 표를 안 봤다).
+def test_the_full_run_get_route_still_points_at_run_full_and_a_missing_id_is_404(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from src.api import backtest_run_routes as rr
+    from src.app_factory import create_app
+    from tests.route_walk import flat_routes
+
+    app = create_app()
+    hits = [r for r in flat_routes(app) if r.path == "/api/v1/backtest/runs/{run_id}" and "GET" in (r.methods or ())]
+    assert [r.endpoint.__name__ for r in hits] == ["run_full"]
+    monkeypatch.setattr(rr.br, "get_run", lambda rid, strict=False: None)
+    res = TestClient(app).get("/api/v1/backtest/runs/bt_missing")
+    assert res.status_code == 404, res.text                       # 422(body 요구) 가 아니다

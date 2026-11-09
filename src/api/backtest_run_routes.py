@@ -653,7 +653,6 @@ def run_telemetry(run_id: str):
             "available": True, "telemetry": tele, "reason": None}
 
 
-@router.get("/runs/{run_id}")
 def _perf_block(row: dict) -> dict | None:
     """★화면이 세지 않도록 서버가 낸다★ (2026-11-09 · 결과 화면 성과 그림 문법 §3.2)
 
@@ -678,6 +677,7 @@ def _perf_block(row: dict) -> dict | None:
     }
 
 
+@router.get("/runs/{run_id}")
 def run_full(run_id: str):
     try:
         r = br.get_run(run_id, strict=True)
