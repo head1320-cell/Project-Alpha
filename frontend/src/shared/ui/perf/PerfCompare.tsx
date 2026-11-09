@@ -9,9 +9,11 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { cumPct, fmtSignedPct, fmtSignedPp, fmtValue, tickFormatter, type PerfCompareView, type PerfPoint } from "./perfView";
 import { useMeasuredWidth } from "./useMeasuredWidth";
-import { GAP, L_MIN, R_MIN, STRIP_H, TOP, XLAB_H, areaPath, argExt, linePath, pickIndexes, textW } from "./perfGeo";
+import { L_MIN, R_MIN, STRIP_H, TOP, XLAB_H, areaPath, argExt, linePath, pickIndexes, textW } from "./perfGeo";
 
 export type CompareFocus = "a" | "b" | "both";
+/** 위 패널 아래 눈금("×0.87")과 차이 패널 위 눈금("+6%p")이 부딪히지 않게 — PerfCurve 의 GAP(8)보다 넓다(검수에서 겹쳤다). */
+const PANEL_GAP = 20;
 
 const lastOf = (vals: PerfPoint[]): number | null => { for (let i = vals.length - 1; i >= 0; i--) { const v = vals[i]; if (v !== null) return v; } return null; };
 const firstOf = (vals: PerfPoint[]): number | null => vals.find((v) => v !== null) ?? null;
@@ -29,7 +31,7 @@ export function PerfCompare({ view, height = 260, focus = "both", title = "두 �
   const vd = view.diffPp;
 
   const geo = useMemo(() => {
-    const plotH = Math.max(90, height - TOP - STRIP_H - XLAB_H - GAP);
+    const plotH = Math.max(90, height - TOP - STRIP_H - XLAB_H - PANEL_GAP);
     const eqH = Math.round(plotH * 0.68);
     const dfH = plotH - eqH;
     const base = view.base;
@@ -56,7 +58,7 @@ export function PerfCompare({ view, height = 260, focus = "both", title = "두 �
     const plotW = Math.max(40, width - L - R);
     const x = (i: number) => (n <= 1 ? L + plotW / 2 : L + (i / (n - 1)) * plotW);
     const yEq = (v: number) => TOP + (1 - (v - lo) / (hi - lo)) * eqH;
-    const dfTop = TOP + eqH + GAP;
+    const dfTop = TOP + eqH + PANEL_GAP;
     const yDf = (v: number) => dfTop + (1 - (v - dlo) / (dhi - dlo)) * dfH;
     const stripY = dfTop + dfH + 4;
     const maxPts = Math.max(24, Math.floor(plotW / 2));

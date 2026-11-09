@@ -11,6 +11,7 @@ export function DrawdownEpisodes({ view, episodes }: { view?: PerfView; episodes
   if (eps === null) return <p className="pg-note">큰 낙폭 사건은 이 결과에 없어요 — 서버가 낙폭 사건을 주지 않았어요.</p>;
   if (!eps.length) return <p className="pg-note">고점 아래로 내려간 적이 없어요 — 낙폭 사건이 없어요.</p>;
   return (
+    <div className="pf-eps-wrap">
     <table className="pg-table pf-dd-eps">
       <thead><tr><th>고점</th><th>바닥</th><th className="pg-td-num">깊이</th><th className="pg-td-num">바닥까지</th><th>되찾은 날</th><th className="pg-td-num">되찾기까지</th></tr></thead>
       <tbody>
@@ -27,5 +28,6 @@ export function DrawdownEpisodes({ view, episodes }: { view?: PerfView; episodes
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

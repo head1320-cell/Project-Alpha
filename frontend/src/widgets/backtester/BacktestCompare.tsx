@@ -50,7 +50,13 @@ const fmt = (v: unknown, r: Row) => {
   const n = num(v); if (n == null) return "—";
   return `${n.toLocaleString("ko-KR", { maximumFractionDigits: r.digits ?? 1 })}${r.suffix ?? ""}`;
 };
-const fmtDelta = (d: number, r: Row) => d === 0 ? "같아요" : `${d > 0 ? "+" : ""}${d.toLocaleString("ko-KR", { maximumFractionDigits: r.digits ?? 1 })}${r.pp ? "%p" : (r.suffix ?? "")}`;
+/** 보이는 자리에서 0 이면 "같아요"(−0.004 가 "-0%p" 로 보이지 않게 · 2026-11-09 검수). */
+const fmtDelta = (d: number, r: Row) => {
+  const k = 10 ** (r.digits ?? 1);
+  const rd = Math.round(d * k) / k;
+  if (rd === 0) return "같아요";
+  return `${rd > 0 ? "+" : ""}${rd.toLocaleString("ko-KR", { maximumFractionDigits: r.digits ?? 1 })}${r.pp ? "%p" : (r.suffix ?? "")}`;
+};
 const signColor = (d: number | null) => (d == null || d === 0 ? undefined : d > 0 ? "var(--tx-up-ink)" : "var(--tx-down-ink)");
 
 export function BacktestCompare({ runId }: { runId: string }) {

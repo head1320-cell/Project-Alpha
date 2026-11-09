@@ -25692,3 +25692,44 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   `min(drawdown_pct)` −14.94 = 통계 `max_drawdown_pct` 14.94(같은 단위).
 - 하지 않음: 비교 화면(`BacktestCompare`)의 recharts · 핵심 지표 타일·산출 불가 사유 · 엔진 월별 함수 · 답 문장을 서버 explain 으로 · 다른 화면의 recharts(번들에
   남음) · 서버 `partial` 규칙(달력 영업일 판정) · 초기 자본을 응답에 싣기 · `shared/ui/PerfLabel` 의 `title=`(이전부터).
+
+## 성과 그림 문법 ③ — 다른 화면 넷: 둘 겹쳐 보기 + 단일 곡선 이식 (2026-11-09)
+
+- 설계·계획: `docs/superpowers/specs/2026-11-09-perf-grammar-other-screens-design.md`(사용자 결정: 넷 전부 두 묶음 · 비교 부품 하나 · 다섯 절 승인) ·
+  `docs/superpowers/plans/2026-11-09-perf-grammar-other-screens.md`. 커밋 여섯(①~⑥).
+- 서버(②): 순수 모듈 `src/engine/perf_compare.py` — `align_curves`(공통 날이 2 이상이고 짧은 쪽의 반 이상이면 ★날짜 합집합★ · 한쪽에 없는 날은
+  None(0 아님) · 아니면 "n일째" 순번 + 사유 문장 · 각자 첫 유효값을 base(1|100) 로 · 차이 (B−A)/base×100 %p) · `yearly_diff` · `metric_rows`
+  (`NODE_METRICS` 7 = 옛 `_STAT_KO` · `PAGE_METRICS` 10). 세 곳이 같은 함수를 쓴다: 순수 엔드포인트 `POST /api/v1/perf/compare`(저장소 없음 ·
+  길이 불일치·점 2개 미만·base≠1|100 은 422 — E2E 가 스텁하지 않아 진짜 정렬이 시험된다) · 캔버스 비교 노드 `view.compare{curves, yearly,
+  drawdowns{a,b}, labels, practice}`(곡선 없으면 null + 사유) · 현실성 탭(두 실행 뒤 같은 문). 스트레스 과거 재생은 계산해 두고 버리던
+  `equity_curve`(첫 점 = 1+첫날 수익)·`benchmark_curve`·`drawdowns` 를 싣고, /macro 전략 `_curve_summary` 는 `drawdown_pct`(≤0 · 통계 mdd 와
+  같은 바닥)·`dates_note`("오늘부터 30일씩 거슬러 센 어림") 를 싣는다 — 해마다·날짜 계산은 하지 않는다. 시험 14(빨강 먼저) · 변이 셋(교집합 ·
+  base 무시 · 부호 뒤집기) 죽음.
+- 부품(③): `perfGeo.ts`(PerfCurve 의 솎기·글자 폭·경로를 옮기기만 — 기존 E2E 30 그대로) · `PerfCompare`(A 잉크 · B `--mc-c-1` · 끝값 라벨 ·
+  차이 띠 0 기준 등락 두 팔 · 증거 띠: 순번이면 점선 · 한쪽이라도 연습용이면 빗금 · 읽는 줄 날짜·A·B·차이 %p · 키보드 · 한 줄 강조 · 표 쌍둥이 ·
+  title 0) · `CompareYearTable`(해 합집합 · "주지 않았어요" · "(B 일부)") · `DrawdownEpisodes` 가 `episodes` 로도 · `PerfCurve` 에 벤치마크 낙폭
+  회색 선 · base100 · 띠 범례 글(`data-server`) · `benchNoneText`. `entities/perf/api.ts`. 새 토큰 0(`--mc-c-1` 은 범주색 1).
+- 화면: 비교 화면(③ · 답의 차이 셋·지표 표 10·곡선·해마다 차이·낙폭 사건 두 열이 전부 서버 값 — 화면이 빼던 `vb−va`·순번 `normalize` 삭제 ·
+  카드 제목·`.brun-cmp`·`.brun-cmp-diff`·`.brun-cmp-labels`·`.brun-select` 계약 그대로) · 캔버스 비교 노드(③ · 표 위에 같은 그림 · 7행 그대로) ·
+  현실성 탭(④ · 틈 그림 = 이상 A·현실 B + 차이 띠 · `data-days` = 서버 합집합 · `joinByDate`·`.rl-legend` 삭제) · /macro 전략 창(⑤ · 처음을
+  100으로 · 낙폭 물속 · 어림 라벨 사유 · 지표 5 그대로) · 캔버스 스트레스 과거 모드(⑤ · 자산곡선 ×1 · 벤치마크 회색 · 낙폭 둘 · 낙폭 사건).
+  recharts 는 이 넷의 성과 그림에서 0(보유 도넛·프론티어·노출 추이·수익률곡선은 범위 밖 — 캔버스 묶음엔 남는다).
+  - ★고침(⑤)★ 역할 변수 `--pf-*` 가 `.pg-theme`·`.rs` 에만 있어 캔버스 밖(현실성 탭 · 전략 창)에서는 선의 stroke 가 비어 그려지지 않았다 —
+    커밋 ④의 현실성 틈 그림이 그랬고 E2E 는 요소 수만 세어 못 봤다. `:root` 에 `--tx-*` 로 매핑.
+  - 검수(라이트·다크·390 스크린샷 · 스펙 §5.1)에서 고친 넷: 두 패널 눈금 충돌 → 간격 20px · 해마다 "(일부)" → 어느 쪽 · "-0%p" → "같아요" ·
+    390 낙폭 사건 표 nowrap+가로 스크롤(+격자 칸 min-width 0). 캔버스 두 노드는 임시 스펙으로 못 찍어 E2E 단언으로 갈음(§5.1 8).
+- E2E: 새 `perf-compare.spec.ts` 8(실행 둘 스텁 · `/perf/compare` 진짜 서버 — 두 선·차이 선·읽는 줄·"+9.0%p" · 정렬 짝(같은 날짜 글 0 · B 끝 2점
+  빼면 합집합 5 + "B에 없는 날 2일" · 날짜가 통째로 다르면 "시작부터 5일째") · 해마다 합집합 · 지표 차이 = 서버 rows(B 값 삭제 → "비교할 수
+  없어요") · recharts 0·title 0 · 라이트·다크 AA · 390) · `realism.spec` 틈 그림 1(마지막 날 차이 = 픽스처에서 셈한 %p · 연습용 · 강조 → focus 짝 ·
+  recharts 0) + AA 시험 기다림 · `macro-cards.spec` 전략 창 1(곡선·낙폭 물속 · 낙폭 축 글자 = 서버 drawdown_pct 바닥 · "어림" · 지표 5 · recharts 0
+  (그림 안)) · `portfolio-graph.spec` 비교 블록(그림 · 차이 0) + 확인하기(자산곡선 길이 = 낙폭 · 벤치마크 낙폭 선 · 축 글자 = 서버 % · 사건 행 수).
+  옛 빌드에서 빨강 확인((d) 지표 표만 옛 화면도 같은 수를 내 통과 — 서버 행은 서버 시험이 건다). 변이: 정렬 순번 강제 · 차이 띠 안 그림 ·
+  data-days 이상 길이 · 스트레스 낙폭 ×100 · 전략 창 낙폭 ×100 · 벤치마크 낙폭 선 안 그림 — 여섯 다 죽음. 전체 E2E 1291 중 1285 통과 · 건너뜀 4 · 실패 2 — 둘 다 이전부터의 간헐(HISTORY 기록 있음): `canvas-ai-suggest` 'AI 유령이 카드와 겹친다' · `canvas-workspace` '빈 필수 입력'(끈 선이 가끔 안 이어짐). 따로 2번씩 돌리면 AI 유령 2/2 · 빈 필수 입력 1/2 — 이번 변경과 무관(성과 부품을 안 쓴다). `make all` 통과(3.14 · Node 24) — ruff · pytest 8937 통과(건너뜀 11) · tsc · 다크 모듈 생성 구역 · 빌드.
+- 측정(압축 전송 · 3회 중앙값 · 커밋 ② 워크트리 :3002 대 이번 빌드 :3000): 첫 화면 JS `/backtest/runs/x/compare` 528.7 → 426.7 kB(43 → 41 조각) ·
+  `/admin/live-trading?tab=realism` 558.7 → 445.2 kB(46 → 42) · `/macro` 594.6 → 592.6 kB(처음 묶음엔 모달이 없다) · 전략 창을 열 때 받는 조각
+  20.5 → 13.9 kB(2 → 1 조각 · 원본 57.8 → 40.6). 수 대조: 실제 실행 둘(2023-01~12 · 2023-03~2024-02)에서 서버 `rows[].diff` 10행 = `vb − va`
+  (차이 0) · 정렬 date · 합집합 304 · 공통 218 · 한쪽에 없는 날 44/42 · 해마다 2023 둘·2024 B만. 현실성 `curves.n` = 옛 합집합 수(픽스처 196 ·
+  E2E 가 같은 수를 건다).
+- 하지 않음: 성과가 아닌 recharts(시세·수익률곡선·프론티어·노출 추이·MacroW2) · `/macro` 전략의 실제 달력 날짜(데이터 계층) · 현실성 서버 통합
+  엔드포인트 · 비교 화면 설정 표의 의미 · 새 지표·판단·정책 · 새 색 토큰 · 기존 CSS 클래스 이름 · 성과 부품의 `lazyChart` 지연 · 비교 화면 읽는
+  줄의 기본 자리(마지막 날 — A 가 먼저 끝나면 "—" · 정직한 결과).

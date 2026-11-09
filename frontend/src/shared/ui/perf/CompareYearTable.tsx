@@ -15,7 +15,8 @@ export function CompareYearTable({ view }: { view: PerfCompareView }) {
       <tbody>
         {rows.map((r) => (
           <tr key={r.year} data-partial={r.a_partial || r.b_partial ? "true" : "false"}>
-            <td>{r.year}{r.a_partial || r.b_partial ? <small className="pf-partial"> (일부)</small> : null}</td>
+            <td>{r.year}{r.a_partial || r.b_partial
+              ? <small className="pf-partial"> ({r.a_partial && r.b_partial ? "둘 다" : r.a_partial ? view.a.label : view.b.label} 일부)</small> : null}</td>
             <td className="pg-td-num">{r.a_return_pct === null ? <span className="pf-na">주지 않았어요</span> : fmtSignedPct(r.a_return_pct)}</td>
             <td className="pg-td-num">{r.b_return_pct === null ? <span className="pf-na">주지 않았어요</span> : fmtSignedPct(r.b_return_pct)}</td>
             <td className={`pg-td-num${r.diff_pp === null ? "" : r.diff_pp >= 0 ? " pf-delta--up" : " pf-delta--down"}`}>

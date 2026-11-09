@@ -10096,7 +10096,11 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pf-cmp--focus-b .pf-line-a, .pf-cmp--focus-b .pf-dot--a, .pf-cmp--focus-b .pf-endlabel--a { opacity: 0.25; }
 .pf-year-diff td.pf-delta--up { color: var(--pf-up-ink); } .pf-year-diff td.pf-delta--down { color: var(--pf-down-ink); }
 .pf-partial { color: var(--pf-assume); font-size: 11px; }
+/* 낙폭 사건 표 — 좁은 폭(390)에서 "되찾기까지" 가 네 줄로 꺾이지 않게: 칸은 한 줄, 넘치면 가로 스크롤 */
+.pf-eps-wrap { overflow-x: auto; }
+.pf-dd-eps th, .pf-dd-eps td { white-space: nowrap; }
 .pf-cmp-eps { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.pf-cmp-eps > div { min-width: 0; }                /* 격자 칸이 nowrap 표만큼 자라지 않게 — 안의 .pf-eps-wrap 이 가로로 스크롤한다(390 검수) */
 .pf-cmp-eps > div > .pg-h4 { margin: 0 0 4px; }
 @media (min-width: 900px) { .pf-cmp-eps { grid-template-columns: 1fr 1fr; } }
 /* 해마다 — 등락 막대 + 부호 숫자 */
