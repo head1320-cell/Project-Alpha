@@ -104,6 +104,12 @@ BADGES: tuple[Badge, ...] = (
     Badge(("t-mode-badge",), (AXIS_RUN_MODE,),
           "관리자 패널(데이터 상태)의 실행 모드 배지(`st.config.kis_real` · BU7b 부터 모르면 '몰라요', 옛 `MODE: MOCK` 아님). "
           "★데이터 축이 아니라 실행 모드다★ — 이름이 닮아 섞기 쉽다."),
+    # 2026-11-09 성과 그림 문법 — 그림 안의 증거 띠. 합성 데이터면 띠 전체에 빗금(`pg-pf-strip-practice`)을 긋고 띠 범례가
+    # "연습용 데이터" 라고 글로 말한다(`perf_label.data_real` 로만 켠다 · 모르면 "데이터가 실제인지 몰라요"). 같은 패널의 `PerfLabel`
+    # 과 같은 축을 그림 안에서 한 번 더 말하는 것이다 — 센다, 합치지 않는다.
+    Badge(("pg-pf-strip-practice",), (AXIS_DATA_SOURCE,),
+          "캔버스 성과 그림(`widgets/portfolio-graph/perf/PerfCurve.tsx`)의 증거 띠 빗금 — 합성 데이터일 때만 그린다 "
+          "(`perf_label.data_real === false`). 글자 범례 '연습용 데이터' 가 따른다(색·무늬만으로 말하지 않는다)."),
 )
 
 _COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)

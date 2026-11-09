@@ -7,10 +7,11 @@
  */
 import type { ReactNode } from "react";
 import { RecordRobustnessResult } from "./RobustnessResults";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
-import type { NodeRunResult } from "@/entities/portfolio-graph";
+import type { NodeExplain, NodeRunResult } from "@/entities/portfolio-graph";
+import { PerfPanel } from "./perf/PerfPanel";
+import { perfViewOfBacktest } from "./perf/perfView";
 import type { ConstraintsReport } from "@/entities/allocation/api";
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 import { CorrStressResult, FactorXrayResult, ScenarioStressResult, SensitivityResult } from "./CheckResults";
@@ -259,36 +260,31 @@ function Conformal({ cf }: { cf: Dict | null | undefined }) {
   );
 }
 
-function Backtest({ v }: { v: Dict }) {
-  const s = (v.summary as Dict) ?? {};
-  const dates = (v.dates as string[]) ?? [];
-  const eq = (v.equity_curve as number[]) ?? [];
-  const bench = (v.bench_curve as number[] | null) ?? null;
-  const step = Math.max(1, Math.floor(eq.length / 300));
-  const data = eq.map((y, i) => ({ d: dates[i], p: y, b: bench?.[i] ?? null })).filter((_, i) => i % step === 0);
+/**
+ * 과거로 돌려 보기(7번) — 성과 그림 문법(2026-11-09 · `./perf`). 머리·그림 하나·해마다·믿어도 되나요·지표 모두·표로 보기는 공용 부품,
+ * 이 노드만의 절(룩어헤드 통제 · 다음 구간 예측 · 조건부 μ/Σ 메모)은 그 아래 그대로.
+ */
+function Backtest({ v, prov, explain }: { v: Dict; prov: Dict; explain?: NodeExplain | null }) {
   const la = v.lookahead_evidence as Dict | undefined;
   return (
-    <>
-      <KV rows={[
-        ["총수익", pct(s.total_return_pct)], ["CAGR", pct(s.cagr_pct)],
-        ["변동성", pct(s.volatility_pct)], ["Sharpe", fmt(s.sharpe_ratio)],
-        ["MDD", pct(s.max_drawdown_pct)], ["리밸런싱", `${String(v.n_rebalances ?? "—")}회`],
-      ]} />
-      {v.belief_note ? <p className="pg-warn">{String(v.belief_note)}</p> : null}
-      <Lookahead la={la} />
-      <Conformal cf={v.conformal as Dict | null | undefined} />
-      <div className="pg-chart">
-        <ResponsiveContainer width="100%" height={160}>
-          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <XAxis dataKey="d" hide />
-            <YAxis domain={["auto", "auto"]} width={40} tick={{ fontSize: 10 }} />
-            <Tooltip formatter={(x: number) => x?.toFixed?.(3)} />
-            <Line dataKey="p" name="포트폴리오" dot={false} stroke="var(--chart-line)" strokeWidth={1.5} isAnimationActive={false} />
-            {bench && <Line dataKey="b" name="벤치마크" dot={false} stroke="var(--chart-bench)" strokeWidth={1} isAnimationActive={false} />}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </>
+    <PerfPanel view={perfViewOfBacktest(v, prov, explain)} fallbackTitle="과거에 이 규칙대로 했다면"
+      after={
+        <>
+          {v.belief_note ? <p className="pg-warn">{String(v.belief_note)}</p> : null}
+          {((v.notes as string[] | undefined) ?? []).map((t) => <p key={t} className="pg-warn">{t}</p>)}
+          <Lookahead la={la} />
+          <Conformal cf={v.conformal as Dict | null | undefined} />
+        </>
+      }
+      /* 시트에도 같은 절 — 다음 구간 예측은 곡선 위가 아니라 따로 떨어진 글 절(§4.0 ②) · 룩어헤드 축은 '데이터와 한계' 앞에. */
+      sheetAfter={
+        <>
+          <Conformal cf={v.conformal as Dict | null | undefined} />
+          {v.belief_note ? <p className="pg-warn">{String(v.belief_note)}</p> : null}
+          {((v.notes as string[] | undefined) ?? []).map((t) => <p key={t} className="pg-warn">{t}</p>)}
+          <Lookahead la={la} />
+        </>
+      } />
   );
 }
 
@@ -400,14 +396,14 @@ function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate", "backtest_load", "counterfactual"]);
+const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate", "backtest_load", "counterfactual", "backtest"]);
 
 /** 노드 종류 → 결과 그림. 없는 종류는 원자료 JSON(Generic) — 지어낸 요약을 그리지 않는다. */
-const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
+const RENDERERS: Record<string, (p: { v: Dict; prov: Dict; explain?: NodeExplain | null }) => ReactNode> = {
   optimizer: ({ v }) => <Optimizer v={v} />,
   current_weights: ({ v }) => <Current v={v} />,
   risk: ({ v }) => <Risk v={v} />,
-  backtest: ({ v }) => <Backtest v={v} />,
+  backtest: ({ v, prov, explain }) => <Backtest v={v} prov={prov} explain={explain} />,
   universe: ({ v }) => <UniverseResult v={v} />,
   views: ({ v }) => <ViewsResult v={v} />,
   estimate: ({ v }) => <EstimateResult v={v} />,
@@ -430,7 +426,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   order_preview: ({ v }) => <OrdersResult v={v} />,
   target_version: ({ v }) => <TargetResult v={v} />,
   decision_journal: ({ v }) => <JournalResult v={v} />,
-  strategy_backtest: ({ v }) => <StrategyBacktestResult v={v} />,
+  strategy_backtest: ({ v, explain }) => <StrategyBacktestResult v={v} explain={explain} />,
   company_views: ({ v }) => <CompanyViewsResult v={v} />,
   valuation_scores: ({ v }) => <ValuationScoresResult v={v} />,
   attribution_review: ({ v }) => <AttributionResult v={v} />,
@@ -444,7 +440,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict }) => ReactNode> = {
   record_robustness: ({ v }) => <RecordRobustnessResult v={v} />,
   alpha_validate: ({ v, prov }) => <AlphaValidateResult v={v} prov={prov} />,
   backtest_setup: ({ v }) => <BacktestSetupResult v={v} />,
-  backtest_load: ({ v, prov }) => <BacktestLoadResult v={v} prov={prov} />,
+  backtest_load: ({ v, prov, explain }) => <BacktestLoadResult v={v} prov={prov} explain={explain} />,
   backtest_attribution: ({ v }) => <BacktestAttributionResult v={v} />,
   backtest_compare: ({ v }) => <BacktestCompareResult v={v} />,
   yield_curve: ({ v }) => <YieldCurveResult v={v} />,
@@ -521,7 +517,7 @@ export function NodeResultPanel({ kind, result, stale, extra, params, onReload }
       </div>
       {/* 성과 라벨 — 자기 렌더러가 숫자 옆에 직접 그리는 종류는 여기서 겹쳐 그리지 않는다. */}
       {prov.perf_label && !OWN_PERF_LABEL.has(kind) ? <div className="pg-perf"><PerfLabel value={prov.perf_label as PerfLabelValue} /></div> : null}
-      {v && (RENDERERS[kind] ? RENDERERS[kind]({ v, prov }) : <Generic v={v} />)}
+      {v && (RENDERERS[kind] ? RENDERERS[kind]({ v, prov, explain: result.explain ?? null }) : <Generic v={v} />)}
       {/* 진행 중·끝난 실행은 노드가 '아직' 으로 실패한다 — 그 실행을 읽기만 하며 끝나기를 기다린다. */}
       {kind === "backtest_load" && result.status === "failed" && typeof params?.run_id === "string" && onReload
         && result.reason?.startsWith("아직") && <RunProgress runId={params.run_id} onReload={onReload} />}

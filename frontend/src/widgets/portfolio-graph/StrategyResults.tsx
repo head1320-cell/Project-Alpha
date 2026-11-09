@@ -6,15 +6,14 @@
  * `null` 이면 그 이름을 적고 비워 둔다. 전략 묶음의 곡선은 계좌 금액, 낙폭은 같은 축의 아래 띠로 보인다.
  */
 import type { ReactNode } from "react";
-import { Area, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { PerfLabel } from "@/shared/ui/PerfLabel";
-import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
+import type { NodeExplain } from "@/entities/portfolio-graph";
+import { PerfPanel } from "./perf/PerfPanel";
+import { perfViewOfStrategy } from "./perf/perfView";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const pct = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number).toFixed(d)}%`);
 const signed = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number) >= 0 ? "+" : ""}${(v as number).toFixed(d)}%`);
-const won = (v: unknown) => (num(v) === null ? "—" : `${Math.round(v as number).toLocaleString("ko-KR")}원`);
 const NOT_MEASURED = "안 쟀어요";
 
 function KV({ rows }: { rows: [string, ReactNode][] }) {
@@ -41,38 +40,18 @@ function Bars({ rows, labels, fmt = (x) => pct(x, 2) }: {
 const EFFECT: [string, string][] = [["allocation_effect_pct", "나누는 방식"], ["cost_effect_pct", "거래 비용"],
   ["netting_effect_pct", "주문 상계"], ["cash_effect_pct", "현금 이자"], ["macro_effect_pct", "매크로 조정"]];
 
-export function StrategyBacktestResult({ v }: { v: Dict }) {
+/** 성과 그림 문법(2026-11-09) — 7번·불러오기와 같은 부품(`perf/PerfPanel`): 숨은 오른쪽 축 낙폭 대신 같은 물속 그림. 아래 절은 그대로. */
+export function StrategyBacktestResult({ v, explain }: { v: Dict; explain?: NodeExplain | null }) {
   const s = (v.summary as Dict) ?? {};
   const names = (v.strategy_names as Record<string, string>) ?? {};
-  const curve = (v.curve as { date: string; equity: number; dd: number }[]) ?? [];
-  const step = Math.max(1, Math.floor(curve.length / 300));
-  const data = curve.filter((_, i) => i % step === 0 || i === curve.length - 1);
   const attr = (s.attribution as Dict) ?? {};
   const per = (v.period as Dict) ?? {};
   const srcs = ((v.sources as Dict)?.strategies as Dict[]) ?? [];
   const last = Object.entries((v.last_weights as Record<string, number>) ?? {}).map(([k, w]) => [k, w * 100] as [string, number])
     .sort((a, b) => b[1] - a[1]);
   return (
-    <>
-      {/* ★숫자 바로 위에 그 숫자의 신원★ — 원천 전략들의 mock 여부로 정한 라벨(서버 `_label_from_sources`). */}
-      {v.perf_label ? <div className="pg-perf"><PerfLabel value={v.perf_label as PerfLabelValue} /></div> : null}
-      <div className="pg-chart" aria-label="계좌 금액과 낙폭">
-        <ResponsiveContainer width="100%" height={170}>
-          <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <XAxis dataKey="date" hide />
-            <YAxis yAxisId="e" domain={["auto", "auto"]} width={52} tick={{ fontSize: 10 }}
-                   tickFormatter={(x: number) => `${Math.round(x / 1e4).toLocaleString("ko-KR")}만`} />
-            <YAxis yAxisId="d" orientation="right" domain={["dataMin", 0]} hide />
-            <Tooltip formatter={(x: number, n: string) => (n === "낙폭" ? `${x.toFixed(1)}%` : won(x))} />
-            <Area yAxisId="d" dataKey="dd" name="낙폭" stroke="none" fill="var(--pg-fail)" fillOpacity={0.14} isAnimationActive={false} />
-            <Line yAxisId="e" dataKey="equity" name="계좌" dot={false} stroke="var(--pg-st-check)" strokeWidth={1.6} isAnimationActive={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      <KV rows={[["기간", `${String(per.start)} ~ ${String(per.end)}${per.whole_record ? " · 함께 기록된 전체" : ""}`],
-                 ["전체 수익", signed(s.total_return_pct)], ["연 수익", signed(s.annualized_return_pct)],
-                 ["가장 크게 빠진 폭", pct(s.max_drawdown_pct)],
-                 ["샤프 비율", num(s.sharpe_ratio_full) === null ? "계산 못 함" : (s.sharpe_ratio_full as number).toFixed(2)],
+    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 묶음을 돌려 봤어요" after={<>
+      <KV rows={[["기간", `${String(per.start)} ~ ${String(per.end)}${per.whole_record ? " (함께 기록된 전체)" : ""}`],
                  ["다시 나눈 횟수", `${String(s.n_rebalances ?? "—")}번`], ["거래일", `${String(v.n_trading_days ?? "—")}일`]]} />
       <h4 className="pg-h4">마지막 날 전략 비중</h4>
       <Bars rows={last} labels={names} />
@@ -97,7 +76,7 @@ export function StrategyBacktestResult({ v }: { v: Dict }) {
         ))}
       </ul>
       {((v.warnings as string[]) ?? []).map((w) => <p key={w} className="pg-warn">{w}</p>)}
-    </>
+    </>} />
   );
 }
 

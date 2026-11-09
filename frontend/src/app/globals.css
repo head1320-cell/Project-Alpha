@@ -4333,9 +4333,9 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-perf { font-size: 12px; }
 .pg-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--pg-mute); }
 .pg-warn { margin: 0; font-size: 13px; line-height: 1.55; color: var(--pg-assume); }
-.pg-kv { display: grid; gap: 4px; margin: 0; font-size: 13.5px; }
-.pg-kv > div { display: flex; justify-content: space-between; gap: 8px; }
-.pg-kv dt { color: var(--pg-mute); } .pg-kv dd { margin: 0; font-weight: 600; text-align: right; color: var(--pg-ink); }
+.pg-kv, .pg-pf-mkv { display: grid; gap: 4px; margin: 0; font-size: 13.5px; }
+.pg-kv > div, .pg-pf-mkv > div { display: flex; justify-content: space-between; gap: 8px; }
+.pg-kv dt, .pg-pf-mkv dt { color: var(--pg-mute); } .pg-kv dd, .pg-pf-mkv dd { margin: 0; font-weight: 600; text-align: right; color: var(--pg-ink); }
 .pg-table { width: 100%; font-size: 13px; border-collapse: collapse; color: var(--pg-ink); }
 .pg-table td { padding: 3px 0; }
 .pg-td-name { width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -9992,3 +9992,131 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .chart-slot { display: flex; align-items: center; justify-content: center; text-align: center; color: var(--tx-sub); font-size: 13px; }
 .chart-slot--fail { align-items: stretch; justify-content: flex-start; flex-direction: column; text-align: left; }   /* 실패는 글이 길다 — 자리 높이는 잡지 않는다 */
 .chart-slot-act { margin-top: 10px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   성과 그림 문법 (2026-11-09 · docs/superpowers/specs/2026-11-09-canvas-performance-viz-design.md) — 부품은 역할 변수(--pf-*)만 읽고,
+   캔버스는 여기서 그 변수에 --pg-*·--tx-* 를 넣는다. 다른 도구는 같은 변수에 제 토큰을 넣으면 같은 부품을 쓴다. 새 색 토큰은 없다. */
+.pg-theme {
+  --pf-ink: var(--pg-ink); --pf-body: var(--pg-body); --pf-mute: var(--pg-mute); --pf-line: var(--pg-line); --pf-soft: var(--pg-soft);
+  --pf-surface: var(--pg-paper); --pf-up: var(--tx-up); --pf-up-ink: var(--tx-up-ink); --pf-down: var(--tx-down); --pf-down-ink: var(--tx-down-ink);
+  --pf-assume: var(--pg-assume); --pf-unknown: var(--pg-unknown);
+}
+.pg-pf { display: flex; flex-direction: column; gap: 10px; }
+.pg-pf-head { display: flex; flex-direction: column; gap: 6px; }
+.pg-pf-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pg-pf-title { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.4; color: var(--pf-ink); }
+.pg-pf-open { flex: none; height: 30px; padding: 0 10px; font-size: 12.5px; }
+.pg-pf-hero { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.pg-pf-hero b { font-size: 28px; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; color: var(--pf-ink); }
+.pg-pf-hero small { font-size: 13px; color: var(--pf-mute); }
+.pg-pf-delta--up { color: var(--pf-up-ink); } .pg-pf-delta--down { color: var(--pf-down-ink); }
+.pg-pf-kv { margin-top: 2px; }
+/* 그림 — 글자는 잉크·회색만, 데이터 색은 마크에만 */
+.pg-pf-fig { display: flex; flex-direction: column; gap: 6px; }
+.pg-pf-curve { display: block; max-width: 100%; outline: none; cursor: crosshair; touch-action: none; }
+.pg-pf-curve:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; border-radius: 6px; }
+.pg-pf-curve text { font-family: inherit; }
+.pg-pf-grid { stroke: var(--pf-line); stroke-width: 1; }
+.pg-pf-baseline { stroke: var(--pf-mute); stroke-width: 1; }
+.pg-pf-ytick, .pg-pf-xtick { font-size: 11px; fill: var(--pf-mute); }
+.pg-pf-line-port { fill: none; stroke: var(--pf-ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pg-pf-line-bench { fill: none; stroke: var(--pf-mute); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.pg-pf-dd-area { fill: var(--pf-down); fill-opacity: 0.12; stroke: none; }
+.pg-pf-dd-line { fill: none; stroke: var(--pf-down-ink); stroke-width: 1.5; stroke-linejoin: round; }
+.pg-pf-endlabel { font-size: 11px; font-weight: 600; fill: var(--pf-ink); }
+.pg-pf-endlabel--bench { fill: var(--pf-mute); font-weight: 500; }
+.pg-pf-leader { stroke: var(--pf-mute); stroke-width: 1; }
+.pg-pf-crossline { stroke: var(--pf-mute); stroke-width: 1; }
+.pg-pf-dot { stroke: var(--pf-surface); stroke-width: 2; }
+.pg-pf-dot--port { fill: var(--pf-ink); } .pg-pf-dot--bench { fill: var(--pf-mute); } .pg-pf-dot--dd { fill: var(--pf-down-ink); }
+.pg-pf-hatch-line { stroke: var(--pf-mute); stroke-width: 1; }
+.pg-pf-learn-fill { opacity: 0.45; }
+.pg-pf-strip-sim { fill: var(--pf-line); }
+.pg-pf-strip-learn { opacity: 0.6; }
+.pg-pf-strip-practice { opacity: 0.55; }
+.pg-pf-strip-rebal { stroke: var(--pf-body); stroke-width: 1; }
+.pg-pf-strip-asof { fill: var(--pf-ink); }
+/* 읽는 줄·범례 — 늘 보이는 글자 */
+.pg-pf-read { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; padding: 8px 10px; font-size: 12.5px; line-height: 1.5;
+  color: var(--pf-body); background: var(--pf-soft); border-radius: 10px; }
+.pg-pf-read b { color: var(--pf-ink); font-weight: 600; }
+.pg-pf-read-date { font-weight: 700; }
+.pg-pf-read-item { display: inline-flex; align-items: baseline; gap: 4px; }
+.pg-pf-read-rebal { color: var(--pf-assume); }
+.pg-pf-delta { margin-left: 2px; }
+.pg-pf-legend, .pg-pf-strip-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; font-size: 12px; line-height: 1.5; color: var(--pf-mute); }
+.pg-pf-legend span, .pg-pf-strip-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.pg-pf-legend-none, .pg-pf-strip-legend-unknown { color: var(--pf-unknown); }
+.pg-pf-strip-legend-practice { color: var(--pf-assume); }
+/* 띠 범례의 표식 — 그림의 빗금·눈금·▲ 와 같은 모양(색·무늬만으로 말하지 않고 글자가 따른다) */
+.pg-pf-skey { display: inline-block; width: 14px; height: 10px; border-radius: 2px; background: var(--pf-line); }
+.pg-pf-skey--learn { background: repeating-linear-gradient(45deg, var(--pf-mute) 0 1px, transparent 1px 4px); opacity: 0.6; }
+.pg-pf-skey--rebal { width: 10px; background: linear-gradient(var(--pf-body), var(--pf-body)) center / 1px 100% no-repeat, var(--pf-line); }
+.pg-pf-skey--asof { width: 0; height: 0; border-radius: 0; background: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid var(--pf-ink); }
+.pg-pf-skey--practice { background: repeating-linear-gradient(45deg, var(--pf-assume) 0 1px, transparent 1px 4px); }
+.pg-pf-key { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--pf-ink); vertical-align: middle; }
+.pg-pf-key--bench { border-top-color: var(--pf-mute); border-top-width: 1.5px; }
+.pg-pf-key--dd { height: 8px; border-top: 1.5px solid var(--pf-down-ink); background: color-mix(in srgb, var(--pf-down) 12%, transparent); }
+/* 해마다 — 등락 막대 + 부호 숫자 */
+.pg-pf-years { display: flex; flex-direction: column; gap: 4px; }
+.pg-pf-year-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.pg-pf-year { display: grid; grid-template-columns: 76px 1fr 64px; align-items: center; gap: 8px; font-size: 13px; color: var(--pf-ink); }
+.pg-pf-year-lab { color: var(--pf-body); } .pg-pf-year-lab small { font-size: 11px; color: var(--pf-assume); }
+.pg-pf-year-track { position: relative; display: block; height: 10px; background: var(--pf-soft); border-radius: 3px; }
+.pg-pf-year-track::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--pf-mute); }
+.pg-pf-year-bar { position: absolute; top: 2px; height: 6px; border-radius: 2px; }
+.pg-pf-year-bar--up { background: var(--pf-up); } .pg-pf-year-bar--down { background: var(--pf-down); }
+.pg-pf-year-val { text-align: right; font-weight: 600; }
+/* 지표 묶음 · 표로 보기 */
+.pg-pf-metrics > summary, .pg-pf-table > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--pf-ink); }
+.pg-pf-mgroup { margin-top: 6px; }
+.pg-pf-na { color: var(--pf-unknown); font-weight: 500; }
+.pg-pf-table-scroll { max-height: 220px; overflow: auto; margin-top: 8px; border: 1px solid var(--pf-line); border-radius: 8px; }
+.pg-pf-table-scroll table { font-variant-numeric: tabular-nums; }
+.pg-pf-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); padding: 4px 0; }
+.pg-pf-table th.pg-td-num { text-align: right; }
+.pg-pf-table-scroll th, .pg-pf-table-scroll td { padding: 3px 8px; }
+.pg-pf-table-scroll thead th { position: sticky; top: 0; background: var(--pf-surface); }
+/* 성과 시트 — 공용 .tx-sheet(오른쪽 520) 를 넓힌다. 820 이하는 캔버스 패널처럼 바닥에서(.tx-sheet 의 560 규칙과 같은 모양). */
+.pg-sheet--wide { width: min(960px, 100vw - 32px); }
+@media (max-width: 820px) {
+  .pg-sheet--wide { inset: auto 0 0 0; width: 100vw; max-width: 100vw; height: 90vh; max-height: 90vh; border-left: 0; border-radius: 20px 20px 0 0;
+    box-shadow: 0 -12px 40px rgb(25 31 40 / 16%); }
+  .pg-sheet--wide[open] { animation-name: tx-sheet-up; }
+}
+.pg-pf-sheet { gap: 16px; }
+.pg-pf-sec { display: flex; flex-direction: column; gap: 8px; }
+.pg-pf-sec > .pg-h4 { margin: 0; }
+/* 질문 띠 — 네 질문 중 어느 것에 답했는지(CLAUDE.md §2) · 관문 점은 레일과 같은 상태 모양 */
+.pg-pf-q { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.55; color: var(--pf-body);
+  background: var(--pf-soft); border-radius: 12px; }
+.pg-pf-q-row { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: baseline; }
+.pg-pf-q-k { font-weight: 700; color: var(--pf-ink); }
+.pg-pf-q-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.pg-pf-q-gate { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; padding: 1px 8px 1px 4px; font-size: 12px; font-weight: 600;
+  color: var(--pf-ink); background: var(--pf-surface); border: 1px solid var(--pf-line); border-radius: 999px; vertical-align: middle; }
+.pg-pf-q-gate .pg-stn-dot { width: 12px; height: 12px; border-width: 2px; }
+.pg-pf-q-nogate { margin-left: 6px; font-size: 12px; color: var(--pf-unknown); }
+@media (max-width: 560px) { .pg-pf-q-row { grid-template-columns: 1fr; gap: 2px; } }
+/* 지표 묶음 — 시트에서는 여러 열 */
+.pg-pf-mbody { display: flex; flex-direction: column; }
+.pg-pf-metrics--grid .pg-pf-mbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px 32px; }
+/* 달마다 격자 — 두 팔 색(세기는 |수익|) + 칸 안 숫자(잉크) · 일부 달은 점선 · 빈 칸은 자료 없음 */
+.pg-pf-months-wrap { display: flex; flex-direction: column; gap: 6px; overflow-x: auto; }
+.pg-pf-months { width: 100%; min-width: 560px; border-collapse: separate; border-spacing: 3px; table-layout: fixed; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pg-pf-months th { padding: 2px 0; font-weight: 500; text-align: center; color: var(--pf-mute); }
+.pg-pf-months th.pg-pf-months-y { width: 44px; text-align: left; font-weight: 600; color: var(--pf-body); }
+.pg-pf-month { padding: 7px 2px; text-align: center; color: var(--pf-ink); background: var(--pf-soft); border-radius: 6px; white-space: nowrap; }
+.pg-pf-month[data-tone="up"] { background: color-mix(in srgb, var(--pf-up) var(--pf-mix, 20%), transparent); }
+.pg-pf-month[data-tone="down"] { background: color-mix(in srgb, var(--pf-down) var(--pf-mix, 20%), transparent); }
+.pg-pf-month[data-partial="true"] { outline: 1.5px dashed var(--pf-assume); outline-offset: -1.5px; }
+.pg-pf-month--none { background: transparent; }
+@media (max-width: 820px) { .pg-pf-months { font-size: 11px; } .pg-pf-month { padding: 6px 1px; } }
+/* 낙폭 사건 · 리밸런싱 기록 */
+.pg-pf-dd-eps th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); }
+.pg-pf-dd-eps th, .pg-pf-dd-eps td { padding: 4px 18px 4px 0; }       /* 오른쪽 정렬 숫자 다음의 왼쪽 정렬 날짜가 붙어 보이지 않게 */
+.pg-pf-dd-eps th:last-child, .pg-pf-dd-eps td:last-child { padding-right: 0; }
+.pg-pf-dd-eps th.pg-td-num { text-align: right; }
+.pg-pf-dd-ep-open { color: var(--pf-unknown); font-weight: 500; }
+.pg-pf-rebal-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); }
+.pg-pf-rebal-table th.pg-td-num { text-align: right; }

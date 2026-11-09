@@ -60,6 +60,14 @@ ALLOWED: dict[str, str] = {
         "없는 시뮬레이션을 있다고 말하는 셈이다.",
     # (BL4) `src/widgets/allocation/AllocationProvider.tsx` — 마법사와 함께 지웠다. 허용 사유도 함께 사라진다.
     # (BU8a) `src/widgets/landing/HeroDeckLive.tsx` — 예시 수치 덱을 지웠다(첫 화면 히어로는 서버가 지금 내는 답 + 실제 화면).
+    # 성과 그림 문법(2026-11-09) — 아래 둘은 `perf/PerfPanel.tsx` 가 머리(`perf/PerfFigures.tsx` · `PerfLabel` 을 hero 바로
+    # 밑에 둔다) 아래에만 그리는 절이다. 같은 라벨을 절마다 되풀이하면 한 결과에 라벨이 셋 붙는다.
+    "src/widgets/portfolio-graph/perf/MetricGroups.tsx":
+        "★PerfPanel 의 아래 절★ — 같은 패널의 머리(PerfFigures)가 hero 바로 밑에 PerfLabel 을 둔다. "
+        "이 부품은 홀로 그려지지 않는다(PerfPanel 만 부른다 · `canvas-perf-grammar.spec.ts` (i) 가 .pg-perf 를 건다).",
+    "src/widgets/portfolio-graph/perf/PerfTableView.tsx":
+        "★PerfPanel 의 아래 절★ — 그림의 표 쌍둥이. 같은 패널의 머리(PerfFigures)가 hero 바로 밑에 PerfLabel 을 둔다. "
+        "이 부품은 홀로 그려지지 않는다(PerfPanel 만 부른다).",
 }
 
 

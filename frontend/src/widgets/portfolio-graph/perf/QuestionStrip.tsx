@@ -1,0 +1,42 @@
+"use client";
+/**
+ * 질문 띠 — ★어떤 질문에 답했는지 밝힌다★ (CLAUDE.md §2 네 질문 · 2026-11-09 캔버스 성과 그림 문법 §4.1 시트 ①)
+ * 이 결과가 답하는 것은 '전달'(과거에 이 규칙대로 했다면)이고, 답하지 않는 것(예측 스킬 · 경제적 가치)은 관문 레일의 `oos`·`economic` 역
+ * 판정을 ★서버 그대로★ 보인다(상태 클래스 `pg-stn--{state}` + 글). 판정이 없으면 없다고 말한다 — 예전 판정을 붙이지 않는다.
+ */
+import type { Gate, GateState } from "@/entities/portfolio-graph";
+import type { PerfView } from "./perfView";
+
+const STATE_TEXT: Record<GateState, string> = {
+  confirmed: "확인", assumed: "가정", partial: "절반 확인", unknown: "몰라요", skipped: "건너뜀", failed: "실패",
+};
+
+function GateChip({ gates, gateKey }: { gates: Gate[] | null; gateKey: "oos" | "economic" }) {
+  if (gates === null) return null;
+  const g = gates.find((x) => x.key === gateKey);
+  if (!g) return <span className="pg-pf-q-nogate">관문 ‘{gateKey}’ 판정이 보고서에 없어요</span>;
+  return (
+    <span className={`pg-pf-q-gate pg-stn--${g.state}`} data-gate={g.key}>
+      <span className="pg-stn-dot" aria-hidden="true" />관문 ‘{g.label}’ {STATE_TEXT[g.state] ?? g.state}
+    </span>
+  );
+}
+
+export function QuestionStrip({ view, gates }: { view: PerfView; gates: Gate[] | null }) {
+  return (
+    <section className="pg-pf-q" aria-label="이 결과가 답하는 것과 답하지 않는 것">
+      <div className="pg-pf-q-row">
+        <span className="pg-pf-q-k">답하는 것</span>
+        <span className="pg-pf-q-v">{view.question} (네 질문 중 ② 전달 안정성)</span>
+      </div>
+      <div className="pg-pf-q-row">
+        <span className="pg-pf-q-k">답하지 않는 것</span>
+        <ul className="pg-pf-q-list">
+          <li>③ 예측 스킬: 신호가 미래를 맞히는지 <GateChip gates={gates} gateKey="oos" /></li>
+          <li>④ 경제적 가치: 돈이 되는지 <GateChip gates={gates} gateKey="economic" /></li>
+        </ul>
+      </div>
+      {gates === null && <p className="pg-note">관문 판정이 없어요 — 계산 전이거나, 결과가 낡았거나, 부분 계산이라 관문을 매기지 않았어요.</p>}
+    </section>
+  );
+}

@@ -6,9 +6,10 @@
  * **읽기만**(GET) 3초마다 확인한다 — 끝나면 '결과 불러오기' 버튼이 밝아진다. 이 웨이브에서 움직이는 것은 이 카드 하나다.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 import { backtestRunApi, STAGE_LABELS, TERMINAL, type RunStatusLite } from "@/entities/backtest-run";
+import type { NodeExplain } from "@/entities/portfolio-graph";
+import { PerfPanel } from "./perf/PerfPanel";
+import { perfViewOfLoad } from "./perf/perfView";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -85,36 +86,11 @@ export function RunProgress({ runId, onReload }: { runId: string; onReload: () =
 
 // ── 결과 ─────────────────────────────────────────────────────────────────────
 
-const STATS: [string, string, number, string][] = [
-  ["total_return_pct", "총수익", 2, "%"], ["cagr", "연평균(CAGR)", 2, "%"], ["sharpe_ratio", "샤프", 2, ""],
-  ["max_drawdown_pct", "최대 낙폭", 2, "%"], ["win_rate", "승률", 1, "%"], ["num_trades", "거래 수", 0, "회"],
-];
-
-export function BacktestLoadResult({ v, prov }: { v: Dict; prov: Dict }) {
-  const s = (v.statistics as Dict) ?? {};
-  const eq = (v.equity as { dates?: string[]; values?: number[] }) ?? {};
-  const vals = eq.values ?? [];
-  const step = Math.max(1, Math.floor(vals.length / 300));
-  const data = vals.map((y, i) => ({ d: (eq.dates ?? [])[i], y })).filter((_, i) => i % step === 0);
+/** 성과 그림 문법(2026-11-09) — 7번·전략 묶음과 같은 부품(`perf/PerfPanel`). 머리·그림·해마다·지표 묶음·표 쌍둥이는 뷰에서 옮기기만 한다. */
+export function BacktestLoadResult({ v, prov, explain }: { v: Dict; prov: Dict; explain?: NodeExplain | null }) {
   return (
-    <>
-      {prov.perf_label ? <div className="pg-perf"><PerfLabel value={prov.perf_label as PerfLabelValue} /></div> : null}
-      <KV rows={STATS.map(([k, label, d, u]) => [label, fmt(s[k], d, u)] as [string, ReactNode])} />
-      {data.length > 1 && (
-        <div className="pg-chart" role="img" aria-label={`자산 추이 ${data.length}점`}>
-          <ResponsiveContainer width="100%" height={150}>
-            <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <XAxis dataKey="d" hide />
-              <YAxis width={52} tick={{ fontSize: 10 }} domain={["auto", "auto"]}
-                     tickFormatter={(x: number) => `${(x / 1e8).toFixed(2)}억`} />
-              <Tooltip formatter={(x: number) => `${Math.round(x).toLocaleString("ko-KR")}원`} />
-              <Line dataKey="y" name="자산" dot={false} stroke="var(--pg-blue)" strokeWidth={1.5} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      <p className="pg-note">실행 {String(v.run_id)} · 조건 통과 {String(v.screened_count ?? "—")}종목</p>
-    </>
+    <PerfPanel view={perfViewOfLoad(v, prov, explain)} fallbackTitle="저장된 백테스트 결과"
+               after={<p className="pg-note">실행 {String(v.run_id)} · 조건 통과 {String(v.screened_count ?? "—")}종목</p>} />
   );
 }
 
