@@ -25573,3 +25573,83 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 측정(`docs/plans/2026-11-08-stack-upgrade.md` "4번" 절): 첫 화면 JS `/macro` 365.9 → 242.1 kB(−34%). 쓸 수 있기까지 LAN 504 → 472 · 느린 4G 4185 → 3474 ms. 첫 차트 LAN 504 → 472. ★느린 4G 첫 차트는 4185 → 5305 ms 로 1.1 s 늦어졌다★ — 차트 조각(94 kB)이 hydration 직후 출발해 글꼴 482 kB 와 대역을 나눠 쓴다(잰 시간표). 답 문장·숫자·탭은 0.7 s 먼저 쓸 수 있다. 되돌리려면 이 커밋만 되돌린다.
 - E2E: 전체 1251 중 1244 통과 · 건너뜀 4 · 실패 3 — 화면 골든(Esc 경합)·realism ST3c 는 이전부터. `canvas-ai-suggest`(AI 유령이 카드와 겹침)는 새로 보였으나 A/B 로 이번 변경과 무관함을 확인: 변경 전 빌드(`2755d13`)·글꼴 바꾸기 전 파일로 지은 빌드 모두 8번 중 5번 실패 — 이전부터의 불안정(별도 할 일).
 - 하지 않음: 백테스트 결과(`/backtest/runs/<id>/results` · 첫 화면 JS 343.6 → 343.8 kB · recharts 포함)·캔버스 결과 패널·실거래 현실성 탭의 차트(이번 세 화면 밖) · 셸 공통 32.8 kB.
+
+## 캔버스 성과 그림 문법 ① — 서버: 해마다·달마다 수익 · 큰 낙폭 사건 (2026-11-09)
+
+- 설계: `docs/superpowers/specs/2026-11-09-canvas-performance-viz-design.md`(사용자 결정 셋 — 백테스트 계열 셋 + 공용 문법 · 자세히 탭은 요약이고
+  넓은 성과 시트를 더한다 · 서버에 작은 순수 함수 둘). 계획 `happy-percolating-falcon.md` V0~V5.
+- 무엇: `src/engine/quant_metrics.py` 에 순수 함수 둘 — `period_returns(dates, equity)`(해마다·달마다 수익 · 해 안의 가장 크게 빠진 폭 · 거래일 ·
+  `partial`) · `drawdown_episodes(dates, equity, top=3)`(고점·바닥·회복·깊이·며칠, 깊이순). 지표 공식은 이 파일 한 곳(`test_metrics_single_source`).
+  - 부분 기간은 `partial=True` 로 적고 ★연환산하지 않는다★. 회복 못 한 사건은 `recovery_date=null`(0일이 아니다). 두 점 미만이면 빈 목록(0 아님).
+    `None`·`NaN` 날은 건너뛴다(곡선에서 빼고 세지, 0 으로 잇지 않는다).
+  - 싣는 곳: 7번(`walk_forward`) 출력 `periods`·`drawdowns` — ★화면에 실리는 곡선과 같은 값★(`np.round(eq, 5)` 에서 센다 · 반올림 전 곡선으로
+    세면 4째 자리가 어긋났다) · 불러오기 뷰(`equity` 에서) · 전략 묶음 뷰(`curve` 에서).
+  - 불러오기 뷰의 낙폭: 저장된 `drawdown_curve` 는 비율(−0.15)이고 통계 `max_drawdown_pct` 는 %(14.9)라, 뷰가 % 로 옮겨 **이름에 단위를 적은**
+    `drawdown_pct` 로 싣는다(7번 `drawdown_curve` 와 같은 단위 · 화면이 ×100 을 추측하지 않게). 단위 없는 이름 `drawdown` 은 없다.
+  - 사실 한 줄 `drawdown_fact(view)`(`allocation_graph_explain.py`): "가장 깊은 낙폭은 … 고점에서 n일 만에 x% 빠진 것이었고, 고점을 되찾기까지
+    m일 걸렸어요." / "아직 고점을 되찾지 못했어요." — `explain_backtest`·`_explain_strategy`·`_explain_load` 의 facts 끝에. 사건이 없으면 없다.
+- 시험(빨강 먼저): `tests/test_quant_periods.py` 8 — 손으로 계산한 연·월 수익 · `partial` 짝(12개월이면 False) · 해 안의 낙폭 · 빈/한 점 → 빈 목록 ·
+  None+NaN 건너뜀(짝: 그 해 낙폭 0.0 · 사건 없음) · 사건 깊이순·날짜·며칠 · 회복 null · top 제한·평평한 곡선. `tests/test_perf_periods_wiring.py` 3 —
+  `walk_forward` 의 `periods`·`drawdowns` 가 실린 곡선에서 다시 센 값과 같다 · `drawdown_fact` 회복/못 함/없음 + 금지어 · explain 에 사건이 있을 때만.
+  `tests/test_allocation_graph_bl3w1.py` 1 — 불러오기 뷰의 `drawdown_pct` = 저장 비율 ×100 = 통계와 같은 단위 · `drawdown` 없음.
+  - 변이: NaN 을 0 으로 세는 변이가 None 만 넣은 시험을 통과했다 → NaN 을 함께 넣고 낙폭·사건까지 걸어 죽였다.
+- 계약 등록(셋 다 이번 키 때문에 실패했던 것): `test_allocation_contract.BACKTEST_KEYS` 에 `periods`·`drawdowns`(★키를 정확히 건다★) ·
+  `test_cf3_golden.NEW_KEYS` 에 둘(곡선·지표는 한 자리도 안 바뀌고 골든 비교 통과) · `test_perf_label_contract.ALLOWED` 에 `perf/MetricGroups.tsx`·
+  `perf/PerfTableView.tsx`(PerfPanel 의 아래 절 — 머리 `PerfFigures` 가 hero 바로 밑에 `PerfLabel` 을 둔다 · 사유 40자 이상).
+- 하지 않음: `kis_backtest_engine._compute_monthly_returns` 통합(값 골든 — 별도) · 세 엔진의 지표 키 이름 통일(`cagr`·`cagr_pct`·`annualized_return_pct`·
+  `sharpe_ratio_full` — 응답 계약이라 화면 라벨에서 맞춘다) · 불러오기 explain 의 사실 글("연평균(CAGR) 24.1%" — 서버 `_STAT_KO` 그대로, 이번 범위 밖).
+
+## 캔버스 성과 그림 문법 ② — 백테스트 계열 셋 + 성과 시트 (2026-11-09)
+
+- 무엇: `frontend/src/widgets/portfolio-graph/perf/` — `perfView.ts`(세 노드 뷰 → `PerfView` 한 모양으로 ★옮기기만★ · 서식만 · 수 계산 0) ·
+  `PerfCurve.tsx`(직접 그린 SVG — 자산 곡선 + 낙폭 물속 + 증거 띠 + 읽는 줄) · `PerfFigures.tsx`(서버 explain 제목·hero · `PerfLabel` · `.pg-kv` 요약 셋~넷) ·
+  `PeriodBars.tsx`(해마다 등락 막대 · '일부') · `MetricGroups.tsx`(여섯 묶음 · '산출 불가') · `PerfTableView.tsx`(표 쌍둥이 — 해마다 + 곡선 전체) ·
+  `PerfPanel.tsx`(읽는 순서 하나 + '크게 보기') · `PerfSheet.tsx`(시트) · `QuestionStrip.tsx`(질문 띠) · `MonthGrid.tsx`(달마다 격자) ·
+  `DrawdownEpisodes.tsx`(낙폭 사건 표) · `RebalanceTable.tsx`(리밸런싱 기록) · `useCanvasGates.ts`(관문 판정 — 낡았으면 null) · `useMeasuredWidth.ts`.
+  - 세 노드가 같은 부품: 7번 `NodeResultPanel.Backtest` · 불러오기 `BacktestResults.BacktestLoadResult` · 전략 묶음 `StrategyResults.StrategyBacktestResult`.
+    세 파일에서 recharts import 를 뺐다(전략 묶음의 숨은 오른쪽 축 낙폭 → 같은 물속 그림). 노드 고유 절(룩어헤드·다음 구간·전략 비중·수익 나눠 보기·
+    전략 출처·실행 id)은 그대로 아래(`after`)에, 시트에는 `sheetAfter` 로.
+  - 색은 역할 변수(`--pf-ink/body/mute/line/soft/surface/up/up-ink/down/down-ink/assume/unknown`)만 읽고 `.pg-theme` 이 `--pg-*`·`--tx-*` 를 넣는다 — 새 색 토큰 0.
+    포트폴리오 = 잉크 · 벤치마크 = 회색 · 낙폭 = 등락 '내림' 파랑 wash 12% + 선 · 파랑 행동색은 데이터에 안 쓴다.
+- 그림 하나(`PerfCurve`): 폭은 `ResizeObserver` 로 px · 세로축 자리는 라벨 폭에 맞춘다(원 단위 "9,983만원" 이 잘렸다) · 솎을 때 양 끝·최고·최저·낙폭 바닥은
+  반드시 남긴다 · null 인 날은 선을 끊는다 · 오른쪽 끝값 둘(겹치면 안내선). ★증거 띠★ — 배움 구간 빗금(`coverage.start`~첫 날) · 리밸런싱 날 눈금 ·
+  기준일 ▲ · 합성 데이터면 띠 전체 빗금. 띠 범례는 항목 줄(표식 + 글) — 리밸런싱은 ★아는 만큼만★(날짜 있으면 눈금+횟수 · 횟수만 알면 "n번 (날짜는 기록에
+  없어요)" · 0이면 "없음" · 모르면 말하지 않음) · 데이터가 실제인지 모르면 "몰라요". ★읽는 줄★(`aria-live`) 이 늘 보이고 포인터·←→(Shift ×10)·Home·End 로
+  날짜를 옮긴다 — 떠다니는 툴팁 0 · 새 부품에 `title=` 0. 범례: 벤치마크가 없으면 "벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았어요".
+- 시트(`PerfSheet` · 공용 `Sheet` + `.pg-sheet--wide` = min(960px, 100vw−32px) · 820px 이하는 바닥에서): ① 질문 띠 — 답하는 것(전달 ②) · 답하지 않는 것
+  (③ 예측 스킬 · ④ 경제적 가치)은 관문 레일 `oos`·`economic` 의 ★서버 판정 그대로★(`pg-stn--{state}` 점 + 글 · 판정이 없으면 "관문 판정이 없어요") ②
+  큰 그림(360) ③ 기간별 — 해마다 표 + 달마다 격자(해×달 · 두 팔 색 세기 |수익| 비례 8~45% · 칸 안 숫자는 잉크 · 빈 칸 = 자료 없음 · 일부 달은 점선) ④ 큰
+  낙폭 사건 표(회복 못 함은 "아직 고점을 되찾지 못했어요") ⑤ 여섯 묶음 펼친 채 여러 열 ⑥ 리밸런싱 기록(날짜·회전율·총/순 매매·충격 — 있는 칸만) ⑦ 노드
+  고유 절 ⑧ 데이터와 한계(사실·믿어도 되나요·재지 않은 것 펼침) ⑨ 표로 보기.
+- 지표 묶음: 세 노드의 키가 다르다 — 같은 뜻은 같은 한글 라벨로 적되 ★있는 키만★, 한 뷰에 같은 뜻이 둘이면(7번 `sharpe_ratio`·`sharpe_ratio_full`) 앞의 키만.
+  묶음의 `<dl>` 에 `.pg-kv` 를 붙이지 않는다 — ".pg-kv 총수익" 이 BL3 W1 의 E2E 계약(요약 숫자 하나)이라 둘이 잡혀 `portfolio-graph.spec` 이 깨졌다(고침 ·
+  모양은 `globals.css` 선택자를 나란히).
+- 시험(빨강 먼저 · 둘 다 옛 빌드에서 전부 실패 확인): `e2e/canvas-perf-grammar.spec.ts` 12 — (a) 제목·hero = 서버 explain (b) 선·낙폭 경로 · 눈금 수 =
+  `n_rebalances` · 기준일 (c) 읽는 줄 마지막 날 · ←·Home 으로 바뀜 · recharts 툴팁 0 · title= 0 (d) 해마다 막대 수·'일부'·값 = 서버 (e) 벤치마크 없음 줄(짝)
+  (f) 연습용 띠 범례(짝: 실데이터면 없음) (g) 표 쌍둥이 행 수 = 날짜 수 (h) 대비 라이트·다크 (i) 기존 계약 (j) 불러오기 — 실제 실행을 만들어 같은 문법 ·
+  `drawdown_pct` = 통계와 같은 단위 · 벤치마크 KOSPI · 리밸런싱은 말하지 않음 (k) 전략 묶음 — 개발 서버에 등록 전략이 0 이라 7번이 실제로 돌린 곡선을
+  전략 묶음 뷰 모양으로 옮긴 픽스처로 화면 문법만(낙폭 물속 · 원 단위 · 벤치마크 없음 · "리밸런싱 n번 (날짜는 기록에 없어요)" · 아래 절 그대로).
+  `e2e/canvas-perf-sheet.spec.ts` 8 — (l) 열림·닫힘·Esc·초점 복귀 (m) 질문 띠 관문 상태(짝: 판정 없음) (n) 달마다 칸 수·값·일부(짝: 값 바꾸면 칸이 바뀜)
+  (o) 낙폭 사건 수·날짜·깊이·며칠(짝: 회복 null) (p) 리밸런싱 행 수(짝: 없으면 '없어요') (q) 대비 라이트·다크 · 800px 바닥 시트(모션 끝난 자리).
+  - 변이 여섯(한 빌드에 함께 넣고 각 시험이 제 사유로 죽는지): 눈금 안 그림 → (b) 0 · 읽는 줄 고정 → (c) 날짜 안 바뀜 · 부분 연도 연환산 → (d) +2.1% ≠ +1.1% ·
+    범례 "없음" 뺌 → (e) · 달마다 ×1.1 → (n) −3.8% ≠ −3.5% · 회복 null 을 0일로 → (o). 여섯 다 죽었다.
+  - 대비(`contrastAudit`): 패널 세 노드 · 시트 라이트·다크 AA 미달 0 · 다크 밝은 배경 0.
+- 측정(LAN · 자세히 탭 누름 → 첫 그림 svg, 5회 중앙값 × 2회): 이전(recharts, HEAD `dfe01cc` 빌드) 159·156 ms → 이후(직접 SVG) 140·152 ms — ★같다(잡음 안)★.
+  누른 뒤 새로 받는 JS 조각 0(둘 다 처음 묶음). 첫 화면 JS `/allocation`(압축 전송 · 3회 중앙값) 752.8 → 758.1 kB(+5.3 kB · 새 부품). 세 노드 렌더러는
+  recharts 를 안 쓰지만 캔버스 묶음에는 `Bl2Results`·`CheckResults`·`MacroResults`·`MacroW2Results` 가 아직 싣는다 — 줄어들지 않았다.
+- 눈으로(라이트·다크 · 세 노드 · 시트 · 800px): 스펙 §5.1 에 와이어프레임 대비 바꾼 것 여덟을 적었다(배움 글자 뺌 · 띠 범례 항목 줄 · 세로축 자리 · 샤프 두 줄 ·
+  `drawdown_pct` · 낙폭 사건 표 · `.pg-kv` · 측정).
+- 배지 축 레지스트리(`tests/test_badge_axis_registry.py`): 띠 빗금 `pg-pf-strip-practice` 를 데이터 축으로 등록 — 센다, 합치지 않는다.
+- 게이트: `make all`(3.14 · Node 24) — ruff · pytest 8917 통과(건너뜀 11) · tsc · 다크 모듈 생성 구역 최신 · 빌드. E2E: 전체 1271 중 1266 통과 · 건너뜀 4 ·
+  실패 1(`realism.spec.ts` ST3c 다크 AA — 이전부터의 간헐 실패, 2026-11-08 기록과 같음 · 캔버스 밖). 화면 골든은 이번에 통과(아래 항목).
+- 하지 않음: `shared/ui/PerfLabel` 의 `title=`(이전부터 · 이번 범위 밖) · `/backtest` 결과 화면·확인하기의 다른 패널(위험·스트레스·견고성)·갈래 비교표 ·
+  새 지표·판단·정책 변경 · 다음 구간을 곡선 위에 그리기 · 전략 묶음의 실제 실행 E2E(등록 전략이 있는 환경에서) · 불러오기 explain 사실 글의 영어 약어.
+
+## E2E 화면 골든 — Esc 경합 고침 + lucide 1.x 로 다시 얼림 (2026-11-09)
+
+- 무엇: `e2e/canvas-golden.spec.ts` '화면 골든' 이 명령 찾기를 Esc 로 닫은 직후 `?` 를 누르면 단축키 시트가 안 열렸다(HISTORY 가 "이전부터의 실패(화면
+  골든 Esc 경합)" 로 적어 두던 것). 계측 복제: 같은 순서를 한 걸음(evaluate 한 번) 띄우면 늘 열린다 → 닫히는 대화상자가 한 프레임 안의 키를 삼키는 경합.
+  '명령 골든' 과 같게 `.pg-cmd` 가 안 보일 때까지 기다리고 누른다(2회 반복 통과).
+- 경합을 지나니 골든(`e2e/golden/canvas-classes.json`) 자체가 `ac3f3cf`(lucide-react 1) 이후 낡아 있었다 — 아이콘 클래스 이름(`lucide-redo2` → `lucide-redo-2` ·
+  별칭 클래스 · `aria-hidden`) 과 아이콘 안 `line`·`polyline`·`polygon` 요소가 없어진 것. `UPDATE_CANVAS_GOLDEN=1` 로 다시 얼렸고 diff 는 lucide 줄뿐(그 밖
+  `+` 줄 0 — 확인). 성과 그림 부품은 계산 전 상태를 얼리는 이 골든에 안 보인다. 문서·명령 골든은 그대로.

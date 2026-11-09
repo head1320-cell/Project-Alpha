@@ -326,6 +326,9 @@ test("화면 골든 — 상태마다 요소 모양(태그·클래스·data/aria/
   await expect(page.locator(".pg-cmd")).toBeVisible();
   await take("dialog:cmd");
   await page.keyboard.press("Escape");
+  // 명령 찾기가 닫힌 것을 보고 나서 다음 키를 누른다 — Esc 직후 한 프레임 안의 '?' 는 닫히는 대화상자가 삼킨다(아래 '명령 골든' 과 같은 순서 ·
+  // 2026-11-09 실측: 같은 순서를 한 걸음 띄워 되풀이하면 늘 열린다).
+  await expect(page.locator(".pg-cmd")).not.toBeVisible();
 
   await page.keyboard.press("?");
   await expect(page.locator(".pg-keys")).toBeVisible();
