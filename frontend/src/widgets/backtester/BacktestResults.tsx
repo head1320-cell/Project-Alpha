@@ -11,19 +11,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
-import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { backtestRunApi, STAGE_LABELS, type RunFull } from "@/entities/backtest-run/api";
-import type { BacktestStatistics, BacktestTrade, MonthlyReturn, ScreenToBacktestResult, SymbolPerf } from "@/entities/backtest/bridgeModel";
+import type { BacktestStatistics, BacktestTrade, ScreenToBacktestResult, SymbolPerf } from "@/entities/backtest/bridgeModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
-import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import { Notice, PageHead } from "@/shared/ui/tx";
-import { krAxisTick } from "@/shared/lib/krFormat";
 
 import { RegisterAsStrategy } from "./RegisterAsStrategy";
+import { DrawdownEpisodes } from "@/shared/ui/perf/DrawdownEpisodes";
+import { MonthGrid } from "@/shared/ui/perf/MonthGrid";
+import { PerfCurve } from "@/shared/ui/perf/PerfCurve";
+import { PerfTableView, YearTable } from "@/shared/ui/perf/PerfTableView";
+import { QuestionStrip } from "@/shared/ui/perf/QuestionStrip";
+import { perfViewOfRun } from "./perfOfRun";
 
 // ★Card 로 감싸면서 지킨 것★ `.brun-card` / `.brun-card-t`(H2) 는 같은 노드에 그대로 둔다(E2E 계약 — backtest.spec 이
 //  `.brun-card-t` 의 텍스트로 절을 찾는다). 여백의 주인은 하나: `.brun-card` 는 0, 머리·몸통(`rs-card-h`·`rs-card-b`)이 가진다.
@@ -395,7 +395,6 @@ export function BacktestResults({ runId }: { runId: string }) {
 }
 
 function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; router: ReturnType<typeof useRouter> }) {
-  const anim = useChartAnimation();
   const res = run.result!;
   const bt = res.backtest;
   const stats = bt.statistics as BacktestStatistics;
@@ -414,16 +413,9 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
   const tradeCount = num(stats.num_trades as number);
   const [retryErr, setRetryErr] = useState<string | null>(null);
 
-  const equity = useMemo(() => (bt.equity_curve || []).map((v, i) => ({
-    i, date: bt.equity_dates?.[i] ?? String(i), equity: v,
-    bench: bt.benchmark?.curve?.[i] ?? null, dd: bt.drawdown_curve?.[i] ?? null,
-  })), [bt]);
-  // 자산곡선 세로축 — 곡선은 원 단위(기본 5,000만 원이면 5,000만 언저리)라 날 숫자로는 고정 폭 밖으로 잘렸다('000000').
-  // 한 축 한 단위(만·억)로 줄여 쓰고, 그 단위의 가장 긴 글자("9,999만")가 들어가는 폭을 준다.
-  const equityTick = useMemo(() => krAxisTick(equity.reduce((m, d) =>
-    Math.max(m, Number.isFinite(d.equity) ? Math.abs(d.equity) : 0, d.bench != null && Number.isFinite(d.bench) ? Math.abs(d.bench) : 0), 0)), [equity]);
-  const monthly = useMemo(() => (bt.monthly_returns || []).map((m, i) =>
-    typeof m === "number" ? { month: String(i + 1), return_pct: m } : (m as MonthlyReturn)), [bt.monthly_returns]);
+  // 성과 그림의 수는 서버 `perf` 만(세지 않는다) — `perfViewOfRun` 이 뷰를 옮긴다.
+  const view = perfViewOfRun(run);
+  const NO_GATES = "이 화면은 예측 스킬·경제적 가치를 재지 않아요. 캔버스에서 이 실행을 불러오면 관문(표본 밖 · 경제적 가치)이 매겨져요.";
   const roundTrips = bt.round_trips && bt.round_trips.length ? bt.round_trips : bt.trades || [];
 
   // 같은 설정으로 다시 — 실패를 삼키지 않는다(예전 `catch { /* ignore */ }` 는 눌러도 아무 일이 없는 단추였다).
@@ -494,50 +486,26 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         )}
       </section>
 
-      {/* 곡선 먼저 — 숫자 33개보다 모양이 먼저 읽힌다 */}
-      {equity.length > 1 && (
-        <Card className="brun-card">
-          <CardHeader className="rs-card-h">
-            <CardTitle as="h2" className="brun-card-t">자산곡선{bt.benchmark ? <span className="brun-note">벤치마크 {bt.benchmark.label}와 함께</span> : null}</CardTitle>
-          </CardHeader>
-          <CardContent className="rs-card-b">
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="2 3" stroke="var(--tx-line)" vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "var(--tx-sub)" }} minTickGap={60} stroke="var(--tx-line)" />
-              <YAxis tick={{ fontSize: 12, fill: "var(--tx-sub)" }} width={64} tickFormatter={equityTick} stroke="var(--tx-line)" />
-              <Tooltip formatter={(v: number) => v?.toLocaleString("ko-KR")} labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 13, borderRadius: 10 }} />
-              <Line isAnimationActive={anim} type="monotone" dataKey="equity" stroke="var(--tx-blue)" dot={false} strokeWidth={2} name="이 전략" />
-              {bt.benchmark && <Line isAnimationActive={anim} type="monotone" dataKey="bench" stroke="var(--tx-mute)" dot={false} strokeDasharray="4 3" strokeWidth={1.4} name={bt.benchmark.label} />}
-            </LineChart>
-          </ResponsiveContainer>
-          {bt.benchmark && (
-            <p className="brun-benchrow">
-              벤치마크 {num(bt.benchmark.total_return_pct) != null ? signedPct(bt.benchmark.total_return_pct as number) : "몰라요"}
-              {num(bt.benchmark.excess_return_pct) != null && <> · 차이 <b style={{ color: col(bt.benchmark.excess_return_pct) }}>{signedPct(bt.benchmark.excess_return_pct as number).replace("%", "%p")}</b></>}
-              {num(bt.benchmark.beta) != null && <> · 베타 {(bt.benchmark.beta as number).toFixed(2)}</>}
-              {num(bt.benchmark.alpha_pct) != null && <> · 알파 {signedPct(bt.benchmark.alpha_pct as number)}</>}
-            </p>
-          )}
-          </CardContent>
-        </Card>
-      )}
+      <QuestionStrip view={view} gates={null} noGatesText={NO_GATES} />
 
-      {bt.drawdown_curve?.some((d) => d < 0) && (
-        <Card className="brun-card">
+      {/* 곡선 먼저 — 숫자 33개보다 모양이 먼저 읽힌다. 그림 하나 = 자산 곡선 + 낙폭(물속) + 증거 띠 + 읽는 줄(성과 그림 문법 · 2026-11-09). */}
+      {view.dates.length > 1 && (
+        <Card className="brun-card rs-fig">
           <CardHeader className="rs-card-h">
-            <CardTitle as="h2" className="brun-card-t">낙폭<span className="brun-note">고점에서 얼마나 내려갔나요</span></CardTitle>
+            <CardTitle as="h2" className="brun-card-t">자산곡선과 낙폭{bt.benchmark ? <span className="brun-note">벤치마크 {bt.benchmark.label}와 함께</span> : null}</CardTitle>
           </CardHeader>
           <CardContent className="rs-card-b">
-          <ResponsiveContainer width="100%" height={150}>
-            <AreaChart data={equity} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="2 3" stroke="var(--tx-line)" vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "var(--tx-sub)" }} minTickGap={60} stroke="var(--tx-line)" />
-              <YAxis tick={{ fontSize: 12, fill: "var(--tx-sub)" }} width={48} stroke="var(--tx-line)" />
-              <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} contentStyle={{ fontSize: 13, borderRadius: 10 }} />
-              <Area isAnimationActive={anim} type="monotone" dataKey="dd" stroke="var(--tx-down)" fill="var(--tx-down-soft)" strokeWidth={1.4} name="낙폭" />
-            </AreaChart>
-          </ResponsiveContainer>
+            <PerfCurve view={view} height={300} />
+            {!run.perf && <p className="brun-note">낙폭 곡선·기간별 수익·낙폭 사건은 서버가 이 실행에 주지 않았어요 — 화면이 대신 세지 않아요.</p>}
+            {bt.benchmark && (
+              <p className="brun-benchrow">
+                벤치마크 {num(bt.benchmark.total_return_pct) != null ? signedPct(bt.benchmark.total_return_pct as number) : "몰라요"}
+                {num(bt.benchmark.excess_return_pct) != null && <> · 차이 <b style={{ color: col(bt.benchmark.excess_return_pct) }}>{signedPct(bt.benchmark.excess_return_pct as number).replace("%", "%p")}</b></>}
+                {num(bt.benchmark.beta) != null && <> · 베타 {(bt.benchmark.beta as number).toFixed(2)}</>}
+                {num(bt.benchmark.alpha_pct) != null && <> · 알파 {signedPct(bt.benchmark.alpha_pct as number)}</>}
+              </p>
+            )}
+            <PerfTableView view={view} />
           </CardContent>
         </Card>
       )}
@@ -583,30 +551,28 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         </CardContent>
       </Card>
 
-      {monthly.length > 0 && (
-        <Card className="brun-card">
-          <CardHeader className="rs-card-h">
-            <CardTitle as="h2" className="brun-card-t">월별 수익률</CardTitle>
-          </CardHeader>
-          <CardContent className="rs-card-b">
-          <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={monthly} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="2 3" stroke="var(--tx-line)" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: "var(--tx-sub)" }} minTickGap={20} stroke="var(--tx-line)" />
-              <YAxis tick={{ fontSize: 12, fill: "var(--tx-sub)" }} width={40} stroke="var(--tx-line)" />
-              <Tooltip formatter={(v: number) => `${v?.toFixed(2)}%`} contentStyle={{ fontSize: 13, borderRadius: 10 }} />
-              <Bar isAnimationActive={anim} dataKey="return_pct" radius={[4, 4, 0, 0]}>
-                {monthly.map((m, i) => <Cell key={i} fill={m.return_pct >= 0 ? "var(--tx-up)" : "var(--tx-down)"} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
+      <Card className="brun-card">
+        <CardHeader className="rs-card-h">
+          <CardTitle as="h2" className="brun-card-t">기간별<span className="brun-note">해마다 · 달마다 (연환산하지 않아요)</span></CardTitle>
+        </CardHeader>
+        <CardContent className="rs-card-b rs-periods">
+          <YearTable view={view} />
+          <MonthGrid view={view} />
+        </CardContent>
+      </Card>
+
+      <Card className="brun-card">
+        <CardHeader className="rs-card-h">
+          <CardTitle as="h2" className="brun-card-t">큰 낙폭 사건<span className="brun-note">고점에서 바닥까지, 되찾기까지</span></CardTitle>
+        </CardHeader>
+        <CardContent className="rs-card-b">
+          <DrawdownEpisodes view={view} />
+        </CardContent>
+      </Card>
 
       {/* 기여도 — 엔진 산출 contribution_pct */}
       {bt.symbol_results && bt.symbol_results.some((s) => s.contribution_pct != null) && (
-        <AttributionChart rows={bt.symbol_results} />
+        <AttributionBars rows={bt.symbol_results} />
       )}
 
       {bt.symbol_results && bt.symbol_results.length > 0 && <SymbolTable rows={bt.symbol_results} />}
@@ -650,36 +616,34 @@ function Kpi({ m, v }: { m: MetricDef; v: number }) {
   );
 }
 
-function AttributionChart({ rows }: { rows: SymbolPerf[] }) {
-  const anim = useChartAnimation();
+/** 기여도 — HTML 막대(종목 · 막대 · 부호 숫자). 상위 8 + 하위 8. 색은 등락 두 팔, 글자는 잉크(성과 그림 문법 · 2026-11-09). */
+function AttributionBars({ rows }: { rows: SymbolPerf[] }) {
   const data = useMemo(() => {
     const withC = rows.filter((r) => r.contribution_pct != null);
     const sorted = [...withC].sort((a, b) => (b.contribution_pct as number) - (a.contribution_pct as number));
     const top = sorted.slice(0, 8);
     const bot = sorted.slice(-8).filter((r) => !top.includes(r));
-    return [...top, ...bot].map((r) => ({
-      name: r.corp_name || r.symbol, contribution: r.contribution_pct as number,
-    }));
+    return [...top, ...bot].map((r) => ({ name: r.corp_name || r.symbol, contribution: r.contribution_pct as number }));
   }, [rows]);
   if (data.length === 0) return null;
-  const h = Math.max(140, data.length * 26 + 30);
+  const max = Math.max(1e-9, ...data.map((d) => Math.abs(d.contribution)));
   return (
     <Card className="brun-card">
       <CardHeader className="rs-card-h">
         <CardTitle as="h2" className="brun-card-t">기여도<span className="brun-note">수익을 가장 많이 더하고 뺀 종목</span></CardTitle>
       </CardHeader>
       <CardContent className="rs-card-b">
-      <ResponsiveContainer width="100%" height={h}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
-          <CartesianGrid strokeDasharray="2 3" stroke="var(--tx-line)" horizontal={false} />
-          <XAxis type="number" tick={{ fontSize: 12, fill: "var(--tx-sub)" }} tickFormatter={(v) => `${v}%`} stroke="var(--tx-line)" />
-          <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: "var(--tx-ink)" }} width={96} stroke="var(--tx-line)" />
-          <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} contentStyle={{ fontSize: 13, borderRadius: 10 }} />
-          <Bar isAnimationActive={anim} dataKey="contribution" radius={4}>
-            {data.map((d, i) => <Cell key={i} fill={d.contribution >= 0 ? "var(--tx-up)" : "var(--tx-down)"} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+        <table className="brun-attr-table">
+          <tbody>
+            {data.map((d) => (
+              <tr key={d.name} data-sign={d.contribution >= 0 ? "up" : "down"}>
+                <td className="brun-attr-name">{d.name}</td>
+                <td className="brun-attr-track"><span className="brun-attr-bar" style={{ width: `${(Math.abs(d.contribution) / max) * 100}%` }} /></td>
+                <td className="brun-attr-val" style={{ color: col(d.contribution) }}>{signedPct(d.contribution, 1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </CardContent>
     </Card>
   );

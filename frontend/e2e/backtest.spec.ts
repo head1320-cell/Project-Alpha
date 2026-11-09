@@ -222,7 +222,7 @@ test("Backtest: completed run → results workspace renders + refresh recovery (
   // 픽스처에는 `pit_evidence` 가 없다 — 판정할 자료가 없으면 '미검증'이 아니라 '판정불가'다
   // (a7b2765 의 네 상태 배지). 옛 단언은 '미검증' 이었고 그 뒤로 조용히 깨져 있었다.
   await expect(page.getByText("시점 정합: 판정 불가").first()).toBeVisible();   // BU4 라벨
-  await expect(page.locator("table").first()).toBeVisible(); // symbols / trades
+  await expect(page.locator(".brun-table").first()).toBeVisible(); // symbols / trades (성과 그림의 표 쌍둥이는 접힌 details 안이라 "table" 로는 안 잡는다)
   const body = await page.locator("body").innerText();
   expect(body).toContain("삼성전자");
   expect(body).not.toMatch(/�/);
@@ -354,14 +354,16 @@ test("S1c: 차트 색이 토큰으로 실제 해석된다 (var() 가 SVG 에서 
   await stubCompletedRun(page);
   await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "networkidle" });
 
-  const line = page.locator(".recharts-line-curve").first();
+  const line = page.locator(".pf-line-port").first();
   await expect(line).toBeVisible();
   const stroke = await line.evaluate((e) => getComputedStyle(e).stroke);
   // 해석 실패 시 브라우저는 none / rgb(0,0,0) 을 준다.
   expect(stroke, "차트 선 색이 해석되지 않았다").not.toBe("none");
   expect(stroke, "차트 선이 검정으로 떨어졌다 — var() 가 죽었다").not.toBe("rgb(0, 0, 0)");
-  // 토큰이 실제로 우리 강조색이어야 한다 — BU4 부터 옛 #1200ff 가 아니라 --tx-blue(라이트 #3182f6).
-  expect(stroke).toBe("rgb(49, 130, 246)");
+  // 성과 그림 문법(2026-11-09): 포트폴리오 선은 잉크(--pf-ink ← --tx-ink · 라이트 #191f28) — 행동색 파랑은 데이터에 쓰지 않는다.
+  const ink = await page.evaluate(() => { const s = document.createElement("span"); s.style.color = "var(--tx-ink)"; document.body.appendChild(s);
+    const c = getComputedStyle(s).color; s.remove(); return c; });
+  expect(stroke).toBe(ink);
 });
 
 test("S1b: 지표 설명이 hover 전용이 아니다 (title= 제거)", async ({ page }) => {

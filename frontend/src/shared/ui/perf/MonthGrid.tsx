@@ -1,7 +1,7 @@
 "use client";
 /**
  * 달마다 격자 — 해 × 달, 등락 두 팔 색(세기는 |수익| 비례) + 칸 안 숫자(부호) · 글자는 잉크 (2026-11-09 · 캔버스 성과 그림 문법 §4.1 시트 ③)
- * ★서버 `periods.monthly` 그대로★ — 없는 달은 빈 칸(0 이 아니다), 일부만 있는 달은 점선 테두리 + 아래 글. 이 격자가 곧 표라 쌍둥이가 따로 없다.
+ * ★서버 `periods.monthly` 그대로★ — 없는 달은 빈 칸(0 이 아니다), 곡선이 시작·끝나는 달(전체가 아닐 수 있다)은 점선 테두리 + 아래 글. 이 격자가 곧 표라 쌍둥이가 따로 없다.
  */
 import type { CSSProperties } from "react";
 import { fmtSignedPct, type PerfView } from "./perfView";
@@ -43,7 +43,7 @@ export function MonthGrid({ view }: { view: PerfView }) {
       </table>
       <p className="pg-note pf-months-note">
         빨강은 오른 달, 파랑은 내린 달이고 진할수록 폭이 커요. 빈 칸은 자료가 없는 달이에요(0 이 아니에요).
-        {anyPartial ? " 점선 테두리는 그 달의 일부만 있는 달이에요 — 그 기간 수익 그대로예요." : ""}
+        {anyPartial ? " 점선 테두리는 곡선이 시작하거나 끝나는 달이에요 — 달 전체가 아닐 수 있어서 그 기간 수익을 그대로 적었어요." : ""}
       </p>
     </div>
   );

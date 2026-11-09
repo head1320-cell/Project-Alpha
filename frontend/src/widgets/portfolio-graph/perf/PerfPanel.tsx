@@ -6,20 +6,19 @@
  * '크게 보기' 는 같은 `PerfView` 로 성과 시트(`PerfSheet`)를 연다 — 시트의 노드 고유 절은 `sheetAfter`.
  */
 import { useState, type ReactNode } from "react";
-import type { NodeExplain } from "@/entities/portfolio-graph";
-import { MetricGroups } from "./MetricGroups";
-import { PerfCurve } from "./PerfCurve";
-import { PerfFigures } from "./PerfFigures";
+import { MetricGroups } from "@/shared/ui/perf/MetricGroups";
+import { PerfCurve } from "@/shared/ui/perf/PerfCurve";
+import { PerfFigures } from "@/shared/ui/perf/PerfFigures";
+import { PerfTableView } from "@/shared/ui/perf/PerfTableView";
+import type { PerfExplain, PerfView } from "@/shared/ui/perf/perfView";
+import { PeriodBars } from "@/shared/ui/perf/PeriodBars";
 import { PerfSheet } from "./PerfSheet";
-import { PerfTableView } from "./PerfTableView";
-import type { PerfView } from "./perfView";
-import { PeriodBars } from "./PeriodBars";
 import { useCanvasGates } from "./useCanvasGates";
 
-const TRUST_TEXT = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패" } as const;
+const TRUST_TEXT: Record<string, string> = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패", partial: "절반 확인", skipped: "건너뜀", fallback: "대체" };
 
 /** 믿어도 되나요(trust 칩) + 재지 않은 것 — 서버 explain 그대로. 패널과 시트가 같이 쓴다. */
-export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explain: NodeExplain | null; openUnmeasured?: boolean }) {
+export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explain: PerfExplain | null; openUnmeasured?: boolean }) {
   const trust = explain?.trust ?? [];
   const unmeasured = explain?.unmeasured ?? [];
   return (
@@ -28,7 +27,7 @@ export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explai
         <div className="pg-trust pf-trust">
           <div className="pg-trust-q">믿어도 되나요?</div>
           {trust.map((t, i) => (
-            <div key={i} className="pg-trust-a"><span className={`pg-tag pg-tag--${t.state}`}>{TRUST_TEXT[t.state]}</span><span>{t.text}</span></div>
+            <div key={i} className="pg-trust-a"><span className={`pg-tag pg-tag--${t.state}`}>{TRUST_TEXT[t.state] ?? t.state}</span><span>{t.text}</span></div>
           ))}
         </div>
       )}

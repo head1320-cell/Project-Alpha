@@ -8,7 +8,7 @@
 import type { ReactNode } from "react";
 import type { NodeExplain } from "@/entities/portfolio-graph";
 import { PerfPanel } from "./perf/PerfPanel";
-import { perfViewOfStrategy } from "./perf/perfView";
+import { perfViewOfStrategy } from "@/shared/ui/perf/perfView";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);

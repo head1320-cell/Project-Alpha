@@ -7173,6 +7173,25 @@ select.fp-factor2 { max-width: 220px; }
 .rs-state { align-items: stretch; padding: 24px 0; text-align: left; gap: 12px; }
 .rs-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .rs-acts .tx-btn { height: 44px; padding: 0 18px; font-size: 15px; }
+/* 성과 그림 문법(2026-11-09) — 결과 화면은 부품의 역할 변수에 --tx-* 를 넣는다(새 토큰 0). 캔버스는 .pg-theme 이 --pg-* 를 넣는다.
+   부품이 보조 클래스(.pg-note·.pg-table·.pg-h4·.pg-td-num)로 읽는 캔버스 변수 넷도 이 화면에선 --tx-* 로 받는다. */
+.rs {
+  --pf-ink: var(--tx-ink); --pf-body: var(--tx-sub); --pf-mute: var(--tx-mute); --pf-line: var(--tx-line); --pf-soft: var(--tx-soft);
+  --pf-surface: var(--tx-surface); --pf-up: var(--tx-up); --pf-up-ink: var(--tx-up-ink); --pf-down: var(--tx-down); --pf-down-ink: var(--tx-down-ink);
+  --pf-assume: var(--tx-warn); --pf-unknown: var(--tx-mute);
+  --pg-ink: var(--tx-ink); --pg-body: var(--tx-sub); --pg-mute: var(--tx-mute); --pg-line: var(--tx-line);
+}
+.rs .pf-q { margin-bottom: 14px; }
+.rs-periods { display: flex; flex-direction: column; gap: 14px; }
+.rs .pf-curve:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; border-radius: 6px; }
+/* 기여도 — HTML 막대 */
+.brun-attr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.brun-attr-table td { padding: 5px 0; vertical-align: middle; }
+.brun-attr-name { width: 30%; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx-ink); padding-right: 10px; }
+.brun-attr-track { position: relative; }
+.brun-attr-bar { display: block; height: 10px; border-radius: 3px; background: var(--tx-up); }
+tr[data-sign="down"] .brun-attr-bar { background: var(--tx-down); }
+.brun-attr-val { width: 72px; text-align: right; font-weight: 600; padding-left: 10px; font-variant-numeric: tabular-nums; }   /* 아래 종목 표와 같은 글꼴·한 자리 */
 a.tx-btn, a.tx-btn:hover { text-decoration: none; }
 
 /* 답 */
@@ -10075,7 +10094,7 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pf-table-scroll table { font-variant-numeric: tabular-nums; }
 .pf-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); padding: 4px 0; }
 .pf-table th.pg-td-num { text-align: right; }
-.pf-table-scroll th, .pf-table-scroll td { padding: 3px 8px; }
+.pf-table-scroll th, .pf-table-scroll td { padding: 3px 8px; white-space: nowrap; }   /* 좁은 폭에서 "1.0억원" 이 반으로 꺾이지 않게 — 넘치면 가로 스크롤 */
 .pf-table-scroll thead th { position: sticky; top: 0; background: var(--pf-surface); }
 /* 성과 시트 — 공용 .tx-sheet(오른쪽 520) 를 넓힌다. 820 이하는 캔버스 패널처럼 바닥에서(.tx-sheet 의 560 규칙과 같은 모양). */
 .pg-sheet--wide { width: min(960px, 100vw - 32px); }

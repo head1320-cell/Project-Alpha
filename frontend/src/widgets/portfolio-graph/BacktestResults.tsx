@@ -9,7 +9,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { backtestRunApi, STAGE_LABELS, TERMINAL, type RunStatusLite } from "@/entities/backtest-run";
 import type { NodeExplain } from "@/entities/portfolio-graph";
 import { PerfPanel } from "./perf/PerfPanel";
-import { perfViewOfLoad } from "./perf/perfView";
+import { perfViewOfLoad } from "@/shared/ui/perf/perfView";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);

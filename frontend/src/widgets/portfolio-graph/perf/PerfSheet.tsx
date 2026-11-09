@@ -7,17 +7,17 @@
  */
 import type { ReactNode } from "react";
 import type { Gate } from "@/entities/portfolio-graph";
+import { DrawdownEpisodes } from "@/shared/ui/perf/DrawdownEpisodes";
+import { MetricGroups } from "@/shared/ui/perf/MetricGroups";
+import { MonthGrid } from "@/shared/ui/perf/MonthGrid";
+import { PerfCurve } from "@/shared/ui/perf/PerfCurve";
+import { PerfFigures } from "@/shared/ui/perf/PerfFigures";
+import { PerfTableView, YearTable } from "@/shared/ui/perf/PerfTableView";
+import type { PerfView } from "@/shared/ui/perf/perfView";
+import { QuestionStrip } from "@/shared/ui/perf/QuestionStrip";
+import { RebalanceTable } from "@/shared/ui/perf/RebalanceTable";
 import { Sheet } from "@/shared/ui/tx/Sheet";
-import { DrawdownEpisodes } from "./DrawdownEpisodes";
-import { MetricGroups } from "./MetricGroups";
-import { MonthGrid } from "./MonthGrid";
-import { PerfCurve } from "./PerfCurve";
-import { PerfFigures } from "./PerfFigures";
 import { TrustAndUnmeasured } from "./PerfPanel";
-import { PerfTableView, YearTable } from "./PerfTableView";
-import type { PerfView } from "./perfView";
-import { QuestionStrip } from "./QuestionStrip";
-import { RebalanceTable } from "./RebalanceTable";
 
 export function PerfSheet({ view, fallbackTitle, open, onClose, gates, after }: {
   view: PerfView; fallbackTitle: string; open: boolean; onClose: () => void; gates: Gate[] | null; after?: ReactNode;

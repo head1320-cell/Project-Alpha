@@ -11,7 +11,7 @@ import { PerfLabel } from "@/shared/ui/PerfLabel";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 import type { NodeExplain, NodeRunResult } from "@/entities/portfolio-graph";
 import { PerfPanel } from "./perf/PerfPanel";
-import { perfViewOfBacktest } from "./perf/perfView";
+import { perfViewOfBacktest } from "@/shared/ui/perf/perfView";
 import type { ConstraintsReport } from "@/entities/allocation/api";
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 import { CorrStressResult, FactorXrayResult, ScenarioStressResult, SensitivityResult } from "./CheckResults";

@@ -9,6 +9,7 @@
  */
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { cumPct, fmtPct, fmtSignedPct, fmtValue, type PerfPoint, type PerfView } from "./perfView";
+import { krAxisTick } from "@/shared/lib/krFormat";
 import { useMeasuredWidth } from "./useMeasuredWidth";
 
 const L_MIN = 46;      // 세로축 글자 자리(최소 — 라벨이 길면 넓힌다 · 원 단위 "9,983만원")
@@ -94,9 +95,12 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
     if (hi - lo < 1e-9) { hi = lo + (Math.abs(lo) || 1) * 0.1; }
     const pad = (hi - lo) * 0.06;
     lo -= pad; hi += pad;
-    const yTopV = hi - (hi - lo) * 0.06, yBotV = lo + (hi - lo) * 0.06;
+    // 위·아래 눈금은 여백의 끝(= 곡선 최댓값 + 6% · 최솟값 − 6%) — 맨 위 눈금이 곡선 최댓값보다 작게 적히지 않게.
+    const yTopV = hi, yBotV = lo;
+    // 원 단위 눈금은 한 축 한 단위(만·억)로 짧게("1.05억" · "5,636만" · "112") — 끝값·읽는 줄은 그대로 "1.2억원".
+    const tickFmt = view.unit === "krw" ? krAxisTick(Math.max(Math.abs(hi), Math.abs(lo))) : (v: number) => fmtValue("x", v);
     const ddMin = hasDd ? Math.min(0, ...(view.drawdown as PerfPoint[]).filter((v): v is number => v !== null)) : 0;
-    const tickTexts = [fmtValue(view.unit, yTopV), fmtValue(view.unit, yBotV), ...(baseline === null ? [] : [fmtValue(view.unit, baseline)]),
+    const tickTexts = [tickFmt(yTopV), tickFmt(yBotV), ...(baseline === null ? [] : [tickFmt(baseline)]),
                        ...(hasDd ? [fmtPct(ddMin, 0)] : [])];
     const L = Math.max(L_MIN, Math.ceil(Math.max(0, ...tickTexts.map(textW))) + 10);
     const endTexts = [view.equity[n - 1] ?? null, view.bench ? (view.bench[n - 1] ?? null) : null].filter((v): v is number => v !== null)
@@ -117,7 +121,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
     const maxPts = Math.max(24, Math.floor(plotW / 2));
     const must = [0, n - 1, argExt(view.equity, "max"), argExt(view.equity, "min"), hasDd ? argExt(view.drawdown as PerfPoint[], "min") : -1];
     const idxs = pickIndexes(n, maxPts, must);
-    return { hasDd, eqH, ddH, learnW, plotW, x0, x, yTopV, yBotV, baseline, yEq, ddTop, ddMin, yDd, stripY, idxs, learnDays, L };
+    return { hasDd, eqH, ddH, learnW, plotW, x0, x, yTopV, yBotV, baseline, yEq, ddTop, ddMin, yDd, stripY, idxs, learnDays, L, tickFmt };
   }, [view, width, height, n]);
 
   const dateIndex = useMemo(() => new Map(view.dates.map((d, i) => [d.slice(0, 10), i])), [view.dates]);
@@ -175,13 +179,16 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
 
   // 세로축 눈금 — 위·아래·기준선 셋(겹치면 기준선만 둘).
   const ticks: { v: number; label: string; base?: boolean }[] = [];
-  const tickLabel = (v: number) => fmtValue(view.unit, v);
+  const tickLabel = geo.tickFmt;
   const { yTopV: yTop, yBotV: yBot } = geo;
   ticks.push({ v: yTop, label: tickLabel(yTop) });
   if (baseline !== null && Math.abs(yEq(baseline) - yEq(yTop)) > 12 && Math.abs(yEq(baseline) - yEq(yBot)) > 12) ticks.push({ v: baseline, label: tickLabel(baseline), base: true });
   ticks.push({ v: yBot, label: tickLabel(yBot) });
 
-  const xLabels = [0, Math.floor((n - 1) / 2), n - 1].map((i) => ({ i, text: view.dates[i].slice(0, 10) }));
+  // 날짜 라벨 — 셋(처음·가운데·끝)이 들어갈 폭이 없으면 둘(처음·끝). 좁은 화면(390px)에서 셋이 겹쳐 읽히지 않던 것을 고친다.
+  const dateW = textW(view.dates[0].slice(0, 10));
+  const xLabelIdx = Array.from(new Set(plotW >= dateW * 3 + 16 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1]));
+  const xLabels = xLabelIdx.map((i) => ({ i, text: view.dates[i].slice(0, 10) }));
   const stripBottom = stripY + STRIP_H - 4;
   const ariaLabel = `${title} — 포트폴리오 ${fmtValue(view.unit, lastPort)}${view.bench ? `, 벤치마크 ${fmtValue(view.unit, lastBench)}` : ""}. 화살표로 날짜를 옮겨 읽어요.`;
   // 띠 범례 — 리밸런싱 날짜가 없는 노드(불러오기·전략 묶음)는 횟수만 알거나 아예 모른다: 아는 만큼만 말한다.
@@ -254,7 +261,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
       <p className="pf-read" aria-live="polite">
         <b className="pf-read-date">{view.dates[cur].slice(0, 10)}</b>
         <span className="pf-read-item"><i className="pf-key pf-key--port" aria-hidden="true" />포트폴리오 <b>{fmtValue(view.unit, curPort)}</b>
-          {cumCur !== null && <span className={`pf-delta pf-delta--${cumCur >= 0 ? "up" : "down"}`}>({fmtSignedPct(cumCur)})</span>}</span>
+          {cumCur !== null && <span className={`pf-delta pf-delta--${cumCur >= 0 ? "up" : "down"}`}>(첫날 대비 {fmtSignedPct(cumCur)})</span>}</span>
         {view.bench && <span className="pf-read-item"><i className="pf-key pf-key--bench" aria-hidden="true" />{view.benchLabel ?? "벤치마크"} <b>{fmtValue(view.unit, curBench ?? null)}</b></span>}
         {hasDd && <span className="pf-read-item"><i className="pf-key pf-key--dd" aria-hidden="true" />낙폭 <b>{fmtPct(curDd ?? null)}</b></span>}
         {curRebal && <span className="pf-read-item pf-read-rebal">이날 리밸런싱{curRebal.turnover !== null ? ` (회전율 ${fmtPct(curRebal.turnover, 0)})` : ""}</span>}

@@ -60,14 +60,9 @@ ALLOWED: dict[str, str] = {
         "없는 시뮬레이션을 있다고 말하는 셈이다.",
     # (BL4) `src/widgets/allocation/AllocationProvider.tsx` — 마법사와 함께 지웠다. 허용 사유도 함께 사라진다.
     # (BU8a) `src/widgets/landing/HeroDeckLive.tsx` — 예시 수치 덱을 지웠다(첫 화면 히어로는 서버가 지금 내는 답 + 실제 화면).
-    # 성과 그림 문법(2026-11-09) — 아래 둘은 `perf/PerfPanel.tsx` 가 머리(`perf/PerfFigures.tsx` · `PerfLabel` 을 hero 바로
-    # 밑에 둔다) 아래에만 그리는 절이다. 같은 라벨을 절마다 되풀이하면 한 결과에 라벨이 셋 붙는다.
-    "src/widgets/portfolio-graph/perf/MetricGroups.tsx":
-        "★PerfPanel 의 아래 절★ — 같은 패널의 머리(PerfFigures)가 hero 바로 밑에 PerfLabel 을 둔다. "
-        "이 부품은 홀로 그려지지 않는다(PerfPanel 만 부른다 · `canvas-perf-grammar.spec.ts` (i) 가 .pg-perf 를 건다).",
-    "src/widgets/portfolio-graph/perf/PerfTableView.tsx":
-        "★PerfPanel 의 아래 절★ — 그림의 표 쌍둥이. 같은 패널의 머리(PerfFigures)가 hero 바로 밑에 PerfLabel 을 둔다. "
-        "이 부품은 홀로 그려지지 않는다(PerfPanel 만 부른다).",
+    # 성과 그림 문법(2026-11-09) — 지표 묶음·표 쌍둥이 부품은 `shared/ui/perf/` 로 올라갔다(둘째 화면이 붙으면서 FSD 규칙이 요구).
+    # 공용 부품은 라벨을 정의하지 그리지 않는다 — 이 검사는 화면(`src/widgets`)만 본다. 그 부품을 그리는 화면(캔버스 패널 `PerfPanel` ·
+    # 결과 화면 `BacktestResults`)이 각각 `PerfLabel` 을 쓴다.
 }
 
 
@@ -210,9 +205,11 @@ def test_strings_are_deliberately_not_stripped():
 
 
 def test_the_scan_is_not_vacuous():
+    # 하한 10 → 8 (2026-11-09): 성과 그림 부품(지표 묶음·표 쌍둥이)이 `shared/ui/perf` 로 올라가고 캔버스 세 렌더러가 지표를 직접
+    # 그리지 않게 되어 화면 쪽 수가 줄었다 — 검출기가 아니라 자리가 옮겨진 것(아래 실측 8: 백테스트 결과·비교·칵핏·현실성 …).
     """★공허 배제★ 검출 대상이 0개면 이 파일 전체가 아무 말도 하지 않는다."""
     found = _scan()
-    assert len(found) >= 10, f"지표를 그리는 위젯이 {len(found)}개뿐입니다 — 검출기를 의심하세요"
+    assert len(found) >= 8, f"지표를 그리는 위젯이 {len(found)}개뿐입니다 — 검출기를 의심하세요"
     assert sum(found.values()) >= 5, "PerfLabel 을 쓰는 위젯이 너무 적습니다"
 
 

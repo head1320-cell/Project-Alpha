@@ -5,8 +5,16 @@
  * 기간별 수익·낙폭 사건·지표를 서버가 준 그대로 고르고, 없는 것은 `null` 로 둔다(화면이 "없다" 고 말한다). 하는 것은 숫자·단위 서식뿐
  * (ADR-003 §2.6 이 허용하는 클라이언트 일).
  */
-import type { NodeExplain } from "@/entities/portfolio-graph";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
+
+/** 서버 explain 의 모양(캔버스 `NodeExplain` 과 구조가 같다 — shared 는 entities 를 모른다 · 캔버스는 NodeExplain 을 그대로 넘긴다). */
+export interface PerfExplain {
+  title: string;
+  headline?: { label: string; value: number | null; unit: string; text: string } | null;
+  facts?: string[];
+  trust?: { state: string; text: string; kind?: string }[];
+  unmeasured?: string[];
+}
 
 type Dict = Record<string, unknown>;
 export type PerfPoint = number | null;
@@ -43,7 +51,7 @@ export interface PerfView {
   summary: Dict;
   metrics: Dict | null;
   cost: { bps: number | null; impact: Dict | null; nRebalances: number | null; turnoverAvg: number | null };
-  explain: NodeExplain | null;
+  explain: PerfExplain | null;
 }
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -84,7 +92,7 @@ function periodsOf(v: unknown): PerfView["periods"] {
 function tone(v: number | null): "up" | "down" | null { return v === null ? null : v >= 0 ? "up" : "down"; }
 
 /** 7번 과거로 돌려 보기(정책 walk-forward · `allocation_backtest.walk_forward`) — 곡선은 "처음을 1로". */
-export function perfViewOfBacktest(v: Dict, prov: Dict, explain: NodeExplain | null | undefined): PerfView {
+export function perfViewOfBacktest(v: Dict, prov: Dict, explain: PerfExplain | null | undefined): PerfView {
   const s = (v.summary as Dict) ?? {};
   const cov = (v.coverage as Dict) ?? {};
   const cfg = (v.config as Dict) ?? {};
@@ -117,7 +125,7 @@ export function perfViewOfBacktest(v: Dict, prov: Dict, explain: NodeExplain | n
 }
 
 /** 백테스트 불러오기(BL3 W1 · 저장된 실행) — 곡선은 원. 낙폭은 서버 뷰가 % 로 옮겨 준 `drawdown_pct`(저장된 결과에 있을 때만). */
-export function perfViewOfLoad(v: Dict, prov: Dict, explain: NodeExplain | null | undefined): PerfView {
+export function perfViewOfLoad(v: Dict, prov: Dict, explain: PerfExplain | null | undefined): PerfView {
   const s = (v.statistics as Dict) ?? {};
   const eq = (v.equity as { dates?: unknown; values?: unknown }) ?? {};
   const bm = (v.benchmark as Dict | null) ?? null;
@@ -144,7 +152,7 @@ export function perfViewOfLoad(v: Dict, prov: Dict, explain: NodeExplain | null 
 }
 
 /** 전략 묶음(BK W5 · `multibacktest_run`) — 곡선은 계좌 금액(원) · 낙폭은 기록마다 `dd`. */
-export function perfViewOfStrategy(v: Dict, explain: NodeExplain | null | undefined): PerfView {
+export function perfViewOfStrategy(v: Dict, explain: PerfExplain | null | undefined): PerfView {
   const s = (v.summary as Dict) ?? {};
   const curve = Array.isArray(v.curve) ? (v.curve as Dict[]) : [];
   const pl = (v.perf_label as PerfLabelValue | null) ?? null;

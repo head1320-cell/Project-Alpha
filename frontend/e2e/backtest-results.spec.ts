@@ -160,10 +160,11 @@ test("등락은 부호 + 한국식 색 — 오름 --tx-up-ink · 내림 --tx-dow
 type Tick = { text: string; left: number; svgLeft: number; y: number };
 async function equityTicks(page: Page): Promise<Tick[]> {
   const card = page.locator(".brun-card").filter({ has: page.getByRole("heading", { name: /^자산곡선/ }) });
-  await expect(card.locator(".recharts-yAxis .recharts-cartesian-axis-tick-value").first()).toBeVisible();
+  await expect(card.locator(".pf-curve .pf-ytick").first()).toBeVisible();
   return card.evaluate((el) => {
-    const svg = el.querySelector("svg.recharts-surface")!.getBoundingClientRect();
-    return [...el.querySelectorAll(".recharts-yAxis .recharts-cartesian-axis-tick-value")].map((t) => {
+    const svg = el.querySelector("svg.pf-curve")!.getBoundingClientRect();
+    // 자산 축의 눈금만 — 낙폭 축(`.pf-dd` 안)의 "-n%" 는 다른 축이다.
+    return [...el.querySelectorAll(".pf-ytick")].filter((t) => !t.closest(".pf-dd")).map((t) => {
       const r = t.getBoundingClientRect();
       return { text: (t.textContent ?? "").trim(), left: r.left, svgLeft: svg.left, y: r.top + r.height / 2 };
     });
@@ -175,7 +176,8 @@ const readKr = (s: string) => {
   return m ? Number(m[1]) * (m[2] === "억" ? 1e8 : m[2] === "만" ? 1e4 : 1) : NaN;
 };
 function checkAxis(ticks: Tick[], max: number) {
-  expect(ticks.length, "눈금이 셋 이상 있어야 이 검사가 공허하지 않다").toBeGreaterThanOrEqual(3);
+  // 부품은 위·아래 + (기준선이 둘과 12px 이상 떨어질 때) 기준선 — 짧은 픽스처 곡선은 둘이 된다.
+  expect(ticks.length, "눈금이 둘 이상 있어야 이 검사가 공허하지 않다").toBeGreaterThanOrEqual(2);
   for (const t of ticks) expect(t.left, `눈금 '${t.text}' 이 차트 왼쪽 밖으로 잘렸다`).toBeGreaterThanOrEqual(t.svgLeft - 0.5);
   const texts = ticks.map((t) => t.text);
   expect(new Set(texts).size, `눈금 글자가 겹친다: ${texts.join(" | ")}`).toBe(texts.length);

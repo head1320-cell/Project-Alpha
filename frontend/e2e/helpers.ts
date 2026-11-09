@@ -92,6 +92,20 @@ export function completedRun(runId: string = STUB_RUN_ID) {
     profit_factor: 1.35, num_trades: 3, var_pct: -2.1, cvar_pct: -2.6,
     total_commission: 41000, total_slippage: 12000, eod_liquidated: 1,
   };
+  // 서버 `run_full` 이 붙이는 성과 블록(2026-11-09) — 결과 화면은 이 수만 그린다(세지 않는다). 곡선 다섯 점과 손으로 맞춘 값.
+  const perf = {
+    unit: "krw",
+    drawdown_pct: [0, 0, -1.9, 0, 0],
+    periods: {
+      yearly: [{ year: 2023, return_pct: 12.0, max_drawdown_pct: -1.9, n_days: 5, partial: true }],
+      monthly: [
+        { year: 2023, month: 1, return_pct: 0.0, n_days: 1, partial: true }, { year: 2023, month: 2, return_pct: 3.0, n_days: 1, partial: true },
+        { year: 2023, month: 3, return_pct: -1.9, n_days: 1, partial: true }, { year: 2023, month: 4, return_pct: 6.9, n_days: 1, partial: true },
+        { year: 2023, month: 5, return_pct: 3.7, n_days: 1, partial: true },
+      ],
+    },
+    drawdowns: [{ peak_date: "2023-02", trough_date: "2023-03", recovery_date: "2023-04", depth_pct: -1.9, days_to_trough: 28, days_to_recover: 59 }],
+  };
   const result = {
     error: false,
     screened_tickers: ["005930", "000660"],
@@ -117,7 +131,7 @@ export function completedRun(runId: string = STUB_RUN_ID) {
     intraday: null, asset_alloc: null, backtest_config: {},
   };
   const input_snapshot = { universe: "kospi200", start_date: "2023-01-01", end_date: "2023-05-31", strategy_name: "Condition", benchmark: "KOSPI" };
-  return { lite: { ...base }, full: { ...base, input_snapshot, parameter_snapshot: {}, result } };
+  return { lite: { ...base }, full: { ...base, input_snapshot, parameter_snapshot: {}, result, perf } };
 }
 
 /** 완료 런의 status·상세 두 엔드포인트를 스텁하고 페이로드를 돌려준다. */
