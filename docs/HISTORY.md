@@ -25653,3 +25653,42 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 경합을 지나니 골든(`e2e/golden/canvas-classes.json`) 자체가 `ac3f3cf`(lucide-react 1) 이후 낡아 있었다 — 아이콘 클래스 이름(`lucide-redo2` → `lucide-redo-2` ·
   별칭 클래스 · `aria-hidden`) 과 아이콘 안 `line`·`polyline`·`polygon` 요소가 없어진 것. `UPDATE_CANVAS_GOLDEN=1` 로 다시 얼렸고 diff 는 lucide 줄뿐(그 밖
   `+` 줄 0 — 확인). 성과 그림 부품은 계산 전 상태를 얼리는 이 골든에 안 보인다. 문서·명령 골든은 그대로.
+
+## 백테스트 결과 화면에 성과 그림 문법 — recharts 가 이 화면에서 빠짐 (2026-11-09)
+
+- 설계: `docs/superpowers/specs/2026-11-09-backtest-results-perf-grammar-design.md`(사용자 결정: 범위 C 그림 전부+기여도 · 접근 1 `run_full` 에 perf 블록 +
+  접두어 `pf-*` · 승인) · 계획 `docs/superpowers/plans/2026-11-09-backtest-results-perf-grammar.md`. 커밋 넷(①~④) + 결함 고침 하나.
+- 서버(①): `run_full` 에 `perf {unit:"krw", drawdown_pct, periods, drawdowns}` — 저장 `drawdown_curve` 는 비율(−0.15)이고 통계 `max_drawdown_pct` 는 %(14.9)라
+  화면이 비율을 %처럼 그리던 결함(E2E 픽스처가 % 로 적혀 있어 시험이 못 봤다)을 서버에서 고쳤다(×100 · 4자리 · 이름에 단위). 캔버스 불러오기와 같은
+  `quant_metrics` 함수라 같은 실행이면 같은 수. 곡선이 없으면 None(0 배열이 아니다). 시험(`tests/test_backtest_run_perf_block.py` · 빨강 먼저 · 비율 그대로 싣는
+  변이 죽음).
+  - ★결함(E2E 가 잡음 · 별도 커밋)★: 그 커밋이 `_perf_block` 을 `@router.get("/runs/{run_id}")` 와 `run_full` 사이에 끼워 넣어 데코레이터가 헬퍼를 받았다 — GET 이
+    body 를 요구하며 422, `run_full` 은 경로에서 빠짐. 함수를 직접 부르던 단위 시험 다섯은 전부 통과했다(라우트 표를 안 봤다). 결과 화면 E2E(404 → '찾지
+    못했어요')가 잡았고, 라우트 표(`route_walk.flat_routes`)에서 그 GET 의 endpoint 가 `run_full` 이고 없는 id 가 404 인 시험을 더했다(옛 코드에서 빨강 확인).
+- 접두어(②): 부품 클래스 `pg-pf-*` → `pf-*`(부품 · `globals.css` · 캔버스 스펙 둘 · 배지 레지스트리 — 한 커밋). `pg-pf-open` 도 규칙대로 `pf-open`(스펙 §3.3 의
+  "그대로" 는 컨테이너 `.pg-pf` 와 `.pg-sheet--wide` 뿐 · §5.1). 캔버스 두 스펙 20 통과.
+- 화면(③): 질문 띠(관문 없는 화면의 문장 — `QuestionStrip.noGatesText`: "예측 스킬·경제적 가치를 재지 않아요 — 캔버스에서 불러오면 관문이 매겨져요") · 그림 하나
+  (`PerfCurve` 300 · 원 단위 눈금 `krAxisTick`) · 기간별(해마다 표 + 달마다 격자) · 큰 낙폭 사건 표 · 기여도 HTML 막대(`.brun-attr-*` · 부호·등락색 · 종목 표와
+  같은 한 자리) · `perfViewOfRun`(옮기기만 — 리밸런싱·배움·기준일은 이 엔진에 없어 띠는 말하지 않는다 · 벤치마크는 길이가 같을 때만). 핵심 지표·산출 불가·
+  종목별·거래·한계·진행·비교는 그대로. 역할 변수 `--pf-*` ← `.rs` 의 `--tx-*`(`--pf-assume`=`--tx-warn` · `--pf-unknown`=`--tx-mute`) + 전역 도우미(`.pg-note`·
+  `.pg-table`·`.pg-h4`·`.pg-td-num`)가 읽는 `--pg-ink/body/mute/line` 도 `.rs` 에서 `--tx-*` 로 잇는다 — 새 토큰 0. 이 화면의 recharts import 0.
+  - ★설계와 달라진 것★: 공용 부품 11개를 `widgets/portfolio-graph/perf` → `shared/ui/perf` 로 옮겼다. 스펙 §3.3·§5 는 "widgets 에 두고 둘째 화면 뒤 별도" 였으나
+    FSD 규칙(`eslint.config.js` `import/no-restricted-paths`: widgets 끼리 import 금지)이 `widgets/backtester` → `widgets/portfolio-graph/perf` 를 막는다. 부품은
+    `NodeExplain`·`GateState`(entities) 대신 제 구조 타입(`PerfExplain`·`PerfGate`)을 읽고, 캔버스 전용(PerfPanel·PerfSheet·useCanvasGates)은 widgets 에 남는다.
+    `tests/test_perf_label_contract.py` 의 허용 항목 둘을 지우고 공허 방지 하한을 10 → 8 로(부품이 widgets 밖으로 — 사유 주석).
+  - 검수(라이트·다크·390 스크린샷 · 실제 실행 하나)에서 고친 넷 + 글 하나(스펙 §5.1): 390px 에서 날짜 라벨 셋이 겹침 → 폭이 모자라면 처음·끝 둘 · 표 쌍둥이 칸이
+    "1.0억원" 중간에서 꺾임 → nowrap + 가로 스크롤 · 읽는 줄의 누적 % 는 곡선 첫날 대비라 머리글의 총수익(초기 자본 대비: +24.9% ≠ +25.2% — 첫날 값이 이미
+    비용을 뺀 9,983만원)과 다를 수 있어 "첫날 대비" 를 적음(초기 자본은 서버가 안 준다 — 기준은 그대로) · 기여도 두 자리·모노 → 종목 표와 같은 한 자리·같은
+    글꼴 · 달마다 격자의 글 "일부만 있는 달" → "곡선이 시작·끝나는 달 — 전체가 아닐 수 있다"(서버 `partial` 은 첫 달·마지막 달 표시일 뿐 달력 영업일을 모른다 —
+    1월 2일 시작도 partial · 시트 스펙 (n) 의 글 확인도 함께). 공용 부품이라 캔버스에도 같이 적용된다.
+- E2E: 새 `backtest-results-perf.spec.ts` 10(옛 빌드에서 빨강 · (a) 그림 하나·읽는 줄·연습용 띠(짝: 라벨 없으면 "실제인지 몰라요") (b) 낙폭 단위 (c) 달마다
+  (d) 낙폭 사건 (e) 기여도 (f) 짝: perf 없음 → "주지 않았어요" · 곡선은 그대로 (g) 질문 띠 (h) recharts·title 0 (i) 라이트·다크 AA) · 기존 `backtest-results.spec.ts`
+  의 축 눈금 시험 셋은 `.pf-ytick` 으로(하한 2 · 동작 같음), `backtest.spec.ts` 의 `table` 은 `.brun-table` 로(성과 표 쌍둥이는 접힌 details 안이라 `table` 로는
+  숨은 표가 잡혔다), S1c 는 `.pf-line-port` 의 stroke = `--tx-ink`. 변이 셋(한 빌드: 화면이 기간을 지어냄 · 낙폭에 화면이 ×100 · 기여도 부호 뒤집기) → (f)(b)(e) 만
+  죽고 나머지 7 통과. 다섯 스펙(결과 둘 · 백테스트 · 캔버스 둘) 67 통과. 전체 E2E 1281 중 1273 통과 · 건너뜀 4 · 실패 4 — 넷 다 이전부터의 간헐(HISTORY 기록 있음): `canvas-ai-suggest` 'AI 유령이 카드와 겹친다'(2026-11-08 A/B 8번 중 5번) · `canvas-minimap-pick` U3 짝(확대 0.992 에서 멈춤 · 2단계 전부터) · `clients.spec` PB3 겹침(`route.fetch: Test ended` — 시간 여유) · `realism` ST3c 다크 AA. 넷을 따로 2번씩 돌리면 셋은 2/2 통과, `canvas-ai-suggest` 만 1/2(기록된 비율 그대로) — 이번 변경과 무관(캔버스 유령·확대·고객 목록·realism 은 성과 부품을 안 쓴다). 게이트 `make all` 통과(3.14 · Node 24) — ruff · pytest 8923 통과(건너뜀 11) · tsc · 다크 모듈 생성 구역 · 빌드.
+- 측정: 첫 화면 JS `/backtest/runs/x/results`(압축 전송 · 3회 중앙값 · 같은 스크립트로 ② 커밋 `f1daa35` 워크트리 :3002 대 이번 빌드 :3000) 540.1 kB(43 조각)
+  → 436.4 kB(42 조각) · 원본 1775.7 → 1377.5 kB — recharts 조각이 이 화면에서 빠졌다. L5 기록(343.6 kB)과 수가 다른데 그 사이 커밋이 많아 원인은 쫓지 않았다
+  (전/후는 같은 날 같은 스크립트). 엔진 `monthly_returns`(2자리) 대 `perf.periods.monthly`(4자리): 실제 실행 하나 12달 모두 0.05%p 안에서 같다 ·
+  `min(drawdown_pct)` −14.94 = 통계 `max_drawdown_pct` 14.94(같은 단위).
+- 하지 않음: 비교 화면(`BacktestCompare`)의 recharts · 핵심 지표 타일·산출 불가 사유 · 엔진 월별 함수 · 답 문장을 서버 explain 으로 · 다른 화면의 recharts(번들에
+  남음) · 서버 `partial` 규칙(달력 영업일 판정) · 초기 자본을 응답에 싣기 · `shared/ui/PerfLabel` 의 `title=`(이전부터).
