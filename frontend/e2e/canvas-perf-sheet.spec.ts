@@ -50,7 +50,7 @@ async function openSheet(page: Page): Promise<RunBody> {
   const body = await run(page);
   await node(page, "backtest").click();
   await tab(page, "detail");
-  await page.locator(".pg-side .pg-pf-open").click();
+  await page.locator(".pg-side .pf-open").click();
   await expect(sheet(page)).toBeVisible();
   return body;
 }
@@ -65,26 +65,26 @@ test("(l) 열림·닫힘 — '크게 보기' → 넓은 시트 · 제목은 서�
   const s = sheet(page);
   await expect(s).toHaveAttribute("open", "");
   await expect(s.locator(".tx-sheet-title")).toHaveText(body.nodes.backtest.explain!.title);
-  await expect(s.locator(".pg-pf-curve")).toBeVisible();
+  await expect(s.locator(".pf-curve")).toBeVisible();
   // 넓다 — 패널(≤600)보다 넓은 그림.
   const w = (await s.boundingBox())!.width;
   expect(w, "시트 폭").toBeGreaterThan(700);
   await page.keyboard.press("Escape");
   await expect(s).not.toHaveAttribute("open", "");
-  await expect(page.locator(".pg-side .pg-pf-open")).toBeFocused();
+  await expect(page.locator(".pg-side .pf-open")).toBeFocused();
 });
 
 test("(m) 질문 띠 — 답하는 것 · 답하지 않는 것은 관문 oos·economic 의 서버 판정 그대로", async ({ page }) => {
   await openCanvas(page);
   const body = await openSheet(page);
   const gates = body.gates?.gates ?? [];
-  const q = sheet(page).locator(".pg-pf-q");
+  const q = sheet(page).locator(".pf-q");
   await expect(q).toContainText("답하는 것");
   await expect(q).toContainText("답하지 않는 것");
   for (const key of ["oos", "economic"]) {
     const g = gates.find((x) => x.key === key);
     expect(g, `관문 ${key} 가 보고서에 있어야 이 시험이 공허하지 않다`).toBeTruthy();
-    const dot = q.locator(`.pg-pf-q-gate[data-gate="${key}"]`);
+    const dot = q.locator(`.pf-q-gate[data-gate="${key}"]`);
     await expect(dot).toHaveClass(new RegExp(`pg-stn--${g!.state}(\\s|$)`));
     await expect(dot).toContainText(STATE_TEXT[g!.state]);
     await expect(dot).toContainText(g!.label);
@@ -93,8 +93,8 @@ test("(m) 질문 띠 — 답하는 것 · 답하지 않는 것은 관문 oos·ec
   await page.keyboard.press("Escape");
   await patchRun(page, (b) => { b.gates = null; });
   await openSheet(page);
-  await expect(sheet(page).locator(".pg-pf-q")).toContainText("관문 판정이 없어요");
-  await expect(sheet(page).locator(".pg-pf-q-gate")).toHaveCount(0);
+  await expect(sheet(page).locator(".pf-q")).toContainText("관문 판정이 없어요");
+  await expect(sheet(page).locator(".pf-q-gate")).toHaveCount(0);
 });
 
 test("(n) 달마다 격자 — 칸 수 = 서버 periods.monthly · 칸 글자 = 서버 값 · 일부 달 · 짝: 값을 바꾸면 칸이 바뀐다", async ({ page }) => {
@@ -102,23 +102,23 @@ test("(n) 달마다 격자 — 칸 수 = 서버 periods.monthly · 칸 글자 = 
   const body = await openSheet(page);
   const monthly = (body.nodes.backtest.view!.periods as { monthly: { year: number; month: number; return_pct: number; partial: boolean }[] }).monthly;
   expect(monthly.length, "서버가 달마다 수익을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(3);
-  const cells = sheet(page).locator("td.pg-pf-month[data-month]");
+  const cells = sheet(page).locator("td.pf-month[data-month]");
   await expect(cells).toHaveCount(monthly.length);
   for (const m of [monthly[0], monthly[Math.floor(monthly.length / 2)], monthly[monthly.length - 1]]) {
-    const cell = sheet(page).locator(`td.pg-pf-month[data-month="${m.year}-${String(m.month).padStart(2, "0")}"]`);
+    const cell = sheet(page).locator(`td.pf-month[data-month="${m.year}-${String(m.month).padStart(2, "0")}"]`);
     await expect(cell).toHaveText(signed(m.return_pct));
     await expect(cell).toHaveAttribute("data-partial", String(m.partial));
     await expect(cell).toHaveAttribute("data-tone", m.return_pct >= 0 ? "up" : "down");
   }
   expect(monthly[0].partial || monthly[monthly.length - 1].partial, "양 끝 달 중 하나는 일부여야 '일부' 표시가 공허하지 않다").toBe(true);
-  await expect(sheet(page).locator(".pg-pf-months-note")).toContainText("일부");
+  await expect(sheet(page).locator(".pf-months-note")).toContainText("일부");
   // 짝 — 서버 값이 바뀌면 칸이 바뀐다(화면이 제 수를 쓰지 않는다).
   await page.keyboard.press("Escape");
   const key = `${monthly[1].year}-${String(monthly[1].month).padStart(2, "0")}`;
   await patchRun(page, (b) => { (b.nodes.backtest.view!.periods as { monthly: { return_pct: number }[] }).monthly[1].return_pct = -12.3456; });
   await openSheet(page);
-  await expect(sheet(page).locator(`td.pg-pf-month[data-month="${key}"]`)).toHaveText("−12.3%");
-  await expect(sheet(page).locator(`td.pg-pf-month[data-month="${key}"]`)).toHaveAttribute("data-tone", "down");
+  await expect(sheet(page).locator(`td.pf-month[data-month="${key}"]`)).toHaveText("−12.3%");
+  await expect(sheet(page).locator(`td.pf-month[data-month="${key}"]`)).toHaveAttribute("data-tone", "down");
 });
 
 test("(o) 큰 낙폭 사건 — 수 = 서버 drawdowns · 날짜·깊이·며칠 · 짝: 회복 못 한 사건은 그렇게 말한다", async ({ page }) => {
@@ -126,7 +126,7 @@ test("(o) 큰 낙폭 사건 — 수 = 서버 drawdowns · 날짜·깊이·며칠
   const body = await openSheet(page);
   const eps = body.nodes.backtest.view!.drawdowns as { peak_date: string; trough_date: string; recovery_date: string | null; depth_pct: number; days_to_trough: number; days_to_recover: number | null }[];
   expect(eps.length, "낙폭 사건이 있어야 이 시험이 공허하지 않다").toBeGreaterThan(0);
-  const rows = sheet(page).locator(".pg-pf-dd-ep");
+  const rows = sheet(page).locator(".pf-dd-ep");
   await expect(rows).toHaveCount(eps.length);
   const e0 = eps[0];
   await expect(rows.first()).toContainText(e0.peak_date);
@@ -141,8 +141,8 @@ test("(o) 큰 낙폭 사건 — 수 = 서버 drawdowns · 날짜·깊이·며칠
   await page.keyboard.press("Escape");
   await patchRun(page, (b) => { const d = (b.nodes.backtest.view!.drawdowns as { recovery_date: string | null; days_to_recover: number | null }[])[0]; d.recovery_date = null; d.days_to_recover = null; });
   await openSheet(page);
-  await expect(sheet(page).locator(".pg-pf-dd-ep").first()).toHaveAttribute("data-recovered", "false");
-  await expect(sheet(page).locator(".pg-pf-dd-ep").first()).toContainText("아직 고점을 되찾지 못했어요");
+  await expect(sheet(page).locator(".pf-dd-ep").first()).toHaveAttribute("data-recovered", "false");
+  await expect(sheet(page).locator(".pf-dd-ep").first()).toContainText("아직 고점을 되찾지 못했어요");
 });
 
 test("(p) 리밸런싱 기록 — 행 수 = 서버 rebalances · 날짜·회전율 · 짝: 기록이 없으면 '없어요'", async ({ page }) => {
@@ -150,15 +150,15 @@ test("(p) 리밸런싱 기록 — 행 수 = 서버 rebalances · 날짜·회전�
   const body = await openSheet(page);
   const rebs = body.nodes.backtest.view!.rebalances as { date: string; turnover_pct: number }[];
   expect(rebs.length).toBeGreaterThan(0);
-  const rows = sheet(page).locator("table.pg-pf-rebal-table tbody tr");
+  const rows = sheet(page).locator("table.pf-rebal-table tbody tr");
   await expect(rows).toHaveCount(rebs.length);
   await expect(rows.first()).toContainText(rebs[0].date.slice(0, 10));
   await expect(rows.first()).toContainText(`${rebs[0].turnover_pct.toFixed(1)}%`);
   await page.keyboard.press("Escape");
   await patchRun(page, (b) => { b.nodes.backtest.view!.rebalances = []; b.nodes.backtest.view!.n_rebalances = 0; });
   await openSheet(page);
-  await expect(sheet(page).locator("table.pg-pf-rebal-table")).toHaveCount(0);
-  await expect(sheet(page).locator(".pg-pf-rebal-none")).toContainText("리밸런싱 날짜 기록이 없어요");
+  await expect(sheet(page).locator("table.pf-rebal-table")).toHaveCount(0);
+  await expect(sheet(page).locator(".pf-rebal-none")).toContainText("리밸런싱 날짜 기록이 없어요");
 });
 
 for (const scheme of ["light", "dark"] as const) {
@@ -168,8 +168,8 @@ for (const scheme of ["light", "dark"] as const) {
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
     await node(page, "backtest").click();
     await tab(page, "detail");
-    await page.locator(".pg-side .pg-pf-open").click();
-    await expect(sheet(page).locator(".pg-pf-curve")).toBeVisible();
+    await page.locator(".pg-side .pf-open").click();
+    await expect(sheet(page).locator(".pf-curve")).toBeVisible();
     await page.waitForTimeout(300);
     const audit = await page.evaluate<AuditResult>(contrastAudit('dialog.pg-sheet--wide[data-sheet="perf"]'));
     expect(audit.checked, "검사한 텍스트 노드 수").toBeGreaterThan(80);
@@ -184,12 +184,12 @@ test("(q) 820px 이하 — 시트는 바닥에서 올라오고 화면 폭을 다
   await run(page);
   await node(page, "backtest").click();
   await page.locator('.pg-tab[data-tab="detail"]').click();
-  await page.locator(".pg-side .pg-pf-open").click();
+  await page.locator(".pg-side .pf-open").click();
   await expect(sheet(page)).toBeVisible();
   // 올라오는 모션(220ms)이 끝난 자리를 잰다 — 바닥에 붙고(소수 px 반올림 허용) 화면 폭을 다 쓴다.
   await expect.poll(async () => { const b = (await sheet(page).boundingBox())!; return Math.abs(b.y + b.height - 900); }, { timeout: 5_000 }).toBeLessThanOrEqual(1);
   const box = (await sheet(page).boundingBox())!;
   expect(Math.round(box.x)).toBe(0);
   expect(Math.round(box.width)).toBe(800);
-  await expect(sheet(page).locator(".pg-pf-curve")).toBeVisible();
+  await expect(sheet(page).locator(".pf-curve")).toBeVisible();
 });

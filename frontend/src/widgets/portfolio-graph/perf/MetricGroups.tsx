@@ -71,17 +71,17 @@ export function MetricGroups({ view, open = false, grid = false }: {
   const naCount = all.reduce((acc, [, rows, s]) => acc + rows.filter(([k, , f]) => cell(s[k], f).na).length, 0);
   const convention = typeof view.summary.convention === "string" ? view.summary.convention : null;
   return (
-    <details className={`pg-pf-metrics${grid ? " pg-pf-metrics--grid" : ""}`} open={open || undefined}>
+    <details className={`pf-metrics${grid ? " pf-metrics--grid" : ""}`} open={open || undefined}>
       <summary>지표 모두 보기{naCount ? ` (산출 불가 ${naCount}개)` : ""}</summary>
-      <div className="pg-pf-mbody">
+      <div className="pf-mbody">
         {all.map(([title, rows, s]) => (
-          <section key={title} className="pg-pf-mgroup">
+          <section key={title} className="pf-mgroup">
             <h4 className="pg-h4">{title}</h4>
             {/* `.pg-kv` 는 안 붙인다 — ".pg-kv 총수익" 이 E2E 계약(BL3 W1 · 요약 숫자 하나)이라 묶음에도 붙이면 둘이 잡힌다. 모양은 같은 규칙(globals.css). */}
-            <dl className="pg-pf-mkv">
+            <dl className="pf-mkv">
               {rows.map(([k, label, f]) => {
                 const c = cell(s[k], f);
-                return <div key={k}><dt>{label}</dt><dd className={c.na ? "pg-pf-na" : undefined}>{c.text}</dd></div>;
+                return <div key={k}><dt>{label}</dt><dd className={c.na ? "pf-na" : undefined}>{c.text}</dd></div>;
               })}
             </dl>
           </section>

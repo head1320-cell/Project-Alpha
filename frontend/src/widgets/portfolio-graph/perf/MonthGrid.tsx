@@ -18,20 +18,20 @@ export function MonthGrid({ view }: { view: PerfView }) {
   const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.return_pct)));
   const anyPartial = rows.some((r) => r.partial);
   return (
-    <div className="pg-pf-months-wrap">
-      <table className="pg-pf-months">
-        <thead><tr><th className="pg-pf-months-y">해</th>{MONTHS.map((m) => <th key={m}>{m}월</th>)}</tr></thead>
+    <div className="pf-months-wrap">
+      <table className="pf-months">
+        <thead><tr><th className="pf-months-y">해</th>{MONTHS.map((m) => <th key={m}>{m}월</th>)}</tr></thead>
         <tbody>
           {years.map((y) => (
             <tr key={y}>
-              <th className="pg-pf-months-y">{y}</th>
+              <th className="pf-months-y">{y}</th>
               {MONTHS.map((m) => {
                 const key = `${y}-${String(m).padStart(2, "0")}`;
                 const r = byKey.get(key);
-                if (!r) return <td key={m} className="pg-pf-month pg-pf-month--none" />;
+                if (!r) return <td key={m} className="pf-month pf-month--none" />;
                 const mix = MIX_MIN + ((MIX_MAX - MIX_MIN) * Math.abs(r.return_pct)) / max;
                 return (
-                  <td key={m} className="pg-pf-month" data-month={key} data-partial={r.partial ? "true" : "false"}
+                  <td key={m} className="pf-month" data-month={key} data-partial={r.partial ? "true" : "false"}
                       data-tone={r.return_pct >= 0 ? "up" : "down"} style={{ "--pf-mix": `${mix.toFixed(0)}%` } as CSSProperties}>
                     {fmtSignedPct(r.return_pct)}
                   </td>
@@ -41,7 +41,7 @@ export function MonthGrid({ view }: { view: PerfView }) {
           ))}
         </tbody>
       </table>
-      <p className="pg-note pg-pf-months-note">
+      <p className="pg-note pf-months-note">
         빨강은 오른 달, 파랑은 내린 달이고 진할수록 폭이 커요. 빈 칸은 자료가 없는 달이에요(0 이 아니에요).
         {anyPartial ? " 점선 테두리는 그 달의 일부만 있는 달이에요 — 그 기간 수익 그대로예요." : ""}
       </p>

@@ -14,9 +14,9 @@ const STATE_TEXT: Record<GateState, string> = {
 function GateChip({ gates, gateKey }: { gates: Gate[] | null; gateKey: "oos" | "economic" }) {
   if (gates === null) return null;
   const g = gates.find((x) => x.key === gateKey);
-  if (!g) return <span className="pg-pf-q-nogate">관문 ‘{gateKey}’ 판정이 보고서에 없어요</span>;
+  if (!g) return <span className="pf-q-nogate">관문 ‘{gateKey}’ 판정이 보고서에 없어요</span>;
   return (
-    <span className={`pg-pf-q-gate pg-stn--${g.state}`} data-gate={g.key}>
+    <span className={`pf-q-gate pg-stn--${g.state}`} data-gate={g.key}>
       <span className="pg-stn-dot" aria-hidden="true" />관문 ‘{g.label}’ {STATE_TEXT[g.state] ?? g.state}
     </span>
   );
@@ -24,14 +24,14 @@ function GateChip({ gates, gateKey }: { gates: Gate[] | null; gateKey: "oos" | "
 
 export function QuestionStrip({ view, gates }: { view: PerfView; gates: Gate[] | null }) {
   return (
-    <section className="pg-pf-q" aria-label="이 결과가 답하는 것과 답하지 않는 것">
-      <div className="pg-pf-q-row">
-        <span className="pg-pf-q-k">답하는 것</span>
-        <span className="pg-pf-q-v">{view.question} (네 질문 중 ② 전달 안정성)</span>
+    <section className="pf-q" aria-label="이 결과가 답하는 것과 답하지 않는 것">
+      <div className="pf-q-row">
+        <span className="pf-q-k">답하는 것</span>
+        <span className="pf-q-v">{view.question} (네 질문 중 ② 전달 안정성)</span>
       </div>
-      <div className="pg-pf-q-row">
-        <span className="pg-pf-q-k">답하지 않는 것</span>
-        <ul className="pg-pf-q-list">
+      <div className="pf-q-row">
+        <span className="pf-q-k">답하지 않는 것</span>
+        <ul className="pf-q-list">
           <li>③ 예측 스킬: 신호가 미래를 맞히는지 <GateChip gates={gates} gateKey="oos" /></li>
           <li>④ 경제적 가치: 돈이 되는지 <GateChip gates={gates} gateKey="economic" /></li>
         </ul>

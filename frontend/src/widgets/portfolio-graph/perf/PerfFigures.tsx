@@ -17,22 +17,22 @@ export function PerfFigures({ view, fallbackTitle, action, noTitle = false }: {
   const ex = view.explain;
   const h = ex?.headline ?? null;
   return (
-    <div className="pg-pf-head">
+    <div className="pf-head">
       {!noTitle && (
-        <div className="pg-pf-title-row">
-          <h3 className="pg-pf-title">{ex?.title ?? fallbackTitle}</h3>
+        <div className="pf-title-row">
+          <h3 className="pf-title">{ex?.title ?? fallbackTitle}</h3>
           {action}
         </div>
       )}
       {h && h.value !== null ? (
-        <p className="pg-pf-hero"><b>{h.text}</b><small>{h.label}</small></p>
+        <p className="pf-hero"><b>{h.text}</b><small>{h.label}</small></p>
       ) : (
         <p className="pg-note">헤드라인을 서버가 주지 않았어요 — 아래 숫자를 보세요.</p>
       )}
       {view.perfLabel ? <div className="pg-perf"><PerfLabel value={view.perfLabel} /></div> : null}
-      <dl className="pg-kv pg-pf-kv">
+      <dl className="pg-kv pf-kv">
         {view.figures.map((f) => (
-          <div key={f.key}><dt>{f.label}</dt><dd className={f.tone ? `pg-pf-delta--${f.tone}` : undefined}>{f.text}</dd></div>
+          <div key={f.key}><dt>{f.label}</dt><dd className={f.tone ? `pf-delta--${f.tone}` : undefined}>{f.text}</dd></div>
         ))}
       </dl>
     </div>

@@ -140,7 +140,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
   }, [view.asOf, view.dates, dateIndex, n]);
 
   if (n < 2) {
-    return <p className="pg-note pg-pf-empty">그릴 곡선이 없어요 — 서버가 날짜·값을 주지 않았어요.</p>;
+    return <p className="pg-note pf-empty">그릴 곡선이 없어요 — 서버가 날짜·값을 주지 않았어요.</p>;
   }
 
   const { x, yEq, yDd, hasDd, stripY, idxs, baseline, learnW, x0, plotW, learnDays, L } = geo;
@@ -190,90 +190,90 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
     : nReb === null ? null : nReb > 0 ? `리밸런싱 ${nReb}번 (날짜는 기록에 없어요)` : "리밸런싱 없음";
 
   return (
-    <div className="pg-chart pg-pf-fig" ref={wrap}>
-      <svg className="pg-pf-curve" width={width} height={height} role="group" aria-label={ariaLabel} tabIndex={0}
+    <div className="pg-chart pf-fig" ref={wrap}>
+      <svg className="pf-curve" width={width} height={height} role="group" aria-label={ariaLabel} tabIndex={0}
            onPointerMove={onPointer} onPointerDown={onPointer} onKeyDown={onKey} onBlur={() => setIdx(null)}>
         <defs>
           <pattern id={`${pid}-hatch`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="6" className="pg-pf-hatch-line" />
+            <line x1="0" y1="0" x2="0" y2="6" className="pf-hatch-line" />
           </pattern>
         </defs>
         {/* 격자·세로축 */}
         {ticks.map((t) => (
           <g key={`t${t.v}`}>
-            <line x1={x0} x2={x0 + plotW} y1={yEq(t.v)} y2={yEq(t.v)} className={t.base ? "pg-pf-baseline" : "pg-pf-grid"} />
-            <text x={L - 6} y={yEq(t.v) + 3.5} textAnchor="end" className="pg-pf-ytick">{t.label}</text>
+            <line x1={x0} x2={x0 + plotW} y1={yEq(t.v)} y2={yEq(t.v)} className={t.base ? "pf-baseline" : "pf-grid"} />
+            <text x={L - 6} y={yEq(t.v) + 3.5} textAnchor="end" className="pf-ytick">{t.label}</text>
           </g>
         ))}
         {/* 배움 구간(곡선 앞) — 빗금만. 글자는 띠 범례가 맡는다(세로축 눈금 글자와 부딪히지 않게). */}
-        {learnW > 0 && <rect x={L} y={TOP} width={learnW} height={geo.eqH} fill={`url(#${pid}-hatch)`} className="pg-pf-learn pg-pf-learn-fill" />}
+        {learnW > 0 && <rect x={L} y={TOP} width={learnW} height={geo.eqH} fill={`url(#${pid}-hatch)`} className="pf-learn pf-learn-fill" />}
         {/* 낙폭(물속) */}
         {hasDd && (
-          <g className="pg-pf-dd">
-            <line x1={x0} x2={x0 + plotW} y1={geo.ddTop} y2={geo.ddTop} className="pg-pf-baseline" />
-            <path d={areaPath(idxs, view.drawdown as PerfPoint[], x, yDd, geo.ddTop)} className="pg-pf-dd-area" />
-            <path d={linePath(idxs, view.drawdown as PerfPoint[], x, yDd)} className="pg-pf-dd-line" />
-            <text x={L - 6} y={geo.ddTop + geo.ddH} textAnchor="end" className="pg-pf-ytick">{fmtPct(geo.ddMin, 0)}</text>
+          <g className="pf-dd">
+            <line x1={x0} x2={x0 + plotW} y1={geo.ddTop} y2={geo.ddTop} className="pf-baseline" />
+            <path d={areaPath(idxs, view.drawdown as PerfPoint[], x, yDd, geo.ddTop)} className="pf-dd-area" />
+            <path d={linePath(idxs, view.drawdown as PerfPoint[], x, yDd)} className="pf-dd-line" />
+            <text x={L - 6} y={geo.ddTop + geo.ddH} textAnchor="end" className="pf-ytick">{fmtPct(geo.ddMin, 0)}</text>
           </g>
         )}
         {/* 벤치마크 → 포트폴리오(위에) */}
-        {view.bench && <path d={linePath(idxs, view.bench, x, yEq)} className="pg-pf-line-bench" />}
-        <path d={linePath(idxs, view.equity, x, yEq)} className="pg-pf-line-port" />
+        {view.bench && <path d={linePath(idxs, view.bench, x, yEq)} className="pf-line-bench" />}
+        <path d={linePath(idxs, view.equity, x, yEq)} className="pf-line-port" />
         {/* 오른쪽 끝 값 */}
-        {endPortY !== null && <text x={x0 + plotW + 6} y={endPortY + 4} className="pg-pf-endlabel pg-pf-endlabel--port">{fmtValue(view.unit, lastPort)}</text>}
+        {endPortY !== null && <text x={x0 + plotW + 6} y={endPortY + 4} className="pf-endlabel pf-endlabel--port">{fmtValue(view.unit, lastPort)}</text>}
         {endBenchY !== null && (
           <g>
-            {collide && endPortY !== null && <line x1={x0 + plotW + 2} x2={x0 + plotW + 6} y1={yEq(lastBench as number)} y2={endBenchY} className="pg-pf-leader" />}
-            <text x={x0 + plotW + 6} y={endBenchY + 4} className="pg-pf-endlabel pg-pf-endlabel--bench">{fmtValue(view.unit, lastBench)}</text>
+            {collide && endPortY !== null && <line x1={x0 + plotW + 2} x2={x0 + plotW + 6} y1={yEq(lastBench as number)} y2={endBenchY} className="pf-leader" />}
+            <text x={x0 + plotW + 6} y={endBenchY + 4} className="pf-endlabel pf-endlabel--bench">{fmtValue(view.unit, lastBench)}</text>
           </g>
         )}
         {/* 십자선·점 */}
-        <g className="pg-pf-cross">
-          <line x1={x(cur)} x2={x(cur)} y1={TOP} y2={stripY - 2} className="pg-pf-crossline" />
-          {curPort !== null && <circle cx={x(cur)} cy={yEq(curPort)} r={4} className="pg-pf-dot pg-pf-dot--port" />}
-          {curBench !== null && curBench !== undefined && <circle cx={x(cur)} cy={yEq(curBench)} r={4} className="pg-pf-dot pg-pf-dot--bench" />}
-          {hasDd && curDd !== null && curDd !== undefined && <circle cx={x(cur)} cy={yDd(curDd)} r={3.5} className="pg-pf-dot pg-pf-dot--dd" />}
+        <g className="pf-cross">
+          <line x1={x(cur)} x2={x(cur)} y1={TOP} y2={stripY - 2} className="pf-crossline" />
+          {curPort !== null && <circle cx={x(cur)} cy={yEq(curPort)} r={4} className="pf-dot pf-dot--port" />}
+          {curBench !== null && curBench !== undefined && <circle cx={x(cur)} cy={yEq(curBench)} r={4} className="pf-dot pf-dot--bench" />}
+          {hasDd && curDd !== null && curDd !== undefined && <circle cx={x(cur)} cy={yDd(curDd)} r={3.5} className="pf-dot pf-dot--dd" />}
         </g>
         {/* 증거 띠 */}
-        <g className="pg-pf-strip" transform={`translate(0 ${stripY})`}>
-          {learnW > 0 && <rect x={L} y={0} width={learnW} height={STRIP_H - 4} fill={`url(#${pid}-hatch)`} className="pg-pf-strip-learn" />}
-          <rect x={x0} y={3} width={plotW} height={STRIP_H - 10} className="pg-pf-strip-sim" />
-          {view.practice === true && <rect x={L} y={0} width={learnW + plotW} height={STRIP_H - 4} fill={`url(#${pid}-hatch)`} className="pg-pf-strip-practice" />}
-          {rebalIdx.map((r, k) => <line key={k} x1={x(r.i)} x2={x(r.i)} y1={0} y2={STRIP_H - 4} className="pg-pf-strip-rebal" />)}
+        <g className="pf-strip" transform={`translate(0 ${stripY})`}>
+          {learnW > 0 && <rect x={L} y={0} width={learnW} height={STRIP_H - 4} fill={`url(#${pid}-hatch)`} className="pf-strip-learn" />}
+          <rect x={x0} y={3} width={plotW} height={STRIP_H - 10} className="pf-strip-sim" />
+          {view.practice === true && <rect x={L} y={0} width={learnW + plotW} height={STRIP_H - 4} fill={`url(#${pid}-hatch)`} className="pf-strip-practice" />}
+          {rebalIdx.map((r, k) => <line key={k} x1={x(r.i)} x2={x(r.i)} y1={0} y2={STRIP_H - 4} className="pf-strip-rebal" />)}
           {asOfIdx !== null && asOfIdx >= 0 && (
-            <path d={`M${(x(asOfIdx) - 4).toFixed(1)} ${STRIP_H - 4}L${x(asOfIdx).toFixed(1)} ${STRIP_H - 10}L${(x(asOfIdx) + 4).toFixed(1)} ${STRIP_H - 4}Z`} className="pg-pf-strip-asof" />
+            <path d={`M${(x(asOfIdx) - 4).toFixed(1)} ${STRIP_H - 4}L${x(asOfIdx).toFixed(1)} ${STRIP_H - 10}L${(x(asOfIdx) + 4).toFixed(1)} ${STRIP_H - 4}Z`} className="pf-strip-asof" />
           )}
         </g>
         {/* 가로축 글자 */}
         {xLabels.map((l, k) => (
-          <text key={l.i} x={x(l.i)} y={stripBottom + XLAB_H - 2} className="pg-pf-xtick"
+          <text key={l.i} x={x(l.i)} y={stripBottom + XLAB_H - 2} className="pf-xtick"
                 textAnchor={k === 0 ? "start" : k === xLabels.length - 1 ? "end" : "middle"}>{l.text}</text>
         ))}
       </svg>
       {/* 읽는 줄 — 늘 보인다 · 포인터·키보드가 옮긴다 */}
-      <p className="pg-pf-read" aria-live="polite">
-        <b className="pg-pf-read-date">{view.dates[cur].slice(0, 10)}</b>
-        <span className="pg-pf-read-item"><i className="pg-pf-key pg-pf-key--port" aria-hidden="true" />포트폴리오 <b>{fmtValue(view.unit, curPort)}</b>
-          {cumCur !== null && <span className={`pg-pf-delta pg-pf-delta--${cumCur >= 0 ? "up" : "down"}`}>({fmtSignedPct(cumCur)})</span>}</span>
-        {view.bench && <span className="pg-pf-read-item"><i className="pg-pf-key pg-pf-key--bench" aria-hidden="true" />{view.benchLabel ?? "벤치마크"} <b>{fmtValue(view.unit, curBench ?? null)}</b></span>}
-        {hasDd && <span className="pg-pf-read-item"><i className="pg-pf-key pg-pf-key--dd" aria-hidden="true" />낙폭 <b>{fmtPct(curDd ?? null)}</b></span>}
-        {curRebal && <span className="pg-pf-read-item pg-pf-read-rebal">이날 리밸런싱{curRebal.turnover !== null ? ` (회전율 ${fmtPct(curRebal.turnover, 0)})` : ""}</span>}
+      <p className="pf-read" aria-live="polite">
+        <b className="pf-read-date">{view.dates[cur].slice(0, 10)}</b>
+        <span className="pf-read-item"><i className="pf-key pf-key--port" aria-hidden="true" />포트폴리오 <b>{fmtValue(view.unit, curPort)}</b>
+          {cumCur !== null && <span className={`pf-delta pf-delta--${cumCur >= 0 ? "up" : "down"}`}>({fmtSignedPct(cumCur)})</span>}</span>
+        {view.bench && <span className="pf-read-item"><i className="pf-key pf-key--bench" aria-hidden="true" />{view.benchLabel ?? "벤치마크"} <b>{fmtValue(view.unit, curBench ?? null)}</b></span>}
+        {hasDd && <span className="pf-read-item"><i className="pf-key pf-key--dd" aria-hidden="true" />낙폭 <b>{fmtPct(curDd ?? null)}</b></span>}
+        {curRebal && <span className="pf-read-item pf-read-rebal">이날 리밸런싱{curRebal.turnover !== null ? ` (회전율 ${fmtPct(curRebal.turnover, 0)})` : ""}</span>}
       </p>
       {/* 범례 — 두 계열이면 늘 · 벤치마크가 없으면 그렇게 말한다 */}
-      <p className="pg-pf-legend">
-        <span><i className="pg-pf-key pg-pf-key--port" aria-hidden="true" />포트폴리오{view.unit === "x" ? " (처음을 1로)" : ""}</span>
+      <p className="pf-legend">
+        <span><i className="pf-key pf-key--port" aria-hidden="true" />포트폴리오{view.unit === "x" ? " (처음을 1로)" : ""}</span>
         {view.bench
-          ? <span><i className="pg-pf-key pg-pf-key--bench" aria-hidden="true" />벤치마크{view.benchLabel ? ` ${view.benchLabel}` : ""}</span>
-          : <span className="pg-pf-legend-none">벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았어요</span>}
-        {hasDd ? <span><i className="pg-pf-key pg-pf-key--dd" aria-hidden="true" />낙폭(고점 대비)</span> : <span className="pg-pf-legend-none">낙폭 곡선 없음</span>}
+          ? <span><i className="pf-key pf-key--bench" aria-hidden="true" />벤치마크{view.benchLabel ? ` ${view.benchLabel}` : ""}</span>
+          : <span className="pf-legend-none">벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았어요</span>}
+        {hasDd ? <span><i className="pf-key pf-key--dd" aria-hidden="true" />낙폭(고점 대비)</span> : <span className="pf-legend-none">낙폭 곡선 없음</span>}
       </p>
       {/* 증거 띠 범례 — 글자가 띠의 뜻을 말한다(색·빗금만으로 말하지 않는다) */}
-      <p className="pg-pf-strip-legend">
-        {learnW > 0 && <span><i className="pg-pf-skey pg-pf-skey--learn" aria-hidden="true" />처음 {learnDays}일은 배우기만</span>}
-        {rebalLegend && <span>{rebalIdx.length > 0 && <i className="pg-pf-skey pg-pf-skey--rebal" aria-hidden="true" />}{rebalLegend}</span>}
-        {asOfIdx !== null && asOfIdx >= 0 && view.asOf && <span><i className="pg-pf-skey pg-pf-skey--asof" aria-hidden="true" />기준일 {view.asOf.slice(0, 10)}</span>}
-        {view.practice === true && <span className="pg-pf-strip-legend-practice"><i className="pg-pf-skey pg-pf-skey--practice" aria-hidden="true" />연습용 데이터</span>}
-        {view.practice === null && <span className="pg-pf-strip-legend-unknown">데이터가 실제인지 몰라요</span>}
+      <p className="pf-strip-legend">
+        {learnW > 0 && <span><i className="pf-skey pf-skey--learn" aria-hidden="true" />처음 {learnDays}일은 배우기만</span>}
+        {rebalLegend && <span>{rebalIdx.length > 0 && <i className="pf-skey pf-skey--rebal" aria-hidden="true" />}{rebalLegend}</span>}
+        {asOfIdx !== null && asOfIdx >= 0 && view.asOf && <span><i className="pf-skey pf-skey--asof" aria-hidden="true" />기준일 {view.asOf.slice(0, 10)}</span>}
+        {view.practice === true && <span className="pf-strip-legend-practice"><i className="pf-skey pf-skey--practice" aria-hidden="true" />연습용 데이터</span>}
+        {view.practice === null && <span className="pf-strip-legend-unknown">데이터가 실제인지 몰라요</span>}
       </p>
     </div>
   );

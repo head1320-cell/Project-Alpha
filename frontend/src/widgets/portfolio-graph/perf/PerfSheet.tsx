@@ -25,28 +25,28 @@ export function PerfSheet({ view, fallbackTitle, open, onClose, gates, after }: 
   const title = view.explain?.title ?? fallbackTitle;
   return (
     <Sheet open={open} onClose={onClose} title={title} testId="perf" className="pg-sheet pg-sheet--wide">
-      <div className="pg-pf pg-pf-sheet">
+      <div className="pg-pf pf-sheet">
         <QuestionStrip view={view} gates={gates} />
         <PerfFigures view={view} fallbackTitle={fallbackTitle} noTitle />
         <PerfCurve view={view} height={360} />
-        <section className="pg-pf-sec">
+        <section className="pf-sec">
           <h4 className="pg-h4">기간별</h4>
           <YearTable view={view} />
           <MonthGrid view={view} />
         </section>
-        <section className="pg-pf-sec">
+        <section className="pf-sec">
           <h4 className="pg-h4">큰 낙폭 사건</h4>
           <DrawdownEpisodes view={view} />
         </section>
         <MetricGroups view={view} open grid />
-        <section className="pg-pf-sec">
+        <section className="pf-sec">
           <h4 className="pg-h4">리밸런싱 기록</h4>
           <RebalanceTable view={view} />
         </section>
         {after}
-        <section className="pg-pf-sec">
+        <section className="pf-sec">
           <h4 className="pg-h4">데이터와 한계</h4>
-          {(view.explain?.facts ?? []).map((f, i) => <p key={i} className="pg-note pg-pf-fact">{f}</p>)}
+          {(view.explain?.facts ?? []).map((f, i) => <p key={i} className="pg-note pf-fact">{f}</p>)}
           <TrustAndUnmeasured explain={view.explain} openUnmeasured />
         </section>
         <PerfTableView view={view} />

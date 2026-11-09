@@ -25,7 +25,7 @@ export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explai
   return (
     <>
       {trust.length > 0 && (
-        <div className="pg-trust pg-pf-trust">
+        <div className="pg-trust pf-trust">
           <div className="pg-trust-q">믿어도 되나요?</div>
           {trust.map((t, i) => (
             <div key={i} className="pg-trust-a"><span className={`pg-tag pg-tag--${t.state}`}>{TRUST_TEXT[t.state]}</span><span>{t.text}</span></div>
@@ -33,7 +33,7 @@ export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explai
         </div>
       )}
       {unmeasured.length > 0 && (
-        <details className="pg-unmeasured pg-pf-unmeasured" open={openUnmeasured || undefined}>
+        <details className="pg-unmeasured pf-unmeasured" open={openUnmeasured || undefined}>
           <summary>재지 않은 것 {unmeasured.length}가지</summary>
           <ul>{unmeasured.map((u, i) => <li key={i}>{u}</li>)}</ul>
         </details>
@@ -51,10 +51,10 @@ export function PerfPanel({ view, fallbackTitle, after, sheetAfter }: {
   return (
     <div className="pg-pf">
       <PerfFigures view={view} fallbackTitle={fallbackTitle}
-                   action={<button type="button" className="pg-btn pg-pf-open" onClick={() => setOpen(true)}>크게 보기</button>} />
+                   action={<button type="button" className="pg-btn pf-open" onClick={() => setOpen(true)}>크게 보기</button>} />
       <PerfCurve view={view} />
       <PeriodBars view={view} />
-      {(ex?.facts ?? []).map((f, i) => <p key={i} className="pg-note pg-pf-fact">{f}</p>)}
+      {(ex?.facts ?? []).map((f, i) => <p key={i} className="pg-note pf-fact">{f}</p>)}
       <TrustAndUnmeasured explain={ex} />
       <MetricGroups view={view} />
       <PerfTableView view={view} />

@@ -10,7 +10,7 @@ export function YearTable({ view }: { view: PerfView }) {
   const yearly = view.periods?.yearly ?? [];
   if (!yearly.length) return null;
   return (
-    <table className="pg-table pg-pf-table-years">
+    <table className="pg-table pf-table-years">
       <thead><tr><th>해</th><th className="pg-td-num">수익</th><th className="pg-td-num">가장 크게 빠진 폭</th><th className="pg-td-num">거래일</th></tr></thead>
       <tbody>
         {yearly.map((r) => (
@@ -28,11 +28,11 @@ export function YearTable({ view }: { view: PerfView }) {
 
 export function PerfTableView({ view }: { view: PerfView }) {
   return (
-    <details className="pg-pf-table">
+    <details className="pf-table">
       <summary>표로 보기</summary>
       <YearTable view={view} />
-      <div className="pg-pf-table-scroll">
-        <table className="pg-table pg-pf-table-curve">
+      <div className="pf-table-scroll">
+        <table className="pg-table pf-table-curve">
           <thead><tr><th>날짜</th><th className="pg-td-num">포트폴리오</th>{view.bench && <th className="pg-td-num">벤치마크</th>}{view.drawdown && <th className="pg-td-num">낙폭</th>}</tr></thead>
           <tbody>
             {view.dates.map((d, i) => (

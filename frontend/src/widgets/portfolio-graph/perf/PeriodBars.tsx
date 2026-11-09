@@ -7,23 +7,23 @@ import { fmtSignedPct, type PerfView } from "./perfView";
 
 export function PeriodBars({ view }: { view: PerfView }) {
   const rows = view.periods?.yearly ?? null;
-  if (!rows) return <p className="pg-note pg-pf-years-none">해마다 수익은 이 결과에 없어요 — 서버가 기간별 수익을 주지 않았어요.</p>;
-  if (!rows.length) return <p className="pg-note pg-pf-years-none">해마다 수익을 셀 만큼 긴 곡선이 아니에요.</p>;
+  if (!rows) return <p className="pg-note pf-years-none">해마다 수익은 이 결과에 없어요 — 서버가 기간별 수익을 주지 않았어요.</p>;
+  if (!rows.length) return <p className="pg-note pf-years-none">해마다 수익을 셀 만큼 긴 곡선이 아니에요.</p>;
   const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.return_pct)));
   return (
-    <div className="pg-pf-years">
+    <div className="pf-years">
       <h4 className="pg-h4">해마다</h4>
-      <ul className="pg-pf-year-list">
+      <ul className="pf-year-list">
         {rows.map((r) => {
           const w = Math.min(50, (Math.abs(r.return_pct) / max) * 50);
           return (
-            <li key={r.year} className="pg-pf-year" data-partial={r.partial ? "true" : "false"}>
-              <span className="pg-pf-year-lab">{r.year}{r.partial ? <small> 일부</small> : null}</span>
-              <span className="pg-pf-year-track" aria-hidden="true">
-                <i className={`pg-pf-year-bar pg-pf-year-bar--${r.return_pct >= 0 ? "up" : "down"}`}
+            <li key={r.year} className="pf-year" data-partial={r.partial ? "true" : "false"}>
+              <span className="pf-year-lab">{r.year}{r.partial ? <small> 일부</small> : null}</span>
+              <span className="pf-year-track" aria-hidden="true">
+                <i className={`pf-year-bar pf-year-bar--${r.return_pct >= 0 ? "up" : "down"}`}
                    style={r.return_pct >= 0 ? { left: "50%", width: `${w}%` } : { right: "50%", width: `${w}%` }} />
               </span>
-              <span className={`pg-pf-year-val pg-pf-delta--${r.return_pct >= 0 ? "up" : "down"}`}>{fmtSignedPct(r.return_pct)}</span>
+              <span className={`pf-year-val pf-delta--${r.return_pct >= 0 ? "up" : "down"}`}>{fmtSignedPct(r.return_pct)}</span>
             </li>
           );
         })}

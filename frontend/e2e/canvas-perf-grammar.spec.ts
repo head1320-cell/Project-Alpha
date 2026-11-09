@@ -64,18 +64,18 @@ const side = (page: Page) => page.locator(".pg-side");
 const strs = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
 const nums = (v: unknown) => (Array.isArray(v) ? (v as number[]) : []);
 /** 새 부품 안의 title= 만 — 아래 절(전략 비중 표 등)의 이전부터 있던 title= 과 성과 라벨(`shared/ui/PerfLabel`)은 이 범위 밖이다. */
-const NEW_PART_TITLES = ".pg-pf-head [title]:not(.perf-label), .pg-pf-fig [title], .pg-pf-years [title], .pg-pf-metrics [title], .pg-pf-table [title]";
+const NEW_PART_TITLES = ".pf-head [title]:not(.perf-label), .pf-fig [title], .pf-years [title], .pf-metrics [title], .pf-table [title]";
 
 /** 세 노드가 ★같은 문법★으로 그려졌는가 — 머리(서버 explain) · 그림 하나 · 읽는 줄(키보드) · 해마다 · 표 쌍둥이 · recharts·툴팁 0 · 대비. */
 async function sameGrammar(page: Page, n: RunBody["nodes"][string], dates: string[], hasDd: boolean) {
   const ex = n.explain!;
-  await expect(side(page).locator(".pg-pf-title")).toHaveText(ex.title);
-  await expect(side(page).locator(".pg-pf-hero")).toContainText(ex.headline!.text);
-  const fig = side(page).locator(".pg-pf-curve");
+  await expect(side(page).locator(".pf-title")).toHaveText(ex.title);
+  await expect(side(page).locator(".pf-hero")).toContainText(ex.headline!.text);
+  const fig = side(page).locator(".pf-curve");
   await expect(fig).toBeVisible();
-  await expect(fig.locator(".pg-pf-line-port")).toHaveCount(1);
-  await expect(fig.locator(".pg-pf-dd-area")).toHaveCount(hasDd ? 1 : 0);
-  const read = side(page).locator(".pg-pf-read");
+  await expect(fig.locator(".pf-line-port")).toHaveCount(1);
+  await expect(fig.locator(".pf-dd-area")).toHaveCount(hasDd ? 1 : 0);
+  const read = side(page).locator(".pf-read");
   await expect(read).toContainText(dates[dates.length - 1]);
   await fig.focus();
   await page.keyboard.press("ArrowLeft");
@@ -84,17 +84,17 @@ async function sameGrammar(page: Page, n: RunBody["nodes"][string], dates: strin
   await expect(read).toContainText(dates[dates.length - 1]);
   const yearly = (n.view!.periods as { yearly: unknown[] }).yearly;
   expect(yearly.length, "서버가 해마다 수익을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(0);
-  await expect(side(page).locator(".pg-pf-year")).toHaveCount(yearly.length);
+  await expect(side(page).locator(".pf-year")).toHaveCount(yearly.length);
   await expect(side(page).locator(".recharts-wrapper, .recharts-tooltip-wrapper")).toHaveCount(0);
   await expect(side(page).locator(NEW_PART_TITLES)).toHaveCount(0);
-  await expect(side(page).locator(".pg-pf-kv")).toContainText("총수익");
+  await expect(side(page).locator(".pf-kv")).toContainText("총수익");
   await expect(side(page).locator(".pg-perf .perf-label")).toBeVisible();
   await expect(side(page).locator(".pg-result")).not.toContainText("NaN");
-  const det = side(page).locator("details.pg-pf-table");
+  const det = side(page).locator("details.pf-table");
   await det.locator("summary").click();
-  await expect(det.locator("table.pg-pf-table-curve tbody tr")).toHaveCount(dates.length);
+  await expect(det.locator("table.pf-table-curve tbody tr")).toHaveCount(dates.length);
   await det.locator("summary").click();
-  await side(page).locator("details.pg-pf-metrics summary").click();
+  await side(page).locator("details.pf-metrics summary").click();
   for (const dark of [false, true]) {
     await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), dark);
     await page.waitForTimeout(150);
@@ -111,9 +111,9 @@ test("(a) 제목·헤드라인은 서버 explain 그대로", async ({ page }) =>
   const body = await run(page);
   const ex = body.nodes.backtest.explain!;
   await detail(page, "backtest");
-  await expect(side(page).locator(".pg-pf-title")).toHaveText(ex.title);
-  await expect(side(page).locator(".pg-pf-hero")).toContainText(ex.headline!.text);
-  await expect(side(page).locator(".pg-pf-hero")).toContainText(ex.headline!.label);
+  await expect(side(page).locator(".pf-title")).toHaveText(ex.title);
+  await expect(side(page).locator(".pf-hero")).toContainText(ex.headline!.text);
+  await expect(side(page).locator(".pf-hero")).toContainText(ex.headline!.label);
 });
 
 test("(b) 그림 하나 — 포트폴리오 선 · 낙폭(물속) · 증거 띠의 리밸런싱 눈금 수 = n_rebalances · 기준일 표식", async ({ page }) => {
@@ -121,15 +121,15 @@ test("(b) 그림 하나 — 포트폴리오 선 · 낙폭(물속) · 증거 띠�
   const body = await run(page);
   const v = body.nodes.backtest.view!;
   await detail(page, "backtest");
-  const fig = side(page).locator(".pg-pf-curve");
+  const fig = side(page).locator(".pf-curve");
   await expect(fig).toBeVisible();
-  await expect(fig.locator(".pg-pf-line-port")).toHaveCount(1);
-  await expect(fig.locator(".pg-pf-dd-area")).toHaveCount(1);
-  await expect(fig.locator(".pg-pf-strip-rebal")).toHaveCount(Number(v.n_rebalances));
+  await expect(fig.locator(".pf-line-port")).toHaveCount(1);
+  await expect(fig.locator(".pf-dd-area")).toHaveCount(1);
+  await expect(fig.locator(".pf-strip-rebal")).toHaveCount(Number(v.n_rebalances));
   const asOf = (v.coverage as { as_of_effective?: string } | undefined)?.as_of_effective;
-  await expect(fig.locator(".pg-pf-strip-asof")).toHaveCount(asOf ? 1 : 0);
+  await expect(fig.locator(".pf-strip-asof")).toHaveCount(asOf ? 1 : 0);
   // 두 계열이면 범례가 늘 있다(색만으로 가르지 않는다).
-  await expect(side(page).locator(".pg-pf-legend")).toContainText("포트폴리오");
+  await expect(side(page).locator(".pf-legend")).toContainText("포트폴리오");
 });
 
 test("(c) 읽는 줄 — 기본은 마지막 날 · ArrowLeft/Home 으로 날짜가 바뀐다 · 떠다니는 툴팁 0 · title= 0", async ({ page }) => {
@@ -137,9 +137,9 @@ test("(c) 읽는 줄 — 기본은 마지막 날 · ArrowLeft/Home 으로 날짜
   const body = await run(page);
   const dates = strs(body.nodes.backtest.view!.dates);
   await detail(page, "backtest");
-  const read = side(page).locator(".pg-pf-read");
+  const read = side(page).locator(".pf-read");
   await expect(read).toContainText(dates[dates.length - 1]);
-  await side(page).locator(".pg-pf-curve").focus();
+  await side(page).locator(".pf-curve").focus();
   await page.keyboard.press("ArrowLeft");
   await expect(read).toContainText(dates[dates.length - 2]);
   await page.keyboard.press("Home");
@@ -156,7 +156,7 @@ test("(d) 해마다 막대 수 = 서버 periods.yearly · 부분 연도는 '일�
   const yearly = (body.nodes.backtest.view!.periods as { yearly: { year: number; return_pct: number; partial: boolean }[] }).yearly;
   expect(yearly.length, "서버가 해마다 수익을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(0);
   await detail(page, "backtest");
-  const rows = side(page).locator(".pg-pf-year");
+  const rows = side(page).locator(".pf-year");
   await expect(rows).toHaveCount(yearly.length);
   for (let i = 0; i < yearly.length; i++) {
     const y = yearly[i];
@@ -173,21 +173,21 @@ test("(e) 벤치마크가 없으면 범례가 그렇게 말한다 — 짝: 있�
   const body = await run(page);
   const v = body.nodes.backtest.view!;
   await detail(page, "backtest");
-  const legend = side(page).locator(".pg-pf-legend");
+  const legend = side(page).locator(".pf-legend");
   if (Array.isArray(v.bench_curve)) await expect(legend).toContainText("벤치마크");
   await patchRun(page, (b) => { b.nodes.backtest.view!.bench_curve = null; b.nodes.backtest.view!.benchmark_label = null; });
   await run(page);
   await detail(page, "backtest");
   await expect(legend).toContainText("벤치마크 없음");
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-line-bench")).toHaveCount(0);
+  await expect(side(page).locator(".pf-curve .pf-line-bench")).toHaveCount(0);
 });
 
 test("(f) 합성 데이터면 띠 범례에 '연습용 데이터' — 짝: 실데이터라고 말하면 없다", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   await detail(page, "backtest");
-  await expect(side(page).locator(".pg-pf-strip-legend")).toContainText("연습용 데이터");
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-strip-practice")).toHaveCount(1);
+  await expect(side(page).locator(".pf-strip-legend")).toContainText("연습용 데이터");
+  await expect(side(page).locator(".pf-curve .pf-strip-practice")).toHaveCount(1);
   await patchRun(page, (b) => {
     const n = b.nodes.backtest as unknown as { provenance?: { perf_label?: { data_real?: boolean | null } } };
     if (n.provenance?.perf_label) n.provenance.perf_label.data_real = true;
@@ -195,8 +195,8 @@ test("(f) 합성 데이터면 띠 범례에 '연습용 데이터' — 짝: 실�
   });
   await run(page);
   await detail(page, "backtest");
-  await expect(side(page).locator(".pg-pf-strip-legend")).not.toContainText("연습용 데이터");
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-strip-practice")).toHaveCount(0);
+  await expect(side(page).locator(".pf-strip-legend")).not.toContainText("연습용 데이터");
+  await expect(side(page).locator(".pf-curve .pf-strip-practice")).toHaveCount(0);
 });
 
 test("(g) 표로 보기 — 그림의 쌍둥이 표 · 해마다 값이 같다 · 곡선 전체 날짜·값", async ({ page }) => {
@@ -206,12 +206,12 @@ test("(g) 표로 보기 — 그림의 쌍둥이 표 · 해마다 값이 같다 �
   const yearly = (v.periods as { yearly: { year: number; return_pct: number }[] }).yearly;
   const dates = strs(v.dates);
   await detail(page, "backtest");
-  const det = side(page).locator("details.pg-pf-table");
+  const det = side(page).locator("details.pf-table");
   await det.locator("summary").click();
-  const yrows = det.locator("table.pg-pf-table-years tbody tr");
+  const yrows = det.locator("table.pf-table-years tbody tr");
   await expect(yrows).toHaveCount(yearly.length);
   await expect(yrows.first()).toContainText(String(yearly[0].year));
-  const crows = det.locator("table.pg-pf-table-curve tbody tr");
+  const crows = det.locator("table.pf-table-curve tbody tr");
   await expect(crows).toHaveCount(dates.length);
   await expect(crows.last()).toContainText(dates[dates.length - 1]);
 });
@@ -222,8 +222,8 @@ for (const scheme of ["light", "dark"] as const) {
     await run(page);
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
     await detail(page, "backtest");
-    await expect(side(page).locator(".pg-pf-curve")).toBeVisible();
-    await side(page).locator("details.pg-pf-metrics summary").click();
+    await expect(side(page).locator(".pf-curve")).toBeVisible();
+    await side(page).locator("details.pf-metrics summary").click();
     await page.waitForTimeout(200);
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-side"));
     expect(audit.checked, "검사한 텍스트 노드 수").toBeGreaterThan(40);
@@ -237,7 +237,7 @@ test("(i) 기존 계약 그대로 — .pg-kv 총수익 · .pg-chart 보임 · [d
   await run(page);
   await detail(page, "backtest");
   await expect(side(page).locator(".pg-kv", { hasText: "총수익" }).first()).toBeVisible();
-  const kv = side(page).locator(".pg-pf-kv");
+  const kv = side(page).locator(".pf-kv");
   await expect(kv).toContainText("총수익");
   await expect(side(page).locator(".pg-chart").first()).toBeVisible();
   await expect(side(page).locator("[data-lookahead]")).toHaveCount(1);
@@ -269,19 +269,19 @@ test("(j) 백테스트 불러오기 — 같은 문법 · 낙폭은 서버가 % �
   // 낙폭은 서버가 % 로 옮긴 `drawdown_pct` — 통계의 '가장 크게 빠진 폭' 과 같은 단위(화면이 ×100 하지 않는다 · 축 글자도 그 값).
   const stats = v.statistics as { max_drawdown_pct: number };
   expect(Math.abs(Math.min(...ddPct))).toBeCloseTo(Math.abs(stats.max_drawdown_pct), 0);
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-dd .pg-pf-ytick")).toHaveText(`${Math.min(...ddPct).toFixed(0)}%`);
+  await expect(side(page).locator(".pf-curve .pf-dd .pf-ytick")).toHaveText(`${Math.min(...ddPct).toFixed(0)}%`);
   // 벤치마크 — 서버가 곡선을 주면 회색 선·범례(이름)·끝값. 짝: 없으면 '벤치마크 없음'.
   const bm = v.benchmark as { label?: string; curve?: unknown } | null;
   if (bm && nums(bm.curve).length === dates.length) {
-    await expect(side(page).locator(".pg-pf-curve .pg-pf-line-bench")).toHaveCount(1);
-    await expect(side(page).locator(".pg-pf-legend")).toContainText(`벤치마크 ${bm.label ?? ""}`.trim());
+    await expect(side(page).locator(".pf-curve .pf-line-bench")).toHaveCount(1);
+    await expect(side(page).locator(".pf-legend")).toContainText(`벤치마크 ${bm.label ?? ""}`.trim());
   } else {
-    await expect(side(page).locator(".pg-pf-legend")).toContainText("벤치마크 없음");
+    await expect(side(page).locator(".pf-legend")).toContainText("벤치마크 없음");
   }
   // 리밸런싱 날짜도 횟수도 모르는 노드 — 띠는 리밸런싱을 말하지 않는다(0번이라고도 하지 않는다 · 모름 ≠ 0).
-  await expect(side(page).locator(".pg-pf-strip-legend")).not.toContainText("리밸런싱");
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-strip-rebal")).toHaveCount(0);
-  await expect(side(page).locator(".pg-pf-strip-legend")).toContainText("연습용 데이터");          // is_mock_data → data_real=false
+  await expect(side(page).locator(".pf-strip-legend")).not.toContainText("리밸런싱");
+  await expect(side(page).locator(".pf-curve .pf-strip-rebal")).toHaveCount(0);
+  await expect(side(page).locator(".pf-strip-legend")).toContainText("연습용 데이터");          // is_mock_data → data_real=false
   await expect(side(page).locator(".pg-note", { hasText: `실행 ${rid}` })).toBeVisible();          // 아래 절(실행 id) 그대로
   await expect(side(page).locator(".pg-kv", { hasText: "총수익" }).first()).toBeVisible();          // BL3 W1 계약
 });
@@ -322,13 +322,13 @@ test("(k) 전략 묶음 — 같은 문법(서버 모양 픽스처) · 낙폭은 
   await detail(page, "m");
   await sameGrammar(page, body.nodes.m, dates, true);
   // 낙폭은 같은 물속 · 곡선은 원 단위(끝값 '억원') · 벤치마크 없음은 범례가 말한다
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-endlabel--port")).toContainText("억원");
-  await expect(side(page).locator(".pg-pf-legend")).toContainText("벤치마크 없음");
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-line-bench")).toHaveCount(0);
+  await expect(side(page).locator(".pf-curve .pf-endlabel--port")).toContainText("억원");
+  await expect(side(page).locator(".pf-legend")).toContainText("벤치마크 없음");
+  await expect(side(page).locator(".pf-curve .pf-line-bench")).toHaveCount(0);
   // 리밸런싱 횟수는 알지만 날짜는 없다 — 눈금 0 · 글로 그렇게 말한다(눈금 없이 횟수만 그리지 않는다)
-  await expect(side(page).locator(".pg-pf-curve .pg-pf-strip-rebal")).toHaveCount(0);
-  await expect(side(page).locator(".pg-pf-strip-legend")).toContainText(`리밸런싱 ${nReb}번 (날짜는 기록에 없어요)`);
-  await expect(side(page).locator(".pg-pf-strip-legend")).toContainText("연습용 데이터");
+  await expect(side(page).locator(".pf-curve .pf-strip-rebal")).toHaveCount(0);
+  await expect(side(page).locator(".pf-strip-legend")).toContainText(`리밸런싱 ${nReb}번 (날짜는 기록에 없어요)`);
+  await expect(side(page).locator(".pf-strip-legend")).toContainText("연습용 데이터");
   // 아래 절 그대로 — 기간·다시 나눈 횟수 · 전략 비중 · 수익 나눠 보기(안 잰 칸 넷은 '안 쟀어요') · 전략 출처 둘
   await expect(side(page).locator(".pg-kv", { hasText: "다시 나눈 횟수" })).toContainText(`${nReb}번`);
   await expect(side(page).locator(".pg-h4", { hasText: "마지막 날 전략 비중" })).toBeVisible();
