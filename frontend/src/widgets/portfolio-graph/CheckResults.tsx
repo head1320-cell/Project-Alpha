@@ -3,11 +3,13 @@
  * 확인하기 노드의 결과 (BK W1) — 시나리오 충격 · 상관 스트레스 · 기대수익 민감도 · 팩터 성격
  * ==========================================================================
  * 수는 서버 view 그대로 그린다(다시 계산하지 않는다). 가정 충격과 실제 시세 재생은 모양부터
- * 다르다 — 재생은 낙폭 곡선, 가정은 종목별 충격 표.
+ * 다르다 — 재생은 자산곡선 + 낙폭(성과 그림 문법 ③ · 2026-11-09), 가정은 종목별 충격 표.
  */
 import type { ReactNode } from "react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
+import { DrawdownEpisodes } from "@/shared/ui/perf/DrawdownEpisodes";
+import { PerfCurve } from "@/shared/ui/perf/PerfCurve";
+import { perfViewOfStress } from "@/shared/ui/perf/perfView";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -22,24 +24,15 @@ function KV({ rows }: { rows: [string, ReactNode][] }) {
   );
 }
 
-function Drawdown({ r }: { r: Dict }) {
-  const dates = (r.dates as string[]) ?? [];
-  const p = (r.portfolio_dd as number[]) ?? [];
-  const b = (r.benchmark_dd as number[] | undefined) ?? null;
-  const step = Math.max(1, Math.floor(p.length / 300));
-  const data = p.map((y, i) => ({ d: dates[i], p: y, b: b?.[i] ?? null })).filter((_, i) => i % step === 0);
+/** 과거 재생의 그림 — 성과 그림 문법 ③ (2026-11-09): 자산곡선(처음을 1로 · 첫 점은 첫날 수익) + 벤치마크 회색 + 낙폭 둘 + 낙폭 사건. 서버 값만. */
+function StressFigure({ r, prov }: { r: Dict; prov: Dict }) {
+  const view = perfViewOfStress(r, prov);
   return (
-    <div className="pg-chart" aria-label="낙폭 곡선">
-      <ResponsiveContainer width="100%" height={150}>
-        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-          <XAxis dataKey="d" hide />
-          <YAxis domain={["auto", 0]} width={40} tick={{ fontSize: 10 }} unit="%" />
-          <Tooltip formatter={(x: number) => `${x?.toFixed?.(1)}%`} />
-          <Line dataKey="p" name="이 비중" dot={false} stroke="var(--pg-fail)" strokeWidth={1.5} isAnimationActive={false} />
-          {b && <Line dataKey="b" name={String(r.benchmark_label ?? "지수")} dot={false} stroke="var(--pg-mute)" strokeWidth={1} isAnimationActive={false} />}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <>
+      <PerfCurve view={view} height={210} title="재생 기간의 자산 곡선과 낙폭" />
+      <h4 className="pg-h4">큰 낙폭 사건</h4>
+      <DrawdownEpisodes view={view} />
+    </>
   );
 }
 
@@ -81,7 +74,7 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
             ["최대 낙폭", pct(r.max_dd_pct, 1)], ["기간 수익률", pct(r.total_return_pct, 1)],
             ...(r.benchmark_max_dd_pct != null ? [[`${String(r.benchmark_label)} 최대 낙폭`, pct(r.benchmark_max_dd_pct, 1)] as [string, ReactNode]] : []),
           ]} />
-          <Drawdown r={r} />
+          <StressFigure r={r} prov={prov} />
           {((r.dropped as string[]) ?? []).length > 0 && <p className="pg-warn">시세가 없어 뺀 종목: {(r.dropped as string[]).join(", ")}</p>}
         </>
       ) : (

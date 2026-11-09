@@ -3876,6 +3876,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* 부착 자리 — 라벨을 숫자에서 떼어 놓는 여백만 준다(색·크기는 위 블록이 정한다). */
 .brun-cmp-labels { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
 .sm-perf-label { margin: 6px 0 4px; }
+.sm-perf { margin-top: 4px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §59. 로그인 화면 `.login-*` — ★인증이 들어오는 자리★ (AC7 / P-1)
@@ -7175,7 +7176,9 @@ select.fp-factor2 { max-width: 220px; }
 .rs-acts .tx-btn { height: 44px; padding: 0 18px; font-size: 15px; }
 /* 성과 그림 문법(2026-11-09) — 결과 화면은 부품의 역할 변수에 --tx-* 를 넣는다(새 토큰 0). 캔버스는 .pg-theme 이 --pg-* 를 넣는다.
    부품이 보조 클래스(.pg-note·.pg-table·.pg-h4·.pg-td-num)로 읽는 캔버스 변수 넷도 이 화면에선 --tx-* 로 받는다. */
-.rs {
+/* 2026-11-09 ③: 캔버스 밖 어디서나(현실성 탭 `.rl` · /macro 전략 창 `.sm-modal`) 부품이 --tx-* 를 읽도록 :root 에도 — .pg-theme 은
+   제 --pg-* 로 덮는다. (이전엔 .rs 에만 있어 현실성 탭의 선이 stroke 없이 그려졌다 — 커밋 ⑤에서 고침.) */
+:root, .rs {
   --pf-ink: var(--tx-ink); --pf-body: var(--tx-sub); --pf-mute: var(--tx-mute); --pf-line: var(--tx-line); --pf-soft: var(--tx-soft);
   --pf-surface: var(--tx-surface); --pf-up: var(--tx-up); --pf-up-ink: var(--tx-up-ink); --pf-down: var(--tx-down); --pf-down-ink: var(--tx-down-ink);
   --pf-assume: var(--tx-warn); --pf-unknown: var(--tx-mute);

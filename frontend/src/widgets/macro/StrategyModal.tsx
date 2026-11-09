@@ -8,16 +8,30 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/shadcn/dialog";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { X } from "lucide-react";
 import type { StrategyAI, StrategyDetail, TacticalHolding } from "@/entities/macro/analysisModel";
 import type { Market } from "@/entities/macro/data";
 import { loadStrategyAI } from "@/entities/macro/data";
 import { regimeName } from "@/entities/macro/regimeKo";
 import { Notice } from "@/shared/ui/tx";
-import { HoldingsDonut, donutColor, SignalBadge, fmtPct, moveColor, TIP_STYLE } from "./cockpitParts";
-import { useChartAnimation } from "@/shared/ui/chartStyle";
+import { HoldingsDonut, donutColor, SignalBadge, fmtPct, moveColor } from "./cockpitParts";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
+import { PerfCurve } from "@/shared/ui/perf/PerfCurve";
+import type { PerfView } from "@/shared/ui/perf/perfView";
+
+/** 서버 `perf` → `PerfView` ★옮기기만★ — 곡선은 처음 100 · 날짜 자리는 서버 달 라벨("24.03") · 낙폭은 서버 % · 해마다·사건은 서버가 주지 않는다. */
+function strategyPerfView(d: StrategyDetail): PerfView {
+  const pl = d.perf.perf_label ?? null;
+  const dd = d.perf.drawdown_pct;
+  return {
+    unit: "base100", dates: d.perf.curve.map((p) => String(p.t)), equity: d.perf.curve.map((p) => (Number.isFinite(p.v) ? p.v : null)),
+    bench: null, benchLabel: null, drawdown: Array.isArray(dd) ? dd.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null)) : null,
+    note: d.perf.dates_note ?? null, rebalances: [], question: "이 전략의 비중을 달마다 다시 정해 왔다면 어땠나",
+    learnFrom: null, asOf: null, practice: pl && typeof pl.data_real === "boolean" ? pl.data_real === false : null, perfLabel: pl,
+    periods: null, drawdowns: null, figures: [], summary: {}, metrics: null,
+    cost: { bps: null, impact: null, nRebalances: null, turnoverAvg: null }, explain: null,
+  };
+}
 
 const Q_FILL: Record<string, string> = {
   Goldilocks: "var(--mc-q-goldilocks)", Reflation: "var(--mc-q-reflation)",
@@ -31,7 +45,6 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
   currentQuad: string; market: Market;
   onClose: () => void; onBacktest?: (d: StrategyDetail) => void;
 }) {
-  const anim = useChartAnimation();
   // undefined = 아직 안 물음 · null = 실패 · 값 = 받음
   const [ai, setAi] = useState<StrategyAI | null | undefined>(undefined);
   const [aiLoading, setAiLoading] = useState(false);
@@ -107,17 +120,8 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
               <Section title="과거로 돌려 본 성과(월마다 비중 조정)">
                 {detail.perf.curve.length ? (
                   <>
-                    <ResponsiveContainer width="100%" height={150}>
-                      <AreaChart data={detail.perf.curve} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-                        <defs><linearGradient id="smPerf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--tx-blue)" stopOpacity={0.22} /><stop offset="100%" stopColor="var(--tx-blue)" stopOpacity={0.02} /></linearGradient></defs>
-                        <CartesianGrid strokeDasharray="2 2" stroke="var(--tx-line)" vertical={false} />
-                        <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" minTickGap={28} />
-                        <YAxis tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" domain={["auto", "auto"]} width={40} />
-                        <Tooltip contentStyle={TIP_STYLE} formatter={(v: number | string) => [Number(v).toFixed(1), "가치(처음 100)"]} />
-                        <ReferenceLine y={100} stroke="var(--tx-mute)" strokeDasharray="3 3" />
-                        <Area type="monotone" dataKey="v" stroke="var(--tx-blue)" strokeWidth={1.8} fill="url(#smPerf)" isAnimationActive={anim} />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                    {/* 성과 그림 문법 ③ (2026-11-09): 처음을 100으로 · 낙폭 물속(서버 drawdown_pct) · 달 라벨이 어림인 사유는 서버 글 그대로 */}
+                    <div className="sm-perf"><PerfCurve view={strategyPerfView(detail)} height={200} title="과거로 돌려 본 성과" benchNoneText={null} /></div>
                     {/* ★이 총수익·연평균이 무엇인가★ — `/macro/strategy/{sid}` 가 선언한다(Z3). */}
                     <div className="sm-perf-label"><PerfLabel value={detail.perf.perf_label} compact /></div>
                     <dl className="sm-perf-stats">
@@ -127,7 +131,6 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
                         <div key={k} className="sm-perf-stat"><dt>{k}</dt><dd style={{ color: kind === "move" ? moveColor(v) : "var(--tx-ink)" }}>{fmtPct(v)}</dd></div>
                       ))}
                     </dl>
-                    <p className="sm-note">점선은 처음 값(100)이에요.</p>
                   </>
                 ) : <div className="mc-empty-sm">성과 곡선 자료가 없어요</div>}
               </Section>

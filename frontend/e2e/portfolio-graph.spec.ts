@@ -344,6 +344,18 @@ test("확인하기 노드(BK W1): 팔레트에서 골라 비중에 잇고 계산
   await page.locator(`.pg-step[data-node-id="${id}"] .pg-more`).click();
   await expect(page.locator(".pg-model-type")).toContainText("역사 리플레이");
   await expect(page.locator(".pg-side .pg-chart")).toBeVisible();
+  // 성과 그림 문법 ③ (2026-11-09): 재생은 자산곡선(처음을 1로) + 벤치마크 회색 + 낙폭 둘(벤치마크 낙폭은 회색 선) + 낙폭 사건 · recharts 0.
+  const res = r.view.result as { portfolio_dd: number[]; benchmark_dd?: number[]; drawdowns?: unknown[]; equity_curve?: number[] };
+  expect(res.equity_curve?.length, "서버가 자산곡선을 준다").toBe(res.portfolio_dd.length);
+  const fig = page.locator(".pg-side .pf-curve");
+  await expect(fig).toBeVisible();
+  await expect(fig.locator(".pf-line-port")).toHaveCount(1);
+  await expect(fig.locator(".pf-dd-area")).toHaveCount(1);
+  await expect(fig.locator(".pf-dd-bench")).toHaveCount(res.benchmark_dd ? 1 : 0);
+  const floor = Math.min(...res.portfolio_dd, ...(res.benchmark_dd ?? []));
+  await expect(fig.locator(".pf-dd .pf-ytick")).toHaveText(`${floor.toFixed(0)}%`);           // 축 글자 = 서버 % 그대로
+  await expect(page.locator(".pg-side .pf-dd-eps tbody tr")).toHaveCount((res.drawdowns ?? []).length);
+  await expect(page.locator(".pg-side .recharts-wrapper")).toHaveCount(0);
 });
 
 test("신호·후보 노드(BK W2): 스크리너 → 알파 점수 → 점수로 비중 · 오늘 값 표시 · 조건 편집기", async ({ page }) => {

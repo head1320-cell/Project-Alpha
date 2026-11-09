@@ -13,7 +13,10 @@ import { useMeasuredWidth } from "./useMeasuredWidth";
 
 import { GAP, L_MIN, R_MIN, STRIP_H, TOP, XLAB_H, areaPath, argExt, days, linePath, pickIndexes, textW } from "./perfGeo";
 
-export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭" }: { view: PerfView; height?: number; title?: string }) {
+export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭", benchNoneText = "벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았어요" }:
+  { view: PerfView; height?: number; title?: string;
+    /** 벤치마크가 없을 때 범례 글 — 비교 지수라는 개념이 없는 화면(/macro 전략 창)은 null 로 줄을 뺀다. */
+    benchNoneText?: string | null }) {
   const wrap = useRef<HTMLDivElement>(null);
   const width = useMeasuredWidth(wrap);
   const pid = useId();
@@ -216,7 +219,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
         <span><i className="pf-key pf-key--port" aria-hidden="true" />포트폴리오{view.unit === "x" ? " (처음을 1로)" : view.unit === "base100" ? " (처음을 100으로)" : ""}</span>
         {view.bench
           ? <span><i className="pf-key pf-key--bench" aria-hidden="true" />벤치마크{view.benchLabel ? ` ${view.benchLabel}` : ""}</span>
-          : <span className="pf-legend-none">벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았어요</span>}
+          : benchNoneText !== null ? <span className="pf-legend-none">{benchNoneText}</span> : null}
         {hasDd ? <span><i className="pf-key pf-key--dd" aria-hidden="true" />낙폭(고점 대비)</span> : <span className="pf-legend-none">낙폭 곡선 없음</span>}
         {geo.bdd && <span><i className="pf-key pf-key--ddb" aria-hidden="true" />{view.benchLabel ?? "벤치마크"} 낙폭</span>}
       </p>
@@ -227,7 +230,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
         {asOfIdx !== null && asOfIdx >= 0 && view.asOf && <span><i className="pf-skey pf-skey--asof" aria-hidden="true" />기준일 {view.asOf.slice(0, 10)}</span>}
         {view.practice === true && <span className="pf-strip-legend-practice"><i className="pf-skey pf-skey--practice" aria-hidden="true" />연습용 데이터</span>}
         {view.practice === null && <span className="pf-strip-legend-unknown">데이터가 실제인지 몰라요</span>}
-        {view.note && <span className="pf-strip-legend-note">{view.note}</span>}
+        {view.note && <span className="pf-strip-legend-note" data-server>{view.note}</span>}
       </p>
     </div>
   );

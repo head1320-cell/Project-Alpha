@@ -638,3 +638,27 @@ for (const t of TABS2) {
     expect(over).toBeLessThanOrEqual(0);
   });
 }
+
+// ── 과거 성과 = 성과 그림 문법 (2026-11-09 · 성과 그림 문법 ③) ──────────────────────────────────────────────────────
+test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글자 = 서버 drawdown_pct · 어림 라벨 글 · 읽는 줄 · recharts 0", async ({ page }) => {
+  await open(page);
+  await goTab2(page, "strategies");
+  const detailP = page.waitForResponse((r) => /\/api\/v1\/macro\/strategy\/[^/?]+(\?|$)/.test(r.url()), { timeout: 30_000 });
+  await panel2(page, "strategies").locator(".mc-stratcard").first().click();
+  const dlg = page.getByRole("dialog");
+  const detail = await (await detailP).json() as { perf: { curve: unknown[]; drawdown_pct?: number[]; dates_note?: string } };
+  expect(detail.perf.curve.length, "곡선이 없으면 이 시험은 공허하다").toBeGreaterThan(1);
+  const fig = dlg.locator(".sm-perf .pf-curve");
+  await expect(fig).toBeVisible({ timeout: 30_000 });
+  await expect(fig.locator(".pf-line-port")).toHaveCount(1);
+  await expect(fig.locator(".pf-dd-area")).toHaveCount(1);
+  // 낙폭 축 글자 = 서버 drawdown_pct 의 바닥(화면이 ×100 하지 않는다 — 비율을 넣으면 "-0%" 가 된다)
+  const floor = Math.min(...(detail.perf.drawdown_pct ?? [0]));
+  await expect(fig.locator(".pf-dd .pf-ytick")).toHaveText(`${floor.toFixed(0)}%`);
+  await expect(dlg.locator(".sm-perf .pf-strip-legend-note")).toContainText("어림");
+  await expect(dlg.locator(".sm-perf .pf-legend")).toContainText("처음을 100으로");
+  await expect(dlg.locator(".sm-perf .pf-read")).toContainText("포트폴리오");
+  await expect(dlg.locator(".sm-perf-stats .sm-perf-stat")).toHaveCount(5);                 // 지표 5 는 그대로
+  await expect(dlg.locator(".sm-perf .recharts-wrapper")).toHaveCount(0);            // 보유 도넛(recharts · 범위 밖)은 그대로
+  await expect(dlg.locator(".sm-perf [title]")).toHaveCount(0);
+});

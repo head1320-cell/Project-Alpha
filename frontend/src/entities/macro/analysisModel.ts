@@ -139,7 +139,9 @@ export interface StrategyDetail {
   id: string; name: string; family: string; signal: string; archetype: string; archetype_kr: string;
   holdings: TacticalHolding[]; profile: StrategyProfile; regime_fit: RegimeFit[];
   /** `perf_label` = ★이 곡선이 무엇인가★ (Z3). 없으면 화면이 `unknown` 을 그린다. */
-  perf: { curve: PerfPoint[]; summary: PerfSummary; perf_label?: PerfLabelValue | null };
+  perf: { curve: PerfPoint[]; summary: PerfSummary; perf_label?: PerfLabelValue | null;
+    /** 점마다 고점 대비 %(≤ 0) · 달 라벨이 어림인 사유 — 성과 그림 문법 ③(2026-11-09). 옛 응답에는 없다. */
+    drawdown_pct?: number[] | null; dates_note?: string | null };
   recent_return_12m: number | null;
   sources: { prices: boolean };
 }
