@@ -34,6 +34,7 @@ from src.api.allocation_graph_explain import (
 from src.api.allocation_graph_nodes import _FORBID, _pydantic_reason, _ui
 from src.api.allocation_graph_nodes_signal import _presets_filter
 from src.engine import portfolio_graph as pg
+from src.engine.perf_compare import NODE_METRICS, align_curves, yearly_diff
 from src.engine.quant_metrics import drawdown_episodes, period_returns
 
 logger = logging.getLogger(__name__)
@@ -189,9 +190,8 @@ def _load(inputs: dict, p: LoadParams) -> pg.NodeOutput:
                                "sources": [f"backtest_run:{p.run_id}"]})
 
 
-_STAT_KO = (("total_return_pct", "총수익", "%"), ("cagr", "연평균(CAGR)", "%"), ("sharpe_ratio", "샤프", ""),
-            ("max_drawdown_pct", "최대 낙폭", "%"), ("win_rate", "승률", "%"), ("num_trades", "거래 수", "회"),
-            ("profit_factor", "손익비", ""))
+#: 지표 7 — 비교 노드 표(E2E 계약 7행)와 불러오기 explain 이 같이 쓴다. 정의는 `perf_compare`(비교 화면과 같은 곳)에.
+_STAT_KO = NODE_METRICS
 
 
 def _explain_load(view: dict, prov: dict, params: Any) -> dict:
@@ -251,10 +251,31 @@ _COND_KO = {"start_date": "시작", "end_date": "끝", "commission_rate": "수�
             "universe": "후보 범위", "strategy_name": "규칙"}
 
 
-def _stats(run: dict) -> dict:
+def _bt(run: dict) -> dict:
     res = (run.get("run") or {}).get("result") or {}
-    bt = res.get("backtest") if isinstance(res.get("backtest"), dict) else res
-    return bt.get("statistics") or {}
+    return res.get("backtest") if isinstance(res.get("backtest"), dict) else res
+
+
+def _stats(run: dict) -> dict:
+    return _bt(run).get("statistics") or {}
+
+
+def _compare_block(a: dict, b: dict) -> tuple[dict | None, str | None]:
+    """★둘 겹쳐 보기★ (2026-11-09 · 성과 그림 문법 ③) — 비교 화면·현실성 탭과 같은 `perf_compare` 함수로 맞춘다.
+
+    두 실행의 저장 곡선(원 단위)을 각자 처음 1 로 맞춰 겹치고 차이(%p)·해마다 차이·낙폭 사건(각 3)을 낸다. 한쪽에 곡선이
+    없으면 그리지 않고 사유를 말한다(0 으로 채우지 않는다).
+    """
+    ba, bb = _bt(a), _bt(b)
+    da, ea = ba.get("equity_dates") or [], ba.get("equity_curve") or []
+    db, eb = bb.get("equity_dates") or [], bb.get("equity_curve") or []
+    if not (da and ea and db and eb):
+        return None, "한쪽 실행에 자산 곡선이 없어 겹쳐 그리지 못했어요."
+    return {"curves": align_curves(da, ea, db, eb, base=1.0),
+            "yearly": yearly_diff(period_returns(da, ea), period_returns(db, eb)),
+            "drawdowns": {"a": drawdown_episodes(da, ea, top=3), "b": drawdown_episodes(db, eb, top=3)},
+            "labels": {"a": (a.get("run") or {}).get("strategy_name") or a.get("run_id"),
+                       "b": (b.get("run") or {}).get("strategy_name") or b.get("run_id")}}, None
 
 
 def _compare(inputs: dict, p: Any) -> pg.NodeOutput:
@@ -272,7 +293,9 @@ def _compare(inputs: dict, p: Any) -> pg.NodeOutput:
     ma, mb = (a.get("run") or {}).get("is_mock_data"), (b.get("run") or {}).get("is_mock_data")
     if ma != mb:
         differences.append({"key": "is_mock_data", "label": "데이터(연습용/실제)", "a": ma, "b": mb})
-    view = {"a": a["run_id"], "b": b["run_id"], "rows": rows, "differences": differences}
+    compare, why = _compare_block(a, b)
+    view = {"a": a["run_id"], "b": b["run_id"], "rows": rows, "differences": differences,
+            "compare": compare, "compare_reason": why}
     return pg.NodeOutput(values={}, view=view)
 
 

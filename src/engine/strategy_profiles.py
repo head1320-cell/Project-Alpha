@@ -229,6 +229,8 @@ def get_profile(sid: str) -> dict | None:
 
 # ── 동적 전략 백테스트 (★매월 전략 로직 재평가·리밸런스·복리 — buy&hold 아님★) ──
 _BACKTEST_MONTHS = 48
+#: 달 라벨은 월말 날짜가 아니라 오늘부터 30일씩 거슬러 센 것이다 — 화면이 이 사실을 그림 옆에 적는다(해마다·날짜 계산은 하지 않는다).
+_DATES_NOTE = "달 라벨은 오늘부터 30일씩 거슬러 센 어림이에요 — 실제 달과 한두 달 어긋날 수 있어요."
 
 
 def _curve_summary(vals: list[float], port: list[float], months: int) -> dict:
@@ -240,14 +242,17 @@ def _curve_summary(vals: list[float], port: list[float], months: int) -> dict:
     years = months / 12.0
     cagr = (vals[-1] / vals[0]) ** (1 / years) - 1 if (years > 0 and vals[0] > 0) else 0.0
     peak, mdd = vals[0], 0.0
+    dd_pct: list[float] = []                       # 점마다 고점 대비 %(≤ 0) — 그림의 낙폭 물속(성과 그림 문법 ③ · 2026-11-09)
     for v in vals:
         peak = max(peak, v)
-        mdd = min(mdd, (v - peak) / peak)
+        d = (v - peak) / peak if peak > 0 else 0.0
+        mdd = min(mdd, d)
+        dd_pct.append(round(d * 100, 2))
     mean = sum(port) / len(port) if port else 0.0
     var = sum((x - mean) ** 2 for x in port) / len(port) if port else 0.0
     vol = math.sqrt(var) * math.sqrt(12)
     recent12 = (vals[-1] / vals[-13] - 1) if len(vals) >= 13 else None
-    return {"curve": curve, "summary": {
+    return {"curve": curve, "drawdown_pct": dd_pct, "dates_note": _DATES_NOTE, "summary": {
         "total_return_pct": round(total * 100, 1), "cagr_pct": round(cagr * 100, 1),
         "mdd_pct": round(mdd * 100, 1), "vol_pct": round(vol * 100, 1),
         "recent_12m_pct": round(recent12 * 100, 1) if recent12 is not None else None,

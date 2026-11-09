@@ -286,20 +286,26 @@ def historical_replay(holdings: dict[str, float], scenario: str, benchmark: str)
     port = sub.values @ w
     eq = np.cumprod(1.0 + port)
     dd = eq / np.maximum.accumulate(eq) - 1.0
+    from src.engine.quant_metrics import drawdown_episodes
+    dates = [str(d.date()) for d in sub.index]
     out = {
         "error": False, "mode": "historical", "available": True,
         "scenario": scenario, "label": win["label"],
-        "dates": [str(d.date()) for d in sub.index],
+        "dates": dates,
         "portfolio_dd": [round(float(x) * 100, 2) for x in dd],
         "max_dd_pct": round(float(dd.min()) * 100, 2),
         "total_return_pct": round(float(eq[-1] - 1.0) * 100, 2),
         "dropped": dropped,
+        # ★성과 그림 문법 ③ (2026-11-09)★ — 계산해 둔 자산곡선(첫 점 = 1 + 첫날 수익)과 낙폭 사건을 버리지 않고 싣는다.
+        "equity_curve": [round(float(x), 6) for x in eq],
+        "drawdowns": drawdown_episodes(dates, [float(x) for x in eq], top=3),
     }
     if benchmark in df.columns:
         b = df[benchmark].reindex(sub.index).ffill().dropna()
         if len(b) >= _MIN_OBS:
             beq = np.cumprod(1.0 + b.values)
             bdd = beq / np.maximum.accumulate(beq) - 1.0
+            out["benchmark_curve"] = [round(float(x), 6) for x in beq]
             out["benchmark_dd"] = [round(float(x) * 100, 2) for x in bdd]
             out["benchmark_max_dd_pct"] = round(float(bdd.min()) * 100, 2)
             out["benchmark_label"] = benchmark
