@@ -229,15 +229,21 @@ def get_profile(sid: str) -> dict | None:
 
 # ── 동적 전략 백테스트 (★매월 전략 로직 재평가·리밸런스·복리 — buy&hold 아님★) ──
 _BACKTEST_MONTHS = 48
-#: 달 라벨은 월말 날짜가 아니라 오늘부터 30일씩 거슬러 센 것이다 — 화면이 이 사실을 그림 옆에 적는다(해마다·날짜 계산은 하지 않는다).
+#: 월말 날짜를 못 얻었을 때만 — 달 라벨이 오늘부터 30일씩 거슬러 센 것임을 화면이 그림 옆에 적는다(그때는 해마다·낙폭 사건도 없다).
 _DATES_NOTE = "달 라벨은 오늘부터 30일씩 거슬러 센 어림이에요 — 실제 달과 한두 달 어긋날 수 있어요."
 
 
-def _curve_summary(vals: list[float], port: list[float], months: int) -> dict:
-    today = datetime.now()
+def _curve_summary(vals: list[float], port: list[float], months: int, dates: list[str] | None = None) -> dict:
+    """곡선·요약. `dates`(점마다 월말 ISO 날짜)가 있으면 라벨은 그 날짜에서 나오고 해마다·달마다 수익·낙폭 사건도 붙는다(성과 그림
+    문법 ③ · 2026-11-09). 없으면 옛 어림 라벨(오늘부터 30일씩)과 그 사유만 — 날짜를 지어내지 않는다."""
     n = len(vals)
-    curve = [{"t": (today - timedelta(days=(n - 1 - i) * 30)).strftime("%y.%m"), "v": round(v, 1)}
-             for i, v in enumerate(vals)]
+    dated = bool(dates) and len(dates or []) == n
+    if dated:
+        curve = [{"t": datetime.fromisoformat(d).strftime("%y.%m"), "v": round(v, 1)} for d, v in zip(dates or [], vals)]
+    else:
+        today = datetime.now()
+        curve = [{"t": (today - timedelta(days=(n - 1 - i) * 30)).strftime("%y.%m"), "v": round(v, 1)}
+                 for i, v in enumerate(vals)]
     total = vals[-1] / vals[0] - 1 if vals[0] > 0 else 0.0
     years = months / 12.0
     cagr = (vals[-1] / vals[0]) ** (1 / years) - 1 if (years > 0 and vals[0] > 0) else 0.0
@@ -252,7 +258,12 @@ def _curve_summary(vals: list[float], port: list[float], months: int) -> dict:
     var = sum((x - mean) ** 2 for x in port) / len(port) if port else 0.0
     vol = math.sqrt(var) * math.sqrt(12)
     recent12 = (vals[-1] / vals[-13] - 1) if len(vals) >= 13 else None
-    return {"curve": curve, "drawdown_pct": dd_pct, "dates_note": _DATES_NOTE, "summary": {
+    from src.engine.quant_metrics import drawdown_episodes, period_returns
+    return {"curve": curve, "drawdown_pct": dd_pct,
+            "dates": list(dates or []) if dated else None,
+            "periods": period_returns(dates or [], vals) if dated else None,
+            "drawdowns": drawdown_episodes(dates or [], vals, top=3) if dated else None,
+            "dates_note": None if dated else _DATES_NOTE, "summary": {
         "total_return_pct": round(total * 100, 1), "cagr_pct": round(cagr * 100, 1),
         "mdd_pct": round(mdd * 100, 1), "vol_pct": round(vol * 100, 1),
         "recent_12m_pct": round(recent12 * 100, 1) if recent12 is not None else None,
@@ -285,6 +296,14 @@ def backtest_strategy(sid: str, mk: str, months: int = _BACKTEST_MONTHS) -> dict
     span = min(months, avail - 1)
     if span < 6:
         return {"curve": [], "summary": {}}
+    # ★실제 월말 날짜★ — 리샘플이 달력 월말이라 어느 티커나 같은 자리에 같은 날짜. span+1 개가 있는 첫 티커에서 가져온다.
+    from src.data.etf_prices import monthly_closes_dated
+    dates: list[str] | None = None
+    for tk in closes:
+        dated = monthly_closes_dated(tk, mk, months + 3)
+        if len(dated) >= span + 1 and len(dated) == len(closes[tk]):
+            dates = [d for d, _ in dated][-(span + 1):]
+            break
     vals, port = [100.0], []
     for m in range(span, 0, -1):
         with etf_prices.as_of(m):  # m개월 전 시점 비중
@@ -302,7 +321,7 @@ def backtest_strategy(sid: str, mk: str, months: int = _BACKTEST_MONTHS) -> dict
                 pr += (wt / wsum) * (c[-m] / c[-m - 1] - 1.0)
         vals.append(vals[-1] * (1 + pr))
         port.append(pr)
-    return _curve_summary(vals, port, span)
+    return _curve_summary(vals, port, span, dates=dates)
 
 
 # ── 국면 적합도 (recommender 아키타입 × 국면) ────────────────────────────────────

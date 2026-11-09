@@ -6,12 +6,12 @@
 import { fmtPct, fmtSignedPct, fmtValue, type PerfView } from "./perfView";
 
 /** 해마다 표 — 수익 · 그 해 안의 가장 크게 빠진 폭 · 거래일 · 일부 연도 표시(시트의 '기간별' 절과 표 쌍둥이가 같이 쓴다). */
-export function YearTable({ view }: { view: PerfView }) {
+export function YearTable({ view, nLabel = "거래일" }: { view: PerfView; /** 마지막 열 이름 — 점이 날이면 "거래일", 달이면 "달"(/macro 전략) */ nLabel?: string }) {
   const yearly = view.periods?.yearly ?? [];
   if (!yearly.length) return null;
   return (
     <table className="pg-table pf-table-years">
-      <thead><tr><th>해</th><th className="pg-td-num">수익</th><th className="pg-td-num">가장 크게 빠진 폭</th><th className="pg-td-num">거래일</th></tr></thead>
+      <thead><tr><th>해</th><th className="pg-td-num">수익</th><th className="pg-td-num">가장 크게 빠진 폭</th><th className="pg-td-num">{nLabel}</th></tr></thead>
       <tbody>
         {yearly.map((r) => (
           <tr key={r.year}>

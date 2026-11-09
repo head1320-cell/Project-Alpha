@@ -145,9 +145,10 @@ export function PerfCompare({ view, height = 260, focus = "both", title = "두 �
           <path d={areaPath(idxs, upVals, x, yDf, yDf(0))} className="pf-diff-area pf-diff-area--up" />
           <path d={areaPath(idxs, downVals, x, yDf, yDf(0))} className="pf-diff-area pf-diff-area--down" />
           <path d={linePath(idxs, vd, x, yDf)} className="pf-diff-line" />
-          <text x={L - 6} y={geo.dfTop + 4} textAnchor="end" className="pf-ytick">{fmtSignedPp(geo.dhi, 0)}</text>
+          {/* 차이가 0 이거나 한쪽으로만 벌어지면 끝 눈금이 0 눈금 위에 겹친다("−0%p") — 11px 안이면 끝 눈금을 생략(캔버스 검수 2026-11-09) */}
+          {yDf(0) - geo.dfTop > 11 && <text x={L - 6} y={geo.dfTop + 4} textAnchor="end" className="pf-ytick">{fmtSignedPp(geo.dhi, 0)}</text>}
           <text x={L - 6} y={yDf(0) + 3.5} textAnchor="end" className="pf-ytick">0</text>
-          <text x={L - 6} y={geo.dfTop + geo.dfH} textAnchor="end" className="pf-ytick">{fmtSignedPp(geo.dlo, 0)}</text>
+          {geo.dfTop + geo.dfH - yDf(0) > 11 && <text x={L - 6} y={geo.dfTop + geo.dfH} textAnchor="end" className="pf-ytick">{fmtSignedPp(geo.dlo, 0)}</text>}
         </g>
         {/* 십자선·점 */}
         <g className="pf-cross">

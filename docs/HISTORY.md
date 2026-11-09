@@ -25733,3 +25733,34 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 하지 않음: 성과가 아닌 recharts(시세·수익률곡선·프론티어·노출 추이·MacroW2) · `/macro` 전략의 실제 달력 날짜(데이터 계층) · 현실성 서버 통합
   엔드포인트 · 비교 화면 설정 표의 의미 · 새 지표·판단·정책 · 새 색 토큰 · 기존 CSS 클래스 이름 · 성과 부품의 `lazyChart` 지연 · 비교 화면 읽는
   줄의 기본 자리(마지막 날 — A 가 먼저 끝나면 "—" · 정직한 결과).
+
+## 성과 그림 문법 ③ 후속 — 캔버스 두 노드 검수 + /macro 전략 곡선에 실제 월말 날짜 (2026-11-09)
+
+- 왜: ③ 마무리에서 남긴 둘(사용자 선택 "① + ②") — 캔버스 비교·스트레스 노드는 스크린샷 없이 E2E 단언으로 갈음했고(스펙 §5.1 8), /macro 전략
+  곡선의 달 라벨은 "오늘부터 30일씩" 어림이라 해마다·낙폭 사건을 붙이지 못했다(§5 하지 않음). ③ 의 셋째 남은 것(성과가 아닌 recharts 제거)은
+  사용자가 미뤘다.
+- 데이터 계층: `src/data/etf_prices.py::monthly_closes_dated(ticker, market, n)` — `monthly_closes` 와 자리마다 같은 값에 ★그 달의 마지막 거래일
+  (ISO)★ 을 붙인다. 달력 월말(`resample("ME")` 라벨)이 아니라 데이터가 있는 마지막 날 — 첫 시험이 `2024-03-31` 대 `2024-03-29` 로 빨갰다.
+  같은 `as_of` 자르기 · 따로 캐시(`md:` 접두어). `monthly_closes` 와 그 호출처는 손대지 않았다(값이 같으니 별도 함수).
+- 엔진: `strategy_profiles.backtest_strategy` 가 유니버스 중 길이가 맞는 첫 티커의 날짜 span+1 개를 `_curve_summary(vals, port, span, dates=…)`
+  로 넘긴다. 날짜가 있으면 `curve[].t` 는 그 날짜의 달("23.11") · `dates`(ISO) · `periods = period_returns`(해마다 `n_days` 는 그 해의 ★달 수★) ·
+  `drawdowns = drawdown_episodes(top 3)` · `dates_note = None`. 못 얻으면 옛 어림 라벨 + 사유 글만 — 날짜를 지어내지 않는다(짝 시험).
+  `strategy_backtest_map.py` 는 `curve[].t/v` 만 읽어 모양 변화 없음(라벨이 실제 달이 되어 `_iso` 가 더 맞다).
+- 화면: `StrategyModal` — `perf.dates` 가 곡선 길이와 맞으면 읽는 줄·가로 라벨이 진짜 날짜(어림 글 사라짐) · 그림 아래 "해마다"(`YearTable` 에
+  셈 열 이름 prop `nLabel="달"` — 점이 달이라 '거래일'이 아니다) · "큰 낙폭 사건"(빈 배열이면 "고점 아래로 내려간 달이 없어요"). `DrawdownEpisodes`
+  에 `compact`(날짜 "yy.mm.dd" · "아직이에요" · 칸 사이 8px · 값은 같고 서식만) — 전략 창(약 350px)·캔버스 패널용 · 결과 화면·시트·비교 화면은
+  그대로(E2E 가 긴 글을 건다).
+- 캔버스 두 노드 검수(라이트·다크 — `portfolio-graph.spec` 의 `SHOT_DIR` 선택 훅 · `RECORD_VIZ` 와 같은 방식 · 평소엔 아무것도 안 한다):
+  비교 노드는 차이가 0 이거나 한쪽으로만 벌어지면 끝 눈금("−0%p")이 0 눈금 위에 겹쳤다 → 11px 안이면 끝 눈금 생략(`PerfCompare`). 스트레스
+  노드의 그림·두 낙폭·범례·읽는 줄은 그대로 괜찮았다. 낙폭 사건 표는 패널 기본 폭(약 300px)에서 가로로 잘려 compact 로 — 그래도 수십 px 가로
+  스크롤이 남는다(같은 패널의 계산 기록 표와 같은 방식 · 패널은 늘릴 수 있다 · 전략 창은 다 들어간다 · 열을 줄이면 정보가 빠져 안 줄였다).
+- 시험: 서버 `tests/test_perf_compare.py` +4(`_curve_summary` 날짜 있음/없음 짝 · `monthly_closes_dated` = `monthly_closes` 자리마다 같은 값 +
+  실제 거래일 + `as_of` · `backtest_strategy` 날짜 관통/폴백 짝) · 변이 셋(`dated=False` 강제 → 2 죽음 · `dates=None` 넘김 → 1 · 달력 월말
+  날짜 → 3) · macro·strategy·perf_label·금지어 관련 801 통과. E2E `macro-cards.spec` 전략 창 시험을 "어림" → 실제 날짜(글 0 · 읽는 줄 마지막
+  날짜 · 해마다 행 = 서버 yearly 수 · 마지막 열 "달" · 사건 행 = 서버 drawdowns 수 · compact) 로 — 연습 환경이 날짜를 못 주면 실패한다(공허한
+  분기 대신). 대상 스펙(macro-cards · perf-compare · realism · backtest-results-perf · canvas-perf-grammar · canvas-perf-sheet · radix-dialogs ·
+  portfolio-graph 셋) 전부 통과. 전체 E2E 1291 중 1286 통과 · 건너뜀 4 · 실패 1(`canvas-minimap-pick` U3 — 이전부터의 간헐 · 홀로 2/2 통과).
+  `make all`(lint · pytest 8941 통과 · 11 건너뜀 · typecheck · build) 통과. 스크린샷은 저장소 밖(검수용 · 발견은 §5.1 10~11 에 글로).
+- 하지 않음: 성과가 아닌 recharts 제거(③ 남은 것 셋째 · 미룸) · 캔버스 패널 기본 폭에서 사건 표의 가로 스크롤 없애기 · 전략 창의 보유 도넛 ·
+  `monthly_closes` 를 날짜 포함으로 바꾸기 · `period_returns` 의 `n_days` 이름 바꾸기(캔버스·결과 화면 계약 — 전략 창은 열 이름만 "달") ·
+  패널을 좁혀 본 스크린샷(기본 폭만).

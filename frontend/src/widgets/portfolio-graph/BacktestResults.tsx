@@ -143,8 +143,8 @@ export function BacktestCompareResult({ v }: { v: Dict }) {
           <h4 className="pg-h4">해마다 차이</h4>
           <CompareYearTable view={view} />
           <div className="pf-cmp-eps">
-            <div><h4 className="pg-h4">A 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} /></div>
-            <div><h4 className="pg-h4">B 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} /></div>
+            <div><h4 className="pg-h4">A 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} compact /></div>
+            <div><h4 className="pg-h4">B 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} compact /></div>
           </div>
         </>
       ) : (

@@ -10162,6 +10162,7 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pf-dd-eps th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); }
 .pf-dd-eps th, .pf-dd-eps td { padding: 4px 18px 4px 0; }       /* 오른쪽 정렬 숫자 다음의 왼쪽 정렬 날짜가 붙어 보이지 않게 */
 .pf-dd-eps th:last-child, .pf-dd-eps td:last-child { padding-right: 0; }
+.pf-dd-eps--compact th, .pf-dd-eps--compact td { padding-right: 8px; }    /* 좁은 자리(캔버스 패널·전략 창) — 날짜도 "yy.mm.dd" 로 짧다 · 전략 창(약 350px)은 다 들어가고 캔버스 패널(약 300px)은 수십 px 가로 스크롤 */
 .pf-dd-eps th.pg-td-num { text-align: right; }
 .pf-dd-ep-open { color: var(--pf-unknown); font-weight: 500; }
 .pf-rebal-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); }

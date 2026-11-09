@@ -31,7 +31,7 @@ function StressFigure({ r, prov }: { r: Dict; prov: Dict }) {
     <>
       <PerfCurve view={view} height={210} title="재생 기간의 자산 곡선과 낙폭" />
       <h4 className="pg-h4">큰 낙폭 사건</h4>
-      <DrawdownEpisodes view={view} />
+      <DrawdownEpisodes view={view} compact />
     </>
   );
 }

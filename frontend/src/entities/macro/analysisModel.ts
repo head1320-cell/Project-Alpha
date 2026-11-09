@@ -2,6 +2,7 @@
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 
 import type { YieldCurvePoint } from "./api";
+import type { DdEpisode, MonthRow, YearRow } from "@/shared/ui/perf/perfView";
 
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 
@@ -141,7 +142,10 @@ export interface StrategyDetail {
   /** `perf_label` = ★이 곡선이 무엇인가★ (Z3). 없으면 화면이 `unknown` 을 그린다. */
   perf: { curve: PerfPoint[]; summary: PerfSummary; perf_label?: PerfLabelValue | null;
     /** 점마다 고점 대비 %(≤ 0) · 달 라벨이 어림인 사유 — 성과 그림 문법 ③(2026-11-09). 옛 응답에는 없다. */
-    drawdown_pct?: number[] | null; dates_note?: string | null };
+    drawdown_pct?: number[] | null;
+    /** 점마다 그 달의 마지막 거래일(ISO) — 있으면 라벨은 어림이 아니고 `periods`·`drawdowns` 가 붙는다 · 없으면 `dates_note` 가 사유. */
+    dates?: string[] | null; dates_note?: string | null;
+    periods?: { yearly: YearRow[]; monthly: MonthRow[] } | null; drawdowns?: DdEpisode[] | null };
   recent_return_12m: number | null;
   sources: { prices: boolean };
 }

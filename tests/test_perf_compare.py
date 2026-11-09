@@ -185,11 +185,60 @@ def test_stress_replay_ships_equity_benchmark_and_episodes(monkeypatch):
 
 
 # ── /macro 전략 ──────────────────────────────────────────────────────────────
-def test_macro_curve_summary_ships_drawdown_pct_and_a_dates_note():
+def test_macro_curve_summary_with_real_month_ends_ships_dates_periods_and_episodes():
+    from src.engine.strategy_profiles import _curve_summary
+    dates = ["2023-10-31", "2023-11-30", "2023-12-29", "2024-01-31"]
+    out = _curve_summary([100.0, 110.0, 99.0, 120.0], [0.1, -0.1, 0.2121], 3, dates=dates)
+    assert [c["t"] for c in out["curve"]] == ["23.10", "23.11", "23.12", "24.01"]      # 라벨 = 실제 날짜
+    assert out["dates"] == dates and out["dates_note"] is None
+    assert len(out["drawdown_pct"]) == 4 and out["drawdown_pct"][2] == pytest.approx(-10.0)
+    assert out["summary"]["mdd_pct"] == pytest.approx(-10.0)
+    years = {r["year"]: r for r in out["periods"]["yearly"]}
+    assert years[2023]["partial"] is True and years[2024]["partial"] is True
+    assert years[2023]["return_pct"] == pytest.approx(-1.0)                        # 100 → 99
+    assert [m["month"] for m in out["periods"]["monthly"]] == [10, 11, 12, 1]
+    assert out["drawdowns"][0]["trough_date"] == "2023-12-29" and out["drawdowns"][0]["recovery_date"] == "2024-01-31"
+
+
+def test_macro_curve_summary_without_dates_keeps_the_approximate_labels_and_says_so():
     from src.engine.strategy_profiles import _curve_summary
     out = _curve_summary([100.0, 110.0, 99.0, 120.0], [0.1, -0.1, 0.2121], 3)
     assert len(out["drawdown_pct"]) == 4 and max(out["drawdown_pct"]) == 0.0
-    assert out["drawdown_pct"][2] == pytest.approx(-10.0)
-    assert out["summary"]["mdd_pct"] == pytest.approx(-10.0)                # 통계와 같은 단위·같은 바닥
     assert "어림" in out["dates_note"] and "30일" in out["dates_note"]
-    assert out["summary"]["total_return_pct"] == pytest.approx(20.0)        # 기존 키 그대로
+    assert out["dates"] is None and out["periods"] is None and out["drawdowns"] is None  # 날짜를 지어내지 않는다
+    assert out["summary"]["total_return_pct"] == pytest.approx(20.0)
+
+
+def test_monthly_closes_dated_matches_monthly_closes_position_by_position(monkeypatch):
+    import pandas as pd
+
+    import src.data.etf_prices as ep
+    idx = pd.bdate_range("2024-01-02", "2024-06-28")
+    df = pd.DataFrame({"close": [100.0 + i for i in range(len(idx))]}, index=idx)
+    monkeypatch.setattr(ep, "_daily_df", lambda code: df)
+    monkeypatch.setattr(ep, "resolve", lambda t, m: (t, t))
+    ep.cache_clear()
+    plain = ep.monthly_closes("SPY", "us", 4)
+    dated = ep.monthly_closes_dated("SPY", "us", 4)
+    assert [v for _, v in dated] == plain and [d for d, _ in dated] == ["2024-03-29", "2024-04-30", "2024-05-31", "2024-06-28"]
+    with ep.as_of(2):                                                            # as_of 도 같은 자리를 자른다
+        assert [v for _, v in ep.monthly_closes_dated("SPY", "us", 2)] == ep.monthly_closes("SPY", "us", 2)
+    ep.cache_clear()
+
+
+def test_macro_backtest_strategy_threads_real_month_end_dates_into_the_curve():
+    from src.engine.strategy_profiles import backtest_strategy
+    out = backtest_strategy("classic_dm", "us", months=12)
+    assert out["curve"] and out["dates"] and len(out["dates"]) == len(out["curve"])
+    assert all(len(d) == 10 and d[4] == "-" for d in out["dates"])                             # ISO 날짜
+    assert [c["t"] for c in out["curve"]] == [f"{d[2:4]}.{d[5:7]}" for d in out["dates"]]      # 라벨 = 그 날짜의 달
+    assert out["dates_note"] is None and out["periods"]["yearly"] and out["drawdowns"] is not None
+
+
+def test_macro_backtest_strategy_without_dated_closes_falls_back_to_the_approximate_labels(monkeypatch):
+    import src.data.etf_prices as ep
+    from src.engine.strategy_profiles import backtest_strategy
+    monkeypatch.setattr(ep, "monthly_closes_dated", lambda *a, **k: [])                        # 날짜를 못 얻는 상황
+    out = backtest_strategy("classic_dm", "us", months=12)
+    assert out["curve"] and out["dates"] is None and out["periods"] is None and out["drawdowns"] is None
+    assert "어림" in out["dates_note"]                                                           # 날짜를 지어내지 않고 사유만

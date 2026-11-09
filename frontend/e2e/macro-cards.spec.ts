@@ -640,13 +640,14 @@ for (const t of TABS2) {
 }
 
 // ── 과거 성과 = 성과 그림 문법 (2026-11-09 · 성과 그림 문법 ③) ──────────────────────────────────────────────────────
-test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글자 = 서버 drawdown_pct · 어림 라벨 글 · 읽는 줄 · recharts 0", async ({ page }) => {
+test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글자 = 서버 drawdown_pct · 실제 월말 날짜(어림 글 0) · 해마다 · 큰 낙폭 사건 · recharts 0", async ({ page }) => {
   await open(page);
   await goTab2(page, "strategies");
   const detailP = page.waitForResponse((r) => /\/api\/v1\/macro\/strategy\/[^/?]+(\?|$)/.test(r.url()), { timeout: 30_000 });
   await panel2(page, "strategies").locator(".mc-stratcard").first().click();
   const dlg = page.getByRole("dialog");
-  const detail = await (await detailP).json() as { perf: { curve: unknown[]; drawdown_pct?: number[]; dates_note?: string } };
+  const detail = await (await detailP).json() as { perf: { curve: unknown[]; drawdown_pct?: number[]; dates?: string[] | null; dates_note?: string | null;
+    periods?: { yearly: unknown[] } | null; drawdowns?: unknown[] | null } };
   expect(detail.perf.curve.length, "곡선이 없으면 이 시험은 공허하다").toBeGreaterThan(1);
   const fig = dlg.locator(".sm-perf .pf-curve");
   await expect(fig).toBeVisible({ timeout: 30_000 });
@@ -655,7 +656,15 @@ test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글�
   // 낙폭 축 글자 = 서버 drawdown_pct 의 바닥(화면이 ×100 하지 않는다 — 비율을 넣으면 "-0%" 가 된다)
   const floor = Math.min(...(detail.perf.drawdown_pct ?? [0]));
   await expect(fig.locator(".pf-dd .pf-ytick")).toHaveText(`${floor.toFixed(0)}%`);
-  await expect(dlg.locator(".sm-perf .pf-strip-legend-note")).toContainText("어림");
+  // 실제 월말 날짜 — 서버가 주면 어림 글은 없고 해마다·낙폭 사건이 서버 행 수 그대로 붙는다(못 줄 때의 짝 — 글만·표 0 — 은 서버 시험 `tests/test_perf_compare.py`)
+  expect(detail.perf.dates?.length, "연습 환경은 실제 월말 날짜를 준다 — 없으면 데이터 계층이 바뀐 것").toBe(detail.perf.curve.length);
+  expect(detail.perf.dates_note ?? null).toBeNull();
+  await expect(dlg.locator(".sm-perf .pf-strip-legend-note")).toHaveCount(0);
+  await expect(dlg.locator(".sm-perf .pf-read")).toContainText((detail.perf.dates ?? [])[detail.perf.curve.length - 1].slice(0, 10));
+  await expect(dlg.locator(".sm-perf .pf-table-years tbody tr")).toHaveCount(detail.perf.periods?.yearly.length ?? -1);
+  await expect(dlg.locator(".sm-perf .pf-table-years th").last()).toHaveText("달");                       // 점이 달이라 '거래일'이 아니다
+  await expect(dlg.locator(".sm-perf .pf-dd-eps tbody tr")).toHaveCount((detail.perf.drawdowns ?? []).length);
+  if ((detail.perf.drawdowns ?? []).length) await expect(dlg.locator(".sm-perf .pf-dd-eps")).toHaveClass(/pf-dd-eps--compact/);   // 좁은 창 — 짧은 날짜
   await expect(dlg.locator(".sm-perf .pf-legend")).toContainText("처음을 100으로");
   await expect(dlg.locator(".sm-perf .pf-read")).toContainText("포트폴리오");
   await expect(dlg.locator(".sm-perf-stats .sm-perf-stat")).toHaveCount(5);                 // 지표 5 는 그대로

@@ -356,6 +356,17 @@ test("확인하기 노드(BK W1): 팔레트에서 골라 비중에 잇고 계산
   await expect(fig.locator(".pf-dd .pf-ytick")).toHaveText(`${floor.toFixed(0)}%`);           // 축 글자 = 서버 % 그대로
   await expect(page.locator(".pg-side .pf-dd-eps tbody tr")).toHaveCount((res.drawdowns ?? []).length);
   await expect(page.locator(".pg-side .recharts-wrapper")).toHaveCount(0);
+  if (process.env.SHOT_DIR) {                                                     // 검수용 스크린샷(RECORD_VIZ 와 같은 선택 훅)
+    await page.locator(".pg-side .pf-curve").evaluate((el) => el.scrollIntoView({ block: "start" }));
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-stress-light.png` });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(400);
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-stress-dark.png` });
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+    await page.locator(".pg-side .pf-dd-eps").evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-stress-table-light.png` });
+    console.log("eps-wrap overflow", await page.locator(".pg-side .pf-eps-wrap").evaluate((el) => el.scrollWidth - el.clientWidth));
+  }
 });
 
 test("신호·후보 노드(BK W2): 스크리너 → 알파 점수 → 점수로 비중 · 오늘 값 표시 · 조건 편집기", async ({ page }) => {
@@ -1108,6 +1119,13 @@ test("백테스트(BL3 W1): 설정 계산은 아무것도 시작하지 않고 ·
   await expect(page.locator(".pg-side .pg-cmp-warn")).toHaveCount(0);
   await expect(page.locator(".pg-side .pf-cmp .pf-diff-line"), "둘 겹쳐 보기 — 같은 실행 둘이라 차이 0 이어도 그림은 있다").toHaveCount(1);
   await expect(page.locator(".pg-side .pf-cmp .pf-read-diff")).toContainText("+0.0%p");
+  if (process.env.SHOT_DIR) {                                                     // 검수용 스크린샷(RECORD_VIZ 와 같은 선택 훅)
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-compare-light.png` });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(400);
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-compare-dark.png` });
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  }
   expect(starts, "백테스트 시작은 버튼 한 번뿐").toHaveLength(0);                // 저장 문(/graph/save)이 시작했다 — /backtest/runs POST 는 없다
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
 });
