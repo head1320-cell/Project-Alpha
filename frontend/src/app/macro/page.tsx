@@ -6,13 +6,16 @@
  * 국면 실패는 화면 전체 alert + [다시 시도], 나머지는 그 데이터를 쓰는 탭 안에서 alert + [다시 시도].
  * `["macro","regime"]` 는 홈·기업 분석·셸 prefetch 와 같은 키다 — 성공 값 `null` 도 실패로 그린다(누가 다시 삼켜도 침묵하지 않는다).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { LoadingState } from "@/shared/ui/States";
 import { Notice } from "@/shared/ui/tx";
 import MacroCockpit, { type CoreKey, type TransplantPayload } from "@/widgets/macro/MacroCockpit";
 import MacroIntelPanel from "@/widgets/macro/MacroIntelPanel";
+import { loadCockpitCharts } from "@/widgets/macro/cockpitParts";
+import { loadAnalyticsCharts } from "@/widgets/macro/analyticsParts";
+import { loadVisualCharts } from "@/widgets/macro/visualParts";
 import { loadStrategyBacktestConfig } from "@/entities/macro/data";
 import { setMacroHandoff } from "@/entities/macro/handoff";
 import { analysisApi } from "@/entities/macro/analysisApi";
@@ -28,6 +31,11 @@ export default function MacroPage() {
   const strategiesQ = useQuery({ queryKey: ["macro", "strategies", "kr"], queryFn: () => analysisApi.macroStrategies("kr") });
   const recommendQ = useQuery({ queryKey: ["macro", "recommend", "kr"], queryFn: () => analysisApi.macroRecommend("kr") });
   const loading = regimeQ.isLoading || dashboardQ.isLoading || valuationQ.isLoading || strategiesQ.isLoading || recommendQ.isLoading;
+  // 차트 코드(recharts)는 첫 화면 JS 에 없다 — 칵핏은 다섯 쿼리가 다 온 뒤에야 붙으므로 ★여기서★ 미리 받아 데이터와 같이 오게.
+  // 못 받으면 차트 자리마다 그렇게 말한다(lazyChart).
+  useEffect(() => {
+    for (const load of [loadCockpitCharts, loadAnalyticsCharts, loadVisualCharts]) load().catch(() => {});
+  }, []);
   const regime = regimeQ.data ?? null;
   // 실패한 코어 데이터 → 다시 묻는 함수(탭이 alert 옆 [다시 시도]로 쓴다)
   const coreFail: Partial<Record<CoreKey, () => void>> = {};

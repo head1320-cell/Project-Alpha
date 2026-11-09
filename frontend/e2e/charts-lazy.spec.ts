@@ -23,6 +23,13 @@ type Screen = {
 
 const SCREENS: Screen[] = [
   {
+    path: "/macro",
+    rest: async (page) => {
+      await expect(page.locator(".mc-tab").first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator(".mc .tx-answer-s")).not.toBeEmpty();   // 답 문장(서버 국면) — macro-head 스펙과 같은 자리
+    },
+  },
+  {
     path: "/insights",
     rest: async (page) => {
       await expect(page.locator(".ca-pg-go")).toBeVisible({ timeout: 30_000 });
