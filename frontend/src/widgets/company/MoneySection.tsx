@@ -11,18 +11,16 @@
 //   섞여 있어 거짓 단위였다 — 머리는 "항목", 단위는 칸마다.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from "react";
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
+import { lazyChart } from "@/shared/ui/lazyChart";
 import type { CompanyData } from "@/entities/company/insightsModel";
 import { RetryFail } from "@/shared/ui/tx";
-import { useChartAnimation, TX_TIP_STYLE } from "@/shared/ui/chartStyle";
-import { catColor } from "@/shared/ui/vizColor";
-import { KpiBars, Spark } from "./parts";
+import { KpiBars, Spark, loadCharts } from "./parts";
 import FinancialsDeepTab from "./FinancialsDeepTab";
 import { eokWon, ok, pctTxt, ppSigned, periodKo, periodShort, wonTxt } from "./fmt";
 
-type N = number | null;
-type Row = { k: string; revenue: N; op: N; ni: N; equity: N; roe: N; debt: N; opMargin: N; eps: N; bps: N; dps: N };
-const margin = (a: N, rev: N): N => (ok(a) && ok(rev) && rev !== 0 ? Math.round((a / rev) * 1000) / 10 : null);
+export type N = number | null;
+export type Row = { k: string; revenue: N; op: N; ni: N; equity: N; roe: N; debt: N; opMargin: N; eps: N; bps: N; dps: N };
+export const margin = (a: N, rev: N): N => (ok(a) && ok(rev) && rev !== 0 ? Math.round((a / rev) * 1000) / 10 : null);
 
 function rowsOf(c: CompanyData, mode: "annual" | "quarter"): Row[] {
   if (mode === "quarter") return c.quarters.map((q) => ({ k: q.q, revenue: q.revenue, op: q.op, ni: q.ni, equity: q.equity, roe: q.roe, debt: q.debt, opMargin: q.opMargin, eps: q.eps, bps: q.bps, dps: q.dps }));
@@ -39,34 +37,6 @@ function answer(rows: Row[]): string {
   return `매출은 ${periodKo(a.k)} ${eokWon(a.revenue)}에서 ${periodKo(b.k)} ${eokWon(b.revenue)}으로 ${verb}.${m}`;
 }
 
-function StoryChart({ rows }: { rows: Row[] }) {
-  const anim = useChartAnimation();
-  const data = rows.map((r) => ({ k: periodShort(r.k), revenue: r.revenue, opM: r.opMargin, niM: margin(r.ni, r.revenue) }));
-  const tickEok = (v: number) => (Math.abs(v) >= 10000 ? `${Math.round(v / 10000).toLocaleString("ko-KR")}조` : `${Math.round(v).toLocaleString("ko-KR")}억`);
-  const AX = { fontSize: 11, fill: "var(--tx-sub)" };
-  return (
-    <figure className="ci-story" aria-label={`기간별 매출과 이익률: ${rows.map((r) => `${periodKo(r.k)} 매출 ${eokWon(r.revenue)}, 영업이익률 ${pctTxt(r.opMargin)}`).join(", ")}`}>
-      <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={data} margin={{ top: 10, right: 4, bottom: 0, left: 0 }}>
-          <XAxis dataKey="k" tick={AX} tickLine={false} axisLine={{ stroke: "var(--tx-line)" }} />
-          <YAxis yAxisId="w" tick={AX} tickFormatter={tickEok} width={52} tickLine={false} axisLine={false} />
-          <YAxis yAxisId="p" orientation="right" tick={AX} tickFormatter={(v: number) => `${v}%`} width={40} tickLine={false} axisLine={false} />
-          <ReferenceLine yAxisId="p" y={0} stroke="var(--tx-line)" />
-          <Tooltip contentStyle={TX_TIP_STYLE} cursor={{ fill: "var(--tx-soft)" }}
-                   formatter={(v: number, name: string) => [name === "revenue" ? eokWon(v) : pctTxt(v), name === "revenue" ? "매출" : name === "opM" ? "영업이익률" : "순이익률"]} />
-          <Bar yAxisId="w" dataKey="revenue" fill="var(--tx-blue)" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={anim} />
-          <Line yAxisId="p" dataKey="opM" stroke={catColor(1)} strokeWidth={2.2} dot={{ r: 3, fill: catColor(1), strokeWidth: 0 }} connectNulls={false} isAnimationActive={anim} />
-          <Line yAxisId="p" dataKey="niM" stroke={catColor(6)} strokeWidth={1.8} strokeDasharray="5 4" dot={false} connectNulls={false} isAnimationActive={anim} />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <figcaption className="ci-story-cap">
-        <span className="ci-story-key"><i className="sw bar" aria-hidden />매출(막대 · 왼쪽 눈금)</span>
-        <span className="ci-story-key"><i className="sw op" aria-hidden />영업이익률(선 · 오른쪽 눈금)</span>
-        <span className="ci-story-key"><i className="sw ni" aria-hidden />순이익률(점선)</span>
-      </figcaption>
-    </figure>
-  );
-}
 
 /** 요약 카드 — 마지막 값 + 바로 전 기간 대비(등락은 부호 + 한국식 등락색) + 추세. 두 값 중 하나라도 모르면 대비를 그리지 않는다. */
 function SumCard({ k, label, vals, periods, fmt, delta }: { k: string; label: string; vals: N[]; periods: string[]; fmt: (v: N) => string; delta: (d: number) => string }) {
@@ -150,3 +120,6 @@ export function MoneySection({ c, onRetry, seen }: { c: CompanyData; onRetry: ()
     </div>
   );
 }
+
+/** 이야기 그림(매출 막대 + 이익률 선) — 본문은 `charts.tsx`(화면이 뜬 뒤에 받는다). */
+const StoryChart = lazyChart(loadCharts, (m) => m.StoryChart, { height: 290, label: "매출과 이익률" });

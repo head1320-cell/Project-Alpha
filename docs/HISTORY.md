@@ -25553,3 +25553,12 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 측정: 첫 화면 JS 332.8 → 218.6 kB(gzip · −34%) · 느린 4G 쓸 수 있기까지 3267 → 2751 ms · LAN [가격 계산하기] → 그림 73 → 50 ms. ★느린 4G 에서 쓸 수 있게 된 바로 그 순간 누르면 그림이 335 → 1519 ms 로 늦다(차트 코드가 아직 오는 중)★ — 3초 뒤 누르면 238 ms.
 - 게이트: `make all`(3.14 · Node 24) 통과 — pytest 8903 · ruff · eslint · tsc · 빌드. 그 뒤 `chartModule` 고침(프론트만)은 eslint(경고 97 = HEAD 와 같음)·tsc·빌드를 다시 돌려 통과했고, pytest 는 다시 돌리지 않았다. · E2E: 전체 1251 중 1244 통과 · 건너뜀 4 · 실패 3 — 화면 골든(Esc 경합)·realism ST3c 는 이전부터. `canvas-ai-suggest`(AI 유령이 카드와 겹침)는 새로 보였으나 A/B 로 이번 변경과 무관함을 확인: 변경 전 빌드(`2755d13`)·글꼴 바꾸기 전 파일로 지은 빌드 모두 8번 중 5번 실패 — 이전부터의 불안정(별도 할 일).
 - 하지 않음: 서버 컴포넌트 데이터 로딩·토큰 쿠키 이전(사용자 결정) · recharts 판 · 차트 모양과 class 이름.
+
+## 차트 코드를 화면이 뜬 뒤에 받기 ② — `/insights` (2026-11-09)
+
+- 무엇: `company/parts.tsx` 의 `PriceChart`·`PriceValueChart`·`KpiBars` 와 `MoneySection.tsx` 의 `StoryChart` 를 `widgets/company/charts.tsx` 로 옮겼다(본문 그대로).
+  - 자리 높이는 각 차트의 `height` prop 을 따른다.
+  - 미리 받기는 화면 뿌리(`app/insights/page.tsx`)에서 한다. 칵핏은 데이터가 온 뒤에야 붙기 때문이다.
+  - `/my-account` 는 `company/parts` 의 차트 아닌 부품만 써서 원래도 recharts 를 싣지 않았다(export 단위 트리 셰이킹). 이 화면에는 변화가 없다.
+- 측정: 첫 화면 JS 355.7 → 241.8 kB(−32%) · 쓸 수 있기까지 LAN 224 → 177 · 느린 4G 3376 → 2806 ms · 첫 차트 LAN 709 → 613 · 느린 4G 7660 → 7447 ms.
+- 하지 않음: 위와 같음.

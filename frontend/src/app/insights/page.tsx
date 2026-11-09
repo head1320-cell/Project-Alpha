@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import CompanyCockpit, { type LazyLoaders } from "@/widgets/company/CompanyCockpit";
+import { loadCharts } from "@/widgets/company/parts";
 import { loadCompanyCore, loadNetwork, loadRisk, loadNarrative } from "@/entities/company/data";
 import { companyApi } from "@/entities/company/api";
 import { LoadingState } from "@/shared/ui/States";
@@ -31,6 +32,8 @@ function CompanyPage() {
   // 머리 줄 찾기(BU0) — `/insights?code=005930` 으로 오면 그 종목을 연다. 6자리 코드만 받는다(이름 해석은 서버 검색이 이미 했다).
   const qCode = useSearchParams().get("code");
   useEffect(() => { if (qCode && /^\d{6}$/.test(qCode)) setCode(qCode); }, [qCode]);
+  // 차트 코드(recharts)는 첫 화면 JS 에 없다 — 붙자마자 미리 받아 데이터와 같이 오게. 못 받으면 차트 자리가 그렇게 말한다(lazyChart).
+  useEffect(() => { loadCharts().catch(() => {}); }, []);
 
   // 스크리너 핸드오프 (sessionStorage)
   useEffect(() => {

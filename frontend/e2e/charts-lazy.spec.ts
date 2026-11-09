@@ -23,6 +23,13 @@ type Screen = {
 
 const SCREENS: Screen[] = [
   {
+    path: "/insights",
+    rest: async (page) => {
+      await expect(page.locator(".ca-pg-go")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText("삼성전자").first()).toBeVisible({ timeout: 30_000 });
+    },
+  },
+  {
     path: "/derivatives",
     act: async (page) => { await page.getByRole("button", { name: "가격 계산하기" }).click(); },
     rest: async (page) => { await expect(page.locator(".dv-ans")).toBeVisible({ timeout: 30_000 }); },
