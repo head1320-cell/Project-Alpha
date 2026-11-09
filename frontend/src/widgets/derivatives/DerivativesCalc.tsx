@@ -7,12 +7,14 @@
 // 서버가 계산하지 않는 모형(변동성 곡면·금리 모형·몬테카를로)은 한 탭에 "설명만 있어요"로 모은다(가짜 결과 카드 없음).
 // 탭은 주소 `?tab=` 와 같이 움직인다(옛 주소 `vol-surface`·`xva`·`rates`·`mc` 도 받는다).
 // ═══════════════════════════════════════════════════════════════════════════════
+import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Chips, PageHead, Tabs } from "@/shared/ui/tx";
 import { OptionCalc } from "./OptionCalc";
 import { BondCalc } from "./BondCalc";
 import { HedgeCalc } from "./HedgeCalc";
 import { CvaCalc } from "./CvaCalc";
+import { loadCharts } from "./parts";
 
 type Tab = "option" | "bond" | "hedge" | "cva" | "models";
 const TABS: { value: Tab; label: string }[] = [
@@ -30,6 +32,8 @@ export function DerivativesCalc() {
   const router = useRouter();
   const tab = tabOf(sp.get("tab"));
   const pick = (t: Tab) => router.replace(t === "option" ? "/derivatives" : `/derivatives?tab=${t}`, { scroll: false });
+  // 차트 코드(recharts)는 첫 화면 JS 에 없다 — 붙자마자 미리 받아 [계산하기] 뒤 그림이 기다리지 않게. 못 받으면 차트 자리가 그렇게 말한다(lazyChart).
+  useEffect(() => { loadCharts().catch(() => {}); }, []);
 
   return (
     <div className="dv tx-page">

@@ -25527,3 +25527,29 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - E2E: 전체 1242 중 1235 통과 · 건너뜀 4 · 실패 3 — 둘은 이전부터(화면 골든 Esc 경합 · 미니맵 찾기 확대 멈춤), 하나는 nav 머리 시험의 경합(아래 항목 — 고침). realism ST3c 는 이번엔 통과.
 - 게이트: `make all`(3.14 · Node 24) 통과 — pytest 8903 통과(새 시험 3) · ruff · eslint · tsc · 빌드.
 - 하지 않음: 글꼴 미리 받기(preload — 쓰지 않는 화면에서 경고가 난다) · `.num` 글꼴 규칙 · 옛 설계 문서(2026-09-30 BU 스펙의 "Google `@import` 는 남기고")는 그때 기록이라 둠.
+
+## 차트 코드를 화면이 뜬 뒤에 받기 ① — 도우미 `lazyChart` + `/derivatives` (2026-11-09 · 올린 판을 실제로 쓰기 ④)
+
+- ★처음 제안의 근거를 정정한다★: 4번은 "데이터 로딩 일부를 서버 컴포넌트로 옮겨 Next 16·React 19 로 늘어난 첫 화면 JS(+35 kB)를 되찾는다"였다.
+  지금 빌드를 재 보니 틀렸다.
+  - 늘어난 몫은 모두 프레임워크(react-dom + Next 런타임 · 모든 화면 166.7 kB)라 서버 컴포넌트로 줄지 않는다.
+  - 데이터를 서버에서 받기도 어렵다. 로그인 토큰이 `localStorage` 에 있고, E2E 57개 파일이 브라우저에서 API 를 가로챈다.
+  - 화면 고유 코드가 큰 곳은 `/macro` 156 · `/insights` 146 · `/derivatives` 124 kB 셋뿐이었고, 그중 96 kB(gzip)가 차트 라이브러리(recharts)였다.
+  사용자 결정으로 "차트 코드를 나중에 받기"로 바꿨다.
+- 무엇:
+  - 새 도우미 `shared/ui/lazyChart.tsx` — `React.lazy` + `Suspense`, 브라우저에서만 그린다(`useSyncExternalStore`).
+  - 받는 동안에는 차트 높이만큼 자리를 잡는다(`.chart-slot` · role=status).
+  - 못 받으면 그 자리에서만 "차트를 불러오지 못했어요" + [새로 고침]을 보인다(`Notice` · 에러 경계). 이 앱에는 `app/error.tsx` 가 없어 경계가 없으면 화면 전체가 죽는다.
+  - 경계는 부품 파일 안에 둔다(EvidenceDrawer 원칙). 차트 본문은 `charts.tsx` 로 **글자 하나 바꾸지 않고** 옮기고, 원래 파일은 같은 이름을 `lazyChart(...)` 로 내보낸다. 소비자 코드는 그대로다.
+  - `/derivatives`: `Payoff`·`ExposureCurve` → `widgets/derivatives/charts.tsx`. 뿌리(`DerivativesCalc`)가 마운트될 때 미리 받는다.
+  - `next/dynamic` 대신 `React.lazy` 를 쓴 까닭: `loading` 이 prop 을 받지 못해, 차트마다 다른 높이로 자리를 잡을 수 없다.
+  - ★React 19 의 Suspense 드러내기 지연(약 300 ms)★: 처음 판은 LAN [계산하기] → 그림이 73 → 349 ms 로 나빠졌다. 이미 받아 둔 모듈도 `React.lazy` 는 한 번 멈추고 대체물을 보이고, React 가 그 뒤 드러내기를 늦췄다. 그래서 `chartModule(() => import(...))` 이 받은 모듈을 `.loaded` 로 들고, 붙는 순간 이미 받아 둔 차트는 Suspense 없이 그린다(한 번 정하면 그대로 — 도중에 바꾸면 차트가 다시 붙는다) → 50 ms.
+- 시험(새 `e2e/charts-lazy.spec.ts` · 세 화면 × 셋):
+  - (a) 서버가 준 HTML 의 script 에 recharts 가 없다.
+  - (b) ★짝★ 차트는 실제로 그려지고, 그 코드는 뒤에 온 요청으로 왔다.
+  - (c) recharts 조각을 끊으면 차트 자리에 실패를 말하고, 답 문장·계산 결과는 그대로다.
+  - 고치기 전 9개 모두 실패. (c)는 화면 전체가 붙지 않아 실패했다.
+  - 변이(빌드마다): 정적 import → (a) · 끝나지 않는 loader → (b) 셋 · 에러 경계 뺌 → (c) 셋. 각각 실패.
+- 측정: 첫 화면 JS 332.8 → 218.6 kB(gzip · −34%) · 느린 4G 쓸 수 있기까지 3267 → 2751 ms · LAN [가격 계산하기] → 그림 73 → 50 ms. ★느린 4G 에서 쓸 수 있게 된 바로 그 순간 누르면 그림이 335 → 1519 ms 로 늦다(차트 코드가 아직 오는 중)★ — 3초 뒤 누르면 238 ms.
+- 게이트: `make all`(3.14 · Node 24) 통과 — pytest 8903 · ruff · eslint · tsc · 빌드. 그 뒤 `chartModule` 고침(프론트만)은 eslint(경고 97 = HEAD 와 같음)·tsc·빌드를 다시 돌려 통과했고, pytest 는 다시 돌리지 않았다. · E2E: 전체 1251 중 1244 통과 · 건너뜀 4 · 실패 3 — 화면 골든(Esc 경합)·realism ST3c 는 이전부터. `canvas-ai-suggest`(AI 유령이 카드와 겹침)는 새로 보였으나 A/B 로 이번 변경과 무관함을 확인: 변경 전 빌드(`2755d13`)·글꼴 바꾸기 전 파일로 지은 빌드 모두 8번 중 5번 실패 — 이전부터의 불안정(별도 할 일).
+- 하지 않음: 서버 컴포넌트 데이터 로딩·토큰 쿠키 이전(사용자 결정) · recharts 판 · 차트 모양과 class 이름.

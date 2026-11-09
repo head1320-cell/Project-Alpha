@@ -8,6 +8,10 @@
 import { useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Notice, RetryFail } from "@/shared/ui/tx";
+import { chartModule } from "@/shared/ui/lazyChart";
+
+// 차트 둘(만기 손익·기대 노출)의 코드 — 화면이 뜬 뒤에 받는다. 뿌리(DerivativesCalc)가 마운트 때 불러 미리 받아 둔다(lazyChart).
+export const loadCharts = chartModule(() => import("./charts"));
 
 export type Raw = Record<string, string>;
 export const EMPTY = "값을 넣어 주세요";

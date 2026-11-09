@@ -9987,3 +9987,8 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 
 /* 그림 받기(R7) — 찍는 동안만 붙는다: 전환·움직임을 꺼서 화면 상태를 뗀 순간의 중간 모양이 찍히지 않게. */
 .pg-exporting, .pg-exporting * { transition: none !important; animation: none !important; }
+
+/* 차트 코드를 받는 동안·못 받았을 때의 자리(shared/ui/lazyChart · 2026-11-08) — 차트와 같은 높이를 잡아 화면이 밀리지 않게. */
+.chart-slot { display: flex; align-items: center; justify-content: center; text-align: center; color: var(--tx-sub); font-size: 13px; }
+.chart-slot--fail { align-items: stretch; justify-content: flex-start; flex-direction: column; text-align: left; }   /* 실패는 글이 길다 — 자리 높이는 잡지 않는다 */
+.chart-slot-act { margin-top: 10px; }

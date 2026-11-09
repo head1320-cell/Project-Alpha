@@ -4,18 +4,18 @@
 // 가정 칩으로 말한다(엔진 `_ee_profile` 주석 · 캔버스 `cva_calc` 의 "양식화" 표시와 같은 사실).
 // 덜 쓰는 칸은 "더 넣기"에 접어 두지만, 접어도 요청 본문에는 늘 모든 칸을 보낸다(기본값 = 서버 기본값).
 import { useState } from "react";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { lazyChart } from "@/shared/ui/lazyChart";
 import { api, type CvaOut } from "@/shared/api/legacyApi";
 import { Chips, Segmented } from "@/shared/ui/tx";
 import { won as wonK } from "@/shared/lib/krFormat";
-import { CalcFail, Fig, NumField, StaleNote, parse, useCalc, type Raw } from "./parts";
+import { CalcFail, Fig, NumField, StaleNote, loadCharts, parse, useCalc, type Raw } from "./parts";
 
-type Pos = "irs" | "fx_forward" | "option";
+export type Pos = "irs" | "fx_forward" | "option";
 type Body = {
   notional: number; maturity_years: number; cds_spread_bps: number; recovery_rate: number; risk_free_rate: number; position_type: Pos;
   volatility: number; bank_cds_spread_bps: number; bank_recovery: number; spread_shock_bps: number;
 };
-const POS_KO: Record<Pos, string> = { irs: "금리 스왑", fx_forward: "통화 선도", option: "옵션" };
+export const POS_KO: Record<Pos, string> = { irs: "금리 스왑", fx_forward: "통화 선도", option: "옵션" };
 
 export function CvaCalc() {
   const [raw, setRaw] = useState<Raw>({ notional: "1000000000", T: "5", cds: "150", rec: "40", rf: "3", vol: "2", bank: "50", bankRec: "40", shock: "100" });
@@ -94,24 +94,5 @@ export function CvaCalc() {
   );
 }
 
-function ExposureCurve({ ee, T, epe, peak, pos }: { ee: number[]; T: number; epe: number; peak: number; pos: Pos }) {
-  const pts = ee.map((y, i) => ({ t: Number(((T * (i + 1)) / ee.length).toFixed(3)), y }));
-  return (
-    <div className="dv-chart" data-testid="cva-curve" data-points={ee.length}>
-      <h3 className="dv-h3">시간에 따라 얼마나 물려 있나요(기대 노출)</h3>
-      <p className="dv-note">상대방이 그 시점에 부도나면 잃을 수 있는 금액의 기대값이에요. {POS_KO[pos]} 모양으로 {ee.length}개 시점을 계산했어요. 가장 클 때 {wonK(peak)}, 평균 {wonK(epe)}이에요.</p>
-      <div className="dv-chart-box" role="img" aria-label={`기대 노출 곡선 ${ee.length}개 점. 가장 클 때 ${wonK(peak)}, 평균 ${wonK(epe)}`}>
-        <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
-            <CartesianGrid stroke="var(--tx-line)" vertical={false} />
-            <XAxis dataKey="t" type="number" domain={[0, T]} tick={{ fill: "var(--tx-sub)", fontSize: 12 }} tickFormatter={(x: number) => `${x}년`} />
-            <YAxis tick={{ fill: "var(--tx-sub)", fontSize: 12 }} width={64} tickFormatter={(x: number) => wonK(x).replace("원", "")} />
-            <ReferenceLine y={epe} stroke="var(--tx-mute)" strokeDasharray="4 4" />
-            <Line dataKey="y" type="monotone" stroke="var(--tx-blue)" strokeWidth={2.5} dot={{ r: 2.5, fill: "var(--tx-blue)", strokeWidth: 0 }} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <p className="dv-keys"><span><i className="dv-key-line" aria-hidden />기대 노출</span><span><i className="dv-key-s" aria-hidden />평균(EPE) {wonK(epe)}</span></p>
-    </div>
-  );
-}
+/** 기대 노출 곡선 — 본문은 `charts.tsx`(화면이 뜬 뒤에 받는다). */
+const ExposureCurve = lazyChart(loadCharts, (m) => m.ExposureCurve, { height: 340, label: "기대 노출 곡선" });
