@@ -9,7 +9,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { backtestRunApi, STAGE_LABELS, TERMINAL, type RunStatusLite } from "@/entities/backtest-run";
 import type { NodeExplain } from "@/entities/portfolio-graph";
 import { PerfPanel } from "./perf/PerfPanel";
-import { perfViewOfLoad } from "@/shared/ui/perf/perfView";
+import { compareViewOf, perfViewOfLoad, type CompareCurves, type DdEpisode, type YearDiffRow } from "@/shared/ui/perf/perfView";
+import { PerfCompare } from "@/shared/ui/perf/PerfCompare";
+import { CompareYearTable } from "@/shared/ui/perf/CompareYearTable";
+import { DrawdownEpisodes } from "@/shared/ui/perf/DrawdownEpisodes";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -119,11 +122,34 @@ export function BacktestAttributionResult({ v }: { v: Dict }) {
   );
 }
 
+/** 서버 비교 노드 뷰의 `compare` 블록 — 비교 화면의 `/perf/compare` 응답과 같은 `curves` 모양(같은 함수). */
+type CompareBlock = { curves: CompareCurves; yearly: YearDiffRow[] | null; drawdowns: { a: DdEpisode[] | null; b: DdEpisode[] | null };
+  labels: { a: string; b: string }; practice: boolean | null };
+
+/** 둘 겹쳐 보기(2026-11-09 · 성과 그림 문법 ③) — 표 위에 같은 그림. 곡선이 없으면 서버 사유를 그대로. */
 export function BacktestCompareResult({ v }: { v: Dict }) {
   const rows = (v.rows as Dict[]) ?? [];
   const diffs = (v.differences as Dict[]) ?? [];
+  const cmp = (v.compare as CompareBlock | null | undefined) ?? null;
+  const view = cmp ? compareViewOf({ curves: cmp.curves, yearly: cmp.yearly, rows: null },
+    { unit: "x", labelA: "A", labelB: "B", question: "두 백테스트를 같은 자리에 놓으면 어떻게 다른가",
+      drawdownsA: cmp.drawdowns?.a ?? null, drawdownsB: cmp.drawdowns?.b ?? null, practice: cmp.practice ?? null }) : null;
   return (
     <>
+      {view ? (
+        <>
+          <PerfCompare view={view} height={240} />
+          <p className="pg-note">A {String(cmp?.labels?.a ?? v.a)} · B {String(cmp?.labels?.b ?? v.b)} — 각자 처음을 1로 맞췄어요.</p>
+          <h4 className="pg-h4">해마다 차이</h4>
+          <CompareYearTable view={view} />
+          <div className="pf-cmp-eps">
+            <div><h4 className="pg-h4">A 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} /></div>
+            <div><h4 className="pg-h4">B 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} /></div>
+          </div>
+        </>
+      ) : (
+        <p className="pg-note pf-cmp-none">{String(v.compare_reason ?? "두 실행의 곡선을 겹쳐 그리지 못했어요 — 서버가 사유를 주지 않았어요.")}</p>
+      )}
       {diffs.length > 0 && (
         <div className="pg-warn pg-cmp-warn" role="note">
           같은 조건이 아니에요 — {diffs.map((d) => `${String(d.label)}(${String(d.a)} / ${String(d.b)})`).join(", ")}.

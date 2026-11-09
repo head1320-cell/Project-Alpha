@@ -5,6 +5,7 @@
  * 기간별 수익·낙폭 사건·지표를 서버가 준 그대로 고르고, 없는 것은 `null` 로 둔다(화면이 "없다" 고 말한다). 하는 것은 숫자·단위 서식뿐
  * (ADR-003 §2.6 이 허용하는 클라이언트 일).
  */
+import { krAxisTick } from "@/shared/lib/krFormat";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 
 /** 서버 explain 의 모양(캔버스 `NodeExplain` 과 구조가 같다 — shared 는 entities 를 모른다 · 캔버스는 NodeExplain 을 그대로 넘긴다). */
@@ -18,7 +19,8 @@ export interface PerfExplain {
 
 type Dict = Record<string, unknown>;
 export type PerfPoint = number | null;
-export type PerfUnit = "x" | "krw";
+/** 세로축 단위 — `x` 처음을 1로 · `krw` 원 · `base100` 처음을 100으로(/macro 전략 곡선 · 비교 화면이 서버에 base 100 으로 청한 곡선). */
+export type PerfUnit = "x" | "krw" | "base100";
 
 export interface YearRow { year: number; return_pct: number; max_drawdown_pct: number; n_days: number; partial: boolean }
 export interface MonthRow { year: number; month: number; return_pct: number; n_days: number; partial: boolean }
@@ -36,6 +38,10 @@ export interface PerfView {
   bench: PerfPoint[] | null;
   benchLabel: string | null;
   drawdown: PerfPoint[] | null;
+  /** 벤치마크의 낙폭(%) — 스트레스 과거 재생이 준다. 낙폭 패널에 회색 선으로. 없으면 그리지 않는다. */
+  benchDrawdown?: PerfPoint[] | null;
+  /** 서버가 그림 옆에 적어 달라고 준 글(예: /macro 전략의 "달 라벨은 … 어림이에요"). 띠 범례에 그대로. */
+  note?: string | null;
   rebalances: { date: string; turnover_pct: number | null; gross_pct: number | null; net_pct: number | null; impact_bps: number | null }[];
   /** 이 결과가 답하는 질문(전달) — 질문 띠가 적는다. 노드마다 한 문장. */
   question: string;
@@ -73,7 +79,20 @@ export function fmtWon(v: number | null): string {
   if (a >= 1e4) return `${s}${Math.round(a / 1e4).toLocaleString("ko-KR")}만원`;
   return `${s}${Math.round(a).toLocaleString("ko-KR")}원`;
 }
-export const fmtValue = (unit: PerfUnit, v: number | null): string => (unit === "x" ? fmtX(v) : fmtWon(v));
+export const fmtValue = (unit: PerfUnit, v: number | null): string =>
+  (unit === "x" ? fmtX(v) : unit === "base100" ? fmtNum(v, 1) : fmtWon(v));
+/** 차이(%p) — 부호와 함께. */
+export const fmtSignedPp = (v: number | null, d = 1): string =>
+  v === null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(d)}%p`;
+/** 세로축 눈금 서식 — 원은 한 단위(만·억)로 짧게, 처음을 100으로는 정수, 처음을 1로는 ×. */
+export function tickFormatter(unit: PerfUnit, hi: number, lo: number): (v: number) => string {
+  if (unit === "krw") return krAxisTick(Math.max(Math.abs(hi), Math.abs(lo)));
+  if (unit === "base100") return (v) => fmtNum(v, 0);
+  return (v) => fmtX(v);
+}
+/** 기준선 — 처음을 1로는 1 · 처음을 100으로는 100 · 원은 첫 값. */
+export const baselineOf = (unit: PerfUnit, first: number | null): number | null =>
+  (unit === "x" ? 1 : unit === "base100" ? 100 : first);
 /** 누적 수익률(%) — 곡선의 첫 값 대비. 첫 값이 0 이거나 모르면 null. */
 export const cumPct = (first: number | null, v: number | null): number | null =>
   first === null || v === null || first <= 0 ? null : (v / first - 1) * 100;
@@ -172,5 +191,74 @@ export function perfViewOfStrategy(v: Dict, explain: PerfExplain | null | undefi
     figures, summary: s, metrics: null,
     cost: { bps: null, impact: null, nRebalances: num(s.n_rebalances), turnoverAvg: null },
     explain: explain ?? null,
+  };
+}
+
+// ── 둘 겹쳐 보기 (2026-11-09 · 성과 그림 문법 ③ §3.2) ─────────────────────────
+/** 서버 `POST /api/v1/perf/compare` 의 응답 — 비교 화면·현실성 탭이 받고, 캔버스 비교 노드 뷰의 `compare.curves` 도 같은 모양. */
+export interface CompareCurves {
+  alignment: "date" | "index"; x: string[]; n: number; common: number; missing_a: number; missing_b: number;
+  base: number; a: PerfPoint[]; b: PerfPoint[]; diff_pp: PerfPoint[]; note: string | null;
+}
+export interface YearDiffRow { year: number; a_return_pct: number | null; b_return_pct: number | null; diff_pp: number | null; a_partial: boolean; b_partial: boolean }
+export interface MetricDiffRow { key: string; label: string; unit: string; a: number | null; b: number | null; diff: number | null }
+export interface CompareResponse { curves: CompareCurves; yearly: YearDiffRow[] | null; rows: MetricDiffRow[] | null }
+
+export interface PerfCompareView {
+  unit: PerfUnit;
+  /** 서버가 맞춘 x — 날짜(ISO) 또는 "n일째". */
+  x: string[];
+  alignment: "date" | "index";
+  /** 서버가 준 정렬 글(순번으로 맞췄다 · 한쪽에 없는 날이 있다). 없으면 null. */
+  note: string | null;
+  base: number;
+  a: { label: string; values: PerfPoint[] };
+  b: { label: string; values: PerfPoint[] };
+  /** 차이 = B − A (%p) — 서버가 뺐다. */
+  diffPp: PerfPoint[];
+  missingA: number;
+  missingB: number;
+  /** 한쪽이라도 연습용이면 true · 둘 다 실제면 false · 모르면 null. */
+  practice: boolean | null;
+  perfLabelA: PerfLabelValue | null;
+  perfLabelB: PerfLabelValue | null;
+  question: string;
+  yearly: YearDiffRow[] | null;
+  drawdowns: { a: DdEpisode[] | null; b: DdEpisode[] | null } | null;
+}
+
+export function compareViewOf(resp: CompareResponse, meta: {
+  unit: PerfUnit; labelA: string; labelB: string; perfLabelA?: PerfLabelValue | null; perfLabelB?: PerfLabelValue | null;
+  question: string; drawdownsA?: DdEpisode[] | null; drawdownsB?: DdEpisode[] | null;
+  /** 라벨 대신 서버가 연습용 여부를 바로 줄 때(캔버스 비교 노드 `compare.mock`). */
+  practice?: boolean | null;
+}): PerfCompareView {
+  const c = resp.curves;
+  const pa = practiceOf(meta.perfLabelA ?? null);
+  const pb = practiceOf(meta.perfLabelB ?? null);
+  const practice = meta.practice !== undefined ? meta.practice
+    : pa === true || pb === true ? true : pa === false && pb === false ? false : null;
+  return {
+    unit: meta.unit, x: c.x.map(String), alignment: c.alignment, note: c.note ?? null, base: c.base,
+    a: { label: meta.labelA, values: pts(c.a) ?? [] }, b: { label: meta.labelB, values: pts(c.b) ?? [] },
+    diffPp: pts(c.diff_pp) ?? [], missingA: c.missing_a, missingB: c.missing_b, practice,
+    perfLabelA: meta.perfLabelA ?? null, perfLabelB: meta.perfLabelB ?? null, question: meta.question,
+    yearly: Array.isArray(resp.yearly) ? resp.yearly : null,
+    drawdowns: meta.drawdownsA === undefined && meta.drawdownsB === undefined ? null
+      : { a: meta.drawdownsA ?? null, b: meta.drawdownsB ?? null },
+  };
+}
+
+/** 스트레스 과거 재생(`historical_replay`) — 자산곡선은 "처음을 1로"(첫 점 = 1 + 첫날 수익) · 벤치마크 곡선·낙폭 둘 · 낙폭 사건. */
+export function perfViewOfStress(r: Dict, prov: Dict): PerfView {
+  const pl = (prov.perf_label ?? null) as PerfLabelValue | null;
+  const dates = Array.isArray(r.dates) ? (r.dates as string[]).map(String) : [];
+  return {
+    unit: "x", dates, equity: pts(r.equity_curve) ?? [], bench: pts(r.benchmark_curve), benchLabel: str(r.benchmark_label),
+    drawdown: pts(r.portfolio_dd), benchDrawdown: pts(r.benchmark_dd), rebalances: [],
+    question: "오늘의 비중을 그 기간에 고정했다면 어땠나", learnFrom: null, asOf: null,
+    practice: practiceOf(pl), perfLabel: pl, periods: null,
+    drawdowns: Array.isArray(r.drawdowns) ? (r.drawdowns as DdEpisode[]) : null,
+    figures: [], summary: {}, metrics: null, cost: { bps: null, impact: null, nRebalances: null, turnoverAvg: null }, explain: null,
   };
 }

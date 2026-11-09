@@ -271,7 +271,10 @@ def _compare_block(a: dict, b: dict) -> tuple[dict | None, str | None]:
     db, eb = bb.get("equity_dates") or [], bb.get("equity_curve") or []
     if not (da and ea and db and eb):
         return None, "한쪽 실행에 자산 곡선이 없어 겹쳐 그리지 못했어요."
-    return {"curves": align_curves(da, ea, db, eb, base=1.0),
+    ma, mb = (a.get("run") or {}).get("is_mock_data"), (b.get("run") or {}).get("is_mock_data")
+    # 한쪽이라도 연습용이면 True · 둘 다 실제면 False · 모르면 None(화면이 "실제인지 몰라요" 라고 말한다).
+    practice = True if (ma is True or mb is True) else (False if (ma is False and mb is False) else None)
+    return {"curves": align_curves(da, ea, db, eb, base=1.0), "practice": practice,
             "yearly": yearly_diff(period_returns(da, ea), period_returns(db, eb)),
             "drawdowns": {"a": drawdown_episodes(da, ea, top=3), "b": drawdown_episodes(db, eb, top=3)},
             "labels": {"a": (a.get("run") or {}).get("strategy_name") or a.get("run_id"),

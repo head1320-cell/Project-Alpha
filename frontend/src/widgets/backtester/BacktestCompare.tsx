@@ -1,20 +1,21 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
 // BacktestCompare — 두 실행 비교 (스펙 §5e)
-//   실행 A(현재 run) vs 실행 B(완료된 다른 run 선택) — 정규화 자산곡선 오버레이 +
-//   핵심 지표 델타 표 + 설정/스냅샷 차이. 완료·결과 없는 실행은 정직하게 비교 불가 표기.
-//   신규 백엔드 없음: 기존 list()/get()만 사용.
+//   실행 A(현재 run) vs 실행 B(완료된 다른 run 선택) — ★둘 겹쳐 보기★(2026-11-09 · 성과 그림 문법 ③): 두 곡선·차이·해마다 차이·
+//   지표 차이는 서버 `POST /api/v1/perf/compare` 가 맞추고 뺀다(캔버스 비교 노드와 같은 함수). 화면은 서식만 · 설정 차이는 문자열 비교.
+//   완료·결과 없는 실행은 정직하게 비교 불가 표기.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { backtestRunApi, type RunFull } from "@/entities/backtest-run/api";
 import type { BacktestStatistics } from "@/entities/backtest/bridgeModel";
+import { perfApi } from "@/entities/perf/api";
 import Link from "next/link";
-import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
+import { CompareYearTable } from "@/shared/ui/perf/CompareYearTable";
+import { DrawdownEpisodes } from "@/shared/ui/perf/DrawdownEpisodes";
+import { PerfCompare } from "@/shared/ui/perf/PerfCompare";
+import { compareViewOf, type MetricDiffRow } from "@/shared/ui/perf/perfView";
 import { Notice, PageHead } from "@/shared/ui/tx";
 
 // BU4: ★차이만 말한다★ 예전 `higherBetter` 로 "초록 = B 우위" 를 칠했다 — 어느 쪽이 나은지는 화면이 정할 일이 아니다
@@ -51,10 +52,6 @@ const fmt = (v: unknown, r: Row) => {
 };
 const fmtDelta = (d: number, r: Row) => d === 0 ? "같아요" : `${d > 0 ? "+" : ""}${d.toLocaleString("ko-KR", { maximumFractionDigits: r.digits ?? 1 })}${r.pp ? "%p" : (r.suffix ?? "")}`;
 const signColor = (d: number | null) => (d == null || d === 0 ? undefined : d > 0 ? "var(--tx-up-ink)" : "var(--tx-down-ink)");
-const normalize = (curve: number[] | undefined) => {
-  if (!curve || curve.length === 0 || !curve[0]) return [];
-  return curve.map((v) => (v / curve[0]) * 100);
-};
 
 export function BacktestCompare({ runId }: { runId: string }) {
   // 결과 페이지와 같은 이유로 항상 최신 상태를 읽는다(전역 staleTime 24h 회피).
@@ -121,40 +118,50 @@ export function BacktestCompare({ runId }: { runId: string }) {
 }
 
 function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
-  const anim = useChartAnimation();
   const bComparable = b.status === "completed" && !!b.result;
-  const overlay = useMemo(() => {
-    const ea = normalize(a.result?.backtest.equity_curve);
-    const eb = normalize(b.result?.backtest.equity_curve);
-    const n = Math.max(ea.length, eb.length);
-    return Array.from({ length: n }, (_, i) => ({ i, A: ea[i] ?? null, B: eb[i] ?? null }));
-  }, [a, b]);
-  const lenMismatch = (a.result?.backtest.equity_curve?.length ?? 0) !== (b.result?.backtest.equity_curve?.length ?? 0);
+  // ★차이는 서버가 뺀다★ — 두 곡선(원)·지표·해마다 수익을 보내면 날짜 합집합/순번으로 맞춘 곡선(처음 100)·차이(%p)·지표 차이 행이 온다.
+  const side = (r: RunFull, label: string) => ({
+    label, dates: (r.result?.backtest.equity_dates ?? []).map(String), equity: r.result?.backtest.equity_curve ?? [],
+    stats: (r.result?.backtest.statistics ?? null) as Record<string, unknown> | null, periods: r.perf?.periods ?? null,
+  });
+  const cmpQ = useQuery({
+    queryKey: ["perf", "compare", a.run_id, b.run_id],
+    queryFn: () => perfApi.compare({ a: side(a, "A"), b: side(b, "B"), base: 100, metrics: "page" }),
+    enabled: bComparable, staleTime: 0, retry: 1,
+  });
 
   if (!bComparable) return <Notice tone="warn" title="실행 B 가 끝나지 않아 비교할 수 없어요">지금 상태: {b.status}</Notice>;
-  const sa = a.result!.backtest.statistics as BacktestStatistics;
-  const sb = b.result!.backtest.statistics as BacktestStatistics;
-  const rowOf = (k: keyof BacktestStatistics) => CMP_METRICS.find((r) => r.k === k)!;
+  const rows: MetricDiffRow[] | null = cmpQ.data?.rows ?? null;
+  const rowOf = (k: keyof BacktestStatistics): MetricDiffRow | null => rows?.find((r) => r.key === k) ?? null;
+  const specOf = (k: string): Row => CMP_METRICS.find((r) => r.k === k) ?? { k: k as keyof BacktestStatistics, label: k };
+  const view = cmpQ.data
+    ? compareViewOf(cmpQ.data, { unit: "base100", labelA: "A", labelB: "B", perfLabelA: a.perf_label ?? null, perfLabelB: b.perf_label ?? null,
+                                 question: "두 조건식이 같은 자리에서 어떻게 다른가", drawdownsA: a.perf?.drawdowns ?? null, drawdownsB: b.perf?.drawdowns ?? null })
+    : null;
+  const retry = <button type="button" className="tx-btn tx-btn--sub" onClick={() => void cmpQ.refetch()}>다시 시도</button>;
 
   return (
     <>
-      {/* ★답 = 서버 값의 차이(B − A)만★ 어느 쪽이 낫다고 말하지 않는다. 한쪽 값이 없으면 0 이 아니라 "비교할 수 없어요". */}
+      {/* ★답 = 서버가 뺀 차이(B − A)만★ 어느 쪽이 낫다고 말하지 않는다. 한쪽 값이 없으면 0 이 아니라 "비교할 수 없어요". */}
       <section className="tx-answer rs-answer" aria-label="한 줄 답">
         <p className="tx-answer-s">B 는 A 와 이만큼 달라요</p>
-        <ul className="rs-diff">
-          {HEADLINE.map((h) => {
-            const va = num(sa[h.k]); const vb = num(sb[h.k]);
-            if (va == null || vb == null) {
-              return <li key={h.k} className="rs-diff-na">{h.topic} 비교할 수 없어요 — {va == null ? "A" : "B"} 에 값이 없어요</li>;
-            }
-            const d = vb - va;
-            return (
-              <li key={h.k}>
-                <span>{h.name}</span> <b style={{ color: signColor(d) }}>{fmtDelta(d, rowOf(h.k))}</b>
-              </li>
-            );
-          })}
-        </ul>
+        {cmpQ.isPending && <p className="rs-diff-wait">차이를 재는 중이에요</p>}
+        {cmpQ.isError && <Notice tone="danger" title="차이를 재지 못했어요">{(cmpQ.error as Error).message} {retry}</Notice>}
+        {rows && (
+          <ul className="rs-diff">
+            {HEADLINE.map((h) => {
+              const r = rowOf(h.k);
+              if (!r || r.diff == null) {
+                return <li key={h.k} className="rs-diff-na">{h.topic} 비교할 수 없어요 — {r?.a == null ? "A" : "B"} 에 값이 없어요</li>;
+              }
+              return (
+                <li key={h.k}>
+                  <span>{h.name}</span> <b style={{ color: signColor(r.diff) }}>{fmtDelta(r.diff, specOf(h.k))}</b>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <div className="brun-cmp-labels">
           <PerfLabel value={a.perf_label} scope="A" />
           <PerfLabel value={b.perf_label} scope="B" />
@@ -163,36 +170,36 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
       </section>
 
       <section className="brun-card rs-card">
-        <h2 className="brun-card-t">자산곡선 (시작 = 100)</h2>
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={overlay} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="2 3" stroke="var(--tx-line)" vertical={false} />
-            <XAxis dataKey="i" tick={{ fontSize: 12, fill: "var(--tx-sub)" }} minTickGap={60} stroke="var(--tx-line)" />
-            <YAxis tick={{ fontSize: 12, fill: "var(--tx-sub)" }} width={44} stroke="var(--tx-line)" />
-            <Tooltip formatter={(v: number) => v?.toFixed(1)} contentStyle={{ fontSize: 13, borderRadius: 10 }} />
-            <Legend wrapperStyle={{ fontSize: 13 }} formatter={(v: string) => <span className="rs-legend">{v}</span>} />
-            <Line isAnimationActive={anim} type="monotone" dataKey="A" stroke="var(--tx-blue)" dot={false} strokeWidth={2} name={`A · ${a.strategy_name}`} />
-            <Line isAnimationActive={anim} type="monotone" dataKey="B" stroke="var(--tx-ink)" dot={false} strokeDasharray="5 3" strokeWidth={1.6} name={`B · ${b.strategy_name}`} />
-          </LineChart>
-        </ResponsiveContainer>
-        {lenMismatch && <p className="brun-note">두 실행의 기간·길이가 달라 순서(번째 날) 기준으로 맞췄어요 — 날짜가 같은 날끼리 놓인 것이 아니에요.</p>}
+        <h2 className="brun-card-t">자산곡선 (시작 = 100)<span className="brun-note">A 는 잉크 · B 는 색 · 아래 띠는 차이(B − A)</span></h2>
+        {cmpQ.isPending && <p className="brun-loading">두 곡선을 맞추는 중이에요</p>}
+        {cmpQ.isError && <Notice tone="danger" title="두 곡선을 맞추지 못했어요">{(cmpQ.error as Error).message} {retry}</Notice>}
+        {view && (
+          <>
+            <PerfCompare view={view} height={280} />
+            <h3 className="pg-h4">해마다 차이</h3>
+            <CompareYearTable view={view} />
+            <div className="pf-cmp-eps">
+              <div><h3 className="pg-h4">A 의 큰 낙폭 사건</h3><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} /></div>
+              <div><h3 className="pg-h4">B 의 큰 낙폭 사건</h3><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} /></div>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="brun-card rs-card">
-        <h2 className="brun-card-t">지표 차이<span className="brun-note">차이 = B − A · 색은 부호만(오름 빨강 · 내림 파랑)</span></h2>
+        <h2 className="brun-card-t">지표 차이<span className="brun-note">차이 = B − A · 서버가 뺀 값 · 색은 부호만(오름 빨강 · 내림 파랑)</span></h2>
         <div className="brun-tablewrap">
           <table className="brun-table brun-cmp">
             <thead><tr><th>지표</th><th>A</th><th>B</th><th>차이</th></tr></thead>
             <tbody>
-              {CMP_METRICS.filter((r) => num(sa[r.k]) != null || num(sb[r.k]) != null).map((r) => {
-                const va = num(sa[r.k]); const vb = num(sb[r.k]);
-                const d = va != null && vb != null ? vb - va : null;
+              {(rows ?? []).filter((r) => r.a != null || r.b != null).map((r) => {
+                const spec = specOf(r.key);
                 return (
-                  <tr key={r.k}>
+                  <tr key={r.key}>
                     <td>{r.label}</td>
-                    <td className="num">{fmt(va, r)}</td>
-                    <td className="num">{fmt(vb, r)}</td>
-                    <td className="num" style={{ color: signColor(d) }}>{d == null ? "비교할 수 없어요" : fmtDelta(d, r)}</td>
+                    <td className="num">{fmt(r.a, spec)}</td>
+                    <td className="num">{fmt(r.b, spec)}</td>
+                    <td className="num" style={{ color: signColor(r.diff) }}>{r.diff == null ? "비교할 수 없어요" : fmtDelta(r.diff, spec)}</td>
                   </tr>
                 );
               })}

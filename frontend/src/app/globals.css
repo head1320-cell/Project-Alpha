@@ -10076,6 +10076,30 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pf-key { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--pf-ink); vertical-align: middle; }
 .pf-key--bench { border-top-color: var(--pf-mute); border-top-width: 1.5px; }
 .pf-key--dd { height: 8px; border-top: 1.5px solid var(--pf-down-ink); background: color-mix(in srgb, var(--pf-down) 12%, transparent); }
+/* 둘 겹쳐 보기 (2026-11-09 · 성과 그림 문법 ③) — A 잉크 · B 범주색 1(--mc-c-1 · 직접 라벨) · 차이는 등락 두 팔 · 벤치마크 낙폭은 회색 선 */
+.pf-line-a { fill: none; stroke: var(--pf-ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pf-line-b { fill: none; stroke: var(--mc-c-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pf-diff-line { fill: none; stroke: var(--pf-ink); stroke-width: 1.2; stroke-linejoin: round; }
+.pf-diff-area--up { fill: var(--pf-up); fill-opacity: 0.14; stroke: none; }
+.pf-diff-area--down { fill: var(--pf-down); fill-opacity: 0.14; stroke: none; }
+.pf-dot--a { fill: var(--pf-ink); } .pf-dot--b { fill: var(--mc-c-1); } .pf-dot--diff { fill: var(--pf-ink); }
+.pf-endlabel--a { fill: var(--pf-ink); font-weight: 600; } .pf-endlabel--b { fill: var(--mc-c-1); font-weight: 600; }
+.pf-key--a { border-top-color: var(--pf-ink); } .pf-key--b { border-top-color: var(--mc-c-1); }
+.pf-key--diff { height: 8px; border-top: 1.2px solid var(--pf-ink);
+  background: linear-gradient(to right, color-mix(in srgb, var(--pf-up) 14%, transparent) 50%, color-mix(in srgb, var(--pf-down) 14%, transparent) 50%); }
+.pf-dd-bench { fill: none; stroke: var(--pf-mute); stroke-width: 1.2; stroke-linejoin: round; }
+.pf-key--ddb { border-top: 1.2px solid var(--pf-mute); }
+.pf-strip-index { fill: none; stroke: var(--pf-assume); stroke-width: 1; stroke-dasharray: 3 2; }
+.pf-skey--index { background: none; border: 1px dashed var(--pf-assume); box-sizing: border-box; }
+.pf-strip-legend-align { color: var(--pf-assume); }
+.pf-strip-legend-note, .pf-strip-legend-missing { color: var(--pf-mute); }
+.pf-cmp--focus-a .pf-line-b, .pf-cmp--focus-a .pf-dot--b, .pf-cmp--focus-a .pf-endlabel--b { opacity: 0.25; }
+.pf-cmp--focus-b .pf-line-a, .pf-cmp--focus-b .pf-dot--a, .pf-cmp--focus-b .pf-endlabel--a { opacity: 0.25; }
+.pf-year-diff td.pf-delta--up { color: var(--pf-up-ink); } .pf-year-diff td.pf-delta--down { color: var(--pf-down-ink); }
+.pf-partial { color: var(--pf-assume); font-size: 11px; }
+.pf-cmp-eps { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.pf-cmp-eps > div > .pg-h4 { margin: 0 0 4px; }
+@media (min-width: 900px) { .pf-cmp-eps { grid-template-columns: 1fr 1fr; } }
 /* 해마다 — 등락 막대 + 부호 숫자 */
 .pf-years { display: flex; flex-direction: column; gap: 4px; }
 .pf-year-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }

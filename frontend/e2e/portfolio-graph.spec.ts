@@ -1094,6 +1094,8 @@ test("백테스트(BL3 W1): 설정 계산은 아무것도 시작하지 않고 ·
   await node(page, "bc").click();
   await expect(page.locator(".pg-side .pg-cmp tbody tr")).toHaveCount(7);
   await expect(page.locator(".pg-side .pg-cmp-warn")).toHaveCount(0);
+  await expect(page.locator(".pg-side .pf-cmp .pf-diff-line"), "둘 겹쳐 보기 — 같은 실행 둘이라 차이 0 이어도 그림은 있다").toHaveCount(1);
+  await expect(page.locator(".pg-side .pf-cmp .pf-read-diff")).toContainText("+0.0%p");
   expect(starts, "백테스트 시작은 버튼 한 번뿐").toHaveLength(0);                // 저장 문(/graph/save)이 시작했다 — /backtest/runs POST 는 없다
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
 });
