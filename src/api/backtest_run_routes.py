@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 import src.data.backtest_runs as br
 from src.domain.execution_assumption import assumption_from_result
 from src.domain.perf_kind import backtest_label
+from src.engine.quant_metrics import drawdown_episodes, period_returns
 
 logger = logging.getLogger("api.backtest_run")
 
@@ -653,6 +654,30 @@ def run_telemetry(run_id: str):
 
 
 @router.get("/runs/{run_id}")
+def _perf_block(row: dict) -> dict | None:
+    """★화면이 세지 않도록 서버가 낸다★ (2026-11-09 · 결과 화면 성과 그림 문법 §3.2)
+
+    저장된 `drawdown_curve` 는 비율(−0.15)이고 통계 `max_drawdown_pct` 는 %(14.9)다 — 화면이 비율을 %처럼 그리던 결함을
+    여기서 고친다(이름에 단위를 적은 `drawdown_pct`). 해마다·달마다 수익·낙폭 사건은 캔버스 불러오기 노드와 같은 함수
+    (`quant_metrics`)라 같은 실행이면 같은 수다. 곡선이 없으면 None — 화면이 "주지 않았어요" 라고 말한다(0 으로 채우지 않는다).
+    """
+    result = row.get("result")
+    if row.get("status") != "completed" or not isinstance(result, dict):
+        return None
+    bt = result.get("backtest") if isinstance(result.get("backtest"), dict) else result
+    dates = bt.get("equity_dates") or []
+    equity = bt.get("equity_curve") or []
+    if not dates or not equity:
+        return None
+    dd = bt.get("drawdown_curve")
+    return {
+        "unit": "krw",
+        "drawdown_pct": ([None if d is None else round(float(d) * 100.0, 4) for d in dd] if dd else None),
+        "periods": period_returns(dates, equity),
+        "drawdowns": drawdown_episodes(dates, equity, top=3),
+    }
+
+
 def run_full(run_id: str):
     try:
         r = br.get_run(run_id, strict=True)
@@ -668,6 +693,8 @@ def run_full(run_id: str):
     # 빼면 화면이 "값이 없다" 와 "질문한 적이 없다" 를 구별할 수 없다 — 리더가
     # `unrecorded` + 사유로 **말한다**. ★미상을 0 으로 읽지 않는다★(AG).
     r["execution_assumption"] = assumption_from_result(r.get("result"))
+    # ★성과 그림의 수★ — 해마다·달마다 수익 · 낙폭 사건 · % 단위 낙폭(2026-11-09). 화면이 세지 않는다.
+    r["perf"] = _perf_block(r)
     return r
 
 
