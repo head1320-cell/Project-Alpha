@@ -20,20 +20,24 @@
  *      답 줄은 서버 값을 틀에 끼운 것이다(새 판단 없음 — ADR-003 §2.6).
  */
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
-} from "recharts";
 import { LoadingState, UnavailableState } from "@/shared/ui/States";
-import { useChartAnimation } from "@/shared/ui/chartStyle";
+import { chartModule, lazyChart } from "@/shared/ui/lazyChart";
 import {
   studiosApi, type StudioDescriptor, type StudioResult, type StudioSpan,
 } from "@/entities/macro/studios";
 import { STUDIO_NAV } from "./StudioNav";
 import { IND_KR, STUDIO_OUT_KO, catColor, signed } from "./macroKo";
 import { ReasonWhy, RetryFail, ServerText } from "./studioBits";
-import { CausalGraphView, TIP_STYLE } from "./cockpitParts";
+import { CausalGraphView } from "./cockpitParts";
+
+// 이 패널의 선 그림 셋 — recharts 는 차트 파일에서만 import 한다(ADR 004 · 2026-11-10). 화면이 뜬 뒤에 받는다(lazyChart) —
+// 예전에는 이 파일이 직접 import 해 스튜디오 네 페이지의 초기 script 에 실려 있었다. 패널이 붙자마자 불러 계산 결과와 같이 오게 한다.
+export const loadStudioCharts = chartModule(() => import("./StudioPanel.charts"));
+const FactorLines = lazyChart(loadStudioCharts, (m) => m.FactorLines, { height: 200, label: "요인이 지나온 길" });
+const CurveLines = lazyChart(loadStudioCharts, (m) => m.CurveLines, { height: 210, label: "곡선의 세 요인" });
+const TpLine = lazyChart(loadStudioCharts, (m) => m.TpLine, { height: 170, label: "기간프리미엄 대용" });
 
 /** 스튜디오 id → 한국어 이름(스튜디오 줄·경로 머리와 같은 말). 서버 `label`(LATENT…)은 쓰지 않는다. */
 export const studioName = (id: string): string =>
@@ -168,7 +172,6 @@ export function studioAnswer(id: string, o: Outs): string | null {
 }
 
 function FactorViz({ o }: { o: Outs }) {
-  const anim = useChartAnimation();
   const f = Array.isArray(o.factors) ? (o.factors as unknown[]) : [];
   const k = isNum(o.k_factors) ? o.k_factors : 1;
   const rows = f.map((r, i) => {
@@ -185,17 +188,7 @@ function FactorViz({ o }: { o: Outs }) {
       {rows.length > 1 && (
         <figure className="ms-viz-fig ms-viz-factor">
           <figcaption>요인이 지나온 길</figcaption>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={rows} margin={{ top: 6, right: 10, bottom: 2, left: 0 }}>
-              <XAxis dataKey="i" tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" interval={Math.max(0, Math.floor(rows.length / 6))} />
-              <YAxis width={36} tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" />
-              <ReferenceLine y={0} stroke="var(--tx-mute)" />
-              <Tooltip contentStyle={TIP_STYLE} formatter={(v: number, n: string) => [signed(Number(v), 3), `요인 ${n.slice(1)}`]} labelFormatter={(l) => `관측 ${l}번째`} />
-              {Array.from({ length: k }, (_, j) => (
-                <Line key={j} dataKey={`f${j + 1}`} stroke={k === 1 ? "var(--tx-blue)" : catColor(j)} strokeWidth={2} dot={false} isAnimationActive={anim} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          <FactorLines rows={rows} k={k} />
           <p className="ms-viz-note">가로축은 관측 순서예요(서버가 날짜를 주지 않았어요).</p>
         </figure>
       )}
@@ -221,7 +214,6 @@ function FactorViz({ o }: { o: Outs }) {
 
 const CURVE_KEYS: [string, string][] = [["level", "수준"], ["slope", "기울기"], ["curvature", "곡률"]];
 function CurveViz({ o }: { o: Outs }) {
-  const anim = useChartAnimation();
   const cols = CURVE_KEYS.filter(([k]) => nums(o[k]));
   const n = Math.max(0, ...cols.map(([k]) => nums(o[k])!.length));
   const rows = Array.from({ length: n }, (_, i) => {
@@ -231,21 +223,12 @@ function CurveViz({ o }: { o: Outs }) {
   });
   const tp = nums(o.term_premium_proxy);
   const tpRows = tp ? tp.map((v, i) => ({ i: i + 1, tp: v })) : [];
-  const axis = { tick: { fontSize: 11, fill: "var(--tx-sub)" }, stroke: "var(--tx-line)" };
   return (
     <div className="ms-viz">
       {rows.length > 1 && (
         <figure className="ms-viz-fig ms-viz-curve">
           <figcaption>곡선의 세 요인이 지나온 길(%)</figcaption>
-          <ResponsiveContainer width="100%" height={210}>
-            <LineChart data={rows} margin={{ top: 6, right: 10, bottom: 2, left: 0 }}>
-              <XAxis dataKey="i" {...axis} interval={Math.max(0, Math.floor(rows.length / 6))} />
-              <YAxis width={36} {...axis} />
-              <ReferenceLine y={0} stroke="var(--tx-mute)" />
-              <Tooltip contentStyle={TIP_STYLE} formatter={(v: number, k: string) => [Number(v).toFixed(2), CURVE_KEYS.find(([x]) => x === k)?.[1] ?? k]} labelFormatter={(l) => `관측 ${l}번째`} />
-              {cols.map(([k], j) => <Line key={k} dataKey={k} stroke={catColor(j)} strokeWidth={2} dot={false} isAnimationActive={anim} />)}
-            </LineChart>
-          </ResponsiveContainer>
+          <CurveLines rows={rows} cols={cols} />
           <ul className="mc-legend">
             {cols.map(([k, ko], j) => <li key={k}><i style={{ background: catColor(j) }} aria-hidden />{ko}</li>)}
           </ul>
@@ -254,15 +237,7 @@ function CurveViz({ o }: { o: Outs }) {
       {tpRows.length > 1 && (
         <figure className="ms-viz-fig ms-viz-tp">
           <figcaption>기간프리미엄 대용(bp)</figcaption>
-          <ResponsiveContainer width="100%" height={170}>
-            <LineChart data={tpRows} margin={{ top: 6, right: 10, bottom: 2, left: 0 }}>
-              <XAxis dataKey="i" {...axis} interval={Math.max(0, Math.floor(tpRows.length / 6))} />
-              <YAxis width={40} {...axis} />
-              <ReferenceLine y={0} stroke="var(--tx-mute)" />
-              <Tooltip contentStyle={TIP_STYLE} formatter={(v: number) => [Number(v).toFixed(1), "기간프리미엄 대용"]} labelFormatter={(l) => `관측 ${l}번째`} />
-              <Line dataKey="tp" stroke="var(--tx-blue)" strokeWidth={2} dot={false} isAnimationActive={anim} />
-            </LineChart>
-          </ResponsiveContainer>
+          <TpLine rows={tpRows} />
           <p className="ms-viz-note">가로축은 관측 순서예요. 무차익 조건 없이 잰 대용값이라 위험가격이 아니에요.</p>
         </figure>
       )}
@@ -400,6 +375,8 @@ export function StudioPanel({ id, months = 60 }: { id: string; months?: number }
     queryKey: ["macro", "studio", id, months],
     queryFn: () => studiosApi.run(id, months),
   });
+
+  useEffect(() => { loadStudioCharts().catch(() => {}); }, []);   // 차트 코드를 계산 결과와 같이 받는다(못 받으면 그림 자리가 그렇게 말한다)
 
   const d = listQ.data?.studios.find((s) => s.id === id) ?? null;
   const answer = runQ.data?.available ? studioAnswer(id, runQ.data.outputs) : null;

@@ -41,6 +41,11 @@ const SCREENS: Screen[] = [
     act: async (page) => { await page.getByRole("button", { name: "가격 계산하기" }).click(); },
     rest: async (page) => { await expect(page.locator(".dv-ans")).toBeVisible({ timeout: 30_000 }); },
   },
+  {
+    // 스튜디오 페이지(ADR 004 · 2026-11-10) — `StudioPanel` 이 recharts 를 직접 import 해 네 페이지의 초기 script 에 실려 있었다.
+    path: "/macro/tsfm-latent",
+    rest: async (page) => { await expect(page.locator(".ms-studio .ms-answer")).toBeVisible({ timeout: 30_000 }); },
+  },
 ];
 
 /** 서버가 준 HTML 의 <script src> 목록(같은 출처 절대 주소). */

@@ -82,12 +82,24 @@ module.exports = [
       "react-hooks/preserve-manual-memoization": "warn",
       "react-hooks/use-memo": "warn",
 
+      // ADR 004(2026-11-10): 차트 라이브러리는 ★차트 파일(`charts.tsx` · `*.charts.tsx`)에서만★ import 한다. 경계가 정해져 있어야
+      // 늦게 받기(lazyChart) · 버전 올리기 · 교체 때 손댈 곳이 정해진다. 다른 파일은 그 파일이 내보내는 부품을 받는다(아래 예외 블록).
+      "no-restricted-imports": ["error", { paths: [{
+        name: "recharts",
+        message: "recharts 는 차트 파일(charts.tsx · *.charts.tsx)에서만 import 하세요 — ADR 004. 다른 파일은 그 부품을 lazyChart 로 받아요.",
+      }] }],
+
       // React 19(2026-11-08): 함수 컴포넌트가 `ref` 를 prop 으로 받는다 — forwardRef 는 필요 없고 앞으로 폐기된다. 되돌아오지 않게 막는다.
       "no-restricted-syntax": ["error", {
         selector: "CallExpression[callee.name='forwardRef'], CallExpression[callee.property.name='forwardRef']",
         message: "React 19 에서는 forwardRef 대신 `ref` 를 prop 으로 받으세요(function X({ ref, ...props }: React.ComponentProps<...>)).",
       }],
     },
+  },
+  {
+    // 차트 파일 — recharts 를 import 해도 되는 유일한 자리(ADR 004).
+    files: ["src/**/charts.tsx", "src/**/*.charts.tsx"],
+    rules: { "no-restricted-imports": "off" },
   },
   {
     // app/ 은 Next 라우팅 계층 — 모든 하위 계층을 조립하는 것이 역할이므로 peer 개념이 없다.
