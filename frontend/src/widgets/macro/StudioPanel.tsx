@@ -28,6 +28,7 @@ import {
   studiosApi, type StudioDescriptor, type StudioResult, type StudioSpan,
 } from "@/entities/macro/studios";
 import { STUDIO_NAV } from "./StudioNav";
+import { Spark as SparkLine } from "@/shared/ui/plot/Spark";
 import { IND_KR, STUDIO_OUT_KO, signed } from "./macroKo";
 import { ReasonWhy, RetryFail, ServerText } from "./studioBits";
 import { CausalGraphView } from "./cockpitParts";
@@ -60,18 +61,9 @@ const fmt = (n: number) => (Math.abs(n) >= 1000 || Number.isInteger(n)
   ? n.toLocaleString("ko-KR", { maximumFractionDigits: 3 })
   : n.toFixed(3));
 
-/** 긴 수열은 값 대신 **모양**을 보여 준다. */
+/** 긴 수열은 값 대신 **모양**을 보여 준다 — 공용 스파크라인(선 1.5px · 끝 점 · 유한한 값이 둘 미만이면 그리지 않는다). */
 function Spark({ values }: { values: number[] }) {
-  const n = values.length;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const pts = values.map((v, i) => `${(i / (n - 1)) * 100},${20 - ((v - min) / span) * 20}`);
-  return (
-    <svg className="ms-spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
-      <polyline points={pts.join(" ")} fill="none" stroke="var(--tx-blue)" strokeWidth="1" />
-    </svg>
-  );
+  return <SparkLine values={values} w={110} h={18} stroke="var(--tx-blue)" className="ms-spark" />;
 }
 
 function OutValue({ v }: { v: unknown }) {

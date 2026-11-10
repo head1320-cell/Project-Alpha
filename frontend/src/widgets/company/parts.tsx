@@ -10,6 +10,7 @@
 // 툴팁 `title=` 0 — 값은 늘 보이는 글자로 함께 있다.
 // ═══════════════════════════════════════════════════════════════════════════════
 import React from "react";
+import { Spark as SparkLine } from "@/shared/ui/plot/Spark";
 import type { FactorVal, FactorGroup, ModelResult, Scenario, VerdictTone } from "@/entities/company/insightsModel";
 import { won, eok, pct } from "@/entities/company/insightsModel";
 import { catColor, pctFill } from "@/shared/ui/vizColor";
@@ -67,15 +68,9 @@ export function Spark({ values, color, w = 90, h = 26 }: { values: (number | nul
   // 모르는 기간(null)은 건너뛴다 — 0 으로 끌어내리지 않는다(BU6b)
   const v = values.filter((x): x is number => typeof x === "number" && Number.isFinite(x));
   if (v.length < 2) return null;
-  const min = Math.min(...v), max = Math.max(...v), span = (max - min) || 1;
-  const pts = v.map((x, i) => `${(i / (v.length - 1)) * w},${h - 2 - ((x - min) / span) * (h - 4)}`).join(" ");
   const dir = v[v.length - 1] > v[0] ? "up" : v[v.length - 1] < v[0] ? "down" : "flat";
   const stroke = color ?? (dir === "up" ? "var(--tx-up)" : dir === "down" ? "var(--tx-down)" : "var(--tx-sub)");
-  return (
-    <svg width={w} height={h} className="ca-spark" data-dir={dir} aria-hidden>
-      <polyline points={pts} fill="none" stroke={stroke} strokeWidth="1.6" />
-    </svg>
-  );
+  return <SparkLine values={v} w={w} h={h} stroke={stroke} className="ca-spark" dir={dir} />;   // 그리는 것은 공용 스파크라인 하나(선 1.5px · 끝 점)
 }
 
 /** 내재가치 밴드 — 현재가 · 내재가치 · 모형별 값(로그 눈금). 모형 점은 범주색, 이름은 보이는 글자(툴팁 없음). */

@@ -338,6 +338,8 @@ for (const scheme of ["light", "dark"] as const) {
     await askText(page, "왜요?");
     await dock(page).locator(".pg-ask-chip").first().click();
     await expect(dock(page).locator(".pg-ask-fact")).toBeVisible();
+    // 사실 상자는 굵은 왼쪽 줄이 아니라 전체 1px 테두리다(2026-11-10 · 짝: 위 테두리도 있다)
+    expect(await dock(page).locator(".pg-ask-fact").first().evaluate((e) => { const cs = getComputedStyle(e); return { left: parseFloat(cs.borderLeftWidth), top: parseFloat(cs.borderTopWidth) }; }), "옆줄 테두리 0 · 전체 테두리 1px").toEqual({ left: 1, top: 1 });
     const a = await page.evaluate<AuditResult>(contrastAudit(".pg-ask"));
     expect(a.checked).toBeGreaterThanOrEqual(10);
     expect(a.low, scheme).toEqual([]);

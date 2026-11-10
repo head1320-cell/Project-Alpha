@@ -1149,7 +1149,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* gauge */
 .mc-gauge { position: relative; }
 .mc-gauge-c { position: absolute; bottom: 6px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; }
-.mc-gauge-c b { font-family: var(--t-mono); font-size: 26px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.mc-gauge-c b { font-family: var(--t-mono); font-size: 26px; font-weight: 700; line-height: 1; }
 .mc-gauge-c span { font-family: var(--t-mono); font-size: 9px; color: var(--t-muted); letter-spacing: 0.08em; }
 .mc-gauge-sub { text-align: center; font-family: var(--t-mono); font-size: 11px; color: var(--t-ink); margin-top: 4px; }
 
@@ -1167,7 +1167,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mc-ind-nm { font-size: 11.5px; color: var(--t-ink); font-weight: 500; }
 .mc-ind-z { font-family: var(--t-mono); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mc-ind-v { display: flex; align-items: baseline; gap: 5px; }
-.mc-ind-v b { font-family: var(--t-mono); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mc-ind-v b { font-family: var(--t-mono); font-size: 18px; font-weight: 700; }
 .mc-ind-v em { font-style: normal; font-size: 10px; color: var(--t-muted); }
 .mc-ind-d { font-family: var(--t-mono); font-size: 10px; margin-left: auto; }
 .mc-ind-pct { position: relative; height: 4px; background: var(--t-border); border-radius: 2px; overflow: hidden; }
@@ -1197,7 +1197,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mc-krval { display: flex; gap: 28px; flex-wrap: wrap; }
 .mc-krval-item { display: flex; flex-direction: column; gap: 3px; }
 .mc-krval-item span { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); text-transform: uppercase; }
-.mc-krval-item b { font-family: var(--t-mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mc-krval-item b { font-family: var(--t-mono); font-size: 22px; font-weight: 700; }
 
 /* Recommend mini (overview) */
 .mc-reco-mini { display: flex; gap: 20px; align-items: center; }
@@ -1258,7 +1258,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mc-dparams { display: flex; gap: 36px; flex-wrap: wrap; }
 .mc-dparam { display: flex; flex-direction: column; gap: 4px; }
 .mc-dparam span { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.mc-dparam b { font-family: var(--t-mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mc-dparam b { font-family: var(--t-mono); font-size: 22px; font-weight: 700; }
 
 /* strategies */
 .mc-strat-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
@@ -1307,7 +1307,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mc-modal-h b { font-size: 15px; font-weight: 700; display: block; }
 .mc-modal-h span { font-family: var(--t-mono); font-size: 10px; color: var(--t-muted); }
 .mc-modal-latest { text-align: right; }
-.mc-modal-latest b { font-family: var(--t-mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mc-modal-latest b { font-family: var(--t-mono); font-size: 22px; font-weight: 700; }
 .mc-modal-latest em { font-style: normal; font-size: 10px; color: var(--t-muted); margin-left: 4px; }
 .mc-modal-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
 .mc-modal-stat { display: flex; flex-direction: column; gap: 2px; background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 2px; padding: 8px 10px; }
@@ -3502,7 +3502,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .as-case-warns { display: flex; flex-direction: column; gap: 2px; }
 .as-case-warns:not(:empty) { margin-top: var(--sp-2); }
 .as-case-warn { display: flex; flex-wrap: wrap; gap: 6px; font-size: var(--fs-chrome);
-  padding: 3px 6px; border-left: 2px solid var(--border); background: var(--muted, transparent); }
+  padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--muted, transparent); }   /* 옆줄 아님 — 전체 1px 테두리 */
 .as-case-warn-l { color: var(--foreground); white-space: nowrap; }
 .as-case-warn-r { color: var(--muted-foreground); flex: 1 1 240px; min-width: 0; }
 .as-case-warn-cap { border-left-color: var(--warn-mark); }
@@ -3560,7 +3560,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .ms-span { font-size: var(--fs-chrome); color: var(--muted-foreground); margin-top: 2px; }
 .ms-span-trunc { color: var(--st-warn-fg); }
 .ms-note { font-size: var(--fs-sm); color: var(--foreground); margin: var(--sp-2) 0;
-  padding: var(--sp-1) var(--sp-2); border-left: 2px solid var(--warn-mark); }
+  padding: var(--sp-1) var(--sp-2); border: 1px solid var(--warn-mark); border-radius: 6px; }
 
 /* 산출 표 — 값의 모양으로 렌더가 갈린다(스칼라 · 짧은 배열 · 긴 수열 · 중첩) */
 .ms-outcome { margin-top: var(--sp-2); }
@@ -3751,8 +3751,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .mx-bias {
   margin: var(--sp-2, 8px) 0 0; font-size: 12px; line-height: 1.5;
   color: var(--warn-fg, var(--st-warn-fg));
-  border-left: 2px solid var(--warn-mark, var(--st-warn-fg));
-  padding-left: var(--sp-2, 8px);
+  border: 1px solid var(--warn-mark, var(--st-warn-fg)); border-radius: 8px;
+  padding: var(--sp-1, 4px) var(--sp-2, 8px);
 }
 
 .mx-tblwrap { overflow-x: auto; }
@@ -3894,7 +3894,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* ★실패를 회색으로 숨기지 않는다★ — 사유는 읽히라고 있는 것이다. */
 .login-error {
   font-size: 12px; line-height: 1.5; color: var(--destructive);
-  border-left: 2px solid var(--destructive); padding-left: 8px;
+  border: 1px solid var(--destructive); border-radius: 8px; padding: 6px 10px;
 }
 
 .login-submit {
@@ -4181,8 +4181,8 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-ask-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
 .pg-ask-chip { height: 24px; font-size: 12px; }
 .pg-ask-chip[aria-expanded="true"] { border-color: var(--pg-blue); background: var(--pg-paper); }
-.pg-ask-fact { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 6px; padding: 8px 10px; border-left: 3px solid var(--pg-blue);
-  border-radius: 0 8px 8px 0; background: var(--pg-soft); }
+.pg-ask-fact { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--pg-line);
+  border-radius: 8px; background: var(--pg-soft); }
 .pg-ask-fact-text { flex: 1 1 12rem; margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--pg-ink); word-break: keep-all; }
 .pg-ask-goto { padding: 0; border: 0; background: none; color: var(--pg-blue-ink); font-size: 12.5px; font-weight: 700; cursor: pointer;
   text-decoration: underline; text-underline-offset: 2px; }
@@ -4644,7 +4644,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .pg-runprog-bar > span { transition: none; } }
 
 /* BL3 W2 · 매크로 웨이브 결과 — 곡선의 역전 구간만 색으로 말하고, 나머지는 조용히 */
-.pg-curve--inv { border-left: 3px solid var(--pg-fail); padding-left: 6px; }
+/* 뒤집힌 곡선 — 왼쪽 색 줄을 걷었다(2026-11-10). 뒤집힘은 칠한 구간(`.pg-curve-dip`)과 글자가 말한다. 클래스는 E2E 가 본다. */
 .pg-dot-inv { display: inline-block; width: 12px; height: 9px; margin-right: 6px; vertical-align: 0; background: var(--pg-fail-soft); border: 1px solid var(--pg-fail); border-radius: 2px; }
 .pg-muted { color: var(--pg-mute); }
 .pg-consensus .pg-strong, .pg-trace .pg-strong { font-weight: 700; color: var(--pg-ink); }
@@ -4691,7 +4691,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-sens-base { background: var(--pg-blue-soft); border-radius: 3px; }
 .pg-sens .pg-strong, .pg-thesis .pg-strong { font-weight: 700; color: var(--pg-ink); }
 .pg-assume .pg-tag { white-space: normal; line-height: 1.35; }
-.pg-claim { margin: 0 0 8px; padding: 6px 10px; border-left: 3px solid var(--pg-line); font-size: 13.5px; color: var(--pg-body); }
+.pg-claim { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--pg-line); border-radius: 8px; font-size: 13.5px; color: var(--pg-body); }
 .pg-list { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--pg-ink); }
 
 /* BL3 W3b · 기업 분석 모델 — '가치의 층' 하나만 크게 */
@@ -5076,7 +5076,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-simple-kind { margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--pg-body); }
 .pg-simple-title { margin: 0; font-size: 17px; font-weight: 800; color: var(--pg-ink); line-height: 1.4; }
 .pg-simple-headline { display: flex; align-items: baseline; gap: 6px; margin: 8px 0 0; }
-.pg-simple-headline b { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.pg-simple-headline b { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--pg-ink); }
 .pg-simple-headline span { font-size: 13px; font-weight: 600; color: var(--pg-body); }
 .pg-simple-result .pg-glance { max-width: 320px; }
 .pg-simple-result--blocked { border-left: 4px solid var(--pg-assume); }
@@ -5550,7 +5550,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .set-rule[data-ok="true"] { color: var(--t-ink); }
 .set-rule-mark { display: inline-grid; place-items: center; width: 16px; height: 16px; font-size: 11px; font-weight: 800; border-radius: 50%; background: var(--t-surface); box-shadow: inset 0 0 0 1px var(--t-border); }
 .set-rule[data-ok="true"] .set-rule-mark { color: var(--primary-foreground); background: var(--primary); box-shadow: none; }
-.set-error { margin: 0; padding-left: 10px; font-size: 13.5px; line-height: 1.5; color: var(--destructive); border-left: 2px solid var(--destructive); }
+.set-error { margin: 0; padding: 8px 10px; font-size: 13.5px; line-height: 1.5; color: var(--destructive); border: 1px solid var(--destructive); border-radius: 8px; }
 .set-done { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--t-ink); }
 .set-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .set-card > .set-sub { margin-top: 10px; }
@@ -6876,7 +6876,7 @@ a.tx-btn--sub:hover, a.tx-row:hover { color: var(--tx-ink); }
 
 /* ③ 어디서 고를까 — 대상 수 · 시총군 알약 · 관심그룹 줄 */
 .bte-uni-count { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 12px 14px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
-.bte-uni-count b { font-size: 24px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.bte-uni-count b { font-size: 24px; font-weight: 700; color: var(--tx-ink); letter-spacing: -0.02em; }
 .bte-uni-count b.is-counting { opacity: .45; }
 .bte-pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .bte-pill { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 14px; border: 0; border-radius: 18px; background: var(--tx-soft);
@@ -7199,7 +7199,7 @@ a.tx-btn, a.tx-btn:hover { text-decoration: none; }
 
 /* 답 */
 .rs-answer-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.rs-answer .tx-answer-s { font-size: 24px; max-width: none; font-variant-numeric: tabular-nums; }
+.rs-answer .tx-answer-s { font-size: 24px; max-width: none; }
 .rs-answer-sub { margin: -6px 0 0; font-size: 16px; color: var(--tx-sub); font-variant-numeric: tabular-nums; }
 .rs-why { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
 .rs .tx-chip.brun-badge, .dark .rs .tx-chip.brun-badge { font-size: 13px; font-weight: 600; letter-spacing: 0; padding: 7px 10px; border: 0; border-radius: 8px; }
@@ -7222,7 +7222,7 @@ a.tx-btn, a.tx-btn:hover { text-decoration: none; }
 .rs .rs-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .rs .brun-kpi { padding: 14px 16px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); }
 .rs .brun-kpi-l { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--tx-sub); }
-.rs .brun-kpi-v { margin-top: 4px; font-family: var(--tx-font); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rs .brun-kpi-v { margin-top: 4px; font-family: var(--tx-font); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--tx-ink); }
 .rs .brun-kpi-tip { margin-top: 6px; font-size: 12px; color: var(--tx-sub); }
 .rs .brun-kpi-na { background: transparent; box-shadow: inset 0 0 0 1px var(--tx-line); border: 0; }
 .rs .brun-kpi-nabadge { margin-top: 6px; padding: 4px 8px; border: 0; border-radius: 6px; background: var(--tx-soft); font-family: var(--tx-font); font-size: 12px; font-weight: 600; color: var(--tx-ink); letter-spacing: 0; }
@@ -7378,7 +7378,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .rv-donut-empty { stroke: var(--tx-line); stroke-dasharray: 4 4; }
 .rv-donut-c { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
 .rv-donut-c b { max-width: 96px; font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--tx-sub); word-break: keep-all; }
-.rv-donut-c span { font-size: 20px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.rv-donut-c span { font-size: 20px; font-weight: 700; color: var(--tx-ink); }
 .rv-donut-c .rv-donut-unk { font-size: 15px; font-weight: 600; color: var(--tx-sub); }
 
 .rv-leg { flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
@@ -7402,7 +7402,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .rv-gauge-track { stroke: var(--tx-soft); }
 .rv-gauge-fill { stroke: var(--mc-gauge); }
 .rv-gauge-c { position: absolute; left: 0; right: 0; top: 46px; display: flex; align-items: baseline; justify-content: center; gap: 2px; }
-.rv-gauge-v { font-size: 32px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.rv-gauge-v { font-size: 32px; font-weight: 700; color: var(--tx-ink); letter-spacing: -0.02em; }
 .rv-gauge-c span { font-size: 15px; color: var(--tx-sub); }
 .rv-gauge-ends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--tx-mute); }
 .rv-facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
@@ -8021,7 +8021,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci-name { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--tx-ink); }
 .ci-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 0; font-size: 14px; color: var(--tx-sub); }
 .ci-px { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 0; }
-.ci-price { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ci-price { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--tx-ink); }
 .ci .ci-verdict, .ci .ca-verdict { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 0; border-radius: 999px;
   background: var(--tx-surface); font-size: 14px; font-weight: 700; color: var(--tx-ink); }
 /* 붙는 목차 — 지금 절만 파랑 바탕(색 + 굵기 + aria-current). 좁으면 가로로 밀리는 한 줄. */
@@ -8064,7 +8064,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci-model-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; font-size: 14px; color: var(--tx-sub); }
 .ci-model-h b { font-size: 15px; color: var(--tx-ink); }
 .ci-model-h em { margin-left: auto; font-style: normal; font-size: 13px; }
-.ci-model-v { margin: 8px 0 2px; font-size: 22px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ci-model-v { margin: 8px 0 2px; font-size: 22px; font-weight: 700; color: var(--tx-ink); }
 .ci-model-g { margin: 0; font-size: 14px; color: var(--tx-ink); }
 .ci-model-more { margin-top: 10px; font-size: 13px; }
 .ci-model-more summary { cursor: pointer; font-weight: 600; color: var(--tx-sub); }
@@ -8151,7 +8151,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 0; }
 .ci-num { padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
 .ci-num dt { font-size: 13px; color: var(--tx-sub); }
-.ci-num dd { margin: 4px 0 0; font-size: 20px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ci-num dd { margin: 4px 0 0; font-size: 20px; font-weight: 700; color: var(--tx-ink); }
 .ci-numgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; margin-top: 12px; }
 .ci .ca-cp-card { border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); overflow: visible; padding: 16px 18px; min-width: 0; }
 .ci .ca-cp-card > :not(.ca-cp-card-h) { padding: 0; }
@@ -8403,7 +8403,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci-money-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; margin: 16px 0 0; }
 .ci-sumcard { display: grid; gap: 4px; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
 .ci-sumcard-k { font-size: 13px; color: var(--tx-sub); }
-.ci-sumcard-v { font-size: 22px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ci-sumcard-v { font-size: 22px; font-weight: 700; color: var(--tx-ink); }
 .ci-sumcard-d { font-size: 13px; color: var(--tx-sub); }
 .ci-sumcard-d[data-dir=up] { color: var(--tx-up-ink); }
 .ci-sumcard-d[data-dir=down] { color: var(--tx-down-ink); }
@@ -8454,7 +8454,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci .ca-fd-wf-bar[data-kind=out] { background: var(--tx-mute); }
 .ci .ca-fd-wf-val { width: 104px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--tx-ink); }
 .ci-fd-eq { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 6px 0 0; font-size: 15px; color: var(--tx-ink); }
-.ci-fd-spread { font-size: 22px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ci-fd-spread { font-size: 22px; font-weight: 700; color: var(--tx-ink); }
 .ci-fd-verdict { margin: 8px 0 0; font-size: 14px; color: var(--tx-ink); }
 .ci .ci-fd-dupont { padding: 0; }
 .ci .ci-fd-dupont > :not(summary) { margin-left: 16px; margin-right: 16px; }
@@ -8582,7 +8582,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .rk .rk-stats { margin-top: 12px; border: 0; border-radius: 0; gap: 8px; }
 .rk .tstat { padding: 14px 16px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); }
 .rk .tstat-key { font-family: inherit; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--tx-sub); margin-bottom: 6px; }
-.rk .tstat-val { display: block; font-family: inherit; font-size: 24px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; margin-bottom: 0; }
+.rk .tstat-val { display: block; font-family: inherit; font-size: 24px; font-weight: 700; color: var(--tx-ink); margin-bottom: 0; }
 .rk .tstat-val.rk-dir[data-dir=up] { color: var(--tx-up-ink); }
 .rk .tstat-val.rk-dir[data-dir=down] { color: var(--tx-down-ink); }
 .rk-stat-bar { display: block; position: relative; height: 8px; margin-top: 10px; border-radius: 4px; background: var(--tx-surface); overflow: hidden; }
@@ -8791,13 +8791,13 @@ details[open] > .rs-more { margin-bottom: 12px; }
 /* 결과 */
 .dv-out { display: flex; flex-direction: column; gap: 12px; }
 .dv-ans { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.45; letter-spacing: -0.02em; color: var(--tx-ink); word-break: keep-all; }
-.dv-ans b { font-variant-numeric: tabular-nums; }
+.dv-ans b { }
 .dv-note { margin: 0; font-size: 14px; line-height: 1.55; color: var(--tx-sub); }
 .dv-figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; margin: 0; }
 .dv-fig { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); }
 .dv-fig dt { font-size: 13px; color: var(--tx-sub); }
 .dv-fig dd { margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.dv-fig-v { font-size: 20px; font-weight: 700; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.dv-fig-v { font-size: 20px; font-weight: 700; color: var(--tx-ink); }
 .dv-fig-why { font-size: 13px; line-height: 1.5; color: var(--tx-ink); }
 .dv-stale .tx-notice { margin: 0; }
 
@@ -9303,7 +9303,7 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .set-broker-pair { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 12px; }
 .set-broker-real-note { margin: 0; }
 /* 오류 글자는 다크 짝이 있는 `--tx-danger` 로 — `--destructive`(#dc2626)는 다크 카드에서 4.1:1 이었다(BV8 스펙 AA). */
-.set-broker .set-error { color: var(--tx-danger); border-left-color: var(--tx-danger); }
+.set-broker .set-error { color: var(--tx-danger); border-color: var(--tx-danger); }
 @media (max-width: 480px) {
   .set-broker-pair { grid-template-columns: minmax(0, 1fr); }
 }
@@ -10196,3 +10196,15 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pf-dd-ep-open { color: var(--pf-unknown); font-weight: 500; }
 .pf-rebal-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); }
 .pf-rebal-table th.pg-td-num { text-align: right; }
+
+/* ════ 숫자와 작은 지표의 규격 (2026-11-10 · 설계 chart-indicator-system §3 D · `e2e/figures.spec.ts`) ════
+   ⑴ 홀로 선 큰 숫자(≥20px)는 ★비례폭 숫자★ — `tabular-nums` 는 모든 숫자에 0 의 폭을 줘서 큰 글자에서 "121" 이 헐거워 보인다.
+      고정폭 숫자는 세로로 줄을 맞추는 곳(표의 숫자 칸 · 축 눈금 · 작은 글자의 줄)에만 쓴다. 매크로 탭 안은 조상(`.mc [role=tabpanel]`)과
+      `.num` 이 고정폭을 물려주므로 값 쪽에서 되돌린다. ★새 큰 숫자를 만들면 여기에 더한다★(시험이 화면에서 잡는다). */
+.rv-donut-c span, .rv-gauge-v, .mc .mc-gauge-c b, .mx-panel .mx-stat-v, .mc .mc-ind-v b, .mc .mc-dparam dd, .mc .mc-krval-item dd,
+.mc .mc-strat-title, .mc .mc-reco-comp b, .mc-modal .mc-modal-latest b,
+.ci-price, .ci-model-v, .ci-num dd, .ci-sumcard-v, .ci-fd-spread, .rk .tstat-val, .dv-ans b, .dv-fig-v,
+.bte-uni-count b, .rs-answer .tx-answer-s, .rs .brun-kpi-v, .pg-simple-headline b { font-variant-numeric: normal; }
+/* ⑵ 스파크라인은 하나(`shared/ui/plot/Spark.tsx`) — 선 1.5px · 둥근 이음 · 그림이 늘어나도 굵기는 그대로 · 끝 점 = 지금 */
+.sp-line { stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.sp-end { stroke: none; }

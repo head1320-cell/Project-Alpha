@@ -27,6 +27,7 @@ export const moveColor = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v) || v === 0 ? "var(--tx-ink)" : v > 0 ? "var(--tx-up-ink)" : "var(--tx-down-ink)";
 import { chartModule, lazyChart } from "@/shared/ui/lazyChart";
 import { AXIS_TICK } from "@/shared/ui/chart/chartSpec";
+import { Spark } from "@/shared/ui/plot/Spark";
 
 // 이 파일의 차트(RegimeScatter, YieldCurveChart) 코드 — 화면이 뜬 뒤에 받는다(recharts 를 첫 화면 JS 에서 뺌 · lazyChart).
 // 보유 도넛(HoldingsDonut)은 직접 SVG 라 여기 있다(ADR 004 · 2026-11-10) — 차트 조각을 기다리지 않는다.
@@ -107,11 +108,8 @@ export const YieldCurveChart = lazyChart(loadCockpitCharts, (m) => m.YieldCurveC
 export function Sparkline({ values, w = 200, h = 30, color = "var(--tx-blue)" }: { values: number[]; w?: number; h?: number; color?: string }) {
   const vals = (values || []).filter((v) => Number.isFinite(v));
   if (vals.length < 2) return <svg width={w} height={h} className="mc-spark" aria-hidden />;
-  const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1;
-  const step = w / (vals.length - 1);
-  const pts = vals.map((v, idx) => `${(idx * step).toFixed(1)},${(h - ((v - min) / range) * (h - 4) - 2).toFixed(1)}`).join(" ");
   const c = color === "auto" ? (vals[vals.length - 1] >= vals[0] ? "var(--tx-up)" : "var(--tx-down)") : color;
-  return <svg width={w} height={h} className="mc-spark" preserveAspectRatio="none" viewBox={`0 0 ${w} ${h}`} aria-hidden><polyline points={pts} fill="none" stroke={c} strokeWidth={1.6} /></svg>;
+  return <Spark values={vals} w={w} h={h} stroke={c} className="mc-spark" />;   // 그리는 것은 공용 스파크라인 하나(선 1.5px · 끝 점)
 }
 
 // ── ZBar — z 막대(가운데 0, −3..+3). 수준 색. 모르면 채우지 않는다(0 으로 그리지 않는다). ──

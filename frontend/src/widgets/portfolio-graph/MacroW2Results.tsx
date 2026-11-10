@@ -6,6 +6,7 @@
  * 이 웨이브에서 눈에 띄게 그리는 것은 곡선 하나다 — 뒤집힌 구간을 곡선 위에 칠해 "어디가 역전인지" 를 보여 준다.
  */
 import type { ReactNode } from "react";
+import { Spark as SparkLine } from "@/shared/ui/plot/Spark";
 import { CurvePlot } from "./MiniPlots";
 
 type Dict = Record<string, unknown>;
@@ -19,17 +20,10 @@ function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="pg-kv">{rows.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>;
 }
 
-/** 작은 추이선 — 값이 둘 미만이면 그리지 않고 비운다(선 하나를 지어내지 않는다). */
+/** 작은 추이선 — 값이 둘 미만이면 그리지 않고 비운다(선 하나를 지어내지 않는다). 그리는 것은 공용 스파크라인(선 1.5px · 끝 점). */
 function Spark({ values, w = 72, h = 20 }: { values: number[]; w?: number; h?: number }) {
-  const vs = values.filter((x) => Number.isFinite(x));
-  if (vs.length < 2) return <span className="pg-spark pg-spark--empty" aria-hidden="true" />;
-  const lo = Math.min(...vs), hi = Math.max(...vs), rg = hi - lo || 1, st = w / (vs.length - 1);
-  const pts = vs.map((v, i) => `${(i * st).toFixed(1)},${(h - 1 - ((v - lo) / rg) * (h - 2)).toFixed(1)}`).join(" ");
-  return (
-    <svg className="pg-spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <polyline points={pts} fill="none" stroke="var(--pg-blue)" strokeWidth={1.4} strokeLinejoin="round" />
-    </svg>
-  );
+  if (values.filter((x) => Number.isFinite(x)).length < 2) return <span className="pg-spark pg-spark--empty" aria-hidden="true" />;
+  return <SparkLine values={values} w={w} h={h} stroke="var(--pg-blue)" className="pg-spark" />;
 }
 
 const REGIME_KO: Record<string, string> = {

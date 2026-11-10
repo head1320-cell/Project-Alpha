@@ -1291,6 +1291,8 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   await pick("yc");
   await tab(page, "detail");
   await expect(page.locator(".pg-side .pg-curve--inv")).toBeVisible();
+  // 뒤집힌 곡선은 왼쪽 색 줄로 말하지 않는다 — 칠한 구간(`.pg-curve-dip`)과 글자가 말한다(2026-11-10)
+  expect(await page.locator(".pg-side .pg-curve--inv").evaluate((e) => parseFloat(getComputedStyle(e).borderLeftWidth)), "옆줄 테두리 0").toBe(0);
   expect(await page.locator(".pg-side .pg-curve .pg-curve-dip").count()).toBeGreaterThan(0);
   // 직접 SVG (ADR 004): 점 수 = 서버 금리 점 수 · 마지막 만기의 금리가 읽는 줄에(호버 아님) · 표 쌍둥이 = 전부 · recharts 0
   const yv = (body.nodes.yc.view as { result: { points: { label: string; yield_pct: number | null }[] } }).result.points;

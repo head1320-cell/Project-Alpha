@@ -63,3 +63,12 @@ export function stepPath(xs: number[], ys: (number | null)[]): string {
   }
   return d;
 }
+
+/** 스파크라인의 점 — 유한한 값만 쓴다(모르는 기간은 건너뛴다 · 0 으로 끌어내리지 않는다). 값이 둘 미만이면 null — 선을 지어내지 않는다.
+ *  값이 모두 같으면 가운데 가로선(바닥에 붙이면 "가장 낮다"로 읽힌다). `pad` 는 끝 점이 잘리지 않을 여백(px). */
+export function sparkPoints(values: ReadonlyArray<number | null | undefined>, w: number, h: number, pad = 3): XY[] | null {
+  const v = values.filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+  if (v.length < 2) return null;
+  const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo;
+  return v.map((x, i) => ({ x: pad + (i / (v.length - 1)) * (w - 2 * pad), y: span === 0 ? h / 2 : h - pad - ((x - lo) / span) * (h - 2 * pad) }));
+}

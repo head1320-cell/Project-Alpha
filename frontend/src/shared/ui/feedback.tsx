@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState, useRef } from "react";
+import { Spark } from "@/shared/ui/plot/Spark";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -149,16 +150,8 @@ export function Sparkline({
   data: number[]; width?: number; height?: number; color?: string; className?: string;
 }) {
   if (!data || data.length < 2) return <span className={`inline-block ${className}`} style={{ width, height }} />;
-  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
-  const step = width / (data.length - 1);
-  const points = data.map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / range) * height).toFixed(1)}`).join(" ");
   const isUp = data[data.length - 1] >= data[0];
   const stroke = color === "auto" ? (isUp ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)") : color;
-  return (
-    <span className={`sparkline inline-block ${className}`}>
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-        <polyline points={points} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-    </span>
-  );
+  // 그리는 것은 공용 스파크라인 하나(`shared/ui/plot/Spark`) — 선 1.5px · 끝 점
+  return <span className={`sparkline inline-block ${className}`}><Spark values={data} w={width} h={height} stroke={stroke} /></span>;
 }

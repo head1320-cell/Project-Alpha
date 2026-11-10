@@ -127,6 +127,8 @@ test("설정: 지금 비밀번호가 틀리면 서버 사유 그대로 · 분석
   await form.locator('input[name="confirm-password"]').fill(`pw-${name}-2`);
   await form.locator(".set-pw-submit").click();
   await expect(form.locator(".set-error")).toHaveText("지금 비밀번호가 맞지 않아요.");
+  // 오류 글은 굵은 왼쪽 줄이 아니라 전체 1px 테두리 상자다(2026-11-10 · 짝: 위 테두리도 있다)
+  expect(await form.locator(".set-error").evaluate((e) => { const cs = getComputedStyle(e); return { left: parseFloat(cs.borderLeftWidth), top: parseFloat(cs.borderTopWidth) }; }), "옆줄 테두리 0 · 전체 테두리 1px").toEqual({ left: 1, top: 1 });
   expect(await tokenNow(page), "실패해도 토큰은 그대로").toBe(tok);
 
   // 관리자가 초기화하면 이 사람의 토큰이 죽는다.

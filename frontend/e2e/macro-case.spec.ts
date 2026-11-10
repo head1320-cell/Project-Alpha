@@ -65,6 +65,8 @@ test("★능력 레벨 배지에는 막힌 레벨과 사유가 함께 붙는다�
   // 막혔으면 사유가 **보여야** 한다. 배지만 있고 사유가 없으면 이 테스트가 빨개진다.
   const warn = page.locator(".as-case-warn-cap");
   await expect(warn).toBeVisible();
+  // 알림 상자는 굵은 왼쪽 줄이 아니라 전체 1px 테두리다(2026-11-10 · 짝: 위 테두리도 있다 — 테두리를 통째로 지운 것이 아니다)
+  expect(await warn.evaluate((e) => { const cs = getComputedStyle(e); return { left: parseFloat(cs.borderLeftWidth), top: parseFloat(cs.borderTopWidth) }; }), "옆줄 테두리 0 · 전체 테두리 1px").toEqual({ left: 1, top: 1 });
   const reason = (await warn.locator(".as-case-warn-r").textContent()) ?? "";
   expect(reason.trim().length, "막힌 사유 길이").toBeGreaterThan(20);
 });
