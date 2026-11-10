@@ -10131,6 +10131,9 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .cr-table th.pg-td-num { text-align: right; }
 .cr-scroll th, .cr-scroll td { padding: 3px 8px; white-space: nowrap; }
 .cr-scroll thead th { position: sticky; top: 0; background: var(--pf-surface); }
+/* 보유 도넛 — 직접 SVG 고리(shared/ui/Donut · widgets/macro HoldingsDonut · ADR 004). 조각 사이 틈으로 자취가 비친다 */
+.tx-donut { display: block; flex: none; }
+.tx-donut-track { stroke: var(--tx-soft); }
 /* 캔버스 결과의 작은 그림 — 직접 SVG (widgets/portfolio-graph/MiniPlots · ADR 004) */
 .pg-plot { display: block; max-width: 100%; outline: none; cursor: crosshair; touch-action: pan-y; }
 .pg-plot:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; border-radius: 6px; }

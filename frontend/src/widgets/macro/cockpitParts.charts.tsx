@@ -1,14 +1,13 @@
 "use client";
-// cockpitParts 의 차트(RegimeScatter, YieldCurveChart, HoldingsDonut) — `lazyChart` 로 ★화면이 뜬 뒤에★ 받는다(recharts 를 첫 화면 JS 에서 뺌 · 2026-11-08 · `e2e/charts-lazy.spec.ts`).
+// cockpitParts 의 차트(RegimeScatter, YieldCurveChart) — `lazyChart` 로 ★화면이 뜬 뒤에★ 받는다(recharts 를 첫 화면 JS 에서 뺌 · 2026-11-08 · `e2e/charts-lazy.spec.ts`).
 // 본문은 cockpitParts.tsx 에 있던 그대로다. 소비자는 그 파일이 같은 이름으로 내보내는 것을 쓴다.
-import { ResponsiveContainer, LineChart, Line, ScatterChart, Scatter, ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from "recharts";
+import { ResponsiveContainer, LineChart, Line, ScatterChart, Scatter, ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import type { YieldCurvePoint } from "@/entities/macro/api";
-import type { TacticalHolding } from "@/entities/macro/analysisModel";
 import { regimeName } from "@/entities/macro/regimeKo";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { signed } from "./macroKo";
 import { TX_TIP_STYLE as TIP_STYLE } from "@/shared/ui/chartStyle";
-import { AX, Q_FILL, foldHoldings } from "./cockpitParts";
+import { AX, Q_FILL } from "./cockpitParts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RegimeScatter — 성장(x) × 물가(y) 평면 + 네 국면 바탕(국면 색) + 지금 위치
@@ -58,19 +57,5 @@ export function YieldCurveChart({ points }: { points: YieldCurvePoint[]; inversi
         <Line type="monotone" dataKey="y" stroke="var(--tx-blue)" strokeWidth={2} dot={{ r: 3, fill: "var(--tx-blue)" }} activeDot={{ r: 4 }} isAnimationActive={anim} />
       </LineChart>
     </ResponsiveContainer>
-  );
-}
-
-// ── HoldingsDonut — 전략 보유 비중 도넛(범주 색 · 8 개 넘으면 기타로 접음) ──
-export function HoldingsDonut({ holdings, size = 116 }: { holdings: TacticalHolding[]; size?: number }) {
-  const anim = useChartAnimation();
-  const data = foldHoldings(holdings, (h) => h.label);
-  return (
-    <PieChart width={size} height={size}>
-      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={size * 0.29} outerRadius={size * 0.46} paddingAngle={1.5} stroke="var(--tx-surface)" isAnimationActive={anim}>
-        {data.map((d, idx) => <Cell key={idx} fill={d.color} />)}
-      </Pie>
-      <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string, name: string) => [`${val}%`, name]} />
-    </PieChart>
   );
 }

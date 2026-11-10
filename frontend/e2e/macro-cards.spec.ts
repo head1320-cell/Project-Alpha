@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from "./fixtures";
+import { CAT_N } from "../src/shared/ui/vizColor";
 import { contrastAudit, type AuditResult } from "./helpers";
 
 /**
@@ -534,14 +535,46 @@ test("롤링 상관 선 = 범주색(등락색 아님) · 전략 창 보유 목�
   for (const s of strokes) { expect(s).not.toBe(up); expect(s).not.toBe(down); }
   expect(strokes[0]).toBe(await tokenColor(page, "--mc-c-1"));
   const dlg = await openModal(page);
-  // 조각 색은 fill 속성(var(--mc-c-n))에 있다 — 계산 색으로 풀어서 범례 칸 바탕과 견준다.
-  const slices = await dlg.locator(".recharts-pie-sector path").evaluateAll((els) => els.map((e) => {
-    const t = document.createElement("span"); t.style.color = e.getAttribute("fill") ?? ""; document.body.appendChild(t);
+  // 조각 색은 고리 조각(circle)의 stroke 속성(var(--mc-c-n))에 있다 — 계산 색으로 풀어서 범례 칸 바탕과 견준다(도넛은 직접 SVG · ADR 004).
+  const slices = await dlg.locator("svg.tx-donut circle[data-slice]").evaluateAll((els) => els.map((e) => {
+    const t = document.createElement("span"); t.style.color = e.getAttribute("stroke") ?? ""; document.body.appendChild(t);
     const c = getComputedStyle(t).color; t.remove(); return c;
   }));
   expect(slices.length).toBeGreaterThan(1);
   const legend = await dlg.locator(".sm-hold i").evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
   for (const c of legend) expect(slices).toContain(c);
+});
+
+// ── 보유 도넛 = 직접 SVG 고리 (ADR 004 · 2026-11-10) ──
+// 예전에는 recharts Pie 였고 이름·비중은 호버 툴팁에만 있었다. 이제 공용 고리(`shared/ui/Donut.tsx`)라 차트 조각을 기다리지 않고,
+// 조각 전부의 이름·비중은 `aria-label` 에(보이는 값은 옆 목록에) 있다. 분모는 ★값의 합★ — 비중 합이 100 이 아니어도 고리는 한 바퀴다.
+test("보유 도넛 — 직접 SVG 고리: 조각 수 = 접은 보유 수 · 조각 길이의 합 = 한 바퀴(비중 합 50 이어도) · 이름·비중은 aria-label · recharts 0", async ({ page }) => {
+  // 전략 상세의 보유 비중을 절반으로 고친다(합 ≈ 50) — 분모를 100 으로 두면 고리가 반만 찬다.
+  await page.route(/\/api\/v1\/macro\/strategy\/[^/?]+(\?.*)?$/, async (route) => {
+    const res = await route.fetch();
+    const body = await res.json() as { holdings?: { weight: number }[] };
+    for (const h of body.holdings ?? []) h.weight = Math.round(h.weight * 5) / 10;
+    await route.fulfill({ response: res, json: body });
+  });
+  const detailP = page.waitForResponse((r) => /\/api\/v1\/macro\/strategy\/[^/?]+(\?|$)/.test(r.url()), { timeout: 30_000 });
+  const dlg = await openModal(page);
+  const detail = await (await detailP).json() as { holdings: { label: string; weight: number }[] };
+  expect(detail.holdings.length, "보유가 하나뿐이면 이 검사는 공허하다").toBeGreaterThan(1);
+  expect(detail.holdings.reduce((a, h) => a + h.weight, 0), "비중 합을 100 아래로 고쳤어야 한다").toBeLessThan(60);
+  const donut = dlg.locator("svg.tx-donut");
+  await expect(donut).toHaveCount(1);
+  const arcs = donut.locator("circle[data-slice]");
+  await expect(arcs).toHaveCount(Math.min(detail.holdings.length, CAT_N));
+  const label = (await donut.getAttribute("aria-label")) ?? "";
+  expect(label).toContain(detail.holdings[0].label);
+  expect(label).toContain(`${detail.holdings[0].weight}%`);
+  // 조각마다 (그린 길이 + 틈 1.5) 를 더하면 고리 둘레 — 조각이 아주 작아 길이가 0 으로 잘린 만큼만 어긋난다(3px 안)
+  const geo = await arcs.evaluateAll((els) => els.map((e) => ({
+    r: Number(e.getAttribute("r")), dash: parseFloat((e.getAttribute("stroke-dasharray") ?? "0").split(/[ ,]+/)[0]) })));
+  const round = 2 * Math.PI * geo[0].r;
+  expect(Math.abs(geo.reduce((a, g) => a + g.dash + 1.5, 0) - round), `조각 길이 합 대 둘레 ${round.toFixed(1)}`).toBeLessThan(3);
+  await expect(dlg.locator(".recharts-pie-sector, .recharts-tooltip-wrapper")).toHaveCount(0);
+  await expect(donut.locator("title")).toHaveCount(0);
 });
 
 // ── 실패는 실패로 ──
@@ -668,6 +701,6 @@ test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글�
   await expect(dlg.locator(".sm-perf .pf-legend")).toContainText("처음을 100으로");
   await expect(dlg.locator(".sm-perf .pf-read")).toContainText("포트폴리오");
   await expect(dlg.locator(".sm-perf-stats .sm-perf-stat")).toHaveCount(5);                 // 지표 5 는 그대로
-  await expect(dlg.locator(".sm-perf .recharts-wrapper")).toHaveCount(0);            // 보유 도넛(recharts · 범위 밖)은 그대로
+  await expect(dlg.locator(".sm-perf .recharts-wrapper")).toHaveCount(0);            // 성과 절에는 차트 라이브러리가 없다(보유 도넛도 이제 직접 SVG)
   await expect(dlg.locator(".sm-perf [title]")).toHaveCount(0);
 });

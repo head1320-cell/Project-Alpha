@@ -7,7 +7,8 @@
 //   빈 값 "—" 대신 "몰라요". 그림은 하나도 지우지 않았다(사용자 상시 규칙 — 바꾸되 없애지 않는다).
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from "react";
-import type { MacroIndicator, MacroTheme } from "@/entities/macro/analysisModel";
+import type { MacroIndicator, MacroTheme, TacticalHolding } from "@/entities/macro/analysisModel";
+import { DonutRing } from "@/shared/ui/Donut";
 import { regimeName } from "@/entities/macro/regimeKo";
 import { CAT_N, IND_KR, catColor, signed, zFill as lvFill } from "./macroKo";
 
@@ -27,7 +28,8 @@ export const moveColor = (v: number | null | undefined): string =>
 import { TX_TIP_STYLE as TIP_STYLE } from "@/shared/ui/chartStyle";
 import { chartModule, lazyChart } from "@/shared/ui/lazyChart";
 
-// 이 파일의 차트(RegimeScatter, YieldCurveChart, HoldingsDonut) 코드 — 화면이 뜬 뒤에 받는다(recharts 를 첫 화면 JS 에서 뺌 · lazyChart).
+// 이 파일의 차트(RegimeScatter, YieldCurveChart) 코드 — 화면이 뜬 뒤에 받는다(recharts 를 첫 화면 JS 에서 뺌 · lazyChart).
+// 보유 도넛(HoldingsDonut)은 직접 SVG 라 여기 있다(ADR 004 · 2026-11-10) — 차트 조각을 기다리지 않는다.
 // MacroCockpit 이 붙자마자 불러 데이터와 같이 오게 한다. 이름·prop 은 그대로라 소비자는 바뀌지 않는다.
 export const loadCockpitCharts = chartModule(() => import("./cockpitParts.charts"));
 export { TIP_STYLE };
@@ -199,7 +201,20 @@ export function foldHoldings<T extends { weight: number }>(hs: T[], label: (h: T
   return [...head, { name: `기타 ${rows.length - (CAT_N - 1)}개`, value: Math.round(rest * 10) / 10, color: "var(--mc-c-etc)" }];
 }
 
-export const HoldingsDonut = lazyChart(loadCockpitCharts, (m) => m.HoldingsDonut, { height: (p) => p.size ?? 116, width: (p) => p.size ?? 116, label: "보유 비중" });   // 본문은 cockpitParts.charts.tsx(화면이 뜬 뒤에 받는다)
+// ── HoldingsDonut — 전략 보유 비중 고리(범주 색 · 8 개 넘으면 기타로 접음) ── 직접 SVG(ADR 004 · 2026-11-10 · 예전엔 recharts Pie).
+//   분모는 값의 합이다 — 비중 합이 100 이 아니어도 한 바퀴(예전 Pie 와 같은 비율). 12시에서 시계 방향.
+//   이름·비중은 호버 툴팁이 아니라 `aria-label`(조각 전부)과 옆 목록에 있다.
+export function HoldingsDonut({ holdings, size = 116 }: { holdings: TacticalHolding[]; size?: number }) {
+  const data = foldHoldings(holdings, (h) => h.label);
+  const total = data.reduce((a, d) => a + d.value, 0);
+  return (
+    <svg className="tx-donut" width={size} height={size} viewBox="0 0 88 88" role="img"
+         aria-label={data.length ? `보유 비중 ${data.map((d) => `${d.name} ${d.value}%`).join(", ")}` : "보유 비중 자료가 없어요"}>
+      <DonutRing total={total} r={33} width={15} trackClass="tx-donut-track" arcClass="tx-donut-arc"
+        slices={data.map((d, i) => ({ key: String(i), value: d.value, color: d.color, data: { slice: d.name } }))} />
+    </svg>
+  );
+}
 /** 보유 목록 i 번째 칸의 색 — 도넛과 같은 순서. 목록이 7 개를 넘으면 7 번째부터는 도넛의 "기타" 회색과 같다(`total` 을 넘길 때). */
 export const donutColor = (idx: number, total = 0): string =>
   total > CAT_N && idx >= CAT_N - 1 ? "var(--mc-c-etc)" : catColor(idx);
