@@ -10124,6 +10124,8 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pf-table-scroll th, .pf-table-scroll td { padding: 3px 8px; white-space: nowrap; }   /* 좁은 폭에서 "1.0억원" 이 반으로 꺾이지 않게 — 넘치면 가로 스크롤 */
 .pf-table-scroll thead th { position: sticky; top: 0; background: var(--pf-surface); }
 /* 차트 읽는 줄·표 쌍둥이(shared/ui/chart · ADR 004) — 성과 그림의 읽는 줄과 같은 모양. 이름은 cr-* (기존 pf-* 선택자와 겹치지 않게) */
+.cr { outline: none; }
+.cr:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 4px; border-radius: 8px; }
 .cr-read { margin-top: 6px; }
 .cr-key { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--pf-ink); vertical-align: middle; }
 .cr-table { margin-top: 6px; }

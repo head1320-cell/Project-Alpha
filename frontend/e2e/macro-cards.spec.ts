@@ -545,6 +545,114 @@ test("롤링 상관 선 = 범주색(등락색 아님) · 전략 창 보유 목�
   for (const c of legend) expect(slices).toContain(c);
 });
 
+// ── 값은 호버가 아니라 늘 보이는 읽는 줄에 (ADR 004 §2.4 · 2026-11-10) ──
+// 분석 탭의 그림 넷과 지표 흐름 창은 recharts 그대로지만 `<Tooltip>` 이 없다. 값은 읽는 줄(`.cr-read` · 처음 자리 = 마지막 점 ·
+// ←→ Home End · 마우스를 올려도 옮겨진다)과 표 쌍둥이(`.cr-table` — 솎지 않은 전부)에 있다. 글자 = 서버 값을 화면 서식으로.
+const sgn2 = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}`;       // macroKo.signed 와 같은 서식
+const frame = (root: ReturnType<Page["locator"]>, id: string) => root.locator(`.cr[data-chart="${id}"]`);
+
+test("읽는 줄 — 상관 탭(롤링·평균): 툴팁 0 · 처음 자리 = 서버 마지막 점 · ← 로 앞 날짜 · 마우스로도 · 표 쌍둥이 = 전부", async ({ page }) => {
+  const corrP = page.waitForResponse((r) => r.url().includes("/api/v1/macro/correlations"), { timeout: 30_000 });
+  await open(page);
+  await goTab2(page, "correlations");
+  const corr = await (await corrP).json() as { pairs: { key: string; label: string; series: { t: string; corr: number | null }[] }[]; avg_corr: { t: string; corr: number }[] };
+  const pnl = panel2(page, "correlations");
+  const len = Math.max(...corr.pairs.map((p) => p.series.length));
+  expect(len, "롤링 상관 점이 없으면 이 검사는 공허하다").toBeGreaterThan(3);
+  const roll = frame(pnl, "rolling-corr");
+  await expect(roll.locator(".recharts-line-curve").first()).toBeVisible({ timeout: 30_000 });
+  await expect(pnl.locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+  const dates = corr.pairs[0].series.map((x) => x.t);
+  await expect(roll.locator(".cr-head")).toHaveText(dates[len - 1]);
+  await expect(roll.locator(".cr-item")).toHaveCount(corr.pairs.length);
+  for (const p of corr.pairs) {
+    const v = p.series[len - 1]?.corr;
+    if (v != null) await expect(roll.locator(".cr-read")).toContainText(`${p.label} ${sgn2(v)}`);
+  }
+  await roll.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(roll.locator(".cr-head")).toHaveText(dates[len - 2]);
+  // ★마우스로도★ — 툴팁 없이 그림 왼쪽에 올리면 읽는 줄이 앞쪽 날짜로 간다(차트 이벤트 → 자리)
+  const box = (await roll.locator(".recharts-wrapper > svg.recharts-surface").boundingBox())!;     // 범례 칸의 작은 svg 도 같은 class 다
+  await page.mouse.move(box.x + box.width * 0.15, box.y + box.height * 0.4);
+  await expect.poll(async () => dates.indexOf((await roll.locator(".cr-head").textContent()) ?? ""), { message: "왼쪽에 올리면 앞쪽 날짜" }).toBeLessThan(len / 2);
+  await roll.locator(".cr-table summary").click();
+  await expect(roll.locator(".cr-table tbody tr")).toHaveCount(len);
+  // 평균 상관
+  const avg = frame(pnl, "avg-corr");
+  const lastA = corr.avg_corr[corr.avg_corr.length - 1];
+  await expect(avg.locator(".cr-head")).toHaveText(lastA.t);
+  await expect(avg.locator(".cr-read")).toContainText(`평균 상관 ${lastA.corr.toFixed(2)}`);
+  await avg.locator(".cr-table summary").click();
+  await expect(avg.locator(".cr-table tbody tr")).toHaveCount(corr.avg_corr.length);
+  await expect(pnl.locator("[title]")).toHaveCount(0);
+});
+
+test("읽는 줄 — 타이밍 탭(위험 선호도 추이): 툴팁 0 · 처음 자리 = 서버 마지막 점 · Home 으로 첫 점 · 표 쌍둥이 = 전부", async ({ page }) => {
+  const timP = page.waitForResponse((r) => r.url().includes("/api/v1/macro/timing"), { timeout: 30_000 });
+  await open(page);
+  await goTab2(page, "timing");
+  const hist = ((await (await timP).json()) as { history: { t: string; score: number }[] }).history;
+  expect(hist.length, "추이 점이 없으면 이 검사는 공허하다").toBeGreaterThan(3);
+  const pnl = panel2(page, "timing");
+  const f = frame(pnl, "timing-history");
+  await expect(f.locator(".recharts-area-curve").first()).toBeVisible({ timeout: 30_000 });
+  await expect(pnl.locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+  const last = hist[hist.length - 1];
+  await expect(f.locator(".cr-head")).toHaveText(last.t);
+  await expect(f.locator(".cr-read")).toContainText(`위험 선호도 ${last.score.toFixed(0)}`);
+  await f.focus();
+  await page.keyboard.press("Home");
+  await expect(f.locator(".cr-head")).toHaveText(hist[0].t);
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr")).toHaveCount(hist.length);
+});
+
+test("읽는 줄 — 국면 궤적(산점도): 툴팁 0 · 처음 자리 = 지금 달 · ← 로 앞 달(성장·물가·국면 이름) · 표 쌍둥이 = 전부", async ({ page }) => {
+  const trP = page.waitForResponse((r) => r.url().includes("/api/v1/macro/regime-trajectory"), { timeout: 30_000 });
+  await open(page);
+  await goTab(page, "regime");
+  const path = ((await (await trP).json()) as { path: { t: string; growth: number; inflation: number }[] }).path;
+  expect(path.length, "궤적 점이 없으면 이 검사는 공허하다").toBeGreaterThan(2);
+  const f = frame(panel(page, "regime"), "regime-trajectory");
+  await expect(f.locator(".recharts-scatter").first()).toBeVisible({ timeout: 30_000 });
+  await expect(f.locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+  const last = path[path.length - 1], prev = path[path.length - 2];
+  await expect(f.locator(".cr-head")).toHaveText(last.t);
+  await expect(f.locator(".cr-read")).toContainText(`성장 ${last.growth.toFixed(2)}`);
+  await expect(f.locator(".cr-read")).toContainText(`물가 ${last.inflation.toFixed(2)}`);
+  await f.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(f.locator(".cr-head")).toHaveText(prev.t);
+  await expect(f.locator(".cr-read")).toContainText(`성장 ${prev.growth.toFixed(2)}`);
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr")).toHaveCount(path.length);
+});
+
+test("읽는 줄 — 지표 흐름 창: 툴팁 0 · 처음 자리 = 서버 마지막 값 · ← 로 앞 달 · 표 쌍둥이 = 전부", async ({ page }) => {
+  await open(page);
+  await goTab(page, "indicators");
+  const serP = page.waitForResponse((r) => r.url().includes("/api/v1/macro/series/") && r.status() === 200, { timeout: 30_000 });
+  await panel(page, "indicators").locator(".mc-heat-cell").first().click();
+  const ser = await (await serP).json() as { timestamps: string[]; values: number[] };
+  expect(ser.values.length, "시계열이 없으면 이 검사는 공허하다").toBeGreaterThan(3);
+  const dlg = page.getByRole("dialog");
+  const f = frame(dlg, "drill-series");
+  await expect(f.locator(".recharts-area-curve").first()).toBeVisible({ timeout: 30_000 });
+  await expect(dlg.locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+  const lab = (t: string) => (t.length > 6 ? t.slice(0, 7).replace("-", ".") : t);                         // 창의 가로축 글자와 같은 서식
+  const num = (v: number) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(2));         // cockpitParts.fmtNum
+  const n = ser.values.length;
+  await expect(f.locator(".cr-head")).toHaveText(lab(ser.timestamps[n - 1]));
+  await expect(f.locator(".cr-read")).toContainText(num(ser.values[n - 1]));
+  await f.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(f.locator(".cr-head")).toHaveText(lab(ser.timestamps[n - 2]));
+  await expect(f.locator(".cr-read")).toContainText(num(ser.values[n - 2]));
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr")).toHaveCount(n);
+});
+
 // ── 보유 도넛 = 직접 SVG 고리 (ADR 004 · 2026-11-10) ──
 // 예전에는 recharts Pie 였고 이름·비중은 호버 툴팁에만 있었다. 이제 공용 고리(`shared/ui/Donut.tsx`)라 차트 조각을 기다리지 않고,
 // 조각 전부의 이름·비중은 `aria-label` 에(보이는 값은 옆 목록에) 있다. 분모는 ★값의 합★ — 비중 합이 100 이 아니어도 고리는 한 바퀴다.

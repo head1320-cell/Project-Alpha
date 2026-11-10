@@ -9,7 +9,7 @@
  * 글자는 부르는 쪽이 서버 값을 서식해 넘긴다 — 여기서는 셈하지 않는다.
  * ★이 파일은 차트 라이브러리를 import 하지 않는다★(경계 규칙 — `eslint.config.js` 의 `no-restricted-imports`).
  */
-import { useCallback, useState, type KeyboardEvent } from "react";
+import { useCallback, useState, type KeyboardEvent, type ReactNode } from "react";
 
 export interface ReadCell { key: string; label: string; text: string; /** 선 색(범례 구실) — 없으면 표식 없이 글자만 */ color?: string }
 export interface ReadRow { head: string; cells: ReadCell[] }
@@ -70,4 +70,32 @@ export function TableTwin({ headLabel, rows }: { headLabel: string; rows: ReadRo
       </div>
     </details>
   );
+}
+
+/**
+ * 그림(자식) + 읽는 줄 + 표 쌍둥이를 한 틀로 — 차트 라이브러리로 그린 그림에 쓴다(직접 SVG 그림은 svg 가 포커스를 받는다).
+ * 틀이 포커스를 받고 ←→ Home End 로 자리를 옮긴다. 틀 안의 다른 조작부(표 펼치기)에서 누른 키는 가로채지 않는다.
+ * `id` 는 `data-chart` 로 나간다(E2E 가 그림을 가리키는 이름).
+ */
+export function ReadoutFrame({ id, label, headLabel, rows, idx, onKeyDown, children }: {
+  id: string; label: string; headLabel: string; rows: ReadRow[]; idx: number;
+  onKeyDown: (e: KeyboardEvent) => void; children: ReactNode;
+}) {
+  return (
+    <div className="cr" data-chart={id} role="group" tabIndex={0} aria-label={`${label}. 화살표로 옮겨 읽어요.`}
+         onKeyDown={(e) => { if (e.target === e.currentTarget) onKeyDown(e); }}>
+      {children}
+      <ReadLine row={idx >= 0 ? rows[idx] ?? null : null} />
+      <TableTwin headLabel={headLabel} rows={rows} />
+    </div>
+  );
+}
+
+/**
+ * recharts 2.x 차트 이벤트(`onMouseMove` 의 첫 인자)에서 자리를 꺼낸다 — ★이 모양을 아는 한 곳★(ADR 004 §2.5).
+ * `<Tooltip>` 이 없어도 차트는 포인터 아래 자리를 `activeTooltipIndex` 로 알려 준다. 라이브러리를 올리거나 바꾸면 여기만 고친다.
+ */
+export function idxFromChartEvent(state: unknown): number | null {
+  const i = (state as { activeTooltipIndex?: unknown } | null | undefined)?.activeTooltipIndex;
+  return typeof i === "number" && Number.isFinite(i) && i >= 0 ? i : null;
 }

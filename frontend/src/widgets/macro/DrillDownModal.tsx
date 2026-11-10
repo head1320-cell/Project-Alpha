@@ -43,7 +43,7 @@ export function DrillDownModal({ series, loading, failed, onRetry, onClose }: { 
               <div><b>{series.name}</b><span><span data-mono>{series.indicator}</span> · <span data-server>{series.source}</span></span></div>
               <div className="mc-modal-latest"><b>{fmtNum(series.latest)}</b><em>{series.unit}</em></div>
             </div>
-            <DrillSeriesChart data={data} name={series.name} mean5y={series.mean_5y} />
+            <DrillSeriesChart data={data} name={series.name} unit={series.unit} mean5y={series.mean_5y} />
             <p className="mc-modal-note">점선은 지난 5년 평균이에요.</p>
             <dl className="mc-modal-stats">
               {[["최근 값", `${fmtNum(series.latest)} ${series.unit}`], ["지난 5년 평균", fmtNum(series.mean_5y)], ["지난 5년 표준편차", fmtNum(series.std_5y)],
