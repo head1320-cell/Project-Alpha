@@ -967,10 +967,35 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
   }
   // ★구름과 곡선은 같은 단위(%)★ — 한쪽만 100배면 곡선이 축 끝에 눌려 안 보인다(실측으로 잡은 결함).
   await node(page, "fr").click();
-  const ticks = await page.locator(".pg-frontier .recharts-xAxis .recharts-cartesian-axis-tick-value").allTextContents();
+  const fr = page.locator(".pg-side .pg-frontier");
+  const ticks = await fr.locator(".pg-plot-xtick").allTextContents();
   const xs = ticks.map((t) => parseFloat(t)).filter((x) => Number.isFinite(x));
   expect(xs.length).toBeGreaterThan(2);
   expect(Math.max(...xs), `x축 눈금 ${ticks.join(",")}`).toBeLessThan(300);
+  // ★직접 SVG (ADR 004 · 2026-11-10)★ — 캔버스에 차트 라이브러리가 없고, 값은 호버가 아니라 읽는 줄·표 쌍둥이에 늘 있다.
+  const fv = body.nodes.fr.view as { curve: { volatility: number; return: number; sharpe: number }[]; cloud: { volatilities: number[] } | null };
+  expect(fv.curve.length, "경계 점이 없으면 이 검사는 공허하다").toBeGreaterThan(2);
+  await expect(fr.locator(".pg-plot-dot")).toHaveCount(Math.ceil((fv.cloud?.volatilities.length ?? 0) / 3));   // 구름은 셋 중 하나로 솎는다(예전 그대로)
+  await expect(fr.locator(".pg-plot-line")).toHaveCount(1);
+  const bestI = fv.curve.reduce((b, r, i) => (fv.curve[b].sharpe >= r.sharpe ? b : i), 0);
+  await expect(fr.locator(".cr-read"), "읽는 줄의 처음 자리 = 가장 좋은 점").toContainText(`흔들림 ${fv.curve[bestI].volatility.toFixed(1)}%`);
+  await expect(fr.locator(".cr-read")).toContainText(`수익 ${fv.curve[bestI].return.toFixed(1)}%`);
+  await fr.locator(".pg-plot").focus();
+  await page.keyboard.press("Home");                                                             // ★짝★ 키보드로 자리를 옮기면 다른 점의 값
+  await expect(fr.locator(".cr-read")).toContainText(`흔들림 ${fv.curve[0].volatility.toFixed(1)}%`);
+  await expect(fr.locator(".cr-read")).toContainText("1번째 점");
+  await fr.locator(".cr-table summary").click();
+  await expect(fr.locator(".cr-table tbody tr")).toHaveCount(fv.curve.length);                   // 표 쌍둥이 = 경계 점 전부
+  await expect(page.locator(".pg-side .recharts-wrapper")).toHaveCount(0);
+  await expect(page.locator(".pg-side .pg-frontier [title]")).toHaveCount(0);
+  if (process.env.SHOT_DIR) {                                                     // 검수용 스크린샷(선택 훅 · 평소엔 아무것도 안 한다)
+    await page.locator(".pg-side .pg-plot").evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-frontier-light.png` });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(400);
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-frontier-dark.png` });
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  }
   await node(page, "en").click();
   await expect(page.locator(".pg-ensemble thead th")).toHaveCount(4);          // 국면 + 세 방법
   await expect(page.locator(".pg-ensemble tbody tr")).toHaveCount(4);          // 네 국면
@@ -987,6 +1012,52 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
   }
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+
+// ── 시점별 노출 — 계단선도 직접 SVG (ADR 004 · 2026-11-10) ──
+// BL2b 시험에 붙이면 그 시험의 시간 한도(90초)를 넘겨서 따로 둔다. 타이밍 신호 하나 → 시뮬레이션 하나.
+test("시점별 타이밍 시뮬레이션: 노출 계단선 = 직접 SVG · 읽는 줄의 처음 자리 = 마지막 시점 · ← 로 앞 시점 · 표 쌍둥이 = 전부 · recharts 0", async ({ page }) => {
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push(
+    { id: "tm", type: "timing_signal", params: { rules: [{ factor_id: "abs_mom" }, { factor_id: "ma_month" }] }, position: { x: 1000, y: 0 } },
+    { id: "ts", type: "timing_simulation", params: { months: 12, mode: "forward" }, position: { x: 1300, y: 0 } },
+  );
+  doc.edges.push({ id: "s1", source: "tm", source_port: "signal", target: "ts", target_port: "signal" });
+  await importText(page, "sim.json", JSON.stringify(await spread(page, doc)));
+  const body = await run(page);
+  expect(body.nodes.ts.status, `ts: ${body.nodes.ts.reason}`).toBe("ok");
+  await page.locator(".react-flow__controls-fitview").click();
+  // 읽는 줄의 처음 자리 = 가장 최근 시점 · ← 로 그 앞 시점. ★왼쪽이 옛날★ — 가로축 양 끝 글자가 가장 옛 날짜·가장 최근 날짜다
+  // (예전 화면은 받은 순서를 뒤집어 시간이 오른쪽에서 왼쪽으로 흘렀다 — 가로축이 숨겨져 있어 안 보였다).
+  await node(page, "ts").click();
+  await tab(page, "detail");
+  const sim = [...(body.nodes.ts.view as { result: { points: { as_of: string; exposure: number }[] } }).result.points]
+    .sort((x, y) => x.as_of.localeCompare(y.as_of));
+  expect(sim.length, "시점이 없으면 이 검사는 공허하다").toBeGreaterThan(2);
+  const last = sim[sim.length - 1], prev = sim[sim.length - 2];
+  const step = page.locator(".pg-side .pg-expo");
+  await expect(step.locator(".pg-plot-line--step")).toHaveCount(1);
+  await expect(step.locator(".pg-plot-xtick").first()).toHaveText(sim[0].as_of);
+  await expect(step.locator(".pg-plot-xtick").last()).toHaveText(last.as_of);
+  await expect(step.locator(".cr-read")).toContainText(last.as_of);
+  await expect(step.locator(".cr-read")).toContainText(`노출 ${(last.exposure * 100).toFixed(0)}%`);
+  await step.locator(".pg-plot").focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(step.locator(".cr-read")).toContainText(prev.as_of);
+  await step.locator(".cr-table summary").click();
+  await expect(step.locator(".cr-table tbody tr")).toHaveCount(sim.length);
+  await expect(page.locator(".pg-side .recharts-wrapper")).toHaveCount(0);
+  await expect(page.locator(".pg-side .pg-expo [title]")).toHaveCount(0);
+  if (process.env.SHOT_DIR) {                                                     // 검수용 스크린샷(선택 훅 · 평소엔 아무것도 안 한다)
+    await page.locator(".pg-side .pg-plot").evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-expo-light.png` });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(400);
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-expo-dark.png` });
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  }
 });
 
 test("매크로 다리(BL2b): ?snapshot= 으로 열면 국면 노드가 그 스냅샷을 쓰고 케이스 바가 보인다 · 없는 스냅샷은 사유", async ({ page }) => {
@@ -1215,7 +1286,29 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   await pick("yc");
   await tab(page, "detail");
   await expect(page.locator(".pg-side .pg-curve--inv")).toBeVisible();
-  expect(await page.locator(".pg-side .pg-curve .recharts-reference-area").count()).toBeGreaterThan(0);
+  expect(await page.locator(".pg-side .pg-curve .pg-curve-dip").count()).toBeGreaterThan(0);
+  // 직접 SVG (ADR 004): 점 수 = 서버 금리 점 수 · 마지막 만기의 금리가 읽는 줄에(호버 아님) · 표 쌍둥이 = 전부 · recharts 0
+  const yv = (body.nodes.yc.view as { result: { points: { label: string; yield_pct: number | null }[] } }).result.points;
+  expect(yv.length, "곡선 점이 없으면 이 검사는 공허하다").toBeGreaterThan(2);
+  const ycv = page.locator(".pg-side .pg-curve");
+  await expect(ycv.locator(".pg-curve-pt")).toHaveCount(yv.filter((p) => p.yield_pct !== null).length);
+  const lastY = yv[yv.length - 1];
+  await expect(ycv.locator(".cr-read")).toContainText(String(lastY.label));
+  await expect(ycv.locator(".cr-read")).toContainText(`금리 ${(lastY.yield_pct as number).toFixed(2)}%`);
+  await ycv.locator(".pg-plot").focus();
+  await page.keyboard.press("Home");
+  await expect(ycv.locator(".cr-read")).toContainText(`금리 ${(yv[0].yield_pct as number).toFixed(2)}%`);
+  await ycv.locator(".cr-table summary").click();
+  await expect(ycv.locator(".cr-table tbody tr")).toHaveCount(yv.length);
+  if (process.env.SHOT_DIR) {                                                     // 검수용 스크린샷(선택 훅 · 평소엔 아무것도 안 한다)
+    await page.locator(".pg-side .pg-plot").evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-yieldcurve-light.png` });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.waitForTimeout(400);
+    await page.locator(".pg-side").screenshot({ path: `${process.env.SHOT_DIR}/canvas-yieldcurve-dark.png` });
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  }
+  await expect(page.locator(".pg-side .recharts-wrapper")).toHaveCount(0);
   await expect(page.locator(".pg-side .pg-tag", { hasText: "경험칙" })).toBeVisible();
   // 대시보드: 전부면 여섯 테마, 테마를 고르면 하나
   await pick("db");

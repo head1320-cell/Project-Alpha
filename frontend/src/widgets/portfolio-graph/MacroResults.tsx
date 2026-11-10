@@ -6,7 +6,7 @@
  * 아래는 같은 종목이 줄어든 만큼 빗금 친 현금 칸. 줄어든 폭이 눈으로 보인다. 수는 서버 view 그대로.
  */
 import type { ReactNode } from "react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { StepPlot } from "./MiniPlots";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -115,23 +115,21 @@ export function OverlayResult({ v }: { v: Dict }) {
 
 export function SimulationResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
-  const pts = [...((r.points as Dict[]) ?? [])].reverse();
-  const data = pts.map((p) => ({ d: String(p.as_of), e: (num(p.exposure) ?? 0) * 100 }));
+  // ★왼쪽이 옛날★ — 날짜(ISO)로 놓는다. 예전에는 받은 순서를 뒤집었는데 서버는 옛날부터 준다(`simulate_rule_set` "months 개월 전부터
+  // 현재까지") — 가로축이 숨겨져 있어 시간이 오른쪽에서 왼쪽으로 흐르는 것이 안 보였다(2026-11-10 검수에서 발견).
+  const pts = [...((r.points as Dict[]) ?? [])].sort((a, b) => String(a.as_of).localeCompare(String(b.as_of)));
+  // 노출을 % 로 — 서식만(0~1 → 0~100). ★못 읽은 시점은 0 이 아니라 빈 값★(예전에는 `?? 0` 으로 0% 를 그렸다) → 선이 끊기고 읽는 줄이 말한다.
+  const ys = pts.map((p) => { const e = num(p.exposure); return e === null ? null : e * 100; });
+  const read = pts.map((p, i) => ({ head: String(p.as_of), cells: [{ key: "e", label: "노출", text: ys[i] === null ? "못 읽었어요" : `${(ys[i] as number).toFixed(0)}%` }] }));
   return (
     <>
       <p className={`pg-model-type pg-model-type--${r.backtest_eligible ? "hist" : "hypo"}`}>
         {r.backtest_eligible ? "과거 검증에 쓸 수 있는 신호" : "참고용 — 과거 검증이 아니에요"}
       </p>
       {r.warning ? <p className="pg-warn">{String(r.warning)}</p> : null}
-      <div className="pg-chart" aria-label="시점별 노출">
-        <ResponsiveContainer width="100%" height={140}>
-          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <XAxis dataKey="d" hide />
-            <YAxis domain={[0, 100]} width={36} tick={{ fontSize: 10 }} unit="%" />
-            <Tooltip formatter={(x: number) => `${x.toFixed(0)}%`} />
-            <Line type="stepAfter" dataKey="e" name="노출" dot={false} stroke="var(--pg-blue)" strokeWidth={1.5} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
+      {/* 직접 SVG (ADR 004 · 2026-11-10) — 계단선 + 읽는 줄(처음 자리 = 마지막 시점) + 표 쌍둥이 */}
+      <div className="pg-chart pg-expo">
+        <StepPlot ys={ys} rows={read} label="시점별 노출" />
       </div>
       <KV rows={[["시점 수", String(pts.length)], ["신호 바뀜", `${String(r.state_changes ?? 0)}번`],
                  ["못 읽은 시점", String(r.unavailable_count ?? 0)]]} />

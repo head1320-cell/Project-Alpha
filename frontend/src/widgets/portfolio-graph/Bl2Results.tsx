@@ -5,7 +5,7 @@
  * 수는 서버 view 그대로 그린다(다시 계산하지 않는다). 계산하지 못한 칸은 비워 두지 않고 "—" 와 사유를 적는다.
  */
 import type { ReactNode } from "react";
-import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
+import { FrontierPlot } from "./MiniPlots";
 import { PerfLabel, type PerfLabelValue } from "@/shared/ui/PerfLabel";
 import { RobustnessView } from "./RobustnessResults";
 import { usePortfolioGraph } from "./store";
@@ -29,37 +29,31 @@ const rk = (r: unknown) => REGIME_KO[String(r)] ?? String(r ?? "—");
 // ── 효율적 프런티어 ─────────────────────────────────────────────────────────
 
 export function FrontierResult({ v }: { v: Dict }) {
-  const curve = ((v.curve as Dict[]) ?? []).map((r) => ({ x: num(r.volatility), y: num(r.return) }));
+  const all = (v.curve as Dict[]) ?? [];
+  // 그릴 수 있는 경계 점(흔들림·수익 둘 다 수)만 — 읽는 줄·표 쌍둥이와 같은 순서다.
+  const onCurve = all.filter((r) => num(r.volatility) !== null && num(r.return) !== null);
+  const curve = onCurve.map((r) => ({ x: r.volatility as number, y: r.return as number }));
   const cloud = v.cloud as { returns?: number[]; volatilities?: number[] } | null;
   // 구름 좌표는 서버가 이미 % 로 준다(곡선과 같은 단위) — 다시 곱하지 않는다.
   const dots = (cloud?.volatilities ?? []).map((x, i) => ({ x, y: (cloud?.returns ?? [])[i] }))
-    .filter((_, i) => i % 3 === 0);
+    .filter((_, i) => i % 3 === 0).filter((p) => num(p.x) !== null && num(p.y) !== null);
   const pt = v.point as { return: number; volatility: number } | null;
-  const best = ((v.curve as Dict[]) ?? []).reduce<Dict | null>((b, r) => (b && (num(b.sharpe) ?? -1e9) >= (num(r.sharpe) ?? -1e9) ? b : r), null);
+  const best = all.reduce<Dict | null>((b, r) => (b && (num(b.sharpe) ?? -1e9) >= (num(r.sharpe) ?? -1e9) ? b : r), null);
+  const bestAt = best ? onCurve.indexOf(best) : -1;                // 읽는 줄의 처음 자리 = 아래 KV 의 "가장 좋은 점" 과 같은 점
+  const read = onCurve.map((r, i) => ({ head: `${i + 1}번째 점`, cells: [
+    { key: "vol", label: "흔들림", text: pct(r.volatility) }, { key: "ret", label: "수익", text: pct(r.return) },
+    { key: "sharpe", label: "샤프", text: num(r.sharpe) === null ? "몰라요" : (r.sharpe as number).toFixed(2) },
+  ] }));
   return (
     <>
-      <div className="pg-chart pg-frontier" role="img"
-           aria-label={`흔들림 대비 수익 경계 ${curve.length}점${pt ? ` · 이은 비중 연 ${pt.return}% · 흔들림 ${pt.volatility}%` : ""}`}>
-        <ResponsiveContainer width="100%" height={220}>
-          <ScatterChart margin={{ top: 8, right: 12, bottom: 18, left: 0 }}>
-            <CartesianGrid stroke="var(--pg-line)" strokeDasharray="2 4" />
-            <XAxis type="number" dataKey="x" name="흔들림" unit="%" tick={{ fontSize: 11 }} domain={["auto", "auto"]}
-                   label={{ value: "흔들림(연)", position: "insideBottom", offset: -8, fontSize: 11, fill: "var(--pg-body)" }} />
-            <YAxis type="number" dataKey="y" name="수익" unit="%" width={44} tick={{ fontSize: 11 }} domain={["auto", "auto"]} />
-            <ZAxis range={[14, 14]} />
-            <Tooltip cursor={false} formatter={(x: number) => `${x?.toFixed?.(1)}%`} />
-            {dots.length > 0 && <Scatter name="무작위 조합" data={dots} fill="var(--pg-line)" isAnimationActive={false} />}
-            <Scatter name="경계" data={curve} fill="var(--pg-blue)" line={{ stroke: "var(--pg-blue)", strokeWidth: 2 }}
-                     shape={() => <g />} isAnimationActive={false} />
-            {pt && <Scatter name="이은 비중" data={[{ x: pt.volatility, y: pt.return }]} isAnimationActive={false}
-                            shape={(props: { cx?: number; cy?: number }) => (
-                              <circle cx={props.cx} cy={props.cy} r={7} fill="var(--pg-assume)" stroke="var(--pg-paper)" strokeWidth={2.5} />
-                            )} />}
-          </ScatterChart>
-        </ResponsiveContainer>
+      {/* 직접 SVG (ADR 004 · 2026-11-10) — 값은 호버가 아니라 읽는 줄(←→)·표 쌍둥이에 늘 있다 */}
+      <div className="pg-chart pg-frontier">
+        <FrontierPlot dots={dots} curve={curve} point={pt && num(pt.volatility) !== null && num(pt.return) !== null ? { x: pt.volatility, y: pt.return } : null}
+          rows={read} initial={bestAt >= 0 ? bestAt : 0}
+          label={`흔들림 대비 수익 경계 ${all.length}점${pt ? ` · 이은 비중 연 ${pt.return}% · 흔들림 ${pt.volatility}%` : ""}`} />
       </div>
       <KV rows={[
-        ["곡선", `${curve.length}점`],
+        ["곡선", `${all.length}점`],
         ["가장 좋은 점", best ? `연 ${pct(best.return)} · 흔들림 ${pct(best.volatility)}` : "—"],
         ["이은 비중", pt ? <><span className="pg-dot-point" aria-hidden="true" />연 {pct(pt.return)} · 흔들림 {pct(pt.volatility)}</>
                        : "비중을 이으면 곡선 위에 찍어요"],

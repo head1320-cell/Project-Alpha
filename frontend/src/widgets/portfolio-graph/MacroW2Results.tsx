@@ -6,7 +6,7 @@
  * 이 웨이브에서 눈에 띄게 그리는 것은 곡선 하나다 — 뒤집힌 구간을 곡선 위에 칠해 "어디가 역전인지" 를 보여 준다.
  */
 import type { ReactNode } from "react";
-import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CurvePlot } from "./MiniPlots";
 
 type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -45,25 +45,16 @@ export function YieldCurveResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
   const pts = ((r.points as Dict[]) ?? []).map((p) => ({ t: String(p.label), y: num(p.yield_pct) }));
   // 뒤집힌 구간 = 만기가 긴 점의 금리가 앞 점보다 낮은 이웃 쌍. 서버의 역전 판정(2Y·10Y)과 별개로 모양을 보여 준다.
-  const dips = pts.slice(1).map((p, i) => ({ a: pts[i], b: p }))
+  const dips = pts.slice(1).map((p, i) => ({ a: pts[i], b: p, at: [i, i + 1] as [number, number] }))
     .filter(({ a, b }) => a.y !== null && b.y !== null && (b.y as number) < (a.y as number));
   const inv = Boolean(r.inversion);
+  const read = pts.map((p) => ({ head: p.t, cells: [{ key: "y", label: "금리", text: p.y === null ? "몰라요" : `${p.y.toFixed(2)}%` }] }));
   return (
     <>
-      <div className={`pg-chart pg-curve${inv ? " pg-curve--inv" : ""}`} role="img"
-           aria-label={`수익률 곡선 ${pts.map((p) => `${p.t} ${fx(p.y)}%`).join(", ")}${inv ? " · 역전" : ""}`}>
-        <ResponsiveContainer width="100%" height={170}>
-          <LineChart data={pts} margin={{ top: 10, right: 14, bottom: 4, left: 0 }}>
-            <CartesianGrid stroke="var(--pg-line)" strokeDasharray="2 4" vertical={false} />
-            {dips.map(({ a, b }) => (
-              <ReferenceArea key={`${a.t}-${b.t}`} x1={a.t} x2={b.t} fill="var(--pg-fail-soft)" fillOpacity={0.9} ifOverflow="extendDomain" />
-            ))}
-            <XAxis dataKey="t" tick={{ fontSize: 11 }} />
-            <YAxis width={40} tick={{ fontSize: 11 }} unit="%" domain={["auto", "auto"]} />
-            <Tooltip formatter={(x: number) => `${x.toFixed(2)}%`} />
-            <Line dataKey="y" name="금리" stroke="var(--pg-blue)" strokeWidth={2.2} dot={{ r: 3.5 }} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
+      {/* 직접 SVG (ADR 004 · 2026-11-10) — 점 위 금리 글자 + 읽는 줄(←→) + 표 쌍둥이 · 뒤집힌 이웃 쌍은 칠한다 */}
+      <div className={`pg-chart pg-curve${inv ? " pg-curve--inv" : ""}`}>
+        <CurvePlot pts={pts} dips={dips.map((d) => d.at)} rows={read}
+          label={`수익률 곡선 ${pts.map((p) => `${p.t} ${fx(p.y)}%`).join(", ")}${inv ? " · 역전" : ""}`} />
       </div>
       <KV rows={[
         ["10년 − 2년", <span key="s" className={num(r.spread_2y10y_bp) !== null && (r.spread_2y10y_bp as number) < 0 ? "pg-neg" : ""}>

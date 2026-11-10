@@ -94,3 +94,29 @@ for (const s of SCREENS) {
     await expect(page.locator(".recharts-surface")).toHaveCount(0);
   });
 }
+
+// ── 캔버스는 차트 라이브러리를 아예 받지 않는다 (ADR 004 · 2026-11-10) ──
+// 캔버스 결과의 그림 셋(프런티어 · 시점별 노출 · 수익률 곡선)은 직접 SVG 다. 예전에는 결과 패널이 recharts 를 정적으로 실어,
+// 차트를 하나도 보지 않아도 캔버스를 열기만 하면 그 조각이 왔다.
+test("/allocation — 캔버스는 기본 흐름을 돌리고 결과를 열어도 recharts 조각을 받지 않는다", async ({ page }) => {
+  const got: string[] = [];
+  let seen = 0;
+  const pending: Promise<void>[] = [];
+  page.on("response", (r) => {
+    if (!/\/_next\/static\/chunks\/.+\.js/.test(r.url())) return;
+    seen++;
+    pending.push(r.text().then((t) => { if (t.includes(MARK)) got.push(r.url()); }).catch(() => { /* 끊긴 응답 */ }));
+  });
+  await page.goto("/allocation", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
+  const done = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
+  await page.locator(".pg-run").click();
+  await done;
+  await expect(page.locator(".pg-summary:not(.pg-summary--err):not(.pg-summary--stale)")).toContainText("완료", { timeout: 30_000 });
+  await page.locator(".pg-node").first().click();
+  await page.locator('.pg-tab[data-tab="detail"]').click();
+  await page.waitForLoadState("networkidle");
+  await Promise.all(pending);
+  expect(seen, "조각을 하나도 못 봤으면 이 시험은 공허하다").toBeGreaterThan(3);
+  expect(got, "캔버스가 받은 조각 중 recharts 가 든 것").toEqual([]);
+});
