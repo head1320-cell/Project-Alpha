@@ -25764,3 +25764,58 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 하지 않음: 성과가 아닌 recharts 제거(③ 남은 것 셋째 · 미룸) · 캔버스 패널 기본 폭에서 사건 표의 가로 스크롤 없애기 · 전략 창의 보유 도넛 ·
   `monthly_closes` 를 날짜 포함으로 바꾸기 · `period_returns` 의 `n_days` 이름 바꾸기(캔버스·결과 화면 계약 — 전략 창은 열 이름만 "달") ·
   패널을 좁혀 본 스크린샷(기본 폭만).
+
+## 차트 라이브러리 경계 고정 + 늘 보이는 읽는 줄 — recharts 는 두되 캔버스에서 빼고 값은 호버 밖으로 (2026-11-10)
+
+- 왜: 사용자 질문 "recharts 를 제거하는 게 맞는지, 더 좋은 방식이 있는지". 판단은 [ADR 004](decisions/adr-004-chart-library-boundary.md) —
+  ★전부 제거는 목표가 아니다★. 실제 문제는 셋이었다: ⑴ 캔버스 묶음이 recharts 조각을 통째로 받는다 ⑵ 값이 호버 툴팁에만 있다(ADR 003
+  "툴팁 금지" · 터치·키보드로 못 읽음) ⑶ recharts 3 을 되돌려 2.15 에 묶여 있는데 import 가 흩어져 있다. 사용자 선택은 "경계 고정 + 읽는 줄".
+  설계 `docs/superpowers/specs/2026-11-10-chart-boundary-readout-design.md` · 계획 `docs/superpowers/plans/2026-11-10-chart-boundary-readout.md` ·
+  커밋 여섯(①~⑥). 서버 변경 없음.
+- A 캔버스 셋(②): 프런티어 · 시점별 노출 계단선 · 수익률 곡선을 직접 SVG 로(`widgets/portfolio-graph/MiniPlots.tsx` · 눈금·경로는
+  `shared/ui/plot/plotGeo.ts`). 값은 읽는 줄(←→ Home End · 포인터)과 표 쌍둥이에(`shared/ui/chart/ChartReadout.tsx` — 차트 라이브러리
+  import 없음). 캔버스는 recharts 조각을 더는 받지 않는다. 감싸는 계약(`.pg-chart` · `.pg-frontier` · `.pg-curve` · `.pg-curve--inv` · KV)은
+  그대로 · 화면이 하던 셈(가장 좋은 점 고르기 · 구름 셋 중 하나 · 뒤집힌 구간 찾기)은 옮기기만.
+- B 도넛(③): `shared/ui/Donut.tsx::DonutRing` — 캔버스 `StrategyDonut` 의 고리를 옮긴 조각 묶음(캔버스 DOM 그대로 · 분모 100). 매크로
+  `HoldingsDonut` 은 recharts Pie(lazy) → 평범한 부품(분모 = 값의 합 — 예전 Pie 와 같은 비율 · 12시에서 시계 방향 · 이름·비중은 `aria-label` 과
+  옆 목록에). 차트 조각을 기다리지 않는다.
+- C 경계(④): ESLint `no-restricted-imports` — `recharts` 는 `charts.tsx` · `*.charts.tsx` 에서만. `StudioPanel` 의 선 그림 셋은
+  `StudioPanel.charts.tsx` + lazyChart(스튜디오 페이지의 초기 script 에서 빠짐) · `DrillDownModal` 의 그림은 `DrillDownModal.charts.tsx`.
+  이제 recharts 를 import 하는 파일은 차트 파일 일곱(기업 1 · 파생 1 · 매크로 5).
+- D 읽는 줄(⑤): `ReadoutFrame`(그림 + 읽는 줄 + 표 쌍둥이 · 포커스 가능한 틀) + `idxFromChartEvent`(recharts 차트 이벤트 모양을 아는 한 곳).
+  매크로 분석의 그림 넷(롤링 상관 · 평균 상관 · 위험 선호도 추이 · 국면 궤적)과 지표 흐름 창에서 `<Tooltip>` 을 뺐다 — 처음 자리 = 서버
+  마지막 점 · 마우스를 올려도 옮겨진다(툴팁 없이 차트 `onMouseMove`) · 글자는 예전 툴팁 서식 그대로.
+- ★검수에서 찾아 고친 것★
+  - 시점별 노출의 시간이 오른쪽에서 왼쪽으로 흘렀다 — 서버는 옛날부터 주는데(`simulate_rule_set`) 화면이 받은 순서를 뒤집었고, 가로축이
+    숨겨져 있어 안 보였다. 날짜 순으로 놓고 축 양 끝 글자를 E2E 로 묶었다(옛 순서에서 빨강).
+  - 감싸는 이름 `.pg-step` 은 이야기 탭의 단계 줄이 쓰는 이름이라 그림이 24px 로 눌렸다 → `.pg-expo`.
+  - `/macro` 라이트 스타일 골든이 class 없는 `circle` 의 새 색 조합으로 실패 → 도넛 조각에 `tx-donut-arc` 를 붙이고 `/macro` 만 다시 얼림
+    (golden-diff: main 더함 3 · 사라짐 3 · 새 조합 0 / shell 은 아이콘 class 별칭 이름만 · 새 조합 0 / 그 밖 12 라우트 변화 없음).
+  - BL2b 캔버스 시험에 계단선 단언을 붙이니 그 시험의 90초 한도를 넘겨 작은 시험으로 떼었다.
+  - 읽는 줄 자리가 바뀔 때마다 차트 자료 배열을 새로 넘기고 있었다 → useMemo. 선이 다시 그려지는지는 프레임 지문으로 쟀다(넷 다 1 — 고치기
+    전에도 보이는 다시 그림은 없었다 · 호버마다 도는 애니메이션 주기만 없앴다).
+- 시험(전부 옛 빌드에서 빨강 먼저): `portfolio-graph.spec`(프런티어 눈금 < 300 · 구름 점 수 · 읽는 줄 = 서버 가장 좋은 점 · Home · 표 = 경계 점
+  전부 / 새 시험 "시점별 타이밍 시뮬레이션" / 수익률 곡선 점 수·금리·칠한 구간) · `charts-lazy.spec`(/allocation 은 돌리고 결과를 열어도
+  recharts 조각 0 · `/macro/tsfm-latent` 초기 script 에 recharts 0 과 짝 둘) · `macro-cards.spec`(도넛 조각 색 = 범례 색 · 새 도넛 시험 ·
+  읽는 줄 넷). 변이 열 개가 전부 죽었다 — A 넷(구름 ×100 · 칠한 구간 0 · 시간 뒤집기 · 키보드 자리 고정은 세 시험에서 각각) · B 하나(분모 100) ·
+  C 둘(차트 파일 정적 import · 린트: 차트 파일 밖 import 오류 1 대 안 0) · D 셋(처음 자리 0 · 표 솎기 · Tooltip 남김). 
+  전체 E2E 1301 중 1294 통과 · 건너뜀 4 · 실패 3 — 셋 다 이전부터 기록된 간헐이고 이번에 고친 파일이 아니다: `canvas-minimap-pick` U3
+  (홀로 1/2) · `realism` ST3c AA 라이트·다크(홀로 라이트 2/2 · 다크 1/2). `make all`(lint · pytest 8941 통과 · 11 건너뜀 · typecheck · build) 통과.
+  - `realism` ST3c AA 의 원인을 읽었다(고치지는 않았다 — 범위 밖): 두 번째 폭(390)에서 [다시 계산하기]를 누른 직후에는 앞 결과가 아직 화면에
+    있어 세 기다림(단추 글 · 용량 절 · 틈 그림)이 낡은 화면에서 바로 통과하고, 그 뒤 결과가 내려간 사이에 대비 감사가 3 요소만 본다.
+    누르기 전에 `/api/v1/perf/compare` 응답 기다림을 걸고 누른 뒤 그것을 기다리면 닫힌다(틈 그림은 두 실행이 끝난 뒤에야 그 문을 부른다).
+- 측정(브라우저에서 잰 script 압축 전송 · 3회 중앙값 · 같은 기계 · 전 = 커밋 ① · 후 = 커밋 ⑤): 
+  | 경로 | 받은 script 합 | 그중 초기 HTML 이 부른 몫 | recharts 조각 |
+  |---|---|---|---|
+  | `/allocation`(캔버스) | 760.7 → 655.1 kB(−105.6) | 170.2 → 170.2 | 받음 1 → **0** |
+  | `/macro/tsfm-latent` · `/macro/neural-sde`(스튜디오) | 535.3 → 522.8 kB | 286.8 → 182.2 kB(−104.6) | 초기 script 1 → **0**(화면이 뜬 뒤 1) |
+  | `/macro`(대조군) | 592.6 → 540.8 kB(53 → 51 조각) | 198.0 → 199.1 | 뒤에 1 그대로 |
+
+  recharts 조각 자체는 그대로다(원본 381 → 379 kB · gzip 96 kB) — 지운 것이 아니라 ★받는 곳과 때★를 바꿨다. `/macro` 가 줄어든 것은 목표가
+  아니었다: 창을 6초로 늘려 재도 같은 수라 도착 시각 탓이 아니고, 바꾸기 전 커밋을 따로 빌드해 견주니 `recharts-pie` 표지가 든 조각이
+  사라졌다(관측). 도넛이 recharts Pie 를 쓰지 않게 되어 Pie 쪽 코드를 받지 않는 것으로 보인다 — 이름 없는 조각 셋(각 18 kB 안팎)이 같은
+  까닭인지는 확인하지 않았다(추론).
+- 하지 않음: recharts 전부 제거 · 다른 차트 라이브러리 · recharts 3 · 남은 12개 차트의 읽는 줄(매크로 cockpit 2 · visual 1 · studio 3 · 기업 4 —
+  별도 승인 · 파생 2 는 원래 툴팁이 없다) · 전략 카드의 보유 6줄 계약(7번째·기타 조각의 이름은 전략 창 목록과 `aria-label` 에만) · 도넛을 100
+  기준으로 · 화면이 하던 기존 셈 고치기(프런티어 `best` · `foldHoldings` 기타 합 · 뒤집힌 구간) · 롤링 상관의 범례와 읽는 줄 색 표식 중복 정리 ·
+  서버·정책·지표 · 새 색 토큰 · PR.
