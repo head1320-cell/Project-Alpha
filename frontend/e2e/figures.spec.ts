@@ -3,7 +3,7 @@
 // ⑴ ★홀로 선 큰 숫자(≥20px)는 비례폭 숫자★ — `tabular-nums` 는 모든 숫자에 0 의 폭을 줘서 큰 글자에서는 "121" 이 헐거워 보인다.
 //    고정폭 숫자는 세로로 줄을 맞춰야 하는 곳(표의 숫자 칸 · 축 눈금)에만 쓴다. 짝: 표의 숫자 칸은 `tabular-nums` 다(항상-통과 배제).
 // ⑵ ★스파크라인은 하나★(`shared/ui/plot/Spark.tsx`) — 선 1.5px · 끝 점 하나(지금) · 값이 둘 미만이면 선을 그리지 않는다(지어내지 않는다).
-import { expect, test, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { freezeCharts } from "./helpers";
 
 /** 보이는 "홀로 선 숫자"(제 글자에 숫자가 있고 ≥20px · 표·그림·입력 칸 밖)의 수와, 그중 고정폭 숫자인 것. */

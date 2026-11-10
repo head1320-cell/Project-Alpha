@@ -3,7 +3,7 @@
 // 규격(`shared/ui/chart/chartSpec.ts`): 격자는 실선(점선은 뜻이 있는 주석선에만) · 선 굵기는 2 또는 1.5(뒤로 물린 선) · 점은 r≥4 + 표면색 고리 2px ·
 // 면은 그라데이션이 아닌 단색 물들임 · 막대는 24px 이하.
 // ★공허한 통과를 막는다★ — 장면마다 "반드시 있어야 하는 표식"(need)을 적고, 그 표식이 하나도 없으면 빨강이다.
-import { expect, test, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { freezeCharts } from "./helpers";
 
 type Kind = "grid" | "line" | "dot" | "area" | "bar";
