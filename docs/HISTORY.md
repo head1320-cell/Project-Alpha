@@ -25779,7 +25779,8 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - B 도넛(③): `shared/ui/Donut.tsx::DonutRing` — 캔버스 `StrategyDonut` 의 고리를 옮긴 조각 묶음(캔버스 DOM 그대로 · 분모 100). 매크로
   `HoldingsDonut` 은 recharts Pie(lazy) → 평범한 부품(분모 = 값의 합 — 예전 Pie 와 같은 비율 · 12시에서 시계 방향 · 이름·비중은 `aria-label` 과
   옆 목록에). 차트 조각을 기다리지 않는다.
-- C 경계(④): ESLint `no-restricted-imports` — `recharts` 는 `charts.tsx` · `*.charts.tsx` 에서만. `StudioPanel` 의 선 그림 셋은
+- C 경계(④): ESLint `no-restricted-imports` — `recharts` 는 `charts.tsx` · `*.charts.tsx` 에서만. ★거는 곳은 CI 의 `npx eslint src`★
+  (`.github/workflows`) — `make all` 의 lint 는 ruff 뿐이라 이 규칙을 돌리지 않는다. 그래서 `npx eslint src` 를 따로 돌려 오류 0 을 확인했다. `StudioPanel` 의 선 그림 셋은
   `StudioPanel.charts.tsx` + lazyChart(스튜디오 페이지의 초기 script 에서 빠짐) · `DrillDownModal` 의 그림은 `DrillDownModal.charts.tsx`.
   이제 recharts 를 import 하는 파일은 차트 파일 일곱(기업 1 · 파생 1 · 매크로 5).
 - D 읽는 줄(⑤): `ReadoutFrame`(그림 + 읽는 줄 + 표 쌍둥이 · 포커스 가능한 틀) + `idxFromChartEvent`(recharts 차트 이벤트 모양을 아는 한 곳).
