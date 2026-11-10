@@ -54,3 +54,14 @@
 - 린트: `frontend/eslint.config.js` 의 `no-restricted-imports`(변이로 오류가 나는지 확인하고 HISTORY 에 적는다).
 - E2E: `charts-lazy.spec.ts`(초기 script 에 recharts 0 · 캔버스는 한 번 돌려도 조각 0) · 읽는 줄 시험(`macro-cards.spec.ts`).
 - 변하지 않는 것: 화면은 서버 값을 서식만 · CSS 클래스명은 E2E 계약 · 새 색 토큰 0 · 서버 변경 없음.
+
+## 6. 보탬 (2026-11-10 · 같은 날) — 표식 규격 · 이중 축 · Tooltip
+
+스펙: [`docs/superpowers/specs/2026-11-10-chart-indicator-system-design.md`](../superpowers/specs/2026-11-10-chart-indicator-system-design.md)
+
+1. **표식 규격은 한 곳.** 선 굵기 · 점 · 면 · 막대 · 축 글자는 `shared/ui/chart/chartSpec.ts` 의 값을 쓴다(recharts 차트와 손그림이 같이).
+   격자는 실선, 점선은 뜻이 있는 주석선(평균 · 손익분기 · 내재가치)에만.
+2. **이중 축은 쓰지 않는다.** §2.1 이 "이중 축"을 라이브러리가 잘하는 일로 꼽았지만, 단위가 다른 두 측정을 한 그림의 두 축에 올리면 눈금 비율이
+   없는 관계를 만든다. 위아래 칸으로 나눈다(같은 가로축). 기업 `StoryChart` 가 그 하나였다.
+3. **`Tooltip` 은 import 하지 못한다.** §2.4 의 "화면 단위로 걷어 낸다"가 끝났다 — 차트 파일에서도 `recharts` 의 `Tooltip` 은 ESLint 오류다.
+   지키는 것: `e2e/chart-marks.spec.ts` · 읽는 줄 시험(`macro-cards` · `macro-studios` · `insights` · `derivatives`).
