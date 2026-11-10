@@ -98,8 +98,12 @@ module.exports = [
   },
   {
     // 차트 파일 — recharts 를 import 해도 되는 유일한 자리(ADR 004).
+    // ★단 `Tooltip` 은 여기서도 못 쓴다★(ADR 004 §6 · 2026-11-10) — 값은 호버가 아니라 늘 보이는 읽는 줄에(`shared/ui/chart/ChartReadout`).
     files: ["src/**/charts.tsx", "src/**/*.charts.tsx"],
-    rules: { "no-restricted-imports": "off" },
+    rules: { "no-restricted-imports": ["error", { paths: [{
+      name: "recharts", importNames: ["Tooltip"],
+      message: "recharts 의 Tooltip 은 쓰지 않아요 — 값은 읽는 줄·표 쌍둥이에(ReadoutFrame · ADR 004 §2.4 · §6).",
+    }] }] },
   },
   {
     // app/ 은 Next 라우팅 계층 — 모든 하위 계층을 조립하는 것이 역할이므로 peer 개념이 없다.

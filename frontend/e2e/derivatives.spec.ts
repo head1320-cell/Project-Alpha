@@ -187,3 +187,32 @@ test("글 · 대비 · 390 — em-dash·영어 대문자·툴팁 0 · 탭마다 
     expect(over, `${q} 390 넘침`).toBeLessThanOrEqual(0);
   }
 });
+
+// ── 읽는 줄 — 기대 노출 곡선 (2026-11-10 · ADR 004 §6) ──
+// 예전에는 시점별 값을 읽을 길이 없었다(툴팁도 표도 없이 선과 점뿐). 값은 늘 보이는 줄(`.cr-read`)과 표 쌍둥이(`.cr-table` — 전부)에 있다.
+test("읽는 줄 — 기대 노출 곡선: 처음 자리 = 마지막 시점 · 값 = 서버 ee_values · ← 로 앞 시점 · Home 으로 첫 시점 · 표 쌍둥이 = 점 수 · 툴팁 0", async ({ page }) => {
+  const ee = [1, 4, 9, 16, 25, 30, 28, 20, 10, 0].map((x) => x * 1e6);
+  await patch(page, "/calculate-cva", (b) => { (b.exposure_profile as Record<string, unknown>).ee_values = ee; });
+  await open(page, "?tab=cva");
+  await page.getByRole("button", { name: "신용 위험 계산하기" }).click();
+  const f = page.getByTestId("cva-curve").locator('.cr[data-chart="cva-exposure"]');
+  await expect(f.locator(".recharts-line-curve")).toBeVisible({ timeout: 20_000 });
+  // 만기 5년(기본값)을 10 시점으로 — 마지막 시점 5년 · 그 앞 4.5년 · 첫 시점 0.5년
+  await expect(f.locator(".cr-head")).toHaveText("5년");
+  await expect(f.locator(".cr-read")).toContainText("기대 노출 0원");
+  await f.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(f.locator(".cr-head")).toHaveText("4.5년");
+  await expect(f.locator(".cr-read")).toContainText("기대 노출 1,000만원");
+  await page.keyboard.press("Home");
+  await expect(f.locator(".cr-head")).toHaveText("0.5년");
+  await expect(f.locator(".cr-read")).toContainText("기대 노출 100만원");
+  // 마우스로도 — 그림 왼쪽에 올리면 앞쪽 시점으로
+  const box = (await f.locator(".recharts-wrapper > svg.recharts-surface").boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5);
+  await expect.poll(async () => (await f.locator(".cr-head").textContent()) ?? "", { message: "오른쪽에 올리면 뒤쪽 시점" }).toMatch(/^(3\.5|4|4\.5)년$/);
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr")).toHaveCount(ee.length);
+  await expect(page.locator(".dv .recharts-tooltip-wrapper")).toHaveCount(0);
+  await expect(page.locator(".dv [title]")).toHaveCount(0);
+});

@@ -1,9 +1,11 @@
 "use client";
 // 파생상품 계산기의 차트 둘 — `lazyChart` 로 ★화면이 뜬 뒤에★ 받는다(recharts 를 첫 화면 JS 에서 뺌 · 2026-11-08 · `e2e/charts-lazy.spec.ts`).
 // 본문은 OptionCalc·CvaCalc 에 있던 그대로다. 소비자는 그 파일들이 같은 이름으로 내보내는 것을 쓴다.
-import { Area, CartesianGrid, ComposedChart, Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { useMemo } from "react";
+import { Area, CartesianGrid, ComposedChart, Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { won as wonK } from "@/shared/lib/krFormat";
-import { AXIS_TICK, GRID, MARK, ringDot } from "@/shared/ui/chart/chartSpec";
+import { ReadoutFrame, followChart, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
+import { AXIS_TICK, CROSSHAIR, GRID, MARK, pickDot, ringDot } from "@/shared/ui/chart/chartSpec";
 import { f4, type Kind } from "./OptionCalc";
 import { POS_KO, type Pos } from "./CvaCalc";
 
@@ -40,21 +42,29 @@ export function Payoff({ kind, K, S, price }: { kind: Kind; K: number; S: number
 }
 
 export function ExposureCurve({ ee, T, epe, peak, pos }: { ee: number[]; T: number; epe: number; peak: number; pos: Pos }) {
-  const pts = ee.map((y, i) => ({ t: Number(((T * (i + 1)) / ee.length).toFixed(3)), y }));
+  const pts = useMemo(() => ee.map((y, i) => ({ t: Number(((T * (i + 1)) / ee.length).toFixed(3)), y })), [ee, T]);
+  // 읽는 줄 — 시점마다 기대 노출(서버 `ee_values` 를 화면 서식으로). 예전에는 시점별 값을 읽을 길이 없었다(선과 점뿐). 처음 자리 = 마지막 시점.
+  const rows: ReadRow[] = pts.map((p) => ({ head: `${p.t}년`, cells: [{ key: "y", label: "기대 노출", text: wonK(p.y) }] }));
+  const { idx, setIdx, onKeyDown } = useReadout(rows.length);
+  const cur = idx >= 0 ? pts[idx] : null;
   return (
     <div className="dv-chart" data-testid="cva-curve" data-points={ee.length}>
       <h3 className="dv-h3">시간에 따라 얼마나 물려 있나요(기대 노출)</h3>
       <p className="dv-note">상대방이 그 시점에 부도나면 잃을 수 있는 금액의 기대값이에요. {POS_KO[pos]} 모양으로 {ee.length}개 시점을 계산했어요. 가장 클 때 {wonK(peak)}, 평균 {wonK(epe)}이에요.</p>
-      <div className="dv-chart-box" role="img" aria-label={`기대 노출 곡선 ${ee.length}개 점. 가장 클 때 ${wonK(peak)}, 평균 ${wonK(epe)}`}>
-        <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
-            <CartesianGrid {...GRID} />
-            <XAxis dataKey="t" type="number" domain={[0, T]} tick={AXIS_TICK} tickFormatter={(x: number) => `${x}년`} />
-            <YAxis tick={AXIS_TICK} width={64} tickFormatter={(x: number) => wonK(x).replace("원", "")} />
-            <ReferenceLine y={epe} stroke="var(--tx-mute)" strokeDasharray="4 4" />
-            <Line dataKey="y" type="monotone" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={ringDot("var(--tx-blue)")} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="dv-chart-box">
+        <ReadoutFrame id="cva-exposure" label={`기대 노출 곡선 ${ee.length}개 점. 가장 클 때 ${wonK(peak)}, 평균 ${wonK(epe)}`} headLabel="시점" rows={rows} idx={idx} onKeyDown={onKeyDown}>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }} onMouseMove={followChart(setIdx)}>
+              <CartesianGrid {...GRID} />
+              <XAxis dataKey="t" type="number" domain={[0, T]} tick={AXIS_TICK} tickFormatter={(x: number) => `${x}년`} />
+              <YAxis tick={AXIS_TICK} width={64} tickFormatter={(x: number) => wonK(x).replace("원", "")} />
+              <ReferenceLine y={epe} stroke="var(--tx-mute)" strokeDasharray="4 4" />
+              <Line dataKey="y" type="monotone" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={ringDot("var(--tx-blue)")} isAnimationActive={false} />
+              {cur && <ReferenceLine x={cur.t} {...CROSSHAIR} />}
+              {cur && <ReferenceDot x={cur.t} y={cur.y} {...pickDot("var(--tx-blue)")} />}
+            </LineChart>
+          </ResponsiveContainer>
+        </ReadoutFrame>
       </div>
       <p className="dv-keys"><span><i className="dv-key-line" aria-hidden />기대 노출</span><span><i className="dv-key-s" aria-hidden />평균(EPE) {wonK(epe)}</span></p>
     </div>

@@ -25,7 +25,6 @@ export function sigColor(_sig: string): string { return "var(--tx-ink)"; }
 /** 등락색 — 오름 빨강 / 내림 파랑(한국식). 0 은 잉크. */
 export const moveColor = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v) || v === 0 ? "var(--tx-ink)" : v > 0 ? "var(--tx-up-ink)" : "var(--tx-down-ink)";
-import { TX_TIP_STYLE as TIP_STYLE } from "@/shared/ui/chartStyle";
 import { chartModule, lazyChart } from "@/shared/ui/lazyChart";
 import { AXIS_TICK } from "@/shared/ui/chart/chartSpec";
 
@@ -33,7 +32,6 @@ import { AXIS_TICK } from "@/shared/ui/chart/chartSpec";
 // 보유 도넛(HoldingsDonut)은 직접 SVG 라 여기 있다(ADR 004 · 2026-11-10) — 차트 조각을 기다리지 않는다.
 // MacroCockpit 이 붙자마자 불러 데이터와 같이 오게 한다. 이름·prop 은 그대로라 소비자는 바뀌지 않는다.
 export const loadCockpitCharts = chartModule(() => import("./cockpitParts.charts"));
-export { TIP_STYLE };
 export const AX = AXIS_TICK;   // 축 글자는 규격 한 곳(`shared/ui/chart/chartSpec.ts`)
 export const Q_FILL: Record<string, string> = {
   Goldilocks: "var(--mc-q-goldilocks)", Reflation: "var(--mc-q-reflation)",
