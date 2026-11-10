@@ -10139,16 +10139,15 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 /* 캔버스 결과의 작은 그림 — 직접 SVG (widgets/portfolio-graph/MiniPlots · ADR 004) */
 .pg-plot { display: block; max-width: 100%; outline: none; cursor: crosshair; touch-action: pan-y; }
 .pg-plot:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; border-radius: 6px; }
-.pg-plot-grid { stroke: var(--pg-line); stroke-dasharray: 2 4; }
+.pg-plot-grid { stroke: var(--pg-line); }   /* 격자는 실선(규격 — shared/ui/chart/chartSpec.ts) */
 .pg-plot-xtick, .pg-plot-ytick, .pg-plot-axis { font-size: 11px; fill: var(--pg-body); }
 .pg-plot-dot { fill: var(--pg-line); }
 .pg-plot-line { fill: none; stroke: var(--pg-blue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.pg-plot-line--step { stroke-width: 1.5; }
 .pg-plot-cross { stroke: var(--pg-mute); stroke-width: 1; }
 .pg-plot-active { fill: var(--pg-paper); stroke: var(--pg-blue); stroke-width: 2; }
 .pg-plot-point { fill: var(--pg-assume); stroke: var(--pg-paper); stroke-width: 2.5; }
 .pg-curve-dip { fill: var(--pg-fail-soft); opacity: .9; }
-.pg-curve-pt { fill: var(--pg-blue); }
+.pg-curve-pt { fill: var(--pg-blue); stroke: var(--pg-paper); stroke-width: 2; }
 .pg-curve-val { font-size: 11px; fill: var(--pg-ink); font-variant-numeric: tabular-nums; }
 /* 성과 시트 — 공용 .tx-sheet(오른쪽 520) 를 넓힌다. 820 이하는 캔버스 패널처럼 바닥에서(.tx-sheet 의 560 규칙과 같은 모양). */
 .pg-sheet--wide { width: min(960px, 100vw - 32px); }

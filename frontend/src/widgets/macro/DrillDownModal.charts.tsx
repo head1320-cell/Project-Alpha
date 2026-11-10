@@ -4,6 +4,7 @@
 // 값은 호버 툴팁이 아니라 읽는 줄·표 쌍둥이에 있다(ADR 004 §2.4) — 처음 자리 = 마지막 달 · ←→ Home End · 마우스를 올려도 옮겨진다.
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceDot, ReferenceLine } from "recharts";
 import { ReadoutFrame, idxFromChartEvent, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
+import { AXIS_TICK, CROSSHAIR, GRID, MARK, pickDot } from "@/shared/ui/chart/chartSpec";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { fmtNum } from "./cockpitParts";
 
@@ -18,14 +19,13 @@ export function DrillSeriesChart({ data, name, unit, mean5y }: { data: { t: stri
     <ResponsiveContainer width="100%" height={220}>
       <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -10 }}
                  onMouseMove={(st) => { const i = idxFromChartEvent(st); if (i !== null) setIdx(i); }}>
-        <defs><linearGradient id="mcgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--tx-blue)" stopOpacity={0.24} /><stop offset="100%" stopColor="var(--tx-blue)" stopOpacity={0.02} /></linearGradient></defs>
-        <CartesianGrid strokeDasharray="2 2" stroke="var(--tx-line)" vertical={false} />
-        <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" minTickGap={24} />
-        <YAxis tick={{ fontSize: 11, fill: "var(--tx-sub)" }} stroke="var(--tx-line)" domain={["auto", "auto"]} width={48} />
+        <CartesianGrid {...GRID} />
+        <XAxis dataKey="t" tick={AXIS_TICK} stroke="var(--tx-line)" minTickGap={24} />
+        <YAxis tick={AXIS_TICK} stroke="var(--tx-line)" domain={["auto", "auto"]} width={48} />
         {mean5y != null && <ReferenceLine y={mean5y} stroke="var(--tx-mute)" strokeDasharray="3 3" />}
-        <Area type="monotone" dataKey="v" stroke="var(--tx-blue)" strokeWidth={1.8} fill="url(#mcgrad)" isAnimationActive={anim} />
-        {cur && <ReferenceLine x={cur.t} stroke="var(--tx-mute)" strokeWidth={1} />}
-        {cur && Number.isFinite(cur.v) && <ReferenceDot x={cur.t} y={cur.v} r={4} fill="var(--tx-surface)" stroke="var(--tx-blue)" strokeWidth={2} />}
+        <Area type="monotone" dataKey="v" stroke="var(--tx-blue)" strokeWidth={MARK.line} fill="var(--tx-blue)" fillOpacity={MARK.wash} isAnimationActive={anim} />
+        {cur && <ReferenceLine x={cur.t} {...CROSSHAIR} />}
+        {cur && Number.isFinite(cur.v) && <ReferenceDot x={cur.t} y={cur.v} {...pickDot("var(--tx-blue)")} />}
       </AreaChart>
     </ResponsiveContainer>
     </ReadoutFrame>

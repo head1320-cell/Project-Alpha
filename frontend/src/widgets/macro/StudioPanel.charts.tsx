@@ -4,9 +4,10 @@
 // 직접 import 해 스튜디오 네 페이지의 초기 script 에 실려 있었다. 본문은 그 파일에 있던 그대로다(행 만들기는 StudioPanel 에 남는다).
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
 import { TX_TIP_STYLE as TIP_STYLE, useChartAnimation } from "@/shared/ui/chartStyle";
+import { AXIS_TICK, MARK } from "@/shared/ui/chart/chartSpec";
 import { catColor, signed } from "./macroKo";
 
-const AXIS = { tick: { fontSize: 11, fill: "var(--tx-sub)" }, stroke: "var(--tx-line)" } as const;
+const AXIS = { tick: AXIS_TICK, stroke: "var(--tx-line)" } as const;
 const sixth = (n: number) => Math.max(0, Math.floor(n / 6));
 
 /** 요인이 지나온 길 — 행 = { i, f1, f2, … } · 요인 k 개(하나면 강조색, 여럿이면 범주색). */
@@ -20,7 +21,7 @@ export function FactorLines({ rows, k }: { rows: Record<string, number>[]; k: nu
         <ReferenceLine y={0} stroke="var(--tx-mute)" />
         <Tooltip contentStyle={TIP_STYLE} formatter={(v: number, n: string) => [signed(Number(v), 3), `요인 ${n.slice(1)}`]} labelFormatter={(l) => `관측 ${l}번째`} />
         {Array.from({ length: k }, (_, j) => (
-          <Line key={j} dataKey={`f${j + 1}`} stroke={k === 1 ? "var(--tx-blue)" : catColor(j)} strokeWidth={2} dot={false} isAnimationActive={anim} />
+          <Line key={j} dataKey={`f${j + 1}`} stroke={k === 1 ? "var(--tx-blue)" : catColor(j)} strokeWidth={MARK.line} dot={false} isAnimationActive={anim} />
         ))}
       </LineChart>
     </ResponsiveContainer>
@@ -37,7 +38,7 @@ export function CurveLines({ rows, cols }: { rows: Record<string, number>[]; col
         <YAxis width={36} {...AXIS} />
         <ReferenceLine y={0} stroke="var(--tx-mute)" />
         <Tooltip contentStyle={TIP_STYLE} formatter={(v: number, k: string) => [Number(v).toFixed(2), cols.find(([x]) => x === k)?.[1] ?? k]} labelFormatter={(l) => `관측 ${l}번째`} />
-        {cols.map(([k], j) => <Line key={k} dataKey={k} stroke={catColor(j)} strokeWidth={2} dot={false} isAnimationActive={anim} />)}
+        {cols.map(([k], j) => <Line key={k} dataKey={k} stroke={catColor(j)} strokeWidth={MARK.line} dot={false} isAnimationActive={anim} />)}
       </LineChart>
     </ResponsiveContainer>
   );
@@ -53,7 +54,7 @@ export function TpLine({ rows }: { rows: { i: number; tp: number }[] }) {
         <YAxis width={40} {...AXIS} />
         <ReferenceLine y={0} stroke="var(--tx-mute)" />
         <Tooltip contentStyle={TIP_STYLE} formatter={(v: number) => [Number(v).toFixed(1), "기간프리미엄 대용"]} labelFormatter={(l) => `관측 ${l}번째`} />
-        <Line dataKey="tp" stroke="var(--tx-blue)" strokeWidth={2} dot={false} isAnimationActive={anim} />
+        <Line dataKey="tp" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={false} isAnimationActive={anim} />
       </LineChart>
     </ResponsiveContainer>
   );

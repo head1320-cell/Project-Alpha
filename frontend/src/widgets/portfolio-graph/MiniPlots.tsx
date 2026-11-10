@@ -9,6 +9,7 @@
  */
 import { useMemo, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { ReadLine, TableTwin, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
+import { MARK } from "@/shared/ui/chart/chartSpec";
 import { textW } from "@/shared/ui/perf/perfGeo";
 import { useMeasuredWidth } from "@/shared/ui/perf/useMeasuredWidth";
 import { gapPath, linScale, niceTicks, stepPath, tickDecimals, xyPath, type XY } from "@/shared/ui/plot/plotGeo";
@@ -92,7 +93,7 @@ export function FrontierPlot({ dots, curve, point, rows, initial, label, height 
       <text className="pg-plot-axis" x={(left + width - RIGHT) / 2} y={height - 4} textAnchor="middle">흔들림(연)</text>
       {dots.map((p, i) => <circle key={i} className="pg-plot-dot" cx={sx(p.x)} cy={sy(p.y)} r={2} />)}
       {curve.length > 1 && <path className="pg-plot-line" d={xyPath(curve.map((p) => ({ x: sx(p.x), y: sy(p.y) })))} />}
-      {cur && <circle className="pg-plot-active" cx={sx(cur.x)} cy={sy(cur.y)} r={4.5} />}
+      {cur && <circle className="pg-plot-active" cx={sx(cur.x)} cy={sy(cur.y)} r={MARK.dotR} />}
       {point && <circle className="pg-plot-point" cx={sx(point.x)} cy={sy(point.y)} r={7} />}
     </Frame>
   );
@@ -126,7 +127,7 @@ export function StepPlot({ ys, rows, label, height = 140 }: { ys: (number | null
       ))}
       <path className="pg-plot-line pg-plot-line--step" d={stepPath(xs, py)} />
       {idx >= 0 && <line className="pg-plot-cross" x1={xs[idx]} x2={xs[idx]} y1={TOP} y2={height - bottom} />}
-      {idx >= 0 && curY !== null && <circle className="pg-plot-active" cx={xs[idx]} cy={curY} r={4} />}
+      {idx >= 0 && curY !== null && <circle className="pg-plot-active" cx={xs[idx]} cy={curY} r={MARK.dotR} />}
       <text className="pg-plot-xtick" x={left} y={height - 4} textAnchor="start">{rows[0]?.head ?? ""}</text>
       {n > 1 && <text className="pg-plot-xtick" x={width - RIGHT} y={height - 4} textAnchor="end">{rows[n - 1]?.head ?? ""}</text>}
     </Frame>
@@ -175,14 +176,14 @@ export function CurvePlot({ pts, dips, rows, label, height = 170 }: {
       <path className="pg-plot-line" d={gapPath(xs, py)} />
       {pts.map((p, i) => (
         <g key={`${p.t}-${i}`}>
-          {py[i] !== null && <circle className="pg-curve-pt" cx={xs[i]} cy={py[i] as number} r={3.5} />}
+          {py[i] !== null && <circle className="pg-curve-pt" cx={xs[i]} cy={py[i] as number} r={MARK.dotR} />}
           {py[i] !== null && shown(i, valEvery) && (
             <text className="pg-curve-val" x={xs[i]} y={(py[i] as number) - 7} textAnchor="middle">{(p.y as number).toFixed(2)}</text>
           )}
           {shown(i, tickEvery) && <text className="pg-plot-xtick" x={xs[i]} y={height - 5} textAnchor="middle">{p.t}</text>}
         </g>
       ))}
-      {idx >= 0 && py[idx] !== null && <circle className="pg-plot-active" cx={xs[idx]} cy={py[idx] as number} r={5.5} />}
+      {idx >= 0 && py[idx] !== null && <circle className="pg-plot-active" cx={xs[idx]} cy={py[idx] as number} r={MARK.dotR + 2.5} />}
     </Frame>
   );
 }

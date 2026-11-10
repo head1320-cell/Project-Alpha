@@ -977,6 +977,10 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
   expect(fv.curve.length, "경계 점이 없으면 이 검사는 공허하다").toBeGreaterThan(2);
   await expect(fr.locator(".pg-plot-dot")).toHaveCount(Math.ceil((fv.cloud?.volatilities.length ?? 0) / 3));   // 구름은 셋 중 하나로 솎는다(예전 그대로)
   await expect(fr.locator(".pg-plot-line")).toHaveCount(1);
+  // 표식 규격(ADR 004 §6 · `shared/ui/chart/chartSpec.ts`) — 격자는 실선 · 선 2px. 손그림도 recharts 차트와 같은 값이다.
+  expect(await fr.locator(".pg-plot-grid").evaluateAll((els) => els.map((e) => getComputedStyle(e).strokeDasharray)).then((d) => [d.length > 0, ...new Set(d)]),
+    "격자가 있고 전부 실선").toEqual([true, "none"]);
+  expect(await fr.locator(".pg-plot-line").evaluate((e) => getComputedStyle(e).strokeWidth)).toBe("2px");
   const bestI = fv.curve.reduce((b, r, i) => (fv.curve[b].sharpe >= r.sharpe ? b : i), 0);
   await expect(fr.locator(".cr-read"), "읽는 줄의 처음 자리 = 가장 좋은 점").toContainText(`흔들림 ${fv.curve[bestI].volatility.toFixed(1)}%`);
   await expect(fr.locator(".cr-read")).toContainText(`수익 ${fv.curve[bestI].return.toFixed(1)}%`);
@@ -1039,6 +1043,7 @@ test("시점별 타이밍 시뮬레이션: 노출 계단선 = 직접 SVG · 읽�
   const last = sim[sim.length - 1], prev = sim[sim.length - 2];
   const step = page.locator(".pg-side .pg-expo");
   await expect(step.locator(".pg-plot-line--step")).toHaveCount(1);
+  expect(await step.locator(".pg-plot-line--step").evaluate((e) => getComputedStyle(e).strokeWidth), "계단선도 2px(표식 규격)").toBe("2px");
   await expect(step.locator(".pg-plot-xtick").first()).toHaveText(sim[0].as_of);
   await expect(step.locator(".pg-plot-xtick").last()).toHaveText(last.as_of);
   await expect(step.locator(".cr-read")).toContainText(last.as_of);
@@ -1292,6 +1297,9 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   expect(yv.length, "곡선 점이 없으면 이 검사는 공허하다").toBeGreaterThan(2);
   const ycv = page.locator(".pg-side .pg-curve");
   await expect(ycv.locator(".pg-curve-pt")).toHaveCount(yv.filter((p) => p.yield_pct !== null).length);
+  // 표식 규격: 점은 r≥4 + 바탕색 고리 2px(선과 겹쳐도 읽힌다)
+  expect(await ycv.locator(".pg-curve-pt").first().evaluate((e: SVGCircleElement) => { const cs = getComputedStyle(e); return [e.r.baseVal.value >= 4, cs.strokeWidth, cs.stroke !== cs.fill]; }))
+    .toEqual([true, "2px", true]);
   const lastY = yv[yv.length - 1];
   await expect(ycv.locator(".cr-read")).toContainText(String(lastY.label));
   await expect(ycv.locator(".cr-read")).toContainText(`금리 ${(lastY.yield_pct as number).toFixed(2)}%`);

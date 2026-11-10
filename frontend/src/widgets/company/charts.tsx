@@ -7,12 +7,13 @@ import {
 import type { CompanyData } from "@/entities/company/insightsModel";
 import { won, eok } from "@/entities/company/insightsModel";
 import { useChartAnimation, TX_TIP_STYLE, TX_TIP_STYLE as TIP_STYLE } from "@/shared/ui/chartStyle";
+import { AXIS_TICK, BAR_TOP, MARK, ringDot } from "@/shared/ui/chart/chartSpec";
 import { catColor } from "@/shared/ui/vizColor";
 import type { ValueBandIn } from "./parts";
 import { margin, type Row } from "./MoneySection";
 import { eokWon, pctTxt, periodKo, periodShort } from "./fmt";
 
-const AXIS = { fontSize: 11, fill: "var(--tx-sub)" };
+const AXIS = AXIS_TICK;
 
 /** 1년 주가 면적 — 중립 한 색(판정 색으로 칠하지 않는다) + 내재가치 점선. ★주가가 없으면 부르지 않는다(지어내지 않음)★. */
 export function PriceChart({ data, height = 200, intrinsic }: { data: CompanyData["price1y"]; height?: number; intrinsic?: number }) {
@@ -21,17 +22,11 @@ export function PriceChart({ data, height = 200, intrinsic }: { data: CompanyDat
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id="ci-price-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--tx-blue)" stopOpacity={0.18} />
-            <stop offset="100%" stopColor="var(--tx-blue)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
         <XAxis dataKey="t" tick={AXIS} interval={Math.max(0, Math.floor(data.length / 6))} tickLine={false} axisLine={{ stroke: "var(--tx-line)" }} />
         <YAxis domain={["dataMin", "dataMax"]} tick={AXIS} tickFormatter={tick} width={48} tickLine={false} axisLine={false} />
         <Tooltip contentStyle={TIP_STYLE} formatter={(v: number) => [won(v), "종가"]} />
         {intrinsic ? <ReferenceLine y={intrinsic} stroke="var(--tx-ink)" strokeDasharray="5 4" strokeWidth={1.2} ifOverflow="extendDomain" /> : null}
-        <Area isAnimationActive={anim} type="monotone" dataKey="p" stroke="var(--tx-blue)" strokeWidth={1.6} fill="url(#ci-price-fill)" />
+        <Area isAnimationActive={anim} type="monotone" dataKey="p" stroke="var(--tx-blue)" strokeWidth={MARK.line} fill="var(--tx-blue)" fillOpacity={MARK.wash} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -61,7 +56,7 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
           ))}
           {intrinsic > 0 && <ReferenceLine y={intrinsic} stroke="var(--tx-ink)" strokeDasharray="5 4" strokeWidth={1.2} />}
           {data.length > 0 && <Tooltip contentStyle={TIP_STYLE} formatter={(v: number) => [won(v), "종가"]} />}
-          {data.length > 0 && <Line type="monotone" dataKey="p" stroke="var(--tx-blue)" strokeWidth={2} dot={false} isAnimationActive={anim} />}
+          {data.length > 0 && <Line type="monotone" dataKey="p" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={false} isAnimationActive={anim} />}
         </ComposedChart>
       </ResponsiveContainer>
       <ul className="ci-pv-leg">
@@ -91,7 +86,7 @@ export function KpiBars({ data, dataKey, xKey = "year", height = 130, fmt = eok 
         <XAxis dataKey={xKey} tick={AXIS} tickLine={false} axisLine={{ stroke: "var(--tx-line)" }} />
         <ReferenceLine y={0} stroke="var(--tx-mute)" />
         <Tooltip formatter={(v: number) => [fmt(v), ""]} contentStyle={TIP_STYLE} cursor={{ fill: "var(--tx-soft)" }} />
-        <Bar isAnimationActive={anim} dataKey={dataKey} radius={[3, 3, 0, 0]} fill="var(--tx-blue)" />
+        <Bar isAnimationActive={anim} dataKey={dataKey} radius={BAR_TOP} maxBarSize={MARK.barMax} fill="var(--tx-blue)" />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -101,7 +96,7 @@ export function StoryChart({ rows }: { rows: Row[] }) {
   const anim = useChartAnimation();
   const data = rows.map((r) => ({ k: periodShort(r.k), revenue: r.revenue, opM: r.opMargin, niM: margin(r.ni, r.revenue) }));
   const tickEok = (v: number) => (Math.abs(v) >= 10000 ? `${Math.round(v / 10000).toLocaleString("ko-KR")}조` : `${Math.round(v).toLocaleString("ko-KR")}억`);
-  const AX = { fontSize: 11, fill: "var(--tx-sub)" };
+  const AX = AXIS_TICK;
   return (
     <figure className="ci-story" aria-label={`기간별 매출과 이익률: ${rows.map((r) => `${periodKo(r.k)} 매출 ${eokWon(r.revenue)}, 영업이익률 ${pctTxt(r.opMargin)}`).join(", ")}`}>
       <ResponsiveContainer width="100%" height={240}>
@@ -112,9 +107,9 @@ export function StoryChart({ rows }: { rows: Row[] }) {
           <ReferenceLine yAxisId="p" y={0} stroke="var(--tx-line)" />
           <Tooltip contentStyle={TX_TIP_STYLE} cursor={{ fill: "var(--tx-soft)" }}
                    formatter={(v: number, name: string) => [name === "revenue" ? eokWon(v) : pctTxt(v), name === "revenue" ? "매출" : name === "opM" ? "영업이익률" : "순이익률"]} />
-          <Bar yAxisId="w" dataKey="revenue" fill="var(--tx-blue)" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={anim} />
-          <Line yAxisId="p" dataKey="opM" stroke={catColor(1)} strokeWidth={2.2} dot={{ r: 3, fill: catColor(1), strokeWidth: 0 }} connectNulls={false} isAnimationActive={anim} />
-          <Line yAxisId="p" dataKey="niM" stroke={catColor(6)} strokeWidth={1.8} strokeDasharray="5 4" dot={false} connectNulls={false} isAnimationActive={anim} />
+          <Bar yAxisId="w" dataKey="revenue" fill="var(--tx-blue)" radius={BAR_TOP} maxBarSize={MARK.barMax} isAnimationActive={anim} />
+          <Line yAxisId="p" dataKey="opM" stroke={catColor(1)} strokeWidth={MARK.line} dot={ringDot(catColor(1))} connectNulls={false} isAnimationActive={anim} />
+          <Line yAxisId="p" dataKey="niM" stroke={catColor(6)} strokeWidth={MARK.quiet} strokeDasharray="5 4" dot={false} connectNulls={false} isAnimationActive={anim} />
         </ComposedChart>
       </ResponsiveContainer>
       <figcaption className="ci-story-cap">

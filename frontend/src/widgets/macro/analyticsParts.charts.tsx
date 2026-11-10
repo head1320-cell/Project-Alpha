@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, ScatterChart, Scatter, ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 import type { MacroCorrelations, MacroTiming, TrajectoryPoint } from "@/entities/macro/analysisModel";
 import { ReadoutFrame, idxFromChartEvent, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
+import { CROSSHAIR, GRID, MARK, pickDot } from "@/shared/ui/chart/chartSpec";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { regimeName } from "@/entities/macro/regimeKo";
 import { catColor, signed } from "./macroKo";
@@ -15,12 +16,11 @@ import { AX, inkLegend } from "./analyticsParts";
 // 자료 배열은 useMemo 로 고정한다 — 읽는 줄 자리가 바뀔 때마다 이 부품이 다시 그려지는데, 그때 새 배열을 넘기면 recharts 가
 // "자료가 바뀌었다"로 보고 애니메이션 주기를 다시 돈다. 재 보니 같은 자리로 보간이라 선이 다시 그려져 보이지는 않았다(프레임 지문 1) —
 // 그래도 호버마다 할 일이 아니다(예전엔 호버 상태가 recharts 안에 있어 이 부품이 다시 그려지지 않았다).
-const CROSS = { stroke: "var(--tx-mute)", strokeWidth: 1 } as const;
-const DOT = { r: 4, fill: "var(--tx-surface)", stroke: "var(--tx-blue)", strokeWidth: 2 } as const;
+const DOT = pickDot("var(--tx-blue)");
 /** 차트 `onMouseMove` → 읽는 줄 자리. */
 const follow = (setIdx: (i: number) => void) => (st: unknown) => { const i = idxFromChartEvent(st); if (i !== null) setIdx(i); };
 
-// ── RollingCorrChart — 60일 롤링 상관 추이 (주식·장기채를 굵게) ──
+// ── RollingCorrChart — 60일 롤링 상관 추이 (주식·장기채가 앞 · 나머지 쌍은 1.5px + 흐림으로 뒤로) ──
 export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] }) {
   const anim = useChartAnimation();
   const data = useMemo(() => {
@@ -40,17 +40,17 @@ export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] 
     <ReadoutFrame id="rolling-corr" label="60일 롤링 상관 추이" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }} onMouseMove={follow(setIdx)}>
-          <CartesianGrid strokeDasharray="2 2" stroke="var(--tx-line)" vertical={false} />
+          <CartesianGrid {...GRID} />
           <XAxis dataKey="t" tick={AX} stroke="var(--tx-line)" minTickGap={32} />
           <YAxis domain={[-1, 1]} ticks={[-1, -0.5, 0, 0.5, 1]} tick={AX} stroke="var(--tx-line)" width={36} />
           <Legend wrapperStyle={{ fontSize: 13 }} formatter={inkLegend} />
           <ReferenceLine y={0} stroke="var(--tx-mute)" strokeWidth={1} />
           {pairs.map((p, i) => (
             <Line key={p.key} type="monotone" dataKey={p.key} name={p.label}
-              stroke={catColor(i)} strokeWidth={p.key === "SPY-TLT" ? 2.6 : 1.4}
+              stroke={catColor(i)} strokeWidth={p.key === "SPY-TLT" ? MARK.line : MARK.quiet} strokeOpacity={p.key === "SPY-TLT" ? 1 : MARK.quietOpacity}
               dot={false} isAnimationActive={anim} />
           ))}
-          {idx >= 0 && <ReferenceLine x={data[idx].t} {...CROSS} />}
+          {idx >= 0 && <ReferenceLine x={data[idx].t} {...CROSSHAIR} />}
         </LineChart>
       </ResponsiveContainer>
     </ReadoutFrame>
@@ -69,13 +69,12 @@ export function AvgCorrChart({ avg }: { avg: MacroCorrelations["avg_corr"] }) {
     <ReadoutFrame id="avg-corr" label="모든 자산 쌍의 평균 상관" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }} onMouseMove={follow(setIdx)}>
-          <defs><linearGradient id="mcaAvg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--tx-blue)" stopOpacity={0.22} /><stop offset="100%" stopColor="var(--tx-blue)" stopOpacity={0.02} /></linearGradient></defs>
-          <CartesianGrid strokeDasharray="2 2" stroke="var(--tx-line)" vertical={false} />
+          <CartesianGrid {...GRID} />
           <XAxis dataKey="t" tick={AX} stroke="var(--tx-line)" minTickGap={32} />
           <YAxis domain={[0, 1]} tick={AX} stroke="var(--tx-line)" width={36} />
           <ReferenceLine y={0.6} stroke="var(--tx-mute)" strokeDasharray="3 3" label={{ value: "참고선 0.6", position: "insideTopRight", fontSize: 12, fill: "var(--tx-sub)" }} />
-          <Area type="monotone" dataKey="corr" stroke="var(--tx-blue)" strokeWidth={1.8} fill="url(#mcaAvg)" isAnimationActive={anim} />
-          {cur && <ReferenceLine x={cur.t} {...CROSS} />}
+          <Area type="monotone" dataKey="corr" stroke="var(--tx-blue)" strokeWidth={MARK.line} fill="var(--tx-blue)" fillOpacity={MARK.wash} isAnimationActive={anim} />
+          {cur && <ReferenceLine x={cur.t} {...CROSSHAIR} />}
           {cur && <ReferenceDot x={cur.t} y={cur.corr} {...DOT} />}
         </AreaChart>
       </ResponsiveContainer>
@@ -94,14 +93,13 @@ export function TimingHistory({ history }: { history: MacroTiming["history"] }) 
     <ReadoutFrame id="timing-history" label="위험 선호도 추이" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={210}>
         <AreaChart data={history} margin={{ top: 8, right: 16, bottom: 4, left: 0 }} onMouseMove={follow(setIdx)}>
-          <defs><linearGradient id="mcaTim" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--tx-blue)" stopOpacity={0.22} /><stop offset="100%" stopColor="var(--tx-blue)" stopOpacity={0.02} /></linearGradient></defs>
-          <CartesianGrid strokeDasharray="2 2" stroke="var(--tx-line)" vertical={false} />
+          <CartesianGrid {...GRID} />
           <XAxis dataKey="t" tick={AX} stroke="var(--tx-line)" minTickGap={28} />
           <YAxis domain={[0, 100]} ticks={[0, 40, 60, 100]} tick={AX} stroke="var(--tx-line)" width={36} />
           <ReferenceLine y={60} stroke="var(--tx-mute)" strokeDasharray="3 3" label={{ value: "위험 선호(60 이상)", position: "insideBottomLeft", fontSize: 12, fill: "var(--tx-sub)" }} />
           <ReferenceLine y={40} stroke="var(--tx-mute)" strokeDasharray="3 3" label={{ value: "위험 회피(40 이하)", position: "insideTopLeft", fontSize: 12, fill: "var(--tx-sub)" }} />
-          <Area type="monotone" dataKey="score" stroke="var(--tx-blue)" strokeWidth={1.8} fill="url(#mcaTim)" isAnimationActive={anim} />
-          {cur && <ReferenceLine x={cur.t} {...CROSS} />}
+          <Area type="monotone" dataKey="score" stroke="var(--tx-blue)" strokeWidth={MARK.line} fill="var(--tx-blue)" fillOpacity={MARK.wash} isAnimationActive={anim} />
+          {cur && <ReferenceLine x={cur.t} {...CROSSHAIR} />}
           {cur && <ReferenceDot x={cur.t} y={cur.score} {...DOT} />}
         </AreaChart>
       </ResponsiveContainer>
@@ -144,7 +142,7 @@ export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
             <YAxis type="number" dataKey="y" domain={[-lim, lim]} ticks={ticks} tick={AX} stroke="var(--tx-line)" label={{ value: "물가 →", angle: -90, position: "insideLeft", ...AX }} />
             <ReferenceLine x={0} stroke="var(--tx-mute)" />
             <ReferenceLine y={0} stroke="var(--tx-mute)" />
-            <Scatter data={data} line={{ stroke: "var(--tx-blue)", strokeWidth: 1.5 }} lineType="joint"
+            <Scatter data={data} line={{ stroke: "var(--tx-blue)", strokeWidth: MARK.quiet }} lineType="joint"
               fill="var(--tx-blue)" fillOpacity={0.5} isAnimationActive={anim} onMouseEnter={(_: unknown, i: number) => setIdx(i)} />
             <ReferenceDot x={last.x} y={last.y} r={14} fill="var(--tx-ink)" fillOpacity={0.1} stroke="none" />
             <ReferenceDot x={last.x} y={last.y} r={5} fill="var(--tx-ink)" stroke="var(--tx-surface)" strokeWidth={2} />

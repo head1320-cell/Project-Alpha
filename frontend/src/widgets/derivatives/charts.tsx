@@ -3,6 +3,7 @@
 // 본문은 OptionCalc·CvaCalc 에 있던 그대로다. 소비자는 그 파일들이 같은 이름으로 내보내는 것을 쓴다.
 import { Area, CartesianGrid, ComposedChart, Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { won as wonK } from "@/shared/lib/krFormat";
+import { AXIS_TICK, GRID, MARK, ringDot } from "@/shared/ui/chart/chartSpec";
 import { f4, type Kind } from "./OptionCalc";
 import { POS_KO, type Pos } from "./CvaCalc";
 
@@ -22,14 +23,14 @@ export function Payoff({ kind, K, S, price }: { kind: Kind; K: number; S: number
       <div className="dv-chart-box" role="img" aria-label={`만기 손익 그림. 손익분기 ${f4(be)}원, 최대 손실 ${f4(price)}원`}>
         <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
-            <CartesianGrid stroke="var(--tx-line)" vertical={false} />
-            <XAxis dataKey="x" type="number" domain={[lo, hi]} tick={{ fill: "var(--tx-sub)", fontSize: 12 }} tickFormatter={(x: number) => x.toFixed(0)} />
-            <YAxis tick={{ fill: "var(--tx-sub)", fontSize: 12 }} width={48} tickFormatter={(x: number) => x.toFixed(0)} />
+            <CartesianGrid {...GRID} />
+            <XAxis dataKey="x" type="number" domain={[lo, hi]} tick={AXIS_TICK} tickFormatter={(x: number) => x.toFixed(0)} />
+            <YAxis tick={AXIS_TICK} width={48} tickFormatter={(x: number) => x.toFixed(0)} />
             <ReferenceLine y={0} stroke="var(--tx-mute)" />
             <ReferenceLine x={be} stroke="var(--tx-ink)" strokeDasharray="4 4" />
             <ReferenceLine x={S} stroke="var(--tx-mute)" strokeDasharray="2 4" />
-            <Area dataKey="pl" type="linear" stroke="none" fill="var(--tx-blue)" fillOpacity={0.08} isAnimationActive={false} />
-            <Line dataKey="pl" type="linear" stroke="var(--tx-blue)" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+            <Area dataKey="pl" type="linear" stroke="none" fill="var(--tx-blue)" fillOpacity={MARK.wash} isAnimationActive={false} />
+            <Line dataKey="pl" type="linear" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={false} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -47,11 +48,11 @@ export function ExposureCurve({ ee, T, epe, peak, pos }: { ee: number[]; T: numb
       <div className="dv-chart-box" role="img" aria-label={`기대 노출 곡선 ${ee.length}개 점. 가장 클 때 ${wonK(peak)}, 평균 ${wonK(epe)}`}>
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
-            <CartesianGrid stroke="var(--tx-line)" vertical={false} />
-            <XAxis dataKey="t" type="number" domain={[0, T]} tick={{ fill: "var(--tx-sub)", fontSize: 12 }} tickFormatter={(x: number) => `${x}년`} />
-            <YAxis tick={{ fill: "var(--tx-sub)", fontSize: 12 }} width={64} tickFormatter={(x: number) => wonK(x).replace("원", "")} />
+            <CartesianGrid {...GRID} />
+            <XAxis dataKey="t" type="number" domain={[0, T]} tick={AXIS_TICK} tickFormatter={(x: number) => `${x}년`} />
+            <YAxis tick={AXIS_TICK} width={64} tickFormatter={(x: number) => wonK(x).replace("원", "")} />
             <ReferenceLine y={epe} stroke="var(--tx-mute)" strokeDasharray="4 4" />
-            <Line dataKey="y" type="monotone" stroke="var(--tx-blue)" strokeWidth={2.5} dot={{ r: 2.5, fill: "var(--tx-blue)", strokeWidth: 0 }} isAnimationActive={false} />
+            <Line dataKey="y" type="monotone" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={ringDot("var(--tx-blue)")} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>

@@ -4,6 +4,7 @@
 import { ResponsiveContainer, LineChart, Line, ScatterChart, Scatter, ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import type { YieldCurvePoint } from "@/entities/macro/api";
 import { regimeName } from "@/entities/macro/regimeKo";
+import { GRID, MARK, ringDot } from "@/shared/ui/chart/chartSpec";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { signed } from "./macroKo";
 import { TX_TIP_STYLE as TIP_STYLE } from "@/shared/ui/chartStyle";
@@ -50,11 +51,11 @@ export function YieldCurveChart({ points }: { points: YieldCurvePoint[]; inversi
   return (
     <ResponsiveContainer width="100%" height={210}>
       <LineChart data={data} margin={{ top: 12, right: 18, bottom: 4, left: -8 }}>
-        <CartesianGrid strokeDasharray="2 2" stroke="var(--tx-line)" vertical={false} />
+        <CartesianGrid {...GRID} />
         <XAxis dataKey="label" tick={AX} stroke="var(--tx-line)" />
         <YAxis tick={AX} stroke="var(--tx-line)" domain={["auto", "auto"]} unit="%" width={48} />
         <Tooltip contentStyle={TIP_STYLE} formatter={(val: number | string) => [`${val}%`, "수익률"]} />
-        <Line type="monotone" dataKey="y" stroke="var(--tx-blue)" strokeWidth={2} dot={{ r: 3, fill: "var(--tx-blue)" }} activeDot={{ r: 4 }} isAnimationActive={anim} />
+        <Line type="monotone" dataKey="y" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={ringDot("var(--tx-blue)")} activeDot={false} isAnimationActive={anim} />
       </LineChart>
     </ResponsiveContainer>
   );
