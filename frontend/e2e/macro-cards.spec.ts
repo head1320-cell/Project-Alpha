@@ -812,3 +812,69 @@ test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글�
   await expect(dlg.locator(".sm-perf .recharts-wrapper")).toHaveCount(0);            // 성과 절에는 차트 라이브러리가 없다(보유 도넛도 이제 직접 SVG)
   await expect(dlg.locator(".sm-perf [title]")).toHaveCount(0);
 });
+
+// ── 읽는 줄 — 남은 매크로 그림(금리곡선 · 축 쌓기) (2026-11-10 · ADR 004 §6 — `<Tooltip>` 은 이제 한 곳도 없다) ──
+const sgn3 = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(3)}`;         // macroKo.signed(v, 3) 와 같은 서식
+const ymS = (s: string) => { const m = /^(\d{4})-?(\d{2})/.exec(s); return m ? `${m[1]}.${m[2]}` : s; };   // macroKo.ym 과 같은 서식
+type YcPoint = { label: string; yield_pct: number };
+/** 금리곡선을 실은 응답(어느 경로가 싣는지에 묶이지 않는다 — 처음 온 것). */
+function captureYield(page: Page): () => YcPoint[] | null {
+  let pts: YcPoint[] | null = null;
+  page.on("response", async (r) => {
+    if (pts || !r.url().includes("/api/v1/macro/")) return;
+    try { const p = (await r.json())?.yield_curve?.points; if (Array.isArray(p) && p.length) pts = p; } catch { /* JSON 이 아닌 응답 */ }
+  });
+  return () => pts;
+}
+
+test("읽는 줄 — 금리곡선(개요): 툴팁 0 · 처음 자리 = 서버 마지막 만기 · ← 로 앞 만기 · 표 쌍둥이 = 전부", async ({ page }) => {
+  const got = captureYield(page);
+  await open(page);
+  const pnl = panel(page, "overview");
+  const yc = frame(pnl, "yield-curve");
+  await expect(yc.locator(".recharts-line-curve")).toBeVisible({ timeout: 30_000 });
+  const pts = got();
+  expect(pts?.length ?? 0, "곡선 점이 없으면 이 검사는 공허하다").toBeGreaterThan(3);
+  await expect(pnl.locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+  const last = pts![pts!.length - 1], prev = pts![pts!.length - 2];
+  await expect(yc.locator(".cr-head")).toHaveText(last.label);
+  await expect(yc.locator(".cr-read")).toContainText(`수익률 ${last.yield_pct.toFixed(2)}%`);
+  await yc.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(yc.locator(".cr-head")).toHaveText(prev.label);
+  await expect(yc.locator(".cr-read")).toContainText(`수익률 ${prev.yield_pct.toFixed(2)}%`);
+  await yc.locator(".cr-table summary").click();
+  await expect(yc.locator(".cr-table tbody tr")).toHaveCount(pts!.length);
+  await expect(pnl.locator("[title]")).toHaveCount(0);
+});
+
+test("읽는 줄 — 축 쌓기(국면 탭 · 성장·물가): 툴팁 0 · 처음 자리 = 서버 마지막 달 · 축 점수와 지표 기여 · ← 로 앞 달 · 표 쌍둥이 = 전부", async ({ page }) => {
+  const axP = page.waitForResponse((r) => r.url().includes("/api/v1/macro/axis-history"), { timeout: 30_000 });
+  await open(page);
+  await goTab(page, "regime");
+  type AxPt = { t: string; growth: number; inflation: number; growth_parts: Record<string, number>; inflation_parts: Record<string, number> };
+  const ax = await (await axP).json() as { points: AxPt[] };
+  expect(ax.points.length, "축 이력이 없으면 이 검사는 공허하다").toBeGreaterThan(3);
+  const pnl = panel(page, "regime");
+  const last = ax.points[ax.points.length - 1], prev = ax.points[ax.points.length - 2];
+  for (const [axis, name] of [["growth", "성장 축"], ["inflation", "물가 축"]] as const) {
+    const f = frame(pnl, `axis-stack-${axis}`);
+    await expect(f.locator(".recharts-bar-rectangle").first()).toBeVisible({ timeout: 30_000 });
+    const pk = `${axis}_parts` as const;
+    const keys = [...new Set(ax.points.flatMap((p) => Object.keys(p[pk] ?? {})))];
+    expect(keys.length, `${name}: 지표가 없으면 공허하다`).toBeGreaterThan(0);
+    await expect(f.locator(".cr-head")).toHaveText(ymS(last.t));
+    await expect(f.locator(".cr-read")).toContainText(`${name} 점수 ${sgn3(last[axis])}`);
+    await expect(f.locator(".cr-item"), "읽는 줄 칸 = 축 점수 + 지표 수").toHaveCount(keys.length + 1);
+    const k0 = keys.find((k) => typeof last[pk]?.[k] === "number")!;
+    await expect(f.locator(".cr-read"), "지표 기여 = 서버 값").toContainText(sgn3(last[pk][k0]));
+    await f.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(f.locator(".cr-head")).toHaveText(ymS(prev.t));
+    await expect(f.locator(".cr-read")).toContainText(`${name} 점수 ${sgn3(prev[axis])}`);
+    await f.locator(".cr-table summary").click();
+    await expect(f.locator(".cr-table tbody tr")).toHaveCount(ax.points.length);
+  }
+  await expect(pnl.locator(".recharts-tooltip-wrapper"), "국면 탭의 그림 전부(금리곡선 포함)").toHaveCount(0);
+  await expect(pnl.locator("[title]")).toHaveCount(0);
+});

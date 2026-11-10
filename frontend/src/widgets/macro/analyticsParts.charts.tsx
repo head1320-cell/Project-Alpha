@@ -6,7 +6,7 @@
 import { useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, ScatterChart, Scatter, ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 import type { MacroCorrelations, MacroTiming, TrajectoryPoint } from "@/entities/macro/analysisModel";
-import { ReadoutFrame, idxFromChartEvent, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
+import { ReadoutFrame, followChart, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
 import { CROSSHAIR, GRID, MARK, pickDot } from "@/shared/ui/chart/chartSpec";
 import { useChartAnimation } from "@/shared/ui/chartStyle";
 import { regimeName } from "@/entities/macro/regimeKo";
@@ -17,8 +17,6 @@ import { AX, inkLegend } from "./analyticsParts";
 // "자료가 바뀌었다"로 보고 애니메이션 주기를 다시 돈다. 재 보니 같은 자리로 보간이라 선이 다시 그려져 보이지는 않았다(프레임 지문 1) —
 // 그래도 호버마다 할 일이 아니다(예전엔 호버 상태가 recharts 안에 있어 이 부품이 다시 그려지지 않았다).
 const DOT = pickDot("var(--tx-blue)");
-/** 차트 `onMouseMove` → 읽는 줄 자리. */
-const follow = (setIdx: (i: number) => void) => (st: unknown) => { const i = idxFromChartEvent(st); if (i !== null) setIdx(i); };
 
 // ── RollingCorrChart — 60일 롤링 상관 추이 (주식·장기채가 앞 · 나머지 쌍은 1.5px + 흐림으로 뒤로) ──
 export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] }) {
@@ -39,7 +37,7 @@ export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] 
   return (
     <ReadoutFrame id="rolling-corr" label="60일 롤링 상관 추이" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={260}>
-        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }} onMouseMove={follow(setIdx)}>
+        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }} onMouseMove={followChart(setIdx)}>
           <CartesianGrid {...GRID} />
           <XAxis dataKey="t" tick={AX} stroke="var(--tx-line)" minTickGap={32} />
           <YAxis domain={[-1, 1]} ticks={[-1, -0.5, 0, 0.5, 1]} tick={AX} stroke="var(--tx-line)" width={36} />
@@ -68,7 +66,7 @@ export function AvgCorrChart({ avg }: { avg: MacroCorrelations["avg_corr"] }) {
   return (
     <ReadoutFrame id="avg-corr" label="모든 자산 쌍의 평균 상관" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }} onMouseMove={follow(setIdx)}>
+        <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }} onMouseMove={followChart(setIdx)}>
           <CartesianGrid {...GRID} />
           <XAxis dataKey="t" tick={AX} stroke="var(--tx-line)" minTickGap={32} />
           <YAxis domain={[0, 1]} tick={AX} stroke="var(--tx-line)" width={36} />
@@ -92,7 +90,7 @@ export function TimingHistory({ history }: { history: MacroTiming["history"] }) 
   return (
     <ReadoutFrame id="timing-history" label="위험 선호도 추이" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={210}>
-        <AreaChart data={history} margin={{ top: 8, right: 16, bottom: 4, left: 0 }} onMouseMove={follow(setIdx)}>
+        <AreaChart data={history} margin={{ top: 8, right: 16, bottom: 4, left: 0 }} onMouseMove={followChart(setIdx)}>
           <CartesianGrid {...GRID} />
           <XAxis dataKey="t" tick={AX} stroke="var(--tx-line)" minTickGap={28} />
           <YAxis domain={[0, 100]} ticks={[0, 40, 60, 100]} tick={AX} stroke="var(--tx-line)" width={36} />

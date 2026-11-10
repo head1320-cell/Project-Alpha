@@ -393,3 +393,58 @@ test("BU5c 대비: 뷰 만들기 — 제약으로 바꾼 뒤 라이트/다크 AA
   expect(dark.low, "다크 AA 미달").toEqual([]);
   expect(dark.bright, "다크인데 밝은 배경").toEqual([]);
 });
+
+// ── 읽는 줄 — 스튜디오 선 그림 셋 (2026-11-10 · ADR 004 §6) ──
+// 값은 호버 툴팁이 아니라 늘 보이는 줄(`.cr-read` · 처음 자리 = 마지막 관측 · ←→ Home End)과 표 쌍둥이(`.cr-table` — 전부)에 있다.
+const sg3 = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(3)}`;          // macroKo.signed(v, 3) 과 같은 서식
+const fx = (v: number, d: number) => v.toFixed(d).replace(/^-/, "−");                 // 음수는 빼기표(−)
+const crFrame = (page: Page, id: string) => page.locator(`.ms-studio .cr[data-chart="${id}"]`);
+
+test("읽는 줄 — 잠재 요인: 툴팁 0 · 처음 자리 = 서버 마지막 관측 · ← 로 앞 관측 · 표 쌍둥이 = 전부", async ({ page }) => {
+  const runP = page.waitForResponse((r) => r.url().includes("/macro/studios/tsfm-latent"));
+  await page.goto("/macro/tsfm-latent", { waitUntil: "networkidle" });
+  const o = (await (await runP).json()).outputs as { factors: (number | number[])[] };
+  const n = o.factors.length;
+  expect(n, "요인 관측이 없으면 이 검사는 공허하다").toBeGreaterThan(3);
+  const f = crFrame(page, "studio-factor");
+  await expect(f.locator(".recharts-line-curve").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".ms-studio .recharts-tooltip-wrapper")).toHaveCount(0);
+  const at = (i: number) => [o.factors[i]].flat() as number[];
+  await expect(f.locator(".cr-head")).toHaveText(`관측 ${n}번째`);
+  await expect(f.locator(".cr-read")).toContainText(`요인 1 ${sg3(at(n - 1)[0])}`);
+  await f.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(f.locator(".cr-head")).toHaveText(`관측 ${n - 1}번째`);
+  await expect(f.locator(".cr-read")).toContainText(`요인 1 ${sg3(at(n - 2)[0])}`);
+  await page.keyboard.press("Home");
+  await expect(f.locator(".cr-head")).toHaveText("관측 1번째");
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr")).toHaveCount(n);
+  await expect(page.locator(".ms-studio [title]")).toHaveCount(0);
+});
+
+test("읽는 줄 — 기간 구조(세 요인 · 기간프리미엄 대용): 툴팁 0 · 처음 자리 = 서버 마지막 관측 · 표 쌍둥이 = 전부", async ({ page }) => {
+  const runP = page.waitForResponse((r) => r.url().includes("/macro/studios/neural-sde"));
+  await page.goto("/macro/neural-sde", { waitUntil: "networkidle" });
+  const o = (await (await runP).json()).outputs as { level: number[]; slope: number[]; curvature: number[]; term_premium_proxy: number[] };
+  expect(o.level.length, "곡선 요인 관측이 없으면 이 검사는 공허하다").toBeGreaterThan(3);
+  const c = crFrame(page, "studio-curve");
+  await expect(c.locator(".recharts-line-curve")).toHaveCount(3, { timeout: 20_000 });
+  await expect(page.locator(".ms-studio .recharts-tooltip-wrapper")).toHaveCount(0);
+  const n = o.level.length;
+  await expect(c.locator(".cr-head")).toHaveText(`관측 ${n}번째`);
+  for (const [k, ko] of [["level", "수준"], ["slope", "기울기"], ["curvature", "곡률"]] as const) {
+    await expect(c.locator(".cr-read")).toContainText(`${ko} ${fx(o[k][n - 1], 2)}`);
+  }
+  await c.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(c.locator(".cr-read")).toContainText(`수준 ${fx(o.level[n - 2], 2)}`);
+  await c.locator(".cr-table summary").click();
+  await expect(c.locator(".cr-table tbody tr")).toHaveCount(n);
+  const tp = crFrame(page, "studio-tp");
+  const m = o.term_premium_proxy.length;
+  await expect(tp.locator(".cr-head")).toHaveText(`관측 ${m}번째`);
+  await expect(tp.locator(".cr-read")).toContainText(`기간프리미엄 대용 ${fx(o.term_premium_proxy[m - 1], 1)}`);
+  await tp.locator(".cr-table summary").click();
+  await expect(tp.locator(".cr-table tbody tr")).toHaveCount(m);
+});

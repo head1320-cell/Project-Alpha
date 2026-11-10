@@ -19,14 +19,17 @@ export const AXIS_TICK = { fontSize: 12, fill: "var(--tx-sub)" } as const;
 /** 가로 격자(recharts `<CartesianGrid {...GRID} />`) — 실선. */
 export const GRID = { stroke: "var(--tx-line)", vertical: false } as const;
 
-/** 계열의 점 — 계열 색 + 표면색 고리. */
-export const ringDot = (color: string) => ({ r: MARK.dotR, fill: color, stroke: "var(--tx-surface)", strokeWidth: MARK.ring });
+/** 계열의 점 — 계열 색 + 표면색 고리. SVG 선은 반지름 안팎으로 반씩 걸치므로 r 에 고리 절반을 더해야 ★보이는 색 점이 r4(8px)★ 로 남는다. */
+export const ringDot = (color: string) => ({ r: MARK.dotR + MARK.ring / 2, fill: color, stroke: "var(--tx-surface)", strokeWidth: MARK.ring });
 
 /** 읽는 줄이 고른 자리 — 세로선. */
 export const CROSSHAIR = { stroke: "var(--tx-mute)", strokeWidth: 1 } as const;
 
 /** 읽는 줄이 고른 자리의 점 — 속이 빈 고리(계열의 찬 점과 구별된다). */
-export const pickDot = (color: string) => ({ r: MARK.dotR, fill: "var(--tx-surface)", stroke: color, strokeWidth: MARK.ring });
+export const pickDot = (color: string) => ({ r: MARK.dotR + MARK.ring / 2, fill: "var(--tx-surface)", stroke: color, strokeWidth: MARK.ring });
+
+/** 음수 — 하이픈이 아니라 빼기표(−). `toFixed` 로 만든 글자에 쓴다(`signed()` 와 같은 부호). */
+export const minus = (s: string): string => s.replace(/^-/, "−");
 
 /** 막대의 둥근 끝 — recharts `radius` [왼위, 오른위, 오른아래, 왼아래]. 자료 끝(위)만 둥글다. */
 export const BAR_TOP: [number, number, number, number] = [MARK.barR, MARK.barR, 0, 0];

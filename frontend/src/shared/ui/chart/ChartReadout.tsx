@@ -77,16 +77,18 @@ export function TableTwin({ headLabel, rows }: { headLabel: string; rows: ReadRo
  * 틀이 포커스를 받고 ←→ Home End 로 자리를 옮긴다. 틀 안의 다른 조작부(표 펼치기)에서 누른 키는 가로채지 않는다.
  * `id` 는 `data-chart` 로 나간다(E2E 가 그림을 가리키는 이름).
  */
-export function ReadoutFrame({ id, label, headLabel, rows, idx, onKeyDown, children }: {
+export function ReadoutFrame({ id, label, headLabel, rows, idx, onKeyDown, table = true, children }: {
   id: string; label: string; headLabel: string; rows: ReadRow[]; idx: number;
-  onKeyDown: (e: KeyboardEvent) => void; children: ReactNode;
+  onKeyDown: (e: KeyboardEvent) => void;
+  /** false = 표 쌍둥이를 달지 않는다 — ★그 절에 같은 값을 다 적은 표가 이미 있을 때만★(겹쳐 달지 않는다). */
+  table?: boolean; children: ReactNode;
 }) {
   return (
     <div className="cr" data-chart={id} role="group" tabIndex={0} aria-label={`${label}. 화살표로 옮겨 읽어요.`}
          onKeyDown={(e) => { if (e.target === e.currentTarget) onKeyDown(e); }}>
       {children}
       <ReadLine row={idx >= 0 ? rows[idx] ?? null : null} />
-      <TableTwin headLabel={headLabel} rows={rows} />
+      {table && <TableTwin headLabel={headLabel} rows={rows} />}
     </div>
   );
 }
@@ -99,3 +101,9 @@ export function idxFromChartEvent(state: unknown): number | null {
   const i = (state as { activeTooltipIndex?: unknown } | null | undefined)?.activeTooltipIndex;
   return typeof i === "number" && Number.isFinite(i) && i >= 0 ? i : null;
 }
+
+/** 차트 `onMouseMove` 에 다는 것 — 포인터 아래 자리로 읽는 줄을 옮긴다(자리가 없으면 그대로 둔다). */
+export const followChart = (setIdx: (i: number) => void) => (state: unknown): void => {
+  const i = idxFromChartEvent(state);
+  if (i !== null) setIdx(i);
+};

@@ -176,14 +176,14 @@ export function CurvePlot({ pts, dips, rows, label, height = 170 }: {
       <path className="pg-plot-line" d={gapPath(xs, py)} />
       {pts.map((p, i) => (
         <g key={`${p.t}-${i}`}>
-          {py[i] !== null && <circle className="pg-curve-pt" cx={xs[i]} cy={py[i] as number} r={MARK.dotR} />}
+          {py[i] !== null && <circle className="pg-curve-pt" cx={xs[i]} cy={py[i] as number} r={MARK.dotR + MARK.ring / 2} />}
           {py[i] !== null && shown(i, valEvery) && (
             <text className="pg-curve-val" x={xs[i]} y={(py[i] as number) - 7} textAnchor="middle">{(p.y as number).toFixed(2)}</text>
           )}
           {shown(i, tickEvery) && <text className="pg-plot-xtick" x={xs[i]} y={height - 5} textAnchor="middle">{p.t}</text>}
         </g>
       ))}
-      {idx >= 0 && py[idx] !== null && <circle className="pg-plot-active" cx={xs[idx]} cy={py[idx] as number} r={MARK.dotR + 2.5} />}
+      {idx >= 0 && py[idx] !== null && <circle className="pg-plot-active" cx={xs[idx]} cy={py[idx] as number} r={MARK.dotR + 3.5} />}
     </Frame>
   );
 }

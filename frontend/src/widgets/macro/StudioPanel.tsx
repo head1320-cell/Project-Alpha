@@ -28,7 +28,7 @@ import {
   studiosApi, type StudioDescriptor, type StudioResult, type StudioSpan,
 } from "@/entities/macro/studios";
 import { STUDIO_NAV } from "./StudioNav";
-import { IND_KR, STUDIO_OUT_KO, catColor, signed } from "./macroKo";
+import { IND_KR, STUDIO_OUT_KO, signed } from "./macroKo";
 import { ReasonWhy, RetryFail, ServerText } from "./studioBits";
 import { CausalGraphView } from "./cockpitParts";
 
@@ -229,9 +229,6 @@ function CurveViz({ o }: { o: Outs }) {
         <figure className="ms-viz-fig ms-viz-curve">
           <figcaption>곡선의 세 요인이 지나온 길(%)</figcaption>
           <CurveLines rows={rows} cols={cols} />
-          <ul className="mc-legend">
-            {cols.map(([k, ko], j) => <li key={k}><i style={{ background: catColor(j) }} aria-hidden />{ko}</li>)}
-          </ul>
         </figure>
       )}
       {tpRows.length > 1 && (
