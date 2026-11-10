@@ -25854,6 +25854,12 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
 - 라이트 골든: ② `/macro` · `/insights` · ③ `/macro` · 스튜디오 둘 · ④ `/insights` 를 다시 얼렸다(커밋 메시지마다 `golden-diff` 출력). ⑥ 은 13 라우트 변화 없음.
 - 게이트(커밋 시점): 커밋마다 대상 스펙과 이웃을 돌렸다 — ② 262건 중 260(나머지 2 = 의도한 골든) · ③ 208건 중 205(3 = 골든) · ④ `insights` 52 · ⑤ `derivatives`·`chart-marks` 16 · ⑥ 대상 9 + 골든 13. `npx tsc --noEmit` · `npx eslint src` 오류 0 · 팔레트 검증기 재실행 PASS(색 토큰 줄 변경 0).
   ★전체 E2E(1,317건)와 `make all` 은 이 기록을 쓰는 시점에 아직 끝나지 않았다★ — 결과는 바로 아래 "게이트 결과" 줄로 덧붙인다(이 줄이 없으면 아직 미검증이다).
+- 게이트 결과(2026-11-10 · 위 기록 뒤에 돌렸다): 전체 E2E 1,317건 중 1,310 통과 · 건너뜀 4 · 실패 3(54.8분).
+  ⑴ `api-no-reuse` — 새 스펙 둘(`chart-marks` · `figures`)이 `test` 를 `@playwright/test` 에서 바로 가져왔다. ★내 실수다★(저장소 규칙은 `./fixtures` ·
+  대상 스펙만 돌리던 동안에는 보이지 않았다) → 고치고 `api-no-reuse` · `chart-marks` · `figures` 17건 통과(커밋 `6d8d688`).
+  ⑵ `realism` ST3c dark AA — 기록된 간헐 · 홀로 통과. ⑶ `canvas-minimap-pick` U3 — 기록된 간헐(확대가 1 이 아니라 0.9975 에서 멈춘다) · 홀로 5회 중 4회 통과 ·
+  이번에 고친 파일이 아니다(캔버스에서 손댄 것은 `MiniPlots` 표식과 `MacroW2Results` 스파크라인뿐).
+  `make all` 통과 — ruff · pytest 8,941 통과(건너뜀 11) · typecheck · build. `npx eslint src` 오류 0.
 - 하지 않은 것: 색 토큰 변경(검증기 PASS) · 차트 라이브러리 교체 · recharts 3 · 게이지를 미터로 · 숫자 타일 부품 통합 · 촘촘한 쌓은 막대의 틈 · z-index 토큰화 ·
   화면에 나오지 않는 옛 CSS 청소 · `Payoff` · `RegimeScatter` 읽는 줄 · `mapPrices` 배율 고침 · `.pg-claim` 단언(그 상태에 닿는 스펙이 없다) · 서버·정책·지표 변경 · PR.
 
