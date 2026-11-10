@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // 돈 버는 힘(BU6b · 사용자 결정 "이야기 그림 먼저 + 표는 펼침")
 // ─────────────────────────────────────────────────────────────────────────────
-// 위에서 아래로: 답 한 문장(서버 매출 첫·마지막 해) → ★이야기 그림★(매출 막대 + 영업이익률 선 + 순이익률 점선) →
+// 위에서 아래로: 답 한 문장(서버 매출 첫·마지막 해) → ★이야기 그림★(위 칸 매출 막대 · 아래 칸 영업이익률 선 + 순이익률 점선 — 이중 축 아님) →
 //   요약 카드 셋(ROE·부채비율·주당배당금: 마지막 값 + 지난 기간 대비 + 추세) → "표로 보기"(9줄 표 + 막대 셋, 기본 닫힘) → 재무 심화.
 // ★그림은 지우지 않았다★ 옛 표·막대 셋은 그대로 펼침 안에 있다(사용자 규칙 2). 이야기 그림과 카드는 더한 것.
 //   막대 셋의 카드는 `.ca-cp-card` 가 아니라 `.ci-kpicard` — 닫힌 펼침 안이라 module-motion 04 패널(숨김 0 검사)에서 뺀다.
@@ -107,9 +107,9 @@ export function MoneySection({ c, onRetry, seen }: { c: CompanyData; onRetry: ()
             <summary>표로 보기(항목 {q ? 10 : 9}줄 × {rows.length}{unit})</summary>
             <FinTable rows={rows} quarter={q} />
             <div className="ca-cp-kpibars">
-              <div className="ci-kpicard"><div className="ci-kpicard-h">매출</div><KpiBars data={rows} dataKey="revenue" xKey="k" fmt={eokWon} /></div>
-              <div className="ci-kpicard"><div className="ci-kpicard-h">영업이익</div><KpiBars data={rows} dataKey="op" xKey="k" fmt={eokWon} /></div>
-              <div className="ci-kpicard"><div className="ci-kpicard-h">순이익</div><KpiBars data={rows} dataKey="ni" xKey="k" fmt={eokWon} /></div>
+              <div className="ci-kpicard"><div className="ci-kpicard-h">매출</div><KpiBars data={rows} dataKey="revenue" xKey="k" fmt={eokWon} label="매출" /></div>
+              <div className="ci-kpicard"><div className="ci-kpicard-h">영업이익</div><KpiBars data={rows} dataKey="op" xKey="k" fmt={eokWon} label="영업이익" /></div>
+              <div className="ci-kpicard"><div className="ci-kpicard-h">순이익</div><KpiBars data={rows} dataKey="ni" xKey="k" fmt={eokWon} label="순이익" /></div>
             </div>
           </details>
         </>
@@ -122,4 +122,4 @@ export function MoneySection({ c, onRetry, seen }: { c: CompanyData; onRetry: ()
 }
 
 /** 이야기 그림(매출 막대 + 이익률 선) — 본문은 `charts.tsx`(화면이 뜬 뒤에 받는다). */
-const StoryChart = lazyChart(loadCharts, (m) => m.StoryChart, { height: 290, label: "매출과 이익률" });
+const StoryChart = lazyChart(loadCharts, (m) => m.StoryChart, { height: 430, label: "매출과 이익률" });

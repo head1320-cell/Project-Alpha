@@ -55,9 +55,9 @@ export function ScoreRing({ score, size = 84 }: { score: number; size?: number }
 // ── 차트 셋(+ 돈 버는 힘의 이야기 그림) — 본문은 `charts.tsx`. 화면이 뜬 뒤에 받는다(recharts 를 첫 화면 JS 에서 뺌 · lazyChart).
 //    기업 분석 화면 뿌리(app/insights)가 붙자마자 `loadCharts()` 로 미리 받아 둔다. 이름·prop 은 그대로라 소비자는 바뀌지 않는다.
 export const loadCharts = chartModule(() => import("./charts"));
-export const PriceChart = lazyChart(loadCharts, (m) => m.PriceChart, { height: (p) => p.height ?? 200, label: "1년 주가" });
-export const PriceValueChart = lazyChart(loadCharts, (m) => m.PriceValueChart, { height: (p) => (p.height ?? 260) + 56, label: "주가와 가치 범위" });
-export const KpiBars = lazyChart(loadCharts, (m) => m.KpiBars, { height: (p) => p.height ?? 130, label: "기간별 막대" });
+export const PriceChart = lazyChart(loadCharts, (m) => m.PriceChart, { height: (p) => (p.height ?? 200) + 76, label: "1년 주가" });
+export const PriceValueChart = lazyChart(loadCharts, (m) => m.PriceValueChart, { height: (p) => (p.height ?? 260) + 56 + 76, label: "주가와 가치 범위" });
+export const KpiBars = lazyChart(loadCharts, (m) => m.KpiBars, { height: (p) => (p.height ?? 130) + 48, label: "기간별 막대" });
 
 export type ValueBandIn = { id: string; label: string; lo: number; hi: number };
 

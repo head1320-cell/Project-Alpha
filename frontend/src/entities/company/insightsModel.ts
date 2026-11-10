@@ -22,7 +22,8 @@ export interface QuarterFin { q: string; revenue: N; op: N; ni: N; equity: N; ro
 export interface ModelResult { key: "RIM" | "DCF" | "DDM"; label: string; value: number; weight: number; assumptions: { k: string; v: string }[]; components: { k: string; v: string }[] }
 export interface Peer { code: string; name: string; price: number; per: N; pbr: N; roe: N; gap: N; mktcap: N; self?: boolean }
 export interface Scenario { key: "bull" | "base" | "bear"; label: string; value: number; gap: number; note: string }
-export interface PricePt { t: string; p: number }
+/** `t`·`p` = 그림의 축 글자(연.월)와 높이(지금 주가에 맞춘 값). `date`·`close` = 서버가 준 날짜와 종가 그대로(읽는 줄·표가 쓴다). */
+export interface PricePt { t: string; p: number; date?: string; close?: number }
 
 // 지연 로드(lazy) — 탭 진입 시 채워짐
 export interface SignalInfo { action: string; strength: number; reason: string; strategy: string }

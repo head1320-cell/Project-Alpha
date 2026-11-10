@@ -8048,7 +8048,8 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci-pv { margin: 4px 0 0; min-width: 0; }
 .ci-pv-leg { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--tx-ink); }
 .ci-pv-leg li { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
-.ci-pv-leg i { width: 12px; height: 12px; border-radius: 3px; opacity: .75; }
+.ci-pv-leg i { width: 12px; height: 12px; border-radius: 3px; }
+.ci-pv-shift { margin: 6px 0 0; }
 .ci-pv-leg b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 720px) { .ci-pv-leg { flex-direction: column; } .ci-pv-leg b { margin-left: auto; } .ci-pv-leg li { width: 100%; } }
 .ci-pv-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 0; font-size: 13px; color: var(--tx-ink); }
@@ -8391,6 +8392,8 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci-money-ans { margin: 0 0 14px; font-size: 17px; font-weight: 700; line-height: 1.5; color: var(--tx-ink); }
 .ci-money .ca-cp-fintabs { margin: 0 0 6px; }
 .ci-story { margin: 10px 0 0; }
+.ci-story-pt { margin: 10px 0 0; font-size: 12px; font-weight: 600; color: var(--tx-sub); }
+.ci-story-panel:first-child .ci-story-pt { margin-top: 0; }
 .ci-story-cap { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 0; font-size: 13px; color: var(--tx-ink); }
 .ci-story-key { display: inline-flex; align-items: center; gap: 6px; }
 .ci-story-key .sw { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }

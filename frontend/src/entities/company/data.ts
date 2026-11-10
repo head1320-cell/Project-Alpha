@@ -97,9 +97,9 @@ function mapPrices(bars: { date: string; close: number }[], current: number): Pr
   const out: PricePt[] = [];
   for (let i = 0; i < bars.length; i += step) {
     const d = bars[i].date.slice(2).replace(/-/g, ".").slice(0, 5); // YY.MM
-    out.push({ t: d, p: Math.round(bars[i].close * scale) });
+    out.push({ t: d, p: Math.round(bars[i].close * scale), date: bars[i].date, close: bars[i].close });
   }
-  out[out.length - 1] = { t: out[out.length - 1].t, p: Math.round(current) };
+  out[out.length - 1] = { ...out[out.length - 1], p: Math.round(current) };
   return out;
 }
 function mapYears(hist: FinancialHistory | null): YearFin[] {

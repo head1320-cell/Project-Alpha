@@ -956,3 +956,115 @@ test("U9 · 목차로 '같은 업종'을 고르면 그 절이 화면에 들지 �
   await expect.poll(() => rel.length, { timeout: 15_000, message: "목차로 고른 절은 늦은 내용을 부른다" }).toBeGreaterThan(0);
   await expect(sec(page, "peers").locator(".ci-net")).toBeVisible({ timeout: 30_000 });
 });
+
+// ── 차트 형태·읽는 줄 (2026-11-10 · ADR 004 §6 · 설계 `2026-11-10-chart-indicator-system-design.md` §3 B·C) ──
+// ⑴ 이야기 그림은 ★이중 축이 아니다★ — 단위가 다른 매출(원)과 이익률(%)을 위아래 두 칸으로 나눴다(같은 기간 축).
+// ⑵ 주가와 가치는 ★겹친 띠가 아니다★ — 모형별 범위는 주가 선 오른쪽에 겹치지 않는 가는 막대로(같은 y 축).
+// ⑶ 값은 호버 툴팁이 아니라 늘 보이는 읽는 줄에. 글자 = 서버 값을 화면 서식으로(주가는 ★서버 종가·날짜 그대로★ — 그림 높이가 아니라).
+const crIn = (root: ReturnType<Page["locator"]>, id: string) => root.locator(`.cr[data-chart="${id}"]`);
+
+test("이야기 그림 — ★이중 축 0★: 매출 칸·이익률 칸(칸마다 y 축 하나) · 막대 가운데 = 영업이익률 점 · 읽는 줄 = 서버 마지막 해 · ← 로 앞 해 · 접힌 막대 셋에도 읽는 줄", async ({ page }) => {
+  // 마지막 두 해를 아는 값으로: 매출 2조·영업이익 3,000억(15.0%)·순이익 1,000억(5.0%) / 그 앞 해 매출 1조·영업이익 1,000억(10.0%)
+  await patchAnnual(page, (rows) => {
+    const ys = rows.map((r) => Number(r.year)).sort((a, b) => a - b); const hi = ys[ys.length - 1], pv = ys[ys.length - 2];
+    for (const r of rows) {
+      if (Number(r.year) === hi) { r["revenue_억"] = 20000; r["operating_profit_억"] = 3000; r["net_income_억"] = 1000; }
+      if (Number(r.year) === pv) { r["revenue_억"] = 10000; r["operating_profit_억"] = 1000; r["net_income_억"] = 500; }
+    }
+  });
+  const finP = page.waitForResponse((r) => r.url().includes("/valuation/financial/") && r.url().includes("period=annual"));
+  await open(page);
+  const fin = ((await (await finP).json()).financials ?? []) as { year: string | number }[];
+  const years = fin.map((f) => Number(f.year)).sort((a, b) => a - b);
+  expect(years.length, "두 해 이상이어야 이 검사가 뜻이 있다").toBeGreaterThan(2);
+  const hi = years[years.length - 1], pv = years[years.length - 2];
+  await goSec(page, "money", "돈 버는 힘");
+  const story = sec(page, "money").locator(".ci-story");
+  await expect(story.locator(".recharts-bar-rectangle").first()).toBeVisible({ timeout: 30_000 });
+  // ⑴ 두 칸 · 칸마다 y 축 하나(오른쪽 축 없음) — ★이 단언이 먼저다★(이중 축이 돌아오면 여기서 빨강)
+  const panels = story.locator(".ci-story-panel");
+  await expect(panels).toHaveCount(2);
+  await expect(panels.nth(1).locator(".recharts-line").first()).toBeVisible();
+  for (let i = 0; i < 2; i++) await expect(panels.nth(i).locator(".recharts-yAxis"), `칸 ${i + 1} 의 y 축`).toHaveCount(1);
+  await expect(story.locator(".recharts-bar-rectangle"), "막대 = 기간 수(아래 칸에는 막대가 없다)").toHaveCount(years.length);
+  await expect(panels.nth(0).locator(".recharts-bar-rectangle")).toHaveCount(years.length);
+  await expect(panels.nth(1).locator(".recharts-line")).toHaveCount(2);
+  // 같은 기간 축 — 첫 막대의 가운데와 첫 영업이익률 점이 같은 세로줄
+  const cx = (l: ReturnType<Page["locator"]>) => l.first().evaluate((e) => { const r = e.getBoundingClientRect(); return r.x + r.width / 2; });
+  const barX = await cx(panels.nth(0).locator(".recharts-bar-rectangle path")), dotX = await cx(panels.nth(1).locator(".recharts-line-dots circle"));
+  expect(Math.abs(barX - dotX), `막대 가운데 ${barX} · 점 ${dotX}`).toBeLessThan(1.5);
+  const tickX = await cx(panels.nth(1).locator(".recharts-xAxis .recharts-cartesian-axis-tick-value"));
+  expect(Math.abs(tickX - dotX), `기간 글자 ${tickX} 는 점 ${dotX} 아래`).toBeLessThan(2.5);
+  // ⑶ 읽는 줄
+  const f = crIn(sec(page, "money"), "story");
+  await expect(story.locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+  await expect(f.locator(".cr-head")).toHaveText(`${hi}년`);
+  await expect(f.locator(".cr-read")).toContainText("매출 2조원");
+  await expect(f.locator(".cr-read")).toContainText("영업이익률 15.0%");
+  await expect(f.locator(".cr-read")).toContainText("순이익률 5.0%");
+  await f.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(f.locator(".cr-head")).toHaveText(`${pv}년`);
+  await expect(f.locator(".cr-read")).toContainText("매출 1조원");
+  await expect(f.locator(".cr-read")).toContainText("영업이익률 10.0%");
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr")).toHaveCount(years.length);
+  // 접힌 "표로 보기" 안의 막대 셋 — 읽는 줄은 있고, 표 쌍둥이는 달지 않는다(바로 위에 같은 값을 다 적은 표가 있다)
+  await sec(page, "money").locator("details.ci-fin-more > summary").click();
+  const kpi = crIn(sec(page, "money"), "kpi-revenue");
+  await expect(kpi.locator(".recharts-bar-rectangle").first()).toBeVisible({ timeout: 20_000 });
+  await expect(kpi.locator(".cr-head")).toHaveText(`${hi}년`);
+  await expect(kpi.locator(".cr-read")).toContainText("매출 2조원");
+  await kpi.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(kpi.locator(".cr-read")).toContainText("매출 1조원");
+  await expect(kpi.locator(".cr-table")).toHaveCount(0);
+  await expect(sec(page, "money").locator(".ca-cp-fin")).toBeVisible();
+  await expect(crIn(sec(page, "money"), "kpi-op").locator(".cr-read")).toContainText("영업이익 3,000억원");
+  await expect(sec(page, "money").locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+});
+
+test("주가와 가치 — ★범위 막대는 겹치지 않는다★: 주가 선 오른쪽 · 폭 ≤ 24 · 읽는 줄 = 서버 날짜·종가 · ← 로 앞 날 · 표 쌍둥이 = 전부 · 1년 주가도 같다", async ({ page }) => {
+  const closes = [70000, 70500, 69800, 70200, 71000, 70700, 71100, 70900, 71200, 71400];
+  const prices = closes.map((c, i) => ({ date: `2026-09-${String(i + 1).padStart(2, "0")}`, close: c }));
+  await page.route(`${API}/prices/**`, (r) => r.fulfill({ json: { ticker: "005930", count: prices.length, prices } }));
+  await open(page);
+  const fig = page.locator(".ci-sec[data-sec=value] .ci-pv");
+  await expect(fig.locator(".recharts-line")).toHaveCount(1, { timeout: 40_000 });
+  // ⑵ 범위 막대 — 겹치지 않고 가늘고 주가 선 오른쪽에 있다
+  await expect(fig.locator(".recharts-reference-area").first()).toBeVisible();
+  await page.waitForTimeout(600);
+  const boxes = (await fig.locator(".recharts-reference-area").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x, w: r.width }; })))
+    .sort((a, b) => a.x - b.x);
+  expect(boxes.length, "범위 막대가 둘 이상이어야 겹침 검사가 뜻이 있다").toBeGreaterThan(1);
+  const heights = await fig.locator(".recharts-reference-area").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+  expect(heights.filter((h) => h < 4), `값이 한 점인 범위도 보인다(높이 ${heights.join(",")})`).toEqual([]);
+  expect(boxes.filter((b) => b.w > 24.5), "막대 폭 ≤ 24px").toEqual([]);
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i].x, `막대 ${i} 가 앞 막대와 겹치지 않는다`).toBeGreaterThanOrEqual(boxes[i - 1].x + boxes[i - 1].w - 0.5);
+  const lineRight = await fig.locator(".recharts-line-curve").evaluate((e) => e.getBoundingClientRect().right);
+  expect(boxes[0].x, "막대는 주가 선 끝의 오른쪽").toBeGreaterThanOrEqual(lineRight - 0.5);
+  // ⑶ 읽는 줄 — 서버 날짜·종가 그대로
+  const f = crIn(fig, "price-value");
+  await expect(fig.locator(".recharts-tooltip-wrapper")).toHaveCount(0);
+  await expect(f.locator(".cr-head")).toHaveText("2026.09.10");
+  await expect(f.locator(".cr-read")).toContainText("종가 71,400원");
+  await f.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(f.locator(".cr-head")).toHaveText("2026.09.09");
+  await expect(f.locator(".cr-read")).toContainText("종가 71,200원");
+  // 마우스로도 — 그림 왼쪽에 올리면 앞쪽 날로
+  const box = (await fig.locator(".recharts-wrapper > svg.recharts-surface").boundingBox())!;
+  await page.mouse.move(box.x + 48 + (lineRight - box.x - 48) * 0.1, box.y + box.height * 0.5);
+  await expect.poll(async () => (await f.locator(".cr-head").textContent()) ?? "", { message: "왼쪽에 올리면 앞쪽 날" }).toMatch(/2026\.09\.0[1-3]/);
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr")).toHaveCount(prices.length);
+  // 1년 주가(자세히 보기 안)도 같은 읽는 줄
+  await page.locator(".ci-sec[data-sec=value] details.ci-more > summary").click();
+  const p1 = crIn(page.locator(".ci-sec[data-sec=value]"), "price-1y");
+  await expect(p1.locator(".recharts-area-curve")).toBeVisible({ timeout: 20_000 });
+  await expect(p1.locator(".cr-head")).toHaveText("2026.09.10");
+  await expect(p1.locator(".cr-read")).toContainText("종가 71,400원");
+  await p1.locator(".cr-table summary").click();
+  await expect(p1.locator(".cr-table tbody tr")).toHaveCount(prices.length);
+  await expect(page.locator(".ci-sec[data-sec=value] .recharts-tooltip-wrapper")).toHaveCount(0);
+});

@@ -94,12 +94,18 @@ export function ReadoutFrame({ id, label, headLabel, rows, idx, onKeyDown, table
 }
 
 /**
- * recharts 2.x 차트 이벤트(`onMouseMove` 의 첫 인자)에서 자리를 꺼낸다 — ★이 모양을 아는 한 곳★(ADR 004 §2.5).
+ * recharts 2.x 차트 이벤트(`onMouseMove` 의 첫 인자)에서 자리를 꺼낸다 — ★이 모양을 아는 한 곳★(ADR 004 §2.5 · 아래 `xFromChartEvent` 도 여기).
  * `<Tooltip>` 이 없어도 차트는 포인터 아래 자리를 `activeTooltipIndex` 로 알려 준다. 라이브러리를 올리거나 바꾸면 여기만 고친다.
  */
 export function idxFromChartEvent(state: unknown): number | null {
   const i = (state as { activeTooltipIndex?: unknown } | null | undefined)?.activeTooltipIndex;
   return typeof i === "number" && Number.isFinite(i) && i >= 0 ? i : null;
+}
+
+/** 같은 이벤트에서 포인터의 가로 자리(차트 왼쪽 끝에서 px)를 꺼낸다 — 가로가 숫자 축이라 자리 번호가 오지 않는 그림에서 쓴다. */
+export function xFromChartEvent(state: unknown): number | null {
+  const x = (state as { chartX?: unknown } | null | undefined)?.chartX;
+  return typeof x === "number" && Number.isFinite(x) ? x : null;
 }
 
 /** 차트 `onMouseMove` 에 다는 것 — 포인터 아래 자리로 읽는 줄을 옮긴다(자리가 없으면 그대로 둔다). */
