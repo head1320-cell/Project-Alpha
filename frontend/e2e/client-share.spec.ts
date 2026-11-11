@@ -141,7 +141,7 @@ test("PB6 · 주소 → 고객 PIN(틀리면 같은 말) → 한 장(메뉴 없�
 
   await c.route("**/api/v1/share/ask", (r) => r.fulfill({ json: {
     available: true, source: "claude", answer: { answerable: true, cannot: null, sentences: [{ text: "가장 큰 비중은 34.04% 입니다.", fact_ids: ["f1"] }] },
-    facts: { f1: { where: "비중 계산", part: "비중", index: 0, text: "삼성전자 34.04%" } }, rejected: [], notice: null } }));
+    facts: { f1: { where: "포트폴리오 최적화", part: "비중", index: 0, text: "삼성전자 34.04%" } }, rejected: [], notice: null } }));
   await c.locator(".cs-ask-input").fill("가장 큰 비중은요?");
   await c.locator(".cs-ask-go").click();
   await expect(c.locator(".cs-ask-answer")).toContainText("34.04%");

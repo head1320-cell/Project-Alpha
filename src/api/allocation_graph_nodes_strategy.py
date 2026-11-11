@@ -2,16 +2,16 @@
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W5
 
-- 전략 묶음 돌려 보기(`strategy_backtest`): `/multibacktest/run` 을 **`save=False` 로** 그대로 부른다 —
+- 멀티전략 백테스트(`strategy_backtest`): `/multibacktest/run` 을 **`save=False` 로** 그대로 부른다 —
   같은 가드(코어 부재 503 · 없는 기능 422) · 같은 비용 블록 · 같은 출처(`sources`·`perf_label`). ★기록하지
   않는다★(`run_and_save` 가 아니라 `run`). `hrp_macro` 는 선택지에 없다 — 배분기(`allocator.METHODS`)가
   가진 것만 고르게 하고, 문의 거절은 그대로 둔다.
-- 기업 전망 넣기(`company_views`): `/analyze` 의 `use_company_views` 와 같은 함수(`prices_for`·
+- 기업 전망(`company_views`): `/analyze` 의 `use_company_views` 와 같은 함수(`prices_for`·
   `company_views`)다. 뷰는 **지금 시점 전용**(`pit: forward_only`) — 하류 정책 백테스트가 거절한다.
   옵티마이저는 이 뷰를 사용자 뷰와 섞지 않고 `company_views=` 로 따로 넘긴다(`/analyze` 와 같은 자리).
-- 가치평가로 점수 매기기(`valuation_scores`): `/valuation/compare` 를 그대로 부른다. 점수는 **−괴리율**
+- 밸류에이션 스코어링(`valuation_scores`): `/valuation/compare` 를 그대로 부른다. 점수는 **−괴리율**
   (싼 만큼 높다). ★적정가를 못 낸 종목(데이터 없음 → 괴리율 0)은 점수에 넣지 않는다★ — 미상 ≠ 0.
-- 결정 되짚기(`attribution_review`): `/attribution/{run_id}` 와 같은 `_attribution_for`. 저장된 연구
+- 결정 사후 검토(`attribution_review`): `/attribution/{run_id}` 와 같은 `_attribution_for`. 저장된 연구
   실행을 읽기만 한다. 벤치마크 구성종목이 없어 못 재는 분해는 "안 측정했습니다" 로 그대로 둔다.
 """
 from __future__ import annotations
@@ -69,7 +69,7 @@ StrategyParams = _subset(
         "netting_enabled": _ui("주문 상계", "advanced", help="전략끼리 반대 주문을 서로 지워 비용을 줄입니다."),
         "commission_rate": _ui("수수료율", "advanced"),
         "slippage_rate": _ui("슬리피지율", "advanced"),
-        "lookback_days": _ui("비중 계산 기간", "advanced", unit="일"),
+        "lookback_days": _ui("포트폴리오 최적화 기간", "advanced", unit="일"),
         "max_weight": _ui("전략 하나의 최대 비중", "advanced"),
         "min_weight": _ui("전략 하나의 최소 비중", "advanced"),
         "regime_market": _ui("국면을 볼 시장", "advanced", options={"kr": "한국", "us": "미국"}),
@@ -109,7 +109,7 @@ def _strategy_backtest(inputs: dict, p) -> pg.NodeOutput:
         try:
             s11._guard()                                   # 코어가 없으면 기간을 읽기 전에 사유를 말한다
         except HTTPException as e:
-            raise pg.NodeFailure(f"전략 묶음을 돌릴 수 없습니다 — {_detail_reason(e.detail)}") from e
+            raise pg.NodeFailure(f"전략 그룹을 돌릴 수 없습니다 — {_detail_reason(e.detail)}") from e
         span = _common_span(ids)
         start, end = start or span[0], end or span[1]
     # ★사용자가 정한 칸만 넘긴다★ — 문의 비용 블록은 "명시한 요율" 과 "기본값" 을 가른다
@@ -121,9 +121,9 @@ def _strategy_backtest(inputs: dict, p) -> pg.NodeOutput:
     try:
         out = s11.multibacktest_run(req)
     except HTTPException as e:
-        raise pg.NodeFailure(f"전략 묶음을 돌리지 못했습니다 — {_detail_reason(e.detail)}") from e
+        raise pg.NodeFailure(f"전략 그룹을 돌리지 못했습니다 — {_detail_reason(e.detail)}") from e
     if not out.get("success"):
-        raise pg.NodeFailure(f"전략 묶음을 돌리지 못했습니다 — {out.get('message')}")
+        raise pg.NodeFailure(f"전략 그룹을 돌리지 못했습니다 — {out.get('message')}")
     recs = out.get("daily_records") or []
     view = {
         "summary": out["summary"], "strategy_names": {str(k): v for k, v in out["strategy_names"].items()},
@@ -299,7 +299,7 @@ class AttributionParams(BaseModel):
     model_config = _FORBID
     run_id: str = Field(..., min_length=1, max_length=64, json_schema_extra={"x-ui": _ui(
         "연구 기록", question="검토 대상 결정", widget="pick", source="research_runs",
-        help="‘비중 계산’ 결과를 연구 기록으로 남기면 여기에 나옵니다.")})
+        help="‘포트폴리오 최적화’ 결과를 연구 기록으로 남기면 여기에 나옵니다.")})
     as_of: str | None = Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui(
         "기준일", "advanced", help="비우면 오늘까지의 가격으로 되짚습니다.")})
 
@@ -343,23 +343,23 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("strategy_backtest", "전략 묶음 백테스트", stage="check", plain_label="전략 묶음 돌려 보기",
+        pg.NodeSpec("strategy_backtest", "전략 그룹 백테스트", stage="check", plain_label="멀티전략 백테스트",
                     plain_description="등록한 전략 여러 개를 한 계좌처럼 나눠 담았다면 어땠을지 봅니다. 기록은 남기지 않습니다.",
                     inputs=(), outputs=(P("result", "StrategyResult"),), run=_strategy_backtest,
                     params_model=StrategyParams, explain=_explain_strategy, category="전략",
                     description="/multibacktest/run(save=False) — 같은 가드·비용·출처. hrp_macro 는 선택지에 없다."),
-        pg.NodeSpec("company_views", "기업 전망", stage="belief", plain_label="기업 전망 넣기",
+        pg.NodeSpec("company_views", "기업 전망", stage="belief", plain_label="기업 전망",
                     plain_description="재무로 계산한 적정가와 지금 가격의 차이를 전망으로 바꿔 넣습니다.",
                     inputs=(P("returns", "Returns"), P("views", "Views", required=False)),
                     outputs=(P("views", "Views"),), run=_company_views, params_model=CompanyViewsParams,
                     explain=_explain_company, category="추정",
                     description="/analyze use_company_views 와 같은 company_views. 지금 시점 전용(forward_only)."),
-        pg.NodeSpec("valuation_scores", "가치평가 점수", stage="signal", plain_label="가치평가로 점수 매기기",
+        pg.NodeSpec("valuation_scores", "가치평가 점수", stage="signal", plain_label="밸류에이션 스코어링",
                     plain_description="종목마다 적정가를 계산해 얼마나 싼지 점수로 매깁니다.",
                     inputs=(P("universe", "Universe"),), outputs=(P("scores", "Scores"),), run=_valuation_scores,
                     params_model=ValuationParams_, explain=_explain_valuation, category="신호",
                     description="/valuation/compare 와 같은 3-모델 가치평가. 점수 = −괴리율, 적정가 없음은 제외."),
-        pg.NodeSpec("attribution_review", "성과 귀인", stage="act", plain_label="결정 되짚기",
+        pg.NodeSpec("attribution_review", "성과 귀인", stage="act", plain_label="결정 사후 검토",
                     plain_description="저장한 결정이 그 뒤 실제로 어땠는지 기대와 비교합니다.",
                     inputs=(), outputs=(), run=_attribution, params_model=AttributionParams,
                     explain=_explain_attribution, category="기록",

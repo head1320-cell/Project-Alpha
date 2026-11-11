@@ -25,7 +25,7 @@ type Sug = { action: string; kind: string | null; label: string | null; text: st
 type Proc = { next: Sug | null; by_gate: Record<string, Sug | null> };
 type Doc = { nodes: { id: string; type: string; position: { x: number; y: number } }[]; edges: Edge[] };
 const SUGGEST = "**/api/v1/assist/canvas/suggest";
-const RISK = { action: "add", kind: "risk", label: "흔들림 나눠 보기", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있습니다.",
+const RISK = { action: "add", kind: "risk", label: "위험 기여도 분해", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있습니다.",
                attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" }] };
 const ok = (suggestions: object[], rejected: object[] = []) => ({
   available: true, source: "claude", model: "claude-opus-5-5", suggestions, rejected, cached: false,
@@ -124,7 +124,7 @@ test("누르면 묻는 중 → 'AI 추천' 유령과 이유 · 요청 본문은 
   await expect(g.locator(".pg-ghost-chip--ai")).toHaveText("AI 추천");
   await expect(g.locator(".pg-ghost-chip")).toHaveCount(1);                         // 규칙 칩은 없다
   await expect(g.locator(".pg-ghost-text")).toHaveText(RISK.reason);
-  await expect(g.locator(".pg-ghost-name")).toHaveText("흔들림 나눠 보기");
+  await expect(g.locator(".pg-ghost-name")).toHaveText("위험 기여도 분해");
   expect(await g.getAttribute("aria-label")).toMatch(/^AI 추천: /);
   await expect(page.locator('.pg-ghost-wire[data-to="risk"][data-from="optimizer"]')).toHaveCount(1);
   await expect(page.locator('.pg-ghost[data-source="rule"]')).toHaveCount(2);         // 규칙 유령은 그대로
@@ -158,7 +158,7 @@ test("규칙과 같은 AI 추천은 유령 하나에 두 칩 — 규칙 글 + AI
   await expect(page.locator('.pg-ghost[data-kind="risk"]')).toHaveAttribute("data-source", "claude");
 });
 const BT_SAME: { action: string; kind: string; label: string; reason: string; attach: Edge[] } = {
-  action: "add", kind: "backtest", label: "과거로 돌려 보기", reason: "거래비용을 넣어 과거로 돌려 볼 수 있습니다.", attach: [] };
+  action: "add", kind: "backtest", label: "정책 백테스트", reason: "거래비용을 넣어 과거로 돌려 볼 수 있습니다.", attach: [] };
 
 test("AI 유령 [붙이기] → 유령이 보인 자리에 진짜 노드 + 추천 선 · 되돌리기 한 번에 원래", async ({ page }) => {
   await signIn(page);
@@ -169,7 +169,7 @@ test("AI 유령 [붙이기] → 유령이 보인 자리에 진짜 노드 + 추�
   await expect(g).toHaveCount(1);
   const at = { x: Number(await g.getAttribute("data-x")), y: Number(await g.getAttribute("data-y")) };
   await g.locator(".pg-ghost-add").click();
-  await expect(page.locator(".pg-note")).toContainText("흔들림 나눠 보기");
+  await expect(page.locator(".pg-note")).toContainText("위험 기여도 분해");
   const doc = await wip(page);
   const made = doc.nodes.find((x) => x.type === "risk")!;
   expect(made.position).toEqual(at);

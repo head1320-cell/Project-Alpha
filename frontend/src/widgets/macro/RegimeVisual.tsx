@@ -161,7 +161,7 @@ function StressCard({ st }: { st: RegimeState }) {
         <div className="rv-gauge-c">
           {known ? <><b className="rv-gauge-v">{Math.round(s)}</b><span>/100</span></> : <Unknown reason="스트레스 값 수신 실패" />}
         </div>
-        <div className="rv-gauge-ends" aria-hidden><span>0 · 잔잔합니다</span><span>100 · 불안합니다</span></div>
+        <div className="rv-gauge-ends" aria-hidden><span>0 · 안정</span><span>100 · 불안</span></div>
       </div>
       <dl className="rv-facts">
         <div><dt>권장 단계</dt><dd>{mode}</dd></div>

@@ -1,4 +1,4 @@
-"""BR R1a — 전략 합치기 노드의 견고성 절(`view.robustness`) · 노드 층 `allocation_graph_robustness`.
+"""BR R1a — 전략 결합 노드의 견고성 절(`view.robustness`) · 노드 층 `allocation_graph_robustness`.
 
 거는 것:
 - 합치기의 몫·비중은 그대로다(견고성은 관측만 — 기존 골든 테스트가 `combine_sleeves` 와 같음을 지킨다).
@@ -151,7 +151,7 @@ def _compare(n=2, **params):
 
 def test_compare_node_is_named_for_what_it_does():
     spec = gn.REGISTRY.get("sleeve_analytics")
-    assert spec.label == "견고성 비교" and "무너지" in spec.plain_label
+    assert spec.label == "견고성 비교" and "견고성" in spec.plain_label
     assert spec.params_model is not None
     d = spec.params_model()
     assert (d.period, d.window, d.shock_rho) == ("1y", 60, 0.8)
@@ -162,9 +162,9 @@ def test_compare_node_carries_robustness_and_the_old_table(market):
     r = pg.run(_compare(3), gn.REGISTRY)["nodes"]["s"]
     assert r["status"] == "ok", r["reason"]
     v = r["view"]
-    assert v["result"]["sleeves"] == ["묶음 1", "묶음 2", "묶음 3"]
+    assert v["result"]["sleeves"] == ["그룹 1", "그룹 2", "그룹 3"]
     rob = v["robustness"]
-    assert rob["available"] and rob["names"] == ["묶음 1", "묶음 2", "묶음 3"] and rob["shares_basis"] == "equal"
+    assert rob["available"] and rob["names"] == ["그룹 1", "그룹 2", "그룹 3"] and rob["shares_basis"] == "equal"
     assert v["requested_days"] == 252 and v["ports"] == ["a", "b", "c"]
     assert r["glance"]["kind"] == "bars" and len(r["glance"]["points"]) == 3
     ex = r["explain"]

@@ -55,7 +55,7 @@ const step = (page: Page, key: string) => page.locator(`.pg-proc-step[data-step=
 const edges = (page: Page) => page.locator(".react-flow__edge");
 const nodeOf = (page: Page, kind: string) => page.locator(`.pg-node[data-kind="${kind}"]`);
 
-test("빈 캔버스: 절차 탭이 먼저 · 첫 걸음은 종목 고르기 · 다음 걸음은 선까지 이어서 붙는다", async ({ page }) => {
+test("빈 캔버스: 절차 탭이 먼저 · 첫 걸음은 유니버스 · 다음 걸음은 선까지 이어서 붙는다", async ({ page }) => {
   await openWith(page, EMPTY);
   await expect(page.locator('.pg-left-tab[data-tab="proc"]')).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".pg-proc-step")).toHaveCount(6);
@@ -66,7 +66,7 @@ test("빈 캔버스: 절차 탭이 먼저 · 첫 걸음은 종목 고르기 · �
   await expect(edges(page)).toHaveCount(0);
   await expect(step(page, "data")).toHaveAttribute("data-state", "partial");          // 종목만으로는 데이터 관문을 잴 수 없다
   // 다음 걸음 — 수익률은 종목에서 이어 붙는다(붙이기만 하고 잇지 않는 제안은 없다)
-  await expect(step(page, "data").locator(".pg-proc-fix")).toHaveText("‘수익률 불러오기’ 붙이기");
+  await expect(step(page, "data").locator(".pg-proc-fix")).toHaveText("‘수익률 데이터’ 붙이기");
   await step(page, "data").locator(".pg-proc-fix").click();
   await expect(nodeOf(page, "returns")).toHaveCount(1);
   await expect(edges(page)).toHaveCount(1);
@@ -78,7 +78,7 @@ test("빈 캔버스: 절차 탭이 먼저 · 첫 걸음은 종목 고르기 · �
   await expect(edges(page)).toHaveCount(0);
 });
 
-test("비중까지만: 확인하기가 비어 있고 붙이면 과거로 돌려 보기가 선 2개로 이어진다", async ({ page }) => {
+test("비중까지만: 확인하기가 비어 있고 붙이면 정책 백테스트가 선 2개로 이어진다", async ({ page }) => {
   await openWith(page, BUILD_ONLY, "proc");
   await expect(step(page, "build")).toHaveAttribute("data-state", "filled");
   await expect(step(page, "build").locator(".pg-proc-fix")).toHaveCount(0);
@@ -121,7 +121,7 @@ test("관문 알약: 판정한 노드로 가고, 건너뛴 관문의 [붙이기]
   await page.locator('.pg-stn[data-gate="data"] button').click();
   const nodes = page.locator(".pg-gate-pop .pg-gate-node");
   await expect(nodes).toHaveCount(1);
-  await expect(nodes.first()).toContainText("수익률 불러오기");
+  await expect(nodes.first()).toContainText("수익률 데이터");
   await nodes.first().click();
   await expect(page.locator('.pg-node[data-kind="returns"].pg-node--selected')).toHaveCount(1);
   // ★짝★ 잴 걸음이 없는 관문(데이터 — 이미 수익률이 있다)에는 [붙이기] 가 없다
@@ -163,7 +163,7 @@ for (const theme of ["light", "dark"] as const) {
 test("다음 한 걸음: 서버 문장 그대로 · [붙이기] 뒤 다음 규칙으로 · 다 채우면 그 자리는 길잡이 '계산하기'(짝)", async ({ page }) => {
   await openWith(page, BUILD_ONLY, "add");
   const next = page.locator(".pg-next");
-  await expect(next).toContainText("‘과거로 돌려 보기’");
+  await expect(next).toContainText("‘정책 백테스트’");
   await expect(next).toContainText("잴 수 있게 됩니다");
   const before = await edges(page).count();
   await next.locator(".pg-next-go").click();
@@ -201,7 +201,7 @@ test("사람이 고른 노드 뒤에 붙인다 · 고르지 않았으면 잇지 
   await page.locator('.pg-palette-item[data-kind="risk"]').click();
   await expect(nodeOf(page, "risk")).toHaveCount(1);
   await expect(edges(page)).toHaveCount(base + 1);
-  await expect(page.locator(".pg-note")).toContainText("‘비중 계산’ 뒤에 이었습니다");
+  await expect(page.locator(".pg-note")).toContainText("‘포트폴리오 최적화’ 뒤에 이었습니다");
   // 새 노드가 자동으로 골라졌지만 사람이 고른 것이 아니다 — 한 번 더 눌러도 사슬로 잇지 않는다.
   // ★공허하지 않게★ 비중을 받아 비중을 내는 노출 조절로 본다(자기 자신 뒤에 이을 수 있는 종류 — 흔들림 나눠 보기는 그럴 수 없다).
   await nodeOf(page, "optimizer").click();

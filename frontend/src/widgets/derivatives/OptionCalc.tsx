@@ -61,7 +61,7 @@ export function OptionCalc() {
       {g && ran ? (
         <section className="tx-sec dv-out" aria-live="polite">
           {calc.stale(key) && <StaleNote onRerun={run} />}
-          <p className="dv-ans">이 {KO[ran.option_type]} 옵션의 이론가는 <b>{f4(g.Price)}원</b>입니다.</p>
+          <p className="dv-ans">이 {KO[ran.option_type]} 옵션 가격 계산은 <b>{f4(g.Price)}원</b>입니다.</p>
           {g.at_expiry && (
             <p className="dv-note" data-testid="option-expiry">만기입니다. 시간 가치는 없고 내재가치만 남습니다. 등가격이면 델타는 정의되지 않습니다.</p>
           )}

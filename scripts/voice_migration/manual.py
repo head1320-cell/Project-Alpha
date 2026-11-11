@@ -70,4 +70,8 @@ sub("frontend/e2e/settings.spec.ts", 'toContainText("먼저 바꿔")', 'toContai
 sub("frontend/e2e/shell-search.spec.ts", "toHaveText(/맞는 종목·화면 없음/)", "toHaveText(/맞는 종목·화면이 없습니다/)")
 sub("frontend/e2e/canvas-workspace.spec.ts", 'await expect(note).toContainText("비중을 내는 노드 없음");', 'await expect(note).toContainText("비중을 내는 노드가 없습니다");')
 sub("frontend/e2e/live-safety.spec.ts", 'await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("N/A");', 'await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("미상");')
+# 노드 이름 ②(vocab2.py) 뒤 — 쉬운 이름의 낱말 조각을 보던 단언
+sub("tests/test_record_robustness.py", 'assert spec.label == "기록끼리 견고성" and "무너지" in spec.plain_label', 'assert spec.label == "기록끼리 견고성" and "견고성" in spec.plain_label')
+sub("tests/test_graph_robustness.py", 'assert spec.label == "견고성 비교" and "무너지" in spec.plain_label', 'assert spec.label == "견고성 비교" and "견고성" in spec.plain_label')
+sub("tests/test_allocation_graph_bl3w5.py", 'assert r["status"] == "failed" and "지금 들고" in r["reason"]', 'assert r["status"] == "failed" and "현재 보유" in r["reason"]')
 print("안 맞은 것:", bad, "· 나머지 E2E 단언 26건은 efix.py 가 맞췄다(BASE=045fbce)")

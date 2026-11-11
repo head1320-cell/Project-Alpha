@@ -183,13 +183,13 @@ function MyBlocks() {
     <section className="pg-blocks" aria-label="내 블록">
       <h4 className="pg-blocks-h">내 블록 <span className="pg-blocks-where">이 브라우저에만</span></h4>
       {!available && <p className="pg-blocks-note">이 브라우저에 블록을 저장할 수 없습니다 — 상자의 ‘파일로 받기’를 쓰고, 파일로 불러옵니다.</p>}
-      {available && blocks.length === 0 && <p className="pg-blocks-note">아직 없습니다. 상자 머리의 책갈피 버튼으로 전략이나 묶음을 넣어 두십시오.</p>}
+      {available && blocks.length === 0 && <p className="pg-blocks-note">아직 없습니다. 상자 머리의 책갈피 버튼으로 전략이나 그룹을 넣어 두십시오.</p>}
       {blocks.map((b, i) => (
         <div key={`${b.label}-${i}`} className="pg-block" data-block={b.label}>
           <button type="button" className="pg-block-add" onClick={() => insert(i)}
-                  title={b.kind === "strategy" ? "새 전략 띠로 넣고 포트폴리오에 잇습니다" : "묶음으로 넣습니다"}>
+                  title={b.kind === "strategy" ? "새 전략 띠로 넣고 포트폴리오에 잇습니다" : "그룹으로 넣습니다"}>
             <b>{b.label}</b>
-            <span>{b.kind === "strategy" ? "전략" : "묶음"} · 노드 {b.nodes.length}개</span>
+            <span>{b.kind === "strategy" ? "전략" : "그룹"} · 노드 {b.nodes.length}개</span>
           </button>
           <button type="button" className="pg-block-x" aria-label={`${b.label} 파일로 받기`} onClick={() => downloadBlock(b)}>
             <Download size={13} aria-hidden="true" />

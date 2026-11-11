@@ -45,7 +45,7 @@ export function branchScope(root: string, nodes: N[], edges: E[], groups: GraphG
 /** 원본 뿌리의 다음 갈래 글자 — 다 찼으면 null. */
 export function nextBranchLetter(ofRoot: string, branches: GraphBranch[]): string | null {
   const used = new Set(branches.filter((b) => b.of_root === ofRoot).map((b) => b.label));
-  return BRANCH_LETTERS.find((l) => !used.has(`갈래 ${l}`)) ?? null;
+  return BRANCH_LETTERS.find((l) => !used.has(`대안 ${l}`)) ?? null;
 }
 
 /** 설정 차이 — 원본과 다른 파라미터 이름·값 쌍(깊은 비교). */

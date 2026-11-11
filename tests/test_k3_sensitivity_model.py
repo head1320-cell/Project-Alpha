@@ -4,7 +4,7 @@
 기본 템플릿 '충격 점검'(위험 똑같이 = 리스크 패리티)에서 사용자가 본 민감도는 자기 비중의 것이 아니었다.
 
 이제 노드는 `sensitivity_matrix(..., model=, constraints=, risk_aversion=, w_current=, bench_returns=, groups_of=)` 로
-'비중 계산' 과 ★같은 길★(`optimize` → 제약이면 `constrained_solve`)로 기준 비중을 풀고, 흔든 기대 수익마다 같은 길로 다시 푼다.
+'포트폴리오 최적화' 과 ★같은 길★(`optimize` → 제약이면 `constrained_solve`)로 기준 비중을 풀고, 흔든 기대 수익마다 같은 길로 다시 푼다.
 - 기대 수익을 쓰지 않는 방식(무제약 최소분산·위험 똑같이·HRP·최대분산·최소 CVaR, 생각 없는 BL)은 계산하되 칸이 모두 0 이고
   `mu_reach: "none"` + 서버 문장("기대 수익을 쓰지 않아 … 움직이지 않습니다")을 싣는다 — 화면은 0 칸 히트맵 대신 그 문장을 보인다.
 - 강건 최적화(무제약)는 기대 수익을 수익률에서 스스로 다시 추정해 흔든 값이 들어가지 않는다 — `mu_reach: "own"` + 그 문장.
@@ -124,7 +124,7 @@ def test_without_constraints_the_same_data_goes_past_the_cap():
 
 
 def test_constrained_max_div_follows_the_optimizer_path():
-    """제약이 걸리면 '비중 계산' 도 `constrained_solve` 의 기대 수익 목적함수로 푼다 — 민감도도 같은 길이라 움직인다."""
+    """제약이 걸리면 '포트폴리오 최적화' 도 `constrained_solve` 의 기대 수익 목적함수로 푼다 — 민감도도 같은 길이라 움직인다."""
     out = st.sensitivity_matrix(NAMES, _R(), model="max_div", constraints=_cap(40))
     assert out["mu_reach"] == "reads"
 

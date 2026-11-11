@@ -383,7 +383,7 @@ def _real_option(inputs: dict, p: RealOptionParams) -> pg.NodeOutput:
 def _explain_real_option(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     bs, bi = (r.get("black_scholes") or {}).get("value"), (r.get("binomial") or {}).get("value")
-    title = (f"선택권의 값 {bs:,.0f}억(유럽형) · {bi:,.0f}억(미국형)" if isinstance(bs, (int, float)) and isinstance(bi, (int, float))
+    title = (f"실물옵션 {bs:,.0f}억(유럽형) · {bi:,.0f}억(미국형)" if isinstance(bs, (int, float)) and isinstance(bi, (int, float))
              else "실물옵션을 계산했습니다")
     npv = r.get("static_npv")
     facts = []
@@ -403,36 +403,36 @@ def _explain_real_option(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     common = {"inputs": (), "outputs": (), "category": "기업", "stage": "signal"}
     for spec in (
-        pg.NodeSpec("company_eva", "EVA·가치 동인", plain_label="자본비용을 넘게 버나",
+        pg.NodeSpec("company_eva", "EVA·가치 동인", plain_label="EVA 분석",
                     plain_description="투하자본에 드는 비용을 빼고도 남는 이익(EVA)과, 성장이 가치를 만드는지 봅니다.",
                     run=_eva, params_model=EvaParams, explain=_explain_eva,
                     description="company_model_eva 라우트 함수 그대로(practice_models.eva_analysis).", **common),
-        pg.NodeSpec("company_value_layers", "가치의 층", plain_label="가치가 어디서 나오나",
+        pg.NodeSpec("company_value_layers", "가치의 층", plain_label="가치 구성 분해",
                     plain_description="자산 → 지금의 이익력 → 성장으로 가치를 층층이 쌓고, 층마다 확률을 둡니다.",
                     run=_layers, params_model=LayersParams, explain=_explain_layers,
                     description="company_model_value_layers 라우트 함수 그대로(Greenwald 3층 + 확률 가중).", **common),
-        pg.NodeSpec("company_multiples", "배수·PEG", plain_label="성장 대비 몇 배가 맞나",
+        pg.NodeSpec("company_multiples", "배수·PEG", plain_label="PEG·멀티플",
                     plain_description="성장률과 PEG 를 바꿔 가며 맞는 주가를 보고, ROE·배당으로 정당한 배수를 봅니다.",
                     run=_multiples, params_model=MultiplesParams, explain=_explain_multiples,
                     description="company_model_multiples 라우트 함수 그대로.", **common),
-        pg.NodeSpec("company_driver_mc", "영업 동인 몬테카를로", plain_label="매출·마진이 흔들리면",
+        pg.NodeSpec("company_driver_mc", "영업 동인 몬테카를로", plain_label="영업 동인 몬테카를로",
                     plain_description="매출 성장·마진·재투자를 흔들어 주당 가치가 어디서 어디까지 나오는지 봅니다.",
                     run=_driver_mc, params_model=DriverMcParams, explain=_explain_driver_mc,
                     description="company_model_driver_mc 라우트 함수 그대로(시드 고정 재현).", **common),
-        pg.NodeSpec("company_scenarios", "시나리오 가중", plain_label="경우를 확률로 묶기",
+        pg.NodeSpec("company_scenarios", "시나리오 가중", plain_label="확률가중 시나리오",
                     plain_description="약세·기본·강세처럼 경우마다 가정을 바꾸고 확률을 둬 적정가를 묶습니다.",
                     run=_scenarios, params_model=ScenariosParams, explain=_explain_scenarios,
                     description="company_model_scenarios 라우트 함수 그대로(행마다 샌드박스와 같은 엔진).", **common),
-        pg.NodeSpec("company_decision_tree", "의사결정 나무", plain_label="사건이 갈리면",
+        pg.NodeSpec("company_decision_tree", "의사결정 나무", plain_label="의사결정 나무",
                     plain_description="승인·실패처럼 갈리는 사건을 나무로 그려 기대 가치를 접습니다.",
                     run=_tree, params_model=TreeParams, explain=_explain_tree,
                     description="company_model_decision_tree 라우트 함수 그대로.", **common),
-        pg.NodeSpec("company_sotp", "합산가치(SOTP)", plain_label="부문·자회사 합치기",
+        pg.NodeSpec("company_sotp", "합산가치(SOTP)", plain_label="SOTP 가치평가",
                     plain_description="사업 부문과 상장 자회사 지분을 더하고 지주사 할인을 반영합니다.",
                     run=_sotp, params_model=SotpParams, explain=_explain_sotp,
                     description="company_model_sotp 라우트 함수 그대로(자회사 시총 조회).", **common),
-        pg.NodeSpec("company_real_option", "실물옵션", plain_label="선택권의 값",
-                    plain_description="확장·연기·포기처럼 나중에 정할 수 있는 선택권의 값을 블랙-숄즈와 이항으로 봅니다.",
+        pg.NodeSpec("company_real_option", "실물옵션", plain_label="실물옵션",
+                    plain_description="확장·연기·포기처럼 나중에 정할 수 있는 실물옵션을 블랙-숄즈와 이항으로 봅니다.",
                     run=_real_option, params_model=RealOptionParams, explain=_explain_real_option,
                     description="company_model_real_option 라우트 함수 그대로(BS + CRR 이항).", **common),
     ):

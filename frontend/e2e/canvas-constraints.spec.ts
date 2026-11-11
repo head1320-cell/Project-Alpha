@@ -72,7 +72,7 @@ test("P1 · 짝 — 종목 상한만이면 빠진 것이 없다", async ({ page 
   await expect(rep).toHaveAttribute("data-cons-status", /ok|approx/);
 });
 
-test("P1 · 기대 수익 추정은 이어진 수익률을 쓰지 않는다고 말한다", async ({ page }) => {
+test("P1 · 기대수익률 추정은 이어진 수익률을 쓰지 않는다고 말한다", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   await tab(page, "story");

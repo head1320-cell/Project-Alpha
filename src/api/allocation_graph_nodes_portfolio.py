@@ -35,7 +35,7 @@ METHOD_HELP = {
     "equal": "전략마다 똑같이 나눕니다.",
     "inverse_vol": "덜 흔들리는 전략에 더 줍니다. 전략 사이 상관은 보지 않습니다.",
     "min_var": "합친 흔들림이 가장 작아지게 나눕니다. 한두 전략에 몰릴 수 있습니다.",
-    "hrp": "비슷하게 움직이는 전략끼리 묶은 뒤 묶음 사이에서 위험을 나눕니다.",
+    "hrp": "비슷하게 움직이는 전략끼리 묶은 뒤 그룹 사이에서 위험을 나눕니다.",
     "crisis_risk_parity": "시장이 가장 나빴던 날(하위 10%)에 같이 잃은 크기로 위험을 똑같이 나눕니다.",
     "max_diversification": "전략끼리 서로 상쇄하는 효과(분산 효과)가 가장 크게 나눕니다.",
     "risk_budget": "전략마다 위험을 몇 %씩 맡길지 직접 정합니다.",
@@ -213,7 +213,7 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     facts = [f"{s['label']}: 몫 {s['share_pct']:.1f}% · 위험 분담 {s['risk_pct']:.1f}% · "
              f"리밸런싱 {REBALANCE.get(s.get('rebalance') or 'D', REBALANCE['D'])[1]}" for s in view.get("strategies") or []]
-    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 전략의 수익 흐름으로 몫을 정하고 종목 비중을 합쳤습니다(묶음 합치기와 같은 계산).")]
+    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 전략의 수익 흐름으로 몫을 정하고 종목 비중을 합쳤습니다(슬리브 결합과 같은 계산).")]
     trust += _method_trust(r, view)
     rows_all = view.get("strategies") or []
     codes = [x.get("rebalance") or "D" for x in rows_all]
@@ -278,7 +278,7 @@ def glance(view: dict) -> dict | None:
 
 def register(registry: pg.Registry) -> None:
     registry.register(pg.NodeSpec(
-        "portfolio_combine", "포트폴리오 합치기", plain_label="전략 합치기", category="배분", stage="build",
+        "portfolio_combine", "포트폴리오 합치기", plain_label="전략 결합", category="배분", stage="build",
         plain_description="전략 여러 개의 비중을 한 포트폴리오로 합칩니다. 전략마다 몫과 위험 분담을 보여 줍니다.",
         description="전략(슬리브) 2~8개 결합 — sleeve_combine.combine_sleeves 그대로(/combine-sleeves 와 같다).",
         inputs=tuple(P(port, "Weights", required=i < 2) for i, port in enumerate(PORTS)),

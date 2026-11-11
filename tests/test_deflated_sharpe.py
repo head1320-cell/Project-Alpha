@@ -1,4 +1,4 @@
-"""BO O3 · 갈래 비교의 다중 비교 보정 — PSR / DSR (`src/engine/deflated_sharpe.py`)
+"""BO O3 · 대안 비교의 다중 비교 보정 — PSR / DSR (`src/engine/deflated_sharpe.py`)
 ==================================================================================
 거는 것:
 - 공식 골든 — 정규·독립이면 PSR = Φ(SR·√(T−1)/√(1+SR²/2)) · 기대 최대 SR 은 몬테카를로 최대값의 평균과 맞는다.
@@ -52,8 +52,8 @@ def test_expected_max_sr_golden():
 def test_more_trials_deflate_more():
     assert ds.expected_max_sr(2, 0.001) < ds.expected_max_sr(5, 0.001) < ds.expected_max_sr(20, 0.001)
     base = [{"label": "원본", "returns": _series(0.0008, seed=1)},
-            {"label": "갈래 1", "returns": _series(0.0002, seed=2)}]
-    more = base + [{"label": f"갈래 {i}", "returns": _series(0.0005, seed=i)} for i in range(2, 8)]
+            {"label": "대안 1", "returns": _series(0.0002, seed=2)}]
+    more = base + [{"label": f"대안 {i}", "returns": _series(0.0005, seed=i)} for i in range(2, 8)]
     a, b = ds.compare(base), ds.compare(more)
     assert a["n"] == 2 and b["n"] == 8
     assert b["sr0"] > 0 and a["sr0"] > 0
@@ -124,8 +124,8 @@ def test_route_returns_engine_values():
     from fastapi.testclient import TestClient
     from main_api import app
     a, b, c = _series(0.0008, seed=1), _series(0.0001, seed=2), _series(0.0004, seed=3)
-    body = {"series": [{"label": "원본", "equity": _eq(a)}, {"label": "갈래 1", "equity": _eq(b)},
-                       {"label": "갈래 2", "equity": _eq(c)}]}
+    body = {"series": [{"label": "원본", "equity": _eq(a)}, {"label": "대안 1", "equity": _eq(b)},
+                       {"label": "대안 2", "equity": _eq(c)}]}
     res = TestClient(app).post("/api/v1/allocation/graph/branch-evidence", json=body)
     assert res.status_code == 200, res.text
     got = res.json()
@@ -138,8 +138,8 @@ def test_route_returns_engine_values():
 def test_route_broken_curve_is_a_row_reason_not_a_crash():
     from fastapi.testclient import TestClient
     from main_api import app
-    body = {"series": [{"label": "원본", "equity": [1.0, 0.0, 1.0]}, {"label": "갈래 1", "equity": _eq(_series(0.0))},
-                       {"label": "갈래 2", "equity": _eq(_series(0.001, seed=9))}]}
+    body = {"series": [{"label": "원본", "equity": [1.0, 0.0, 1.0]}, {"label": "대안 1", "equity": _eq(_series(0.0))},
+                       {"label": "대안 2", "equity": _eq(_series(0.001, seed=9))}]}
     got = TestClient(app).post("/api/v1/allocation/graph/branch-evidence", json=body).json()
     row = got["rows"][0]
     assert row["sr"] is None and "0 이하" in row["reason"]

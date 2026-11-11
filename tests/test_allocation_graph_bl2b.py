@@ -1,4 +1,4 @@
-"""BL2b · 마법사에만 있던 계산을 노드로 — 프런티어 · 국면 앙상블/설명 · 시나리오 둘 · 전략 건강 · 묶음 분석 · 알파 둘
+"""BL2b · 마법사에만 있던 계산을 노드로 — 프런티어 · 국면 앙상블/설명 · 시나리오 둘 · 전략 건강 · 그룹 분석 · 알파 둘
 ==============================================================================
 계획 `happy-percolating-falcon.md` §BL2b. 노드는 **라우트·엔진과 같은 함수**를 부른다 — 여기 골든이 대조한다.
 
@@ -238,8 +238,8 @@ def test_sleeve_analytics_equals_the_engine(market):
     assert s["status"] == "ok", _why(rep)
     from src.api.allocation_graph_nodes_check import holdings_pct
     vals = pg._execute(g, gn.REGISTRY)[1]
-    ref = sleeve_analytics([{"name": "묶음 1", "weights": holdings_pct(vals["o"]["weights"])},
-                            {"name": "묶음 2", "weights": holdings_pct(vals["o2"]["weights"])}])
+    ref = sleeve_analytics([{"name": "그룹 1", "weights": holdings_pct(vals["o"]["weights"])},
+                            {"name": "그룹 2", "weights": holdings_pct(vals["o2"]["weights"])}])
     assert s["view"]["result"] == ref
 
 

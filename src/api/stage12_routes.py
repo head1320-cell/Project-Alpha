@@ -306,7 +306,7 @@ class CapacityRequest(BaseModel):
 
 @router.post("/capacity/estimate")
 def realism_capacity_estimate(req: CapacityRequest):
-    """전략별 수용량 추정 (ADV × max_pct × holding_period)."""
+    """전략별 운용 가능 규모 추정 (ADV × max_pct × holding_period)."""
     try:
         from src.database import get_sync_engine
         from src.engine.liquidity_capacity import (

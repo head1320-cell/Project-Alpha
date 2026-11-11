@@ -122,7 +122,7 @@ test("지금 이을 수 있습니다: 고른 노드가 있을 때만(짝) · 모
   await node(page, "optimizer").click();
   const strip = page.locator(".pg-palette-next");
   await expect(strip).toBeVisible();
-  await expect(strip.locator(".pg-palette-next-h")).toContainText("비중 계산");
+  await expect(strip.locator(".pg-palette-next-h")).toContainText("포트폴리오 최적화");
   const outs = new Set(cat.find((c) => c.type === "optimizer")!.outputs.map((p) => p.type));
   const kinds = await strip.locator(".pg-palette-next-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")!));
   expect(kinds.length).toBeGreaterThan(0);

@@ -200,7 +200,7 @@ def test_a_thesis_with_nested_groups_is_refused_instead_of_flattened():
     nested = {"logic": "AND", "conditions": [{"field": "roe", "op": "lt", "value": 8}],
               "groups": [{"logic": "OR", "conditions": [{"field": "per", "op": "gt", "value": 30}], "groups": []}]}
     r = _one("thesis_check", code=CODE, claim="x", kill_conditions=nested)
-    assert r["status"] == "failed" and "묶음" in r["reason"]
+    assert r["status"] == "failed" and "그룹" in r["reason"]
 
 
 def test_a_zero_fair_value_is_not_described_as_no_gap(monkeypatch):

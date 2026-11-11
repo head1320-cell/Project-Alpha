@@ -176,7 +176,7 @@ test("처음 열림(CF1): 보통 확대 이상으로 열리고 흐름의 시작�
   const first = (await rfNode(page, "universe").boundingBox())!;
   const cv = (await page.locator(".react-flow").boundingBox())!;
   const pl = await page.locator(".pg-palette").boundingBox();
-  expect(first.x, "흐름의 시작(종목 고르기)이 왼쪽 판 밖에 보인다").toBeGreaterThanOrEqual((pl ? pl.x + pl.width : cv.x) - 1);
+  expect(first.x, "흐름의 시작(유니버스)이 왼쪽 판 밖에 보인다").toBeGreaterThanOrEqual((pl ? pl.x + pl.width : cv.x) - 1);
   expect(first.y, "위로 잘리지 않는다").toBeGreaterThanOrEqual(cv.y);
   await page.locator(".react-flow__controls-fitview").click();
   await expect(canvas(page)).toHaveAttribute("data-zoom", "far");

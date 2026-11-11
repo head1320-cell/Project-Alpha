@@ -80,7 +80,7 @@ export const portfolioGraphApi = {
                                "제약 확인"),
   /** 갈래 비교의 다중 비교 보정(BO O3) — 과거 성과 곡선들 → PSR·DSR. 표시만, 저장하지 않는다. */
   branchEvidence: async (series: { label: string; equity: number[] }[]): Promise<BranchEvidence> =>
-    readJson<BranchEvidence>(await postJson(`${BASE}/branch-evidence`, { series }), "갈래 보정 계산"),
+    readJson<BranchEvidence>(await postJson(`${BASE}/branch-evidence`, { series }), "대안 보정 계산"),
   /** AI 노드 추천(AI1) — ★누를 때만★ 부른다. 던지지 않는다: 키 없음·한도·거절·로그인 끝·네트워크 모두 `available:false` + 사유. */
   assistSuggest: (doc: GraphDoc): Promise<AssistSuggest> => assistCall<AssistSuggest>("suggest", doc),
   /** AI 풀어 쓰기(AI2) — ★누를 때만★. 설명·봉인은 `/run` 이 준 그대로 보낸다(서버가 지금 그래프로 확인한다). 던지지 않는다. */

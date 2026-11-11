@@ -54,7 +54,7 @@ SUPPLY_PACKAGE = "src.data"
 
 @dataclass(frozen=True)
 class UnsuppliedSignal:
-    """★`src/data/` 공급 모듈을 지나지 않는 신호 묶음★
+    """★`src/data/` 공급 모듈을 지나지 않는 신호 그룹★
 
     `version_registry.MissingAxis` 와 같은 모양이고 `promotes_when` 이 하나
     더 있다 — **언제 이 항목을 지울 수 있는지**를 적어 두지 않으면 레지스트리

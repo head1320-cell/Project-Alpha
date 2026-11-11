@@ -55,12 +55,12 @@ export function nodeAria(num: number | undefined, label: string, state: { text: 
 
 /** "묶음 ‘데이터 준비’ · 노드 3개 · 접힘" — 이름 앞 말은 상자 머리의 말(묶음·전략)과 같다. */
 export function boxAria(strategy: boolean, label: string, count: number, collapsed: boolean): string {
-  return `${strategy ? "전략" : "묶음"} ‘${label}’ · 노드 ${count}개 · ${collapsed ? "접힘" : "펼침"}`;
+  return `${strategy ? "전략" : "그룹"} ‘${label}’ · 노드 ${count}개 · ${collapsed ? "접힘" : "펼침"}`;
 }
 
 /** 갈래 틀 — "갈래 ‘갈래 1’ · 노드 3개"(틀 머리의 이름 그대로). */
 export function branchAria(label: string, count: number): string {
-  return `갈래 ‘${label}’ · 노드 ${count}개`;
+  return `대안 ‘${label}’ · 노드 ${count}개`;
 }
 
 /** "선 1. 종목 고르기 → 2. 수익률 불러오기 · 종목" — 접힌 상자의 대리 선은 실제 끝이 숨었다고 덧붙인다. */

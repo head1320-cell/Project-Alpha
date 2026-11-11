@@ -63,7 +63,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
           </button>
           {stratOpen && (
             <div className="pg-strat-menu" role="menu" aria-label="전략 추가">
-              <p className="pg-strat-menu-h">새 전략 띠로 넣고 ‘전략 합치기’에 잇습니다</p>
+              <p className="pg-strat-menu-h">새 전략 띠로 넣고 ‘전략 결합’에 잇습니다</p>
               {strategySources.map((x) => (
                 <button key={x.key} type="button" role="menuitem" className="pg-strat-item" data-source={x.key}
                         onClick={() => addStrategy(x.src)}>

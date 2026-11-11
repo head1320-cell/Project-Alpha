@@ -17,7 +17,7 @@ const nd = (id: string, x: number, y = 0, kind = "optimizer"): N => ({ id, posit
 const H = nodeHeight("optimizer", null);
 const BASE = [nd("u", 0), nd("r", 330), nd("e", 660), nd("o", 990)];
 const at = (ns: N[], id: string, x: number, y = 0) => ns.map((n) => (n.id === id ? { ...n, position: { x, y } } : n));
-const G1: GraphGroup = { id: "g1", label: "묶음", members: ["u", "r"] };
+const G1: GraphGroup = { id: "g1", label: "그룹", members: ["u", "r"] };
 const plan = (ids: string[], now: N[], groups: GraphGroup[], focus: string | null = null, start: N[] = BASE) =>
   boxDropPlan(ids, now, start, groups, null, focus);
 
@@ -61,7 +61,7 @@ test.describe("규칙 (브라우저 없이)", () => {
     expect(plan(["r"], at(BASE, "r", 330, 900), [s]).moves).toEqual([{ id: "r", from: "s1", to: null }]);
   });
 
-  test("R4 · 전략을 합치는 노드는 전략 상자에 넣을 수 없다 (짝: 그냥 묶음에는 넣는다)", () => {
+  test("R4 · 전략을 합치는 노드는 전략 상자에 넣을 수 없다 (짝: 그냥 그룹에는 넣는다)", () => {
     const ns = [...BASE, nd("pf", 330, 900, "portfolio_combine")];
     const s: GraphGroup = { id: "s1", label: "전략 1", kind: "strategy", members: ["u", "r"], output: "r" };
     const p = boxDropPlan(["pf"], at(ns, "pf", 200), ns, [s], null, null);
@@ -88,7 +88,7 @@ const NODES = [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }
                n("estimate", "estimate", 660, 0), n("optimizer", "optimizer", 990, 0)];
 const EDGES = [e("universe", "universe", "returns", "universe"), e("returns", "returns", "estimate", "returns"),
                e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")];
-const DOC = { ...F, nodes: NODES, edges: EDGES, groups: [{ id: "g1", label: "묶음", members: ["universe", "returns"] }] };
+const DOC = { ...F, nodes: NODES, edges: EDGES, groups: [{ id: "g1", label: "그룹", members: ["universe", "returns"] }] };
 const HEAD = { x: 30, y: 14 };
 type Doc = { nodes: { id: string; position: { x: number; y: number } }[]; groups?: { id: string; members: string[] }[] };
 

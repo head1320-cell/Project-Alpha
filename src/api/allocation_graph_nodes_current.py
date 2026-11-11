@@ -66,7 +66,7 @@ def _explain_current(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     registry.register(pg.NodeSpec(
-        "current_weights", "지금 비중", plain_label="지금 들고 있는 비중", category="배분", stage="build",
+        "current_weights", "지금 비중", plain_label="현재 보유 비중", category="배분", stage="build",
         plain_description="유니버스에 적은 지금 비중을 그대로 냅니다. 충격 노드에 이으면 목표 비중과 나란히 흔들어 볼 수 있습니다.",
         inputs=(P("universe", "Universe"),), outputs=(P("weights", "Weights"),), run=_current_weights,
         params_model=CurrentWeightsParams, explain=_explain_current,

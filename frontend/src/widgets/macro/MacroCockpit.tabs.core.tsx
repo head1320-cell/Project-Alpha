@@ -82,8 +82,8 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
         <div className="mc-center"><CycleClock g={regime.growth_axis} i={regime.inflation_axis} size={196} /></div>
       </div>
       <div className="mc-card">
-        <div className="mc-card-h">시장 스트레스 <span className="mc-card-sub">0은 잔잔하고 100은 불안합니다</span></div>
-        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 잔잔합니다", "100 · 불안합니다"]} />
+        <div className="mc-card-h">시장 스트레스 <span className="mc-card-sub">0은 안정, 100은 불안</span></div>
+        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 안정", "100 · 불안"]} />
       </div>
       <div className="mc-card span2">
         <div className="mc-card-h">추천 자산배분 <span className="mc-card-sub">{regimeName(quad)} 국면 기준 · 규칙·성과·AI 점수를 합쳤습니다</span></div>
@@ -130,7 +130,7 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
           ))}
           {!extreme.length && <div className="mc-empty-sm">지표 자료 없음</div>}
         </div>
-        {!!extreme.length && <LevelLegend lo="평균보다 낮습니다" hi="평균보다 높습니다" />}
+        {!!extreme.length && <LevelLegend lo="평균 하회" hi="평균 상회" />}
       </div>
     </div>
   );
@@ -168,14 +168,14 @@ export function IndicatorsTab({ core, onDrill, cbSent, onRetryCb }: { core: Macr
       <div className="mc-card">
         <div className="mc-card-h">지표 지도(지표 {n}개) <span className="mc-card-sub">z는 지난 5년 평균에서 표준편차 몇 개만큼 떨어졌는지입니다. 칸을 누르면 36개월 흐름을 봅니다.</span></div>
         <ZHeatmap themes={themes} onPick={(ind) => onDrill(ind.id)} />
-        <LevelLegend lo="평균보다 낮습니다" hi="평균보다 높습니다" />
+        <LevelLegend lo="평균 하회" hi="평균 상회" />
       </div>
       {themes.map((t) => (
         <div key={t.key} className="mc-card">
           <div className="mc-card-h">{t.label} <span className="mc-card-sub">지표 {t.indicators.length}개 · ▲▼는 지난번보다 오르고 내린 폭입니다</span></div>
           {t.indicators.length ? (
             <div className="mc-indgrid">{t.indicators.map((ind) => <IndicatorCard key={ind.id} ind={ind} onClick={() => onDrill(ind.id)} />)}</div>
-          ) : <div className="mc-empty-sm">이 묶음에는 지표 없음</div>}
+          ) : <div className="mc-empty-sm">이 그룹에는 지표 없음</div>}
         </div>
       ))}
     </div>
@@ -258,8 +258,8 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
         <div className="mc-center"><CycleClock g={regime.growth_axis} i={regime.inflation_axis} size={188} /></div>
       </div>
       <div className="mc-card">
-        <div className="mc-card-h">스트레스 게이지 <span className="mc-card-sub">0은 잔잔하고 100은 불안합니다</span></div>
-        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 잔잔합니다", "100 · 불안합니다"]} />
+        <div className="mc-card-h">스트레스 게이지 <span className="mc-card-sub">0은 안정, 100은 불안</span></div>
+        <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 안정", "100 · 불안"]} />
       </div>
       <div className="mc-card span2">
         <div className="mc-card-h">스트레스 구성 항목 <span className="mc-card-sub">항목마다 0~100, 높을수록 불안합니다</span></div>

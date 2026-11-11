@@ -25,6 +25,9 @@ OVERRIDE: dict[str, str] = {}
 MANUAL: list[tuple[re.Pattern, str]] = []
 MANUAL_TS: list[tuple[re.Pattern, str]] = []
 PAIRS: list[tuple[str, str]] = []
+#: 말끝 변환(해요체 → 합니다체)을 함께 돌리나 — 용어 규칙 파일은 `ENDINGS = False` 로 끈다.
+#: ★결함에서 배웠다★ 처음에는 늘 돌렸다. 그래서 용어 패스가 손으로 넣은 해요체 검사 정규식(랜딩 E2E)까지 합니다체로 바꿨다.
+ENDINGS = True
 KEEP_NA = ("끝나요", "어긋나요", "일어나요", "나타나요", "드러나요", "늘어나요", "벗어나요", "지나요", "만나요")
 def load_rules():
     import os
@@ -37,6 +40,8 @@ def load_rules():
         for a, b in getattr(m, "PHRASES_TS", []):
             MANUAL_TS.append((re.compile(a), b))
         PAIRS.extend(sorted(getattr(m, "PAIRS", []), key=lambda ab: -len(ab[0])))
+        global ENDINGS
+        ENDINGS = getattr(m, "ENDINGS", True)
 
 EU_DROP = {"써": "씁", "커": "큽", "꺼": "끕", "떠": "뜹", "터": "틉"}
 
@@ -151,7 +156,7 @@ def conv_text(t: str, stats=None, miss=None, ts=False, skip=()) -> str:
             return w
         if stats is not None: stats[(w, r)] += 1
         return r
-    return YO.sub(f, t)
+    return YO.sub(f, t) if ENDINGS else t
 
 def conv_src(src: str, stats=None, miss=None, path=None) -> str:
     ch = chunks_of(path, src) if path is not None else chunks(src)

@@ -96,7 +96,7 @@ test("선 탭: 흐르는 값 · 두 노드 · 서버 역할 — 역할을 확인
 test("끊으면: 받는 노드부터 하류 수를 말하고, 끊기는 되돌리기 한 번에 돌아온다", async ({ page }) => {
   await openWith(page, WITH_RISK);
   await clickWire(page, "returns.returns->optimizer.returns");
-  await expect(row(page, "cut")).toContainText("‘비중 계산’부터 2개 노드가 계산되지 않습니다");  // optimizer + risk
+  await expect(row(page, "cut")).toContainText("‘포트폴리오 최적화’부터 2개 노드가 계산되지 않습니다");  // optimizer + risk
   const before = await edges(page).count();
   await page.locator(".pg-wire-cut").click();
   await expect(edges(page)).toHaveCount(before - 1);
@@ -172,11 +172,11 @@ test("끌지 않고 잇기: 목록은 이 타입을 내는 노드만(짝) · 고
   const pick = page.locator('.pg-io-pick[data-port="weights"] select');
   await expect(pick).toBeVisible();
   const labels = await pick.locator("option").allTextContents();
-  expect(labels.some((l) => l.includes("비중 계산"))).toBe(true);
-  expect(labels.some((l) => l.includes("수익률 불러오기"))).toBe(false);                         // ★짝★ 비중을 내지 않는다
+  expect(labels.some((l) => l.includes("포트폴리오 최적화"))).toBe(true);
+  expect(labels.some((l) => l.includes("수익률 데이터"))).toBe(false);                         // ★짝★ 비중을 내지 않는다
   expect(labels.some((l) => l.includes("종목"))).toBe(false);
   const before = await edges(page).count();
-  await pick.selectOption({ label: labels.find((l) => l.includes("비중 계산"))! });
+  await pick.selectOption({ label: labels.find((l) => l.includes("포트폴리오 최적화"))! });
   await expect(edges(page)).toHaveCount(before + 1);
   expect((await wip(page)).edges.some((x) => x.source === "optimizer" && x.target === "risk" && x.target_port === "weights")).toBe(true);
   await pick.selectOption({ index: 0 });

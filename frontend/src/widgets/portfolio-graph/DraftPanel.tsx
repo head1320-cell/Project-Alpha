@@ -17,7 +17,7 @@ import { STAGE_VAR } from "./GraphNode";
 const STALE = "캔버스가 바뀌어 초안을 지웠습니다 — 다시 말하십시오";
 const MAX = 300;
 /** 예시(규칙 글 — AI 글이 아니다). 누르면 칸에 채우기만 한다. */
-const EXAMPLES = ["삼성전자, SK하이닉스, NAVER로 3년 기준 비중을 짜 줘", "과거로 돌려 보기를 붙이고 거래비용은 0.3%로 해 줘",
+const EXAMPLES = ["삼성전자, SK하이닉스, NAVER로 3년 기준 비중을 짜 줘", "정책 백테스트를 붙이고 거래비용은 0.3%로 해 줘",
                   "위험을 많이 피하게 바꿔 줘"];
 
 type Answer = Extract<AssistDraft, { available: true }>;
@@ -118,7 +118,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
           </div>
         )}
         <textarea ref={inputRef} className="pg-say-text" rows={3} maxLength={MAX} value={text} disabled={busy}
-                  aria-label="캔버스를 어떻게 고칠지 말하기" placeholder="예: 과거로 돌려 보기를 붙이고 5년 기준으로 해 줘"
+                  aria-label="캔버스를 어떻게 고칠지 말하기" placeholder="예: 정책 백테스트를 붙이고 5년 기준으로 해 줘"
                   onChange={(ev) => setText(ev.target.value)}
                   onKeyDown={(ev) => {
                     if (ev.key === "Escape") { ev.stopPropagation(); ev.currentTarget.blur(); return; }

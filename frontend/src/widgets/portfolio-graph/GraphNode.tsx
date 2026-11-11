@@ -28,7 +28,7 @@ export const PORT_PLAIN: Record<string, string> = {
   Universe: "종목", Returns: "수익률", Belief: "기대 수익", Views: "내 생각",
   Weights: "비중", RiskReport: "위험 나눔", BacktestResult: "과거 성과",
   Scenario: "시나리오", StressReport: "충격 결과", Scores: "점수", RegimeState: "경기 국면",
-  TimingSignal: "타이밍 신호", Trades: "주문 목록", TargetVersion: "실행 목표", StrategyResult: "전략 묶음 성과",
+  TimingSignal: "타이밍 신호", Trades: "주문 목록", TargetVersion: "실행 목표", StrategyResult: "전략 그룹 성과",
   BacktestRun: "백테스트 실행", Client: "고객", Account: "계좌",
 };
 
@@ -250,9 +250,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
                 onClick={() => { data.onPreviewRunTo?.(null); data.onRunTo?.(id); }}>
           <Play size={12} aria-hidden="true" /> 여기까지 계산
         </button>
-        <button type="button" className="pg-branch-make pg-tb-icon" aria-label="갈래 만들기"
+        <button type="button" className="pg-branch-make pg-tb-icon" aria-label="대안 만들기"
                 onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.makeBranch(id)); }}
-                title="갈래 만들기 — 이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 나란히 봅니다">
+                title="대안 만들기 — 이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 나란히 봅니다">
           <GitBranch size={14} aria-hidden="true" />
         </button>
         <button type="button" className="pg-pin pg-tb-icon" aria-pressed={pinned} onClick={() => togglePin(id)}

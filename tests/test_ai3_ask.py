@@ -5,7 +5,7 @@
 
 ## 거는 것 (짝으로 항상-통과·항상-거부 구현을 배제한다)
 - 선 봉인: `/run` 이 전달 점검 기록마다 `sig` — 같은 문서면 통과 · 기록 한 글자 · 위 설정이 바뀌면 실패 · 자리는 무관 · 엔진은 그대로.
-- 범위: 노드 = 조상 전부 + 그 노드 + 바로 아래(먼 아래 · 다른 갈래 · 조상→자식 선은 뺌) / 선 = 보내는 쪽 조상 + 양끝 + 그 선.
+- 범위: 노드 = 조상 전부 + 그 노드 + 바로 아래(먼 아래 · 다른 대안 · 조상→자식 선은 뺌) / 선 = 보내는 쪽 조상 + 양끝 + 그 선.
 - 근거 줄: 서버가 id 를 붙인다 · 범위 밖은 줄이 없다 · 관계 문장은 서버가 문서로 다시 만든 것(화면이 보낸 글이 아니다).
 - 문장 검사: 사실 줄 ≥1 · 근거에 있는 줄 · ★그 문장이 댄 줄 밖 숫자★(짝: 안 숫자) · 금지 표현 · 길이 · 4문장 · 형식.
   답할 수 없으면 서버 고정 문장(모델 글이 아니다). 합성 경고는 서버가(짝: 없으면 없다).
@@ -180,7 +180,7 @@ def _srec(eid, rec, doc=DOC, key=KEY):
 
 
 EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 위험 똑같이", "종목 2개"], "trust": [{"state": "confirmed", "text": "비중 계산은 문제없이 끝났습니다."}],
+        "facts": ["계산 방식: 위험 똑같이", "종목 2개"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}],
         "unmeasured": ["거래비용"]}
 EX_ES = {"title": "기대 수익을 잡았습니다", "facts": ["과거 평균 7.2%"], "trust": [{"state": "assumed", "text": "과거 평균이 이어진다는 가정입니다."}]}
 EX_BT = {"title": "과거로 돌려 봤습니다", "facts": ["누적 수익 31.4%"], "trust": []}
@@ -205,13 +205,13 @@ def test_lines_get_server_ids_and_cover_explain_parts_relations_and_records_in_s
     ids = [x["id"] for x in g["lines"]]
     assert ids == [f"f{i}" for i in range(1, len(ids) + 1)] and set(refs) == set(ids)
     texts = " | ".join(x["text"] for x in g["lines"])
-    for must in ("비중을 이렇게 나눴습니다", "삼성전자 50.5%", "계산 방식: 위험 똑같이", "비중 계산은 문제없이 끝났습니다.", "거래비용",
+    for must in ("비중을 이렇게 나눴습니다", "삼성전자 50.5%", "계산 방식: 위험 똑같이", "포트폴리오 최적화는 문제없이 끝났습니다.", "거래비용",
                  "과거 평균 7.2%", "누적 수익 31.4%", "756일", "빈 날 4일을 뺐습니다"):
         assert must in texts, must
     assert "NAVER 99" not in texts                                                     # 범위 밖 갈래
     rel = [x for x in g["lines"] if x["part"] == "관계"]
     assert rel and all(x["text"] == _relate(DOC)[refs[x["id"]]["target_id"]]["text"] for x in rel)
-    assert g["target"] == {"kind": "node", "id": "o", "label": "비중 계산"} and g["question"] == "왜 이렇게 나눴나요?"
+    assert g["target"] == {"kind": "node", "id": "o", "label": "포트폴리오 최적화"} and g["question"] == "왜 이렇게 나눴나요?"
     o_fact = next(k for k, v in refs.items() if v["target_id"] == "o" and v["part"] == "사실" and v["index"] == 1)
     assert refs[o_fact] == {"target_kind": "node", "target_id": "o", "part": "사실", "index": 1, "text": "종목 2개"}
     assert all(not any(ch.isdigit() for ch in x["part"]) for x in g["lines"])           # 줄 이름에 숫자가 없다(숫자 검사가 헷갈리지 않게)

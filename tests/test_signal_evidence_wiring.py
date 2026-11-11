@@ -143,7 +143,7 @@ def test_the_rollup_counts_the_whole_catalog_not_the_filtered_page(
 def test_most_timing_rules_are_now_graded(monkeypatch):
     """★AX 이후 — 24개가 `etf_prices` 를 싣는다★
 
-    AV·AW 때는 33개 전부가 미상이었다. 이제 남는 미상은 두 묶음뿐이고
+    AV·AW 때는 33개 전부가 미상이었다. 이제 남는 미상은 두 그룹뿐이고
     ★둘 다 서로 다른 사유★를 단다.
     """
     monkeypatch.setenv("KIS_USE_MOCK", "1")

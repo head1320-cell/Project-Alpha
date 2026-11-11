@@ -269,8 +269,8 @@ function Capacity({ names }: { names: Record<string, string> }) {
   return (
     <section className="tx-sec rl-sec" data-sec="capacity" aria-labelledby="rl-cap-h">
       <header className="tx-sec-head"><div>
-        <h2 className="tx-sec-t" id="rl-cap-h">유동성·수용량</h2>
-        <p className="tx-sec-sub">전략마다 시장이 받아 줄 수 있는 돈의 크기입니다. 서버가 전략별 수용량을 주지 않았습니다. 이번 계산은 용량 제약을 켜지 않았습니다.</p>
+        <h2 className="tx-sec-t" id="rl-cap-h">유동성·운용 가능 규모</h2>
+        <p className="tx-sec-sub">전략마다 시장이 받아 줄 수 있는 돈의 크기입니다. 서버가 전략별 운용 가능 규모을 주지 않았습니다. 이번 계산은 용량 제약을 켜지 않았습니다.</p>
       </div></header>
       <div className="tx-sec-body">
         <ul className="rl-caps">
@@ -278,7 +278,7 @@ function Capacity({ names }: { names: Record<string, string> }) {
             <li key={id} className="rl-cap" data-id={id}>
               <span className="rl-cap-n">{n}</span>
               <span className="rl-cap-track" aria-hidden />
-              <span className="rl-cap-v">수용량 미상</span>
+              <span className="rl-cap-v">운용 가능 규모 미상</span>
             </li>
           ))}
         </ul>

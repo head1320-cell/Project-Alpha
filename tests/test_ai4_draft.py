@@ -90,7 +90,7 @@ BUILD = _raw(add=[_add("u", "universe"), _add("r", "returns"), _add("e", "estima
              sets=[_set("u", "tickers", "삼성전자, SK하이닉스, NAVER", "tickers", names=["삼성전자", "SK하이닉스", "NAVER"]),
                    _set("r", "lookback_days", "3년", "preset", "3년"),
                    _set("o", "model", "위험 똑같이", "option", "risk_parity")],
-             summary="세 종목으로 비중 계산 흐름을 만듭니다")
+             summary="세 종목으로 포트폴리오 최적화 흐름을 만듭니다")
 
 
 def _check(raw, graph=EMPTY, sentence=SENT, resolve=fake_resolve):
@@ -138,7 +138,7 @@ def test_booleans_text_and_lists_are_not_speakable_pair_numbers_are():
 def test_the_grounding_has_the_sentence_structure_and_readable_fields_but_no_settings():
     g = dr.ground(DOC, SENT, KINDS, routes.graph_validate(DOC))
     assert g["sentence"] == SENT
-    assert {"id": "o", "type": "optimizer", "label": "비중 계산"} in g["graph"]["nodes"]
+    assert {"id": "o", "type": "optimizer", "label": "포트폴리오 최적화"} in g["graph"]["nodes"]
     assert g["kinds"]["returns"]["fields"]["lookback_days"]["presets"] == ["1년", "3년", "5년"]
     assert "conditional" not in g["kinds"]["estimate"]["fields"]
     blob = json.dumps(g["graph"], ensure_ascii=False)
@@ -161,7 +161,7 @@ def test_a_whole_build_on_an_empty_canvas_reads_every_value_from_the_sentence():
     d = res["draft"]
     assert [(a["ref"], a["id"], a["kind"]) for a in d["add"]] == [
         ("u", "universe", "universe"), ("r", "returns", "returns"), ("e", "estimate", "estimate"), ("o", "optimizer", "optimizer")]
-    assert d["add"][3]["label"] == "비중 계산"
+    assert d["add"][3]["label"] == "포트폴리오 최적화"
     assert [c["id"] for c in d["connect"]] == ["universe.universe->returns.universe", "returns.returns->estimate.returns",
                                                "returns.returns->optimizer.returns", "estimate.belief->optimizer.belief"]
     assert _sets(res) == {("universe", "tickers"): ["005930", "000660", "035420"], ("returns", "lookback_days"): 756,
@@ -170,7 +170,7 @@ def test_a_whole_build_on_an_empty_canvas_reads_every_value_from_the_sentence():
     assert by["lookback_days"]["display"] == "3년" and by["lookback_days"]["quote"] == "3년" and by["lookback_days"]["read"] == "preset"
     assert by["lookback_days"]["label"] == "기간"
     assert by["model"]["display"] == "위험 똑같이" and by["tickers"]["display"] == "삼성전자 · SK하이닉스 · NAVER"
-    assert d["empty"] == [] and d["summary"] == "세 종목으로 비중 계산 흐름을 만듭니다"
+    assert d["empty"] == [] and d["summary"] == "세 종목으로 포트폴리오 최적화 흐름을 만듭니다"
 
 
 def test_a_value_written_by_the_model_is_refused():

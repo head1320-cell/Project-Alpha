@@ -118,10 +118,10 @@ const BRANCHED = {
   nodes: [...NODES, n("estimate_b", "estimate", 660, 330), n("optimizer_b", "optimizer", 990, 330)],
   edges: [...EDGES, e("returns", "returns", "estimate_b", "returns"), e("returns", "returns", "optimizer_b", "returns"),
           e("estimate_b", "belief", "optimizer_b", "belief")],
-  branches: [{ id: "br1", label: "갈래 B", root: "estimate_b", of_root: "estimate", map: { estimate_b: "estimate", optimizer_b: "optimizer" } }],
+  branches: [{ id: "br1", label: "대안 B", root: "estimate_b", of_root: "estimate", map: { estimate_b: "estimate", optimizer_b: "optimizer" } }],
 };
 
-test("R1 · 갈래 뿌리 복제를 지우면 갈래 틀이 사라진다 — 다른 복제가 남아 있어도", async ({ page }) => {
+test("R1 · 대안 뿌리 복제를 지우면 대안 틀이 사라진다 — 다른 복제가 남아 있어도", async ({ page }) => {
   await open(page, BRANCHED);
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   await node(page, "estimate_b").click({ position: HEAD });
@@ -134,7 +134,7 @@ test("R1 · 갈래 뿌리 복제를 지우면 갈래 틀이 사라진다 — 다
   await expect(page.locator(".pg-branch")).toHaveCount(1);
 });
 
-test("R1 · (짝) 뿌리가 아닌 복제를 지우면 갈래 틀은 남고 그 복제만 빠진다", async ({ page }) => {
+test("R1 · (짝) 뿌리가 아닌 복제를 지우면 대안 틀은 남고 그 복제만 빠진다", async ({ page }) => {
   await open(page, BRANCHED);
   await node(page, "optimizer_b").click({ position: HEAD });
   await page.keyboard.press("Delete");
@@ -189,7 +189,7 @@ test("R1 · Shift 상자로 고른 뒤 우클릭해도 노드 메뉴가 열린�
 
 // ── ④ 상자 끌기 · 이름 ────────────────────────────────────────────────────────
 
-const GROUPED = { ...CORE, groups: [{ id: "g1", label: "묶음", members: ["universe", "returns"] }] };
+const GROUPED = { ...CORE, groups: [{ id: "g1", label: "그룹", members: ["universe", "returns"] }] };
 
 async function dragFrame(page: Page, dx: number, dy: number) {
   const f = (await page.locator('.react-flow__node[data-id="frame:g1"]').boundingBox())!;
@@ -230,21 +230,21 @@ test("R1 · 상자 끌기는 되돌리기 한 단계 · 멤버는 같은 만큼 
   await expect.poll(async () => graphOf(await wip(page))).toEqual(before);
 });
 
-test("R1 · 묶음 이름을 이어 치면 한 단계 (짝: 0.8초 넘게 쉬고 또 고치면 두 단계)", async ({ page }) => {
+test("R1 · 그룹 이름을 이어 치면 한 단계 (짝: 0.8초 넘게 쉬고 또 고치면 두 단계)", async ({ page }) => {
   await open(page, GROUPED);
   const label = page.locator('.pg-group[data-group-id="g1"] .pg-group-label');
   await label.click();
   await label.press("End");
   await label.pressSequentially("abc", { delay: 40 });
-  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("묶음abc");
+  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("그룹abc");
   await page.waitForTimeout(900);
   await label.pressSequentially("d", { delay: 40 });
-  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("묶음abcd");
+  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("그룹abcd");
   await page.locator(".react-flow__pane").click({ position: { x: 360, y: 24 } });
   await page.keyboard.press("Control+z");
-  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("묶음abc");
+  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("그룹abc");
   await page.keyboard.press("Control+z");
-  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("묶음");
+  await expect.poll(async () => (await wip(page)).groups?.[0]?.label).toBe("그룹");
   await expect(undoBtn(page)).toBeDisabled();
 });
 

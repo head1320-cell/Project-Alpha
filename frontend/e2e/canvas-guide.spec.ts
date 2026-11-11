@@ -83,7 +83,7 @@ test("계산 전 · 절차를 다 채움 → 규칙 길잡이 '계산하기' · 
   await expect(page.locator(".pg-note")).toContainText("다음엔 Ctrl+Enter 로도 계산합니다");
 });
 
-test("계산 뒤 우선순위: 전달 점검 보기 → [다음에] → 갈래 만들기 → [다음에] → 전략 더하기 · 해 보기는 그 도구를 연다", async ({ page }) => {
+test("계산 뒤 우선순위: 전달 점검 보기 → [다음에] → 대안 만들기 → [다음에] → 전략 더하기 · 해 보기는 그 도구를 연다", async ({ page }) => {
   await openWith(page, FULL);
   await runAll(page);
   await expect(bar(page)).toHaveAttribute("data-tool", "wire_check");
@@ -106,7 +106,7 @@ test("계산 뒤 우선순위: 전달 점검 보기 → [다음에] → 갈래 �
   await expect(page.locator(".pg-strat-menu")).toBeVisible();                                    // 무엇을 더할지는 사람이 고른다
 });
 
-test("갈래 만들기 [해 보기] → 갈래가 생기고 되돌리기 한 번이면 사라진다 · 안내 줄에 다음엔 어디서", async ({ page }) => {
+test("대안 만들기 [해 보기] → 대안이 생기고 되돌리기 한 번이면 사라진다 · 안내 줄에 다음엔 어디서", async ({ page }) => {
   await openWith(page, FULL);
   await runAll(page);
   await bar(page).locator(".pg-guide-later").click();                                             // 전달 점검 건너뛰기
@@ -114,7 +114,7 @@ test("갈래 만들기 [해 보기] → 갈래가 생기고 되돌리기 한 번
   const before = await page.locator(".pg-node").count();
   await bar(page).locator(".pg-guide-go").click();
   await expect.poll(() => page.locator(".pg-node").count()).toBeGreaterThan(before);
-  await expect(page.locator(".pg-note")).toContainText("다음엔 노드를 고르고 Ctrl+K ‘갈래’로도 됩니다");
+  await expect(page.locator(".pg-note")).toContainText("다음엔 노드를 고르고 Ctrl+K ‘대안’으로도 됩니다");
   await page.keyboard.press("Control+z");
   await expect.poll(() => page.locator(".pg-node").count()).toBe(before);
 });
@@ -158,14 +158,14 @@ test("길잡이가 숨는 때: 다음 한 걸음이 있으면(짝: 없으면 보
 test("AI 길잡이: 상태·적용 도구를 보내고 · 답(2개 중 1 · 넘기기) · 상태가 바뀌면 지우고 규칙 줄로 · 로그아웃이면 로그인 링크", async ({ page }) => {
   await signIn(page);
   const seen = await answer(page, ok([
-    { feature: "branch", label: "갈래 만들기", why: "계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다." },
+    { feature: "branch", label: "대안 만들기", why: "계산을 마쳤고 대안이 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다." },
     { feature: "records", label: "기록함", why: "과거로 돌려 본 기록을 모아 볼 수 있습니다." }]));
   await openWith(page, FULL);
   await runAll(page);
   await bar(page).locator(".pg-guide-ai").click();
   await expect(bar(page).locator(".pg-guide-chip")).toHaveText("AI 길잡이");
   await expect(bar(page)).toHaveAttribute("data-tool", "branch");
-  await expect(why(page)).toHaveText("계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다.");
+  await expect(why(page)).toHaveText("계산을 마쳤고 대안이 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다.");
   await expect(bar(page).locator(".pg-guide-more")).toHaveText("2개 중 1 · 다음");
   await bar(page).locator(".pg-guide-more").click();
   await expect(bar(page)).toHaveAttribute("data-tool", "records");

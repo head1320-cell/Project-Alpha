@@ -82,7 +82,7 @@ test("R3 · 겹침·다시 쌓기가 늘린 높이를 본다 (짝: 늘리지 않
 });
 
 test("R3 · 유령 자리가 늘린 카드를 피한다 (짝: 늘리지 않으면 이음 노드 옆 같은 높이)", () => {
-  const sug: ProcedureSuggestion = { action: "add", kind: "backtest", label: "과거로 돌려 보기", text: "",
+  const sug: ProcedureSuggestion = { action: "add", kind: "backtest", label: "정책 백테스트", text: "",
     attach: [{ source: "a", source_port: "weights", target: "@new", target_port: "weights" }], unlocks: [] };
   const above = (slotH?: number) => ({ id: "b", kind: "optimizer", position: { x: COL, y: -cardHeight("optimizer", null) - ROW_GAP - 10 }, ...(slotH ? { slotH } : {}) });
   const a = { id: "a", kind: "optimizer", position: { x: 0, y: 0 } };

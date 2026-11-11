@@ -60,7 +60,7 @@ test("U2 규칙 · 오른쪽·세로 가운데·아래 — 다른 축은 그대�
   for (const k of ["right", "middle", "bottom"] as const) expect(alignRects([THREE[0]], k).size, `${k} — 하나면 아무것도 옮기지 않는다`).toBe(0);
 });
 
-test("U2 규칙 · snapGroup — 묶음 테두리로 붙는다(둘째 카드의 가장자리로도) · 하나면 snapToGuides 와 같다 (짝: 문턱 밖이면 0 · 빈 묶음 0)", () => {
+test("U2 규칙 · snapGroup — 그룹 테두리로 붙는다(둘째 카드의 가장자리로도) · 하나면 snapToGuides 와 같다 (짝: 문턱 밖이면 0 · 빈 그룹 0)", () => {
   const m: Rect[] = [{ x: 100, y: 100, w: 240, h: 100 }, { x: 400, y: 250, w: 240, h: 100 }];   // 묶음 x 100..640 · y 100..350
   // 아래 끝(둘째 카드 몫 350)이 다른 카드 위(353)에 3 차이 → dy +3 · 가로는 맞는 곳이 없다
   expect(snapGroup(m, [{ x: 0, y: 353, w: 240, h: 100 }], 6)).toMatchObject({ dx: 0, dy: 3 });
@@ -132,7 +132,7 @@ async function dragPicked(page: Page, dyScreen: number, during?: () => Promise<v
   await page.waitForTimeout(200);
 }
 
-test("U2 · 여럿 끌기 정렬선 — 둘을 끌어 묶음 위가 셋째 위 3px 안이면 붙고 선이 보인다 · 놓으면 선이 사라진다 (짝: 둘 사이 간격 그대로 · 멀면 붙지 않고 선 없음)", async ({ page }) => {
+test("U2 · 여럿 끌기 정렬선 — 둘을 끌어 그룹 위가 셋째 위 3px 안이면 붙고 선이 보인다 · 놓으면 선이 사라진다 (짝: 둘 사이 간격 그대로 · 멀면 붙지 않고 선 없음)", async ({ page }) => {
   await openWith(page, LOOSE);
   await pick(page, ["a", "b"]);
   const z = await zoomOf(page);
@@ -144,7 +144,7 @@ test("U2 · 여럿 끌기 정렬선 — 둘을 끌어 묶음 위가 셋째 위 3
   });
   await expect(page.locator(".pg-guide")).toHaveCount(0);
   const a1 = await pos(page, "a"), b1 = await pos(page, "b");
-  expect(a1.y, "묶음 위가 c 위에 붙었다").toBe(160);
+  expect(a1.y, "그룹 위가 c 위에 붙었다").toBe(160);
   expect(b1.y - a1.y, "둘 사이 간격 그대로").toBe(440);
   expect(b1.x - a1.x, "가로 간격도 그대로").toBe(560);
   // 짝 — 되돌리고, 어떤 가장자리·가운데와도 30 넘게 떨어지는 곳으로 끌면 붙지 않고 선도 없다(격자 이동만)

@@ -20,13 +20,13 @@ const NW = 168;
 const NH = 66;
 /** 스튜디오 기본 흐름 — 종목·내 생각 → 수익률 → 비중 계산 → 확인하기 셋. 이름은 카탈로그 `plain_label`. */
 export const HERO_NODES: HeroNode[] = [
-  { id: "views", label: "내 생각 넣기", stage: "belief", x: 40, y: 46, col: 0, ins: [], outs: ["Views"] },
-  { id: "universe", label: "종목 고르기", stage: "data", x: 40, y: 170, col: 0, ins: [], outs: ["Universe"] },
-  { id: "returns", label: "수익률 불러오기", stage: "data", x: 330, y: 170, col: 1, ins: ["Universe"], outs: ["Returns"] },
-  { id: "optimizer", label: "비중 계산", stage: "build", x: 620, y: 108, col: 2, ins: ["Views", "Returns"], outs: ["Weights"] },
-  { id: "risk", label: "흔들림 나눠 보기", stage: "check", x: 900, y: 24, col: 3, ins: ["Weights"], outs: ["RiskReport"] },
-  { id: "scenario_stress", label: "상황에 넣어 보기", stage: "check", x: 900, y: 117, col: 3, ins: ["Weights"], outs: ["StressReport"] },
-  { id: "backtest", label: "과거로 돌려 보기", stage: "check", x: 900, y: 210, col: 3, ins: ["Weights", "Returns"], outs: ["BacktestResult"] },
+  { id: "views", label: "투자 뷰(BL)", stage: "belief", x: 40, y: 46, col: 0, ins: [], outs: ["Views"] },
+  { id: "universe", label: "유니버스", stage: "data", x: 40, y: 170, col: 0, ins: [], outs: ["Universe"] },
+  { id: "returns", label: "수익률 데이터", stage: "data", x: 330, y: 170, col: 1, ins: ["Universe"], outs: ["Returns"] },
+  { id: "optimizer", label: "포트폴리오 최적화", stage: "build", x: 620, y: 108, col: 2, ins: ["Views", "Returns"], outs: ["Weights"] },
+  { id: "risk", label: "위험 기여도 분해", stage: "check", x: 900, y: 24, col: 3, ins: ["Weights"], outs: ["RiskReport"] },
+  { id: "scenario_stress", label: "시나리오 스트레스", stage: "check", x: 900, y: 117, col: 3, ins: ["Weights"], outs: ["StressReport"] },
+  { id: "backtest", label: "정책 백테스트", stage: "check", x: 900, y: 210, col: 3, ins: ["Weights", "Returns"], outs: ["BacktestResult"] },
 ];
 /** [보내는 노드, 받는 노드, 포트 타입] — 타입은 보내는 쪽 출력과 받는 쪽 입력에 실제로 있다. */
 export const HERO_WIRES: [string, string, string][] = [
@@ -40,7 +40,7 @@ export const HERO_WIRES: [string, string, string][] = [
 ];
 /** 서버 관문 목록(`workflow_gates` · 카탈로그 `gates`)과 같은 키·이름·순서. */
 export const HERO_GATES: { key: string; label: string }[] = [
-  { key: "data", label: "데이터" }, { key: "pit", label: "시점" }, { key: "signal", label: "신호" }, { key: "build", label: "비중 계산" },
+  { key: "data", label: "데이터" }, { key: "pit", label: "시점" }, { key: "signal", label: "신호" }, { key: "build", label: "포트폴리오 최적화" },
   { key: "cost", label: "거래비용" }, { key: "oos", label: "처음 보는 기간" }, { key: "economic", label: "돈이 되는지" }, { key: "live", label: "모의·실계좌" },
 ];
 
@@ -55,8 +55,8 @@ const WIRES = HERO_WIRES.map(([from, to, t]) => {
 });
 
 const SUMMARY =
-  "포트폴리오 설계 스튜디오의 기본 흐름을 줄여 그린 그림입니다. 종목 고르기와 내 생각 넣기에서 시작해 수익률 불러오기와 비중 계산을 거쳐 " +
-  "흔들림 나눠 보기, 상황에 넣어 보기, 과거로 돌려 보기로 값이 흐릅니다. 계산하면 데이터부터 모의·실계좌까지 관문 여덟 곳을 차례로 확인합니다.";
+  "포트폴리오 설계 스튜디오의 기본 흐름을 줄여 그린 그림입니다. 유니버스와 내 생각 넣기에서 시작해 수익률 데이터와 포트폴리오 최적화를 거쳐 " +
+  "위험 기여도 분해, 시나리오 스트레스, 정책 백테스트로 값이 흐릅니다. 계산하면 데이터부터 모의·실계좌까지 관문 여덟 곳을 차례로 확인합니다.";
 
 export function HeroCanvas() {
   return (

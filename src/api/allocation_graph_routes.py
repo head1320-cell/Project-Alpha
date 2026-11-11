@@ -243,7 +243,7 @@ class BranchEvidenceRequest(BaseModel):
 
 @router.post("/branch-evidence")
 def graph_branch_evidence(req: BranchEvidenceRequest) -> dict:
-    """갈래 비교의 다중 비교 보정 (BO O3) — 원본 + 갈래들의 과거 성과 곡선 → PSR·DSR. ★표시만★ — 저장하지 않는다.
+    """대안 비교의 다중 비교 보정 (BO O3) — 원본 + 대안들의 과거 성과 곡선 → PSR·DSR. ★표시만★ — 저장하지 않는다.
 
     곡선이 망가졌으면(0 이하·비유한) 그 행만 사유를 달고 N 에는 넣는다 — 비교한 수를 줄이면 보정이 약해진다.
     """

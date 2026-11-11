@@ -82,7 +82,7 @@ export function StrategiesTab({ strategies, market, setMarket, loading, failed, 
         <div className="mc-strat-title">전술적 자산배분 전략{total ? ` ${total}개` : ""} <span className="mc-card-sub">모멘텀·위험·최적화 규칙으로 지금 시점의 비중과 신호를 냈습니다. 카드를 누르면 자세히 봅니다.</span></div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
-      {loading && <p className="mc-loading">{mktName(market)} 비중 계산 중</p>}
+      {loading && <p className="mc-loading">{mktName(market)} 포트폴리오 최적화 중</p>}
       {!loading && failed && <TabFail title={`${mktName(market)} 전략 조회 실패`} onRetry={onRetry} />}
       {!loading && !failed && (groups.length ? groups.map((g) => (
         <section key={g.family} className="mc-fam">

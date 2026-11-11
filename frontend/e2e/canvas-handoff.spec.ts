@@ -85,7 +85,7 @@ async function zoomTo(page: Page, level: "far" | "mid" | "near") {
 }
 const RANK: Record<string, number> = { lost: 0, changed: 1, structural: 2, unused: 3 };
 
-test("실제 계산: 문제가 있는 선에만 칩 하나 · 단계·개수·이름 = 서버 — 짝: `[]` 인 선(비중 계산 → 시나리오)엔 없다", async ({ page }) => {
+test("실제 계산: 문제가 있는 선에만 칩 하나 · 단계·개수·이름 = 서버 — 짝: `[]` 인 선(포트폴리오 최적화 → 시나리오)엔 없다", async ({ page }) => {
   await openWith(page, STRESS);
   await patchRun(page);
   const body = await run(page);
@@ -197,7 +197,7 @@ test("계산 전 관계 문장에는 요약 괄호가 없고, 계산 뒤엔 서�
   await openWith(page, STRESS);
   await page.locator(`.react-flow__edge[data-testid="rf__edge-${SENS}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
   const rel = page.locator("p.pg-wire-relation");
-  await expect(rel).toContainText("‘비중 계산’의");
+  await expect(rel).toContainText("‘포트폴리오 최적화’의");
   expect((await rel.textContent())!.split("→")[0]).not.toContain("(");
   await patchRun(page);
   const body = await run(page);

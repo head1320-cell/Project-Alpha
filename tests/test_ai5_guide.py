@@ -83,7 +83,7 @@ def test_the_grounding_has_only_applicable_known_tools_server_gate_names_and_kin
     assert [t["id"] for t in g["tools"]] == APPLICABLE                                  # 목록 밖은 버림 · 겹친 것은 하나 · 목록 순서
     assert g["tools"][0] == {"id": "branch", **gd.FEATURES["branch"]}
     assert g["state"]["gates_blocked"] == ["거래비용", "처음 보는 기간"]
-    assert "비중 계산" in g["kinds"] and "종목 고르기" in g["kinds"]
+    assert "포트폴리오 최적화" in g["kinds"] and "유니버스" in g["kinds"]
     blob = json.dumps(g, ensure_ascii=False)
     assert "005930" not in blob and "params" not in blob and "risk_parity" not in blob
 
@@ -106,14 +106,14 @@ def _tip(f, why):
 
 
 def test_a_good_tip_passes_with_the_server_label():
-    ok, bad = gd.check({"tips": [_tip("branch", "계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다.")]}, _g())
-    assert bad == [] and ok == [{"feature": "branch", "label": "갈래 만들기", "why": "계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다."}]
+    ok, bad = gd.check({"tips": [_tip("branch", "계산을 마쳤고 대안이 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다.")]}, _g())
+    assert bad == [] and ok == [{"feature": "branch", "label": "대안 만들기", "why": "계산을 마쳤고 대안이 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다."}]
 
 
 def test_numbers_must_come_from_the_state_and_the_pair_passes():
-    ok, bad = gd.check({"tips": [_tip("branch", "노드 12개를 갈래로 나눠 보십시오.")]}, _g())
+    ok, bad = gd.check({"tips": [_tip("branch", "노드 12개를 대안으로 나눠 보십시오.")]}, _g())
     assert ok == [] and bad[0]["code"] == "numbers" and "12" in bad[0]["reason"]
-    ok, bad = gd.check({"tips": [_tip("branch", "노드 4개짜리 설계를 갈래로 나눠 보십시오.")]}, _g())        # ★짝★ 상태의 수
+    ok, bad = gd.check({"tips": [_tip("branch", "노드 4개짜리 설계를 대안으로 나눠 보십시오.")]}, _g())        # ★짝★ 상태의 수
     assert bad == [] and len(ok) == 1
 
 
@@ -122,7 +122,7 @@ def test_numbers_must_come_from_the_state_and_the_pair_passes():
     (_tip("rm_rf", "지워 보십시오."), "not_applicable"),
     (_tip("branch", "가" * 71), "too_long"),
     (_tip("branch", "이 전략은 견고함이 확인됐습니다."), "banned"),
-    (_tip("branch", "갈래를 만들면 좋은 전략을 찾을 수 있습니다."), "banned"),
+    (_tip("branch", "대안을 만들면 좋은 전략을 찾을 수 있습니다."), "banned"),
     (_tip("branch", "지금 사십시오."), "banned"),
     ({"feature": "branch", "why": "x", "extra": 1}, "shape"),
     ({"feature": "branch", "why": "  "}, "shape"),

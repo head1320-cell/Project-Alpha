@@ -1,4 +1,4 @@
-"""BK W5 · 전략 묶음 돌려 보기 — `/multibacktest/run(save=False)` 와 같은 수 · 기록하지 않는다
+"""BK W5 · 멀티전략 백테스트 — `/multibacktest/run(save=False)` 와 같은 수 · 기록하지 않는다
 ==============================================================================
 대상 `src/api/allocation_graph_nodes_strategy.py::_strategy_backtest`
 

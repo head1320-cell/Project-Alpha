@@ -8,7 +8,7 @@
 | 효율적 프런티어 | `PortfolioAnalyzer.efficient_frontier` + MC 구름 — `/analyze` 3·4 단계와 같은 호출 |
 | 국면 앙상블 · 국면 설명 | `regime_ensemble` · `regime_transitions`+`regime_drivers` — `/macro/regime-*` 와 같은 함수 |
 | 세 갈래 시나리오 · 직접 만든 시나리오 | `/scenario-three-way` · `/scenario-run` 라우트 함수 |
-| 전략 건강 · 묶음 분석 | `/strategy-health` 라우트 함수 · `sleeve_analytics` |
+| 전략 건강 · 그룹 분석 | `/strategy-health` 라우트 함수 · `sleeve_analytics` |
 | 알파 검증 · 알파 포트폴리오 | `/alpha-lab/validate` · `/alpha-lab/portfolio` 라우트 함수, ★`record_run=False` 명시★ |
 
 ## 매크로 데이터 경로 (사용자 결정 — 저장된 관측 + mock 합성)
@@ -256,11 +256,11 @@ def _explain_three_way(view: dict, prov: dict, params: Any) -> dict:
                      + (f" · 손실 {_signed_pct(float(loss))}" if loss is not None else " · 손실 미계산"))
     trust = [_t(ASSUMED, str(r.get("composition_note") or "노출을 시나리오 손실에 곱했습니다."))]
     if not r.get("composed"):
-        trust.append(_t(UNKNOWN, "충격을 구하지 못해 갈래별 손실을 적지 않았습니다."))
+        trust.append(_t(UNKNOWN, "충격을 구하지 못해 대안별 손실을 적지 않았습니다."))
     if r.get("overlay") is None:
-        trust.append(_t(UNKNOWN, "경기 국면을 잇지 않아 ‘타이밍 + 국면’ 갈래는 판정하지 않았습니다."))
+        trust.append(_t(UNKNOWN, "경기 국면을 잇지 않아 ‘타이밍 + 국면’ 대안은 판정하지 않았습니다."))
     return {"title": f"‘{(r.get('scenario') or {}).get('label')}’에서 세 갈래를 비교했습니다",
-            "facts": facts, "trust": trust, "unmeasured": ["시나리오가 실제로 일어날 확률", "갈래 사이의 거래 비용"]}
+            "facts": facts, "trust": trust, "unmeasured": ["시나리오가 실제로 일어날 확률", "대안 사이의 거래 비용"]}
 
 
 # ── 직접 만든 시나리오 ────────────────────────────────────────────────────────
@@ -372,21 +372,21 @@ class RobustCompareParams(BaseModel):
     shock_rho: Literal[0.7, 0.8, 0.9] = Field(0.8, json_schema_extra={"x-ui": _ui(
         "치솟는 상관", "advanced", presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
                                          {"label": "0.9", "value": 0.9}],
-        help="묶음끼리 상관이 이 값으로 오른다고 가정하고 합친 흔들림을 다시 측정합니다.")})
+        help="그룹끼리 상관이 이 값으로 오른다고 가정하고 합친 흔들림을 다시 측정합니다.")})
 
 
 def _sleeve_analytics(inputs: dict, p: RobustCompareParams) -> pg.NodeOutput:
     from src.api.allocation_graph_robustness import robustness_for_sleeves
     from src.engine import sleeve_combine as sc
     ports = [k for k in ("a", "b", "c", "d") if inputs.get(k) is not None]
-    sleeves = [{"name": f"묶음 {i + 1}", "weights": holdings_pct(inputs[k])} for i, k in enumerate(ports)]
+    sleeves = [{"name": f"그룹 {i + 1}", "weights": holdings_pct(inputs[k])} for i, k in enumerate(ports)]
     days = PERIODS[p.period][0]
     ret = sc._load_ret_matrix(sleeves, lookback=days)
     out = sc.sleeve_analytics(sleeves, ret_matrix=ret)
     # BR R1b — 엔진은 {"error": True, "message"} 를 돌려준다. 예전에는 `available is False` 를 봐서 실패가 '완료 + 빈 표' 였다.
     if not isinstance(out, dict) or out.get("error"):
         why = out.get("message") if isinstance(out, dict) else None
-        raise pg.NodeFailure(f"묶음 사이 측정 불가 — {why or '사유 미상'}")
+        raise pg.NodeFailure(f"그룹 사이 측정 불가 — {why or '사유 미상'}")
     # BS3 — 날짜로 맞춘 흐름(못 맞추면 끝 맞춤 + 라벨) · 시장 대용은 든 종목으로.
     rob = robustness_for_sleeves(sleeves, None, lookback=days, window=p.window, target_rho=p.shock_rho)
     view = {"result": out, "n": len(sleeves), "ports": ports, "requested_days": days, "robustness": rob}
@@ -397,9 +397,9 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
     rob = view.get("robustness") or {}
     n_days, want = rob.get("n_days"), view.get("requested_days")
     trust = [_t(ASSUMED, "지금 비중을 이 기간 내내 들고 있었다고 보고 잰 흐름입니다 — 실제 운용 기록이 아닙니다."),
-             _t(ASSUMED, "묶음끼리 몫은 똑같이 나눴다고 봤습니다(합친 흔들림·충격 계산).")]
+             _t(ASSUMED, "그룹끼리 몫은 똑같이 나눴다고 봤습니다(합친 흔들림·충격 계산).")]
     if rob.get("available"):
-        trust.insert(0, _t(CONFIRMED, f"묶음 {view.get('n')}개의 과거 {n_days}거래일 수익으로 상관 추이·위기일·최악 구간을 측정했습니다."))
+        trust.insert(0, _t(CONFIRMED, f"그룹 {view.get('n')}개의 과거 {n_days}거래일 수익으로 상관 추이·위기일·최악 구간을 측정했습니다."))
         if isinstance(n_days, int) and isinstance(want, int) and n_days < want:
             trust.append(_t(UNKNOWN, f"{want}거래일을 보려 했지만 시세가 {n_days}거래일뿐이었습니다."))
         crisis = rob.get("crisis") or {}
@@ -421,8 +421,8 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
     eff = rob.get("effective_n") or {}
     headline = None if eff.get("value") is None else {
         "label": "실질 독립 개수", "value": eff["value"], "unit": "개",
-        "text": f"묶음 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다"}
-    return {"title": f"묶음 {view.get('n')}개가 같이 무너지는지 봤습니다", "headline": headline,
+        "text": f"그룹 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다"}
+    return {"title": f"그룹 {view.get('n')}개가 같이 무너지는지 봤습니다", "headline": headline,
             "facts": list(rob.get("story") or []), "trust": trust,
             "unmeasured": ["앞으로도 같을지(과거 관계입니다)", "돈이 되는지(경제적 가치)"]
             + ([] if rob.get("axis") == "date" else ["날짜로 맞춘 비교(시세의 끝을 맞췄습니다)"])}
@@ -573,51 +573,51 @@ def _explain_alpha_portfolio(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("frontier", "효율적 프런티어", stage="check", plain_label="흔들림 대비 수익의 경계",
+        pg.NodeSpec("frontier", "효율적 프런티어", stage="check", plain_label="효율적 프런티어",
                     plain_description="같은 흔들림에서 가장 높은 수익을 내는 조합들을 곡선으로 그립니다.",
                     inputs=(P("returns", "Returns"), P("weights", "Weights", required=False)), outputs=(),
                     run=_frontier, params_model=FrontierParams, explain=_explain_frontier, category="확인",
                     description="PortfolioAnalyzer.efficient_frontier + MC 구름(/analyze 3·4 단계와 같다)."),
-        pg.NodeSpec("regime_ensemble", "국면 앙상블", stage="signal", plain_label="세 방법으로 국면 보기",
+        pg.NodeSpec("regime_ensemble", "국면 앙상블", stage="signal", plain_label="국면 앙상블",
                     plain_description="축·상태 전환·군집 세 방법이 각각 어떤 국면을 가리키는지 나란히 봅니다.",
                     inputs=(), outputs=(), run=_regime_ensemble, params_model=EnsembleParams,
                     explain=_explain_ensemble, category="거시",
                     description="regime_ensemble(/macro/regime-ensemble 과 같다) · 운영은 저장된 관측만."),
-        pg.NodeSpec("regime_explain", "국면 설명", stage="signal", plain_label="국면이 왜 나왔나",
+        pg.NodeSpec("regime_explain", "국면 설명", stage="signal", plain_label="국면 판정 근거",
                     plain_description="지금 국면을 만든 지표와 다음 달들로 넘어갈 확률을 봅니다.",
                     inputs=(), outputs=(), run=_regime_explain, params_model=ExplainParams,
                     explain=_explain_regime_explain, category="거시",
                     description="regime_transitions + regime_drivers(/macro/regime-explain 과 같다) · 운영은 저장된 관측만."),
-        pg.NodeSpec("scenario_three_way", "세 갈래 시나리오", stage="check", plain_label="상황별 세 갈래 비교",
+        pg.NodeSpec("scenario_three_way", "세 갈래 시나리오", stage="check", plain_label="3-시나리오 비교",
                     plain_description="그대로 두기 · 타이밍만 · 타이밍+국면을 같은 충격 아래서 비교합니다.",
                     inputs=(P("weights", "Weights"), P("signal", "TimingSignal"),
                             P("regime", "RegimeState", required=False)), outputs=(),
                     run=_three_way, params_model=ThreeWayParams, explain=_explain_three_way, category="확인",
                     description="/scenario-three-way 라우트 함수 — 같은 rule_set_states·three_way."),
-        pg.NodeSpec("custom_scenario", "직접 만든 시나리오", stage="check", plain_label="내가 정한 충격 넣기",
+        pg.NodeSpec("custom_scenario", "직접 만든 시나리오", stage="check", plain_label="사용자 정의 시나리오",
                     plain_description="시장과 성격별 충격을 직접 정해 이 비중에 넣어 봅니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("stress", "StressReport"),),
                     run=_custom_scenario, params_model=CustomParams, explain=_explain_custom, category="확인",
                     description="/scenario-run 라우트 함수(인라인 팩 · 저장된 팩) — model_type 은 서버가 정한다."),
-        pg.NodeSpec("strategy_health", "전략 건강", stage="check", plain_label="알파들 상태 보기",
+        pg.NodeSpec("strategy_health", "전략 건강", stage="check", plain_label="알파 건전성 점검",
                     plain_description="등록한 알파들이 건강한지, 줄이거나 멈출 것이 있는지 봅니다.",
                     inputs=(), outputs=(), run=_strategy_health, explain=_explain_health, category="알파",
                     description="/strategy-health 라우트 함수(읽기만)."),
-        pg.NodeSpec("sleeve_analytics", "견고성 비교", stage="check", plain_label="같이 무너지나 보기",
-                    plain_description="비중 묶음 2~4개가 평소·위기 때 얼마나 같이 움직이는지, 상관이 치솟으면 어떻게 되는지, "
+        pg.NodeSpec("sleeve_analytics", "견고성 비교", stage="check", plain_label="견고성 비교",
+                    plain_description="비중 그룹 2~4개가 평소·위기 때 얼마나 같이 움직이는지, 상관 스트레스 어떻게 되는지, "
                                       "크게 잃은 구간이 겹치는지 봅니다.",
                     inputs=(P("a", "Weights"), P("b", "Weights"), P("c", "Weights", required=False),
                             P("d", "Weights", required=False)), outputs=(),
                     run=_sleeve_analytics, params_model=RobustCompareParams, explain=_explain_sleeves,
                     glance=_glance_sleeves, category="확인",
                     description="sleeve_analytics(/sleeve-analytics 와 같은 표) + strategy_robustness(관측만)."),
-        pg.NodeSpec("alpha_validate", "알파 검증", stage="signal", plain_label="알파 식 검증하기",
+        pg.NodeSpec("alpha_validate", "알파 검증", stage="signal", plain_label="알파 검증",
                     plain_description="알파 식의 점수가 과거에 다음 달 수익 순위와 얼마나 맞았는지 측정합니다.",
                     inputs=(), outputs=(), run=_alpha_validate, params_model=AlphaValidateParams,
                     explain=_explain_validate, category="알파",
                     save=_save_alpha_validation, save_label="검증 기록 남기기",
                     description="/alpha-lab/validate 라우트 함수 record_run=False · 저장은 버튼으로 한 번."),
-        pg.NodeSpec("alpha_portfolio", "알파 포트폴리오", stage="build", plain_label="알파로 비중 만들기",
+        pg.NodeSpec("alpha_portfolio", "알파 포트폴리오", stage="build", plain_label="알파 포트폴리오",
                     plain_description="승인된 알파 여럿의 점수를 합쳐 상위 종목의 비중을 정합니다.",
                     inputs=(), outputs=(P("weights", "Weights"),), run=_alpha_portfolio,
                     params_model=AlphaPortfolioParams, explain=_explain_alpha_portfolio, category="알파",

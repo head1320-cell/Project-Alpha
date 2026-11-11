@@ -25,7 +25,7 @@ type State = { kind: "loading" } | { kind: "error"; text: string } | { kind: "re
 
 const EMPTY: Record<string, string> = {
   strategies: "등록된 전략이 없습니다 — 백테스트 결과를 전략으로 등록하면 여기에 나옵니다.",
-  research_runs: "연구 기록이 없습니다 — 비중 계산 결과를 연구 기록으로 남기면 여기에 나옵니다.",
+  research_runs: "연구 기록이 없습니다 — 포트폴리오 최적화 결과를 연구 기록으로 남기면 여기에 나옵니다.",
   alphas: "등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 나옵니다.",
   backtest_runs: "백테스트가 없습니다 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 나옵니다(목록을 못 읽어도 비어 보일 수 있습니다).",
   scenario_packs: "저장된 시나리오가 없습니다 — 직접 정한 충격을 쓰거나, 시나리오를 저장하면 여기에 나옵니다.",

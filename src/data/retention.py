@@ -111,7 +111,7 @@ DECISION_RECORD: dict[str, str] = {
         "`result` 가 실행당 수백 KB JSON 이고 텔레메트리의 `result_bytes` 가 "
         "이미 그것을 재고 있다. 수치는 실 DB 를 봐야 안다."),
     "multibacktest_runs": (
-        "다전략 실행 헤더 — 어떤 전략 묶음을 어떤 설정으로 돌렸나. 아래 두 "
+        "다전략 실행 헤더 — 어떤 전략 그룹을 어떤 설정으로 돌렸나. 아래 두 "
         "일별 표가 이 행을 참조한다(`ON DELETE CASCADE` 로 선언돼 있지만 "
         "★SQLite 에서는 `PRAGMA foreign_keys` 를 켜는 곳이 저장소에 없어 "
         "강제되지 않는다★ — 헤더만 지우면 일별 행이 고아로 남는다)."),

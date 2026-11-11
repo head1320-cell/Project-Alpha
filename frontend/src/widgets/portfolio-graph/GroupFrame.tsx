@@ -87,7 +87,7 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
   const total = times.reduce((a, b) => a + b, 0);
   const out = data.output ? results?.[data.output] : undefined;
   const head = out?.status === "ok" ? out.explain?.headline : null;
-  const noun = strategy ? "전략" : "묶음";
+  const noun = strategy ? "전략" : "그룹";
   if (strategy && data.collapsed) {
     return <StrategyNode data={data} ok={ok} blocked={blocked} failed={failed} total={times.length ? total : null} computed={!!results} />;
   }
@@ -131,7 +131,7 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
             <LogIn size={14} aria-hidden="true" />
           </button>
           {strategy && (
-            <button type="button" className="pg-group-x pg-group-branch nodrag" aria-label="전략째 갈래 만들기"
+            <button type="button" className="pg-group-x pg-group-branch nodrag" aria-label="전략째 대안 만들기"
                     title="이 전략의 노드를 모두 복제해 설정만 바꿔 나란히 봅니다" onClick={() => data.onBranchStrategy?.(data.groupId)}>
               <GitBranch size={14} aria-hidden="true" />
             </button>

@@ -73,7 +73,7 @@ function NewPlan({ onSaved }: { onSaved: (id: string) => void }) {
   return (
     <section className="pg-rec-sec" aria-label="새 실행 계획">
       <h3 className="pg-h4">1. 실행 목표 고르기</h3>
-      {list.length === 0 && <p className="pg-help">저장된 실행 목표가 없습니다 — 캔버스의 ‘실행 목표 만들기’ 노드에서 저장하면 여기에 나옵니다.</p>}
+      {list.length === 0 && <p className="pg-help">저장된 실행 목표가 없습니다 — 캔버스의 ‘실행 목표 비중’ 노드에서 저장하면 여기에 나옵니다.</p>}
       {tv && (
         <button type="button" className="pg-btn pg-btn--ghost pg-rec-change" onClick={() => { setTv(null); preview.reset(); save.reset(); }}>
           다른 목표 고르기

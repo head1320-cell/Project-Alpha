@@ -229,8 +229,8 @@ test("관문 레일: 계산 전 판정 없음 · 건너뛴 관문은 끊기고 �
   // 이 그래프에는 신호 노드가 없다 — 신호는 건너뜀이고, 경제적 가치·실계좌는 이 경로에 없다.
   expect([gates.signal, gates.economic, gates.live]).toEqual(["skipped", "skipped", "skipped"]);
   expect(gates.build, "짝: 모두 건너뜀인 구현이 아니다").toBe("confirmed");
-  await expect(stn("build"), "신호(건너뜀) → 비중 계산 구간은 끊긴다").toHaveClass(/pg-stn--link-off/);
-  await expect(stn("cost"), "비중 계산(확인) → 거래비용(가정) 구간은 잇는다").toHaveClass(/pg-stn--link-on/);
+  await expect(stn("build"), "신호(건너뜀) → 포트폴리오 최적화 구간은 끊긴다").toHaveClass(/pg-stn--link-off/);
+  await expect(stn("cost"), "포트폴리오 최적화(확인) → 거래비용(가정) 구간은 잇는다").toHaveClass(/pg-stn--link-on/);
   await stn("cost").locator("button").click();
   await expect(page.locator(".pg-gate-pop")).toContainText("가정");
   await expect(page.locator(".pg-gate-pop")).toContainText("0.1%");
@@ -704,7 +704,7 @@ test("편집 도구(BL1): 되돌리기·다시하기 · 복사·붙여넣기(링
   expect(x("optimizer")).toBeLessThan(x("backtest"));
 });
 
-test("묶음 상자(BL1): 고른 노드를 묶고 접으면 숨고 요약만 · 파일에 남고 다시 불러와도 그대로", async ({ page }) => {
+test("그룹 상자(BL1): 고른 노드를 묶고 접으면 숨고 요약만 · 파일에 남고 다시 불러와도 그대로", async ({ page }) => {
   await openCanvas(page);
   await node(page, "risk").click();
   await node(page, "backtest").click({ modifiers: [mod === "Meta" ? "Meta" : "Control"] });
@@ -712,18 +712,18 @@ test("묶음 상자(BL1): 고른 노드를 묶고 접으면 숨고 요약만 · 
   const frame = page.locator(".pg-group");
   await expect(frame).toHaveCount(1);
   await expect(frame).toContainText("노드 2개");
-  await frame.getByLabel("묶음 이름").fill("확인 묶음");
-  await frame.getByRole("button", { name: "묶음 접기" }).click();
+  await frame.getByLabel("그룹 이름").fill("확인 그룹");
+  await frame.getByRole("button", { name: "그룹 접기" }).click();
   await expect(node(page, "risk")).toBeHidden();
   await expect(frame).toHaveClass(/pg-group--collapsed/);
   const doc = await exportDoc(page);
-  expect(doc.groups).toEqual([expect.objectContaining({ label: "확인 묶음", members: ["risk", "backtest"], collapsed: true })]);
+  expect(doc.groups).toEqual([expect.objectContaining({ label: "확인 그룹", members: ["risk", "backtest"], collapsed: true })]);
   // 접어도 계산은 그대로 — 서버로 가는 그래프에는 묶음이 없다.
   const body = await run(page);
   expect(body.nodes.risk.status).toBe("ok");
   await importText(page, "grouped.json", JSON.stringify(doc));
-  await expect(page.locator(".pg-group").getByLabel("묶음 이름"), "이름은 입력칸 값이다").toHaveValue("확인 묶음");
-  await page.locator(".pg-group").getByRole("button", { name: "묶음 펼치기" }).click();
+  await expect(page.locator(".pg-group").getByLabel("그룹 이름"), "이름은 입력칸 값이다").toHaveValue("확인 그룹");
+  await page.locator(".pg-group").getByRole("button", { name: "그룹 펼치기" }).click();
   await expect(node(page, "risk")).toBeVisible();
 });
 
@@ -733,7 +733,7 @@ test("명령 팔레트·계산 기록(BL1): Ctrl+K 로 노드 추가 · 두 번 
   const dlg = page.getByRole("dialog", { name: "명령 찾기" });
   await expect(dlg).toBeVisible();
   await dlg.getByLabel("명령 찾기").fill("상관이");
-  await expect(dlg.locator(".pg-cmd-item").first()).toContainText("상관이 치솟으면 추가");
+  await expect(dlg.locator(".pg-cmd-item").first()).toContainText("상관 스트레스 추가");
   await page.keyboard.press("Enter");
   await expect(dlg).toBeHidden();
   await expect(page.locator('.pg-node[data-kind="corr_stress"]')).toHaveCount(1);
@@ -886,7 +886,7 @@ test("알파 목록 서랍(BL2): 식 점검 → 초안 등록 → 실험으로 �
   await expect(row).toHaveCount(0);
 });
 
-test("저장 버튼(BL2): 비중 계산은 '연구 기록 남기기' · 기록함에서 그 기록을 재계산해 대조", async ({ page }) => {
+test("저장 버튼(BL2): 포트폴리오 최적화는 '연구 기록 남기기' · 기록함에서 그 기록을 재계산해 대조", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   await node(page, "optimizer").click();
@@ -927,7 +927,7 @@ test("서랍 대비(BL2): 세 서랍 라이트·다크 AA", async ({ page }) => 
 });
 
 // ── BL2b · 마법사에서 옮긴 계산 노드 · 매크로 스냅샷 다리 ────────────────────
-test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직접 만든 시나리오·묶음 분석이 돌고 결과가 그림으로 · 대비 AA", async ({ page }) => {
+test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직접 만든 시나리오·그룹 분석이 돌고 결과가 그림으로 · 대비 AA", async ({ page }) => {
   const sink = trackErrors(page);
   await openCanvas(page);
   const doc = await exportDoc(page);
@@ -1021,7 +1021,7 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
 
 // ── 시점별 노출 — 계단선도 직접 SVG (ADR 004 · 2026-11-10) ──
 // BL2b 시험에 붙이면 그 시험의 시간 한도(90초)를 넘겨서 따로 둔다. 타이밍 신호 하나 → 시뮬레이션 하나.
-test("시점별 타이밍 시뮬레이션: 노출 계단선 = 직접 SVG · 읽는 줄의 처음 자리 = 마지막 시점 · ← 로 앞 시점 · 표 쌍둥이 = 전부 · recharts 0", async ({ page }) => {
+test("타이밍 시뮬레이션: 노출 계단선 = 직접 SVG · 읽는 줄의 처음 자리 = 마지막 시점 · ← 로 앞 시점 · 표 쌍둥이 = 전부 · recharts 0", async ({ page }) => {
   await openCanvas(page);
   const doc = await exportDoc(page);
   doc.nodes.push(
@@ -1153,7 +1153,7 @@ test("백테스트(BL3 W1): 설정 계산은 아무것도 시작하지 않고 ·
   expect(sv.ok, sv.message).toBe(true);
   await expect(page.locator(".pg-save-msg")).toContainText("백테스트를 시작했습니다");
   await page.locator(".pg-save-follow").click();                               // 결과 불러오기 노드 추가
-  const loader = page.locator(".pg-node").filter({ hasText: "백테스트 결과 보기" });
+  const loader = page.locator(".pg-node").filter({ hasText: "백테스트 결과 조회" });
   await expect(loader).toHaveCount(1);
 
   // 계산 — 아직이면 진행 카드가 뜨고, 끝나면 '결과 불러오기' 가 밝아진다(읽기만 한다).

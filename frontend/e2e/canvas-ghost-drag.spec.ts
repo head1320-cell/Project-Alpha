@@ -65,7 +65,7 @@ test("U4 · 유령 머리를 끌어 놓으면 놓은 자리(격자)에 붙는다
   expect(Math.abs(g1.x - g0.x - d.x), "끄는 동안 유령이 손을 따라온다").toBeLessThanOrEqual(2);
   expect(Math.abs(g1.y - g0.y - d.y)).toBeLessThanOrEqual(2);
   await page.mouse.up();
-  await expect(page.locator(".pg-note")).toContainText("기대 수익 추정");
+  await expect(page.locator(".pg-note")).toContainText("기대수익률 추정");
   const doc = await wip(page);
   const made = doc.nodes.find((x) => x.type === "estimate")!;
   const want = { x: Math.round((at.x + d.x / z) / 11) * 11, y: Math.round((at.y + d.y / z) / 11) * 11 };
@@ -148,7 +148,7 @@ test("U4 · AI 유령도 같은 길 — 머리를 끌어 놓으면 놓은 자리
   // AI 추천 경로는 가로챈다(이 환경의 실제 서버는 Claude 키가 없다 — canvas-ai-suggest 와 같은 대역)
   await page.addInitScript(() => { try { localStorage.setItem("project-alpha.auth-token", "e2e.fake.token"); } catch { /* */ } });
   await page.route("**/api/v1/auth/me", (r) => r.fulfill({ json: { principal: { username: "alice", role: "analyst" }, must_change_password: false, password_changed_at: null } }));
-  const RISK = { action: "add", kind: "risk", label: "흔들림 나눠 보기", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있습니다.",
+  const RISK = { action: "add", kind: "risk", label: "위험 기여도 분해", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있습니다.",
                  attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" }] };
   await page.route("**/api/v1/assist/canvas/suggest", (r) => r.fulfill({ json: {
     available: true, source: "claude", model: "stub", suggestions: [RISK], rejected: [], cached: false,

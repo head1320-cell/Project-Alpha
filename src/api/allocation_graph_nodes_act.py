@@ -2,10 +2,10 @@
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W4
 
-- 주문 목록 미리보기(`order_preview`): `execution_routes._compute` — `/execution-plan` 미리보기와 같은
+- 주문 미리보기(`order_preview`): `execution_routes._compute` — `/execution-plan` 미리보기와 같은
   오더 diff·비용·사전 점검. **저장·승인·체결 입력 없음.** 주문 경로(`OrderExecutor`·`TradingEngine`)는
   import 조차 하지 않는다(BK0 AST 트립와이어).
-- 실행 목표 만들기(`target_version`): `compile_target` 으로 목표를 **미리보기**하고, 저장은 '저장하기'
+- 실행 목표 비중(`target_version`): `compile_target` 으로 목표를 **미리보기**하고, 저장은 '저장하기'
   버튼(`/graph/save` → `save_target` 한 번). ★합성 데이터로 만든 비중은 실행 목표로 두지 않는다★ —
   입력 계보를 읽어(`wants_lineage`) 상태를 연구용으로 내린다. 저장은 되지만 실행 경로가 거절한다.
 - 결정 기록(`decision_journal`): 저널 항목을 미리보기하고, 저장은 버튼(`create_entry` 한 번).
@@ -254,18 +254,18 @@ def _explain_journal(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("order_preview", "주문 목록", stage="act", plain_label="주문 목록 미리보기",
+        pg.NodeSpec("order_preview", "주문 목록", stage="act", plain_label="주문 미리보기",
                     plain_description="지금 비중에서 목표로 가려면 무엇을 사고팔지 미리 봅니다. 주문은 나가지 않습니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("trades", "Trades"),),
                     run=_order_preview, params_model=OrderParams, explain=_explain_orders, category="실행",
                     description="/execution-plan 미리보기와 같은 오더 diff·비용·사전 점검(저장·승인 없음)."),
-        pg.NodeSpec("target_version", "실행 목표", stage="act", plain_label="실행 목표 만들기",
+        pg.NodeSpec("target_version", "실행 목표", stage="act", plain_label="실행 목표 비중",
                     plain_description="비중을 실행 목표로 만듭니다. 저장은 버튼으로 한 번만 합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("target", "TargetVersion"),),
                     run=_target_version, params_model=TargetParams, explain=_explain_target, category="실행",
                     wants_lineage=True, save=_save_target_version, save_label="실행 목표로 저장",
                     description="compile_target 미리보기 · 저장은 /graph/save → save_target."),
-        pg.NodeSpec("decision_journal", "결정 기록", stage="act", plain_label="결정 기록 남기기",
+        pg.NodeSpec("decision_journal", "결정 기록", stage="act", plain_label="투자 결정 기록",
                     plain_description="무엇을 왜 정했는지 저널에 남깁니다. 저장은 버튼으로 합니다.",
                     inputs=(P("target", "TargetVersion"), P("trades", "Trades", required=False),
                             P("stress", "StressReport", required=False)),

@@ -19,9 +19,9 @@ from tests.test_allocation_graph_explain import FORBIDDEN  # noqa: E402
 from tests.test_cf3_golden import VIEWS, _chain, market  # noqa: E402, F401
 
 KINDS = {
-    "src": {"plain_label": "수익률 불러오기", "inputs": [],
+    "src": {"plain_label": "수익률 데이터", "inputs": [],
             "outputs": [{"name": "returns", "type": "Returns"}]},
-    "dst": {"plain_label": "비중 계산", "inputs": [
+    "dst": {"plain_label": "포트폴리오 최적화", "inputs": [
         {"name": "returns", "type": "Returns", "required": True, "role": "공분산을 재는 데 씁니다."},
         {"name": "other", "type": "Returns", "required": False}], "outputs": []},
 }
@@ -36,7 +36,7 @@ def _e(tp="returns", id_="a.returns->b.returns", **over):
 def test_the_template_with_a_brief_and_a_role():
     out = rel.relations(NODES, [_e()], KINDS, PLAIN, briefs={("a", "returns"): "5종목 · 756일"})
     r = out["a.returns->b.returns"]
-    assert r["text"] == "‘수익률 불러오기’의 수익률(5종목 · 756일) → ‘비중 계산’ 수익률 자리. 공분산을 재는 데 씁니다."
+    assert r["text"] == "‘수익률 데이터’의 수익률(5종목 · 756일) → ‘포트폴리오 최적화’ 수익률 자리. 공분산을 재는 데 씁니다."
     assert r == {**r, "flows": "수익률", "role": "공분산을 재는 데 씁니다.", "required": True, "brief": "5종목 · 756일"}
 
 
@@ -47,7 +47,7 @@ def test_no_brief_no_parentheses():
 
 def test_no_role_no_second_sentence():
     r = rel.relations(NODES, [_e("other", id_="x")], KINDS, PLAIN)["x"]
-    assert r["text"] == "‘수익률 불러오기’의 수익률 → ‘비중 계산’ 수익률 자리." and r["role"] is None
+    assert r["text"] == "‘수익률 데이터’의 수익률 → ‘포트폴리오 최적화’ 수익률 자리." and r["role"] is None
     assert r["required"] is False
 
 
@@ -84,7 +84,7 @@ def client():
 def test_validate_carries_relations_without_briefs(client):
     body = client.post("/api/v1/allocation/graph/validate", json=_chain("bl", views=VIEWS)).json()
     r = body["relations"]["r.returns->o.returns"]
-    assert r["text"].startswith("‘수익률 불러오기’의 수익률 →") and "(" not in r["text"].split("→")[0]
+    assert r["text"].startswith("‘수익률 데이터’의 수익률 →") and "(" not in r["text"].split("→")[0]
     assert r["role"] and r["text"].endswith(r["role"])
     assert set(body["relations"]) == {e["id"] for e in _chain("bl", views=VIEWS)["edges"]}
 

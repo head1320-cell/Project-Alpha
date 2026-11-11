@@ -67,7 +67,7 @@ async function openSection(page: Page, name: string) {
   return sec;
 }
 
-test("견고성 절(BR R1a): 전략 합치기 자세히 = 서버 view.robustness 그대로 — 이야기 · 같이 떨어진 날 대 기대 · 충격 · 낙폭 구간 · 실질 개수", async ({ page }) => {
+test("견고성 절(BR R1a): 전략 결합 자세히 = 서버 view.robustness 그대로 — 이야기 · 같이 떨어진 날 대 기대 · 충격 · 낙폭 구간 · 실질 개수", async ({ page }) => {
   const sink = trackErrors(page);
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
@@ -255,8 +255,8 @@ test("고른 노드 막대(BR R1b): 고른 노드 아래에 뜨고 · 묶으면 
   await page.keyboard.press("Control+g");
   await expect(page.locator(".pg-group")).toHaveCount(1);
   await expect(bar, "묶은 뒤에는 상자 머리가 그 역할 — 막대가 없다").toHaveCount(0);
-  await page.locator(".pg-group").getByRole("button", { name: "묶음 접기" }).click();
-  await expect(page.locator(".pg-group").getByRole("button", { name: "묶음 펼치기" })).toBeVisible();
+  await page.locator(".pg-group").getByRole("button", { name: "그룹 접기" }).click();
+  await expect(page.locator(".pg-group").getByRole("button", { name: "그룹 펼치기" })).toBeVisible();
 });
 
 // ══ BS3 · 날짜 축 · 기록끼리 견고성 ══════════════════════════════════════════════

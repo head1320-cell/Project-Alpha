@@ -49,7 +49,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
 
   const k = kill.data;
   const killState = kill.isPending ? "확인 중" : kill.isError ? "확인 실패"
-    : k?.active && k.event ? "켜져 있습니다" : k?.active ? "주문이 막혀 있습니다" : "꺼져 있습니다";
+    : k?.active && k.event ? "사용" : k?.active ? "주문이 막혀 있습니다" : "미사용";
   const killSub = kill.isError ? <button type="button" className="ma-link" onClick={() => void kill.refetch()}>재시도</button>
     : k?.active && k.event ? <>사유 <span data-server>{k.event.trigger_reason ?? "적히지 않았습니다"}</span></>
     : k?.active ? "이 계좌가 건 정지가 아닙니다. 운영자 정지이거나 상태 읽기 실패"

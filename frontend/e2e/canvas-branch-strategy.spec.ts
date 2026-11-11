@@ -54,7 +54,7 @@ async function pickByCmd(page: Page, ids: string[], cmd: string, query: string) 
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-test("U6 · 전략째 갈래 → 복제도 새 전략 상자(이름 '<전략> · 갈래 X' · 출력 = 원본 출력의 복제) · 두 머리가 겹치지 않음 · 되돌리기 한 번에 복제·상자 모두 (짝: 원본 전략 그대로)", async ({ page }) => {
+test("U6 · 전략째 대안 → 복제도 새 전략 상자(이름 '<전략> · 대안 X' · 출력 = 원본 출력의 복제) · 두 머리가 겹치지 않음 · 되돌리기 한 번에 복제·상자 모두 (짝: 원본 전략 그대로)", async ({ page }) => {
   await openWith(page, null);
   await page.locator(".pg-strat-add").click();
   await page.locator('.pg-strat-item[data-source="tpl:stress"]').click();
@@ -78,7 +78,7 @@ test("U6 · 전략째 갈래 → 복제도 새 전략 상자(이름 '<전략> ·
   // 두 머리(갈래 틀 · 새 전략 상자)는 겹치지 않는다
   const bh = (await page.locator(".pg-branch-head").boundingBox())!;
   const gh = (await page.locator(`.pg-group--strategy[data-group-id="${made.id}"] .pg-group-head`).boundingBox())!;
-  expect(overlap(bh, gh), "갈래 틀 머리 × 전략 상자 머리").toBe(0);
+  expect(overlap(bh, gh), "대안 틀 머리 × 전략 상자 머리").toBe(0);
   // 되돌리기 한 번 — 복제·상자·갈래 모두
   await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
   await page.keyboard.press("Control+z");
@@ -88,12 +88,12 @@ test("U6 · 전략째 갈래 → 복제도 새 전략 상자(이름 '<전략> ·
   expect(doc.branches ?? []).toEqual([]);
 });
 
-test("U6 · 고른 노드째 갈래는 틀만 + [전략으로 묶기] → 누르면 전략 상자(출력 = 비중 계산 복제) · 되돌리기 한 번 (짝: 비중 노드 없는 갈래는 까닭 · 갈래를 지우면 그 상자도)", async ({ page }) => {
+test("U6 · 고른 노드째 대안은 틀만 + [전략으로 묶기] → 누르면 전략 상자(출력 = 포트폴리오 최적화 복제) · 되돌리기 한 번 (짝: 비중 노드 없는 대안은 까닭 · 대안을 지우면 그 상자도)", async ({ page }) => {
   await openWith(page, CORE);
-  await pickByCmd(page, ["estimate", "optimizer"], "branch-picked", "고른 노드째 갈래");
+  await pickByCmd(page, ["estimate", "optimizer"], "branch-picked", "고른 노드째 대안");
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   let doc = await wip(page);
-  expect(strategiesOf(doc), "고른 노드째 갈래는 상자를 만들지 않는다").toHaveLength(0);
+  expect(strategiesOf(doc), "고른 노드째 대안은 상자를 만들지 않는다").toHaveLength(0);
   const br = doc.branches![0];
   const btn = page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-strategy`);
   await expect(btn).toBeVisible();
@@ -111,7 +111,7 @@ test("U6 · 고른 노드째 갈래는 틀만 + [전략으로 묶기] → 누르
   await expect(btn).toBeVisible();
 
   // 짝 — 비중 노드가 없는 갈래(종목·수익률)는 까닭 · 상자 없음
-  await pickByCmd(page, ["universe", "returns"], "branch-picked", "고른 노드째 갈래");
+  await pickByCmd(page, ["universe", "returns"], "branch-picked", "고른 노드째 대안");
   await expect(page.locator(".pg-branch")).toHaveCount(2);
   doc = await wip(page);
   const br2 = doc.branches!.find((x) => x.id !== br.id)!;
@@ -126,10 +126,10 @@ test("U6 · 고른 노드째 갈래는 틀만 + [전략으로 묶기] → 누르
   await expect.poll(async () => strategiesOf(await wip(page)).length).toBe(1);
   await page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-x`).click();
   await expect.poll(async () => (await wip(page)).branches?.length ?? 0).toBe(1);
-  expect(strategiesOf(await wip(page)), "지운 갈래의 상자는 남지 않는다").toHaveLength(0);
+  expect(strategiesOf(await wip(page)), "지운 대안의 상자는 남지 않는다").toHaveLength(0);
 });
 
-test("U6 · 짝 — 전략째 갈래를 원본으로 올리면 갈래의 상자도 사라진다(빈 상자가 남지 않음 · 원본 전략 그대로)", async ({ page }) => {
+test("U6 · 짝 — 전략째 대안을 원본으로 올리면 대안의 상자도 사라진다(빈 상자가 남지 않음 · 원본 전략 그대로)", async ({ page }) => {
   await openWith(page, null);
   await page.locator(".pg-strat-add").click();
   await page.locator('.pg-strat-item[data-source="tpl:stress"]').click();
@@ -166,9 +166,9 @@ const ed = (source: string, target: string) => ({ source, target });
 test("U6 규칙 · strategyEnds — 범위 안에서 비중을 내고 그 뒤에 비중을 내는 구성원이 없는 끝들 (짝: 줄로 이어지면 끝은 하나 · 고르지 않은 노드를 거쳐도 이어진 것 · 비중이 없으면 0 · 범위 밖 하류는 세지 않음)", () => {
   const nodes = [nd("r", "returns"), nd("a", "optimizer"), nd("b", "optimizer"), nd("n", "neutralize"), nd("t", "backtest")];
   const par = [ed("r", "a"), ed("r", "b")];
-  expect(strategyEnds(["a", "b"], nodes, par, CAT), "나란한 비중 계산 둘 = 끝 둘").toEqual(["a", "b"]);
+  expect(strategyEnds(["a", "b"], nodes, par, CAT), "나란한 포트폴리오 최적화 둘 = 끝 둘").toEqual(["a", "b"]);
   const ser = [ed("r", "a"), ed("a", "n"), ed("n", "t")];
-  expect(strategyEnds(["a", "n", "t"], nodes, ser, CAT), "비중 → 치우침 없애기 → 돌려 보기 = 끝 하나(뒤쪽)").toEqual(["n"]);
+  expect(strategyEnds(["a", "n", "t"], nodes, ser, CAT), "비중 → 노출 중립화 → 돌려 보기 = 끝 하나(뒤쪽)").toEqual(["n"]);
   expect(strategyEnds(["a", "t"], nodes, [ed("a", "t")], CAT), "비중을 받기만 하는 노드는 끝이 아니다").toEqual(["a"]);
   expect(strategyEnds(["r"], nodes, par, CAT)).toEqual([]);
   expect(strategyEnds(["a"], nodes, ser, CAT), "범위 밖 하류(n)는 세지 않는다").toEqual(["a"]);
@@ -177,12 +177,12 @@ test("U6 규칙 · strategyEnds — 범위 안에서 비중을 내고 그 뒤에
   expect(strategyEnds(["a", "b"], via, [ed("r", "a"), ed("a", "m"), ed("m", "b")], CAT), "범위 밖을 거쳐 이어진 둘 = 끝 하나").toEqual(["b"]);
 });
 
-test("U6 · 끝이 둘인 갈래는 [전략으로 묶기]가 까닭을 말하고 상자를 만들지 않는다 (짝: 줄로 이어진 갈래는 묶이고 출력 = 뒤쪽 끝의 복제)", async ({ page }) => {
+test("U6 · 끝이 둘인 대안은 [전략으로 묶기]가 까닭을 말하고 상자를 만들지 않는다 (짝: 줄로 이어진 대안은 묶이고 출력 = 뒤쪽 끝의 복제)", async ({ page }) => {
   const PAR = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }), n("returns", "returns", 330, 0),
                               n("optA", "optimizer", 660, 0), n("optB", "optimizer", 990, 0, { model: "risk_parity" })],
                 edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "optA", "returns"), e("returns", "returns", "optB", "returns")] };
   await openWith(page, PAR);
-  await pickByCmd(page, ["optA", "optB"], "branch-picked", "고른 노드째 갈래");
+  await pickByCmd(page, ["optA", "optB"], "branch-picked", "고른 노드째 대안");
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   const br = (await wip(page)).branches![0];
   await page.locator(".react-flow__controls-fitview").click();
@@ -197,14 +197,14 @@ test("U6 · 끝이 둘인 갈래는 [전략으로 묶기]가 까닭을 말하고
                 edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "opt", "returns"), e("opt", "weights", "neu", "weights")] };
   const other = await page.context().newPage();
   await openWith(other, SER);
-  await pickByCmd(other, ["opt", "neu"], "branch-picked", "고른 노드째 갈래");
+  await pickByCmd(other, ["opt", "neu"], "branch-picked", "고른 노드째 대안");
   const br2 = (await wip(other)).branches![0];
   await other.locator(".react-flow__controls-fitview").click();
   await other.waitForTimeout(400);
   await other.locator(`.pg-branch[data-branch-id="${br2.id}"] .pg-branch-strategy`).click();
   await expect.poll(async () => strategiesOf(await wip(other)).length).toBe(1);
   const [box] = strategiesOf(await wip(other));
-  expect(br2.map[box.output!], "출력 = 뒤쪽 끝(치우침 없애기)의 복제").toBe("neu");
+  expect(br2.map[box.output!], "출력 = 뒤쪽 끝(노출 중립화)의 복제").toBe("neu");
 });
 
 test("U6 이어서 · Ctrl+K '전략으로 묶기' 도 끝이 둘이면 까닭을 말하고 묶지 않는다 — 하나를 말없이 고르지 않음 (짝: 줄로 이어진 둘은 묶이고 출력 = 뒤쪽 끝)", async ({ page }) => {
@@ -224,7 +224,7 @@ test("U6 이어서 · Ctrl+K '전략으로 묶기' 도 끝이 둘이면 까닭�
   await pickByCmd(other, ["opt", "neu"], "strategy-picked", "전략으로 묶기");
   await expect.poll(async () => strategiesOf(await wip(other)).length).toBe(1);
   const [box] = strategiesOf(await wip(other));
-  expect(box.output, "출력 = 뒤쪽 끝(치우침 없애기)").toBe("neu");
+  expect(box.output, "출력 = 뒤쪽 끝(노출 중립화)").toBe("neu");
   expect([...box.members].sort()).toEqual(["neu", "opt"]);
 });
 

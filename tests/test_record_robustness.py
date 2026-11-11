@@ -67,7 +67,7 @@ def _params(**k):
 
 def test_the_node_is_registered_with_record_ports():
     spec = gn.REGISTRY.get("record_robustness")
-    assert spec.label == "기록끼리 견고성" and "무너지" in spec.plain_label
+    assert spec.label == "기록끼리 견고성" and "견고성" in spec.plain_label
     kinds = {p.name: p.type for p in spec.inputs}
     assert kinds == {"r1": "BacktestRun", "r2": "BacktestRun", "r3": "BacktestRun", "r4": "BacktestRun",
                      "t1": "BacktestResult", "t2": "BacktestResult"}

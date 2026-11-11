@@ -33,7 +33,7 @@ async function branchAndFit(page: Page, w: number, h: number) {
   await page.locator('.react-flow__node[data-id="estimate"] .pg-node').click({ position: { x: 30, y: 14 } });
   await page.locator('.react-flow__node[data-id="optimizer"] .pg-node').click({ position: { x: 30, y: 14 }, modifiers: ["Control"] });
   await page.keyboard.press("Control+k");
-  await page.getByLabel("명령 찾기").last().fill("고른 노드째 갈래");
+  await page.getByLabel("명령 찾기").last().fill("고른 노드째 대안");
   await page.keyboard.press("Enter");
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   await page.locator(".react-flow__controls-fitview").click();
@@ -44,14 +44,14 @@ const visibleToolbars = (page: Page) => page.locator(".react-flow__node-toolbar"
   .map((t) => { const r = t.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }));
 
 for (const [w, h] of [[1280, 720], [1440, 900]] as const) {
-  test(`도구줄 × 틀 머리 · ${w}×${h} — 고른 갈래 뿌리 복제의 도구줄은 갈래 틀 머리 단추를 덮지 않는다 (짝: 도구줄은 보인다 · 제 카드도 덮지 않는다)`, async ({ page }) => {
+  test(`도구줄 × 틀 머리 · ${w}×${h} — 고른 대안 뿌리 복제의 도구줄은 대안 틀 머리 단추를 덮지 않는다 (짝: 도구줄은 보인다 · 제 카드도 덮지 않는다)`, async ({ page }) => {
     await branchAndFit(page, w, h);
     const tbs = await visibleToolbars(page);
     expect(tbs, "고른 카드의 도구줄 하나가 보인다").toHaveLength(1);
     const btns = await page.locator(".pg-branch-head button").evaluateAll((els) => els.map((b) => {
       const r = b.getBoundingClientRect(); return { cls: b.className.split(" ")[0], x: r.x, y: r.y, width: r.width, height: r.height };
     }));
-    expect(btns.length, "갈래 머리 단추를 잰다").toBeGreaterThanOrEqual(2);
+    expect(btns.length, "대안 머리 단추를 잰다").toBeGreaterThanOrEqual(2);
     for (const b of btns) expect(overlap(tbs[0], b), `도구줄 × ${b.cls}`).toBe(0);
     const root = (await page.locator(".react-flow__node.selected .pg-node").first().boundingBox())!;
     expect(overlap(tbs[0], root), "도구줄 × 제 카드").toBe(0);
@@ -62,7 +62,7 @@ test("도구줄 × 틀 머리 · 짝 — 넓은 상자의 ★몸통★만 덮는
   await page.setViewportSize({ width: 1440, height: 900 });
   // 상자 하나(두 열 — 넓은 틀) · 고를 카드는 아래 줄: 카드 위 자리는 상자 몸통(빈 곳)이다.
   const BOX = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930"] }), n("returns", "returns", 330, 0), n("estimate", "estimate", 0, 770)], edges: [],
-                groups: [{ id: "g1", label: "묶음 하나", members: ["universe", "returns", "estimate"] }] };
+                groups: [{ id: "g1", label: "그룹 하나", members: ["universe", "returns", "estimate"] }] };
   await page.addInitScript((d) => {
     try {
       if (sessionStorage.getItem("tb_seeded")) return;

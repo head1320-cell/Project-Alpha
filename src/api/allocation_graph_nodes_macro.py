@@ -11,7 +11,7 @@ Macro→Allocation 승인 범위: `docs/decisions/adr-002-aas-node-canvas.md` §
   `MODE_CAP`·`REGIME_TILTS`·임계값을 읽지도 쓰지도 않는다(테스트가 소스로 확인).
   퀀트 고객을 위한 고도화: 세 판단을 나란히 보여 주고 고른 것만 적용 · 적용 강도(줄이는 쪽으로만) ·
   ★모든 신호를 읽지 못했으면 적용하지 않음★ · 실행 목표 상태(실행 가능/연구용)와 사유를 함께 나름.
-- 시점별 타이밍 시뮬레이션(`timing_simulation`): `simulate_rule_set` — backtest 모드는 부적격 팩터가 있으면
+- 타이밍 시뮬레이션(`timing_simulation`): `simulate_rule_set` — backtest 모드는 부적격 팩터가 있으면
   **거부**(엔진 규칙 그대로), forward 모드는 걷되 백테스트가 아니라고 말한다.
 """
 from __future__ import annotations
@@ -179,7 +179,7 @@ def _explain_timing(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, "규칙대로 신호를 읽고 합쳤습니다.")]
     if c.get("unavailable_count"):
         trust.append(_t(UNKNOWN, f"읽지 못한 신호 {c['unavailable_count']}개는 규칙대로 위험-오프로 셌습니다."))
-    trust.append(_t(UNKNOWN, "오늘 기준 신호입니다 — 과거에도 이 판단이 맞았는지는 ‘시점별 타이밍 시뮬레이션’으로 봅니다."
+    trust.append(_t(UNKNOWN, "오늘 기준 신호입니다 — 과거에도 이 판단이 맞았는지는 ‘타이밍 시뮬레이션’으로 봅니다."
                     if not view.get("as_of") else "기준일 값이지만 그날 실제로 알 수 있었는지는 팩터마다 다릅니다."))
     if mock_allowed():
         trust.append(_t(UNKNOWN, "개발 모드라 시세가 합성일 수 있습니다 — 실제 신호를 말해 주지 않습니다."))
@@ -225,7 +225,7 @@ def _overlay(inputs: dict, p: OverlayParams) -> pg.NodeOutput:
         if sig is None:
             raise pg.NodeFailure("‘따를 판단’이 타이밍이라 ‘타이밍 신호’를 연결하십시오.")
         if p.follow == "timing_macro" and reg is None:
-            raise pg.NodeFailure("‘타이밍 + 경기 국면’을 고르셨습니다 — ‘경기 국면 불러오기’를 연결하십시오.")
+            raise pg.NodeFailure("‘타이밍 + 경기 국면’을 고르셨습니다 — ‘경기 국면’을 연결하십시오.")
     overlay = overlay_from_snapshot(reg, enabled=True) if reg is not None else None
     if sig is not None:
         states = sig["states"]
@@ -307,7 +307,7 @@ def _explain_overlay(view: dict, prov: dict, params: Any) -> dict:
     return {"title": title,
             "headline": {"label": "주식 노출", "value": round(e * 100, 1), "unit": "%", "text": _pct(e * 100)},
             "facts": facts, "trust": trust,
-            "unmeasured": ["이 조절이 과거에 손실을 줄였는지 — ‘시점별 타이밍 시뮬레이션’으로 따로 봅니다",
+            "unmeasured": ["이 조절이 과거에 손실을 줄였는지 — ‘타이밍 시뮬레이션’으로 따로 봅니다",
                            "현금으로 둔 몫의 기회비용"]}
 
 
@@ -372,7 +372,7 @@ def _save_timing_rules(values: dict, view: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("regime", "경기 국면", stage="signal", plain_label="경기 국면 불러오기",
+        pg.NodeSpec("regime", "경기 국면", stage="signal", plain_label="경기 국면",
                     plain_description="매크로 탭에 저장한 경기 국면 스냅샷을 불러옵니다.",
                     inputs=(), outputs=(P("regime", "RegimeState"),), run=_regime, params_model=RegimeParams,
                     explain=_explain_regime, category="거시", description="RegimeSnapshot 읽기(쓰기 없음)."),
@@ -382,14 +382,14 @@ def register(registry: pg.Registry) -> None:
                     explain=_explain_timing, category="타이밍",
                     save=_save_timing_rules, save_label="타이밍 규칙 저장",
                     description="V2 룰셋 → 팩터별 3-상태 → 조합(3자 비교와 같은 파생)."),
-        pg.NodeSpec("exposure_overlay", "노출 조절", stage="build", plain_label="노출 조절(비중에 적용)",
+        pg.NodeSpec("exposure_overlay", "노출 조절", stage="build", plain_label="노출 오버레이",
                     plain_description="타이밍·경기 국면 판단대로 주식 비중을 줄이고 나머지는 현금으로 둡니다.",
                     inputs=(P("weights", "Weights"), P("signal", "TimingSignal", required=False),
                             P("regime", "RegimeState", required=False)),
                     outputs=(P("weights", "Weights"),), run=_overlay, params_model=OverlayParams,
                     explain=_explain_overlay, category="배분",
                     description="three_way 노출 × compile_target(기존 함수만 · 줄이는 쪽으로만)."),
-        pg.NodeSpec("timing_simulation", "타이밍 시뮬레이션", stage="check", plain_label="시점별 타이밍 시뮬레이션",
+        pg.NodeSpec("timing_simulation", "타이밍 시뮬레이션", stage="check", plain_label="타이밍 시뮬레이션",
                     plain_description="과거 시점마다 신호가 어땠는지 재계산해 봅니다.",
                     inputs=(P("signal", "TimingSignal"),), outputs=(), run=_simulation, params_model=SimulationParams,
                     explain=_explain_simulation, category="확인",

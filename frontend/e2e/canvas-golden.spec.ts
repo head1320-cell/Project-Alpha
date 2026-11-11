@@ -21,8 +21,8 @@ const CORE = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930
                        e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")] };
 const EMPTY = { ...F, nodes: [], edges: [] };
 const DRAFT = {
-  summary: "과거로 돌려 보기를 붙이고 5년 기준으로 바꿉니다",
-  add: [{ ref: "b", id: "backtest", kind: "backtest", label: "과거로 돌려 보기" }],
+  summary: "정책 백테스트를 붙이고 5년 기준으로 바꿉니다",
+  add: [{ ref: "b", id: "backtest", kind: "backtest", label: "정책 백테스트" }],
   connect: [{ id: "returns.returns->backtest.returns", source: "returns", source_port: "returns", target: "backtest", target_port: "returns" }],
   set: [{ node: "backtest", field: "cost_bps", label: "거래비용", value: 30, display: "0.3%", quote: "0.3%", read: "preset" }],
   empty: [],
@@ -212,7 +212,7 @@ test("문서 골든 — 조작마다 작업 중 문서 · 되돌리기 사다리
 
   // 말로 초안 받아들이기(가로챈 답)
   await page.locator('.pg-left-tab[data-tab="say"]').click();
-  await page.locator(".pg-say-text").fill("과거로 돌려 보기를 붙이고 거래비용은 0.3%로 해 줘");
+  await page.locator(".pg-say-text").fill("정책 백테스트를 붙이고 거래비용은 0.3%로 해 줘");
   await page.locator(".pg-say-text").press("Enter");
   await page.locator(".pg-say-accept").click();
   await expect.poll(async () => (await wip(page)).nodes.some((x) => x.id === "backtest")).toBe(true);

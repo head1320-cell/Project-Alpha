@@ -126,7 +126,7 @@ export function Radar({ groups: all, size = 240 }: { groups: FactorGroup[]; size
   const known = all.map((g) => ({ g, k: g.factors.map((f) => f.pct).filter((p): p is number => p != null) })).filter((x) => x.k.length);
   const groups = known.map((x) => x.g);
   const n = groups.length, cx = size / 2, cy = size / 2, R = size / 2 - 34;
-  if (n < 3) return <p className="ci-note">백분위를 아는 묶음이 셋보다 적어 레이더를 그리지 않았습니다.</p>;
+  if (n < 3) return <p className="ci-note">백분위를 아는 그룹이 셋보다 적어 레이더를 그리지 않았습니다.</p>;
   const avg = known.map((x) => x.k.reduce((s, v) => s + v, 0) / x.k.length);
   const pt = (i: number, r: number) => {
     const a = -Math.PI / 2 + (i / n) * Math.PI * 2;

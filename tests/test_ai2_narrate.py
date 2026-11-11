@@ -190,7 +190,7 @@ def _sealed(nid, type_, explain, doc=DOC, key=KEY):
 
 EX_U = {"title": "종목 2개를 골랐습니다", "facts": ["삼성전자, SK하이닉스"], "trust": []}
 EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 위험 똑같이"], "trust": [{"state": "confirmed", "text": "비중 계산은 문제없이 끝났습니다."}]}
+        "facts": ["계산 방식: 위험 똑같이"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}]}
 PRACTICE = {"state": "unknown", "text": "합성 데이터입니다.", "kind": "practice"}
 
 
@@ -207,7 +207,7 @@ def test_verified_facts_come_in_flow_order_and_broken_ones_are_dropped_with_a_re
 def test_the_grounding_has_names_and_explain_text_and_says_practice():
     ok, _ = nr.verify_facts(DOC, [_sealed("u", "universe", EX_U), _sealed("o", "optimizer", {**EX_O, "trust": [PRACTICE]})], KEY)
     g = nr.ground(ok, KINDS)
-    assert [n["id"] for n in g["nodes"]] == ["u", "o"] and g["nodes"][0]["label"] == "종목 고르기"
+    assert [n["id"] for n in g["nodes"]] == ["u", "o"] and g["nodes"][0]["label"] == "유니버스"
     assert g["nodes"][1]["headline"] == "삼성전자 50.5%" and g["practice"] is True
     ok2, _ = nr.verify_facts(DOC, [_sealed("o", "optimizer", EX_O)], KEY)
     assert nr.ground(ok2, KINDS)["practice"] is False                                  # ★짝★

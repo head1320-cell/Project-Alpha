@@ -50,7 +50,7 @@ export function StrategyBacktestResult({ v, explain }: { v: Dict; explain?: Node
   const last = Object.entries((v.last_weights as Record<string, number>) ?? {}).map(([k, w]) => [k, w * 100] as [string, number])
     .sort((a, b) => b[1] - a[1]);
   return (
-    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 묶음을 돌려 봤습니다" after={<>
+    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 그룹을 돌려 봤습니다" after={<>
       <KV rows={[["기간", `${String(per.start)} ~ ${String(per.end)}${per.whole_record ? " (함께 기록된 전체)" : ""}`],
                  ["다시 나눈 횟수", `${String(s.n_rebalances ?? "—")}번`], ["거래일", `${String(v.n_trading_days ?? "—")}일`]]} />
       <h4 className="pg-h4">마지막 날 전략 비중</h4>
@@ -115,7 +115,7 @@ export function CompanyViewsResult({ v }: { v: Dict }) {
           );
         })}</tbody>
       </table>
-      {num(v.n_user_views) ? <p className="pg-note">내 생각 {String(v.n_user_views)}개와 함께 ‘비중 계산’으로 넘깁니다.</p> : null}
+      {num(v.n_user_views) ? <p className="pg-note">내 생각 {String(v.n_user_views)}개와 함께 ‘포트폴리오 최적화’로 넘깁니다.</p> : null}
       <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="전망을 만들지 못한 종목" />
     </>
   );

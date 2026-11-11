@@ -654,7 +654,7 @@ def sensitivity_matrix(names: list[str], R: np.ndarray,
     연율 평균) — Robustness가 검증하는 대상이 실제 사용 중인 기대수익이 되도록.
     행별 Δ 합은 합1 제약으로 ≈0. SLSQP N회(N≤30)라 수 초 내.
 
-    ★`model` 을 주면(K3) 그 방식·제약·λ 로 '비중 계산' 과 같은 길을 탄다★ — `_sensitivity_for_model`.
+    ★`model` 을 주면(K3) 그 방식·제약·λ 로 '포트폴리오 최적화' 과 같은 길을 탄다★ — `_sensitivity_for_model`.
     주지 않으면 아래 예전 길 그대로다(`/sensitivity` 라우트 — 바이트 불변).
     """
     if model is not None:
@@ -692,7 +692,7 @@ def sensitivity_matrix(names: list[str], R: np.ndarray,
 
 def _sensitivity_for_model(names, R, views, delta, tau, bump_pct, *, model, constraints, risk_aversion,
                            w_current, bench_returns, groups_of) -> dict:
-    """고른 방식의 민감도(K3) — 기준 비중은 '비중 계산' 노드와 같은 길(`optimize` → 제약이면 `constrained_solve`,
+    """고른 방식의 민감도(K3) — 기준 비중은 '포트폴리오 최적화' 노드와 같은 길(`optimize` → 제약이면 `constrained_solve`,
     못 풀면 제약 없는 비중 — `_apply_constraints` 와 같다). 흔든 기대 수익마다 같은 길로 다시 푼다.
 
     흔드는 기대 수익은 그 방식이 실제로 쓰는 것이다: 제약 해·BL·EP 는 `mu_used`(사후 μ 포함), 나머지 무제약 방식은 과거 평균.

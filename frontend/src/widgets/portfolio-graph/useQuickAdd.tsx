@@ -163,7 +163,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
     const pinned = st.pinned.includes(id);
     return [
       { key: "run-to", label: "여기까지 계산", icon: <Play size={14} aria-hidden="true" />, disabled: st.running, run: () => runToRef.current(id) },
-      { key: "branch", label: "갈래 만들기", icon: <GitBranch size={14} aria-hidden="true" />,
+      { key: "branch", label: "대안 만들기", icon: <GitBranch size={14} aria-hidden="true" />,
         run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.makeBranch(id)); } },
       { key: "duplicate", label: "복제 (Ctrl+D)", icon: <Copy size={14} aria-hidden="true" />,
         run: () => { usePortfolioGraph.getState().duplicateNode(id); } },

@@ -11,11 +11,11 @@ import type { AiSuggestion, AttachEdge, Procedure, ProcedureSuggestion } from ".
  */
 
 const EST: ProcedureSuggestion = {
-  action: "add", kind: "estimate", label: "기대 수익 추정", text: "‘기대 수익 추정’을 추가해 연결하시겠습니까?",
+  action: "add", kind: "estimate", label: "기대수익률 추정", text: "‘기대수익률 추정’을 추가해 연결하시겠습니까?",
   attach: [{ source: "@new", source_port: "belief", target: "optimizer", target_port: "belief" }], unlocks: [],
 };
 const BT: ProcedureSuggestion = {
-  action: "add", kind: "backtest", label: "과거로 돌려 보기", text: "거래비용과 처음 보는 기간을 아직 측정하지 않았습니다.",
+  action: "add", kind: "backtest", label: "정책 백테스트", text: "거래비용과 처음 보는 기간을 아직 측정하지 않았습니다.",
   attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" },
            { source: "returns", source_port: "returns", target: "@new", target_port: "returns" }],
   unlocks: ["cost", "oos"],

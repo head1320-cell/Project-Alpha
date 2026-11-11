@@ -280,7 +280,7 @@ test("R5 · 우클릭 — 같은 넷 · 사이에 넣기…는 후보 + [뒤로]
 });
 
 test("R5 · 접힌 상자의 대리 선 — 도구줄 없음 · 우클릭은 까닭 + [상자 펼치기]", async ({ page }) => {
-  await open(page, { ...CORE, groups: [{ id: "g1", label: "묶음", members: ["returns", "estimate"], collapsed: true }] });
+  await open(page, { ...CORE, groups: [{ id: "g1", label: "그룹", members: ["returns", "estimate"], collapsed: true }] });
   await pickWire(page, UR);                                                      // 종목 → 상자의 대리 선
   await expect(tb(page)).toHaveCount(0);
   const at = await onWire(page, UR, 0.5);

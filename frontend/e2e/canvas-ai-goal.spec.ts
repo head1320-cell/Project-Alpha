@@ -19,7 +19,7 @@ const CHAIN = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["00593
 const withGoal = (goal: string) => ({ ...CHAIN, meta: { name: "내 설계", goal } });
 type Doc = { meta?: { name?: string; goal?: string }; nodes: { id: string; type: string }[] };
 const SUGGEST = "**/api/v1/assist/canvas/suggest";
-const RISK = { action: "add", kind: "risk", label: "흔들림 나눠 보기", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있습니다.",
+const RISK = { action: "add", kind: "risk", label: "위험 기여도 분해", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있습니다.",
                attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" }] };
 const ok = (suggestions: object[]) => ({ available: true, source: "claude", model: "claude-opus-5-5", suggestions, rejected: [], cached: false,
                                          usage: { input_tokens: 1200, output_tokens: 300, cost_usd: 0.0108, cost_note: null } });

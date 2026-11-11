@@ -354,7 +354,7 @@ function ViewsResult({ v }: { v: Dict }) {
   type View = { assets?: string[]; weights?: Record<string, number> | null; direction?: number; magnitude_pct?: number | null;
                 confidence?: number | null; label?: string | null };
   const views = (v.views as View[] | undefined) ?? [];
-  if (!views.length) return <p className="pg-note">적은 생각이 없습니다 — 비중 계산은 과거 기준으로만 합니다.</p>;
+  if (!views.length) return <p className="pg-note">적은 생각이 없습니다 — 포트폴리오 최적화는 과거 기준으로만 합니다.</p>;
   return (
     <ul className="pg-list pg-views-list">
       {views.map((x, i) => (

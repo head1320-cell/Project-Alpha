@@ -9,7 +9,7 @@ const F = { format: "project-alpha.portfolio-graph", version: 1 };
 const n = (id: string, type: string, x: number, y: number, params: Record<string, unknown> = {}) => ({ id, type, position: { x, y }, params });
 // a·b 는 묶음 상자 하나(상자 틀은 미니맵에 칸이 없다) · z 는 멀리(1배에서는 화면 밖).
 const DOC = { ...F, nodes: [n("a", "universe", 0, 0, { tickers: ["005930"] }), n("b", "returns", 330, 0), n("z", "estimate", 3300, 1320)], edges: [],
-              groups: [{ id: "g1", label: "묶음 하나", members: ["a", "b"] }] };
+              groups: [{ id: "g1", label: "그룹 하나", members: ["a", "b"] }] };
 
 async function openWith(page: Page, doc: object) {
   await page.setViewportSize({ width: 1440, height: 900 });

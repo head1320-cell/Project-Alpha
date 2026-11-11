@@ -126,7 +126,7 @@ def test_a_blocked_optimizer_says_where_it_stopped(monkeypatch):
     from tests.test_allocation_routes import _fake_returns_df, _patch_returns
     _patch_returns(monkeypatch, _fake_returns_df(["005930"], n=800))
     out = _run(chain())
-    assert "앞 단계 ‘수익률 불러오기’" in out["nodes"]["o"]["explain"]["facts"][0]
+    assert "앞 단계 ‘수익률 데이터’" in out["nodes"]["o"]["explain"]["facts"][0]
 
 
 # ── 금지어 — 출력 전수 + 소스 리터럴 ───────────────────────────────────────

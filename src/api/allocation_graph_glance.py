@@ -170,7 +170,7 @@ def _overlay(view):
 
 
 def _sleeves(view):
-    return _bars_from(_get(view, "result", "sleeve_allocation"), caption="묶음 몫")
+    return _bars_from(_get(view, "result", "sleeve_allocation"), caption="그룹 몫")
 
 
 def _holding_var(view):

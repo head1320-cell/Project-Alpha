@@ -111,7 +111,7 @@ export function SimpleView({ nodes, edges, groups, catalog, results, staleIds, r
             })}
             <h3 className="pg-simple-step">② 결과</h3>
             {!live && <p className="pg-help">아직 계산하지 않았습니다 — 위의 ‘계산하기’를 누르십시오.</p>}
-            {live && outs.length === 0 && <p className="pg-help">이 묶음에서 보여 줄 결과 없음</p>}
+            {live && outs.length === 0 && <p className="pg-help">이 그룹에서 보여 줄 결과 없음</p>}
             {outs.map((id) => <ResultCard key={id} id={id} entry={entryOf(id)} r={live![id]} onCause={() => onCause(id)} />)}
           </section>
         );

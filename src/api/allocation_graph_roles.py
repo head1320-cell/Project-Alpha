@@ -44,9 +44,9 @@ ROLES: dict[tuple[str, str], str] = {
     ("scores_to_weights", "scores"): "점수 상위 종목을 고르는 데 씁니다.",
     ("scores_to_weights", "returns"): "흔들림을 쓰는 나누기 방식(역변동성·위험 균등 등)에 씁니다.",
     ("neutralize", "weights"): "시장 민감도·업종 쏠림을 없앨 비중입니다.",
-    ("sleeve_combine", "a"): "위험 기준으로 합칠 첫째 묶음입니다.",
-    ("sleeve_combine", "b"): "위험 기준으로 합칠 둘째 묶음입니다.",
-    ("sleeve_combine", "c"): "있으면 위험 기준으로 함께 합칠 셋째 묶음입니다.",
+    ("sleeve_combine", "a"): "위험 기준으로 합칠 첫째 그룹입니다.",
+    ("sleeve_combine", "b"): "위험 기준으로 합칠 둘째 그룹입니다.",
+    ("sleeve_combine", "c"): "있으면 위험 기준으로 함께 합칠 셋째 그룹입니다.",
     ("exposure_overlay", "weights"): "타이밍·국면 판단대로 주식 비중을 줄일 비중입니다.",
     ("exposure_overlay", "signal"): "주식 비중을 얼마나 줄일지 정하는 타이밍 신호입니다.",
     ("exposure_overlay", "regime"): "주식 비중을 얼마나 줄일지 정하는 경기 국면입니다.",
@@ -60,8 +60,8 @@ ROLES: dict[tuple[str, str], str] = {
     ("frontier", "returns"): "기대 수익과 흔들림의 경계를 그리는 데 씁니다.",
     ("frontier", "weights"): "이으면 경계 옆에 이 비중의 기대 수익·흔들림을 점으로 찍습니다.",
     ("scenario_three_way", "weights"): "세 갈래를 같은 충격에 넣어 볼 비중입니다.",
-    ("scenario_three_way", "signal"): "‘타이밍만’ 갈래에 쓰는 신호입니다.",
-    ("scenario_three_way", "regime"): "‘타이밍+국면’ 갈래에 쓰는 경기 국면입니다.",
+    ("scenario_three_way", "signal"): "‘타이밍만’ 대안에 쓰는 신호입니다.",
+    ("scenario_three_way", "regime"): "‘타이밍+국면’ 대안에 쓰는 경기 국면입니다.",
     ("custom_scenario", "weights"): "직접 정한 충격에 넣어 볼 비중입니다.",
     ("backtest_attribution", "run"): "수익을 매크로 흐름별로 나눠 볼 백테스트 실행입니다.",
     ("backtest_compare", "a"): "나란히 놓을 첫째 백테스트 실행입니다.",
@@ -79,7 +79,7 @@ ROLES: dict[tuple[str, str], str] = {
     ("current_weights", "universe"): "유니버스에 적은 지금 비중을 그대로 꺼냅니다.",
 }
 for _p in ("a", "b", "c", "d"):
-    ROLES[("sleeve_analytics", _p)] = "평소·위기 때 함께 움직이는지 볼 비중 묶음입니다."
+    ROLES[("sleeve_analytics", _p)] = "평소·위기 때 함께 움직이는지 볼 비중 그룹입니다."
 for _i in range(1, 9):
     ROLES[("portfolio_combine", f"s{_i}")] = f"한 포트폴리오로 합칠 {_i}번째 전략의 비중입니다."
 for _p in ("r1", "r2", "r3", "r4"):

@@ -86,7 +86,7 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
                         style={{ left: `${d.pct}%`, "--lane": d.lane, background: pctFill(d.pct) } as React.CSSProperties}
                         onFocus={() => setCur(d.idx)} onMouseEnter={() => setCur(d.idx)} onClick={() => setCur(d.idx)} />
               ))}
-              {!ds.length && <span className="ci-fmap-none">이 묶음은 백분위를 아는 팩터 없음</span>}
+              {!ds.length && <span className="ci-fmap-none">이 그룹은 백분위를 아는 팩터 없음</span>}
             </span>
           </div>
         ))}
@@ -116,9 +116,9 @@ export function FactorsSection({ c, onRetry }: { c: CompanyData; onRetry: () => 
         : null}
       {known && <FactorDotMap groups={groups} strengths={c.strengths} weaknesses={c.weaknesses} />}
       <div className="ca-cp-factop">
-        <div className="ca-cp-card"><div className="ca-cp-card-h">묶음 평균 백분위</div><div className="ca-cp-radar"><Radar groups={groups} size={260} /></div></div>
+        <div className="ca-cp-card"><div className="ca-cp-card-h">그룹 평균 백분위</div><div className="ca-cp-radar"><Radar groups={groups} size={260} /></div></div>
         <div className="ca-cp-card">
-          <div className="ca-cp-card-h">묶음 평균: 재무 {nF(c.fundamentals)}개, 가격·수급 {nF(c.priceFactors)}개</div>
+          <div className="ca-cp-card-h">그룹 평균: 재무 {nF(c.fundamentals)}개, 가격·수급 {nF(c.priceFactors)}개</div>
           <div className="ca-cp-catbars">
             {groups.map((g) => { const avg = groupAvg(g); return (
               <div key={g.id} className="ca-cp-catbar" data-unknown={avg == null ? "" : undefined}>

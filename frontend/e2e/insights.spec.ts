@@ -781,7 +781,7 @@ test("★관계도 500 → alert + 재시도★(옛 코드는 '등록된 관계 
 });
 
 // ── 팩터 ──
-test("팩터 — 백분위 점 지도: 줄 = 묶음 수 · 점 = 팩터 수 · 점 위치 = 백분위 · 점 색 = 수준 색", async ({ page }) => {
+test("팩터 — 백분위 점 지도: 줄 = 그룹 수 · 점 = 팩터 수 · 점 위치 = 백분위 · 점 색 = 수준 색", async ({ page }) => {
   await open(page);
   await goSec(page, "factors", "팩터");
   const map = sec(page, "factors").locator(".ci-fmap");

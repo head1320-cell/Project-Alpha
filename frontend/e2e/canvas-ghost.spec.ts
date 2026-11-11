@@ -92,7 +92,7 @@ test("유령 [붙이기] → 진짜 노드가 유령이 보인 자리에 · 추�
   const g = ghost(page, "estimate");
   const at = { x: Number(await g.getAttribute("data-x")), y: Number(await g.getAttribute("data-y")) };
   await g.locator(".pg-ghost-add").click();
-  await expect(page.locator(".pg-note")).toContainText("기대 수익 추정");
+  await expect(page.locator(".pg-note")).toContainText("기대수익률 추정");
   const doc = await wip(page);
   const made = doc.nodes.find((x) => x.type === "estimate")!;
   expect(made.position).toEqual(at);
@@ -176,7 +176,7 @@ test("유령 선은 누름을 가로채지 않는다 — 선이 지나는 자리
     }
     return null;
   });
-  expect(hit, "추천 선이 비중 계산 카드를 지나지 않는다(검사가 공허하다)").not.toBeNull();
+  expect(hit, "추천 선이 포트폴리오 최적화 카드를 지나지 않는다(검사가 공허하다)").not.toBeNull();
   expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.react-flow__node[data-id="optimizer"]'), hit!)).toBe(true);
 });
 

@@ -102,7 +102,7 @@ export function ArcGauge({ value, max = 100, label, sub, ends }: { value: number
   );
 }
 
-export const YieldCurveChart = lazyChart(loadCockpitCharts, (m) => m.YieldCurveChart, { height: 210, label: "금리 곡선" });   // 본문은 cockpitParts.charts.tsx(화면이 뜬 뒤에 받는다)
+export const YieldCurveChart = lazyChart(loadCockpitCharts, (m) => m.YieldCurveChart, { height: 210, label: "수익률 곡선" });   // 본문은 cockpitParts.charts.tsx(화면이 뜬 뒤에 받는다)
 
 // ── Sparkline — 작은 선(지표 카드). "auto" = 처음보다 오르면 빨강 · 내리면 파랑(등락색, 한국식). ──
 export function Sparkline({ values, w = 200, h = 30, color = "var(--tx-blue)" }: { values: number[]; w?: number; h?: number; color?: string }) {
@@ -161,7 +161,7 @@ export function ZHeatmap({ themes, onPick }: { themes: MacroTheme[]; onPick: (in
                 <span className="mc-heat-z">{fmtZ(ind.z_score)}</span>
               </button>
             ))}
-            {!t.indicators.length && <span className="mc-heat-empty">이 묶음에는 지표 없음</span>}
+            {!t.indicators.length && <span className="mc-heat-empty">이 그룹에는 지표 없음</span>}
           </div>
         </div>
       ))}

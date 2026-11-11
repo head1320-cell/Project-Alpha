@@ -49,7 +49,7 @@ export function CycleStripGrid({ data }: { data: CycleStrips }) {
       <div className="mv-strip-axis" aria-hidden>
         <span>{ym(months[0])}</span><span>{ym(months[Math.floor(months.length / 2)])}</span><span>{ym(months.at(-1))}</span>
       </div>
-      <LevelLegend lo="평균보다 낮습니다" hi="평균보다 높습니다" />
+      <LevelLegend lo="평균 하회" hi="평균 상회" />
       <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
     </div>
   );

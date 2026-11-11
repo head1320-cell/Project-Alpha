@@ -67,7 +67,7 @@ class ScreenerParams(BaseModel):
     model_config = _FORBID
     universe: Literal[tuple(_UNIVERSE_LABEL)] = Field("kospi50", json_schema_extra={"x-ui": _ui(
         "후보 범위", question="종목 유니버스", widget="cards", options=_UNIVERSE_LABEL,
-        help="앞에 ‘종목 고르기’를 이으면 그 종목들 안에서 고릅니다.")})
+        help="앞에 ‘유니버스’를 이으면 그 종목들 안에서 고릅니다.")})
     filter_ast: _sr.FilterGroupModel = Field(
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
         json_schema_extra={"x-ui": _ui("조건", question="스크리닝 조건", widget="filter",
@@ -293,7 +293,7 @@ class ScoresToWeightsParams(BaseModel):
         presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
     weighting: Literal[tuple(_WEIGHTING)] = Field("equal", json_schema_extra={"x-ui": _ui(
         "나누는 방식", question="비중 배분 방식", widget="cards", options=_WEIGHTING,
-        help="흔들림을 쓰는 방식은 ‘수익률 불러오기’를 이어야 합니다.")})
+        help="흔들림을 쓰는 방식은 ‘수익률 데이터’를 이어야 합니다.")})
 
 
 def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
@@ -306,7 +306,7 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
     observed: dict = {}                        # CF3 — 관측만(공분산을 왜 못 보냈나 · 비중 0 이라 뺀 종목)
     if p.weighting in _RETURN_BASED:
         if r is None:
-            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’은 흔들림을 씁니다 — ‘수익률 불러오기’를 연결하십시오 "
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’은 흔들림을 씁니다 — ‘수익률 데이터’를 연결하십시오 "
                                  "(균등 비중으로 몰래 바꾸지 않습니다).")
         missing = [c for c in codes if c not in r["returns"].columns]
         if missing:
@@ -347,9 +347,9 @@ def _explain_scores_to_weights(view: dict, prov: dict, params: Any) -> dict:
         miss = view.get("sigma_missing") or {}
         if miss.get("reason") == "codes_missing":
             trust.append(_t(UNKNOWN, "이은 수익률에 없는 종목이 있어 공분산을 함께 보내지 못합니다("
-                                     + ", ".join(miss.get("codes") or []) + ") — ‘흔들림 나눠 보기’는 이 비중을 계산하지 못합니다."))
+                                     + ", ".join(miss.get("codes") or []) + ") — ‘위험 기여도 분해’는 이 비중을 계산하지 못합니다."))
         else:
-            trust.append(_t(UNKNOWN, "공분산이 없어 ‘흔들림 나눠 보기’는 이 비중을 계산하지 못합니다 — 수익률을 연결하십시오."))
+            trust.append(_t(UNKNOWN, "공분산이 없어 ‘위험 기여도 분해’는 이 비중을 계산하지 못합니다 — 수익률을 연결하십시오."))
     return {"title": f"점수로 {len(w)}종목의 비중을 정했습니다",
             "headline": ({"label": f"가장 큰 비중 · {view['labels'].get(top, top)}", "value": w[top], "unit": "%",
                           "text": _pct(w[top])} if top else None),
@@ -418,7 +418,7 @@ def _sleeve_combine(inputs: dict, p: SleeveParams) -> pg.NodeOutput:
         w = inputs.get(port)
         if w is None:
             continue
-        sleeves.append({"name": f"묶음 {port.upper()}",
+        sleeves.append({"name": f"그룹 {port.upper()}",
                         "weights": {n: float(x) * 100.0 for n, x in zip(w["names"], np.asarray(w["weights"], dtype=float))}})
     out = combine_sleeves(sleeves, method=p.method)
     if out.get("error"):
@@ -435,46 +435,46 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     alloc = r.get("sleeve_allocation") or {}
     facts = [f"{k}: {_pct(float(v))}" for k, v in alloc.items()]
-    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 묶음의 수익 흐름으로 묶음 비중을 정하고 종목 비중을 합쳤습니다.")]
+    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 그룹의 수익 흐름으로 그룹 비중을 정하고 종목 비중을 합쳤습니다.")]
     if r.get("method") in ("min_var", "hrp"):
         trust.append(_t(UNKNOWN, "이 방식은 계산이 안 풀리면 엔진이 역변동성으로 바꿉니다 — 이 결과가 그 경우인지는 표시되지 않습니다."))
-    trust.append(_t(ASSUMED, "묶음 수익은 각 묶음의 지금 비중을 과거에 고정해 만든 흐름입니다."))
-    return {"title": f"{r.get('n_sleeves')}개 묶음을 {r.get('n_stocks')}종목 비중으로 합쳤습니다", "facts": facts,
-            "trust": trust, "unmeasured": ["묶음 사이 상관이 앞으로 유지될지"]}
+    trust.append(_t(ASSUMED, "그룹 수익은 각 그룹의 지금 비중을 과거에 고정해 만든 흐름입니다."))
+    return {"title": f"{r.get('n_sleeves')}개 그룹을 {r.get('n_stocks')}종목 비중으로 합쳤습니다", "facts": facts,
+            "trust": trust, "unmeasured": ["그룹 사이 상관이 앞으로 유지될지"]}
 
 
 # ── 등록 ─────────────────────────────────────────────────────────────────────
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("screener", "스크리너", stage="signal", plain_label="조건으로 종목 거르기",
+        pg.NodeSpec("screener", "스크리너", stage="signal", plain_label="스크리닝",
                     plain_description="재무·시세 조건으로 후보를 걸러 종목 목록을 만듭니다.",
                     inputs=(P("universe", "Universe", required=False),), outputs=(P("universe", "Universe"),),
                     run=_screener, params_model=ScreenerParams, explain=_explain_screener, category="신호",
                     description="유동성 게이트 → 필터 → 정렬(/screener/run-advanced 와 같다)."),
-        pg.NodeSpec("factor_scores", "팩터 점수", stage="signal", plain_label="팩터로 점수 매기기",
+        pg.NodeSpec("factor_scores", "팩터 점수", stage="signal", plain_label="팩터 스코어링",
                     plain_description="가치·수익성 같은 성격에 점수를 매깁니다.",
                     inputs=(P("universe", "Universe", required=False),), outputs=(P("scores", "Scores"),),
                     run=_factor_scores, params_model=FactorScoreParams, explain=_explain_factor_scores, category="신호",
                     description="방향 인지 z-score 가중합(/factor-portfolio 의 점수와 같다)."),
-        pg.NodeSpec("alpha_score", "알파 점수", stage="signal", plain_label="알파 식으로 점수 매기기",
+        pg.NodeSpec("alpha_score", "알파 점수", stage="signal", plain_label="알파 스코어링",
                     plain_description="알파 실험실의 식으로 오늘(또는 기준일)의 점수를 냅니다.",
                     inputs=(P("universe", "Universe"),), outputs=(P("scores", "Scores"),),
                     run=_alpha_score, params_model=AlphaParams, explain=_explain_alpha, category="신호",
                     description="score_alpha — 라이브 크로스섹션 점수."),
-        pg.NodeSpec("scores_to_weights", "점수 → 비중", stage="build", plain_label="점수로 비중 정하기",
+        pg.NodeSpec("scores_to_weights", "점수 → 비중", stage="build", plain_label="스코어 기반 비중",
                     plain_description="점수 상위 종목을 골라 비중을 나눕니다.",
                     inputs=(P("scores", "Scores"), P("returns", "Returns", required=False)),
                     outputs=(P("weights", "Weights"),), run=_scores_to_weights, params_model=ScoresToWeightsParams,
                     explain=_explain_scores_to_weights, category="배분",
                     description="상위 K → 균등·틸트·역변동성·위험균등·최소분산·HRP(폴백 없음)."),
-        pg.NodeSpec("neutralize", "중립화", stage="build", plain_label="치우침 없애기",
+        pg.NodeSpec("neutralize", "중립화", stage="build", plain_label="노출 중립화",
                     plain_description="시장 민감도나 업종 쏠림을 없앤 비중을 만듭니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("weights", "Weights"),),
                     run=_neutralize, params_model=NeutralizeParams, explain=_explain_neutralize, category="배분",
                     description="베타·섹터 중립화(/neutralize 와 같다). 결과는 연구용 — 실행 목표가 아니다."),
-        pg.NodeSpec("sleeve_combine", "슬리브 결합", stage="build", plain_label="묶음 합치기",
-                    plain_description="비중 묶음 2~3개를 위험 기준으로 하나로 합칩니다.",
+        pg.NodeSpec("sleeve_combine", "슬리브 결합", stage="build", plain_label="슬리브 결합",
+                    plain_description="비중 그룹 2~3개를 위험 기준으로 하나로 합칩니다.",
                     inputs=(P("a", "Weights"), P("b", "Weights"), P("c", "Weights", required=False)),
                     outputs=(P("weights", "Weights"),), run=_sleeve_combine, params_model=SleeveParams,
                     explain=_explain_sleeves, category="배분",

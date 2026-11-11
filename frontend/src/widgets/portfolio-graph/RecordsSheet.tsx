@@ -132,7 +132,7 @@ function RunsTab() {
   if (q.isError) return <Failed what="연구 기록" err={q.error} />;
   if (q.data && !q.data.available) return <p className="pg-warn">{q.data.reason ?? "연구 기록 저장소를 읽을 수 없습니다 — 기록이 없는 것과 다릅니다."}</p>;
   const list = q.data?.runs ?? [];
-  if (list.length === 0) return <p className="pg-help">연구 기록이 없습니다 — ‘비중 계산’ 노드의 ‘연구 기록 남기기’로 남깁니다.</p>;
+  if (list.length === 0) return <p className="pg-help">연구 기록이 없습니다 — ‘포트폴리오 최적화’ 노드의 ‘연구 기록 남기기’로 남깁니다.</p>;
   return (
     <ul className="pg-rec-list">{list.map((r) => {
       const cov = r.snapshot?.coverage;
@@ -162,7 +162,7 @@ function TargetsTab() {
   if (q.isError) return <Failed what="실행 목표" err={q.error} />;
   if (q.data && !q.data.available) return <p className="pg-warn">{q.data.reason}</p>;
   const list = q.data?.versions ?? [];
-  if (list.length === 0) return <p className="pg-help">실행 목표가 없습니다 — ‘실행 목표 만들기’ 노드에서 저장합니다.</p>;
+  if (list.length === 0) return <p className="pg-help">실행 목표가 없습니다 — ‘실행 목표 비중’ 노드에서 저장합니다.</p>;
   return (
     <ul className="pg-rec-list">{list.map((t) => (
       <li key={t.tpv_id ?? ""} className="pg-rec-item" data-tpv={t.tpv_id}>

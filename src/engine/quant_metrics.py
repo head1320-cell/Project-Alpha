@@ -187,7 +187,7 @@ def compute_metrics(
     benchmark_returns=None,
     risk_free: float = 0.035,
 ) -> dict:
-    """QuantStats 표준 지표 묶음을 반환(기존 stats와 병합해 쓰는 보강 지표).
+    """QuantStats 표준 지표 그룹을 반환(기존 stats와 병합해 쓰는 보강 지표).
 
     ★`risk_free` 는 죽은 인자였다 (P1)★ 선언만 되고 한 번도 쓰이지 않았는데
     `allocation_backtest:495` 가 `_RF` 를 넘기며 뭔가 한다고 믿고 있었다. 이제

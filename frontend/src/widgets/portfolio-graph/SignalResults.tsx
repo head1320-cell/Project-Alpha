@@ -74,7 +74,7 @@ export function ScoresResult({ v }: { v: Dict }) {
 export function ScoresToWeightsResult({ v }: { v: Dict }) {
   return (
     <>
-      {!v.has_sigma && <p className="pg-warn">공분산이 없어 ‘흔들림 나눠 보기’에는 쓸 수 없습니다 — 수익률을 연결하십시오.</p>}
+      {!v.has_sigma && <p className="pg-warn">공분산이 없어 ‘위험 기여도 분해’에는 쓸 수 없습니다 — 수익률을 연결하십시오.</p>}
       <h4 className="pg-h4">비중</h4>
       <Bars values={(v.weights as Record<string, number>) ?? {}} labels={v.labels as Record<string, string>} unit="%" />
     </>
@@ -104,7 +104,7 @@ export function SleeveResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
   return (
     <>
-      <h4 className="pg-h4">묶음 비중</h4>
+      <h4 className="pg-h4">그룹 비중</h4>
       <Bars values={(r.sleeve_allocation as Record<string, number>) ?? {}} unit="%" />
       <KV rows={Object.entries((r.risk_contribution_pct as Record<string, number>) ?? {}).map(([k, x]) => [`${k} 위험 기여`, pct(x)] as [string, ReactNode])} />
       <h4 className="pg-h4">합친 종목 비중</h4>

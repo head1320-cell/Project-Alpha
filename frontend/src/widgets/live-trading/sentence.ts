@@ -51,9 +51,9 @@ export function killState(kill: Read<OpKill>): string {
   if (kill.pending) return "확인 중";
   if (kill.failed) return "확인 실패";
   const k = kill.value;
-  if (k?.is_active && k.active_event) return "켜져 있습니다";
+  if (k?.is_active && k.active_event) return "사용";
   if (k?.is_active) return "켜져 있지만 어떤 정지인지 미상";
-  return "꺼져 있습니다";
+  return "미사용";
 }
 
 /** 모의 체결로 바꿀 때 확인 줄 — 어디로 가는지(연습용 여부)를 서버 게이트로만. */

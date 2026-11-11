@@ -324,7 +324,7 @@ def _check(sugs, doc=DOC, numbers=frozenset()):
 def test_a_valid_suggestion_passes_with_the_catalog_label():
     ok, bad = _check([BT])
     assert bad == []
-    assert ok == [{"action": "add", "kind": "backtest", "label": "과거로 돌려 보기", "attach": BT["attach"], "reason": BT["reason"]}]
+    assert ok == [{"action": "add", "kind": "backtest", "label": "정책 백테스트", "attach": BT["attach"], "reason": BT["reason"]}]
 
 
 def test_a_kind_outside_the_catalog_is_rejected_and_the_pair_inside_passes():
@@ -420,7 +420,7 @@ def test_an_available_answer_says_its_source_model_and_usage():
     sdk = FakeSDK(_msg({"suggestions": [BT]}))
     res = _suggest(_client(sdk))
     assert res["available"] is True and res["source"] == "claude" and res["model"] == "claude-opus-5-5"
-    assert [s["kind"] for s in res["suggestions"]] == ["backtest"] and res["suggestions"][0]["label"] == "과거로 돌려 보기"
+    assert [s["kind"] for s in res["suggestions"]] == ["backtest"] and res["suggestions"][0]["label"] == "정책 백테스트"
     assert res["rejected"] == [] and res["cached"] is False
     assert res["usage"] == {"input_tokens": 1200, "output_tokens": 300,
                             "cost_usd": pytest.approx((1200 * 4 + 300 * 20) / 1e6), "cost_note": None}

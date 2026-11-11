@@ -171,7 +171,7 @@ test("R3 · 계산 뒤 늘려도 예전 결과가 되지 않는다 (짝: 선을 
 });
 
 test("R3 · 상자 테두리 · 복제가 늘린 높이를 본다", async ({ page }) => {
-  const doc = { ...CORE, groups: [{ id: "g1", label: "묶음", members: ["estimate", "optimizer"] }] };
+  const doc = { ...CORE, groups: [{ id: "g1", label: "그룹", members: ["estimate", "optimizer"] }] };
   await open(page, doc);
   await zoomTo(page, "mid");                                                      // 상자 틀까지 맞추면 멀리(55% 미만) — 손잡이는 멀리에서 숨는다
   const frameH = async () => { const b = (await page.locator('.react-flow__node[data-id="frame:g1"]').boundingBox())!; return b.height / (await zoomOf(page)); };

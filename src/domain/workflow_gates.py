@@ -22,7 +22,7 @@ CONFIRMED, ASSUMED, PARTIAL, UNKNOWN, SKIPPED, FAILED = (
     "confirmed", "assumed", "partial", "unknown", "skipped", "failed")
 
 GATES = [
-    ("data", "데이터"), ("pit", "시점"), ("signal", "신호"), ("build", "비중 계산"),
+    ("data", "데이터"), ("pit", "시점"), ("signal", "신호"), ("build", "포트폴리오 최적화"),
     ("cost", "거래비용"), ("oos", "처음 보는 기간"), ("economic", "돈이 되는지"),
     ("live", "모의·실계좌"),
 ]
@@ -119,7 +119,7 @@ def _build(rs: list[dict]) -> list[dict]:
         if cr and cr.get("status") == "infeasible":
             out.append(_r(FAILED, "제약을 모두 지킬 수 없었습니다 — " + str(cr.get("reason") or "")))
         else:
-            out.append(_r(CONFIRMED, "비중 계산이 끝났습니다."))
+            out.append(_r(CONFIRMED, "포트폴리오 최적화가 끝났습니다."))
         # CF3 — 요청한 방식 대신 다른 비중이 쓰였으면(역변동성·시장 비중 대체) 그 사실을 가정으로 더한다(확인 + 가정 = 절반).
         for f in (r.get("view") or {}).get("fallbacks") or []:
             if f.get("affects_weights"):
@@ -216,9 +216,9 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
         names = sorted({hist[str(n["type"])] for n in present})
         who = " · ".join(f"‘{x}’" for x in names) + _subj_particle(names[-1])
         rules["cost"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과의 거래비용을 읽지 않습니다 — "
-                                     "‘과거로 돌려 보기’를 이으면 측정할 수 있습니다.")]
+                                     "‘정책 백테스트’를 이으면 측정할 수 있습니다.")]
         rules["oos"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과로 처음 보는 기간을 판정하지 "
-                                    "않습니다 — ‘과거로 돌려 보기’를 이으면 측정할 수 있습니다.")]
+                                    "않습니다 — ‘정책 백테스트’를 이으면 측정할 수 있습니다.")]
         feeders["cost"] = feeders["oos"] = [str(n["id"]) for n in present]
     gates = []
     for key, label in GATES:

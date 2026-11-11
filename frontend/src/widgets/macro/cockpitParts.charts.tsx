@@ -54,7 +54,7 @@ export function YieldCurveChart({ points }: { points: YieldCurvePoint[]; inversi
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
   const cur = idx >= 0 ? data[idx] : null;
   return (
-    <ReadoutFrame id="yield-curve" label="금리 곡선" headLabel="만기" rows={rows} idx={idx} onKeyDown={onKeyDown}>
+    <ReadoutFrame id="yield-curve" label="수익률 곡선" headLabel="만기" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={210}>
         <LineChart data={data} margin={{ top: 12, right: 18, bottom: 4, left: -8 }} onMouseMove={followChart(setIdx)}>
           <CartesianGrid {...GRID} />

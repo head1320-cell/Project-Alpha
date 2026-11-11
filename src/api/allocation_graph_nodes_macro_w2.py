@@ -241,7 +241,7 @@ def _explain_long_run(view: dict, prov: dict, params: Any) -> dict:
 
 # ── 스튜디오 모델 ─────────────────────────────────────────────────────────────
 
-_STUDIOS = {"neural-sde": "금리 곡선 요인", "tsfm-latent": "공통 잠재 상태",
+_STUDIOS = {"neural-sde": "수익률 곡선 요인", "tsfm-latent": "공통 잠재 상태",
             "causal-deepm": "선후 관계 그래프", "pinn-tail": "꼬리 위험"}
 
 
@@ -287,31 +287,31 @@ def _explain_studio(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("yield_curve", "수익률 곡선", stage="signal", plain_label="금리 곡선 보기",
+        pg.NodeSpec("yield_curve", "수익률 곡선", stage="signal", plain_label="수익률 곡선 보기",
                     plain_description="짧은 금리와 긴 금리의 모양, 뒤집혔는지를 봅니다.",
                     inputs=(), outputs=(), run=_yield_curve, explain=_explain_yield_curve, category="거시",
                     description="macro_routes.yield_curve_view(/macro/yield-curve 본문) · 운영은 저장된 관측만."),
-        pg.NodeSpec("macro_dashboard", "지표 대시보드", stage="signal", plain_label="거시 지표 한눈에",
+        pg.NodeSpec("macro_dashboard", "지표 대시보드", stage="signal", plain_label="매크로 지표 대시보드",
                     plain_description="성장·물가·금리 같은 테마별로 지표가 평소와 얼마나 먼지 봅니다.",
                     inputs=(), outputs=(), run=_dashboard, params_model=DashboardParams,
                     explain=_explain_dashboard, category="거시",
                     description="macro_routes.dashboard_themes(/macro/dashboard 본문) · 운영은 저장된 관측만."),
-        pg.NodeSpec("regime_consensus", "국면 합의", stage="signal", plain_label="국면 판정이 모이나",
+        pg.NodeSpec("regime_consensus", "국면 합의", stage="signal", plain_label="국면 합의도",
                     plain_description="세 방법의 국면 판정이 같은 곳을 가리키는지, 갈리는지 봅니다.",
                     inputs=(), outputs=(), run=_consensus, params_model=EnsembleParams,
                     explain=_explain_consensus, category="거시",
                     description="macro_routes.regime_consensus_view(/macro/regime-consensus 본문) · 운영은 저장된 관측만."),
-        pg.NodeSpec("regime_forecast_coverage", "국면 예측 적중률", stage="signal", plain_label="국면 예측 채점",
+        pg.NodeSpec("regime_forecast_coverage", "국면 예측 적중률", stage="signal", plain_label="국면 예측 적중률",
                     plain_description="다음 국면을 예측했을 때 실제로 얼마나 맞았는지 과거로 채점합니다.",
                     inputs=(), outputs=(), run=_coverage, params_model=CoverageParams,
                     explain=_explain_coverage, category="거시",
                     description="macro_routes.forecast_coverage_view(/macro/regime-forecast-coverage 본문)."),
-        pg.NodeSpec("long_run", "장기 관계", stage="signal", plain_label="지표들의 장기 균형",
+        pg.NodeSpec("long_run", "장기 관계", stage="signal", plain_label="장기 균형관계(VECM)",
                     plain_description="지표들이 길게 보면 함께 움직이는 균형이 있는지 검정합니다.",
                     inputs=(), outputs=(), run=_long_run, params_model=LongRunParams,
                     explain=_explain_long_run, category="거시",
                     description="macro_routes.long_run_view(/macro/long-run 본문) · 계열은 저장된 관측 주입."),
-        pg.NodeSpec("macro_studio", "스튜디오 모델", stage="signal", plain_label="거시 모델에 묻기",
+        pg.NodeSpec("macro_studio", "스튜디오 모델", stage="signal", plain_label="매크로 모델 스튜디오",
                     plain_description="금리 요인·잠재 상태·선후 관계·꼬리 위험 모델을 지금 설치된 엔진으로 돌립니다.",
                     inputs=(), outputs=(), run=_studio, params_model=StudioParams,
                     explain=_explain_studio, category="거시",

@@ -301,6 +301,6 @@ def test_the_availability_axis_does_not_decide_the_origin():
     (ORIGIN_ETF_PRICES, 20), (ORIGIN_PIT_MACRO, 5), (None, 4),
 ])
 def test_each_origin_group_actually_has_members(origin, minimum):
-    """변이 b — ★한 값으로 뭉치면 다른 묶음이 비어 죽는다★"""
+    """변이 b — ★한 값으로 뭉치면 다른 그룹이 비어 죽는다★"""
     assert len(_BY_ORIGIN.get(origin, [])) >= minimum, (
         origin, len(_BY_ORIGIN.get(origin, [])))

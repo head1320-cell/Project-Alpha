@@ -129,7 +129,7 @@ const wipTickers = (page: Page) => page.evaluate(() => {
   return d.nodes?.find((n) => n.type === "universe")?.params?.tickers ?? null;
 });
 
-test("설계에 넣기: 표 위 10개 코드 그대로 캔버스 종목 고르기 노드로", async ({ page }) => {
+test("설계에 넣기: 표 위 10개 코드 그대로 캔버스 유니버스 노드로", async ({ page }) => {
   await open(page);
   await settled(page);
   const codes = (await rows(page).evaluateAll((trs) => trs.slice(0, 10).map((tr) => tr.getAttribute("data-code"))));

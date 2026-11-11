@@ -976,7 +976,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -1114,7 +1114,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -1125,7 +1125,7 @@
    "branches": [
     {
      "id": "br_mvk7e2o04",
-     "label": "갈래 B",
+     "label": "대안 B",
      "root": "estimate__b",
      "of_root": "estimate",
      "map": {
@@ -1347,7 +1347,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -1358,7 +1358,7 @@
    "branches": [
     {
      "id": "br_mvk7e2o04",
-     "label": "갈래 B",
+     "label": "대안 B",
      "root": "estimate__b",
      "of_root": "estimate",
      "map": {
@@ -1594,7 +1594,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -1605,7 +1605,7 @@
    "branches": [
     {
      "id": "br_mvk7e2o04",
-     "label": "갈래 B",
+     "label": "대안 B",
      "root": "estimate__b",
      "of_root": "estimate",
      "map": {
@@ -1862,7 +1862,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -1873,7 +1873,7 @@
    "branches": [
     {
      "id": "br_mvk7e2o04",
-     "label": "갈래 B",
+     "label": "대안 B",
      "root": "estimate__b",
      "of_root": "estimate",
      "map": {
@@ -2132,7 +2132,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -2143,7 +2143,7 @@
    "branches": [
     {
      "id": "br_mvk7e2o04",
-     "label": "갈래 B",
+     "label": "대안 B",
      "root": "estimate__b",
      "of_root": "estimate",
      "map": {
@@ -2400,7 +2400,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -2411,7 +2411,7 @@
    "branches": [
     {
      "id": "br_mvk7e2o04",
-     "label": "갈래 B",
+     "label": "대안 B",
      "root": "estimate__b",
      "of_root": "estimate",
      "map": {
@@ -2647,7 +2647,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -2658,7 +2658,7 @@
    "branches": [
     {
      "id": "br_mvk7e2o04",
-     "label": "갈래 B",
+     "label": "대안 B",
      "root": "estimate__b",
      "of_root": "estimate",
      "map": {
@@ -2880,7 +2880,7 @@
    "groups": [
     {
      "id": "grp_mvk7e2o03",
-     "label": "묶음 1",
+     "label": "그룹 1",
      "members": [
       "optimizer_mvk7e2o01",
       "risk_mvk7e2o02"
@@ -3992,7 +3992,7 @@
   "groups": [
    {
     "id": "grp_mvk7e2o03",
-    "label": "묶음 1",
+    "label": "그룹 1",
     "members": [
      "optimizer_mvk7e2o01",
      "risk_mvk7e2o02"
@@ -4003,7 +4003,7 @@
   "branches": [
    {
     "id": "br_mvk7e2o04",
-    "label": "갈래 B",
+    "label": "대안 B",
     "root": "estimate__b",
     "of_root": "estimate",
     "map": {

@@ -1,6 +1,6 @@
 """K2 · 백테스트가 비중 계산의 위험 회피 λ 를 받는다 (작업 카드 — 백테스트 수치가 바뀌는 승인된 변경)
 ==============================================================================
-정책 백테스트는 받은 비중이 아니라 '비중 계산' 의 규칙을 리밸런싱마다 다시 푼다. 그런데 λ(`risk_aversion`)를 넘기지 않아
+정책 백테스트는 받은 비중이 아니라 '포트폴리오 최적화' 의 규칙을 리밸런싱마다 다시 푼다. 그런데 λ(`risk_aversion`)를 넘기지 않아
 λ 1.5 로 고른 위험 성향 효용(mv_utility)이 기본값 λ 4 로 백테스트됐다. 이제 λ 가 끝까지 간다:
 `BacktestRequest.risk_aversion` → `_policy_backtest` → `walk_forward` → `plan_walk_forward` → `_weights_at` 이
 `optimize(risk_aversion=)` 과 제약이면 `constrained_solve(risk_aversion=)` 에 넘긴다(두 함수는 이미 받는다 — 인자 하나 잇기).

@@ -90,7 +90,7 @@ def explain_universe(view: dict, prov: dict, params: Any) -> dict:
     labels = view.get("labels") or {}
     facts = [_names(tickers, labels)]
     facts.append("지금 들고 있는 비중도 알려 주었습니다." if view.get("weights")
-                 else "지금 들고 있는 비중은 알려 주지 않았습니다.")
+                 else "현재 보유 비중은 알려 주지 않았습니다.")
     trust = []
     unk = (view.get("unknown_tickers") or {}).get("codes") or []
     if unk:
@@ -145,7 +145,7 @@ def explain_views(view: dict, prov: dict, params: Any) -> dict:
 
 
 #: CF 3부 P1 — 추정 노드는 수익률 입력을 받지만 쓰지 않는다(설정만 넘긴다). 선이 뜻하는 의존과 실제가 달라서 말한다.
-_ESTIMATE_INPUT_UNUSED = "이어진 수익률은 이 단계에서 쓰지 않습니다 — 설정만 넘기고, 기대 수익은 비중 계산 단계가 자기 수익률 입력으로 계산합니다."
+_ESTIMATE_INPUT_UNUSED = "이어진 수익률은 이 단계에서 쓰지 않습니다 — 설정만 넘기고, 기대 수익은 포트폴리오 최적화 단계가 자기 수익률 입력으로 계산합니다."
 
 #: 완화 사다리가 건너뛴 제약 이름(`constrained_solve` 의 relaxed) → 쉬운 말.
 _RELAXED_PLAIN = {"turnover": "회전율", "beta": "시장 민감도", "group": "업종 상한"}
@@ -169,7 +169,7 @@ def explain_estimate(view: dict, prov: dict, params: Any) -> dict:
     s = view.get("settings") or {}
     if s.get("conditional"):
         return {"title": "경기 국면을 반영해 기대 수익을 잡기로 했습니다",
-                "facts": ["실제로 반영됐는지는 비중 계산 단계가 알려 줍니다.", _ESTIMATE_INPUT_UNUSED],
+                "facts": ["실제로 반영됐는지는 포트폴리오 최적화 단계가 알려 줍니다.", _ESTIMATE_INPUT_UNUSED],
                 "trust": [_t(ASSUMED, "국면이 앞으로도 이어진다고 가정합니다.")]}
     return {"title": "과거 수익률을 기준으로 기대 수익을 잡았습니다",
             "facts": ["경기 국면은 반영하지 않았습니다.", _ESTIMATE_INPUT_UNUSED],
@@ -188,7 +188,7 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
                     "text": f"{name} {_pct(w[top])}"}
     # CF3 — 요청한 방식 대신 다른 비중이 쓰였으면 "문제없이" 라고 하지 않는다. 대체마다 가정 줄(`kind: fallback`).
     used = [f for f in view.get("fallbacks") or [] if f.get("affects_weights")]
-    trust = [_t(CONFIRMED, "비중 계산은 끝났습니다." if used else "비중 계산은 문제없이 끝났습니다.")]
+    trust = [_t(CONFIRMED, "포트폴리오 최적화는 끝났습니다." if used else "포트폴리오 최적화는 문제없이 끝났습니다.")]
     trust += [{"state": ASSUMED, "text": str(f.get("text") or ""), "kind": FALLBACK} for f in used]
     if _is_practice(prov):
         trust.append(_practice())

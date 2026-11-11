@@ -160,11 +160,11 @@ export function parseFile(text: string): ParseResult {
   if (Array.isArray(raw.groups)) {
     for (const [i, g] of (raw.groups as unknown[]).entries()) {
       if (!isObj(g) || typeof g.id !== "string" || !Array.isArray(g.members)) {
-        problems.push(`묶음 #${i + 1} 에 id·members 가 없어 건너뛰었습니다.`);
+        problems.push(`그룹 #${i + 1} 에 id·members 가 없어 건너뛰었습니다.`);
         continue;
       }
       const members = (g.members as unknown[]).filter((m): m is string => typeof m === "string" && seen.has(m));
-      if (!members.length) { problems.push(`묶음 "${String(g.label ?? g.id)}" 에 남은 노드가 없어 건너뛰었습니다.`); continue; }
+      if (!members.length) { problems.push(`그룹 "${String(g.label ?? g.id)}" 에 남은 노드가 없어 건너뛰었습니다.`); continue; }
       const strategy = g.kind === "strategy";
       groups.push({ id: g.id, label: typeof g.label === "string" ? g.label : g.id, members, collapsed: g.collapsed === true,
                     // 전략 상자(BM C2) — 선택 칸. 모르는 값은 버리고 그냥 묶음으로 읽는다(옛 문서는 그대로).
@@ -180,12 +180,12 @@ export function parseFile(text: string): ParseResult {
   if (Array.isArray(raw.branches)) {
     for (const [i, b] of (raw.branches as unknown[]).entries()) {
       if (!isObj(b) || typeof b.id !== "string" || typeof b.root !== "string" || typeof b.of_root !== "string" || !isObj(b.map)) {
-        problems.push(`갈래 #${i + 1} 에 id·root·of_root·map 이 없어 건너뛰었습니다.`);
+        problems.push(`대안 #${i + 1} 에 id·root·of_root·map 이 없어 건너뛰었습니다.`);
         continue;
       }
       const map = Object.fromEntries(Object.entries(b.map as Record<string, unknown>)
         .filter(([c, o]) => typeof o === "string" && seen.has(c) && seen.has(o)) as [string, string][]);
-      if (!(b.root in map) || !seen.has(b.of_root)) { problems.push(`갈래 "${String(b.label ?? b.id)}" 의 뿌리가 없어 건너뛰었습니다.`); continue; }
+      if (!(b.root in map) || !seen.has(b.of_root)) { problems.push(`대안 "${String(b.label ?? b.id)}" 의 뿌리가 없어 건너뛰었습니다.`); continue; }
       branches.push({ id: b.id, label: typeof b.label === "string" ? b.label : b.id, root: b.root, of_root: b.of_root, map });
     }
   }

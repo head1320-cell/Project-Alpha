@@ -122,7 +122,7 @@ test("가까이·보통 확대에서 포트 이름이 보이고, 멀리에서는
   await expect(name).toBeHidden();
 });
 
-test("종목 고르기·내 생각·기대 수익 설정: 자세히 탭에 원시 JSON 이 없고 서버 값이 표·목록으로 보인다", async ({ page }) => {
+test("유니버스·내 생각·기대 수익 설정: 자세히 탭에 원시 JSON 이 없고 서버 값이 표·목록으로 보인다", async ({ page }) => {
   await openWith(page, null);
   const body = await run(page);
   const detail = async (id: string) => {

@@ -807,9 +807,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
                   <Scale size={14} aria-hidden="true" /> 견고성 비교
                 </button>
                 <button type="button" className="pg-selbar-b pg-selbar-branch"
-                        title="고른 노드만 복제해 갈래를 만듭니다 — 뿌리는 흐름 맨 앞, 밖으로 나가는 선은 잇지 않습니다"
+                        title="고른 노드만 복제해 대안을 만듭니다 — 뿌리는 흐름 맨 앞, 밖으로 나가는 선은 잇지 않습니다"
                         onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.branchPicked()); }}>
-                  <GitBranch size={14} aria-hidden="true" /> 갈래
+                  <GitBranch size={14} aria-hidden="true" /> 대안
                 </button>
               </SelBar>
             )}

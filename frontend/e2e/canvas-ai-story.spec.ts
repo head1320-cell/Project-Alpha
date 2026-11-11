@@ -117,7 +117,7 @@ test("누르면 화면 결과의 설명·봉인을 흐름 순서로 그대로 �
   expect(seen[0].graph.nodes.map((x) => x.id)).toEqual(["universe", "returns", "estimate", "optimizer"]);
   const first = card(page).locator(".pg-ai-para").first();
   await expect(first.locator(".pg-ai-para-text")).toHaveText(PARAS[0].text);
-  await expect(first.locator(".pg-ai-chip")).toHaveText(["1 종목 고르기", "2 수익률 불러오기"]);
+  await expect(first.locator(".pg-ai-chip")).toHaveText(["1 유니버스", "2 수익률 데이터"]);
   await expect(card(page).locator(".pg-ai-story-notice")).toHaveText(NOTICE);
   await expect(card(page).locator(".pg-ai-story-cap")).toContainText("서버 설명을 근거로");
   await card(page).locator(".pg-ai-para").nth(1).locator(".pg-ai-chip").click();

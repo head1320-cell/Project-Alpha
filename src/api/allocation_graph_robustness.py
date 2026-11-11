@@ -3,10 +3,10 @@
 `src/engine/strategy_robustness.py` 의 관측 블록에 두 가지를 붙인다.
 - **시장 대용 위기일** — KODEX 200(`timing_factors._KOSPI_ETF`, 타이밍 신호와 같은 대용)의 일별 수익을 같은 길이로 끝을
   맞춰 가져온다. 없으면 엔진이 전략 평균으로 고르고 그렇다고 라벨을 단다(라벨 붙은 열화).
-- **상관 급등 충격** — `stress_correlation_report`(상관이 치솟으면 노드·`/stress-correlation` 과 같은 함수)를 전략 흐름에.
+- **상관 급등 충격** — `stress_correlation_report`(상관 스트레스 노드·`/stress-correlation` 과 같은 함수)를 전략 흐름에.
   정한 값(가정)과 **실제로 본 가장 높은 평균 창 상관**(관측) 둘. 지금 상관이 이미 그 이상이면 올리지 않고 사유.
 
-전략 합치기(`portfolio_combine`)와 견고성 비교(`sleeve_analytics`) 노드가 같이 쓴다. 배분은 바꾸지 않는다.
+전략 결합(`portfolio_combine`)와 견고성 비교(`sleeve_analytics`) 노드가 같이 쓴다. 배분은 바꾸지 않는다.
 스펙: docs/superpowers/specs/2026-09-28-br-robustness-profile-design.md
 """
 from __future__ import annotations

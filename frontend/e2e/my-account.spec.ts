@@ -281,7 +281,7 @@ test("BV9: 길은 서버 순서대로 네 역이고 지금 상태를 말한다",
   await expect(page.locator(".ma-st")).toHaveCount(4);
   const keys = await page.locator(".ma-st").evaluateAll((els) => els.map((e) => e.getAttribute("data-st")));
   expect(keys).toEqual(["kill", "risk", "mode", "broker"]);
-  await expect(station(page, "kill")).toContainText("꺼져 있습니다");
+  await expect(station(page, "kill")).toContainText("미사용");
   await expect(station(page, "kill")).not.toHaveAttribute("data-blocked", /.*/);   // 짝: 꺼져 있으면 막힘 표시 없음
   await expect(station(page, "broker")).toContainText("보내지 않습니다");
   await expect(page.locator('.ma-mode-b[data-mode="SHADOW"]')).toHaveAttribute("aria-pressed", "true");

@@ -510,7 +510,7 @@ async function addStrategy(page: Page, source: string) {
   await expect(page.locator(".pg-note")).toBeVisible();
 }
 
-test("전략 추가(BM C2): 지금 흐름이 첫 전략이 되고 새 전략이 띠로 들어와 '전략 합치기'에 이어진다 · 계산하면 서버의 전략별 몫", async ({ page }) => {
+test("전략 추가(BM C2): 지금 흐름이 첫 전략이 되고 새 전략이 띠로 들어와 '전략 결합'에 이어진다 · 계산하면 서버의 전략별 몫", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   await expect(page.locator(".pg-group--strategy")).toHaveCount(2);
@@ -543,7 +543,7 @@ test("전략 추가(BM C2): 지금 흐름이 첫 전략이 되고 새 전략이 
   }
 });
 
-test("전략 이름을 바꾸면 포트폴리오 노드의 전략 이름도 바뀌고 결과는 낡음 · 비중 없는 노드는 전략으로 못 묶음(사유)", async ({ page }) => {
+test("전략 이름을 바꾸면 포트폴리오 노드의 전략 이름도 바뀌고 결과는 낡음 · 비중 없는 노드는 전략으로 못 그룹(사유)", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   await run(page);
@@ -719,7 +719,7 @@ test("내 블록: 이 브라우저에 저장할 수 없으면 '없음' 이 아�
   await expect(page.locator(".pg-note")).toContainText("파일로 받아 두십시오");
 });
 
-test("옛 문서(전략 칸 없는 묶음)는 그대로 읽히고 · 전략 문서는 내보내기 → 불러오기 왕복에서 전략 칸이 그대로(BM C2)", async ({ page }) => {
+test("옛 문서(전략 칸 없는 그룹)는 그대로 읽히고 · 전략 문서는 내보내기 → 불러오기 왕복에서 전략 칸이 그대로(BM C2)", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   const dl = page.waitForEvent("download");
@@ -799,24 +799,24 @@ async function makeBranch(page: Page, id: string, via: "toolbar" | "command" = "
     await page.locator('.pg-tab[data-tab="story"]').click();
     await page.locator(`.pg-step[data-node-id="${id}"] .pg-step-num`).click();
     await page.keyboard.press("Control+k");
-    await page.getByLabel("명령 찾기").last().fill("갈래 만들기");
+    await page.getByLabel("명령 찾기").last().fill("대안 만들기");
     await page.keyboard.press("Enter");
   }
   await expect(page.locator(".pg-note")).toBeVisible();
 }
 
-test("갈래(BM C3): 뿌리와 하류를 복제 · 들어오는 선은 원본과 같이 · 나가는 선은 잇지 않음 · 5번째 갈래는 사유와 함께 거절", async ({ page }) => {
+test("대안(BM C3): 뿌리와 하류를 복제 · 들어오는 선은 원본과 같이 · 나가는 선은 잇지 않음 · 5번째 대안은 사유와 함께 거절", async ({ page }) => {
   await openCanvas(page);
   await makeBranch(page, "optimizer");
   let doc = (await wip(page)) as BDoc;
   expect(doc.branches?.length).toBe(1);
   const b = doc.branches![0];
-  expect(b.label).toBe("갈래 B");
+  expect(b.label).toBe("대안 B");
   expect(new Set(Object.values(b.map))).toEqual(new Set(["optimizer", "risk", "backtest"]));
   const copies = new Set(Object.keys(b.map));
   const into = (id: string) => doc.edges.filter((e) => e.target === id).map((e) => `${copies.has(e.source) ? b.map[e.source] : e.source}.${e.source_port}->${e.target_port}`).sort();
   for (const [c, o] of Object.entries(b.map)) expect(into(c), c).toEqual(into(o));
-  expect(doc.edges.filter((e) => copies.has(e.source) && !copies.has(e.target)), "갈래 밖으로 나가는 선").toEqual([]);
+  expect(doc.edges.filter((e) => copies.has(e.source) && !copies.has(e.target)), "대안 밖으로 나가는 선").toEqual([]);
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   await expect(page.locator(".pg-branch .pg-branch-same")).toBeVisible();          // 아직 원본과 같다 — 만든 직후 화면은 읽을 수 있는 확대
   const boxes: { y: number; h: number }[] = [];
@@ -824,12 +824,12 @@ test("갈래(BM C3): 뿌리와 하류를 복제 · 들어오는 선은 원본과
   for (const l of ["C", "D", "E"]) {
     await makeBranch(page, "optimizer", "command");
     doc = (await wip(page)) as BDoc;
-    expect(doc.branches!.map((x) => x.label)).toContain(`갈래 ${l}`);
+    expect(doc.branches!.map((x) => x.label)).toContain(`대안 ${l}`);
   }
   // 갈래 틀끼리 겹치지 않는다.
   for (const b of await page.locator(".pg-branch").all()) { const r = (await b.boundingBox())!; boxes.push({ y: r.y, h: r.height }); }
   boxes.sort((a, z) => a.y - z.y);
-  for (let i = 1; i < boxes.length; i++) expect(boxes[i].y, "갈래 틀 겹침").toBeGreaterThanOrEqual(boxes[i - 1].y + boxes[i - 1].h - 1);
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i].y, "대안 틀 겹침").toBeGreaterThanOrEqual(boxes[i - 1].y + boxes[i - 1].h - 1);
   await makeBranch(page, "optimizer", "command");
   await expect(page.locator(".pg-note")).toContainText("4개까지");
   expect(((await wip(page)) as BDoc).branches!.length).toBe(4);
@@ -877,7 +877,7 @@ test("차이만 보기(BM C3): 바꾼 설정 칩 · 표는 값이 다른 행만(
   expect(checked, "Δ 칩을 적어도 하나는 확인한다").toBeGreaterThan(0);
 });
 
-test("갈래 삭제·되돌리기·파일 왕복(BM C3): 지우면 복제도 함께 · Ctrl+Z 로 돌아옴 · 내보내고 불러와도 갈래 그대로", async ({ page }) => {
+test("대안 삭제·되돌리기·파일 왕복(BM C3): 지우면 복제도 함께 · Ctrl+Z 로 돌아옴 · 내보내고 불러와도 대안 그대로", async ({ page }) => {
   await openCanvas(page);
   const n0 = (await wip(page)).nodes.length;
   await makeBranch(page, "optimizer");
@@ -903,7 +903,7 @@ test("갈래 삭제·되돌리기·파일 왕복(BM C3): 지우면 복제도 함
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`대비(BM C3): ${scheme} — 갈래 틀 · 비교 표 · 정직성 문장 AA 미달 0`, async ({ page }) => {
+  test(`대비(BM C3): ${scheme} — 대안 틀 · 비교 표 · 정직성 문장 AA 미달 0`, async ({ page }) => {
     await openCanvas(page);
     await makeBranch(page, "optimizer");
     await run(page);
@@ -1196,14 +1196,14 @@ test("이 전략만 계산(BN N1): 상자 머리·접은 카드 — 대상 = 전
   await expect(node(page, b.output!)).toHaveClass(/pg-node--previous/);
 });
 
-test("전략째 갈래(BN N1): 상자 머리에서 — 전략 노드 전부 복제 · 안쪽 선은 복제끼리 · 포트폴리오로 나가는 선은 잇지 않음 · 되돌리기", async ({ page }) => {
+test("전략째 대안(BN N1): 상자 머리에서 — 전략 노드 전부 복제 · 안쪽 선은 복제끼리 · 포트폴리오로 나가는 선은 잇지 않음 · 되돌리기", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   let doc = (await wip(page)) as BDoc;
   const [, b] = strategiesOf(doc);
   const pf = portfolioOf(doc);
   await page.locator(`.pg-group--strategy[data-group-id="${b.id}"] .pg-group-branch`).click();
-  await expect(page.locator(".pg-note")).toContainText("갈래");
+  await expect(page.locator(".pg-note")).toContainText("대안");
   doc = (await wip(page)) as BDoc;
   expect(doc.branches).toHaveLength(1);
   const br = doc.branches![0];
@@ -1308,7 +1308,7 @@ test("그림 고정이 파일에 남는다(BN N2): 내보내기 → 불러오기
   expect((await wip(page) as Doc & { pinned?: string[] }).pinned).toEqual(["optimizer"]);
 });
 
-test("갈래 승격(BN N2): '이 갈래를 원본으로' — 바꾼 설정이 원본으로 · 갈래·복제는 사라짐 · 결과 낡음 · 되돌리기 한 번", async ({ page }) => {
+test("대안 승격(BN N2): '이 대안을 원본으로' — 바꾼 설정이 원본으로 · 대안·복제는 사라짐 · 결과 낡음 · 되돌리기 한 번", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   await makeBranch(page, "optimizer");
@@ -1448,7 +1448,7 @@ test("위험 회피 δ(BN N2): 초심자 질문에 없음 · 전문가에서만,
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`대비(BN N2): ${scheme}`, () => {
     test.use({ storageState: { cookies: [], origins: [] } });
-    test("환영 줄 · 종목 후보 목록·칩 · 갈래 승격 단추 AA 미달 0", async ({ page }) => {
+    test("환영 줄 · 종목 후보 목록·칩 · 대안 승격 단추 AA 미달 0", async ({ page }) => {
       await openCanvas(page);
       if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
       let audit = await page.evaluate<AuditResult>(contrastAudit(".pg-welcome"));
@@ -1456,7 +1456,7 @@ for (const scheme of ["light", "dark"] as const) {
       expect(audit.low, `${scheme} 환영 줄`).toEqual([]);
       await makeBranch(page, "optimizer");
       audit = await page.evaluate<AuditResult>(contrastAudit(".pg-branch"));
-      expect(audit.low, `${scheme} 갈래 틀`).toEqual([]);
+      expect(audit.low, `${scheme} 대안 틀`).toEqual([]);
       await page.locator('.pg-tab[data-tab="story"]').click();
       await page.locator('.pg-step[data-node-id="universe"] .pg-step-num').click();
       await page.locator('.pg-tab[data-tab="settings"]').click();
@@ -2021,7 +2021,7 @@ async function branchWithModel(page: Page, model: string) {
   await expect(page.locator(".pg-branch-chip").last()).toContainText("→");
 }
 
-test("갈래 보정(BO O3): 칸 = 서버 DSR · 보낸 곡선 = 백테스트 결과 · N 문장·하한 문장 · 갈래가 늘면 N 이 늘고 값이 바뀜(짝)", async ({ page }) => {
+test("대안 보정(BO O3): 칸 = 서버 DSR · 보낸 곡선 = 백테스트 결과 · N 문장·하한 문장 · 대안이 늘면 N 이 늘고 값이 바뀜(짝)", async ({ page }) => {
   await openCanvas(page);
   await branchWithModel(page, "min_var");
   let sent: { series: { label: string; equity: number[] }[] } | null = null;
@@ -2069,18 +2069,18 @@ test("갈래 보정(BO O3): 칸 = 서버 DSR · 보낸 곡선 = 백테스트 결
   expect(panel).not.toMatch(/추천|가장 좋은|최고|우월|더 나은/);
 });
 
-test("갈래 보정(BO O3): 과거 성과 노드가 갈래에 없으면 보정하지 않고 이유를 말한다(짝)", async ({ page }) => {
+test("대안 보정(BO O3): 과거 성과 노드가 대안에 없으면 보정하지 않고 이유를 말한다(짝)", async ({ page }) => {
   await openCanvas(page);
   await makeBranch(page, "risk");
   await run(page);
   await page.locator('.pg-tab[data-tab="branches"]').click();
-  await expect(page.locator(".pg-branch-dsr-none")).toContainText("과거 성과 노드가 갈래에 들어 있어야");
+  await expect(page.locator(".pg-branch-dsr-none")).toContainText("과거 성과 노드가 대안에 들어 있어야");
   await expect(page.locator(".pg-branch-row--dsr")).toHaveCount(0);
 });
 
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`대비(BO O3): ${scheme} — 갈래 비교의 보정 행·N 문장 AA 미달 0`, async ({ page }) => {
+  test(`대비(BO O3): ${scheme} — 대안 비교의 보정 행·N 문장 AA 미달 0`, async ({ page }) => {
     await openCanvas(page);
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
     await branchWithModel(page, "min_var");
@@ -2089,7 +2089,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(page.locator('.pg-branch-row--dsr[data-row^="dsr:"] td').first()).toHaveText(/%|—/, { timeout: 30_000 });
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-branch-compare"));
     expect(audit.checked).toBeGreaterThan(10);
-    expect(audit.low, `${scheme} 갈래 비교 AA`).toEqual([]);
+    expect(audit.low, `${scheme} 대안 비교 AA`).toEqual([]);
   });
 }
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2129,7 +2129,7 @@ test("빠른 추가 순서(BO O5): 내보내는 선이면 다음 단계부터, �
   expect(shown.slice(0, 8)).toEqual(down.slice(0, 8).map((x) => x.c.type));
 });
 
-test("갈래 맞춤(BO O5): 갈래를 만든 뒤 보이는 노드는 위 떠 있는 판(선 범례) 아래에 선다 — 도구줄이 캔버스 위로 잘리지 않음", async ({ page }) => {
+test("대안 맞춤(BO O5): 대안을 만든 뒤 보이는 노드는 위 떠 있는 판(선 범례) 아래에 선다 — 도구줄이 캔버스 위로 잘리지 않음", async ({ page }) => {
   await openCanvas(page);
   await makeBranch(page, "optimizer");
   await page.waitForTimeout(400);

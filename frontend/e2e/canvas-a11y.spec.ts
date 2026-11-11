@@ -82,7 +82,7 @@ test("R6 · 한국어 문장 표가 React Flow 열쇠 12개를 모두 덮는다 
   }
 });
 
-test("R6 · 화면에 React Flow 영어가 남지 않는다 — 설명문 둘 · Controls 묶음 · 선 이름", async ({ page }) => {
+test("R6 · 화면에 React Flow 영어가 남지 않는다 — 설명문 둘 · Controls 그룹 · 선 이름", async ({ page }) => {
   await open(page, CORE);
   const texts = await page.evaluate(() => [...document.querySelectorAll('[id^="react-flow__node-desc"],[id^="react-flow__edge-desc"]')].map((d) => d.textContent ?? ""));
   expect(texts.length).toBe(2);
@@ -100,7 +100,7 @@ test("R6 · 노드 이름 = 번호 · 이름 · 상태 — 계산 전 → 완료
   await open(page, CORE);
   const cat = await catalog(page);
   const H = { u: await head(page, cat, "universe", "universe"), o: await head(page, cat, "optimizer", "optimizer") };
-  expect(H.u).toBe("노드 1. 종목 고르기");                                    // 배지 번호가 흐름 순서다
+  expect(H.u).toBe("노드 1. 유니버스");                                    // 배지 번호가 흐름 순서다
   await expect(page.getByRole("group", { name: `${H.u} · 계산 전`, exact: true })).toBeVisible();
   await expect(page.getByRole("group", { name: `${H.o} · 계산 전`, exact: true })).toBeVisible();
   await compute(page);
@@ -127,14 +127,14 @@ test("R6 · 설정 문제가 있으면 '설정을 확인할 곳 N곳' (짝: 문�
   await expect(page.getByRole("group", { name: `${U} · 계산 전`, exact: true })).toBeVisible();
 });
 
-test("R6 · 묶음 상자 이름 — 펼침·접힘(상자 머리의 말 '묶음' 그대로) · 선 이름 — 번호 → 번호 · 값 (짝: 접힌 상자에 걸린 선)", async ({ page }) => {
-  await open(page, { ...CORE, groups: [{ id: "g1", label: "묶음", members: ["universe", "returns"] }] });
-  await expect(wrap(page, "frame:g1")).toHaveAttribute("aria-label", "묶음 ‘묶음’ · 노드 2개 · 펼침");
-  await expect(wire(page, UR)).toHaveAttribute("aria-label", "선 1. 종목 고르기 → 2. 수익률 불러오기 · 종목");
-  await page.locator('.pg-group-toggle[aria-label="묶음 접기"]').first().click();
-  await expect(wrap(page, "frame:g1")).toHaveAttribute("aria-label", "묶음 ‘묶음’ · 노드 2개 · 접힘");
+test("R6 · 그룹 상자 이름 — 펼침·접힘(상자 머리의 말 '그룹' 그대로) · 선 이름 — 번호 → 번호 · 값 (짝: 접힌 상자에 걸린 선)", async ({ page }) => {
+  await open(page, { ...CORE, groups: [{ id: "g1", label: "그룹", members: ["universe", "returns"] }] });
+  await expect(wrap(page, "frame:g1")).toHaveAttribute("aria-label", "그룹 ‘그룹’ · 노드 2개 · 펼침");
+  await expect(wire(page, UR)).toHaveAttribute("aria-label", "선 1. 유니버스 → 2. 수익률 데이터 · 종목");
+  await page.locator('.pg-group-toggle[aria-label="그룹 접기"]').first().click();
+  await expect(wrap(page, "frame:g1")).toHaveAttribute("aria-label", "그룹 ‘그룹’ · 노드 2개 · 접힘");
   // 접힌 상자에서 나가는 선은 대리 선 — 실제 끝이 숨었다고 말한다
-  await expect(wire(page, RE)).toHaveAttribute("aria-label", "선 2. 수익률 불러오기 → 3. 기대 수익 추정 · 수익률 · 접힌 상자에 걸린 선");
+  await expect(wire(page, RE)).toHaveAttribute("aria-label", "선 2. 수익률 데이터 → 3. 기대수익률 추정 · 수익률 · 접힌 상자에 걸린 선");
 });
 
 // ── ③ 키보드 ─────────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ test("R6 · 노드에 초점 + Enter = 누르기 · 화살표 한 칸 · 읽어 
   await expect(undoBtn(page)).toBeDisabled();
 });
 
-test("R6 · (짝) 묶음 시간이 지난 뒤 또 누르면 되돌리기 두 단계", async ({ page }) => {
+test("R6 · (짝) 그룹 시간이 지난 뒤 또 누르면 되돌리기 두 단계", async ({ page }) => {
   await open(page, CORE);
   await wrap(page, "returns").focus();
   await page.keyboard.press("Enter");

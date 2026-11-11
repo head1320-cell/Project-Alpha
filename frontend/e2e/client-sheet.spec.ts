@@ -113,7 +113,7 @@ test("PB4 · 인쇄 — 메뉴·도구는 숨고 한 장만 · 미리 묻기(답
   let n = 0;
   await page.route("**/snapshots/*/ask", (r) => r.fulfill({ json: n++ === 0
     ? { available: true, source: "claude", answer: { answerable: true, cannot: null, sentences: [{ text: "가장 큰 비중은 34.04% 입니다.", fact_ids: ["f1"] }] },
-        facts: { f1: { target_kind: "sheet", target_id: sid, where: "비중 계산", part: "비중", index: 0, text: "삼성전자 34.04%" } },
+        facts: { f1: { target_kind: "sheet", target_id: sid, where: "포트폴리오 최적화", part: "비중", index: 0, text: "삼성전자 34.04%" } },
         rejected: [], notice: "합성 데이터 결과입니다." }
     : { available: true, source: "claude", answer: { answerable: false, cannot: "투자 판단은 담당 PB와 상담하십시오 — 여기서는 이 한 장에 적힌 내용만 설명합니다.", sentences: [] },
         facts: {}, rejected: [], notice: null } }));

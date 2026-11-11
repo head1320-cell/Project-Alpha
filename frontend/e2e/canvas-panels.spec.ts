@@ -149,14 +149,14 @@ test("여닫기 단축키(BQ Q1): [ 왼쪽 · ] 오른쪽 · \\ 집중 — 입�
 test("오른쪽 창(BQ Q1): 노드를 고르면 열리고 · × 뒤엔 다음 고를 때까지 닫힘 · 집중 모드에서는 고르기만(짝) · 머리에 고른 노드", async ({ page }) => {
   await openCanvas(page);
   await node(page, "optimizer").click();
-  await expect(side(page).locator(".pg-side-head")).toContainText("비중 계산");
+  await expect(side(page).locator(".pg-side-head")).toContainText("포트폴리오 최적화");
   await page.locator('.pg-panel-toggle[data-panel="right"]').click();
   await expect(side(page)).toBeHidden();
   await clickEmpty(page);                                           // 고른 것을 풀어도 닫힌 채
   await expect(side(page)).toBeHidden();
   await node(page, "risk").click();
   await expect(side(page)).toBeVisible();
-  await expect(side(page).locator(".pg-side-head")).toContainText("흔들림 나눠 보기");
+  await expect(side(page).locator(".pg-side-head")).toContainText("위험 기여도 분해");
   // 짝 — 집중 모드(\)에서는 골라도 열리지 않는다
   await clickEmpty(page);
   await page.keyboard.press("\\");

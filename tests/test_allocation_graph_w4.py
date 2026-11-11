@@ -1,4 +1,4 @@
-"""BK W4 · 실행·기록 노드 — 주문 목록 미리보기 · 실행 목표 · 결정 기록
+"""BK W4 · 실행·기록 노드 — 주문 미리보기 · 실행 목표 · 결정 기록
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W4 ·
 대상 `src/api/allocation_graph_nodes_act.py`

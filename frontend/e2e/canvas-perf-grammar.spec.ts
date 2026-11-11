@@ -285,7 +285,7 @@ test("(j) 백테스트 불러오기 — 같은 문법 · 낙폭은 서버가 % �
   await expect(side(page).locator(".pg-kv", { hasText: "총수익률" }).first()).toBeVisible();          // BL3 W1 계약
 });
 
-test("(k) 전략 묶음 — 같은 문법(서버 모양 픽스처) · 낙폭은 숨은 오른쪽 축이 아니라 같은 물속 · 벤치마크 없음 · 리밸런싱 날짜 없음 · 아래 절 그대로", async ({ page }) => {
+test("(k) 전략 그룹 — 같은 문법(서버 모양 픽스처) · 낙폭은 숨은 오른쪽 축이 아니라 같은 물속 · 벤치마크 없음 · 리밸런싱 날짜 없음 · 아래 절 그대로", async ({ page }) => {
   // 개발 서버에는 등록된 전략이 없어 이 노드를 실제로 돌릴 수 없다(`/multibacktest/strategies` → 0). 7번이 ★실제로 돌린★ 곡선·기간별 수익·
   // 낙폭 사건을 전략 묶음 뷰 모양(`allocation_graph_nodes_strategy._strategy_backtest`)으로 옮긴 픽스처로 화면 문법만 건다 — 수는 서버 것이다.
   await openCanvas(page);

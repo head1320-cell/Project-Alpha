@@ -202,7 +202,7 @@ def _glance(view: dict) -> dict | None:
 
 def register(registry: pg.Registry) -> None:
     registry.register(
-        pg.NodeSpec("record_robustness", "기록끼리 견고성", stage="check", plain_label="기록으로 같이 무너지나 보기",
+        pg.NodeSpec("record_robustness", "기록끼리 견고성", stage="check", plain_label="기록 기반 견고성 비교",
                     plain_description="등록한 전략·백테스트 실행·정책 백테스트 결과끼리 평소·위기 때 얼마나 같이 움직였는지, "
                                       "크게 잃은 구간이 겹쳤는지 날짜를 맞춰 봅니다.",
                     inputs=tuple(P(k, "BacktestRun", required=False) for k in RUN_PORTS)

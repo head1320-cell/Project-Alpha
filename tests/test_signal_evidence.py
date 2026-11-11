@@ -182,7 +182,7 @@ def test_a_timing_rule_without_an_origin_is_unknown():
 
     AX 이전에는 33개 **전부**가 미상이었고 사유가 *"개정 정책은 아는데 출처는
     안 실어 나른다"* 였다. 이제 24개가 `etf_prices` 를 싣는다. 남는 것은
-    ★평가 함수가 아예 없는 §6.1 묶음 4개★다.
+    ★평가 함수가 아예 없는 §6.1 그룹 4개★다.
     """
     out = signal_grade(_sig(KIND_TIMING_RULE, category="regime",
                             revision_policy="revised", origin=None))
@@ -288,7 +288,7 @@ def test_the_stale_timing_reason_is_gone(monkeypatch):
 
     ★처음 쓴 이 테스트는 등급이 **붙는** 팩터를 겨눴고, 그래서 변이가
     살아남았다★ — 낡은 문구는 **미상 경로**에서만 나온다. 미상으로 남는
-    두 묶음 **전부**를 본다.
+    두 그룹 **전부**를 본다.
     """
     monkeypatch.setenv("KIS_USE_MOCK", "1")
     monkeypatch.delenv("FRED_API_KEY", raising=False)

@@ -100,7 +100,7 @@ export function ClientDocChip({ ctx }: { ctx: ClientDocCtx }) {
     : !report ? "계산한 뒤에 한 장을 만들 수 있습니다."
     : report.partial ? "전체를 계산한 뒤에 한 장을 만들 수 있습니다 — ‘여기까지 계산’ 은 일부만 계산합니다."
     : staleIds.length ? "고친 것이 있습니다 — 재계산한 뒤 한 장을 만들 수 있습니다."
-    : !focus ? "비중을 낸 노드가 없습니다 — 비중 계산 노드를 계산한 뒤 만들 수 있습니다."
+    : !focus ? "비중을 낸 노드가 없습니다 — 포트폴리오 최적화 노드를 계산한 뒤 만들 수 있습니다."
     : null;
   const [making, setMaking] = useState(false);
 

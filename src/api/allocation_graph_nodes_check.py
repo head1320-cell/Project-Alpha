@@ -235,7 +235,7 @@ def _sensitivity(inputs: dict, p) -> pg.NodeOutput:
     r, w = inputs["returns"], inputs["weights"]
     req = w.get("req")
     if req is None:
-        raise pg.NodeFailure("이 비중에는 다시 풀어 볼 규칙(위험 회피·생각)이 없습니다 — ‘비중 계산’ 노드의 "
+        raise pg.NodeFailure("이 비중에는 다시 풀어 볼 규칙(위험 회피·생각)이 없습니다 — ‘포트폴리오 최적화’ 노드의 "
                              "비중을 연결하십시오.")
     names, _ = _names_on(w, r["returns"])
     views = [v.model_dump() for v in (req.views or [])]
@@ -346,18 +346,18 @@ def _explain_xray(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("scenario_stress", "시나리오 충격", stage="check", plain_label="상황에 넣어 보기",
+        pg.NodeSpec("scenario_stress", "시나리오 충격", stage="check", plain_label="시나리오 스트레스",
                     plain_description="과거 위기나 가정한 충격에 이 비중을 넣어 봅니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("stress", "StressReport"),),
                     run=_scenario_stress, params_model=ScenarioParams, explain=_explain_scenario,
                     category="확인", description="역사 리플레이 · M8 가정 충격 · 국내 시나리오팩(/stress · /kr-scenario 와 같다)."),
-        pg.NodeSpec("corr_stress", "상관 스트레스", stage="check", plain_label="상관이 치솟으면",
+        pg.NodeSpec("corr_stress", "상관 스트레스", stage="check", plain_label="상관 스트레스",
                     plain_description="위기 때 종목들이 같이 움직이면 흔들림이 얼마나 커지는지 봅니다.",
                     inputs=(P("returns", "Returns"), P("weights", "Weights")),
                     outputs=(P("stress", "StressReport"),), run=_corr_stress, params_model=CorrParams,
                     explain=_explain_corr, category="확인",
                     description="위기 상관 수렴 가정 → 변동성·VaR·기여 VaR 변화(/stress-correlation 과 같다)."),
-        pg.NodeSpec("sensitivity", "기대수익 민감도", stage="check", plain_label="기대수익이 틀리면?",
+        pg.NodeSpec("sensitivity", "기대수익 민감도", stage="check", plain_label="기대수익 민감도",
                     plain_description="기대수익이 조금 틀렸을 때 비중이 얼마나 바뀌는지 봅니다.",
                     inputs=(P("returns", "Returns"), P("weights", "Weights")), outputs=(),
                     run=_sensitivity, params_model=SensParams, explain=_explain_sensitivity, category="확인",

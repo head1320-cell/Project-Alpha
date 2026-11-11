@@ -167,17 +167,17 @@ test("물으면 /run 의 설명·봉인과 전달 점검·봉인을 그대로 �
   const turn = dock(page).locator(".pg-ask-turn").first();
   await expect(turn.locator(".pg-ask-q")).toHaveText("왜 이렇게 나눴나요?");
   await expect(turn.locator(".pg-ask-sent-text")).toHaveText(SENTS.map((x) => x.text));
-  await expect(turn.locator(".pg-ask-sent").nth(1).locator(".pg-ask-chip")).toHaveText(["4 비중 계산 · 제목", "2→4 선 · 건너간 것 1"]);
+  await expect(turn.locator(".pg-ask-sent").nth(1).locator(".pg-ask-chip")).toHaveText(["4 포트폴리오 최적화 · 제목", "2→4 선 · 건너간 것 1"]);
   const chip = turn.locator(".pg-ask-sent").first().locator(".pg-ask-chip");
-  await expect(chip).toHaveText("3 기대 수익 추정 · 사실 2");
+  await expect(chip).toHaveText("3 기대수익률 추정 · 사실 2");
   await expect(chip).toHaveAttribute("aria-expanded", "false");
   await expect(turn.locator(".pg-ask-fact")).toHaveCount(0);
   await chip.click();
   await expect(chip).toHaveAttribute("aria-expanded", "true");
   await expect(turn.locator(".pg-ask-fact-text")).toHaveText("기대 수익은 과거 평균입니다");
-  await expect(page.locator(".pg-side-title")).toContainText("비중 계산");                 // 펼치기만 — 고른 것은 그대로
+  await expect(page.locator(".pg-side-title")).toContainText("포트폴리오 최적화");                 // 펼치기만 — 고른 것은 그대로
   await turn.locator(".pg-ask-goto").click();
-  await expect(page.locator(".pg-side-title")).toContainText("기대 수익 추정");
+  await expect(page.locator(".pg-side-title")).toContainText("기대수익률 추정");
   await expect(dock(page).locator(".pg-ask-to")).toHaveText("3 기대 수익 추정에게 묻기");
 });
 
@@ -192,7 +192,7 @@ test("자주 묻는 질문 칩은 누르면 바로 묻는다 · 노드와 선은
   await expect.poll(() => seen.length).toBe(1);
   expect(seen[0].question).toBe("미측정 항목은 무엇입니까?");
   await pickEdge(page, RO);
-  await expect(dock(page).locator(".pg-ask-to")).toHaveText("2 수익률 불러오기 → 4 비중 계산 선에게 묻기");
+  await expect(dock(page).locator(".pg-ask-to")).toHaveText("2 수익률 데이터 → 4 포트폴리오 최적화 선에게 묻기");
   await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["전달 항목은 무엇입니까?", "누락·변경 항목이 있습니까?"]);
   await dock(page).locator(".pg-ask-preset").first().click();
   await expect.poll(() => seen.length).toBe(2);

@@ -22,8 +22,8 @@ import { contrastAudit, trackErrors, uniq, type AuditResult } from "./helpers";
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TOOLS: [string, string, string][] = [
-  ["종목 찾기", "/screener", "조건으로 종목 거르기"], ["백테스트", "/backtest", "조건으로 골라 사고팔아 보기"],
-  ["매크로 분석", "/macro", "경기 국면 불러오기"], ["기업 분석", "/insights", "적정가 매기기"], ["위험 점검", "/risk-tools", "상황에 넣어 보기"],
+  ["종목 찾기", "/screener", "스크리닝"], ["백테스트", "/backtest", "조건식 백테스트"],
+  ["매크로 분석", "/macro", "경기 국면"], ["기업 분석", "/insights", "기업 가치평가"], ["위험 점검", "/risk-tools", "시나리오 스트레스"],
 ];
 const MODE: Record<string, string> = { NORMAL: "보통", CAUTIOUS: "조심", DEFENSIVE: "방어" };
 type Regime = { recommended_mode: string; stress_score: number };

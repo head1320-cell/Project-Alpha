@@ -17,8 +17,8 @@ const NODES = [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }
 const EDGES = [e("universe", "universe", "returns", "universe"), e("returns", "returns", "estimate", "returns"),
                e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")];
 const CORE = { ...F, nodes: NODES, edges: EDGES };
-const FOLDED = { ...CORE, groups: [{ id: "g1", label: "묶음", members: ["universe", "returns"], collapsed: true }] };
-const GROUPED = { ...CORE, groups: [{ id: "g1", label: "묶음", members: ["universe", "returns"] }] };
+const FOLDED = { ...CORE, groups: [{ id: "g1", label: "그룹", members: ["universe", "returns"], collapsed: true }] };
+const GROUPED = { ...CORE, groups: [{ id: "g1", label: "그룹", members: ["universe", "returns"] }] };
 const HEAD = { x: 30, y: 14 };
 
 type Doc = { nodes: { id: string; position: { x: number; y: number } }[]; edges: { id: string }[]; groups?: unknown[]; branches?: unknown[] };

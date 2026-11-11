@@ -62,7 +62,7 @@ def _days():
 
 
 def _series_map_on(monkeypatch, day: date, shape: dict[str, int]) -> dict:
-    """수집기의 "오늘"이 `day` 일 때의 합성 계열 묶음."""
+    """수집기의 "오늘"이 `day` 일 때의 합성 계열 그룹."""
     pinned = datetime(day.year, day.month, day.day, 9, 0, 0)
 
     class _Pinned(datetime):

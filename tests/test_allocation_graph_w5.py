@@ -1,14 +1,14 @@
 """BK W5 · 기업·가치평가·되짚기 노드 — 기존 문과 같은 수 · 지금 시점 전용은 과거로 가지 않는다
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W5 ·
-대상 `src/api/allocation_graph_nodes_strategy.py` (전략 묶음은 `test_allocation_graph_w5_strategy.py`)
+대상 `src/api/allocation_graph_nodes_strategy.py` (전략 그룹은 `test_allocation_graph_w5_strategy.py`)
 
 ## 거는 것
 - 기업 전망 → 비중 == `/analyze(use_company_views=True)` — 같은 가중·같은 블록. 옵티마이저는 회사 뷰를
   사용자 뷰와 섞지 않고 `company_views=` 로 넘긴다(공시 `company_views_used` 가 제 몫만 센다).
 - 기업 전망·가치평가 점수는 **지금 시점 전용** — 하류 정책 백테스트가 거절한다(짝: 없으면 통과).
 - 가치평가 점수 == `/valuation/compare` 행 · 점수 = −괴리율 · ★적정가를 못 낸 종목은 점수에 없다★(미상 ≠ 0).
-- 결정 되짚기 == `/attribution/{run_id}` · 없는 기록은 실패 + 사유.
+- 결정 사후 검토 == `/attribution/{run_id}` · 없는 기록은 실패 + 사유.
 """
 from __future__ import annotations
 

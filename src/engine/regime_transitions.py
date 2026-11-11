@@ -248,7 +248,7 @@ def regime_occupancy(points: list[dict]) -> dict:
 
 def regime_transitions(series_map: dict, market: str = "kr", months: int = 60,
                        forecast_k: int = 3) -> dict:
-    """전환 위험 한 묶음 — 경로 · 전이 사후 · k개월 예측 · 지속성 맥락."""
+    """전환 위험 한 그룹 — 경로 · 전이 사후 · k개월 예측 · 지속성 맥락."""
     path = regime_path(series_map, market, months)
     points = path["points"]
     if len(points) < 2:

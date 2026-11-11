@@ -189,7 +189,7 @@ export function ThreeWayResult({ v }: { v: Dict }) {
     <>
       <p className="pg-model-type pg-model-type--hypo">{String(sc.label ?? "")} · {String(sc.shock_basis ?? "")}</p>
       <table className="pg-table pg-threeway">
-        <thead><tr><th>갈래</th><th>판정</th><th className="pg-td-num">노출</th><th className="pg-td-num">손실</th></tr></thead>
+        <thead><tr><th>대안</th><th>판정</th><th className="pg-td-num">노출</th><th className="pg-td-num">손실</th></tr></thead>
         <tbody>{Object.entries(legs).map(([k, g]) => (
           <tr key={k}>
             <td className="pg-td-name">{LEG_KO[k] ?? k}</td>
@@ -241,7 +241,7 @@ function useSleeveLegend(ports: string[]): [string, string][] {
     const title = n ? catalog?.find((c) => c.type === n.data.kind)?.plain_label ?? n.data.kind : "이어진 노드 없음";
     // 캔버스 카드의 번호와 같은 번호(흐름 순서) — 같은 종류를 둘 이으면 이름만으로는 가를 수 없다.
     const no = n ? topoOrder(nodes.map((x) => x.id), edges).indexOf(n.id) + 1 : 0;
-    return [`묶음 ${i + 1}`, no ? `${no}번 ${title}` : title];
+    return [`그룹 ${i + 1}`, no ? `${no}번 ${title}` : title];
   });
 }
 
@@ -256,12 +256,12 @@ export function SleeveAnalyticsResult({ v }: { v: Dict }) {
   return (
     <>
       {legend.length ? (
-        <ul className="pg-rob-legend" aria-label="묶음과 이어진 노드">
+        <ul className="pg-rob-legend" aria-label="그룹과 이어진 노드">
           {legend.map(([k, t]) => <li key={k}><b>{k}</b>{t}</li>)}
         </ul>
       ) : null}
       <RobustnessView rob={v.robustness as Dict | undefined} />
-      <h4 className="pg-h4">묶음 사이 상관 · 위험 몫</h4>
+      <h4 className="pg-h4">그룹 사이 상관 · 위험 몫</h4>
       <KV rows={[["평균 상관", num(r.avg_correlation) === null ? "—" : (r.avg_correlation as number).toFixed(2)],
                  ["군집", `${String(r.n_clusters ?? "—")}개`],
                  ["함께 빠지는 정도", num(tail.lower_tail_coexceedance) === null ? "—" : `${(tail.lower_tail_coexceedance as number).toFixed(2)} (1 = 서로 무관)`]]} />

@@ -116,7 +116,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     // 한 노드는 한 묶음에만 — 다른 묶음에 있던 노드는 옮겨 온다.
     const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.includes(m)) }))
       .filter((g) => g.members.length >= 1);
-    set({ groups: [...groups, { id, label: label ?? `묶음 ${groups.length + 1}`, members: ids, collapsed: false }] });
+    set({ groups: [...groups, { id, label: label ?? `그룹 ${groups.length + 1}`, members: ids, collapsed: false }] });
     return id;
   },
 
@@ -127,7 +127,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     // 출력을 정할 수 없으면(흐름 끝이 둘 이상) 하나를 말없이 고르지 않고 까닭(U6 이어서 — 갈래의 [전략으로 묶기]와 같은 규칙 · CLAUDE.md 침묵 폴백 금지).
     const ends = strategyEnds(ids, s.nodes, s.edges, s.catalog ?? []);
     if (!ends.length) return "고른 노드에 비중을 내는 노드가 없습니다 — 전략은 비중을 내야 포트폴리오에 합칠 수 있습니다. 그냥 묶으려면 Ctrl+G 를 씁니다.";
-    if (ends.length > 1) return `고른 노드에 비중을 내는 끝이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나만 고르거나 ‘묶음 합치기’로 모으십시오.`;
+    if (ends.length > 1) return `고른 노드에 비중을 내는 끝이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나만 고르거나 ‘슬리브 결합’으로 모으십시오.`;
     const output = ends[0];
     push();
     const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.includes(m)) })).filter((g) => g.members.length);
@@ -136,7 +136,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const label = uniqueLabel(`전략 ${groups.filter((g) => g.kind === "strategy").length + 1}`, groups);
     set({ groups: [...groups, { id: `grp_${Date.now().toString(36)}${nextSeq().toString(36)}`, label, members: ids,
                                 collapsed: false, kind: "strategy", color, output }] });
-    return `고른 노드 ${ids.length}개를 ‘${label}’로 묶었습니다. 포트폴리오에 합치려면 ‘전략 추가’로 전략을 하나 더 넣거나, 비중 출력을 ‘전략 합치기’ 노드에 잇습니다.`;
+    return `고른 노드 ${ids.length}개를 ‘${label}’로 묶었습니다. 포트폴리오에 합치려면 ‘전략 추가’로 전략을 하나 더 넣거나, 비중 출력을 ‘전략 결합’ 노드에 잇습니다.`;
   },
 
   comparePicked: () => {
@@ -222,7 +222,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     set({ nodes, edges, groups, selectedId: null, picked: [] });
     if (!output) return `${wrapped}‘${label}’을 넣었습니다. 이 전략에는 비중을 내는 노드가 없어 포트폴리오에 잇지 않았습니다.`;
     if (unwired) return `${wrapped}‘${label}’을 넣었습니다. 포트폴리오 노드의 빈 자리(최대 ${PORTFOLIO_PORTS.length}개)가 없어 ${unwired}개는 잇지 못했습니다.`;
-    return `${wrapped}‘${label}’을 넣어 ‘전략 합치기’에 이었습니다. 계산하면 전략별 몫이 보입니다.`;
+    return `${wrapped}‘${label}’을 넣어 ‘전략 결합’에 이었습니다. 계산하면 전략별 몫이 보입니다.`;
   },
 
   insertBlock: (b) => {
@@ -303,16 +303,16 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const members = want ? topoOrder(s.nodes.map((n) => n.id), s.edges).filter((id) => want.includes(id)) : null;
     const rootId = members?.[0] ?? rootIdArg;
     const root = s.nodes.find((n) => n.id === rootId);
-    if (!root) return "갈래를 만들 노드를 찾지 못했습니다.";
+    if (!root) return "대안을 만들 노드를 찾지 못했습니다.";
     // 갈래의 갈래는 원본 뿌리에 붙인다 — 비교 표가 한 원본을 기준으로 선다.
     const parent = s.branches.find((b) => rootId in b.map);
     const ofRoot = parent ? parent.map[rootId] : rootId;
     // 고른 것은 모두 원본이거나 모두 뿌리와 같은 갈래 안이어야 한다 — 섞이면 어느 쪽 설정을 이을지 정할 수 없다.
     if (picked && members!.some((id) => s.branches.find((b) => id in b.map) !== parent))
-      return "고른 노드가 원본과 갈래(또는 서로 다른 갈래)에 섞여 있습니다 — 원본에서만, 또는 한 갈래 안에서만 선택하십시오.";
-    if (parent && parent.root !== rootId) return "갈래는 뿌리 노드에서만 다시 만들 수 있습니다 — 갈래 안의 뿌리(점선 틀의 맨 앞)를 선택하십시오.";
+      return "고른 노드가 원본과 대안(또는 서로 다른 대안)에 섞여 있습니다 — 원본에서만, 또는 한 대안 안에서만 선택하십시오.";
+    if (parent && parent.root !== rootId) return "대안은 뿌리 노드에서만 다시 만들 수 있습니다 — 대안 안의 뿌리(점선 틀의 맨 앞)를 선택하십시오.";
     const letter = nextBranchLetter(ofRoot, s.branches);
-    if (!letter) return `한 노드에 갈래는 ${MAX_BRANCHES}개까지입니다 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커집니다. 쓰지 않는 갈래를 지우고 생성하십시오.`;
+    if (!letter) return `한 노드에 대안은 ${MAX_BRANCHES}개까지입니다 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커집니다. 쓰지 않는 대안을 지우고 생성하십시오.`;
     // 갈래 안에서 고른 것은 원본 이름으로 — 범위는 늘 원본 노드다(복제의 설정은 아래 `from` 이 잇는다).
     const scope = branchScope(ofRoot, s.nodes, s.edges, s.groups, s.branches, members?.map((id) => parent?.map[id] ?? id));
     push();
@@ -353,7 +353,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       const target = idOf.get(e.target)!;
       return { ...bare(e), id: `${source}.${e.sourceHandle}->${target}.${e.targetHandle}`, source, target, selected: false };
     });
-    const branch: GraphBranch = { id: `br_${Date.now().toString(36)}${nextSeq().toString(36)}`, label: `갈래 ${letter}`,
+    const branch: GraphBranch = { id: `br_${Date.now().toString(36)}${nextSeq().toString(36)}`, label: `대안 ${letter}`,
       root: idOf.get(ofRoot)!, of_root: ofRoot, map: Object.fromEntries(scope.map((id) => [idOf.get(id)!, id])) };
     // U6(사용자 결정 2026-11-01 "원본이 전략이면 자동") — 전략 상자째 갈래면 복제도 새 전략 상자(출력 = 원본 출력의 복제) · 같은 되돌리기 한 단계.
     const box = strat ? strategyBox(s.groups, scope.filter((id) => strat.members.includes(id)).map((id) => idOf.get(id)!),
@@ -365,7 +365,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
   branchPicked: () => {
     const s = get();
     const ok = s.picked.filter((id) => s.nodes.find((n) => n.id === id)?.data.kind !== PORTFOLIO_NODE);
-    if (!ok.length) return "포트폴리오 노드는 갈래로 복제하지 않습니다 — 계산 노드를 선택하십시오.";
+    if (!ok.length) return "포트폴리오 노드는 대안으로 복제하지 않습니다 — 계산 노드를 선택하십시오.";
     const before = s.branches.length;
     const msg = get().makeBranch("", undefined, ok);
     return get().branches.length > before && ok.length < s.picked.length ? `${msg} 포트폴리오 노드는 넣지 않았습니다.` : msg;
@@ -382,25 +382,25 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
   branchStrategy: (id) => {
     const s = get();
     const b = s.branches.find((x) => x.id === id);
-    if (!b) return "갈래를 찾지 못했습니다.";
+    if (!b) return "대안을 찾지 못했습니다.";
     const copies = Object.keys(b.map).filter((c) => s.nodes.some((n) => n.id === c));
     if (copies.length && s.groups.some((g) => g.kind === "strategy" && copies.every((c) => g.members.includes(c)))) return `‘${b.label}’는 이미 전략 상자입니다.`;
     // 결정 5 — 출력을 정할 수 없으면(범위 안 흐름 끝이 둘 이상) 까닭. 끝이 하나면 그것이 출력(`strategyOutput` 과 같은 노드).
     const ends = strategyEnds(copies, s.nodes, s.edges, s.catalog ?? []);
     if (!ends.length) return `‘${b.label}’에 비중을 내는 노드가 없습니다 — 전략은 비중을 내야 포트폴리오에 합칠 수 있습니다.`;
-    if (ends.length > 1) return `‘${b.label}’에 비중을 내는 끝이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나를 지우거나 ‘묶음 합치기’로 모으십시오.`;
+    if (ends.length > 1) return `‘${b.label}’에 비중을 내는 끝이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나를 지우거나 ‘슬리브 결합’으로 모으십시오.`;
     const output = ends[0];
     push();
     // 한 노드는 한 상자 — 복제가 다른 상자에 들어 있으면 거기서 뺀다(`strategyPicked` 와 같다).
     const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.includes(m)) })).filter((g) => g.members.length);
     const box = strategyBox(groups, copies, output, `${b.label} 전략`);
     set({ groups: [...groups, box] });
-    return `‘${b.label}’를 ‘${box.label}’로 묶었습니다 — 포트폴리오에 합치려면 비중 출력을 ‘전략 합치기’에 잇습니다.`;
+    return `‘${b.label}’를 ‘${box.label}’로 묶었습니다 — 포트폴리오에 합치려면 비중 출력을 ‘전략 결합’에 잇습니다.`;
   },
   promoteBranch: (id) => {
     const s = get();
     const b = s.branches.find((x) => x.id === id);
-    if (!b) return "갈래를 찾지 못했습니다.";
+    if (!b) return "대안을 찾지 못했습니다.";
     push();
     const copies = new Set(Object.keys(b.map));
     const copyOf = new Map(Object.entries(b.map).map(([c, o]) => [o, c]));
@@ -417,7 +417,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
           selectedId: s.selectedId && copies.has(s.selectedId) ? null : s.selectedId, picked: [] });
     return moved
       ? `‘${b.label}’의 바꾼 설정 ${moved}개를 원본으로 옮겼습니다 — 재계산하십시오. 되돌리기(Ctrl+Z)로 돌아갈 수 있습니다.`
-      : `‘${b.label}’은 원본과 같아서 옮길 설정이 없었습니다 — 갈래만 지웠습니다. 되돌리기(Ctrl+Z)로 돌아갈 수 있습니다.`;
+      : `‘${b.label}’은 원본과 같아서 옮길 설정이 없었습니다 — 대안만 지웠습니다. 되돌리기(Ctrl+Z)로 돌아갈 수 있습니다.`;
   },
   loadBlocks: () => { const r = readBlocks(); set({ blocks: r.blocks, blocksAvailable: r.available }); },
   saveBlock: (groupId) => {

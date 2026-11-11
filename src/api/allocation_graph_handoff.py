@@ -216,7 +216,7 @@ def intake_weights_default(h: pg.Handoff) -> dict:
 
 
 def intake_returns_from_universe(h: pg.Handoff) -> dict:
-    """R1 — 수익률 불러오기가 받은 종목·기간 중 잃은 것."""
+    """R1 — 수익률 데이터가 받은 종목·기간 중 잃은 것."""
     view = h.view or {}
     cov = view.get("coverage") or {}
     a = cov.get("alignment") or {}
@@ -239,10 +239,10 @@ def intake_returns_from_universe(h: pg.Handoff) -> dict:
 
 
 def intake_unused_returns(h: pg.Handoff) -> dict:
-    """R3 — 기대 수익 추정은 들어오는 수익률을 읽지 않는다(설정만 넘긴다 — 입력을 바꾸는 일은 별도 승인)."""
+    """R3 — 기대수익률 추정은 들어오는 수익률을 읽지 않는다(설정만 넘긴다 — 입력을 바꾸는 일은 별도 승인)."""
     return _out(["받는 쪽이 이 값을 읽는지"],
-                [_i("unused", "not_read", "‘기대 수익 추정’은 이 수익률을 읽지 않습니다 — 설정만 ‘비중 계산’에 넘기고, "
-                                          "기대 수익은 ‘비중 계산’이 자기 수익률로 계산합니다.")])
+                [_i("unused", "not_read", "‘기대수익률 추정’은 이 수익률을 읽지 않습니다 — 설정만 ‘포트폴리오 최적화’에 넘기고, "
+                                          "기대 수익은 ‘포트폴리오 최적화’가 자기 수익률로 계산합니다.")])
 
 
 def _beta_active(params: Any) -> bool:
@@ -273,7 +273,7 @@ def intake_optimizer_views(h: pg.Handoff) -> dict:
     for leg in view.get("view_legs_dropped") or []:
         issues.append(_i("changed", "legs_dropped", f"생각 {leg['index'] + 1}({leg.get('label')})은 유니버스 밖 종목 "
                                                      f"{_names(leg.get('dropped') or [], 3)}이 빠져 나머지만 반영됐습니다.",
-                         "빠진 종목을 ‘종목 고르기’에 넣거나 생각에서 빼십시오."))
+                         "빠진 종목을 ‘유니버스’에 넣거나 생각에서 빼십시오."))
     for f in view.get("fallbacks") or []:
         if f.get("stage") == "view_applied" and f.get("affects_weights"):
             issues.append(_i("changed", "views_market", str(f.get("text") or f.get("reason") or "")))
@@ -322,9 +322,9 @@ def intake_backtest_weights(h: pg.Handoff) -> dict:
         want = RISK_AVERSION_DEFAULT if req.risk_aversion is None else float(req.risk_aversion)
         got = (((h.view or {}).get("config") or {}).get("risk_aversion") or {}).get("value")
         if got is None:
-            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 어느 λ 로 풀었는지 밝히지 않았습니다."))
+            issues.append(_i("changed", "lambda_dropped", f"포트폴리오 최적화는 위험 회피 λ {want:g}로 풀었지만 백테스트는 어느 λ 로 풀었는지 밝히지 않았습니다."))
         elif float(got) != want:
-            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 λ {float(got):g}로 다시 풀었습니다."))
+            issues.append(_i("changed", "lambda_dropped", f"포트폴리오 최적화는 위험 회피 λ {want:g}로 풀었지만 백테스트는 λ {float(got):g}로 다시 풀었습니다."))
     used = ((w.get("opt") or {}).get("company_views_used")) or 0
     if used:
         issues.append(_i("lost", "company_views_dropped", f"회사 가치에서 온 생각 {used}개는 백테스트로 넘어가지 않습니다."))
@@ -368,7 +368,7 @@ def intake_s2w_returns(h: pg.Handoff) -> dict:
     if miss.get("reason") == "codes_missing":
         issues.append(_i("lost", "codes_missing", f"이 수익률에 없는 종목({_names(miss.get('codes') or [], 3)})이 있어 "
                                                   "공분산을 비중과 함께 보내지 못합니다.",
-                         "같은 종목으로 ‘수익률 불러오기’를 연결하십시오."))
+                         "같은 종목으로 ‘수익률 데이터’를 연결하십시오."))
     return _out([_R2_CHECK, "비중의 종목이 모두 이 수익률에 있는지"], issues)
 
 

@@ -196,7 +196,7 @@ def _request_fn() -> ast.FunctionDef:
 
 
 def _statement_lists(node) -> list[list]:
-    """트리 안의 모든 **문장 목록**(형제 문장 묶음)을 모은다."""
+    """트리 안의 모든 **문장 목록**(형제 문장 그룹)을 모은다."""
     out: list[list] = []
     for n in ast.walk(node):
         for field in ("body", "orelse", "finalbody"):

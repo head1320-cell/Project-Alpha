@@ -70,7 +70,7 @@ class RebalanceParams(BaseModel):
     model_config = _FORBID
     holdings: list[HoldingRow] = Field(
         [], max_length=30, json_schema_extra={"x-ui": _ui(
-            "지금 들고 있는 비중", question="현재 보유 종목·비중",
+            "현재 보유 비중", question="현재 보유 종목·비중",
             help="비우면 유니버스 노드의 '지금 비중' 을 씁니다. 둘 다 없으면 판단할 수 없습니다.")})
     portfolio_value: float = Field(1e8, gt=0, le=1e13, json_schema_extra={"x-ui": _ui(
         "평가 금액", unit="원", presets=[{"label": "1천만", "value": 1e7}, {"label": "1억", "value": 1e8}],
@@ -86,10 +86,10 @@ def _rebalance_request(inputs: dict, p: RebalanceParams, *, record: bool):
     w = inputs["weights"]
     req = w.get("req")
     if req is None:
-        raise pg.NodeFailure("이 비중에는 만든 규칙(유니버스·기간·모델)이 없습니다 — 비중 계산 노드의 비중을 연결하십시오.")
+        raise pg.NodeFailure("이 비중에는 만든 규칙(유니버스·기간·모델)이 없습니다 — 포트폴리오 최적화 노드의 비중을 연결하십시오.")
     holdings = {h.code: h.pct for h in p.holdings if h.pct > 0} or dict(req.weights or {})
     if not holdings:
-        raise pg.NodeFailure("지금 들고 있는 비중이 없습니다 — 설정에 적거나 유니버스 노드의 '지금 비중' 을 채워 주십시오.")
+        raise pg.NodeFailure("현재 보유 비중이 없습니다 — 설정에 적거나 유니버스 노드의 '지금 비중' 을 채워 주십시오.")
     target = {n: float(x) * 100 for n, x in zip(w["names"], np.asarray(w["weights"], dtype=float))}
     base = req.model_dump()
     return RebalanceDecisionRequest(**{**base, "holdings": holdings, "weight_unit": "percent",
@@ -117,7 +117,7 @@ def _rebalance(inputs: dict, p: RebalanceParams) -> pg.NodeOutput:
 
 
 def _save_decision(values: dict, view: dict, params: Any) -> dict:
-    """결정 기록 남기기 — 기록 없이 재계산해 미리보기와 같을 때만 기록한다(BL2a 와 같은 규율)."""
+    """투자 결정 기록 — 기록 없이 재계산해 미리보기와 같을 때만 기록한다(BL2a 와 같은 규율)."""
     from src.api import allocation_routes as ar
     p = params if isinstance(params, RebalanceParams) else RebalanceParams(**(params or {}))
     probe = ar.rebalance_decision_route(_rebalance_request(values, p, record=False))
@@ -441,33 +441,33 @@ def _explain_counterfactual(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("rebalance_decision", "리밸런싱 판단", plain_label="지금 거래할 가치가 있나", category="실행", stage="act",
+        pg.NodeSpec("rebalance_decision", "리밸런싱 판단", plain_label="리밸런싱 판단", category="실행", stage="act",
                     plain_description="목표 비중으로 옮길 때 얻는 효용과 드는 비용을 견줘 거래할지 판단합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(), run=_rebalance, params_model=RebalanceParams,
-                    explain=_explain_rebalance, save=_save_decision, save_label="결정 기록 남기기",
+                    explain=_explain_rebalance, save=_save_decision, save_label="투자 결정 기록",
                     description="rebalance_decision_route(record_decision=False) — 기록은 저장 버튼만."),
-        pg.NodeSpec("implement_exposures", "노출 → 상품", plain_label="시장 비중을 상품으로", category="배분", stage="build",
+        pg.NodeSpec("implement_exposures", "노출 → 상품", plain_label="노출의 상품 구현", category="배분", stage="build",
                     plain_description="국내 주식·금리·원자재 같은 비중을 실제로 살 수 있는 상장 상품으로 바꿉니다.",
                     inputs=(), outputs=(P("weights", "Weights"),), run=_implement, params_model=ImplementParams,
                     explain=_explain_implement, description="implement_exposures_route(/implement 와 같다)."),
-        pg.NodeSpec("pair_spread", "페어 스프레드", plain_label="한 종목 사고 한 종목 팔기", category="배분", stage="build",
+        pg.NodeSpec("pair_spread", "페어 스프레드", plain_label="페어 트레이딩", category="배분", stage="build",
                     plain_description="두 종목을 사고팔아 시장 방향 노출을 줄이는 비율을 봅니다.",
                     inputs=(), outputs=(), run=_pair, params_model=PairParams, explain=_explain_pair,
                     description="sleeve_routes.pair_spread(/pair-spread 와 같다)."),
-        pg.NodeSpec("market_impact", "시장 충격", plain_label="주문이 가격을 얼마나 밀까", category="실행", stage="act",
+        pg.NodeSpec("market_impact", "시장 충격", plain_label="시장충격 추정", category="실행", stage="act",
                     plain_description="주문 금액과 거래대금으로 체결 때 가격이 얼마나 움직일지 추정합니다.",
                     inputs=(), outputs=(), run=_impact, params_model=ImpactParams, explain=_explain_impact,
                     description="realism_market_impact(/realism/market-impact/estimate 와 같다)."),
-        pg.NodeSpec("cash_yield", "현금 수익", plain_label="놀고 있는 현금의 이자", category="실행", stage="act",
+        pg.NodeSpec("cash_yield", "현금 수익", plain_label="현금 수익", category="실행", stage="act",
                     plain_description="투자하지 않은 현금이 무위험 금리로 얼마를 버는지 봅니다.",
                     inputs=(P("weights", "Weights", required=False),), outputs=(), run=_cash, params_model=CashParams,
                     explain=_explain_cash, description="realism_cash_yield(/realism/cash-yield/estimate 와 같다) · 금리 출처 표시."),
-        pg.NodeSpec("strategy_capacity", "전략 용량", plain_label="얼마까지 굴릴 수 있나", category="전략", stage="check",
+        pg.NodeSpec("strategy_capacity", "전략 용량", plain_label="운용 가능 규모", category="전략", stage="check",
                     plain_description="전략 종목들의 거래대금으로 그 전략에 넣을 수 있는 돈의 한도를 추정합니다.",
                     inputs=(), outputs=(), run=_capacity, params_model=CapacityParams, explain=_explain_capacity,
                     description="realism_capacity_estimate(/realism/capacity/estimate 와 같다) · 모르면 무한대가 아니라 모름."),
-        pg.NodeSpec("counterfactual", "멀티전략 반사실", plain_label="다른 규칙이었다면", category="전략", stage="check",
-                    plain_description="같은 전략 묶음을 상계·균등 배분 같은 다른 규칙으로 돌렸을 때와 나란히 봅니다.",
+        pg.NodeSpec("counterfactual", "멀티전략 반사실", plain_label="멀티전략 반사실", category="전략", stage="check",
+                    plain_description="같은 전략 그룹을 상계·균등 배분 같은 다른 규칙으로 돌렸을 때와 나란히 봅니다.",
                     inputs=(), outputs=(), run=_counterfactual, params_model=CounterfactualParams,
                     explain=_explain_counterfactual,
                     description="multibacktest_counterfactual(/multibacktest/counterfactual 와 같다) · 멀티전략 문 그대로."),

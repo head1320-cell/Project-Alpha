@@ -1,14 +1,14 @@
 """BL2a · 마법사 고유 기능 이전 — 저장 버튼 둘 (연구 기록 · 타이밍 규칙)
 ==============================================================================
 마법사에만 있던 쓰기 두 가지를 노드의 '저장하기'(`/graph/save`, BK0 계약)로 옮긴다:
-- 비중 계산 → **연구 기록 남기기** — 마법사와 같은 경로(`run_analyze(record_run=True)`). 기록된 비중 == 노드 미리보기.
+- 포트폴리오 최적화 → **연구 기록 남기기** — 마법사와 같은 경로(`run_analyze(record_run=True)`). 기록된 비중 == 노드 미리보기.
   회사 뷰를 쓴 비중이면 기록 요청에도 `use_company_views` 를 싣는다(짝: 안 쓰면 싣지 않는다).
 - 타이밍 신호 → **규칙 저장** — `/timing-rules` 와 같은 문(정규화·버전). 저장된 조합 방식·k 가 노드와 같다.
 실행 계획 저장은 노드가 아니라 실행실 서랍이 **승인된 실행 목표에서만** 만든다(`_resolve_target` 의 R0 차단선).
 
 ## 거는 것
 - 계산은 여전히 쓰지 않는다(그래프 쓰기 감시) · 저장은 미리보기 해시가 같을 때 한 번.
-- 저장 가능한 노드 집합 == {실행 목표, 결정 기록, 비중 계산, 타이밍 신호} — 주문 목록은 저장하지 않는다.
+- 저장 가능한 노드 집합 == {실행 목표, 결정 기록, 포트폴리오 최적화, 타이밍 신호} — 주문 목록은 저장하지 않는다.
 """
 from __future__ import annotations
 
@@ -140,7 +140,7 @@ def test_every_save_button_says_what_it_does():
     assert labels == {"target_version": "실행 목표로 저장", "decision_journal": "판단 기록 저장",
                       "optimizer": "연구 기록 남기기", "timing_signal": "타이밍 규칙 저장",
                       "alpha_validate": "검증 기록 남기기", "backtest_setup": "백테스트 시작",
-                      "rebalance_decision": "결정 기록 남기기"}
+                      "rebalance_decision": "투자 결정 기록"}
     assert all(c["save_label"] is None for c in cat.values() if not c["savable"])
 
 

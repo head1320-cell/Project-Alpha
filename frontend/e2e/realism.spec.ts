@@ -110,7 +110,7 @@ test("ST3c: 폭포 = 서버 원화 둘 + 나머지 · 합 = 현실 끝 자산", 
   await expect(rows.nth(2)).toHaveAttribute("data-dir", "up");
 });
 
-test("ST3c: 현실 조건이 한 일 · 적응 모드 근거는 서버 글 · 수용량은 미상입니다", async ({ page }) => {
+test("ST3c: 현실 조건이 한 일 · 적응 모드 근거는 서버 글 · 운용 가능 규모은 미상입니다", async ({ page }) => {
   await open(page);
   await page.locator(".rl-calc").click();
   const did = sec(page, "did");
@@ -119,7 +119,7 @@ test("ST3c: 현실 조건이 한 일 · 적응 모드 근거는 서버 글 · �
   await expect(did.locator('[data-k="adaptive"] [data-server]')).toContainText("상관붕괴 진단만으로");
   await expect(did.locator(".rl-modes-l li")).toHaveCount(3);
   await expect(sec(page, "capacity").locator(".rl-cap")).toHaveCount(2);
-  await expect(sec(page, "capacity").locator(".rl-cap-v").first()).toHaveText("수용량 미상");
+  await expect(sec(page, "capacity").locator(".rl-cap-v").first()).toHaveText("운용 가능 규모 미상");
 });
 
 for (const side of ["ideal", "reality"] as const) {

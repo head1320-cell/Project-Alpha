@@ -7,9 +7,9 @@
 ## 거는 것
 - ★선언이 참이다★ — 싣는다고 선언한 값은 노드를 실제로 돌리면 실린다. 선언하지 않은 값은 실리지 않는다(짝).
   조건부(`when`)는 입력이 있을 때·없을 때 둘 다 본다.
-- `needs_unmet` 은 실패가 **확실할 때만** 나온다(점수→비중 · 수익률 없음 → 흔들림 나눠 보기). 조건부로 줄 수
+- `needs_unmet` 은 실패가 **확실할 때만** 나온다(점수→비중 · 수익률 없음 → 위험 기여도 분해). 조건부로 줄 수
   있으면 나오지 않는다(짝). 이 판정은 `/validate` 에만 있고 `/run` 결과를 바꾸지 않는다.
-- 템플릿이 쓰는 모양(스크리너 → 점수→비중 + 수익률 → 흔들림 나눠 보기)은 오류가 아니다.
+- 템플릿이 쓰는 모양(스크리너 → 점수→비중 + 수익률 → 위험 기여도 분해)은 오류가 아니다.
 - 과거를 돌려 보는 다른 노드가 있으면 거래비용·처음 보는 기간은 "단계가 없습니다"(건너뜀)가 아니라 미상다(짝).
 """
 from __future__ import annotations
@@ -136,7 +136,7 @@ def test_needs_unmet_speaks_when_failure_is_certain_and_names_the_fix():
     [err] = _unmet(rep)
     assert rep["ok"] is False and err["node_id"] == "k" and err["edge_id"] == "s.weights->k.weights"
     assert "공분산" in err["message"] and "실패" in err["message"]
-    assert err["fix"] == "‘점수로 비중 정하기’에 ‘수익률’을 이으면 줄 수 있습니다."
+    assert err["fix"] == "‘스코어 기반 비중’에 ‘수익률’을 이으면 줄 수 있습니다."
 
 
 def test_needs_unmet_is_silent_when_the_value_may_be_given():
@@ -151,7 +151,7 @@ def test_a_backtest_needs_the_optimizers_rule():
     edges = SCORE_EDGES[:2] + [_edge("u", "universe", "r", "universe"), _edge("r", "returns", "s", "returns"),
                                _edge("s", "weights", "b", "weights"), _edge("r", "returns", "b", "returns")]
     [err] = _unmet(routes.graph_validate(_g(nodes, edges)))
-    assert err["node_id"] == "b" and "규칙" in err["message"] and err["fix"] == "‘비중 계산’의 비중을 연결하십시오."
+    assert err["node_id"] == "b" and "규칙" in err["message"] and err["fix"] == "‘포트폴리오 최적화’의 비중을 연결하십시오."
     ok = chain(backtest={})
     assert _unmet(routes.graph_validate(ok)) == []                                   # ★짝★ 옵티마이저 비중
 
@@ -218,7 +218,7 @@ def test_a_history_node_turns_cost_and_oos_into_unknown_not_skipped():
     rep = wg.evaluate(nodes, {"sb": {"status": "ok"}}, STAGE, history_types=HIST)
     for key in ("cost", "oos"):
         g = _gate(rep, key)
-        assert g["state"] == "unknown" and "‘전략 묶음 돌려 보기’가 있지만" in g["reasons"][0]["text"]
+        assert g["state"] == "unknown" and "‘멀티전략 백테스트’가 있지만" in g["reasons"][0]["text"]
         assert g["node_ids"] == ["sb"]
     bare = wg.evaluate([], {}, STAGE, history_types=HIST)                              # ★짝★
     assert _gate(bare, "cost")["state"] == "skipped" and _gate(bare, "cost")["node_ids"] == []

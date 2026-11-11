@@ -21,7 +21,7 @@ SYSTEM = """너는 포트폴리오 설계 캔버스의 도우미다. 사용자�
 
 
 def user_prompt(grounding: dict) -> str:
-    return ("아래는 지금 캔버스의 근거 묶음(JSON)이다. 이것만 보고 다음에 붙일 노드를 추천해.\n\n"
+    return ("아래는 지금 캔버스의 근거 그룹(JSON)이다. 이것만 보고 다음에 붙일 노드를 추천해.\n\n"
             + json.dumps(grounding, ensure_ascii=False, sort_keys=True))
 
 

@@ -67,7 +67,7 @@ def test_the_core_chain_fills_data_belief_build_and_leaves_check_empty():
     assert {s["key"]: s["state"] for s in p["steps"]} == {
         "data": "filled", "signal": "empty", "belief": "filled", "build": "filled",
         "check": "empty", "act": "empty"}
-    assert _step(p, "build")["node_ids"] == ["o"] and "‘비중 계산’" in _step(p, "build")["text"]
+    assert _step(p, "build")["node_ids"] == ["o"] and "‘포트폴리오 최적화’" in _step(p, "build")["text"]
 
 
 def test_a_node_missing_a_required_input_blocks_its_step_and_the_pair_is_filled():
@@ -80,7 +80,7 @@ def test_a_step_with_nodes_but_unmeasurable_gates_is_partial_not_filled():
     # 종목만 있으면 데이터 단계에 노드는 있지만 데이터·시점 관문을 잴 수 없다 — "채움"이라 부르지 않는다.
     st = _step(_proc([UNI], []), "data")
     assert st["state"] == "partial" and st["node_ids"] == ["u"]
-    assert st["text"].startswith("‘종목 고르기’ — ") and "수익률 불러오기" in st["text"]
+    assert st["text"].startswith("‘유니버스’ — ") and "수익률 데이터" in st["text"]
     both = _proc(CORE[:2], CORE_E[:1])
     assert _step(both, "data")["state"] == "filled"                                   # ★짝★ 수익률이 있으면 채움
     # 확인하기에 흔들림 나눠 보기만 있으면 거래비용·처음 보는 기간은 아직이다
@@ -196,8 +196,8 @@ def test_suggestions_never_carry_parameter_values():
 
 
 def test_korean_particles_follow_the_final_consonant():
-    assert proc._obj("비중 계산") == "‘비중 계산’을" and proc._obj("흔들림 나눠 보기") == "‘흔들림 나눠 보기’를"
-    assert proc._subj("종목") == "‘종목’이" and proc._subj("과거로 돌려 보기") == "‘과거로 돌려 보기’가"
+    assert proc._obj("포트폴리오 최적화") == "‘포트폴리오 최적화’를" and proc._obj("위험 기여도 분해") == "‘위험 기여도 분해’를"
+    assert proc._subj("종목") == "‘종목’이" and proc._subj("정책 백테스트") == "‘정책 백테스트’가"
 
 
 def test_the_pure_module_reads_nothing_outside():

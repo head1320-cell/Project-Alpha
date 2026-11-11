@@ -1,11 +1,11 @@
-"""BK W2 · 신호·후보 노드 — 스크리너 · 팩터 점수 · 알파 점수 · 점수→비중 · 중립화 · 묶음 합치기
+"""BK W2 · 신호·후보 노드 — 스크리너 · 팩터 점수 · 알파 점수 · 점수→비중 · 중립화 · 슬리브 결합
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W2 ·
 대상 `src/api/allocation_graph_nodes_signal.py`
 
 ## 거는 것
 - ★골든★ 팩터 점수 + 점수→비중(균등·틸트) == `/factor-portfolio` · 중립화 == `/neutralize` 의 엔진 ·
-  묶음 합치기 == `combine_sleeves` · 수익률 기반 비중 == `_raw_weights_for_model`.
+  슬리브 결합 == `combine_sleeves` · 수익률 기반 비중 == `_raw_weights_for_model`.
 - 스크리너는 `_run_advanced_core` 에 요청을 그대로 넘기고 상위 N 종목만 넘긴다 · 필터 검증 실패는 노드 실패.
 - ★오늘 값으로 고른 종목은 과거 검증을 막는다★ — 스크리너 → 수익률 → 비중 → 정책 백테스트 = 거절
   (짝: 같은 종목을 직접 고르면 통과).
@@ -251,7 +251,7 @@ def test_sleeve_combine_equals_the_engine(market, monkeypatch):
                    _edge("o", "weights", "m", "a"), _edge("o2", "weights", "m", "b")]
     m = _run(g)["nodes"]["m"]
     assert m["status"] == "ok", m["reason"]
-    sleeves = [{"name": f"묶음 {k}", "weights": {n: float(x) * 100 for n, x in zip(w["names"], w["weights"])}}
+    sleeves = [{"name": f"그룹 {k}", "weights": {n: float(x) * 100 for n, x in zip(w["names"], w["weights"])}}
                for k, w in (("A", _values(g, "o")["weights"]), ("B", _values(g, "o2")["weights"]))]
     assert m["view"]["result"] == sc.combine_sleeves(sleeves, method="inverse_vol", ret_matrix=ret)
 
@@ -267,7 +267,7 @@ def test_every_w2_node_has_its_stage_and_explainer(kind, stage):
 
 
 def test_w2_nodes_never_produce_a_backtestable_policy(alpha, market):
-    """점수·중립화·묶음 비중에는 규칙(req)이 없다 — 정책 백테스트는 거절한다(짝은 BK0 테스트)."""
+    """점수·중립화·그룹 비중에는 규칙(req)이 없다 — 정책 백테스트는 거절한다(짝은 BK0 테스트)."""
     g = _scores_graph("equal", with_returns=True)
     g["nodes"].append(_node("b", "backtest"))
     g["edges"] += [_edge("r", "returns", "b", "returns"), _edge("w", "weights", "b", "weights")]

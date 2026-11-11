@@ -1,10 +1,10 @@
 """
-Liquidity Capacity Constraint — 전략별 수용량 한계
+Liquidity Capacity Constraint — 전략별 운용 가능 규모 한계
 =========================================================
 HRP는 변동성 낮은 전략에 큰 자본 배분. 그러나 '소형주 가치' 전략에 자본 40% 배분하면
 호가창을 다 잡아먹어 자기 알파를 파괴 (capacity-induced alpha decay).
 
-각 전략의 수용량 = 그 전략이 거래하는 종목들의 일일 거래대금에 의해 제약됨.
+각 전략의 운용 가능 규모 = 그 전략이 거래하는 종목들의 일일 거래대금에 의해 제약됨.
 
 공식:
   strategy_capacity_krw = Σᵢ (ADVᵢ × max_pct_of_adv × holding_period_days)
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CapacityConfig:
-    """전략별 수용량 산정 파라미터."""
+    """전략별 운용 가능 규모 산정 파라미터."""
     max_pct_of_adv:       float = 0.05    # 일일 ADV의 5% 한도
     holding_period_days:  int = 5         # 평균 보유 기간
     safety_buffer:        float = 0.7     # 추가 안전 마진 (capacity의 70%만 사용)
@@ -48,7 +48,7 @@ class CapacityConfig:
 
 class LiquidityCapacityEstimator:
     """
-    전략별 수용량 추정.
+    전략별 운용 가능 규모 추정.
 
     Usage:
         estimator = LiquidityCapacityEstimator(engine)
@@ -83,7 +83,7 @@ class LiquidityCapacityEstimator:
         lookback_days: int = 60,
     ) -> dict:
         """
-        단일 전략의 수용량 추정.
+        단일 전략의 운용 가능 규모 추정.
 
         방법:
           1. 전략이 거래한 종목 목록 조회 (최근 trades 또는 holdings)

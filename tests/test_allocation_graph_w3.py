@@ -1,4 +1,4 @@
-"""BK W3 · 거시·타이밍 노드 — 경기 국면 · 타이밍 신호 · ★노출 조절(비중에 적용)★ · 시점별 시뮬레이션
+"""BK W3 · 거시·타이밍 노드 — 경기 국면 · 타이밍 신호 · ★노출 오버레이★ · 시점별 시뮬레이션
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W3 · §3 ·
 대상 `src/api/allocation_graph_nodes_macro.py` · Macro→Allocation 승인 범위: ADR 002 §7

@@ -37,7 +37,7 @@ export function readWip(): string | null {
   catch { return null; }
 }
 
-export const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"], ["branches", "갈래"], ["wire", "선"]] as const;
+export const TABS = [["story", "이야기"], ["settings", "설정"], ["detail", "자세히"], ["branches", "대안"], ["wire", "선"]] as const;
 
 export type DrawerKey = "execution" | "records" | "alphas";
 /** 서랍 셋 — 예전 EXECUTION·JOURNAL·ALPHA LAB 화면의 기록 관리를 옮겼다(BL2). 계산은 노드, 기록 관리는 서랍. */

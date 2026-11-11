@@ -23,10 +23,10 @@ const CORE = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930
                edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "estimate", "returns"),
                        e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")] };
 const DRAFT_URL = "**/api/v1/assist/canvas/draft";
-const SENTENCE = "과거로 돌려 보기를 붙이고 5년 기준, 거래비용 0.3%로 해 줘";
+const SENTENCE = "정책 백테스트를 붙이고 5년 기준, 거래비용 0.3%로 해 줘";
 const DRAFT = {
-  summary: "과거로 돌려 보기를 붙이고 5년 기준으로 바꿉니다",
-  add: [{ ref: "b", id: "backtest", kind: "backtest", label: "과거로 돌려 보기" }],
+  summary: "정책 백테스트를 붙이고 5년 기준으로 바꿉니다",
+  add: [{ ref: "b", id: "backtest", kind: "backtest", label: "정책 백테스트" }],
   connect: [{ id: "optimizer.weights->backtest.weights", source: "optimizer", source_port: "weights", target: "backtest", target_port: "weights" },
             { id: "returns.returns->backtest.returns", source: "returns", source_port: "returns", target: "backtest", target_port: "returns" }],
   set: [{ node: "returns", field: "lookback_days", label: "기간", value: 1260, display: "5년", quote: "5년", read: "preset" },
@@ -100,7 +100,7 @@ test("탭 '말로' — 로그아웃이면 로그인 링크만 · 요청 0", asyn
   expect(seen).toHaveLength(0);
 });
 
-test("보낸 것 = 지금 문서 + 말씀 · 답 → 바뀐 점 묶음(수) = 캔버스 유령·점선 · 값이 바뀔 노드 표시 · 출처 칩", async ({ page }) => {
+test("보낸 것 = 지금 문서 + 말씀 · 답 → 바뀐 점 그룹(수) = 캔버스 유령·점선 · 값이 바뀔 노드 표시 · 출처 칩", async ({ page }) => {
   await signIn(page);
   const seen = await answer(page, ok());
   await openWith(page, CORE);
@@ -113,7 +113,7 @@ test("보낸 것 = 지금 문서 + 말씀 · 답 → 바뀐 점 묶음(수) = �
   await expect(panel(page).locator(".pg-say-sent")).toContainText(SENTENCE);
   await expect(panel(page).locator(".pg-say-summary")).toHaveText(DRAFT.summary);
   await expect(sec(page, "add").locator(".pg-say-item")).toHaveCount(1);
-  await expect(sec(page, "add")).toContainText("과거로 돌려 보기");
+  await expect(sec(page, "add")).toContainText("정책 백테스트");
   await expect(sec(page, "connect").locator(".pg-say-item")).toHaveCount(2);
   await expect(sec(page, "set").locator(".pg-say-item")).toHaveCount(2);
   await expect(sec(page, "set").locator(".pg-say-item").first()).toContainText("기간");
@@ -123,7 +123,7 @@ test("보낸 것 = 지금 문서 + 말씀 · 답 → 바뀐 점 묶음(수) = �
   await expect(sec(page, "empty")).toHaveCount(0);                                  // 빈 것이 없으면 묶음도 없다
   // 캔버스 — 더할 노드 유령 하나 · 이을 선 점선 둘 · 값이 바뀔 지금 노드(수익률)만 표시(짝: 잇기만 하는 비중 계산은 아님)
   await expect(page.locator(".pg-draft-node")).toHaveCount(1);
-  await expect(page.locator('.pg-draft-node[data-id="backtest"]')).toContainText("과거로 돌려 보기");
+  await expect(page.locator('.pg-draft-node[data-id="backtest"]')).toContainText("정책 백테스트");
   await expect(page.locator(".pg-draft-wire")).toHaveCount(2);
   await expect(page.locator('.pg-draft-touched[data-node-id="returns"]')).toBeVisible();
   await expect(page.locator('.pg-draft-touched[data-node-id="optimizer"]')).toHaveCount(0);
@@ -271,7 +271,7 @@ test("이해 못 함·투자 판단은 서버 고정 문장 · 받아들일 것�
   await answer(page, async (route, i) => route.fulfill({ json: i === 0
     ? ok({ understood: false, cannot, draft: empty, rejected: [] })
     : ok({ draft: { ...DRAFT, connect: DRAFT.connect.slice(0, 1),
-                    empty: [{ node: "backtest", port: "returns", why: "‘과거로 돌려 보기’가 받을 ‘수익률’을 내는 노드가 없습니다" }] } }) }));
+                    empty: [{ node: "backtest", port: "returns", why: "‘정책 백테스트’가 받을 ‘수익률’을 내는 노드가 없습니다" }] } }) }));
   await openWith(page, CORE);
   await openTab(page);
   await say(page, "무슨 종목을 살까?");
@@ -279,7 +279,7 @@ test("이해 못 함·투자 판단은 서버 고정 문장 · 받아들일 것�
   await expect(panel(page).locator(".pg-say-accept")).toHaveCount(0);
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);
   await say(page);
-  await expect(sec(page, "empty").locator(".pg-say-item")).toHaveText(["‘과거로 돌려 보기’가 받을 ‘수익률’을 내는 노드가 없습니다"]);
+  await expect(sec(page, "empty").locator(".pg-say-item")).toHaveText(["‘정책 백테스트’가 받을 ‘수익률’을 내는 노드가 없습니다"]);
   await expect(sec(page, "rejected").locator(".pg-say-item")).toHaveCount(1);
   await expect(panel(page).locator(".pg-say-accept")).toBeVisible();
 });
@@ -397,9 +397,9 @@ test("U5 규칙 · pickDraft — 뺀 줄은 빠지고, 뺀 새 노드에 기대�
   expect(noAdd.body.connect).toEqual([]);
   expect(noAdd.body.set.map((x) => x.node)).toEqual(["returns"]);
   expect(noAdd.n).toBe(1);
-  expect(noAdd.blocked.get(KEYS.w)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없습니다");
-  expect(noAdd.blocked.get(KEYS.r)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없습니다");
-  expect(noAdd.blocked.get(KEYS.cost)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없습니다");
+  expect(noAdd.blocked.get(KEYS.w)).toBe("‘정책 백테스트(새)’를 빼서 이 선을 이을 수 없습니다");
+  expect(noAdd.blocked.get(KEYS.r)).toBe("‘정책 백테스트(새)’를 빼서 이 선을 이을 수 없습니다");
+  expect(noAdd.blocked.get(KEYS.cost)).toBe("‘정책 백테스트(새)’를 빼서 이 값을 넣을 곳이 없습니다");
   expect(noAdd.blocked.has(KEYS.look)).toBe(false);
   const noLook = pickDraft(D, new Set([KEYS.look]), EXIST);
   expect(noLook.body.set.map((x) => x.node)).toEqual(["backtest"]);
@@ -430,8 +430,8 @@ test("U5 · 새 노드를 빼면 그 노드의 잇기·값 줄이 꺼지고 까�
     await expect(pickBox(page, k)).toBeDisabled();
     await expect(pickBox(page, k)).not.toBeChecked();
   }
-  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.w}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없습니다");
-  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.cost}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없습니다");
+  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.w}"] ~ .pg-say-why`)).toHaveText("‘정책 백테스트(새)’를 빼서 이 선을 이을 수 없습니다");
+  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.cost}"] ~ .pg-say-why`)).toHaveText("‘정책 백테스트(새)’를 빼서 이 값을 넣을 곳이 없습니다");
   await expect(pickBox(page, KEYS.look)).toBeEnabled();
   await expect(pickBox(page, KEYS.look)).toBeChecked();
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);

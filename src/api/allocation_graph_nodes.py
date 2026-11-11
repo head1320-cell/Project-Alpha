@@ -71,7 +71,7 @@ PORT_PLAIN = {
     "Weights": "비중", "RiskReport": "위험 나눔", "BacktestResult": "과거 성과",
     "Scenario": "시나리오", "StressReport": "충격 결과", "Scores": "점수", "RegimeState": "경기 국면",
     "TimingSignal": "타이밍 신호", "Trades": "주문 목록", "TargetVersion": "실행 목표",
-    "StrategyResult": "전략 묶음 성과", "BacktestRun": "백테스트 실행",
+    "StrategyResult": "전략 그룹 성과", "BacktestRun": "백테스트 실행",
     "Client": "고객", "Account": "계좌",
 }
 
@@ -388,7 +388,7 @@ def _risk(inputs: dict, p) -> pg.NodeOutput:
     names, sigma = w["names"], w.get("sigma_annual")
     if sigma is None:
         raise pg.NodeFailure("이 비중에는 공분산이 함께 오지 않아 위험을 나눌 수 없습니다 — "
-                             "공분산을 추정하는 노드(비중 계산)의 비중을 연결하십시오.")
+                             "공분산을 추정하는 노드(포트폴리오 최적화)의 비중을 연결하십시오.")
     sigma_source = w.get("sigma_source") or "미상"
     view = {
         "risk_contribution_optimized": _risk_contribution_report(
@@ -405,7 +405,7 @@ def _backtest_admits(lineage: dict) -> str | None:
     """정책 백테스트가 받지 않는 계보 (BK0) — 조용히 벗겨 내지 않고 거절한다."""
     if lineage.get("overlay"):
         return ("오늘 계산한 노출 조절이 얹힌 비중입니다. 오늘의 판단을 과거 전체에 쓰면 미래를 "
-                "보고 한 계산이 됩니다 — ‘시점별 타이밍 시뮬레이션’으로 과거를 확인하십시오.")
+                "보고 한 계산이 됩니다 — ‘타이밍 시뮬레이션’으로 과거를 확인하십시오.")
     if lineage.get("pit") == "forward_only":
         return ("지금 시점에만 쓸 수 있는 값(전망·국면 스냅샷)이 섞여 있습니다. 과거에 쓰면 미래를 "
                 "보고 한 계산이 돼서 백테스트하지 않습니다.")
@@ -419,7 +419,7 @@ def _backtest(inputs: dict, p) -> pg.NodeOutput:
         # 이 노드는 비중을 되돌리지 않고 **규칙(옵티마이저 요청)** 을 다시 돌린다. 규칙 없는
         # 비중을 받아 옵티마이저 성과를 그 비중의 성과처럼 보이면 안 된다.
         raise pg.NodeFailure("이 비중에는 과거로 되돌려 볼 규칙이 없습니다 — 정책 백테스트는 "
-                             "‘비중 계산’ 노드의 규칙을 시점마다 다시 풉니다. 비중 계산 노드를 연결하십시오.")
+                             "‘포트폴리오 최적화’ 노드의 규칙을 시점마다 다시 풉니다. 포트폴리오 최적화 노드를 연결하십시오.")
     try:
         breq = BacktestRequest(
             tickers=r["universe"]["tickers"], benchmark=r["universe"]["benchmark"],
@@ -450,7 +450,7 @@ P = pg.Port
 # ── 저장 (BL2) ────────────────────────────────────────────────────────────────
 
 def _save_research_run(values: dict, view: dict, params: Any) -> dict:
-    """비중 계산 → **연구 기록 남기기** (BL2 · 마법사 OPTIMIZE 의 '기록' 을 옮김).
+    """포트폴리오 최적화 → **연구 기록 남기기** (BL2 · 마법사 OPTIMIZE 의 '기록' 을 옮김).
 
     ★기록은 `/analyze` 가 남긴다★ 재현(`/research-runs/{id}/reproduce`)이 그 경로를 다시 부르기 때문이다. 그런데
     캔버스에는 `/analyze` 에 없는 칸이 있다(예: 회사 뷰의 수렴 기간). 그 경로가 미리보기와 **다른 비중**을 내면 그 기록은
@@ -476,25 +476,25 @@ def _save_research_run(values: dict, view: dict, params: Any) -> dict:
 
 REGISTRY = pg.Registry(port_types=PORT_TYPES)
 for _spec in (
-    pg.NodeSpec("universe", "유니버스", stage="data", plain_label="종목 고르기",
+    pg.NodeSpec("universe", "유니버스", stage="data", plain_label="유니버스",
                 plain_description="분석할 종목과 지금 비중을 정합니다.", explain=EXPLAINERS["universe"], inputs=(), outputs=(P("universe", "Universe"),),
                 run=_universe, params_model=UniverseParams, category="입력",
                 description="종목 목록 · 현재 비중(선택) · 벤치마크."),
-    pg.NodeSpec("returns", "수익률", stage="data", plain_label="수익률 불러오기",
+    pg.NodeSpec("returns", "수익률", stage="data", plain_label="수익률 데이터",
                 plain_description="기간과 기준일을 정합니다.", explain=EXPLAINERS["returns"], inputs=(P("universe", "Universe"),),
                 outputs=(P("returns", "Returns"),), run=_returns, params_model=ReturnsParams,
                 category="데이터",
                 description="적재된 일별 수익률(lookback·절단일). 운영에서는 합성하지 않는다."),
-    pg.NodeSpec("views", "BL 뷰", stage="belief", plain_label="내 생각 넣기",
+    pg.NodeSpec("views", "BL 뷰", stage="belief", plain_label="투자 뷰(BL)",
                 plain_description="“삼성전자가 오를 것” 같은 전망을 넣습니다.", explain=EXPLAINERS["views"], inputs=(), outputs=(P("views", "Views"),), run=_views,
                 params_model=ViewsParams, category="입력",
                 description="절대(assets) 또는 부호 있는 조합(weights) 뷰."),
-    pg.NodeSpec("estimate", "추정 설정", stage="belief", plain_label="기대 수익 추정",
+    pg.NodeSpec("estimate", "추정 설정", stage="belief", plain_label="기대수익률 추정",
                 plain_description="과거 기준 또는 경기 국면을 반영합니다.", explain=EXPLAINERS["estimate"], inputs=(P("returns", "Returns"),),
                 outputs=(P("belief", "Belief"),), run=_estimate, params_model=EstimateParams,
                 category="추정",
                 description="표본 또는 국면조건부 μ/Σ 설정. 계산은 옵티마이저가 자기 모델로 한다."),
-    pg.NodeSpec("optimizer", "옵티마이저", stage="build", plain_label="비중 계산",
+    pg.NodeSpec("optimizer", "옵티마이저", stage="build", plain_label="포트폴리오 최적화",
                 plain_description="여러 방식 중 하나로 비중을 나눕니다.", explain=EXPLAINERS["optimizer"],
                 inputs=(P("returns", "Returns"), P("belief", "Belief"),
                         P("views", "Views", required=False)),
@@ -502,11 +502,11 @@ for _spec in (
                 params_model=OptimizerParams, category="배분",
                 save=_save_research_run, save_label="연구 기록 남기기",
                 description="/analyze 와 같은 최적화·제약. 결과는 가중치와 정책을 함께 나른다."),
-    pg.NodeSpec("risk", "리스크 분해", stage="check", plain_label="흔들림 나눠 보기",
+    pg.NodeSpec("risk", "리스크 분해", stage="check", plain_label="위험 기여도 분해",
                 plain_description="어느 종목이 위험을 얼마나 만드는지 봅니다.", explain=EXPLAINERS["risk"], inputs=(P("weights", "Weights"),),
                 outputs=(P("risk", "RiskReport"),), run=_risk, category="분석",
                 description="오일러 리스크 기여 · ENB/Neff (추천 포트폴리오 기준)."),
-    pg.NodeSpec("backtest", "정책 백테스트", stage="check", plain_label="과거로 돌려 보기",
+    pg.NodeSpec("backtest", "정책 백테스트", stage="check", plain_label="정책 백테스트",
                 plain_description="이 규칙대로 했다면 어땠을지 봅니다.", explain=EXPLAINERS["backtest"],
                 inputs=(P("returns", "Returns"), P("weights", "Weights")),
                 outputs=(P("backtest", "BacktestResult"),), run=_backtest, admits=_backtest_admits,

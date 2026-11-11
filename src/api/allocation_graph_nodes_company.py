@@ -142,7 +142,7 @@ def _explain_reverse(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     ig, cg = r.get("implied_growth_pct"), r.get("current_growth_pct")
     title = (f"지금 가격은 앞으로 10년 현금흐름이 해마다 {ig:.1f}% 자란다고 믿는 가격입니다"
-             if isinstance(ig, (int, float)) else "시장이 믿는 성장률을 풀었습니다")
+             if isinstance(ig, (int, float)) else "역DCF를 풀었습니다")
     facts = []
     if isinstance(cg, (int, float)):
         facts.append(f"지금까지의 성장률은 {cg:.1f}% — 차이 {r.get('gap_pp', 0):+.1f}%p")
@@ -263,13 +263,13 @@ class ThesisParams(_Company):
     kill_conditions: _sr.FilterGroupModel = Field(
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
         json_schema_extra={"x-ui": _ui("버릴 조건", question="논지 폐기 조건", widget="filter",
-                                       help="조건 하나하나가 ‘이렇게 되면 틀렸다’ 입니다. 묶음(그룹)은 쓰지 않습니다.")})
+                                       help="조건 하나하나가 ‘이렇게 되면 틀렸다’ 입니다. 그룹(그룹)은 쓰지 않습니다.")})
 
 
 def _thesis(inputs: dict, p: ThesisParams) -> pg.NodeOutput:
     head = _company(p)
     if p.kill_conditions.groups:
-        raise pg.NodeFailure("버릴 조건은 한 줄씩 나열하십시오 — 묶음(그룹)은 논지 점검에서 쓰지 않습니다.")
+        raise pg.NodeFailure("버릴 조건은 한 줄씩 나열하십시오 — 그룹(그룹)은 논지 점검에서 쓰지 않습니다.")
     kills = [c.model_dump(exclude_none=True) for c in p.kill_conditions.conditions]
     out = cr.company_thesis_check(p.code, cr.ThesisCheckRequest(claim=p.claim, kill_conditions=kills))
     if out.get("available") is False:
@@ -297,31 +297,31 @@ def _explain_thesis(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     common = {"inputs": (), "outputs": (), "category": "기업", "stage": "signal"}
     for spec in (
-        pg.NodeSpec("company_valuation", "가치평가 샌드박스", plain_label="적정가 매기기",
+        pg.NodeSpec("company_valuation", "가치평가 샌드박스", plain_label="기업 가치평가",
                     plain_description="가정을 바꿔 가며 기업의 적정가와 그 민감도를 봅니다.",
                     run=_sandbox, params_model=SandboxParams, explain=_explain_sandbox,
                     description="company_valuation_sandbox 라우트 함수 그대로.", **common),
-        pg.NodeSpec("reverse_dcf", "역DCF", plain_label="시장이 믿는 성장률",
+        pg.NodeSpec("reverse_dcf", "역DCF", plain_label="역DCF",
                     plain_description="지금 가격을 정당화하려면 얼마나 자라야 하는지 거꾸로 풉니다.",
                     run=_reverse, params_model=_Priced, explain=_explain_reverse,
                     description="company_reverse_dcf 라우트 함수 그대로.", **common),
-        pg.NodeSpec("valuation_distribution", "가치 분포", plain_label="적정가의 범위",
+        pg.NodeSpec("valuation_distribution", "가치 분포", plain_label="내재가치 분포",
                     plain_description="가정을 흔들어 적정가가 어디서 어디까지 나오는지 봅니다.",
                     run=_distribution, params_model=DistributionParams, explain=_explain_distribution,
                     description="company_valuation_distribution 라우트 함수 그대로.", **common),
-        pg.NodeSpec("financial_deep", "재무 심층", plain_label="이익의 질 보기",
+        pg.NodeSpec("financial_deep", "재무 심층", plain_label="이익의 질(QoE)",
                     plain_description="이익이 현금으로 들어오는지, 운전자본·자본배치는 어떤지 봅니다.",
                     run=_financial, params_model=_Company, explain=_explain_financial,
                     description="company_financial_deep 라우트 함수 그대로.", **common),
-        pg.NodeSpec("risk_deep", "위험 심층", plain_label="재무 위험 보기",
+        pg.NodeSpec("risk_deep", "위험 심층", plain_label="재무 위험 분석",
                     plain_description="부도 판별 점수와 금리가 오를 때의 버팀을 봅니다.",
                     run=_risk, params_model=_Priced, explain=_explain_risk,
                     description="company_risk_deep 라우트 함수 그대로.", **common),
-        pg.NodeSpec("company_macro_sensitivity", "매크로 민감도", plain_label="금리에 얼마나 흔들리나",
+        pg.NodeSpec("company_macro_sensitivity", "매크로 민감도", plain_label="매크로 민감도",
                     plain_description="금리 같은 거시 충격에 적정가가 얼마나 움직이는지 봅니다.",
                     run=_macro_sens, params_model=MacroSensParams, explain=_explain_macro_sens,
                     description="macro_sensitivity_for + statistical_sensitivity(저장된 매크로 관측).", **common),
-        pg.NodeSpec("thesis_check", "테제 점검", plain_label="논지 점검하기",
+        pg.NodeSpec("thesis_check", "테제 점검", plain_label="투자 논지 점검",
                     plain_description="내 논지와 버릴 조건을 적으면 검증할 수 있는 조건인지 가려 줍니다.",
                     run=_thesis, params_model=ThesisParams, explain=_explain_thesis,
                     description="company_thesis_check 라우트 함수(저장하지 않는다).", **common),

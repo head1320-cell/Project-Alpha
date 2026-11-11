@@ -97,13 +97,13 @@ def test_rebalance_decision_says_the_benefit_is_self_referential_only_when_it_is
 def test_rebalance_decision_needs_weights_that_carry_a_rule():
     spec = gn.REGISTRY.get("rebalance_decision")
     inputs = {"weights": {"names": ["005930"], "weights": np.array([1.0]), "req": None}}
-    with pytest.raises(pg.NodeFailure, match="비중 계산"):
+    with pytest.raises(pg.NodeFailure, match="포트폴리오 최적화"):
         spec.run(inputs, spec.params_model(holdings=HOLD))
 
 
 def test_rebalance_decision_without_holdings_fails_with_a_reason(market):
     r = _run(_rebal_graph(holdings=[]))["nodes"]["x"]
-    assert r["status"] == "failed" and "지금 들고" in r["reason"]
+    assert r["status"] == "failed" and "현재 보유" in r["reason"]
 
 
 def test_undetermined_is_kept_not_turned_into_hold(market, monkeypatch):
