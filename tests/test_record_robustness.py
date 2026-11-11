@@ -93,7 +93,7 @@ def test_each_record_says_what_it_is_and_none_is_live_trading():
     assert s["실행 bt_a"]["data"] == "synthetic" and s["실행 bt_b"]["data"] == "real"
     ex = gn.REGISTRY.get("record_robustness").explain(out.view, {}, _params())
     text = " ".join(t["text"] for t in ex["trust"])
-    assert "실거래 기록이 아닙니다" in text and "몫은 똑같이" in text
+    assert "실거래 기록이 아닙니다" in text and "동일 가중으로 가정" in text
 
 
 def test_unknown_mock_state_is_not_called_real_pair():
