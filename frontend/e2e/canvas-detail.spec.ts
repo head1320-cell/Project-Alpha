@@ -160,7 +160,7 @@ test("명세 칸의 수 = 서버 explain 의 수 · 계산 전에는 그렇다�
   await expect(page.locator('.pg-passport [data-k="assumed"] dd')).toHaveText(`${count("assumed")}개`);
   await expect(page.locator('.pg-passport [data-k="unknown"] dd')).toHaveText(`${count("unknown")}개`);
   await expect(page.locator('.pg-passport [data-k="unmeasured"] dd')).toHaveText(`${(ex.unmeasured ?? []).length}가지`);
-  await expect(page.locator('.pg-passport [data-k="stage"] dd')).toHaveText("비중 정하기");
+  await expect(page.locator('.pg-passport [data-k="stage"] dd')).toHaveText("비중 산출");
 });
 
 // ── 대비 AA — 선 판 · 명세 · 고치는 법 (라이트/다크) ───────────────────────────────────────────────

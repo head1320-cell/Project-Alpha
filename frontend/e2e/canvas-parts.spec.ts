@@ -93,7 +93,7 @@ test("혼자 쓰는 도구: 연결점 없이 '선 없이' 줄 · 흐름 노드�
   await openCanvas(page);
   const cat = await catalogOf(page);
   const solo = cat.find((c) => c.stage === "check" && !c.inputs.length && !c.outputs.length)!;
-  expect(solo, "확인하기 단계에 혼자 도구가 있어야 한다").toBeTruthy();
+  expect(solo, "점검 단계에 혼자 도구가 있어야 한다").toBeTruthy();
   const group = page.locator('.pg-palette-group[data-stage="check"]');
   const kinds = await group.locator(".pg-palette-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
   const firstSolo = kinds.findIndex((k) => cat.find((c) => c.type === k && !c.inputs.length && !c.outputs.length));

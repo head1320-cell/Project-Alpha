@@ -126,9 +126,9 @@ _MODELS = tuple(_studio.model_availability())
 STAGES = [
     {"key": "data", "label": "데이터"},
     {"key": "signal", "label": "신호"},
-    {"key": "belief", "label": "생각 정하기"},
-    {"key": "build", "label": "비중 정하기"},
-    {"key": "check", "label": "확인하기"},
+    {"key": "belief", "label": "전망 설정"},
+    {"key": "build", "label": "비중 산출"},
+    {"key": "check", "label": "점검"},
     {"key": "act", "label": "실행·기록"},
 ]
 

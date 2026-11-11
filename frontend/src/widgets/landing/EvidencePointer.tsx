@@ -11,9 +11,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 const EV = [
-  { k: "source", t: "어디서 왔는지", d: "답에 쓴 데이터가 합성 데이터인지 실데이터인지, 서버 연결 상태로 밝힙니다." },
-  { k: "model", t: "무엇으로 쟀는지", d: "어떤 모형으로 쟀는지 적어서, 무엇을 재지 않았는지도 알 수 있습니다." },
-  { k: "asof", t: "언제 기준인지", d: "언제 계산한 값인지 기준 시각을 붙입니다." },
+  { k: "source", t: "데이터 출처", d: "답에 쓴 데이터가 합성 데이터인지 실데이터인지, 서버 연결 상태로 밝힙니다." },
+  { k: "model", t: "측정 모형", d: "어떤 모형으로 쟀는지 적어서, 무엇을 재지 않았는지도 알 수 있습니다." },
+  { k: "asof", t: "기준 시각", d: "언제 계산한 값인지 기준 시각을 붙입니다." },
 ] as const;
 type Key = (typeof EV)[number]["k"];
 

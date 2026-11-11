@@ -13,7 +13,7 @@
 import { Workflow } from "lucide-react";
 
 type Stage = "data" | "belief" | "build" | "check";
-const STAGE_KO: Record<Stage, string> = { data: "데이터", belief: "생각 정하기", build: "비중 정하기", check: "확인하기" };
+const STAGE_KO: Record<Stage, string> = { data: "데이터", belief: "전망 설정", build: "비중 산출", check: "점검" };
 type HeroNode = { id: string; label: string; stage: Stage; x: number; y: number; col: number; ins: string[]; outs: string[] };
 
 const NW = 168;
@@ -40,8 +40,8 @@ export const HERO_WIRES: [string, string, string][] = [
 ];
 /** 서버 관문 목록(`workflow_gates` · 카탈로그 `gates`)과 같은 키·이름·순서. */
 export const HERO_GATES: { key: string; label: string }[] = [
-  { key: "data", label: "데이터" }, { key: "pit", label: "시점" }, { key: "signal", label: "신호" }, { key: "build", label: "포트폴리오 최적화" },
-  { key: "cost", label: "거래비용" }, { key: "oos", label: "처음 보는 기간" }, { key: "economic", label: "돈이 되는지" }, { key: "live", label: "모의·실계좌" },
+  { key: "data", label: "데이터 무결성" }, { key: "pit", label: "시점 정합" }, { key: "signal", label: "신호 타당성" }, { key: "build", label: "포트폴리오 전달" },
+  { key: "cost", label: "거래비용" }, { key: "oos", label: "표본외 강건성" }, { key: "economic", label: "경제적 가치" }, { key: "live", label: "모의·실계좌" },
 ];
 
 const byId = new Map(HERO_NODES.map((n) => [n.id, n]));

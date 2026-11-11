@@ -62,7 +62,7 @@ CORE_E = [_e("u", "universe", "r", "universe"), _e("r", "returns", "es", "return
           _e("r", "returns", "o", "returns"), _e("es", "belief", "o", "belief")]
 DOC = {**F, "nodes": CORE, "edges": CORE_E}
 BT = {"kind": "backtest", "attach": [_a("o", "weights", "@new", "weights"), _a("r", "returns", "@new", "returns")],
-      "reason": "거래비용과 처음 보는 기간을 아직 측정하지 않았습니다."}
+      "reason": "거래비용과 표본외 구간을 아직 측정하지 않았습니다."}
 
 
 # ── 가짜 SDK ─────────────────────────────────────────────────────────────────

@@ -279,7 +279,7 @@ def _add_backtest(by_id, incoming, kinds) -> dict | None:
         attach.append({"source": ret, "source_port": _out_port(kinds, "returns", "Returns"),
                        "target": NEW, "target_port": _in_port(kinds, "backtest", "Returns")})
     return _suggest("add", "backtest",
-                    f"거래비용과 처음 보는 기간을 아직 측정하지 않았습니다 — ‘{_label(kinds, 'optimizer')}’ 뒤에 "
+                    f"거래비용과 표본외 구간을 아직 측정하지 않았습니다 — ‘{_label(kinds, 'optimizer')}’ 뒤에 "
                     f"{_obj(_label(kinds, 'backtest'))} 붙이면 잴 수 있게 됩니다.", attach, ["cost", "oos"], kinds)
 
 
@@ -313,7 +313,7 @@ def _step_text(state: str, need: str, labels: list[str]) -> str:
     if need == REQUIRED:
         return "아직 없습니다 — 꼭 있어야 합니다."
     if need == RECOMMENDED:
-        return "아직 없습니다 — 있으면 거래비용·처음 보는 기간을 측정할 수 있습니다."
+        return "아직 없습니다 — 있으면 거래비용·표본외 구간을 측정할 수 있습니다."
     return "없어도 됩니다."
 
 

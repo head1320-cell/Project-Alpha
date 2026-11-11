@@ -424,7 +424,7 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
         "text": f"그룹 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다"}
     return {"title": f"그룹 {view.get('n')}개가 같이 무너지는지 봤습니다", "headline": headline,
             "facts": list(rob.get("story") or []), "trust": trust,
-            "unmeasured": ["앞으로도 같을지(과거 관계입니다)", "돈이 되는지(경제적 가치)"]
+            "unmeasured": ["앞으로도 같을지(과거 관계입니다)", "경제적 가치"]
             + ([] if rob.get("axis") == "date" else ["날짜로 맞춘 비교(시세의 끝을 맞췄습니다)"])}
 
 

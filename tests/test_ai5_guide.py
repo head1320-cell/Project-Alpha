@@ -82,7 +82,7 @@ def test_the_grounding_has_only_applicable_known_tools_server_gate_names_and_kin
     g = gd.ground(DOC, STATE, [*APPLICABLE, "rm_rf", "branch"], KINDS)
     assert [t["id"] for t in g["tools"]] == APPLICABLE                                  # 목록 밖은 버림 · 겹친 것은 하나 · 목록 순서
     assert g["tools"][0] == {"id": "branch", **gd.FEATURES["branch"]}
-    assert g["state"]["gates_blocked"] == ["거래비용", "처음 보는 기간"]
+    assert g["state"]["gates_blocked"] == ["거래비용", "표본외 강건성"]
     assert "포트폴리오 최적화" in g["kinds"] and "유니버스" in g["kinds"]
     blob = json.dumps(g, ensure_ascii=False)
     assert "005930" not in blob and "params" not in blob and "risk_parity" not in blob

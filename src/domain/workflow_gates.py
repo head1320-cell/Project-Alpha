@@ -22,8 +22,8 @@ CONFIRMED, ASSUMED, PARTIAL, UNKNOWN, SKIPPED, FAILED = (
     "confirmed", "assumed", "partial", "unknown", "skipped", "failed")
 
 GATES = [
-    ("data", "데이터"), ("pit", "시점"), ("signal", "신호"), ("build", "포트폴리오 최적화"),
-    ("cost", "거래비용"), ("oos", "처음 보는 기간"), ("economic", "돈이 되는지"),
+    ("data", "데이터 무결성"), ("pit", "시점 정합"), ("signal", "신호 타당성"), ("build", "포트폴리오 전달"),
+    ("cost", "거래비용"), ("oos", "표본외 강건성"), ("economic", "경제적 가치"),
     ("live", "모의·실계좌"),
 ]
 
@@ -168,8 +168,8 @@ _SKIP = {
     "signal": "신호·알파 단계가 없습니다 — 신호가 미래를 맞히는지는 측정하지 않았습니다.",
     "build": "비중을 계산하는 단계가 없습니다.",
     "cost": "과거로 돌려 보는 단계가 없어서 거래비용을 반영하지 않았습니다.",
-    "oos": "과거로 돌려 보는 단계가 없어서 처음 보는 기간에서는 확인하지 않았습니다.",
-    "economic": "비용과 위험을 뺀 뒤에도 돈이 되는지 통계로 재는 단계가 없습니다.",
+    "oos": "과거로 돌려 보는 단계가 없어서 표본외 구간에서는 확인하지 않았습니다.",
+    "economic": "비용과 위험을 뺀 뒤의 경제적 가치를 통계로 재는 단계가 없습니다.",
     "live": "모의투자·실계좌 기록과 이어지지 않았습니다.",
 }
 
@@ -186,7 +186,7 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
 
     `history_types` — 과거를 시뮬레이션하거나 그 기록을 읽는 노드 종류 → 쉬운 이름(BT1, 라우트가 레지스트리에서
     넘긴다 — 이 모듈은 레지스트리를 모른다). 정책 백테스트(`backtest`)가 없는데 이런 노드가 있으면 거래비용·
-    처음 보는 기간은 **모릅니다**다: "단계가 없습니다"는 사실이 아니고, 관문이 그 결과를 아직 읽지 않으므로 확인도 아니다.
+    표본외 구간은 **모릅니다**다: "단계가 없습니다"는 사실이 아니고, 관문이 그 결과를 아직 읽지 않으므로 확인도 아니다.
     """
     def ids(*types: str) -> list[str]:
         return [str(n["id"]) for n in nodes if n.get("type") in types and n.get("id") in results]
@@ -217,7 +217,7 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
         who = " · ".join(f"‘{x}’" for x in names) + _subj_particle(names[-1])
         rules["cost"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과의 거래비용을 읽지 않습니다 — "
                                      "‘정책 백테스트’를 이으면 측정할 수 있습니다.")]
-        rules["oos"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과로 처음 보는 기간을 판정하지 "
+        rules["oos"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과로 표본외 구간을 판정하지 "
                                     "않습니다 — ‘정책 백테스트’를 이으면 측정할 수 있습니다.")]
         feeders["cost"] = feeders["oos"] = [str(n["id"]) for n in present]
     gates = []

@@ -315,7 +315,7 @@ test("복제해서 비교: 같은 입력·같은 설정으로 하나 더 · 나�
   await expect(page.locator(".pg-step")).toHaveCount(8);
 });
 
-test("확인하기 노드(BK W1): 팔레트에서 골라 비중에 잇고 계산 → 이야기·자세히에 서버 결과", async ({ page }) => {
+test("점검 노드(BK W1): 팔레트에서 골라 비중에 잇고 계산 → 이야기·자세히에 서버 결과", async ({ page }) => {
   await openCanvas(page);
   for (const kind of ["scenario_stress", "corr_stress", "sensitivity", "factor_xray"]) {
     await expect(page.locator(`.pg-palette-item[data-kind="${kind}"]`), kind).toBeVisible();

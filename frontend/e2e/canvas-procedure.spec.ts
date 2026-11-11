@@ -78,7 +78,7 @@ test("빈 캔버스: 절차 탭이 먼저 · 첫 걸음은 유니버스 · 다�
   await expect(edges(page)).toHaveCount(0);
 });
 
-test("비중까지만: 확인하기가 비어 있고 붙이면 정책 백테스트가 선 2개로 이어진다", async ({ page }) => {
+test("비중까지만: 점검이 비어 있고 붙이면 정책 백테스트가 선 2개로 이어진다", async ({ page }) => {
   await openWith(page, BUILD_ONLY, "proc");
   await expect(step(page, "build")).toHaveAttribute("data-state", "filled");
   await expect(step(page, "build").locator(".pg-proc-fix")).toHaveCount(0);

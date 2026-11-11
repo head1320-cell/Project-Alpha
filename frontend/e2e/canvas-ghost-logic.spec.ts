@@ -15,7 +15,7 @@ const EST: ProcedureSuggestion = {
   attach: [{ source: "@new", source_port: "belief", target: "optimizer", target_port: "belief" }], unlocks: [],
 };
 const BT: ProcedureSuggestion = {
-  action: "add", kind: "backtest", label: "정책 백테스트", text: "거래비용과 처음 보는 기간을 아직 측정하지 않았습니다.",
+  action: "add", kind: "backtest", label: "정책 백테스트", text: "거래비용과 표본외 구간을 아직 측정하지 않았습니다.",
   attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" },
            { source: "returns", source_port: "returns", target: "@new", target_port: "returns" }],
   unlocks: ["cost", "oos"],
