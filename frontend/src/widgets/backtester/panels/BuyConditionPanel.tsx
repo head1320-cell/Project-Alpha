@@ -54,7 +54,7 @@ export default function BuyConditionPanel({ s, set }: {
               <p className="bte-note bte-note--warn">당일 시초가처럼 변동이 큰 기준은 불공정 거래 소지가 있으니 조심하십시오.</p>
             </div>
           )}
-          <Field label="사는 때">
+          <Field label="매수 시점">
             <Segmented tone="buy" value={s.buy.buyTiming} onChange={(t) => patchBuy({ buyTiming: t })}
               options={[{ id: "pre_open", label: "장 시작 전" }, { id: "intraday", label: "장중 주문" }]} />
             <p className="bte-note">장중 주문은 지정가로 살 때 시가 갭으로 체결되는 경우를 뺍니다(보수적).</p>

@@ -23,7 +23,7 @@ import { MacroAnswer } from "./MacroAnswer";
 const TODO = [
   { label: "포트폴리오 설계", href: "/allocation", sub: "종목·비중·점검을 한 화면에서 이어 설계합니다" },
   { label: "종목 찾기", href: "/screener", sub: "조건을 걸어 종목을 고릅니다" },
-  { label: "백테스트", href: "/backtest", sub: "전략을 지난 데이터로 돌려 봅니다" },
+  { label: "백테스트", href: "/backtest", sub: "전략을 과거 데이터로 시뮬레이션합니다" },
   { label: "매크로 분석", href: "/macro", sub: "경기와 물가가 어느 쪽으로 가는지 봅니다" },
   { label: "기업 분석", href: "/insights", sub: "한 종목의 가치와 재무를 자세히 봅니다" },
   { label: "위험 점검", href: "/risk-tools", sub: "충격이 오면 얼마나 잃을지 재 봅니다" },

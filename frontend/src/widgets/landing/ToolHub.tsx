@@ -17,7 +17,7 @@ import { Building2, ChevronRight, Globe2, LineChart, ListFilter, ShieldAlert, Wo
 type Tool = { t: string; href: string; d: string; node: string; Icon: LucideIcon; side: "l" | "r" };
 const TOOLS: Tool[] = [
   { t: "종목 찾기", href: "/screener", d: "조건을 걸어 종목을 고릅니다", node: "스크리닝", Icon: ListFilter, side: "l" },
-  { t: "백테스트", href: "/backtest", d: "규칙을 지난 데이터로 돌려 봅니다", node: "조건식 백테스트", Icon: LineChart, side: "l" },
+  { t: "백테스트", href: "/backtest", d: "매매 규칙을 과거 데이터로 시뮬레이션합니다", node: "조건식 백테스트", Icon: LineChart, side: "l" },
   { t: "매크로 분석", href: "/macro", d: "경기와 물가가 어느 쪽으로 가는지 봅니다", node: "경기 국면", Icon: Globe2, side: "r" },
   { t: "기업 분석", href: "/insights", d: "한 종목의 가치와 재무를 자세히 봅니다", node: "기업 가치평가", Icon: Building2, side: "r" },
   { t: "위험 점검", href: "/risk-tools", d: "충격이 오면 어디가 먼저 무너지는지 봅니다", node: "시나리오 스트레스", Icon: ShieldAlert, side: "r" },

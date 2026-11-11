@@ -27,7 +27,7 @@ const PATH: { t: string; d: string; href?: string; rec: string }[] = [
   { t: "설계에서 불러오기", d: "값을 베끼지 않고 남긴 기록을 가리킵니다", href: "/allocation?from=macro", rec: "값 대신 snapshot_id 를 가리킵니다" },
   { t: "타이밍 규칙", d: "언제 비중을 늘리고 줄일지 정합니다", href: "/allocation?from=timing", rec: "name@version" },
   { t: "충격 견뎌 보기", d: "정해 둔 충격 시나리오에 넣어 봅니다", href: "/allocation?from=stress", rec: "pack_id@해시" },
-  { t: "포트폴리오 최적화·백테스트", d: "비중을 정하고 지난 데이터로 돌려 봅니다", href: "/allocation?from=optimize", rec: "run_id" },
+  { t: "포트폴리오 최적화·백테스트", d: "비중을 산출하고 과거 데이터로 시뮬레이션합니다", href: "/allocation?from=optimize", rec: "run_id" },
   { t: "결정 기록하기", d: "왜 그렇게 정했는지 남기고 나중에 되짚습니다", href: "/allocation?from=journal", rec: "결정 → run_id → snapshot_id 사슬" },
 ];
 

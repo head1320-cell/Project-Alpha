@@ -8,7 +8,7 @@ import { buildSummary, type BacktestStrategy } from "@/entities/backtest/strateg
 
 export type StepId = "buy" | "sell" | "universe" | "capital";
 
-const STEP_NAME: Record<StepId, string> = { buy: "무엇을 살까", sell: "언제 팔까", universe: "어디서 고를까", capital: "돈·기간·비용" };
+const STEP_NAME: Record<StepId, string> = { buy: "매수 설정", sell: "매도 설정", universe: "매매 대상", capital: "투자금·기간·비용" };
 const CAPITAL_GROUP = "포트 기본";
 
 /** ★아직 세지 않은 대상 수를 0으로 보이지 않는다★ 대상 수는 ③을 열 때 서버에 묻는다(`universe-count`) — 그 전의

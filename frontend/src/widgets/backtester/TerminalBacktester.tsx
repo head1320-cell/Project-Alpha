@@ -29,10 +29,10 @@ import { applyMacroConfig, initialStrategy, runLabel, strategyToRun } from "./st
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const STEPS: Array<{ id: StepId; name: string }> = [
-  { id: "buy", name: "무엇을 살까" },
-  { id: "sell", name: "언제 팔까" },
-  { id: "universe", name: "어디서 고를까" },
-  { id: "capital", name: "돈·기간·비용" },
+  { id: "buy", name: "매수 설정" },
+  { id: "sell", name: "매도 설정" },
+  { id: "universe", name: "매매 대상" },
+  { id: "capital", name: "투자금·기간·비용" },
 ];
 
 /** 단계 머리의 "지금" 줄 — 사용자가 넣은 설정을 되읽는다(판단이 아니다). 오른쪽 요약과 같은 `stepGroups` 한 곳에서 꺼낸다. */
@@ -106,7 +106,7 @@ export default function TerminalBacktester() {
 
   return (
     <div className="tpage-fade tx-page tx-page--wide bte">
-      <PageHead title="백테스트" lede="전략을 지난 데이터로 돌려 봅니다. 순서대로 정하고 실행합니다." />
+      <PageHead title="백테스트" lede="전략을 과거 데이터로 시뮬레이션합니다. 단계별로 설정한 뒤 실행합니다." />
 
       {handoff && (
         <div className="bte-handoff tscreener-handoff">

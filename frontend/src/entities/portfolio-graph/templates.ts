@@ -197,7 +197,7 @@ export interface GraphTemplate { key: string; name: string; description: string;
 /** 팔레트의 "빠른 시작" 목록 — 순서가 곧 권하는 순서다. */
 export const TEMPLATES: GraphTemplate[] = [
   { key: "core", name: "기본 흐름", doc: CORE_CHAIN_TEMPLATE,
-    description: "종목 3개로 비중을 정하고 과거로 돌려 봅니다." },
+    description: "종목 3개로 비중을 산출하고 과거 데이터로 시뮬레이션합니다." },
   { key: "stress", name: "충격 점검", doc: STRESS_TEMPLATE,
     description: "정한 비중을 위기 상황·상관 급등·기대 수익 오차에 넣어 봅니다." },
   { key: "screener", name: "조건으로 고른 종목 나누기", doc: SCREENER_TEMPLATE,

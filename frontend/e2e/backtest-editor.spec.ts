@@ -15,7 +15,7 @@ import { contrastAudit, type AuditResult } from "./helpers";
 const act = (p: Page, a: string) => p.locator(`[data-act="${a}"]`);
 const steps = (p: Page) => p.locator(".bte .tbt-mode");
 const nowLine = (p: Page, i: number) => steps(p).nth(i).locator(".bte-step-now");
-const STEP_NAMES = ["무엇을 살까", "언제 팔까", "어디서 고를까", "돈·기간·비용"];
+const STEP_NAMES = ["매수 설정", "매도 설정", "매매 대상", "투자금·기간·비용"];
 
 async function open(page: Page) {
   await page.goto("/backtest", { waitUntil: "domcontentloaded" });
