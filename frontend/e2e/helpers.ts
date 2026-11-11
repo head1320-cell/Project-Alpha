@@ -275,3 +275,58 @@ export async function minimapOn(page: Page, on: boolean): Promise<void> {
   if (on) await page.locator(".pg-minimap").waitFor({ state: "visible" });
   else await page.locator(".pg-minimap").waitFor({ state: "detached" });
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// 문체 감사 (ADR 005 · 2026-11-11) — 뿌리 아래 ★보이는 글자★가 개조식 + 합니다체인지
+// ═══════════════════════════════════════════════════════════════════
+// 화면 문체를 해요체에서 전문 용어 문체로 옮겼다(용어집 `docs/specs/2026-11-11-ui-terminology.md`). 소스는
+// `tests/test_frontend_voice.py`(래칫)가 보고, 이 감사는 ★실제로 그려진 글자★를 본다 — 소스에 없어도 서버가 준 글·조립된 문장이 화면에 나온다.
+// 예전에는 스펙마다 `BANNED…` 정규식과 em-dash·툴팁 검사를 따로 들고 있었다(14개 스펙). 한 곳으로 모은다.
+//
+//   haeyo  — 해요체 말끝이 든 글(했어요 · 이에요 · 주세요 · 됐죠 …). 판정은 래칫과 같은 규칙이다:
+//            "요" 앞 글자가 받침 없는 음절이고 모음이 ㅏㅐㅓㅔㅕㅖㅘㅙㅝㅞ 이면 말끝. 수요·주요·필요는 걸리지 않고 "개요"만 따로 뺀다.
+//   dash   — 보이는 em-dash/en-dash.
+//   banned — 풀어 쓴 영어 낱말·개발자 낱말(용어집 §6). ★통용 약어(PER·MDD·Z-Score …)는 금지가 아니다★.
+//   titles — `title` 툴팁 수(사유는 보이는 줄에 둔다).
+//
+// 서버가 준 글(`[data-server]`)·식별자(`code`·`[data-mono]`)·입력 칸은 세지 않는다 — 화면이 쓴 글이 아니다.
+// 반환값은 브라우저 안에서 도는 문자열이다(`contrastAudit` 과 같은 까닭).
+export interface VoiceResult { checked: number; haeyo: string[]; dash: string[]; banned: string[]; titles: number }
+
+export const VOICE_BANNED = "Overview|Valuation|Financials|Factors|Peers|Network|Football Field|Bull|Base|Bear|Comps|HOLD|BUY|SELL|Claude|ANTHROPIC_API_KEY|ModuleNotFoundError|mock|Mock|MOCK";
+
+export function voiceAudit(rootSelector: string, extraBanned = ""): string {
+  const banned = extraBanned ? `${VOICE_BANNED}|${extraBanned}` : VOICE_BANNED;
+  return `(() => {
+  const roots = Array.from(document.querySelectorAll(${JSON.stringify(rootSelector)}));
+  if (!roots.length) return { checked: 0, haeyo: ["NO " + ${JSON.stringify(rootSelector)}], dash: [], banned: [], titles: 0 };
+  const OPEN = new Set([0, 1, 4, 5, 6, 7, 9, 10, 14, 15]);
+  const isHaeyo = (s) => {
+    for (const m of s.matchAll(/([가-힣])요(?![가-힣])/g)) {
+      const code = m[1].charCodeAt(0) - 0xac00;
+      if (code % 28 === 0 && OPEN.has(Math.floor(code / 28) % 21) && m[0] !== "개요") return true;
+    }
+    return /(?:[가-힣]죠|군요)(?![가-힣])/.test(s);
+  };
+  const BANNED = new RegExp("\\\\b(" + ${JSON.stringify(banned)} + ")\\\\b");
+  const haeyo = [], dash = [], bannedHits = [];
+  let checked = 0, titles = 0;
+  for (const root of roots) {
+    const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walk.nextNode())) {
+      const el = n.parentElement; const s = (n.textContent || "").trim();
+      if (!s || !el || !el.getClientRects().length) continue;
+      if (getComputedStyle(el).visibility === "hidden") continue;
+      if (el.closest("[data-server], code, [data-mono], input, textarea, select, script, style")) continue;
+      checked++;
+      if (isHaeyo(s)) haeyo.push(s.slice(0, 60));
+      if (/[—–]/.test(s)) dash.push(s.slice(0, 60));
+      if (BANNED.test(s)) bannedHits.push(s.slice(0, 60));
+    }
+    titles += Array.from(root.querySelectorAll("[title]")).filter((e) => (e.getAttribute("title") || "").trim()).length
+      + Array.from(root.querySelectorAll("svg title")).filter((e) => (e.textContent || "").trim()).length;
+  }
+  return { checked, haeyo: [...new Set(haeyo)], dash: [...new Set(dash)], banned: [...new Set(bannedHits)], titles };
+})()`;
+}

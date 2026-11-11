@@ -93,7 +93,7 @@ TDD 구현 → **전체 게이트**(`make all` = lint+test+typecheck+build, CI�
 **수치 안전** — 분수승·로그·제곱근에 음수가 들어갈 수 있는 파생식은 반드시 가드
 (적자기업 실데이터에서만 터집니다 — mock 은 항상 흑자라 테스트를 통과합니다).
 
-**프론트엔드** — API 주소를 빌드 타임에 박지 말 것(`NEXT_PUBLIC_*`·`rewrites` 금지),
-런타임 프록시 경유. **CSS 클래스명이 E2E 계약**이니 바꾸면 스펙도 함께 —
-[ADR 001](docs/decisions/adr-001-tailwind-shadcn-aas-migration.md). **보안** — `.env`
-커밋 금지(`.env.example` 만). API 키를 채팅·이슈·로그에 노출 금지.
+**프론트엔드** — API 주소를 빌드 타임에 박지 말 것(`NEXT_PUBLIC_*`·`rewrites` 금지), 런타임 프록시 경유.
+**CSS 클래스명이 E2E 계약**이니 바꾸면 스펙도 함께 — [ADR 001](docs/decisions/adr-001-tailwind-shadcn-aas-migration.md).
+**화면 문구**는 개조식 + 합니다체 · [용어집](docs/specs/2026-11-11-ui-terminology.md)대로(해요체 금지 — ADR 005).
+**보안** — `.env` 커밋 금지(`.env.example` 만). API 키를 채팅·이슈·로그에 노출 금지.
