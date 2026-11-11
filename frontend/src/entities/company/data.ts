@@ -88,19 +88,19 @@ function buildFactorGroups(item: ScreenerItem, catalog: FieldsCatalog, sample: S
   return groups;
 }
 
-// 일봉 → 차트용 다운샘플. ★시세가 없으면 빈 배열 — 합성 경로를 지어 그리지 않는다(BU6, CLAUDE.md §6 mock 게이트)★
-function mapPrices(bars: { date: string; close: number }[], current: number): PricePt[] {
-  if (!bars.length) return [];
-  const lastClose = bars[bars.length - 1].close;
-  const scale = current > 0 && lastClose > 0 ? current / lastClose : 1; // 헤더 현재가에 정렬(실 KIS면 ≈1)
-  const step = Math.max(1, Math.floor(bars.length / 60));
-  const out: PricePt[] = [];
-  for (let i = 0; i < bars.length; i += step) {
-    const d = bars[i].date.slice(2).replace(/-/g, ".").slice(0, 5); // YY.MM
-    out.push({ t: d, p: Math.round(bars[i].close * scale), date: bars[i].date, close: bars[i].close });
-  }
-  out[out.length - 1] = { ...out[out.length - 1], p: Math.round(current) };
-  return out;
+// 일봉 → 차트용 다운샘플(60 점 안팎). ★시세가 없으면 빈 배열 — 합성 경로를 지어 그리지 않는다(BU6, CLAUDE.md §6 mock 게이트)★
+// ★종가는 서버 값 그대로다(2026-11-10)★ 예전에는 과거 종가 전부에 (헤더 현재가 ÷ 마지막 종가)를 곱하고 끝 점을 현재가로 바꿔 그렸다 —
+//   선이 헤더 가격에서 끝나 보이지만 과거가 통째로 옮겨진다(헤더 가격과 시세 이력은 출처가 다르다: 장중이면 그날 등락만큼, 연습용 자료면 수십 %).
+//   지금 주가는 그림이 따로 표시한다(`widgets/company/charts.tsx::PriceValueChart` 의 "지금 주가" 선). 둘이 다르면 다르게 보이는 것이 맞다.
+// ★솎아도 마지막 봉은 남긴다★ 예전에는 건너뛰는 칸에 걸리면 마지막 날이 빠졌다(그 자리에 현재가를 덮어 써서 보이지 않았다).
+function mapPrices(bars: { date: string; close: number }[]): PricePt[] {
+  const n = bars.length;
+  if (!n) return [];
+  const step = Math.max(1, Math.floor(n / 60));
+  const picked: number[] = [];
+  for (let i = 0; i < n; i += step) picked.push(i);
+  if (picked[picked.length - 1] !== n - 1) picked.push(n - 1);
+  return picked.map((i) => ({ t: bars[i].date.slice(2).replace(/-/g, ".").slice(0, 5), p: bars[i].close, date: bars[i].date }));   // t = YY.MM
 }
 function mapYears(hist: FinancialHistory | null): YearFin[] {
   if (!hist?.financials?.length) return [];
@@ -224,10 +224,11 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
 
   const years = mapYears(hist);
   const quarters = mapQuarters(quarterHist);
-  const price1y = mapPrices(bars, price);
-
-  // 전일 대비 — 시세 원본의 마지막 두 종가(배율 조정 전). 둘 미만이면 모른다(null).
+  // 종가를 아는 봉만 쓴다(0·빈 값은 모르는 날 — 0 으로 그리지 않는다). 그림과 전일 대비가 같은 봉을 본다.
   const closes = bars.filter((b) => b.close > 0);
+  const price1y = mapPrices(closes);
+
+  // 전일 대비 — 시세의 마지막 두 종가. 둘 미만이면 모른다(null).
   const dayChange = closes.length >= 2
     ? { pct: Math.round((closes[closes.length - 1].close / closes[closes.length - 2].close - 1) * 10000) / 100, date: closes[closes.length - 1].date }
     : null;

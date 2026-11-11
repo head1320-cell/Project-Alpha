@@ -8049,13 +8049,13 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .ci-pv-leg { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--tx-ink); }
 .ci-pv-leg li { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
 .ci-pv-leg i { width: 12px; height: 12px; border-radius: 3px; }
-.ci-pv-shift { margin: 6px 0 0; }
 .ci-pv-leg b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 720px) { .ci-pv-leg { flex-direction: column; } .ci-pv-leg b { margin-left: auto; } .ci-pv-leg li { width: 100%; } }
 .ci-pv-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 0; font-size: 13px; color: var(--tx-ink); }
 .ci-pv-key span { display: inline-flex; align-items: center; gap: 6px; }
 .ci-pv-sw { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--tx-blue); }
 .ci-pv-sw.dash { border-top: 2px dashed var(--tx-ink); }
+.ci-pv-sw.now { border-top: 1px solid var(--tx-mute); }   /* 지금 주가 선(그림의 가는 실선과 같은 모양) */
 .ci-pv-out { margin: 8px 0 0; padding: 10px 12px; list-style: none; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 13px; line-height: 1.5; color: var(--tx-ink); }
 .ci-pv-noprice { margin: 0 0 8px; padding: 10px 12px; border-radius: var(--tx-r-row); background: var(--tx-soft); font-size: 14px; color: var(--tx-ink); }
 /* 모형 카드 */

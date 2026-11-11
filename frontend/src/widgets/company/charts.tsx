@@ -5,8 +5,8 @@
 //   · 값은 호버 툴팁이 아니라 늘 보이는 읽는 줄(+ 표 쌍둥이)에 — 처음 자리 = 마지막 점 · ←→ Home End · 마우스를 올려도 옮겨진다.
 //   · 이야기 그림은 이중 축이 아니다 — 매출(원)과 이익률(%)을 위아래 두 칸으로(같은 기간 축).
 //   · 주가와 가치는 겹친 띠가 아니다 — 모형별 범위는 주가 선 오른쪽의 겹치지 않는 가는 막대(같은 y 축).
-//   · 주가의 읽는 줄·표는 ★서버 날짜·종가 그대로★다. 선의 높이는 예전처럼 지금 주가에 맞춰 옮겨 그리므로(entities/company/data.ts::mapPrices),
-//     둘이 다르면 그렇다고 한 줄로 말한다(`.ci-pv-shift`).
+//   · 주가 선은 ★서버 종가 그대로★다(예전에는 지금 주가에 맞춰 통째로 옮겨 그렸다 — entities/company/data.ts::mapPrices). 지금 주가(헤더 가격)는
+//     범위 칸을 가로지르는 따로 선(`.ci-pv-nowline`)과 글자(`.ci-pv-now`)로 — 마지막 종가와 다르면 다르게 보인다.
 import { useMemo, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, ReferenceArea, ReferenceDot, ComposedChart, Line, AreaChart, Area,
@@ -27,14 +27,11 @@ const AXIS = AXIS_TICK;
 const BLUE = "var(--tx-blue)";
 const priceTick = (v: number) => (v >= 10000 ? `${Math.round(v / 1000).toLocaleString()}천` : Math.round(v).toLocaleString());
 
-/** 주가의 읽는 줄 — 머리 = 서버 날짜(없으면 축 글자), 값 = 서버 종가(없으면 그림 값). */
+/** 주가의 읽는 줄 — 머리 = 서버 날짜(없으면 축 글자), 값 = 서버 종가(그림의 높이와 같은 값). */
 const priceRows = (data: Price): ReadRow[] => data.map((d) => ({
   head: d.date ? d.date.replace(/-/g, ".") : d.t,
-  cells: [{ key: "p", label: "종가", text: won(d.close ?? d.p) }],
+  cells: [{ key: "p", label: "종가", text: won(d.p) }],
 }));
-/** 선을 옮겨 그렸는가 — 그림 높이와 서버 종가가 0.5% 넘게 다른 점이 있다(지금 주가에 맞춘 배율 · `mapPrices`). */
-const shifted = (data: Price): boolean => data.some((d) => d.close != null && d.close > 0 && Math.abs(d.p - d.close) / d.close > 0.005);
-const ShiftNote = () => <p className="ci-note ci-pv-shift">선의 높이는 지금 주가에 맞춰 옮겨 그렸어요. 읽는 줄과 표의 종가는 서버 값 그대로예요.</p>;
 
 /** 1년 주가 면적 — 중립 한 색(판정 색으로 칠하지 않는다) + 내재가치 점선. ★주가가 없으면 부르지 않는다(지어내지 않음)★. */
 export function PriceChart({ data, height = 200, intrinsic }: { data: Price; height?: number; intrinsic?: number }) {
@@ -45,7 +42,6 @@ export function PriceChart({ data, height = 200, intrinsic }: { data: Price; hei
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
   const cur = idx >= 0 ? pts[idx] : null;
   return (
-    <>
     <ReadoutFrame id="price-1y" label="1년 주가" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={pts} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} onMouseMove={followChart(setIdx)}>
@@ -58,12 +54,11 @@ export function PriceChart({ data, height = 200, intrinsic }: { data: Price; hei
         </AreaChart>
       </ResponsiveContainer>
     </ReadoutFrame>
-    {shifted(data) && <ShiftNote />}
-    </>
   );
 }
 
-/** 주가 선(왼쪽 구역) + 모형별 가치 범위 막대(오른쪽 구역 · 풋볼필드 lo~hi) + 내재가치 점선. ★y 축은 하나★라 주가와 범위를 같은 눈금으로 견준다.
+/** 주가 선(왼쪽 구역 · 서버 종가 그대로) + 모형별 가치 범위 막대(오른쪽 구역 · 풋볼필드 lo~hi) + 내재가치 점선 + ★지금 주가 선★(헤더 가격 `price` —
+ *  범위 칸을 가로지른다 · 시세 이력의 마지막 종가와 출처가 달라 높이가 다를 수 있고, 다르면 다르게 보인다). ★y 축은 하나★라 셋을 같은 눈금으로 견준다.
  *  예전에는 범위를 반투명 띠로 겹쳐 깔아 겹친 곳이 범례에 없는 색이 됐다 — 막대는 서로 겹치지 않는다.
  *  가로는 그림 px 단위의 숫자 축(잰 폭)이라 막대 폭이 화면 폭과 상관없이 규격대로다.
  *  ★주가가 없으면 선을 그리지 않는다(지어내지 않음)★ — 막대만 남고 부르는 쪽이 "시세가 아직…"을 말한다.
@@ -110,11 +105,11 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
         {inRange.map((b, k) => (
           <ReferenceArea key={b.id} x1={bandX(k)} x2={bandX(k) + barW} y1={bandY(b)[0]} y2={bandY(b)[1]} fill={catColor(k)} fillOpacity={1} stroke="none" radius={MARK.barR} ifOverflow="extendDomain" />
         ))}
-        {intrinsic > 0 && <ReferenceLine y={intrinsic} stroke="var(--tx-ink)" strokeDasharray="5 4" strokeWidth={1.2} />}
-        {last && m > 0 && <ReferenceLine segment={[{ x: lineW, y: last.p }, { x: plotW, y: last.p }]} stroke="var(--tx-mute)" strokeWidth={1} />}
+        {intrinsic > 0 && <ReferenceLine className="ci-pv-intr" y={intrinsic} stroke="var(--tx-ink)" strokeDasharray="5 4" strokeWidth={1.2} />}
+        {price > 0 && m > 0 && <ReferenceLine className="ci-pv-nowline" segment={[{ x: lineW, y: price }, { x: plotW, y: price }]} stroke="var(--tx-mute)" strokeWidth={1} />}
         {hasLine && <Line type="monotone" dataKey="p" stroke={BLUE} strokeWidth={MARK.line} dot={false} isAnimationActive={anim} />}
         {cur && <ReferenceLine segment={[{ x: cur.x, y: lo }, { x: cur.x, y: hi }]} {...CROSSHAIR} />}
-        {last && <ReferenceDot x={last.x} y={last.p} {...ringDot(BLUE)} />}
+        {last && <ReferenceDot className="ci-pv-end" x={last.x} y={last.p} {...ringDot(BLUE)} />}
         {cur && cur !== last && <ReferenceDot x={cur.x} y={cur.p} {...pickDot(BLUE)} />}
       </ComposedChart>
     </ResponsiveContainer>
@@ -124,7 +119,6 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
       {hasLine
         ? <ReadoutFrame id="price-value" label="1년 주가와 모형별 가치 범위" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>{chart}</ReadoutFrame>
         : chart}
-      {hasLine && shifted(data) && <ShiftNote />}
       <ul className="ci-pv-leg">
         {inRange.map((b, i) => (
           <li key={b.id}><i style={{ background: catColor(i) }} aria-hidden /><span data-server>{b.label}</span> <b>{won(b.lo)}~{won(b.hi)}</b></li>
@@ -132,6 +126,7 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
       </ul>
       <p className="ci-pv-key">
         {hasLine && <span><i className="ci-pv-sw line" aria-hidden />주가(1년)</span>}
+        {price > 0 && m > 0 && <span className="ci-pv-now"><i className="ci-pv-sw now" aria-hidden />지금 주가 {won(price)}</span>}
         {intrinsic > 0 && <span><i className="ci-pv-sw dash" aria-hidden />내재가치 {won(intrinsic)}</span>}
       </p>
       {out.length > 0 && (

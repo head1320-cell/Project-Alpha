@@ -259,7 +259,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {/* ── 주가와 가치 ── */}
       {sec("value", (
         <>
-          <p className="ci-sec-lede">1년 주가 선 오른쪽에 모형별 가치 범위를 막대로 세웠어요. 눈금이 같아서 지금 주가와 바로 견줄 수 있어요. 점선은 우리 추정 내재가치예요.</p>
+          <p className="ci-sec-lede">1년 주가 선(날마다의 종가) 오른쪽에 모형별 가치 범위를 막대로 세웠어요. 가는 실선은 지금 주가예요. 종가와 받아 오는 곳과 때가 달라 선 끝과 높이가 다를 수 있어요. 점선은 우리 추정 내재가치예요.</p>
           {c.failed.includes("prices") && <RetryFail title="시세를 불러오지 못했어요" onRetry={onRetry} />}
           {!c.price1y.length && !c.failed.includes("prices") && <p className="ci-pv-noprice">시세가 아직 적재되지 않았어요. 주가 선 없이 가치 범위만 보여 드려요.</p>}
           {sb.isError && <RetryFail title="가치 범위를 불러오지 못했어요" onRetry={() => void sb.refetch()} />}

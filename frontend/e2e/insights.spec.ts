@@ -1068,3 +1068,72 @@ test("주가와 가치 — ★범위 막대는 겹치지 않는다★: 주가 �
   await expect(p1.locator(".cr-table tbody tr")).toHaveCount(prices.length);
   await expect(page.locator(".ci-sec[data-sec=value] .recharts-tooltip-wrapper")).toHaveCount(0);
 });
+
+// ── 주가 선은 서버 종가 그대로 (2026-11-10 · 배율을 걷었다) ──
+// 예전 `mapPrices` 는 과거 종가 전부에 (헤더 현재가 ÷ 마지막 종가)를 곱해 그렸다 — 선이 헤더 가격에서 끝나 보이지만 과거가 통째로 옮겨진다
+// (헤더 가격과 시세 이력은 출처가 다르다: 장중이면 그날 등락만큼, 연습용 자료면 수십 %). 이제 ⑴ 선은 서버 종가 그대로 ⑵ 솎아도 마지막 봉은 남고
+// ⑶ 지금 주가(헤더)는 범위 칸을 가로지르는 따로 선으로 — 둘이 다르면 다르게 보인다(짝: 같으면 한 점에서 만난다).
+const wonS = (n: number) => `${Math.round(n).toLocaleString()}원`;            // entities/company/insightsModel.won 과 같은 서식
+const midY = (l: ReturnType<Page["locator"]>) => l.first().evaluate((e) => { const r = e.getBoundingClientRect(); return r.y + r.height / 2; });
+/** 헤더의 지금 주가(원) — 화면이 쓰는 값 그대로 읽는다. */
+async function headerPrice(page: Page): Promise<number> {
+  await open(page);
+  const p = Number(((await page.locator(".ci-head .ci-price").textContent()) ?? "").replace(/[^\d]/g, ""));
+  expect(p, "헤더 가격을 못 읽으면 이 검사는 공허하다").toBeGreaterThan(1000);
+  return p;
+}
+/** 130 봉(2026-01-01 부터 하루씩) — 60 점으로 솎으면 두 칸씩 건너 마지막 봉(130번째)이 빠지는 수. */
+function bars130(base: number, lastClose: number) {
+  const day0 = Date.UTC(2026, 0, 1);
+  return Array.from({ length: 130 }, (_, i) => ({ date: new Date(day0 + i * 86_400_000).toISOString().slice(0, 10), close: i === 129 ? lastClose : base + (i % 7) * 100 }));
+}
+
+test("★주가 선은 서버 종가 그대로★ — 선 끝 = 마지막 종가(지금 주가가 달라도) · 솎아도 마지막 봉이 남는다 · 지금 주가는 따로 선 · 1년 주가 눈금 = 서버 종가 범위", async ({ page }) => {
+  const P = await headerPrice(page);
+  const base = Math.round((P * 0.6) / 100) * 100, lastClose = base + 300;          // 지금 주가보다 40% 낮은 이력(배율이 있으면 선이 통째로 올라간다)
+  const prices = bars130(base, lastClose);
+  await page.route(`${API}/prices/**`, (r) => r.fulfill({ json: { ticker: "005930", count: prices.length, prices } }));
+  await open(page);
+  const fig = page.locator(".ci-sec[data-sec=value] .ci-pv");
+  await expect(fig.locator(".recharts-line")).toHaveCount(1, { timeout: 40_000 });
+  // ⑵ 마지막 봉 — 읽는 줄의 처음 자리는 서버의 마지막 날·마지막 종가(솎은 끝 점이 아니라)
+  const f = crIn(fig, "price-value");
+  await expect(f.locator(".cr-head")).toHaveText("2026.05.10");
+  await expect(f.locator(".cr-read")).toContainText(`종가 ${wonS(lastClose)}`);
+  await f.locator(".cr-table summary").click();
+  await expect(f.locator(".cr-table tbody tr"), "두 칸씩 솎은 65 점 + 마지막 봉").toHaveCount(66);
+  // ⑶ 지금 주가는 따로 — 글자로도(헤더와 같은 값)
+  await expect(fig.locator(".ci-pv-now")).toContainText(`지금 주가 ${wonS(P)}`);
+  // ⑴ 선 끝은 마지막 종가의 높이에 있다. 세로 눈금은 높이를 아는 두 선(지금 주가 · 내재가치)으로 잰다.
+  const intr = Number(((await fig.locator(".ci-pv-key").textContent()) ?? "").match(/내재가치 ([\d,]+)원/)?.[1].replace(/,/g, "") ?? NaN);
+  expect(intr, "내재가치 선이 없으면 높이를 잴 수 없다").toBeGreaterThan(0);
+  expect(Math.abs(intr - P) / P, "두 기준선이 너무 가까우면 눈금이 거칠다").toBeGreaterThan(0.05);
+  await page.waitForTimeout(600);
+  const nowY = await midY(fig.locator(".ci-pv-nowline line")), intrY = await midY(fig.locator(".ci-pv-intr line")), endY = await midY(fig.locator(".ci-pv-end circle"));
+  const valueAt = (y: number) => P + ((y - nowY) * (intr - P)) / (intrY - nowY);
+  expect(Math.abs(valueAt(endY) - lastClose) / lastClose, `선 끝의 높이 ${Math.round(valueAt(endY))} · 마지막 종가 ${lastClose} · 지금 주가 ${P}`).toBeLessThan(0.02);
+  expect(Math.abs(endY - nowY), "지금 주가 선과 선 끝은 다른 높이(값이 40% 다르다)").toBeGreaterThan(15);
+  // 1년 주가(자세히 보기) — 세로 눈금이 서버 종가 범위 안(배율이 있으면 지금 주가 근처로 올라간다)
+  await page.locator(".ci-sec[data-sec=value] details.ci-more > summary").click();
+  const p1 = crIn(page.locator(".ci-sec[data-sec=value]"), "price-1y");
+  await expect(p1.locator(".recharts-area-curve")).toBeVisible({ timeout: 20_000 });
+  const ticks = (await p1.locator(".recharts-yAxis .recharts-cartesian-axis-tick-value").allTextContents())
+    .map((t) => (t.endsWith("천") ? Number(t.replace(/[^\d.]/g, "")) * 1000 : Number(t.replace(/[^\d.]/g, ""))));
+  expect(ticks.length, "눈금이 없으면 공허하다").toBeGreaterThan(1);
+  expect(ticks.filter((v) => v < base - 1000 || v > base + 600 + 1000), `눈금 ${ticks.join(",")} 은 서버 종가 ${base}~${base + 600} 안`).toEqual([]);
+  await expect(p1.locator(".cr-head")).toHaveText("2026.05.10");
+  await expect(p1.locator(".cr-read")).toContainText(`종가 ${wonS(lastClose)}`);
+});
+
+test("짝 — 마지막 종가가 지금 주가와 같으면 선 끝과 지금 주가 선이 한 점에서 만난다", async ({ page }) => {
+  const P = await headerPrice(page);
+  const prices = bars130(P - 600, P);
+  await page.route(`${API}/prices/**`, (r) => r.fulfill({ json: { ticker: "005930", count: prices.length, prices } }));
+  await open(page);
+  const fig = page.locator(".ci-sec[data-sec=value] .ci-pv");
+  await expect(fig.locator(".recharts-line")).toHaveCount(1, { timeout: 40_000 });
+  await expect(crIn(fig, "price-value").locator(".cr-read")).toContainText(`종가 ${wonS(P)}`);
+  await page.waitForTimeout(600);
+  const nowY = await midY(fig.locator(".ci-pv-nowline line")), endY = await midY(fig.locator(".ci-pv-end circle"));
+  expect(Math.abs(endY - nowY), `선 끝 ${endY} · 지금 주가 선 ${nowY}`).toBeLessThan(1.5);
+});
