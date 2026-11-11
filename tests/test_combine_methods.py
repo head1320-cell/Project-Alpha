@@ -82,7 +82,7 @@ def test_manual_shares_are_used_as_given():
 
 
 @pytest.mark.parametrize("shares,word", [
-    (None, "몫"), ({"가": 50.0, "나": 30.0}, "다"), ({"가": 50.0, "나": 30.0, "다": 10.0}, "100"),
+    (None, "배분 비율"), ({"가": 50.0, "나": 30.0}, "다"), ({"가": 50.0, "나": 30.0, "다": 10.0}, "100"),
     ({"가": 120.0, "나": -20.0, "다": 0.0}, "음수"),
 ])
 def test_manual_without_proper_shares_fails_with_a_reason(shares, word):
@@ -245,7 +245,7 @@ def test_the_node_offers_the_new_methods_with_the_same_default():
 
 
 @pytest.mark.parametrize("method,field,word", [("score", "scores", "점수"), ("risk_budget", "budgets", "위험 예산"),
-                                                ("manual", "shares", "몫")])
+                                                ("manual", "shares", "배분 비율")])
 def test_methods_that_need_numbers_fail_without_them_instead_of_falling_back(market, method, field, word):
     r = _node(method=method)
     assert r["status"] == "failed" and word in r["reason"] and "전략 1" in r["reason"]
@@ -255,7 +255,7 @@ def test_manual_shares_by_port_become_the_shares(market):
     r = _node(method="manual", shares={"s1": 50, "s2": 30, "s3": 20})
     assert r["status"] == "ok", r["reason"]
     assert [s["share_pct"] for s in r["view"]["strategies"]] == [50.0, 30.0, 20.0]
-    assert "내가 정한 몫" in _trust(r)
+    assert "사용자가 지정한 값" in _trust(r)
 
 
 def test_manual_shares_that_do_not_add_up_fail_pair(market):

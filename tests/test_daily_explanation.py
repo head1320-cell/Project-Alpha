@@ -143,7 +143,7 @@ def test_interaction_and_unexplained_read_differently():
     assert "상호작용" in inter
     assert "상호작용" not in unexp, (
         "커버리지가 불완전한데 잔차를 복리 상호작용이라 불렀습니다")
-    assert "설명하지 못한" in unexp
+    assert "미설명 잔차" in unexp
 
 
 def test_a_complete_coverage_is_never_called_unexplained():
@@ -367,5 +367,5 @@ def test_no_reason_string_carries_its_own_dash():
 def test_the_residual_clause_has_exactly_one_dash():
     """문장 수준에서도 확인한다 — 사유가 바뀌어도 여기가 잡는다."""
     text = summarize_ko(_exp(residual_reason="어떤 사유"))
-    clause = text.split("설명하지 못한 몫 ")[1]
+    clause = text.split("미설명 잔차 ")[1]
     assert clause.count(" — ") == 1, clause
