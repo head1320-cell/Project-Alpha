@@ -91,6 +91,16 @@ let followHold = 0;
 /** 화면을 `ms` 동안 옮기기 시작할 때 부른다(focusNode) — 그동안의 화면은 옮기는 도중이라 재지 않는다. */
 export const holdFollow = (ms: number) => { followHold = Date.now() + ms; };
 
+/**
+ * 코드가 시작한 화면 옮기기의 ★목표 확대★(U3 — 2026-11-11). 옮기는 동안의 확대는 보간 중간값이라(React Flow 는 옮길 때 확대를 잠깐 줄였다 늘린다)
+ * 그 도중에 또 옮기면서 `getZoom()` 을 읽으면 중간값으로 멈춘다 — 위쪽 노드를 눌러 '고른 노드 보이기'가 화면을 내리는 280ms 안에
+ * Ctrl+F 로 먼 노드에 가면 확대가 1 이 아니라 0.99 로 남았다(6번 중 6번 재현). 옮기기를 시작하는 곳이 목표를 적고, 다음 옮기기는 그 값을 쓴다.
+ */
+let zoomAim: { z: number; until: number } | null = null;
+export const aimZoom = (z: number, ms: number) => { zoomAim = { z, until: Date.now() + ms + 50 }; };
+/** 옮기는 중이면 그 목표 확대, 아니면 null(지금 확대를 쓰면 된다). */
+export const aimedZoom = (): number | null => (zoomAim && Date.now() < zoomAim.until ? zoomAim.z : null);
+
 /** 화면이 따라가기 — 상자에 들어가기 · 고른 노드가 판 밑이면 판만 옮기기 · 고르면 오른쪽 창 열기 · 갈래를 만들면 함께 보이기(본체의 같은 자리에서 부른다). */
 export function useViewFollow(s: PgState, rf: RefObject<ReactFlowInstance | null>, canvasEl: RefObject<HTMLDivElement | null>, ctx: unknown,
                               leftShown: boolean, rightShown: boolean, setPanels: Dispatch<SetStateAction<Panels>>) {
@@ -126,7 +136,7 @@ export function useViewFollow(s: PgState, rf: RefObject<ReactFlowInstance | null
       const maxRight = el.clientWidth - ins.right - 16;
       if (right > maxRight) dx = maxRight - right;
       if (left + dx < ins.left + 16) dx = ins.left + 16 - left;
-      if (dx || dy) inst.setViewport({ ...vp, x: vp.x + dx, y: vp.y + dy }, { duration: 200 });
+      if (dx || dy) { aimZoom(vp.zoom, 200); inst.setViewport({ ...vp, x: vp.x + dx, y: vp.y + dy }, { duration: 200 }); }
     }, Math.max(0, followHold - Date.now()));
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 고를 때·창이 열리고 닫힐 때만

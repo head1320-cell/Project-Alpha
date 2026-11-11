@@ -5,6 +5,8 @@
  * ★규칙을 새로 정하지 않는다★ — 빠른 추가의 후보는 서버 카탈로그에서 **포트 타입이 맞는 노드**만(연결 규칙과 같은 타입 일치),
  * 메뉴의 동작은 이미 있는 스토어 동작(여기까지 계산 · 갈래 · 복제 · 그림 고정 · 원인 · 지우기)을 부를 뿐이다.
  * 모든 판은 키보드로 쓸 수 있다: ↑↓ 로 고르고 Enter, Esc 로 닫는다. 같은 동작은 명령 찾기(Ctrl+K)에도 있다.
+ * ★선택은 마우스를 실제로 움직일 때만 옮긴다(`onMouseMove`)★ 빠른 추가·찾기는 커서 자리에 열린다. `onMouseEnter` 였을 때는 가만히 있는
+ * 커서 아래 항목이 저절로 골라져 Enter 가 사용자가 고르지 않은 노드를 더했다(2026-11-11 · 노드 이름이 바뀌어 목록 길이가 달라지자 E2E 가 잡았다).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Download, ImageDown, MoreHorizontal, Search, Undo2, Upload, X } from "lucide-react";
@@ -80,7 +82,7 @@ export function QuickAdd({ at, catalog, stageKeys, fromKind, box, inset, onPick,
         {items.length === 0 && <li className="pg-quick-empty">{q ? `‘${q}’에 맞는 노드가 없습니다.` : "이 값을 이을 수 있는 노드 없음"}</li>}
         {items.map(({ c, port }, i) => (
           <li key={c.type} id={`pg-quick-${i}`} role="option" aria-selected={i === active} className="pg-quick-item" data-kind={c.type}
-              onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); onPick(c.type, port); }}>
+              onMouseMove={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); onPick(c.type, port); }}>
             <b>{c.plain_label}</b><span>{c.plain_description}</span>
           </li>
         ))}
@@ -148,7 +150,7 @@ export function FindBar({ nodes, onPick, onClose }: {
           {hits.length === 0 && <li className="pg-quick-empty">‘{q}’에 맞는 노드가 없습니다.</li>}
           {hits.map((n, i) => (
             <li key={n.id} id={`pg-find-${i}`} role="option" aria-selected={i === active} className="pg-find-item" data-node-id={n.id}
-                onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); onPick(n.id); onClose(); }}>
+                onMouseMove={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); onPick(n.id); onClose(); }}>
               <b>{n.label}</b><span>{n.sub}</span>
             </li>
           ))}

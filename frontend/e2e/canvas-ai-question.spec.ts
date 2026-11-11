@@ -94,13 +94,13 @@ async function askText(page: Page, q: string) {
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-test("아무것도 고르지 않으면 묻기 칸이 없다 — 짝: 노드를 고르면 '4 비중 계산에게 묻기' · 범위 한 줄", async ({ page }) => {
+test("아무것도 고르지 않으면 묻기 칸이 없다 — 짝: 노드를 고르면 '4 포트폴리오 최적화에게 묻기' · 범위 한 줄", async ({ page }) => {
   await signIn(page);
   await openWith(page, CORE);
   await runAll(page);
   await expect(dock(page)).toHaveCount(0);
   await pick(page, "optimizer");
-  await expect(dock(page).locator(".pg-ask-to")).toHaveText("4 비중 계산에게 묻기");                      // ★짝★
+  await expect(dock(page).locator(".pg-ask-to")).toHaveText("4 포트폴리오 최적화에게 묻기");                      // ★짝★
   await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 3의 계산 설명으로 답합니다");          // 0 인 쪽은 말하지 않는다
   await pick(page, "estimate");
   await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 2 · 아래 1의 계산 설명으로 답합니다");
@@ -178,7 +178,7 @@ test("물으면 /run 의 설명·봉인과 전달 점검·봉인을 그대로 �
   await expect(page.locator(".pg-side-title")).toContainText("포트폴리오 최적화");                 // 펼치기만 — 고른 것은 그대로
   await turn.locator(".pg-ask-goto").click();
   await expect(page.locator(".pg-side-title")).toContainText("기대수익률 추정");
-  await expect(dock(page).locator(".pg-ask-to")).toHaveText("3 기대 수익 추정에게 묻기");
+  await expect(dock(page).locator(".pg-ask-to")).toHaveText("3 기대수익률 추정에게 묻기");
 });
 
 test("자주 묻는 질문 칩은 누르면 바로 묻는다 · 노드와 선은 다른 질문", async ({ page }) => {
@@ -378,7 +378,7 @@ test.describe("두 창을 연 1024", () => {
     await runAll(page);
     // 두 창을 열면 비중 계산 카드는 오른쪽 창 밑이다 — 이야기 탭의 단계로 고른다(사람이 이 폭에서 고르는 길).
     await page.locator('.pg-step[data-node-id="optimizer"] .pg-step-num').click();
-    await expect(dock(page).locator(".pg-ask-to")).toHaveText("4 비중 계산에게 묻기");
+    await expect(dock(page).locator(".pg-ask-to")).toHaveText("4 포트폴리오 최적화에게 묻기");
     await askText(page, "왜요?");
     await askText(page, "또 왜요?");
     await expect(dock(page).locator(".pg-ask-turn")).toHaveCount(2);

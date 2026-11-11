@@ -74,4 +74,23 @@ sub("frontend/e2e/live-safety.spec.ts", 'await expect(rows.nth(1).locator(".lvs-
 sub("tests/test_record_robustness.py", 'assert spec.label == "기록끼리 견고성" and "무너지" in spec.plain_label', 'assert spec.label == "기록끼리 견고성" and "견고성" in spec.plain_label')
 sub("tests/test_graph_robustness.py", 'assert spec.label == "견고성 비교" and "무너지" in spec.plain_label', 'assert spec.label == "견고성 비교" and "견고성" in spec.plain_label')
 sub("tests/test_allocation_graph_bl3w5.py", 'assert r["status"] == "failed" and "지금 들고" in r["reason"]', 'assert r["status"] == "failed" and "현재 보유" in r["reason"]')
+# ── 노드 이름 ② 뒤 전체 E2E(1,324 → 1,307 통과 · 13 실패)에서 손으로 맞춘 것 ──
+W = "frontend/e2e/canvas-workspace.spec.ts"
+# Enter 는 aria-selected 항목을 더한다(마우스가 올라간 항목일 수 있다) — 첫 항목이 아니라 고른 항목의 종류를 읽는다
+sub(W, 'const kind = await quick.locator(".pg-quick-item").first().getAttribute("data-kind");',
+       "const kind = await quick.locator('.pg-quick-item[aria-selected=\"true\"]').getAttribute(\"data-kind\");      // Enter 가 더하는 것 = 고른 항목")
+sub(W, "await page.locator(\".pg-quick input\").fill(\"흔들림\");\n  await page.locator('.pg-quick-item[data-kind=\"risk\"]').click();",
+       "await page.locator(\".pg-quick input\").fill(\"위험 기여도\");\n  await page.locator('.pg-quick-item[data-kind=\"risk\"]').click();")
+sub(W, '    await page.locator(".pg-find input").fill("비중");', '    await page.locator(".pg-find input").fill("최적화");')
+sub(W, '    await page.locator(".pg-quick input").fill("흔들림");', '    await page.locator(".pg-quick input").fill("위험 기여도");')
+# 두 줄 이름 검사 — 긴 이름 노드가 바뀌었다(VaR·ES 는 짧다)
+sub(W, '긴 이름 노드("하루에 얼마나 잃을 수 있나")를', '긴 이름 노드("기록 기반 견고성 비교")를')
+sub(W, "  await page.locator('.pg-palette-item[data-kind=\"var_es\"]').click();\n  const longId = (await page.locator('.pg-node[data-kind=\"var_es\"]').last()",
+       "  await page.locator('.pg-palette-item[data-kind=\"record_robustness\"]').click();\n  const longId = (await page.locator('.pg-node[data-kind=\"record_robustness\"]').last()")
+G = "frontend/e2e/portfolio-graph.spec.ts"
+sub(G, 'await dlg.getByLabel("명령 찾기").fill("상관이");', 'await dlg.getByLabel("명령 찾기").fill("상관 스트레스");')
+sub(G, 'expect(body.nodes.nh.reason).toContain("지금 들고");', 'expect(body.nodes.nh.reason).toContain("현재 보유");')
+M = "frontend/e2e/macro-cards.spec.ts"
+sub(M, '.locator(".mc-gauge")).not.toContainText("불안합니다");', '.locator(".mc-gauge")).not.toContainText("100 · 불안");', 2)
+sub(M, 'await expect(page.locator("#mc-panel-regime .mc-gauge").first()).toContainText("불안합니다");', 'await expect(page.locator("#mc-panel-regime .mc-gauge").first()).toContainText("100 · 불안");')
 print("안 맞은 것:", bad, "· 나머지 E2E 단언 26건은 efix.py 가 맞췄다(BASE=045fbce)")

@@ -18,7 +18,7 @@ from src.engine import portfolio_graph as pg
 
 #: 값 키 → 사람 말(연결 설명 문장에 쓴다).
 NEED_PLAIN = {
-    "req": "되돌려 볼 규칙(비중 계산의 설정)",
+    "req": "되돌려 볼 규칙(포트폴리오 최적화의 설정)",
     "sigma_annual": "공분산(종목끼리 같이 움직이는 정도)",
 }
 

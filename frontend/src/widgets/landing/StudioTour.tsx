@@ -16,7 +16,7 @@ type Box = { x: number; y: number; w: number; h: number };
 const STEPS: { t: string; d: string; box: Box }[] = [
   {
     t: "필요한 부품을 고릅니다",
-    d: "종목 고르기부터 신호, 점검까지 왼쪽 목록에서 골라 캔버스에 놓습니다. 절차 탭이 다음에 붙일 것을 알려 줍니다.",
+    d: "유니버스부터 신호, 점검까지 왼쪽 목록에서 골라 캔버스에 놓습니다. 절차 탭이 다음에 붙일 것을 알려 줍니다.",
     box: { x: 5.31, y: 16.63, w: 16.25, h: 50 },
   },
   {
@@ -89,7 +89,7 @@ export function StudioTour() {
                  style={{ transform: `translate(${v.tx}%, ${v.ty}%) scale(${v.z})` }}>
               <Image className="ld-shot-light" src="/landing/studio-light.webp" width={1920} height={1200} unoptimized
                      sizes="(max-width: 1080px) 100vw, 720px"
-                     alt="포트폴리오 설계 스튜디오 화면. 왼쪽에 노드 목록, 가운데에 종목 고르기에서 비중 계산까지 선으로 이은 노드들, 위에 관문 확인 알약, 오른쪽에 합성 데이터 결과라는 안내와 설계 이야기가 있습니다." />
+                     alt="포트폴리오 설계 스튜디오 화면. 왼쪽에 노드 목록, 가운데에 유니버스에서 포트폴리오 최적화까지 선으로 이은 노드들, 위에 관문 확인 알약, 오른쪽에 합성 데이터 결과라는 안내와 설계 이야기가 있습니다." />
               <Image className="ld-shot-dark" src="/landing/studio-dark.webp" width={1920} height={1200} unoptimized
                      sizes="(max-width: 1080px) 100vw, 720px"
                      alt="포트폴리오 설계 스튜디오 화면(어두운 테마). 노드 목록, 선으로 이은 노드들, 관문 알약, 설계 이야기가 있습니다." />

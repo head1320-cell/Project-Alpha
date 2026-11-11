@@ -207,7 +207,7 @@ export const TEMPLATES: GraphTemplate[] = [
   { key: "risk", name: "포트폴리오 위험 점검", doc: RISK_TEMPLATE,
     description: "정한 비중이 하루에 얼마나 잃을 수 있는지 보고, 지수 선물로 시장 위험을 줄일 계약 수까지 계산합니다." },
   { key: "rebalance", name: "리밸런싱 판단", doc: REBALANCE_TEMPLATE,
-    description: "지금 들고 있는 비중에서 목표로 옮길 가치가 있는지 효용과 비용을 견줘 보고 주문 목록까지 봅니다." },
+    description: "현재 보유 비중에서 목표로 옮길 가치가 있는지 효용과 비용을 견줘 보고 주문 목록까지 봅니다." },
   { key: "review", name: "정기 점검", doc: REVIEW_TEMPLATE,
     description: "고객·계좌·목표를 점검하고, 지금 비중에서 목표로 옮길지 본 뒤 주문 목록·결정 기록까지 잇습니다. 고객 정보는 비워 두었습니다 — 채워야 계좌 점검이 실행됩니다." },
 ];

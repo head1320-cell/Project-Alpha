@@ -344,7 +344,7 @@ def intake_sensitivity_weights(h: pg.Handoff) -> dict:
     cr = (h.source_view or {}).get("constraints_report") or {}
     if view.get("has_constraints") and not view.get("constraints_applied") and cr.get("status") != "infeasible":
         # 비중 계산도 제약을 못 풀었으면(infeasible) 둘 다 제약 없는 비중이라 빠진 것이 아니다.
-        issues.append(_i("lost", "constraints_dropped", "비중 계산에 건 제약은 민감도로 넘어가지 않습니다."))
+        issues.append(_i("lost", "constraints_dropped", "포트폴리오 최적화에 건 제약은 민감도로 넘어가지 않습니다."))
     req = (h.value or {}).get("req")
     if req is not None and getattr(req, "conditional", False):
         issues.append(_i("changed", "conditional_dropped", "경기 국면 반영은 민감도로 넘어가지 않습니다."))

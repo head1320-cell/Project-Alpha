@@ -96,7 +96,7 @@ import { DRAWERS, FILTERS, LEFT_TAB_KEY, markWelcomed, matchFilter, welcomeSeen,
 import { MIN_ZOOM, SNAP, fitClear } from "./canvasGeometry";
 import { deleteNote, overlapping, useWireHandlers } from "./canvasRules";
 import { WireDragLine } from "./WireDragLine";
-import { holdFollow, useCanvasView, useViewFollow } from "./useCanvasView";
+import { aimZoom, aimedZoom, holdFollow, useCanvasView, useViewFollow } from "./useCanvasView";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { RightPanel } from "./RightPanel";
 import { useCanvasCommands } from "./useCanvasCommands";
@@ -370,11 +370,12 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     const n = usePortfolioGraph.getState().nodes.find((x) => x.id === id);
     if (n && rf.current) {
       // 떠 있는 판 사이의 가운데로(BQ Q1) — 캔버스 가운데는 창 밑일 수 있다.
-      const z = rf.current.getZoom();
+      const z = aimedZoom() ?? rf.current.getZoom();         // 옮기는 중이면 그 목표 확대(U3)
       const ins = floatInsets(canvasEl.current);
       // 카드 가운데(CF1 — 자리 고정 상자: 폭·높이는 카탈로그로 정한 값. 예전 +90/+60 은 폭 150 카드의 가운데였다).
       const cx = n.position.x + cardWidth(n.data.kind) / 2, cy = n.position.y + nodeHeight(n.data.kind, usePortfolioGraph.getState().catalog, n.data.slotH) / 2;
       holdFollow(280);
+      aimZoom(z, 250);
       rf.current.setCenter(cx + (ins.right - ins.left) / 2 / z, cy + ins.bottom / 2 / z, { zoom: z, duration: 250 });
     }
     const entry = usePortfolioGraph.getState().catalog?.find((c) => c.type === n?.data.kind);

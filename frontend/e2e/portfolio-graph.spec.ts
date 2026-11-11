@@ -732,7 +732,7 @@ test("명령 팔레트·계산 기록(BL1): Ctrl+K 로 노드 추가 · 두 번 
   await page.keyboard.press(`${mod}+k`);
   const dlg = page.getByRole("dialog", { name: "명령 찾기" });
   await expect(dlg).toBeVisible();
-  await dlg.getByLabel("명령 찾기").fill("상관이");
+  await dlg.getByLabel("명령 찾기").fill("상관 스트레스");
   await expect(dlg.locator(".pg-cmd-item").first()).toContainText("상관 스트레스 추가");
   await page.keyboard.press("Enter");
   await expect(dlg).toBeHidden();
@@ -1708,7 +1708,7 @@ test("배분 추가(BL3 W5): 리밸런싱 저울 · 기록은 버튼 한 번 · 
   }
   expect(body.nodes.rb.view.result.persisted).toBe(false);                 // 계산은 기록하지 않는다
   expect(body.nodes.nh.status).toBe("failed");
-  expect(body.nodes.nh.reason).toContain("지금 들고");
+  expect(body.nodes.nh.reason).toContain("현재 보유");
   expect(body.nodes.im.view.result.placed_pct).toBeCloseTo(90, 5);        // 요청한 만큼만 놓는다(남는 10% 는 현금 — 재분배 없음)
   const cap = body.nodes.sc.view.result.capacities["987654"];
   expect(cap.available).toBe(false);

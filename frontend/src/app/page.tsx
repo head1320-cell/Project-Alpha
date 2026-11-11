@@ -27,7 +27,7 @@ const PATH: { t: string; d: string; href?: string; rec: string }[] = [
   { t: "설계에서 불러오기", d: "값을 베끼지 않고 남긴 기록을 가리킵니다", href: "/allocation?from=macro", rec: "값 대신 snapshot_id 를 가리킵니다" },
   { t: "타이밍 규칙", d: "언제 비중을 늘리고 줄일지 정합니다", href: "/allocation?from=timing", rec: "name@version" },
   { t: "충격 견뎌 보기", d: "정해 둔 충격 시나리오에 넣어 봅니다", href: "/allocation?from=stress", rec: "pack_id@해시" },
-  { t: "비중 계산하고 돌려 보기", d: "비중을 정하고 지난 데이터로 돌려 봅니다", href: "/allocation?from=optimize", rec: "run_id" },
+  { t: "포트폴리오 최적화·백테스트", d: "비중을 정하고 지난 데이터로 돌려 봅니다", href: "/allocation?from=optimize", rec: "run_id" },
   { t: "결정 기록하기", d: "왜 그렇게 정했는지 남기고 나중에 되짚습니다", href: "/allocation?from=journal", rec: "결정 → run_id → snapshot_id 사슬" },
 ];
 
@@ -64,7 +64,7 @@ export default function Landing() {
                   <span className="ld-line"><span style={{ ["--i" as string]: 2 }}>포트폴리오</span> <span style={{ ["--i" as string]: 3 }}>설계</span></span>
                 </h1>
                 <p className="ld-lede ld-rise" style={{ ["--i" as string]: 3 }}>
-                  종목 고르기부터 위험 점검까지 노드를 선으로 이어 하나의 설계로 만듭니다. 숫자마다 어디서 왔고 무엇을 재지 않았는지 함께 붙습니다.
+                  유니버스부터 위험 점검까지 노드를 선으로 이어 하나의 설계로 만듭니다. 숫자마다 어디서 왔고 무엇을 재지 않았는지 함께 붙습니다.
                 </p>
                 <div className="ld-hero-cta ld-rise" style={{ ["--i" as string]: 4 }}>
                   <Link href="/allocation" className="tx-btn tx-btn--main ld-btn">포트폴리오 설계 시작</Link>

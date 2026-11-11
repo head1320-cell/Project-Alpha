@@ -448,12 +448,12 @@ test("적합도·위험 선호도 게이지에는 스트레스 끝 글자가 없
   await open(page);
   await goTab2(page, "recommend");
   await expect(panel2(page, "recommend").locator(".mc-gauge").first()).toBeVisible();
-  await expect(panel2(page, "recommend").locator(".mc-gauge")).not.toContainText("불안합니다");
+  await expect(panel2(page, "recommend").locator(".mc-gauge")).not.toContainText("100 · 불안");
   await goTab2(page, "timing");
   await expect(panel2(page, "timing").locator(".mc-gauge").first()).toBeVisible();
-  await expect(panel2(page, "timing").locator(".mc-gauge")).not.toContainText("불안합니다");
+  await expect(panel2(page, "timing").locator(".mc-gauge")).not.toContainText("100 · 불안");
   await page.locator("#mc-tab-regime").click();
-  await expect(page.locator("#mc-panel-regime .mc-gauge").first()).toContainText("불안합니다");
+  await expect(page.locator("#mc-panel-regime .mc-gauge").first()).toContainText("100 · 불안");
 });
 
 // ── 색의 뜻 ──

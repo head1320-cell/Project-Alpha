@@ -210,9 +210,9 @@ test("글자 크기(BR R2): 보통은 제목 14·값 18(제목 < 값) · 멀리�
 
   // 한국어는 어절(띄어쓰기)에서 꺾인다 — "수익률 불러\n오기" 처럼 음절 가운데서 꺾이지 않는다.
   // ★공허한 검사가 아니게★ 적어도 한 이름은 실제로 두 줄이어야 한다. CF1 에서 카드가 240 으로 넓어져 기본 흐름의 이름은 글자 상한(28px,
-  // 확대 0.39 이하)에서도 한 줄에 든다 — 긴 이름 노드("하루에 얼마나 잃을 수 있나")를 하나 더하고 그만큼 멀리 줄여서 본다.
-  await page.locator('.pg-palette-item[data-kind="var_es"]').click();
-  const longId = (await page.locator('.pg-node[data-kind="var_es"]').last().getAttribute("data-node-id"))!;
+  // 확대 0.39 이하)에서도 한 줄에 든다 — 긴 이름 노드("기록 기반 견고성 비교")를 하나 더하고 그만큼 멀리 줄여서 본다.
+  await page.locator('.pg-palette-item[data-kind="record_robustness"]').click();
+  const longId = (await page.locator('.pg-node[data-kind="record_robustness"]').last().getAttribute("data-node-id"))!;
   for (let i = 0; i < 8 && Number(await canvas(page).evaluate((el) => getComputedStyle(el).getPropertyValue("--pg-z"))) > 0.39; i++) {
     await page.locator(".react-flow__controls-zoomout").click();
     await page.waitForTimeout(120);
@@ -1560,8 +1560,14 @@ test("우클릭(BN N3): 노드 메뉴 — 그림 고정·풀기·삭제(되돌�
   await expect(quick).toHaveAttribute("data-type", "");
   const n0 = (await wip(page)).nodes.length;
   await quick.locator("input").fill("스트레스");
-  await expect(quick.locator(".pg-quick-item").first()).toBeVisible();
-  const kind = await quick.locator(".pg-quick-item").first().getAttribute("data-kind");
+  await expect(quick.locator(".pg-quick-item").nth(1)).toBeVisible();
+  // ★가만히 있는 커서는 고르지 않는다★ 목록은 커서 자리에 열린다 — 움직이지 않았으면 키보드 선택(첫 항목)이 그대로다.
+  await page.waitForTimeout(300);
+  await expect(quick.locator(".pg-quick-item").first()).toHaveAttribute("aria-selected", "true");
+  // 짝 — 실제로 움직이면 그 항목이 골라진다(마우스 선택이 죽지 않았다).
+  await quick.locator(".pg-quick-item").nth(1).hover();
+  await expect(quick.locator(".pg-quick-item").nth(1)).toHaveAttribute("aria-selected", "true");
+  const kind = await quick.locator('.pg-quick-item[aria-selected="true"]').getAttribute("data-kind");      // Enter 가 더하는 것 = 고른 항목
   await quick.locator("input").press("Enter");
   const doc = await wip(page);
   expect(doc.nodes.length).toBe(n0 + 1);
@@ -1604,7 +1610,7 @@ test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 연결하십시
   const ep = await emptyPoint(page);
   await page.mouse.click(ep.x, ep.y, { button: "right" });
   await page.locator('[data-action="add-here"]').click();
-  await page.locator(".pg-quick input").fill("흔들림");
+  await page.locator(".pg-quick input").fill("위험 기여도");
   await page.locator('.pg-quick-item[data-kind="risk"]').click();
   await expect(page.locator(".pg-quick")).toHaveCount(0);
   const doc = await wip(page);
@@ -1738,7 +1744,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.keyboard.press("Escape");
     await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
     await page.keyboard.press("Control+f");
-    await page.locator(".pg-find input").fill("비중");
+    await page.locator(".pg-find input").fill("최적화");
     await check(".pg-find", 2);
     await page.keyboard.press("Escape");
     await page.keyboard.press("?");
@@ -1748,7 +1754,7 @@ for (const scheme of ["light", "dark"] as const) {
     const ep = await emptyPoint(page);
     await page.mouse.click(ep.x, ep.y, { button: "right" });
     await page.locator('[data-action="add-here"]').click();
-    await page.locator(".pg-quick input").fill("흔들림");
+    await page.locator(".pg-quick input").fill("위험 기여도");
     await page.locator('.pg-quick-item[data-kind="risk"]').click();
     await zoomTo(page, "mid");                                   // 멀리에서는 "이어 주세요"가 숨는다(CF1)
     await expect(page.locator(".pg-node-need").first()).toBeVisible();
@@ -2204,7 +2210,7 @@ test("도구줄 자리(BP P1): 위쪽 띠에 있는 노드를 고르면 판이 �
   expect(tb.y + tb.height).toBeLessThanOrEqual(nb.y + 1);
 });
 
-test("받는 것(BP P1): 전략 합치기의 빈 선택 포트는 '비중 빈 자리 n개(선택)' 한 줄 · 이은 것은 하나씩", async ({ page }) => {
+test("받는 것(BP P1): 전략 결합의 빈 선택 포트는 '비중 빈 자리 n개(선택)' 한 줄 · 이은 것은 하나씩", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   const doc = await wip(page);
