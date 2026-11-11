@@ -225,9 +225,15 @@ def test_the_response_says_the_optimizer_does_not_know_this_target(client):
 
 
 def test_the_horizon_can_come_from_the_retirement_year_instead(client):
-    body = _post(client, horizon_days=None, target_retirement_year=2036).json()
+    """★은퇴 연도는 오늘에서 센다★ 예전에는 `2036` 고정이라 남은 햇수가 날마다 줄어
+    2027-01-01 부터 `> 9` 가 거짓이 됐다(`faketime` 으로 쟀다 — 2026-12-31 통과 · 2027-01-01 실패).
+    코드가 아니라 달력이 깨뜨리는 시험이었다. 10년 뒤 해로 두면 남은 햇수는 늘 9 초과 · 10 남짓 이하다
+    (엔진이 날 수를 365.25 로 나눠 1월 1일에는 10.001 이 된다 — 그래서 위쪽은 10.1 로 둔다)."""
+    from datetime import date
+    year = date.today().year + 10
+    body = _post(client, horizon_days=None, target_retirement_year=year).json()
     assert body["evidence"]["axes"][AXIS_HORIZON]["state"] == AXIS_OK
-    assert body["glide"]["years_remaining"] > 9
+    assert 9 < body["glide"]["years_remaining"] < 10.1
 
 
 # ── ★프런트 타입과 응답이 어긋나면 화면이 조용히 빈다★ (AO5) ─────────────
