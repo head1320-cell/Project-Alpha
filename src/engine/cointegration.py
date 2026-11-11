@@ -34,6 +34,7 @@ K=40·p=1 이면 **1,600 모수 vs 240 관측** — 공분산이 특이에 가�
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,9 @@ MAX_CORE_VARS = 7
 
 #: VECM 최소 관측. 시차 2·변수 7 이면 98모수라, 그 두 배 아래로는 추정이 무의미하다.
 MIN_OBSERVATIONS = 60
+
+#: 요한센 고유값의 허수부 허용치(실수부 크기 대비). 이론상 실수인 고유값이 복소수로 나오면 부동소수 잡음(~1e-15)만 허용한다.
+IMAG_TOL = 1e-9
 
 
 class CoreVariableError(ValueError):
@@ -121,11 +125,25 @@ def analyze_long_run(series: dict[str, list[float]], *,
         return {"available": False, "coint_rank": None,
                 "reason": "결측·무한값이 있는 계열이 있습니다 — 채우지 않고 거부합니다."}
 
+    # ★판정이 프로세스의 경고 필터 상태에 기대지 않게★ (2026-11-11 · tests/test_cointegration_warning_state.py)
+    # statsmodels 는 고유값을 복소 dtype 으로 받아 trace 통계량에 넣으며 ComplexWarning 을 낸다(허수부가 0 이어도).
+    # 다른 스레드의 `catch_warnings()`(scikit-learn 입력 검사 등)가 엇갈리면 'error' 필터가 전역에 남아, 오래 돈 서버에서만
+    # 같은 입력이 실패했다. 경고는 이 자리에서만 끄고, 대신 버린 허수부를 아래에서 직접 잰다 — 0 이 아니면 판정하지 않는다.
     try:
-        jo = coint_johansen(y, det_order, k_ar_diff)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", np.exceptions.ComplexWarning)
+            jo = coint_johansen(y, det_order, k_ar_diff)
     except Exception as e:              # 특이행렬 등 — 숫자를 지어내지 않는다
         return {"available": False, "coint_rank": None,
                 "reason": f"요한센 검정이 실패했습니다: {e}"}
+
+    eig = np.asarray(jo.eig)
+    imag = float(np.max(np.abs(np.imag(eig)))) if eig.size else 0.0
+    scale = max(1.0, float(np.max(np.abs(np.real(eig))))) if eig.size else 1.0
+    if imag > IMAG_TOL * scale:
+        return {"available": False, "coint_rank": None,
+                "reason": f"요한센 고유값에 허수부({imag:.2e})가 있습니다 — 이론상 실수여야 하는 값이라 수치가 불안정합니다. "
+                          "실수부만 취해 판정하지 않습니다."}
 
     # ★trace 통계량이 95% 임계값을 넘는 개수가 공적분 랭크다★
     trace = [float(v) for v in jo.lr1]

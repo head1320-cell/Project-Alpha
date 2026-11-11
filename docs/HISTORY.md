@@ -26202,3 +26202,20 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   - `portfolio-graph` 매크로 노드(BL3 W2) — `long_run`(요한센 검정)이 "Casting complex values to real discards the imaginary part" 로 실패.
     ★같은 요청(`long_run` 하나 · months=120)을 E2E 서버의 쌓인 sqlite(`/tmp/e2e_pw.db` — 오늘 전체 E2E 를 여러 번 받았다)로는 실패, 새 sqlite 로 띄운 서버로는 `ok`★.
     오늘 이 경로의 코드 변경은 `cointegration.py` 의 문장 한 줄("골라 주세요" → "선택하십시오")뿐이다 — DB 상태에 따라 입력이 달라지는 수치 결함이다(다음 일로 원인을 잰다).
+
+## 요한센 판정이 서버의 경고 필터 상태에 따라 달라지던 것 — 오래 돈 서버에서만 실패 (2026-11-11)
+
+- 무엇이 있었나(재현): ④ 의 전체 E2E 에서 캔버스 `long_run`(장기 균형관계) 노드가 "요한센 검정이 실패했습니다: Casting complex values to real discards the
+  imaginary part" 로 실패했다. 같은 요청이 새로 띄운 서버에서는 `ok`. 처음에는 쌓인 DB 탓으로 봤으나 ★입력은 두 DB 에서 똑같았다★(같은 6계열 · 같은 표준편차).
+  - statsmodels `coint_johansen` 은 고유값을 복소 dtype 으로 받아 trace 통계량에 넣으며 `ComplexWarning` 을 낸다(`vecm.py` 717–718). 이 입력의 허수부는 ★정확히 0★.
+  - scikit-learn 의 입력 검사(`check_array`) 등은 `catch_warnings()` 안에서 `ComplexWarning` 을 잠깐 'error' 로 바꾼다. `catch_warnings` 는 스레드 안전하지 않다
+    (Python 3.14 · `sys.flags.context_aware_warnings == 0`) — 두 스레드가 엇갈려 드나들면 'error' 필터가 프로세스 전역에 남는 것을 재현했고, 그 상태에서 이 입력이
+    실패하는 것도 재현했다. 오래 돈 E2E 서버가 그 상태였다고 본다(★추론★ — 서버 안의 필터를 직접 보지는 못했다. 작업자 재시작으로 서버가 내려갔다).
+- 고침(`src/engine/cointegration.py`): 요한센 호출만 `catch_warnings` 안에서 `ComplexWarning` 을 끄고, 대신 ★버린 허수부를 직접 잰다★ — 실수부 크기 대비 `1e-9`
+  (`IMAG_TOL`)를 넘으면 실수부만 취해 판정하지 않고 사유와 함께 거절한다(침묵 폴백 금지). 판정 규칙(랭크·임계값)은 그대로다.
+- 시험(`tests/test_cointegration_warning_state.py` · 입력은 `tests/golden/johansen_complex_dtype_case.json` — 합성 E0): 이 입력이 정말 경고를 내는지(공허 방지) ·
+  전역에 'error' 가 남아 있어도 같은 랭크·같은 통계량 · 판정 뒤 전역 필터가 들어오기 전 그대로 · ★짝★ 허수부 1e-3 이면 거절 · 짝의 짝 1e-14 와 0 은 거절하지 않음.
+  고치기 전 빨강 2(누수 상태에서 실패 · 허수부를 조용히 받음) → 초록. 변이 넷 — 경고 막기 제거 · 허수부 검사 제거 · 늘 거절 · 전역 필터 직접 변경 — 모두 죽음.
+- 하지 않은 것: ★근본 원인은 프로세스 전역 경고 필터의 스레드 경쟁★이라 다른 수치 코드도 같은 상태에 놓일 수 있다. 서버를 `PYTHON_CONTEXT_AWARE_WARNINGS=1`
+  (또는 `-X context_aware_warnings`)로 띄우면 `catch_warnings` 가 문맥별이 되어 누수 자체가 사라진다 — 서버 실행 설정(Dockerfile·Makefile)을 바꾸는 일이라
+  하지 않고 적어만 둔다. 다른 statsmodels 호출 자리는 손대지 않았다(재현된 자리만).
