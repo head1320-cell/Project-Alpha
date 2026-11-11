@@ -412,6 +412,7 @@ _FIX = [
     # 명령 찾기의 '고른 노드 견고성 비교' 설명
     ("비중을 내는 노드 2~4개를 골라, 평소·위기 때 같이 움직이는지와 크게 잃은 구간이 겹치는지 봅니다",
      "비중을 산출하는 노드 2~4개를 골라 평시·위기 상관과 낙폭 구간의 중첩을 비교합니다"),
+    ('t.text.includes("내가 정한 몫")', 't.text.includes("사용자가 지정한 값")'),
 ]
 
 PAIRS = _DESC + _METHODS + _FIELDS + _GLOBAL + _PLEASE + _RESULTS + _SHARE + _FIX

@@ -96,7 +96,7 @@ test("합치기 방법(BS4): 카드 = 서버 순서·이름·설명 · 기본 �
   const rows = (r.view!.strategies as { port: string; share_pct: number }[]);
   expect(rows.find((x) => x.port === pa)!.share_pct).toBe(60);
   expect(rows.find((x) => x.port === pb)!.share_pct).toBe(40);
-  expect(r.explain!.trust.some((t) => t.text.includes("내가 정한 몫"))).toBe(true);
+  expect(r.explain!.trust.some((t) => t.text.includes("사용자가 지정한 값"))).toBe(true);
   await openTab(page, pf.id, "detail");
   await expect(page.locator(`.pg-side .pg-strat-table tr[data-port="${pa}"] td`).nth(1)).toHaveText("60.0%");
   expect(uniq(sink.pageErrors)).toEqual([]);
