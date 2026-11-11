@@ -49,41 +49,41 @@ test("답 = 서버 국면의 번역 — 한국·미국을 바꾸면 문장이 �
   await expect(answer(page)).toContainText("미국은 ‘리플레이션’");
 });
 
-test("확률이 없으면 '확률 몰라요'(0% 아님) · 미국 국면이 없으면 줄은 남고 '몰라요'(짝)", async ({ page }) => {
+test("확률이 없으면 '확률 미상'(0% 아님) · 미국 국면이 없으면 줄은 남고 'N/A'(짝)", async ({ page }) => {
   await patch(page, "regime", (x) => {
     delete x.regime_probs; delete (x as Record<string, unknown>).confidence;
     if (x.markets?.kr) { delete x.markets.kr.regime_probs; delete x.markets.kr.confidence; }
     if (x.markets) delete x.markets.us;
   });
   await open(page);
-  await expect(fig(page, "한국")).toContainText("확률 몰라요");
+  await expect(fig(page, "한국")).toContainText("확률 미상");
   await expect(fig(page, "한국")).not.toContainText("0%");
-  await expect(fig(page, "미국")).toContainText("몰라요");
+  await expect(fig(page, "미국")).toContainText("N/A");
   await expect(answer(page)).not.toContainText("미국");
 });
 
-test("연습용 칩은 connection-status 로만 — 출처를 추론하지 않는다(짝: mock_allowed false 면 없음)", async ({ page }) => {
+test("합성 칩은 connection-status 로만 — 출처를 추론하지 않는다(짝: mock_allowed false 면 없음)", async ({ page }) => {
   await page.route("**/api/v1/macro/connection-status", (r) =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ mock_allowed: true, bok_configured: false, fred_configured: false }) }));
   await open(page);
-  await expect(page.locator(".mc .tx-answer")).toContainText("연습용 데이터");
+  await expect(page.locator(".mc .tx-answer")).toContainText("합성 데이터");
   await page.unroute("**/api/v1/macro/connection-status");
   await page.route("**/api/v1/macro/connection-status", (r) =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ mock_allowed: false, bok_configured: true, fred_configured: true }) }));
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator(".mc .tx-answer")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".mc .tx-answer")).not.toContainText("연습용");
+  await expect(page.locator(".mc .tx-answer")).not.toContainText("합성");
   await expect(main(page)).not.toContainText("MOCK");
 });
 
-test("국면을 불러오지 못하면 alert + 다시 시도 → 풀리면 답(짝: 정상이면 alert 0)", async ({ page }) => {
+test("국면을 불러오지 못하면 alert + 재시도 → 풀리면 답(짝: 정상이면 alert 0)", async ({ page }) => {
   let fail = true;
   await page.route("**/api/v1/macro/regime", (r) => fail ? r.fulfill({ status: 500, body: "boom" }) : r.continue());
   await page.goto("/macro", { waitUntil: "domcontentloaded" });
   const alerts = main(page).getByRole("alert");
-  await expect(alerts.first()).toContainText("매크로 분석을 불러오지 못했어요", { timeout: 30_000 });
+  await expect(alerts.first()).toContainText("매크로 분석 조회 실패", { timeout: 30_000 });
   fail = false;
-  await main(page).getByRole("button", { name: "다시 시도" }).first().click();
+  await main(page).getByRole("button", { name: "재시도" }).first().click();
   await expect(answer(page)).toContainText("한국은", { timeout: 30_000 });
   await expect(alerts).toHaveCount(0);
 });
@@ -92,7 +92,7 @@ test("탭 데이터를 불러오지 못하면 그 탭 안 alert — 다른 탭�
   await page.route("**/api/v1/macro/valuation**", (r) => r.fulfill({ status: 500, body: "boom" }));
   await open(page);
   await page.getByRole("tab", { name: "가치" }).click();
-  await expect(main(page).getByRole("alert").first()).toContainText("불러오지 못했어요");
+  await expect(main(page).getByRole("alert").first()).toContainText("조회 실패");
   await page.getByRole("tab", { name: "지표" }).click();
   await expect(main(page).getByRole("alert")).toHaveCount(0);
 });
@@ -100,19 +100,19 @@ test("탭 데이터를 불러오지 못하면 그 탭 안 alert — 다른 탭�
 test("한국·미국 비교를 못 하면 영원한 '계산 중'이 아니라 실패로 말한다", async ({ page }) => {
   await page.route("**/api/v1/macro/compare-krus", (r) => r.fulfill({ status: 500, body: "boom" }));
   await open(page);
-  await expect(main(page)).toContainText("비교를 불러오지 못했어요", { timeout: 30_000 });
+  await expect(main(page)).toContainText("비교 조회 실패", { timeout: 30_000 });
   await expect(main(page)).not.toContainText("비교 계산 중");
 });
 
-test("국면 궤적을 못 받으면 영원한 '불러오는 중'이 아니라 실패 + 다시 시도 → 풀리면 궤적", async ({ page }) => {
+test("국면 궤적을 못 받으면 영원한 '불러오는 중'이 아니라 실패 + 재시도 → 풀리면 궤적", async ({ page }) => {
   let fail = true;
   await page.route("**/api/v1/macro/regime-trajectory", (r) => fail ? r.fulfill({ status: 500, body: "boom" }) : r.continue());
   await open(page);
   await page.getByRole("tab", { name: "국면" }).click();
-  await expect(main(page).getByRole("alert").first()).toContainText("국면 궤적을 불러오지 못했어요", { timeout: 30_000 });
-  await expect(main(page)).not.toContainText("궤적을 불러오는 중이에요");
+  await expect(main(page).getByRole("alert").first()).toContainText("국면 궤적 조회 실패", { timeout: 30_000 });
+  await expect(main(page)).not.toContainText("궤적 조회 중");
   fail = false;
-  await main(page).getByRole("alert").getByRole("button", { name: "다시 시도" }).click();
+  await main(page).getByRole("alert").getByRole("button", { name: "재시도" }).click();
   await expect(main(page).getByRole("alert")).toHaveCount(0, { timeout: 30_000 });
 });
 
@@ -201,7 +201,7 @@ test("도넛 = 서버 국면 확률 네 조각 — 응답을 바꾸면 조각 �
   await expect(card(page, "kr").locator('.rv-leg li[data-now]')).toHaveAttribute("data-regime", "Stagflation");
 });
 
-test("확률이 없으면 빈 고리 + '확률 몰라요'(조각 0 · 0% 없음) · 미국이 없으면 미국 자리에 '몰라요'(짝)", async ({ page }) => {
+test("확률이 없으면 빈 고리 + '확률 미상'(조각 0 · 0% 없음) · 미국이 없으면 미국 자리에 'N/A'(짝)", async ({ page }) => {
   await patch(page, "regime", (x) => {
     delete x.regime_probs;
     if (x.markets?.kr) delete x.markets.kr.regime_probs;
@@ -209,9 +209,9 @@ test("확률이 없으면 빈 고리 + '확률 몰라요'(조각 0 · 0% 없음)
   });
   await open(page);
   await expect(card(page, "kr").locator(".rv-donut-seg")).toHaveCount(0);
-  await expect(card(page, "kr")).toContainText("확률 몰라요");
+  await expect(card(page, "kr")).toContainText("확률 미상");
   await expect(card(page, "kr").locator(".rv-donut-c")).not.toContainText("0%");
-  await expect(card(page, "us")).toContainText("미국 국면을 받지 못했어요");
+  await expect(card(page, "us")).toContainText("미국 국면 수신 실패");
   await expect(card(page, "us").locator(".rv-donut-seg")).toHaveCount(0);
 });
 

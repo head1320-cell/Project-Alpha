@@ -117,7 +117,7 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
   return (
     <div className="ci-pv" ref={boxRef}>
       {hasLine
-        ? <ReadoutFrame id="price-value" label="1년 주가와 모형별 가치 범위" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>{chart}</ReadoutFrame>
+        ? <ReadoutFrame id="price-value" label="1년 주가와 모형별 밸류에이션 밴드" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>{chart}</ReadoutFrame>
         : chart}
       <ul className="ci-pv-leg">
         {inRange.map((b, i) => (
@@ -126,12 +126,12 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
       </ul>
       <p className="ci-pv-key">
         {hasLine && <span><i className="ci-pv-sw line" aria-hidden />주가(1년)</span>}
-        {price > 0 && m > 0 && <span className="ci-pv-now"><i className="ci-pv-sw now" aria-hidden />지금 주가 {won(price)}</span>}
+        {price > 0 && m > 0 && <span className="ci-pv-now"><i className="ci-pv-sw now" aria-hidden />현재가 {won(price)}</span>}
         {intrinsic > 0 && <span><i className="ci-pv-sw dash" aria-hidden />내재가치 {won(intrinsic)}</span>}
       </p>
       {out.length > 0 && (
         <ul className="ci-pv-out" aria-label="그림 범위 밖 가치">
-          {out.map((b) => <li key={b.id}><span data-server>{b.label}</span> {won(b.lo)}~{won(b.hi)}: 현재가와 너무 멀어 그림 밖에 적었어요(원천 자료를 확인해 보세요)</li>)}
+          {out.map((b) => <li key={b.id}><span data-server>{b.label}</span> {won(b.lo)}~{won(b.hi)}: 현재가와 너무 멀어 그림 밖에 적었습니다(원천 자료를 확인하십시오)</li>)}
         </ul>
       )}
     </div>
@@ -147,7 +147,7 @@ export function KpiBars({ data, dataKey, xKey = "year", height = 130, fmt = eok,
   const recs = data as ReadonlyArray<Record<string, unknown>>;
   const rows: ReadRow[] = recs.map((r) => {
     const v = r[dataKey];
-    return { head: periodKo(String(r[xKey] ?? "")), cells: [{ key: dataKey, label, text: typeof v === "number" && Number.isFinite(v) ? fmt(v) : "몰라요" }] };
+    return { head: periodKo(String(r[xKey] ?? "")), cells: [{ key: dataKey, label, text: typeof v === "number" && Number.isFinite(v) ? fmt(v) : "N/A" }] };
   });
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
   const curX = idx >= 0 ? (recs[idx][xKey] as string | number) : null;

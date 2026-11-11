@@ -27,7 +27,7 @@ export function PerfFigures({ view, fallbackTitle, action, noTitle = false }: {
       {h && h.value !== null ? (
         <p className="pf-hero"><b>{h.text}</b><small>{h.label}</small></p>
       ) : (
-        <p className="pg-note">헤드라인을 서버가 주지 않았어요 — 아래 숫자를 보세요.</p>
+        <p className="pg-note">헤드라인을 서버가 주지 않았습니다 — 아래 숫자를 보십시오.</p>
       )}
       {view.perfLabel ? <div className="pg-perf"><PerfLabel value={view.perfLabel} /></div> : null}
       <dl className="pg-kv pf-kv">

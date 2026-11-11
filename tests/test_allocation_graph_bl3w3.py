@@ -7,7 +7,7 @@
 - 가격은 비우면 `company_views.prices_for` 의 값과 **출처**를 쓴다. 못 구하면 사유 실패(짝: 직접 넣으면 계산) — 지어내지 않는다.
 - 엔진이 `available: false` 로 답하면(적자 기업의 역DCF · 재무 미적재 · 조건 없는 테제) 숫자 대신 그 사유로 실패한다.
 - 매크로 민감도의 통계 블록은 BL2b `macro_series_map()` 계열 — 운영은 저장된 관측만(외부 호출 0 · 적재 0).
-- 계산 중 쓰기 0(`graph_write_guard`). 계보는 `forward_only`(오늘의 재무·가격) · mock 이면 연습용.
+- 계산 중 쓰기 0(`graph_write_guard`). 계보는 `forward_only`(오늘의 재무·가격) · mock 이면 합성.
 """
 from __future__ import annotations
 
@@ -217,6 +217,6 @@ def test_the_sandbox_title_says_which_side_the_price_is_on(monkeypatch):
     out = {"unified": {"value": 40000.0, "gap_pct": 25.0, "models": []}, "assumptions": [], "sensitivity": {},
            "football_field": {"bands": []}, "comps": {}}
     monkeypatch.setattr(cr, "company_valuation_sandbox", lambda *a, **k: out)
-    assert "높아요" in _one("company_valuation", code=CODE, price=50000)["explain"]["title"]
+    assert "높습니다" in _one("company_valuation", code=CODE, price=50000)["explain"]["title"]
     out["unified"]["gap_pct"] = -25.0
-    assert "낮아요" in _one("company_valuation", code=CODE, price=30000)["explain"]["title"]
+    assert "낮습니다" in _one("company_valuation", code=CODE, price=30000)["explain"]["title"]

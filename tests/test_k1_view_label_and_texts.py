@@ -6,7 +6,7 @@ CF3 가 드러낸 세 가지 틀린 말을 고친다. 비중·백테스트 숫�
    ★예외★ 제약을 걸면 `_apply_constraints` 가 생각을 넣은 기대 수익(`mu_used`)으로 다시 풀므로 생각이 비중에 닿는다 —
    그때는 참이고, 대체 기록은 비중에 닿지 않은 것으로 바뀐다. 라벨을 뒤집는 것은 BL 만이다: 다른 방식의 비중은 생각 열을
    쓰지 않아(EP 는 자기 μ 로 생각을 쓴다) 그 라벨은 예전 뜻(생각을 넣은 기대 수익을 계산했다) 그대로다.
-2. `cap_missing` 설명 — "출발점을 똑같이 나눴어요" 는 시가총액을 **모두** 모를 때만 참이다. 일부만 모르면 엔진은 나머지의
+2. `cap_missing` 설명 — "출발점을 똑같이 나눴습니다" 는 시가총액을 **모두** 모를 때만 참이다. 일부만 모르면 엔진은 나머지의
    중앙값으로 채운다(`market_cap_weights`).
 3. 베타 제약 사유 — 벤치마크에 빈 날이 있어 길이가 안 맞으면 라우트가 벤치마크를 버리고, 엔진은 "벤치마크 수익률이 없어" 라고
    적는다. ★엔진 문장(`constrained_opt.py`, SHA 가드)은 그대로 두고★ 라우트가 그 경우에만 정확한 사유로 바꿔 싣는다.
@@ -31,7 +31,7 @@ from tests.test_graph_handoff_rules import gappy  # noqa: E402, F401
 
 NAMES = ["005930", "000660", "035420"]
 VIEW = [{"assets": ["005930"], "direction": 1, "magnitude_pct": 4.0, "confidence": 60}]
-MARKET_SENTENCE = "생각을 반영한 비중을 만들지 못해 시가총액 비중을 썼어요."
+MARKET_SENTENCE = "생각을 반영한 비중을 만들지 못해 시가총액 비중을 썼습니다."
 
 
 def _R():
@@ -71,7 +71,7 @@ def test_bl_solved_says_views_reached(caps):
 
 
 def test_label_flip_is_bl_only(caps, monkeypatch):
-    """짝 — 비중이 생각 열을 쓰지 않는 방식은 라벨 뜻이 그대로다(뒤집으면 EP 설명이 '반영된 생각이 없어요' 로 틀려진다)."""
+    """짝 — 비중이 생각 열을 쓰지 않는 방식은 라벨 뜻이 그대로다(뒤집으면 EP 설명이 '반영된 생각이 없습니다' 로 틀려진다)."""
     monkeypatch.setattr(st, "_opt", _opt_none)
     out = st.optimize("mvo", NAMES, _R(), views=VIEW)
     assert out["views_applied"] is True
@@ -89,9 +89,9 @@ def test_constraints_resolve_with_the_posterior_so_views_reach_the_weights(marke
     assert v["weights"] != v["flow"]["market"]
     [f] = [f for f in v["fallbacks"] if f["stage"] == "view_applied"]
     assert f["affects_weights"] is False
-    assert "제약" in f["text"] and "그래서 비중은 시가총액 비중이에요." not in f["text"]
+    assert "제약" in f["text"] and "그래서 비중은 시가총액 비중입니다." not in f["text"]
     texts = _texts(o["explain"])
-    assert "내 생각을 반영했어요." in texts
+    assert "내 생각을 반영했습니다." in texts
     assert not any(t.get("kind") == "fallback" for t in o["explain"]["trust"])
     assert "views_market" not in {i["code"] for i in rep["edges"]["v.views->o.views"]["issues"] or []}
 
@@ -125,13 +125,13 @@ def test_market_fallback_sentence_says_what_happened(market, monkeypatch, target
     monkeypatch.setattr(target, _opt_none if target.endswith("_opt") else _raise)
     texts = _texts(_run(_chain("bl", views=VIEWS))["nodes"]["o"]["explain"])
     assert MARKET_SENTENCE in texts
-    assert "반영된 생각이 없어요." not in texts and "내 생각을 반영했어요." not in texts
+    assert "반영된 생각이 없습니다." not in texts and "내 생각을 반영했습니다." not in texts
 
 
 def test_bl_without_views_still_says_none(market):
     """짝 — 생각이 없으면 대체도 없고 문장은 예전 그대로."""
     texts = _texts(_run(_chain("bl"))["nodes"]["o"]["explain"])
-    assert "반영된 생각이 없어요." in texts and MARKET_SENTENCE not in texts
+    assert "반영된 생각이 없습니다." in texts and MARKET_SENTENCE not in texts
 
 
 # ── 2. 시가총액 모름 ─────────────────────────────────────────────────────────

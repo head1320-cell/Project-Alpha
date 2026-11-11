@@ -230,11 +230,11 @@ def get_profile(sid: str) -> dict | None:
 # ── 동적 전략 백테스트 (★매월 전략 로직 재평가·리밸런스·복리 — buy&hold 아님★) ──
 _BACKTEST_MONTHS = 48
 #: 월말 날짜를 못 얻었을 때만 — 달 라벨이 오늘부터 30일씩 거슬러 센 것임을 화면이 그림 옆에 적는다(그때는 해마다·낙폭 사건도 없다).
-_DATES_NOTE = "달 라벨은 오늘부터 30일씩 거슬러 센 어림이에요 — 실제 달과 한두 달 어긋날 수 있어요."
+_DATES_NOTE = "달 라벨은 오늘부터 30일씩 거슬러 센 어림입니다 — 실제 달과 한두 달 어긋날 수 있습니다."
 
 
 def _curve_summary(vals: list[float], port: list[float], months: int, dates: list[str] | None = None) -> dict:
-    """곡선·요약. `dates`(점마다 월말 ISO 날짜)가 있으면 라벨은 그 날짜에서 나오고 해마다·달마다 수익·낙폭 사건도 붙는다(성과 그림
+    """곡선·요약. `dates`(점마다 월말 ISO 날짜)가 있으면 라벨은 그 날짜에서 나오고 해마다·월별 수익률·낙폭 구간도 붙는다(성과 그림
     문법 ③ · 2026-11-09). 없으면 옛 어림 라벨(오늘부터 30일씩)과 그 사유만 — 날짜를 지어내지 않는다."""
     n = len(vals)
     dated = bool(dates) and len(dates or []) == n

@@ -92,7 +92,7 @@ for (const s of SCREENS) {
     await s.rest(page);
     const fail = page.locator(".chart-slot--fail").first();
     await expect(fail).toBeVisible({ timeout: 30_000 });
-    await expect(fail).toContainText("차트를 불러오지 못했어요");
+    await expect(fail).toContainText("차트 로딩 실패");
     await expect(fail.getByRole("button", { name: "새로 고침" })).toBeVisible();
     expect(cut, "recharts 조각 요청을 실제로 끊었어야 한다(아니면 이 시험은 공허하다)").toBeGreaterThan(0);
     await s.rest(page);   // 화면 전체가 오류 화면으로 바뀌지 않았다

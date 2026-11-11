@@ -230,7 +230,7 @@ def test_every_w5_node_speaks_politely_without_overclaiming(market, co, valuatio
             _run(_attr_graph(run_id="rr_test_1"))["nodes"]["a"]]
     for r in reps:
         assert r["status"] == "ok", r["reason"]
-        assert r["explain"]["title"].endswith("요"), r["explain"]["title"]
+        assert r["explain"]["title"].endswith("다"), r["explain"]["title"]
         assert not [t for t in _texts(r["explain"]) for w in FORBIDDEN if w in t], r["type"]
 
 

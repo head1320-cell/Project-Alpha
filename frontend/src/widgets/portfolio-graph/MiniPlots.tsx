@@ -33,7 +33,7 @@ function Frame({ boxRef, label, width, height, onKeyDown, onPointer, row, rows, 
   return (
     <div ref={boxRef} className="pg-plot-box">
       <svg className="pg-plot" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="group" tabIndex={0}
-           aria-label={`${label}. 화살표로 옮겨 읽어요.`} onKeyDown={onKeyDown} onPointerMove={onPointer} onPointerDown={onPointer}>
+           aria-label={`${label}. 화살표 키로 이동해 값을 읽습니다.`} onKeyDown={onKeyDown} onPointerMove={onPointer} onPointerDown={onPointer}>
         {children}
       </svg>
       <ReadLine row={row} />
@@ -65,7 +65,7 @@ export function FrontierPlot({ dots, curve, point, rows, initial, label, height 
     const every = room < Math.max(...xt.map((t) => textW(fx(t)))) + 8 ? 2 : 1;
     return { xt, yt, fx, fy, left, bottom, sx, sy, every };
   }, [dots, curve, point, width, height]);
-  if (!geo) return <p className="pg-note">경계를 그릴 점이 없어요.</p>;
+  if (!geo) return <p className="pg-note">경계를 그릴 점 없음</p>;
   const { xt, yt, fx, fy, left, bottom, sx, sy, every } = geo;
   const cur = idx >= 0 ? curve[idx] : null;
   const onPointer = (e: PointerEvent<SVGSVGElement>) => {
@@ -113,7 +113,7 @@ export function StepPlot({ ys, rows, label, height = 140 }: { ys: (number | null
   const sy = linScale(0, 100, height - bottom, TOP);
   const sx = linScale(0, Math.max(1, n - 1), left, width - RIGHT);
   const xs = ys.map((_, i) => (n === 1 ? (left + width - RIGHT) / 2 : sx(i)));
-  if (!n) return <p className="pg-note">그릴 시점이 없어요.</p>;
+  if (!n) return <p className="pg-note">그릴 시점 없음</p>;
   const py = ys.map((v) => (v === null ? null : sy(v)));
   const curY = idx >= 0 ? py[idx] : null;
   return (
@@ -157,7 +157,7 @@ export function CurvePlot({ pts, dips, rows, label, height = 170 }: {
     const room = n > 1 ? xs[1] - xs[0] : width;
     return { yt, fy, left, bottom, sy, xs, valEvery: room < 30 ? 2 : 1, tickEvery: room < Math.max(...pts.map((p) => textW(p.t))) + 6 ? 2 : 1 };
   }, [pts, n, width, height]);
-  if (!geo) return <p className="pg-note">그릴 금리 점이 없어요.</p>;
+  if (!geo) return <p className="pg-note">그릴 금리 점 없음</p>;
   const { yt, fy, left, bottom, sy, xs, valEvery, tickEvery } = geo;
   const py = pts.map((p) => (p.y === null ? null : sy(p.y)));
   const shown = (i: number, every: number) => (n - 1 - i) % every === 0;        // 마지막 점에서부터 센다(끝은 늘 남는다)

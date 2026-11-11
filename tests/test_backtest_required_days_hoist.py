@@ -10,7 +10,7 @@
     130,601 calls  8.59s   condition_strategy.py  required_days   ← cumtime 27%
 
 `kis_backtest_engine.py` 의 하루 × 종목 루프가 봉마다 `strategy.required_days`
-를 읽는데(200 × 653 = 130,600), 그 `@property` 는 **매번 처음부터 다시 계산**한다.
+를 읽는데(200 × 653 = 130,600), 그 `@property` 는 **매번 처음부터 재계산**한다.
 그런데 입력(`buy_conditions`·`sell_conditions`·`_prio_ast`)은 루프가 시작되기
 전에 전부 확정된다 — `set_priority_expr` 는 루프보다 한참 위에서 끝난다.
 

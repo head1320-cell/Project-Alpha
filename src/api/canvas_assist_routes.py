@@ -40,7 +40,7 @@ def canvas_suggest(graph: Any = Body(...), p: Principal = Depends(require_login)
 
 def _small_dict(v: dict) -> dict:
     if len(json.dumps(v, ensure_ascii=False, default=str).encode("utf-8")) > MAX_EXPLAIN_BYTES:
-        raise ValueError(f"하나가 {MAX_EXPLAIN_BYTES}바이트를 넘어요")
+        raise ValueError(f"하나가 {MAX_EXPLAIN_BYTES}바이트를 넘습니다")
     return v
 
 
@@ -54,7 +54,7 @@ class NarrateFact(BaseModel):
     @classmethod
     def _small(cls, v: dict) -> dict:
         if len(json.dumps(v, ensure_ascii=False, default=str).encode("utf-8")) > MAX_EXPLAIN_BYTES:
-            raise ValueError(f"설명 하나가 {MAX_EXPLAIN_BYTES}바이트를 넘어요")
+            raise ValueError(f"설명 하나가 {MAX_EXPLAIN_BYTES}바이트를 넘습니다")
         return v
 
 
@@ -66,7 +66,7 @@ class NarrateRequest(BaseModel):
 @router.post("/narrate")
 def canvas_narrate(req: NarrateRequest, p: Principal = Depends(require_login)) -> dict:
     """AI2 — 계산 결과를 읽는 순서로 풀어 쓴다. ★서버 봉인이 지금 그래프로 확인되는 설명만★ 근거 · 문단마다 근거 노드 ·
-    연습용이면 서버가 경고를 붙인다. 키·한도·거절이면 `available:false` + 사유(확인 못 한 설명은 `dropped`)."""
+    합성 데이터이면 서버가 경고를 붙인다. 키·한도·거절이면 `available:false` + 사유(확인 못 한 설명은 `dropped`)."""
     return service.narrate(req.graph, [f.model_dump() for f in req.facts], p.username,
                            catalog=graph_routes._kinds, key=derived_key(fact_seal.PURPOSE))
 
@@ -106,7 +106,7 @@ class AskRequest(BaseModel):
     @classmethod
     def _not_blank(cls, v: str) -> str:
         if not v.strip():
-            raise ValueError("질문이 비어 있어요")
+            raise ValueError("질문이 비어 있습니다")
         return v.strip()
 
 
@@ -196,7 +196,7 @@ class DraftRequest(BaseModel):
     @classmethod
     def _not_blank(cls, v: str) -> str:
         if not v.strip():
-            raise ValueError("말씀이 비어 있어요")
+            raise ValueError("말씀이 비어 있습니다")
         return v.strip()
 
 

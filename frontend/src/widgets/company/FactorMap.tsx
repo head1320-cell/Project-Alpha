@@ -73,7 +73,7 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
           {weaknesses.length > 0 && <div><span className="ci-fmap-chips-k">백분위가 낮은 팩터</span><ul>{weaknesses.map(chip)}</ul></div>}
         </div>
       )}
-      <div className="ci-fmap-grid" role="group" aria-label={`팩터 ${dots.length}개의 백분위 위치. 화살표 키로 옮겨 다녀요`} onKeyDown={onKey}>
+      <div className="ci-fmap-grid" role="group" aria-label={`팩터 ${dots.length}개의 백분위 위치. 화살표 키로 옮겨 다닙니다`} onKeyDown={onKey}>
         {rows.map(({ g, ds, h }) => (
           <div key={g.id} className="ci-fmap-row" data-group={g.id}>
             <span className="ci-fmap-name" data-server>{g.label}</span>
@@ -86,7 +86,7 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
                         style={{ left: `${d.pct}%`, "--lane": d.lane, background: pctFill(d.pct) } as React.CSSProperties}
                         onFocus={() => setCur(d.idx)} onMouseEnter={() => setCur(d.idx)} onClick={() => setCur(d.idx)} />
               ))}
-              {!ds.length && <span className="ci-fmap-none">이 묶음은 백분위를 아는 팩터가 없어요</span>}
+              {!ds.length && <span className="ci-fmap-none">이 묶음은 백분위를 아는 팩터 없음</span>}
             </span>
           </div>
         ))}
@@ -94,7 +94,7 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
       </div>
       <p className="ci-fmap-read" aria-live="polite">
         {active ? <><b>{active.label}</b> <span>{factorValue(active)}</span> <span className="ci-fmap-read-p">백분위 {active.pct}</span> <span className="ci-fmap-read-g">{active.group}</span></>
-          : "점에 올리거나 초점을 두면 그 팩터의 값과 백분위를 여기에 보여 줘요."}
+          : "점에 올리거나 초점을 두면 그 팩터의 값과 백분위를 여기에 보여 줍니다."}
       </p>
     </div>
   );
@@ -103,16 +103,16 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
 export function FactorsSection({ c, onRetry }: { c: CompanyData; onRetry: () => void }) {
   const groups = [...c.fundamentals, ...c.priceFactors];
   const nF = (gs: FactorGroup[]) => gs.reduce((s, g) => s + g.factors.length, 0);
-  if (c.failed.includes("factors")) return <div className="ca-cp-pad"><RetryFail title="팩터 목록을 불러오지 못했어요" onRetry={onRetry} /></div>;
-  if (!groups.length) return <div className="ca-cp-pad"><p className="ca-cp-empty">이 종목은 값을 아는 팩터가 없어요.</p></div>;
+  if (c.failed.includes("factors")) return <div className="ca-cp-pad"><RetryFail title="팩터 목록 조회 실패" onRetry={onRetry} /></div>;
+  if (!groups.length) return <div className="ca-cp-pad"><p className="ca-cp-empty">이 종목은 값을 아는 팩터 없음</p></div>;
   const b = c.factorBasis;
   const sampleFail = c.failed.includes("factorSample");
   const known = groups.some((g) => g.factors.some((f) => f.pct != null));
   return (
     <div className="ca-cp-pad">
-      {sampleFail ? <RetryFail title="비교할 종목 표본을 불러오지 못해 백분위를 재지 못했어요" onRetry={onRetry}>팩터 값은 아래 목록에 그대로 있어요. 백분위만 비어 있어요.</RetryFail>
-        : b && !known ? <p className="ci-fmap-reason">비교할 종목이 {b.n}개뿐이라 백분위를 재지 않았어요(5개 이상 필요해요). 팩터 값은 아래 목록에 있어요.</p>
-        : b ? <p className="ci-sec-lede">{b.source === "db" ? `적재된 종목 ${b.n.toLocaleString("ko-KR")}개` : `코스피 200 종목 ${b.n.toLocaleString("ko-KR")}개`}와 견준 백분위예요. 높을수록 그 팩터에서 좋은 쪽이에요(낮을수록 좋은 팩터는 뒤집어 셌어요).</p>
+      {sampleFail ? <RetryFail title="비교할 종목 표본을 불러오지 못해 백분위 측정 불가" onRetry={onRetry}>팩터 값은 아래 목록에 그대로 있습니다. 백분위만 비어 있습니다.</RetryFail>
+        : b && !known ? <p className="ci-fmap-reason">비교할 종목이 {b.n}개뿐이라 백분위를 측정하지 않았습니다(5개 이상 필요합니다). 팩터 값은 아래 목록에 있습니다.</p>
+        : b ? <p className="ci-sec-lede">{b.source === "db" ? `적재된 종목 ${b.n.toLocaleString("ko-KR")}개` : `코스피 200 종목 ${b.n.toLocaleString("ko-KR")}개`}와 견준 백분위입니다. 높을수록 그 팩터에서 좋은 쪽입니다(낮을수록 좋은 팩터는 뒤집어 셌습니다).</p>
         : null}
       {known && <FactorDotMap groups={groups} strengths={c.strengths} weaknesses={c.weaknesses} />}
       <div className="ca-cp-factop">

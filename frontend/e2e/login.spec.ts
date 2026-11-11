@@ -37,7 +37,7 @@ test("셸 없이 혼자 선다 — 머리 줄·왼쪽 메뉴 0 · 짝: 홈에는
   await expect(page.locator(".lg h1")).toHaveText("로그인");
   await expect(page.locator(".terminal-sidebar, .terminal-header")).toHaveCount(0);
   await expect(page.locator(".lg-brand")).toHaveAttribute("href", "/");
-  await expect(page.locator(".lg-note")).toHaveText("계정은 관리자에게 받아요. 따로 가입하는 곳은 없어요.");
+  await expect(page.locator(".lg-note")).toHaveText("계정은 관리자에게 받습니다. 따로 가입하는 곳은 없습니다.");
   await expect(page.locator(".lg")).not.toContainText("—");
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".terminal-sidebar")).toHaveCount(1);
@@ -51,7 +51,7 @@ test("★틀린 자격 증명(실제 서버 401) → 사람 말 · 원문은 닫
   const body = (await (await res).json()) as { detail: string };
   expect((await res).status()).toBe(401);
   await expect(err(page)).toHaveAttribute("role", "alert");
-  await expect(err(page).locator(".lg-error-say")).toHaveText("아이디 또는 비밀번호가 맞지 않아요.");
+  await expect(err(page).locator(".lg-error-say")).toHaveText("아이디 또는 비밀번호가 맞지 않습니다.");
   const raw = err(page).locator("details.lg-raw");
   expect(await raw.evaluate((d) => (d as HTMLDetailsElement).open), "원문 칸은 닫혀 있다").toBe(false);
   expect(await err(page).innerText(), "닫힌 원문은 보이는 글이 아니다").not.toContain(body.detail);
@@ -61,12 +61,12 @@ test("★틀린 자격 증명(실제 서버 401) → 사람 말 · 원문은 닫
   await expect(page).toHaveURL(/\/login/);
 });
 
-test("★502(내부 주소가 든 원문) → '서버에 닿지 못했어요' · 내부 주소는 보이는 글에 없다★ · 네트워크 실패도 같은 말(원문 칸 없음)", async ({ page }) => {
-  await page.route(LOGIN, (r) => r.fulfill({ status: 502, json: { error: true, detail: "백엔드에 연결할 수 없어요 (http://internal-backend:8000): ECONNREFUSED" } }));
+test("★502(내부 주소가 든 원문) → '서버 연결 실패' · 내부 주소는 보이는 글에 없다★ · 네트워크 실패도 같은 말(원문 칸 없음)", async ({ page }) => {
+  await page.route(LOGIN, (r) => r.fulfill({ status: 502, json: { error: true, detail: "백엔드에 연결할 수 없습니다 (http://internal-backend:8000): ECONNREFUSED" } }));
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await fill(page);
   await page.locator(".login-submit").click();
-  await expect(err(page).locator(".lg-error-say")).toHaveText("서버에 닿지 못했어요. 잠시 뒤 다시 해 주세요.");
+  await expect(err(page).locator(".lg-error-say")).toHaveText("서버 연결 실패. 잠시 뒤 다시 하십시오.");
   const visible = await err(page).innerText();
   expect(visible).not.toContain("internal-backend");
   expect(visible).not.toContain("백엔드");
@@ -76,7 +76,7 @@ test("★502(내부 주소가 든 원문) → '서버에 닿지 못했어요' ·
   await page.unroute(LOGIN);
   await page.route(LOGIN, (r) => r.abort("connectionrefused"));
   await page.locator(".login-submit").click();
-  await expect(err(page).locator(".lg-error-say")).toHaveText("서버에 닿지 못했어요. 잠시 뒤 다시 해 주세요.");
+  await expect(err(page).locator(".lg-error-say")).toHaveText("서버 연결 실패. 잠시 뒤 다시 하십시오.");
   await expect(err(page).locator("details.lg-raw")).toHaveCount(0);
 });
 
@@ -87,7 +87,7 @@ test("422(형식) → 사람 말 · 배열 사유는 글자로(객체 그대로 
   expect((await user(page).inputValue()).length).toBe(64);
   await pass(page).fill("x");
   await page.locator(".login-submit").click();
-  await expect(err(page).locator(".lg-error-say")).toHaveText("아이디와 비밀번호를 다시 확인해 주세요.");
+  await expect(err(page).locator(".lg-error-say")).toHaveText("아이디와 비밀번호를 다시 확인하십시오.");
   await err(page).locator("details.lg-raw summary").click();
   await expect(err(page).locator("details.lg-raw")).toContainText("body.username: String should have at most 64 characters");
   await expect(err(page)).not.toContainText("[object Object]");
@@ -102,7 +102,7 @@ test("★요청 본문은 정확히 {username, password} · Enter 로 보낸다 
   await fill(page, "e2e-user", "pw-123");
   await pass(page).press("Enter");
   await expect(page.locator(".login-submit")).toBeDisabled();
-  await expect(page.locator(".login-submit")).toHaveText("확인하는 중이에요");
+  await expect(page.locator(".login-submit")).toHaveText("확인 중");
   await expect(page.locator(".lg-form")).toHaveAttribute("aria-busy", "true");
   await expect.poll(() => seen !== null).toBe(true);
   expect(JSON.parse(seen!.postData() ?? "{}")).toEqual({ username: "e2e-user", password: "pw-123" });
@@ -190,7 +190,7 @@ test("★로그인이 여는 것 지도: 층 셋이 지도 파일 그대로 · �
   expect(open).toEqual(ACCESS.open.items.map((i) => [i.label, i.href]));
   await expect(map.locator('.lg-tier[data-tier="login"] a, .lg-tier[data-tier="admin"] a'), "잠긴 층은 링크가 아니다").toHaveCount(0);
   await expect(map.locator(".lg-why")).toHaveText(ACCESS.admin.why!);
-  await expect(map.locator(".lg-map-cap")).toHaveText("서버의 보호 목록과 같은 내용이에요.");
+  await expect(map.locator(".lg-map-cap")).toHaveText("서버의 보호 목록과 같은 내용입니다.");
 });
 
 test("★지금 이 서버 칩: 데이터 출처는 connection-status 로만 · 실행 모드는 서버 값의 번역(짝: 값이 바뀌면 문장도) · 실패는 말한다★", async ({ page }) => {
@@ -199,13 +199,13 @@ test("★지금 이 서버 칩: 데이터 출처는 connection-status 로만 · 
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   const mode = (await (await seen).json()) as { mode: string };
   expect(mode.mode, "이 환경은 그림자 모드로 시작한다").toBe("SHADOW");
-  await expect(chip("mode")).toHaveText("실행 모드: 주문 없이 신호만 기록해요", { timeout: 20_000 });
-  await expect(chip("data")).toHaveText("연습용 데이터");
+  await expect(chip("mode")).toHaveText("실행 모드: 주문 없이 신호만 기록합니다", { timeout: 20_000 });
+  await expect(chip("data")).toHaveText("합성 데이터");
 
   await page.route("**/api/v1/live/mode", (r) => r.fulfill({ json: { mode: "LIVE" } }));
   await page.route("**/api/v1/macro/connection-status", (r) => r.fulfill({ json: { mock_allowed: false, real_mode: true, bok_configured: true, fred_configured: true } }));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(chip("mode")).toHaveText("실행 모드: 실제 돈으로 주문해요", { timeout: 20_000 });
+  await expect(chip("mode")).toHaveText("실행 모드: 실제 돈으로 주문합니다", { timeout: 20_000 });
   await expect(chip("data")).toHaveText("한국은행 실데이터");
   await expect(chip("data")).toHaveAttribute("data-tone", "ok");
 
@@ -217,7 +217,7 @@ test("★지금 이 서버 칩: 데이터 출처는 connection-status 로만 · 
   await page.unroute("**/api/v1/live/mode");
   await page.route("**/api/v1/live/mode", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(chip("mode")).toHaveText("실행 모드를 확인하지 못했어요", { timeout: 20_000 });
+  await expect(chip("mode")).toHaveText("실행 모드 확인 실패", { timeout: 20_000 });
   await expect(chip("mode")).toHaveAttribute("data-tone", "unknown");
 });
 

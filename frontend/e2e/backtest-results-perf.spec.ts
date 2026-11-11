@@ -47,12 +47,12 @@ test("(a) 그림 하나 — 선·벤치마크·낙폭 물속 · 읽는 줄 마�
   await expect(curveCard(page).locator(".pf-legend")).toContainText("벤치마크 KOSPI");
   // 리밸런싱 날짜를 모르는 엔진 — 띠는 리밸런싱을 말하지 않는다(모름 ≠ 0).
   await expect(curveCard(page).locator(".pf-strip-legend")).not.toContainText("리밸런싱");
-  await expect(curveCard(page).locator(".pf-strip-legend")).toContainText("연습용 데이터");
+  await expect(curveCard(page).locator(".pf-strip-legend")).toContainText("합성 데이터");
   // 짝: 라벨이 없으면 "실제인지 몰라요" — 연습용이라고 단정하지 않는다.
   await page.unrouteAll();
   await openResults(page);
-  await expect(curveCard(page).locator(".pf-strip-legend")).toContainText("데이터가 실제인지 몰라요");
-  await expect(curveCard(page).locator(".pf-strip-legend")).not.toContainText("연습용 데이터");
+  await expect(curveCard(page).locator(".pf-strip-legend")).toContainText("데이터 출처 미상");
+  await expect(curveCard(page).locator(".pf-strip-legend")).not.toContainText("합성 데이터");
 });
 
 test("(b) 낙폭 단위 = perf.drawdown_pct(통계와 같은 %) — 축 글자도 그 값 · 짝: 비율을 넣으면 작은 수로 보인다", async ({ page }) => {
@@ -75,7 +75,7 @@ test("(c) 달마다 격자 — 칸 수 = perf.periods.monthly · 칸 글자 = �
   await expect(page.locator('td.pf-month[data-month="2023-03"]')).toHaveText("+7.8%");
 });
 
-test("(d) 큰 낙폭 사건 — 행 수 = perf.drawdowns · 날짜·깊이 · 짝: 회복 null 은 '아직'", async ({ page }) => {
+test("(d) 주요 낙폭 구간 — 행 수 = perf.drawdowns · 날짜·깊이 · 짝: 회복 null 은 '아직'", async ({ page }) => {
   const f = await openResults(page);
   const eps = (f.perf as Perf).drawdowns;
   const rows = page.locator(".pf-dd-ep");
@@ -86,7 +86,7 @@ test("(d) 큰 낙폭 사건 — 행 수 = perf.drawdowns · 날짜·깊이 · �
   await page.unrouteAll();
   await openResults(page, (f2) => { const e = (f2.perf as Perf).drawdowns[0]; e.recovery_date = null; e.days_to_recover = null; });
   await expect(page.locator(".pf-dd-ep").first()).toHaveAttribute("data-recovered", "false");
-  await expect(page.locator(".pf-dd-ep").first()).toContainText("아직 고점을 되찾지 못했어요");
+  await expect(page.locator(".pf-dd-ep").first()).toContainText("고점 미회복");
 });
 
 test("(e) 기여도 — HTML 막대 · 행 수 = contribution 있는 종목 · 부호와 등락색 · recharts 아님", async ({ page }) => {
@@ -100,14 +100,14 @@ test("(e) 기여도 — HTML 막대 · 행 수 = contribution 있는 종목 · �
   await expect(page.locator(".recharts-wrapper")).toHaveCount(0);
 });
 
-test("(f) 짝: perf 가 없으면 낙폭·기간별·낙폭 사건은 '주지 않았어요' 이고 곡선은 그대로(화면이 세지 않는다)", async ({ page }) => {
+test("(f) 짝: perf 가 없으면 낙폭·기간별·낙폭 구간은 '미제공' 이고 곡선은 그대로(화면이 세지 않는다)", async ({ page }) => {
   await openResults(page, (f) => { (f as { perf: unknown }).perf = null; });
   await expect(curveCard(page).locator(".pf-line-port")).toHaveCount(1);
   await expect(curveCard(page).locator(".pf-dd-area")).toHaveCount(0);
   await expect(curveCard(page).locator(".pf-legend")).toContainText("낙폭 곡선 없음");
   await expect(page.locator("td.pf-month[data-month]")).toHaveCount(0);
   await expect(page.locator(".pf-dd-ep")).toHaveCount(0);
-  await expect(page.locator(".terminal-main")).toContainText("주지 않았어요");
+  await expect(page.locator(".terminal-main")).toContainText("미제공");
 });
 
 test("(g) 질문 띠 — 답하는 것(전달) · 답하지 않는 것은 이 화면이 재지 않는다고 말한다(관문 칩 0)", async ({ page }) => {
@@ -115,7 +115,7 @@ test("(g) 질문 띠 — 답하는 것(전달) · 답하지 않는 것은 이 �
   const q = page.locator(".pf-q");
   await expect(q).toContainText("답하는 것");
   await expect(q).toContainText("답하지 않는 것");
-  await expect(q).toContainText("재지 않아요");
+  await expect(q).toContainText("측정하지 않습니다");
   await expect(q.locator(".pf-q-gate")).toHaveCount(0);
 });
 

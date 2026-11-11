@@ -36,7 +36,7 @@ async function fill(page: Page, o: Partial<Record<"basis" | "authority" | "refer
 test("BU9b 관문: 닫힘 · 지난 선언 최신 먼저 · 거둔 사람과 때", async ({ page }) => {
   await open(page, { current: null, history: [OLD] });
   await expect(page.locator(".lvg-now")).toHaveAttribute("data-open", "false");
-  await expect(page.locator(".lvg-now")).toContainText("지금 닫혀 있어요");
+  await expect(page.locator(".lvg-now")).toContainText("지금 닫혀 있습니다");
   await expect(page.locator(".lvg-revoke-open"), "닫혀 있으면 거둘 것이 없다").toHaveCount(0);
   await expect(page.locator(".lvg-h")).toHaveCount(1);
   await expect(page.locator(".lvg-h").first()).toContainText("10월 9일 21:00에 admin 님이 거둠");
@@ -45,11 +45,11 @@ test("BU9b 관문: 닫힘 · 지난 선언 최신 먼저 · 거둔 사람과 때
 test("BU9b 관문: 열림 — 근거·허용 사용자를 서버 값 그대로 (짝: 선언 시각은 한국 시간)", async ({ page }) => {
   await open(page, { current: GATE_OPEN, history: [GATE_OPEN, OLD] });
   await expect(page.locator(".lvg-now")).toHaveAttribute("data-open", "true");
-  await expect(page.locator(".lvg-now")).toContainText("10월 9일 21:00에 선언했어요");
+  await expect(page.locator(".lvg-now")).toContainText("10월 9일 21:00에 선언했습니다");
   await expect(page.locator('.lvg-now + .lvg-facts [data-k="basis"] dd')).toHaveText(GATE_OPEN.basis);
   await expect(page.locator('.lvg-now + .lvg-facts [data-k="allowed_users"] li')).toHaveText(["admin"]);
   const t = await page.locator(".lvg-h-t").allTextContents();
-  expect(t[0], "최신 선언이 먼저").toContain("지금 열려 있어요");
+  expect(t[0], "최신 선언이 먼저").toContain("지금 열려 있습니다");
   expect(t[1]).toContain("거둠");
 });
 
@@ -75,20 +75,20 @@ test("BU9b 관문: 선언 — 여섯 칸이 다 차야 켜지고, 본문은 정�
   await expect(go, "짝: 한 칸이라도 비면 꺼짐").toBeDisabled();
   await page.locator('[name="gate-scope"]').fill("운영 계좌");
   await go.click();
-  await expect(page.locator(".lvg-said")).toHaveText("선언했어요.");
+  await expect(page.locator(".lvg-said")).toHaveText("선언했습니다.");
   const post = calls.find((c) => c.m === "POST")!;
   expect(post.body).toEqual({ basis: "본인 계좌 운영", authority: "증권사 약관", reference_no: "REF-1", verified_at: "2026-10-10", scope: "운영 계좌", allowed_users: ["minji"] });
   await expect(page.locator(".lvg-now")).toHaveAttribute("data-open", "true");
 });
 
 test("BU9b 관문: 422 는 사유 그대로 + 칸 이름, 시트는 남는다 · 실계좌에서 내려왔으면 그렇다고", async ({ page }) => {
-  const gate: GateState = { current: null, history: [], declareReply: { status: 422, json: { detail: "확인 기록이 불완전해요. 빠진 항목: allowed_users" } } };
+  const gate: GateState = { current: null, history: [], declareReply: { status: 422, json: { detail: "확인 기록이 불완전합니다. 빠진 항목: allowed_users" } } };
   await open(page, gate);
   await page.locator(".lvg-declare-open").click();
   await fill(page);
   await page.locator('[name="gate-user"]').fill("*");
   await page.locator(".lvg-user-add").click();
-  await expect(page.locator('[data-sheet="gate-declare"] .lv-hint').last()).toContainText("모두에게 여는 값(예: *, 모두)은 서버가 받지 않아요");
+  await expect(page.locator('[data-sheet="gate-declare"] .lv-hint').last()).toContainText("모두에게 여는 값(예: *, 모두)은 서버가 받지 않습니다");
   await page.locator(".lvg-declare-go").click();
   const alert = page.locator('[data-sheet="gate-declare"] [role="alert"]');
   await expect(alert).toContainText("빠진 항목: allowed_users");
@@ -96,7 +96,7 @@ test("BU9b 관문: 422 는 사유 그대로 + 칸 이름, 시트는 남는다 ·
   await expect(page.locator('[data-sheet="gate-declare"]')).toBeVisible();
   gate.declareReply = { status: 201, json: { current: GATE_OPEN, live_dropped_to_shadow: true } };
   await page.locator(".lvg-declare-go").click();
-  await expect(page.locator(".lvg-said")).toContainText("실계좌로 돌던 운영 계좌를 기록만으로 돌려놨어요");
+  await expect(page.locator(".lvg-said")).toContainText("실계좌로 돌던 운영 계좌를 기록만으로 돌려놨습니다");
 });
 
 test("BU9b 관문: 거두기는 확인 — 취소 0 · 확인 DELETE 1 · 404 사유", async ({ page }) => {
@@ -108,7 +108,7 @@ test("BU9b 관문: 거두기는 확인 — 취소 0 · 확인 DELETE 1 · 404 �
   expect(calls.filter((c) => c.m === "DELETE")).toHaveLength(0);
   await page.locator(".lvg-revoke-open").click();
   await page.locator(".lvg-revoke-yes").click();
-  await expect(page.locator(".lvg-said")).toContainText("관문을 거뒀어요");
+  await expect(page.locator(".lvg-said")).toContainText("관문을 거뒀습니다");
   expect(calls.filter((c) => c.m === "DELETE")).toHaveLength(1);
   await expect(page.locator(".lvg-now")).toHaveAttribute("data-open", "false");
   // 404 — 그사이 다른 관리자가 거뒀다면 서버 사유 그대로
@@ -119,13 +119,13 @@ test("BU9b 관문: 거두기는 확인 — 취소 0 · 확인 DELETE 1 · 404 �
   g2.current = null;   // 그사이 다른 관리자가 거뒀다
   await p.locator(".lvg-revoke-open").click();
   await p.locator(".lvg-revoke-yes").click();
-  await expect(p.locator('[data-sheet="gate-revoke"] [role="alert"]')).toContainText("지금 열려 있는 실계좌 관문이 없어요.");
+  await expect(p.locator('[data-sheet="gate-revoke"] [role="alert"]')).toContainText("지금 열려 있는 실계좌 관문 없음");
   await p.close();
 });
 
-test("BU9b 관문: 읽기 실패는 다시 시도 · 분석가·로그아웃은 관문 요청 0 (짝: 관리자는 1)", async ({ page }) => {
+test("BU9b 관문: 읽기 실패는 재시도 · 분석가·로그아웃은 관문 요청 0 (짝: 관리자는 1)", async ({ page }) => {
   const calls = await open(page, { current: null, history: [], fail: 500 });
-  await expect(page.locator('.lvg [role="alert"]')).toContainText("관문 기록을 읽지 못했어요");
+  await expect(page.locator('.lvg [role="alert"]')).toContainText("관문 기록 읽기 실패");
   expect(calls.filter((c) => c.m === "GET").length).toBeGreaterThan(0);
   for (const role of ["analyst", null] as const) {
     const p = await page.context().newPage();
@@ -140,7 +140,7 @@ test("BU9b 관문: 선언 시트 라이트/다크 AA", async ({ page }) => {
   for (const scheme of ["light", "dark"] as const) {
     const p = await page.context().newPage();
     await p.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* 없음 */ } }, scheme);
-    await open(p, { current: GATE_OPEN, history: [GATE_OPEN, OLD], declareReply: { status: 422, json: { detail: "확인 기록이 불완전해요. 빠진 항목: scope" } } });
+    await open(p, { current: GATE_OPEN, history: [GATE_OPEN, OLD], declareReply: { status: 422, json: { detail: "확인 기록이 불완전합니다. 빠진 항목: scope" } } });
     await p.locator(".lvg-declare-open").click();
     await fill(p);
     await p.locator('[name="gate-user"]').fill("minji");

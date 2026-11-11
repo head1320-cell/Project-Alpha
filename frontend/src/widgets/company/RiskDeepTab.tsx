@@ -24,8 +24,8 @@ const at = (z: number) => Math.max(0, Math.min(100, (z / ALT_MAX) * 100));
 
 export default function RiskDeepTab({ code, price }: { code: string; price: number }) {
   const q = useQuery({ queryKey: ["company", "risk-deep", code, price], queryFn: () => companyApi.riskDeep(code, price), retry: false, staleTime: 5 * 60_000 });
-  if (q.isPending) return <div className="ci-rd"><p className="ci-fd-wait">재무로 잰 위험을 계산하는 중이에요</p></div>;
-  if (q.isError) return <div className="ci-rd"><RetryFail title="재무로 잰 위험을 불러오지 못했어요" onRetry={() => q.refetch()} /></div>;
+  if (q.isPending) return <div className="ci-rd"><p className="ci-fd-wait">재무로 잰 위험 계산 중</p></div>;
+  if (q.isError) return <div className="ci-rd"><RetryFail title="재무로 잰 위험 조회 실패" onRetry={() => q.refetch()} /></div>;
   const d = q.data;
   const alt = d.altman;
   const maxC = Math.max(...alt.components.map((c) => Math.abs(c.contribution)), 0.01);
@@ -35,7 +35,7 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
       <h3 className="ci-block-h">재무로 잰 위험</h3>
       <div className="ca-vt-grid">
         <section className="ca-cp-sec ci-alt">
-          <h4 className="ci-fd-h">부도 위험 점수(알트만 Z)</h4>
+          <h4 className="ci-fd-h">Altman Z-Score(알트만 Z)</h4>
           {ok(alt.z) ? (
             <>
               <dl className="ci-alt-ans"><div><dt>점수</dt><dd>{plain(alt.z)}</dd></div><div><dt>서버가 본 구간</dt><dd className="ci-alt-zone" data-server>{alt.zone}</dd></div></dl>
@@ -47,8 +47,8 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
                 <i className="ci-alt-dot" data-v={alt.z} style={{ left: `${at(alt.z)}%` }} aria-hidden />
               </div>
               <p className="ci-alt-axis"><span>0</span><span>{ALT_MAX} 이상</span></p>
-              {out && <p className="ci-note">점수가 눈금 밖이라 끝에 붙여 그렸어요.</p>}
-              <p className="ci-fd-lede">다섯 요소가 점수에 더한 몫이에요(가중치 × 비율).</p>
+              {out && <p className="ci-note">점수가 눈금 밖이라 끝에 붙여 그렸습니다.</p>}
+              <p className="ci-fd-lede">다섯 요소가 점수에 더한 몫입니다(가중치 × 비율).</p>
               <div className="ci-alt-rows">
                 {alt.components.map((c) => (
                   <div key={c.id} className="ci-alt-row">
@@ -60,11 +60,11 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
                 ))}
               </div>
             </>
-          ) : <p className="ci-fd-reason">부도 위험 점수를 계산하지 못했어요. 서버가 이 종목의 재무 원천을 읽지 못했어요.</p>}
+          ) : <p className="ci-fd-reason">Altman Z-Score 산출 실패. 서버가 이 종목의 재무 원천 읽기 실패</p>}
         </section>
 
         <section className="ca-cp-sec ci-ben">
-          <h4 className="ci-fd-h">이익 조작 점검(베니시 M)</h4>
+          <h4 className="ci-fd-h">Beneish M-Score(베니시 M)</h4>
           {d.beneish.available ? (
             <>
               <dl className="ci-alt-ans"><div><dt>점수</dt><dd>{plain(d.beneish.m_score)}</dd></div><div><dt>서버 판정</dt><dd data-server>{d.beneish.flag}</dd></div></dl>
@@ -86,7 +86,7 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
             </>
           ) : (
             <>
-              <p className="ci-fd-reason">전년 재무가 없어 이익 조작 점검을 하지 못했어요.</p>
+              <p className="ci-fd-reason">전년 재무가 없어 Beneish M-Score을 하지 못했습니다.</p>
               {d.beneish.note && <details className="ci-fd-raw"><summary>원래 사유 보기</summary><p data-server>{d.beneish.note}</p></details>}
             </>
           )}
@@ -113,13 +113,13 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
               </table>
             </div>
           </>
-        ) : <p className="ci-fd-reason">연도별 재무가 없어 추이를 그리지 못했어요.</p>}
+        ) : <p className="ci-fd-reason">연도별 재무가 없어 추이를 그리지 못했습니다.</p>}
         <p className="ci-note"><span className="ci-fd-k">근사</span><span data-server>{d.coverage.note}</span></p>
       </section>
 
       <section className="ca-cp-sec ci-stress">
         <h4 className="ci-fd-h">금리가 오르면</h4>
-        <p className="ci-fd-lede">할인율을 한꺼번에 올려 다시 계산한 값이에요(1%p = 100bp).</p>
+        <p className="ci-fd-lede">할인율을 한꺼번에 올려 재계산한 값입니다(1%p = 100bp).</p>
         <div className="ci-tablewrap">
           <table className="ca-fd-tbl">
             <thead><tr><th scope="col">금리 충격</th><th scope="col" className="n">이자보상배율</th><th scope="col" className="n">현금흐름할인 가치</th><th scope="col" className="n">통합 적정가</th></tr></thead>

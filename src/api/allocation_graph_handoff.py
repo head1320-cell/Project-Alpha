@@ -54,7 +54,7 @@ def facts_returns(v: dict) -> list[dict]:
         out.append(_f("t_over_n", "종목당 관측", f"{T / N:,.0f}일 (관측 {T} ÷ 종목 {N})", round(T / N, 2)))
     a = cov.get("alignment")
     if a is None:
-        out.append(_f("alignment", "날짜 맞추기", "재지 않았어요"))
+        out.append(_f("alignment", "날짜 맞추기", "측정하지 않았습니다"))
     else:
         out.append(_f("requested", "요청한 기간", f"{a['requested_days']}일 · 모자란 날 {a['shortfall_days']}일",
                       a["shortfall_days"]))
@@ -63,7 +63,7 @@ def facts_returns(v: dict) -> list[dict]:
         ls = a.get("latest_start")
         if ls:
             out.append(_f("latest_start", "가장 늦게 시작한 종목",
-                          f"{ls['ticker']} · {ls['first']}" + (" — 이 종목이 기간의 시작을 정했어요" if a.get("binding") else ""),
+                          f"{ls['ticker']} · {ls['first']}" + (" — 이 종목이 기간의 시작을 정했습니다" if a.get("binding") else ""),
                           ls["ticker"]))
     ex = v.get("excluded") or []
     if ex:
@@ -72,7 +72,7 @@ def facts_returns(v: dict) -> list[dict]:
     if bench_name:
         gap = (a or {}).get("bench_gap_days")
         out.append(_f("bench", "벤치마크", f"{bench_name}" + (f" · 빈 날 {gap}일" if gap is not None else "")
-                      + ("" if v.get("bench") is not None else " · 받지 못했어요"), gap))
+                      + ("" if v.get("bench") is not None else " · 수신 실패"), gap))
     if cov.get("as_of_effective"):
         out.append(_f("as_of", "기준일", str(cov["as_of_effective"])))
     return out
@@ -144,7 +144,7 @@ def facts_scores(v: dict) -> list[dict]:
 
 def facts_belief(v: dict) -> list[dict]:
     v = v or {}
-    return [_f("conditional", "경기 국면 반영", "요청했어요" if v.get("conditional") else "하지 않아요(과거 기준)",
+    return [_f("conditional", "경기 국면 반영", "요청했습니다" if v.get("conditional") else "하지 않습니다(과거 기준)",
                bool(v.get("conditional")))]
 
 
@@ -153,12 +153,12 @@ def facts_universe(v: dict) -> list[dict]:
     t = list(v.get("tickers") or [])
     return [_f("n", "종목", f"{len(t)}개 · " + _names(t), len(t)),
             _f("bench", "벤치마크", str(v.get("benchmark") or "없음")),
-            _f("current", "지금 비중", "함께 보내요" if v.get("weights") else "없어요")]
+            _f("current", "지금 비중", "함께 보냅니다" if v.get("weights") else "없습니다")]
 
 
 def facts_regime(v: dict) -> list[dict]:
     v = v or {}
-    out = [_f("regime", "국면", str(v.get("regime") or "몰라요"))]
+    out = [_f("regime", "국면", str(v.get("regime") or "N/A"))]
     for key, label in (("snapshot_id", "스냅샷"), ("as_of", "기준일"), ("data_status", "데이터 상태")):
         if v.get(key) is not None:
             out.append(_f(key, label, str(v[key])))
@@ -196,8 +196,8 @@ def _structural_returns(value: dict) -> list[dict]:
         return []
     T, N = int(R.shape[0]), int(R.shape[1])
     if N and T <= N:
-        return [_i("structural", "t_le_n", f"관측 {T}일이 종목 {N}개보다 많지 않아 표본 공분산이 특이해요 — "
-                                           "역행렬을 쓰는 계산은 축소 추정에 기대요.")]
+        return [_i("structural", "t_le_n", f"관측 {T}일이 종목 {N}개보다 많지 않아 표본 공분산이 특이합니다 — "
+                                           "역행렬을 쓰는 계산은 축소 추정에 기댑니다.")]
     return []
 
 
@@ -223,26 +223,26 @@ def intake_returns_from_universe(h: pg.Handoff) -> dict:
     issues = []
     ex = view.get("excluded") or []
     if ex:
-        issues.append(_i("lost", "excluded", f"종목 {len(ex)}개는 시세가 없거나 짧아 빠졌어요: "
+        issues.append(_i("lost", "excluded", f"종목 {len(ex)}개는 시세가 없거나 짧아 빠졌습니다: "
                                              + _names([f"{x.get('ticker')}({x.get('reason')})" for x in ex], 3)))
     if a.get("shortfall_days"):
         ls = a.get("latest_start") or {}
-        why = (f" — {ls.get('ticker')}가 {ls.get('first')}에 시작해 기간을 묶었어요" if a.get("binding") else "")
-        issues.append(_i("lost", "shortfall", f"요청한 {a['requested_days']}일 중 {a['shortfall_days']}일이 모자라요{why}.",
-                         "늦게 시작한 종목을 빼거나 기간을 줄이면 날이 맞아요." if a.get("binding") else None))
+        why = (f" — {ls.get('ticker')}가 {ls.get('first')}에 시작해 기간을 묶었습니다" if a.get("binding") else "")
+        issues.append(_i("lost", "shortfall", f"요청한 {a['requested_days']}일 중 {a['shortfall_days']}일이 모자랍니다{why}.",
+                         "늦게 시작한 종목을 빼거나 기간을 줄이면 날이 맞습니다." if a.get("binding") else None))
     if a.get("holes_in_window"):
-        issues.append(_i("lost", "holes", f"기간 안에서 {a['holes_in_window']}일은 어느 한 종목이 비어 모든 종목에서 빠졌어요."))
+        issues.append(_i("lost", "holes", f"기간 안에서 {a['holes_in_window']}일은 어느 한 종목이 비어 모든 종목에서 빠졌습니다."))
     bench = (h.value or {}).get("benchmark")
     if bench and not cov.get("benchmark_available"):
-        issues.append(_i("lost", "no_bench", f"벤치마크 {bench}의 수익률을 받지 못했어요 — 벤치마크를 쓰는 계산(베타 제약 등)은 빠져요."))
+        issues.append(_i("lost", "no_bench", f"벤치마크 {bench}의 수익률 수신 실패 — 벤치마크를 쓰는 계산(베타 제약 등)은 빠집니다."))
     return _out(["뺀 종목", "요청한 기간과 실제 기간", "기간 안의 빈 날", "벤치마크"], issues)
 
 
 def intake_unused_returns(h: pg.Handoff) -> dict:
     """R3 — 기대 수익 추정은 들어오는 수익률을 읽지 않는다(설정만 넘긴다 — 입력을 바꾸는 일은 별도 승인)."""
     return _out(["받는 쪽이 이 값을 읽는지"],
-                [_i("unused", "not_read", "‘기대 수익 추정’은 이 수익률을 읽지 않아요 — 설정만 ‘비중 계산’에 넘기고, "
-                                          "기대 수익은 ‘비중 계산’이 자기 수익률로 계산해요.")])
+                [_i("unused", "not_read", "‘기대 수익 추정’은 이 수익률을 읽지 않습니다 — 설정만 ‘비중 계산’에 넘기고, "
+                                          "기대 수익은 ‘비중 계산’이 자기 수익률로 계산합니다.")])
 
 
 def _beta_active(params: Any) -> bool:
@@ -256,7 +256,7 @@ def intake_optimizer_returns(h: pg.Handoff) -> dict:
     gap = (((h.value or {}).get("coverage") or {}).get("alignment") or {}).get("bench_gap_days")
     if _beta_active(h.params) and gap:
         issues.append(_i("changed", "beta_dropped", f"벤치마크가 기간 중 {gap}일 비어 기간 길이가 맞지 않아 "
-                                                    "베타 제약을 걸지 못했어요."))
+                                                    "베타 제약을 걸지 못했습니다."))
     return _out([_R2_CHECK, "베타 제약에 쓸 벤치마크가 기간 전체에 있는지"], issues)
 
 
@@ -265,15 +265,15 @@ def intake_optimizer_views(h: pg.Handoff) -> dict:
     view = h.view or {}
     issues = []
     if view.get("views_unused"):
-        issues.append(_i("unused", "views_unused", f"이 계산 방식은 생각을 쓰지 않아요 — 이어진 생각 {view['views_unused']}개가 비중에 들어가지 않아요.",
-                         "‘내 생각 반영’ 방식을 고르면 비중에 들어가요."))
+        issues.append(_i("unused", "views_unused", f"이 계산 방식은 생각을 쓰지 않습니다 — 이어진 생각 {view['views_unused']}개가 비중에 들어가지 않습니다.",
+                         "‘내 생각 반영’ 방식을 고르면 비중에 들어갑니다."))
     skipped = [s for s in view.get("skipped_views") or [] if ((s or {}).get("view") or {}).get("source") != "conditional"]
     if skipped:
-        issues.append(_i("lost", "skipped", f"생각 {len(skipped)}개는 쓸 수 없어 빠졌어요 — " + str(skipped[0].get("reason") or "")))
+        issues.append(_i("lost", "skipped", f"생각 {len(skipped)}개는 쓸 수 없어 빠졌습니다 — " + str(skipped[0].get("reason") or "")))
     for leg in view.get("view_legs_dropped") or []:
         issues.append(_i("changed", "legs_dropped", f"생각 {leg['index'] + 1}({leg.get('label')})은 유니버스 밖 종목 "
-                                                     f"{_names(leg.get('dropped') or [], 3)}이 빠져 나머지만 반영됐어요.",
-                         "빠진 종목을 ‘종목 고르기’에 넣거나 생각에서 빼세요."))
+                                                     f"{_names(leg.get('dropped') or [], 3)}이 빠져 나머지만 반영됐습니다.",
+                         "빠진 종목을 ‘종목 고르기’에 넣거나 생각에서 빼십시오."))
     for f in view.get("fallbacks") or []:
         if f.get("stage") == "view_applied" and f.get("affects_weights"):
             issues.append(_i("changed", "views_market", str(f.get("text") or f.get("reason") or "")))
@@ -283,7 +283,7 @@ def intake_optimizer_views(h: pg.Handoff) -> dict:
 def intake_optimizer_belief(h: pg.Handoff) -> dict:
     """R6 — 경기 국면 반영을 요청했는데 막혀 과거 기준으로 계산했는지."""
     b = (h.view or {}).get("belief") or {}
-    issues = ([_i("changed", "belief_blocked", "경기 국면 반영을 요청했지만 막혀 과거 기준으로 계산했어요 — "
+    issues = ([_i("changed", "belief_blocked", "경기 국면 반영을 요청했지만 막혀 과거 기준으로 계산했습니다 — "
                                                + str(b.get("blocked_reason") or ""))] if b.get("blocked") else [])
     return _out(["요청한 기대 수익 방식으로 계산했는지"], issues)
 
@@ -293,7 +293,7 @@ def intake_backtest_returns(h: pg.Handoff) -> dict:
     issues = _structural_returns(h.value)
     gap = (((h.value or {}).get("coverage") or {}).get("alignment") or {}).get("bench_gap_days")
     if gap:
-        issues.append(_i("changed", "bench_zero_fill", f"벤치마크가 빈 {gap}일은 수익 0으로 채워 비교해요."))
+        issues.append(_i("changed", "bench_zero_fill", f"벤치마크가 빈 {gap}일은 수익 0으로 채워 비교합니다."))
     return _out([_R2_CHECK, "벤치마크 빈 날"], issues)
 
 
@@ -313,21 +313,21 @@ def intake_backtest_weights(h: pg.Handoff) -> dict:
         if req.as_of != r.get("as_of"):
             diff.append("기준일")
         if diff:
-            issues.append(_i("changed", "other_returns", f"규칙을 다른 수익률({'·'.join(diff)})로 다시 풀어요 — 받은 비중과 같은 비중이 아니에요."))
+            issues.append(_i("changed", "other_returns", f"규칙을 다른 수익률({'·'.join(diff)})로 다시 풉니다 — 받은 비중과 같은 비중이 아닙니다."))
         if req.conditional:
-            issues.append(_i("changed", "conditional_dropped", "경기 국면 반영은 백테스트로 넘어가지 않아 리밸런싱마다 과거 기준으로 풀어요."))
+            issues.append(_i("changed", "conditional_dropped", "경기 국면 반영은 백테스트로 넘어가지 않아 리밸런싱마다 과거 기준으로 풉니다."))
     if req is not None and req.model == "mv_utility":
         # K2 — 백테스트가 밝힌 λ(`config.risk_aversion`)를 비중 계산의 λ 와 견준다. 받지 못했거나 밝히지 않았으면 '바뀜'.
         from src.engine.allocation_studio import RISK_AVERSION_DEFAULT
         want = RISK_AVERSION_DEFAULT if req.risk_aversion is None else float(req.risk_aversion)
         got = (((h.view or {}).get("config") or {}).get("risk_aversion") or {}).get("value")
         if got is None:
-            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 어느 λ 로 풀었는지 밝히지 않았어요."))
+            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 어느 λ 로 풀었는지 밝히지 않았습니다."))
         elif float(got) != want:
-            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 λ {float(got):g}로 다시 풀었어요."))
+            issues.append(_i("changed", "lambda_dropped", f"비중 계산은 위험 회피 λ {want:g}로 풀었지만 백테스트는 λ {float(got):g}로 다시 풀었습니다."))
     used = ((w.get("opt") or {}).get("company_views_used")) or 0
     if used:
-        issues.append(_i("lost", "company_views_dropped", f"회사 가치에서 온 생각 {used}개는 백테스트로 넘어가지 않아요."))
+        issues.append(_i("lost", "company_views_dropped", f"회사 가치에서 온 생각 {used}개는 백테스트로 넘어가지 않습니다."))
     return _out(base["checks"] + ["같은 수익률로 다시 푸는지", "위험 회피 λ", "경기 국면 반영", "회사 가치 생각"], issues)
 
 
@@ -340,24 +340,24 @@ def intake_sensitivity_weights(h: pg.Handoff) -> dict:
     model, basis = view.get("model"), view.get("basis")
     if model and basis and model != basis:
         issues.append(_i("changed", "other_model", f"‘{MODEL_PLAIN.get(model, model)}’ 비중을 받았지만 민감도는 "
-                                                   f"‘{MODEL_PLAIN.get(basis, basis)}’ 방식으로 다시 풀어요."))
+                                                   f"‘{MODEL_PLAIN.get(basis, basis)}’ 방식으로 다시 풉니다."))
     cr = (h.source_view or {}).get("constraints_report") or {}
     if view.get("has_constraints") and not view.get("constraints_applied") and cr.get("status") != "infeasible":
         # 비중 계산도 제약을 못 풀었으면(infeasible) 둘 다 제약 없는 비중이라 빠진 것이 아니다.
-        issues.append(_i("lost", "constraints_dropped", "비중 계산에 건 제약은 민감도로 넘어가지 않아요."))
+        issues.append(_i("lost", "constraints_dropped", "비중 계산에 건 제약은 민감도로 넘어가지 않습니다."))
     req = (h.value or {}).get("req")
     if req is not None and getattr(req, "conditional", False):
-        issues.append(_i("changed", "conditional_dropped", "경기 국면 반영은 민감도로 넘어가지 않아요."))
+        issues.append(_i("changed", "conditional_dropped", "경기 국면 반영은 민감도로 넘어가지 않습니다."))
     used = ((h.value or {}).get("opt") or {}).get("company_views_used") or 0
     if used:
-        issues.append(_i("lost", "company_views_dropped", f"회사 가치에서 온 생각 {used}개는 민감도로 넘어가지 않아요."))
+        issues.append(_i("lost", "company_views_dropped", f"회사 가치에서 온 생각 {used}개는 민감도로 넘어가지 않습니다."))
     return _out(base["checks"] + ["같은 방식으로 다시 푸는지", "제약", "경기 국면 반영", "회사 가치 생각"], issues)
 
 
 def intake_s2w_scores(h: pg.Handoff) -> dict:
     """R11 — 점수 상위에 들었지만 비중이 0 으로 반올림돼 빠진 종목."""
     z = (h.view or {}).get("dropped_zero") or []
-    issues = [_i("lost", "dropped_zero", f"점수 상위 {len(z)}개 종목은 비중이 0으로 반올림돼 빠졌어요: {_names(z)}")] if z else []
+    issues = [_i("lost", "dropped_zero", f"점수 상위 {len(z)}개 종목은 비중이 0으로 반올림돼 빠졌습니다: {_names(z)}")] if z else []
     return _out(["점수 상위 종목이 모두 비중을 받았는지"], issues)
 
 
@@ -367,19 +367,19 @@ def intake_s2w_returns(h: pg.Handoff) -> dict:
     miss = (h.view or {}).get("sigma_missing") or {}
     if miss.get("reason") == "codes_missing":
         issues.append(_i("lost", "codes_missing", f"이 수익률에 없는 종목({_names(miss.get('codes') or [], 3)})이 있어 "
-                                                  "공분산을 비중과 함께 보내지 못해요.",
-                         "같은 종목으로 ‘수익률 불러오기’를 이어 주세요."))
+                                                  "공분산을 비중과 함께 보내지 못합니다.",
+                         "같은 종목으로 ‘수익률 불러오기’를 연결하십시오."))
     return _out([_R2_CHECK, "비중의 종목이 모두 이 수익률에 있는지"], issues)
 
 
 def intake_overlay_signal(h: pg.Handoff) -> dict:
-    """R13 — '직접 정할게요'면 신호를 적용하지 않는다 · 읽지 못한 신호가 섞였다."""
+    """R13 — '직접 지정'면 신호를 적용하지 않는다 · 읽지 못한 신호가 섞였다."""
     view = h.view or {}
     issues = []
     if view.get("follow") == "manual":
-        issues.append(_i("unused", "manual", "‘직접 정할게요’를 골라 이 신호는 나란히 보여 주기만 하고 적용하지 않아요."))
+        issues.append(_i("unused", "manual", "‘직접 지정’를 골라 이 신호는 나란히 보여 주기만 하고 적용하지 않습니다."))
     elif view.get("unavailable"):
-        issues.append(_i("lost", "unread", f"신호 {view.get('n_signals')}개 중 {view['unavailable']}개를 읽지 못한 채 노출을 정했어요."))
+        issues.append(_i("lost", "unread", f"신호 {view.get('n_signals')}개 중 {view['unavailable']}개를 읽지 못한 채 노출을 정했습니다."))
     return _out(["신호를 적용하는지", "읽지 못한 신호"], issues)
 
 
@@ -388,7 +388,7 @@ def intake_overlay_regime(h: pg.Handoff) -> dict:
     view = h.view or {}
     issues = ([] if view.get("follow") == "timing_macro" else
               [_i("unused", "regime_shown_only", "‘타이밍 + 경기 국면’을 고르지 않아 경기 국면은 나란히 보여 주기만 하고 "
-                                                 "비중에 적용하지 않아요.")])
+                                                 "비중에 적용하지 않습니다.")])
     return _out(["경기 국면을 적용하는지"], issues)
 
 

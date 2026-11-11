@@ -13,7 +13,7 @@ import { useMeasuredWidth } from "./useMeasuredWidth";
 
 import { GAP, L_MIN, R_MIN, STRIP_H, TOP, XLAB_H, areaPath, argExt, days, linePath, pickIndexes, textW } from "./perfGeo";
 
-export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭", benchNoneText = "벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았어요" }:
+export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭", benchNoneText = "벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았습니다" }:
   { view: PerfView; height?: number; title?: string;
     /** 벤치마크가 없을 때 범례 글 — 비교 지수라는 개념이 없는 화면(/macro 전략 창)은 null 로 줄을 뺀다. */
     benchNoneText?: string | null }) {
@@ -90,7 +90,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
   }, [view.asOf, view.dates, dateIndex, n]);
 
   if (n < 2) {
-    return <p className="pg-note pf-empty">그릴 곡선이 없어요 — 서버가 날짜·값을 주지 않았어요.</p>;
+    return <p className="pg-note pf-empty">그릴 곡선이 없습니다 — 서버가 날짜·값을 주지 않았습니다.</p>;
   }
 
   const { x, yEq, yDd, hasDd, stripY, idxs, baseline, learnW, x0, plotW, learnDays, L } = geo;
@@ -136,11 +136,11 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
   const xLabelIdx = Array.from(new Set(plotW >= dateW * 3 + 16 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1]));
   const xLabels = xLabelIdx.map((i) => ({ i, text: view.dates[i].slice(0, 10) }));
   const stripBottom = stripY + STRIP_H - 4;
-  const ariaLabel = `${title} — 포트폴리오 ${fmtValue(view.unit, lastPort)}${view.bench ? `, 벤치마크 ${fmtValue(view.unit, lastBench)}` : ""}. 화살표로 날짜를 옮겨 읽어요.`;
+  const ariaLabel = `${title} — 포트폴리오 ${fmtValue(view.unit, lastPort)}${view.bench ? `, 벤치마크 ${fmtValue(view.unit, lastBench)}` : ""}. 화살표 키로 날짜를 이동해 값을 읽습니다.`;
   // 띠 범례 — 리밸런싱 날짜가 없는 노드(불러오기·전략 묶음)는 횟수만 알거나 아예 모른다: 아는 만큼만 말한다.
   const nReb = view.cost.nRebalances;
   const rebalLegend = rebalIdx.length > 0 ? `리밸런싱 ${rebalIdx.length}번`
-    : nReb === null ? null : nReb > 0 ? `리밸런싱 ${nReb}번 (날짜는 기록에 없어요)` : "리밸런싱 없음";
+    : nReb === null ? null : nReb > 0 ? `리밸런싱 ${nReb}번 (날짜는 기록에 없습니다)` : "리밸런싱 없음";
 
   return (
     <div className="pg-chart pf-fig" ref={wrap}>
@@ -216,7 +216,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
       </p>
       {/* 범례 — 두 계열이면 늘 · 벤치마크가 없으면 그렇게 말한다 */}
       <p className="pf-legend">
-        <span><i className="pf-key pf-key--port" aria-hidden="true" />포트폴리오{view.unit === "x" ? " (처음을 1로)" : view.unit === "base100" ? " (처음을 100으로)" : ""}</span>
+        <span><i className="pf-key pf-key--port" aria-hidden="true" />포트폴리오{view.unit === "x" ? " (시작값 1)" : view.unit === "base100" ? " (시작값 100)" : ""}</span>
         {view.bench
           ? <span><i className="pf-key pf-key--bench" aria-hidden="true" />벤치마크{view.benchLabel ? ` ${view.benchLabel}` : ""}</span>
           : benchNoneText !== null ? <span className="pf-legend-none">{benchNoneText}</span> : null}
@@ -228,8 +228,8 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
         {learnW > 0 && <span><i className="pf-skey pf-skey--learn" aria-hidden="true" />처음 {learnDays}일은 배우기만</span>}
         {rebalLegend && <span>{rebalIdx.length > 0 && <i className="pf-skey pf-skey--rebal" aria-hidden="true" />}{rebalLegend}</span>}
         {asOfIdx !== null && asOfIdx >= 0 && view.asOf && <span><i className="pf-skey pf-skey--asof" aria-hidden="true" />기준일 {view.asOf.slice(0, 10)}</span>}
-        {view.practice === true && <span className="pf-strip-legend-practice"><i className="pf-skey pf-skey--practice" aria-hidden="true" />연습용 데이터</span>}
-        {view.practice === null && <span className="pf-strip-legend-unknown">데이터가 실제인지 몰라요</span>}
+        {view.practice === true && <span className="pf-strip-legend-practice"><i className="pf-skey pf-skey--practice" aria-hidden="true" />합성 데이터</span>}
+        {view.practice === null && <span className="pf-strip-legend-unknown">데이터 출처 미상</span>}
         {view.note && <span className="pf-strip-legend-note" data-server>{view.note}</span>}
       </p>
     </div>

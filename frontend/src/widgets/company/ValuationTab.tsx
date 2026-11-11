@@ -12,7 +12,7 @@ import { catColor } from "@/shared/ui/vizColor";
 import { RetryFail } from "@/shared/ui/tx";
 
 const fmtW = (v: number | null | undefined) =>
-  v == null ? "몰라요" : `${Math.round(v).toLocaleString()}원`;
+  v == null ? "N/A" : `${Math.round(v).toLocaleString()}원`;
 const fmtK = (v: number) => `${Math.round(v / 1000).toLocaleString()}천`;
 
 const SLIDERS: { key: "rf" | "beta" | "erp" | "g" | "years"; label: string;
@@ -51,7 +51,7 @@ export default function ValuationTab({ code, base }: { code: string; price: numb
   return (
     <div className="ca-vt" aria-busy={busy} style={{ opacity: busy ? 0.6 : 1, transition: "opacity .15s" }}>
       <FootballField ff={data.football_field} />
-      {failed && <RetryFail title="바꾼 가정으로 다시 계산하지 못했어요" onRetry={() => load(ov)} />}
+      {failed && <RetryFail title="바꾼 가정으로 재계산하지 못했습니다" onRetry={() => load(ov)} />}
       <div className="ca-vt-grid">
         <AssumptionPanel data={data} ov={ov} onSlide={onSlide}
           onReset={() => { setOv({}); setData(base); setFailed(false); }} />
@@ -81,20 +81,20 @@ function RiskReturnScatter({ scatter, sector }: {
       const fd = await companyApi.financialDeep(p.code);
       const d = fd.dupont;
       const i = d.years.length - 1;
-      const v = (x: number | null | undefined) => (x == null ? "몰라요" : String(x));
+      const v = (x: number | null | undefined) => (x == null ? "N/A" : String(x));
       const body = i >= 0
         ? `${d.years[i]}년 ROE ${v(d.roe[i])}% = 순이익률 ${v(d.net_margin[i])}% × 자산회전율 ${v(d.asset_turnover[i])} × 레버리지 ${v(d.leverage[i])}`
-        : "듀폰 분해 자료가 없어요(재무 시계열이 적재되지 않았어요)";
+        : "듀폰 분해 자료가 없습니다(재무 시계열이 적재되지 않았습니다)";
       setPopup({ code: p.code, name: p.name, body });
     } catch {
-      setPopup({ code: p.code, name: p.name, body: "듀폰 분해를 불러오지 못했어요. 점을 다시 눌러 보세요." });
+      setPopup({ code: p.code, name: p.name, body: "듀폰 분해 조회 실패. 점을 다시 누르십시오." });
     }
   };
 
   return (
     <section className="ca-cp-sec ca-rr" style={{ position: "relative" }}>
-      <h4>같은 업종 안 위치</h4>
-      <p className="ca-cp-sub"><span data-server>{sector ?? ""}</span> 업종. 가로 = 품질(업종 안 백분위), 세로 = 상승 여력. 점을 누르면 ROE 를 셋으로 나눠 보여요.</p>
+      <h4>동종업계 안 위치</h4>
+      <p className="ca-cp-sub"><span data-server>{sector ?? ""}</span> 업종. 가로 = 품질(업종 안 백분위), 세로 = 상승 여력. 점을 누르면 ROE 를 셋으로 나눠 보입니다.</p>
       <svg viewBox="0 0 100 100" className="ca-rr-svg" role="img" aria-label={`업종 ${scatter.length}개 기업의 품질과 상승 여력`}>
         <line x1={50} x2={50} y1={8} y2={92} className="ca-rr-axis" />
         <line x1={8} x2={92} y1={Y(0)} y2={Y(0)} className="ca-rr-axis" />
@@ -111,7 +111,7 @@ function RiskReturnScatter({ scatter, sector }: {
           </g>
         ))}
       </svg>
-      <p className="ca-heat-read" aria-live="polite">{cur ?? "점에 마우스를 올리거나 Tab 으로 고르면 여기에 값이 나와요"}</p>
+      <p className="ca-heat-read" aria-live="polite">{cur ?? "점에 마우스를 올리거나 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
       {popup && (
         <div className="ca-rr-popup" role="dialog" aria-label={`${popup.name} 듀폰 분해`}>
           <b>{popup.name}</b>
@@ -127,7 +127,7 @@ function FootballField({ ff }: { ff: ValuationSandbox["football_field"] }) {
   const P = ff.current_price;
   const all = ff.bands.filter((b) => b.available !== false && b.lo != null && b.hi != null);
   const unavailable = ff.bands.filter((b) => b.available === false);
-  if (!all.length) return <p className="ca-cp-note">모형별 가치 범위를 낼 수 없어요(재무 자료가 부족해요).</p>;
+  if (!all.length) return <p className="ca-cp-note">모형별 밸류에이션 밴드를 낼 수 없습니다(재무 자료가 부족합니다).</p>;
 
   // 로버스트 축: 현재가와 극단 괴리(4배↑/0.15배↓) 밴드는 축 계산에서 제외하고 그림 밖 목록에 적는다
   // — 그레이엄 넘버 같은 아웃라이어 1개가 차트를 뭉개는 것 방지(겹친 그림과 같은 규칙).
@@ -142,8 +142,8 @@ function FootballField({ ff }: { ff: ValuationSandbox["football_field"] }) {
 
   return (
     <section className="ca-cp-sec">
-      <h4>모형별 가치 범위(풋볼필드)</h4>
-      <p className="ca-cp-sub">세로 점선이 현재가예요. 막대 안의 금은 가운데 값이에요.</p>
+      <h4>모형별 밸류에이션 밴드(풋볼필드)</h4>
+      <p className="ca-cp-sub">세로 점선이 현재가입니다. 막대 안의 금은 가운데 값입니다.</p>
       <div className="ca-ff2">
         {/* 현재가 기준선 (전 행 관통) */}
         <div className="ca-ff2-price" style={{ left: `calc(168px + (100% - 258px) * ${X(P) / 100})` }}>
@@ -187,7 +187,7 @@ function FootballField({ ff }: { ff: ValuationSandbox["football_field"] }) {
         <ul className="ca-ff-legend">
           {outliers.map((b) => (
             <li key={b.id} className="ca-ff-leg ca-ff-na">
-              <span data-server>{b.label}</span> {fmtW(b.lo)}{b.lo !== b.hi ? `~${fmtW(b.hi)}` : ""}: 현재가와 너무 멀어 그림 밖에 적었어요(원천 자료를 확인해 보세요)
+              <span data-server>{b.label}</span> {fmtW(b.lo)}{b.lo !== b.hi ? `~${fmtW(b.hi)}` : ""}: 현재가와 너무 멀어 그림 밖에 적었습니다(원천 자료를 확인하십시오)
             </li>
           ))}
           {unavailable.map((b) => (
@@ -224,7 +224,7 @@ function AssumptionPanel({ data, ov, onSlide, onReset }: {
         );
       })}
       <dl className="ca-vt-derived">
-        <div><dt>자기자본비용(Ke, 도출)</dt><dd>{ke == null ? "몰라요" : `${(ke * 100).toFixed(2)}%`}</dd></div>
+        <div><dt>자기자본비용(Ke, 도출)</dt><dd>{ke == null ? "N/A" : `${(ke * 100).toFixed(2)}%`}</dd></div>
         <div><dt>적정가</dt><dd>{fmtW(data.unified.value)}</dd></div>
         <div><dt>현재가와 차이</dt><dd>{data.unified.gap_pct > 0 ? "+" : ""}{data.unified.gap_pct.toFixed(1)}%</dd></div>
         <div><dt>판정</dt><dd data-server>{data.unified.verdict}</dd></div>
@@ -237,7 +237,7 @@ function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
   const [mode, setMode] = useState<"2d" | "3d">("2d");
   const [cur, setCur] = useState<string | null>(null);
   const say = (i: number, j: number, v: number | null) =>
-    `자기자본비용 ${(s.ke_axis[i] * 100).toFixed(1)}%, 영구성장률 ${(s.g_axis[j] * 100).toFixed(1)}%: ${v == null ? "잔존가치가 발산해 계산할 수 없어요" : `적정가 ${fmtW(v)}`}`;
+    `자기자본비용 ${(s.ke_axis[i] * 100).toFixed(1)}%, 영구성장률 ${(s.g_axis[j] * 100).toFixed(1)}%: ${v == null ? "잔존가치가 발산해 계산 불가" : `적정가 ${fmtW(v)}`}`;
   return (
     <section className="ca-cp-sec">
       <h4>가정이 바뀌면 적정가는(민감도)
@@ -246,7 +246,7 @@ function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
           <button type="button" aria-pressed={mode === "3d"} className={mode === "3d" ? "on" : ""} onClick={() => setMode("3d")}>입체</button>
         </span>
       </h4>
-      <p className="ca-cp-sub">행 = 자기자본비용(Ke), 열 = 영구성장률(g). 칸 색은 현재가보다 높으면 주황 쪽, 낮으면 청록 쪽이에요.</p>
+      <p className="ca-cp-sub">행 = 자기자본비용(Ke), 열 = 영구성장률(g). 칸 색은 현재가보다 높으면 주황 쪽, 낮으면 청록 쪽입니다.</p>
       {mode === "2d" ? (
         <>
           <div style={{ overflowX: "auto" }}>
@@ -267,13 +267,13 @@ function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
               </tbody>
             </table>
           </div>
-          <p className="ca-heat-read" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 Tab 으로 고르면 여기에 값이 나와요"}</p>
-          <p className="ca-cp-sub">“발산” 칸은 영구성장률이 할인율에 너무 가까워 잔존가치(TV)를 계산할 수 없는 조합이에요.</p>
+          <p className="ca-heat-read" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
+          <p className="ca-cp-sub">“발산” 칸은 영구성장률이 할인율에 너무 가까워 잔존가치(TV)를 계산할 수 없는 조합입니다.</p>
         </>
       ) : (
         <>
           <SurfaceIso s={s} />
-          <p className="ca-cp-sub">높이 = 적정가. 두 가정이 함께 나빠질 때 가치가 절벽처럼 꺾이는 곳(잔존가치 발산 부근)이 보여요.</p>
+          <p className="ca-cp-sub">높이 = 적정가. 두 가정이 함께 나빠질 때 가치가 절벽처럼 꺾이는 곳(잔존가치 발산 부근)이 보입니다.</p>
         </>
       )}
     </section>
@@ -283,7 +283,7 @@ function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
 // Ke×g 등축(isometric) 표면 — 외부 라이브러리 없이 SVG 폴리곤. 뒤→앞 렌더.
 function SurfaceIso({ s }: { s: ValuationSandbox["sensitivity"] }) {
   const vals = s.grid.flat().filter((v): v is number => v != null);
-  if (!vals.length) return <p className="ca-cp-note">표면을 그릴 수 없어요(모든 칸에서 잔존가치가 발산해요).</p>;
+  if (!vals.length) return <p className="ca-cp-note">표면을 그릴 수 없습니다(모든 칸에서 잔존가치가 발산합니다).</p>;
   const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
   const CX = 6.5, CY = 3.4, HMAX = 26;   // 등축 셀 폭/깊이, 최대 높이
   const px = (i: number, j: number) => 50 + (j - i) * CX;
@@ -319,11 +319,11 @@ function CompsTable({ comps, selfCode }: { comps: ValuationSandbox["comps"]; sel
     { k: "ev_ebitda", label: "EV/EBITDA(배)" }, { k: "roe", label: "ROE(%)" },
     { k: "op_margin", label: "영업이익률(%)" }, { k: "rev_growth", label: "매출 성장(%)" },
   ];
-  const num = (v: unknown) => (typeof v === "number" ? v.toLocaleString() : "몰라요");
+  const num = (v: unknown) => (typeof v === "number" ? v.toLocaleString() : "N/A");
   return (
     <section className="ca-cp-sec">
       <h4>업종 안 상대가치 비교</h4>
-      <p className="ca-cp-sub"><span data-server>{comps.sector ?? ""}</span> 업종 {comps.rows.length - 1}개 기업과 같은 기준으로 놓았어요.</p>
+      <p className="ca-cp-sub"><span data-server>{comps.sector ?? ""}</span> 업종 {comps.rows.length - 1}개 기업과 같은 기준으로 놓았습니다.</p>
       <div style={{ overflowX: "auto" }}>
         <table className="ca-comps">
           <thead><tr><th scope="col">기업</th>{cols.map((c) => <th key={c.k} scope="col">{c.label}</th>)}</tr></thead>

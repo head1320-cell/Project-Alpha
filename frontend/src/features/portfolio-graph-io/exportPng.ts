@@ -83,7 +83,7 @@ function download(blob: Blob, name: string) {
 /** 캔버스(`.pg-canvas`)를 그래프 전체 그림 + 아래 띠로 찍어 내려받는다. 실패하면 던진다(부르는 쪽이 까닭을 말한다). */
 export async function exportPng(canvasEl: HTMLElement, lines: string[], fileName: string): Promise<{ fontsMissed: number }> {
   const viewport = canvasEl.querySelector<HTMLElement>(".react-flow__viewport");
-  if (!viewport) throw new Error("캔버스를 찾지 못했어요");
+  if (!viewport) throw new Error("캔버스를 찾지 못했습니다");
   const prevZoom = canvasEl.dataset.zoom;
   const prevZ = canvasEl.style.getPropertyValue("--pg-z");
   const removed: [Element, string][] = [];
@@ -99,7 +99,7 @@ export async function exportPng(canvasEl: HTMLElement, lines: string[], fileName
   try {
     const { toCanvas } = await import("html-to-image");
     const b = flowBounds(viewport);
-    if (!b) throw new Error("그릴 카드가 없어요");
+    if (!b) throw new Error("그릴 카드 없음");
     const size = exportSize(b);
     scale = size.scale;
     const font = await usedFontCSS(viewport.textContent ?? "");
@@ -123,7 +123,7 @@ export async function exportPng(canvasEl: HTMLElement, lines: string[], fileName
   out.width = shot.width;
   out.height = shot.height + bandHeight(lines.length, scale);
   const g = out.getContext("2d");
-  if (!g) throw new Error("그림판을 열지 못했어요");
+  if (!g) throw new Error("그림판 열기 실패");
   g.drawImage(shot, 0, 0);
   g.fillStyle = css.getPropertyValue("--pg-paper").trim() || "#ffffff";
   g.fillRect(0, shot.height, out.width, out.height - shot.height);
@@ -139,7 +139,7 @@ export async function exportPng(canvasEl: HTMLElement, lines: string[], fileName
     g.fillText(line, m.pad, shot.height + m.pad + m.line * (i + 0.5));
   }
   const blob = await new Promise<Blob | null>((ok) => out.toBlob(ok, "image/png"));
-  if (!blob) throw new Error("PNG 로 바꾸지 못했어요");
+  if (!blob) throw new Error("PNG 로 바꾸지 못했습니다");
   download(blob, fileName);
   return { fontsMissed };
 }

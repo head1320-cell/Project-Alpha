@@ -105,7 +105,7 @@ test("경유점 끌기: 점과 선이 따라간다 · 놓은 자리가 문서에
   await expect.poll(() => validates).toBeGreaterThan(before);
 });
 
-test("경유점 지우기: 점을 두 번 누르면 · 점에서 Delete 도 — 선은 그대로 · 되돌리기 한 번", async ({ page }) => {
+test("경유점 삭제: 점을 두 번 누르면 · 점에서 Delete 도 — 선은 그대로 · 되돌리기 한 번", async ({ page }) => {
   await openWith(page, { ...PAIR, edges: [e("universe", "universe", "returns", "universe", [{ x: 330, y: 0 }, { x: 330, y: 220 }]), PAIR.edges[1]] });
   const dot = (i: number) => page.locator(`.pg-waypoint[data-edge-id="${W}"][data-i="${i}"]`);
   await pickWire(page);
@@ -146,12 +146,12 @@ test("파일 왕복: 경유점이 내보내기 → 불러오기에 그대로", a
   const page2 = await context.newPage();
   await openWith(page2, PAIR);                                             // 경유점 없는 문서를 불러온 파일이 바꾼다
   await page2.locator(".pg-import-input").setInputFiles({ name: "wp.portfolio-graph.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(exported)) });
-  await expect(page2.locator(".pg-file-note")).toContainText("불러왔어요");
+  await expect(page2.locator(".pg-file-note")).toContainText("불러왔습니다");
   expect(await via(page2)).toEqual(wp);
   // 망가진 점은 버린다(지어내지 않는다) — 숫자가 아닌 점이 있으면 그 선의 경유점은 없다.
   const bad = { ...exported, edges: exported.edges.map((x: { id: string }) => (x.id === W ? { ...x, waypoints: [{ x: "a", y: 1 }] } : x)) };
   await page2.locator(".pg-import-input").setInputFiles({ name: "bad.portfolio-graph.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(bad)) });
-  await expect(page2.locator(".pg-file-note")).toContainText("불러왔어요");
+  await expect(page2.locator(".pg-file-note")).toContainText("불러왔습니다");
   expect(await via(page2)).toEqual([]);
   await page2.close();
 });

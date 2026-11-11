@@ -8,8 +8,8 @@ CLAUDE.md §1 의 관문 순서: 데이터 무결성 → 시점 정합 → 신�
 
 - confirmed(확인) — 이 코드가 실제로 한 일을 관측했다(계산이 끝났다 · 기준일을 기록했다).
 - assumed(가정) — 입력한 가정 위에 서 있다(거래비용 10bp).
-- partial(절반 확인) — 확인과 미상·가정이 섞였다.
-- unknown(몰라요) — 재지 않았거나 잴 수 없다(연습용 데이터 · 출처 등급 미기록).
+- partial(부분 확인) — 확인과 미상·가정이 섞였다.
+- unknown(N/A) — 재지 않았거나 잴 수 없다(합성 데이터 · 출처 등급 미기록).
 - skipped(건너뜀) — 그 관문을 재는 단계가 그래프에 없다.
 - failed(실패) — 그 관문이 깨졌다(노드 실패 · 제약 불가).
 
@@ -27,9 +27,9 @@ GATES = [
     ("live", "모의·실계좌"),
 ]
 
-_PRACTICE = "연습용 합성 데이터예요 — 실제 시세가 아니에요."
-_AXIS_PLAIN = {"window": "리밸런싱마다 그때까지의 데이터로만 비중을 정했어요",
-               "as_of": "계산 기준일을 고정했어요",
+_PRACTICE = "합성 데이터입니다 — 실제 시세가 아닙니다."
+_AXIS_PLAIN = {"window": "리밸런싱마다 그때까지의 데이터로만 비중을 정했습니다",
+               "as_of": "계산 기준일을 고정했습니다",
                "universe": "상장폐지된 종목이 빠졌는지(생존 편향)",
                "price": "수정주가인지 원주가인지(가격 정의)"}
 
@@ -62,9 +62,9 @@ def _not_run(r: dict) -> dict | None:
     """실패·막힘 노드의 사유. 확인이 될 수 없다."""
     st = r.get("status")
     if st == "failed":
-        return _r(FAILED, f"단계가 실패했어요 — {r.get('reason') or '사유 없음'}")
+        return _r(FAILED, f"단계가 실패했습니다 — {r.get('reason') or '사유 없음'}")
     if st != "ok":
-        return _r(UNKNOWN, "앞 단계에서 멈춰서 확인하지 못했어요.")
+        return _r(UNKNOWN, "앞 단계에서 멈춰서 확인하지 못했습니다.")
     return None
 
 
@@ -79,13 +79,13 @@ def _data(rs: list[dict]) -> list[dict]:
         if prov.get("source") == "mock":
             out.append(_r(UNKNOWN, _PRACTICE))
         elif prov.get("data_grade"):
-            out.append(_r(CONFIRMED, f"데이터 등급 {prov['data_grade']}로 기록돼 있어요."))
+            out.append(_r(CONFIRMED, f"데이터 등급 {prov['data_grade']}로 기록돼 있습니다."))
         else:
-            out.append(_r(UNKNOWN, "데이터 출처 등급은 몰라요 — "
-                                   + str(prov.get("data_grade_reason") or "기록되지 않았어요.")))
+            out.append(_r(UNKNOWN, "데이터 출처 등급은 미상입니다 — "
+                                   + str(prov.get("data_grade_reason") or "기록되지 않았습니다.")))
         ex = ((r.get("view") or {}).get("excluded")) or []
         if ex:
-            out.append(_r(ASSUMED, f"{len(ex)}개 종목은 데이터가 모자라 빠졌어요."))
+            out.append(_r(ASSUMED, f"{len(ex)}개 종목은 데이터가 모자라 빠졌습니다."))
     return out
 
 
@@ -98,13 +98,13 @@ def _pit(rs: list[dict]) -> list[dict]:
             continue
         cut = ((r.get("view") or {}).get("coverage") or {}).get("as_of_effective")
         if cut:
-            out.append(_r(CONFIRMED, f"계산 기준일을 {cut}로 기록했어요."))
-        out.append(_r(UNKNOWN, "그 날 실제로 알 수 있던 값인지(공표 시점)는 행마다 재지 않았어요."))
+            out.append(_r(CONFIRMED, f"계산 기준일을 {cut}로 기록했습니다."))
+        out.append(_r(UNKNOWN, "그 날 실제로 알 수 있던 값인지(공표 시점)는 행마다 측정하지 않았습니다."))
     return out
 
 
 def _signal(rs: list[dict]) -> list[dict]:
-    return [_not_run(r) or _r(UNKNOWN, "신호 단계는 있지만, 신호가 미래를 맞히는지 검정한 결과는 없어요.")
+    return [_not_run(r) or _r(UNKNOWN, "신호 단계는 있지만, 신호가 미래를 맞히는지 검정한 결과는 없습니다.")
             for r in rs]
 
 
@@ -117,13 +117,13 @@ def _build(rs: list[dict]) -> list[dict]:
             continue
         cr = (r.get("view") or {}).get("constraints_report") or None
         if cr and cr.get("status") == "infeasible":
-            out.append(_r(FAILED, "제약을 모두 지킬 수 없었어요 — " + str(cr.get("reason") or "")))
+            out.append(_r(FAILED, "제약을 모두 지킬 수 없었습니다 — " + str(cr.get("reason") or "")))
         else:
-            out.append(_r(CONFIRMED, "비중 계산이 끝났어요."))
+            out.append(_r(CONFIRMED, "비중 계산이 끝났습니다."))
         # CF3 — 요청한 방식 대신 다른 비중이 쓰였으면(역변동성·시장 비중 대체) 그 사실을 가정으로 더한다(확인 + 가정 = 절반).
         for f in (r.get("view") or {}).get("fallbacks") or []:
             if f.get("affects_weights"):
-                out.append(_r(ASSUMED, str(f.get("text") or f.get("reason") or "고른 방식 대신 다른 비중을 썼어요.")))
+                out.append(_r(ASSUMED, str(f.get("text") or f.get("reason") or "고른 방식 대신 다른 비중을 썼습니다.")))
     return out
 
 
@@ -136,10 +136,10 @@ def _cost(rs: list[dict]) -> list[dict]:
             continue
         bps = ((r.get("view") or {}).get("config") or {}).get("cost_bps")
         if bps is None:
-            out.append(_r(UNKNOWN, "거래비용을 얼마로 봤는지 기록되지 않았어요."))
+            out.append(_r(UNKNOWN, "거래비용을 얼마로 봤는지 기록되지 않았습니다."))
         else:
-            out.append(_r(ASSUMED, f"거래비용을 한 번에 {_pct_bp(float(bps))}로 가정했어요 — "
-                                   "실제 체결 비용은 재지 않았어요."))
+            out.append(_r(ASSUMED, f"거래비용을 한 번에 {_pct_bp(float(bps))}로 가정했습니다 — "
+                                   "실제 체결 비용은 측정하지 않았습니다."))
     return out
 
 
@@ -154,23 +154,23 @@ def _oos(rs: list[dict]) -> list[dict]:
         for a in la.get("ok_axes") or []:
             out.append(_r(CONFIRMED, _AXIS_PLAIN.get(a, a) + "."))
         for a in la.get("unknown_axes") or []:
-            out.append(_r(UNKNOWN, _AXIS_PLAIN.get(a, a) + "는 재지 않았어요."))
+            out.append(_r(UNKNOWN, _AXIS_PLAIN.get(a, a) + "는 측정하지 않았습니다."))
         for a in la.get("broken_axes") or []:
-            out.append(_r(FAILED, _AXIS_PLAIN.get(a, a) + "에 결함이 있어요."))
+            out.append(_r(FAILED, _AXIS_PLAIN.get(a, a) + "에 결함이 있습니다."))
         if ((r.get("provenance") or {}).get("perf_label") or {}).get("data_real") is False:
             out.append(_r(UNKNOWN, _PRACTICE))
     return out
 
 
 _SKIP = {
-    "data": "수익률을 불러오는 단계가 없어요.",
-    "pit": "수익률을 불러오는 단계가 없어서 기준일도 없어요.",
-    "signal": "신호·알파 단계가 없어요 — 신호가 미래를 맞히는지는 재지 않았어요.",
-    "build": "비중을 계산하는 단계가 없어요.",
-    "cost": "과거로 돌려 보는 단계가 없어서 거래비용을 반영하지 않았어요.",
-    "oos": "과거로 돌려 보는 단계가 없어서 처음 보는 기간에서는 확인하지 않았어요.",
-    "economic": "비용과 위험을 뺀 뒤에도 돈이 되는지 통계로 재는 단계가 없어요.",
-    "live": "모의투자·실계좌 기록과 이어지지 않았어요.",
+    "data": "수익률을 불러오는 단계가 없습니다.",
+    "pit": "수익률을 불러오는 단계가 없어서 기준일도 없습니다.",
+    "signal": "신호·알파 단계가 없습니다 — 신호가 미래를 맞히는지는 측정하지 않았습니다.",
+    "build": "비중을 계산하는 단계가 없습니다.",
+    "cost": "과거로 돌려 보는 단계가 없어서 거래비용을 반영하지 않았습니다.",
+    "oos": "과거로 돌려 보는 단계가 없어서 처음 보는 기간에서는 확인하지 않았습니다.",
+    "economic": "비용과 위험을 뺀 뒤에도 돈이 되는지 통계로 재는 단계가 없습니다.",
+    "live": "모의투자·실계좌 기록과 이어지지 않았습니다.",
 }
 
 
@@ -186,7 +186,7 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
 
     `history_types` — 과거를 시뮬레이션하거나 그 기록을 읽는 노드 종류 → 쉬운 이름(BT1, 라우트가 레지스트리에서
     넘긴다 — 이 모듈은 레지스트리를 모른다). 정책 백테스트(`backtest`)가 없는데 이런 노드가 있으면 거래비용·
-    처음 보는 기간은 **몰라요**다: "단계가 없어요"는 사실이 아니고, 관문이 그 결과를 아직 읽지 않으므로 확인도 아니다.
+    처음 보는 기간은 **모릅니다**다: "단계가 없습니다"는 사실이 아니고, 관문이 그 결과를 아직 읽지 않으므로 확인도 아니다.
     """
     def ids(*types: str) -> list[str]:
         return [str(n["id"]) for n in nodes if n.get("type") in types and n.get("id") in results]
@@ -215,10 +215,10 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
     if present and not rules["cost"]:
         names = sorted({hist[str(n["type"])] for n in present})
         who = " · ".join(f"‘{x}’" for x in names) + _subj_particle(names[-1])
-        rules["cost"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과의 거래비용을 읽지 않아요 — "
-                                     "‘과거로 돌려 보기’를 이으면 잴 수 있어요.")]
+        rules["cost"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과의 거래비용을 읽지 않습니다 — "
+                                     "‘과거로 돌려 보기’를 이으면 측정할 수 있습니다.")]
         rules["oos"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과로 처음 보는 기간을 판정하지 "
-                                    "않아요 — ‘과거로 돌려 보기’를 이으면 잴 수 있어요.")]
+                                    "않습니다 — ‘과거로 돌려 보기’를 이으면 측정할 수 있습니다.")]
         feeders["cost"] = feeders["oos"] = [str(n["id"]) for n in present]
     gates = []
     for key, label in GATES:
@@ -226,7 +226,7 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
         gates.append({"key": key, "label": label, "state": _combine(reasons) if rules[key] else SKIPPED,
                       "reasons": reasons, "node_ids": feeders[key]})
     n_ok = sum(g["state"] == CONFIRMED for g in gates)
-    text = (f"{len(gates)}개 관문 중 {n_ok}개만 확인했어요." if n_ok < len(gates)
-            else f"{len(gates)}개 관문을 모두 확인했어요.")
+    text = (f"{len(gates)}개 관문 중 {n_ok}개만 확인했습니다." if n_ok < len(gates)
+            else f"{len(gates)}개 관문을 모두 확인했습니다.")
     return {"gates": gates, "summary": {"confirmed": n_ok, "total": len(gates), "text": text,
-                                        "note": "끊긴 곳은 아직 재지 않은 곳이에요."}}
+                                        "note": "끊긴 곳은 아직 재지 않은 곳입니다."}}

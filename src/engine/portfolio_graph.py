@@ -18,11 +18,11 @@ AAS 캔버스가 그린 노드-링크 그래프(파일 포맷 `project-alpha.por
 3. **옆 가지는 계속 돈다.** 한 가지의 실패가 관계없는 노드를 멈추지 않는다.
 4. 파일 포맷·버전이 다르거나 순환이 있으면 **아무것도 실행하지 않는다** — 순서를 정할 수
    없거나, 이 파일이 무엇을 뜻하는지 모르기 때문이다.
-5. **계보는 하류로 흐른다** (BK0). 노드가 단 태그(연습용 합성 · 시점 정합 · 노출을 얹음)는
+5. **계보는 하류로 흐른다** (BK0). 노드가 단 태그(합성 · 시점 정합 · 노출을 얹음)는
    모든 하류 결과의 `lineage` 에 합쳐진다 — 직접 부모만이 아니다. 노드는 `admits` 로 받지 않을
    계보를 **거절**할 수 있고(실패 + 사유), 조용히 벗겨 내는 경로는 없다.
 6. **계산은 쓰지 않는다** (BK0). `run` 은 어떤 노드의 `save` 도 부르지 않는다. 저장은
-   `save_node` 가 그래프를 다시 계산해 **미리보기 해시가 같을 때만** 한 번 부른다.
+   `save_node` 가 그래프를 재계산해 **미리보기 해시가 같을 때만** 한 번 부른다.
 """
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ PIT_ORDER = ("pit", "unknown", "forward_only")
 def merge_lineage(*parts: Mapping[str, Any] | None) -> dict:
     """계보 합치기(순수). `pit` 은 가장 약한 값, `practice`·`overlay` 는 OR, `sources` 는 합집합.
 
-    - `practice` — mock 게이트를 지나 **합성값**을 썼다(연습용).
+    - `practice` — mock 게이트를 지나 **합성값**을 썼다(합성).
     - `pit` — `pit`(시점 고정) · `unknown`(모름) · `forward_only`(지금 시점 전용 — 과거에 쓰면 룩어헤드).
     - `overlay` — 오늘 계산한 노출 조절을 얹은 비중(과거 전체에 쓰면 룩어헤드).
     """
@@ -480,14 +480,14 @@ def _blocked(spec_type: str | None, reason: str, explain: dict | None = None) ->
 # ── 쉬운 말 설명 (BJ1) ────────────────────────────────────────────────────────
 
 def _explain_failed(reason: str) -> dict:
-    return {"title": "계산하지 못했어요", "trust": [{"state": STATUS_FAILED, "text": reason}]}
+    return {"title": "산출 실패", "trust": [{"state": STATUS_FAILED, "text": reason}]}
 
 
 def _explain_ok(spec: NodeSpec, out: NodeOutput, params: Any) -> dict:
     """노드 설명기를 부른다. ★설명이 실패해도 결과를 지우지 않고, 문장을 지어내지 않는다★ —
-    "설명을 만들지 못했어요" + 예외 종류를 몰라요(unknown)로 싣는다."""
+    "설명 생성 실패" + 예외 종류 미상(unknown)로 싣는다."""
     if spec.explain is None:
-        return {"title": f"‘{spec.human}’를 계산했어요"}
+        return {"title": f"‘{spec.human}’를 계산했습니다"}
     try:
         ex = spec.explain(out.view or {}, dict(out.provenance or {}), params)
         if not isinstance(ex, dict) or not ex.get("title"):
@@ -495,9 +495,9 @@ def _explain_ok(spec: NodeSpec, out: NodeOutput, params: Any) -> dict:
         return ex
     except Exception as e:                            # noqa: BLE001
         logger.exception(f"설명기 실패: {spec.type}")
-        return {"title": f"‘{spec.human}’를 계산했어요",
+        return {"title": f"‘{spec.human}’를 계산했습니다",
                 "trust": [{"state": "unknown",
-                           "text": f"설명을 만들지 못했어요({type(e).__name__}) — 결과 숫자는 자세히 탭에 있어요."}]}
+                           "text": f"설명 생성 실패({type(e).__name__}) — 결과 숫자는 자세히 탭에 있습니다."}]}
 
 
 # ── 캔버스 위 작은 그림 (BM C1) ────────────────────────────────────────────────
@@ -589,10 +589,10 @@ def run(graph: Any, registry: Registry, targets: list[str] | None = None,
 
 ISSUE_LEVELS = ("lost", "changed", "structural", "unused")
 _FACTS_MAX, _ISSUES_MAX, _TEXT_MAX = 12, 12, 240
-_NO_RULE = "이 자리는 아직 점검 규칙이 없어요."
-_NOT_RUN = "받는 노드가 계산되지 않아 점검하지 않았어요."
-_BAD_SHAPE = "점검 결과의 모양이 맞지 않아 보이지 않아요(서버 로그를 보세요)."
-_FAILED = "점검하다 오류가 나서 보이지 않아요(서버 로그를 보세요)."
+_NO_RULE = "이 자리는 아직 점검 규칙이 없습니다."
+_NOT_RUN = "받는 노드가 계산되지 않아 점검하지 않았습니다."
+_BAD_SHAPE = "점검 결과의 모양이 맞지 않아 보이지 않습니다(서버 로그를 보십시오)."
+_FAILED = "점검하다 오류가 나서 보이지 않습니다(서버 로그를 보십시오)."
 
 
 def _short_text(x: Any) -> bool:
@@ -682,7 +682,7 @@ def _handoffs(graph: Any, registry: Registry, report: dict, values: dict, params
 def _run_facts(registry: Registry, ptype: str, value: Any, where: str) -> tuple[list | None, str | None]:
     fn = registry.port_facts.get(ptype)
     if fn is None:
-        return None, "이 값은 아직 잴 항목이 없어요."
+        return None, "이 값은 아직 잴 항목이 없습니다."
     try:
         facts = fn(value)
     except Exception:                                 # noqa: BLE001
@@ -744,7 +744,7 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
     if targets is not None:
         unknown = [t for t in targets if t not in nodes]
         if unknown or not targets:
-            why = (f"계산할 노드가 그래프에 없어요: {', '.join(unknown)}" if unknown else "계산할 노드를 고르지 않았어요.")
+            why = (f"계산할 노드가 그래프에 없습니다: {', '.join(unknown)}" if unknown else "계산할 노드를 고르지 않았습니다.")
             return {"ok": False, "errors": [_err("unknown_target", why)], "order": [], "nodes": {}}, {}, {}
         need = _ancestors(list(targets), incoming)
         edge_target = {_edge_id(e): str(e.get("target")) for e in graph["edges"] if isinstance(e, Mapping)}
@@ -769,10 +769,10 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
         raw_type = str(nodes[nid].get("type"))
         spec = specs[nid]
         if nid in own_error:
-            ex = ({"title": "모르는 노드예요",
-                   "facts": [f"‘{raw_type}’는 이 서버에 없는 노드예요. 설정은 그대로 남아 있어요."]}
+            ex = ({"title": "모르는 노드입니다",
+                   "facts": [f"‘{raw_type}’는 이 서버에 없는 노드입니다. 설정은 그대로 남아 있습니다."]}
                   if spec is None else
-                  {"title": "설정을 확인해 주세요", "facts": [own_error[nid]]})
+                  {"title": "설정을 확인하십시오", "facts": [own_error[nid]]})
             results[nid] = _blocked(raw_type, own_error[nid], ex)
             continue
         bad_up = [(src, results[src]) for src, _ in incoming[nid].values()
@@ -783,8 +783,8 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
             up_name = up.human if up else str(r.get("type"))
             results[nid] = _blocked(
                 raw_type, f"상류 {src}({r.get('type')}) 가 {r.get('status')} 입니다 — {r.get('reason')}",
-                {"title": "계산하지 못했어요",
-                 "facts": [f"앞 단계 ‘{up_name}’에서 멈춰서 이 단계는 계산하지 않았어요."]})
+                {"title": "산출 실패",
+                 "facts": [f"앞 단계 ‘{up_name}’에서 멈춰서 이 단계는 계산하지 않았습니다."]})
             continue
         assert spec is not None                       # 모르는 타입은 own_error 에 있다
         inputs = {p.name: None for p in spec.inputs}
@@ -814,7 +814,7 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
             continue
         except Exception as e:                        # noqa: BLE001
             logger.exception(f"그래프 노드 {nid}({raw_type}) 처리 실패")
-            why = f"처리 중 오류({type(e).__name__}) — 서버 로그를 보세요."
+            why = f"처리 중 오류({type(e).__name__}) — 서버 로그를 보십시오."
             results[nid] = {"type": raw_type, "status": STATUS_FAILED, "reason": why,
                             "view": None, "provenance": {}, "explain": _explain_failed(why),
                             "lineage": in_lineage, "view_hash": None, "glance": None,
@@ -840,45 +840,45 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
 # ── 저장 액션 (BK0) ───────────────────────────────────────────────────────────
 
 def run_for_sheet(graph: Any, node_id: str, preview: Mapping[str, str | None], registry: Registry) -> dict:
-    """고객 한 장(CF 3부 PB4) — 그래프를 **다시 계산**하고, 주인공 `node_id` 가 비중(`Weights`)을 내는 계산된 노드이며 ★모든 노드의★
+    """고객 한 장(CF 3부 PB4) — 그래프를 **재계산**하고, 주인공 `node_id` 가 비중(`Weights`)을 내는 계산된 노드이며 ★모든 노드의★
     view 해시가 PB 가 본 계산(`preview` {노드 id: 해시 · 계산 못 한 노드는 None})과 같을 때만 `{"ok": True, report, values}`.
     아니면 `{"ok": False, code, message}` — 코드: `no_node` · `not_weights` · `not_ok` · `stale` (`save_node` 와 같은 규율 —
     한 장은 모든 단계의 설명을 싣으므로 본 것과 다른 설명·숫자를 싣지 않는다)."""
     report, values, _params = _execute(graph, registry)
     res = report["nodes"].get(node_id)
     if res is None:
-        return {"ok": False, "code": "no_node", "message": f"그래프에 {node_id} 노드가 없어요."}
+        return {"ok": False, "code": "no_node", "message": f"그래프에 {node_id} 노드가 없습니다."}
     spec = registry.get(str(res.get("type")))
     if spec is None or not any(p.type == "Weights" for p in spec.outputs) or \
             not isinstance((res.get("view") or {}).get("weights") if res["status"] == STATUS_OK else {}, Mapping):
-        return {"ok": False, "code": "not_weights", "message": "이 노드는 비중 표를 내지 않아 한 장의 주인공이 될 수 없어요."}
+        return {"ok": False, "code": "not_weights", "message": "이 노드는 비중 표를 내지 않아 한 장의 주인공이 될 수 없습니다."}
     if res["status"] != STATUS_OK:
         return {"ok": False, "code": "not_ok",
-                "message": f"이 노드가 계산되지 않아 한 장을 만들 수 없어요 — {res.get('reason')}"}
+                "message": f"이 노드가 계산되지 않아 한 장을 만들 수 없습니다 — {res.get('reason')}"}
     if {nid: r.get("view_hash") for nid, r in report["nodes"].items()} != dict(preview):
         return {"ok": False, "code": "stale",
-                "message": "보신 계산과 지금 계산이 달라요. 다시 계산한 뒤 한 장을 만들어 주세요."}
+                "message": "보신 계산과 지금 계산이 다릅니다. 재계산한 뒤 한 장을 생성하십시오."}
     return {"ok": True, "report": report, "values": values}
 
 
 def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry) -> dict:
-    """그래프를 **다시 계산**해 `node_id` 의 view 해시가 사용자가 본 미리보기와 같을 때만
+    """그래프를 **재계산**해 `node_id` 의 view 해시가 사용자가 본 미리보기와 같을 때만
     그 노드의 `save` 를 **한 번** 부른다. 결과 `{"ok": True, saved_id, text, node_id}` 또는
     `{"ok": False, code, message}` — 코드: `no_node` · `not_savable` · `not_ok` · `stale` · `save_failed`.
     """
     report, values, params = _execute(graph, registry)
     res = report["nodes"].get(node_id)
     if res is None:
-        return {"ok": False, "code": "no_node", "message": f"그래프에 {node_id} 노드가 없어요."}
+        return {"ok": False, "code": "no_node", "message": f"그래프에 {node_id} 노드가 없습니다."}
     spec = registry.get(str(res.get("type")))
     if spec is None or spec.save is None:
-        return {"ok": False, "code": "not_savable", "message": "이 노드는 저장할 것이 없어요."}
+        return {"ok": False, "code": "not_savable", "message": "이 노드는 저장할 것이 없습니다."}
     if res["status"] != STATUS_OK:
         return {"ok": False, "code": "not_ok",
-                "message": f"이 노드가 계산되지 않아 저장할 수 없어요 — {res.get('reason')}"}
+                "message": f"이 노드가 계산되지 않아 저장할 수 없습니다 — {res.get('reason')}"}
     if res["view_hash"] != preview_hash:
         return {"ok": False, "code": "stale",
-                "message": "보신 미리보기와 지금 계산이 달라요. 다시 계산한 뒤 저장해 주세요."}
+                "message": "보신 미리보기와 지금 계산이 다릅니다. 재계산한 뒤 저장하십시오."}
     try:
         out = spec.save(values[node_id], res["view"] or {}, params.get(node_id))
     except NodeFailure as e:
@@ -886,5 +886,5 @@ def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry) -
     except Exception as e:                            # noqa: BLE001
         logger.exception(f"그래프 노드 {node_id} 저장 실패")
         return {"ok": False, "code": "save_failed",
-                "message": f"저장하지 못했어요({type(e).__name__}) — 서버 로그를 보세요."}
+                "message": f"저장 실패({type(e).__name__}) — 서버 로그를 보십시오."}
     return {"ok": True, "saved_id": out.get("saved_id"), "text": out.get("text"), "node_id": node_id}

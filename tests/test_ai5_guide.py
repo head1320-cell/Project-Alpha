@@ -106,24 +106,24 @@ def _tip(f, why):
 
 
 def test_a_good_tip_passes_with_the_server_label():
-    ok, bad = gd.check({"tips": [_tip("branch", "계산을 마쳤고 갈래가 없어요. 설정을 바꾼 설계를 나란히 볼 수 있어요.")]}, _g())
-    assert bad == [] and ok == [{"feature": "branch", "label": "갈래 만들기", "why": "계산을 마쳤고 갈래가 없어요. 설정을 바꾼 설계를 나란히 볼 수 있어요."}]
+    ok, bad = gd.check({"tips": [_tip("branch", "계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다.")]}, _g())
+    assert bad == [] and ok == [{"feature": "branch", "label": "갈래 만들기", "why": "계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다."}]
 
 
 def test_numbers_must_come_from_the_state_and_the_pair_passes():
-    ok, bad = gd.check({"tips": [_tip("branch", "노드 12개를 갈래로 나눠 보세요.")]}, _g())
+    ok, bad = gd.check({"tips": [_tip("branch", "노드 12개를 갈래로 나눠 보십시오.")]}, _g())
     assert ok == [] and bad[0]["code"] == "numbers" and "12" in bad[0]["reason"]
-    ok, bad = gd.check({"tips": [_tip("branch", "노드 4개짜리 설계를 갈래로 나눠 보세요.")]}, _g())        # ★짝★ 상태의 수
+    ok, bad = gd.check({"tips": [_tip("branch", "노드 4개짜리 설계를 갈래로 나눠 보십시오.")]}, _g())        # ★짝★ 상태의 수
     assert bad == [] and len(ok) == 1
 
 
 @pytest.mark.parametrize("tip,code", [
-    (_tip("records", "기록함을 열어 보세요."), "not_applicable"),
-    (_tip("rm_rf", "지워 보세요."), "not_applicable"),
+    (_tip("records", "기록함을 열어 보십시오."), "not_applicable"),
+    (_tip("rm_rf", "지워 보십시오."), "not_applicable"),
     (_tip("branch", "가" * 71), "too_long"),
-    (_tip("branch", "이 전략은 견고함이 확인됐어요."), "banned"),
-    (_tip("branch", "갈래를 만들면 좋은 전략을 찾을 수 있어요."), "banned"),
-    (_tip("branch", "지금 사세요."), "banned"),
+    (_tip("branch", "이 전략은 견고함이 확인됐습니다."), "banned"),
+    (_tip("branch", "갈래를 만들면 좋은 전략을 찾을 수 있습니다."), "banned"),
+    (_tip("branch", "지금 사십시오."), "banned"),
     ({"feature": "branch", "why": "x", "extra": 1}, "shape"),
     ({"feature": "branch", "why": "  "}, "shape"),
 ])
@@ -133,11 +133,11 @@ def test_bad_tips_are_rejected_with_a_reason(tip, code):
 
 
 def test_at_most_two_and_no_duplicates():
-    tips = [_tip("branch", "갈래요."), _tip("branch", "또 갈래요."), _tip("story_ai", "풀어 써요."), _tip("ask_ai", "물어요.")]
+    tips = [_tip("branch", "갈래요."), _tip("branch", "또 갈래요."), _tip("story_ai", "풀어 씁니다."), _tip("ask_ai", "묻습니다.")]
     ok, bad = gd.check({"tips": tips}, _g())
     assert gd.MAX_TIPS == 2 and [t["feature"] for t in ok] == ["branch", "story_ai"]
     assert [b["code"] for b in bad] == ["duplicate", "limit"]
-    assert gd.check({"nope": 1}, _g()) == ([], [{"code": "shape", "reason": "답에 도구 목록이 없어요"}])
+    assert gd.check({"nope": 1}, _g()) == ([], [{"code": "shape", "reason": "답에 도구 목록이 없습니다"}])
 
 
 def test_the_schema_limits_features_to_applicable_tools():
@@ -146,7 +146,7 @@ def test_the_schema_limits_features_to_applicable_tools():
     assert s["additionalProperties"] is False and item["additionalProperties"] is False
     assert item["properties"]["feature"]["enum"] == ["branch", "ask_ai"]
     assert "maxItems" not in _blob(s)
-    for must in ("도구", "투자 판단", "숫자", "해요"):
+    for must in ("도구", "투자 판단", "숫자", "합니다"):
         assert must in pr.GUIDE_SYSTEM
 
 
@@ -159,10 +159,10 @@ def _guide(client, state=STATE, applicable=APPLICABLE, graph=DOC, user="alice"):
 
 
 def test_an_answer_carries_checked_tips():
-    sdk = FakeSDK(_msg({"tips": [_tip("story_ai", "결과가 낡지 않았어요. 읽는 순서로 풀어 써 볼 수 있어요."), _tip("records", "x")]}))
+    sdk = FakeSDK(_msg({"tips": [_tip("story_ai", "결과가 낡지 않았습니다. 읽는 순서로 풀어 써 볼 수 있습니다."), _tip("records", "x")]}))
     res = _guide(_client(sdk))
     assert res["available"] is True and res["source"] == "claude"
-    assert res["tips"] == [{"feature": "story_ai", "label": "AI 로 풀어 쓰기", "why": "결과가 낡지 않았어요. 읽는 순서로 풀어 써 볼 수 있어요."}]
+    assert res["tips"] == [{"feature": "story_ai", "label": "AI 로 풀어 쓰기", "why": "결과가 낡지 않았습니다. 읽는 순서로 풀어 써 볼 수 있습니다."}]
     assert res["rejected"][0]["code"] == "not_applicable"
     kw = sdk.beta.messages.calls[0]
     assert kw["system"] == pr.GUIDE_SYSTEM and kw["output_config"]["format"]["schema"] == pr.guide_schema(APPLICABLE)

@@ -11,7 +11,7 @@ export function RebalanceTable({ view }: { view: PerfView }) {
     const n = view.cost.nRebalances;
     return (
       <p className="pg-note pf-rebal-none">
-        리밸런싱 날짜 기록이 없어요{n === null ? " — 횟수도 몰라요." : n > 0 ? ` — 횟수는 ${n}번이에요.` : " — 리밸런싱이 없었어요."}
+        리밸런싱 날짜 기록이 없습니다{n === null ? " — 횟수도 미상입니다." : n > 0 ? ` — 횟수는 ${n}번입니다.` : " — 리밸런싱이 없었습니다."}
       </p>
     );
   }
@@ -22,7 +22,7 @@ export function RebalanceTable({ view }: { view: PerfView }) {
       <table className="pg-table pf-rebal-table">
         <thead><tr><th>날짜</th><th className="pg-td-num">회전율</th>
           {hasLs && <><th className="pg-td-num">총 매매</th><th className="pg-td-num">순 매매</th></>}
-          {hasImpact && <th className="pg-td-num">충격(bp)</th>}</tr></thead>
+          {hasImpact && <th className="pg-td-num">시장충격(bp)</th>}</tr></thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={`${r.date}-${i}`}>

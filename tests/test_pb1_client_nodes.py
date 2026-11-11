@@ -67,7 +67,7 @@ def test_client_unknowns_stay_unknown_with_reasons():
     assert v["risk_tolerance"] is None and v["profile_source"] == "unknown" and v["assessed_at"] is None
     trust = " ".join(t["text"] for t in out["explain"]["trust"])
     assert "모르" in trust                                   # 미상이라고 말한다
-    assert "비중을 바꾸지 않아요" in trust                     # 관측만
+    assert "비중을 바꾸지 않습니다" in trust                     # 관측만
 
 
 def test_client_declared_profile_is_carried_and_aged():
@@ -249,8 +249,8 @@ def test_goal_says_the_gap_is_unknown_when_target_is_inside_the_interval(market)
     r = _run(_pb_chain())["t"]
     assert r["view"]["result"]["glide"]["gap"]["state"] == "unknown"
     facts = " ".join(r["explain"]["facts"])
-    assert "차이는 몰라요" in facts
-    assert not any(w in facts for w in ("많아요", "적어요"))       # 부호를 지어내지 않는다
+    assert "차이는 미상입니다" in facts
+    assert not any(w in facts for w in ("많습니다", "적습니다"))       # 부호를 지어내지 않는다
 
 
 def test_goal_states_a_known_gap_with_its_sign():
@@ -259,9 +259,9 @@ def test_goal_states_a_known_gap_with_its_sign():
     view = {"result": {"glide": {"target_pct": 40.0, "gap": {"state": "above", "lo": 10.0, "hi": 20.0, "sign": 1}},
                        "contribution": {"months": None}}}
     facts = " ".join(_explain_goal(view, {}, None)["facts"])
-    assert "목표보다 10.0~20.0%p 많아요" in facts
+    assert "목표보다 10.0~20.0%p 많습니다" in facts
     view["result"]["glide"]["gap"] = {"state": "below", "lo": -20.0, "hi": -5.0, "sign": -1}
-    assert "목표보다 5.0~20.0%p 적어요" in " ".join(_explain_goal(view, {}, None)["facts"])
+    assert "목표보다 5.0~20.0%p 적습니다" in " ".join(_explain_goal(view, {}, None)["facts"])
 
 
 def test_account_without_a_type_stops_instead_of_defaulting(market):

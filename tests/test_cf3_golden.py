@@ -285,7 +285,7 @@ def test_outputs_equal_the_frozen_ones(name, market, monkeypatch, frozen):
         data[name] = got
         GOLDEN.write_text(json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         return
-    assert name in frozen, f"골든에 {name} 이 없어요 — UPDATE_CF3_GOLDEN=1 로 먼저 얼려요."
+    assert name in frozen, f"골든에 {name} 이 없습니다 — UPDATE_CF3_GOLDEN=1 로 먼저 얼립니다."
     d = _diff(_strip(got), _strip(frozen[name]))
     assert d is None, d
 

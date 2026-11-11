@@ -1,13 +1,13 @@
-"""BT7 · 연습용 표시 — ★화면이 문구 부분일치로 판정하지 않게, 서버가 표시를 단다★
+"""BT7 · 합성 표시 — ★화면이 문구 부분일치로 판정하지 않게, 서버가 표시를 단다★
 ==============================================================================
-`explain.trust` 의 연습용(합성 데이터) 줄은 `kind: "practice"` 를 단다. 화면의 "연습용 데이터" 칩은 이 표시만 본다
-(예전엔 `text.includes("연습용")` — 문구를 다듬으면 칩이 조용히 사라지거나 엉뚱한 줄에 붙을 수 있었다).
+`explain.trust` 의 합성(합성 데이터) 줄은 `kind: "practice"` 를 단다. 화면의 "합성 데이터" 칩은 이 표시만 본다
+(예전엔 `text.includes("합성")` — 문구를 다듬으면 칩이 조용히 사라지거나 엉뚱한 줄에 붙을 수 있었다).
 
 ## 거는 것
-- 노드 모듈에서 연습용 문구를 `_t(UNKNOWN, …)` 로 직접 만드는 곳이 없다(AST) — 모두 `_practice(…)` 를 거친다.
-- `_practice` 는 몰라요(unknown) 상태와 표시를 함께 단다.
+- 노드 모듈에서 합성 문구를 `_t(UNKNOWN, …)` 로 직접 만드는 곳이 없다(AST) — 모두 `_practice(…)` 를 거친다.
+- `_practice` 는 미상(unknown) 상태와 표시를 함께 단다.
 - mock 으로 핵심 사슬을 돌리면 수익률 불러오기의 설명에 표시가 있고, 종목 고르기에는 없다(짝).
-- 표시가 붙은 줄은 모두 연습용을 말한다 — 표시를 다른 줄에 붙이지 않는다(역방향).
+- 표시가 붙은 줄은 모두 합성 데이터를 말한다 — 표시를 다른 줄에 붙이지 않는다(역방향).
 """
 from __future__ import annotations
 
@@ -56,16 +56,16 @@ def test_no_node_module_builds_a_practice_line_without_the_mark():
         consts = _strings_of(tree)
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_t" \
-                    and len(node.args) >= 2 and "연습용" in _text_of(node.args[1], consts):
+                    and len(node.args) >= 2 and "합성 데이터" in _text_of(node.args[1], consts):
                 offenders.append(f"{f.name}:{node.lineno}")
-    assert offenders == [], f"연습용 줄은 _practice(...) 로 — 표시 없이 만든 곳: {offenders}"
+    assert offenders == [], f"합성 줄은 _practice(...) 로 — 표시 없이 만든 곳: {offenders}"
 
 
 def test_the_practice_helper_marks_the_line_as_unknown_and_practice():
     t = ex._practice()
     assert t == {"state": ex.UNKNOWN, "text": ex._PRACTICE, "kind": "practice"}
     assert ex._practice("다른 문장")["kind"] == "practice"
-    assert "kind" not in ex._t(ex.UNKNOWN, "연습용과 상관없는 줄")                    # ★짝★ 보통 줄엔 없다
+    assert "kind" not in ex._t(ex.UNKNOWN, "합성 데이터와 상관없는 줄")                    # ★짝★ 보통 줄엔 없다
 
 
 def test_a_mock_core_chain_marks_returns_as_practice_and_not_the_universe():
@@ -83,4 +83,4 @@ def test_a_mock_core_chain_marks_returns_as_practice_and_not_the_universe():
     for nid in ("u", "r"):
         for t in (body["nodes"][nid].get("explain") or {}).get("trust", []):
             if t.get("kind") == "practice":
-                assert "연습용" in t["text"] and t["state"] == ex.UNKNOWN
+                assert "합성" in t["text"] and t["state"] == ex.UNKNOWN

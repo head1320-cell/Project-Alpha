@@ -255,7 +255,7 @@ const LOADERS: Array<{ tab: Tab; path: string; ok: string }> = [
   { tab: "valuation", path: "asset-strips**", ok: ".mv-strips" },
 ];
 for (const L of LOADERS) {
-  test(`${L.path} 500 → 그 카드 안 alert + 다시 시도 → 풀리면 그림`, async ({ page }) => {
+  test(`${L.path} 500 → 그 카드 안 alert + 재시도 → 풀리면 그림`, async ({ page }) => {
     await page.route(`**/api/v1/macro/${L.path}`, (r) => r.fulfill({ status: 500, body: "x" }));
     await open(page);
     await goTab(page, L.tab, { settle: false });
@@ -263,7 +263,7 @@ for (const L of LOADERS) {
     await expect(alert).toHaveCount(1, { timeout: 30_000 });
     await expect(panel(page, L.tab).locator(L.ok)).toHaveCount(0);
     await page.unroute(`**/api/v1/macro/${L.path}`);
-    await alert.getByRole("button", { name: "다시 시도" }).click();
+    await alert.getByRole("button", { name: "재시도" }).click();
     await expect(panel(page, L.tab).locator(L.ok).first()).toBeVisible({ timeout: 30_000 });
     await expect(alert).toHaveCount(0);
   });
@@ -283,7 +283,7 @@ for (const t of TABS) {
     await expect(panel(page, t).locator('[role="alert"]')).toHaveCount(0);
   });
 }
-test("드릴다운 시계열 500 → 창 안 alert + 다시 시도 → 풀리면 통계", async ({ page }) => {
+test("드릴다운 시계열 500 → 창 안 alert + 재시도 → 풀리면 통계", async ({ page }) => {
   await page.route("**/api/v1/macro/series/**", (r) => r.fulfill({ status: 500, body: "x" }));
   await open(page);
   await goTab(page, "indicators");
@@ -291,7 +291,7 @@ test("드릴다운 시계열 500 → 창 안 alert + 다시 시도 → 풀리면
   const dlg = page.getByRole("dialog");
   await expect(dlg.locator('[role="alert"]')).toHaveCount(1, { timeout: 30_000 });
   await page.unroute("**/api/v1/macro/series/**");
-  await dlg.getByRole("button", { name: "다시 시도" }).click();
+  await dlg.getByRole("button", { name: "재시도" }).click();
   await expect(dlg.locator(".mc-modal-stats")).toBeVisible({ timeout: 30_000 });
   await expect(dlg.locator('[role="alert"]')).toHaveCount(0);
 });
@@ -422,7 +422,7 @@ const copyAudit = (loc: ReturnType<Page["locator"]>) => loc.evaluate((root) => {
       + Array.from(root.querySelectorAll("svg title")).filter((e) => e.textContent?.trim()).length,
   };
 });
-const BANNED_EN2 = /\b(Goldilocks|Reflation|Stagflation|Disinflation|STRESS|Stress|CAUTIOUS|mock|MOCK|US ETF|Weight Attribution|Causal Graph|lag|12M|MC|CAGR|MDD|ANTHROPIC_API_KEY|Claude)\b/;
+const BANNED_EN2 = /\b(Goldilocks|Reflation|Stagflation|Disinflation|STRESS|Stress|CAUTIOUS|mock|MOCK|US ETF|Weight Attribution|Causal Graph|lag|12M|MC|ANTHROPIC_API_KEY|Claude)\b/;
 async function expectCopy(loc: ReturnType<Page["locator"]>) {
   const r = await copyAudit(loc);
   expect(r.texts.filter((s) => s.includes("—")), "보이는 em-dash").toEqual([]);
@@ -448,12 +448,12 @@ test("적합도·위험 선호도 게이지에는 스트레스 끝 글자가 없
   await open(page);
   await goTab2(page, "recommend");
   await expect(panel2(page, "recommend").locator(".mc-gauge").first()).toBeVisible();
-  await expect(panel2(page, "recommend").locator(".mc-gauge")).not.toContainText("불안해요");
+  await expect(panel2(page, "recommend").locator(".mc-gauge")).not.toContainText("불안합니다");
   await goTab2(page, "timing");
   await expect(panel2(page, "timing").locator(".mc-gauge").first()).toBeVisible();
-  await expect(panel2(page, "timing").locator(".mc-gauge")).not.toContainText("불안해요");
+  await expect(panel2(page, "timing").locator(".mc-gauge")).not.toContainText("불안합니다");
   await page.locator("#mc-tab-regime").click();
-  await expect(page.locator("#mc-panel-regime .mc-gauge").first()).toContainText("불안해요");
+  await expect(page.locator("#mc-panel-regime .mc-gauge").first()).toContainText("불안합니다");
 });
 
 // ── 색의 뜻 ──
@@ -686,7 +686,7 @@ test("보유 도넛 — 직접 SVG 고리: 조각 수 = 접은 보유 수 · 조
 });
 
 // ── 실패는 실패로 ──
-test("미국 전략 500 → alert + 다시 시도('데이터 없음' 아님) → 풀리면 전략 카드", async ({ page }) => {
+test("미국 전략 500 → alert + 재시도('데이터 없음' 아님) → 풀리면 전략 카드", async ({ page }) => {
   await page.route("**/api/v1/macro/strategies?market=us", (r) => r.fulfill({ status: 500, body: "x" }));
   await open(page);
   await goTab2(page, "strategies");
@@ -695,11 +695,11 @@ test("미국 전략 500 → alert + 다시 시도('데이터 없음' 아님) →
   await expect(alert).toHaveCount(1, { timeout: 30_000 });
   await expect(panel2(page, "strategies")).not.toContainText("데이터 없음");
   await page.unroute("**/api/v1/macro/strategies?market=us");
-  await alert.getByRole("button", { name: "다시 시도" }).click();
+  await alert.getByRole("button", { name: "재시도" }).click();
   await expect(panel2(page, "strategies").locator(".mc-stratcard").first()).toBeVisible({ timeout: 30_000 });
 });
 for (const [tab, path, ok] of [["correlations", "correlations?market=kr", ".mca-matrix"], ["timing", "timing?market=kr", ".mca-trend"], ["correlations", "causal-graph", ".mc-causal"]] as const) {
-  test(`${path} 500 → 그 자리 alert + 다시 시도 → 풀리면 그림`, async ({ page }) => {
+  test(`${path} 500 → 그 자리 alert + 재시도 → 풀리면 그림`, async ({ page }) => {
     await page.route(`**/api/v1/macro/${path}`, (r) => r.fulfill({ status: 500, body: "x" }));
     await open(page);
     await goTab2(page, tab, { settle: false });
@@ -707,7 +707,7 @@ for (const [tab, path, ok] of [["correlations", "correlations?market=kr", ".mca-
     await expect(alert).toHaveCount(1, { timeout: 30_000 });
     await expect(panel2(page, tab).locator(ok)).toHaveCount(0);
     await page.unroute(`**/api/v1/macro/${path}`);
-    await alert.getByRole("button", { name: "다시 시도" }).click();
+    await alert.getByRole("button", { name: "재시도" }).click();
     await expect(panel2(page, tab).locator(ok).first()).toBeVisible({ timeout: 30_000 });
   });
 }
@@ -719,16 +719,16 @@ test("시장을 바꾸면 옛 시장 상관 행렬이 남지 않는다 — 새 �
   await expect(panel2(page, "correlations").locator(".mca-matrix")).toBeVisible();
   await panel2(page, "correlations").getByRole("button", { name: "미국 ETF" }).click();
   await expect(panel2(page, "correlations").locator(".mca-matrix")).toHaveCount(0, { timeout: 1500 });
-  await expect(panel2(page, "correlations")).toContainText("계산하는 중이에요");
+  await expect(panel2(page, "correlations")).toContainText("계산 중");
   await expect(panel2(page, "correlations").locator('[role="alert"]')).toHaveCount(1, { timeout: 30_000 });
   await expect(panel2(page, "correlations").locator(".mca-matrix")).toHaveCount(0);
 });
-test("전략 상세 500 → 창 안 alert + 다시 시도 → 풀리면 상세", async ({ page }) => {
+test("전략 상세 500 → 창 안 alert + 재시도 → 풀리면 상세", async ({ page }) => {
   await page.route("**/api/v1/macro/strategy/*?market=kr", (r) => r.fulfill({ status: 500, body: "x" }));
   const dlg = await openModal(page);
   await expect(dlg.locator('[role="alert"]')).toHaveCount(1, { timeout: 30_000 });
   await page.unroute("**/api/v1/macro/strategy/*?market=kr");
-  await dlg.getByRole("button", { name: "다시 시도" }).click();
+  await dlg.getByRole("button", { name: "재시도" }).click();
   await expect(dlg.locator(".sm-body")).toBeVisible({ timeout: 30_000 });
 });
 test("전략 AI 500 → 그 자리 alert(조용히 단추로 돌아가지 않는다)", async ({ page }) => {
@@ -781,7 +781,7 @@ for (const t of TABS2) {
 }
 
 // ── 과거 성과 = 성과 그림 문법 (2026-11-09 · 성과 그림 문법 ③) ──────────────────────────────────────────────────────
-test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글자 = 서버 drawdown_pct · 실제 월말 날짜(어림 글 0) · 해마다 · 큰 낙폭 사건 · recharts 0", async ({ page }) => {
+test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글자 = 서버 drawdown_pct · 실제 월말 날짜(어림 글 0) · 해마다 · 주요 낙폭 구간 · recharts 0", async ({ page }) => {
   await open(page);
   await goTab2(page, "strategies");
   const detailP = page.waitForResponse((r) => /\/api\/v1\/macro\/strategy\/[^/?]+(\?|$)/.test(r.url()), { timeout: 30_000 });

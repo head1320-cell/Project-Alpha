@@ -407,17 +407,17 @@ def _group_cap_gaps(caps: dict[str, float], names: list[str], groups_of: dict[st
     from src.data.stock_master import resolve_name
     if not groups_of:
         return [{"kind": "group_cap", "group": g, "cap_pct": float(cap),
-                 "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았어요 — 이 종목들의 업종을 읽지 못했어요."}
+                 "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았습니다 — 이 종목들의 업종 읽기 실패"}
                 for g, cap in caps.items()]
     present = set(groups_of.values())
     out = [{"kind": "group_cap", "group": g, "cap_pct": float(cap),
-            "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았어요 — 이 종목들 중 그 업종이 없어요."}
+            "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았습니다 — 이 종목들 중 그 업종이 없습니다."}
            for g, cap in caps.items() if g not in present]
     unknown = [t for t in names if t not in groups_of]
     if unknown:
         shown = ", ".join(resolve_name(t) for t in unknown[:5]) + (" 등" if len(unknown) > 5 else "")
         out.append({"kind": "unknown_sector", "names": unknown,
-                    "text": f"업종을 모르는 종목 {len(unknown)}개({shown})는 어떤 업종 상한에도 들지 않았어요."})
+                    "text": f"업종을 모르는 종목 {len(unknown)}개({shown})는 어떤 업종 상한에도 들지 않았습니다."})
     return out
 
 
@@ -473,7 +473,7 @@ def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -
 # ── 제약 확인 (CF 3부 P2) — 편집기가 계산 전에 "풀 수 없어요" 를 말하게 ─────────────────────────
 
 #: 공매도(음수 하한)가 든 비중 — 실행 목표로 만들면 실행 게이트가 막는다(`allows_short` → research_only).
-_SHORT_NOTE = "공매도가 들어간 비중은 연구·백테스트용이에요 — 실행 목표로 만들면 실행할 수 없다고 막혀요."
+_SHORT_NOTE = "공매도가 들어간 비중은 연구·백테스트용입니다 — 실행 목표로 만들면 실행할 수 없다고 막힙니다."
 #: 공분산만 쓰는 방식 — 엔진이 롱숏을 거절한다(`constrained_solve` 의 cov_only 갈래와 같은 집합).
 _COV_ONLY_MODELS = ("risk_parity", "hrp")
 
@@ -784,7 +784,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
             return {"error": True,
-                    "message": "분석 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요.",
+                    "message": "분석 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하십시오.",
                     "excluded": excluded}
 
         names = list(returns.columns)
@@ -1053,7 +1053,7 @@ def allocation_backtest(req: BacktestRequest):
             req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
             return {"error": True, "excluded": excluded,
-                    "message": "백테스트 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요."}
+                    "message": "백테스트 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하십시오."}
 
         return _policy_backtest(req, returns, bench, excluded, coverage)
     except Exception:
@@ -1236,7 +1236,7 @@ def allocation_factor_portfolio(req: FactorPortfolioRequest):
         rows = [r for r in rows if r.get("stock_code")]
         if len(rows) < max(req.top_k, 3):
             return {"error": True,
-                    "message": "후보 종목이 부족합니다. 유니버스를 적재하거나 종목을 직접 지정하세요.",
+                    "message": "후보 종목이 부족합니다. 유니버스를 적재하거나 종목을 직접 지정하십시오.",
                     "candidates": len(rows)}
 
         ranked, factor_meta, cov_w = factor_scores(rows, req.factors)

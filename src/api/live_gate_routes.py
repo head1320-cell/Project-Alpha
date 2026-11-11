@@ -56,5 +56,5 @@ def declare_gate(req: DeclareRequest, p: Principal = Depends(require_admin)):
 @router.delete("")
 def revoke_gate(p: Principal = Depends(require_admin)):
     if not live_gate_store.revoke(p.username):
-        raise HTTPException(404, "지금 열려 있는 실계좌 관문이 없어요.")
+        raise HTTPException(404, "지금 열려 있는 실계좌 관문이 없습니다.")
     return {"revoked": True, "revoked_by": p.username, "live_dropped_to_shadow": _drop_operator_live(p.username)}

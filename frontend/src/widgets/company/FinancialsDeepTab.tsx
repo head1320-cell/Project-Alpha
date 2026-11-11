@@ -23,7 +23,7 @@ export function MiniLine({ years, series, label }: {
   label: string;
 }) {
   const all = series.flatMap((s) => s.vals.filter((v): v is number => ok(v)));
-  if (!all.length) return <p className="ci-note">그릴 값이 없어요.</p>;
+  if (!all.length) return <p className="ci-note">그릴 값 없음</p>;
   const lo = Math.min(...all, 0), hi = Math.max(...all, 0), span = hi - lo || 1;
   const X = (i: number) => (i / Math.max(1, years.length - 1)) * 100;
   const Y = (v: number) => 31 - ((v - lo) / span) * 28;
@@ -43,13 +43,13 @@ const last = <T,>(a: T[]): T | undefined => a[a.length - 1];
 
 export default function FinancialsDeepTab({ code }: { code: string }) {
   const q = useQuery({ queryKey: ["company", "financial-deep", code], queryFn: () => companyApi.financialDeep(code), retry: false, staleTime: 5 * 60_000 });
-  if (q.isPending) return <div className="ci-fd"><p className="ci-fd-wait">재무를 더 깊이 계산하는 중이에요</p></div>;
-  if (q.isError) return <div className="ci-fd"><RetryFail title="재무 심화를 불러오지 못했어요" onRetry={() => q.refetch()} /></div>;
+  if (q.isPending) return <div className="ci-fd"><p className="ci-fd-wait">재무를 더 깊이 계산하는 중입니다</p></div>;
+  if (q.isError) return <div className="ci-fd"><RetryFail title="재무 심화 조회 실패" onRetry={() => q.refetch()} /></div>;
   const d = q.data;
   if (!d.available) {
     return (
       <div className="ci-fd">
-        <p className="ci-fd-reason">재무 시계열이 아직 적재되지 않아 이익의 질·운전자본·자본 배치를 계산하지 못했어요. 연도별 숫자는 위 표에서 볼 수 있어요.</p>
+        <p className="ci-fd-reason">재무 시계열이 아직 적재되지 않아 이익의 질·운전자본·자본 배치 산출 실패. 연도별 숫자는 위 표에서 볼 수 있습니다.</p>
         {d.note && <details className="ci-fd-raw"><summary>원래 사유 보기</summary><p data-server>{d.note}</p></details>}
       </div>
     );
@@ -63,7 +63,7 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
 
       <section className="ca-cp-sec ci-fd-qoe">
         <h4 className="ci-fd-h">이익의 질</h4>
-        <p className="ci-fd-lede">장부상 순이익이 실제 들어온 현금(영업현금흐름)으로 뒷받침되는지 봐요.</p>
+        <p className="ci-fd-lede">장부상 순이익이 실제 들어온 현금(영업현금흐름)으로 뒷받침되는지 봅니다.</p>
         <MiniLine years={qe.years} label={`순이익과 영업현금흐름 ${qe.years.length}년 추이`}
           series={[{ vals: qe.ni, cls: "ca-fd-ni" }, { vals: qe.ocf, cls: "ca-fd-ocf", dash: true }]} />
         <p className="ci-fd-keys">
@@ -81,14 +81,14 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
           {qe.red_flags.length
             ? qe.red_flags.map((f) => (
               <p key={f.rule} className="ci-fd-flag"><span className="ci-fd-flag-k">주의</span><span data-server>{f.msg}</span></p>))
-            : <p className="ci-fd-noflag">세 가지 점검(현금이 이익보다 3년 연속 적음 · 발생액 3년 연속 증가 · 운전자본 비중 3년 연속 증가)에 걸린 것이 없어요.</p>}
+            : <p className="ci-fd-noflag">세 가지 점검(현금이 이익보다 3년 연속 적음 · 발생액 3년 연속 증가 · 운전자본 비중 3년 연속 증가)에 걸린 것이 없습니다.</p>}
         </div>
       </section>
 
       <div className="ca-vt-grid">
         <section className="ca-cp-sec">
           <h4 className="ci-fd-h">운전자본</h4>
-          <p className="ci-fd-lede">유동자산에서 유동부채를 뺀 돈이에요. 매출 대비 비중이 늘면 현금이 영업에 묶여요.</p>
+          <p className="ci-fd-lede">유동자산에서 유동부채를 뺀 돈입니다. 매출 대비 비중이 늘면 현금이 영업에 묶입니다.</p>
           <MiniLine years={d.nwc.years} label="운전자본 추이" series={[{ vals: d.nwc.nwc, cls: "ca-fd-ni" }]} />
           <div className="ci-tablewrap">
             <table className="ca-fd-tbl">
@@ -102,20 +102,20 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
         </section>
 
         <section className="ca-cp-sec">
-          <h4 className="ci-fd-h">번 현금을 어디에 썼나요</h4>
-          <p className="ci-fd-lede">{periodShort(wf.years[li])} 영업현금흐름에서 설비투자·배당·빚 갚기를 뺀 나머지예요.</p>
+          <h4 className="ci-fd-h">현금 사용처</h4>
+          <p className="ci-fd-lede">{periodShort(wf.years[li])} 영업현금흐름에서 설비투자·배당·빚 갚기를 뺀 나머지입니다.</p>
           <WaterfallBars ocf={wf.ocf[li]} capex={wf.capex[li]} dividends={wf.dividends[li]}
             repay={ok(wf.debt_delta[li]) ? Math.max(0, -(wf.debt_delta[li] as number)) : null} residual={wf.residual[li]} />
-          {debtUp && <p className="ci-note">이 해에는 부채가 {eokWon(wf.debt_delta[li])} 늘었어요. 새로 빌렸고 갚은 돈은 없어요.</p>}
-          {!ok(wf.debt_delta[li]) && <p className="ci-note">전년 부채를 몰라 빚 갚은 돈을 계산하지 못했어요.</p>}
+          {debtUp && <p className="ci-note">이 해에는 부채가 {eokWon(wf.debt_delta[li])} 늘었습니다. 새로 빌렸고 갚은 돈은 없습니다.</p>}
+          {!ok(wf.debt_delta[li]) && <p className="ci-note">전년 부채를 몰라 빚 갚은 돈 산출 실패</p>}
           <p className="ci-note" data-server>{wf.note}</p>
         </section>
       </div>
 
       {d.roic_wacc ? (
         <section className="ca-cp-sec ci-fd-rw">
-          <h4 className="ci-fd-h">자본비용보다 많이 벌었나요</h4>
-          <p className="ci-fd-lede">투하자본이익률(ROIC)에서 자본을 쓰는 비용(WACC)을 뺀 차이예요.</p>
+          <h4 className="ci-fd-h">ROIC−WACC 스프레드</h4>
+          <p className="ci-fd-lede">투하자본이익률(ROIC)에서 자본을 쓰는 비용(WACC)을 뺀 차이입니다.</p>
           <p className="ci-fd-eq">
             <span>ROIC {pctTxt(d.roic_wacc.roic, 2)}</span><span aria-hidden>−</span><span>WACC {pctTxt(d.roic_wacc.wacc, 2)}</span><span aria-hidden>=</span>
             <b className="ci-fd-spread">{ppSigned(d.roic_wacc.spread)}</b>
@@ -124,12 +124,12 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
           <p className="ci-note"><span className="ci-fd-k">가정</span><span data-server>{d.roic_wacc.note}</span></p>
         </section>
       ) : (
-        <p className="ci-note">자본비용 대비 이익률은 투하자본이익률(ROIC)이 적재되지 않아 계산하지 못했어요.</p>
+        <p className="ci-note">자본비용 대비 이익률은 투하자본이익률(ROIC)이 적재되지 않아 계산하지 못했습니다.</p>
       )}
 
       <details className="ca-cp-sec ci-fd-dupont">
         <summary>ROE 를 셋으로 나눠 보기(듀폰 분해)</summary>
-        <p className="ci-fd-lede">순이익률 × 자산회전율 × 레버리지 = ROE 예요.</p>
+        <p className="ci-fd-lede">순이익률 × 자산회전율 × 레버리지 = ROE 입니다.</p>
         <div className="ci-tablewrap">
           <table className="ca-fd-tbl">
             <thead><tr><th scope="col">항목</th>{d.dupont.years.map((y) => <th key={y} scope="col">{periodShort(y)}</th>)}</tr></thead>

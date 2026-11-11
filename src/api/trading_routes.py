@@ -189,5 +189,5 @@ def toggle_kill_switch(enable: bool = True):
     return {
         "kill_switch": enable,
         "message": "모든 신규 주문 차단" if enable else "정상 거래 가능",
-        "note": "각 execute/screen-to-trade 요청의 safety.kill_switch=true로 적용하세요",
+        "note": "각 execute/screen-to-trade 요청의 safety.kill_switch=true로 적용하십시오",
     }

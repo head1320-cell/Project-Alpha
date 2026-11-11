@@ -8,7 +8,7 @@
 - 범위: 노드 = 조상 전부 + 그 노드 + 바로 아래(먼 아래 · 다른 갈래 · 조상→자식 선은 뺌) / 선 = 보내는 쪽 조상 + 양끝 + 그 선.
 - 근거 줄: 서버가 id 를 붙인다 · 범위 밖은 줄이 없다 · 관계 문장은 서버가 문서로 다시 만든 것(화면이 보낸 글이 아니다).
 - 문장 검사: 사실 줄 ≥1 · 근거에 있는 줄 · ★그 문장이 댄 줄 밖 숫자★(짝: 안 숫자) · 금지 표현 · 길이 · 4문장 · 형식.
-  답할 수 없으면 서버 고정 문장(모델 글이 아니다). 연습용 경고는 서버가(짝: 없으면 없다).
+  답할 수 없으면 서버 고정 문장(모델 글이 아니다). 합성 경고는 서버가(짝: 없으면 없다).
 - 서비스: 대상 결과가 없으면 부르기 전에 못 보임 · 깨진 기록은 사유와 함께 · 직전 문답은 근거·캐시 열쇠에 들어간다 ·
   한도는 추천·풀어 쓰기와 한 그릇 · 키 없음 = 사유 + 글 0 · 키 누출 0 · 경로 401/200/422 · 보호 목록·지도.
 
@@ -179,15 +179,15 @@ def _srec(eid, rec, doc=DOC, key=KEY):
     return {"edge_id": eid, "record": rec, "sig": fs.seal(key, eid, fs.EDGE_TYPE, fs.deep_sigs(doc)[e["target"]], rec)}
 
 
-EX_O = {"title": "비중을 이렇게 나눴어요", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 위험 똑같이", "종목 2개"], "trust": [{"state": "confirmed", "text": "비중 계산은 문제없이 끝났어요."}],
+EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
+        "facts": ["계산 방식: 위험 똑같이", "종목 2개"], "trust": [{"state": "confirmed", "text": "비중 계산은 문제없이 끝났습니다."}],
         "unmeasured": ["거래비용"]}
-EX_ES = {"title": "기대 수익을 잡았어요", "facts": ["과거 평균 7.2%"], "trust": [{"state": "assumed", "text": "과거 평균이 이어진다는 가정이에요."}]}
-EX_BT = {"title": "과거로 돌려 봤어요", "facts": ["누적 수익 31.4%"], "trust": []}
-EX_U2 = {"title": "종목 1개를 골랐어요", "facts": ["NAVER 99"], "trust": []}
-PRACTICE = {"state": "unknown", "text": "연습용 합성 데이터예요.", "kind": "practice"}
+EX_ES = {"title": "기대 수익을 잡았습니다", "facts": ["과거 평균 7.2%"], "trust": [{"state": "assumed", "text": "과거 평균이 이어진다는 가정입니다."}]}
+EX_BT = {"title": "과거로 돌려 봤습니다", "facts": ["누적 수익 31.4%"], "trust": []}
+EX_U2 = {"title": "종목 1개를 골랐습니다", "facts": ["NAVER 99"], "trust": []}
+PRACTICE = {"state": "unknown", "text": "합성 데이터입니다.", "kind": "practice"}
 REC_RO = {"source": "r", "target": "o", "facts": [{"key": "n_obs", "label": "기간", "text": "756일", "value": 756}],
-          "facts_reason": None, "checks": ["빈 날"], "issues": [{"level": "lost", "code": "gap", "text": "빈 날 4일을 뺐어요", "fix": None}],
+          "facts_reason": None, "checks": ["빈 날"], "issues": [{"level": "lost", "code": "gap", "text": "빈 날 4일을 뺐습니다", "fix": None}],
           "issues_reason": None}
 
 
@@ -205,8 +205,8 @@ def test_lines_get_server_ids_and_cover_explain_parts_relations_and_records_in_s
     ids = [x["id"] for x in g["lines"]]
     assert ids == [f"f{i}" for i in range(1, len(ids) + 1)] and set(refs) == set(ids)
     texts = " | ".join(x["text"] for x in g["lines"])
-    for must in ("비중을 이렇게 나눴어요", "삼성전자 50.5%", "계산 방식: 위험 똑같이", "비중 계산은 문제없이 끝났어요.", "거래비용",
-                 "과거 평균 7.2%", "누적 수익 31.4%", "756일", "빈 날 4일을 뺐어요"):
+    for must in ("비중을 이렇게 나눴습니다", "삼성전자 50.5%", "계산 방식: 위험 똑같이", "비중 계산은 문제없이 끝났습니다.", "거래비용",
+                 "과거 평균 7.2%", "누적 수익 31.4%", "756일", "빈 날 4일을 뺐습니다"):
         assert must in texts, must
     assert "NAVER 99" not in texts                                                     # 범위 밖 갈래
     rel = [x for x in g["lines"] if x["part"] == "관계"]
@@ -218,8 +218,8 @@ def test_lines_get_server_ids_and_cover_explain_parts_relations_and_records_in_s
 
 
 def test_previous_turn_and_practice_are_in_the_grounding_and_the_pair():
-    g, _ = _ground(previous={"question": "어디서 왔나요?", "answer": "기대 수익에서 왔어요."})
-    assert g["previous"] == {"question": "어디서 왔나요?", "answer": "기대 수익에서 왔어요."} and g["practice"] is False
+    g, _ = _ground(previous={"question": "어디서 왔나요?", "answer": "기대 수익에서 왔습니다."})
+    assert g["previous"] == {"question": "어디서 왔나요?", "answer": "기대 수익에서 왔습니다."} and g["practice"] is False
     g2, _ = _ground(facts=[_sealed("o", {**EX_O, "trust": [PRACTICE]})])
     assert g2["previous"] is None and g2["practice"] is True                           # ★짝★
 
@@ -248,26 +248,26 @@ def _ans(*sentences, answerable=True, why_not="none"):
 def test_a_grounded_answer_passes():
     g, refs = _ground()
     head = _id(refs, "o", "핵심 값")
-    answer, bad = ak.check(_ans(("삼성전자 비중이 50.5% 로 가장 커요.", [head])), g)
+    answer, bad = ak.check(_ans(("삼성전자 비중이 50.5% 로 가장 큽니다.", [head])), g)
     assert bad == [] and answer == {"answerable": True, "cannot": None,
-                                    "sentences": [{"text": "삼성전자 비중이 50.5% 로 가장 커요.", "fact_ids": [head]}]}
+                                    "sentences": [{"text": "삼성전자 비중이 50.5% 로 가장 큽니다.", "fact_ids": [head]}]}
 
 
 def test_numbers_must_come_from_the_sentences_own_lines_and_the_pair_passes():
     g, refs = _ground()
     title = _id(refs, "o", "제목")
-    answer, bad = ak.check(_ans(("삼성전자 비중이 50.5% 예요.", [title])), g)
+    answer, bad = ak.check(_ans(("삼성전자 비중이 50.5% 입니다.", [title])), g)
     assert answer["sentences"] == [] and bad[0]["code"] == "numbers" and "50.5" in bad[0]["reason"]
-    answer, bad = ak.check(_ans(("과거 평균은 7.2% 예요.", [_id(refs, "es", "사실")])), g)          # ★짝★
+    answer, bad = ak.check(_ans(("과거 평균은 7.2% 입니다.", [_id(refs, "es", "사실")])), g)          # ★짝★
     assert bad == [] and len(answer["sentences"]) == 1
-    answer, bad = ak.check(_ans(("기간은 756일이에요.", [_id(refs, EID["r>o"], "건너간 것")])), g)  # 선의 줄
+    answer, bad = ak.check(_ans(("기간은 756일입니다.", [_id(refs, EID["r>o"], "건너간 것")])), g)  # 선의 줄
     assert bad == []
 
 
 @pytest.mark.parametrize("sentence,code", [
-    (("비중을 나눴어요.", []), "no_source"),
-    (("비중을 나눴어요.", ["f999"]), "unknown_fact"),
-    (("이건 더 나은 전략이에요.", None), "banned"),
+    (("비중을 나눴습니다.", []), "no_source"),
+    (("비중을 나눴습니다.", ["f999"]), "unknown_fact"),
+    (("이건 더 나은 전략입니다.", None), "banned"),
     (("가" * 241, None), "too_long"),
 ])
 def test_bad_sentences_are_rejected_with_a_reason(sentence, code):
@@ -280,7 +280,7 @@ def test_bad_sentences_are_rejected_with_a_reason(sentence, code):
 def test_shape_limit_and_malformed_answers_are_reported():
     g, refs = _ground()
     t = _id(refs, "o", "제목")
-    answer, bad = ak.check(_ans(*[(f"비중을 나눴어요{'.' * i}", [t]) for i in range(1, 7)]), g)
+    answer, bad = ak.check(_ans(*[(f"비중을 나눴습니다{'.' * i}", [t]) for i in range(1, 7)]), g)
     assert ak.MAX_SENTENCES == 4 and len(answer["sentences"]) == 4 and [b["code"] for b in bad] == ["limit", "limit"]
     answer, bad = ak.check({"answerable": True, "why_not": "none", "sentences": [{"text": "x", "fact_ids": [t], "extra": 1}]}, g)
     assert answer["sentences"] == [] and bad[0]["code"] == "shape"
@@ -291,10 +291,10 @@ def test_shape_limit_and_malformed_answers_are_reported():
 @pytest.mark.parametrize("why", ["not_in_facts", "judgement", "off_topic"])
 def test_cannot_answer_uses_the_servers_fixed_sentence(why):
     g, refs = _ground()
-    answer, bad = ak.check(_ans(("이 결과에는 거래비용이 없어요.", [_id(refs, "o", "재지 않은 것")]), answerable=False, why_not=why), g)
+    answer, bad = ak.check(_ans(("이 결과에는 거래비용이 없습니다.", [_id(refs, "o", "재지 않은 것")]), answerable=False, why_not=why), g)
     assert answer["answerable"] is False and answer["cannot"] == ak.CANNOT[why] and bad == []
-    assert answer["sentences"] == [{"text": "이 결과에는 거래비용이 없어요.", "fact_ids": [_id(refs, "o", "재지 않은 것")]}]
-    ok, _ = ak.check(_ans(("비중을 나눴어요.", [_id(refs, "o", "제목")])), g)
+    assert answer["sentences"] == [{"text": "이 결과에는 거래비용이 없습니다.", "fact_ids": [_id(refs, "o", "재지 않은 것")]}]
+    ok, _ = ak.check(_ans(("비중을 나눴습니다.", [_id(refs, "o", "제목")])), g)
     assert ok["cannot"] is None                                                       # ★짝★
     assert set(ak.CANNOT) == {"not_in_facts", "judgement", "off_topic"} and "투자 판단" in ak.CANNOT["judgement"]
 
@@ -306,7 +306,7 @@ def test_the_schema_closes_objects_and_limits_ids_to_lines():
     assert sen["properties"]["fact_ids"]["items"]["enum"] == ["f1", "f2"]
     assert s["properties"]["why_not"]["enum"] == ["none", "not_in_facts", "judgement", "off_topic"]
     assert "maxItems" not in _blob(s)
-    for must in ("근거", "숫자", "투자 판단", "해요"):
+    for must in ("근거", "숫자", "투자 판단", "합니다"):
         assert must in pr.ASK_SYSTEM
 
 
@@ -323,10 +323,10 @@ def _ask(client, target=None, question="왜 이렇게 나눴나요?", previous=N
 
 def test_an_answer_carries_sentences_cited_lines_and_the_server_notice(report):
     facts, recs = _facts(report), _records(report)
-    sdk = FakeSDK(_msg(_ans(("비중은 여기서 나눴어요.", ["f1"]))))
+    sdk = FakeSDK(_msg(_ans(("비중은 여기서 나눴습니다.", ["f1"]))))
     res = _ask(_client(sdk), facts=facts, records=recs, key=_route_key())
     assert res["available"] is True and res["source"] == "claude" and res["cached"] is False
-    assert res["answer"]["sentences"] == [{"text": "비중은 여기서 나눴어요.", "fact_ids": ["f1"]}] and res["rejected"] == []
+    assert res["answer"]["sentences"] == [{"text": "비중은 여기서 나눴습니다.", "fact_ids": ["f1"]}] and res["rejected"] == []
     assert set(res["facts"]) == {"f1"} and res["facts"]["f1"]["target_id"] == "u"         # 흐름 맨 앞 줄
     assert res["notice"] == nr.NOTICE and res["dropped"] == []                             # mock 결과 — 연습용
     assert res["scope"] == {"nodes": ["u", "r", "es", "o", "bt", "rk"],
@@ -338,7 +338,7 @@ def test_an_answer_carries_sentences_cited_lines_and_the_server_notice(report):
 
 
 def test_no_practice_no_notice():
-    res = _ask(_client(FakeSDK(_msg(_ans(("비중을 이렇게 나눴어요.", ["f1"]))))), facts=[_sealed("o", EX_O)], records=[])
+    res = _ask(_client(FakeSDK(_msg(_ans(("비중을 이렇게 나눴습니다.", ["f1"]))))), facts=[_sealed("o", EX_O)], records=[])
     assert res["available"] and res["notice"] is None
     res2 = _ask(_client(FakeSDK(_msg(_ans()))), facts=[_sealed("o", {**EX_O, "trust": [PRACTICE]})], records=[])
     assert res2["notice"] == nr.NOTICE                                                    # ★짝★
@@ -358,11 +358,11 @@ def test_without_the_targets_own_result_it_does_not_call(target, facts, records,
 
 
 def test_an_edge_target_answers_from_its_record():
-    sdk = FakeSDK(_msg(_ans(("빈 날 4일을 뺐어요.", ["f3"]))))
+    sdk = FakeSDK(_msg(_ans(("빈 날 4일을 뺐습니다.", ["f3"]))))
     res = _ask(_client(sdk), target={"kind": "edge", "id": EID["r>o"]}, facts=[_sealed("o", EX_O)])
     assert res["available"] is True
     user = sdk.beta.messages.calls[0]["messages"][0]["content"]
-    assert "빈 날 4일을 뺐어요" in user and "과거 평균 7.2%" not in user                     # es 는 r→o 선의 범위 밖
+    assert "빈 날 4일을 뺐습니다" in user and "과거 평균 7.2%" not in user                     # es 는 r→o 선의 범위 밖
 
 
 def test_dropped_items_inside_the_scope_are_reported_and_outside_are_ignored():
@@ -373,7 +373,7 @@ def test_dropped_items_inside_the_scope_are_reported_and_outside_are_ignored():
 
 
 def test_the_previous_turn_is_part_of_the_cache_key_and_the_pair_hits():
-    sdk = FakeSDK(_msg(_ans(("비중을 나눴어요.", ["f1"]))))
+    sdk = FakeSDK(_msg(_ans(("비중을 나눴습니다.", ["f1"]))))
     c = _client(sdk)
     _ask(c, previous={"question": "a", "answer": "b"})
     assert _ask(c, previous={"question": "a", "answer": "b"})["cached"] is True and len(sdk.beta.messages.calls) == 1
@@ -384,7 +384,7 @@ def test_the_previous_turn_is_part_of_the_cache_key_and_the_pair_hits():
 
 
 def test_a_cache_hit_reports_this_requests_dropped_items():
-    c = _client(FakeSDK(_msg(_ans(("비중을 나눴어요.", ["f1"])))))
+    c = _client(FakeSDK(_msg(_ans(("비중을 나눴습니다.", ["f1"])))))
     _ask(c, facts=[_sealed("o", EX_O)])
     res = _ask(c, facts=[_sealed("o", EX_O), {**_sealed("es", EX_ES), "sig": "bad"}])
     assert res["cached"] is True and [d["node_id"] for d in res["dropped"]] == ["es"]

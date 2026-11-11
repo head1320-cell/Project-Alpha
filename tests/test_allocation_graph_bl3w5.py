@@ -5,7 +5,7 @@
 ## 거는 것
 - 골든 — 노드는 라우트 함수를 **같은 요청으로** 부른다(노드 == 라우트).
 - ★계산 중 쓰기 0★ — 리밸런싱 판단은 `record_decision=False` 를 명시한다(기본도 거짓이지만 기본에 기대지 않는다).
-  기록은 저장 버튼만 — 기록 없이 다시 계산해 미리보기와 같을 때만 기록한다.
+  기록은 저장 버튼만 — 기록 없이 재계산해 미리보기와 같을 때만 기록한다.
 - 편익을 모르면 판단 `undetermined` 그대로(거래 안 함으로 바꾸지 않는다) · 편익이 목표를 고른 사후분포로 잰 것이면 그 사실을 설명한다.
 - 노출 → 상품: 구현 못 한 노출은 재분배하지 않는다(`unplaced_pct`) · 아무것도 못 놓으면 사유 실패.
 - 현금 수익: 금리가 기본값이면 '가정' 으로 말한다(BL3 M7) · 비중을 이으면 투자 비중 = Σ|w|(1 이하).
@@ -116,7 +116,7 @@ def test_undetermined_is_kept_not_turned_into_hold(market, monkeypatch):
     monkeypatch.setattr(ar, "rebalance_decision_route", fake)
     r = _run(_rebal_graph())["nodes"]["x"]
     assert r["view"]["result"]["decision"] == "undetermined"
-    assert "판단할 수 없어요" in r["explain"]["title"]
+    assert "판단할 수 없습니다" in r["explain"]["title"]
 
 
 def test_saving_records_once_after_matching_the_preview(market, monkeypatch):
@@ -255,10 +255,10 @@ def test_counterfactual_passes_the_multistrategy_door_reason_through(monkeypatch
     import src.api.stage11_routes as s11
 
     def closed(**kw):
-        raise HTTPException(503, detail={"available": False, "reason": "멀티전략 코어가 없어요(테스트)"})
+        raise HTTPException(503, detail={"available": False, "reason": "멀티전략 코어가 없습니다(테스트)"})
     monkeypatch.setattr(s11, "_guard", closed)
     r = _one("counterfactual", strategy_ids=[1, 2])["nodes"]["c"]
-    assert r["status"] == "failed" and "멀티전략 코어가 없어요" in r["reason"]
+    assert r["status"] == "failed" and "멀티전략 코어가 없습니다" in r["reason"]
 
 
 def test_counterfactual_does_not_persist_runs():

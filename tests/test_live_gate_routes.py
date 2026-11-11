@@ -7,7 +7,7 @@
   ③ ★운영자 `.env` 계좌의 LIVE 도 관문 뒤★ — 관문이 닫혀 있거나 이름이 없으면 400 + 사유 · 짝: 열려 있고 이름이 있으면 LIVE
   ④ 관문을 바꾸거나 철회하면 LIVE 였던 운영자 실행기는 SHADOW 로
   ⑤ 준비 목록 — 본인 계좌만 · 항목마다 사유 · 대조 감시는 늘 미통과 → ready 는 지금 False
-  ⑥ 연결 확인 결과가 감사에 남고(비밀 0), 준비 목록이 그것을 읽는다 · 연습용 확인은 세지 않는다
+  ⑥ 연결 확인 결과가 감사에 남고(비밀 0), 준비 목록이 그것을 읽는다 · 합성 확인은 세지 않는다
 """
 from __future__ import annotations
 
@@ -244,7 +244,7 @@ def test_a_practice_check_is_recorded_but_does_not_count(client):
     acc = _connect(client, is_paper=False)
     assert client.post(f"{BASE}/{acc}/check", headers=_alice(client)).json()["state"] == "practice"
     conn = {i["key"]: i for i in _ready(client, acc).json()["items"]}["connection"]
-    assert conn["ok"] is False and "연습용" in conn["reason"]
+    assert conn["ok"] is False and "합성" in conn["reason"]
 
 
 def test_a_successful_check_counts(client, monkeypatch):

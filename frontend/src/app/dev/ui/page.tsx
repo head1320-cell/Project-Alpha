@@ -337,11 +337,11 @@ export default function DevUiPage() {
         </Specimen>
         <Specimen name="EmptyState" from="States">
           <Variant label="기본"><EmptyState /></Variant>
-          <Variant label="label + sub"><EmptyState label="결과 없음" sub="필터를 완화해 보세요" /></Variant>
+          <Variant label="label + sub"><EmptyState label="결과 없음" sub="필터를 완화하십시오" /></Variant>
         </Specimen>
         <Specimen name="ErrorState" from="States">
           <Variant label="기본"><ErrorState /></Variant>
-          <Variant label="label + sub"><ErrorState label="조회 실패" sub="HTTP 500 — 백엔드 로그를 확인하세요" /></Variant>
+          <Variant label="label + sub"><ErrorState label="조회 실패" sub="HTTP 500 — 백엔드 로그를 확인하십시오" /></Variant>
         </Specimen>
         <Specimen name="UnavailableState" from="States"
           note="빈 상태(0건)와 다른 사실입니다 — 사유가 필수 prop 입니다.">
@@ -456,42 +456,42 @@ export default function DevUiPage() {
         <p className="devui-group-note">
           ADR-003. 답 문장은 서버 값으로만 만든다 — 아래 문장은 모양을 보이는 표본이다. 클래스 <code>.tx-*</code> 가 계약.
         </p>
-        <Specimen name="PageHead" from="tx"><Tx.PageHead title="매크로 분석" lede="지금 경제가 어느 쪽으로 가는지 보여 드려요." /></Specimen>
+        <Specimen name="PageHead" from="tx"><Tx.PageHead title="매크로 분석" lede="지금 경제가 어느 쪽으로 가는지 보여 드립니다." /></Specimen>
         <Specimen name="Answer" from="tx" note="문장 + 숫자 1~3 + 근거 칩 + 다음 행동 하나.">
-          <Tx.Answer sentence="(표본) 서버가 준 값을 끼운 한 문장이 여기에 와요."
+          <Tx.Answer sentence="(표본) 서버가 준 값을 끼운 한 문장이 여기에 옵니다."
             figures={[{ label: "스트레스", value: "52/100" }, { label: "확률", value: pct(0.54, 0) }]}
-            chips={[{ label: "연습용 데이터", tone: "practice" }, { label: "가정 2개", tone: "assumed" }, { label: "재지 않은 것 1가지", tone: "unmeasured" }]}
+            chips={[{ label: "합성 데이터", tone: "practice" }, { label: "가정 2개", tone: "assumed" }, { label: "재지 않은 것 1가지", tone: "unmeasured" }]}
             action={<button type="button" className="devui-tx-act">매크로 분석 보기</button>} />
         </Specimen>
         <Specimen name="Chips" from="tx">
-          <Tx.Chips items={[{ label: "연습용 데이터", tone: "practice" }, { label: "가정 1개", tone: "assumed" }, { label: "몰라요 1개", tone: "unknown" },
+          <Tx.Chips items={[{ label: "합성 데이터", tone: "practice" }, { label: "가정 1개", tone: "assumed" }, { label: "N/A 1개", tone: "unknown" },
                             { label: "재지 않은 것", tone: "unmeasured" }, { label: "정상", tone: "ok" }, { label: "안내", tone: "info" }]} />
         </Specimen>
         <Specimen name="Section" from="tx">
-          <Tx.Section title="무엇을 할까요" sub="한 절은 한 가지 일만 해요.">
-            <Tx.ListRow title="종목 찾기" sub="조건으로 종목을 골라요" href="/screener" />
+          <Tx.Section title="작업 선택" sub="한 절은 한 가지 일만 합니다.">
+            <Tx.ListRow title="종목 찾기" sub="조건으로 종목을 고릅니다" href="/screener" />
           </Tx.Section>
         </Specimen>
         <Specimen name="ListRow" from="tx" note="href → 링크 · onClick → 단추 · 둘 다 없으면 누를 수 없는 줄(화살표 없음).">
           <Variant label="링크"><Tx.ListRow title="삼성전자" sub="005930" right={won(71_200)} href="/insights?code=005930" /></Variant>
-          <Variant label="단추"><Tx.ListRow title="자세히 보기" onClick={() => {}} /></Variant>
+          <Variant label="단추"><Tx.ListRow title="상세 보기" onClick={() => {}} /></Variant>
           <Variant label="그냥 줄"><Tx.ListRow title="적재 행 수" right={num(1_234_567)} /></Variant>
         </Specimen>
-        <Specimen name="Stat" from="tx" note="등락은 색 + ▲▼ + 글자. 미상은 '몰라요'(평평함과 다르다).">
-          <Variant label="오름"><Tx.Stat label="연 수익률" value={signedPct(0.241)} delta={{ text: pp(0.021), dir: direction(0.021) }} /></Variant>
+        <Specimen name="Stat" from="tx" note="등락은 색 + ▲▼ + 글자. 미상은 'N/A'(평평함과 다르다).">
+          <Variant label="오름"><Tx.Stat label="연환산 수익률" value={signedPct(0.241)} delta={{ text: pp(0.021), dir: direction(0.021) }} /></Variant>
           <Variant label="내림"><Tx.Stat label="최대 낙폭" value={pct(-0.18)} delta={{ text: pp(-0.03), dir: direction(-0.03) }} /></Variant>
           <Variant label="그대로"><Tx.Stat label="변동성" value={pct(0.12)} delta={{ text: pp(0), dir: direction(0) }} /></Variant>
-          <Variant label="모름"><Tx.Stat label="베타" value={<Tx.Unknown reason="벤치마크 시계열이 없어요" />} delta={{ text: pp(null), dir: direction(null) }} /></Variant>
+          <Variant label="모름"><Tx.Stat label="베타" value={<Tx.Unknown reason="벤치마크 시계열 없음" />} delta={{ text: pp(null), dir: direction(null) }} /></Variant>
         </Specimen>
         <Specimen name="Segmented" from="tx" note="radiogroup · 화살표·Home·End."><LiveTxSegmented /></Specimen>
         <Specimen name="Tabs" from="tx" note="tablist · 로빙 tabindex · 화살표로 옮기면 바로 고른다."><LiveTxTabs /></Specimen>
         <Specimen name="Notice" from="tx">
-          <Variant label="practice"><Tx.Notice tone="practice" title="연습용 데이터예요">실제 시장 값이 아니라 합성 값으로 계산했어요.</Tx.Notice></Variant>
-          <Variant label="warn"><Tx.Notice tone="warn" title="가정이 들어 있어요" /></Variant>
-          <Variant label="danger"><Tx.Notice tone="danger" title="불러오지 못했어요">서버에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.</Tx.Notice></Variant>
+          <Variant label="practice"><Tx.Notice tone="practice" title="합성 데이터입니다">실제 시장 값이 아니라 합성 값으로 계산했습니다.</Tx.Notice></Variant>
+          <Variant label="warn"><Tx.Notice tone="warn" title="가정이 들어 있습니다" /></Variant>
+          <Variant label="danger"><Tx.Notice tone="danger" title="조회 실패">서버 연결 실패. 잠시 뒤 재시도하십시오.</Tx.Notice></Variant>
         </Specimen>
         <Specimen name="Unknown" from="tx" note="사유가 필수다(타입). 0 이나 빈칸으로 그리지 않는다.">
-          <Tx.Unknown reason="재무 데이터가 아직 적재되지 않았어요" />
+          <Tx.Unknown reason="재무 데이터가 아직 적재되지 않았습니다" />
         </Specimen>
       </section>
 

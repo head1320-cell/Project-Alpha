@@ -6,7 +6,7 @@
 ## 거는 것
 - ★골든★ 시나리오 충격(가정 M8 · 역사 리플레이 · 국내 팩) · 상관 스트레스 · 기대수익 민감도 ·
   팩터 성격 노드의 결과 == 같은 입력의 기존 라우트/엔진 함수(사본을 만들지 않는다).
-- 역사 리플레이가 mock 폴백을 쓰면 **연습용 계보** — 짝: 적재 시세면 아니다.
+- 역사 리플레이가 mock 폴백을 쓰면 **합성 계보** — 짝: 적재 시세면 아니다.
 - 그 기간 시세가 없으면 **실패 + 사유**(지어내지 않는다).
 - 역사 리플레이에는 강도 배율이 적용되지 않는다는 사실을 말한다 — 짝: 가정 충격은 배율을 말한다.
 - 민감도는 기대수익을 쓰는 방식 기준이다 — 다른 방식(HRP 등)을 고르면 **가정**으로 말한다(짝: MVO 는 아님).
@@ -108,7 +108,7 @@ def test_historical_replay_on_the_mock_fallback_is_practice(market, monkeypatch)
     s = _run(_stress_graph(scenario="hist_2020_covid"))["nodes"]["s"]
     assert calls["n"] == 1 and s["status"] == "ok", s["reason"]
     assert s["lineage"]["practice"] is True
-    assert any("연습용" in t["text"] for t in s["explain"]["trust"] if t["state"] == "unknown")
+    assert any("합성" in t["text"] for t in s["explain"]["trust"] if t["state"] == "unknown")
 
 
 def test_a_window_without_prices_fails_instead_of_inventing(market, monkeypatch):
@@ -197,12 +197,12 @@ def test_sensitivity_with_a_view_uses_the_same_view_as_the_route(market):
 
 
 def test_sensitivity_of_a_mu_free_model_says_it_does_not_move(market):
-    """K3(사용자 결정 2026-10-18) — HRP 는 기대 수익을 쓰지 않는다: 같은 방식으로 계산하고 '안 움직여요' 라고 말한다."""
+    """K3(사용자 결정 2026-10-18) — HRP 는 기대 수익을 쓰지 않는다: 같은 방식으로 계산하고 '안 움직입니다' 라고 말한다."""
     m = _run(_sens_graph(model="hrp"))["nodes"]["m"]
     assert m["status"] == "ok", m["reason"]
     assert m["view"]["basis"] == "hrp" and m["view"]["result"]["mu_reach"] == "none"
     assert all(x == 0.0 for row in m["view"]["result"]["matrix"] for x in row)
-    assert any("움직이지 않아요" in f for f in m["explain"]["facts"])
+    assert any("움직이지 않습니다" in f for f in m["explain"]["facts"])
     assert not any(t["state"] == "assumed" for t in m["explain"]["trust"])
 
 
@@ -258,7 +258,7 @@ def test_every_check_node_speaks_politely_without_overclaiming(market, monkeypat
     for nid in ("s1", "s2", "s3", "c", "m", "x"):
         r = rep["nodes"][nid]
         assert r["status"] == "ok", (nid, r["reason"])
-        assert r["explain"]["title"].endswith("요"), (nid, r["explain"]["title"])
+        assert r["explain"]["title"].endswith("다"), (nid, r["explain"]["title"])
         assert not [t for t in _texts(r["explain"]) for w in FORBIDDEN if w in t], nid
 
 

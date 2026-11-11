@@ -110,7 +110,7 @@ def combine_alphas(specs: list[dict[str, Any]], tickers: list[str],
         return {"available": False,
                 "reason": (f"같은 알파가 여러 번 들어 있습니다: {', '.join(dup_ids)} — "
                            "가중치를 합칠지 하나로 볼지는 추측하지 않습니다. "
-                           "한 항목으로 정리한 뒤 다시 시도하세요.")}
+                           "한 항목으로 정리한 뒤 재시도하십시오.")}
 
     scored: dict[str, dict] = {}
     excluded: list[dict[str, Any]] = []

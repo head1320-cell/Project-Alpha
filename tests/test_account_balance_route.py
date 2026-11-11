@@ -2,7 +2,7 @@
 
 "내 계좌" 화면(BV9b)이 쓴다. 지키는 것:
 
-  ① 연습용(mock)이면 그 계좌의 연습용 클라이언트 값 + `practice: true` — 응답이 자기 출처를 말한다
+  ① 합성(mock)이면 그 계좌의 합성 클라이언트 값 + `practice: true` — 응답이 자기 출처를 말한다
   ② ★증권사 원문(`raw`)·종목 이름·앱 키·시크릿·전체 계좌번호를 싣지 않는다★ — 가린 칸만
   ③ 빠진 칸은 `None` — 0 으로 메우지 않는다(미상 ≠ 0)
   ④ 운영에서 증권사·네트워크 실패는 `/check` 와 같은 어휘(`state:"failed"` + 사람 말 + 가린 원문),
@@ -121,7 +121,7 @@ def test_practice_balance_is_the_accounts_own_practice_client(client):
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["state"] == "ok"
-    assert body["practice"] is True, "연습용 잔고인데 그렇다고 말하지 않았다"
+    assert body["practice"] is True, "가상 잔고인데 그렇다고 말하지 않았다"
     assert body["account_id"] == acc
     mock = kc.get_kis_client(account_id=acc)
     assert body["cash_krw"] == mock.cash
@@ -204,7 +204,7 @@ def test_an_unreachable_broker_is_a_failure(client, monkeypatch):
     _production(monkeypatch, down)
     body = _balance(client, acc).json()
     assert body["state"] == "failed"
-    assert "닿지" in body["reason"]
+    assert "연결 실패" in body["reason"]
 
 
 def test_a_programming_error_is_not_dressed_up_as_a_broker_failure(client, monkeypatch):

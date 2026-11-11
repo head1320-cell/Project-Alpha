@@ -3,9 +3,9 @@
 계획 `happy-percolating-falcon.md` §BL2b. 노드는 **라우트·엔진과 같은 함수**를 부른다 — 여기 골든이 대조한다.
 
 ## 거는 것
-- **매크로 데이터 경로**(사용자 결정: 저장된 관측 + mock 연습용) — 운영은 `collect_all(store_only=True)`: 외부 호출 0 ·
+- **매크로 데이터 경로**(사용자 결정: 저장된 관측 + mock 합성) — 운영은 `collect_all(store_only=True)`: 외부 호출 0 ·
   캐시 쓰기 0 · 관측 적재 0 · 저장된 것이 없으면 사유 있는 실패(짝: 있으면 계산). 개발은 `/macro` 라우트와 같은 수집기
-  출력 + 연습용 계보. 저장된 관측으로 만든 계열은 같은 값을 받아 온 라이브 계열과 **같다**(정규화를 두 벌 두지 않는다).
+  출력 + 합성 계보. 저장된 관측으로 만든 계열은 같은 값을 받아 온 라이브 계열과 **같다**(정규화를 두 벌 두지 않는다).
 - 쓰기 끔: 알파 검증·포트폴리오는 `record_run=False` 를 **명시**한다(라우트 기본은 True) — 계산 중 기록 0.
   알파 검증의 '검증 기록 남기기' 는 먼저 기록 없이 대조하고 같을 때만 한 번 기록한다.
 """
@@ -174,7 +174,7 @@ def test_regime_ensemble_in_development_equals_the_route_and_is_practice(monkeyp
     assert r["status"] == "ok", r["reason"]
     assert r["view"]["result"] == macro_regime_ensemble(market="kr", months=48)
     assert r["lineage"]["practice"] is True
-    assert any("연습용" in t["text"] for t in r["explain"]["trust"])
+    assert any("합성" in t["text"] for t in r["explain"]["trust"])
 
 
 def test_regime_explain_in_development_equals_the_route(monkeypatch):

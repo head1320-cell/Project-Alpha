@@ -93,7 +93,7 @@ def test_each_record_says_what_it_is_and_none_is_live_trading():
     assert s["실행 bt_a"]["data"] == "synthetic" and s["실행 bt_b"]["data"] == "real"
     ex = gn.REGISTRY.get("record_robustness").explain(out.view, {}, _params())
     text = " ".join(t["text"] for t in ex["trust"])
-    assert "실거래 기록이 아니에요" in text and "몫은 똑같이" in text
+    assert "실거래 기록이 아닙니다" in text and "몫은 똑같이" in text
 
 
 def test_unknown_mock_state_is_not_called_real_pair():
@@ -133,10 +133,10 @@ def test_registered_strategies_are_read_with_their_labels(monkeypatch):
 
 def test_an_empty_registry_says_so(monkeypatch):
     monkeypatch.setattr(rec, "_registry_rows", lambda ids: (_ for _ in ()).throw(
-        pg.NodeFailure("등록한 전략이 없어요 — 백테스트 결과에서 등록하세요")))
+        pg.NodeFailure("등록한 전략이 없습니다 — 백테스트 결과에서 등록하십시오")))
     with pytest.raises(pg.NodeFailure) as e:
         rec._record_robustness({"r1": _run_value("bt_a", 200, 1)}, _params(strategy_ids=[1]))
-    assert "등록한 전략이 없어요" in str(e.value)
+    assert "등록한 전략이 없습니다" in str(e.value)
 
 
 def test_unknown_strategy_ids_are_named_pair(monkeypatch):

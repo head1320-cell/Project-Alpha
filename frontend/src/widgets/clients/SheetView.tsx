@@ -28,11 +28,11 @@ export function SheetView({ cid, sid }: { cid: string; sid: string }) {
   const here = `/clients/${cid}/sheets/${sid}`;
   return (
     <div className="tx-page cs-page">
-      {session.kind === "loading" ? <p className="tx-sec-sub" aria-busy="true">계정을 확인하는 중이에요.</p>
-        : session.kind === "unknown" ? <RetryFail title="계정 정보를 확인하지 못했어요" onRetry={() => void retry()}>{session.reason}</RetryFail>
+      {session.kind === "loading" ? <p className="tx-sec-sub" aria-busy="true">계정 확인 중</p>
+        : session.kind === "unknown" ? <RetryFail title="계정 정보 확인 실패" onRetry={() => void retry()}>{session.reason}</RetryFail>
         : session.kind === "signed_out" ? (
           <section className="tx-sec cl-signed-out">
-            <p className="cl-strong">로그인하면 이 한 장을 볼 수 있어요.</p>
+            <p className="cl-strong">로그인하면 이 한 장을 볼 수 있습니다.</p>
             <Link href={loginHref(here)} className="tx-btn tx-btn--main">로그인</Link>
           </section>
         ) : <Body cid={cid} sid={sid} />}
@@ -45,18 +45,18 @@ function Body({ cid, sid }: { cid: string; sid: string }) {
   const q = useQuery({ queryKey: ["pb-sheet", cid, sid], queryFn: unwrap(() => getSheet(cid, sid)), staleTime: 0, retry: false });
   const [err, setErr] = useState<string | null>(null);
   const back = `/clients?client=${encodeURIComponent(cid)}`;
-  if (q.isLoading) return <p className="tx-sec-sub" aria-busy="true">한 장을 여는 중이에요.</p>;
+  if (q.isLoading) return <p className="tx-sec-sub" aria-busy="true">한 장 로딩 중</p>;
   if (q.isError) {
     return (
       <section className="tx-sec">
-        <p className="cl-strong">이 한 장을 열지 못했어요 — {(q.error as Error).message}</p>
+        <p className="cl-strong">이 한 장 열기 실패 — {(q.error as Error).message}</p>
         <Link href="/clients" className="tx-btn tx-btn--sub">고객으로</Link>
       </section>
     );
   }
   const x = q.data!;
   async function remove() {
-    if (!window.confirm("이 한 장을 지울까요? 고객에게 보여 준 적 없는 한 장만 지울 수 있어요.")) return;
+    if (!window.confirm("이 한 장을 삭제하시겠습니까? 고객에게 보여 준 적 없는 한 장만 지울 수 있습니다.")) return;
     const r = await deleteSheet(cid, sid);
     if (!r.ok) { setErr(r.error); return; }
     router.replace(back);
@@ -68,15 +68,15 @@ function Body({ cid, sid }: { cid: string; sid: string }) {
         <div className="cs-tools-act">
           <button type="button" className="tx-btn tx-btn--main cs-print" onClick={() => window.print()}>인쇄 · PDF로 저장</button>
           {!x.shared && !x.client_archived && (
-            <button type="button" className="tx-btn tx-btn--sub cs-delete" onClick={() => void remove()}>지우기</button>
+            <button type="button" className="tx-btn tx-btn--sub cs-delete" onClick={() => void remove()}>삭제</button>
           )}
         </div>
-        {x.shared && <p className="cs-tools-note">고객에게 보여 준 한 장이라 지울 수 없어요 — 무엇을 보여 줬는지가 남아요.</p>}
+        {x.shared && <p className="cs-tools-note">고객에게 보여 준 한 장이라 지울 수 없습니다 — 무엇을 보여 줬는지가 남습니다.</p>}
         {err && <p className="cl-err" role="alert">{err}</p>}
       </div>
       <ClientSheet sheet={x.sheet} />
       <SharePanel cid={cid} sid={sid} archived={x.client_archived} />
-      <SheetAsk title="고객 AI 미리 묻기" sub="고객이 이 한 장에 물으면 어떻게 답하는지 미리 봐요. 근거는 이 한 장에 적힌 줄뿐이고, 투자 판단은 답하지 않아요."
+      <SheetAsk title="고객 AI 미리 묻기" sub="고객이 이 한 장에 물으면 어떻게 답하는지 미리 봅니다. 근거는 이 한 장에 적힌 줄뿐이고, 투자 판단은 답하지 않습니다."
                 ask={(question, prev) => askSheet(cid, sid, question, prev)} />
     </>
   );

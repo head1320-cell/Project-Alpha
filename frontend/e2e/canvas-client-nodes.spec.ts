@@ -95,7 +95,7 @@ test("PB1 · 목표까지 — 목표는 곡선에서 읽고, 구간 안이면 �
   await tab(page, "detail");
   const side = page.locator(".pg-side");
   await expect(side.locator(".pg-goal-target")).toContainText("%");
-  await expect(side.locator('.pg-goal-gap[data-state="unknown"]')).toContainText("몰라요");
+  await expect(side.locator('.pg-goal-gap[data-state="unknown"]')).toContainText("N/A");
 });
 
 test("PB1 · 고객 · 보유 진단 — 성향·출처·평가일 · 위험 기여", async ({ page }) => {
@@ -106,7 +106,7 @@ test("PB1 · 고객 · 보유 진단 — 성향·출처·평가일 · 위험 기
   const side = page.locator(".pg-side");
   await expect(side.locator(".pg-client-kv")).toContainText("위험중립형");
   await expect(side.locator(".pg-client-kv")).toContainText("설문");
-  await expect(side.locator(".pg-client-kv")).toContainText("일 지났어요");
+  await expect(side.locator(".pg-client-kv")).toContainText("일 지났습니다");
   await node(page, "h").click();
   await tab(page, "detail");
   await expect(side.locator(".pg-hold-risk .pg-table tr")).toHaveCount(3);

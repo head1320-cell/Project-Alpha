@@ -65,21 +65,21 @@ test("히어로: 답 문장 = 서버 국면의 번역 — 응답을 DEFENSIVE �
   const seen = page.waitForResponse((r) => r.url().endsWith("/api/v1/macro/regime"));
   await open(page);
   const body = (await (await seen).json()) as Regime;
-  await expect(answer(page)).toHaveText(`지금 경제 흐름은 ‘${MODE[body.recommended_mode]}’ 단계예요`, { timeout: 20_000 });
+  await expect(answer(page)).toHaveText(`지금 경제 흐름은 ‘${MODE[body.recommended_mode]}’ 단계입니다`, { timeout: 20_000 });
   await expect(live(page)).toContainText("지금 서버가 내는 답");
 
   await patchRegime(page, (b) => { b.recommended_mode = "DEFENSIVE"; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 경제 흐름은 ‘방어’ 단계예요", { timeout: 20_000 });
+  await expect(answer(page)).toHaveText("지금 경제 흐름은 ‘방어’ 단계입니다", { timeout: 20_000 });
 
   await page.unroute("**/api/v1/macro/regime");
   await patchRegime(page, (b) => { b.recommended_mode = "SOMETHING_NEW"; b.stress_score = 41.4; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 시장 스트레스는 41/100이에요", { timeout: 20_000 });
+  await expect(answer(page)).toHaveText("지금 시장 스트레스는 41/100입니다", { timeout: 20_000 });
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
 });
 
-test("★히어로: 국면 실패는 alert + 다시 시도★ — 풀고 누르면 문장이 뜬다 · 정상이면 alert 없음(짝)", async ({ page }) => {
+test("★히어로: 국면 실패는 alert + 재시도★ — 풀고 누르면 문장이 뜬다 · 정상이면 alert 없음(짝)", async ({ page }) => {
   await open(page);
   await expect(answer(page)).toBeVisible({ timeout: 20_000 });
   await expect(live(page).locator("[role='alert']")).toHaveCount(0);
@@ -87,21 +87,21 @@ test("★히어로: 국면 실패는 alert + 다시 시도★ — 풀고 누르�
   await page.route("**/api/v1/macro/regime", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await page.reload({ waitUntil: "domcontentloaded" });
   const alert = live(page).locator("[role='alert']");
-  await expect(alert).toContainText("매크로 분석을 불러오지 못했어요", { timeout: 20_000 });
+  await expect(alert).toContainText("매크로 분석 조회 실패", { timeout: 20_000 });
   await expect(answer(page)).toHaveCount(0);
   await page.unroute("**/api/v1/macro/regime");
-  await live(page).locator("button", { hasText: "다시 시도" }).click();
+  await live(page).locator("button", { hasText: "재시도" }).click();
   await expect(answer(page)).toBeVisible({ timeout: 20_000 });
   await expect(alert).toHaveCount(0);
 });
 
-test("히어로: 연습용 칩은 connection-status 로만 — mock 이면 있고 · 실데이터 응답이면 없다(짝)", async ({ page }) => {
+test("히어로: 합성 칩은 connection-status 로만 — mock 이면 있고 · 실데이터 응답이면 없다(짝)", async ({ page }) => {
   const chip = (tone: string) => page.locator(`.ld-live .tx-chip[data-tone="${tone}"]`);
   const cs = page.waitForResponse((r) => r.url().endsWith("/api/v1/macro/connection-status"));
   await open(page);
   const st = (await (await cs).json()) as { mock_allowed: boolean; bok_configured: boolean };
   expect(st.mock_allowed && !st.bok_configured, "이 환경은 mock 이다").toBe(true);
-  await expect(chip("practice")).toHaveText("연습용 데이터", { timeout: 20_000 });
+  await expect(chip("practice")).toHaveText("합성 데이터", { timeout: 20_000 });
 
   await page.route("**/api/v1/macro/connection-status", (r) => r.fulfill({ json: { mock_allowed: false, real_mode: true, bok_configured: true, fred_configured: true } }));
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -174,7 +174,7 @@ test("★근거 짚기: 누르면 답 카드의 그 칩을 짚는다 · 짝: 다
   await expect(btn("source")).toHaveAttribute("aria-pressed", "true");
   expect(await ring("source"), "짚은 칩은 테두리가 생긴다").not.toBe(base);
   expect(await ring("model"), "짝: 다른 칩은 그대로").toBe(base);
-  await expect(page.locator(".ld-ev-d")).toContainText("연습용");
+  await expect(page.locator(".ld-ev-d")).toContainText("합성");
 
   await btn("model").click();
   await expect(hero).toHaveAttribute("data-focus", "model");
@@ -242,13 +242,13 @@ async function centerStep(page: Page, n: number) {
 const tourActive = (p: Page) => p.locator(".ld-tour").getAttribute("data-active");
 const zoomOf = (p: Page) => p.locator(".ld-tour-zoom").evaluate((e) => getComputedStyle(e).transform);
 
-test("★지운 띠가 없다 — 노란 연습용 띠·약속·출처·질문·시작하기·바닥 · 예시 수치 덱★ · 짝: 연습용 여부는 히어로 답의 칩이 말한다", async ({ page }) => {
+test("★지운 띠가 없다 — 노란 합성 띠·약속·출처·질문·시작하기·바닥 · 예시 수치 덱★ · 짝: 합성 여부는 히어로 답의 칩이 말한다", async ({ page }) => {
   await open(page);
   await expect(page.locator(".ld-top, .lp-topbar")).toHaveCount(0);
   await expect(page.locator(".ld-promise, .ld-checks, .ld-src, .ld-faq, .ld-start, .ld-foot, .lp-deck")).toHaveCount(0);
   await expect(page.locator(".ld")).not.toContainText(/KIS_USE_MOCK|dry_run|예시 수치|Sharpe|\+24\.6%|1,539|\b181\b/);
   await expect(page.locator(".ld main > section")).toHaveCount(4);
-  await expect(page.locator('.ld-live .tx-chip[data-tone="practice"]')).toHaveText("연습용 데이터", { timeout: 20_000 });
+  await expect(page.locator('.ld-live .tx-chip[data-tone="practice"]')).toHaveText("합성 데이터", { timeout: 20_000 });
 });
 
 test("★스튜디오 둘러보기: 가운데 온 단계가 그 부위를 비추고 다가간다 · 짝: 다른 단계는 다른 부위·다른 확대★", async ({ page }) => {
@@ -276,7 +276,7 @@ test("★스튜디오 둘러보기: 가운데 온 단계가 그 부위를 비추
   await expect.poll(() => zoomOf(page)).not.toBe(z2);
 });
 
-test("스튜디오 둘러보기: 단계 제목은 단추라 눌러서(키보드로도) 고른다 · 실제 화면이 불러와지고 연습용 캡션이 붙는다", async ({ page }) => {
+test("스튜디오 둘러보기: 단계 제목은 단추라 눌러서(키보드로도) 고른다 · 실제 화면이 불러와지고 합성 캡션이 붙는다", async ({ page }) => {
   await open(page);
   const btn = page.locator('.ld-tour-step[data-step="4"] .ld-tour-btn');
   await btn.focus();
@@ -289,7 +289,7 @@ test("스튜디오 둘러보기: 단계 제목은 단추라 눌러서(키보드�
   await expect.poll(() => img.evaluate((e) => (e as HTMLImageElement).complete && (e as HTMLImageElement).naturalWidth), { timeout: 20_000 }).toBeGreaterThan(0);
   expect((await img.getAttribute("alt"))?.length ?? 0, "그림 설명(alt)").toBeGreaterThan(20);
   await expect(page.locator(".ld-tour-zoom img.ld-shot-dark")).toBeHidden();
-  await expect(page.locator(".ld-tour .ld-shot-cap")).toContainText("연습용");
+  await expect(page.locator(".ld-tour .ld-shot-cap")).toContainText("합성");
 });
 
 test("★도구 허브: 다섯 도구 + 가운데 스튜디오 = 링크 6 · 도구마다 실제 캔버스 노드 이름(서버 카탈로그와 같다)★", async ({ page, request }) => {
@@ -347,7 +347,7 @@ test("리서치 경로: 일곱 단계가 순서대로 · 화면에 들어오면 
   await expect(band.locator(".ld-end .tx-btn--main")).toHaveText("포트폴리오 설계 시작");
 });
 
-test("★보이는 글: em-dash 0 · 합니다체 0 · 영어 대문자 소제목 0 · 툴팁 0★", async ({ page }) => {
+test("★보이는 글: em-dash 0 · 해요체 0 · 영어 대문자 소제목 0 · 툴팁 0★", async ({ page }) => {
   await open(page);
   await expect(answer(page)).toBeVisible({ timeout: 20_000 });
   const root = page.locator(".ld");
@@ -355,7 +355,7 @@ test("★보이는 글: em-dash 0 · 합니다체 0 · 영어 대문자 소제�
   await root.locator("details").evaluateAll((ds) => ds.forEach((d) => { (d as HTMLDetailsElement).open = true; }));
   const text = await root.innerText();
   expect(text, "보이는 글에 em-dash").not.toContain("—");
-  expect(text.match(/[가-힣](습니다|합니다|입니다)[.\s]/g) ?? [], "해요체로 쓴다").toEqual([]);
+  expect(text.match(/[가-힣](어요|아요|에요|예요|세요|해요|돼요)(?![가-힣])/g) ?? [], "합니다체로 쓴다(ADR 005)").toEqual([]);
   const heads = await root.locator("h1, h2, h3").allInnerTexts();
   for (const h of heads) expect(h, `소제목에 영어 대문자: ${h}`).not.toMatch(/[A-Z]{3,}/);
   await expect(root.locator("[title]")).toHaveCount(0);

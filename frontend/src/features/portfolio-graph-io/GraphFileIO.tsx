@@ -45,7 +45,7 @@ export function ExportButton({ getDoc, disabled }: { getDoc: () => GraphDoc; dis
   return (
     <button type="button" className={`pg-export ${BTN}`} disabled={disabled}
             onClick={() => downloadGraph(getDoc())}
-            title="설정·위치만 파일로 받아요(계산 결과는 담지 않아요 — 불러와서 다시 계산해요)">
+            title="설정·위치만 파일로 받습니다(계산 결과는 담지 않습니다 — 불러와서 재계산합니다)">
       <Download size={13} aria-hidden="true" /> <span className="pg-tl">내보내기</span>
     </button>
   );

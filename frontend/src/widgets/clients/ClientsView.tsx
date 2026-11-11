@@ -21,8 +21,8 @@ import { loginHref } from "@/shared/lib/nextPath";
 import { Notice, PageHead, RetryFail } from "@/shared/ui/tx";
 
 const TITLE = "고객";
-const LEDE = "관리하는 고객과 고객별 설계 문서예요. 고객 정보는 비중을 바꾸지 않아요 — 점검하고 기록하는 데 써요.";
-const NO_PII = "별칭만 적어요 — 실명·연락처·주민번호·계좌번호는 적지 않아요. 전화·이메일·긴 숫자 모양은 서버가 받지 않고, 실명은 모양으로 알 수 없어 PB 가 지켜요.";
+const LEDE = "관리하는 고객과 고객별 설계 문서입니다. 고객 정보는 비중을 바꾸지 않습니다 — 점검하고 기록하는 데 씁니다.";
+const NO_PII = "별칭만 적습니다 — 실명·연락처·주민번호·계좌번호는 적지 않습니다. 전화·이메일·긴 숫자 모양은 서버가 받지 않고, 실명은 모양으로 알 수 없어 PB 가 지킵니다.";
 
 const unwrap = <T,>(fn: () => Promise<Result<T>>) => async (): Promise<T> => {
   const r = await fn();
@@ -38,17 +38,17 @@ export function ClientsView() {
   return (
     <div className="tx-page cl-page">
       <PageHead title={TITLE} lede={LEDE} />
-      {session.kind === "loading" ? <p className="tx-sec-sub" aria-busy="true">계정을 확인하는 중이에요.</p>
-        : session.kind === "unknown" ? <RetryFail title="계정 정보를 확인하지 못했어요" onRetry={() => void retry()}>{session.reason}</RetryFail>
+      {session.kind === "loading" ? <p className="tx-sec-sub" aria-busy="true">계정 확인 중</p>
+        : session.kind === "unknown" ? <RetryFail title="계정 정보 확인 실패" onRetry={() => void retry()}>{session.reason}</RetryFail>
         : session.kind === "signed_out" ? (
           <section className="tx-sec cl-signed-out">
-            <p className="cl-strong">로그인하면 내 고객을 볼 수 있어요.</p>
-            <p className="tx-sec-sub">고객 자료는 이 서버의 내 계정에만 있어요 — 다른 PB 는 보지 못해요.</p>
+            <p className="cl-strong">로그인하면 내 고객을 볼 수 있습니다.</p>
+            <p className="tx-sec-sub">고객 자료는 이 서버의 내 계정에만 있습니다 — 다른 PB 는 보지 못합니다.</p>
             <Link href={loginHref("/clients")} className="tx-btn tx-btn--main">로그인</Link>
           </section>
         ) : session.mustChange ? (
           <section className="tx-sec cl-must" role="alert">
-            <p className="cl-strong">비밀번호를 먼저 바꿔 주세요.</p>
+            <p className="cl-strong">비밀번호를 먼저 변경하십시오.</p>
             <Link href="/settings#password" className="tx-btn tx-btn--main">비밀번호 바꾸러 가기</Link>
           </section>
         ) : <Clients />}
@@ -70,10 +70,10 @@ function Clients() {
             </button>
           ))}
         </div>
-        {list.isLoading ? <p className="tx-sec-sub" aria-busy="true">고객을 불러오는 중이에요.</p>
-          : list.isError ? <RetryFail title="고객을 불러오지 못했어요" onRetry={() => void list.refetch()}>{(list.error as Error).message}</RetryFail>
+        {list.isLoading ? <p className="tx-sec-sub" aria-busy="true">고객 조회 중</p>
+          : list.isError ? <RetryFail title="고객 조회 실패" onRetry={() => void list.refetch()}>{(list.error as Error).message}</RetryFail>
           : (list.data?.clients ?? []).length === 0 ? (
-            <p className="cl-empty">{tab === "active" ? "아직 고객이 없어요 — 아래에서 별칭으로 더해요." : "보관한 고객이 없어요."}</p>
+            <p className="cl-empty">{tab === "active" ? "아직 고객이 없습니다 — 아래에서 별칭으로 더합니다." : "보관한 고객 없음"}</p>
           ) : (
             <ul className="cl-list">
               {list.data!.clients.map((c) => (
@@ -90,7 +90,7 @@ function Clients() {
       </section>
       <div className="cl-main">
         {want ? <Detail key={want} cid={want} /> : (
-          <section className="tx-sec cl-detail-empty"><p className="tx-sec-sub">고객을 고르면 그 고객의 정보와 설계 문서가 보여요.</p></section>
+          <section className="tx-sec cl-detail-empty"><p className="tx-sec-sub">고객을 고르면 그 고객의 정보와 설계 문서가 보입니다.</p></section>
         )}
       </div>
       <AddClient />
@@ -151,7 +151,7 @@ function AddClient() {
   return (
     <section className="tx-sec cl-add" aria-label="고객 더하기">
       <h2 className="tx-sec-t">고객 더하기</h2>
-      <Notice tone="warn" title="실명·연락처는 적지 않아요">{NO_PII}</Notice>
+      <Notice tone="warn" title="실명·연락처는 적지 않습니다">{NO_PII}</Notice>
       <FactsForm key={n} init={{}} submitLabel="더하기" className="cl-add" err={err} onSubmit={async (f) => {
         const r = await createClient(f);
         if (!r.ok) { setErr(r.error); return; }
@@ -170,11 +170,11 @@ function Detail({ cid }: { cid: string }) {
   const q = useQuery({ queryKey: ["pb-client", cid], queryFn: unwrap(() => getClient(cid)), staleTime: 0, retry: false });
   const [err, setErr] = useState<string | null>(null);
   const [editErr, setEditErr] = useState<string | null>(null);
-  if (q.isLoading) return <section className="tx-sec cl-detail" aria-busy="true"><p className="tx-sec-sub">고객을 여는 중이에요.</p></section>;
+  if (q.isLoading) return <section className="tx-sec cl-detail" aria-busy="true"><p className="tx-sec-sub">고객 로딩 중</p></section>;
   if (q.isError) {
     return (
       <section className="tx-sec cl-detail cl-detail--missing">
-        <p className="cl-strong">이 고객을 열지 못했어요 — {(q.error as Error).message}</p>
+        <p className="cl-strong">이 고객 열기 실패 — {(q.error as Error).message}</p>
         <button type="button" className="tx-btn tx-btn--sub" onClick={() => router.replace("/clients")}>목록으로</button>
       </section>
     );
@@ -201,7 +201,7 @@ function Detail({ cid }: { cid: string }) {
       <dl className="cl-facts">
         <div><dt>위험 성향</dt><dd>{c.risk_tolerance ? RISK_PLAIN[c.risk_tolerance] : "모름"}</dd></div>
         <div><dt>성향 출처</dt><dd>{SOURCE_PLAIN[c.profile_source]}</dd></div>
-        <div><dt>평가일</dt><dd>{c.assessed_at ? `${c.assessed_at} · ${c.assessed_age_days}일 지났어요` : "모름"}</dd></div>
+        <div><dt>평가일</dt><dd>{c.assessed_at ? `${c.assessed_at} · ${c.assessed_age_days}일 지났습니다` : "모름"}</dd></div>
         <div><dt>투자 기간</dt><dd>{c.horizon_years === null ? "모름" : `${c.horizon_years}년`}</dd></div>
       </dl>
       <div className="cl-acts">
@@ -212,7 +212,7 @@ function Detail({ cid }: { cid: string }) {
       </div>
       {err && <p className="cl-err" role="alert">{err}</p>}
       <h3 className="cl-h3">설계 문서</h3>
-      {c.docs.length === 0 ? <p className="cl-empty">아직 문서가 없어요 — ‘정기 점검으로 새 문서’ 로 만들어요.</p> : (
+      {c.docs.length === 0 ? <p className="cl-empty">아직 문서가 없습니다 — ‘정기 점검으로 새 문서’ 로 만듭니다.</p> : (
         <ul className="cl-docs">
           {c.docs.map((d) => (
             <li key={d.doc_id} className="cl-doc" data-doc-id={d.doc_id}>
@@ -224,11 +224,11 @@ function Detail({ cid }: { cid: string }) {
         </ul>
       )}
       <h3 className="cl-h3">고객 한 장</h3>
-      {(c.sheets ?? []).length === 0 ? <p className="cl-empty">아직 한 장이 없어요 — 캔버스에서 계산한 뒤 위 칩의 ‘한 장’ 으로 만들어요.</p> : (
+      {(c.sheets ?? []).length === 0 ? <p className="cl-empty">아직 한 장이 없습니다 — 캔버스에서 계산한 뒤 위 칩의 ‘한 장’ 으로 만듭니다.</p> : (
         <ul className="cl-docs">
           {c.sheets.map((x) => (
             <li key={x.sheet_id} className="cl-doc cl-sheet" data-sheet-id={x.sheet_id}>
-              <span className="cl-doc-name">{x.title}{x.practice && <span className="cl-practice">연습용</span>}</span>
+              <span className="cl-doc-name">{x.title}{x.practice && <span className="cl-practice">합성</span>}</span>
               <span className="cl-doc-when">{x.shared ? "고객에게 보여 줌" : `만든 날 ${day(x.created_at)}`}</span>
               <Link href={`/clients/${encodeURIComponent(cid)}/sheets/${encodeURIComponent(x.sheet_id)}`} className="cl-doc-open">한 장 보기</Link>
             </li>

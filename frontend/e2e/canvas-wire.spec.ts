@@ -96,7 +96,7 @@ test("선 탭: 흐르는 값 · 두 노드 · 서버 역할 — 역할을 확인
 test("끊으면: 받는 노드부터 하류 수를 말하고, 끊기는 되돌리기 한 번에 돌아온다", async ({ page }) => {
   await openWith(page, WITH_RISK);
   await clickWire(page, "returns.returns->optimizer.returns");
-  await expect(row(page, "cut")).toContainText("‘비중 계산’부터 2개 노드가 계산되지 않아요");  // optimizer + risk
+  await expect(row(page, "cut")).toContainText("‘비중 계산’부터 2개 노드가 계산되지 않습니다");  // optimizer + risk
   const before = await edges(page).count();
   await page.locator(".pg-wire-cut").click();
   await expect(edges(page)).toHaveCount(before - 1);
@@ -129,7 +129,7 @@ test("사이에 넣기: 같은 타입을 받아 내는 노드만 · 넣으면 �
   expect(d1.edges.some((x) => x.source === "optimizer" && x.target === "risk")).toBe(false);
 });
 
-test("믿을 수 있나요: 계산 뒤 연습용 흐름엔 칩 · 연습용이 아닌 흐름엔 없다(짝)", async ({ page }) => {
+test("신뢰도: 계산 뒤 합성 흐름엔 칩 · 합성 데이터가 아닌 흐름엔 없다(짝)", async ({ page }) => {
   await openWith(page, WITH_RISK);
   await page.locator(".pg-run").first().click();
   await expect(page.locator('.pg-node[data-kind="risk"]')).toHaveClass(/pg-node--ok/, { timeout: 60_000 });
@@ -160,7 +160,7 @@ test("끄는 동안 이을 수 있는 포트만 또렷하다 · 잘못 놓으면
   const before = await edges(page).count();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 });
   await page.mouse.up();
-  await expect(page.locator(".pg-note")).toContainText("같은 색 점끼리 이어요");
+  await expect(page.locator(".pg-note")).toContainText("같은 색 점끼리 잇습니다");
   await expect(edges(page)).toHaveCount(before);
   await expect(page.locator(".pg-port--can")).toHaveCount(0);                                     // 끝나면 강조도 사라진다
 });

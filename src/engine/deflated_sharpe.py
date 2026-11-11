@@ -45,8 +45,8 @@ MIN_OBS = 60
 #: 샤프가 10¹⁵ 로 튄다(테스트가 찾았다). 일별 수익의 실제 표준편차는 이보다 수만 배 크다.
 FLAT_SD = 1e-10
 
-NOTE_N_LOWER_BOUND = ("N 은 이 캔버스에 남아 있는 비교 대상 수예요 — 그 전에 바꿔 보고 지운 설정은 세지 않아 "
-                      "실제로 시도한 수보다 작을 수 있고, 그만큼 보정이 약해요.")
+NOTE_N_LOWER_BOUND = ("N 은 이 캔버스에 남아 있는 비교 대상 수입니다 — 그 전에 바꿔 보고 지운 설정은 세지 않아 "
+                      "실제로 시도한 수보다 작을 수 있고, 그만큼 보정이 약합니다.")
 
 
 def _norm_cdf(x: float) -> float:
@@ -62,9 +62,9 @@ def returns_from_equity(equity: list[float] | np.ndarray) -> np.ndarray:
     """누적 곡선 → 기간 수익. 0 이하·비유한 값이 있으면 ValueError(지어내지 않는다)."""
     eq = np.asarray(equity, dtype=float)
     if eq.ndim != 1 or eq.size < 2:
-        raise ValueError("곡선에 점이 두 개 이상 있어야 해요")
+        raise ValueError("곡선에 점이 두 개 이상 있어야 합니다")
     if not np.all(np.isfinite(eq)) or np.any(eq <= 0):
-        raise ValueError("곡선에 0 이하이거나 숫자가 아닌 값이 있어요")
+        raise ValueError("곡선에 0 이하이거나 숫자가 아닌 값이 있습니다")
     return eq[1:] / eq[:-1] - 1.0
 
 
@@ -74,10 +74,10 @@ def moments(r: np.ndarray) -> dict[str, Any]:
     T = int(r.size)
     if T < MIN_OBS:
         return {"t": T, "sr": None, "skew": None, "kurt": None,
-                "reason": f"수익이 {T}개뿐이에요 — {MIN_OBS}개 이상이어야 분포 모양을 믿을 만하게 재요"}
+                "reason": f"수익이 {T}개뿐입니다 — {MIN_OBS}개 이상이어야 분포 모양을 믿을 만하게 측정합니다"}
     sd = float(r.std(ddof=1))
     if not math.isfinite(sd) or sd <= FLAT_SD:
-        return {"t": T, "sr": None, "skew": None, "kurt": None, "reason": "수익이 흔들리지 않아(표준편차 0) 샤프를 정의할 수 없어요"}
+        return {"t": T, "sr": None, "skew": None, "kurt": None, "reason": "수익이 흔들리지 않아(표준편차 0) 샤프를 정의할 수 없습니다"}
     mu = float(r.mean())
     z = (r - mu) / float(r.std(ddof=0))
     return {"t": T, "sr": mu / sd, "skew": float(np.mean(z ** 3)), "kurt": float(np.mean(z ** 4)), "reason": None}
@@ -94,7 +94,7 @@ def psr(sr: float, sr_star: float, t: int, skew: float, kurt: float) -> float | 
 def expected_max_sr(n: int, var_sr: float) -> float:
     """N 번 독립 시도에서 운으로 기대되는 최대 SR(기간당) — 참 SR 이 모두 0 일 때."""
     if n < 2:
-        raise ValueError("N 은 2 이상이어야 해요")
+        raise ValueError("N 은 2 이상이어야 합니다")
     return math.sqrt(max(var_sr, 0.0)) * ((1 - EULER_GAMMA) * _norm_ppf(1 - 1 / n)
                                           + EULER_GAMMA * _norm_ppf(1 - 1 / (n * math.e)))
 
@@ -109,13 +109,13 @@ def participation_ratio(C: np.ndarray) -> float:
 def _n_eff(series: list[dict], rows: list[dict]) -> tuple[float | None, str | None]:
     bad = [r["label"] for r in rows if r["sr"] is None]
     if bad:
-        return None, f"샤프를 못 잰 대상({', '.join(map(str, bad))})이 있어 서로 얼마나 닮았는지 잴 수 없어요"
+        return None, f"샤프를 못 잰 대상({', '.join(map(str, bad))})이 있어 서로 얼마나 닮았는지 측정할 수 없습니다"
     arrs = [np.asarray(s["returns"], dtype=float) for s in series]
     t = min(a.size for a in arrs)
     M = np.vstack([a[-t:] for a in arrs])                     # 끝을 맞춘다(같은 날까지의 흐름)
     C = np.corrcoef(M)
     if not np.all(np.isfinite(C)):
-        return None, "상관을 계산하지 못했어요(흔들림이 없는 흐름이 있어요)"
+        return None, "상관 산출 실패(흔들림이 없는 흐름이 있습니다)"
     return participation_ratio(C), None
 
 
@@ -132,7 +132,7 @@ def compare(series: list[dict]) -> dict[str, Any]:
         if m["sr"] is not None:
             row["psr0"] = psr(m["sr"], 0.0, m["t"], m["skew"], m["kurt"])
             if row["psr0"] is None:
-                row["reason"] = "왜도·첨도가 극단적이라 샤프의 표준오차를 정의할 수 없어요"
+                row["reason"] = "왜도·첨도가 극단적이라 샤프의 표준오차를 정의할 수 없습니다"
         rows.append(row)
     n = len(series)
     srs = [r["sr"] for r in rows if r["sr"] is not None]
@@ -141,14 +141,14 @@ def compare(series: list[dict]) -> dict[str, Any]:
     out: dict[str, Any] = {"n": n, "sr0": None, "var_sr": None, "rows": rows, "reason": None,
                            "note": NOTE_N_LOWER_BOUND, "n_eff": None, "sr0_eff": None, "n_eff_reason": None}
     if n < 2:
-        out["reason"] = "비교할 대상이 둘 이상이어야 보정할 수 있어요"
+        out["reason"] = "비교할 대상이 둘 이상이어야 보정할 수 있습니다"
         return out
     if len(srs) < 2:
-        out["reason"] = "샤프를 잰 대상이 둘 미만이라 시도 사이의 흩어짐을 잴 수 없어요"
+        out["reason"] = "샤프를 잰 대상이 둘 미만이라 시도 사이의 흩어짐을 측정할 수 없습니다"
         return out
     var = float(np.var(srs, ddof=1))
     if var <= 0:
-        out["reason"] = "모든 대상의 샤프가 같아 시도 사이의 흩어짐이 0 이에요 — 보정 기준을 정할 수 없어요"
+        out["reason"] = "모든 대상의 샤프가 같아 시도 사이의 흩어짐이 0 입니다 — 보정 기준을 정할 수 없습니다"
         return out
     sr0 = expected_max_sr(n, var)
     out["var_sr"], out["sr0"] = var, sr0
@@ -158,8 +158,8 @@ def compare(series: list[dict]) -> dict[str, Any]:
     n_eff, why = _n_eff(series, rows)
     out["n_eff"], out["n_eff_reason"] = n_eff, why
     if n_eff is not None and n_eff < 2:
-        out["n_eff_reason"] = (f"서로 닮아 독립으로 센 수가 {n_eff:.2f} 로 2 보다 작아요 — "
-                               "기대 최대 샤프를 정할 수 없어 이 보정은 내지 않아요")
+        out["n_eff_reason"] = (f"서로 닮아 독립으로 센 수가 {n_eff:.2f} 로 2 보다 작습니다 — "
+                               "기대 최대 샤프를 정할 수 없어 이 보정은 내지 않습니다")
     elif n_eff is not None:
         sr0_eff = expected_max_sr(n_eff, var)
         out["sr0_eff"] = sr0_eff

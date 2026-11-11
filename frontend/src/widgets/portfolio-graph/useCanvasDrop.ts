@@ -16,11 +16,11 @@ export function useCanvasDrop(rf: RefObject<ReactFlowInstance | null>, setFileNo
                               addAt: (kind: string, pos?: { x: number; y: number }) => string) {
   const applyLoad = useCallback((r: ParseResult, fileName: string) => {
     if (!r.doc) {
-      setFileNote(`「${fileName}」을 불러오지 않았어요 — ${r.problems.join(" ")} 캔버스는 그대로예요.`);
+      setFileNote(`「${fileName}」을 불러오지 않았습니다 — ${r.problems.join(" ")} 캔버스는 그대로입니다.`);
       return;
     }
     usePortfolioGraph.getState().loadDoc(r.doc, r.problems);
-    setFileNote(`「${fileName}」을 불러왔어요 — 노드 ${r.doc.nodes.length}개, 링크 ${r.doc.edges.length}개.${overlapping() ? ` ${OVERLAP_NOTE}` : ""}`);
+    setFileNote(`「${fileName}」을 불러왔습니다 — 노드 ${r.doc.nodes.length}개, 링크 ${r.doc.edges.length}개.${overlapping() ? ` ${OVERLAP_NOTE}` : ""}`);
     fit();
   }, [fit, setFileNote]);
 
@@ -28,7 +28,7 @@ export function useCanvasDrop(rf: RefObject<ReactFlowInstance | null>, setFileNo
     const t = TEMPLATES.find((x) => x.key === key) ?? TEMPLATES[0];
     const st = usePortfolioGraph.getState();
     st.loadDoc(restackDoc(t.doc, st.catalog));
-    setFileNote(`‘${t.name}’을 불러왔어요. 종목·조건은 예시예요 — 노드를 눌러 바꿔 보세요.`);
+    setFileNote(`‘${t.name}’을 불러왔습니다. 종목·조건은 예시입니다 — 노드를 눌러 바꿔 보십시오.`);
     fit();
   }, [fit, setFileNote]);
 
@@ -73,7 +73,7 @@ export function useCanvasDrop(rf: RefObject<ReactFlowInstance | null>, setFileNo
       const at = rf.current.screenToFlowPosition({ x: e.clientX, y: e.clientY });
       st.act(() => {
         st.insertOnEdge(spot.edge, kind, spot.i, spot.o, { x: at.x - NODE_W / 2, y: at.y - 30 });
-        return "선 사이에 노드를 넣었어요.";
+        return "선 사이에 노드를 넣었습니다.";
       });
       return;
     }

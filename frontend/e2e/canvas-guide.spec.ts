@@ -76,30 +76,30 @@ test("계산 전 · 절차를 다 채움 → 규칙 길잡이 '계산하기' · 
   await openWith(page, FULL);
   await expect(bar(page)).toHaveAttribute("data-tool", "run");
   await expect(bar(page).locator(".pg-guide-chip")).toHaveText("규칙 길잡이");
-  await expect(why(page)).toHaveText("절차를 다 채웠어요 — 계산하면 노드마다 결과와 설명이 나와요");
+  await expect(why(page)).toHaveText("절차를 다 채웠습니다 — 계산하면 노드마다 결과와 설명이 나옵니다");
   const res = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
   await bar(page).locator(".pg-guide-go").click();
   await res;
-  await expect(page.locator(".pg-note")).toContainText("다음엔 Ctrl+Enter 로도 계산해요");
+  await expect(page.locator(".pg-note")).toContainText("다음엔 Ctrl+Enter 로도 계산합니다");
 });
 
 test("계산 뒤 우선순위: 전달 점검 보기 → [다음에] → 갈래 만들기 → [다음에] → 전략 더하기 · 해 보기는 그 도구를 연다", async ({ page }) => {
   await openWith(page, FULL);
   await runAll(page);
   await expect(bar(page)).toHaveAttribute("data-tool", "wire_check");
-  await expect(why(page)).toHaveText("빠지거나 바뀐 것이 있는 선이 1개예요 — 무엇이 빠졌는지 볼 수 있어요");
+  await expect(why(page)).toHaveText("빠지거나 바뀐 것이 있는 선이 1개입니다 — 무엇이 빠졌는지 볼 수 있습니다");
   await bar(page).locator(".pg-guide-go").click();
   await page.mouse.move(700, 300);                                                              // 안내 위에 머물면 닫히지 않는다(설계) — 사람처럼 옮긴다
   await expect(page.locator('.pg-tab[data-tab="wire"]')).toHaveAttribute("aria-selected", "true");      // 그 선을 골라 '선' 탭
   await expect(page.locator(".pg-wire-issue")).toHaveCount(1);
-  await expect(page.locator(".pg-note")).toContainText("다음엔 선을 눌러 오른쪽 창 ‘선’ 탭에서 봐요");
+  await expect(page.locator(".pg-note")).toContainText("다음엔 선을 눌러 오른쪽 창 ‘선’ 탭에서 봅니다");
   // '다음엔 어디서' 는 알림일 뿐 — 스스로 닫힌다(토스트는 아래 바를 가린다: 닫히지 않으면 길잡이가 사라진 채 남았다)
   await expect(page.locator(".pg-note")).toHaveCount(0, { timeout: 12_000 });
   await page.locator(".react-flow__pane").click({ position: { x: 700, y: 650 } });
   await expect(bar(page)).toHaveAttribute("data-tool", "wire_check");
   await bar(page).locator(".pg-guide-later").click();
   await expect(bar(page)).toHaveAttribute("data-tool", "branch");
-  await expect(why(page)).toHaveText("설정을 바꾼 설계를 나란히 비교할 수 있어요");
+  await expect(why(page)).toHaveText("설정을 바꾼 설계를 나란히 비교할 수 있습니다");
   await bar(page).locator(".pg-guide-later").click();
   await expect(bar(page)).toHaveAttribute("data-tool", "strategy_add");
   await bar(page).locator(".pg-guide-go").click();
@@ -114,7 +114,7 @@ test("갈래 만들기 [해 보기] → 갈래가 생기고 되돌리기 한 번
   const before = await page.locator(".pg-node").count();
   await bar(page).locator(".pg-guide-go").click();
   await expect.poll(() => page.locator(".pg-node").count()).toBeGreaterThan(before);
-  await expect(page.locator(".pg-note")).toContainText("다음엔 노드를 고르고 Ctrl+K ‘갈래’로도 돼요");
+  await expect(page.locator(".pg-note")).toContainText("다음엔 노드를 고르고 Ctrl+K ‘갈래’로도 됩니다");
   await page.keyboard.press("Control+z");
   await expect.poll(() => page.locator(".pg-node").count()).toBe(before);
 });
@@ -158,14 +158,14 @@ test("길잡이가 숨는 때: 다음 한 걸음이 있으면(짝: 없으면 보
 test("AI 길잡이: 상태·적용 도구를 보내고 · 답(2개 중 1 · 넘기기) · 상태가 바뀌면 지우고 규칙 줄로 · 로그아웃이면 로그인 링크", async ({ page }) => {
   await signIn(page);
   const seen = await answer(page, ok([
-    { feature: "branch", label: "갈래 만들기", why: "계산을 마쳤고 갈래가 없어요. 설정을 바꾼 설계를 나란히 볼 수 있어요." },
-    { feature: "records", label: "기록함", why: "과거로 돌려 본 기록을 모아 볼 수 있어요." }]));
+    { feature: "branch", label: "갈래 만들기", why: "계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다." },
+    { feature: "records", label: "기록함", why: "과거로 돌려 본 기록을 모아 볼 수 있습니다." }]));
   await openWith(page, FULL);
   await runAll(page);
   await bar(page).locator(".pg-guide-ai").click();
   await expect(bar(page).locator(".pg-guide-chip")).toHaveText("AI 길잡이");
   await expect(bar(page)).toHaveAttribute("data-tool", "branch");
-  await expect(why(page)).toHaveText("계산을 마쳤고 갈래가 없어요. 설정을 바꾼 설계를 나란히 볼 수 있어요.");
+  await expect(why(page)).toHaveText("계산을 마쳤고 갈래가 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다.");
   await expect(bar(page).locator(".pg-guide-more")).toHaveText("2개 중 1 · 다음");
   await bar(page).locator(".pg-guide-more").click();
   await expect(bar(page)).toHaveAttribute("data-tool", "records");
@@ -178,16 +178,16 @@ test("AI 길잡이: 상태·적용 도구를 보내고 · 답(2개 중 1 · 넘�
   await page.locator(".pg-view-open").click();
   await page.locator('[data-view="lanes"]').click();
   await expect(bar(page).locator(".pg-guide-chip")).toHaveText("규칙 길잡이");
-  await expect(bar(page).locator(".pg-guide-note")).toHaveText("캔버스가 바뀌어 AI 길잡이를 지웠어요");
+  await expect(bar(page).locator(".pg-guide-note")).toHaveText("캔버스가 바뀌어 AI 길잡이를 지웠습니다");
 });
 
 test("AI 길잡이를 보여 줄 수 없으면 사유 · 규칙 줄은 그대로", async ({ page }) => {
   await signIn(page);
-  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요" });
+  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다" });
   await openWith(page, FULL);
   await runAll(page);
   await bar(page).locator(".pg-guide-ai").click();
-  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 보여 줄 수 없어요: 한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요");
+  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
   await expect(bar(page).locator(".pg-guide-chip")).toHaveText("규칙 길잡이");
   await expect(bar(page)).toHaveAttribute("data-tool", "wire_check");
 });
@@ -216,7 +216,7 @@ test("가로채지 않은 실제 서버: 실제 상태 → 서버 검증(422 아
   const r = await res;
   expect(r.status()).toBe(200);
   expect(await r.json()).toMatchObject({ available: false, reason_code: "no_key" });
-  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 보여 줄 수 없어요: 서버에 Claude 키가 없어요");
+  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
 });
 
 for (const scheme of ["light", "dark"] as const) {

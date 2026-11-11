@@ -88,7 +88,7 @@ BADGES: tuple[Badge, ...] = (
     Badge(("brun-badge",), (AXIS_PIT,),
           "백테스트 결과 화면의 시점 정합 칩(`res.pit_evidence`). BU4 전에는 같은 클래스가 "
           "mock/real(데이터) 배지에도 쓰였다 — 이제 데이터 축은 그 화면의 `PerfLabel` 과 "
-          "\"연습용 데이터\" 칩이 말하고 이 클래스는 시점 정합 하나만 말한다."),
+          "\"합성 데이터\" 칩이 말하고 이 클래스는 시점 정합 하나만 말한다."),
     Badge(("data-lookahead",), (AXIS_LOOKAHEAD,),
           "E 가 만든 자리. 예전에는 마법사의 `as-bt-badge ok` 가 `\"OOS · look-ahead "
           "없음\"` 을 **상수로** 단정했다 — 이제 응답의 `lookahead_evidence` 를 "
@@ -98,18 +98,18 @@ BADGES: tuple[Badge, ...] = (
     # 그리지 않아(시세가 비면 "시세가 아직 적재되지 않았어요") 표시할 합성 값이 없다.
     # 연습용 여부는 답 칩 "연습용 시세·재무"(`connection-status.mock_allowed`)가 말한다 — 아래 `practice`.
     Badge(("practice",), (AXIS_DATA_SOURCE,),
-          "연습용(mock) 데이터 표시 — 화면 답 칩·`Notice` 의 `practice` 톤(서버 `connection-status.mock_allowed` "
-          "로만 켠다, BU1~BU6) · 캔버스 계보 `practice`(연습용 수익률의 하류). ★합성값을 만든다는 뜻이 아니라 "
+          "합성(mock) 데이터 표시 — 화면 답 칩·`Notice` 의 `practice` 톤(서버 `connection-status.mock_allowed` "
+          "로만 켠다, BU1~BU6) · 캔버스 계보 `practice`(합성 수익률의 하류). ★합성값을 만든다는 뜻이 아니라 "
           "mock 게이트가 열려 있다는 출처 표시다★."),
     Badge(("t-mode-badge",), (AXIS_RUN_MODE,),
-          "관리자 패널(데이터 상태)의 실행 모드 배지(`st.config.kis_real` · BU7b 부터 모르면 '몰라요', 옛 `MODE: MOCK` 아님). "
+          "관리자 패널(데이터 상태)의 실행 모드 배지(`st.config.kis_real` · BU7b 부터 모르면 'N/A', 옛 `MODE: MOCK` 아님). "
           "★데이터 축이 아니라 실행 모드다★ — 이름이 닮아 섞기 쉽다."),
     # 2026-11-09 성과 그림 문법 — 그림 안의 증거 띠. 합성 데이터면 띠 전체에 빗금(`pf-strip-practice`)을 긋고 띠 범례가
     # "연습용 데이터" 라고 글로 말한다(`perf_label.data_real` 로만 켠다 · 모르면 "데이터가 실제인지 몰라요"). 같은 패널의 `PerfLabel`
     # 과 같은 축을 그림 안에서 한 번 더 말하는 것이다 — 센다, 합치지 않는다.
     Badge(("pf-strip-practice",), (AXIS_DATA_SOURCE,),
           "캔버스 성과 그림(`widgets/portfolio-graph/perf/PerfCurve.tsx`)의 증거 띠 빗금 — 합성 데이터일 때만 그린다 "
-          "(`perf_label.data_real === false`). 글자 범례 '연습용 데이터' 가 따른다(색·무늬만으로 말하지 않는다)."),
+          "(`perf_label.data_real === false`). 글자 범례 '합성 데이터' 가 따른다(색·무늬만으로 말하지 않는다)."),
 )
 
 _COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)

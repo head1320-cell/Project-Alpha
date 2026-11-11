@@ -120,10 +120,10 @@ export function perfViewOfBacktest(v: Dict, prov: Dict, explain: PerfExplain | n
   const bench = pts(v.bench_curve);
   const active = num(s.active_return_pct);
   const figures: PerfFigure[] = [
-    { key: "total", label: "총수익", text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
-    { key: "mdd", label: "가장 크게 빠진 폭", text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
-    { key: "sharpe", label: "위험 대비 수익(샤프)", text: fmtNum(num(s.sharpe_ratio)) },
-    ...(bench ? [{ key: "active", label: `${str(v.benchmark_label) ?? "벤치마크"} 대비(연)`, text: fmtSignedPct(active), tone: tone(active) }] : []),
+    { key: "total", label: "총수익률", text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
+    { key: "mdd", label: "MDD(최대낙폭)", text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
+    { key: "sharpe", label: "샤프지수", text: fmtNum(num(s.sharpe_ratio)) },
+    ...(bench ? [{ key: "active", label: `${str(v.benchmark_label) ?? "벤치마크"} 대비 초과수익률(연환산)`, text: fmtSignedPct(active), tone: tone(active) }] : []),
   ];
   const learnFrom = str(cov.start);
   return {
@@ -133,7 +133,7 @@ export function perfViewOfBacktest(v: Dict, prov: Dict, explain: PerfExplain | n
       ? (v.rebalances as Dict[]).map((r) => ({ date: String(r.date ?? ""), turnover_pct: num(r.turnover_pct), gross_pct: num(r.gross_pct),
                                                  net_pct: num(r.net_pct), impact_bps: num(r.impact_bps) })).filter((r) => r.date)
       : [],
-    question: "과거에 이 규칙대로 비중을 전달했다면 어땠나",
+    question: "이 규칙으로 비중을 전달했을 때의 과거 성과",
     learnFrom: learnFrom && dates[0] && learnFrom < dates[0] ? learnFrom : null,
     asOf: str(cov.as_of_effective), practice: practiceOf(pl), perfLabel: pl,
     periods: periodsOf(v.periods), drawdowns: Array.isArray(v.drawdowns) ? (v.drawdowns as DdEpisode[]) : null,
@@ -152,16 +152,16 @@ export function perfViewOfLoad(v: Dict, prov: Dict, explain: PerfExplain | null 
   const dates = Array.isArray(eq.dates) ? (eq.dates as unknown[]).map(String) : [];
   const bench = bm ? pts(bm.curve) : null;
   const figures: PerfFigure[] = [
-    { key: "total", label: "총수익", text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
-    { key: "mdd", label: "가장 크게 빠진 폭", text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
-    { key: "sharpe", label: "위험 대비 수익(샤프)", text: fmtNum(num(s.sharpe_ratio)) },
+    { key: "total", label: "총수익률", text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
+    { key: "mdd", label: "MDD(최대낙폭)", text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
+    { key: "sharpe", label: "샤프지수", text: fmtNum(num(s.sharpe_ratio)) },
     ...(bm && num(bm.excess_return_pct) !== null
       ? [{ key: "active", label: `${str(bm.label) ?? "벤치마크"} 대비`, text: fmtSignedPct(num(bm.excess_return_pct)), tone: tone(num(bm.excess_return_pct)) }] : []),
   ];
   return {
     unit: "krw", dates, equity: pts(eq.values) ?? [], bench: bench && bench.length === dates.length ? bench : null,
     benchLabel: bm ? str(bm.label) : null, drawdown: pts(v.drawdown_pct),
-    rebalances: [], question: "저장된 조건식 백테스트가 과거에 어떤 성과를 냈나",
+    rebalances: [], question: "저장된 조건식 백테스트의 과거 성과",
     learnFrom: null, asOf: null, practice: practiceOf(pl), perfLabel: pl,
     periods: periodsOf(v.periods), drawdowns: Array.isArray(v.drawdowns) ? (v.drawdowns as DdEpisode[]) : null,
     figures, summary: s, metrics: null,
@@ -177,15 +177,15 @@ export function perfViewOfStrategy(v: Dict, explain: PerfExplain | null | undefi
   const pl = (v.perf_label as PerfLabelValue | null) ?? null;
   const annual = num(s.annualized_return_pct);
   const figures: PerfFigure[] = [
-    { key: "total", label: "총수익", text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
-    { key: "annual", label: "연 수익률", text: fmtSignedPct(annual), tone: tone(annual) },
-    { key: "mdd", label: "가장 크게 빠진 폭", text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
-    { key: "sharpe", label: "위험 대비 수익(샤프)", text: num(s.sharpe_ratio_full) === null ? "계산 못 함" : fmtNum(num(s.sharpe_ratio_full)) },
+    { key: "total", label: "총수익률", text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
+    { key: "annual", label: "연환산 수익률", text: fmtSignedPct(annual), tone: tone(annual) },
+    { key: "mdd", label: "MDD(최대낙폭)", text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
+    { key: "sharpe", label: "샤프지수", text: num(s.sharpe_ratio_full) === null ? "산출 불가" : fmtNum(num(s.sharpe_ratio_full)) },
   ];
   return {
     unit: "krw", dates: curve.map((r) => String(r.date ?? "")), equity: curve.map((r) => num(r.equity)),
     bench: null, benchLabel: null, drawdown: curve.map((r) => num(r.dd)),
-    rebalances: [], question: "등록된 전략들을 한 계좌처럼 나눠 담았다면 어땠나",
+    rebalances: [], question: "등록 전략을 단일 계좌로 배분했을 때의 과거 성과",
     learnFrom: null, asOf: null, practice: practiceOf(pl), perfLabel: pl,
     periods: periodsOf(v.periods), drawdowns: Array.isArray(v.drawdowns) ? (v.drawdowns as DdEpisode[]) : null,
     figures, summary: s, metrics: null,
@@ -256,7 +256,7 @@ export function perfViewOfStress(r: Dict, prov: Dict): PerfView {
   return {
     unit: "x", dates, equity: pts(r.equity_curve) ?? [], bench: pts(r.benchmark_curve), benchLabel: str(r.benchmark_label),
     drawdown: pts(r.portfolio_dd), benchDrawdown: pts(r.benchmark_dd), rebalances: [],
-    question: "오늘의 비중을 그 기간에 고정했다면 어땠나", learnFrom: null, asOf: null,
+    question: "현재 비중을 해당 기간에 고정했을 때의 성과", learnFrom: null, asOf: null,
     practice: practiceOf(pl), perfLabel: pl, periods: null,
     drawdowns: Array.isArray(r.drawdowns) ? (r.drawdowns as DdEpisode[]) : null,
     figures: [], summary: {}, metrics: null, cost: { bps: null, impact: null, nRebalances: null, turnoverAvg: null }, explain: null,

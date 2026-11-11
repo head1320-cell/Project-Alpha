@@ -31,7 +31,7 @@ export const inkLegend = (v: string) => <span style={{ color: "var(--tx-ink)" }}
 export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
   const [cur, setCur] = useState<string | null>(null);
   const n = m.tickers.length;
-  if (!n) return <div className="mc-empty-sm">상관을 잴 자산이 없어요</div>;
+  if (!n) return <div className="mc-empty-sm">상관을 잴 자산 없음</div>;
   const name = (i: number) => `${m.labels[i] ?? m.tickers[i]}(${m.tickers[i]})`;
   const say = (i: number, j: number) => `${name(i)} · ${name(j)} · ${signed(m.values[i][j])}`;
   /** 줄에 초점 → 그 자산과 가장 같이·가장 반대로 움직인 자산(자기 자신 제외). */
@@ -59,8 +59,8 @@ export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
           ))}
         </div>
       </div>
-      <div className="mc-zlegend"><span>반대로 움직여요</span><i className="mc-zleg-grad" aria-hidden /><span>같이 움직여요</span></div>
-      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 두 자산과 상관이 나와요"}</p>
+      <div className="mc-zlegend"><span>반대로 움직입니다</span><i className="mc-zleg-grad" aria-hidden /><span>같이 움직입니다</span></div>
+      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 두 자산과 상관이 나옵니다"}</p>
     </div>
   );
 }
@@ -78,7 +78,7 @@ export function ComponentBars({ comps }: { comps: TimingComponent[] }) {
           <span className="mca-comp-lbl"><span data-server>{c.label}</span><em>가중 {c.weight}</em></span>
           <div className="mca-comp-track" aria-hidden><i style={{ width: `${Math.max(2, Math.min(100, c.score))}%` }} /></div>
           <span className="mca-comp-sc">{c.score.toFixed(0)}</span>
-          <span className="mca-comp-val">{c.value != null ? c.value : "몰라요"}</span>
+          <span className="mca-comp-val">{c.value != null ? c.value : "N/A"}</span>
         </div>
       ))}
     </div>
@@ -90,7 +90,7 @@ export const TimingHistory = lazyChart(loadAnalyticsCharts, (m) => m.TimingHisto
 // ── TrendTable — 자산별 추세 ──
 // 가격 방향(이동평균 대비·12개월 모멘텀)은 등락색 + ▲▼ + 부호. 52주 고점 거리는 늘 0 이하라 색 없이 숫자. RSI 는 점 하나(잉크) — 30·70 구간 뜻은 열 머리 글자.
 function PctCell({ v }: { v: number | null | undefined }) {
-  if (v == null || !Number.isFinite(v)) return <td className="n">몰라요</td>;
+  if (v == null || !Number.isFinite(v)) return <td className="n">N/A</td>;
   return (
     <td className="n" style={{ color: moveColor(v) }}>
       <span className="mca-arrow" aria-hidden>{v > 0 ? "▲" : v < 0 ? "▼" : ""}</span> {signed(v, 1)}%
@@ -114,7 +114,7 @@ export function TrendTable({ assets }: { assets: TrendRow[] }) {
                 <td><b data-mono>{a.ticker}</b> <span className="mca-trend-nm">{a.label}</span></td>
                 <PctCell v={a.vs_ma200_pct} />
                 <PctCell v={a.mom_12m} />
-                <td className="n">{a.dist_52w_high == null ? "몰라요" : `${signed(a.dist_52w_high, 1)}%`}</td>
+                <td className="n">{a.dist_52w_high == null ? "N/A" : `${signed(a.dist_52w_high, 1)}%`}</td>
                 <td className="n">
                   {rsi != null ? (
                     <span className="mca-rsi">
@@ -124,7 +124,7 @@ export function TrendTable({ assets }: { assets: TrendRow[] }) {
                       </span>
                       {rsi.toFixed(0)}
                     </span>
-                  ) : "몰라요"}
+                  ) : "N/A"}
                 </td>
                 <td><span className="mca-trend-pill" data-dir={dir ?? "flat"} style={{ color: dir === "up" ? "var(--tx-up-ink)" : dir === "down" ? "var(--tx-down-ink)" : "var(--tx-ink)" }}>
                   {dir === "up" ? "▲ " : dir === "down" ? "▼ " : ""}{a.trend}</span></td>

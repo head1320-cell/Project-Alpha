@@ -293,7 +293,7 @@ def test_every_w2_node_speaks_politely_without_overclaiming(monkeypatch, alpha, 
     for nid in ("s", "f", "a", "w", "n", "m"):
         r = rep["nodes"][nid]
         assert r["status"] == "ok", (nid, r["reason"])
-        assert r["explain"]["title"].endswith("요"), (nid, r["explain"]["title"])
+        assert r["explain"]["title"].endswith("다"), (nid, r["explain"]["title"])
         assert not [t for t in _texts(r["explain"]) for w in FORBIDDEN if w in t], nid
 
 

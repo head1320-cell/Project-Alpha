@@ -20,11 +20,11 @@ const CORE = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930
                edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "estimate", "returns"),
                        e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")] };
 const NARRATE = "**/api/v1/assist/canvas/narrate";
-const NOTICE = "연습용 결과예요. 실제 시세가 아니라 합성 데이터로 계산했어요. 투자 판단에 쓰기 전에 실데이터로 다시 계산해 주세요.";
+const NOTICE = "합성 데이터 결과입니다. 실제 시세가 아니라 합성 데이터로 계산했습니다. 투자 판단에 쓰기 전에 실데이터로 재계산하십시오.";
 type Fact = { node_id: string; explain: unknown; sig: string };
 type RunNode = { explain?: unknown; explain_sig?: string };
-const PARAS = [{ text: "종목 둘을 골라 최근 수익률을 불러왔어요.", node_ids: ["universe", "returns"] },
-               { text: "비중은 수익 대비 위험 최적으로 나눴어요.", node_ids: ["optimizer"] }];
+const PARAS = [{ text: "종목 둘을 골라 최근 수익률을 불러왔습니다.", node_ids: ["universe", "returns"] },
+               { text: "비중은 수익 대비 위험 최적으로 나눴습니다.", node_ids: ["optimizer"] }];
 const ok = (paragraphs = PARAS, extra: Record<string, unknown> = {}) => ({
   available: true, source: "claude", model: "claude-opus-5-5", paragraphs, rejected: [], dropped: [], notice: NOTICE, cached: false,
   usage: { input_tokens: 2400, output_tokens: 400, cost_usd: 0.0176, cost_note: null }, ...extra });
@@ -77,7 +77,7 @@ test("계산 전에는 안내만(단추 없음) — 짝: 계산하면 [AI 로 �
   await signIn(page);
   await openWith(page, CORE);
   await expect(card(page).locator(".pg-ai-story-h")).toHaveText("AI 가 풀어 쓴 글");
-  await expect(card(page).locator(".pg-ai-story-wait")).toHaveText("계산한 뒤에 풀어 쓸 수 있어요");
+  await expect(card(page).locator(".pg-ai-story-wait")).toHaveText("계산한 뒤에 풀어 쓸 수 있습니다");
   await expect(ask(page)).toHaveCount(0);
   await runAll(page);
   await expect(ask(page)).toHaveText("AI 로 풀어 쓰기");                                   // ★짝★
@@ -89,14 +89,14 @@ test("로그아웃이면 로그인 링크 · 요청 0", async ({ page }) => {
   page.on("request", (r) => { if (r.url().includes("/assist/canvas/narrate")) sent.push(r.url()); });
   await openWith(page, CORE);
   await runAll(page);
-  await expect(card(page).locator(".pg-ai-story-login")).toHaveText("로그인하면 AI 로 풀어 쓸 수 있어요");
+  await expect(card(page).locator(".pg-ai-story-login")).toHaveText("로그인하면 AI 로 풀어 쓸 수 있습니다");
   await expect(card(page).locator(".pg-ai-story-login")).toHaveAttribute("href", "/login");
   await expect(ask(page)).toHaveCount(0);
   await page.waitForTimeout(400);
   expect(sent).toEqual([]);
 });
 
-test("누르면 화면 결과의 설명·봉인을 흐름 순서로 그대로 보낸다 → 문단·근거 칩 · 칩을 누르면 그 노드 · 서버 연습용 경고", async ({ page }) => {
+test("누르면 화면 결과의 설명·봉인을 흐름 순서로 그대로 보낸다 → 문단·근거 칩 · 칩을 누르면 그 노드 · 서버 합성 경고", async ({ page }) => {
   await signIn(page);
   let release!: () => void;
   const gate = new Promise<void>((r) => { release = r; });
@@ -104,7 +104,7 @@ test("누르면 화면 결과의 설명·봉인을 흐름 순서로 그대로 �
   await openWith(page, CORE);
   const rep = await runAll(page);
   await ask(page).click();
-  await expect(ask(page)).toHaveText("AI 가 풀어 쓰는 중이에요");
+  await expect(ask(page)).toHaveText("AI 가 풀어 쓰는 중입니다");
   await expect(ask(page)).toBeDisabled();
   release();
   await expect(card(page).locator(".pg-ai-para")).toHaveCount(2);
@@ -126,7 +126,7 @@ test("누르면 화면 결과의 설명·봉인을 흐름 순서로 그대로 �
   await expect(ask(page)).toHaveText("AI 로 다시 풀어 쓰기");
 });
 
-test("연습용 경고는 서버가 붙였을 때만 — 짝: notice 가 없으면 없다", async ({ page }) => {
+test("합성 경고는 서버가 붙였을 때만 — 짝: notice 가 없으면 없다", async ({ page }) => {
   await signIn(page);
   await answer(page, ok(PARAS, { notice: null }));
   await openWith(page, CORE);
@@ -138,11 +138,11 @@ test("연습용 경고는 서버가 붙였을 때만 — 짝: notice 가 없으�
 
 test("못 보이면 서버 사유를 그대로 · 문단 0 · 서버 설명은 그대로", async ({ page }) => {
   await signIn(page);
-  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요", dropped: [] });
+  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다", dropped: [] });
   await openWith(page, CORE);
   await runAll(page);
   await ask(page).click();
-  await expect(card(page).locator(".pg-ai-story-note")).toHaveText("AI 글을 보여 줄 수 없어요: 한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요");
+  await expect(card(page).locator(".pg-ai-story-note")).toHaveText("AI 글을 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
   await expect(card(page).locator(".pg-ai-para")).toHaveCount(0);
   await expect(page.locator(".pg-step")).toHaveCount(4);
   await expect(ask(page)).toHaveText("AI 로 풀어 쓰기");
@@ -151,15 +151,15 @@ test("못 보이면 서버 사유를 그대로 · 문단 0 · 서버 설명은 �
 test("검사에서 빠진 문단 · 확인하지 못한 결과는 수와 사유를 말한다", async ({ page }) => {
   await signIn(page);
   await answer(page, ok([PARAS[1]], {
-    rejected: [{ code: "numbers", reason: "근거 노드에 없는 숫자 9 를 썼어요" }],
-    dropped: [{ node_id: "universe", reason: "서명이 맞지 않아요(그래프가 바뀌었거나 서버가 다시 시작했어요). 다시 계산하면 풀어 쓸 수 있어요" }] }));
+    rejected: [{ code: "numbers", reason: "근거 노드에 없는 숫자 9 를 썼습니다" }],
+    dropped: [{ node_id: "universe", reason: "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 풀어 쓸 수 있습니다" }] }));
   await openWith(page, CORE);
   await runAll(page);
   await ask(page).click();
   await expect(card(page).locator(".pg-ai-para")).toHaveCount(1);
   const note = card(page).locator(".pg-ai-story-note");
-  await expect(note).toContainText("1문단은 검사에서 빠졌어요: 근거 노드에 없는 숫자 9 를 썼어요");
-  await expect(note).toContainText("1개 단계의 결과는 확인하지 못해 뺐어요: 서명이 맞지 않아요");
+  await expect(note).toContainText("1문단은 검사에서 빠졌습니다: 근거 노드에 없는 숫자 9 를 썼습니다");
+  await expect(note).toContainText("1개 단계의 결과는 확인하지 못해 뺐습니다: 서명이 맞지 않습니다");
 });
 
 test("계산 결과가 바뀌면 AI 글을 지우고 말한다 — 짝: 노드를 옮기기만 하면 남는다 · 다시 물으면 낡지 않은 결과만 보낸다", async ({ page }) => {
@@ -180,7 +180,7 @@ test("계산 결과가 바뀌면 AI 글을 지우고 말한다 — 짝: 노드�
   await page.locator('.react-flow__node[data-id="estimate"]').click();                       // 지운다 — 아래 비중 계산도 낡는다
   await page.keyboard.press("Delete");
   await expect(card(page).locator(".pg-ai-para")).toHaveCount(0);
-  await expect(card(page).locator(".pg-ai-story-stale")).toHaveText("계산 결과가 바뀌어 AI 글을 지웠어요");
+  await expect(card(page).locator(".pg-ai-story-stale")).toHaveText("계산 결과가 바뀌어 AI 글을 지웠습니다");
   await expect(ask(page)).toHaveText("AI 로 다시 풀어 쓰기");
   await ask(page).click();                                                                  // 비중 계산은 위가 바뀌어 낡았다 — 보내지 않는다
   await expect.poll(() => seen.length).toBe(2);
@@ -198,7 +198,7 @@ test("가로채지 않은 실제 서버: 실제 계산 → 실제 봉인 → 브
   await ask(page).click();
   const body = await (await res).json();
   expect(body).toMatchObject({ available: false, source: "unavailable", reason_code: "no_key", dropped: [] });
-  await expect(card(page).locator(".pg-ai-story-note")).toHaveText("AI 글을 보여 줄 수 없어요: 서버에 Claude 키가 없어요");
+  await expect(card(page).locator(".pg-ai-story-note")).toHaveText("AI 글을 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
   await expect(card(page).locator(".pg-ai-para")).toHaveCount(0);
 });
 

@@ -97,14 +97,14 @@ function EngineEvidence({ v }: { v: Dict }) {
         <b className="pg-eng-v" data-engine={eng ?? "unknown"}>{eng ? (ENGINE_LABEL[eng] ?? eng) : "미상"}</b>
         {ep && <span className={`pg-tag pg-tag--${ep.feasible ? "confirmed" : "failed"}`}>{ep.feasible ? "뷰 실현 가능" : "뷰 실현 불가"}</span>}
       </p>
-      {COV_ONLY.has(String(v.model)) && <p className="pg-note">이 방식은 비중을 정할 때 μ 를 쓰지 않아요 — 공분산만으로 나눠요.</p>}
+      {COV_ONLY.has(String(v.model)) && <p className="pg-note">이 방식은 비중을 정할 때 μ 를 쓰지 않습니다 — 공분산만으로 나눕니다.</p>}
       {ep && (
         <>
           <p className="pg-note">반영한 뷰 {String(ep.n_views ?? "—")}개 · 유효 시나리오 {ensPrior === null ? "—" : Math.round(ensPrior)} → {ens === null ? "—" : Math.round(ens)}</p>
           {ep.confidence_used === false && (
-            <p className="pg-note pg-eng-conf">엔트로피 풀링은 뷰의 신뢰도를 쓰지 않아요 — 부등식 뷰는 경성 제약이라 대응하는 손잡이가 없어요. 뷰가 과한지는 유효 시나리오 수로 봐요.</p>
+            <p className="pg-note pg-eng-conf">엔트로피 풀링은 뷰의 신뢰도를 쓰지 않습니다 — 부등식 뷰는 경성 제약이라 대응하는 손잡이가 없습니다. 뷰가 과한지는 유효 시나리오 수로 봅니다.</p>
           )}
-          {ensDrop && <p className="pg-warn" role="status">유효 시나리오 수가 크게 무너졌어요 — 뷰가 사전분포보다 강해서 표본 몇 개에 기댄 상태예요.</p>}
+          {ensDrop && <p className="pg-warn" role="status">유효 시나리오 수가 크게 무너졌습니다 — 뷰가 사전분포보다 강해서 표본 몇 개에 기댄 상태입니다.</p>}
           {ep.note ? <p className="pg-note">{String(ep.note)}</p> : null}
         </>
       )}
@@ -123,7 +123,7 @@ function LongShortLegs({ weights }: { weights: Record<string, number> }) {
     <div className="pg-ls-exposure" role="note">
       <KV rows={[["총 노출 (gross)", p1(legs.gross)], ["순 노출 (net)", p1(legs.net)], ["롱", p1(legs.long)], ["숏", p1(legs.short)],
                  [`집중도 HHI (${c.basis} 기준)`, Math.round(c.hhi).toLocaleString("ko-KR")]]} />
-      <p className="pg-note">숏이 있어 집중도는 |비중| 합(gross)으로 쟀어요. 롱숏 비중은 연구·백테스트용이에요 — 실행 목표로 만들면 실행할 수 없다고 막혀요.</p>
+      <p className="pg-note">숏이 있어 집중도는 |비중| 합(gross)으로 측정했습니다. 롱숏 비중은 연구·백테스트용입니다 — 실행 목표로 만들면 실행할 수 없다고 막힙니다.</p>
     </div>
   );
 }
@@ -180,7 +180,7 @@ function Optimizer({ v }: { v: Dict }) {
       ]} />
       {cr && <ConstraintReport cr={cr as unknown as ConstraintsReport} />}
       <EngineEvidence v={v} />
-      {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 가 막혀서 표본 추정으로 계산했어요 — {String(belief.blocked_reason)}</p>}
+      {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 가 막혀서 표본 추정으로 계산했습니다 — {String(belief.blocked_reason)}</p>}
       {cap.length > 0 && <p className="pg-note">시가총액 미상 종목 {cap.length}개 — 시장 균형 가중은 그 종목에 대해 가정입니다.</p>}
       {((v.skipped_views as unknown[]) ?? []).length > 0 && (
         <p className="pg-warn">건너뛴 뷰: {JSON.stringify(v.skipped_views)}</p>
@@ -228,7 +228,7 @@ function Lookahead({ la }: { la: Dict | undefined }) {
     <div className="pg-la">
       <p className="pg-la-row">
         <span className={`pg-tag pg-tag--${st === "verified" ? "confirmed" : st === "unverified" ? "failed" : "assumed"}`} data-lookahead={st}>{LA_TEXT[st]}</span>
-        {la?.summary ? <span className="pg-note">{String(la.summary)}</span> : !la ? <span className="pg-note">이 결과는 룩어헤드를 어디까지 통제했는지 말하지 않아요.</span> : null}
+        {la?.summary ? <span className="pg-note">{String(la.summary)}</span> : !la ? <span className="pg-note">이 결과는 룩어헤드를 어디까지 통제했는지 말하지 않습니다.</span> : null}
       </p>
       {unmeasured.length > 0 && <ul className="pg-list pg-la-unmeasured">{unmeasured.map((t, i) => <li key={i}>안 잰 것: {t}</li>)}</ul>}
     </div>
@@ -251,10 +251,10 @@ function Conformal({ cf }: { cf: Dict | null | undefined }) {
             ["점추정", p3(np.point)], ["보정 쌍", String(cf.n_pairs ?? "—")],
             ["실측 적중률", mc?.available && num(mc.coverage) !== null && num(mc.hits) !== null && num(mc.n) !== null
               ? `${((mc.coverage as number) * 100).toFixed(1)}% (${String(mc.hits)}/${String(mc.n)})`
-              : <span className="pg-bt-cf-na">{String(mc?.reason ?? "적중률을 잴 표본이 없어요.")}</span>],
+              : <span className="pg-bt-cf-na">{String(mc?.reason ?? "적중률을 잴 표본 없음")}</span>],
           ]} />
         </>
-      ) : <p className="pg-warn pg-bt-cf-na">{String(cf.reason ?? "구간을 계산할 수 없어요.")}</p>}
+      ) : <p className="pg-warn pg-bt-cf-na">{String(cf.reason ?? "구간 계산 불가")}</p>}
       {cf.note ? <p className="pg-note">{String(cf.note).replace(/\*\*/g, "")}</p> : null}
     </div>
   );
@@ -318,7 +318,7 @@ function Current({ v }: { v: Dict }) {
       <p className="pg-note pg-current-basis">{String(v.basis ?? "")}</p>
       <LongShortLegs weights={(v.weights as Record<string, number>) ?? {}} />
       <WeightBars weights={(v.weights as Record<string, number>) ?? {}} labels={labels} />
-      {zero.length > 0 && <p className="pg-note">비중을 적지 않은 종목은 0% 예요: {zero.map((z) => labels[z] ?? z).join(", ")}</p>}
+      {zero.length > 0 && <p className="pg-note">비중을 적지 않은 종목은 0% 입니다: {zero.map((z) => labels[z] ?? z).join(", ")}</p>}
     </>
   );
 }
@@ -342,7 +342,7 @@ function UniverseResult({ v }: { v: Dict }) {
           </tbody>
         </table>
       )}
-      {!weights && <p className="pg-note">지금 비중은 적지 않았어요 — 비중이 필요한 노드는 이 목록만 받아요.</p>}
+      {!weights && <p className="pg-note">지금 비중은 적지 않았습니다 — 비중이 필요한 노드는 이 목록만 받습니다.</p>}
       {(unknown.codes ?? []).length > 0 && (
         <p className="pg-warn">이름을 찾지 못한 종목: {(unknown.codes ?? []).join(", ")}{unknown.note ? ` — ${unknown.note}` : ""}</p>
       )}
@@ -354,7 +354,7 @@ function ViewsResult({ v }: { v: Dict }) {
   type View = { assets?: string[]; weights?: Record<string, number> | null; direction?: number; magnitude_pct?: number | null;
                 confidence?: number | null; label?: string | null };
   const views = (v.views as View[] | undefined) ?? [];
-  if (!views.length) return <p className="pg-note">적은 생각이 없어요 — 비중 계산은 과거 기준으로만 해요.</p>;
+  if (!views.length) return <p className="pg-note">적은 생각이 없습니다 — 비중 계산은 과거 기준으로만 합니다.</p>;
   return (
     <ul className="pg-list pg-views-list">
       {views.map((x, i) => (
@@ -504,13 +504,13 @@ export function NodeResultPanel({ kind, result, stale, extra, params, onReload }
   onReload?: () => void;
 }) {
   if (!result) {
-    return <p className="pg-panel-note">아직 계산하지 않았어요 — 위의 ‘계산하기’를 누르세요.</p>;
+    return <p className="pg-panel-note">아직 계산하지 않았습니다 — 위의 ‘계산하기’를 누르십시오.</p>;
   }
   const v = result.view;
   const prov = result.provenance ?? {};
   return (
     <section className={`pg-result${stale ? " pg-result--stale" : ""}`}>
-      {stale && <p className="pg-warn">설정이 바뀌어서 이 결과는 지금 그래프와 달라요 — 다시 계산해 주세요.</p>}
+      {stale && <p className="pg-warn">설정이 바뀌어서 이 결과는 지금 그래프와 다릅니다 — 재계산하십시오.</p>}
       <div className={`pg-node-status pg-node-status--${result.status}`}>
         <span className="pg-node-status-k">{STATUS_TEXT[result.status]}</span>
         {result.reason && <span className="pg-node-status-why">{result.reason}</span>}

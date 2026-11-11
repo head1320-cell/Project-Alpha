@@ -5,7 +5,7 @@
 `instrument_master` 가 없어 실제로 그렇다. 엔진(`constrained_opt.py`)은 SHA 가드라 손대지 않고, 같은 사실을
 라우트(`_apply_constraints`)가 보고 `unapplied` 로 적는다.
 
-설명(`explain_optimizer`)은 근사해(`approx`)나 계산 뒤 깎아 맞춘 해(`projected`)에도 "정한 제약 안에서 계산했어요"(확인)라고
+설명(`explain_optimizer`)은 근사해(`approx`)나 계산 뒤 깎아 맞춘 해(`projected`)에도 "정한 제약 안에서 계산했습니다"(확인)라고
 말했다 — 확인이 아니라 가정이다. 기대 수익 추정 노드는 수익률 입력을 받기만 하고 쓰지 않는다 — 그 사실을 설명에 적는다.
 """
 from __future__ import annotations
@@ -88,7 +88,7 @@ def test_unreadable_sectors_report_every_cap(monkeypatch):
     rep = _run(monkeypatch, {}, group_caps_pct={"반도체": 50, "자동차": 30})
     gone = sorted(u["group"] for u in rep["unapplied"] if u["kind"] == "group_cap")
     assert gone == ["반도체", "자동차"]
-    assert all("읽지 못" in u["text"] for u in rep["unapplied"] if u["kind"] == "group_cap")
+    assert all("읽기 실패" in u["text"] for u in rep["unapplied"] if u["kind"] == "group_cap")
     # 모든 종목이 업종 미상이라는 줄을 따로 늘어놓지 않는다(같은 사실을 두 번 말하지 않는다)
     assert not [u for u in rep["unapplied"] if u["kind"] == "unknown_sector"]
 
@@ -139,7 +139,7 @@ def test_clean_constraint_report_is_confirmed():
     """짝 — 상태 ok · 빠진 것 없음 · 투영 아님 이면 지금처럼 확인."""
     t = _trust({"status": "ok", "violations": [], "binding": [], "relaxed": [], "notes": [], "projected": False,
                 "unapplied": []})
-    assert "정한 제약 안에서 계산했어요." in _texts(t, ex.CONFIRMED)
+    assert "정한 제약 안에서 계산했습니다." in _texts(t, ex.CONFIRMED)
 
 
 def test_approx_is_not_called_confirmed():
@@ -161,13 +161,13 @@ def test_projected_is_not_called_confirmed():
 def test_unapplied_caps_become_unknown_lines():
     t = _trust({"status": "ok", "violations": [], "binding": [], "relaxed": [], "notes": [], "projected": False,
                 "unapplied": [{"kind": "group_cap", "group": "바이오", "cap_pct": 20.0,
-                               "text": "업종 상한 ‘바이오’ 20%는 적용되지 않았어요 — 이 종목들 중 그 업종이 없어요."}]})
-    assert "적용된 제약 안에서 계산했어요." in _texts(t, ex.CONFIRMED)
+                               "text": "업종 상한 ‘바이오’ 20%는 적용되지 않았습니다 — 이 종목들 중 그 업종이 없습니다."}]})
+    assert "적용된 제약 안에서 계산했습니다." in _texts(t, ex.CONFIRMED)
     assert any("바이오" in x for x in _texts(t, ex.UNKNOWN))
 
 
 def test_infeasible_stays_failed():
-    t = _trust({"status": "infeasible", "reason": "상한 합이 100% 보다 작아요", "violations": [], "binding": [],
+    t = _trust({"status": "infeasible", "reason": "상한 합이 100% 보다 작습니다", "violations": [], "binding": [],
                 "relaxed": [], "notes": [], "unapplied": []})
     assert any("상한 합" in x for x in _texts(t, ex.FAILED))
 
@@ -177,7 +177,7 @@ def test_infeasible_stays_failed():
 @pytest.mark.parametrize("conditional", [False, True])
 def test_estimate_says_it_does_not_use_its_returns_input(conditional):
     out = ex.explain_estimate({"settings": {"conditional": conditional}}, {}, None)
-    assert any("이어진 수익률" in f and "쓰지 않아요" in f for f in out["facts"])
+    assert any("이어진 수익률" in f and "쓰지 않습니다" in f for f in out["facts"])
 
 
 def test_optimizer_explain_does_not_carry_the_estimate_line():

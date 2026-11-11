@@ -7,7 +7,7 @@
 // 왜 모르는지 아는 호출자는 `shared/ui/tx` 의 `Unknown`(사유 필수)을 쓴다.
 // ★비율과 퍼센트를 섞지 않는다★ `pct(0.241)` = "24.1%" — 입력은 늘 비율이다(0.241). 이미 퍼센트인 값은 100 으로 나눠 넣는다.
 
-export const UNKNOWN_TEXT = "몰라요";
+export const UNKNOWN_TEXT = "N/A";
 /** 음수 부호 — 하이픈(-) 대신 빼기 기호(U+2212). 숫자 폭이 맞고 화면 낭독기가 "마이너스"로 읽는다. */
 export const MINUS = "−";
 

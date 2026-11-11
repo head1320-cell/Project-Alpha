@@ -57,7 +57,7 @@ test.describe("규칙 (브라우저 없이)", () => {
     const s: GraphGroup = { id: "s1", label: "전략 1", kind: "strategy", members: ["r", "e", "o"], output: "o" };
     const p = plan(["o"], at(BASE, "o", 1800), [s]);
     expect(p.moves).toEqual([]);
-    expect(p.blocked).toEqual([{ id: "o", why: "‘전략 1’의 비중을 내는 노드라 상자 밖으로 뺄 수 없어요." }]);
+    expect(p.blocked).toEqual([{ id: "o", why: "‘전략 1’의 비중을 내는 노드라 상자 밖으로 뺄 수 없습니다." }]);
     expect(plan(["r"], at(BASE, "r", 330, 900), [s]).moves).toEqual([{ id: "r", from: "s1", to: null }]);
   });
 
@@ -66,7 +66,7 @@ test.describe("규칙 (브라우저 없이)", () => {
     const s: GraphGroup = { id: "s1", label: "전략 1", kind: "strategy", members: ["u", "r"], output: "r" };
     const p = boxDropPlan(["pf"], at(ns, "pf", 200), ns, [s], null, null);
     expect(p.moves).toEqual([]);
-    expect(p.blocked[0].why).toMatch(/전략 상자에 넣을 수 없어요/);
+    expect(p.blocked[0].why).toMatch(/전략 상자에 넣을 수 없습니다/);
     expect(boxDropPlan(["pf"], at(ns, "pf", 200), ns, [G1], null, null).moves).toEqual([{ id: "pf", from: null, to: "g1" }]);
   });
 
@@ -139,7 +139,7 @@ test("R4 · 끌어 넣기 — 끄는 동안 상자가 빛나고 · 놓으면 멤
   await page.mouse.up();
   await expect(box(page, "g1")).not.toHaveClass(/pg-group--drop/);
   await expect.poll(() => membersOf(page, "g1")).toEqual(["universe", "returns", "estimate"]);
-  await expect(page.locator(".pg-note")).toContainText("넣었어요");
+  await expect(page.locator(".pg-note")).toContainText("넣었습니다");
   await page.keyboard.press("Control+z");
   await expect.poll(async () => ({ g: (await wip(page)).groups, x: await xOf(page, "estimate") }))
     .toEqual({ g: before.groups, x: before.nodes.find((x) => x.id === "estimate")!.position.x });
@@ -162,7 +162,7 @@ test("R4 · 끌기 전 테두리 밖으로 완전히 빼면 뺀다 (짝: 조금 
   expect(await membersOf(page, "g1")).toEqual(["universe", "returns"]);           // 가장자리 멤버를 조금 밀어도 빠지지 않는다
   await dragBy(page, "returns", 0, 700);
   await expect.poll(() => membersOf(page, "g1")).toEqual(["universe"]);
-  await expect(page.locator(".pg-note")).toContainText("뺐어요");
+  await expect(page.locator(".pg-note")).toContainText("뺐습니다");
 });
 
 test("R4 · 전략의 비중을 내는 노드는 빼지 않고 까닭을 말한다 (짝: 다른 멤버는 빠진다)", async ({ page }) => {
@@ -170,7 +170,7 @@ test("R4 · 전략의 비중을 내는 노드는 빼지 않고 까닭을 말한�
                   groups: [{ id: "s1", label: "전략 1", kind: "strategy", color: 0, members: ["returns", "estimate", "optimizer"], output: "optimizer" }] };
   await open(page, strat);
   await dragBy(page, "optimizer", 0, 800);
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드라 상자 밖으로 뺄 수 없어요");
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드라 상자 밖으로 뺄 수 없습니다");
   expect(await membersOf(page, "s1")).toEqual(["returns", "estimate", "optimizer"]);
   // 막혀도 자리는 옮겨졌다 — 상자가 그만큼 아래로 커졌으니 되돌리고 다른 멤버를 뺀다
   await page.locator(".pg-note-x").click();

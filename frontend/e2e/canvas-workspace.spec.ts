@@ -282,7 +282,7 @@ test("선 그림은 값을 모르는 구간을 끊는다 · 양 끝 값은 글�
   const g = node(page, "optimizer").locator(".pg-glance");
   await expect(g.locator("polyline")).toHaveCount(2);
   await expect(g.locator(".pg-gl-ends span")).toHaveText(["1.00", "1.30"]);
-  await expect(g.locator(".pg-gl-note")).toHaveText("끊긴 곳은 값을 몰라요");
+  await expect(g.locator(".pg-gl-note")).toHaveText("끊긴 곳은 값 미상");
 });
 
 test("그림 고정(BM C1): 보통 확대에서도 고정한 노드만 그림이 보이고, 풀면 사라진다", async ({ page }) => {
@@ -403,7 +403,7 @@ test("키보드 이동(BM C1): Alt+→ 다음 단계 · Alt+← 앞 단계 · Al
   await expect(node(page, "universe")).toHaveClass(/pg-node--selected/);
   await page.keyboard.press("Alt+ArrowDown");
   await expect(node(page, "universe")).not.toHaveClass(/pg-node--selected/);
-  await expect(page.locator(".pg-sr-live")).toContainText("노드를 골랐어요");
+  await expect(page.locator(".pg-sr-live")).toContainText("노드를 골랐습니다");
 });
 
 for (const scheme of ["light", "dark"] as const) {
@@ -559,7 +559,7 @@ test("전략 이름을 바꾸면 포트폴리오 노드의 전략 이름도 바�
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없어요");
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드 없음");
 });
 
 test("전략 지도(BM C2 → BN N1): 자동 정리 = 노드와 선만(배경 칸 없음) · 전략마다 한 줄 · 포트폴리오 노드는 오른쪽, 여럿이면 세로로 쌓임", async ({ page }) => {
@@ -684,7 +684,7 @@ test("내 블록(BM C2): 저장 → 새로고침해도 남음('이 브라우저�
   const n0 = (await wip(page)).nodes.length;
   await page.locator(".pg-block-input").setInputFiles({ name: "graph.json", mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, nodes: [], edges: [] })) });
-  await expect(page.locator(".pg-blocks-note--err")).toContainText("블록 파일이 아니에요");
+  await expect(page.locator(".pg-blocks-note--err")).toContainText("블록 파일이 아닙니다");
   expect((await wip(page)).nodes.length).toBe(n0);
   // 받은 블록 파일은 다시 넣을 수 있다(왕복).
   await page.locator(".pg-block-input").setInputFiles({ name: "충격_블록.pgblock.json", mimeType: "application/json",
@@ -710,13 +710,13 @@ test("내 블록: 이 브라우저에 저장할 수 없으면 '없음' 이 아�
     };
   });
   await openCanvas(page);
-  await expect(page.locator(".pg-blocks-note")).toContainText("저장할 수 없어요");
+  await expect(page.locator(".pg-blocks-note")).toContainText("저장 불가");
   await addStrategy(page, "tpl:stress");
   const dl = page.waitForEvent("download");
   await page.locator(".pg-group--strategy .pg-group-file").last().click();
   await dl;
   expect(await lastDownloadName(page)).toMatch(/\.pgblock\.json$/);
-  await expect(page.locator(".pg-note")).toContainText("파일로 받아 두세요");
+  await expect(page.locator(".pg-note")).toContainText("파일로 받아 두십시오");
 });
 
 test("옛 문서(전략 칸 없는 묶음)는 그대로 읽히고 · 전략 문서는 내보내기 → 불러오기 왕복에서 전략 칸이 그대로(BM C2)", async ({ page }) => {
@@ -745,7 +745,7 @@ test("큰 그래프(BM C2): 전략 열여섯(노드 100개 넘게)을 넣고 지
   await openCanvas(page);
   for (let i = 0; i < 15; i++) await addStrategy(page, i % 2 ? "tpl:stress" : "tpl:rebalance");
   // 포트폴리오 노드의 자리는 8개 — 넘치면 잇지 않았다고 말한다(조용히 버리지 않는다).
-  await expect(page.locator(".pg-note")).toContainText("잇지 못했어요");
+  await expect(page.locator(".pg-note")).toContainText("잇지 못했습니다");
   const n = (await wip(page)).nodes.length;
   expect(n).toBeGreaterThan(100);
   const t0 = Date.now();
@@ -877,7 +877,7 @@ test("차이만 보기(BM C3): 바꾼 설정 칩 · 표는 값이 다른 행만(
   expect(checked, "Δ 칩을 적어도 하나는 확인한다").toBeGreaterThan(0);
 });
 
-test("갈래 지우기·되돌리기·파일 왕복(BM C3): 지우면 복제도 함께 · Ctrl+Z 로 돌아옴 · 내보내고 불러와도 갈래 그대로", async ({ page }) => {
+test("갈래 삭제·되돌리기·파일 왕복(BM C3): 지우면 복제도 함께 · Ctrl+Z 로 돌아옴 · 내보내고 불러와도 갈래 그대로", async ({ page }) => {
   await openCanvas(page);
   const n0 = (await wip(page)).nodes.length;
   await makeBranch(page, "optimizer");
@@ -1021,7 +1021,7 @@ test("빈 캔버스는 시작하라고 말한다 — 누르면 목표로 시작(
   await openCanvas(page);
   await page.locator(".pg-import-input").setInputFiles({ name: "empty.json", mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, nodes: [], edges: [] })) });
-  await expect(page.locator(".pg-empty-start")).toContainText("비어 있어요");
+  await expect(page.locator(".pg-empty-start")).toContainText("비어 있습니다");
   await page.locator(".pg-empty-start button").click();
   await expect(page.locator(".pg-goal-card")).toHaveCount(4);
 });
@@ -1103,7 +1103,7 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   await expect(card.locator(".pg-node-k")).toHaveText(`전략 · 노드 ${a.members.length}개`);
   await expect(card.locator(".pg-snode-name")).toHaveValue(a.label);
   await expect(card.locator(".pg-snode-share")).toHaveAttribute("data-share", "");
-  await expect(card.locator(".pg-snode-share")).toContainText("계산하면 보여요");
+  await expect(card.locator(".pg-snode-share")).toContainText("계산하면 보입니다");
   await expect(frameB.locator(".pg-group-share")).toHaveText("몫 —");
 
   const fake: Record<string, number> = { [portOf(doc, a)]: 61.2, [portOf(doc, b)]: 38.8 };
@@ -1170,7 +1170,7 @@ test("포트폴리오 노드의 입력 자리(BN N1): 이은 자리 + 빈 자리
   await expect(handles()).toHaveCount(3);
   await run(page);
   await page.locator(`.pg-group--strategy[data-group-id="${third.id}"] .pg-group-toggle`).click();
-  await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toContainText("포트폴리오에 잇지 않았어요");
+  await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toContainText("포트폴리오에 잇지 않았습니다");
   await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toHaveAttribute("data-share", "");
 });
 
@@ -1323,7 +1323,7 @@ test("갈래 승격(BN N2): '이 갈래를 원본으로' — 바꾼 설정이 �
   const n0 = doc.nodes.length;
   const before = JSON.stringify(doc.nodes.find((n) => n.id === "optimizer")!.params.constraints ?? null);
   await page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-promote`).click();
-  await expect(page.locator(".pg-note")).toContainText("원본으로 옮겼어요");
+  await expect(page.locator(".pg-note")).toContainText("원본으로 옮겼습니다");
   doc = (await wip(page)) as BDoc;
   expect(doc.branches ?? []).toEqual([]);
   expect(doc.nodes.find((n) => n.id === "optimizer")!.params.constraints).toEqual({ max_weight_pct: 20 });
@@ -1344,7 +1344,7 @@ test.describe("첫 방문(BN N2)", () => {
     await openCanvas(page);
     const w = page.locator(".pg-welcome");
     await expect(w).toBeVisible();
-    await expect(w).toContainText("처음이세요");
+    await expect(w).toContainText("처음 사용하는 경우");
     // 가리지 않는다 — 맞춰 본 노드들은 환영 줄 위에 있다.
     const wb = (await w.boundingBox())!;
     const bottoms = await page.locator(".react-flow__node").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().bottom));
@@ -1438,7 +1438,7 @@ test("위험 회피 δ(BN N2): 초심자 질문에 없음 · 전문가에서만,
   await node(page, "optimizer").click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   await expect(page.locator('.pg-basic-field[data-field="delta"]')).toHaveCount(0);
-  await expect(page.locator(".pg-settings")).not.toContainText("위험을 얼마나 피할까요");
+  await expect(page.locator(".pg-settings")).not.toContainText("위험 회피 수준");
   const cat = await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json();
   const help = cat.nodes.find((c: { type: string }) => c.type === "optimizer").params_schema.properties.delta["x-ui"].help as string;
   await page.locator(".pg-mode .pg-switch").check();
@@ -1512,7 +1512,7 @@ test("선 끌어 놓기(BN N3): 후보 = 비중을 받는 카탈로그 노드 �
   expect(doc.nodes.length).toBe(n0 + 1);
   const added = doc.nodes.find((n) => n.type === "risk" && !["risk"].includes(n.id))!;
   expect(doc.edges.some((e) => e.source === "optimizer" && e.source_port === "weights" && e.target === added.id && e.target_port === "weights")).toBe(true);
-  await expect(page.locator(".pg-note")).toContainText("이었어요");
+  await expect(page.locator(".pg-note")).toContainText("이었습니다");
   await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
   await page.keyboard.press("Control+z");
   doc = await wip(page);
@@ -1529,7 +1529,7 @@ test("선 끌어 놓기(BN N3): 후보 = 비중을 받는 카탈로그 노드 �
   expect((await wip(page)).nodes.length).toBe(n0);
 });
 
-test("우클릭(BN N3): 노드 메뉴 — 그림 고정·풀기·지우기(되돌리기) · 빈 곳 메뉴 — 여기에 추가 → 찾아 넣기", async ({ page }) => {
+test("우클릭(BN N3): 노드 메뉴 — 그림 고정·풀기·삭제(되돌리기) · 빈 곳 메뉴 — 여기에 추가 → 찾아 넣기", async ({ page }) => {
   await openCanvas(page);
   await node(page, "optimizer").click({ button: "right" });
   const menu = page.locator('.pg-ctx[aria-label="노드 메뉴"]');
@@ -1584,7 +1584,7 @@ test("안내 줄(BN N3): [되돌리기] · 되돌릴 수 있는 안내는 8초 �
   await makeBranch(page, "optimizer", "command");                                          // 키보드 길(명령 찾기)도 되돌릴 수 있는 안내
   await page.locator(".pg-note-undo").click();
   expect(((await wip(page)) as BDoc).branches).toHaveLength(1);
-  await expect(page.locator(".pg-note")).toContainText("되돌렸어요");
+  await expect(page.locator(".pg-note")).toContainText("되돌렸습니다");
 
   // 짝 — 되돌릴 수 없는 안내(묶지 못한 사유)는 사람이 닫을 때까지 남고 [되돌리기] 도 없다.
   await page.locator('.pg-tab[data-tab="story"]').click();
@@ -1592,13 +1592,13 @@ test("안내 줄(BN N3): [되돌리기] · 되돌릴 수 있는 안내는 8초 �
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
   await page.keyboard.press("Enter");
-  await expect(note).toContainText("비중을 내는 노드가 없어요");
+  await expect(note).toContainText("비중을 내는 노드 없음");
   await expect(note.locator(".pg-note-undo")).toHaveCount(0);
   await page.waitForTimeout(9_000);
-  await expect(note).toContainText("비중을 내는 노드가 없어요");
+  await expect(note).toContainText("비중을 내는 노드 없음");
 });
 
-test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 이어 주세요' · 이으면 사라짐(짝) · 이어진 노드엔 없음", async ({ page }) => {
+test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 연결하십시오' · 이으면 사라짐(짝) · 이어진 노드엔 없음", async ({ page }) => {
   await openCanvas(page);
   await expect(page.locator(".pg-port--missing")).toHaveCount(0);                            // 기본 사슬은 다 이어져 있다
   const ep = await emptyPoint(page);
@@ -1610,7 +1610,7 @@ test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 이어 주세�
   const doc = await wip(page);
   const fresh = doc.nodes.find((n) => n.type === "risk" && n.id !== "risk")!;
   const card = node(page, fresh.id);
-  await expect(card.locator(".pg-node-need")).toHaveText("‘비중’을 이어 주세요");
+  await expect(card.locator(".pg-node-need")).toHaveText("‘비중’을 연결하십시오");
   await expect(card.locator('.pg-port--missing .react-flow__handle[data-handleid="weights"]')).toHaveCount(1);
   // 짝 — 선을 이으면 고리와 한 줄이 사라진다.
   await dragFromTo(page, '.react-flow__node[data-id="optimizer"] .react-flow__handle.source[data-handleid="weights"]',
@@ -1637,7 +1637,7 @@ test("찾기·단축키(BN N3): Ctrl+F 로 이름을 찾아 Enter → 그 노드
   const input = page.locator(".pg-find input");
   await expect(input).toBeFocused();
   await input.fill("없는노드이름");
-  await expect(page.locator(".pg-find")).toContainText("맞는 노드가 없어요");
+  await expect(page.locator(".pg-find")).toContainText("맞는 노드 없음");
   await input.fill(label);
   await expect(page.locator('.pg-find-item[data-node-id="optimizer"]')).toBeVisible();
   await input.press("Enter");

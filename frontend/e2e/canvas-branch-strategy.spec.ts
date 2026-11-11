@@ -116,7 +116,7 @@ test("U6 · 고른 노드째 갈래는 틀만 + [전략으로 묶기] → 누르
   doc = await wip(page);
   const br2 = doc.branches!.find((x) => x.id !== br.id)!;
   await page.locator(`.pg-branch[data-branch-id="${br2.id}"] .pg-branch-strategy`).click();
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없어요");
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드 없음");
   expect(strategiesOf(await wip(page))).toHaveLength(0);
 
   // 짝 — 첫 갈래를 묶은 뒤 그 갈래를 지우면 상자도 사라진다(둘째 갈래로 화면이 옮겨졌으니 맞춰 보기부터 — 머리가 오른쪽 창 밑에 들지 않게)
@@ -149,7 +149,7 @@ test("U6 · 짝 — 전략째 갈래를 원본으로 올리면 갈래의 상자�
   await page.waitForTimeout(400);
   await expect(page.locator(".pg-branch .pg-branch-promote")).toBeEnabled();
   await page.locator(".pg-branch .pg-branch-promote").click();
-  await expect(page.locator(".pg-note")).toContainText("원본으로 옮겼어요");
+  await expect(page.locator(".pg-note")).toContainText("원본으로 옮겼습니다");
   await expect(page.locator(".pg-branch")).toHaveCount(0);
   const doc = await wip(page);
   expect((doc.groups ?? []).filter((g) => g.members.length === 0), "빈 상자가 남지 않는다").toEqual([]);
@@ -236,7 +236,7 @@ test("U6 이어서 · '전략 추가' 가 지금 흐름을 '전략 1' 로 묶을
   await page.locator(".pg-strat-add").click();
   await page.locator('.pg-strat-item[data-source="tpl:stress"]').click();
   await expect(page.locator(".pg-note")).toContainText("비중을 내는 끝이 2개라");
-  await expect(page.locator(".pg-note")).toContainText("묶지 않았어요");
+  await expect(page.locator(".pg-note")).toContainText("묶지 않았습니다");
   const doc = await wip(page);
   const ss = strategiesOf(doc);
   expect(ss, "새 전략 하나만 — 지금 흐름은 묶지 않음").toHaveLength(1);

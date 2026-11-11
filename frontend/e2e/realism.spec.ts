@@ -45,7 +45,7 @@ test("ST3c: 전략이 없으면 계산을 보내지 않고 등록 안내 · 짝:
   const st = realismState({ strategies: [] });
   const calls = await open(page, st);
   await page.locator(".rl-calc").click();
-  await expect(page.locator(".rl-none")).toContainText("등록한 전략이 없어요");
+  await expect(page.locator(".rl-none")).toContainText("등록한 전략 없음");
   await expect(page.locator('.rl-none a[href="/backtest"]')).toBeVisible();
   expect(calls.filter((c) => c.startsWith("POST"))).toEqual([]);
   st.strategies = realismState().strategies;
@@ -58,13 +58,13 @@ test("ST3c: 답 = 서버 총수익률 둘(짝) · 차이 %p", async ({ page }) =
   await open(page);
   await page.locator(".rl-calc").click();
   await expect(sec(page, "answer").locator(".rl-ans-s"))
-    .toHaveText("현실 조건을 넣은 총수익률은 −6.72%로, 이상적 조건 −11.82%보다 5.10%p 높아요.");
+    .toHaveText("현실 조건을 넣은 총수익률은 −6.72%로, 이상적 조건 −11.82%보다 5.10%p 높습니다.");
   const p2 = await page.context().newPage();
   const real = JSON.parse(JSON.stringify(REALISM.real)) as R;
   real.summary.total_return_pct = -15;
   await open(p2, realismState({ realityReply: { ...real, config: {} } }));
   await p2.locator(".rl-calc").click();
-  await expect(sec(p2, "answer").locator(".rl-ans-s")).toHaveText("현실 조건을 넣은 총수익률은 −15.00%로, 이상적 조건 −11.82%보다 3.18%p 낮아요.");
+  await expect(sec(p2, "answer").locator(".rl-ans-s")).toHaveText("현실 조건을 넣은 총수익률은 −15.00%로, 이상적 조건 −11.82%보다 3.18%p 낮습니다.");
   await p2.close();
 });
 
@@ -110,16 +110,16 @@ test("ST3c: 폭포 = 서버 원화 둘 + 나머지 · 합 = 현실 끝 자산", 
   await expect(rows.nth(2)).toHaveAttribute("data-dir", "up");
 });
 
-test("ST3c: 현실 조건이 한 일 · 적응 모드 근거는 서버 글 · 수용량은 몰라요", async ({ page }) => {
+test("ST3c: 현실 조건이 한 일 · 적응 모드 근거는 서버 글 · 수용량은 미상입니다", async ({ page }) => {
   await open(page);
   await page.locator(".rl-calc").click();
   const did = sec(page, "did");
   await expect(did.locator('[data-k="impact"] .rl-card-d')).toContainText("10.8bp");
-  await expect(did.locator('[data-k="buying"] .rl-card-v')).toHaveText("0번 줄였어요");
+  await expect(did.locator('[data-k="buying"] .rl-card-v')).toHaveText("0번 줄였습니다");
   await expect(did.locator('[data-k="adaptive"] [data-server]')).toContainText("상관붕괴 진단만으로");
   await expect(did.locator(".rl-modes-l li")).toHaveCount(3);
   await expect(sec(page, "capacity").locator(".rl-cap")).toHaveCount(2);
-  await expect(sec(page, "capacity").locator(".rl-cap-v").first()).toHaveText("수용량 몰라요");
+  await expect(sec(page, "capacity").locator(".rl-cap-v").first()).toHaveText("수용량 미상");
 });
 
 for (const side of ["ideal", "reality"] as const) {
@@ -148,7 +148,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.locator(".rl-calc").click();
       // 두 번째 누름은 결과를 잠시 내렸다가 다시 그린다 — 단추 글이 돌아오고 틈 그림까지 그려진 뒤에 재야 '3 요소만' 감사가 안 난다
       // (이전부터의 간헐 원인 · HISTORY 2026-11-08). 2026-11-09 틈 그림이 서버 `/perf/compare` 를 한 번 더 기다리므로 그것도 기다린다.
-      await expect(page.locator(".rl-calc")).toHaveText("다시 계산하기", { timeout: 20_000 });
+      await expect(page.locator(".rl-calc")).toHaveText("재계산", { timeout: 20_000 });
       await expect(sec(page, "capacity")).toBeVisible({ timeout: 20_000 });
       await expect(sec(page, "gap").locator(".pf-cmp")).toBeVisible({ timeout: 20_000 });
       const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -172,7 +172,7 @@ for (const scheme of ["light", "dark"] as const) {
 }
 
 // ── 둘 겹쳐 보기 (2026-11-09 · 성과 그림 문법 ③) — 틈 그림은 서버 `/perf/compare` 가 맞춘 두 곡선 + 차이 띠 ──────────────
-test("ST3c: 틈 그림 = 두 곡선 + 차이 띠 · 읽는 줄 차이 %p 는 서버 값 · 연습용 빗금 · '현실' 강조(짝: 둘 다) · recharts 0", async ({ page }) => {
+test("ST3c: 틈 그림 = 두 곡선 + 차이 띠 · 읽는 줄 차이 %p 는 서버 값 · 합성 빗금 · '현실' 강조(짝: 둘 다) · recharts 0", async ({ page }) => {
   await open(page);
   await page.locator(".rl-calc").click();
   const gap = sec(page, "gap");
@@ -186,7 +186,7 @@ test("ST3c: 틈 그림 = 두 곡선 + 차이 띠 · 읽는 줄 차이 %p 는 서
   const want = (r[r.length - 1].portfolio_equity / r[0].portfolio_equity - i[i.length - 1].portfolio_equity / i[0].portfolio_equity) * 100;
   await expect(fig.locator(".pf-read-diff")).toContainText(`${want >= 0 ? "+" : "−"}${Math.abs(want).toFixed(1)}%p`);
   await expect(fig.locator(".pf-read-date")).toHaveText(i[i.length - 1].date);
-  await expect(fig.locator(".pf-strip-legend-practice")).toContainText("연습용 데이터");       // 픽스처 perf_label.data_real = false
+  await expect(fig.locator(".pf-strip-legend-practice")).toContainText("합성 데이터");       // 픽스처 perf_label.data_real = false
   await expect(fig.locator(".pf-strip-legend-align")).toHaveCount(0);                         // 같은 날짜 — 순번 아님
   await expect(fig.locator(".pf-strip-legend-missing")).toHaveCount(0);
   await expect(fig).toHaveAttribute("data-alignment", "date");

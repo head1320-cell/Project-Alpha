@@ -49,7 +49,7 @@ class AskIn(BaseModel):
     @classmethod
     def _q(cls, v: str) -> str:
         if not v.strip():
-            raise ValueError("질문이 비어 있어요")
+            raise ValueError("질문이 비어 있습니다")
         return v.strip()
 
 

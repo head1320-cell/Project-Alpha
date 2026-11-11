@@ -72,7 +72,7 @@ test("프로필(BR R3): 국면 배지 대신 동그라미 하나 · 토큰이 �
   await expect(card(page)).toHaveCount(0);
 });
 
-test("프로필: 200 이면 서버 이름·역할 그대로(토큰을 실어 묻는다) · 로그아웃은 토큰을 지우고 '로그아웃했어요'", async ({ page }) => {
+test("프로필: 200 이면 서버 이름·역할 그대로(토큰을 실어 묻는다) · 로그아웃은 토큰을 지우고 '로그아웃했습니다'", async ({ page }) => {
   await withToken(page, "t-abc");
   const calls = await me(page, 200, { username: "kim", role: "analyst", source: "token" });
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
@@ -87,7 +87,7 @@ test("프로필: 200 이면 서버 이름·역할 그대로(토큰을 실어 묻
   await card(page).locator(".pf-logout").click();
   expect(await tokenNow(page)).toBeNull();
   await expect(card(page).locator(".pf-name")).toHaveText("로그인 안 됨");
-  await expect(card(page).locator(".pf-note")).toHaveText("로그아웃했어요.");
+  await expect(card(page).locator(".pf-note")).toHaveText("로그아웃했습니다.");
   await expect(card(page).locator(".pf-login")).toBeVisible();
   await expect(avatar(page)).toHaveAttribute("aria-label", "내 계정 — 로그인 안 됨");
 });
@@ -103,25 +103,25 @@ test("프로필: 관리자 역할은 '관리자' · 어휘 밖 역할은 서버 
   await expect(avatar(page)).toHaveAttribute("aria-label", "내 계정 — ops (operator)");
 });
 
-test("프로필: 401 이면 토큰을 지우고 '로그인이 끝났어요' · 500 이면 토큰을 두고 이름을 지어내지 않는다(짝) · 다시 시도", async ({ page }) => {
+test("프로필: 401 이면 토큰을 지우고 '로그인이 끝났습니다' · 500 이면 토큰을 두고 이름을 지어내지 않는다(짝) · 재시도", async ({ page }) => {
   await withToken(page, "t-old");
   await me(page, 401);
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await expect(avatar(page)).toHaveAttribute("aria-label", "내 계정 — 로그인 안 됨");
   expect(await tokenNow(page), "끝난 토큰은 지운다").toBeNull();
   await avatar(page).click();
-  await expect(card(page).locator(".pf-note")).toHaveText("로그인이 끝났어요. 다시 로그인해 주세요.");
+  await expect(card(page).locator(".pf-note")).toHaveText("로그인이 끝났습니다. 다시 로그인하십시오.");
 
   // 짝 — 서버가 답하지 못한 것은 로그아웃이 아니다.
   await page.evaluate((k) => { localStorage.setItem(k, "t-keep"); }, TOKEN_KEY);
   await page.unroute("**/api/v1/auth/me");
   await me(page, 500);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(avatar(page)).toHaveAttribute("aria-label", "내 계정 — 확인하지 못했어요");
+  await expect(avatar(page)).toHaveAttribute("aria-label", "내 계정 — 확인 실패");
   expect(await tokenNow(page), "모를 때는 토큰을 지우지 않는다").toBe("t-keep");
   await expect(avatar(page).locator("svg"), "이름을 모르면 글자를 지어내지 않는다").toHaveCount(1);
   await avatar(page).click();
-  await expect(card(page).locator(".pf-name")).toHaveText("계정 정보를 확인하지 못했어요");
+  await expect(card(page).locator(".pf-name")).toHaveText("계정 정보 확인 실패");
   await expect(card(page).locator(".pf-sub")).toContainText("500");
   await expect(card(page).locator(".pf-login")).toHaveCount(0);
 

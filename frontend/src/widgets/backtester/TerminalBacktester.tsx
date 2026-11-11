@@ -73,12 +73,12 @@ export default function TerminalBacktester() {
   const handleSaveStrategy = () => {
     saveBacktestStrategy(s);
     setSaved(listSavedStrategies());
-    setSaveMsg(`‘${s.name || "내 전략"}’을 저장했어요 — 새로고침해도 남아요`);
+    setSaveMsg(`‘${s.name || "내 전략"}’을 저장했습니다 — 새로고침해도 남습니다`);
     setTimeout(() => setSaveMsg(null), 4000);
   };
   const handleLoadStrategy = (item: SavedBacktestStrategy) => {
     setS(mergeStrategy(initialStrategy(), item.strategy));
-    setSaveMsg(`‘${item.name}’을 불러왔어요`);
+    setSaveMsg(`‘${item.name}’을 불러왔습니다`);
     setTimeout(() => setSaveMsg(null), 3000);
   };
   const handleDeleteStrategy = (id: string) => {
@@ -101,23 +101,23 @@ export default function TerminalBacktester() {
   };
 
   const macroCfg = macroHandoff?.config;
-  const macroMode = macroCfg?.mode === "conditions" ? "조건식(고칠 수 있어요)"
+  const macroMode = macroCfg?.mode === "conditions" ? "조건식(고칠 수 있습니다)"
     : macroCfg?.mode === "asset_alloc" ? "ETF 자산배분" : "동적 엔진(최적화형)";
 
   return (
     <div className="tpage-fade tx-page tx-page--wide bte">
-      <PageHead title="백테스트" lede="전략을 지난 데이터로 돌려 봐요. 순서대로 정하고 실행해요." />
+      <PageHead title="백테스트" lede="전략을 지난 데이터로 돌려 봅니다. 순서대로 정하고 실행합니다." />
 
       {handoff && (
         <div className="bte-handoff tscreener-handoff">
-          <Notice tone="warn" title={`종목 찾기에서 넘어온 조건 ${handoff.conditionSummary.length}개로 종목을 골라요`}>
-            {handoff.resultCount > 0 ? `넘어올 때 ${handoff.resultCount.toLocaleString("ko-KR")}종목이 맞았어요.` : null}
+          <Notice tone="warn" title={`종목 찾기에서 넘어온 조건 ${handoff.conditionSummary.length}개로 종목을 고릅니다`}>
+            {handoff.resultCount > 0 ? `넘어올 때 ${handoff.resultCount.toLocaleString("ko-KR")}종목이 맞았습니다.` : null}
             <ul className="tx-chips" aria-label="넘어온 조건">
               {handoff.conditionSummary.map((c, i) => <li key={i} className="tx-chip" data-tone="plain">{c}</li>)}
             </ul>
             <div className="scr-retry">
               <button type="button" className="tx-btn tx-btn--sub tscreener-handoff-clear"
-                onClick={() => { clearScreenerHandoff(); setHandoff(null); }}>넘어온 조건 지우기</button>
+                onClick={() => { clearScreenerHandoff(); setHandoff(null); }}>넘어온 조건 삭제</button>
             </div>
           </Notice>
         </div>
@@ -126,7 +126,7 @@ export default function TerminalBacktester() {
       {macroCfg && (
         <div className="bte-handoff tscreener-handoff">
           <Notice tone="warn" title={`매크로 분석에서 넘어온 전략 ‘${macroCfg.name}’ · ${macroMode}`}>
-            {`${macroCfg.universe_codes?.length ?? macroCfg.basket?.length ?? 0}종목으로 실행해요.`}
+            {`${macroCfg.universe_codes?.length ?? macroCfg.basket?.length ?? 0}종목으로 실행합니다.`}
             <ul className="tx-chips" aria-label="넘어온 설정">
               {macroCfg.mode === "conditions" && (macroCfg.buy_conditions || []).map((c, i) => (
                 <li key={i} className="tx-chip" data-tone="plain">{c.expr} ≥ {c.rhs ?? 0}</li>))}
@@ -136,7 +136,7 @@ export default function TerminalBacktester() {
             </ul>
             <div className="scr-retry">
               <button type="button" className="tx-btn tx-btn--sub tscreener-handoff-clear"
-                onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>넘어온 전략 지우기</button>
+                onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>넘어온 전략 삭제</button>
             </div>
           </Notice>
         </div>
@@ -175,13 +175,13 @@ export default function TerminalBacktester() {
         <aside className="tbt-right-col bte-side" aria-label="요약과 실행">
           <div className="tbt-action-box bte-act">
             <button type="button" onClick={run} disabled={loading} data-act="run" className="tbt-run tx-btn tx-btn--main">
-              {loading ? "실행을 시작하는 중이에요" : "백테스트 실행"}
+              {loading ? "실행 시작 중" : "백테스트 실행"}
             </button>
-            <p className="bte-run-note">실행하면 진행 화면으로 옮겨 가요. 결과는 그 화면에서 볼 수 있어요.</p>
+            <p className="bte-run-note">실행하면 진행 화면으로 옮겨 갑니다. 결과는 그 화면에서 볼 수 있습니다.</p>
             {err && (
-              <Notice tone="danger" title="실행을 시작하지 못했어요">
-                설정은 그대로예요. 잠시 뒤 다시 실행해 주세요.
-                <details className="scr-err-detail"><summary>자세히</summary><code>{err}</code></details>
+              <Notice tone="danger" title="실행 시작 실패">
+                설정은 그대로입니다. 잠시 뒤 다시 실행하십시오.
+                <details className="scr-err-detail"><summary>상세</summary><code>{err}</code></details>
               </Notice>
             )}
 
@@ -202,7 +202,7 @@ export default function TerminalBacktester() {
                     <li key={item.id} className="tbt-saved-item">
                       <button type="button" data-act="load" className="tbt-saved-load"
                         aria-label={`${item.name} 불러오기`} onClick={() => handleLoadStrategy(item)}>{item.name}</button>
-                      <button type="button" aria-label={`${item.name} 지우기`} className="tbt-saved-del"
+                      <button type="button" aria-label={`${item.name} 삭제`} className="tbt-saved-del"
                         onClick={() => handleDeleteStrategy(item.id)}>✕</button>
                     </li>
                   ))}

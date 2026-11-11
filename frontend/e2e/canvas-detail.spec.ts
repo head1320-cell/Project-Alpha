@@ -86,13 +86,13 @@ test("고치는 법: 서버 문장 그대로 + 단추 → 빠진 입력이 이�
   }
 });
 
-test("연습용 칩은 서버 표시만 본다 — 표시를 지우면 문구가 남아도 칩이 없다 · 표시가 있으면 칩(짝)", async ({ page }) => {
+test("합성 칩은 서버 표시만 본다 — 표시를 지우면 문구가 남아도 칩이 없다 · 표시가 있으면 칩(짝)", async ({ page }) => {
   await openWith(page, null);
   const body = await run(page);
   const practiceLine = (body.nodes.returns.explain?.trust ?? []).find((t) => t.kind === "practice");
-  expect(practiceLine, "mock 수익률은 연습용 표시가 있다").toBeTruthy();
-  expect(practiceLine!.text).toContain("연습용");
-  const chip = (p: Page) => node(p, "returns").locator(".pg-node-ev .pg-tag", { hasText: "연습용 데이터" });
+  expect(practiceLine, "mock 수익률은 합성 표시가 있다").toBeTruthy();
+  expect(practiceLine!.text).toContain("합성");
+  const chip = (p: Page) => node(p, "returns").locator(".pg-node-ev .pg-tag", { hasText: "합성 데이터" });
   await expect(chip(page)).toHaveCount(1);
 
   // 표시만 지운 응답 — 문구는 그대로 "연습용 …" 이다
@@ -139,7 +139,7 @@ test("종목 고르기·내 생각·기대 수익 설정: 자세히 탭에 원�
   await detail("views");
   const views = (body.nodes.views.view!.views as unknown[]) ?? [];
   if (views.length) await expect(page.locator(".pg-view-row")).toHaveCount(views.length);
-  else await expect(page.locator(".pg-result")).toContainText("적은 생각이 없어요");
+  else await expect(page.locator(".pg-result")).toContainText("적은 생각 없음");
 
   await detail("estimate");
   const settings = body.nodes.estimate.view!.settings as Record<string, unknown>;
@@ -150,7 +150,7 @@ test("명세 칸의 수 = 서버 explain 의 수 · 계산 전에는 그렇다�
   await openWith(page, null);
   await node(page, "optimizer").click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
-  await expect(page.locator(".pg-passport")).toContainText("아직 계산 전이에요");
+  await expect(page.locator(".pg-passport")).toContainText("아직 계산 전입니다");
   await expect(page.locator('.pg-passport [data-k="assumed"]')).toHaveCount(0);
   const body = await run(page);
   await node(page, "optimizer").click();

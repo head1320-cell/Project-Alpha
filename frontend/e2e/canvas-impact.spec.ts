@@ -68,11 +68,11 @@ test("바꾼 노드와 하류만 낡고 상류는 결과를 둔다 · 수가 하
   const url = (await resp).url();
   for (const id of down) expect(url, `${id} 가 목표에 있다`).toContain(id);
   await expect(page.locator(".pg-summary--stale")).toHaveCount(0);
-  for (const id of down) expect(await isStale(page, id), `${id} — 다시 계산했다`).toBe(false);
+  for (const id of down) expect(await isStale(page, id), `${id} — 재계산했다`).toBe(false);
   await expect(page.locator(".pg-summary--partial")).toBeVisible();
 });
 
-test("위만 다시 계산해도 그 전 값으로 계산한 아래 노드는 계속 낡았다(서명 사슬)", async ({ page }) => {
+test("위만 재계산해도 그 전 값으로 계산한 아래 노드는 계속 낡았다(서명 사슬)", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   const doc = await wip(page);
@@ -84,8 +84,8 @@ test("위만 다시 계산해도 그 전 값으로 계산한 아래 노드는 �
   await page.keyboard.press("Shift+Enter");                                                // 여기까지 계산 — 조상만
   await resp;
   await expect(page.locator(".pg-summary--stale")).toHaveAttribute("data-count", String(below.length));
-  expect(await isStale(page, "optimizer"), "다시 계산한 노드는 새것").toBe(false);
-  for (const id of below) expect(await isStale(page, id), `${id} — 위가 바뀐 뒤 다시 계산하지 않았다`).toBe(true);
+  expect(await isStale(page, "optimizer"), "재계산한 노드는 새것").toBe(false);
+  for (const id of below) expect(await isStale(page, id), `${id} — 위가 바뀐 뒤 재계산하지 않았다`).toBe(true);
 });
 
 test("되돌리기로 계산한 그래프로 돌아가면 낡음이 풀리고, 다시하기로 돌아오면 다시 낡는다(짝)", async ({ page }) => {
@@ -110,7 +110,7 @@ test("영향 줄: 수 = 이 노드 + 하류 · 올리면 그 노드들만 또렷
   await page.locator('.pg-tab[data-tab="settings"]').click();
   const impact = page.locator(".pg-impact");
   await expect(impact).toHaveAttribute("data-count", String(down.size));
-  await expect(impact).toContainText(`${down.size}개 노드가 다시 계산돼요`);
+  await expect(impact).toContainText(`${down.size}개 노드가 재계산됩니다`);
   await impact.hover();
   for (const n of doc.nodes) {
     const cls = (await page.locator(`.react-flow__node[data-id="${n.id}"]`).getAttribute("class")) ?? "";
@@ -139,8 +139,8 @@ test("하류가 없는 노드: 영향 줄은 이 노드만 · 아무도 받지 �
   await node(page, leaf.id).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
   await expect(page.locator(".pg-impact")).toHaveAttribute("data-count", "1");
-  await expect(page.locator(".pg-impact")).toContainText("이 노드만 다시 계산돼요");
+  await expect(page.locator(".pg-impact")).toContainText("이 노드만 재계산됩니다");
   await expect(page.locator(".pg-gives-node")).toHaveCount(0);
   const none = page.locator(".pg-gives-none");
-  if (await page.locator(".pg-gives-row").count()) await expect(none.first()).toContainText("아직 아무 노드도 받지 않아요");
+  if (await page.locator(".pg-gives-row").count()) await expect(none.first()).toContainText("아직 아무 노드도 받지 않습니다");
 });

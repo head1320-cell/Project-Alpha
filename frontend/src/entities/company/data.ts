@@ -68,7 +68,7 @@ const UNIT = (u: string) => (u === "×" || u === "x" || u === "배" ? "배" : u 
 export const CAT_KO: Record<string, string> = { quality: "이익의 질", safety: "재무 안전", composite: "종합 지표", financials: "재무 구성", fundamental: "영업 효율", stock: "주가", ir: "기업설명회" };
 /** 영어가 섞인 팩터 이름 → 한국어(약어는 괄호로 남겨 원래 이름을 찾을 수 있게). 모르는 id 는 서버 이름 그대로. */
 export const FACTOR_KO: Record<string, string> = {
-  altman_z: "부도 위험 점수(알트만 Z)", beneish_m: "이익 조작 점검(베니시 M)", acquirers_multiple: "인수자 배수",
+  altman_z: "Altman Z-Score(알트만 Z)", beneish_m: "Beneish M-Score(베니시 M)", acquirers_multiple: "인수자 배수",
   magic_formula_rank: "마법 공식 순위(그린블랫)", greenblatt_score: "그린블랫 점수", qmj_score: "품질 점수(QMJ)",
   piotroski_f: "재무 건전성 점수(피오트로스키 F)", gp_to_assets: "총이익/자산", ev_sales: "EV/매출", sloan_accruals: "슬론 발생액",
 };
@@ -286,7 +286,7 @@ export async function loadNetwork(code: string): Promise<NetworkInfo> {
     mk("customer", "고객사", g.customer),
     mk("competitor", "경쟁사", g.competitor),
   ].filter((grp) => grp.nodes.length);
-  return { groups, note: groups.length ? undefined : "등록된 공급·고객·경쟁 관계가 없어요." };
+  return { groups, note: groups.length ? undefined : "등록된 공급·고객·경쟁 관계 없음" };
 }
 
 export async function loadRisk(code: string): Promise<RiskInfo> {
@@ -320,7 +320,7 @@ export async function loadRisk(code: string): Promise<RiskInfo> {
     const g = v as Record<string, unknown>;
     return { varPct: fin(g.var_pct), esAmount: fin(g.es_amount), vol: fin(g.volatility) ?? fin(g.annual_vol), sharpe: null, mdd: null };
   }
-  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: `이 종목의 일별 시세가 ${closes.length}일뿐이라 시세로 잰 위험을 계산하지 못했어요(30일 이상 필요해요).` };
+  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: `이 종목의 일별 시세가 ${closes.length}일뿐이라 시세로 잰 위험 산출 실패(30일 이상 필요합니다).` };
 }
 
 export async function loadNarrative(item: object, valuationDetail: object): Promise<NarrativeInfo> {

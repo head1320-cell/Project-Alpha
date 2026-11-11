@@ -1,11 +1,11 @@
-"""BV4 — ★내 증권 계좌 경로 넷★: 목록 · 연결 · 지우기 · 연결 확인.
+"""BV4 — ★내 증권 계좌 경로 넷★: 목록 · 연결 · 삭제 · 연결 확인.
 
 BV3 가 금고·계좌 표·계좌별 클라이언트를 만들었다. 여기서는 사용자가 그것을 부르는 문을 고정한다.
 
   ① 목록은 본인 것만, 가려서
   ② 연결 — 소유자는 ★토큰에서만★ · 틀린 입력은 422 · 금고 키가 없으면 503 이고 아무것도 쓰지 않는다
-  ③ 지우기 — 남의 계좌는 404(없는 계좌와 같은 답 — 있는지조차 드러내지 않는다; 관리자도 같다)
-  ④ 연결 확인 — ★소유 확인이 클라이언트 생성보다 먼저★ · 연습용 모드는 '연결됨' 이라 말하지 않는다 ·
+  ③ 삭제 — 남의 계좌는 404(없는 계좌와 같은 답 — 있는지조차 드러내지 않는다; 관리자도 같다)
+  ④ 연결 확인 — ★소유 확인이 클라이언트 생성보다 먼저★ · 합성 데이터 모드는 '연결됨' 이라 말하지 않는다 ·
      실패 사유는 사람 말 + 원문(비밀은 가림) · 프로그램 오류를 '연결 실패' 로 꾸미지 않는다
   ⑤ 전수 — 계좌 id 가 든 모든 보호 경로는 남의 계좌에 404
 
@@ -210,7 +210,7 @@ def test_in_practice_mode_the_check_does_not_claim_a_connection(client):
     body = res.json()
     assert body["state"] == "practice"
     assert body["state"] != "ok"
-    assert "연습용" in body["reason"] and "몰라요" in body["reason"]
+    assert "합성" in body["reason"] and "미상" in body["reason"]
 
 
 def test_checking_someone_elses_account_is_404_and_builds_no_client(client):
@@ -267,7 +267,7 @@ def test_in_production_an_unreachable_broker_is_a_failure(client, monkeypatch):
     _production(monkeypatch, down)
     body = _check(client, acc["account_id"], _alice(client)).json()
     assert body["state"] == "failed"
-    assert "닿지" in body["reason"]
+    assert "연결 실패" in body["reason"]
 
 
 def test_a_programming_error_is_not_dressed_up_as_a_connection_failure(client, monkeypatch):

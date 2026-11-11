@@ -29,29 +29,29 @@ import { OrderPath, type Trace } from "./OrderPath";
 import { unwrap } from "./parts";
 
 const TITLE = "내 계좌";
-const LEDE = "한국투자증권 계좌로 주문을 연습하고, 실계좌로 가기 전에 무엇이 남았는지 봐요.";
+const LEDE = "한국투자증권 계좌로 주문을 연습하고, 실계좌로 가기 전에 무엇이 남았는지 봅니다.";
 
 export function MyAccountView() {
   const { session, retry } = useSession();
   return (
     <div className="tx-page ma">
       {session.kind === "loading" ? (
-        <><PageHead title={TITLE} lede={LEDE} /><p className="tx-sec-sub" aria-busy="true">계정을 확인하는 중이에요.</p></>
+        <><PageHead title={TITLE} lede={LEDE} /><p className="tx-sec-sub" aria-busy="true">계정 확인 중</p></>
       ) : session.kind === "unknown" ? (
         <><PageHead title={TITLE} lede={LEDE} />
-          <RetryFail title="계정 정보를 확인하지 못했어요" onRetry={() => void retry()}>{session.reason}</RetryFail></>
+          <RetryFail title="계정 정보 확인 실패" onRetry={() => void retry()}>{session.reason}</RetryFail></>
       ) : session.kind === "signed_out" ? (
         <><PageHead title={TITLE} lede={LEDE} />
           <section className="tx-sec ma-signed-out">
-            <p className="ma-strong">로그인하면 내 계좌를 볼 수 있어요.</p>
-            <p className="tx-sec-sub">계정은 관리자에게 받아요. 증권 계좌는 로그인한 뒤 설정에서 연결해요.</p>
+            <p className="ma-strong">로그인하면 내 계좌를 볼 수 있습니다.</p>
+            <p className="tx-sec-sub">계정은 관리자에게 받습니다. 증권 계좌는 로그인한 뒤 설정에서 연결합니다.</p>
             <Link href={loginHref("/my-account")} className="tx-btn tx-btn--main">로그인</Link>
           </section></>
       ) : session.mustChange ? (
         <><PageHead title={TITLE} lede={LEDE} />
           <section className="tx-sec ma-must" role="alert">
-            <p className="ma-strong">비밀번호를 먼저 바꿔 주세요.</p>
-            <p className="tx-sec-sub">관리자가 준 임시 비밀번호로는 계좌가 열리지 않아요.</p>
+            <p className="ma-strong">비밀번호를 먼저 변경하십시오.</p>
+            <p className="tx-sec-sub">관리자가 준 임시 비밀번호로는 계좌가 열리지 않습니다.</p>
             <Link href="/settings#password" className="tx-btn tx-btn--main">비밀번호 바꾸러 가기</Link>
           </section></>
       ) : (
@@ -82,19 +82,19 @@ function Accounts() {
     <>
       <PageHead title={TITLE} lede={LEDE} actions={pick} />
       {q.isError ? (
-        <RetryFail title="증권 계좌 목록을 불러오지 못했어요" onRetry={() => void q.refetch()}>{q.error.message}</RetryFail>
+        <RetryFail title="증권 계좌 목록 조회 실패" onRetry={() => void q.refetch()}>{q.error.message}</RetryFail>
       ) : !q.data ? (
-        <p className="tx-sec-sub" aria-busy="true">계좌 목록을 불러오는 중이에요.</p>
+        <p className="tx-sec-sub" aria-busy="true">계좌 목록 조회 중</p>
       ) : !cur ? (
         <section className="tx-sec ma-empty">
-          <p className="ma-strong">연결한 증권 계좌가 없어요.</p>
-          <p className="tx-sec-sub">설정의 ‘내 증권 계좌’에서 한국투자증권 계좌를 연결하면 여기서 주문을 연습할 수 있어요.</p>
+          <p className="ma-strong">연결한 증권 계좌 없음</p>
+          <p className="tx-sec-sub">설정의 ‘내 증권 계좌’에서 한국투자증권 계좌를 연결하면 여기서 주문을 연습할 수 있습니다.</p>
           <Link href="/settings#broker" className="tx-btn tx-btn--main">설정에서 계좌 연결하기</Link>
         </section>
       ) : (
         <>
           {want !== null && !found ? (
-            <div className="ma-fallback"><Notice tone="warn" title="주소의 계좌를 찾지 못해 첫 계좌를 보여 드려요." /></div>
+            <div className="ma-fallback"><Notice tone="warn" title="주소의 계좌를 찾지 못해 첫 계좌를 보여 드립니다." /></div>
           ) : null}
           <AccountView key={cur.account_id} acc={cur} />
         </>
@@ -121,13 +121,13 @@ function AccountView({ acc }: { acc: BrokerAccount }) {
   const b = bal.data;
   const chips: Chip[] = [
     { label: acc.is_paper ? "모의투자 계좌" : "실계좌", tone: acc.is_paper ? "plain" : "assumed" },
-    ...(practice === true ? [{ label: "연습용 데이터", tone: "practice" as const, ev: "source" }]
-      : cs.isError ? [{ label: "연습용인지 확인하지 못했어요", tone: "unknown" as const, ev: "source" }] : []),
+    ...(practice === true ? [{ label: "합성 데이터", tone: "practice" as const, ev: "source" }]
+      : cs.isError ? [{ label: "합성 데이터인지 확인하지 못했습니다", tone: "unknown" as const, ev: "source" }] : []),
   ];
   const figures = [
-    { label: "평가 자산", value: b?.state === "ok" ? priceWon(b.evaluated_total) : "몰라요" },
-    { label: "보유", value: b?.state === "ok" ? `${b.positions.length}종목` : "몰라요" },
-    { label: "최근 주문", value: orders.data ? `${orders.data.count}건` : "몰라요" },
+    { label: "평가 자산", value: b?.state === "ok" ? priceWon(b.evaluated_total) : "N/A" },
+    { label: "보유", value: b?.state === "ok" ? `${b.positions.length}종목` : "N/A" },
+    { label: "최근 주문", value: orders.data ? `${orders.data.count}건` : "N/A" },
   ];
   const action = k?.active && k.event ? (
     <button type="button" className="tx-btn tx-btn--sub ma-kill-resolve-open" onClick={() => { setDone(null); setSheet("resolve"); }}>비상 정지 풀기</button>
@@ -135,7 +135,7 @@ function AccountView({ acc }: { acc: BrokerAccount }) {
     <button type="button" className="tx-btn ma-btn-danger ma-kill-open" onClick={() => { setDone(null); setSheet("kill"); }}>비상 정지</button>
   );
   const sentence = mode.isPending || kill.isPending
-    ? `‘${acc.label}’ 상태를 확인하는 중이에요.`
+    ? `‘${acc.label}’ 상태 확인 중`
     : answerSentence(acc.label, mode.data?.mode ?? null, k, practice);
 
   return (
@@ -143,7 +143,7 @@ function AccountView({ acc }: { acc: BrokerAccount }) {
       <Answer sentence={sentence} figures={figures} chips={chips} action={action} />
       {done ? <p className="ma-kill-done" role="status">{done}</p> : null}
       {mode.isError ? (
-        <RetryFail title="실행 모드를 확인하지 못했어요" onRetry={() => void mode.refetch()}>{mode.error.message}</RetryFail>
+        <RetryFail title="실행 모드 확인 실패" onRetry={() => void mode.refetch()}>{mode.error.message}</RetryFail>
       ) : null}
       <OrderPath acc={acc} mode={mode} kill={kill} ready={ready} practice={practice} trace={trace} />
       <div className="ma-grid">

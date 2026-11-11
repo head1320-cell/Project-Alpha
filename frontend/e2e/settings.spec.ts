@@ -47,7 +47,7 @@ test("설정(BS1): 관리자가 계정을 만들면 임시 비밀번호가 한 �
   await expect(issued).toBeVisible();
   const temp = (await issued.locator(".set-issued-pw").textContent())!.trim();
   expect(temp.length).toBeGreaterThanOrEqual(12);
-  await expect(issued).toContainText("다시 볼 수 없어요");
+  await expect(issued).toContainText("다시 볼 수 없습니다");
   await expect(issued.locator(".set-copy")).toBeVisible();
   await expect(admin_.locator(`.set-acct[data-username="${name}"]`)).toContainText("바꿀 차례");
   // 닫으면 임시 비밀번호가 화면에서 사라진다.
@@ -72,7 +72,7 @@ test("설정(BS1): 관리자가 계정을 만들면 임시 비밀번호가 한 �
   // ── 규칙이 다 맞기 전에는 단추가 꺼져 있다(짝) ─────────────────────────
   const form = p2.locator(".set-pw");
   const submit = form.locator(".set-pw-submit");
-  await expect(form.locator('.set-rule[data-ok="true"]'), "빈 칸이면 어떤 규칙도 '맞아요' 가 아니다").toHaveCount(0);
+  await expect(form.locator('.set-rule[data-ok="true"]'), "빈 칸이면 어떤 규칙도 '맞습니다' 가 아니다").toHaveCount(0);
   await form.locator('input[name="current-password"]').fill(temp);
   await form.locator('input[name="new-password"]').fill("short");
   await expect(form.locator('.set-rule[data-rule="length"]')).toHaveAttribute("data-ok", "false");
@@ -86,7 +86,7 @@ test("설정(BS1): 관리자가 계정을 만들면 임시 비밀번호가 한 �
   await expect(form.locator('.set-rule[data-ok="false"]')).toHaveCount(0);
   await expect(submit).toBeEnabled();
   await submit.click();
-  await expect(p2.locator(".set-done")).toContainText("비밀번호를 바꿨어요");
+  await expect(p2.locator(".set-done")).toContainText("비밀번호를 바꿨습니다");
   await expect(p2.locator(".set-must")).toHaveCount(0);
 
   const newToken = (await p2.evaluate((k) => localStorage.getItem(k), TOKEN_KEY))!;
@@ -126,7 +126,7 @@ test("설정: 지금 비밀번호가 틀리면 서버 사유 그대로 · 분석
   await form.locator('input[name="new-password"]').fill(`pw-${name}-2`);
   await form.locator('input[name="confirm-password"]').fill(`pw-${name}-2`);
   await form.locator(".set-pw-submit").click();
-  await expect(form.locator(".set-error")).toHaveText("지금 비밀번호가 맞지 않아요.");
+  await expect(form.locator(".set-error")).toHaveText("지금 비밀번호가 맞지 않습니다.");
   // 오류 글은 굵은 왼쪽 줄이 아니라 전체 1px 테두리 상자다(2026-11-10 · 짝: 위 테두리도 있다)
   expect(await form.locator(".set-error").evaluate((e) => { const cs = getComputedStyle(e); return { left: parseFloat(cs.borderLeftWidth), top: parseFloat(cs.borderTopWidth) }; }), "옆줄 테두리 0 · 전체 테두리 1px").toEqual({ left: 1, top: 1 });
   expect(await tokenNow(page), "실패해도 토큰은 그대로").toBe(tok);
@@ -136,10 +136,10 @@ test("설정: 지금 비밀번호가 틀리면 서버 사유 그대로 · 분석
   expect(reset.status()).toBe(200);
   await page.reload();
   await expect(page.locator(".set-signed-out")).toBeVisible();
-  await expect(page.locator(".set-signed-out")).toContainText("로그인이 끝났어요");
+  await expect(page.locator(".set-signed-out")).toContainText("로그인이 끝났습니다");
 });
 
-test("설정: 로그인 안 됨이면 로그인으로 안내 · 모름(500)이면 토큰을 두고 다시 시도 · 프로필 카드에 '설정' 줄", async ({ page }) => {
+test("설정: 로그인 안 됨이면 로그인으로 안내 · 모름(500)이면 토큰을 두고 재시도 · 프로필 카드에 '설정' 줄", async ({ page }) => {
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".set-signed-out")).toBeVisible();
   await expect(page.locator(".set-signed-out a")).toHaveAttribute("href", "/login?next=%2Fsettings");

@@ -74,7 +74,7 @@ function AllocationCanvas() {
     // 모르는 `from` 은 무시한다 — 지어낸 안내를 띄우지 않는다.
     setLegacy(isLegacyScreenKey(from) ? LEGACY_SCREENS[from] : null);
     if (sid) {
-      setBoot({ doc: macroSnapshotDoc(sid), note: `매크로 화면에서 가져온 국면 스냅샷 ${sid}로 ‘매크로 스냅샷 반영’ 흐름을 열었어요.` });
+      setBoot({ doc: macroSnapshotDoc(sid), note: `매크로 화면에서 가져온 국면 스냅샷 ${sid}로 ‘매크로 스냅샷 반영’ 흐름을 열었습니다.` });
       return;
     }
     const company = q.get("company");

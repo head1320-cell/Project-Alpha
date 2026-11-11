@@ -70,7 +70,7 @@ function Line({ g, extra }: { g: NodeGlance; extra: number }) {
         <span title={first.label}>{fmtGlance(first.value, g.unit)}</span>
         <span title={last.label}>{fmtGlance(last.value, g.unit)}</span>
       </div>
-      {gaps && <div className="pg-gl-note">끊긴 곳은 값을 몰라요</div>}
+      {gaps && <div className="pg-gl-note">끊긴 곳은 값 미상</div>}
     </>
   );
 }

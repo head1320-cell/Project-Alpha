@@ -16,7 +16,7 @@ import { API_BASE } from "@/shared/api/apiBase";
 /** 저장된 시나리오 팩 — 목록 문은 `/scenario-packs` 하나다. 실패를 빈 목록으로 삼키지 않는다. */
 async function scenarioPackList(): Promise<{ pack_id: string; label: string; version?: number }[]> {
   const r = await fetch(`${API_BASE}/api/v1/allocation/scenario-packs`);
-  if (!r.ok) throw new Error(`저장된 시나리오 목록을 읽지 못했어요 (HTTP ${r.status}).`);
+  if (!r.ok) throw new Error(`저장된 시나리오 목록 읽기 실패 (HTTP ${r.status}).`);
   return ((await r.json()) as { packs?: { pack_id: string; label: string; version?: number }[] }).packs ?? [];
 }
 
@@ -24,11 +24,11 @@ type Item = { value: string | number; label: string; sub?: string; chips: { text
 type State = { kind: "loading" } | { kind: "error"; text: string } | { kind: "ready"; items: Item[] };
 
 const EMPTY: Record<string, string> = {
-  strategies: "등록된 전략이 없어요 — 백테스트 결과를 전략으로 등록하면 여기에 나와요.",
-  research_runs: "연구 기록이 없어요 — 비중 계산 결과를 연구 기록으로 남기면 여기에 나와요.",
-  alphas: "등록된 알파가 없어요 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 나와요.",
-  backtest_runs: "백테스트가 없어요 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 나와요(목록을 못 읽어도 비어 보일 수 있어요).",
-  scenario_packs: "저장된 시나리오가 없어요 — 직접 정한 충격을 쓰거나, 시나리오를 저장하면 여기에 나와요.",
+  strategies: "등록된 전략이 없습니다 — 백테스트 결과를 전략으로 등록하면 여기에 나옵니다.",
+  research_runs: "연구 기록이 없습니다 — 비중 계산 결과를 연구 기록으로 남기면 여기에 나옵니다.",
+  alphas: "등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 나옵니다.",
+  backtest_runs: "백테스트가 없습니다 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 나옵니다(목록을 못 읽어도 비어 보일 수 있습니다).",
+  scenario_packs: "저장된 시나리오가 없습니다 — 직접 정한 충격을 쓰거나, 시나리오를 저장하면 여기에 나옵니다.",
 };
 
 const ALPHA_KO: Record<string, string> = { draft: "초안", experimental: "실험", validated: "검증 단계", approved: "승인", retired: "폐기" };
@@ -38,7 +38,7 @@ async function load(source: string): Promise<Item[]> {
     return (await multibacktestApi.strategies()).map((s) => ({
       value: s.id, label: s.name, sub: `전략 ${s.id}`,
       chips: [
-        ...(s.is_mock_data === true ? [{ text: "연습용 데이터", tone: "unknown" as const }] : []),
+        ...(s.is_mock_data === true ? [{ text: "합성 데이터", tone: "unknown" as const }] : []),
         ...(s.is_mock_data === null ? [{ text: "데이터 출처 미상", tone: "unknown" as const }] : []),
         ...(s.is_pit_verified !== true ? [{ text: "시점 정합 미확인", tone: "assumed" as const }] : []),
       ],
@@ -46,11 +46,11 @@ async function load(source: string): Promise<Item[]> {
   }
   if (source === "research_runs") {
     const res = await researchApi.list(undefined, 50);
-    if (!res.available) throw new Error(res.reason ?? "연구 기록 저장소를 읽지 못했어요.");
+    if (!res.available) throw new Error(res.reason ?? "연구 기록 저장소 읽기 실패");
     return res.runs.map((r) => ({
       value: r.run_id, label: r.name || r.kind,
       sub: `${new Date(r.created_at * 1000).toLocaleDateString("ko-KR")} · ${r.kind}`,
-      chips: r.snapshot?.coverage?.source === "mock" ? [{ text: "연습용 데이터", tone: "unknown" as const }] : [],
+      chips: r.snapshot?.coverage?.source === "mock" ? [{ text: "합성 데이터", tone: "unknown" as const }] : [],
     }));
   }
   if (source === "alphas") {
@@ -68,7 +68,7 @@ async function load(source: string): Promise<Item[]> {
       sub: `${new Date(r.created_at * 1000).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · ${r.run_id}`,
       chips: [
         ...(r.status !== "completed" ? [{ text: r.status === "failed" ? "실패" : `진행 ${Math.round(r.progress_percent ?? 0)}%`, tone: "assumed" as const }] : []),
-        ...(r.is_mock_data === true ? [{ text: "연습용 데이터", tone: "unknown" as const }] : []),
+        ...(r.is_mock_data === true ? [{ text: "합성 데이터", tone: "unknown" as const }] : []),
         ...(r.is_mock_data === null ? [{ text: "데이터 출처 미상", tone: "unknown" as const }] : []),
       ],
     }));
@@ -79,7 +79,7 @@ async function load(source: string): Promise<Item[]> {
       chips: [{ text: "가정 충격", tone: "assumed" as const }],
     }));
   }
-  throw new Error(`이 화면이 모르는 목록이에요(${source}) — 전문가 설정에서 직접 넣어 주세요.`);
+  throw new Error(`이 화면이 모르는 목록입니다(${source}) — 전문가 설정에서 직접 입력하십시오.`);
 }
 
 export function PickField({ source, multi, value, onChange }: {
@@ -102,11 +102,11 @@ export function PickField({ source, multi, value, onChange }: {
     onChange(next.length ? next : undefined);
   };
 
-  if (state.kind === "loading") return <p className="pg-help" role="status">목록을 불러오는 중이에요.</p>;
+  if (state.kind === "loading") return <p className="pg-help" role="status">목록 조회 중</p>;
   if (state.kind === "error") {
     return (
       <div className="pg-pick-err">
-        <p className="pg-field-err">목록을 불러오지 못했어요 — {state.text}</p>
+        <p className="pg-field-err">목록 조회 실패 — {state.text}</p>
         <button type="button" className="pg-add" onClick={() => setNonce((n) => n + 1)}>다시 불러오기</button>
       </div>
     );
@@ -115,7 +115,7 @@ export function PickField({ source, multi, value, onChange }: {
   const orphans = picked.filter((v) => !known.has(v));
   return (
     <div className="pg-pick" role={multi ? "group" : "radiogroup"}>
-      {state.items.length === 0 && <p className="pg-help">{EMPTY[source] ?? "고를 것이 없어요."}</p>}
+      {state.items.length === 0 && <p className="pg-help">{EMPTY[source] ?? "고를 것 없음"}</p>}
       {state.items.map((it) => {
         const on = picked.includes(it.value);
         return (
@@ -128,7 +128,7 @@ export function PickField({ source, multi, value, onChange }: {
         );
       })}
       {orphans.length > 0 && (
-        <p className="pg-warn">목록에 없는 값을 골라 두었어요: {orphans.join(", ")} — 지워졌거나 비활성일 수 있어요.</p>
+        <p className="pg-warn">목록에 없는 값을 골라 두었습니다: {orphans.join(", ")} — 지워졌거나 비활성일 수 있습니다.</p>
       )}
     </div>
   );

@@ -84,7 +84,7 @@ async function noSecretsInDom(page: Page) {
 test("BV8: 계좌가 없으면 빈 상태 문장과 연결 폼", async ({ page }) => {
   await setup(page);
   await page.goto("/settings");
-  await expect(sec(page)).toContainText("아직 연결한 증권 계좌가 없어요");
+  await expect(sec(page)).toContainText("아직 연결한 증권 계좌 없음");
   await expect(page.locator(".set-broker-form")).toBeVisible();
   await expect(page.locator(".set-broker-row")).toHaveCount(0);
 });
@@ -99,10 +99,10 @@ test("BV8: 계좌 둘 → 줄 둘 · 종류 칩 · 가린 번호만 (짝: 빈 �
   await expect(rows.nth(1).locator(".set-broker-kind-chip")).toHaveText("실계좌");
   await expect(rows.nth(0)).toContainText("****5678");
   await expect(rows.nth(1)).toContainText("****9012");
-  await expect(sec(page)).not.toContainText("아직 연결한 증권 계좌가 없어요");
+  await expect(sec(page)).not.toContainText("아직 연결한 증권 계좌 없음");
 });
 
-test("BV8: 목록 500 → alert + 다시 시도 → 회복 (짝: 정상이면 alert 0)", async ({ page }) => {
+test("BV8: 목록 500 → alert + 재시도 → 회복 (짝: 정상이면 alert 0)", async ({ page }) => {
   const s = await setup(page, { accounts: [acc("ba_1", "모의 하나", true)] });
   s.failList();
   await page.goto("/settings");
@@ -162,11 +162,11 @@ test("BV8: 실계좌를 고르면 본문 is_paper 는 false", async ({ page }) =
 test("BV8: 422 → 서버 사유 그대로 · 줄이 늘지 않는다", async ({ page }) => {
   await setup(page);
   await page.route("**/api/v1/broker-accounts", (r) =>
-    r.request().method() === "POST" ? r.fulfill({ status: 422, json: { detail: "계좌번호는 숫자 8자리여야 해요(테스트)." } }) : r.fallback());
+    r.request().method() === "POST" ? r.fulfill({ status: 422, json: { detail: "계좌번호는 숫자 8자리여야 합니다(테스트)." } }) : r.fallback());
   await page.goto("/settings");
   await fillForm(page);
   await page.locator(".set-broker-submit").click();
-  await expect(page.locator(".set-broker-form [role=alert]")).toContainText("계좌번호는 숫자 8자리여야 해요(테스트).");
+  await expect(page.locator(".set-broker-form [role=alert]")).toContainText("계좌번호는 숫자 8자리여야 합니다(테스트).");
   await expect(page.locator(".set-broker-row")).toHaveCount(0);
   await expect(page.locator(".set-broker-vault")).toHaveCount(0);
 });
@@ -187,32 +187,32 @@ test("BV8: 503(금고 키 없음) → 서버 사유 + 운영자에게 알리라�
 const checkReply = (state: string, reason: string, detail?: string) =>
   ({ account_id: "ba_1", state, reason, checked_at: "2026-10-09T08:00:00Z", ...(detail ? { detail } : {}) });
 
-test("BV8: 연습용 확인은 '연결됐어요'로 말하지 않는다", async ({ page }) => {
+test("BV8: 합성 확인은 '연결됐습니다'로 말하지 않는다", async ({ page }) => {
   await setup(page, { accounts: [acc("ba_1", "모의 하나", true)] });
   await page.route("**/api/v1/broker-accounts/ba_1/check", (r) =>
-    r.fulfill({ json: checkReply("practice", "연습용 모드라 증권사에 묻지 않았어요. 키가 맞는지는 아직 몰라요.") }));
+    r.fulfill({ json: checkReply("practice", "합성 데이터 모드라 증권사에 묻지 않았습니다. 키가 맞는지는 미상입니다.") }));
   await page.goto("/settings");
   await page.locator(".set-broker-row .set-broker-check").click();
   const out = page.locator(".set-broker-result");
-  await expect(out).toContainText("연습용 모드라 증권사에 묻지 않았어요");
+  await expect(out).toContainText("합성 데이터 모드라 증권사에 묻지 않았습니다");
   await expect(out).toHaveAttribute("data-state", "practice");
-  await expect(out).not.toContainText("연결됐어요");
+  await expect(out).not.toContainText("연결됐습니다");
 });
 
 test("BV8: 확인 성공은 서버 사유 · 실패는 사유 + 닫힌 원래 사유", async ({ page }) => {
   await setup(page, { accounts: [acc("ba_1", "실계좌", false)] });
-  let reply = checkReply("ok", "증권사가 이 키와 계좌로 잔고 조회를 받아 줬어요.");
+  let reply = checkReply("ok", "증권사가 이 키와 계좌로 잔고 조회를 받아 줬습니다.");
   await page.route("**/api/v1/broker-accounts/ba_1/check", (r) => r.fulfill({ json: reply }));
   await page.goto("/settings");
   await page.locator(".set-broker-check").click();
   await expect(page.locator(".set-broker-result")).toHaveAttribute("data-state", "ok");
-  await expect(page.locator(".set-broker-result")).toContainText("잔고 조회를 받아 줬어요");
+  await expect(page.locator(".set-broker-result")).toContainText("잔고 조회를 받아 줬습니다");
 
-  reply = checkReply("failed", "증권사가 토큰을 내주지 않았어요.", "EGW00123 ****");
+  reply = checkReply("failed", "증권사가 토큰을 내주지 않았습니다.", "EGW00123 ****");
   await page.locator(".set-broker-check").click();
   const out = page.locator(".set-broker-result");
   await expect(out).toHaveAttribute("data-state", "failed");
-  await expect(out).toContainText("증권사가 토큰을 내주지 않았어요.");
+  await expect(out).toContainText("증권사가 토큰을 내주지 않았습니다.");
   const raw = out.locator("details");
   await expect(raw).not.toHaveAttribute("open", "");
   await raw.locator("summary").click();
@@ -221,7 +221,7 @@ test("BV8: 확인 성공은 서버 사유 · 실패는 사유 + 닫힌 원래 �
 
 // ── 지우기 ─────────────────────────────────────────────────────────────────
 
-test("BV8: 지우기는 확인을 거친다 — 취소면 요청 0 · 지우면 DELETE 1 + 줄이 사라진다", async ({ page }) => {
+test("BV8: 삭제는 확인을 거친다 — 취소면 요청 0 · 지우면 DELETE 1 + 줄이 사라진다", async ({ page }) => {
   const s = await setup(page, { accounts: [acc("ba_1", "모의 하나", true)] });
   await page.route("**/api/v1/broker-accounts/ba_1", (r) => {
     if (r.request().method() !== "DELETE") return r.fallback();
@@ -263,9 +263,9 @@ for (const scheme of ["light", "dark"] as const) {
   test(`BV8: ${scheme} AA · 390 가로 넘침 없음 (계좌 둘 + 확인 결과 + 폼 오류)`, async ({ page }) => {
     await setup(page, { accounts: [acc("ba_1", "모의 하나", true), acc("ba_2", "실계좌 하나", false, "9012")] });
     await page.route("**/api/v1/broker-accounts/ba_1/check", (r) =>
-      r.fulfill({ json: checkReply("failed", "증권사에 닿지 못했어요. 잠시 뒤 다시 해 주세요.", "timeout") }));
+      r.fulfill({ json: checkReply("failed", "증권사 연결 실패. 잠시 뒤 다시 하십시오.", "timeout") }));
     await page.route("**/api/v1/broker-accounts", (r) =>
-      r.request().method() === "POST" ? r.fulfill({ status: 422, json: { detail: "이름을 넣어 주세요." } }) : r.fallback());
+      r.request().method() === "POST" ? r.fulfill({ status: 422, json: { detail: "이름을 입력하십시오." } }) : r.fallback());
     await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* 없음 */ } }, scheme);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });

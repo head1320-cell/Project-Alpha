@@ -81,7 +81,7 @@ LEAKAGE_SITES: tuple[EstimatorFit, ...] = (
     EstimatorFit(
         site="src/api/allocation_pipeline.py:_regime_path_for",
         window=WINDOW_TRAILING, vintage=VINTAGE_CURRENT, consumer="allocation",
-        note=("국면 경로를 현재 데이터로 다시 계산한다(`collect_all(use_cache=True)` "
+        note=("국면 경로를 현재 데이터로 재계산한다(`collect_all(use_cache=True)` "
               "+ 최근 60개월). 이미 `path_source:\"recomputed\"` 와 `path_note` 로 "
               "고백하고 있고, `mode==\"backtest\"` 는 아예 막혀 있다."),
     ),

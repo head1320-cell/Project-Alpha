@@ -197,7 +197,7 @@ def test_every_link_route_refuses_someone_elses_client(client):
         url = path.replace("{cid}", cid).replace("{lid}", lid)
         body = bodies.get(method) if path.endswith("share-links") or method == "PATCH" else None
         r = client.request(method, url, json=body, headers=hb)
-        assert r.status_code == 404 and r.json()["detail"] == "그 고객이 없어요.", (method, path, r.text)
+        assert r.status_code == 404 and r.json()["detail"] == "그 고객이 없습니다.", (method, path, r.text)
     for method, path in routes:                                                     # 짝 — 철회는 맨 뒤에
         url = path.replace("{cid}", cid).replace("{lid}", lid)
         body = bodies.get(method) if path.endswith("share-links") or method == "PATCH" else None
@@ -211,7 +211,7 @@ def test_a_link_id_of_another_client_is_404_even_for_the_owner(client):
     h, cid, _sid, lid, _tok = _setup(client)
     other = _cid(client, h, alias="고객 B")
     r = client.post(f"{BASE}/{other}/share-links/{lid}/revoke", headers=h)
-    assert r.status_code == 404 and r.json()["detail"] == "그 주소가 없어요."
+    assert r.status_code == 404 and r.json()["detail"] == "그 주소가 없습니다."
     assert _links(client, h, cid)["links"][0]["state"] == "open"
 
 
@@ -277,7 +277,7 @@ def test_five_wrong_pins_lock_the_link_and_the_pb_can_reopen_it(client):
 
 
 def test_the_wrong_pin_that_locks_the_link_says_so_at_once(client):
-    """다섯 번째로 틀린 그 요청이 바로 '잠겼어요'(423) — 고객이 한 번 더 넣어 봐야 알게 하지 않는다. 틀린 PIN 이라 드러나는 것이 없다."""
+    """다섯 번째로 틀린 그 요청이 바로 '잠겼습니다'(423) — 고객이 한 번 더 넣어 봐야 알게 하지 않는다. 틀린 PIN 이라 드러나는 것이 없다."""
     _h, _cid_, _sid, _lid, tok = _setup(client)
     for _ in range(4):
         assert _session(client, tok, pin="902817").status_code == 401
@@ -392,12 +392,12 @@ def test_client_ask_is_grounded_in_the_links_sheet(client, monkeypatch):
     sheet = client.get(f"{BASE}/{cid}/snapshots/{sid}", headers=h).json()["sheet"]
     w = sheet["focus"]["weights"][0]
     sdk = _fake({"answerable": True, "why_not": "none", "sentences": [
-        {"text": f"{w['name']} 비중은 {w['pct']}% 예요.", "fact_ids": ["f1"]}]}, monkeypatch)
+        {"text": f"{w['name']} 비중은 {w['pct']}% 입니다.", "fact_ids": ["f1"]}]}, monkeypatch)
     sess = _session(client, tok).json()["session"]
     r = client.post(f"{SHARE}/ask", json={"question": "가장 큰 비중은요?"}, headers=_sh(sess))
     body = r.json()
     assert body["available"] is True, body
-    assert [s["text"] for s in body["answer"]["sentences"]] == [f"{w['name']} 비중은 {w['pct']}% 예요."]
+    assert [s["text"] for s in body["answer"]["sentences"]] == [f"{w['name']} 비중은 {w['pct']}% 입니다."]
     sent = sdk.beta.messages.calls[-1] if sdk.beta.messages.calls else sdk.messages.calls[-1]
     assert sheet["steps"][-1]["explain"]["title"] in json.dumps(sent, ensure_ascii=False, default=str)
 

@@ -23,7 +23,7 @@ export function OrdersResult({ v }: { v: Dict }) {
   const pre = (v.pretrade as Dict) ?? {};
   return (
     <>
-      <p className="pg-note">주문은 나가지 않아요 — 무엇을 사고팔지 미리 본 목록이에요.</p>
+      <p className="pg-note">주문은 나가지 않습니다 — 무엇을 사고팔지 미리 본 목록입니다.</p>
       <KV rows={[["평가 금액", won(v.portfolio_value)], ["사는 금액", won(s.buy_notional)], ["파는 금액", won(s.sell_notional)],
                  ["예상 비용", won(s.est_cost)], ["사전 점검", pre.can_approve ? "승인 가능" : "승인 불가"]]} />
       <h4 className="pg-h4">주문</h4>
@@ -70,12 +70,12 @@ export function TargetResult({ v }: { v: Dict }) {
       {/* ★롱숏 목표는 실행할 수 없다 — 왜인지 항목별로 말한다★ 나중에 무엇이 풀렸는지 알 수 있게 나눠 둔다. */}
       {tv.mode === "long_short" && (
         <div className="pg-ls-blocked" role="note">
-          <p className="pg-warn">이 목표는 실행할 수 없어요 — 연구·백테스트 전용이에요.
+          <p className="pg-warn">이 목표는 실행할 수 없습니다 — 연구·백테스트 전용입니다.
             {num(tv.gross_after) !== null ? ` (gross ${pct(tv.gross_after)} · net ${pct(tv.net_after)})` : ""}</p>
           <ul className="pg-list pg-ls-blocked-l">
-            <li>차입 가능 여부가 연동돼 있지 않아요 — 빌릴 수 있는지 늘 모름이에요.</li>
-            <li>KIS 주문 유형에 공매도가 없어요 — 사기·팔기 주문은 일반 현금 주문이에요.</li>
-            <li>실행기가 들고 있지 않은 종목의 매도를 건너뛰어요 — 숏 진입이 주문으로 나가지 않아요.</li>
+            <li>차입 가능 여부가 연동돼 있지 않습니다 — 빌릴 수 있는지 늘 모름입니다.</li>
+            <li>KIS 주문 유형에 공매도가 없습니다 — 사기·팔기 주문은 일반 현금 주문입니다.</li>
+            <li>실행기가 들고 있지 않은 종목의 매도를 건너뜁니다 — 숏 진입이 주문으로 나가지 않습니다.</li>
           </ul>
         </div>
       )}
@@ -91,8 +91,8 @@ export function JournalResult({ v }: { v: Dict }) {
     <>
       <KV rows={[["제목", String(v.title ?? "")], ["결정", String(rec.decision ?? "")],
                  ["목표 상태", t.status === "executable" ? "실행 가능" : "연구용"],
-                 ["주문 요약", links.orders ? "함께 남겨요" : "없어요"], ["충격 점검", links.stress ? "함께 남겨요" : "없어요"]]} />
-      {rec.thesis ? <p className="pg-note">이유: {String(rec.thesis)}</p> : <p className="pg-warn">이유를 적지 않았어요.</p>}
+                 ["주문 요약", links.orders ? "함께 남깁니다" : "없습니다"], ["충격 점검", links.stress ? "함께 남깁니다" : "없습니다"]]} />
+      {rec.thesis ? <p className="pg-note">이유: {String(rec.thesis)}</p> : <p className="pg-warn">이유를 적지 않았습니다.</p>}
     </>
   );
 }

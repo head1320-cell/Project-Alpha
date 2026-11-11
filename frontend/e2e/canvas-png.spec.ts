@@ -91,16 +91,16 @@ test("R7 · 파일 이름 — JSON 과 같은 바탕 + .portfolio-graph.png (짝
   expect(pngFileName(undefined, new Date("2026-10-31T12:00:00Z"))).toBe("portfolio-2026-10-31.portfolio-graph.png");
 });
 
-test("R7 · 띠 문장 — 이름·때는 늘 · 연습용·예전 결과·계산 전은 있을 때만 · '실데이터' 말 없음", () => {
+test("R7 · 띠 문장 — 이름·때는 늘 · 합성·예전 결과·계산 전은 있을 때만 · '실데이터' 말 없음", () => {
   const base = { name: "R7 시험", now: T };
   expect(captionLines({ ...base, computed: true, practice: false, stale: false })).toEqual(["‘R7 시험’ · 2026-10-31 14:05 내보냄"]);
   expect(captionLines({ ...base, name: "", computed: true, practice: false, stale: false })[0]).toBe("‘이름 없는 설계’ · 2026-10-31 14:05 내보냄");
   const all = captionLines({ ...base, computed: true, practice: true, stale: true });
-  expect(all).toEqual(["‘R7 시험’ · 2026-10-31 14:05 내보냄", "연습용(합성) 데이터로 계산한 결과예요 — 실제 시세가 아니에요", "바꾼 뒤 다시 계산하지 않은 예전 결과가 섞여 있어요"]);
-  expect(captionLines({ ...base, computed: false, practice: false, stale: false })[1]).toBe("계산 전이에요 — 카드에 결과가 없어요");
+  expect(all).toEqual(["‘R7 시험’ · 2026-10-31 14:05 내보냄", "합성 데이터로 계산한 결과입니다 — 실제 시세가 아닙니다", "바꾼 뒤 재계산하지 않은 예전 결과가 섞여 있습니다"]);
+  expect(captionLines({ ...base, computed: false, practice: false, stale: false })[1]).toBe("계산 전입니다 — 카드에 결과가 없습니다");
   for (const l of [...all, ...captionLines({ ...base, computed: false, practice: false, stale: false })]) expect(l).not.toContain("실데이터");
-  expect(exportNote(all)).toContain("연습용(합성)");
-  expect(exportNote(captionLines({ ...base, computed: true, practice: false, stale: false }))).toBe("그림(PNG)을 받았어요.");
+  expect(exportNote(all)).toContain("합성");
+  expect(exportNote(captionLines({ ...base, computed: true, practice: false, stale: false }))).toBe("그림(PNG)을 받았습니다.");
 });
 
 test("R7 · 글꼴 고르기 — 쓴 글자가 든 범위만 (짝: 안 쓴 범위는 빠지고 범위 없는 글꼴은 늘)", () => {
@@ -228,20 +228,20 @@ test("R7 · 선도 그림에 들어간다 — 카드 사이 틈에 선 픽셀 (�
   expect(bare).toBe(0);
 });
 
-test("R7 · 받은 뒤 알림이 띠의 성격을 말한다 — 계산 전 → 연습용 → 예전 결과", async ({ page }) => {
+test("R7 · 받은 뒤 알림이 띠의 성격을 말한다 — 계산 전 → 합성 → 예전 결과", async ({ page }) => {
   test.setTimeout(150_000);
   await open(page, CORE);
   await take(page);
-  await expect(page.locator(".pg-note")).toContainText("계산 전이에요");
+  await expect(page.locator(".pg-note")).toContainText("계산 전입니다");
   await compute(page);
   await take(page);
-  await expect(page.locator(".pg-note")).toContainText("연습용(합성) 데이터로 계산한 결과예요");
+  await expect(page.locator(".pg-note")).toContainText("합성 데이터로 계산한 결과입니다");
   await expect(page.locator(".pg-note")).not.toContainText("예전 결과");
   await page.locator(`.react-flow__edge[data-id="${EO}"]`).dispatchEvent("click");
   await page.keyboard.press("Delete");
   await expect(card(page, "optimizer")).toHaveClass(/pg-node--stale/);
   await take(page);
-  await expect(page.locator(".pg-note")).toContainText("예전 결과가 섞여 있어요");
+  await expect(page.locator(".pg-note")).toContainText("예전 결과가 섞여 있습니다");
 });
 
 test("R7 · html-to-image 는 누를 때 받는다 — 누르기 전엔 새 JS 없음 · 두 번째엔 다시 받지 않음", async ({ page }) => {
@@ -282,7 +282,7 @@ test("R7 · 찍은 뒤 화면이 그대로 돌아온다 — 확대 단계 · 고
   const zoom2 = await page.locator(".pg-canvas").getAttribute("data-zoom");
   await page.route("**/_next/static/chunks/**", (r) => r.abort());
   await pngBtn(page).click();
-  await expect(page.locator(".pg-note")).toContainText("그림을 만들지 못했어요");
+  await expect(page.locator(".pg-note")).toContainText("그림 생성 실패");
   await expect(page.locator(".pg-canvas")).toHaveAttribute("data-zoom", zoom2!);
   await expect(page.locator(".pg-canvas.pg-exporting")).toHaveCount(0);
   await expect(card(page, "returns")).toHaveClass(/pg-node--selected/);

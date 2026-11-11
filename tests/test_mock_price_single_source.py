@@ -1,28 +1,28 @@
-"""mock 가격의 출처는 하나다 — ★지금 주가 = 시세 이력의 마지막 종가★
+"""mock 가격의 출처는 하나다 — ★현재가 = 시세 이력의 마지막 종가★
 ==============================================================================
 2026-11-11 · 사용자 요청 "서버 mock 출처도 맞춰줘"
 
 ## 무엇이 문제였나 (실측)
 
-연습용(mock) 자료에서 가격을 만드는 곳이 서로 다른 값을 냈다:
+합성(mock) 자료에서 가격을 만드는 곳이 서로 다른 값을 냈다:
 
-    지금 주가      screener._mock_price          고정 표 — 005930 = 71,000 (날짜와 무관)
-    시점 가격      pit_store.get_price_asof      지금 주가 × (1 − 0.02 × 분기 수) × U(0.85, 1.15) — 과거 종가가 아니다
+    현재가      screener._mock_price          고정 표 — 005930 = 71,000 (날짜와 무관)
+    시점 가격      pit_store.get_price_asof      현재가 × (1 − 0.02 × 분기 수) × U(0.85, 1.15) — 과거 종가가 아니다
     일봉           ohlcv_loader._mock_walk       2000-01-03 기점 걸음 — 005930 의 2026-11-10 종가 56,511.67
-                                                  (표에 없는 123456 은 걸음 137.95 · 지금 주가 52,333 — 379배)
+                                                  (표에 없는 123456 은 걸음 137.95 · 현재가 52,333 — 379배)
 
 기업 화면의 헤더는 71,000원인데 1년 주가 선은 56,512원에서 끝났다. 프론트는 그 차이를 덮으려고 과거 종가에 배율을
 곱해 그렸고(걷어 냈다 — `1d9a109`), 덮지 않자 차이가 그대로 보였다.
 
 ## 무엇을 못 박나
 
-1. **한 출처** — 지금 주가도 시점 가격도 날짜 주소 가능한 걸음(`mock_close_asof`)에서 읽는다.
+1. **한 출처** — 현재가도 시점 가격도 날짜 주소 가능한 걸음(`mock_close_asof`)에서 읽는다.
 2. **수준은 표를 지킨다** — mock 재무가 표 가격 수준에 맞춰져 있다(삼성전자 EPS ≈ 4,690 · 표 71,000). 걸음에 종목별
    ★상수★ 배율을 곱해 기준일(`_MOCK_ANCHOR`)의 종가가 표 값이 되게 한다. 상수라서 수익률·거래량은 그대로다.
 3. **날짜 주소 가능성은 그대로** — 배율은 "오늘"이 아니라 고정 기준일로 정한다. 오늘에 맞추면 같은 날짜가 날마다 다른
    값이 된다(`tests/test_mock_is_date_addressable.py` 가 지키는 성질 · 프론트에서 걷은 배율을 서버로 옮기는 셈).
 4. **운영은 그대로** — `KIS_USE_MOCK≠1` 이면 두 함수 모두 고치기 전과 같은 값을 낸다(골든). 운영 동작 변경은 이번 범위가 아니다.
-5. **가격은 원 단위다** — 지금 주가·시점 가격은 그 날 종가를 원 단위로 반올림한 값이다(`mock_price_asof`). 걸음의 종가는
+5. **가격은 원 단위다** — 현재가·시점 가격은 그 날 종가를 원 단위로 반올림한 값이다(`mock_price_asof`). 걸음의 종가는
    소수라서 그대로 내면 응답에 "198,671.081원"이 실린다(전체 E2E 가 잡았다 — 홈·스크리너의 "서버 값 그대로" 시험 둘).
    예전 고정 표는 늘 정수였고 KRX 가격도 원 단위다. ★일봉은 반올림하지 않는다★ — 반올림하면 수익률이 바뀐다.
 
@@ -101,7 +101,7 @@ def test_the_price_now_moves_with_the_day(mock_mode, monkeypatch):
     a = ValuationScreener._mock_price(TABLE)
     _pin_today(monkeypatch, 2026, 11, 11)
     b = ValuationScreener._mock_price(TABLE)
-    assert a == 71000.0, "기준일의 지금 주가는 표 값이다"
+    assert a == 71000.0, "기준일의 현재가는 표 값이다"
     assert b != pytest.approx(a, rel=1e-6)
     want = 71000.0 * RAW[TABLE]["2026-11-11"][0] / RAW[TABLE]["2026-11-10"][0]
     assert abs(b - want) <= 0.5 + 1e-6, "하루 사이의 변화 = 걸음의 그날 수익률(원 단위 반올림만큼만 다르다)"
@@ -134,7 +134,7 @@ def test_an_as_of_day_without_a_bar_uses_the_last_trading_day(mock_mode, monkeyp
 
 # ── 2b. ★가격은 원 단위★ — 종가(소수)를 그대로 내지 않는다 · 일봉은 반올림하지 않는다 ─────────────────
 def test_mock_prices_are_whole_won(mock_mode, monkeypatch):
-    """지금 주가·시점 가격에 소수점이 없다. 올림과 내림이 둘 다 일어나는 날을 넣어 "내림" 구현을 배제한다."""
+    """현재가·시점 가격에 소수점이 없다. 올림과 내림이 둘 다 일어나는 날을 넣어 "내림" 구현을 배제한다."""
     store, seen = ps.PITStore.get_default(), []
     for code, day in [(OTHER, "2025-06-30"), (OTHER, "2025-06-27"), (TABLE, "2026-11-11"), ("207940", "2025-06-27")]:
         close = ol.mock_close_asof(code, day)
@@ -224,7 +224,7 @@ def test_in_real_mode_the_as_of_price_is_unchanged(monkeypatch, code, as_of, cur
 
 # ── 6. 가장자리 ────────────────────────────────────────────────────────────────────────────────
 def test_a_suffixed_ticker_reads_the_same_walk_as_the_loader(mock_mode, monkeypatch):
-    """`load_ohlcv_unified` 는 `.KS`·`.KQ` 를 떼고 읽는다 — 지금 주가도 같은 종목을 읽어야 둘이 같다."""
+    """`load_ohlcv_unified` 는 `.KS`·`.KQ` 를 떼고 읽는다 — 현재가도 같은 종목을 읽어야 둘이 같다."""
     day = _pin_today(monkeypatch, 2026, 11, 11)
     last = float(_df("005930.KS", day)["close"].iloc[-1])
     assert ValuationScreener._mock_price("005930.KS") == _won(last)

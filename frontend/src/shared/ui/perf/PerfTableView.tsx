@@ -11,7 +11,7 @@ export function YearTable({ view, nLabel = "거래일" }: { view: PerfView; /** 
   if (!yearly.length) return null;
   return (
     <table className="pg-table pf-table-years">
-      <thead><tr><th>해</th><th className="pg-td-num">수익</th><th className="pg-td-num">가장 크게 빠진 폭</th><th className="pg-td-num">{nLabel}</th></tr></thead>
+      <thead><tr><th>연도</th><th className="pg-td-num">수익률</th><th className="pg-td-num">MDD(최대낙폭)</th><th className="pg-td-num">{nLabel}</th></tr></thead>
       <tbody>
         {yearly.map((r) => (
           <tr key={r.year}>

@@ -1,21 +1,21 @@
-"""AAS 그래프 노드 설명기 — ★쉬운 말로, 과장 없이, 모르는 것은 "몰라요" 로★ (BJ1)
+"""AAS 그래프 노드 설명기 — ★쉬운 말로, 과장 없이, 모르는 것은 "N/A" 로★ (BJ1)
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-workflow-ux-design.md` §4.3 · 사용자 결정: 설명
 문장은 **서버가 결정적 규칙으로** 만든다(화면은 그리기만 한다).
 
 설명기는 `(view, provenance, params) -> dict` 순수 함수다. 반환 모양:
 
-    {"title": 해요체 한 줄,
+    {"title": 합니다체 한 줄,
      "headline": {"label", "value", "unit", "text"} | 없음,
      "facts": [한 줄 사실],
-     "trust": [{"state": confirmed|assumed|unknown|failed, "text"}],   # "믿어도 되나요?"
+     "trust": [{"state": confirmed|assumed|unknown|failed, "text"}],   # "신뢰도 점검"
      "unmeasured": [안 잰 것]}
 
 ## 규칙 (CLAUDE.md §2 · §4)
 - **숫자는 view 에서만** 가져온다 — 설명이 계산을 다시 하거나 반올림 이상으로 바꾸지 않는다.
 - "확인(confirmed)" 은 **이 코드가 실제로 한 일**에만 쓴다(계산이 끝났다 · 기준일을 기록했다).
   예측력·경제적 가치를 확인했다는 말은 이 층 어디에도 없다.
-- mock(E0) 은 "연습용 합성 데이터" 를 **몰라요**로 — 실제 성과를 말해 주지 않는다.
+- mock(E0) 은 "합성 데이터" 를 **모릅니다**로 — 실제 성과를 말해 주지 않는다.
   DB 적재분은 등급을 모른다고 말한다(E3 을 지어내지 않는다).
 - 과장 어휘는 테스트가 전수로 막는다(`tests/test_allocation_graph_explain.py`).
 """
@@ -37,7 +37,7 @@ MODEL_PLAIN = {
     "mv_utility": "위험 성향에 맞춰",
 }
 
-_PRACTICE = "연습용 합성 데이터예요 — 실제 시세가 아니라서 실제 성과를 말해 주지 않아요."
+_PRACTICE = "합성 데이터입니다 — 실제 시세가 아니라서 실제 성과를 말해 주지 않습니다."
 
 
 def _t(state: str, text: str) -> dict:
@@ -51,8 +51,8 @@ FALLBACK = "fallback"
 
 
 def _practice(text: str = _PRACTICE) -> dict:
-    """연습용(합성) 데이터라서 실제 성과·국면·가치를 말하지 못한다는 믿음 줄 — 몰라요 + 표시.
-    노드 모듈은 연습용 줄을 `_t(UNKNOWN, …)` 로 직접 만들지 않는다(`tests/test_graph_practice_kind.py` AST)."""
+    """합성 데이터라서 실제 성과·국면·가치를 말하지 못한다는 믿음 줄 — 모릅니다 + 표시.
+    노드 모듈은 합성 줄을 `_t(UNKNOWN, …)` 로 직접 만들지 않는다(`tests/test_graph_practice_kind.py` AST)."""
     return {"state": UNKNOWN, "text": text, "kind": PRACTICE}
 
 
@@ -89,44 +89,44 @@ def explain_universe(view: dict, prov: dict, params: Any) -> dict:
     tickers = view.get("tickers") or []
     labels = view.get("labels") or {}
     facts = [_names(tickers, labels)]
-    facts.append("지금 들고 있는 비중도 알려 주었어요." if view.get("weights")
-                 else "지금 들고 있는 비중은 알려 주지 않았어요.")
+    facts.append("지금 들고 있는 비중도 알려 주었습니다." if view.get("weights")
+                 else "지금 들고 있는 비중은 알려 주지 않았습니다.")
     trust = []
     unk = (view.get("unknown_tickers") or {}).get("codes") or []
     if unk:
-        trust.append(_t(UNKNOWN, f"종목 목록에 없는 코드예요: {', '.join(unk)} — 실재하는 종목인지 몰라요."))
-    return {"title": f"종목 {len(tickers)}개를 골랐어요", "facts": facts, "trust": trust}
+        trust.append(_t(UNKNOWN, f"종목 목록에 없는 코드입니다: {', '.join(unk)} — 실재하는 종목인지 미상"))
+    return {"title": f"종목 {len(tickers)}개를 골랐습니다", "facts": facts, "trust": trust}
 
 
 def explain_returns(view: dict, prov: dict, params: Any) -> dict:
     cov = view.get("coverage") or {}
     n = cov.get("n_obs")
     years = (n / 252) if isinstance(n, (int, float)) and n else None
-    title = (f"최근 {years:.0f}년 수익률을 불러왔어요" if years and abs(years - round(years)) < 0.15
-             else f"최근 {n}일 수익률을 불러왔어요")
-    facts = [f"{cov.get('start')}부터 {cov.get('end')}까지 {n}일 치예요."]
+    title = (f"최근 {years:.0f}년 수익률을 불러왔습니다" if years and abs(years - round(years)) < 0.15
+             else f"최근 {n}일 수익률을 불러왔습니다")
+    facts = [f"{cov.get('start')}부터 {cov.get('end')}까지 {n}일 치입니다."]
     ex = view.get("excluded") or []
-    facts.append("빠진 종목은 없어요." if not ex else
+    facts.append("빠진 종목은 없습니다." if not ex else
                  "빠진 종목: " + "; ".join(f"{x['ticker']}({x['reason']})" for x in ex))
     trust = []
     if _is_practice(prov):
         trust.append(_practice())
     elif prov.get("data_grade"):
-        trust.append(_t(CONFIRMED, f"데이터 등급 {prov['data_grade']}로 기록돼 있어요."))
+        trust.append(_t(CONFIRMED, f"데이터 등급 {prov['data_grade']}로 기록돼 있습니다."))
     else:
-        trust.append(_t(UNKNOWN, "데이터 출처 등급은 몰라요 — "
-                                 + str(prov.get("data_grade_reason") or "행 단위 출처가 기록되지 않았어요.")))
+        trust.append(_t(UNKNOWN, "데이터 출처 등급은 미상입니다 — "
+                                 + str(prov.get("data_grade_reason") or "행 단위 출처가 기록되지 않았습니다.")))
     if cov.get("as_of_effective"):
-        trust.append(_t(CONFIRMED, f"계산 기준일을 {cov['as_of_effective']}로 기록했어요."))
+        trust.append(_t(CONFIRMED, f"계산 기준일을 {cov['as_of_effective']}로 기록했습니다."))
     return {"title": title, "facts": facts, "trust": trust,
-            "unmeasured": ["그 날 실제로 알 수 있던 값인지(공표 시점)는 행마다 재지 않았어요."]}
+            "unmeasured": ["그 날 실제로 알 수 있던 값인지(공표 시점)는 행마다 측정하지 않았습니다."]}
 
 
 def explain_views(view: dict, prov: dict, params: Any) -> dict:
     from src.api.allocation_routes import _labels
     views = view.get("views") or []
     if not views:
-        return {"title": "넣은 생각이 없어요", "facts": ["시장 균형만으로 계산해요."]}
+        return {"title": "넣은 생각이 없습니다", "facts": ["시장 균형만으로 계산합니다."]}
     facts = []
     for v in views:
         mag = float(v.get("direction", 1)) * float(v.get("magnitude_pct", 0))
@@ -135,17 +135,17 @@ def explain_views(view: dict, prov: dict, params: Any) -> dict:
             codes = list(v["assets"])
             who = _names(codes, _labels(codes))
             who = who if len(codes) == 1 else f"{who} 평균"
-            facts.append(f"{who}의 1년 기대 수익을 {_signed_pct(mag)}로 봤어요 (확신 {conf:.0f}%).")
+            facts.append(f"{who}의 1년 기대 수익을 {_signed_pct(mag)}로 봤습니다 (확신 {conf:.0f}%).")
         else:
             w = v.get("weights") or {}
             parts = ", ".join(f"{_names([c], _labels([c]))} {x:+g}" for c, x in w.items())
-            facts.append(f"조합({parts})의 1년 기대 수익을 {_signed_pct(mag)}로 봤어요 (확신 {conf:.0f}%).")
-    return {"title": f"내 생각 {len(views)}개를 넣었어요", "facts": facts,
-            "trust": [_t(ASSUMED, "내 생각은 입력한 가정이에요 — 맞는지는 이 계산이 확인하지 않아요.")]}
+            facts.append(f"조합({parts})의 1년 기대 수익을 {_signed_pct(mag)}로 봤습니다 (확신 {conf:.0f}%).")
+    return {"title": f"내 생각 {len(views)}개를 넣었습니다", "facts": facts,
+            "trust": [_t(ASSUMED, "내 생각은 입력한 가정입니다 — 맞는지는 이 계산이 확인하지 않습니다.")]}
 
 
 #: CF 3부 P1 — 추정 노드는 수익률 입력을 받지만 쓰지 않는다(설정만 넘긴다). 선이 뜻하는 의존과 실제가 달라서 말한다.
-_ESTIMATE_INPUT_UNUSED = "이어진 수익률은 이 단계에서 쓰지 않아요 — 설정만 넘기고, 기대 수익은 비중 계산 단계가 자기 수익률 입력으로 계산해요."
+_ESTIMATE_INPUT_UNUSED = "이어진 수익률은 이 단계에서 쓰지 않습니다 — 설정만 넘기고, 기대 수익은 비중 계산 단계가 자기 수익률 입력으로 계산합니다."
 
 #: 완화 사다리가 건너뛴 제약 이름(`constrained_solve` 의 relaxed) → 쉬운 말.
 _RELAXED_PLAIN = {"turnover": "회전율", "beta": "시장 민감도", "group": "업종 상한"}
@@ -155,25 +155,25 @@ def _constraints_approx_text(cr: dict) -> str:
     """근사해·깎아 맞춘 해를 한 문장으로 — 값은 보고에 있는 것만(새 숫자 없음)."""
     parts = []
     if cr.get("projected"):
-        parts.append("이 계산 방식은 제약을 직접 풀지 못해 계산한 뒤 깎아 맞췄어요 — 회전율·시장 민감도 제약은 이 방식에서 적용되지 않아요.")
+        parts.append("이 계산 방식은 제약을 직접 풀지 못해 계산한 뒤 깎아 맞췄습니다 — 회전율·시장 민감도 제약은 이 방식에서 적용되지 않습니다.")
     relaxed = [_RELAXED_PLAIN.get(r, str(r)) for r in cr.get("relaxed") or []]
     if relaxed:
-        parts.append(f"원래 제약으로는 답이 없어 {'·'.join(relaxed)} 제약을 느슨하게 풀었어요.")
+        parts.append(f"원래 제약으로는 답이 없어 {'·'.join(relaxed)} 제약을 느슨하게 풀었습니다.")
     viol = cr.get("violations") or []
     if viol:
-        parts.append(f"어긋난 제약 {len(viol)}개가 남았어요.")
-    return " ".join(parts) or "제약을 다 지키지 못해 가까운 비중을 냈어요."
+        parts.append(f"어긋난 제약 {len(viol)}개가 남았습니다.")
+    return " ".join(parts) or "제약을 다 지키지 못해 가까운 비중을 냈습니다."
 
 
 def explain_estimate(view: dict, prov: dict, params: Any) -> dict:
     s = view.get("settings") or {}
     if s.get("conditional"):
-        return {"title": "경기 국면을 반영해 기대 수익을 잡기로 했어요",
-                "facts": ["실제로 반영됐는지는 비중 계산 단계가 알려 줘요.", _ESTIMATE_INPUT_UNUSED],
-                "trust": [_t(ASSUMED, "국면이 앞으로도 이어진다고 가정해요.")]}
-    return {"title": "과거 수익률을 기준으로 기대 수익을 잡았어요",
-            "facts": ["경기 국면은 반영하지 않았어요.", _ESTIMATE_INPUT_UNUSED],
-            "trust": [_t(ASSUMED, "과거 평균이 앞으로도 비슷하다고 가정해요.")]}
+        return {"title": "경기 국면을 반영해 기대 수익을 잡기로 했습니다",
+                "facts": ["실제로 반영됐는지는 비중 계산 단계가 알려 줍니다.", _ESTIMATE_INPUT_UNUSED],
+                "trust": [_t(ASSUMED, "국면이 앞으로도 이어진다고 가정합니다.")]}
+    return {"title": "과거 수익률을 기준으로 기대 수익을 잡았습니다",
+            "facts": ["경기 국면은 반영하지 않았습니다.", _ESTIMATE_INPUT_UNUSED],
+            "trust": [_t(ASSUMED, "과거 평균이 앞으로도 비슷하다고 가정합니다.")]}
 
 
 def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
@@ -188,35 +188,35 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
                     "text": f"{name} {_pct(w[top])}"}
     # CF3 — 요청한 방식 대신 다른 비중이 쓰였으면 "문제없이" 라고 하지 않는다. 대체마다 가정 줄(`kind: fallback`).
     used = [f for f in view.get("fallbacks") or [] if f.get("affects_weights")]
-    trust = [_t(CONFIRMED, "비중 계산은 끝났어요." if used else "비중 계산은 문제없이 끝났어요.")]
+    trust = [_t(CONFIRMED, "비중 계산은 끝났습니다." if used else "비중 계산은 문제없이 끝났습니다.")]
     trust += [{"state": ASSUMED, "text": str(f.get("text") or ""), "kind": FALLBACK} for f in used]
     if _is_practice(prov):
         trust.append(_practice())
     cap = view.get("cap_missing") or []
     if model in _MARKET_PRIOR_MODELS and cap:
         # `market_cap_weights` 와 같은 일을 말한다(K1) — 모두 모르면 균등, 일부만 모르면 아는 종목들의 중앙값으로 채운다.
-        trust.append(_t(ASSUMED, "시가총액을 하나도 몰라서 출발점을 모든 종목에 똑같이 나눴어요."
+        trust.append(_t(ASSUMED, "시가총액을 하나도 몰라서 출발점을 모든 종목에 똑같이 나눴습니다."
                         if len(cap) >= len(view.get("names") or []) else
-                        f"{len(cap)}개 종목은 시가총액을 몰라서 출발점에 나머지 종목 시가총액의 중앙값을 넣었어요."))
+                        f"{len(cap)}개 종목은 시가총액을 몰라서 출발점에 나머지 종목 시가총액의 중앙값을 넣었습니다."))
     cr = view.get("constraints_report") or None
     if cr:
         if cr.get("status") == "infeasible":
-            trust.append(_t(FAILED, "제약을 모두 지킬 수 없어서 제약 없는 비중을 그대로 보여 줘요 — "
+            trust.append(_t(FAILED, "제약을 모두 지킬 수 없어서 제약 없는 비중을 그대로 보여 줍니다 — "
                                     + str(cr.get("reason") or "")))
         elif cr.get("status") == "approx" or cr.get("projected"):
             # CF 3부 P1 — 근사해·깎아 맞춘 해는 "제약 안에서" 가 확인이 아니다.
             trust.append(_t(ASSUMED, _constraints_approx_text(cr)))
         else:
-            trust.append(_t(CONFIRMED, "적용된 제약 안에서 계산했어요." if cr.get("unapplied")
-                            else "정한 제약 안에서 계산했어요."))
+            trust.append(_t(CONFIRMED, "적용된 제약 안에서 계산했습니다." if cr.get("unapplied")
+                            else "정한 제약 안에서 계산했습니다."))
         # 엔진이 말없이 건너뛴 업종 상한(라우트가 센 것) — 모르는 것으로 말한다.
         trust += [_t(UNKNOWN, str(u.get("text") or "")) for u in cr.get("unapplied") or []]
     belief = view.get("belief") or {}
     if belief.get("blocked"):
-        trust.append(_t(ASSUMED, "경기 국면 반영이 막혀서 과거 기준으로 계산했어요 — "
+        trust.append(_t(ASSUMED, "경기 국면 반영이 막혀서 과거 기준으로 계산했습니다 — "
                                  + str(belief.get("blocked_reason") or "")))
     if view.get("skipped_views"):
-        trust.append(_t(UNKNOWN, f"넣은 생각 중 {len(view['skipped_views'])}개는 쓸 수 없어서 빠졌어요."))
+        trust.append(_t(UNKNOWN, f"넣은 생각 중 {len(view['skipped_views'])}개는 쓸 수 없어서 빠졌습니다."))
     facts = [f"계산 방식: {MODEL_PLAIN.get(model, model)}"]
     ra = view.get("risk_aversion") or None
     if ra:
@@ -224,19 +224,19 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
         facts.append(f"위험 회피 λ {ra.get('value'):g}")
         if ra.get("source") == "default":
             trust.append(_t(ASSUMED, f"위험을 얼마나 피할지 정하지 않아서 관례적인 값(λ {ra.get('value'):g}, "
-                                     "‘보통’)으로 계산했어요 — 나에게 맞는 값은 아니에요."))
+                                     "‘보통’)으로 계산했습니다 — 나에게 맞는 값은 아닙니다."))
         else:
-            trust.append(_t(ASSUMED, f"위험 회피 λ {ra.get('value'):g}는 내가 고른 값이에요 — "
-                                     "이 값이 나에게 맞는지는 이 계산이 말해 주지 않아요."))
+            trust.append(_t(ASSUMED, f"위험 회피 λ {ra.get('value'):g}는 내가 고른 값입니다 — "
+                                     "이 값이 나에게 맞는지는 이 계산이 말해 주지 않습니다."))
     if view.get("views_unused"):
-        trust.append(_t(ASSUMED, f"이어진 생각 {view['views_unused']}개는 이 계산 방식에서 쓰이지 않아요 — "
-                                 "‘내 생각 반영’을 고르면 비중에 들어가요."))
+        trust.append(_t(ASSUMED, f"이어진 생각 {view['views_unused']}개는 이 계산 방식에서 쓰이지 않습니다 — "
+                                 "‘내 생각 반영’을 고르면 비중에 들어갑니다."))
     if model in _MARKET_PRIOR_MODELS:
         market = any(f.get("stage") == "view_applied" for f in used)
         # K1 — 생각을 넣은 비중을 못 만들어 시가총액 비중을 썼으면 그렇게 말한다(`views_applied` 는 그때 거짓이다).
-        facts.append("생각을 반영한 비중을 만들지 못해 시가총액 비중을 썼어요." if market
-                     else "내 생각을 반영했어요." if view.get("views_applied") else "반영된 생각이 없어요.")
-    return {"title": "비중을 이렇게 나눴어요", "headline": headline, "facts": facts, "trust": trust}
+        facts.append("생각을 반영한 비중을 만들지 못해 시가총액 비중을 썼습니다." if market
+                     else "내 생각을 반영했습니다." if view.get("views_applied") else "반영된 생각이 없습니다.")
+    return {"title": "비중을 이렇게 나눴습니다", "headline": headline, "facts": facts, "trust": trust}
 
 
 def explain_risk(view: dict, prov: dict, params: Any) -> dict:
@@ -244,22 +244,22 @@ def explain_risk(view: dict, prov: dict, params: Any) -> dict:
     enb = view.get("enb") or {}
     vol = rc.get("portfolio_volatility_pct")
     if vol is None:
-        return {"title": "흔들림을 계산하지 못했어요",
-                "trust": [_t(UNKNOWN, str(rc.get("reason") or "사유를 받지 못했어요."))]}
+        return {"title": "흔들림 산출 실패",
+                "trust": [_t(UNKNOWN, str(rc.get("reason") or "사유 수신 실패"))]}
     facts = []
     if enb.get("enb") is not None:
-        facts.append(f"종목들이 함께 움직여서, 실제로 나뉜 베팅은 {enb['enb']:.1f}개 정도예요.")
+        facts.append(f"종목들이 함께 움직여서, 실제로 나뉜 베팅은 {enb['enb']:.1f}개 정도입니다.")
     else:
-        facts.append("실제로 나뉜 베팅 수는 몰라요 — " + str(enb.get("enb_reason") or ""))
-    return {"title": "1년에 이 정도 흔들릴 수 있어요",
+        facts.append("실제로 나뉜 베팅 수는 미상입니다 — " + str(enb.get("enb_reason") or ""))
+    return {"title": "1년에 이 정도 흔들릴 수 있습니다",
             "headline": {"label": "변동성", "value": round(float(vol), 1), "unit": "%",
                          "text": f"{_pct(float(vol))} / 년"},
             "facts": facts,
-            "trust": [_t(ASSUMED, "과거에 종목들이 함께 움직인 방식이 이어진다고 가정해요.")]}
+            "trust": [_t(ASSUMED, "과거에 종목들이 함께 움직인 방식이 이어진다고 가정합니다.")]}
 
 
 def drawdown_fact(view: dict) -> str | None:
-    """가장 깊은 낙폭 사건 한 문장 (2026-11-09 · 캔버스 성과 그림 문법) — `view["drawdowns"]` 의 첫 사건(깊이순).
+    """가장 깊은 낙폭 구간 한 문장 (2026-11-09 · 캔버스 성과 그림 문법) — `view["drawdowns"]` 의 첫 사건(깊이순).
 
     회복했으면 며칠 걸렸는지, 못 했으면 "아직" 이라고. ★사건이 없으면 None★ — 0 일·0% 를 지어내지 않는다.
     """
@@ -272,7 +272,7 @@ def drawdown_fact(view: dict) -> str | None:
         return None
     head = f"가장 깊은 낙폭은 {peak} 고점에서 {int(to_trough)}일 만에 {abs(float(depth)):.1f}% 빠진 것이었고, "
     rec = e.get("days_to_recover")
-    return head + (f"고점을 되찾기까지 {int(rec)}일 걸렸어요." if rec is not None else "아직 고점을 되찾지 못했어요.")
+    return head + (f"고점을 되찾기까지 {int(rec)}일 걸렸습니다." if rec is not None else "아직 고점을 되찾지 못했습니다.")
 
 
 def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
@@ -280,15 +280,15 @@ def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
     cfg = view.get("config") or {}
     cagr, mdd = s.get("cagr_pct"), s.get("max_drawdown_pct")
     headline = None if cagr is None else {
-        "label": "연 수익률", "value": cagr, "unit": "%", "text": f"연 {_pct(float(cagr))}"}
+        "label": "연환산 수익률", "value": cagr, "unit": "%", "text": f"연 {_pct(float(cagr))}"}
     facts = []
     if mdd is not None:
-        facts.append(f"가장 크게 떨어졌을 때는 {_pct(float(mdd))}였어요.")
+        facts.append(f"가장 크게 떨어졌을 때는 {_pct(float(mdd))}였습니다.")
     dd_fact = drawdown_fact(view)
     if dd_fact:
         facts.append(dd_fact)
     if view.get("n_rebalances") is not None:
-        facts.append(f"리밸런싱을 {view['n_rebalances']}번 했어요.")
+        facts.append(f"리밸런싱을 {view['n_rebalances']}번 했습니다.")
     trust = []
     if _is_practice(prov):
         trust.append(_practice())
@@ -297,19 +297,19 @@ def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
     if bps is None:
         bps = cfg.get("cost_bps")
     if bps is not None:
-        trust.append(_t(ASSUMED, f"거래비용은 한 번 사고팔 때마다 {_pct(float(bps) / 100, 2)}로 가정했어요."))
+        trust.append(_t(ASSUMED, f"거래비용은 한 번 사고팔 때마다 {_pct(float(bps) / 100, 2)}로 가정했습니다."))
     la = view.get("lookahead_evidence") or {}
     for name in la.get("ok_axes") or []:
-        trust.append(_t(CONFIRMED, f"{LOOKAHEAD_AXIS_LABELS.get(name, name)}: 확인했어요."))
+        trust.append(_t(CONFIRMED, f"{LOOKAHEAD_AXIS_LABELS.get(name, name)}: 확인했습니다."))
     unmeasured = []
     for n in la.get("unknown_axes") or []:
         lab = LOOKAHEAD_AXIS_LABELS.get(n, n)
-        unmeasured.append(f"{lab}{_josa(lab, '은', '는')} 재지 않았어요.")
+        unmeasured.append(f"{lab}{_josa(lab, '은', '는')} 측정하지 않았습니다.")
     if view.get("belief_note"):
         trust.append(_t(ASSUMED, str(view["belief_note"])))
     # CF3 — 리밸런싱 시점마다 고른 방식을 다시 푸는데, 그때 역변동성으로 대신했는지는 세지 않는다.
-    unmeasured.append("리밸런싱마다 고른 방식이 답을 냈는지(역변동성으로 대신했는지)는 세지 않았어요.")
-    return {"title": "과거에 이 규칙대로 했다면 이랬어요", "headline": headline, "facts": facts,
+    unmeasured.append("리밸런싱마다 고른 방식이 답을 냈는지(역변동성으로 대신했는지)는 세지 않았습니다.")
+    return {"title": "과거에 이 규칙대로 했다면 이랬습니다", "headline": headline, "facts": facts,
             "trust": trust, "unmeasured": unmeasured}
 
 

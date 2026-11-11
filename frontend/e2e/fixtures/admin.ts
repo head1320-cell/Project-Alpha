@@ -25,7 +25,7 @@ export async function signIn(page: Page, role: Role | null, o: { mustChange?: bo
 
 export async function routeConnection(page: Page, mock: boolean | "fail" = true) {
   await page.route("**/api/v1/macro/connection-status", (r) => mock === "fail"
-    ? r.fulfill({ status: 500, json: { detail: "연결 상태를 읽지 못했어요" } })
+    ? r.fulfill({ status: 500, json: { detail: "연결 상태 읽기 실패" } })
     : r.fulfill({ json: { mock_allowed: mock, real_mode: !mock, bok_configured: false, fred_configured: false } }));
 }
 
@@ -81,7 +81,7 @@ export const SAFETY: Record<SafetyKey, unknown> = {
 };
 
 /** BV7 — 관문이 닫혀 있으면 서버가 이 사유로 400 을 준다(`order_executor.set_mode`). */
-export const LIVE_REFUSED = "실계좌 관문이 닫혀 있어요. 빠진 항목: basis, authority, reference_no, verified_at, scope, allowed_users";
+export const LIVE_REFUSED = "실계좌 관문이 닫혀 있습니다. 빠진 항목: basis, authority, reference_no, verified_at, scope, allowed_users";
 
 export const LIVE_BALANCE = {
   cash_krw: 99_786_983, evaluated_total: 100_046_983, stock_value: 473_000, n_positions: 2,
@@ -117,20 +117,20 @@ export async function routeLive(page: Page, st: LiveState) {
     const p = new URL(req.url()).pathname.replace(/^.*\/api\/v1\/live/, "");
     const m = req.method();
     if (p === "/mode" && m === "GET") {
-      if (st.fail.mode) return r.fulfill({ status: st.fail.mode, json: { detail: "모드를 읽지 못했어요" } });
+      if (st.fail.mode) return r.fulfill({ status: st.fail.mode, json: { detail: "모드 읽기 실패" } });
       return r.fulfill({ json: { mode: st.mode, started_at: "2026-10-09T08:00:00", last_mode_change: "2026-10-09T12:00:00",
         changed_by: "admin", enabled_strategies: [] } });
     }
     if (p === "/balance") {
-      if (st.fail.balance) return r.fulfill({ status: st.fail.balance, json: { detail: "잔고를 읽지 못했어요" } });
+      if (st.fail.balance) return r.fulfill({ status: st.fail.balance, json: { detail: "잔고 읽기 실패" } });
       return r.fulfill({ json: st.balance });
     }
     if (p === "/orders" && m === "GET") {
-      if (st.fail.orders) return r.fulfill({ status: st.fail.orders, json: { detail: "주문을 읽지 못했어요" } });
+      if (st.fail.orders) return r.fulfill({ status: st.fail.orders, json: { detail: "주문 읽기 실패" } });
       return r.fulfill({ json: { count: st.orders.length, orders: st.orders } });
     }
     if (p === "/kill-switch/status") {
-      if (st.fail.kill) return r.fulfill({ status: st.fail.kill, json: { detail: "정지 상태를 읽지 못했어요" } });
+      if (st.fail.kill) return r.fulfill({ status: st.fail.kill, json: { detail: "정지 상태 읽기 실패" } });
       return r.fulfill({ json: st.kill });
     }
     if (p === "/mode" && m === "POST") {
@@ -155,7 +155,7 @@ export async function routeLive(page: Page, st: LiveState) {
     }
     const sk = m === "GET" ? SAFETY_PATH[p] : undefined;
     if (sk) {
-      if (st.fail[sk]) return r.fulfill({ status: st.fail[sk], json: { detail: `${sk} 를 읽지 못했어요` } });
+      if (st.fail[sk]) return r.fulfill({ status: st.fail[sk], json: { detail: `${sk} 를 읽지 못했습니다` } });
       return r.fulfill({ json: st.safety[sk] });
     }
     return r.fulfill({ status: 404, json: { detail: "이 스펙이 정하지 않은 경로" } });
@@ -179,7 +179,7 @@ export async function routeGate(page: Page, st: GateState) {
   await page.route("**/api/v1/admin/live-gate", async (r) => {
     const m = r.request().method();
     if (m === "GET") {
-      if (st.fail) return r.fulfill({ status: st.fail, json: { detail: "관문 기록을 읽지 못했어요" } });
+      if (st.fail) return r.fulfill({ status: st.fail, json: { detail: "관문 기록 읽기 실패" } });
       return r.fulfill({ json: { current: st.current, history: st.history } });
     }
     if (m === "POST") {
@@ -193,7 +193,7 @@ export async function routeGate(page: Page, st: GateState) {
       return r.fulfill({ status: 201, json: { current: rec, live_dropped_to_shadow: false } });
     }
     if (m === "DELETE") {
-      if (!st.current) return r.fulfill({ status: 404, json: { detail: "지금 열려 있는 실계좌 관문이 없어요." } });
+      if (!st.current) return r.fulfill({ status: 404, json: { detail: "지금 열려 있는 실계좌 관문 없음" } });
       const now = "2026-10-10T03:05:00+00:00";
       st.history = st.history.map((h) => (h.revoked_at ? h : { ...h, revoked_by: "admin", revoked_at: now }));
       st.current = null;
@@ -236,7 +236,7 @@ export async function routeRealism(page: Page, st: RealismState) {
     const req = r.request();
     const p = new URL(req.url()).pathname.replace(/^.*\/api\/v1\/multibacktest/, "");
     if (p === "/strategies" && req.method() === "GET") {
-      if (st.fail.strategies) return r.fulfill({ status: st.fail.strategies, json: { detail: "전략 목록을 읽지 못했어요" } });
+      if (st.fail.strategies) return r.fulfill({ status: st.fail.strategies, json: { detail: "전략 목록 읽기 실패" } });
       return r.fulfill({ json: { count: st.strategies.length, strategies: st.strategies } });
     }
     return r.fulfill({ status: 404, json: { detail: "Not Found" } });
@@ -245,7 +245,7 @@ export async function routeRealism(page: Page, st: RealismState) {
     const body = r.request().postDataJSON() as Record<string, unknown>;
     const ideal = body.enable_market_impact === false;
     const side = ideal ? "ideal" : "reality";
-    if (st.fail[side]) return r.fulfill({ status: st.fail[side], json: { detail: ideal ? "이상 쪽 계산이 실패했어요" : "현실 조건 계산이 실패했어요" } });
+    if (st.fail[side]) return r.fulfill({ status: st.fail[side], json: { detail: ideal ? "이상 쪽 계산이 실패했습니다" : "현실 조건 계산이 실패했습니다" } });
     const reply = ideal ? st.idealReply : st.realityReply;
     if (reply) return r.fulfill({ json: reply });
     return r.fulfill({ json: { ...(ideal ? REALISM.ideal : REALISM.real), config: body } });

@@ -10,7 +10,7 @@ import type { Sheet, SheetStep, SheetTrust } from "./api";
 
 const CLIENT_KINDS = new Set(["client_profile", "account", "goal", "holdings_check"]);
 const DECISION_KINDS = new Set(["rebalance_decision", "order_preview", "target_version", "decision_journal"]);
-const TRUST: Record<string, string> = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패" };
+const TRUST: Record<string, string> = { confirmed: "확인", assumed: "가정", unknown: "미상", failed: "실패" };
 
 const day = (iso: string) => iso.slice(0, 10);
 
@@ -26,7 +26,7 @@ function Step({ s }: { s: SheetStep }) {
           {(ex.facts ?? []).length > 0 && <ul className="cs-facts">{ex.facts!.map((f, i) => <li key={i}>{f}</li>)}</ul>}
         </>
       ) : (
-        <p className="cs-step-failed">{s.status === "blocked" ? "앞 단계 때문에 계산하지 못했어요" : "계산하지 못했어요"} — {s.reason}</p>
+        <p className="cs-step-failed">{s.status === "blocked" ? "앞 단계 때문에 계산하지 못했습니다" : "산출 실패"} — {s.reason}</p>
       )}
     </li>
   );
@@ -58,7 +58,7 @@ export function ClientSheet({ sheet, audience = "pb" }: { sheet: Sheet; audience
       {sheet.practice && <p className="cs-practice" role="note">{sheet.practice_note}</p>}
       <section className="cs-sec cs-weights-sec">
         <h2 className="cs-h2">내 포트폴리오 비중</h2>
-        <p className="cs-sub">{audience === "client" ? "이번 점검에서 정한 비중이에요." : `${sheet.focus.label} 노드가 정한 비중이에요.`}</p>
+        <p className="cs-sub">{audience === "client" ? "이번 점검에서 정한 비중입니다." : `${sheet.focus.label} 노드가 정한 비중입니다.`}</p>
         <ol className="cs-weights">
           {sheet.focus.weights.map((w) => (
             <li key={w.code} className="cs-weight" data-code={w.code}>
@@ -88,7 +88,7 @@ export function ClientSheet({ sheet, audience = "pb" }: { sheet: Sheet; audience
           <ul className="cs-unmeasured">{unmeasured.map(({ where, u }, i) => <li key={i}>{u}<span className="cs-where">{where}</span></li>)}</ul>
         </section>
       )}
-      <footer className="cs-foot">{sheet.note} 투자 판단은 담당 PB와 상담해 주세요.</footer>
+      <footer className="cs-foot">{sheet.note} 투자 판단은 담당 PB와 상담하십시오.</footer>
     </article>
   );
 }

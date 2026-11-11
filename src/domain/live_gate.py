@@ -44,8 +44,8 @@ AUTH_FIELDS = ("basis", "authority", "reference_no", "verified_at", "scope", "al
 _WILDCARDS = frozenset({"*", "all", "ALL", "everyone", "모두", "전체"})
 
 UNVERIFIED_LIVE_REASON = (
-    "실계좌 주문은 확인된 적이 없어 꺼져 있어요. 운영자가 근거·확인 기관·번호·확인일·범위와 "
-    "허용할 사용자 이름을 선언해야 열려요."
+    "실계좌 주문은 확인된 적이 없어 꺼져 있습니다. 운영자가 근거·확인 기관·번호·확인일·범위와 "
+    "허용할 사용자 이름을 선언해야 열립니다."
 )
 
 
@@ -101,7 +101,7 @@ def live_gate(record: LiveAuthorization | None = None, username: str | None = No
         return {
             "state": LIVE_BLOCKED,
             # ★무엇이 빠졌는지 말한다★ — 막힌 사람이 무엇을 해야 하는지 모르면 그 거부는 절반만 정직하다.
-            "reason": f"확인 기록이 불완전해요. 빠진 항목: {', '.join(missing)}. " + UNVERIFIED_LIVE_REASON,
+            "reason": f"확인 기록이 불완전합니다. 빠진 항목: {', '.join(missing)}. " + UNVERIFIED_LIVE_REASON,
             "missing": missing,
             "authorization": record.to_dict(),
         }
@@ -109,7 +109,7 @@ def live_gate(record: LiveAuthorization | None = None, username: str | None = No
     if not (username or "").strip():
         return {
             "state": LIVE_BLOCKED,
-            "reason": "누구의 계좌인지 몰라서 실계좌를 열 수 없어요.",
+            "reason": "누구의 계좌인지 몰라서 실계좌를 열 수 없습니다.",
             "missing": [],
             "authorization": record.to_dict(),
         }
@@ -118,7 +118,7 @@ def live_gate(record: LiveAuthorization | None = None, username: str | None = No
     if username not in record.allowed_users:
         return {
             "state": LIVE_BLOCKED,
-            "reason": f"'{username}' 계정은 운영자가 실계좌를 연 사용자 목록에 없어요.",
+            "reason": f"'{username}' 계정은 운영자가 실계좌를 연 사용자 목록에 없습니다.",
             "missing": [],
             "authorization": record.to_dict(),
         }

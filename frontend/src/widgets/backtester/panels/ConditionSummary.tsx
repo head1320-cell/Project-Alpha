@@ -13,7 +13,7 @@ const CAPITAL_GROUP = "포트 기본";
 
 /** ★아직 세지 않은 대상 수를 0으로 보이지 않는다★ 대상 수는 ③을 열 때 서버에 묻는다(`universe-count`) — 그 전의
  *  `matched·totalUniverse = 0` 은 "0종목"이 아니라 "모름"이다(미상 ≠ 0). 첫 화면에서 미리 묻지 않는 것은 요청 골든을 지키려고. */
-const UNCOUNTED = "③을 열면 세어요";
+const UNCOUNTED = "③을 열면 셉니다";
 export function stepGroups(s: BacktestStrategy, step: StepId) {
   if (step === "capital") return buildSummary(s, "buy").filter((g) => g.label === CAPITAL_GROUP);
   if (step === "buy") return buildSummary(s, "buy").filter((g) => g.label !== CAPITAL_GROUP);

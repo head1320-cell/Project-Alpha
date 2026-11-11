@@ -279,8 +279,8 @@ export function CatalogueShell(props: CatalogueShellProps) {
 
             <div className="tfm-list" role="listbox" aria-label="카탈로그">
               {loading && <div className="as-empty">불러오는 중…</div>}
-              {error && <div className="as-err">{errorText || "불러오지 못했어요."}</div>}
-              {!loading && results.length === 0 && <div className="as-empty">검색 결과가 없어요</div>}
+              {error && <div className="as-err">{errorText || "조회 실패"}</div>}
+              {!loading && results.length === 0 && <div className="as-empty">검색 결과 없음</div>}
               {results.map((i, idx) => {
                 const off = i.available === false;
                 // 소제목은 **검색 중이 아닐 때만**, 그리고 값이 바뀌는 첫 항목에만.
@@ -314,7 +314,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
 
           <div className="tfm-right">
             {!selectedId ? (
-              <div className="as-empty">왼쪽에서 항목을 선택하세요.</div>
+              <div className="as-empty">왼쪽에서 항목을 선택하십시오.</div>
             ) : (
               <>
                 {children}
@@ -329,12 +329,12 @@ export function CatalogueShell(props: CatalogueShellProps) {
                     {comparison.active === null ? (
                       // ★비교 대상이 없다는 것과 "차이가 없다"는 다른 사실이다★
                       <div className="tfm-cmp-none">
-                        아직 적용된 설정이 없어요 — 비교할 대상이 없어요(차이가 없는 것이 아니에요).
+                        아직 적용된 설정이 없습니다 — 비교할 대상이 없습니다(차이가 없는 것이 아닙니다).
                       </div>
                     ) : (() => {
                       const rows = diffFields(comparison.active, comparison.draft);
                       return rows.length === 0 ? (
-                        <div className="tfm-cmp-same">적용본과 같아요 — 적용해도 바뀌는 것이 없어요.</div>
+                        <div className="tfm-cmp-same">적용본과 같습니다 — 적용해도 바뀌는 것이 없습니다.</div>
                       ) : (
                         <ul className="tfm-cmp-list">
                           {rows.map((d) => (
@@ -368,7 +368,7 @@ export function CatalogueShell(props: CatalogueShellProps) {
                         }}>저장</button>
                     </div>
                     {presetRows.length === 0 ? (
-                      <div className="tfm-preset-empty">저장된 프리셋이 없어요.</div>
+                      <div className="tfm-preset-empty">저장된 프리셋 없음</div>
                     ) : (
                       <ul className="tfm-preset-list">
                         {presetRows.map((p) => (
@@ -388,8 +388,8 @@ export function CatalogueShell(props: CatalogueShellProps) {
                     )}
                     {/* ★프리셋은 재현 좌표가 아니다★ 룰셋 버전과 혼동하면 안 된다. */}
                     <div className="tfm-preset-note">
-                      프리셋은 이 브라우저에만 저장돼요 — 런에 기록되지 않으므로 재현 좌표가
-                      아니에요.
+                      프리셋은 이 브라우저에만 저장됩니다 — 런에 기록되지 않으므로 재현 좌표가
+                      아닙니다.
                     </div>
                   </div>
                 )}

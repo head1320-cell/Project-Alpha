@@ -407,7 +407,7 @@ def sweep_orphaned(max_silence_sec: float = ORPHAN_SILENCE_SEC) -> int:
                 f"UPDATE {_TABLE} SET status='failed', current_stage='failed', "
                 "status_message='중단됨', error_code='worker_lost', "
                 "error_message='서버가 재시작되어 이 실행의 워커가 중단되었습니다. "
-                "다시 실행해 주세요.', completed_at=:co "
+                "다시 실행하십시오.', completed_at=:co "
                 f"WHERE status NOT IN ({placeholders}) AND {age} < :cut"), params)
         n = int(res.rowcount or 0)
         if n:

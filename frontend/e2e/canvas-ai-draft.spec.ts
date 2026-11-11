@@ -25,7 +25,7 @@ const CORE = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930
 const DRAFT_URL = "**/api/v1/assist/canvas/draft";
 const SENTENCE = "과거로 돌려 보기를 붙이고 5년 기준, 거래비용 0.3%로 해 줘";
 const DRAFT = {
-  summary: "과거로 돌려 보기를 붙이고 5년 기준으로 바꿔요",
+  summary: "과거로 돌려 보기를 붙이고 5년 기준으로 바꿉니다",
   add: [{ ref: "b", id: "backtest", kind: "backtest", label: "과거로 돌려 보기" }],
   connect: [{ id: "optimizer.weights->backtest.weights", source: "optimizer", source_port: "weights", target: "backtest", target_port: "weights" },
             { id: "returns.returns->backtest.returns", source: "returns", source_port: "returns", target: "backtest", target_port: "returns" }],
@@ -33,7 +33,7 @@ const DRAFT = {
         { node: "backtest", field: "cost_bps", label: "거래비용", value: 30, display: "0.3%", quote: "0.3%", read: "preset" }],
   empty: [] as unknown[],
 };
-const REJ = [{ op: "set", code: "ticker_ambiguous", reason: "여러 종목이 맞아요 — ‘삼성’: 삼성전자 · 삼성SDI. 이름을 정확히 말해 주세요" }];
+const REJ = [{ op: "set", code: "ticker_ambiguous", reason: "여러 종목이 맞습니다 — ‘삼성’: 삼성전자 · 삼성SDI. 이름을 정확히 말하십시오" }];
 const ok = (extra: Record<string, unknown> = {}) => ({
   available: true, source: "claude", model: "claude-opus-5-5", understood: true, cannot: null, draft: DRAFT, rejected: REJ,
   cached: false, usage: { input_tokens: 4200, output_tokens: 300, cost_usd: 0.0228, cost_note: null }, ...extra });
@@ -209,7 +209,7 @@ test("출처가 망가진 문서: 값은 그대로 두고 출처만 빼며 그�
       : x.id === "optimizer" ? { ...x, said: { model: "위험 똑같이" } }                                      // 값 없는 칸의 출처
         : x.id === "universe" ? { ...x, said: { tickers: "삼성전자, SK하이닉스" } } : x) };                   // ★짝★ 멀쩡함
   await openWith(page, doc);
-  await expect(page.locator(".pg-load-problems")).toContainText("노드 returns 의 ‘말씀에서’ 출처가 형식에 맞지 않아 뺐어요 — 값은 그대로예요.");
+  await expect(page.locator(".pg-load-problems")).toContainText("노드 returns 의 ‘말씀에서’ 출처가 형식에 맞지 않아 뺐습니다 — 값은 그대로입니다.");
   await page.locator('.pg-node[data-node-id="universe"]').click();                  // 문서를 다시 쓰게 한 번 건드린다(고르기만 — 값은 그대로)
   await expect.poll(async () => nodeOf(await wip(page), "returns")!.said).toBeUndefined();
   const d = await wip(page);
@@ -260,18 +260,18 @@ test("캔버스가 바뀌면 초안을 지우고 말한다 — 짝: 노드를 �
   await page.locator('.pg-tab[data-tab="settings"]').click();
   await page.locator('.pg-side .pg-basic-field[data-field="constraints"] .pg-chip', { hasText: "20%" }).click();
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);
-  await expect(panel(page).locator(".pg-say-note")).toHaveText("캔버스가 바뀌어 초안을 지웠어요 — 다시 말해 주세요");
+  await expect(panel(page).locator(".pg-say-note")).toHaveText("캔버스가 바뀌어 초안을 지웠습니다 — 다시 말하십시오");
   await expect(panel(page).locator(".pg-say-accept")).toHaveCount(0);
 });
 
 test("이해 못 함·투자 판단은 서버 고정 문장 · 받아들일 것이 없다 / 빈 것·빠진 것은 사유와 함께", async ({ page }) => {
   await signIn(page);
-  const cannot = "어떤 종목이 좋을지는 말하지 않아요 — 말씀대로 설계만 지어요";
+  const cannot = "어떤 종목이 좋을지는 말하지 않습니다 — 말씀대로 설계만 짓습니다";
   const empty = { summary: null, add: [], connect: [], set: [], empty: [] };
   await answer(page, async (route, i) => route.fulfill({ json: i === 0
     ? ok({ understood: false, cannot, draft: empty, rejected: [] })
     : ok({ draft: { ...DRAFT, connect: DRAFT.connect.slice(0, 1),
-                    empty: [{ node: "backtest", port: "returns", why: "‘과거로 돌려 보기’가 받을 ‘수익률’을 내는 노드가 없어요" }] } }) }));
+                    empty: [{ node: "backtest", port: "returns", why: "‘과거로 돌려 보기’가 받을 ‘수익률’을 내는 노드가 없습니다" }] } }) }));
   await openWith(page, CORE);
   await openTab(page);
   await say(page, "무슨 종목을 살까?");
@@ -279,18 +279,18 @@ test("이해 못 함·투자 판단은 서버 고정 문장 · 받아들일 것�
   await expect(panel(page).locator(".pg-say-accept")).toHaveCount(0);
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);
   await say(page);
-  await expect(sec(page, "empty").locator(".pg-say-item")).toHaveText(["‘과거로 돌려 보기’가 받을 ‘수익률’을 내는 노드가 없어요"]);
+  await expect(sec(page, "empty").locator(".pg-say-item")).toHaveText(["‘과거로 돌려 보기’가 받을 ‘수익률’을 내는 노드가 없습니다"]);
   await expect(sec(page, "rejected").locator(".pg-say-item")).toHaveCount(1);
   await expect(panel(page).locator(".pg-say-accept")).toBeVisible();
 });
 
 test("못 보이면 사유 — 미리보기·문서는 그대로", async ({ page }) => {
   await signIn(page);
-  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요" });
+  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다" });
   await openWith(page, CORE);
   await openTab(page);
   await say(page);
-  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 보여 줄 수 없어요: 한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요");
+  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);
   expect((await wip(page)).nodes).toHaveLength(4);
 });
@@ -307,7 +307,7 @@ test("가로채지 않은 실제 서버: 실제 문서·말씀 → 서버 형식
   const r = await res;
   expect(r.status()).toBe(200);
   expect(await r.json()).toMatchObject({ available: false, reason_code: "no_key" });
-  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 보여 줄 수 없어요: 서버에 Claude 키가 없어요");
+  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
 });
 
 test("Ctrl+K '말로 설계' → 왼쪽 창 '말로' 탭 + 입력에 초점", async ({ page }) => {
@@ -397,9 +397,9 @@ test("U5 규칙 · pickDraft — 뺀 줄은 빠지고, 뺀 새 노드에 기대�
   expect(noAdd.body.connect).toEqual([]);
   expect(noAdd.body.set.map((x) => x.node)).toEqual(["returns"]);
   expect(noAdd.n).toBe(1);
-  expect(noAdd.blocked.get(KEYS.w)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없어요");
-  expect(noAdd.blocked.get(KEYS.r)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없어요");
-  expect(noAdd.blocked.get(KEYS.cost)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없어요");
+  expect(noAdd.blocked.get(KEYS.w)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없습니다");
+  expect(noAdd.blocked.get(KEYS.r)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없습니다");
+  expect(noAdd.blocked.get(KEYS.cost)).toBe("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없습니다");
   expect(noAdd.blocked.has(KEYS.look)).toBe(false);
   const noLook = pickDraft(D, new Set([KEYS.look]), EXIST);
   expect(noLook.body.set.map((x) => x.node)).toEqual(["backtest"]);
@@ -430,8 +430,8 @@ test("U5 · 새 노드를 빼면 그 노드의 잇기·값 줄이 꺼지고 까�
     await expect(pickBox(page, k)).toBeDisabled();
     await expect(pickBox(page, k)).not.toBeChecked();
   }
-  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.w}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없어요");
-  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.cost}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없어요");
+  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.w}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 선을 이을 수 없습니다");
+  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.cost}"] ~ .pg-say-why`)).toHaveText("‘과거로 돌려 보기(새)’를 빼서 이 값을 넣을 곳이 없습니다");
   await expect(pickBox(page, KEYS.look)).toBeEnabled();
   await expect(pickBox(page, KEYS.look)).toBeChecked();
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);

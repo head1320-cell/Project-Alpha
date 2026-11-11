@@ -8,7 +8,7 @@
 모양). 이런 모양이면 별칭으로 받지 않고 사유를 말한다.
 
 ★실명은 모양으로 알 수 없다★ — "홍길동" 이 사람 이름인지 별칭인지 이 코드는 판단하지 못한다. 그것은 화면의 안내 문구("실명·
-연락처를 적지 마세요")와 PB 의 몫이고, 이 검사는 그렇다고 주장하지 않는다. 짧은 숫자·하이픈이 든 별칭("고객 A-12" ·
+연락처를 적지 마십시오")와 PB 의 몫이고, 이 검사는 그렇다고 주장하지 않는다. 짧은 숫자·하이픈이 든 별칭("고객 A-12" ·
 "2026 정기점검")은 막지 않는다.
 """
 from __future__ import annotations
@@ -35,13 +35,13 @@ def pii_reason(text: str | None, *, label: str = "별칭", max_len: int = ALIAS_
         return None
     s = text.strip()
     if len(s) > max_len:
-        return f"{label}은 {max_len}자까지예요 — 메모나 실명을 적는 칸이 아니에요."
+        return f"{label}은 {max_len}자까지입니다 — 메모나 실명을 적는 칸이 아닙니다."
     if _EMAIL.search(s):
-        return f"{label}에 이메일 모양이 있어요 — 연락처는 적지 않아요."
+        return f"{label}에 이메일 모양이 있습니다 — 연락처는 적지 않습니다."
     if _RRN.search(s):
-        return f"{label}에 주민등록번호 모양이 있어요 — 개인정보는 적지 않아요."
+        return f"{label}에 주민등록번호 모양이 있습니다 — 개인정보는 적지 않습니다."
     if _PHONE.search(s):
-        return f"{label}에 전화번호 모양이 있어요 — 연락처는 적지 않아요."
+        return f"{label}에 전화번호 모양이 있습니다 — 연락처는 적지 않습니다."
     if _LONG_DIGITS.search(re.sub(r"[\s-]", "", _DATE.sub("·", s))):
-        return f"{label}에 긴 숫자열(계좌번호 모양)이 있어요 — 계좌번호는 적지 않아요."
+        return f"{label}에 긴 숫자열(계좌번호 모양)이 있습니다 — 계좌번호는 적지 않습니다."
     return None

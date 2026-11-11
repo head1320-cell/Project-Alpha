@@ -14,7 +14,7 @@ test("Landing: 모듈 6개와 포트폴리오 설계가 첫 화면에 있다", a
   expect(await page.locator(".ld-mod").count(), "6 module rows").toBe(6);
   // BU8a — 갤러리 카드(영어 이름)가 도구 허브(다섯 도구 → 가운데 포트폴리오 설계)가 됐다. 이름은 왼쪽 메뉴와 같은 말.
   // 줄 수·주소 계약은 그대로다(그 둘이 이 스펙이 지키려던 것이다).
-  await expect(page.locator(".ld-h2", { hasText: "모든 도구가 스튜디오로 이어져요" })).toBeVisible();
+  await expect(page.locator(".ld-h2", { hasText: "모든 도구가 스튜디오로 이어집니다" })).toBeVisible();
   const aas = page.locator(".ld-mod", { hasText: "포트폴리오 설계" });
   await expect(aas).toBeVisible();
   await expect(aas).toHaveAttribute("href", "/allocation");

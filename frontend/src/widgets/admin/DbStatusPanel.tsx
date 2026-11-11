@@ -49,7 +49,7 @@ const KEY_KO: Record<string, string> = {
 };
 const DOCTOR_KO = { dart: "전자공시(DART)", krx: "한국거래소(KRX)", kis: "한국투자증권(KIS)" } as const;
 const UNIVERSE_KO: Record<string, string> = {
-  kospi: "코스피", kosdaq: "코스닥", etf: "ETF(시세만 적재해요, 재무 적재 대상이 아니에요)", all_listed: "전체 상장 종목",
+  kospi: "코스피", kosdaq: "코스닥", etf: "ETF(시세만 적재합니다, 재무 적재 대상이 아닙니다)", all_listed: "전체 상장 종목",
 };
 
 const n = (v: number) => v.toLocaleString("ko-KR");
@@ -76,7 +76,7 @@ function RawWhy({ raw }: { raw: string }) {
 
 function period(t: Record<string, Cell>): ReactNode {
   const rows = t.rows ?? t.loaded;
-  if (t.start == null && t.end == null) return rows === 0 ? <span className="dsx-mute">비어 있어요</span> : <Unk />;
+  if (t.start == null && t.end == null) return rows === 0 ? <span className="dsx-mute">비어 있습니다</span> : <Unk />;
   return <>{t.start ?? UNKNOWN_TEXT} ~ {t.end ?? UNKNOWN_TEXT}</>;
 }
 
@@ -93,29 +93,29 @@ export default function DbStatusPanel() {
 
   // ── 실행 모드(데이터 축이 아니다) ──
   const realAttr = st ? (st.config?.kis_real ? "1" : "0") : undefined;
-  const modeText = db.isPending ? "실행 모드를 확인하는 중이에요"
-    : !st ? "실행 모드를 몰라요"
-    : st.config?.kis_real ? "실제 시세로 돌아요"
-    : hon.data?.mock_mode === true ? "연습용 시세로 돌아요"
-    : hon.data?.mock_mode === false ? "실제 시세 연결이 없어요"
-    : "실제 시세 연결이 아니에요";
+  const modeText = db.isPending ? "실행 모드 확인 중"
+    : !st ? "실행 모드 미상"
+    : st.config?.kis_real ? "실제 시세 사용 중"
+    : hon.data?.mock_mode === true ? "합성 시세 사용 중"
+    : hon.data?.mock_mode === false ? "실제 시세 연결 없음"
+    : "실제 시세 연결이 아닙니다";
 
   // ── 답: 원천별 연구 등급 세기 ──
   const srcs = hon.data?.sources ?? [];
   const cnt = (u: string) => srcs.filter((s) => s.research_usage === u).length;
   const m = cnt("backtest_eligible");
-  const sentence = hon.isPending ? "원천별 연구 등급을 확인하는 중이에요."
-    : hon.isError ? "원천별 연구 등급을 받지 못해 몇 개를 연구에 쓸 수 있는지 아직 몰라요."
-    : srcs.length === 0 ? "서버가 알려 준 데이터 원천이 없어요."
-    : m > 0 ? `데이터 원천 ${srcs.length}개 중 ${m}개를 과거 검증에 쓸 수 있어요.`
-    : `데이터 원천 ${srcs.length}개 중 과거 검증에 쓸 수 있는 원천은 아직 없어요.`;
+  const sentence = hon.isPending ? "원천별 연구 등급 확인 중"
+    : hon.isError ? "원천별 연구 등급을 받지 못해 몇 개를 연구에 쓸 수 있는지 아직 미상"
+    : srcs.length === 0 ? "서버가 알려 준 데이터 원천 없음"
+    : m > 0 ? `데이터 원천 ${srcs.length}개 중 ${m}개를 과거 검증에 쓸 수 있습니다.`
+    : `데이터 원천 ${srcs.length}개 중 과거 검증에 쓸 수 있는 원천은 아직 없습니다.`;
   const figures: Figure[] = hon.data && srcs.length ? [
     { label: USAGE_LABEL.backtest_eligible, value: `${m}개` },
     { label: USAGE_LABEL.forward_only, value: `${cnt("forward_only")}개` },
     { label: USAGE_LABEL.unavailable, value: `${cnt("unavailable")}개` },
   ] : [];
   if (st) figures.push({ label: "적재 중", value: `${Object.values(running).filter(Boolean).length}개` });
-  const chips: Chip[] = [{ label: "가져올 수 있는 것과 과거 검증에 쓸 수 있는 것은 따로 매겨요", tone: "info" }];
+  const chips: Chip[] = [{ label: "가져올 수 있는 것과 과거 검증에 쓸 수 있는 것은 따로 매깁니다", tone: "info" }];
   if (st) chips.push({ label: `${clock(db.dataUpdatedAt)}에 받은 값`, tone: "plain" });
 
   // ── 적재 확인 창 ──
@@ -124,7 +124,7 @@ export default function DbStatusPanel() {
   const ingest = useMutation({
     mutationFn: (target: string) => api.ingest(target),
     onSuccess: (r, target) => {
-      setRes((p) => ({ ...p, [target]: r.started.length ? { ok: true, text: "적재를 시작했어요.", server: r.message } : { ok: true, text: "이미 실행 중이에요. 새로 시작하지 않았어요.", server: r.message } }));
+      setRes((p) => ({ ...p, [target]: r.started.length ? { ok: true, text: "적재를 시작했습니다.", server: r.message } : { ok: true, text: "이미 실행 중입니다. 새로 시작하지 않았습니다.", server: r.message } }));
       void db.refetch();
     },
     onError: (e, target) => setRes((p) => ({ ...p, [target]: { ok: false, raw: err(e) } })),
@@ -146,28 +146,28 @@ export default function DbStatusPanel() {
 
   return (
     <div className="dsx tx-page">
-      <PageHead title="데이터 상태" lede="어떤 데이터가 연결되고 적재됐는지, 연구에 쓸 수 있는지 봐요."
+      <PageHead title="데이터 상태" lede="어떤 데이터가 연결되고 적재됐는지, 연구에 쓸 수 있는지 봅니다."
         actions={(
           <div className="dsx-head-act">
             <span className="t-mode-badge" data-real={realAttr}>{modeText}</span>
             <button type="button" className="tx-btn tx-btn--sub dsx-refresh" onClick={refresh} disabled={db.isFetching}>
-              <RefreshCw size={16} aria-hidden />{db.isFetching ? "받는 중이에요" : "새로 받기"}
+              <RefreshCw size={16} aria-hidden />{db.isFetching ? "수신 중" : "새로 받기"}
             </button>
           </div>
         )} />
       <Answer sentence={sentence} figures={figures} chips={chips} />
 
       {db.isError && st ? (
-        <Notice tone="warn" title={`마지막으로 받은 값이에요(${clock(db.dataUpdatedAt)}). 새 값을 받지 못했어요.`}>
+        <Notice tone="warn" title={`마지막으로 받은 값입니다(${clock(db.dataUpdatedAt)}). 새 값 수신 실패`}>
           <span data-server>{err(db.error)}</span>
-          <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={() => void db.refetch()}>다시 시도</button></div>
+          <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={() => void db.refetch()}>재시도</button></div>
         </Notice>
       ) : null}
 
       {/* ── 원천별 연구 등급 — ★"가져올 수 있다" 와 "과거 검증에 쓸 수 있다" 는 다른 축★(§3.5). 두 칩을 따로 둔다. ── */}
       <section className="tx-sec t-honesty" aria-labelledby="dsx-hon-h">
         <h2 id="dsx-hon-h" className="tx-sec-t t-honesty-h">원천별 연구 등급</h2>
-        <p className="tx-sec-sub">가져올 수 있는지(왼쪽 칩)와 과거 검증에 쓸 수 있는지(오른쪽 칩)를 따로 매겨요.</p>
+        <p className="tx-sec-sub">가져올 수 있는지(왼쪽 칩)와 과거 검증에 쓸 수 있는지(오른쪽 칩)를 따로 매깁니다.</p>
         {srcs.length ? (
           <dl className="dsx-legend">
             {(["backtest_eligible", "forward_only", "unavailable"] as const).filter((u) => srcs.some((s) => s.research_usage === u)).map((u) => (
@@ -175,8 +175,8 @@ export default function DbStatusPanel() {
             ))}
           </dl>
         ) : null}
-        {hon.isError ? <RetryFail title="원천별 연구 등급을 불러오지 못했어요" onRetry={() => void hon.refetch()} />
-          : hon.isPending ? <p className="dsx-wait">원천별 연구 등급을 불러오는 중이에요</p>
+        {hon.isError ? <RetryFail title="원천별 연구 등급 조회 실패" onRetry={() => void hon.refetch()} />
+          : hon.isPending ? <p className="dsx-wait">원천별 연구 등급 조회 중</p>
           : (
             <ul className="t-honesty-list">
               {srcs.map((sc) => (
@@ -186,7 +186,7 @@ export default function DbStatusPanel() {
                     <span className={`t-honesty-st s-${sc.data_status}`}>{STATUS_LABEL[sc.data_status as DataStatus] ?? sc.data_status}</span>
                     <span className={`t-honesty-use u-${sc.research_usage}`}>{USAGE_LABEL[sc.research_usage as ResearchUsage] ?? sc.research_usage}</span>
                   </span>
-                  {USAGE_REASON[sc.research_usage as ResearchUsage] ? null : <span className="dsx-hon-use">이 등급의 뜻을 화면이 몰라요.</span>}
+                  {USAGE_REASON[sc.research_usage as ResearchUsage] ? null : <span className="dsx-hon-use">이 등급의 뜻을 화면이 미상</span>}
                   <span className="t-honesty-why" data-server>{sc.reason}</span>
                 </li>
               ))}
@@ -194,24 +194,24 @@ export default function DbStatusPanel() {
           )}
       </section>
 
-      {db.isError && !st ? <RetryFail title="데이터 상태를 불러오지 못했어요" onRetry={() => void db.refetch()} />
-        : db.isPending ? <p className="dsx-wait">적재 현황을 점검하는 중이에요</p>
+      {db.isError && !st ? <RetryFail title="데이터 상태 조회 실패" onRetry={() => void db.refetch()} />
+        : db.isPending ? <p className="dsx-wait">적재 현황 점검 중</p>
         : st ? (
           <>
             {!st.available && (
-              <Notice tone="warn" title="서버가 적재 저장소에 연결하지 못했어요">
-                그래서 표별 적재와 도구 준비 상태는 몰라요. 키 연결과 적재 등록부는 아래에 그대로 보여요.
+              <Notice tone="warn" title="서버가 적재 저장소에 연결하지 못했습니다">
+                그래서 표별 적재와 도구 준비 상태는 미상입니다. 키 연결과 적재 등록부는 아래에 그대로 보입니다.
               </Notice>
             )}
 
             <section className="tx-sec dsx-keys" aria-labelledby="dsx-keys-h">
               <h2 id="dsx-keys-h" className="tx-sec-t">연결된 데이터 원천</h2>
-              <p className="tx-sec-sub">키가 있다고 데이터가 오는 것은 아니에요. 실제로 닿는지는 아래 ‘연결 진단’에서 봐요.</p>
+              <p className="tx-sec-sub">키가 있다고 데이터가 오는 것은 아닙니다. 실제로 닿는지는 아래 ‘연결 진단’에서 봅니다.</p>
               <ul className="dsx-keylist">
                 {Object.entries(st.config).map(([k, v]) => (
                   <li key={k} className="dsx-key" data-on={v ? "1" : "0"}>
                     <span className="dsx-key-nm">{KEY_KO[k] ?? <span data-mono>{k}</span>}</span>
-                    <span className="dsx-key-st">{k === "kis_real" ? (v ? "연결됐어요" : "연결되지 않았어요") : v ? "키 있음" : "키 없음"}</span>
+                    <span className="dsx-key-st">{k === "kis_real" ? (v ? "연결됐습니다" : "연결되지 않았습니다") : v ? "키 있음" : "키 없음"}</span>
                   </li>
                 ))}
               </ul>
@@ -221,16 +221,16 @@ export default function DbStatusPanel() {
               <h2 id="dsx-tools-h" className="tx-sec-t">도구 준비</h2>
               {toolEntries.length ? (
                 <>
-                  <p className="tx-sec-sub">도구 {toolEntries.length}개 중 {toolsReady}개가 적재된 데이터로 돌 수 있어요.</p>
+                  <p className="tx-sec-sub">도구 {toolEntries.length}개 중 {toolsReady}개가 적재된 데이터로 돌 수 있습니다.</p>
                   <ul className="dsx-toollist">
                     {toolEntries.map(([k, ok]) => (
                       <li key={k} className="dsx-tool" data-ok={ok ? "1" : "0"}>
-                        <span data-server>{k}</span><span className="dsx-tool-st">{ok ? "쓸 수 있어요" : "데이터가 부족해요"}</span>
+                        <span data-server>{k}</span><span className="dsx-tool-st">{ok ? "쓸 수 있습니다" : "데이터가 부족합니다"}</span>
                       </li>
                     ))}
                   </ul>
                 </>
-              ) : <p className="dsx-reason">서버가 도구 준비 상태를 보내지 않았어요. 적재 저장소를 읽지 못하면 비어 있어요.</p>}
+              ) : <p className="dsx-reason">서버가 도구 준비 상태를 보내지 않았습니다. 적재 저장소를 읽지 못하면 비어 있습니다.</p>}
             </section>
 
             <section className="tx-sec dsx-tables" aria-labelledby="dsx-tbl-h">
@@ -248,7 +248,7 @@ export default function DbStatusPanel() {
                             <td>
                               {TABLE_KO[key] ?? <span data-mono>{key}</span>}
                               {typeof c.reason === "string" && c.reason ? (
-                                <div className="dsx-cellwhy"><span>이 표를 읽지 못했어요.</span><RawWhy raw={c.reason} /></div>
+                                <div className="dsx-cellwhy"><span>이 표 읽기 실패</span><RawWhy raw={c.reason} /></div>
                               ) : null}
                             </td>
                             <td className="num">{cellNum(rows)}{c.total != null ? <span className="dsx-mute"> / {cellNum(c.total)}</span> : null}</td>
@@ -260,13 +260,13 @@ export default function DbStatusPanel() {
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="dsx-reason">서버가 표별 적재 현황을 보내지 않았어요.</p>}
+              ) : <p className="dsx-reason">서버가 표별 적재 현황을 보내지 않았습니다.</p>}
             </section>
 
             {/* 새 그림 — 유니버스마다 적재/전체 막대. ★전체가 0 이면 0% 가 아니라 몰라요★ */}
             <section className="tx-sec dsx-uni" aria-labelledby="dsx-uni-h">
               <h2 id="dsx-uni-h" className="tx-sec-t">유니버스 적재 진행</h2>
-              <p className="tx-sec-sub">종목 마스터의 종목 수 중 펀더멘털 스냅샷이 쌓인 종목 수예요.</p>
+              <p className="tx-sec-sub">종목 마스터의 종목 수 중 펀더멘털 스냅샷이 쌓인 종목 수입니다.</p>
               {st.universe_progress && Object.keys(st.universe_progress.progress ?? {}).length ? (
                 <ul className="dsx-unilist">
                   {(["kospi", "kosdaq", "etf", "all_listed"] as const).map((k) => {
@@ -286,14 +286,14 @@ export default function DbStatusPanel() {
                     );
                   })}
                 </ul>
-              ) : <p className="dsx-reason">서버가 유니버스 적재 진행을 보내지 않았어요. 종목 마스터를 읽지 못했거나 스냅샷 저장소가 비어 있어요.</p>}
+              ) : <p className="dsx-reason">서버가 유니버스 적재 진행을 보내지 않았습니다. 종목 마스터를 읽지 못했거나 스냅샷 저장소가 비어 있습니다.</p>}
             </section>
 
             <section className="tx-sec dsx-reg" aria-labelledby="dsx-reg-h">
               <h2 id="dsx-reg-h" className="tx-sec-t">적재 등록부</h2>
-              <p className="tx-sec-sub">무엇이 어디서 와서 어디에 쌓이는지예요. 목록은 서버가 정해요.</p>
+              <p className="tx-sec-sub">무엇이 어디서 와서 어디에 쌓이는지입니다. 목록은 서버가 정합니다.</p>
               {st.datasets === null ? (
-                <Notice tone="warn" title="적재 등록부를 읽지 못했어요">{st.datasets_error ? <RawWhy raw={st.datasets_error} /> : "서버가 사유를 보내지 않았어요."}</Notice>
+                <Notice tone="warn" title="적재 등록부 읽기 실패">{st.datasets_error ? <RawWhy raw={st.datasets_error} /> : "서버가 사유를 보내지 않았습니다."}</Notice>
               ) : datasets.length ? (
                 <div className="dsx-tablewrap">
                   <table className="trisk-table">
@@ -303,13 +303,13 @@ export default function DbStatusPanel() {
                         <tr key={d.key} data-ds={d.key}>
                           <td>
                             <span data-server>{d.label}</span>
-                            {!d.triggerable && <span className="dsx-mute"> · 여기서 적재하지 않아요</span>}
+                            {!d.triggerable && <span className="dsx-mute"> · 여기서 적재하지 않습니다</span>}
                             {d.note && <div className="dsx-note" data-server><ServerText text={d.note} /></div>}
                           </td>
                           <td data-server>{d.source}</td>
                           <td><span data-mono>{d.table}</span>{d.slice_of && <div className="dsx-note">그 안의 일부: <span data-mono>{d.slice_of}</span></div>}</td>
                           <td>
-                            {d.required_env.length === 0 ? <span className="dsx-mute">필요 없어요</span> : (
+                            {d.required_env.length === 0 ? <span className="dsx-mute">필요 없습니다</span> : (
                               <>
                                 <span className="dsx-env" data-ready={d.env_ready == null ? "" : d.env_ready ? "1" : "0"}>{d.env_ready == null ? UNKNOWN_TEXT : d.env_ready ? "키 있음" : "키 없음"}</span>
                                 <div className="dsx-note">{d.required_env.map((e) => <span key={e} data-mono>{e}</span>)}</div>
@@ -322,7 +322,7 @@ export default function DbStatusPanel() {
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="dsx-reason">등록된 적재 대상이 없어요.</p>}
+              ) : <p className="dsx-reason">등록된 적재 대상 없음</p>}
             </section>
 
             {st.macro ? (
@@ -330,7 +330,7 @@ export default function DbStatusPanel() {
                 <h2 id="dsx-macro-h" className="tx-sec-t">매크로 토큰</h2>
                 <p className="tx-sec-sub" data-server><ServerText text={st.macro.note} /></p>
                 {Object.keys(st.macro.unavailable).length === 0 ? (
-                  <p className="dsx-reason">실패로 기록된 토큰이 없어요{st.macro.ok.length ? `. 조회에 성공한 토큰은 ${st.macro.ok.length}개예요.` : "."}</p>
+                  <p className="dsx-reason">실패로 기록된 토큰이 없습니다{st.macro.ok.length ? `. 조회에 성공한 토큰은 ${st.macro.ok.length}개입니다.` : "."}</p>
                 ) : (
                   <div className="dsx-tablewrap">
                     <table className="trisk-table">
@@ -349,7 +349,7 @@ export default function DbStatusPanel() {
             {/* ★온디맨드★ 일봉은 수백만 행이라 화면을 여는 것만으로 세지 않는다. */}
             <section className="tx-sec dsx-cov" aria-labelledby="dsx-cov-h">
               <h2 id="dsx-cov-h" className="tx-sec-t">종목 커버리지 세기</h2>
-              <p className="tx-sec-sub">적재됐다와 충분히 적재됐다는 달라요. 기간을 덮는 종목이 몇 개인지 세요. 무거운 집계라 눌러야 돌아요.</p>
+              <p className="tx-sec-sub">적재됐다와 충분히 적재됐다는 다릅니다. 기간을 덮는 종목이 몇 개인지 셉니다. 무거운 집계라 눌러야 실행됩니다.</p>
               <div className="dsx-form">
                 <label className="dsx-field"><span>데이터</span>
                   <select className="dsx-input" value={covTarget} onChange={(e) => setCovTarget(e.target.value)}>
@@ -359,23 +359,23 @@ export default function DbStatusPanel() {
                 <label className="dsx-field"><span>시작일</span><input className="dsx-input" type="date" value={covStart} onChange={(e) => setCovStart(e.target.value)} /></label>
                 <label className="dsx-field"><span>끝일</span><input className="dsx-input" type="date" value={covEnd} onChange={(e) => setCovEnd(e.target.value)} /></label>
                 <button type="button" className="tx-btn tx-btn--sub dsx-cov-go" disabled={cov.isPending} onClick={() => cov.mutate()}>
-                  {cov.isPending ? "세는 중이에요" : "커버리지 세기"}
+                  {cov.isPending ? "집계 중" : "커버리지 세기"}
                 </button>
               </div>
-              {cov.isError ? <RetryFail title="커버리지를 세지 못했어요" onRetry={() => cov.mutate()}><span data-server>{err(cov.error)}</span></RetryFail>
+              {cov.isError ? <RetryFail title="커버리지를 세지 못했습니다" onRetry={() => cov.mutate()}><span data-server>{err(cov.error)}</span></RetryFail>
                 : cov.data ? (
                   cov.data.measured ? (
                     <div className="dsx-cov-out">
-                      <p><b data-server>{cov.data.label}</b>: {cellNum(cov.data.tickers_total)}종목 중 {cellNum(cov.data.tickers_covering)}종목이 {cov.data.start} ~ {cov.data.end}를 덮어요{cov.data.covering_pct != null ? `(${cov.data.covering_pct}%)` : ""}.</p>
+                      <p><b data-server>{cov.data.label}</b>: {cellNum(cov.data.tickers_total)}종목 중 {cellNum(cov.data.tickers_covering)}종목이 {cov.data.start} ~ {cov.data.end}를 덮습니다{cov.data.covering_pct != null ? `(${cov.data.covering_pct}%)` : ""}.</p>
                       {cov.data.covering_pct != null && <span className="dsx-uni-bar" aria-hidden><i style={{ width: `${Math.min(100, cov.data.covering_pct)}%` }} /></span>}
                     </div>
-                  ) : <p className="dsx-reason"><b data-server>{cov.data.label}</b>: 세지 못했어요. <span data-server>{cov.data.reason ?? "서버가 사유를 보내지 않았어요."}</span></p>
+                  ) : <p className="dsx-reason"><b data-server>{cov.data.label}</b>: 세지 못했습니다. <span data-server>{cov.data.reason ?? "서버가 사유를 보내지 않았습니다."}</span></p>
                 ) : null}
             </section>
 
             <section className="tx-sec dsx-ing" aria-labelledby="dsx-ing-h">
               <h2 id="dsx-ing-h" className="tx-sec-t">적재</h2>
-              <p className="tx-sec-sub">적재는 서버 뒤에서 돌아요. 큰 백필은 몇 시간 걸릴 수 있고, 키가 없는 원천은 서버가 건너뛰어요. 누르면 먼저 확인을 받아요.</p>
+              <p className="tx-sec-sub">적재는 서버 뒤에서 실행됩니다. 큰 백필은 몇 시간 걸릴 수 있고, 키가 없는 원천은 서버가 건너뜁니다. 누르면 먼저 확인을 받습니다.</p>
               <ul className="dsx-inglist">
                 {triggerable.map((d) => {
                   const s = st.ingest_status?.[d.key];
@@ -389,7 +389,7 @@ export default function DbStatusPanel() {
                       </div>
                       <button type="button" className="tx-btn tx-btn--sub dsx-ing-go" data-act={`ingest-${d.key}`} disabled={!!running[d.key]}
                         onClick={() => setAsk({ target: d.key, label: d.label, ds: [d] })}>
-                        {running[d.key] ? "적재하는 중이에요" : "적재하기"}
+                        {running[d.key] ? "적재 중" : "적재하기"}
                       </button>
                       {r ? <IngestResult r={r} /> : null}
                     </li>
@@ -398,11 +398,11 @@ export default function DbStatusPanel() {
                 <li className="dsx-ing-row dsx-ing-row--all" data-ds="all">
                   <div className="dsx-ing-main">
                     <span className="dsx-ing-nm">전체 적재</span>
-                    <span className="dsx-ing-sub">위의 {triggerable.length}개를 한꺼번에 시작해요. 이미 도는 것은 건너뛰어요.</span>
+                    <span className="dsx-ing-sub">위의 {triggerable.length}개를 한꺼번에 시작합니다. 이미 도는 것은 건너뜁니다.</span>
                   </div>
                   <button type="button" className="tx-btn tx-btn--sub dsx-ing-go" data-act="ingest-all" disabled={anyRunning}
                     onClick={() => setAsk({ target: "all", label: "전체", ds: triggerable })}>
-                    {anyRunning ? "적재하는 중이에요" : "전체 적재하기"}
+                    {anyRunning ? "적재 중" : "전체 적재하기"}
                   </button>
                   {res.all ? <IngestResult r={res.all} /> : null}
                 </li>
@@ -417,27 +417,27 @@ export default function DbStatusPanel() {
 
               {st.dart_usage ? (
                 <div className="dsx-dart">
-                  <p>전자공시 요청 {n(st.dart_usage.requests)}건 · 오류 {n(Object.values(st.dart_usage.errors).reduce((a, b) => a + b, 0))}건(서버가 켜진 뒤부터 센 값이에요)</p>
-                  {st.dart_usage.quota_exhausted && <Notice tone="warn" title="전자공시 하루 요청 한도에 닿았어요">적재가 저절로 멈췄어요. 내일 다시 실행하면 이어서 적재해요.</Notice>}
+                  <p>전자공시 요청 {n(st.dart_usage.requests)}건 · 오류 {n(Object.values(st.dart_usage.errors).reduce((a, b) => a + b, 0))}건(서버가 켜진 뒤부터 센 값입니다)</p>
+                  {st.dart_usage.quota_exhausted && <Notice tone="warn" title="전자공시 하루 요청 한도에 닿았습니다">적재가 저절로 멈췄습니다. 내일 다시 실행하면 이어서 적재합니다.</Notice>}
                   {st.dart_usage.last_error && <p className="dsx-note">최근 오류: <span data-server>[{st.dart_usage.last_error.status}] {st.dart_usage.last_error.message}</span></p>}
                 </div>
-              ) : <p className="dsx-reason">전자공시 사용량을 받지 못했어요.</p>}
-              <p className="dsx-note">펀더멘털과 재무 시계열은 전자공시 하루 한도를 나눠 써요. 함께 돌리면 한도에 빨리 닿아요(재무 시계열을 끝낸 뒤 펀더멘털을 권해요).</p>
+              ) : <p className="dsx-reason">전자공시 사용량 수신 실패</p>}
+              <p className="dsx-note">펀더멘털과 재무 시계열은 전자공시 하루 한도를 나눠 씁니다. 함께 돌리면 한도에 빨리 닿습니다(재무 시계열을 끝낸 뒤 펀더멘털을 권합니다).</p>
             </section>
 
             <section className="tx-sec dsx-doc" aria-labelledby="dsx-doc-h">
               <h2 id="dsx-doc-h" className="tx-sec-t">연결 진단</h2>
-              <p className="tx-sec-sub">원천마다 가벼운 요청을 한 번씩 보내 실제로 닿는지 봐요. 전자공시 하루 한도를 1건 써요.</p>
+              <p className="tx-sec-sub">원천마다 가벼운 요청을 한 번씩 보내 실제로 닿는지 봅니다. 전자공시 하루 한도를 1건 씁니다.</p>
               <button type="button" className="tx-btn tx-btn--sub" data-act="doctor" disabled={doctor.isPending} onClick={() => doctor.mutate()}>
-                {doctor.isPending ? "진단하는 중이에요" : "연결 진단하기"}
+                {doctor.isPending ? "진단 중" : "연결 진단하기"}
               </button>
-              {doctor.isError ? <RetryFail title="연결 진단을 하지 못했어요" onRetry={() => doctor.mutate()}><span data-server>{err(doctor.error)}</span></RetryFail>
+              {doctor.isError ? <RetryFail title="연결 진단을 하지 못했습니다" onRetry={() => doctor.mutate()}><span data-server>{err(doctor.error)}</span></RetryFail>
                 : doctor.data ? (
                   <ul className="dsx-doclist">
                     {(["dart", "krx", "kis"] as const).map((s) => (
                       <li key={s} className="dsx-doc-row" data-ok={doctor.data[s].ok ? "1" : "0"}>
                         <span className="dsx-doc-nm">{DOCTOR_KO[s]}</span>
-                        <span className="dsx-doc-st">{doctor.data[s].ok ? "닿았어요" : "닿지 못했어요"}</span>
+                        <span className="dsx-doc-st">{doctor.data[s].ok ? "닿았습니다" : "연결 실패"}</span>
                         <span className="dsx-note" data-server>{doctor.data[s].message}</span>
                       </li>
                     ))}
@@ -451,14 +451,14 @@ export default function DbStatusPanel() {
         <DialogContent className="dsx-dlg">
           {ask ? (
             <>
-              <DialogTitle className="dsx-dlg-t">{ask.target === "all" ? "전체 적재를 시작할까요?" : `‘${ask.label}’ 적재를 시작할까요?`}</DialogTitle>
-              <DialogDescription className="dsx-dlg-d">서버 뒤에서 돌고, 끝날 때까지 이 화면이 5초마다 진행을 다시 받아요.</DialogDescription>
+              <DialogTitle className="dsx-dlg-t">{ask.target === "all" ? "전체 적재를 시작하시겠습니까?" : `‘${ask.label}’ 적재를 시작하시겠습니까?`}</DialogTitle>
+              <DialogDescription className="dsx-dlg-d">서버 뒤에서 돌고, 끝날 때까지 이 화면이 5초마다 진행을 다시 받습니다.</DialogDescription>
               <ul className="dsx-dlg-list">
-                <li><b>무엇을</b><span className="dsx-dlg-what">{ask.ds.length ? ask.ds.map((d) => <span key={d.key}>{d.label} · {d.source}</span>) : "등록된 대상이 없어요"}</span></li>
-                <li><b>얼마나</b><span>큰 백필은 몇 시간 걸릴 수 있어요.</span></li>
-                {ask.ds.some((d) => d.source.includes("DART")) && <li><b>한도</b><span>전자공시(DART) 하루 요청 한도를 함께 써요.</span></li>}
+                <li><b>무엇을</b><span className="dsx-dlg-what">{ask.ds.length ? ask.ds.map((d) => <span key={d.key}>{d.label} · {d.source}</span>) : "등록된 대상 없음"}</span></li>
+                <li><b>얼마나</b><span>큰 백필은 몇 시간 걸릴 수 있습니다.</span></li>
+                {ask.ds.some((d) => d.source.includes("DART")) && <li><b>한도</b><span>전자공시(DART) 하루 요청 한도를 함께 씁니다.</span></li>}
                 {ask.ds.some((d) => d.env_ready === false) && (
-                  <li><b>키</b><span>필요한 키가 없는 대상({ask.ds.filter((d) => d.env_ready === false).map((d) => d.label).join(", ")})은 서버가 건너뛰어요.</span></li>
+                  <li><b>키</b><span>필요한 키가 없는 대상({ask.ds.filter((d) => d.env_ready === false).map((d) => d.label).join(", ")})은 서버가 건너뜁니다.</span></li>
                 )}
               </ul>
               <div className="dsx-dlg-act">
@@ -481,7 +481,7 @@ function IngestLine({ s }: { s: NonNullable<DbStatus["ingest_status"]>[string] }
   const pct = p && p.total ? Math.min(100, ((p.done ?? 0) / p.total) * 100) : null;
   return (
     <span className="dsx-ing-st">
-      <span>{s.running ? "적재하는 중이에요" : s.finished_at ? `${s.finished_at}에 끝났어요` : "기다리는 중이에요"}</span>
+      <span>{s.running ? "적재 중" : s.finished_at ? `${s.finished_at}에 끝났습니다` : "대기 중"}</span>
       {p ? (
         <>
           <span className="dsx-ing-prog">
@@ -496,6 +496,6 @@ function IngestLine({ s }: { s: NonNullable<DbStatus["ingest_status"]>[string] }
 }
 
 function IngestResult({ r }: { r: { ok: true; text: string; server?: string } | { ok: false; raw: string } }) {
-  if (!r.ok) return <div className="dsx-ing-res"><Notice tone="danger" title="적재를 시작하지 못했어요"><span data-server>{r.raw}</span></Notice></div>;
+  if (!r.ok) return <div className="dsx-ing-res"><Notice tone="danger" title="적재 시작 실패"><span data-server>{r.raw}</span></Notice></div>;
   return <p className="dsx-ing-res dsx-ing-ok" role="status">{r.text}{r.server ? <> <span className="dsx-mute" data-server>({r.server})</span></> : null}</p>;
 }

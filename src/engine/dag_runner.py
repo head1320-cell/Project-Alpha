@@ -609,7 +609,7 @@ def execute_dag_backtest(req: GraphBacktestRequest) -> GraphBacktestResponse:
         if ctx.signals is None or ctx.primary_df is None:
             return GraphBacktestResponse(
                 success=False,
-                message="시그널이 생성되지 않았습니다. 노드 연결을 확인하세요.",
+                message="시그널이 생성되지 않았습니다. 노드 연결을 확인하십시오.",
                 parsed_strategy=_strategy_summary(classified, execution_order),
             )
 

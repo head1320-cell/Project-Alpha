@@ -60,14 +60,14 @@ export default function ThemeTree({ selected, onChange }: {
   return (
     <div className="bte-col">
       <div className="bte-row">
-        <span className="bte-sub-h">{totalSubSelected > 0 ? `세부 업종 ${totalSubSelected}개 골랐어요` : "고르지 않으면 모든 업종이에요"}</span>
+        <span className="bte-sub-h">{totalSubSelected > 0 ? `세부 업종 ${totalSubSelected}개 골랐습니다` : "고르지 않으면 모든 업종입니다"}</span>
         {groups.length > 0 && (
           <button type="button" className="bte-link" onClick={() => emit(allOn ? new Set() : new Set(allIds))}>
             {allOn ? "모두 빼기" : "모두 고르기"}
           </button>
         )}
       </div>
-      {failed && <p className="bte-note bte-note--bad" role="alert">업종 목록을 불러오지 못했어요. 지금은 업종으로 거를 수 없어요 — 새로고침해 다시 시도해 주세요.</p>}
+      {failed && <p className="bte-note bte-note--bad" role="alert">업종 목록 조회 실패. 지금은 업종으로 거를 수 없습니다 — 새로고침해 재시도하십시오.</p>}
 
       <div className="bte-tree">
         {groups.map((g) => {
@@ -108,7 +108,7 @@ export default function ThemeTree({ selected, onChange }: {
       </div>
 
       {note && (
-        <p className="bte-note">{note}{seeded ? ` (지금 세부 업종 ${seeded.subs}/88개 · ${seeded.stocks}종목을 담았어요)` : ""}</p>
+        <p className="bte-note">{note}{seeded ? ` (지금 세부 업종 ${seeded.subs}/88개 · ${seeded.stocks}종목을 담았습니다)` : ""}</p>
       )}
     </div>
   );

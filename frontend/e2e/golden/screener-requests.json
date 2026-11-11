@@ -41,7 +41,7 @@
   "09 조건식 팩터1 or 팩터2": [
    "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":10000}],\"groups\":[{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"lte\",\"value\":500000},{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"OR\"}],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
   ],
-  "10 팩터1 지우기": [
+  "10 팩터1 삭제": [
    "POST /api/v1/screener/count {\"filter_ast\":{\"conditions\":[{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"AND\"},\"limit\":1,\"liquidity_floor\":\"relaxed\",\"universe\":\"kosdaq150\"}",
    "POST /api/v1/screener/run-advanced-stream {\"ascending\":false,\"filter_ast\":{\"conditions\":[{\"field\":\"market_cap_억\",\"kind\":\"field\",\"op\":\"gte\",\"value\":10000}],\"groups\":[{\"conditions\":[{\"field\":\"per\",\"kind\":\"field\",\"op\":\"lte\",\"value\":50}],\"groups\":[],\"logic\":\"AND\"}],\"logic\":\"AND\"},\"limit\":4000,\"liquidity_floor\":\"relaxed\",\"sort_by\":\"composite_score\",\"universe\":\"kosdaq150\"}"
   ]

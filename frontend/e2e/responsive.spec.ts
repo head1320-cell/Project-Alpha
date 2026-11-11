@@ -20,7 +20,7 @@ const TABLET = { width: 768, height: 1024 };
 // 마법사의 문맥 줄은 사라졌다. 캔버스에서 좁은 폭이 줄이면 안 되는 것은 ① 계산 버튼 ② 결과 요약 ③ **연습용(합성) 경고**
 // ④ 노드의 상태와 사유다 — 폭이 좁다고 "연습용" 이 사라지면 합성 수가 실데이터처럼 읽힌다.
 for (const [name, size] of [["mobile", MOBILE], ["tablet", TABLET]] as const) {
-  test(`캔버스 ${name}(${size.width}px): 가로 스크롤 없음 · 계산·요약·연습용 경고·노드 상태가 남는다`, async ({ page }) => {
+  test(`캔버스 ${name}(${size.width}px): 가로 스크롤 없음 · 계산·요약·합성 경고·노드 상태가 남는다`, async ({ page }) => {
     await page.setViewportSize(size);
     await page.goto("/allocation", { waitUntil: "domcontentloaded" });
     await expect(page.locator(".pg-node").first()).toBeAttached({ timeout: 30_000 });
@@ -40,11 +40,11 @@ for (const [name, size] of [["mobile", MOBILE], ["tablet", TABLET]] as const) {
     // 좁은 화면(≤820px)은 오른쪽 창이 닫힌 채(아래 시트 — BQ Q1) 시작하고, 멀리 확대에서는 노드의 연습용 칩도 숨는다.
     // 그래도 연습용 표시는 누르지 않고 보인다 — 도구줄 결과 요약에.
     await expect(summary.locator(".pg-summary-practice")).toBeVisible();
-    await expect(summary.locator(".pg-summary-practice")).toContainText("연습용");
+    await expect(summary.locator(".pg-summary-practice")).toContainText("합성");
     // 이야기 탭 맨 위의 연습용 경고 — 개발 환경의 수익률은 합성이다. 창을 열면(한 번 누름) 맨 위에 있다.
     await page.locator(".pg-side-fab").click();
     await page.locator('.pg-tab[data-tab="story"]').click();
-    const practice = page.locator(".pg-side").getByText("연습용", { exact: false }).first();
+    const practice = page.locator(".pg-side").getByText("합성", { exact: false }).first();
     await practice.scrollIntoViewIfNeeded();
     await expect(practice).toBeVisible();
     const after = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

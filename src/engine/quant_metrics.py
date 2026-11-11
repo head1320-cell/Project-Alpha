@@ -391,7 +391,7 @@ def _period_return_pct(prev_last: float | None, group: list[tuple[_dt.date, floa
 
 
 def _within_max_drawdown_pct(group: list[tuple[_dt.date, float]]) -> float:
-    """그 구간 안의 최고점 대비 가장 크게 빠진 폭 — 다른 구간의 고점을 끌어오지 않는다."""
+    """그 구간 안의 최고점 대비 MDD(최대낙폭) — 다른 구간의 고점을 끌어오지 않는다."""
     peak = -math.inf
     worst = 0.0
     for _, v in group:
@@ -402,7 +402,7 @@ def _within_max_drawdown_pct(group: list[tuple[_dt.date, float]]) -> float:
 
 
 def period_returns(dates: Any, equity: Any) -> dict[str, list[dict[str, Any]]]:
-    """해마다·달마다 수익(%) — ★연환산하지 않는다★.
+    """해마다·월별 수익률(%) — ★연환산하지 않는다★.
 
     yearly: `{year, return_pct, max_drawdown_pct, n_days, partial}` — `partial` 은 그 해에 1월과 12월 점이 모두 있지 않을 때.
     monthly: `{year, month, return_pct, n_days, partial}` — `partial` 은 곡선의 첫 달·마지막 달(가운데서 시작·끝났을 수 있는데
@@ -426,7 +426,7 @@ def period_returns(dates: Any, equity: Any) -> dict[str, list[dict[str, Any]]]:
 
 
 def drawdown_episodes(dates: Any, equity: Any, top: int = 3) -> list[dict[str, Any]]:
-    """큰 낙폭 사건 — 고점에서 바닥까지, 그리고 고점을 되찾은 날까지. 깊이순(같으면 먼저 일어난 것) 상위 `top` 개.
+    """주요 낙폭 구간 — 고점에서 바닥까지, 그리고 고점을 되찾은 날까지. 깊이순(같으면 먼저 일어난 것) 상위 `top` 개.
 
     `{peak_date, trough_date, recovery_date|None, depth_pct, days_to_trough, days_to_recover|None}` — 날짜는 ISO 문자열,
     일수는 달력일. 회복 못 했으면 `recovery_date`·`days_to_recover` 는 None.

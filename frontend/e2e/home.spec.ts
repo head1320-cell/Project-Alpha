@@ -41,19 +41,19 @@ test("답 문장 = 서버 recommended_mode 의 번역 — 응답을 DEFENSIVE �
   const seen = page.waitForResponse((r) => r.url().endsWith("/api/v1/macro/regime"));
   await open(page);
   const body = (await (await seen).json()) as Regime;
-  await expect(answer(page)).toHaveText(`지금 경제 흐름은 ‘${MODE[body.recommended_mode]}’ 단계예요`);
+  await expect(answer(page)).toHaveText(`지금 경제 흐름은 ‘${MODE[body.recommended_mode]}’ 단계입니다`);
 
   await patchRegime(page, (b) => { b.recommended_mode = "DEFENSIVE"; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 경제 흐름은 ‘방어’ 단계예요");
+  await expect(answer(page)).toHaveText("지금 경제 흐름은 ‘방어’ 단계입니다");
 
   await page.unroute("**/api/v1/macro/regime");
   await patchRegime(page, (b) => { b.recommended_mode = "SOMETHING_NEW"; b.stress_score = 37.6; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 시장 스트레스는 38/100이에요");     // 판단을 지어내지 않는다
+  await expect(answer(page)).toHaveText("지금 시장 스트레스는 38/100입니다");     // 판단을 지어내지 않는다
 });
 
-test("숫자는 응답 그대로 — 확률이 없으면 '확률 몰라요'(0% 아님) · 미국 국면이 없으면 줄은 남고 '몰라요'(짝)", async ({ page }) => {
+test("숫자는 응답 그대로 — 확률이 없으면 '확률 미상'(0% 아님) · 미국 국면이 없으면 줄은 남고 'N/A'(짝)", async ({ page }) => {
   const seen = page.waitForResponse((r) => r.url().endsWith("/api/v1/macro/regime"));
   await open(page);
   const b = (await (await seen).json()) as Regime;
@@ -64,19 +64,19 @@ test("숫자는 응답 그대로 — 확률이 없으면 '확률 몰라요'(0% �
 
   await patchRegime(page, (x) => { delete x.regime_probs; delete x.markets; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(fig(page, "한국")).toHaveText(`${KO[b.regime]} 확률 몰라요`);
+  await expect(fig(page, "한국")).toHaveText(`${KO[b.regime]} 확률 미상`);
   await expect(fig(page, "한국")).not.toContainText("0%");
-  await expect(fig(page, "미국")).toContainText("몰라요");
-  await expect(fig(page, "미국")).toContainText("미국 국면을 받지 못했어요");
+  await expect(fig(page, "미국")).toContainText("N/A");
+  await expect(fig(page, "미국")).toContainText("미국 국면 수신 실패");
 });
 
-test("연습용 칩은 connection-status 로만 — mock 이면 있고 · 실데이터면 없고 ok 칩(짝) · 확인 실패면 '몰라요' 칩", async ({ page }) => {
+test("합성 칩은 connection-status 로만 — mock 이면 있고 · 실데이터면 없고 ok 칩(짝) · 확인 실패면 'N/A' 칩", async ({ page }) => {
   const chip = (tone: string) => page.locator(`.home-macro .tx-chip[data-tone="${tone}"]`);
   const cs = page.waitForResponse((r) => r.url().endsWith("/api/v1/macro/connection-status"));
   await open(page);
   const st = (await (await cs).json()) as { mock_allowed: boolean; bok_configured: boolean };
   expect(st.mock_allowed && !st.bok_configured, "이 환경은 mock 이다").toBe(true);
-  await expect(chip("practice")).toHaveText("연습용 데이터");
+  await expect(chip("practice")).toHaveText("합성 데이터");
 
   await page.route("**/api/v1/macro/connection-status", (r) => r.fulfill({ json: { mock_allowed: false, real_mode: true, bok_configured: true, fred_configured: true } }));
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -87,20 +87,20 @@ test("연습용 칩은 connection-status 로만 — mock 이면 있고 · 실데
   await page.unroute("**/api/v1/macro/connection-status");
   await page.route("**/api/v1/macro/connection-status", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(chip("unknown")).toHaveText("데이터 출처를 확인하지 못했어요");
+  await expect(chip("unknown")).toHaveText("데이터 출처 확인 실패");
   await expect(chip("practice")).toHaveCount(0);
 });
 
-test("★국면 실패는 alert + 다시 시도★ — 풀고 누르면 문장이 뜬다 · 정상이면 alert 없음(짝)", async ({ page }) => {
+test("★국면 실패는 alert + 재시도★ — 풀고 누르면 문장이 뜬다 · 정상이면 alert 없음(짝)", async ({ page }) => {
   await open(page);
   await expect(page.locator(".home-macro [role='alert']")).toHaveCount(0);
   await page.route("**/api/v1/macro/regime", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await page.reload({ waitUntil: "domcontentloaded" });
   const alert = page.locator(".home-macro [role='alert']");
-  await expect(alert).toContainText("매크로 분석을 불러오지 못했어요", { timeout: 20_000 });
+  await expect(alert).toContainText("매크로 분석 조회 실패", { timeout: 20_000 });
   await expect(answer(page)).toHaveCount(0);
   await page.unroute("**/api/v1/macro/regime");
-  await page.locator(".home-macro button", { hasText: "다시 시도" }).click();
+  await page.locator(".home-macro button", { hasText: "재시도" }).click();
   await expect(answer(page)).toBeVisible({ timeout: 20_000 });
   await expect(alert).toHaveCount(0);
 });
@@ -142,35 +142,35 @@ test("★점수 실패는 alert(빈 문구 아님)★ · 빈 결과는 빈 문�
   await page.route("**/api/v1/screener/run-advanced", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await open(page);
   const picks = page.locator(".home-picks");
-  await expect(picks.locator("[role='alert']")).toContainText("종목 점수를 불러오지 못했어요", { timeout: 20_000 });
-  await expect(picks).not.toContainText("점수를 낼 종목이 아직 없어요");
-  await expect(picks.locator("button", { hasText: "다시 시도" })).toBeVisible();
+  await expect(picks.locator("[role='alert']")).toContainText("종목 점수 조회 실패", { timeout: 20_000 });
+  await expect(picks).not.toContainText("점수를 낼 종목이 아직 없습니다");
+  await expect(picks.locator("button", { hasText: "재시도" })).toBeVisible();
 
   await page.unroute("**/api/v1/screener/run-advanced");
   await page.route("**/api/v1/screener/run-advanced", (r) => r.fulfill({ json: { universe: "kospi200", total_evaluated: 0, total_passed: 0,
     elapsed_seconds: 0, cache_hits: 0, cache_misses: 0, failures: 0, timestamp: "", items: [] } }));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(picks).toContainText("점수를 낼 종목이 아직 없어요", { timeout: 20_000 });
+  await expect(picks).toContainText("점수를 낼 종목이 아직 없습니다", { timeout: 20_000 });
   await expect(picks.locator("[role='alert']")).toHaveCount(0);
   await expect(picks.locator('a[href="/admin/data"]')).toBeVisible();
 });
 
-test("적재 행 수 = 서버 db_rows · 실패면 '몰라요' + 사유(0 아님 — 짝)", async ({ page }) => {
+test("적재 행 수 = 서버 db_rows · 실패면 'N/A' + 사유(0 아님 — 짝)", async ({ page }) => {
   const st = page.waitForResponse((r) => r.url().endsWith("/api/v1/screener/snapshot-status"));
   await open(page);
   const s = (await (await st).json()) as { db_rows: number; persist_enabled: boolean };
   const row = page.locator(".home-data .dash-mod-stat");
   await expect(row.locator(".tx-row-right")).toHaveText(`${s.db_rows.toLocaleString("ko-KR")}행`);
-  if (!s.persist_enabled) await expect(row.locator(".tx-row-sub")).toContainText("영속 저장이 꺼져 있어요");
+  if (!s.persist_enabled) await expect(row.locator(".tx-row-sub")).toContainText("영속 저장이 꺼져 있습니다");
 
   await page.route("**/api/v1/screener/snapshot-status", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(row.locator(".tx-unknown-v")).toHaveText("몰라요", { timeout: 20_000 });
-  await expect(row.locator(".tx-unknown-why")).toHaveText("적재 현황을 불러오지 못했어요");
+  await expect(row.locator(".tx-unknown-v")).toHaveText("N/A", { timeout: 20_000 });
+  await expect(row.locator(".tx-unknown-why")).toHaveText("적재 현황 조회 실패");
   await expect(row.locator(".tx-row-right")).not.toContainText("0행");
 });
 
-test("무엇을 할까요: 모듈 줄 6개 — 이름·주소 · 번호 표식이 없다 · 포트폴리오 설계가 맨 위", async ({ page }) => {
+test("작업 선택: 모듈 줄 6개 — 이름·주소 · 번호 표식이 없다 · 포트폴리오 설계가 맨 위", async ({ page }) => {
   await open(page);
   const mods = page.locator(".home-todo a.dash-mod");
   await expect(mods).toHaveCount(6);

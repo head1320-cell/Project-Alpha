@@ -68,12 +68,12 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
     if (!lhsExpr) { setExprCheck(null); return; }
     try {
       const r = await backtestBridgeApi.validateExpr(lhsExpr);
-      if (!r.ok) setExprCheck({ ok: false, msg: r.error ?? "식이 올바르지 않아요" });
+      if (!r.ok) setExprCheck({ ok: false, msg: r.error ?? "식이 올바르지 않습니다" });
       else setExprCheck({
         ok: true,
         msg: `유효한 식${r.lookback ? ` · 룩백 ${r.lookback}봉` : ""}${r.unknown_tokens?.length ? ` · ⚠ 미지원 토큰(건너뜀): ${r.unknown_tokens.join(", ")}` : ""}`,
       });
-    } catch { setExprCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하세요" }); }
+    } catch { setExprCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하십시오" }); }
   };
 
   const save = () => {
@@ -118,9 +118,9 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
       const skip = r.skipped?.length ? ` · 변환 불가 ${r.skipped.length}건` : "";
       setNlMsg(added.length
         ? `${added.length}개 조건 추가 (${r.source === "claude" ? "AI" : "규칙"})${skip} — 펀더멘털 토큰은 '펀더멘털 조건 평가' 토글 필요`
-        : `변환된 조건이 없어요${skip}`);
+        : `변환된 조건이 없습니다${skip}`);
       setNlQuery("");
-    } catch { setNlMsg("변환 요청 실패 — 백엔드 연결을 확인하세요"); }
+    } catch { setNlMsg("변환 요청 실패 — 백엔드 연결을 확인하십시오"); }
     finally { setNlBusy(false); }
   };
 
@@ -146,8 +146,8 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
       const r = await backtestBridgeApi.validateLogic(expr, conditions.length);
       setLogicCheck(r.ok
         ? { ok: true, msg: `유효한 식${r.lookback ? ` · 추가 룩백 ${r.lookback}봉` : ""}` }
-        : { ok: false, msg: r.error ?? "식이 올바르지 않아요" });
-    } catch { setLogicCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하세요" }); }
+        : { ok: false, msg: r.error ?? "식이 올바르지 않습니다" });
+    } catch { setLogicCheck({ ok: false, msg: "검증 요청 실패 — 백엔드 연결을 확인하십시오" }); }
   };
 
   const verdict = (c: { ok: boolean; msg: string }) => (
@@ -177,7 +177,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
               </button>
             </div>
             {savedSets.length === 0 ? (
-              <p className="bte-note">저장한 조건식 세트가 없어요.</p>
+              <p className="bte-note">저장한 조건식 세트 없음</p>
             ) : savedSets.map((sv) => (
               <div key={sv.id} className="cfe-row">
                 <button type="button" className="cfe-set" onClick={() => handleLoadSet(sv)} aria-label={`${sv.name} 세트 불러오기`}>
@@ -190,7 +190,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           </div>
         )}
         {conditions.length === 0 && (
-          <p className="cfe-empty">아직 조건이 없어요. 오른쪽에서 식을 만들어 더해요.</p>
+          <p className="cfe-empty">아직 조건이 없습니다. 오른쪽에서 식을 만들어 더합니다.</p>
         )}
         {conditions.map((c, i) => (
           <div key={c.id} className="cfe-cond">
@@ -238,7 +238,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
               className={`bte-input bte-input--mono cfe-full${exprCheck && !exprCheck.ok ? " is-bad" : ""}`}
               onChange={(e) => { setDirectExpr(e.target.value); setExprCheck(null); }}
               placeholder="예: ({분기영업현금흐름}-{분기순이익}) 또는 {종가}/과거값('최고값({고가},{40일})',{1일})" />
-            <p className="bte-note">사칙연산(+ − × ÷) · 괄호 · {"{팩터}"} · 함수를 섞어 써요. 기간은 {"{20일}"}처럼, 비교할 값은 아래에 적어요.</p>
+            <p className="bte-note">사칙연산(+ − × ÷) · 괄호 · {"{팩터}"} · 함수를 섞어 씁니다. 기간은 {"{20일}"}처럼, 비교할 값은 아래에 적습니다.</p>
           </div>
         )}
 
@@ -262,14 +262,14 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           )}
         </div>
         {(op === "cross_above" || op === "cross_below") && (
-          <p className="bte-note">기준선을 {op === "cross_above" ? "위로" : "아래로"} 뚫은 봉만 맞아요. 골든크로스라면 왼쪽 식은 두 이동평균의 차이, 값은 0이에요.</p>
+          <p className="bte-note">기준선을 {op === "cross_above" ? "위로" : "아래로"} 뚫은 봉만 맞습니다. 골든크로스라면 왼쪽 식은 두 이동평균의 차이, 값은 0입니다.</p>
         )}
 
         {/* 지금 만드는 조건을 한 줄로 */}
         <p className="cfe-preview">
           {lhsExpr && rhs !== ""
             ? <>이 조건 <b>{lhsLabel} {opSym(op)} {rhs}{op === "between" ? ` ~ ${rhs2 || "?"}` : ""}</b></>
-            : "팩터로 식을 만들고 값을 넣으면 조건이 완성돼요."}
+            : "팩터로 식을 만들고 값을 넣으면 조건이 완성됩니다."}
         </p>
 
         <button type="button" className="cfe-save" onClick={save} disabled={!canSave} data-act="cond-save">
@@ -285,7 +285,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
                 onKeyDown={(e) => { if (e.key === "Enter") runNl(); }} className="bte-input cfe-grow"
                 placeholder="예: PER 15 이하이고 ROE 상위 30%" />
               <button type="button" className="cfe-btn" onClick={runNl} disabled={nlBusy || !nlQuery.trim()}>
-                <Sparkles size={14} aria-hidden /> {nlBusy ? "바꾸는 중이에요" : "AI 변환"}
+                <Sparkles size={14} aria-hidden /> {nlBusy ? "변경 중" : "AI 변환"}
               </button>
             </div>
             {nlMsg && <p className="bte-note" role="status">{nlMsg}</p>}

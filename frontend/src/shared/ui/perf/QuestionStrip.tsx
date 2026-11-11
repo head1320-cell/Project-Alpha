@@ -10,13 +10,13 @@ import type { PerfView } from "./perfView";
 export interface PerfGate { key: string; label: string; state: string }
 
 const STATE_TEXT: Record<string, string> = {
-  confirmed: "확인", assumed: "가정", partial: "절반 확인", unknown: "몰라요", skipped: "건너뜀", failed: "실패",
+  confirmed: "확인", assumed: "가정", partial: "부분 확인", unknown: "미상", skipped: "건너뜀", failed: "실패",
 };
 
 function GateChip({ gates, gateKey }: { gates: PerfGate[] | null; gateKey: "oos" | "economic" }) {
   if (gates === null) return null;
   const g = gates.find((x) => x.key === gateKey);
-  if (!g) return <span className="pf-q-nogate">관문 ‘{gateKey}’ 판정이 보고서에 없어요</span>;
+  if (!g) return <span className="pf-q-nogate">관문 ‘{gateKey}’ 판정이 보고서에 없습니다</span>;
   return (
     <span className={`pf-q-gate pg-stn--${g.state}`} data-gate={g.key}>
       <span className="pg-stn-dot" aria-hidden="true" />관문 ‘{g.label}’ {STATE_TEXT[g.state] ?? g.state}
@@ -34,12 +34,12 @@ export function QuestionStrip({ view, gates, noGatesText }: { view: PerfView; ga
       <div className="pf-q-row">
         <span className="pf-q-k">답하지 않는 것</span>
         <ul className="pf-q-list">
-          <li>③ 예측 스킬: 신호가 미래를 맞히는지 <GateChip gates={gates} gateKey="oos" /></li>
-          <li>④ 경제적 가치: 돈이 되는지 <GateChip gates={gates} gateKey="economic" /></li>
+          <li>③ 예측 스킬: 신호의 예측력 <GateChip gates={gates} gateKey="oos" /></li>
+          <li>④ 경제적 가치: 비용 차감 후 수익성 <GateChip gates={gates} gateKey="economic" /></li>
         </ul>
       </div>
       {gates === null && (
-        <p className="pg-note pf-q-nogates">{noGatesText ?? "관문 판정이 없어요 — 계산 전이거나, 결과가 낡았거나, 부분 계산이라 관문을 매기지 않았어요."}</p>
+        <p className="pg-note pf-q-nogates">{noGatesText ?? "관문 판정이 없습니다 — 계산 전이거나, 결과가 낡았거나, 부분 계산이라 관문을 매기지 않았습니다."}</p>
       )}
     </section>
   );

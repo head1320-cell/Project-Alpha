@@ -4,9 +4,9 @@
 - 같은 날짜 → 날짜로 · 각자 첫 유효값을 base 로 · 차이 = (B − A) / base × 100 (%p).
 - 한쪽만 있는 날은 그쪽 None(0 아님) · 몇 날인지 센다.
 - 공통 날이 짧은 쪽의 반 미만이면 순번("n일째")으로 맞추고 그 사실을 글로(짝: 반 이상이면 날짜).
-- 해마다 차이는 해 합집합 · 지표 차이는 한쪽이 없으면 None.
+- 연도별 차이는 해 합집합 · 지표 차이는 한쪽이 없으면 None.
 - 순수 엔드포인트는 저장소 없이 답하고 길이가 어긋나면 422 · 캔버스 비교 노드는 곡선이 없으면 사유를 말한다.
-- 스트레스 과거 재생은 계산해 둔 자산곡선·벤치마크 곡선·낙폭 사건을 싣는다 · /macro 전략은 낙폭 % 와 어림 라벨 사유를 싣는다.
+- 스트레스 과거 재생은 계산해 둔 자산곡선·벤치마크 곡선·낙폭 구간을 싣는다 · /macro 전략은 낙폭 % 와 어림 라벨 사유를 싣는다.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def test_little_overlap_falls_back_to_index_with_reason_and_pair_half_overlap_st
     c = align_curves(D, A, far, B)
     assert c["alignment"] == "index" and c["n"] == 5
     assert c["x"][0] == "1일째" and c["x"][-1] == "5일째"
-    assert "시작부터" in c["note"] and "같은 날끼리가 아니에요" in c["note"]
+    assert "시작부터" in c["note"] and "같은 날끼리가 아닙니다" in c["note"]
     assert c["missing_a"] == 0 and c["missing_b"] == 0
     assert c["diff_pp"][-1] == pytest.approx(-2.0)
     # 짝 — 공통 3 = 짧은 쪽 5 의 반 이상이면 날짜로.

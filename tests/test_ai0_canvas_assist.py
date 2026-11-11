@@ -62,7 +62,7 @@ CORE_E = [_e("u", "universe", "r", "universe"), _e("r", "returns", "es", "return
           _e("r", "returns", "o", "returns"), _e("es", "belief", "o", "belief")]
 DOC = {**F, "nodes": CORE, "edges": CORE_E}
 BT = {"kind": "backtest", "attach": [_a("o", "weights", "@new", "weights"), _a("r", "returns", "@new", "returns")],
-      "reason": "거래비용과 처음 보는 기간을 아직 재지 않았어요."}
+      "reason": "거래비용과 처음 보는 기간을 아직 측정하지 않았습니다."}
 
 
 # ── 가짜 SDK ─────────────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ def test_bad_connections_are_rejected(attach, code):
 
 def test_an_occupied_input_is_rejected_and_the_pair_free_input_passes():
     est = {"kind": "estimate", "attach": [_a("r", "returns", "@new", "returns"), _a("@new", "belief", "o", "belief")],
-           "reason": "기대 수익을 한 번 더 추정해 이어요."}
+           "reason": "기대 수익을 한 번 더 추정해 잇습니다."}
     ok, bad = _check([est])
     assert ok == [] and bad[0]["code"] == "multiple_inputs"                    # 비중 계산의 belief 는 이미 차 있다
     free = {**DOC, "edges": CORE_E[:-1]}                                       # ★짝★ 그 선이 없으면
@@ -364,14 +364,14 @@ def test_a_cycle_is_rejected_and_the_pair_one_way_passes():
 
 
 def test_numbers_outside_the_grounding_are_rejected_and_the_pair_grounded_numbers_pass():
-    ok, bad = _check([{**BT, "reason": "거래비용 0.3% 를 넣어 2번 돌려 보세요."}], numbers={"2"})
+    ok, bad = _check([{**BT, "reason": "거래비용 0.3% 를 넣어 2번 돌려 보십시오."}], numbers={"2"})
     assert ok == [] and bad[0]["code"] == "numbers" and "0.3" in bad[0]["reason"]
-    assert _check([{**BT, "reason": "종목 2개로 돌려 보세요."}], numbers={"2"})[0]   # ★짝★
+    assert _check([{**BT, "reason": "종목 2개로 돌려 보십시오."}], numbers={"2"})[0]   # ★짝★
 
 
-@pytest.mark.parametrize("word", ["더 나은 전략", "검증됨", "투자 우위", "좋아져요"])
+@pytest.mark.parametrize("word", ["더 나은 전략", "검증됨", "투자 우위", "좋아집니다"])
 def test_banned_claims_are_rejected(word):
-    ok, bad = _check([{**BT, "reason": f"붙이면 {word} 이에요."}])
+    ok, bad = _check([{**BT, "reason": f"붙이면 {word} 입니다."}])
     assert ok == [] and bad[0]["code"] == "banned" and word in bad[0]["reason"]
 
 
@@ -382,7 +382,7 @@ def test_a_suggestion_carrying_settings_is_rejected_and_the_pair_without_passes(
 
 
 def test_at_most_three_pass_and_the_rest_are_reported_not_dropped():
-    one = lambda k: {"kind": k, "attach": [_a("o", "weights", "@new", "weights")], "reason": "비중을 다른 눈으로 봐요."}  # noqa: E731
+    one = lambda k: {"kind": k, "attach": [_a("o", "weights", "@new", "weights")], "reason": "비중을 다른 눈으로 봅니다."}  # noqa: E731
     ok, bad = _check([BT, one("risk"), one("scenario_stress"), one("custom_scenario"), one("factor_xray")])
     assert ck.MAX_SUGGESTIONS == 3
     assert [s["kind"] for s in ok] == ["backtest", "risk", "scenario_stress"]
@@ -396,7 +396,7 @@ def test_a_repeated_suggestion_is_reported_as_a_duplicate():
 
 
 def test_an_unattached_suggestion_is_rejected_on_a_graph_and_the_pair_empty_canvas_allows_it():
-    uni = {"kind": "universe", "attach": [], "reason": "종목부터 골라요."}
+    uni = {"kind": "universe", "attach": [], "reason": "종목부터 고릅니다."}
     ok, bad = _check([uni])
     assert ok == [] and bad[0]["code"] == "unattached"
     assert _check([uni], doc={**F, "nodes": [], "edges": []})[0][0]["kind"] == "universe"   # ★짝★
@@ -449,8 +449,8 @@ def test_the_service_checks_numbers_against_its_own_grounding_and_the_pair_rejec
     g = gr.ground(DOC, KINDS, routes.graph_validate(DOC))
     n = sorted(gr.numbers_of(g), key=len)[0]
     assert "987654" not in gr.numbers_of(g)
-    sdk = FakeSDK(_msg({"suggestions": [{**BT, "reason": f"근거의 {n} 을 그대로 써요."},
-                                        {**BT, "kind": "risk", "attach": BT["attach"][:1], "reason": "987654 번 돌려요."}]}))
+    sdk = FakeSDK(_msg({"suggestions": [{**BT, "reason": f"근거의 {n} 을 그대로 씁니다."},
+                                        {**BT, "kind": "risk", "attach": BT["attach"][:1], "reason": "987654 번 돌립니다."}]}))
     res = _suggest(_client(sdk))
     assert [s["kind"] for s in res["suggestions"]] == ["backtest"]
     assert [(r["kind"], r["code"]) for r in res["rejected"]] == [("risk", "numbers")]
@@ -460,7 +460,7 @@ def test_no_key_is_unavailable_with_a_reason_and_the_rule_fallback_and_no_demo_t
     sdk = FakeSDK(_msg({"suggestions": [BT]}))
     res = _suggest(_client(sdk, key=""))
     assert res["available"] is False and res["source"] == "unavailable" and res["reason_code"] == "no_key"
-    assert res["reason"] == "서버에 Claude 키가 없어요"
+    assert res["reason"] == "서버에 Claude 키가 없습니다"
     assert "suggestions" not in res and sdk.beta.messages.calls == []
     proc = routes.graph_validate(DOC)["procedure"]
     assert res["rule"] == {"next": proc["next"], "by_gate": proc["by_gate"]}
@@ -603,7 +603,7 @@ def test_the_route_needs_login_and_the_pair_logged_in_gets_an_answer(api):
     res = api.post(ROUTE, json=DOC, headers=_auth(api))                 # ★짝★
     assert res.status_code == 200
     body = res.json()
-    assert body["available"] is False and body["reason_code"] == "no_key" and body["reason"] == "서버에 Claude 키가 없어요"
+    assert body["available"] is False and body["reason_code"] == "no_key" and body["reason"] == "서버에 Claude 키가 없습니다"
 
 
 def test_the_route_passes_the_login_name_to_the_service(api, monkeypatch):

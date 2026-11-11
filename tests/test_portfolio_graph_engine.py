@@ -286,8 +286,8 @@ def _explaining_registry() -> pg.Registry:
     reg = pg.Registry(port_types=("Num",))
     reg.register(pg.NodeSpec(
         "const", "상수", inputs=(), outputs=(pg.Port("out", "Num"),), params_model=_ConstParams,
-        run=_const, stage="data", plain_label="숫자 정하기", plain_description="숫자 하나를 내요",
-        explain=lambda view, prov, params: {"title": f"숫자 {view['value']}을 정했어요"}))
+        run=_const, stage="data", plain_label="숫자 정하기", plain_description="숫자 하나를 냅니다",
+        explain=lambda view, prov, params: {"title": f"숫자 {view['value']}을 정했습니다"}))
     reg.register(pg.NodeSpec("boom", "실패", inputs=(pg.Port("a", "Num"),),
                              outputs=(pg.Port("out", "Num"),), run=_boom, plain_label="터지는 단계"))
     reg.register(pg.NodeSpec("label", "글자", inputs=(pg.Port("x", "Num"),),
@@ -297,13 +297,13 @@ def _explaining_registry() -> pg.Registry:
 
 def test_an_ok_node_carries_its_own_explanation():
     out = pg.run(_g([_n("c", "const", value=3)], []), _explaining_registry())
-    assert out["nodes"]["c"]["explain"] == {"title": "숫자 3을 정했어요"}
+    assert out["nodes"]["c"]["explain"] == {"title": "숫자 3을 정했습니다"}
 
 
 def test_a_node_without_an_explainer_still_gets_a_plain_title():
     g = _g([_n("c", "const", value=3), _n("t", "label")], [_e("c", "out", "t", "x")])
     out = pg.run(g, _explaining_registry())
-    assert out["nodes"]["t"]["explain"]["title"] == "‘글자로 바꾸기’를 계산했어요"
+    assert out["nodes"]["t"]["explain"]["title"] == "‘글자로 바꾸기’를 계산했습니다"
 
 
 def test_a_failed_node_says_so_in_plain_words_with_the_reason():
@@ -311,10 +311,10 @@ def test_a_failed_node_says_so_in_plain_words_with_the_reason():
            [_e("c", "out", "b", "a"), _e("b", "out", "t", "x")])
     out = pg.run(g, _explaining_registry())
     fb = out["nodes"]["b"]["explain"]
-    assert fb["title"] == "계산하지 못했어요"
+    assert fb["title"] == "산출 실패"
     assert fb["trust"] == [{"state": "failed", "text": "일부러 실패 — 재료 없음"}]
     tb = out["nodes"]["t"]["explain"]
-    assert tb["title"] == "계산하지 못했어요"
+    assert tb["title"] == "산출 실패"
     assert "앞 단계 ‘터지는 단계’" in tb["facts"][0], "막힌 이유는 상류의 쉬운 이름으로"
 
 
@@ -332,12 +332,12 @@ def test_an_explainer_that_crashes_does_not_hide_the_result_or_invent_text():
 def test_an_unknown_node_is_explained_as_unknown():
     g = _g([_n("f", "future_node")], [])
     ex = pg.run(g, _explaining_registry())["nodes"]["f"]["explain"]
-    assert ex["title"] == "모르는 노드예요" and "future_node" in ex["facts"][0]
+    assert ex["title"] == "모르는 노드입니다" and "future_node" in ex["facts"][0]
 
 
 def test_the_catalog_carries_plain_words_and_stage():
     c = {x["type"]: x for x in _explaining_registry().catalog()}["const"]
-    assert (c["stage"], c["plain_label"], c["plain_description"]) == ("data", "숫자 정하기", "숫자 하나를 내요")
+    assert (c["stage"], c["plain_label"], c["plain_description"]) == ("data", "숫자 정하기", "숫자 하나를 냅니다")
 
 
 # ★계산 중 DB 쓰기 0★ (BL0) — 이 파일의 모든 그래프 계산이 런타임 쓰기 감시 아래에서 돈다.

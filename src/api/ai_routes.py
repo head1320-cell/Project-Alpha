@@ -29,7 +29,7 @@ def ai_vol_compare(req: AICompareRequest):
     try:
         from src.models.lstm_engine import TORCH_AVAILABLE, AIModelComparison
         if not TORCH_AVAILABLE:
-            raise HTTPException(503, "LSTM 기능은 torch 설치가 필요합니다. `pip install torch` 후 사용하세요.")
+            raise HTTPException(503, "LSTM 기능은 torch 설치가 필요합니다. `pip install torch` 후 사용하십시오.")
         loader = MarketDataLoader(req.ticker, req.start_date, req.end_date)
         returns = loader.fetch_returns()
 
@@ -53,7 +53,7 @@ def lstm_forecast(req: LSTMForecastRequest):
     try:
         from src.models.lstm_engine import TORCH_AVAILABLE, LSTMVolatilityEngine
         if not TORCH_AVAILABLE:
-            raise HTTPException(503, "LSTM 기능은 torch 설치가 필요합니다. `pip install torch` 후 사용하세요.")
+            raise HTTPException(503, "LSTM 기능은 torch 설치가 필요합니다. `pip install torch` 후 사용하십시오.")
         loader = MarketDataLoader(req.ticker, req.start_date, req.end_date)
         returns = loader.fetch_returns()
 

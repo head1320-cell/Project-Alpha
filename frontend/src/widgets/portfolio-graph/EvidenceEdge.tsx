@@ -56,10 +56,10 @@ export function wireOf(src: { status: NodeStatus; lineage?: NodeLineage } | unde
 }
 
 export const WIRE_LEGEND: { key: string; label: string; help: string }[] = [
-  { key: "plain", label: "실선", help: "연습용 합성이 아니에요 — 데이터 등급은 노드에서 확인해요" },
-  { key: "practice", label: "점선", help: "연습용(합성) 값이 흘러요" },
-  { key: "forward", label: "눈금", help: "지금 시점 전용 — 과거 검증에 쓸 수 없어요" },
-  { key: "blocked", label: "끊긴 회색", help: "앞 단계가 막히거나 실패해 값이 흐르지 않았어요" },
+  { key: "plain", label: "실선", help: "합성이 아닙니다 — 데이터 등급은 노드에서 확인합니다" },
+  { key: "practice", label: "점선", help: "합성 값이 흐릅니다" },
+  { key: "forward", label: "눈금", help: "지금 시점 전용 — 과거 검증에 쓸 수 없습니다" },
+  { key: "blocked", label: "끊긴 회색", help: "앞 단계가 막히거나 실패해 값이 흐르지 않았습니다" },
 ];
 
 function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data, selected }: EdgeProps<Edge<WireData>>) {
@@ -109,7 +109,7 @@ function EvidenceEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePositi
         <EdgeLabelRenderer>
           {via.map((p, i) => (
             <button key={i} type="button" className="pg-waypoint nodrag nopan" data-edge-id={id} data-i={i} data-show={showDots || undefined}
-                    aria-label={`경유점 ${i + 1} — 끌어서 옮기고, 두 번 누르거나 Delete 로 지워요`}
+                    aria-label={`경유점 ${i + 1} — 끌어서 옮기고, 두 번 누르거나 Delete 로 지웁니다`}
                     style={{ transform: `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)` }}
                     onPointerEnter={() => setOverDot(true)} onPointerLeave={() => setOverDot(false)}
                     onPointerDown={(ev) => { ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId); drag.current = { i, moved: false }; setDragging(true); }}

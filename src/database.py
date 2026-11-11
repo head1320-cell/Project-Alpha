@@ -332,9 +332,9 @@ class PbClientDoc(Base):
 
 
 class PbClientSheet(Base):
-    """고객 한 장 (CF 3부 PB4) — ★서버가 같은 그래프를 다시 계산한 보고에서 옮긴 것만★ 둔다(새 숫자를 만들지 않는다).
+    """고객 한 장 (CF 3부 PB4) — ★서버가 같은 그래프를 재계산한 보고에서 옮긴 것만★ 둔다(새 숫자를 만들지 않는다).
 
-    만든 때의 그래프(`graph`)와 한 장(`sheet` JSON — 흐름 순서의 노드 설명 · 주인공 비중 · 실패 사유 · 연습용 표시)을 함께 둔다.
+    만든 때의 그래프(`graph`)와 한 장(`sheet` JSON — 흐름 순서의 노드 설명 · 주인공 비중 · 실패 사유 · 합성 표시)을 함께 둔다.
     `shared_at` 은 고객 주소(PB6)로 처음 보여 준 때 — ★그 뒤로는 지우지 않는다★(무엇을 보여 줬는지가 남아야 한다).
     """
     __tablename__ = "pb_client_snapshots"
@@ -683,11 +683,11 @@ def admin_password_reason() -> str | None:
     if state == "configured":
         return None
     if state == "unknown":
-        return "admin 계정을 찾지 못했거나 DB 에 닿지 못했어요 — 기본 비밀번호인지 모릅니다."
+        return "admin 계정을 찾지 못했거나 DB 에 닿지 못했습니다 — 기본 비밀번호인지 모릅니다."
     if os.getenv("ADMIN_PASSWORD", "").strip():
-        return ("ADMIN_PASSWORD 가 설정돼 있지만 admin 계정은 아직 기본 비밀번호를 받아요 — "
-                "환경변수는 계정을 처음 만들 때만 쓰여요. 설정 화면에서 바꾸세요.")
-    return "admin 계정이 기본 비밀번호를 받아요 — 설정 화면에서 바꾸세요."
+        return ("ADMIN_PASSWORD 가 설정돼 있지만 admin 계정은 아직 기본 비밀번호를 받습니다 — "
+                "환경변수는 계정을 처음 만들 때만 쓰입니다. 설정 화면에서 바꾸십시오.")
+    return "admin 계정이 기본 비밀번호를 받습니다 — 설정 화면에서 바꾸십시오."
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

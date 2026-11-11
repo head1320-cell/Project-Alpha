@@ -19,7 +19,7 @@ _TV_GAP = 0.005                                    # g < ke - 0.5%p 발산 가�
 
 
 #: Rf 출처(`KR_10Y.source`) → 라벨. ★기본값은 관측이라 부르지 않고, 합성은 합성이라 부른다★ (BL3 W3-0)
-_RF_LABEL = {"BOK": "ECOS 국고채 10년 (최신 관측)", "MOCK": "연습용 합성 (mock) — 국고채 10년 대용"}
+_RF_LABEL = {"BOK": "ECOS 국고채 10년 (최신 관측)", "MOCK": "합성 (mock) — 국고채 10년 대용"}
 _RF_DEFAULT_LABEL = "기본값 (국고채 10년 근사)"
 
 
@@ -43,7 +43,7 @@ def resolve_default_params(code: str) -> dict:
         if b and 0.1 <= float(b) <= 3.0:
             # mock 모드에선 스토어가 합성 팩터로 채운다(`_mock_factors`) — 실측이라 부르지 않는다
             beta = round(float(b), 2)
-            beta_source = "연습용 합성 (mock)" if mock_allowed() else "일봉 1년 실측 (DB·KIS)"
+            beta_source = "합성 (mock)" if mock_allowed() else "일봉 1년 실측 (DB·KIS)"
     except Exception:
         pass
     return {"rf": rf, "rf_source": rf_source, "beta": beta, "beta_source": beta_source,

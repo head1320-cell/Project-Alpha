@@ -34,7 +34,7 @@ QUANT_ANALYST_PERSONA = """당신은 기관급 한국 주식 퀀트 분석가입
 2. **인과 분석**: "X 때문에 Y" 형태의 명확한 인과를 제시하되, 추측은 "~로 추정됩니다" 표현.
 3. **균형 시각**: 강점과 약점, 기회와 위험을 모두 언급합니다.
 4. **출처 명시**: DART, KIS, 백테스트 결과 등 데이터 출처를 명시합니다.
-5. **투자 권유 금지**: "매수/매도하세요" 대신 "분석 결과는 ~" 또는 "~가능성이 높습니다" 사용.
+5. **투자 권유 금지**: "매수/매도하십시오" 대신 "분석 결과는 ~" 또는 "~가능성이 높습니다" 사용.
 
 출력 형식:
 - Markdown 헤더 구조 (`##`, `###`)
@@ -77,7 +77,7 @@ ROE, FCF, 부채비율, EPS/BPS/DPS를 근거로 저평가/고평가 원인 설�
 ### 5. 결론
 3-5줄로 종합 의견 (투자 권유 X, "분석 결과는 ~" 형태)"""
 
-    user = f"""다음 종목의 통합 가치평가 결과를 분석해주세요:
+    user = f"""다음 종목의 통합 가치평가 결과를 분석하십시오:
 
 ## 종목 정보
 - **종목명**: {stock_item.get('corp_name', '미상')}
@@ -107,7 +107,7 @@ ROE, FCF, 부채비율, EPS/BPS/DPS를 근거로 저평가/고평가 원인 설�
 ## 모델별 핵심 가정
 {_format_model_assumptions(valuation_detail.get('models', []))}
 
-위 데이터를 종합 분석해 보고서를 작성해주세요."""
+위 데이터를 종합 분석해 보고서를 작성하십시오."""
 
     return system, user
 
@@ -183,7 +183,7 @@ Goldilocks/Reflation/Stagflation/Deflation 별 alpha 비교.
 ### 5. 결론
 포트폴리오 등급(우수/양호/보통/부적합) + 다음 단계 권고."""
 
-    user = f"""다음 멀티 전략 백테스트 결과를 분석해주세요:
+    user = f"""다음 멀티 전략 백테스트 결과를 분석하십시오:
 
 ## 백테스트 메타
 - 기간: {backtest_result.get('start_date', '?')} ~ {backtest_result.get('end_date', '?')}
@@ -206,7 +206,7 @@ Goldilocks/Reflation/Stagflation/Deflation 별 alpha 비교.
 ## Regime별 Alpha (4-Quadrant)
 {_format_regime_alpha(attribution.get('regime_alpha', {}))}
 
-위 데이터를 기반으로 포트폴리오 분석 보고서를 작성해주세요."""
+위 데이터를 기반으로 포트폴리오 분석 보고서를 작성하십시오."""
 
     return system, user
 
@@ -283,7 +283,7 @@ def macro_briefing_prompt(regime_state: dict) -> tuple[str, str]:
 - 금리 신호: {regime_state.get('rate_signal', '?')}
 - USD 신호: {regime_state.get('usd_signal', '?')}
 
-위 환경 데이터를 종합 분석해 매크로 브리핑을 작성해주세요."""
+위 환경 데이터를 종합 분석해 매크로 브리핑을 작성하십시오."""
 
     return system, user
 
@@ -336,7 +336,7 @@ def operations_analysis_prompt(events: list, audit_summary: dict) -> tuple[str, 
 ## 카테고리별 분포
 {json.dumps(audit_summary.get('by_category', {}), ensure_ascii=False, indent=2)}
 
-위 데이터를 기반으로 운영 사건 사후 분석 보고서를 작성해주세요."""
+위 데이터를 기반으로 운영 사건 사후 분석 보고서를 작성하십시오."""
 
     return system, user
 
@@ -379,7 +379,7 @@ def counterfactual_prompt(actual: dict, scenarios: list[dict]) -> tuple[str, str
 ## 가상 시나리오 ({len(scenarios)}개)
 {_format_scenarios(scenarios)}
 
-위 데이터를 기반으로 counterfactual 분석을 작성해주세요."""
+위 데이터를 기반으로 counterfactual 분석을 작성하십시오."""
 
     return system, user
 
@@ -448,6 +448,6 @@ WARN/CRITICAL 이벤트 요약.
 ## 알림
 {json.dumps(activities.get('alerts', []), ensure_ascii=False, indent=2, default=str)[:1500]}
 
-위 데이터를 기반으로 일일 요약 보고서를 작성해주세요."""
+위 데이터를 기반으로 일일 요약 보고서를 작성하십시오."""
 
     return system, user

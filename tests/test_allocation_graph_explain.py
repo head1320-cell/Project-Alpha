@@ -5,7 +5,7 @@
 
 ## 거는 것
 - 모든 완료 노드가 해요체 제목을 갖는다. 설명의 숫자는 결과(view)의 숫자와 같다(지어내지 않는다).
-- mock(합성)이면 데이터를 쓰는 노드가 "연습용" 을 **몰라요(unknown)** 로 말한다 — 짝: DB 면 "등급 몰라요".
+- mock(합성)이면 데이터를 쓰는 노드가 "합성" 을 **모릅니다(unknown)** 로 말한다 — 짝: DB 면 "등급 미상".
 - 시장 균형 출발점(BL·EP)에서 시가총액 미상 → 가정(assumed) — 짝: MVO 에서는 그 말을 하지 않는다.
 - 백테스트 비용은 가정이고 값이 파라미터를 따른다(짝) · 룩어헤드의 안 잰 축이 `unmeasured` 에 그대로.
 - 금지어("검증됨·입증됨·견고함·프로덕션 레디·투자 우위·더 나은 전략") 0 — 출력 전수 + 소스 리터럴 AST.
@@ -54,7 +54,7 @@ def test_every_ok_node_speaks_in_plain_polite_korean(market):
     for nid, r in out["nodes"].items():
         assert r["status"] == "ok", (nid, r["reason"])
         t = r["explain"]["title"]
-        assert t.endswith("요") or t.endswith("요."), (nid, t)
+        assert t.endswith("다") or t.endswith("다."), (nid, t)
 
 
 def test_the_optimizer_headline_is_the_largest_weight_it_actually_produced(market):
@@ -73,14 +73,14 @@ def test_mock_data_is_named_as_practice_data_not_hidden(market, monkeypatch):
     out = _run(chain(lookback=1008, backtest={}))
     for nid in ("r", "o", "b"):
         unknown = " ".join(_states(out["nodes"][nid]["explain"]).get("unknown", []))
-        assert "연습용" in unknown, (nid, out["nodes"][nid]["explain"])
+        assert "합성" in unknown, (nid, out["nodes"][nid]["explain"])
 
 
 def test_loaded_data_says_its_grade_is_unknown_instead_of_practice(market):
-    """★짝★ — DB 적재분이면 "연습용" 이 아니라 "등급을 몰라요"."""
+    """★짝★ — DB 적재분이면 "합성" 이 아니라 "등급 미상"."""
     ex = _run(chain())["nodes"]["r"]["explain"]
     unknown = " ".join(_states(ex).get("unknown", []))
-    assert "연습용" not in unknown and "몰라요" in unknown
+    assert "합성" not in unknown and "미상" in unknown
 
 
 def test_market_prior_with_missing_caps_is_an_assumption_only_where_it_applies(market, monkeypatch):
@@ -111,9 +111,9 @@ def test_the_view_sentence_matches_black_litterman_semantics(market):
     """절대 뷰는 "그 종목의 1년 기대 수익 = 방향 × 크기" 다 — "더 오른다" 가 아니다."""
     down = {**VIEW, "direction": -1, "magnitude_pct": 3.0, "confidence": 40}
     ex = _run(chain(views=[VIEW, down]))["nodes"]["v"]["explain"]
-    assert ex["title"] == "내 생각 2개를 넣었어요"
-    assert "기대 수익을 +4%로 봤어요" in ex["facts"][0] and "확신 60%" in ex["facts"][0]
-    assert "기대 수익을 −3%로 봤어요" in ex["facts"][1]
+    assert ex["title"] == "내 생각 2개를 넣었습니다"
+    assert "기대 수익을 +4%로 봤습니다" in ex["facts"][0] and "확신 60%" in ex["facts"][0]
+    assert "기대 수익을 −3%로 봤습니다" in ex["facts"][1]
 
 
 def test_risk_headline_is_the_volatility_it_computed(market):
@@ -171,7 +171,7 @@ def test_every_core_node_has_an_explainer_plain_words_and_a_stage():
 def test_the_universe_explains_unknown_codes_honestly(market):
     g = chain(tickers=[*T3, "ZZZZZZ"])
     ex = _run(g)["nodes"]["u"]["explain"]
-    assert ex["title"] == "종목 4개를 골랐어요"
+    assert ex["title"] == "종목 4개를 골랐습니다"
     assert any("ZZZZZZ" in t for t in _states(ex).get("unknown", []))
 
 

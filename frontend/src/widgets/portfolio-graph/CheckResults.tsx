@@ -30,7 +30,7 @@ function StressFigure({ r, prov }: { r: Dict; prov: Dict }) {
   return (
     <>
       <PerfCurve view={view} height={210} title="재생 기간의 자산 곡선과 낙폭" />
-      <h4 className="pg-h4">큰 낙폭 사건</h4>
+      <h4 className="pg-h4">주요 낙폭 구간</h4>
       <DrawdownEpisodes view={view} compact />
     </>
   );
@@ -64,7 +64,7 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
       <p className={`pg-model-type pg-model-type--${historical ? "hist" : "hypo"}`}>{String(pack.model_type_label ?? "")}</p>
       {/* ★재현 좌표는 라벨이 아니라 pack_id@hash★ 같은 이름의 팩도 정의가 바뀌면 해시가 바뀐다. */}
       {pack.identity ? <p className="pg-pack-id">{String(pack.family_label ?? "")} · <span className="pg-code">{String(pack.identity)}</span>
-        {historical && pack.severity_applies === false ? " · 실제 시세 재생이라 강도 배율을 쓰지 않아요" : ""}</p> : null}
+        {historical && pack.severity_applies === false ? " · 실제 시세 재생이라 강도 배율을 쓰지 않습니다" : ""}</p> : null}
       {historical ? (
         <>
           {/* 기간 수익률·낙폭은 성과 숫자다 — 서버가 단 라벨(고정 비중 재생)을 숫자 바로 위에. */}
@@ -87,7 +87,7 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
           <ShockRows rows={(r.rows as Dict[]) ?? []} />
           {((r.factor_attribution as Dict[]) ?? []).length > 0 && (
             <>
-              <h4 className="pg-h4">어디서 왔나요 (팩터 기여)</h4>
+              <h4 className="pg-h4">수익 원천(팩터 기여)</h4>
               <table className="pg-table"><tbody>
                 {(r.factor_attribution as Dict[]).map((f) => (
                   <tr key={String(f.factor)}><td className="pg-td-name">{String(f.label)}</td>
@@ -97,7 +97,7 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
             </>
           )}
           {r.note ? <p className="pg-note">{String(r.note)}</p> : null}
-          <p className="pg-note pg-linear">선형 근사예요 — 종목별 충격 × 비중을 더했어요. 충격이 커질 때 상관이 바뀌는 효과는 넣지 않았어요.</p>
+          <p className="pg-note pg-linear">선형 근사입니다 — 종목별 충격 × 비중을 더했습니다. 충격이 커질 때 상관이 바뀌는 효과는 넣지 않았습니다.</p>
         </>
       )}
     </>
@@ -117,7 +117,7 @@ export function CorrStressResult({ v }: { v: Dict }) {
     <>
       <KV rows={[
         ["평균 상관", `${String(shift.from_avg_rho ?? "—")} → ${String(shift.to_avg_rho ?? "—")}`],
-        ["변동성(연)", `${pct(b.port_vol_pct, 1)} → ${pct(s.port_vol_pct, 1)}`],
+        ["연환산 변동성", `${pct(b.port_vol_pct, 1)} → ${pct(s.port_vol_pct, 1)}`],
         ["VaR", `${won(b.var_amount)} → ${won(s.var_amount)}`],
         ["신뢰수준", pct(num(r.confidence_level) === null ? null : (r.confidence_level as number) * 100, 1)],
       ]} />
@@ -144,7 +144,7 @@ export function SensitivityResult({ v }: { v: Dict }) {
   const short = (n: string) => labels[n] ?? n;
   return (
     <>
-      <p className="pg-note">줄의 종목 기대수익을 올렸을 때 칸의 종목 비중이 몇 %p 바뀌는지예요.</p>
+      <p className="pg-note">줄의 종목 기대수익을 올렸을 때 칸의 종목 비중이 몇 %p 바뀌는지입니다.</p>
       <div className="pg-heat-wrap">
         <table className="pg-heat">
           <thead><tr><th aria-label="올린 종목" />{names.map((n) => <th key={n} scope="col">{short(n)}</th>)}</tr></thead>
@@ -172,7 +172,7 @@ export function FactorXrayResult({ v }: { v: Dict }) {
   const at = (z: number) => `${((Math.max(-3, Math.min(3, z)) + 3) / 6) * 100}%`;
   return (
     <>
-      <p className="pg-note">가운데가 유니버스 평균(0σ)이에요. 굵은 점이 이 비중, 세로 선이 {String(r.benchmark_label ?? "기준")}.</p>
+      <p className="pg-note">가운데가 유니버스 평균(0σ)입니다. 굵은 점이 이 비중, 세로 선이 {String(r.benchmark_label ?? "기준")}.</p>
       <ul className="pg-z">
         {fs.map((f) => {
           // ★모르는 위치를 가운데(0σ)에 찍지 않는다★ — 값이 없으면 점도 수도 그리지 않는다.

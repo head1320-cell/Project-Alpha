@@ -107,7 +107,7 @@ def test_each_node_computes_on_the_chain_with_strict_json_and_labels(kind, marke
 
 
 def test_mock_returns_make_every_risk_result_practice():
-    """market 픽스처 없이 — 개발 mock 수익률(출처 mock)이면 하류 위험 수치도 전부 연습용이다."""
+    """market 픽스처 없이 — 개발 mock 수익률(출처 mock)이면 하류 위험 수치도 전부 합성 데이터다."""
     for kind in ("var_es", "dcc_corr"):
         rep = _run(_graph(kind))
         assert rep["nodes"]["r"]["lineage"]["practice"] is True, rep["nodes"]["r"]["reason"]

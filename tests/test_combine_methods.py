@@ -8,7 +8,7 @@
   ★입력·풀이가 모자라면 실패 + 사유★ — 평소 공분산이나 다른 방법으로 조용히 가지 않는다.
 - 엔진의 조용한 대체(점수·위험 예산 입력 없음 → 위험 똑같이 · 흔들림 최소·HRP 풀이 실패 → 역변동성 · 모르는 방식)를
   `fallback{used, from, reason}` 로 드러낸다 — 값은 그대로(골든).
-- 방법 비교표는 관측이다 — "어느 방법이 낫다는 뜻이 아니에요".
+- 방법 비교표는 관측이다 — "어느 방법이 낫다는 뜻이 아닙니다".
 """
 from __future__ import annotations
 
@@ -197,7 +197,7 @@ def test_method_table_compares_input_free_methods_on_the_same_flows():
     assert rows["equal"]["effective_n"] == pytest.approx(3.0, abs=1e-3)
     # 시장이 없으면 위기 줄은 사유와 함께 비어 있다(평소 공분산으로 채우지 않는다).
     assert rows["crisis_risk_parity"]["available"] is False and "시장" in rows["crisis_risk_parity"]["reason"]
-    assert "낫다는 뜻이 아니에요" in t["note"]
+    assert "낫다는 뜻이 아닙니다" in t["note"]
 
 
 def test_method_table_with_a_market_fills_the_crisis_row_pair():
@@ -298,7 +298,7 @@ def test_crisis_risk_parity_uses_the_market_proxy_and_says_so(market):
 def test_crisis_risk_parity_with_mixed_markets_fails_with_the_reason(market, monkeypatch):
     from src.api import robustness_inputs as ri
     monkeypatch.setattr(ri, "market_proxy", lambda tickers: {"ticker": None, "label": None,
-                                                            "reason": "한국·미국 종목이 섞여 있어 시장 하나로 위기일을 고를 수 없어요"})
+                                                            "reason": "한국·미국 종목이 섞여 있어 시장 하나로 위기일을 고를 수 없습니다"})
     r = _node(method="crisis_risk_parity")
     assert r["status"] == "failed" and "섞여" in r["reason"]
 
@@ -316,5 +316,5 @@ def test_the_view_carries_the_method_table_with_the_current_method(market):
     rows = {x["method"]: x for x in mc["rows"]}
     assert rows["risk_parity"]["shares"] == r["view"]["result"]["sleeve_allocation"]
     assert rows["crisis_risk_parity"]["available"] is True           # mock 에서는 KODEX 200 이 있다
-    assert "낫다는 뜻이 아니에요" in mc["note"]
+    assert "낫다는 뜻이 아닙니다" in mc["note"]
     assert {x["method"]: x["label"] for x in mc["rows"]}["max_diversification"] == "분산 효과 최대"

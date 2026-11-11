@@ -47,7 +47,7 @@ CLASS_PLAIN = {"EQUITY": "주식", "RATES": "금리(채권)", "CREDIT": "신용"
                "REAL_ASSET": "실물", "CASH": "현금"}
 _CLASSES = tuple(c.value for c in AssetClass)
 
-_OPTIMIZER_UNAWARE = "최적화기는 이 고객·계좌를 모른 채 비중을 냈어요 — 이 점검은 사후 관측이고 비중을 바꾸지 않아요."
+_OPTIMIZER_UNAWARE = "최적화기는 이 고객·계좌를 모른 채 비중을 냈습니다 — 이 점검은 사후 관측이고 비중을 바꾸지 않습니다."
 #: 기존 경로 사유 문장의 필드 이름 → 사람 말 (PB2 화면 점검에서 찾음). 강조 기호·백틱은 걷는다 — 뜻은 그대로.
 _FIELD_PLAIN = {"horizon_days": "투자 기간(일)", "target_retirement_year": "목표 연도", "risky/safe": "위험자산/안전자산"}
 
@@ -65,10 +65,10 @@ def _holdings(inputs: dict, what: str) -> dict[str, float]:
     w = inputs["weights"]
     ws = np.asarray(w["weights"], dtype=float)
     if (ws < -1e-9).any():
-        raise pg.NodeFailure(f"공매도(음수) 비중이 있어 {what}를 하지 않아요 — 이 점검은 롱온리 보유를 재요.")
+        raise pg.NodeFailure(f"공매도(음수) 비중이 있어 {what}를 하지 않습니다 — 이 점검은 롱온리 보유를 측정합니다.")
     out = {str(n): float(x) * 100.0 for n, x in zip(w["names"], ws) if x > 1e-9}
     if not out:
-        raise pg.NodeFailure(f"비중이 모두 0이라 {what}할 보유가 없어요.")
+        raise pg.NodeFailure(f"비중이 모두 0이라 {what}할 보유가 없습니다.")
     return out
 
 
@@ -84,17 +84,17 @@ def _route(fn, req, what: str) -> dict:
 class ClientParams(BaseModel):
     model_config = _FORBID
     alias: str | None = Field(None, max_length=ALIAS_MAX, json_schema_extra={"x-ui": _ui(
-        "별칭", question="이 고객을 무엇이라고 부를까요?", widget="text",
-        help="PB 가 정한 별칭만 적어요 — 실명·연락처·주민번호·계좌번호를 적지 마세요(그런 모양이면 받지 않아요).")})
+        "별칭", question="고객 별칭", widget="text",
+        help="PB 가 정한 별칭만 적습니다 — 실명·연락처·주민번호·계좌번호를 적지 마십시오(그런 모양이면 받지 않습니다).")})
     risk_tolerance: Literal[RISK_TOLERANCE_LEVELS] | None = Field(None, json_schema_extra={"x-ui": _ui(
         "위험 성향", question="고객의 투자 성향은요?", options=RISK_PLAIN, order=list(RISK_TOLERANCE_LEVELS),
-        help="비워 두면 '모름' 이에요 — 기본값으로 채우지 않아요.")})
+        help="비워 두면 '모름' 입니다 — 기본값으로 채우지 않습니다.")})
     profile_source: Literal[PROFILE_SOURCES] = Field(SOURCE_UNKNOWN, json_schema_extra={"x-ui": _ui(
-        "성향 출처", question="그 성향은 어떻게 정했나요?", options=SOURCE_PLAIN, order=list(PROFILE_SOURCES))})
+        "성향 출처", question="투자 성향 판정 근거", options=SOURCE_PLAIN, order=list(PROFILE_SOURCES))})
     assessed_at: str | None = Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui(
-        "평가일", help="성향을 정한 날(YYYY-MM-DD). 성향은 낡아요 — 며칠 지났는지 함께 보여 줘요.")})
+        "평가일", help="성향을 정한 날(YYYY-MM-DD). 성향은 낡습니다 — 며칠 지났는지 함께 보여 줍니다.")})
     horizon_years: int | None = Field(None, ge=1, le=60, json_schema_extra={"x-ui": _ui(
-        "투자 기간", unit="년", help="비워 두면 '모름' 이에요.")})
+        "투자 기간", unit="년", help="비워 두면 '모름' 입니다.")})
 
     @field_validator("alias")
     @classmethod
@@ -111,9 +111,9 @@ def _client(inputs: dict, p: ClientParams) -> pg.NodeOutput:
         try:
             age = (dt.date.today() - dt.date.fromisoformat(p.assessed_at)).days
         except ValueError:
-            raise pg.NodeFailure(f"평가일 {p.assessed_at} 을(를) 날짜로 읽지 못했어요.") from None
+            raise pg.NodeFailure(f"평가일 {p.assessed_at} 을(를) 날짜로 읽지 못했습니다.") from None
         if age < 0:
-            raise pg.NodeFailure(f"평가일 {p.assessed_at} 이(가) 오늘보다 뒤예요 — 미래의 평가는 받지 않아요.")
+            raise pg.NodeFailure(f"평가일 {p.assessed_at} 이(가) 오늘보다 뒤입니다 — 미래의 평가는 받지 않습니다.")
     profile = {"alias": p.alias, "risk_tolerance": p.risk_tolerance, "profile_source": p.profile_source,
                "assessed_at": p.assessed_at, "assessed_age_days": age, "horizon_years": p.horizon_years}
     return pg.NodeOutput(values={"client": profile}, view=dict(profile))
@@ -123,24 +123,24 @@ def _explain_client(view: dict, prov: dict, params: Any) -> dict:
     risk, src = view.get("risk_tolerance"), view.get("profile_source") or SOURCE_UNKNOWN
     facts, trust = [], []
     if risk:
-        when = (f" · 평가일 {view['assessed_at']}({view['assessed_age_days']}일 지났어요)" if view.get("assessed_at")
+        when = (f" · 평가일 {view['assessed_at']}({view['assessed_age_days']}일 지났습니다)" if view.get("assessed_at")
                 else " · 평가일 모름")
         facts.append(f"위험 성향: {RISK_PLAIN.get(risk, risk)}(출처: {SOURCE_PLAIN.get(src, src)}){when}")
-        trust.append({"survey": _t(ASSUMED, "설문으로 정했다고 적은 성향이에요 — 이 계산은 설문을 확인하지 않았어요."),
-                      "user_declared": _t(ASSUMED, "고객이 말한 성향이에요 — 설문으로 잰 값이 아니에요."),
-                      "default": _t(ASSUMED, "기본값으로 둔 성향이에요 — 고객에게 물은 값이 아니에요."),
-                      }.get(src, _t(UNKNOWN, "성향을 어떻게 정했는지 모르는 채예요.")))
+        trust.append({"survey": _t(ASSUMED, "설문으로 정했다고 적은 성향입니다 — 이 계산은 설문을 확인하지 않았습니다."),
+                      "user_declared": _t(ASSUMED, "고객이 말한 성향입니다 — 설문으로 잰 값이 아닙니다."),
+                      "default": _t(ASSUMED, "기본값으로 둔 성향입니다 — 고객에게 물은 값이 아닙니다."),
+                      }.get(src, _t(UNKNOWN, "성향을 어떻게 정했는지 모르는 채입니다.")))
     else:
-        facts.append("위험 성향을 정하지 않았어요.")
-        trust.append(_t(UNKNOWN, "위험 성향을 모르는 채예요 — 기본값으로 채우지 않아요."))
+        facts.append("위험 성향을 정하지 않았습니다.")
+        trust.append(_t(UNKNOWN, "위험 성향을 모르는 채입니다 — 기본값으로 채우지 않습니다."))
     hz = view.get("horizon_years")
-    facts.append(f"투자 기간: {hz}년" if hz else "투자 기간을 정하지 않았어요.")
+    facts.append(f"투자 기간: {hz}년" if hz else "투자 기간을 정하지 않았습니다.")
     if not hz:
-        trust.append(_t(UNKNOWN, "투자 기간을 모르는 채예요."))
-    trust.append(_t(UNKNOWN, "성향·기간은 비중을 바꾸지 않아요 — 최적화기는 이 고객을 모른 채 계산해요."))
+        trust.append(_t(UNKNOWN, "투자 기간을 모르는 채입니다."))
+    trust.append(_t(UNKNOWN, "성향·기간은 비중을 바꾸지 않습니다 — 최적화기는 이 고객을 모른 채 계산합니다."))
     alias = view.get("alias")
     return {"title": f"고객 {alias}" if alias else "고객(별칭 없음)", "facts": facts, "trust": trust,
-            "unmeasured": ["성향이 지금도 맞는지 — 다시 물어야 알 수 있어요", "고객의 실제 계좌·자산 전체"]}
+            "unmeasured": ["성향이 지금도 맞는지 — 다시 물어야 알 수 있습니다", "고객의 실제 계좌·자산 전체"]}
 
 
 # ── 계좌 점검 ────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ class LimitRow(BaseModel):
     """선언하는 한도 하나 — ★값만 받지 않는다★ 출처와 기준일을 함께(AD4 `DeclaredLimit` 와 같은 모양)."""
     model_config = _FORBID
     kind: Literal[LIMIT_KINDS] = Field(..., json_schema_extra={"x-ui": _ui("한도 종류", options=LIMIT_PLAIN)})
-    value: float | None = Field(None, json_schema_extra={"x-ui": _ui("값", help="비우면 '선언하지 않음' — 판정 못 함이에요.")})
+    value: float | None = Field(None, json_schema_extra={"x-ui": _ui("값", help="비우면 '선언하지 않음' — 판정 못 함입니다.")})
     source: str | None = Field(None, max_length=200, json_schema_extra={"x-ui": _ui("출처", help="예: 약관 조항·내부 지침 이름")})
     as_of: str | None = Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui("기준일")})
 
@@ -157,27 +157,27 @@ class LimitRow(BaseModel):
 class AccountParams(BaseModel):
     model_config = _FORBID
     account_type: Literal[ACCOUNT_TYPES] | None = Field(None, json_schema_extra={"x-ui": _ui(
-        "계좌 유형", question="어떤 계좌인가요?", options=ACCOUNT_PLAIN, order=list(ACCOUNT_TYPES),
-        help="골라야 점검해요 — 기본값으로 정하지 않아요.")})
+        "계좌 유형", question="계좌 유형", options=ACCOUNT_PLAIN, order=list(ACCOUNT_TYPES),
+        help="골라야 점검합니다 — 기본값으로 정하지 않습니다.")})
     risky_asset_classes: list[Literal[_CLASSES]] | None = Field(None, json_schema_extra={"x-ui": _ui(
-        "위험자산으로 볼 자산군", question="어느 자산군을 위험자산으로 볼까요?",
+        "위험자산으로 볼 자산군", question="위험자산 분류 기준",
         presets=[{"label": "정하지 않음", "value": None}, {"label": "주식", "value": ["EQUITY"]},
                  {"label": "주식·신용", "value": ["EQUITY", "CREDIT"]}],
-        help="어느 자산군이 위험자산인지는 규제 판단이라 이 저장소가 정하지 않아요 — 정하지 않으면 위험자산 비중을 재지 않아요.")})
+        help="어느 자산군이 위험자산인지는 규제 판단이라 이 저장소가 정하지 않습니다 — 정하지 않으면 위험자산 비중을 측정하지 않습니다.")})
     limits: list[LimitRow] = Field([], max_length=8, json_schema_extra={"x-ui": _ui(
-        "선언한 한도", question="이 계좌의 한도를 출처와 함께 적어 주세요",
-        help="이 저장소는 법규 수치(예: IRP 위험자산 70%)를 들고 있지 않아요 — 선언하지 않은 한도는 '판정 못 함' 이에요.")})
+        "선언한 한도", question="이 계좌의 한도를 출처와 함께 입력하십시오",
+        help="이 저장소는 법규 수치(예: IRP 위험자산 70%)를 들고 있지 않습니다 — 선언하지 않은 한도는 '판정 못 함' 입니다.")})
 
 
 def _account(inputs: dict, p: AccountParams) -> pg.NodeOutput:
     if p.account_type is None:
-        raise pg.NodeFailure("계좌 유형을 골라 주세요 — 기본값으로 정하지 않아요.")
+        raise pg.NodeFailure("계좌 유형을 선택하십시오 — 기본값으로 정하지 않습니다.")
     from src.api.account_policy_routes import AccountDiagnoseRequest, DeclaredLimit, diagnose_account
     holdings = _holdings(inputs, "계좌 점검")
     limits = [lim.model_dump() for lim in p.limits]
     res = _route(diagnose_account, AccountDiagnoseRequest(
         account_type=p.account_type, holdings=holdings, risky_asset_classes=p.risky_asset_classes,
-        limits=[DeclaredLimit(**lim) for lim in limits]), "계좌 점검을 하지 못했어요")
+        limits=[DeclaredLimit(**lim) for lim in limits]), "계좌 점검을 하지 못했습니다")
     client = inputs.get("client")
     account = {"account_type": p.account_type, "holdings": holdings, "risky_asset_classes": p.risky_asset_classes,
                "limits": limits, "client": client}
@@ -193,27 +193,27 @@ def _explain_account(view: dict, prov: dict, params: Any) -> dict:
     facts = [f"{LIMIT_PLAIN.get(v['kind'], v['kind'])}: {VERDICT_PLAIN.get(v['verdict'], v['verdict'])}"
              + (f" — {_plain(v['reason'])}" if v.get("reason") else "") for v in verdicts]
     if not verdicts:
-        facts.append(_plain(r.get("note") or "이 계좌 유형에는 이 저장소가 아는 한도가 없어요."))
+        facts.append(_plain(r.get("note") or "이 계좌 유형에는 이 저장소가 아는 한도가 없습니다."))
     rs = r.get("risky_share") or {}
     iv = rs.get("interval") or {}
     if rs.get("available") and iv.get("lo") is not None:
         un = rs.get("unassigned_pct") or 0
         facts.append(f"위험자산 비중: {iv['lo']:g}~{iv['hi']:g}%"
-                     + (f" — 자산군을 모르는 보유 {un:g}% 만큼 구간이 넓어요(모름을 0으로 접지 않아요)" if un else ""))
+                     + (f" — 자산군을 모르는 보유 {un:g}% 만큼 구간이 넓습니다(모름을 0으로 접지 않습니다)" if un else ""))
     elif rs.get("reason"):
-        facts.append(f"위험자산 비중을 재지 않았어요 — {_plain(rs['reason'])}")
+        facts.append(f"위험자산 비중을 측정하지 않았습니다 — {_plain(rs['reason'])}")
     if r.get("ignored_limits"):
         facts.append(f"이 계좌에 없는 한도라 보지 않은 것: {', '.join(LIMIT_PLAIN.get(k, k) for k in r['ignored_limits'])}")
     trust = []
     if any(v["verdict"] == "undetermined" for v in verdicts):
-        trust.append(_t(UNKNOWN, "선언하지 않았거나 잴 수 없는 한도는 판정하지 못했어요 — 통과가 아니에요."))
+        trust.append(_t(UNKNOWN, "선언하지 않았거나 잴 수 없는 한도는 판정하지 못했습니다 — 통과가 아닙니다."))
     if any(v["verdict"] in ("pass", "breach") for v in verdicts):
-        trust.append(_t(ASSUMED, "판정에 쓴 한도 값은 선언한 것이에요(출처·기준일과 함께) — 이 저장소는 법규 수치를 들고 있지 않아요."))
+        trust.append(_t(ASSUMED, "판정에 쓴 한도 값은 선언한 것입니다(출처·기준일과 함께) — 이 저장소는 법규 수치를 들고 있지 않습니다."))
     trust.append(_t(UNKNOWN, _OPTIMIZER_UNAWARE))
     breach = sum(1 for v in verdicts if v["verdict"] == "breach")
     headline = ({"label": "넘은 한도", "value": breach, "unit": "개", "text": f"{breach}개"} if verdicts else None)
-    return {"title": f"{acct} 계좌 한도를 점검했어요", "headline": headline, "facts": facts, "trust": trust,
-            "unmeasured": ["계좌 잔고·실제 보유 — 계좌를 읽지 않고 이어진 비중만 봐요", "법규 수치가 지금도 같은지"]}
+    return {"title": f"{acct} 계좌 한도를 점검했습니다", "headline": headline, "facts": facts, "trust": trust,
+            "unmeasured": ["계좌 잔고·실제 보유 — 계좌를 읽지 않고 이어진 비중만 봅니다", "법규 수치가 지금도 같은지"]}
 
 
 # ── 목표까지 ─────────────────────────────────────────────────────────────
@@ -227,18 +227,18 @@ class CurveRow(BaseModel):
 class GoalParams(BaseModel):
     model_config = _FORBID
     target_retirement_year: int | None = Field(None, ge=2000, le=2100, json_schema_extra={"x-ui": _ui(
-        "목표 연도", question="목표(은퇴 등)는 몇 년인가요?", help="비워 두면 남은 기간을 몰라 목표 비중을 내지 않아요.")})
+        "목표 연도", question="목표 연도(은퇴 등)", help="비워 두면 남은 기간을 몰라 목표 비중을 내지 않습니다.")})
     curve: list[CurveRow] = Field([], max_length=12, json_schema_extra={"x-ui": _ui(
-        "글라이드패스 곡선", question="남은 기간에 따라 위험자산을 얼마나 둘까요?",
-        help="두 점 이상이어야 목표 비중을 내요 — 곡선은 투자 판단이라 이 저장소가 정하지 않아요.")})
+        "글라이드패스 곡선", question="잔여 기간별 위험자산 비중",
+        help="두 점 이상이어야 목표 비중을 냅니다 — 곡선은 투자 판단이라 이 저장소가 정하지 않습니다.")})
     monthly_krw: float | None = Field(None, ge=0, json_schema_extra={"x-ui": _ui("월 적립 계획", "advanced", unit="원")})
     bucket: Literal["risky", "safe"] | None = Field(None, json_schema_extra={"x-ui": _ui(
         "적립 대상", "advanced", options={"risky": "위험자산", "safe": "안전자산"})})
     portfolio_value_krw: float | None = Field(None, gt=0, json_schema_extra={"x-ui": _ui("평가 금액", "advanced", unit="원")})
     contributed_ytd_krw: float | None = Field(None, ge=0, json_schema_extra={"x-ui": _ui(
-        "올해 이미 낸 금액", "advanced", unit="원", help="★실적★ — 계획이 아니에요. 연간 납입 한도 판정에 써요.")})
+        "올해 이미 낸 금액", "advanced", unit="원", help="★실적★ — 계획이 아닙니다. 연간 납입 한도 판정에 씁니다.")})
     total_contributed_krw: float | None = Field(None, ge=0, json_schema_extra={"x-ui": _ui(
-        "지금까지 낸 금액", "advanced", unit="원", help="★실적★ — 총 납입 한도 판정에 써요.")})
+        "지금까지 낸 금액", "advanced", unit="원", help="★실적★ — 총 납입 한도 판정에 씁니다.")})
 
 
 def _goal(inputs: dict, p: GoalParams) -> pg.NodeOutput:
@@ -251,7 +251,7 @@ def _goal(inputs: dict, p: GoalParams) -> pg.NodeOutput:
         curve=[CurvePoint(**c.model_dump()) for c in p.curve] or None,
         contribution=ContributionPlan(monthly_krw=p.monthly_krw, bucket=p.bucket, portfolio_value_krw=p.portfolio_value_krw),
         limits=[DeclaredLimit(**lim) for lim in acc["limits"]],
-        contributed_ytd_krw=p.contributed_ytd_krw, total_contributed_krw=p.total_contributed_krw), "목표까지를 재지 못했어요")
+        contributed_ytd_krw=p.contributed_ytd_krw, total_contributed_krw=p.total_contributed_krw), "목표까지 측정 불가")
     client = inputs.get("client") or acc.get("client")
     return pg.NodeOutput(values={}, view={"result": res, "account_type": acc["account_type"],
                                           "client_alias": (client or {}).get("alias")})
@@ -264,25 +264,25 @@ def _explain_goal(view: dict, prov: dict, params: Any) -> dict:
     target = g.get("target_pct")
     if target is None:
         why = list(dict.fromkeys(_plain(x) for x in (g.get("years_reason"), g.get("curve_reason"), g.get("reason")) if x))
-        facts.append("목표 위험자산 비중을 내지 않았어요" + (f" — {' / '.join(why)}" if why else "."))
-        trust.append(_t(UNKNOWN, "곡선(두 점 이상)·남은 기간이 있어야 목표를 내요 — 지어내지 않아요."))
+        facts.append("목표 위험자산 비중을 내지 않았습니다" + (f" — {' / '.join(why)}" if why else "."))
+        trust.append(_t(UNKNOWN, "곡선(두 점 이상)·남은 기간이 있어야 목표를 냅니다 — 지어내지 않습니다."))
     else:
         facts.append(f"이 시점의 목표 위험자산 비중: {target:g}%")
-        trust.append(_t(ASSUMED, "목표는 선언한 곡선에서 읽은 값이에요 — 곡선이 옳은지는 이 계산이 판정하지 않아요."))
+        trust.append(_t(ASSUMED, "목표는 선언한 곡선에서 읽은 값입니다 — 곡선이 옳은지는 이 계산이 판정하지 않습니다."))
     gap = g.get("gap") or {}
     if target is not None and gap.get("state") == "above":
-        facts.append(f"지금 위험자산 비중이 목표보다 {gap['lo']:.1f}~{gap['hi']:.1f}%p 많아요")
+        facts.append(f"지금 위험자산 비중이 목표보다 {gap['lo']:.1f}~{gap['hi']:.1f}%p 많습니다")
     elif target is not None and gap.get("state") == "below":
-        facts.append(f"지금 위험자산 비중이 목표보다 {-gap['hi']:.1f}~{-gap['lo']:.1f}%p 적어요")
+        facts.append(f"지금 위험자산 비중이 목표보다 {-gap['hi']:.1f}~{-gap['lo']:.1f}%p 적습니다")
     elif target is not None:
-        facts.append("지금 비중과 목표의 차이는 몰라요" + (f" — {_plain(gap['reason'])}" if gap.get("reason") else ""))
-        trust.append(_t(UNKNOWN, "격차의 부호를 모르면 0으로 보지 않아요 — 미배정 자산군 때문이에요."))
+        facts.append("지금 비중과 목표의 차이는 미상입니다" + (f" — {_plain(gap['reason'])}" if gap.get("reason") else ""))
+        trust.append(_t(UNKNOWN, "격차의 부호를 모르면 0으로 보지 않습니다 — 미배정 자산군 때문입니다."))
     months = (r.get("contribution") or {}).get("months")
     if months is not None:
         facts.append(f"적립 계획대로라면 격차를 좁히는 데 {months}개월")
-    trust.append(_t(UNKNOWN, "최적화기는 이 목표를 모른 채 비중을 냈어요 — 격차를 배분에 반영하지 않아요."))
-    return {"title": "목표까지 얼마나 남았는지 봤어요", "facts": facts, "trust": trust,
-            "unmeasured": ["목표 곡선이 이 고객에게 맞는지", "앞으로의 수익률(적립만으로 좁히는 데 걸리는 개월만 봐요)"]}
+    trust.append(_t(UNKNOWN, "최적화기는 이 목표를 모른 채 비중을 냈습니다 — 격차를 배분에 반영하지 않습니다."))
+    return {"title": "목표까지 얼마나 남았는지 봤습니다", "facts": facts, "trust": trust,
+            "unmeasured": ["목표 곡선이 이 고객에게 맞는지", "앞으로의 수익률(적립만으로 좁히는 데 걸리는 개월만 봅니다)"]}
 
 
 # ── 보유 진단 ────────────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ def _holdings_check(inputs: dict, p: HoldingsCheckParams) -> pg.NodeOutput:
     holdings = _holdings(inputs, "보유 진단")
     res = _route(holdings_diagnostics, HoldingsDiagnosticsRequest(
         holdings=holdings, weight_unit="percent", lookback_days=p.lookback_days, as_of=p.as_of, benchmark=p.benchmark),
-        "보유 진단을 하지 못했어요")
+        "보유 진단을 하지 못했습니다")
     return pg.NodeOutput(values={}, view={"result": res, "labels": _labels(list(holdings))},
                          provenance={"source": "mock"} if mock_allowed() else {})
 
@@ -308,37 +308,37 @@ def _holdings_check(inputs: dict, p: HoldingsCheckParams) -> pg.NodeOutput:
 def _explain_holdings(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     n = len(r.get("holdings") or {})
-    facts = [f"{n}종목 보유를 팩터 노출 · 집중도 · 위험 기여 · 유동성으로 나눠 봤어요."]
-    trust = [_t(CONFIRMED, "진단 계산은 끝났어요.")]
+    facts = [f"{n}종목 보유를 팩터 노출 · 집중도 · 위험 기여 · 유동성으로 나눠 봤습니다."]
+    trust = [_t(CONFIRMED, "진단 계산은 끝났습니다.")]
     for name, blk in (("위험 기여", r.get("risk_contributions")), ("유동성", r.get("liquidity"))):
         if isinstance(blk, dict) and blk.get("available") is False:
-            trust.append(_t(FAILED, f"{name}를 재지 못했어요 — {_plain(blk.get('reason'))}"))
+            trust.append(_t(FAILED, f"{name} 측정 불가 — {_plain(blk.get('reason'))}"))
     if prov.get("source") == "mock":
         trust.append(_practice())
     if r.get("note"):
         facts.append(_plain(r["note"]))
-    return {"title": "지금 보유를 진단했어요", "facts": facts, "trust": trust,
-            "unmeasured": ["이 진단이 앞으로의 위험을 맞히는지 — 과거 기준이에요"]}
+    return {"title": "지금 보유를 진단했습니다", "facts": facts, "trust": trust,
+            "unmeasured": ["이 진단이 앞으로의 위험을 맞히는지 — 과거 기준입니다"]}
 
 
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("client_profile", "고객", plain_label="고객", category="고객", stage="data",
-                    plain_description="별칭·위험 성향·투자 기간을 적어요. 비중은 바꾸지 않아요.",
+                    plain_description="별칭·위험 성향·투자 기간을 적습니다. 비중은 바꾸지 않습니다.",
                     inputs=(), outputs=(P("client", "Client"),), run=_client, params_model=ClientParams,
                     explain=_explain_client, description="PB 가 정한 별칭과 성향(출처·평가일). 개인정보 모양은 받지 않는다."),
         pg.NodeSpec("account", "계좌 점검", plain_label="계좌 점검", category="고객", stage="check",
-                    plain_description="고객 계좌의 유형과 선언한 한도로 이 비중을 점검해요. 선언하지 않은 한도는 판정하지 않아요.",
+                    plain_description="고객 계좌의 유형과 선언한 한도로 이 비중을 점검합니다. 선언하지 않은 한도는 판정하지 않습니다.",
                     inputs=(P("weights", "Weights"), P("client", "Client", required=False)),
                     outputs=(P("account", "Account"),), run=_account, params_model=AccountParams,
                     explain=_explain_account, description="`/accounts/diagnose` 그대로 — 관측만. 공매도 비중은 받지 않는다."),
         pg.NodeSpec("goal", "목표까지", plain_label="목표까지", category="고객", stage="check",
-                    plain_description="고객의 목표 연도·곡선으로 지금 위험자산 비중이 목표와 얼마나 다른지 봐요.",
+                    plain_description="고객의 목표 연도·곡선으로 지금 위험자산 비중이 목표와 얼마나 다른지 봅니다.",
                     inputs=(P("account", "Account"), P("client", "Client", required=False)), outputs=(),
                     run=_goal, params_model=GoalParams, explain=_explain_goal,
                     description="`/accounts/glidepath` 그대로 — 관측만. 곡선이 없으면 목표를 내지 않는다."),
         pg.NodeSpec("holdings_check", "보유 진단", plain_label="보유 진단", category="고객", stage="check",
-                    plain_description="고객이 들고 있는 비중의 팩터 노출·집중도·위험 기여·유동성을 봐요.",
+                    plain_description="고객이 들고 있는 비중의 팩터 노출·집중도·위험 기여·유동성을 봅니다.",
                     inputs=(P("weights", "Weights"),), outputs=(), run=_holdings_check,
                     params_model=HoldingsCheckParams, explain=_explain_holdings,
                     description="`/diagnostics/holdings` 그대로 — 관측만."),

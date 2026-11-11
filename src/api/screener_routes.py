@@ -711,28 +711,28 @@ def screener_count(req: AdvancedRunRequest):
 # 국면별 추천 팩터 + 가이드 텍스트
 _REGIME_GUIDANCE = {
     "Goldilocks": {
-        "text": "골디락스 국면 (성장↑·물가↓) — 성장주에 유리합니다. 높은 ROE·수익성 팩터 가중을 높이세요.",
+        "text": "골디락스 국면 (성장↑·물가↓) — 성장주에 유리합니다. 높은 ROE·수익성 팩터 가중을 높이십시오.",
         "filters": [
             {"field": "roe_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "ROE 상위 30%"},
             {"field": "composite_score", "op": "gte", "value": 60, "label": "종합 점수 ≥ 60"},
         ],
     },
     "Reflation": {
-        "text": "리플레이션 국면 (성장↑·물가↑) — 경기민감·가치주에 유리합니다. 저PER·저PBR 팩터를 강화하세요.",
+        "text": "리플레이션 국면 (성장↑·물가↑) — 경기민감·가치주에 유리합니다. 저PER·저PBR 팩터를 강화하십시오.",
         "filters": [
             {"field": "per", "op": "lt", "value": 12, "label": "PER < 12"},
             {"field": "pbr", "op": "lt", "value": 1.5, "label": "PBR < 1.5"},
         ],
     },
     "Stagflation": {
-        "text": "스태그플레이션 국면 (성장↓·물가↑) — 방어주·배당주에 유리합니다. 고배당·저부채·FCF 흑자 팩터 가중을 높이세요.",
+        "text": "스태그플레이션 국면 (성장↓·물가↑) — 방어주·배당주에 유리합니다. 고배당·저부채·FCF 흑자 팩터 가중을 높이십시오.",
         "filters": [
             {"field": "dividend_yield_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "배당수익률 상위 30%"},
             {"field": "debt_ratio_pct", "op": "lt", "value": 100, "label": "부채비율 < 100%"},
         ],
     },
     "Disinflation": {
-        "text": "디스인플레이션 국면 (성장↓·물가↓ 둔화) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하세요.",
+        "text": "디스인플레이션 국면 (성장↓·물가↓ 둔화) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하십시오.",
         "filters": [
             {"field": "debt_ratio_pct", "op": "lt", "value": 80, "label": "부채비율 < 80%"},
             {"field": "market_cap_억", "rank_mode": "top_pct", "rank_value": 40, "label": "시가총액 상위 40%"},
@@ -1754,7 +1754,7 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         if not tickers:
             return {
                 "error": True,
-                "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하세요.",
+                "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하십시오.",
                 "screened_count": 0,
                 # 유니버스가 텅 빈 이유가 폴백 때문일 수 있다 — 그 사실을 여기서도 낸다.
                 "universe": _universe_meta,

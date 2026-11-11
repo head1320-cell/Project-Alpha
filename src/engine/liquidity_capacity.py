@@ -317,8 +317,8 @@ class LiquidityCapacityEstimator:
             "n_universe_tickers":  0,
             "avg_adv_krw":         None,
             "available":           False,
-            "message":             "capacity 데이터 부족 — 제약을 걸지 않았어요(용량 모름)",
-            "reason":              "전략의 종목 목록이나 거래대금(ADV)을 찾지 못했어요.",
+            "message":             "capacity 데이터 부족 — 제약을 걸지 않았습니다(용량 모름)",
+            "reason":              "전략의 종목 목록이나 거래대금(ADV)을 찾지 못했습니다.",
         }
 
     @staticmethod

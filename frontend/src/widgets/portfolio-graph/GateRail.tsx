@@ -22,11 +22,11 @@ import type { GateReport, GateState, ProcedureSuggestion } from "@/entities/port
 import { usePortfolioGraph, type RunCell } from "./store";
 
 const STATE_TEXT: Record<GateState | "idle", string> = {
-  confirmed: "확인", assumed: "가정", partial: "절반 확인", unknown: "몰라요",
+  confirmed: "확인", assumed: "가정", partial: "부분 확인", unknown: "미상",
   skipped: "건너뜀", failed: "실패", idle: "계산 전",
 };
 const REASON_TEXT: Record<string, string> = {
-  confirmed: "확인", assumed: "가정", partial: "절반", unknown: "몰라요", skipped: "건너뜀", failed: "실패",
+  confirmed: "확인", assumed: "가정", partial: "절반", unknown: "미상", skipped: "건너뜀", failed: "실패",
 };
 
 /*
@@ -118,14 +118,14 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
     ? " pg-stn--link-on" : " pg-stn--link-off");
   const doneN = live ? live.order.filter((id) => live.cells[id]?.phase === "done").length : 0;
   const current = live?.order.find((id) => live.cells[id]?.phase === "running") ?? null;
-  const pillText = live ? (live.lost ? "계산 중 · 진행을 받지 못했어요" : `계산 중 ${doneN}/${live.order.length}${current ? ` · ‘${badge(current).name}’` : ""}`)
+  const pillText = live ? (live.lost ? "계산 중 · 진행 수신 실패" : `계산 중 ${doneN}/${live.order.length}${current ? ` · ‘${badge(current).name}’` : ""}`)
     : report ? `${stale ? "예전 결과 기준 · " : ""}관문 ${report.summary.confirmed}/${report.summary.total} 확인`
-    : note ? "관문은 전체를 계산해야 봐요" : "계산하면 관문을 확인해요";
+    : note ? "관문은 전체를 계산해야 봅니다" : "계산하면 관문을 확인합니다";
 
   return (
     <div className="pg-rail-wrap" ref={wrap} data-open={expanded || undefined} data-stale={(report && stale) || undefined}>
       <button type="button" className="pg-rail-pill" aria-expanded={expanded} aria-controls="pg-rail-card" aria-label={`증거 관문 — ${pillText}`}
-              data-alert={alert ? "new" : undefined} title="이 결과를 어디까지 믿을 수 있을까요 — 눌러서 관문 8개 보기"
+              data-alert={alert ? "new" : undefined} title="결과 신뢰 수준 — 눌러서 관문 8개 보기"
               onClick={() => toggle(!expanded)}>
         <span className="pg-rail-pill-text">{pillText}</span>
         {live ? (
@@ -154,17 +154,17 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
               );
             })}
           </ol>
-          {live.lost && <p className="pg-runline-note" role="status">진행을 받지 못했어요 — 결과는 계산이 끝나면 보여요.</p>}
+          {live.lost && <p className="pg-runline-note" role="status">진행 수신 실패 — 결과는 계산이 끝나면 보입니다.</p>}
         </div>
       )}
       {expanded && (
         <div id="pg-rail-card" className="pg-rail-card">
           <section className="pg-rail" aria-label="증거 관문">
             <div className="pg-rail-head">
-              <strong>이 결과를 어디까지 믿을 수 있을까요</strong>
+              <strong>결과 신뢰 수준</strong>
               <span className="pg-rail-summary">
-                {report ? `${stale ? "예전 결과 기준이에요 — 그 뒤 바뀐 곳이 있어요. 바뀐 곳을 다시 계산하면 새로 판정해요. " : ""}${report.summary.text} ${report.summary.note}`
-                        : note ?? "계산하면 8개 관문 중 어디까지 확인됐는지 보여 드려요."}
+                {report ? `${stale ? "예전 결과 기준입니다 — 그 뒤 바뀐 곳이 있습니다. 바뀐 곳을 재계산하면 새로 판정합니다. " : ""}${report.summary.text} ${report.summary.note}`
+                        : note ?? "계산하면 8개 관문 중 어디까지 확인됐는지 보여 드립니다."}
               </span>
             </div>
             <ol className="pg-track">

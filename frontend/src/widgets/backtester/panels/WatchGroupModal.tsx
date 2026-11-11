@@ -154,7 +154,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
             aria-label="종목 찾기" className="wg-input wg-input--search" />
         </div>
         {searchFailed && (
-          <p className="wg-err" role="alert">종목을 찾지 못했어요 — 서버에 닿지 않았어요. 잠시 뒤 다시 입력해 주세요.</p>
+          <p className="wg-err" role="alert">종목을 찾지 못했습니다 — 서버에 닿지 않았습니다. 잠시 뒤 다시 입력하십시오.</p>
         )}
         {searchHits.length > 0 && (
           <div className="wg-list wg-list--hits">
@@ -165,7 +165,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
         {/* 고른 종목 */}
         <div className="wg-picked" aria-label="고른 종목">
           {selected.size === 0 ? (
-            <span className="wg-picked-empty">아직 고른 종목이 없어요. 아래에서 분류를 골라 체크해요.</span>
+            <span className="wg-picked-empty">아직 고른 종목이 없습니다. 아래에서 분류를 골라 체크합니다.</span>
           ) : (
             <>
               <span className="wg-picked-n">{selected.size}종목</span>
@@ -181,7 +181,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
         </div>
 
         {catalogFailed && (
-          <p className="wg-err" role="alert">분류 목록을 불러오지 못했어요 — 서버에 닿지 않았어요. 창을 닫았다 다시 열어 주세요. 종목 찾기는 따로 돼요.</p>
+          <p className="wg-err" role="alert">분류 목록 조회 실패 — 서버에 닿지 않았습니다. 창을 닫았다 다시 여십시오. 종목 찾기는 따로 됩니다.</p>
         )}
 
         {/* 카스케이드: 분류 → 하위 → 종목 */}
@@ -199,11 +199,11 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
               <button type="button" className="wg-opt" aria-pressed={subId === "__etf__"} onClick={() => setSubId("__etf__")}>
                 <span>전체 ETF{catalog?.etf_size ? <span className="wg-n">{catalog.etf_size}</span> : null}</span>
                 <span className="wg-opt-note">
-                  {catalog?.etf_size ? "국내 시장지수·해외·채권 같은 하위 분류는 아직 없어요" : "ETF 목록을 적재하면 보여요"}
+                  {catalog?.etf_size ? "국내 시장지수·해외·채권 같은 하위 분류는 아직 없습니다" : "ETF 목록을 적재하면 보입니다"}
                 </span>
               </button>
             ) : subOptions.length === 0 ? (
-              <p className="wg-empty">{catalogFailed ? "분류를 불러오지 못했어요" : catalog ? "이 분류에는 항목이 없어요" : "불러오는 중이에요"}</p>
+              <p className="wg-empty">{catalogFailed ? "분류 조회 실패" : catalog ? "이 분류에는 항목 없음" : "조회 중"}</p>
             ) : subOptions.map((o) => (
               <button key={o.id} type="button" className="wg-opt" aria-pressed={subId === o.id} onClick={() => setSubId(o.id)}>
                 {o.label}<span className="wg-n">{o.n}</span>
@@ -212,11 +212,11 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
           </div>
           <div className="wg-list wg-items" aria-label="종목">
             {loading ? (
-              <p className="wg-empty">종목을 불러오는 중이에요</p>
+              <p className="wg-empty">종목 조회 중</p>
             ) : itemsFailed ? (
-              <p className="wg-err" role="alert">종목 목록을 불러오지 못했어요 — 서버에 닿지 않았어요. 분류를 다시 눌러 주세요.</p>
+              <p className="wg-err" role="alert">종목 목록 조회 실패 — 서버에 닿지 않았습니다. 분류를 다시 누르십시오.</p>
             ) : items.length === 0 ? (
-              <p className="wg-empty">{cls === "etf" || subId ? "이 분류에 담긴 종목이 없어요" : "왼쪽에서 분류를 골라요"}</p>
+              <p className="wg-empty">{cls === "etf" || subId ? "이 분류에 담긴 종목 없음" : "왼쪽에서 분류를 고릅니다"}</p>
             ) : items.map((it) => <Row key={it.code} it={it} />)}
           </div>
         </div>

@@ -15,18 +15,18 @@ export const MAX_KEY = "max_weight_pct";
 
 /** 숫자 칸 — 서버 키 · 질문 · 단위 · 묶음. 질문 글은 제품 문구라 여기 둔다(범위·뜻은 서버 스키마). */
 export const NUMBER_CARDS: { key: string; group: string; label: string; unit: string; help?: string }[] = [
-  { key: "min_weight_pct", group: "floor", label: "한 종목에 최소 얼마는 둘까요?", unit: "%",
-    help: "음수로 두면 그만큼 공매도할 수 있어요(공매도는 연구용)." },
-  { key: "turnover_cap_pct", group: "turnover", label: "한 번에 얼마까지 바꿀까요? (회전율)", unit: "%",
-    help: "지금 비중을 적어 두었을 때만 걸려요." },
+  { key: "min_weight_pct", group: "floor", label: "종목별 최소 비중", unit: "%",
+    help: "음수로 두면 그만큼 공매도할 수 있습니다(공매도는 연구용)." },
+  { key: "turnover_cap_pct", group: "turnover", label: "회전율 상한(1회 리밸런싱)", unit: "%",
+    help: "지금 비중을 적어 두었을 때만 걸립니다." },
   { key: "beta_min", group: "beta", label: "시장 민감도(베타) 아래 끝", unit: "",
-    help: "벤치마크가 있을 때만 걸려요." },
+    help: "벤치마크가 있을 때만 걸립니다." },
   { key: "beta_max", group: "beta", label: "시장 민감도(베타) 위 끝", unit: "" },
-  { key: "cash_min_pct", group: "cash", label: "현금을 최소 얼마 둘까요?", unit: "%",
-    help: "현금 수익은 0으로 가정해요." },
-  { key: "cash_max_pct", group: "cash", label: "현금을 최대 얼마 둘까요?", unit: "%" },
+  { key: "cash_min_pct", group: "cash", label: "현금 최소 비중", unit: "%",
+    help: "현금 수익은 0으로 가정합니다." },
+  { key: "cash_max_pct", group: "cash", label: "현금 최대 비중", unit: "%" },
   { key: "gross_max_pct", group: "exposure", label: "총 노출(롱 + 숏) 최대", unit: "%",
-    help: "공매도를 쓸 때의 크기예요 — 130/30 이면 160%." },
+    help: "공매도를 쓸 때의 크기입니다 — 130/30 이면 160%." },
   { key: "net_min_pct", group: "exposure", label: "순 노출(롱 − 숏) 아래 끝", unit: "%" },
   { key: "net_max_pct", group: "exposure", label: "순 노출(롱 − 숏) 위 끝", unit: "%" },
 ];
@@ -38,9 +38,9 @@ export const NUMBER_CARDS: { key: string; group: string; label: string; unit: st
 export const SHAPES: { id: string; label: string; set: ConstraintsValue; assumed?: string }[] = [
   { id: "long_only", label: "롱온리", set: {} },
   { id: "130_30", label: "130/30", set: { min_weight_pct: -10, gross_max_pct: 160, net_min_pct: 100, net_max_pct: 100 },
-    assumed: "종목당 공매도 최대 10%는 가정이에요 — 바꿀 수 있어요." },
+    assumed: "종목당 공매도 최대 10%는 가정입니다 — 바꿀 수 있습니다." },
   { id: "neutral", label: "달러 중립", set: { min_weight_pct: -20, gross_max_pct: 200, net_min_pct: 0, net_max_pct: 0 },
-    assumed: "종목당 공매도 최대 20%는 가정이에요 — 바꿀 수 있어요." },
+    assumed: "종목당 공매도 최대 20%는 가정입니다 — 바꿀 수 있습니다." },
 ];
 const SHAPE_KEYS = ["min_weight_pct", "gross_max_pct", "net_min_pct", "net_max_pct"] as const;
 

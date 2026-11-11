@@ -48,13 +48,13 @@ test("답 문장 = 서버 총수익률·기간 — 값을 바꾸면 문장이 �
   await expect(answer(page)).not.toContainText("+12.3%");
 });
 
-test("벤치 문장은 벤치가 있을 때만 · 총수익률이 없으면 판단 없이 '받지 못했어요'(0% 아님)", async ({ page }) => {
+test("벤치 문장은 벤치가 있을 때만 · 총수익률이 없으면 판단 없이 '수신 실패'(0% 아님)", async ({ page }) => {
   await openResults(page);
   await expect(answer(page)).toContainText("같은 기간 KOSPI +6.0%");
   await page.unrouteAll();
   await openResults(page, (f) => { delete bt(f).benchmark; delete stats(f).total_return_pct; });
   await expect(answer(page)).not.toContainText("같은 기간");
-  await expect(answer(page)).toContainText("총수익률을 받지 못했어요");
+  await expect(answer(page)).toContainText("총수익률 수신 실패");
   await expect(answer(page)).not.toContainText("0%");
 });
 
@@ -67,9 +67,9 @@ test("PerfLabel 은 답 문장 옆 · 응답이 말한 종류 그대로(짝: 라
   await expect(answer(page).locator(".perf-label__kind")).toHaveText("미상");
 });
 
-test("연습용 표시는 mock 일 때만 · 'GCP'·'실데이터' 글자 없음(짝: 실 시세 응답이면 연습용 없음)", async ({ page }) => {
+test("합성 표시는 mock 일 때만 · 'GCP'·'실데이터' 글자 없음(짝: 실 시세 응답이면 합성 없음)", async ({ page }) => {
   await openResults(page);
-  await expect(answer(page)).toContainText("연습용 데이터");
+  await expect(answer(page)).toContainText("합성 데이터");
   await expect(page.locator(".terminal-main")).not.toContainText("GCP");
   await expect(page.locator(".terminal-main")).not.toContainText("실데이터");
   await page.unrouteAll();
@@ -77,23 +77,23 @@ test("연습용 표시는 mock 일 때만 · 'GCP'·'실데이터' 글자 없음
     f.is_mock_data = false;
     (f.result as { data_source: Record<string, unknown> }).data_source = { fundamentals: "dart", market_data: "kis", fully_real: true };
   });
-  await expect(answer(page)).not.toContainText("연습용");
+  await expect(answer(page)).not.toContainText("합성");
   await expect(page.locator(".terminal-main")).not.toContainText("실데이터");
 });
 
 test("시점 정합 사유는 보이는 글자 — title= 툴팁이 아니다(짝: 판정이 있으면 그 요약이 보인다)", async ({ page }) => {
   await openResults(page);
-  await expect(answer(page)).toContainText("시점 정합을 판정할 자료가 없어요");
+  await expect(answer(page)).toContainText("시점 정합을 판정할 자료 없음");
   const titled = await page.locator(".terminal-main [title]:not(.perf-label)").count();
   expect(titled, "툴팁으로 숨긴 사유").toBe(0);
   await page.unrouteAll();
   await openResults(page, (f) => {
-    (f.result as Record<string, unknown>).pit_evidence = { status: "partial", summary: "재무 3건이 정적 시차로 추정됐어요", note: "" };
+    (f.result as Record<string, unknown>).pit_evidence = { status: "partial", summary: "재무 3건이 정적 시차로 추정됐습니다", note: "" };
   });
-  await expect(answer(page)).toContainText("재무 3건이 정적 시차로 추정됐어요");
+  await expect(answer(page)).toContainText("재무 3건이 정적 시차로 추정됐습니다");
 });
 
-test("결과를 불러오지 못하면 alert + 다시 시도 → 풀리면 답(짝: 정상 alert 0) · 404 는 '찾지 못했어요'", async ({ page }) => {
+test("결과를 불러오지 못하면 alert + 재시도 → 풀리면 답(짝: 정상 alert 0) · 404 는 '찾지 못했습니다'", async ({ page }) => {
   let fail = true;
   const f = clone(completedRun().full);
   await page.route(new RegExp(`/api/v1/backtest/runs/${STUB_RUN_ID}$`), (r) => fail
@@ -102,18 +102,18 @@ test("결과를 불러오지 못하면 alert + 다시 시도 → 풀리면 답(�
   await page.goto(`/backtest/runs/${STUB_RUN_ID}/results`, { waitUntil: "domcontentloaded" });
   // Next 의 경로 안내(#__next-route-announcer__)도 role=alert 라 화면 본문으로 좁힌다.
   const alerts = page.locator(".terminal-main").getByRole("alert");
-  await expect(alerts).toContainText("불러오지 못했어요", { timeout: 30_000 });
+  await expect(alerts).toContainText("조회 실패", { timeout: 30_000 });
   fail = false;
-  await page.getByRole("button", { name: "다시 시도" }).click();
+  await page.getByRole("button", { name: "재시도" }).click();
   await expect(answer(page)).toContainText("+12.3%");
   await expect(alerts).toHaveCount(0);
 
   await page.goto("/backtest/runs/bt_missing_bu4/results", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText("이 실행을 찾지 못했어요")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("이 실행을 찾지 못했습니다")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("link", { name: /편집기/ }).or(page.getByRole("button", { name: /편집기/ })).first()).toBeVisible();
 });
 
-test("곡선이 지표보다 위 · 핵심 지표 6 만 펼침 · 나머지는 '지표 모두 보기' 안(짝: 열면 보인다)", async ({ page }) => {
+test("곡선이 지표보다 위 · 핵심 지표 6 만 펼침 · 나머지는 '전체 지표' 안(짝: 열면 보인다)", async ({ page }) => {
   await openResults(page);
   const curve = page.locator(".brun-card-t", { hasText: "자산곡선" });
   const key = page.locator(".rs-key");
@@ -263,7 +263,7 @@ async function stubProgress(page: Page) {
 test("진행 화면: 한 문장 + 지금 단계 · 제출한 설정은 접혀 있되 행은 있다", async ({ page }) => {
   await stubProgress(page);
   await page.goto("/backtest/runs/bt_prog_bu4/loading", { waitUntil: "networkidle" });
-  await expect(page.locator(".tx-answer")).toContainText("백테스트를 돌리는 중이에요");
+  await expect(page.locator(".tx-answer")).toContainText("백테스트 실행 중");
   await expect(page.locator(".brun-stage")).toContainText("시뮬레이션");
   await expect(page.locator(".brun-pct em")).toContainText("엔진 보고");
   const cfg = page.locator("details.rs-cfg");
@@ -300,12 +300,12 @@ test("비교: 차이만 말한다 — 총수익률 +12.6%p · 최대 낙폭 -3.8
   await openCompare(page);
   await expect(answer(page)).toContainText("총수익률 +12.6%p");
   await expect(answer(page)).toContainText("최대 낙폭 -3.8%p");
-  await expect(page.locator(".terminal-main")).not.toContainText(/우위|나아요|낫다|좋아요|더 나은/);
+  await expect(page.locator(".terminal-main")).not.toContainText(/우위|낫습니다|낫다|좋습니다|더 나은/);
 });
 
-test("비교: 한쪽 값이 없으면 '비교할 수 없어요' — 0 으로 두지 않는다(짝)", async ({ page }) => {
+test("비교: 한쪽 값이 없으면 '비교 불가' — 0 으로 두지 않는다(짝)", async ({ page }) => {
   await openCompare(page, (b) => { delete stats(b).total_return_pct; });
-  await expect(answer(page)).toContainText("총수익률은 비교할 수 없어요");
+  await expect(answer(page)).toContainText("총수익률은 비교 불가");
   await expect(answer(page)).not.toContainText("총수익률 +");
   await expect(answer(page)).toContainText("최대 낙폭 -3.8%p");
 });

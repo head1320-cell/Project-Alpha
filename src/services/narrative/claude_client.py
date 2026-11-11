@@ -479,7 +479,7 @@ class ClaudeClient:
         """`output_config.format`(json_schema) 로 한 번 부른다. 거절에 대비해 서버 대체 모델(`fallbacks: "default"`)을 켠다.
 
         실패는 모두 `data=None` + `error` 코드다 — 키 없음·SDK 없음·차단기·거절·잘림·형식 오류에 글을 지어내지 않는다.
-        SDK 가 429·5xx·연결 오류를 스스로 다시 시도한다(기본 2번) — 여기서 따로 되풀이하지 않는다.
+        SDK 가 429·5xx·연결 오류를 스스로 재시도한다(기본 2번) — 여기서 따로 되풀이하지 않는다.
         """
         start = time.time()
         model = model or self.model
@@ -572,7 +572,7 @@ class ClaudeClient:
         for m, u in hops:
             p = price_of(m)
             if p is None:
-                return None, f"가격표에 없는 모델 {m} — 비용을 계산하지 않았어요"
+                return None, f"가격표에 없는 모델 {m} — 비용을 계산하지 않았습니다"
             total += (int(getattr(u, "input_tokens", 0) or 0) * p["input"]
                       + int(getattr(u, "output_tokens", 0) or 0) * p["output"]) / 1_000_000
         return total, None
@@ -683,7 +683,7 @@ MOCK_STOCK_NARRATIVE = """# 종목 분석 — Mock 데모
 **저평가 우량주 등급.** 단, 진입 시점은 매크로 PANIC 국면 해제 확인 후 권장.
 
 > ⚠ 본 분석은 Anthropic API 키 미설정 시 표시되는 Mock 응답입니다.
-> 실제 분석을 위해서는 `.env`에 `ANTHROPIC_API_KEY`를 설정하세요.
+> 실제 분석을 위해서는 `.env`에 `ANTHROPIC_API_KEY`를 설정하십시오.
 """
 
 MOCK_PORTFOLIO_NARRATIVE = """# 포트폴리오 백테스트 보고서 — Mock 데모
@@ -768,5 +768,5 @@ MOCK_GENERAL_NARRATIVE = """# AI 분석 — Mock 응답
 5. **Counterfactual** — "이 결정이 없었다면?" 시나리오
 6. **일일 요약** — 모든 활동 통합 요약
 
-> ⚠ 실제 분석을 위해 `.env`에 `ANTHROPIC_API_KEY`를 설정하세요.
+> ⚠ 실제 분석을 위해 `.env`에 `ANTHROPIC_API_KEY`를 설정하십시오.
 """

@@ -57,7 +57,7 @@ export default function MacroPage() {
         router.push("/backtest");
       } else {
         // 예전엔 설정을 못 받으면 아무 일도 없었다(누른 단추가 조용히 죽음) — 이동하지 않고 이유를 말한다.
-        setBridgeErr(`‘${p.name}’ 전략의 백테스트 설정을 받지 못해 넘기지 못했어요. 잠시 뒤 다시 눌러 주세요.`);
+        setBridgeErr(`‘${p.name}’ 전략의 백테스트 설정을 받지 못해 넘기지 못했습니다. 잠시 뒤 다시 누르십시오.`);
       }
     } finally {
       setBridging(false);
@@ -76,12 +76,12 @@ export default function MacroPage() {
       const res = await regimeSnapshotApi.createFromCurrent("kr");
       if (!res.recorded || !res.snapshot_id) {
         // 저장 실패를 성공으로 위장하지 않는다 — 이동하지 않고 사유를 보여 준다.
-        setAasError(res.message || "스냅샷이 저장되지 않아 이동하지 않았어요.");
+        setAasError(res.message || "스냅샷이 저장되지 않아 이동하지 않았습니다.");
         return;
       }
       router.push(`/allocation?snapshot=${encodeURIComponent(res.snapshot_id)}`);
     } catch (e) {
-      setAasError(e instanceof Error ? e.message : "스냅샷 생성에 실패했어요.");
+      setAasError(e instanceof Error ? e.message : "스냅샷 생성에 실패했습니다.");
     } finally {
       setAasBusy(false);
     }
@@ -89,17 +89,17 @@ export default function MacroPage() {
 
   return (
     <div className="tpage-fade">
-      {loading && <LoadingState label="매크로 분석을 불러오는 중이에요" />}
-      {bridging && <LoadingState label="전략을 백테스트 설정으로 옮기는 중이에요" />}
-      {bridgeErr && <Notice tone="danger" title="백테스트로 넘기지 못했어요">{bridgeErr}</Notice>}
+      {loading && <LoadingState label="매크로 분석 조회 중" />}
+      {bridging && <LoadingState label="전략을 백테스트 설정으로 옮기는 중입니다" />}
+      {bridgeErr && <Notice tone="danger" title="백테스트로 넘기지 못했습니다">{bridgeErr}</Notice>}
       {!loading && !regime && (
         <div className="mc-err tx-page tx-page--wide">
-          <Notice tone="danger" title="매크로 분석을 불러오지 못했어요">
-            국면 계산 서버에 닿지 못했거나 계산이 실패했어요. 잠시 뒤 다시 시도해 주세요.
+          <Notice tone="danger" title="매크로 분석 조회 실패">
+            국면 계산 서버 연결 실패 또는 계산 실패 잠시 뒤 재시도하십시오.
             <div className="mc-act">
               <button type="button" className="tx-btn tx-btn--sub" onClick={() => { void regimeQ.refetch(); }}
                       disabled={regimeQ.isFetching}>
-                {regimeQ.isFetching ? "다시 묻는 중이에요…" : "다시 시도"}
+                {regimeQ.isFetching ? "다시 묻는 중입니다…" : "재시도"}
               </button>
             </div>
           </Notice>

@@ -8,7 +8,7 @@
   자리·경유점·이름은 무관 · 브라우저 왕복(`25.0` → `25`)에도 통과 · 다른 키·다른 용도 키로는 실패 · 엔진 결과는 서명 칸 말고 그대로.
 - narrate: 확인된 사실만 근거 · 깨진 사실은 사유와 함께 `dropped` · 모두 깨지면 부르기 전에 못 보임 · 키 없음 = 사유 + 데모 글 0 ·
   문단 검사(근거 노드 없음 · 확인 안 된 노드 · ★그 문단 근거 노드 밖 숫자★(짝: 안 숫자) · 금지 표현 · 길이 · 5개) ·
-  ★연습용 경고는 서버가 붙인다★(짝: 연습용이 없으면 없다) · 한도는 추천과 한 그릇 · 캐시 · 키 누출 0 · 경로 401/200/422 · 보호 목록·지도.
+  ★합성 경고는 서버가 붙인다★(짝: 합성 데이터가 없으면 없다) · 한도는 추천과 한 그릇 · 캐시 · 키 누출 0 · 경로 401/200/422 · 보호 목록·지도.
 
 ★실제 Claude 응답은 관측하지 않는다★ — 키가 없다. 가짜 SDK 를 주입한다(네트워크 0).
 """
@@ -188,10 +188,10 @@ def _sealed(nid, type_, explain, doc=DOC, key=KEY):
     return {"node_id": nid, "explain": explain, "sig": fs.seal(key, nid, type_, fs.deep_sigs(doc)[nid], explain)}
 
 
-EX_U = {"title": "종목 2개를 골랐어요", "facts": ["삼성전자, SK하이닉스"], "trust": []}
-EX_O = {"title": "비중을 이렇게 나눴어요", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 위험 똑같이"], "trust": [{"state": "confirmed", "text": "비중 계산은 문제없이 끝났어요."}]}
-PRACTICE = {"state": "unknown", "text": "연습용 합성 데이터예요.", "kind": "practice"}
+EX_U = {"title": "종목 2개를 골랐습니다", "facts": ["삼성전자, SK하이닉스"], "trust": []}
+EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
+        "facts": ["계산 방식: 위험 똑같이"], "trust": [{"state": "confirmed", "text": "비중 계산은 문제없이 끝났습니다."}]}
+PRACTICE = {"state": "unknown", "text": "합성 데이터입니다.", "kind": "practice"}
 
 
 def test_verified_facts_come_in_flow_order_and_broken_ones_are_dropped_with_a_reason():
@@ -227,20 +227,20 @@ def _para(text, ids):
 
 
 def test_a_grounded_paragraph_passes():
-    ok, bad = nr.check({"paragraphs": [_para("삼성전자 비중이 50.5% 로 가장 커요.", ["o"])]}, _g())
-    assert bad == [] and ok == [{"text": "삼성전자 비중이 50.5% 로 가장 커요.", "node_ids": ["o"]}]
+    ok, bad = nr.check({"paragraphs": [_para("삼성전자 비중이 50.5% 로 가장 큽니다.", ["o"])]}, _g())
+    assert bad == [] and ok == [{"text": "삼성전자 비중이 50.5% 로 가장 큽니다.", "node_ids": ["o"]}]
 
 
 def test_numbers_must_come_from_the_paragraphs_own_nodes_and_the_pair_passes():
-    ok, bad = nr.check({"paragraphs": [_para("삼성전자 비중이 50.5% 예요.", ["u"])]}, _g())
+    ok, bad = nr.check({"paragraphs": [_para("삼성전자 비중이 50.5% 입니다.", ["u"])]}, _g())
     assert ok == [] and bad[0]["code"] == "numbers" and "50.5" in bad[0]["reason"]
-    assert nr.check({"paragraphs": [_para("종목 2개를 골랐어요.", ["u"])]}, _g())[0]        # ★짝★
+    assert nr.check({"paragraphs": [_para("종목 2개를 골랐습니다.", ["u"])]}, _g())[0]        # ★짝★
 
 
 @pytest.mark.parametrize("para,code", [
-    (_para("비중을 나눴어요.", []), "no_source"),
-    (_para("비중을 나눴어요.", ["r"]), "unknown_node"),
-    (_para("이건 더 나은 전략이에요.", ["o"]), "banned"),
+    (_para("비중을 나눴습니다.", []), "no_source"),
+    (_para("비중을 나눴습니다.", ["r"]), "unknown_node"),
+    (_para("이건 더 나은 전략입니다.", ["o"]), "banned"),
     (_para("가" * 601, ["o"]), "too_long"),
     ({"text": "비중", "node_ids": ["o"], "extra": 1}, "shape"),
     ({"text": "", "node_ids": ["o"]}, "shape"),
@@ -251,7 +251,7 @@ def test_bad_paragraphs_are_rejected_with_a_reason(para, code):
 
 
 def test_at_most_five_paragraphs_and_a_malformed_answer_is_reported():
-    ok, bad = nr.check({"paragraphs": [_para(f"비중을 나눴어요{'.' * i}", ["o"]) for i in range(1, 8)]}, _g())
+    ok, bad = nr.check({"paragraphs": [_para(f"비중을 나눴습니다{'.' * i}", ["o"]) for i in range(1, 8)]}, _g())
     assert nr.MAX_PARAGRAPHS == 5 and len(ok) == 5 and [b["code"] for b in bad] == ["limit", "limit"]
     ok, bad = nr.check({"para": []}, _g())
     assert ok == [] and bad[0]["code"] == "shape"
@@ -263,7 +263,7 @@ def test_the_output_schema_closes_objects_and_limits_node_ids_to_verified_ones()
     assert s["additionalProperties"] is False and item["additionalProperties"] is False
     assert item["properties"]["node_ids"]["items"]["enum"] == ["u", "o"]
     assert "maxItems" not in _blob(s)
-    for must in ("근거", "숫자", "번호", "해요"):
+    for must in ("근거", "숫자", "번호", "합니다"):
         assert must in pr.NARRATE_SYSTEM
 
 
@@ -278,21 +278,21 @@ def _narrate(client, facts, graph=DOC, user="alice", key=KEY):
 def test_an_answer_carries_paragraphs_dropped_facts_and_the_server_practice_notice(report):
     facts = _facts(report)
     tampered = {**facts[0], "explain": {**facts[0]["explain"], "title": "지어낸 제목"}}
-    sdk = FakeSDK(_msg({"paragraphs": [_para("비중을 이렇게 나눴어요.", ["o"])]}))
+    sdk = FakeSDK(_msg({"paragraphs": [_para("비중을 이렇게 나눴습니다.", ["o"])]}))
     res = _narrate(_client(sdk), [tampered, *facts[1:]], key=_route_key())             # 경로가 봉인한 사실
     assert res["available"] is True and res["source"] == "claude" and res["cached"] is False
-    assert res["paragraphs"] == [{"text": "비중을 이렇게 나눴어요.", "node_ids": ["o"]}] and res["rejected"] == []
+    assert res["paragraphs"] == [{"text": "비중을 이렇게 나눴습니다.", "node_ids": ["o"]}] and res["rejected"] == []
     assert [d["node_id"] for d in res["dropped"]] == ["u"]
     assert res["notice"] == nr.NOTICE                                                   # 연습용(mock) 결과 — 서버가 붙인다
     kw = sdk.beta.messages.calls[0]
     assert kw["system"] == pr.NARRATE_SYSTEM and kw["output_config"]["effort"] == "medium"
     assert kw["output_config"]["format"]["schema"] == pr.narrate_schema(["r", "es", "o"])
     user = kw["messages"][0]["content"]
-    assert "비중을 이렇게 나눴어요" in user and "지어낸 제목" not in user                    # 깨진 사실은 근거가 아니다
+    assert "비중을 이렇게 나눴습니다" in user and "지어낸 제목" not in user                    # 깨진 사실은 근거가 아니다
 
 
 def test_no_practice_no_notice():
-    sdk = FakeSDK(_msg({"paragraphs": [_para("삼성전자 비중이 50.5% 예요.", ["o"])]}))
+    sdk = FakeSDK(_msg({"paragraphs": [_para("삼성전자 비중이 50.5% 입니다.", ["o"])]}))
     res = _narrate(_client(sdk), [_sealed("o", "optimizer", EX_O)])
     assert res["available"] and res["notice"] is None
     res2 = _narrate(_client(FakeSDK(_msg({"paragraphs": []}))), [_sealed("o", "optimizer", {**EX_O, "trust": [PRACTICE]})])
@@ -300,7 +300,7 @@ def test_no_practice_no_notice():
 
 
 def test_rejected_paragraphs_travel_with_reasons():
-    sdk = FakeSDK(_msg({"paragraphs": [_para("삼성전자 비중이 50.5% 예요.", ["o"]), _para("99% 확실해요.", ["o"])]}))
+    sdk = FakeSDK(_msg({"paragraphs": [_para("삼성전자 비중이 50.5% 입니다.", ["o"]), _para("99% 확실합니다.", ["o"])]}))
     res = _narrate(_client(sdk), [_sealed("o", "optimizer", EX_O)])
     assert len(res["paragraphs"]) == 1 and res["rejected"][0]["code"] == "numbers"
 
@@ -316,7 +316,7 @@ def test_without_verified_facts_it_does_not_call(facts, code):
 def test_no_key_is_unavailable_with_a_reason_and_no_demo_text():
     sdk = FakeSDK(_msg({"paragraphs": [_para("x", ["o"])]}))
     res = _narrate(_client(sdk, key=""), [_sealed("o", "optimizer", EX_O)])
-    assert res["available"] is False and res["reason_code"] == "no_key" and res["reason"] == "서버에 Claude 키가 없어요"
+    assert res["available"] is False and res["reason_code"] == "no_key" and res["reason"] == "서버에 Claude 키가 없습니다"
     assert sdk.beta.messages.calls == [] and "paragraphs" not in res
     assert "Mock" not in _blob(res) and "데모" not in _blob(res)
 
@@ -338,7 +338,7 @@ def test_the_hourly_limit_is_one_budget_with_suggest(monkeypatch):
 
 
 def test_the_cache_answers_the_same_facts_once_and_failures_are_not_cached():
-    sdk = FakeSDK(_msg({"paragraphs": [_para("비중을 나눴어요.", ["o"])]}))
+    sdk = FakeSDK(_msg({"paragraphs": [_para("비중을 나눴습니다.", ["o"])]}))
     c = _client(sdk)
     _narrate(c, [_sealed("o", "optimizer", EX_O)])
     assert _narrate(c, [_sealed("o", "optimizer", EX_O)])["cached"] is True and len(sdk.beta.messages.calls) == 1
@@ -351,7 +351,7 @@ def test_the_cache_answers_the_same_facts_once_and_failures_are_not_cached():
 
 def test_a_cache_hit_reports_this_requests_dropped_facts():
     """(AI3 설계 중 찾음) 캐시는 근거로 찾는데 `dropped` 는 요청마다 다르다 — 적중해도 이번 요청의 것을 말한다."""
-    c = _client(FakeSDK(_msg({"paragraphs": [_para("비중을 나눴어요.", ["o"])]})))
+    c = _client(FakeSDK(_msg({"paragraphs": [_para("비중을 나눴습니다.", ["o"])]})))
     first = _narrate(c, [_sealed("o", "optimizer", EX_O)])
     assert first["dropped"] == []
     res = _narrate(c, [_sealed("o", "optimizer", EX_O), {"node_id": "u", "explain": EX_U, "sig": "bad"}])

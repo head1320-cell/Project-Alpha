@@ -21,7 +21,7 @@ async function j<T>(r: Response): Promise<T> {
   if (!r.ok) {
     const body = await r.json().catch(() => null) as { detail?: unknown } | null;
     const detail = body?.detail;
-    throw Object.assign(new Error(typeof detail === "string" && detail ? detail : `서버가 ${r.status} 로 답했어요.`), { httpStatus: r.status });
+    throw Object.assign(new Error(typeof detail === "string" && detail ? detail : `서버가 ${r.status} 로 답했습니다.`), { httpStatus: r.status });
   }
   return r.json() as Promise<T>;
 }

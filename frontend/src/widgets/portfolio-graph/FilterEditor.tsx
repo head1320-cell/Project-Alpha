@@ -36,7 +36,7 @@ export function FilterEditor({ value, onChange }: { value: unknown; onChange: (v
 
   return (
     <div className="pg-filter">
-      {err && <p className="pg-field-err">필드 목록을 불러오지 못했어요 — {err}</p>}
+      {err && <p className="pg-field-err">필드 목록 조회 실패 — {err}</p>}
       {conds.length > 1 && (
         <div className="pg-chips pg-filter-logic" role="group" aria-label="조건 묶는 방식">
           {[["AND", "모두 만족"], ["OR", "하나라도"]].map(([k, label]) => (
@@ -66,11 +66,11 @@ export function FilterEditor({ value, onChange }: { value: unknown; onChange: (v
             <input className="pg-field-input pg-filter-v" type="number" step="any" aria-label={`${i + 1}번째 조건 끝값`}
                    value={c.value2 ?? ""} onChange={(e) => setRow(i, { ...c, value2: e.target.value === "" ? null : Number(e.target.value) })} />
           )}
-          <button type="button" className="pg-icon-btn" aria-label={`${i + 1}번째 조건 지우기`}
+          <button type="button" className="pg-icon-btn" aria-label={`${i + 1}번째 조건 삭제`}
                   onClick={() => put({ conditions: conds.filter((_, j) => j !== i) })}><X size={14} /></button>
         </div>
       ))}
-      {(g.groups?.length ?? 0) > 0 && <p className="pg-help">묶음 조건 {g.groups!.length}개는 그대로 두었어요 — 전문가 설정에서 볼 수 있어요.</p>}
+      {(g.groups?.length ?? 0) > 0 && <p className="pg-help">묶음 조건 {g.groups!.length}개는 그대로 두었습니다 — 전문가 설정에서 볼 수 있습니다.</p>}
       <button type="button" className="pg-add" onClick={() => put({ conditions: [...conds, { field: firstField, op: "gt", value: null }] })}>
         <Plus size={14} /> 조건 추가
       </button>

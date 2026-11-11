@@ -298,7 +298,7 @@ class CounterfactualAnalyzer:
                 result["netting_value_reason"] = (
                     "네팅은 보고 전용이라 수익률에 더하지 않습니다 — 켠 것과 끈 것의 "
                     "수익률 차이는 구조적으로 0 이며 가치의 측정이 아닙니다. "
-                    "대신 실제 보유로 잰 절감액(netting_measured_savings)을 보세요.")
+                    "대신 실제 보유로 잰 절감액(netting_measured_savings)을 보십시오.")
                 result["netting_measured_savings"] = b.get("netting_total_savings")
                 result["netting_description"] = description
                 continue

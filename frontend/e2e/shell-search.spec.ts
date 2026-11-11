@@ -75,22 +75,22 @@ test("종목: 서버 검색 결과 그대로 — 고르면 기업 분석이 그 
   await core2;
 });
 
-test("★실패와 빈 결과를 섞지 않는다★ 검색 실패 → '닿지 못했어요'(화면 찾기는 그대로) · 빈 결과 → '맞는 … 없어요'(짝)", async ({ page }) => {
+test("★실패와 빈 결과를 섞지 않는다★ 검색 실패 → '연결 실패'(화면 찾기는 그대로) · 빈 결과 → '맞는 … 없습니다'(짝)", async ({ page }) => {
   let mode: "fail" | "empty" = "fail";
   await page.route("**/api/v1/screener/stock-search**", (route) =>
     mode === "fail" ? route.fulfill({ status: 500, json: { detail: "테스트 실패" } }) : route.fulfill({ status: 200, json: { items: [] } }));
   await open(page);
   await box(page).fill("설정");
   const err = page.locator(".tx-find-note--err");
-  await expect(err).toHaveText(/종목 검색에 닿지 못했어요/);
+  await expect(err).toHaveText(/종목 검색 연결 실패/);
   await expect(err).toHaveAttribute("role", "alert");
   await expect(opts(page).filter({ hasText: "설정" })).toHaveCount(1);       // 화면 찾기는 네트워크 없이 된다
-  await expect(page.locator(".tx-find-pop")).not.toContainText("맞는 종목·화면이 없어요");
+  await expect(page.locator(".tx-find-pop")).not.toContainText("맞는 종목·화면 없음");
 
   mode = "empty";
   await box(page).fill("");
   await box(page).fill("없는이름xyz");
-  await expect(page.locator(".tx-find-pop .tx-find-note")).toHaveText(/맞는 종목·화면이 없어요/);
+  await expect(page.locator(".tx-find-pop .tx-find-note")).toHaveText(/맞는 종목·화면 없음/);
   await expect(err).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(page.locator(".tx-find-pop")).toHaveCount(0);

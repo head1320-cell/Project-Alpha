@@ -51,10 +51,10 @@ export function ProcedurePanel({ procedure, error, gateLabel, gateState, hereSte
       <div className="pg-proc-empty" role="status">
         {error ? (
           <>
-            <p>절차를 불러오지 못했어요 — 서버에 닿지 않았어요.</p>
-            <button type="button" className="pg-proc-retry" onClick={onRetry}>다시 시도</button>
+            <p>절차 조회 실패 — 서버에 닿지 않았습니다.</p>
+            <button type="button" className="pg-proc-retry" onClick={onRetry}>재시도</button>
           </>
-        ) : <p>절차를 읽는 중이에요.</p>}
+        ) : <p>절차 조회 중</p>}
       </div>
     );
   }

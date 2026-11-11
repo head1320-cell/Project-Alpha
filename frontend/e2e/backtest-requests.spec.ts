@@ -16,7 +16,7 @@ import { recordApi, stableJson } from "./helpers";
 
 const GOLDEN = path.join(__dirname, "golden", "backtest-requests.json");
 const NOW = new Date("2026-10-02T09:00:00+09:00");
-const SEARCH = "조건을 단어로 입력하세요";
+const SEARCH = "조건을 단어로 입력하십시오";
 const act = (page: Page, a: string) => page.locator(`[data-act="${a}"]`);
 
 type Runs = { bodies: string[] };

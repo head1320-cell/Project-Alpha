@@ -45,7 +45,7 @@ export const regimeSnapshotApi = {
     const r = await fetch(`${API_BASE}${BASE}?limit=${limit}`);
     const body = (await readJson(r)) as { snapshots?: RegimeSnapshotSummary[] } | null;
     if (!r.ok) throw new Error(extractErrorDetail(body, `스냅샷 목록 실패 (HTTP ${r.status})`));
-    if (!body || !Array.isArray(body.snapshots)) throw new Error("스냅샷 목록 응답 형식이 달라요.");
+    if (!body || !Array.isArray(body.snapshots)) throw new Error("스냅샷 목록 응답 형식이 다릅니다.");
     return body.snapshots;
   },
 

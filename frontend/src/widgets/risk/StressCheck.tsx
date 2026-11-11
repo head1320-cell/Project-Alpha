@@ -47,14 +47,14 @@ export function StressCheck() {
   // ── 답: 취약 종목이 가장 많은 충격(세기만) ──
   const worst = oks.reduce<Ok | null>((a, b) => (!a || b.n_casualties > a.n_casualties ? b : a), null);
   const pending = runs.filter((q) => q.isPending).length;
-  const sentence = list.isError ? "충격 목록을 받지 못해 아직 점검하지 못했어요."
-    : worst ? <>네 경제 충격 중 ‘<span data-server>{worst.scenario_label}</span>’에서 {worst.n_stocks}종목 중 {worst.n_casualties}종목이 취약했어요.</>
-    : pending || list.isPending ? "네 경제 충격을 계산하는 중이에요."
-    : "충격 결과를 하나도 받지 못했어요.";
+  const sentence = list.isError ? "충격 목록을 받지 못해 아직 점검하지 못했습니다."
+    : worst ? <>네 경제 충격 중 ‘<span data-server>{worst.scenario_label}</span>’에서 {worst.n_stocks}종목 중 {worst.n_casualties}종목이 취약했습니다.</>
+    : pending || list.isPending ? "네 경제 충격 계산 중"
+    : "충격 결과를 하나도 받지 못했습니다.";
   const chips: Chip[] = [];
-  if (cs.data?.mock_allowed) chips.push({ label: "연습용 데이터", tone: "practice" });
+  if (cs.data?.mock_allowed) chips.push({ label: "합성 데이터", tone: "practice" });
   chips.push({ label: "코스피 200 · PER 양수 · 종합점수 상위 30종목", tone: "plain" });
-  chips.push({ label: "가격 손실이 아니라 종합점수 변화를 추정해요", tone: "assumed" });
+  chips.push({ label: "가격 손실이 아니라 종합점수 변화를 추정합니다", tone: "assumed" });
 
   // ── 칸 지도: 네 충격 목록에 나온 종목의 합집합 × 충격 ──
   const map = useMemo(() => {
@@ -78,16 +78,16 @@ export function StressCheck() {
 
   return (
     <div className="rk tx-page">
-      <PageHead title="위험 점검" lede="경제 충격이 오면 어떤 종목의 점수가 크게 흔들리는지 미리 봐요." />
+      <PageHead title="위험 점검" lede="경제 충격이 오면 어떤 종목의 점수가 크게 흔들리는지 미리 봅니다." />
       <Answer sentence={sentence} chips={chips} />
 
-      {list.isError ? <RetryFail title="충격 목록을 불러오지 못했어요" onRetry={() => list.refetch()} />
-        : list.isPending ? <p className="rk-wait">충격 목록을 불러오는 중이에요</p>
+      {list.isError ? <RetryFail title="충격 목록 조회 실패" onRetry={() => list.refetch()} />
+        : list.isPending ? <p className="rk-wait">충격 목록 조회 중</p>
         : (
           <>
             <section className="tx-sec rk-sum" aria-labelledby="rk-sum-h">
               <h2 id="rk-sum-h" className="tx-sec-t">네 충격 한눈에</h2>
-              <p className="tx-sec-sub">막대는 30종목 중 기준을 넘겨 버틴 종목의 비율이에요. 줄을 누르면 아래에서 자세히 봐요.</p>
+              <p className="tx-sec-sub">막대는 30종목 중 기준을 넘겨 버틴 종목의 비율입니다. 줄을 누르면 아래에서 자세히 봅니다.</p>
               <div className="rk-sum-list" role="group" aria-label="충격 고르기">
                 {scenarios.map((s) => {
                   const q = byId[s.id]?.q;
@@ -95,7 +95,7 @@ export function StressCheck() {
                     return (
                       <div key={s.id} className="rk-sum-row rk-sum-row--fail" data-sc={s.id}>
                         <span className="rk-sum-name" data-server>{s.label}</span>
-                        <RetryFail title="이 충격을 계산하지 못했어요" onRetry={() => q.refetch()} />
+                        <RetryFail title="이 충격 산출 실패" onRetry={() => q.refetch()} />
                       </div>
                     );
                   }
@@ -104,9 +104,9 @@ export function StressCheck() {
                   return (
                     <button key={s.id} type="button" className="rk-sum-row" data-sc={s.id} aria-pressed={on} onClick={() => setPicked(s.id)}>
                       <span className="rk-sum-name" data-server>{s.label}</span>
-                      {!q || q.isPending ? <span className="rk-sum-wait">계산하는 중이에요</span>
-                        : !r ? <span className="rk-sum-reason">서버가 이 충격의 결과를 보내지 않았어요</span>
-                        : !r.available ? <span className="rk-sum-reason">못 했어요: <span data-server>{r.error ?? r.reason ?? "사유를 받지 못했어요"}</span></span>
+                      {!q || q.isPending ? <span className="rk-sum-wait">계산 중</span>
+                        : !r ? <span className="rk-sum-reason">서버가 이 충격의 결과를 보내지 않았습니다</span>
+                        : !r.available ? <span className="rk-sum-reason">못 했습니다: <span data-server>{r.error ?? r.reason ?? "사유 수신 실패"}</span></span>
                         : (
                           <>
                             <span className="rk-sum-bar" aria-hidden><i style={{ width: `${(r.n_survivors / Math.max(1, r.n_stocks)) * 100}%` }} /></span>
@@ -122,7 +122,7 @@ export function StressCheck() {
 
             <section className="tx-sec rk-mapsec" aria-labelledby="rk-map-h">
               <h2 id="rk-map-h" className="tx-sec-t">종목마다 충격별 점수 변화</h2>
-              <p className="tx-sec-sub">서버는 충격마다 취약한 10종목, 버틴 5종목, 가장 덜 흔들린 5종목만 보내요. 그 밖의 칸은 ‘목록 밖’으로 비워 둬요.</p>
+              <p className="tx-sec-sub">서버는 충격마다 취약한 10종목, 버틴 5종목, 가장 덜 흔들린 5종목만 보냅니다. 그 밖의 칸은 ‘목록 밖’으로 비워 둡니다.</p>
               {map.codes.length ? (
                 <>
                   <div className="rk-mapwrap">
@@ -139,15 +139,15 @@ export function StressCheck() {
                                 const why = ok ? "목록 밖" : UNKNOWN_TEXT;
                                 return (
                                   <td key={s.id} className="rk-cell" data-sc={s.id} data-code={code} {...(ok ? { "data-out": "" } : { "data-na": "" })} tabIndex={0}
-                                      onFocus={() => setRead(`${map.names.get(code)}, ${s.label}: ${ok ? "서버 목록에 없어 값을 몰라요" : "이 충격의 결과를 받지 못했어요"}`)}>
+                                      onFocus={() => setRead(`${map.names.get(code)}, ${s.label}: ${ok ? "서버 목록에 없어 값 미상" : "이 충격의 결과 수신 실패"}`)}>
                                     <span className="rk-cell-out">{why}</span>
                                   </td>
                                 );
                               }
                               return (
                                 <td key={s.id} className="rk-cell" data-sc={s.id} data-code={code} data-v={c.shock_pct} data-weak={c.survived ? undefined : ""} tabIndex={0}
-                                    onFocus={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 넘겨 버텼어요" : "취약해요"}`)}
-                                    onMouseEnter={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 넘겨 버텼어요" : "취약해요"}`)}>
+                                    onFocus={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 넘겨 버텼습니다" : "취약합니다"}`)}
+                                    onMouseEnter={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 넘겨 버텼습니다" : "취약합니다"}`)}>
                                   <span className="rk-cell-v" data-dir={dir(c.shock_pct)}>{sgn(c.shock_pct)}%</span>
                                   <span className="rk-cell-bar" aria-hidden><i style={{ width: `${(Math.abs(c.shock_pct) / map.maxAbs) * 100}%` }} /></span>
                                   {!c.survived && <span className="rk-cell-weak">취약</span>}
@@ -159,9 +159,9 @@ export function StressCheck() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="rk-map-read" aria-live="polite">{read ?? "칸에 초점을 두거나 올리면 그 종목의 점수 변화를 여기에 보여 줘요."}</p>
+                  <p className="rk-map-read" aria-live="polite">{read ?? "칸에 초점을 두거나 올리면 그 종목의 점수 변화를 여기에 보여 줍니다."}</p>
                 </>
-              ) : <p className="rk-wait">{pending ? "충격 결과를 기다리는 중이에요" : "칸 지도에 그릴 결과가 없어요"}</p>}
+              ) : <p className="rk-wait">{pending ? "충격 결과 대기 중" : "칸 지도에 그릴 결과 없음"}</p>}
             </section>
 
             {sel && <Detail id={sel} label={byId[sel]?.meta.label ?? sel} q={byId[sel]?.q} onPick={(code) => router.push(`/insights?code=${code}`)} />}
@@ -176,10 +176,10 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
   return (
     <section className="tx-sec rk-detail" aria-labelledby="rk-detail-h" data-sc={id}>
       <h2 id="rk-detail-h" className="tx-sec-t rk-detail-h"><span data-server>{label}</span> 자세히</h2>
-      {!q || q.isPending ? <p className="rk-wait">계산하는 중이에요</p>
-        : q.isError ? <RetryFail title="이 충격을 계산하지 못했어요" onRetry={() => q.refetch()} />
-        : !r ? <p className="rk-reason">서버가 이 충격의 결과를 보내지 않았어요.</p>
-        : !r.available ? <p className="rk-reason">서버가 이 충격을 계산하지 못했다고 답했어요: <span data-server>{r.error ?? r.reason ?? "사유를 받지 못했어요"}</span></p>
+      {!q || q.isPending ? <p className="rk-wait">계산 중</p>
+        : q.isError ? <RetryFail title="이 충격 산출 실패" onRetry={() => q.refetch()} />
+        : !r ? <p className="rk-reason">서버가 이 충격의 결과를 보내지 않았습니다.</p>
+        : !r.available ? <p className="rk-reason">서버가 이 충격을 계산하지 못했다고 답했습니다: <span data-server>{r.error ?? r.reason ?? "사유 수신 실패"}</span></p>
         : (
           <>
             <div className="tstat-grid rk-stats">
@@ -192,7 +192,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
               <div className="tstat"><span className="tstat-key">버틴 비율</span><span className="tstat-val">{r.survival_rate}%</span></div>
               <div className="tstat"><span className="tstat-key">평균 점수 변화</span><span className="tstat-val rk-dir" data-dir={dir(r.avg_shock_pct)}>{sgn(r.avg_shock_pct)}%</span></div>
             </div>
-            <p className="rk-rule">종합점수가 {STRESS_WEAK_PCT}% 넘게 떨어지면 ‘취약’으로 셌어요(서버 기준).</p>
+            <p className="rk-rule">종합점수가 {STRESS_WEAK_PCT}% 넘게 떨어지면 ‘취약’으로 셌습니다(서버 기준).</p>
 
             <h3 className="rk-h3">취약 종목(점수가 많이 떨어진 순)</h3>
             {r.casualties.length ? (
@@ -212,7 +212,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
                   </tbody>
                 </table>
               </div>
-            ) : <p className="rk-reason">이 충격에서 기준을 넘겨 떨어진 종목은 없어요.</p>}
+            ) : <p className="rk-reason">이 충격에서 기준을 넘겨 떨어진 종목은 없습니다.</p>}
 
             <div className="rk-lists">
               <div>
@@ -228,9 +228,9 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
             </div>
 
             <details className="rk-how">
-              <summary>어떻게 쟀나요</summary>
-              <p>부채비율·PER·배당수익률·ROE 와 1년 베타로 충격마다 종합점수가 얼마나 바뀌는지 추정해요. 가격이 얼마나 떨어지는지는 재지 않았어요.</p>
-              <p>부채·PER·배당·ROE 를 모르는 종목은 서버가 정한 기본값으로 채워 계산하고, 베타를 모르면 베타 효과를 0 으로 둬요.</p>
+              <summary>측정 방법</summary>
+              <p>부채비율·PER·배당수익률·ROE 와 1년 베타로 충격마다 종합점수가 얼마나 바뀌는지 추정합니다. 가격이 얼마나 떨어지는지는 측정하지 않았습니다.</p>
+              <p>부채·PER·배당·ROE 를 모르는 종목은 서버가 정한 기본값으로 채워 계산하고, 베타를 모르면 베타 효과를 0 으로 둡니다.</p>
               {r.note && <p><span className="rk-k">서버 설명</span> <span data-server>{r.note}</span></p>}
             </details>
           </>

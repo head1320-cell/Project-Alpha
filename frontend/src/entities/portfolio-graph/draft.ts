@@ -36,12 +36,12 @@ export function pickDraft(d: DraftBody, off: ReadonlySet<string>, existing: Read
   const blocked = new Map<string, string>();
   const connect = d.connect.filter((c) => {
     const k = draftKey.connect(c), miss = [c.source, c.target].find((id) => !has(id));
-    if (miss !== undefined) { blocked.set(k, `${gone(miss)} 이 선을 이을 수 없어요`); return false; }
+    if (miss !== undefined) { blocked.set(k, `${gone(miss)} 이 선을 이을 수 없습니다`); return false; }
     return !off.has(k);
   });
   const set = d.set.filter((x) => {
     const k = draftKey.set(x);
-    if (!has(x.node)) { blocked.set(k, `${gone(x.node)} 이 값을 넣을 곳이 없어요`); return false; }
+    if (!has(x.node)) { blocked.set(k, `${gone(x.node)} 이 값을 넣을 곳이 없습니다`); return false; }
     return !off.has(k);
   });
   return { body: { ...d, add, connect, set }, blocked, n: add.length + connect.length + set.length };

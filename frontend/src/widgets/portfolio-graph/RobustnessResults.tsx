@@ -71,7 +71,7 @@ function Trend({ r }: { r: Rolling }) {
         <div><dt>지금</dt><dd>{fx(last)}</dd></div>
         <div><dt>이 기간 최고 · 최저</dt><dd>{got.length ? `${Math.max(...got).toFixed(2)} · ${Math.min(...got).toFixed(2)}` : "—"}</dd></div>
       </dl>
-      {s.lo === null && <p className="pg-help">평균은 모든 쌍의 창 상관 평균이에요 — 표본 오차 띠는 쌍을 고르면 보여요.</p>}
+      {s.lo === null && <p className="pg-help">평균은 모든 쌍의 창 상관 평균입니다 — 표본 오차 띠는 쌍을 고르면 보입니다.</p>}
       <p className="pg-help">{r.note}</p>
     </>
   );
@@ -82,8 +82,8 @@ function Crisis({ c }: { c: Dict }) {
   return (
     <>
       <p className="pg-note">
-        {c.basis === "market" ? `시장(${String(c.market_label ?? "KODEX 200")})이 가장 나빴던 ${String(c.crisis_days)}일` : `전략 평균이 가장 나빴던 ${String(c.crisis_days)}일`}을 위기일로 봤어요
-        {c.small_sample ? " — 날이 적어 흔들리는 값이에요." : "."}
+        {c.basis === "market" ? `시장(${String(c.market_label ?? "KODEX 200")})이 가장 나빴던 ${String(c.crisis_days)}일` : `전략 평균이 가장 나빴던 ${String(c.crisis_days)}일`}을 위기일로 봤습니다
+        {c.small_sample ? " — 날이 적어 흔들리는 값입니다." : "."}
       </p>
       {/* 쌍마다 한 덩어리 — 네 칸 표는 판 폭에서 머리글이 음절 가운데서 꺾였다(스크린샷). */}
       <ul className="pg-rob-pairs">{pairs.map((p) => (
@@ -96,8 +96,8 @@ function Crisis({ c }: { c: Dict }) {
         </li>
       ))}</ul>
       <p className="pg-help">
-        나쁜 날만 골라 재면 관계가 그대로여도 상관이 높아 보여요. 그래서 둘 다 제 가장 나쁜 10% 날에 함께 든 날을,
-        전체 상관이 같은 보통 관계에서 기대되는 날 수와 나란히 봐요.
+        나쁜 날만 골라 재면 관계가 그대로여도 상관이 높아 보입니다. 그래서 둘 다 제 가장 나쁜 10% 날에 함께 든 날을,
+        전체 상관이 같은 보통 관계에서 기대되는 날 수와 나란히 봅니다.
       </p>
       {c.note ? <p className="pg-help pg-rob-warn">{String(c.note)}{c.market_reason ? ` (${String(c.market_reason)})` : ""}</p> : null}
     </>
@@ -105,7 +105,7 @@ function Crisis({ c }: { c: Dict }) {
 }
 
 function Shock({ s }: { s: Dict }) {
-  if (!s.available) return <Unknown text="상관 충격을 넣지 못했어요" reason={s.reason} />;
+  if (!s.available) return <Unknown text="상관 충격을 넣지 못했습니다" reason={s.reason} />;
   const rows = (s.scenarios as Dict[]) ?? [];
   const max = Math.max(1e-9, ...rows.flatMap((r) => [r.base_vol_pct, r.stressed_vol_pct].filter(num)));
   return (
@@ -135,7 +135,7 @@ function Shock({ s }: { s: Dict }) {
           ) : <p className="pg-help">{String(r.reason ?? "")}</p>}
         </div>
       ))}
-      <p className="pg-help">상관만 바꾸고 각 전략의 흔들림은 그대로 둔 계산이에요 — 실제 위기에는 흔들림도 함께 커져요.</p>
+      <p className="pg-help">상관만 바꾸고 각 전략의 흔들림은 그대로 둔 계산입니다 — 실제 위기에는 흔들림도 함께 커집니다.</p>
     </>
   );
 }
@@ -217,7 +217,7 @@ function More({ rob }: { rob: Dict }) {
         <tr key={`${p.a}-${p.b}`} data-changed={p.changed === true ? "yes" : p.changed === false ? "no" : "unknown"}>
           <td className="pg-td-name">{p.a}·{p.b}</td>
           <td className="pg-td-num" title={p.changed === null || p.changed === undefined ? String(p.reason ?? "") : undefined}>
-            {fx(p.first)} → {fx(p.second)} · {p.changed === true ? "달라졌어요" : p.changed === false ? "비슷해요" : "모름"}
+            {fx(p.first)} → {fx(p.second)} · {p.changed === true ? "달라졌습니다" : p.changed === false ? "비슷합니다" : "모름"}
           </td>
         </tr>
       ))}</tbody></table>
@@ -229,7 +229,7 @@ function More({ rob }: { rob: Dict }) {
 /** `basis` — 무엇의 흐름인가: 지금 비중을 과거에 들고 있었다면(weights) · 이미 있는 백테스트 기록(records, BS3). */
 export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | undefined; basis?: "weights" | "records" }) {
   if (!rob) return null;
-  if (!rob.available) return <section className="pg-rob" aria-label="견고성"><h4 className="pg-h4">견고성</h4><Unknown text="견고성을 재지 못했어요" reason={rob.reason} /></section>;
+  if (!rob.available) return <section className="pg-rob" aria-label="견고성"><h4 className="pg-h4">견고성</h4><Unknown text="견고성 측정 불가" reason={rob.reason} /></section>;
   const roll = rob.rolling as Rolling;
   const nDays = Number(rob.n_days);
   const story = (rob.story as string[]) ?? [];
@@ -243,18 +243,18 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
       <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·흔들림" compact /></div>
       <ul className="pg-rob-story">{story.map((s) => <li key={s}>{s}</li>)}</ul>
       <p className="pg-help pg-rob-basis">
-        {period ? `${period.start}~${period.end} · ${nDays}거래일을 날짜로 맞춰 쟀어요. ` : ""}
+        {period ? `${period.start}~${period.end} · ${nDays}거래일을 날짜로 맞춰 측정했습니다. ` : ""}
         {basis === "records"
-          ? "과거 백테스트 기록끼리예요 — 실거래 기록이 아니고, 앞으로도 같다는 뜻도 아니에요."
-          : `지금 비중을 ${period ? "이 기간" : `지난 ${nDays}거래일`} 그대로 들고 있었다고 보고 쟀어요 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아니에요.`}
-        {rob.shares_basis === "equal" ? " 몫은 똑같이 나눴다고 봤어요." : ""}
-        {shorts > 0 ? ` 숏 비중 ${shorts}개는 빼고 쟀어요.` : ""}
+          ? "과거 백테스트 기록끼리입니다 — 실거래 기록이 아니고, 앞으로도 같다는 뜻도 아닙니다."
+          : `지금 비중을 ${period ? "이 기간" : `지난 ${nDays}거래일`} 그대로 들고 있었다고 보고 측정했습니다 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아닙니다.`}
+        {rob.shares_basis === "equal" ? " 몫은 똑같이 나눴다고 봤습니다." : ""}
+        {shorts > 0 ? ` 숏 비중 ${shorts}개는 빼고 측정했습니다.` : ""}
       </p>
       {rob.dates_reason ? <p className="pg-help pg-rob-dates-reason">{String(rob.dates_reason)}</p> : null}
       {align?.same === false ? <p className="pg-note pg-rob-align">{String(align.reason)}</p> : null}
       <details className="pg-rob-sec" open>
         <summary>상관 추이 <span>{roll.available ? `${roll.window}거래일 창` : "모름"}</span></summary>
-        {roll.available ? <Trend r={roll} /> : <Unknown text="상관 추이를 보지 못했어요" reason={roll.reason} />}
+        {roll.available ? <Trend r={roll} /> : <Unknown text="상관 추이를 보지 못했습니다" reason={roll.reason} />}
       </details>
       <details className="pg-rob-sec">
         <summary>위기 때 상관</summary>
@@ -262,7 +262,7 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
       </details>
       <details className="pg-rob-sec">
         <summary>상관 급등 충격</summary>
-        <Shock s={(rob.shock as Dict) ?? { available: false, reason: "충격을 넣지 않았어요" }} />
+        <Shock s={(rob.shock as Dict) ?? { available: false, reason: "충격을 넣지 않았습니다" }} />
       </details>
       <details className="pg-rob-sec">
         <summary>최악 구간 겹침</summary>
@@ -278,7 +278,7 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
 
 const SRC_KO: Record<string, string> = { registered: "등록 전략", backtest_run: "백테스트 실행", backtest_result: "정책 백테스트" };
 const DATA_TAG: Record<string, [string, string]> = {
-  real: ["confirmed", "실데이터"], synthetic: ["assumed", "연습용(합성)"], unknown: ["unknown", "데이터 모름"],
+  real: ["confirmed", "실데이터"], synthetic: ["assumed", "합성"], unknown: ["unknown", "데이터 모름"],
 };
 
 /** 기록끼리 견고성 (BS3) — 무엇을 이었는지(출처·데이터·시점 고정)를 먼저, 그다음 같은 견고성 본문. ★실거래 기록이 아니다★. */

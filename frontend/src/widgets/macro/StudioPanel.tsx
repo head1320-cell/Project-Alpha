@@ -67,7 +67,7 @@ function Spark({ values }: { values: number[] }) {
 }
 
 function OutValue({ v }: { v: unknown }) {
-  if (v === null || v === undefined) return <span className="ms-out-na">값이 없어요</span>;
+  if (v === null || v === undefined) return <span className="ms-out-na">값 없음</span>;
   if (typeof v === "boolean") return <span className="ms-out-b">{v ? "예" : "아니오"}</span>;
   if (isNum(v)) return <span className="num">{fmt(v)}</span>;
   if (typeof v === "string") return <span data-server>{v}</span>;
@@ -126,7 +126,7 @@ function SpanLine({ span }: { span: StudioSpan | null }) {
   return (
     <p className={`ms-span${span.truncated ? " ms-span-trunc" : ""}`}>
       {span.truncated
-        ? `관측 ${span.n}개 / 요청 ${span.requested}개${range}. 요청보다 짧은 구간으로 계산했어요.`
+        ? `관측 ${span.n}개 / 요청 ${span.requested}개${range}. 요청보다 짧은 구간으로 계산했습니다.`
         : `관측 ${span.n}개 / 요청 ${span.requested}개${range}.`}
     </p>
   );
@@ -141,24 +141,24 @@ const nums = (v: unknown): number[] | null => (Array.isArray(v) && v.every(isNum
 export function studioAnswer(id: string, o: Outs): string | null {
   if (id === "tsfm-latent") {
     if (!isNum(o.k_factors) || !isNum(o.explained_var)) return null;
-    return `공통 요인 ${o.k_factors}개가 지표 변화의 ${(o.explained_var * 100).toFixed(1)}%를 설명해요`;
+    return `공통 요인 ${o.k_factors}개가 지표 변화의 ${(o.explained_var * 100).toFixed(1)}%를 설명합니다`;
   }
   if (id === "neural-sde") {
     const l = o.latest as Record<string, unknown> | undefined;
     if (!l || !isNum(l.level) || !isNum(l.slope)) return null;
-    const inv = o.inverted === true ? ", 역전됐어요" : o.inverted === false ? ", 역전되지 않았어요" : "";
+    const inv = o.inverted === true ? ", 역전됐습니다" : o.inverted === false ? ", 역전되지 않았습니다" : "";
     return `지금 곡선은 수준 ${l.level.toFixed(2)}%, 기울기 ${signed(l.slope)}%p${inv}`;
   }
   if (id === "causal-deepm") {
     const e = Array.isArray(o.edges) ? o.edges.length : null;
     if (e == null || !isNum(o.n_series)) return null;
     return e > 0
-      ? `계열 ${o.n_series}개 사이에서 앞서 움직이는 관계 ${e}개를 찾았어요`
-      : `계열 ${o.n_series}개 사이에서 앞서 움직이는 관계를 찾지 못했어요`;
+      ? `계열 ${o.n_series}개 사이에서 앞서 움직이는 관계 ${e}개를 찾았습니다`
+      : `계열 ${o.n_series}개 사이에서 앞서 움직이는 관계를 찾지 못했습니다`;
   }
   if (id === "agentic-mcp") {
     if (!isNum(o.n_views)) return null;
-    return `뷰 ${o.n_views}개를 제약으로 바꿨어요${o.feasible === null ? "(모순 검사는 하지 않았어요)" : ""}`;
+    return `뷰 ${o.n_views}개를 제약으로 바꿨습니다${o.feasible === null ? "(모순 검사는 하지 않았습니다)" : ""}`;
   }
   return null;
 }
@@ -181,7 +181,7 @@ function FactorViz({ o }: { o: Outs }) {
         <figure className="ms-viz-fig ms-viz-factor">
           <figcaption>요인이 지나온 길</figcaption>
           <FactorLines rows={rows} k={k} />
-          <p className="ms-viz-note">가로축은 관측 순서예요(서버가 날짜를 주지 않았어요).</p>
+          <p className="ms-viz-note">가로축은 관측 순서입니다(서버가 날짜를 주지 않았습니다).</p>
         </figure>
       )}
       {load.length > 0 && (
@@ -227,7 +227,7 @@ function CurveViz({ o }: { o: Outs }) {
         <figure className="ms-viz-fig ms-viz-tp">
           <figcaption>기간프리미엄 대용(bp)</figcaption>
           <TpLine rows={tpRows} />
-          <p className="ms-viz-note">가로축은 관측 순서예요. 무차익 조건 없이 잰 대용값이라 위험가격이 아니에요.</p>
+          <p className="ms-viz-note">가로축은 관측 순서입니다. 무차익 조건 없이 잰 대용값이라 위험가격이 아닙니다.</p>
         </figure>
       )}
     </div>
@@ -237,7 +237,7 @@ function CurveViz({ o }: { o: Outs }) {
 type Edge = { from: string; to: string; lag: number; p: number };
 function CausalViz({ o }: { o: Outs }) {
   const edges = (Array.isArray(o.edges) ? o.edges : []) as Edge[];
-  if (!edges.length) return <p className="ms-viz-empty">그릴 관계가 없어요. 유의한 앞섬 관계가 하나도 나오지 않았어요.</p>;
+  if (!edges.length) return <p className="ms-viz-empty">그릴 관계가 없습니다. 유의한 앞섬 관계가 하나도 나오지 않았습니다.</p>;
   const given = (Array.isArray(o.nodes) ? o.nodes : []) as { id: string; label?: string }[];
   const ids = given.length ? given.map((n) => n.id) : Array.from(new Set(edges.flatMap((e) => [e.from, e.to])));
   const nodes = ids.map((id) => ({ id, label: IND_KR[id] ?? id }));
@@ -248,7 +248,7 @@ function CausalViz({ o }: { o: Outs }) {
         <CausalGraphView nodes={nodes} edges={edges} />
         <ul className="ms-edges">
           {edges.map((e, i) => (
-            <li key={i}>{IND_KR[e.from] ?? e.from} → {IND_KR[e.to] ?? e.to}, {e.lag}개월 앞서요, 유의확률 {e.p.toFixed(2)}</li>
+            <li key={i}>{IND_KR[e.from] ?? e.from} → {IND_KR[e.to] ?? e.to}, {e.lag}개월 앞섭니다, 유의확률 {e.p.toFixed(2)}</li>
           ))}
         </ul>
       </figure>
@@ -284,7 +284,7 @@ export function StudioOutcome({ res, id }: { res: StudioResult; id: string }) {
   if (!res.available) {
     return (
       <UnavailableState
-        label={`${res.engine ?? "지금 쓰는 계산"}: 이번에는 계산할 수 없어요`}
+        label={`${res.engine ?? "지금 쓰는 계산"}: 이번에는 계산할 수 없습니다`}
         reason={<span data-server><ServerText text={res.reason} /></span>}
       />
     );
@@ -297,7 +297,7 @@ export function StudioOutcome({ res, id }: { res: StudioResult; id: string }) {
       {res.note && <p className="ms-note" data-server><ServerText text={res.note} /></p>}
       <StudioViz id={id} o={res.outputs} />
       {rows.length === 0 ? (
-        <p className="ms-out-na">이 엔진은 이번 실행에서 산출값을 내지 않았어요.</p>
+        <p className="ms-out-na">이 엔진은 이번 실행에서 산출값을 내지 않았습니다.</p>
       ) : (
         <div className="ms-out-wrap">
           <p className="ms-out-cap">서버가 낸 값 모두</p>
@@ -326,10 +326,10 @@ export function FrontierCard({ d }: { d: StudioDescriptor }) {
       <p className="ms-card-s" data-server><ServerText text={f.summary} /></p>
       {f.available ? (
         <p className="ms-note" data-server>
-          {f.note ?? "요건은 충족됐지만 이 엔진의 구현은 아직 없어요. 계약만 있어요."}
+          {f.note ?? "요건은 충족됐지만 이 엔진의 구현은 아직 없습니다. 계약만 있습니다."}
         </p>
       ) : (
-        <UnavailableState label="이 엔진은 지금 쓸 수 없어요" reason={<ReasonWhy raw={f.reason} rawClass="ms-raw" />} />
+        <UnavailableState label="이 엔진은 지금 쓸 수 없습니다" reason={<ReasonWhy raw={f.reason} rawClass="ms-raw" />} />
       )}
     </section>
   );
@@ -374,15 +374,15 @@ export function StudioPanel({ id, months = 60 }: { id: string; months?: number }
     <div className="ms-studio tx-page tx-page--wide tpage-fade">
       <StudioHead id={id} d={d} answer={answer} />
 
-      {listQ.isLoading && <LoadingState label="스튜디오 정보를 불러오는 중이에요" />}
-      {listQ.isError && <StudioFail title="스튜디오 정보를 불러오지 못했어요" onRetry={() => void listQ.refetch()} />}
+      {listQ.isLoading && <LoadingState label="스튜디오 정보 조회 중" />}
+      {listQ.isError && <StudioFail title="스튜디오 정보 조회 실패" onRetry={() => void listQ.refetch()} />}
       {d && <FrontierCard d={d} />}
 
       <section className="ms-card ms-card-sub">
         <h2 className="ms-card-t">지금 쓰는 계산{d ? <>: <span data-server>{d.substitute.name}</span></> : ""}</h2>
         {d && <p className="ms-card-s" data-server><ServerText text={d.substitute.summary} /></p>}
-        {runQ.isLoading && <LoadingState label="계산하는 중이에요" />}
-        {runQ.isError && <StudioFail title="계산 결과를 받지 못했어요" onRetry={() => void runQ.refetch()} />}
+        {runQ.isLoading && <LoadingState label="계산 중" />}
+        {runQ.isError && <StudioFail title="계산 결과 수신 실패" onRetry={() => void runQ.refetch()} />}
         {runQ.data && <StudioOutcome res={runQ.data} id={id} />}
       </section>
     </div>

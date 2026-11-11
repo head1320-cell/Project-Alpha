@@ -2,11 +2,11 @@
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §1 · 대상 `src/engine/portfolio_graph.py`
 
-레포의 도구를 노드로 옮기면 **출처가 다른 값**(연습용 합성 · 전망 전용 · 오늘 판단을 얹은 비중)이
+레포의 도구를 노드로 옮기면 **출처가 다른 값**(합성 · 전망 전용 · 오늘 판단을 얹은 비중)이
 같은 포트를 타고 흐른다. 엔진이 그 사실을 하류로 나르지 않으면 백테스트가 모르고 섞는다.
 
 ## 거는 것 (모두 짝과 함께)
-- 계보는 **하류로 전이된다**(직접 부모만이 아니다) — 연습용은 OR, 시점 정합은 가장 약한 값이 이긴다.
+- 계보는 **하류로 전이된다**(직접 부모만이 아니다) — 합성 데이터는 OR, 시점 정합은 가장 약한 값이 이긴다.
   짝: 태그 없는 그래프의 계보는 깨끗하다(항상-오염 구현 배제).
 - `admits` 가 거절하면 노드는 **실패**하고 사유가 그대로 실린다 — 짝: 깨끗한 입력은 통과.
 - 성공한 노드마다 `view_hash` — 같은 view 는 같은 해시, 다른 view 는 다른 해시.
@@ -41,9 +41,9 @@ def _pass(inputs, p):
 
 def _refuse_forward(lineage: dict) -> str | None:
     if lineage.get("pit") == "forward_only":
-        return "전망 전용 값은 받지 않아요."
+        return "전망 전용 값은 받지 않습니다."
     if lineage.get("overlay"):
-        return "노출을 얹은 값은 받지 않아요."
+        return "노출을 얹은 값은 받지 않습니다."
     return None
 
 
@@ -52,7 +52,7 @@ SAVED: list[dict] = []
 
 def _save(values, view, params) -> dict:
     SAVED.append({"values": values, "view": view})
-    return {"saved_id": f"sv_{values['out']}", "text": "저장했어요"}
+    return {"saved_id": f"sv_{values['out']}", "text": "저장했습니다"}
 
 
 def _registry() -> pg.Registry:
@@ -122,8 +122,8 @@ def test_admits_refuses_forward_only_even_two_hops_up():
                     [_e("s", "p"), _e("p", "g")]), _registry())
     g = rep["nodes"]["g"]
     assert g["status"] == pg.STATUS_FAILED
-    assert g["reason"] == "전망 전용 값은 받지 않아요."
-    assert g["explain"]["title"] == "계산하지 못했어요"
+    assert g["reason"] == "전망 전용 값은 받지 않습니다."
+    assert g["explain"]["title"] == "산출 실패"
 
 
 def test_admits_refuses_an_overlay():
@@ -169,7 +169,7 @@ def test_save_calls_the_node_save_once_when_the_preview_matches():
     reg = _registry()
     h = pg.run(_keep_graph(), reg)["nodes"]["k"]["view_hash"]
     out = pg.save_node(_keep_graph(), "k", h, reg)
-    assert out == {"ok": True, "saved_id": "sv_5", "text": "저장했어요", "node_id": "k"}
+    assert out == {"ok": True, "saved_id": "sv_5", "text": "저장했습니다", "node_id": "k"}
     assert len(SAVED) == 1 and SAVED[0]["values"]["out"] == 5
 
 

@@ -54,7 +54,7 @@ async function pick(page: Page, ids: string[]) {
   await blank(page);
   await node(page, ids[0]).click({ position: HEAD });
   for (const id of ids.slice(1)) await node(page, id).click({ position: HEAD, modifiers: ["Control"] });
-  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐어요`);
+  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
 }
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -161,7 +161,7 @@ test("R1 · 여럿 고른 채 우클릭하면 고르기를 지키고 '고른 노
   await pick(page, ["universe", "returns", "estimate"]);
   await node(page, "returns").click({ button: "right", position: HEAD });
   await expect(page.locator(".pg-ctx")).toBeVisible();
-  await expect(page.locator(".pg-selbar-n")).toHaveText("3개 골랐어요");
+  await expect(page.locator(".pg-selbar-n")).toHaveText("3개 골랐습니다");
   await expect(page.locator('.pg-ctx-item[data-action="compare"]')).toBeVisible();
   await page.keyboard.press("Escape");
   await node(page, "optimizer").click({ button: "right", position: HEAD });
@@ -180,11 +180,11 @@ test("R1 · Shift 상자로 고른 뒤 우클릭해도 노드 메뉴가 열린�
   await page.mouse.move(b.x + b.width + 20, b.y + b.height + 20, { steps: 8 });
   await page.mouse.up();
   await page.keyboard.up("Shift");
-  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 골랐어요");
+  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 골랐습니다");
   await page.mouse.click(b.x + 30, b.y + 14, { button: "right" });
   await expect(page.locator(".pg-ctx")).toBeVisible();
   await expect(page.locator('.pg-ctx-item[data-action="remove"]')).toBeVisible();
-  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 골랐어요");
+  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 골랐습니다");
 });
 
 // ── ④ 상자 끌기 · 이름 ────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ test("R1 · 묶음 이름을 이어 치면 한 단계 (짝: 0.8초 넘게 쉬고
 
 // ── ⑤ 기록이 다 차도 [되돌리기] ──────────────────────────────────────────────
 
-test("R1 · 되돌리기 칸 50개가 다 찬 뒤에도 지우기 토스트에 [되돌리기] 가 붙는다", async ({ page }) => {
+test("R1 · 되돌리기 칸 50개가 다 찬 뒤에도 삭제 토스트에 [되돌리기] 가 붙는다", async ({ page }) => {
   await open(page, CORE);
   const box = (await node(page, "universe").boundingBox())!;
   for (let i = 0; i < 52; i++) {                                               // 끌기 한 번 = 한 단계 · 52번이면 칸이 다 찬다
@@ -262,6 +262,6 @@ test("R1 · 되돌리기 칸 50개가 다 찬 뒤에도 지우기 토스트에 [
   }
   await node(page, "optimizer").click({ button: "right", position: HEAD });
   await page.locator('.pg-ctx-item[data-action="remove"]').click();
-  await expect(page.locator(".pg-note")).toContainText("지웠어요");
+  await expect(page.locator(".pg-note")).toContainText("지웠습니다");
   await expect(page.locator(".pg-note-undo")).toBeVisible();
 });

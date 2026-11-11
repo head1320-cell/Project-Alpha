@@ -32,9 +32,9 @@ class CompareBody(BaseModel):
 
 def _check(side: Side, name: str) -> None:
     if len(side.dates) != len(side.equity):
-        raise HTTPException(422, f"{name} 의 날짜 {len(side.dates)}개와 값 {len(side.equity)}개가 맞지 않아요.")
+        raise HTTPException(422, f"{name} 의 날짜 {len(side.dates)}개와 값 {len(side.equity)}개가 맞지 않습니다.")
     if len(side.dates) < 2:
-        raise HTTPException(422, f"{name} 의 점이 {len(side.dates)}개라 곡선이 아니에요(2개 이상).")
+        raise HTTPException(422, f"{name} 의 점이 {len(side.dates)}개라 곡선이 아닙니다(2개 이상).")
 
 
 @router.post("/compare")

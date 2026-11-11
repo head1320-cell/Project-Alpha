@@ -76,7 +76,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
         {tab === "add" && (
           <label className="pg-search">
             <Search size={14} aria-hidden="true" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="무엇을 추가할까요?" aria-label="노드 찾기" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="추가할 노드 검색" aria-label="노드 찾기" />
           </label>
         )}
       </div>
@@ -90,7 +90,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
            aria-labelledby={procedure ? "pg-left-tab-add" : undefined} hidden={tab !== "add"}>
       {next && next.items.length > 0 && !needle && (
         <section className="pg-palette-next" aria-label="지금 이을 수 있는 노드">
-          <h4 className="pg-palette-next-h">‘{next.from}’ 뒤에 이을 수 있어요</h4>
+          <h4 className="pg-palette-next-h">‘{next.from}’ 뒤에 이을 수 있습니다</h4>
           {next.items.map((c) => (
             <button key={c.type} type="button" className="pg-palette-next-item" data-kind={c.type} onClick={() => onAdd(c.type)}>
               <i style={{ background: STAGE_VAR[c.stage] ?? "var(--pg-mute)" }} aria-hidden="true" />
@@ -117,11 +117,11 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
               </button>
             </h4>
             <div id={body} hidden={!open}>
-              {all.length === 0 && <p className="pg-palette-soon">{st.label} 노드는 곧 추가돼요.</p>}
+              {all.length === 0 && <p className="pg-palette-soon">{st.label} 노드는 곧 추가됩니다.</p>}
               {[...items.filter((c) => !isSolo(c)), ...items.filter(isSolo)].map((c, i, arr) => (
                 <Fragment key={c.type}>
                 {isSolo(c) && (i === 0 || !isSolo(arr[i - 1])) && (
-                  <p className="pg-palette-solo">혼자 계산하는 도구 <span>— 선 없이 설정만으로 계산해요</span></p>
+                  <p className="pg-palette-solo">혼자 계산하는 도구 <span>— 선 없이 설정만으로 계산합니다</span></p>
                 )}
                 <button type="button" className={`pg-palette-item${isSolo(c) ? " pg-palette-item--solo" : ""}`} data-kind={c.type} draggable
                         title={`${c.label} (${c.type})${legacyOf(c.type).length ? ` · 예전 화면 ${legacyOf(c.type).map((a) => a.aliases[1] ?? a.title).join(", ")}` : ""}`}
@@ -136,14 +136,14 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
           </section>
         );
       })}
-      {needle && !catalog.some(match) && <p className="pg-palette-soon">‘{q}’에 맞는 노드가 없어요.</p>}
+      {needle && !catalog.some(match) && <p className="pg-palette-soon">‘{q}’에 맞는 노드가 없습니다.</p>}
       <MyBlocks />
       <section className="pg-quickstart" aria-label="빠른 시작">
         <h4 className="pg-quickstart-h">빠른 시작</h4>
         {onGoal && (
           <button type="button" className="pg-goal-entry" onClick={onGoal}>
             <b>목표로 시작하기</b>
-            <span>무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 바로 계산해요.</span>
+            <span>무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 바로 계산합니다.</span>
           </button>
         )}
         {TEMPLATES.map((t) => (
@@ -174,7 +174,7 @@ function MyBlocks() {
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     const r = parseBlock(await f.text());
-    if (!r.block) { setProblem(`「${f.name}」을 넣지 않았어요 — ${r.problem} 캔버스는 그대로예요.`); return; }
+    if (!r.block) { setProblem(`「${f.name}」을 넣지 않았습니다 — ${r.problem} 캔버스는 그대로입니다.`); return; }
     setProblem(null);
     const st = usePortfolioGraph.getState();
     st.act(() => st.insertBlock(r.block!));
@@ -182,19 +182,19 @@ function MyBlocks() {
   return (
     <section className="pg-blocks" aria-label="내 블록">
       <h4 className="pg-blocks-h">내 블록 <span className="pg-blocks-where">이 브라우저에만</span></h4>
-      {!available && <p className="pg-blocks-note">이 브라우저에 블록을 저장할 수 없어요 — 상자의 ‘파일로 받기’를 쓰고, 파일로 불러와요.</p>}
-      {available && blocks.length === 0 && <p className="pg-blocks-note">아직 없어요. 상자 머리의 책갈피 버튼으로 전략이나 묶음을 넣어 두세요.</p>}
+      {!available && <p className="pg-blocks-note">이 브라우저에 블록을 저장할 수 없습니다 — 상자의 ‘파일로 받기’를 쓰고, 파일로 불러옵니다.</p>}
+      {available && blocks.length === 0 && <p className="pg-blocks-note">아직 없습니다. 상자 머리의 책갈피 버튼으로 전략이나 묶음을 넣어 두십시오.</p>}
       {blocks.map((b, i) => (
         <div key={`${b.label}-${i}`} className="pg-block" data-block={b.label}>
           <button type="button" className="pg-block-add" onClick={() => insert(i)}
-                  title={b.kind === "strategy" ? "새 전략 띠로 넣고 포트폴리오에 이어요" : "묶음으로 넣어요"}>
+                  title={b.kind === "strategy" ? "새 전략 띠로 넣고 포트폴리오에 잇습니다" : "묶음으로 넣습니다"}>
             <b>{b.label}</b>
             <span>{b.kind === "strategy" ? "전략" : "묶음"} · 노드 {b.nodes.length}개</span>
           </button>
           <button type="button" className="pg-block-x" aria-label={`${b.label} 파일로 받기`} onClick={() => downloadBlock(b)}>
             <Download size={13} aria-hidden="true" />
           </button>
-          <button type="button" className="pg-block-x" aria-label={`${b.label} 지우기`}
+          <button type="button" className="pg-block-x" aria-label={`${b.label} 삭제`}
                   onClick={() => usePortfolioGraph.getState().removeBlock(i)}>
             <Trash2 size={13} aria-hidden="true" />
           </button>

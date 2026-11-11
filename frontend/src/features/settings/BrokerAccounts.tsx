@@ -57,19 +57,19 @@ export function BrokerAccounts() {
     <section className="set-sec set-broker" id="broker" aria-labelledby="set-broker-h">
       <h2 className="set-h" id="set-broker-h">내 증권 계좌</h2>
       <p className="set-sub set-sub--lead">
-        한국투자증권 계좌를 연결해요. 키는 서버에 암호화해 두고, 화면에는 끝 네 자리만 보여요.
+        한국투자증권 계좌를 연결합니다. 키는 서버에 암호화해 두고, 화면에는 끝 네 자리만 보입니다.
       </p>
 
       <div className="set-card set-broker-list">
         {loadError ? (
           <div className="set-broker-loadfail" role="alert">
-            <p className="set-error">증권 계좌 목록을 불러오지 못했어요. {loadError}</p>
-            <button type="button" className="set-btn set-btn--sm set-broker-retry" onClick={() => void load()}>다시 시도</button>
+            <p className="set-error">증권 계좌 목록 조회 실패. {loadError}</p>
+            <button type="button" className="set-btn set-btn--sm set-broker-retry" onClick={() => void load()}>재시도</button>
           </div>
         ) : rows === null ? (
-          <p className="set-sub" aria-busy="true">계좌 목록을 불러오는 중이에요.</p>
+          <p className="set-sub" aria-busy="true">계좌 목록 조회 중</p>
         ) : rows.length === 0 ? (
-          <p className="set-sub set-broker-empty">아직 연결한 증권 계좌가 없어요. 아래에서 연결해요.</p>
+          <p className="set-sub set-broker-empty">아직 연결한 증권 계좌가 없습니다. 아래에서 연결합니다.</p>
         ) : rows.map((a) => {
           const result = checks[a.account_id];
           const day = monthDay(a.created_at);
@@ -88,9 +88,9 @@ export function BrokerAccounts() {
               </div>
               {asking === a.account_id ? (
                 <div className="set-confirm set-broker-confirm" role="group" aria-label={`${a.label} 연결 끊기 확인`}>
-                  <span className="set-sub">연결을 끊어요. 이 계좌로 낸 주문 기록은 남아요.</span>
+                  <span className="set-sub">연결을 끊습니다. 이 계좌로 낸 주문 기록은 남습니다.</span>
                   <button type="button" className="set-btn set-btn--sm set-btn--danger set-broker-delete-yes"
-                          onClick={() => void remove(a.account_id)}>지우기</button>
+                          onClick={() => void remove(a.account_id)}>삭제</button>
                   <button type="button" className="set-btn set-btn--sm set-broker-cancel" onClick={() => setAsking(null)}>취소</button>
                 </div>
               ) : (
@@ -100,7 +100,7 @@ export function BrokerAccounts() {
                     {checking === a.account_id ? "확인하는 중" : "연결 확인"}
                   </button>
                   <button type="button" className="set-btn set-btn--sm set-broker-delete" onClick={() => setAsking(a.account_id)}>
-                    지우기
+                    삭제
                   </button>
                 </div>
               )}
@@ -108,7 +108,7 @@ export function BrokerAccounts() {
             </div>
           );
         })}
-        {rowError ? <p className="set-error" role="alert">지우지 못했어요. {rowError}</p> : null}
+        {rowError ? <p className="set-error" role="alert">지우지 못했습니다. {rowError}</p> : null}
       </div>
 
       <ConnectForm onConnected={() => void load()} />
@@ -167,7 +167,7 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
         <span className="set-label">이름</span>
         <input className="set-input" name="broker-label" autoComplete="off" maxLength={64}
                value={label} onChange={(e) => setLabel(e.target.value)} />
-        <span className="set-sub">목록에서 알아보는 이름이에요.</span>
+        <span className="set-sub">목록에서 알아보는 이름입니다.</span>
       </label>
       <label className="set-field">
         <span className="set-label">앱 키</span>
@@ -185,14 +185,14 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
           <input className="set-input" name="broker-account-no" inputMode="numeric" autoComplete="off" maxLength={8}
                  value={accountNo} onChange={(e) => setAccountNo(e.target.value.trim())}
                  aria-invalid={accountNo.length > 0 && !accountOk} />
-          {accountNo.length > 0 && !accountOk ? <span className="set-hint">계좌번호는 숫자 8자리예요.</span> : null}
+          {accountNo.length > 0 && !accountOk ? <span className="set-hint">계좌번호는 숫자 8자리입니다.</span> : null}
         </label>
         <label className="set-field">
           <span className="set-label">상품 코드</span>
           <input className="set-input" name="broker-account-prdt" inputMode="numeric" autoComplete="off" maxLength={2}
                  value={product} onChange={(e) => setProduct(e.target.value.trim())}
                  aria-invalid={!PRODUCT.test(product)} />
-          <span className="set-sub">보통 01이에요.</span>
+          <span className="set-sub">보통 01입니다.</span>
         </label>
       </div>
       <div className="set-row">
@@ -206,7 +206,7 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
       </div>
       {kind === "real" ? (
         <p className="set-warn set-broker-real-note">
-          실계좌로 주문하려면 운영자가 실계좌 관문을 열어야 해요. 연결만으로는 주문이 나가지 않아요.
+          실계좌로 주문하려면 운영자가 실계좌 관문을 열어야 합니다. 연결만으로는 주문이 나가지 않습니다.
         </p>
       ) : null}
       {error ? (
@@ -214,13 +214,13 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
           <p className="set-error" data-server>{error.text}</p>
           {error.vault ? (
             <p className="set-sub set-broker-vault">
-              서버에 자격을 암호화할 키가 없어 아무것도 저장하지 않았어요. 운영자에게 알려 주세요.
+              서버에 자격을 암호화할 키가 없어 아무것도 저장하지 않았습니다. 운영자에게 알려 주십시오.
             </p>
           ) : null}
         </div>
       ) : null}
       <button type="submit" className="set-btn set-btn--primary set-broker-submit" disabled={!ready || busy}>
-        {busy ? "연결하는 중이에요" : "계좌 연결하기"}
+        {busy ? "연결 중" : "계좌 연결하기"}
       </button>
     </form>
   );

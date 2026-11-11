@@ -58,7 +58,7 @@ FEATURES: dict[str, tuple[str, str, str]] = {
         "allocation_method", "hrp_macro",
         "hrp_macro 는 HRP 위에 매크로 국면 기울기를 얹는 배분 정책인데, 기울기 규칙이 "
         "정해지지 않았고 매크로 피드(macro_feed)가 없습니다 — 사용자가 계속 거절하기로 "
-        "했습니다(BH, 증거가 생긴 뒤 별도 설계). hrp 또는 inverse_vol 을 고르세요."),
+        "했습니다(BH, 증거가 생긴 뒤 별도 설계). hrp 또는 inverse_vol 을 고르십시오."),
 }
 
 
@@ -81,7 +81,7 @@ _REASON = ("멀티전략·리얼리즘 백테스트는 이 저장소에서 동�
            "정책을 새로 정하는 일이라 별도 승인 사항입니다.")
 
 _UNSUPPORTED_REASON = ("요청이 이 저장소에 아직 없는 기능을 골랐습니다({names}) — "
-                       "고장이 아니라 부재입니다. 각 항목의 사유를 보세요.")
+                       "고장이 아니라 부재입니다. 각 항목의 사유를 보십시오.")
 
 
 def _spec_exists(name: str) -> bool:

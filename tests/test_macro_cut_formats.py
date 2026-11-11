@@ -4,7 +4,7 @@
 
 `factor_exposure.truncate_series` 는 `str(t)[:10] <= as_of` 였다. `as_of` 는 `YYYY-MM-DD` 인데 수집기가 내는
 타임스탬프는 출처마다 모양이 다르다(`macro_collector` — 한국은행 월별 `YYYYMM` · 일별 `YYYYMMDD` · 연별 `YYYY` ·
-FRED `YYYY-MM-DD` · 연습용 `YYYYMM`). 글자로 견주면 다섯째 글자에서 `"0"`(0x30) 과 `"-"`(0x2D) 가 만난다:
+FRED `YYYY-MM-DD` · 합성 `YYYYMM`). 글자로 견주면 다섯째 글자에서 `"0"`(0x30) 과 `"-"`(0x2D) 가 만난다:
 
     형식          as_of        고치기 전에 남던 마지막 관측     맞는 값
     YYYYMM        2024-06-30   202312                           202406

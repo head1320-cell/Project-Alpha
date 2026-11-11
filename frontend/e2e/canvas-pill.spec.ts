@@ -58,7 +58,7 @@ async function run(page: Page): Promise<Gates> {
 
 test("알약(BQ Q2): 계산 전 문구 · 기본 접힘(짝) · 서버 요약·점 그대로 · 펼치면 레일 · Esc·바깥으로 접힘 · 새로고침해도 펼침 유지", async ({ page }) => {
   await openCanvas(page);
-  await expect(pill(page)).toContainText("계산하면 관문을 확인해요");
+  await expect(pill(page)).toContainText("계산하면 관문을 확인합니다");
   await expect(pill(page).locator(".pg-rail-dot")).toHaveCount(8);
   await expect(pill(page)).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".pg-rail")).toBeHidden();                  // 짝 — 기본은 접힘
@@ -100,7 +100,7 @@ test("알약(BQ Q2): 계산 전 문구 · 기본 접힘(짝) · 서버 요약·�
   await expect(page.locator(".pg-rail")).toBeHidden();
 });
 
-test("알약 강조(BQ Q2): 새로 실패한 관문이 생기면 한 번 · 같은 결과를 다시 계산하면 없음(짝) · 감속 모션이면 없음(짝)", async ({ page }) => {
+test("알약 강조(BQ Q2): 새로 실패한 관문이 생기면 한 번 · 같은 결과를 재계산하면 없음(짝) · 감속 모션이면 없음(짝)", async ({ page }) => {
   await openCanvas(page);
   const g = await run(page);
   const bad = g.gates.some((x) => x.state === "failed");

@@ -49,7 +49,7 @@ export function TimingResult({ v }: { v: Dict }) {
   const fs = (v.factor_states as Dict[]) ?? [];
   return (
     <>
-      <KV rows={[["합친 판단", STATE[String(c.state)] ?? String(c.state)], ["권하는 노출", num(c.exposure) === null ? "— (계산하지 못했어요)" : pct((c.exposure as number) * 100, 0)],
+      <KV rows={[["합친 판단", STATE[String(c.state)] ?? String(c.state)], ["권하는 노출", num(c.exposure) === null ? "— (산출 실패)" : pct((c.exposure as number) * 100, 0)],
                  ["켜짐 · 꺼짐 · 못 읽음", `${String(c.on_count)} · ${String(c.off_count)} · ${String(c.unavailable_count)}`]]} />
       <ul className="pg-sig">
         {fs.map((f) => (
@@ -108,7 +108,7 @@ export function OverlayResult({ v }: { v: Dict }) {
       )}
       {v.conflict ? <p className="pg-warn">{String(v.conflict)}</p> : null}
       <KV rows={[["근거", String(v.source ?? "—")], ["적용 강도", pct(v.strength_pct, 0)],
-                 ["목표 규칙 검사", v.status === "executable" ? "통과 — 데이터 출처는 실행 목표 노드가 다시 봐요" : `막힘 — ${String(v.status_reason ?? "")}`]]} />
+                 ["목표 규칙 검사", v.status === "executable" ? "통과 — 데이터 출처는 실행 목표 노드가 다시 봅니다" : `막힘 — ${String(v.status_reason ?? "")}`]]} />
     </>
   );
 }
@@ -120,11 +120,11 @@ export function SimulationResult({ v }: { v: Dict }) {
   const pts = [...((r.points as Dict[]) ?? [])].sort((a, b) => String(a.as_of).localeCompare(String(b.as_of)));
   // 노출을 % 로 — 서식만(0~1 → 0~100). ★못 읽은 시점은 0 이 아니라 빈 값★(예전에는 `?? 0` 으로 0% 를 그렸다) → 선이 끊기고 읽는 줄이 말한다.
   const ys = pts.map((p) => { const e = num(p.exposure); return e === null ? null : e * 100; });
-  const read = pts.map((p, i) => ({ head: String(p.as_of), cells: [{ key: "e", label: "노출", text: ys[i] === null ? "못 읽었어요" : `${(ys[i] as number).toFixed(0)}%` }] }));
+  const read = pts.map((p, i) => ({ head: String(p.as_of), cells: [{ key: "e", label: "노출", text: ys[i] === null ? "못 읽었습니다" : `${(ys[i] as number).toFixed(0)}%` }] }));
   return (
     <>
       <p className={`pg-model-type pg-model-type--${r.backtest_eligible ? "hist" : "hypo"}`}>
-        {r.backtest_eligible ? "과거 검증에 쓸 수 있는 신호" : "참고용 — 과거 검증이 아니에요"}
+        {r.backtest_eligible ? "과거 검증에 쓸 수 있는 신호" : "참고용 — 과거 검증이 아닙니다"}
       </p>
       {r.warning ? <p className="pg-warn">{String(r.warning)}</p> : null}
       {/* 직접 SVG (ADR 004 · 2026-11-10) — 계단선 + 읽는 줄(처음 자리 = 마지막 시점) + 표 쌍둥이 */}

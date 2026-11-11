@@ -97,7 +97,7 @@ def lineage_for(entry: dict) -> DataLineage:
     if source == "price_series" and mock_allowed():
         caveats.append(
             "KIS_USE_MOCK=1 이라 실데이터가 없으면 결정론적 mock 으로 대체될 수 있습니다 — "
-            "값의 크기를 실측으로 읽지 마세요.")
+            "값의 크기를 실측으로 읽지 마십시오.")
 
     return DataLineage(
         factor_id=entry.get("id", ""),

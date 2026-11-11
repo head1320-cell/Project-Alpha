@@ -51,7 +51,7 @@ test("R3 · 문서 size.slot_h — 범위 밖은 맞추고·숫자가 아니면 
     const r = parseFile(fileWith(bad));
     expect(r.doc!.nodes[0], JSON.stringify(bad)).not.toHaveProperty("size");
     expect(r.problems, JSON.stringify(bad)).toHaveLength(1);
-    expect(r.problems[0]).toMatch(/노드 o 의 결과 칸 높이가 숫자가 아니라 뺐어요/);
+    expect(r.problems[0]).toMatch(/노드 o 의 결과 칸 높이가 숫자가 아니라 뺐습니다/);
   }
 });
 

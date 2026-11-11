@@ -93,10 +93,10 @@ export function TickerInput({ value, onText, onPick, inputProps }: {
         <ul id={`${id}-list`} role="listbox" className="pg-suggest" aria-label="종목 후보">
           {"error" in cur! ? (
             <li className="pg-suggest-note pg-suggest-note--err" role="option" aria-disabled="true" aria-selected="false">
-              {cur.error} — 종목 코드는 그대로 넣을 수 있어요.
+              {cur.error} — 종목 코드는 그대로 넣을 수 있습니다.
             </li>
           ) : hits.length === 0 ? (
-            <li className="pg-suggest-note" role="option" aria-disabled="true" aria-selected="false">‘{token}’으로 찾은 종목이 없어요.</li>
+            <li className="pg-suggest-note" role="option" aria-disabled="true" aria-selected="false">‘{token}’으로 찾은 종목이 없습니다.</li>
           ) : hits.map((h, i) => (
             <li key={h.code} id={`${id}-o${i}`} role="option" aria-selected={i === active} className="pg-suggest-item" data-code={h.code}
                 onMouseDown={(e) => { e.preventDefault(); pick(h); }} onMouseEnter={() => setActive(i)}>
@@ -130,7 +130,7 @@ export function TickerField({ value, onChange }: { value: unknown; onChange: (v:
                                  "aria-label": "종목", onBlur: () => commit(text),
                                  onKeyDown: (e) => { if (e.key === "Enter") commit(text); } }} />
       {left.length > 0 && (
-        <p className="pg-ticker-note" role="status">‘{left.join(", ")}’은 종목 코드가 아니라 넣지 않았어요 — 이름이면 후보에서 골라 주세요.</p>
+        <p className="pg-ticker-note" role="status">‘{left.join(", ")}’은 종목 코드가 아니라 넣지 않았습니다 — 이름이면 후보에서 선택하십시오.</p>
       )}
       {codes.length > 0 && (
         <div className="pg-stock-chips" aria-label="고른 종목">

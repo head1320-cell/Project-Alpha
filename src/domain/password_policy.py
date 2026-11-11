@@ -25,13 +25,13 @@ def password_problems(new: str, *, current: str | None, username: str) -> list[s
     """새 비밀번호가 규칙에 어긋나는 이유들. 빈 목록이면 쓸 수 있다."""
     problems: list[str] = []
     if len(new) < MIN_LENGTH:
-        problems.append(f"{MIN_LENGTH}자 이상이어야 해요.")
+        problems.append(f"{MIN_LENGTH}자 이상이어야 합니다.")
     if len(new.encode("utf-8")) > MAX_BYTES:
-        problems.append(f"{MAX_BYTES}바이트를 넘으면 뒤가 잘려요 — 더 짧게 정해 주세요.")
+        problems.append(f"{MAX_BYTES}바이트를 넘으면 뒤가 잘립니다 — 더 짧게 정하십시오.")
     if current is not None and new == current:
-        problems.append("지금 비밀번호와 달라야 해요.")
+        problems.append("지금 비밀번호와 달라야 합니다.")
     if new.strip().lower() == username.strip().lower():
-        problems.append("아이디와 달라야 해요.")
+        problems.append("아이디와 달라야 합니다.")
     if new.strip().lower() in KNOWN_DEFAULTS:
-        problems.append("알려진 기본 비밀번호는 쓸 수 없어요.")
+        problems.append("알려진 기본 비밀번호는 쓸 수 없습니다.")
     return problems

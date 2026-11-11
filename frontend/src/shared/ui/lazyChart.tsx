@@ -30,7 +30,7 @@ type Box = { height: number; width?: number; label: string };
 function Slot({ height, width, label }: Box) {
   return (
     <div className="chart-slot" style={{ minHeight: height, width }} role="status" aria-busy="true">
-      {label} 그림을 불러오는 중이에요
+      {label} 차트 로딩 중
     </div>
   );
 }
@@ -46,8 +46,8 @@ class Boundary extends Component<Box & { children: ReactNode }, { failed: boolea
     if (!this.state.failed) return this.props.children;
     return (
       <div className="chart-slot chart-slot--fail" style={{ width: this.props.width }}>
-        <Notice tone="danger" title="차트를 불러오지 못했어요">
-          {this.props.label} 그림의 코드를 받지 못했어요(네트워크). 이 화면의 숫자와 설명은 그대로예요.
+        <Notice tone="danger" title="차트 로딩 실패">
+          {this.props.label} 차트 코드 수신 실패(네트워크). 이 화면의 수치와 설명은 유효합니다.
           <div className="chart-slot-act">
             <button type="button" className="tx-btn tx-btn--sub" onClick={() => window.location.reload()}>새로 고침</button>
           </div>

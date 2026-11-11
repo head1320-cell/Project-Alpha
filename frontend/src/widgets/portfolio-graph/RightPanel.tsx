@@ -89,15 +89,15 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                      relation={(s.report && !staleSet.has(selEdge.source) ? s.report.relations?.[selEdge.id] : null)
                                ?? s.validation?.relations?.[selEdge.id] ?? null}
                      record={s.report && !staleSet.has(selEdge.target) ? s.report.edges?.[selEdge.id] ?? null : null}
-                     recordGap={!s.report ? null : staleSet.has(selEdge.target) ? "받는 노드가 예전 결과예요 — 다시 계산하면 점검해요."
-                       : s.report.nodes[selEdge.source]?.status !== "ok" ? "보내는 노드가 계산되지 않아 점검하지 않았어요."
-                       : "받는 노드를 이번에 계산하지 않아 점검하지 않았어요."}
+                     recordGap={!s.report ? null : staleSet.has(selEdge.target) ? "받는 노드가 예전 결과입니다 — 재계산하면 점검합니다."
+                       : s.report.nodes[selEdge.source]?.status !== "ok" ? "보내는 노드가 계산되지 않아 점검하지 않았습니다."
+                       : "받는 노드를 이번에 계산하지 않아 점검하지 않았습니다."}
                      onCut={() => { const st = usePortfolioGraph.getState(); st.act(() => deleteNote(st.deleteElements([], [selEdge.id]))); }}
                      onInsert={(k, i, o) => { const st = usePortfolioGraph.getState();
-                       st.act(() => { st.insertOnEdge(selEdge.id, k, i, o); return "선 사이에 노드를 넣었어요."; }); }} />
+                       st.act(() => { st.insertOnEdge(selEdge.id, k, i, o); return "선 사이에 노드를 넣었습니다."; }); }} />
         )}
         {s.tab !== "story" && s.tab !== "branches" && s.tab !== "wire" && !selected && (
-          <p className="pg-empty">캔버스나 이야기에서 노드를 하나 골라 주세요.</p>
+          <p className="pg-empty">캔버스나 이야기에서 노드를 하나 선택하십시오.</p>
         )}
         {s.tab === "settings" && selected && (
           <SettingsPanel node={selected} entry={selEntry} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []}
@@ -109,7 +109,7 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                          onFocus={focusNode} onImpact={s.setProcHover} onSwap={(k) => swapTo(selected.id, k)}
                          onRewire={(port, src, h) => {
                            const st = usePortfolioGraph.getState();
-                           st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 이었어요." : "선을 뗐어요."; });
+                           st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 이었습니다." : "선을 뗐습니다."; });
                          }}
                          onSave={() => portfolioGraphApi.save(toDoc(s.nodes, s.edges), selected.id, selResult?.view_hash ?? "")}
                          saveFollowUp={selected.data.kind === "backtest_setup" ? {

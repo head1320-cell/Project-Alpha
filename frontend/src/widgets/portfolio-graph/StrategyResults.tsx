@@ -14,7 +14,7 @@ type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const pct = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number).toFixed(d)}%`);
 const signed = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number) >= 0 ? "+" : ""}${(v as number).toFixed(d)}%`);
-const NOT_MEASURED = "안 쟀어요";
+const NOT_MEASURED = "안 측정했습니다";
 
 function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="pg-kv">{rows.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>;
@@ -50,7 +50,7 @@ export function StrategyBacktestResult({ v, explain }: { v: Dict; explain?: Node
   const last = Object.entries((v.last_weights as Record<string, number>) ?? {}).map(([k, w]) => [k, w * 100] as [string, number])
     .sort((a, b) => b[1] - a[1]);
   return (
-    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 묶음을 돌려 봤어요" after={<>
+    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 묶음을 돌려 봤습니다" after={<>
       <KV rows={[["기간", `${String(per.start)} ~ ${String(per.end)}${per.whole_record ? " (함께 기록된 전체)" : ""}`],
                  ["다시 나눈 횟수", `${String(s.n_rebalances ?? "—")}번`], ["거래일", `${String(v.n_trading_days ?? "—")}일`]]} />
       <h4 className="pg-h4">마지막 날 전략 비중</h4>
@@ -68,7 +68,7 @@ export function StrategyBacktestResult({ v, explain }: { v: Dict; explain?: Node
           <li key={String(x.strategy_id)}>
             <b>{String(x.name ?? `전략 ${String(x.strategy_id)}`)}</b>
             {x.registered === false ? <span className="pg-tag pg-tag--failed">등록 안 됨</span> : null}
-            {x.is_mock_data === true ? <span className="pg-tag pg-tag--unknown">연습용 데이터</span>
+            {x.is_mock_data === true ? <span className="pg-tag pg-tag--unknown">합성 데이터</span>
               : x.is_mock_data === null ? <span className="pg-tag pg-tag--unknown">데이터 출처 미상</span> : null}
             {x.is_pit_verified === true ? <span className="pg-tag pg-tag--confirmed">시점 정합 확인</span> : <span className="pg-tag pg-tag--assumed">시점 정합 미확인</span>}
             {x.repro_equal === true ? <span className="pg-tag pg-tag--confirmed">다시 돌려 같음</span> : null}
@@ -100,7 +100,7 @@ export function CompanyViewsResult({ v }: { v: Dict }) {
   const labels = (v.labels as Record<string, string>) ?? {};
   return (
     <>
-      <p className="pg-model-type pg-model-type--hypo">지금 시점에만 쓰는 전망이에요</p>
+      <p className="pg-model-type pg-model-type--hypo">지금 시점에만 쓰는 전망입니다</p>
       <table className="pg-table">
         <thead><tr><th>종목</th><th>방향</th><th className="pg-td-num">연 크기</th><th className="pg-td-num">확신</th></tr></thead>
         <tbody>{views.map((x) => {
@@ -115,7 +115,7 @@ export function CompanyViewsResult({ v }: { v: Dict }) {
           );
         })}</tbody>
       </table>
-      {num(v.n_user_views) ? <p className="pg-note">내 생각 {String(v.n_user_views)}개와 함께 ‘비중 계산’으로 넘겨요.</p> : null}
+      {num(v.n_user_views) ? <p className="pg-note">내 생각 {String(v.n_user_views)}개와 함께 ‘비중 계산’으로 넘깁니다.</p> : null}
       <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="전망을 만들지 못한 종목" />
     </>
   );
@@ -140,12 +140,12 @@ export function ValuationScoresResult({ v }: { v: Dict }) {
           <tr key={c}>
             <td className="pg-td-name" title={c}>{labels[c] ?? c}<span className="pg-verdict">{String(byCode[c]?.verdict ?? "—")}</span></td>
             <td className="pg-td-bar"><span className={`pg-bar${s < 0 ? " pg-bar--neg" : ""}`} style={{ width: `${(Math.abs(s) / max) * 100}%` }} /></td>
-            <td className="pg-td-num">{s >= 0 ? `${s.toFixed(1)}% 싸요` : `${(-s).toFixed(1)}% 비싸요`}</td>
+            <td className="pg-td-num">{s >= 0 ? `${s.toFixed(1)}% 저평가` : `${(-s).toFixed(1)}% 고평가`}</td>
           </tr>
         ))}</tbody>
       </table>
       {unscored.length > 0 && <p className="pg-warn">점수를 내지 못한 종목: {unscored.map((c) => labels[c] ?? c).join(", ")}</p>}
-      <p className="pg-note">점수는 −괴리율이에요. 적정가를 내지 못한 종목은 0으로 치지 않고 아래에 따로 적어요.</p>
+      <p className="pg-note">점수는 −괴리율입니다. 적정가를 내지 못한 종목은 0으로 치지 않고 아래에 따로 적습니다.</p>
       <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="점수를 매기지 못한 종목" />
     </>
   );
@@ -177,7 +177,7 @@ export function AttributionResult({ v }: { v: Dict }) {
         <>
           <h4 className="pg-h4">안 잰 것</h4>
           <div className="pg-chips-static">{unmeasured.map((u) => <span key={u} className="pg-tag pg-tag--unknown">{u}</span>)}</div>
-          <p className="pg-note">벤치마크 구성종목 비중과 연결된 실제 체결이 있어야 잴 수 있어요 — 비슷한 값으로 채우지 않아요.</p>
+          <p className="pg-note">벤치마크 구성종목 비중과 연결된 실제 체결이 있어야 측정할 수 있습니다 — 비슷한 값으로 채우지 않습니다.</p>
         </>
       )}
     </>

@@ -37,7 +37,7 @@ export function BacktestSetupResult({ v }: { v: Dict }) {
         ["종목 · 동시 보유", `${num(c.max_tickers) === null ? "—" : `${String(c.max_tickers)}개`} · ${num(c.max_positions) === null ? "—" : `${String(c.max_positions)}개`}`],
         ["비용", `수수료 ${num(c.commission_rate) === null ? "—" : `${fmt((c.commission_rate as number) * 100)}%`} · 슬리피지 ${num(c.slippage_rate) === null ? "—" : `${fmt((c.slippage_rate as number) * 100)}%`}${c.charge_sell_tax ? " · 매도세" : ""}`],
       ]} />
-      <p className="pg-note">아직 돌리지 않았어요 — 설정 탭의 ‘백테스트 시작’을 누르면 백그라운드에서 돌아요.</p>
+      <p className="pg-note">아직 돌리지 않았습니다 — 설정 탭의 ‘백테스트 시작’을 누르면 백그라운드에서 실행됩니다.</p>
     </>
   );
 }
@@ -71,14 +71,14 @@ export function RunProgress({ runId, onReload }: { runId: string; onReload: () =
   return (
     <div className={`pg-runprog${done ? " pg-runprog--done" : ""}`} data-run={runId} role="status" aria-live="polite">
       <div className="pg-runprog-head">
-        <b>{done ? "백테스트가 끝났어요" : ended ? `백테스트가 ${STAGE_LABELS[st!.status] ?? st!.status}` : "백테스트가 돌고 있어요"}</b>
+        <b>{done ? "백테스트가 끝났습니다" : ended ? `백테스트가 ${STAGE_LABELS[st!.status] ?? st!.status}` : "백테스트가 돌고 있습니다"}</b>
         <span className="pg-runprog-pct">{st ? `${pct.toFixed(0)}%` : "—"}</span>
       </div>
       <div className="pg-runprog-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
       <p className="pg-runprog-stage">
-        {err ? `상태를 읽지 못했어요 — ${err}. 잠시 뒤 다시 확인해요.`
+        {err ? `상태 읽기 실패 — ${err}. 잠시 뒤 다시 확인합니다.`
           : ended ? (st?.error_message ?? "사유 미상")
-            : st ? `${STAGE_LABELS[st.status] ?? st.status}${st.status_message ? ` · ${st.status_message}` : ""}` : "상태를 확인하는 중이에요."}
+            : st ? `${STAGE_LABELS[st.status] ?? st.status}${st.status_message ? ` · ${st.status_message}` : ""}` : "상태 확인 중"}
       </p>
       <button type="button" className={`pg-btn${done ? " pg-btn--primary" : ""}`} disabled={!done} onClick={onReload}>
         결과 불러오기
@@ -117,7 +117,7 @@ export function BacktestAttributionResult({ v }: { v: Dict }) {
           </tr>
         );
       })}</tbody></table>
-      <p className="pg-note">같이 움직인 정도를 나눈 것이에요 — 원인이라는 뜻은 아니에요.</p>
+      <p className="pg-note">같이 움직인 정도를 나눈 것입니다 — 원인이라는 뜻은 아닙니다.</p>
     </>
   );
 }
@@ -139,21 +139,21 @@ export function BacktestCompareResult({ v }: { v: Dict }) {
       {view ? (
         <>
           <PerfCompare view={view} height={240} />
-          <p className="pg-note">A {String(cmp?.labels?.a ?? v.a)} · B {String(cmp?.labels?.b ?? v.b)} — 각자 처음을 1로 맞췄어요.</p>
-          <h4 className="pg-h4">해마다 차이</h4>
+          <p className="pg-note">A {String(cmp?.labels?.a ?? v.a)} · B {String(cmp?.labels?.b ?? v.b)} — 각자 처음을 1로 맞췄습니다.</p>
+          <h4 className="pg-h4">연도별 차이</h4>
           <CompareYearTable view={view} />
           <div className="pf-cmp-eps">
-            <div><h4 className="pg-h4">A 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} compact /></div>
-            <div><h4 className="pg-h4">B 의 큰 낙폭 사건</h4><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} compact /></div>
+            <div><h4 className="pg-h4">A 의 주요 낙폭 구간</h4><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} compact /></div>
+            <div><h4 className="pg-h4">B 의 주요 낙폭 구간</h4><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} compact /></div>
           </div>
         </>
       ) : (
-        <p className="pg-note pf-cmp-none">{String(v.compare_reason ?? "두 실행의 곡선을 겹쳐 그리지 못했어요 — 서버가 사유를 주지 않았어요.")}</p>
+        <p className="pg-note pf-cmp-none">{String(v.compare_reason ?? "두 실행의 곡선을 겹쳐 그리지 못했습니다 — 서버가 사유를 주지 않았습니다.")}</p>
       )}
       {diffs.length > 0 && (
         <div className="pg-warn pg-cmp-warn" role="note">
-          같은 조건이 아니에요 — {diffs.map((d) => `${String(d.label)}(${String(d.a)} / ${String(d.b)})`).join(", ")}.
-          차이가 규칙 때문인지 조건 때문인지 가를 수 없어요.
+          같은 조건이 아닙니다 — {diffs.map((d) => `${String(d.label)}(${String(d.a)} / ${String(d.b)})`).join(", ")}.
+          차이가 규칙 때문인지 조건 때문인지 가를 수 없습니다.
         </div>
       )}
       <table className="pg-table pg-cmp">

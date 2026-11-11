@@ -168,7 +168,7 @@ def test_catalog_question_presets_and_show_if():
     assert props["model"]["x-ui"]["options"]["mv_utility"] == "위험 성향에 맞춰"
     ui = props["risk_aversion"]["x-ui"]
     assert ui["tier"] == "basic"
-    assert ui["question"] == "위험을 얼마나 피할까요?"
+    assert ui["question"] == "위험 회피 수준"
     assert ui["show_if"] == {"model": ["mv_utility"]}
     assert ui["widget"] == "slider"
     labels = [p["label"] for p in ui["presets"]]
@@ -230,7 +230,7 @@ def test_node_lambda_moves_weights_and_explains(market):
     assert lo["view"]["weights"] != hi["view"]["weights"]
     d = pg.run(_graph(None), gn.REGISTRY)["nodes"]["o"]
     trust = " ".join(t["text"] for t in d["explain"]["trust"])
-    assert "관례적인 값" in trust and "나에게 맞는 값은 아니에요" in trust
+    assert "관례적인 값" in trust and "나에게 맞는 값은 아닙니다" in trust
     assert any("위험 회피 λ 4" in f for f in d["explain"]["facts"])
     utrust = " ".join(t["text"] for t in hi["explain"]["trust"])
     assert "내가 고른 값" in utrust and "관례적인 값" not in utrust
@@ -253,10 +253,10 @@ def test_unused_views_are_said_not_hidden(market):
     g = chain(model="mv_utility", views=[VIEW])
     o = pg.run(g, gn.REGISTRY)["nodes"]["o"]
     assert o["view"]["views_unused"] == 1
-    assert any("쓰이지 않아요" in t["text"] for t in o["explain"]["trust"])
+    assert any("쓰이지 않습니다" in t["text"] for t in o["explain"]["trust"])
     b = pg.run(chain(model="bl", views=[VIEW]), gn.REGISTRY)["nodes"]["o"]
     assert "views_unused" not in b["view"]
-    assert not any("쓰이지 않아요" in t["text"] for t in b["explain"]["trust"])
+    assert not any("쓰이지 않습니다" in t["text"] for t in b["explain"]["trust"])
     n = pg.run(chain(model="mv_utility"), gn.REGISTRY)["nodes"]["o"]
     assert "views_unused" not in n["view"]
 

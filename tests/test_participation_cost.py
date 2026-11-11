@@ -157,7 +157,7 @@ def test_the_square_root_law_is_not_reimplemented_here():
     called = {n.func.attr for n in ast.walk(tree)
               if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     assert "turnover_based_impact" in called
-    assert "sqrt" not in src, "√을 여기서 다시 계산하고 있다 — 위임해야 한다"
+    assert "sqrt" not in src, "√을 여기서 재계산하고 있다 — 위임해야 한다"
 
 
 def test_it_delegates_to_the_model_the_rest_of_the_repo_uses():

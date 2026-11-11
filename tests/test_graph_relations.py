@@ -22,7 +22,7 @@ KINDS = {
     "src": {"plain_label": "수익률 불러오기", "inputs": [],
             "outputs": [{"name": "returns", "type": "Returns"}]},
     "dst": {"plain_label": "비중 계산", "inputs": [
-        {"name": "returns", "type": "Returns", "required": True, "role": "공분산을 재는 데 써요."},
+        {"name": "returns", "type": "Returns", "required": True, "role": "공분산을 재는 데 씁니다."},
         {"name": "other", "type": "Returns", "required": False}], "outputs": []},
 }
 PLAIN = {"Returns": "수익률"}
@@ -36,8 +36,8 @@ def _e(tp="returns", id_="a.returns->b.returns", **over):
 def test_the_template_with_a_brief_and_a_role():
     out = rel.relations(NODES, [_e()], KINDS, PLAIN, briefs={("a", "returns"): "5종목 · 756일"})
     r = out["a.returns->b.returns"]
-    assert r["text"] == "‘수익률 불러오기’의 수익률(5종목 · 756일) → ‘비중 계산’ 수익률 자리. 공분산을 재는 데 써요."
-    assert r == {**r, "flows": "수익률", "role": "공분산을 재는 데 써요.", "required": True, "brief": "5종목 · 756일"}
+    assert r["text"] == "‘수익률 불러오기’의 수익률(5종목 · 756일) → ‘비중 계산’ 수익률 자리. 공분산을 재는 데 씁니다."
+    assert r == {**r, "flows": "수익률", "role": "공분산을 재는 데 씁니다.", "required": True, "brief": "5종목 · 756일"}
 
 
 def test_no_brief_no_parentheses():

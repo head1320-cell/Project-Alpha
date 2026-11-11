@@ -227,7 +227,7 @@ test.describe("P4 매크로 지능 패널", () => {
     ["consensus", "regime-consensus"], ["forecast", "regime-forecast-coverage"],
     ["longRun", "long-run"], ["coverage", "source-coverage"],
   ] as const) {
-    test(`BU5c 실패 — ${key} 500: 그 블록에 alert + 다시 시도 → 풀면 회복(미가용 배지가 아니다)`, async ({ page }) => {
+    test(`BU5c 실패 — ${key} 500: 그 블록에 alert + 재시도 → 풀면 회복(미가용 배지가 아니다)`, async ({ page }) => {
       await stubIntel(page);
       await page.route(`**/api/backend/api/v1/macro/${path}**`,
         (r) => r.fulfill({ status: 500, contentType: "application/json", body: "{}" }));
@@ -236,7 +236,7 @@ test.describe("P4 매크로 지능 패널", () => {
       await expect(alert).toHaveCount(1, { timeout: 20_000 });
       await page.unroute(`**/api/backend/api/v1/macro/${path}**`);
       await stubIntel(page);
-      await alert.getByRole("button", { name: "다시 시도" }).click();
+      await alert.getByRole("button", { name: "재시도" }).click();
       await expect(page.locator(".mx-panel [role=alert]")).toHaveCount(0, { timeout: 20_000 });
     });
   }

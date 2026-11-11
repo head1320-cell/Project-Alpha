@@ -48,8 +48,8 @@ export function MarketToggle({ market, setMarket }: { market: Market; setMarket:
 export function TabFail({ title, onRetry }: { title: string; onRetry?: () => void }) {
   return (
     <Notice tone="danger" title={title}>
-      서버에 닿지 못했거나 계산이 실패했어요.
-      {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>}
+      서버 연결 실패 또는 계산 실패
+      {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>재시도</button></div>}
     </Notice>
   );
 }
@@ -79,11 +79,11 @@ export function StrategiesTab({ strategies, market, setMarket, loading, failed, 
   return (
     <div className="mc-stack">
       <div className="mc-strat-bar">
-        <div className="mc-strat-title">전술적 자산배분 전략{total ? ` ${total}개` : ""} <span className="mc-card-sub">모멘텀·위험·최적화 규칙으로 지금 시점의 비중과 신호를 냈어요. 카드를 누르면 자세히 봐요.</span></div>
+        <div className="mc-strat-title">전술적 자산배분 전략{total ? ` ${total}개` : ""} <span className="mc-card-sub">모멘텀·위험·최적화 규칙으로 지금 시점의 비중과 신호를 냈습니다. 카드를 누르면 자세히 봅니다.</span></div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
-      {loading && <p className="mc-loading">{mktName(market)} 비중을 계산하는 중이에요</p>}
-      {!loading && failed && <TabFail title={`${mktName(market)} 전략을 불러오지 못했어요`} onRetry={onRetry} />}
+      {loading && <p className="mc-loading">{mktName(market)} 비중 계산 중</p>}
+      {!loading && failed && <TabFail title={`${mktName(market)} 전략 조회 실패`} onRetry={onRetry} />}
       {!loading && !failed && (groups.length ? groups.map((g) => (
         <section key={g.family} className="mc-fam">
           <h3 className="mc-fam-h"><span className="mc-fam-lbl">{g.label}</span><span className="mc-fam-n">{g.items.length}개</span></h3>
@@ -91,7 +91,7 @@ export function StrategiesTab({ strategies, market, setMarket, loading, failed, 
             {g.items.map((s) => <StrategyCard key={s.id} s={s} onTransplant={onTransplant} onOpen={onOpen} />)}
           </div>
         </section>
-      )) : <div className="mc-empty-sm">이 시장에는 전략이 아직 없어요</div>)}
+      )) : <div className="mc-empty-sm">이 시장에는 전략이 아직 없습니다</div>)}
     </div>
   );
 }
@@ -100,7 +100,7 @@ export function StrategyCard({ s, onTransplant, onOpen }: { s: TacticalStrategy;
   const sorted = [...s.holdings].sort((a, b) => b.weight - a.weight);
   const top = sorted.slice(0, 6);
   return (
-    <div className="mc-stratcard mc-stratcard-click" onClick={() => onOpen(s.id)} role="button" tabIndex={0} aria-label={`${s.name} 자세히 보기`}
+    <div className="mc-stratcard mc-stratcard-click" onClick={() => onOpen(s.id)} role="button" tabIndex={0} aria-label={`${s.name} 상세 보기`}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(s.id); } }}>
       <div className="mc-stratcard-h">
         <div><b>{s.name}</b><SignalBadge signal={s.signal} /></div>
@@ -139,15 +139,15 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
       <MarketToggle market={market} setMarket={setMarket} />
     </div>
   );
-  if (loading) return <div className="mc-stack">{bar()}<p className="mc-loading">{mktName(market)} 추천을 다시 계산하는 중이에요</p></div>;
-  if (failed) return <div className="mc-stack">{bar()}<TabFail title={`${mktName(market)} 추천을 불러오지 못했어요`} onRetry={onRetry} /></div>;
-  if (!recommend) return <div className="mc-stack">{bar()}<div className="mc-empty-sm">추천 데이터 없음 · 이 시장의 추천이 아직 없어요</div></div>;
+  if (loading) return <div className="mc-stack">{bar()}<p className="mc-loading">{mktName(market)} 추천을 재계산하는 중입니다</p></div>;
+  if (failed) return <div className="mc-stack">{bar()}<TabFail title={`${mktName(market)} 추천 조회 실패`} onRetry={onRetry} /></div>;
+  if (!recommend) return <div className="mc-stack">{bar()}<div className="mc-empty-sm">추천 데이터 없음 · 이 시장의 추천이 아직 없습니다</div></div>;
   // 실데이터에서 추천이 부분 계산되면(top/regime/보유 목록 결측) 무너지는 대신 정직하게 말한다.
   if (!recommend.top || !recommend.regime || !Array.isArray(recommend.top.holdings_final)) {
     return (
       <div className="mc-stack">{bar()}
         <div className="mc-empty-sm">
-          추천 데이터가 불완전해요. 국면·전략 계산에 필요한 값이 부족해 보여 드릴 수 없어요(데이터 미가용). 데이터를 적재한 뒤 다시 확인해 주세요.
+          추천 데이터가 불완전합니다. 국면·전략 계산에 필요한 값이 부족해 보여 드릴 수 없습니다(데이터 미가용). 데이터를 적재한 뒤 다시 확인하십시오.
         </div>
       </div>
     );
@@ -161,7 +161,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
       {bar(<span className="mc-card-sub"><span data-server>{recommend.regime.quadrant_kr}</span> · 스트레스 {recommend.regime.stress.toFixed(0)} · 신뢰도 {confPct}%</span>)}
       {recommend.low_conviction && (
         <p className="mc-warn mc-warn--line">
-          확신이 낮은 국면이에요(신뢰도 {confPct}%). 방향을 잘못 짚을 위험을 줄이려고 현금성 자산을 {top.cash_overlay_pct.toFixed(0)}% 넣었어요.
+          확신이 낮은 국면입니다(신뢰도 {confPct}%). 방향을 잘못 짚을 위험을 줄이려고 현금성 자산을 {top.cash_overlay_pct.toFixed(0)}% 넣었습니다.
         </p>
       )}
       <div className="mc-grid">
@@ -169,7 +169,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
         {ma && (
           <div className="mc-card span2 mc-featured">
             <div className="mc-card-h">국면에서 바로 정한 배분(1순위)
-              <span className="mc-card-sub">성장 {signed(ma.inputs.growth)} · 물가 {signed(ma.inputs.inflation)} · 스트레스 {ma.inputs.stress.toFixed(0)}을 네 계절 비중으로 옮겼어요</span></div>
+              <span className="mc-card-sub">성장 {signed(ma.inputs.growth)} · 물가 {signed(ma.inputs.inflation)} · 스트레스 {ma.inputs.stress.toFixed(0)}을 네 계절 비중으로 옮겼습니다</span></div>
             <div className="mc-reco">
               <div className="mc-reco-l">
                 <HoldingsDonut holdings={ma.holdings} size={150} />
@@ -194,7 +194,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
             </div>
             <div className="mc-reco-r">
               <div className="mc-reco-nm">{top.name}</div>
-              <div className="mc-reco-comp">종합 점수 <b>{top.composite.toFixed(0)}</b> / 100 · 신뢰도에 맞춰 현금 {top.cash_overlay_pct.toFixed(0)}%를 섞었어요</div>
+              <div className="mc-reco-comp">종합 점수 <b>{top.composite.toFixed(0)}</b> / 100 · 신뢰도에 맞춰 현금 {top.cash_overlay_pct.toFixed(0)}%를 섞었습니다</div>
               <div className="mc-reco-holds">
                 {finalSorted.map((h, idx) => (
                   <div key={h.ticker} className="mc-hold-row">
@@ -211,7 +211,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
           </div>
         </div>
         <div className="mc-card span2">
-          <div className="mc-card-h">추천한 까닭 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "AI가 국면과 성과를 읽고 쓴 설명이에요" : "규칙으로 쓴 설명이에요 · AI 설명은 관리자가 키를 넣으면 켜져요"}</span></div>
+          <div className="mc-card-h">추천한 까닭 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "AI가 국면과 성과를 읽고 쓴 설명입니다" : "규칙으로 쓴 설명입니다 · AI 설명은 관리자가 키를 넣으면 켜집니다"}</span></div>
           <p className="mc-narr" data-server>{recommend.narrative}</p>
         </div>
         <div className="mc-card span2">
@@ -224,7 +224,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
               ))}
             </div>
           </div>
-          <p className="mc-card-note">12개월 성과는 각 전략의 지금 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치예요(연습용 데이터에서는 합성 시세). 앞으로의 수익을 보장하지 않아요.</p>
+          <p className="mc-card-note">12개월 성과는 각 전략의 지금 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치입니다(합성 데이터에서는 합성 시세). 앞으로의 수익을 보장하지 않습니다.</p>
           {recommend.data_lag_note && <p className="mc-card-note" data-server>{recommend.data_lag_note}</p>}
         </div>
       </div>

@@ -40,10 +40,10 @@ export function useSession() {
       const r = await getWithAuth("/api/v1/auth/me");
       if (r.status === 401) {
         clearToken();
-        setSession({ kind: "signed_out", note: "로그인이 끝났어요. 다시 로그인해 주세요." });
+        setSession({ kind: "signed_out", note: "로그인이 끝났습니다. 다시 로그인하십시오." });
         return;
       }
-      if (!r.ok) { setSession({ kind: "unknown", reason: `서버가 ${r.status} 오류로 답했어요.` }); return; }
+      if (!r.ok) { setSession({ kind: "unknown", reason: `서버가 ${r.status} 오류로 답했습니다.` }); return; }
       const body = (await r.json()) as {
         principal?: { username?: unknown; role?: unknown };
         must_change_password?: unknown; password_changed_at?: unknown;
@@ -51,7 +51,7 @@ export function useSession() {
       };
       const p = body?.principal;
       if (!p || typeof p.username !== "string" || !p.username.trim()) {
-        setSession({ kind: "unknown", reason: "서버 응답에 사용자 이름이 없어요." });
+        setSession({ kind: "unknown", reason: "서버 응답에 사용자 이름 없음" });
         return;
       }
       setSession({
@@ -63,13 +63,13 @@ export function useSession() {
           : null,
       });
     } catch {
-      setSession({ kind: "unknown", reason: "서버에 닿지 못했어요." });
+      setSession({ kind: "unknown", reason: "서버 연결 실패" });
     }
   }, []);
   useEffect(() => { void check(); }, [check]);
   const logout = useCallback(() => {
     clearToken();
-    setSession({ kind: "signed_out", note: "로그아웃했어요." });
+    setSession({ kind: "signed_out", note: "로그아웃했습니다." });
   }, []);
   const retry = useCallback(() => check(false), [check]);
   const refresh = useCallback(() => check(true), [check]);

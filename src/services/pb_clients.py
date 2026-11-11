@@ -97,7 +97,7 @@ def _check_graph(graph: Any) -> str:
     text = json.dumps(graph, ensure_ascii=False, separators=(",", ":"))
     size = len(text.encode("utf-8"))
     if size > DOC_MAX_BYTES:
-        raise DocTooLarge(f"문서가 {size // 1024}KB 예요 — 고객 문서는 {DOC_MAX_BYTES // 1024}KB 까지 둘 수 있어요.")
+        raise DocTooLarge(f"문서가 {size // 1024}KB 입니다 — 고객 문서는 {DOC_MAX_BYTES // 1024}KB 까지 둘 수 있습니다.")
     return text
 
 
@@ -127,7 +127,7 @@ def _owned(s, owner: str, client_id: str) -> PbClient:
 def _writable(s, owner: str, client_id: str) -> PbClient:
     r = _owned(s, owner, client_id)
     if r.archived_at is not None:
-        raise ClientArchived("보관한 고객이에요 — 다시 꺼낸 뒤 고쳐 주세요.")
+        raise ClientArchived("보관한 고객입니다 — 다시 꺼낸 뒤 수정하십시오.")
     return r
 
 
@@ -177,7 +177,7 @@ def update(owner: str, client_id: str, changes: dict) -> dict:
     """`changes` 에 든 칸만 바꾼다 — `None` 은 '모름으로 되돌리기'(별칭은 비울 수 없다)."""
     unknown = set(changes) - set(CLIENT_FIELDS)
     if unknown:
-        raise ValueError(f"고칠 수 없는 칸이에요: {', '.join(sorted(unknown))}")
+        raise ValueError(f"고칠 수 없는 칸입니다: {', '.join(sorted(unknown))}")
     if "alias" in changes:
         _check_text("별칭", changes["alias"])
     with session_scope() as s:
@@ -235,7 +235,7 @@ def save_doc(owner: str, client_id: str, doc_id: str, *, graph: Any, name: str |
     with session_scope() as s:
         c, d = _owned_doc(s, owner, client_id, doc_id)
         if c.archived_at is not None:
-            raise ClientArchived("보관한 고객이에요 — 다시 꺼낸 뒤 고쳐 주세요.")
+            raise ClientArchived("보관한 고객입니다 — 다시 꺼낸 뒤 수정하십시오.")
         d.graph = text
         if name is not None:
             d.name = name
@@ -259,7 +259,7 @@ def _sheet_meta(x: PbClientSheet) -> dict:
 
 def create_sheet(owner: str, client_id: str, *, graph: Any, focus_node_id: str, preview: dict, title: str,
                  doc_id: str | None, recompute: Any, kinds: Any) -> dict:
-    """서버가 다시 계산(`recompute(graph, focus, preview)` → `pg.run_for_sheet`)하고 ★모든 노드가★ 본 것과 같을 때만 한 장을 둔다."""
+    """서버가 재계산(`recompute(graph, focus, preview)` → `pg.run_for_sheet`)하고 ★모든 노드가★ 본 것과 같을 때만 한 장을 둔다."""
     from src.services.pb_sheets import build_sheet
     _check_text("한 장 제목", title, DOC_NAME_MAX)
     text = _check_graph(graph)
@@ -306,9 +306,9 @@ def delete_sheet(owner: str, client_id: str, sheet_id: str) -> dict:
     with session_scope() as s:
         c, x = _owned_sheet(s, owner, client_id, sheet_id)
         if c.archived_at is not None:
-            raise ClientArchived("보관한 고객이에요 — 다시 꺼낸 뒤 고쳐 주세요.")
+            raise ClientArchived("보관한 고객입니다 — 다시 꺼낸 뒤 수정하십시오.")
         if x.shared_at is not None:
-            raise SheetShared("고객에게 보여 준 한 장이라 지울 수 없어요 — 무엇을 보여 줬는지가 남아야 해요.")
+            raise SheetShared("고객에게 보여 준 한 장이라 지울 수 없습니다 — 무엇을 보여 줬는지가 남아야 합니다.")
         s.delete(x)
     return {"deleted": sheet_id}
 

@@ -25,7 +25,7 @@ const CMP_METRICS: Row[] = [
   { k: "total_return_pct", label: "총수익률", suffix: "%", pp: true },
   { k: "cagr", label: "연평균 수익률", suffix: "%", pp: true },
   { k: "max_drawdown_pct", label: "최대낙폭", suffix: "%", pp: true },
-  { k: "volatility_pct", label: "변동성(연)", suffix: "%", pp: true },
+  { k: "volatility_pct", label: "연환산 변동성", suffix: "%", pp: true },
   { k: "sharpe_ratio", label: "샤프 지수", digits: 2 },
   { k: "sortino_ratio", label: "소르티노 지수", digits: 2 },
   { k: "calmar_ratio", label: "칼마 비율", digits: 2 },
@@ -54,7 +54,7 @@ const fmt = (v: unknown, r: Row) => {
 const fmtDelta = (d: number, r: Row) => {
   const k = 10 ** (r.digits ?? 1);
   const rd = Math.round(d * k) / k;
-  if (rd === 0) return "같아요";
+  if (rd === 0) return "같습니다";
   return `${rd > 0 ? "+" : ""}${rd.toLocaleString("ko-KR", { maximumFractionDigits: r.digits ?? 1 })}${r.pp ? "%p" : (r.suffix ?? "")}`;
 };
 const signColor = (d: number | null) => (d == null || d === 0 ? undefined : d > 0 ? "var(--tx-up-ink)" : "var(--tx-down-ink)");
@@ -77,11 +77,11 @@ export function BacktestCompare({ runId }: { runId: string }) {
     [listQ.data, runId],
   );
 
-  if (aQ.isLoading) return <div className="tx-page brun-shell rs"><div className="brun-loading">불러오는 중이에요</div></div>;
+  if (aQ.isLoading) return <div className="tx-page brun-shell rs"><div className="brun-loading">조회 중</div></div>;
   if (aQ.isError || !aQ.data) return (
     <div className="tx-page brun-shell rs">
       <div className="brun-err rs-state">
-        <Notice tone="warn" title="이 실행을 찾지 못했어요">만료되었거나 잘못된 링크일 수 있어요.</Notice>
+        <Notice tone="warn" title="이 실행을 찾지 못했습니다">만료되었거나 잘못된 링크일 수 있습니다.</Notice>
         <div className="rs-acts"><Link href="/backtest" className="tx-btn tx-btn--sub">편집기로 돌아가기</Link></div>
       </div>
     </div>
@@ -98,14 +98,14 @@ export function BacktestCompare({ runId }: { runId: string }) {
           mock 일 수 있고 그때 Δ 는 전략 차이가 아니다(Z3). */}
       <div className="rs-labels"><PerfLabel value={a.perf_label} scope="A" /></div>
 
-      {!aComparable && <Notice tone="warn" title="실행 A 가 끝나지 않아 비교할 수 없어요">지금 상태: {a.status}</Notice>}
+      {!aComparable && <Notice tone="warn" title="실행 A 가 끝나지 않아 비교할 수 없습니다">지금 상태: {a.status}</Notice>}
 
       <section className="brun-card rs-card">
         <h2 className="brun-card-t">견줄 실행 B<span className="brun-note">끝난 다른 실행만</span></h2>
         {listQ.isError ? (
-          <Notice tone="danger" title="실행 목록을 불러오지 못했어요">서버에 닿지 않았어요. 잠시 뒤 새로 고쳐 주세요.</Notice>
+          <Notice tone="danger" title="실행 목록 조회 실패">서버에 닿지 않았습니다. 잠시 뒤 새로 수정하십시오.</Notice>
         ) : candidates.length === 0 ? (
-          <p className="rs-empty">견줄 수 있는 끝난 실행이 아직 없어요 — 편집기에서 하나 더 실행해 보세요.</p>
+          <p className="rs-empty">견줄 수 있는 끝난 실행이 아직 없습니다 — 편집기에서 하나 더 실행하십시오.</p>
         ) : (
           <select className="brun-select" value={bId} onChange={(e) => setBId(e.target.value)} aria-label="견줄 실행 B">
             <option value="">실행 B 고르기</option>
@@ -116,8 +116,8 @@ export function BacktestCompare({ runId }: { runId: string }) {
         )}
       </section>
 
-      {bId && bQ.isLoading && <div className="brun-loading">실행 B 를 불러오는 중이에요</div>}
-      {bId && bQ.isError && <Notice tone="danger" title="실행 B 를 불러오지 못했어요">다른 실행을 고르거나 잠시 뒤 다시 골라 주세요.</Notice>}
+      {bId && bQ.isLoading && <div className="brun-loading">실행 B 를 불러오는 중입니다</div>}
+      {bId && bQ.isError && <Notice tone="danger" title="실행 B 를 불러오지 못했습니다">다른 실행을 고르거나 잠시 뒤 다시 선택하십시오.</Notice>}
       {bId && bQ.data && aComparable && <CompareBody a={a} b={bQ.data} />}
     </div>
   );
@@ -136,7 +136,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
     enabled: bComparable, staleTime: 0, retry: 1,
   });
 
-  if (!bComparable) return <Notice tone="warn" title="실행 B 가 끝나지 않아 비교할 수 없어요">지금 상태: {b.status}</Notice>;
+  if (!bComparable) return <Notice tone="warn" title="실행 B 가 끝나지 않아 비교할 수 없습니다">지금 상태: {b.status}</Notice>;
   const rows: MetricDiffRow[] | null = cmpQ.data?.rows ?? null;
   const rowOf = (k: keyof BacktestStatistics): MetricDiffRow | null => rows?.find((r) => r.key === k) ?? null;
   const specOf = (k: string): Row => CMP_METRICS.find((r) => r.k === k) ?? { k: k as keyof BacktestStatistics, label: k };
@@ -144,21 +144,21 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
     ? compareViewOf(cmpQ.data, { unit: "base100", labelA: "A", labelB: "B", perfLabelA: a.perf_label ?? null, perfLabelB: b.perf_label ?? null,
                                  question: "두 조건식이 같은 자리에서 어떻게 다른가", drawdownsA: a.perf?.drawdowns ?? null, drawdownsB: b.perf?.drawdowns ?? null })
     : null;
-  const retry = <button type="button" className="tx-btn tx-btn--sub" onClick={() => void cmpQ.refetch()}>다시 시도</button>;
+  const retry = <button type="button" className="tx-btn tx-btn--sub" onClick={() => void cmpQ.refetch()}>재시도</button>;
 
   return (
     <>
       {/* ★답 = 서버가 뺀 차이(B − A)만★ 어느 쪽이 낫다고 말하지 않는다. 한쪽 값이 없으면 0 이 아니라 "비교할 수 없어요". */}
       <section className="tx-answer rs-answer" aria-label="한 줄 답">
-        <p className="tx-answer-s">B 는 A 와 이만큼 달라요</p>
-        {cmpQ.isPending && <p className="rs-diff-wait">차이를 재는 중이에요</p>}
-        {cmpQ.isError && <Notice tone="danger" title="차이를 재지 못했어요">{(cmpQ.error as Error).message} {retry}</Notice>}
+        <p className="tx-answer-s">B 는 A 와 이만큼 다릅니다</p>
+        {cmpQ.isPending && <p className="rs-diff-wait">차이 측정 중</p>}
+        {cmpQ.isError && <Notice tone="danger" title="차이 측정 불가">{(cmpQ.error as Error).message} {retry}</Notice>}
         {rows && (
           <ul className="rs-diff">
             {HEADLINE.map((h) => {
               const r = rowOf(h.k);
               if (!r || r.diff == null) {
-                return <li key={h.k} className="rs-diff-na">{h.topic} 비교할 수 없어요 — {r?.a == null ? "A" : "B"} 에 값이 없어요</li>;
+                return <li key={h.k} className="rs-diff-na">{h.topic} 비교할 수 없습니다 — {r?.a == null ? "A" : "B"} 에 값이 없습니다</li>;
               }
               return (
                 <li key={h.k}>
@@ -172,21 +172,21 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
           <PerfLabel value={a.perf_label} scope="A" />
           <PerfLabel value={b.perf_label} scope="B" />
         </div>
-        <p className="rs-why">B 는 {b.strategy_name} · A 는 {a.strategy_name}. 두 실행의 데이터 종류가 다르면 차이는 전략의 차이가 아니에요.</p>
+        <p className="rs-why">B 는 {b.strategy_name} · A 는 {a.strategy_name}. 두 실행의 데이터 종류가 다르면 차이는 전략의 차이가 아닙니다.</p>
       </section>
 
       <section className="brun-card rs-card">
         <h2 className="brun-card-t">자산곡선 (시작 = 100)<span className="brun-note">A 는 잉크 · B 는 색 · 아래 띠는 차이(B − A)</span></h2>
-        {cmpQ.isPending && <p className="brun-loading">두 곡선을 맞추는 중이에요</p>}
-        {cmpQ.isError && <Notice tone="danger" title="두 곡선을 맞추지 못했어요">{(cmpQ.error as Error).message} {retry}</Notice>}
+        {cmpQ.isPending && <p className="brun-loading">두 곡선 정렬 중</p>}
+        {cmpQ.isError && <Notice tone="danger" title="두 곡선을 맞추지 못했습니다">{(cmpQ.error as Error).message} {retry}</Notice>}
         {view && (
           <>
             <PerfCompare view={view} height={280} />
-            <h3 className="pg-h4">해마다 차이</h3>
+            <h3 className="pg-h4">연도별 차이</h3>
             <CompareYearTable view={view} />
             <div className="pf-cmp-eps">
-              <div><h3 className="pg-h4">A 의 큰 낙폭 사건</h3><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} /></div>
-              <div><h3 className="pg-h4">B 의 큰 낙폭 사건</h3><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} /></div>
+              <div><h3 className="pg-h4">A 의 주요 낙폭 구간</h3><DrawdownEpisodes episodes={view.drawdowns?.a ?? null} /></div>
+              <div><h3 className="pg-h4">B 의 주요 낙폭 구간</h3><DrawdownEpisodes episodes={view.drawdowns?.b ?? null} /></div>
             </div>
           </>
         )}
@@ -205,7 +205,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
                     <td>{r.label}</td>
                     <td className="num">{fmt(r.a, spec)}</td>
                     <td className="num">{fmt(r.b, spec)}</td>
-                    <td className="num" style={{ color: signColor(r.diff) }}>{r.diff == null ? "비교할 수 없어요" : fmtDelta(r.diff, spec)}</td>
+                    <td className="num" style={{ color: signColor(r.diff) }}>{r.diff == null ? "비교 불가" : fmtDelta(r.diff, spec)}</td>
                   </tr>
                 );
               })}

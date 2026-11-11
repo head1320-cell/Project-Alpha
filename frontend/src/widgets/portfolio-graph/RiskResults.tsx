@@ -98,8 +98,8 @@ export function VarEsResult({ v }: { v: Dict }) {
   return (
     <>
       <Meta v={v} />
-      <Lead value={krw(h.var_amount)}>하루 동안 {pc(cl, 0)} 확률로 손실이 이 금액을 넘지 않았어요 — 과거 그대로</Lead>
-      <h4 className="pg-h4">세 방법을 나란히 (합치지 않아요)</h4>
+      <Lead value={krw(h.var_amount)}>하루 동안 {pc(cl, 0)} 확률로 손실이 이 금액을 넘지 않았습니다 — 과거 그대로</Lead>
+      <h4 className="pg-h4">세 방법을 나란히 (합치지 않습니다)</h4>
       <Bars rows={[
         { name: "과거 그대로", value: num(h.var_amount), text: krw(h.var_amount) },
         { name: "정규분포", value: num(n.var_amount), text: krw(n.var_amount) },
@@ -114,7 +114,7 @@ export function VarEsResult({ v }: { v: Dict }) {
         <>
           <h4 className="pg-h4">어느 종목이 손실 위험을 만드나</h4>
           <Bars rows={comps.map((c) => ({ name: String(c.label ?? c.name), value: num(c.amount), text: krw(c.amount) }))} />
-          <p className="pg-note">정규·표본 공분산으로 나눈 값이에요 — 더하면 평균 항을 뺀 정규 VaR 가 돼요.</p>
+          <p className="pg-note">정규·표본 공분산으로 나눈 값입니다 — 더하면 평균 항을 뺀 정규 VaR 가 됩니다.</p>
         </>
       ) : r.components_reason ? <p className="pg-note">{String(r.components_reason)}</p> : null}
       <InputsTable r={r} />
@@ -171,7 +171,7 @@ export function McVarResult({ v }: { v: Dict }) {
   return (
     <>
       <Meta v={v} />
-      <Lead value={krw(varAmt)}>{hp}일 동안 {pc(cl, 0)} 확률로 손실이 이 금액을 넘지 않았어요 — 모의 경로 {fx(r.n_simulations, 0)}개</Lead>
+      <Lead value={krw(varAmt)}>{hp}일 동안 {pc(cl, 0)} 확률로 손실이 이 금액을 넘지 않았습니다 — 모의 경로 {fx(r.n_simulations, 0)}개</Lead>
       {r.histogram ? <LossTail h={r.histogram as Dict} varAmt={varAmt} esAmt={esAmt} /> : null}
       {r.histogram ? <p className="pg-ff-legend">진한 막대 = VaR 보다 더 잃은 경로(손실 꼬리) · 점선 = 꼬리의 평균(ES)</p> : null}
       <KV rows={[
@@ -203,7 +203,7 @@ export function VolModelsResult({ v }: { v: Dict }) {
         ["충격이 반으로 줄기까지", num(g.half_life_days) === null ? "—" : `${fx(g.half_life_days, 1)}일`],
         ["표본 안 적합(AIC · BIC)", `${String(ms.aic_winner ?? "—")} · ${String(ms.bic_winner ?? "—")}`],
       ]} />
-      <p className="pg-note">AIC·BIC 는 이 표본에 얼마나 맞는지예요 — 앞날을 더 잘 맞힌다는 뜻이 아니에요.</p>
+      <p className="pg-note">AIC·BIC 는 이 표본에 얼마나 맞는지입니다 — 앞날을 더 잘 맞힌다는 뜻이 아닙니다.</p>
       <InputsTable r={r} />
     </>
   );
@@ -226,7 +226,7 @@ export function HoldingVarResult({ v }: { v: Dict }) {
           </tr>
         ))}</tbody>
       </table>
-      <p className="pg-note">하루 값 × √보유일 — 날마다 독립이라는 가정이에요.</p>
+      <p className="pg-note">하루 값 × √보유일 — 날마다 독립이라는 가정입니다.</p>
       <InputsTable r={r} />
     </>
   );
@@ -240,8 +240,8 @@ export function FrtbResult({ v }: { v: Dict }) {
   return (
     <>
       <Meta v={v} />
-      <Lead value={krw(r.imcc_capital_charge)}>규제 공식(IMA)으로 계산한 자본 — 승인 모델이 아니에요</Lead>
-      {!found && <p className="pg-warn">표본이 짧아 250일 스트레스 구간을 찾지 못했어요 — 스트레스 ES 자리에 현재 ES 를 그대로 뒀어요.</p>}
+      <Lead value={krw(r.imcc_capital_charge)}>규제 공식(IMA)으로 계산한 자본 — 승인 모델이 아닙니다</Lead>
+      {!found && <p className="pg-warn">표본이 짧아 250일 스트레스 구간을 찾지 못했습니다 — 스트레스 ES 자리에 현재 ES 를 그대로 뒀습니다.</p>}
       <table className="pg-table pg-sotp">
         <tbody>
           <tr><td>현재 ES 97.5% (과거 그대로)</td><td className="pg-td-num">{krw(he.es_amount)}</td></tr>
@@ -294,7 +294,7 @@ export function DccResult({ v }: { v: Dict }) {
           );
         })}</tbody>
       </table>
-      <p className="pg-note">상관은 함께 움직인 정도예요 — 한쪽이 다른 쪽을 움직인다는 뜻이 아니에요.</p>
+      <p className="pg-note">상관은 함께 움직인 정도입니다 — 한쪽이 다른 쪽을 움직인다는 뜻이 아닙니다.</p>
       <InputsTable r={r} />
     </>
   );
@@ -349,7 +349,7 @@ export function FuturesHedgeResult({ v }: { v: Dict }) {
         ["β 감소율 (반올림 뒤, 시장 위험만)", r.expected_var_reduction_pct == null ? "계산 안 함" : `${fx(r.expected_var_reduction_pct, 1)}%`],
       ]} />
       {r.reduction_reason ? <p className="pg-note">{String(r.reduction_reason)}</p>
-        : <p className="pg-note">종목 고유의 위험은 선물로 줄지 않아요.</p>}
+        : <p className="pg-note">종목 고유의 위험은 선물로 줄지 않습니다.</p>}
       <InputsTable r={r} />
     </>
   );

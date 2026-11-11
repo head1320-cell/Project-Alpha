@@ -89,7 +89,7 @@ def test_a_default_rate_is_never_labelled_as_ecos(monkeypatch, no_beta):
 def test_a_mock_rate_is_labelled_as_practice(monkeypatch, no_beta):
     p = _rf(monkeypatch, 0.0457, "MOCK")
     assert p["rf"] == 0.0457
-    assert "연습용" in p["rf_source"] and "ECOS" not in p["rf_source"]
+    assert "합성" in p["rf_source"] and "ECOS" not in p["rf_source"]
 
 
 def test_an_out_of_range_rate_still_falls_back_to_the_default_label(monkeypatch, no_beta):
@@ -112,13 +112,13 @@ def _beta(monkeypatch, factors, mock):
 def test_a_beta_in_mock_mode_is_practice(monkeypatch):
     p = _beta(monkeypatch, {"beta_1y": 1.2}, mock=True)
     assert p["beta"] == 1.2
-    assert "연습용" in p["beta_source"] and "KIS" not in p["beta_source"]
+    assert "합성" in p["beta_source"] and "KIS" not in p["beta_source"]
 
 
 def test_a_beta_outside_mock_mode_is_measured_from_daily_prices(monkeypatch):
     p = _beta(monkeypatch, {"beta_1y": 1.2}, mock=False)
     assert p["beta"] == 1.2
-    assert "실측" in p["beta_source"] and "연습용" not in p["beta_source"]
+    assert "실측" in p["beta_source"] and "합성" not in p["beta_source"]
 
 
 def test_a_missing_beta_is_the_default(monkeypatch):

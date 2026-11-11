@@ -185,7 +185,7 @@ def test_the_declaration_site_list_is_pinned():
     """★공허한 하네스는 증거가 아니다★ 목록이 비거나 줄면 전수 검사는 언제나 통과한다."""
     assert _DECLARATION_SITES == _EXPECTED_DECLARATION_SITES, (
         "선언 지점 목록이 바뀌었다 — 새 지점이 `SIGNAL_LAG_DEFAULT` 를 읽는지 "
-        "확인하고 이 스냅샷을 갱신하세요.")
+        "확인하고 이 스냅샷을 갱신하십시오.")
     assert _DECLARATION_SITES, "검사 대상이 없다 — 전수 검사가 공허하다"
 
 

@@ -79,7 +79,7 @@ test("스튜디오 — 잠재 요인 · 기간 구조", async ({ page }) => {
   check("기간 구조", await marks(page, ".ms-studio"), ["line"]);
 });
 
-test("기업 — 주가 · 가치 범위 · 매출과 이익률", async ({ page }) => {
+test("기업 — 주가 · 밸류에이션 밴드 · 매출과 이익률", async ({ page }) => {
   await page.goto("/insights?code=005930", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".ci .ci-head h1")).toBeVisible({ timeout: 40_000 });
   for (const s of ["value", "models", "numbers", "money", "risk", "peers", "factors", "ai"]) {

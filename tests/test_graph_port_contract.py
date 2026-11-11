@@ -10,7 +10,7 @@
 - `needs_unmet` 은 실패가 **확실할 때만** 나온다(점수→비중 · 수익률 없음 → 흔들림 나눠 보기). 조건부로 줄 수
   있으면 나오지 않는다(짝). 이 판정은 `/validate` 에만 있고 `/run` 결과를 바꾸지 않는다.
 - 템플릿이 쓰는 모양(스크리너 → 점수→비중 + 수익률 → 흔들림 나눠 보기)은 오류가 아니다.
-- 과거를 돌려 보는 다른 노드가 있으면 거래비용·처음 보는 기간은 "단계가 없어요"(건너뜀)가 아니라 몰라요다(짝).
+- 과거를 돌려 보는 다른 노드가 있으면 거래비용·처음 보는 기간은 "단계가 없습니다"(건너뜀)가 아니라 미상다(짝).
 """
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ def test_needs_unmet_speaks_when_failure_is_certain_and_names_the_fix():
     [err] = _unmet(rep)
     assert rep["ok"] is False and err["node_id"] == "k" and err["edge_id"] == "s.weights->k.weights"
     assert "공분산" in err["message"] and "실패" in err["message"]
-    assert err["fix"] == "‘점수로 비중 정하기’에 ‘수익률’을 이으면 줄 수 있어요."
+    assert err["fix"] == "‘점수로 비중 정하기’에 ‘수익률’을 이으면 줄 수 있습니다."
 
 
 def test_needs_unmet_is_silent_when_the_value_may_be_given():
@@ -151,7 +151,7 @@ def test_a_backtest_needs_the_optimizers_rule():
     edges = SCORE_EDGES[:2] + [_edge("u", "universe", "r", "universe"), _edge("r", "returns", "s", "returns"),
                                _edge("s", "weights", "b", "weights"), _edge("r", "returns", "b", "returns")]
     [err] = _unmet(routes.graph_validate(_g(nodes, edges)))
-    assert err["node_id"] == "b" and "규칙" in err["message"] and err["fix"] == "‘비중 계산’의 비중을 이어 주세요."
+    assert err["node_id"] == "b" and "규칙" in err["message"] and err["fix"] == "‘비중 계산’의 비중을 연결하십시오."
     ok = chain(backtest={})
     assert _unmet(routes.graph_validate(ok)) == []                                   # ★짝★ 옵티마이저 비중
 
@@ -189,7 +189,7 @@ def test_the_catalog_carries_roles_needs_and_gives_only_where_declared():
 def test_every_role_is_a_polite_korean_sentence():
     for (kind, port), role in roles.ROLES.items():
         assert gn.REGISTRY.get(kind).input(port) is not None, (kind, port)
-        assert role.endswith(("요.", "요")) and len(role) <= 80, (kind, port, role)
+        assert role.endswith(("다.", "다")) and len(role) <= 80, (kind, port, role)
 
 
 def test_node_types_serves_port_names_and_gate_names():

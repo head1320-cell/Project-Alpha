@@ -12,7 +12,7 @@ import { contrastAudit, type AuditResult } from "./helpers";
  * 동작·문구 계약은 `factor-picker.spec`(12 단언)이, 요청은 두 요청 골든이 바이트로 건다.
  */
 
-const SEARCH = "조건을 단어로 입력하세요";
+const SEARCH = "조건을 단어로 입력하십시오";
 const dialog = (p: Page) => p.locator(".tfm");
 const apply = (p: Page) => p.getByRole("button", { name: "입력", exact: true });
 
@@ -121,14 +121,14 @@ test("관심그룹 창: 분류 목록을 불러오지 못하면 alert(짝: 정�
 
   await page.route(/\/api\/v1\/screener\/stock-browse$/, (r) => r.fulfill({ status: 500, body: "boom" }));
   await page.getByRole("button", { name: /그룹 추가/ }).first().click();
-  await expect(wg(page).getByRole("alert")).toContainText("분류 목록을 불러오지 못했어요");
+  await expect(wg(page).getByRole("alert")).toContainText("분류 목록 조회 실패");
 });
 
-test("관심그룹 창: 종목 목록을 불러오지 못하면 alert — '분류를 고르세요'로 덮지 않는다", async ({ page }) => {
+test("관심그룹 창: 종목 목록을 불러오지 못하면 alert — '분류를 고르십시오'로 덮지 않는다", async ({ page }) => {
   await page.route(/\/api\/v1\/screener\/stock-browse\?cls=/, (r) => r.fulfill({ status: 500, body: "boom" }));
   await openWatch(page);
   await wg(page).getByRole("button", { name: /코스피 대형/ }).click();
-  await expect(wg(page).getByRole("alert")).toContainText("종목 목록을 불러오지 못했어요");
+  await expect(wg(page).getByRole("alert")).toContainText("종목 목록 조회 실패");
   await expect(wg(page).locator(".wg-items").getByText(/분류를 (선택|골라)/)).toHaveCount(0);
 });
 

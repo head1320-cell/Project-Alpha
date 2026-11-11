@@ -88,12 +88,12 @@ test("★서버가 못 했다고 답하면(available:false) 사유 — 'undefine
   await expect(page.locator(".rk [role=alert]")).toHaveCount(0);
 });
 
-test("★시나리오 목록 500 → alert + 다시 시도 → 풀면 회복★(옛 화면은 빈 칩 줄) · 짝: 정상은 alert 0", async ({ page }) => {
+test("★시나리오 목록 500 → alert + 재시도 → 풀면 회복★(옛 화면은 빈 칩 줄) · 짝: 정상은 alert 0", async ({ page }) => {
   await page.route(`${API}/screener/stress-scenarios`, (r) => r.fulfill(fail500));
   await open(page);
   await expect(page.locator(".rk [role=alert]")).toBeVisible({ timeout: 40_000 });
   await page.unroute(`${API}/screener/stress-scenarios`);
-  await page.locator(".rk").getByRole("button", { name: "다시 시도" }).click();
+  await page.locator(".rk").getByRole("button", { name: "재시도" }).click();
   await expect(page.locator(".rk-sum-row")).toHaveCount(4, { timeout: 40_000 });
   await expect(page.locator(".rk [role=alert]")).toHaveCount(0);
 });

@@ -123,13 +123,13 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     ("PUT", "/api/v1/pb/clients/{cid}/docs/{did}"):
         (REQUIRE_LOGIN, "내 고객의 설계 문서 저장 — 보관한 고객은 409"),
     ("POST", "/api/v1/pb/clients/{cid}/snapshots"):
-        (REQUIRE_LOGIN, "내 고객의 한 장 만들기(PB4) — 서버가 다시 계산하고 PB 가 본 미리보기와 같을 때만 둔다"),
+        (REQUIRE_LOGIN, "내 고객의 한 장 만들기(PB4) — 서버가 재계산하고 PB 가 본 미리보기와 같을 때만 둔다"),
     ("GET", "/api/v1/pb/clients/{cid}/snapshots"):
         (REQUIRE_LOGIN, "내 고객의 한 장 목록"),
     ("GET", "/api/v1/pb/clients/{cid}/snapshots/{sid}"):
         (REQUIRE_LOGIN, "내 고객의 한 장 보기 — 그 고객의 한 장만"),
     ("DELETE", "/api/v1/pb/clients/{cid}/snapshots/{sid}"):
-        (REQUIRE_LOGIN, "내 고객의 한 장 지우기 — 고객에게 보여 준 적 없는 것만(보여 준 것은 409)"),
+        (REQUIRE_LOGIN, "내 고객의 한 장 삭제 — 고객에게 보여 준 적 없는 것만(보여 준 것은 409)"),
     ("POST", "/api/v1/pb/clients/{cid}/snapshots/{sid}/ask"):
         (REQUIRE_LOGIN, "한 장에게 미리 묻기 — 근거는 그 한 장의 줄뿐 · PB 의 시간당 한도"),
     # ── 고객 주소 (PB6) — 본인 고객만. 만들기·다시 열기·한 장 바꾸기는 유통 관문 뒤(`distribution_surface`) ──
@@ -150,7 +150,7 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/api/v1/broker-accounts"):
         (REQUIRE_LOGIN, "증권 계좌 연결 — 앱 키·시크릿·계좌번호를 받아 암호화해 둔다"),
     ("DELETE", "/api/v1/broker-accounts/{account_id}"):
-        (REQUIRE_LOGIN, "내 증권 계좌 지우기 — 남의 계좌는 404"),
+        (REQUIRE_LOGIN, "내 증권 계좌 삭제 — 남의 계좌는 404"),
     ("POST", "/api/v1/broker-accounts/{account_id}/check"):
         (REQUIRE_LOGIN, "내 증권 계좌 연결 확인 — 그 계좌 자격으로 증권사에 잔고를 한 번 묻는다. 남의 계좌는 404"),
 

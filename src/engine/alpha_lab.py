@@ -539,7 +539,7 @@ def score_alpha(expr: str, tickers: list[str], as_of: str | None = None,
     series = (price_loader or _load_price_series)(tickers, start, str(end))
     if len(series) < MIN_NAMES:
         return {"available": False,
-                "reason": f"시세 가용 종목 {len(series)}개 (<{MIN_NAMES}) — 유니버스를 넓히세요.",
+                "reason": f"시세 가용 종목 {len(series)}개 (<{MIN_NAMES}) — 유니버스를 넓히십시오.",
                 "as_of_requested": as_of, "as_of_effective": str(end)}
 
     names = list(series.keys())
@@ -590,7 +590,7 @@ def validate_alpha(expr: str, tickers: list[str], months: int = 24,
     series = (price_loader or _load_price_series)(tickers, start, str(horizon_end))
     if len(series) < MIN_NAMES:
         return {"error": True,
-                "message": f"시세 가용 종목 {len(series)}개 (<{MIN_NAMES}) — 유니버스를 넓히세요."}
+                "message": f"시세 가용 종목 {len(series)}개 (<{MIN_NAMES}) — 유니버스를 넓히십시오."}
 
     fund = _load_fundamentals(list(series.keys())) if need_fund else {}
     names = list(series.keys())

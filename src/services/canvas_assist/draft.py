@@ -32,8 +32,8 @@ MAX_QUOTE = 120
 MAX_NAMES = 30
 HOWS = ("preset", "option", "number", "tickers")
 WHY_NOT = ("none", "off_topic", "judgement")
-CANNOT = {"off_topic": "포트폴리오 설계에 대해 말해 주세요",
-          "judgement": "어떤 종목이 좋을지는 말하지 않아요 — 말씀대로 설계만 지어요"}
+CANNOT = {"off_topic": "포트폴리오 설계에 대해 말하십시오",
+          "judgement": "어떤 종목이 좋을지는 말하지 않습니다 — 말씀대로 설계만 짓습니다"}
 
 TOP_KEYS = frozenset({"understood", "why_not", "summary", "add", "connect", "set"})
 ADD_KEYS = frozenset({"ref", "kind"})
@@ -47,9 +47,9 @@ _UNITS = {"%p": ("%p", "%포인트", "퍼센트포인트"), "%": ("%", "퍼센�
 UNIT_WORDS = sorted(((w.lower(), u) for u, ws in _UNITS.items() for w in ws), key=lambda x: -len(x[0]))
 MAGNITUDE = ("백", "천", "만", "억", "조")
 _NOT_SPOKEN = frozenset({"per_port", "per_port_number", "pick", "filter", "text", "string_list"})
-_PLAIN = {"type_mismatch": "포트 타입이 달라요", "multiple_inputs": "받는 자리에 이미 선이 있어요",
-          "unknown_port": "카탈로그에 없는 포트예요", "dangling_edge": "그래프에 없는 노드를 가리켜요",
-          "cycle": "이으면 순환이 생겨요", "needs_unmet": "이대로 계산하면 실패할 선이에요"}
+_PLAIN = {"type_mismatch": "포트 타입이 다릅니다", "multiple_inputs": "받는 자리에 이미 선이 있습니다",
+          "unknown_port": "카탈로그에 없는 포트입니다", "dangling_edge": "그래프에 없는 노드를 가리킵니다",
+          "cycle": "이으면 순환이 생깁니다", "needs_unmet": "이대로 계산하면 실패할 선입니다"}
 
 
 class _Reject(Exception):
@@ -134,34 +134,34 @@ def _read_choice(sp: dict, how: str, quote: str, choice: str) -> tuple[Any, str]
     flabel = sp["label"]
     if how == "preset":
         if choice not in sp["presets"]:
-            raise _Reject("preset", f"‘{flabel}’ 칸에 없는 프리셋이에요 — ‘{choice}’")
+            raise _Reject("preset", f"‘{flabel}’ 칸에 없는 프리셋입니다 — ‘{choice}’")
         value, shown = sp["values"][choice], choice
     else:
         if choice not in sp["options"]:
-            raise _Reject("option", f"‘{flabel}’ 칸에 없는 선택지예요 — ‘{choice}’")
+            raise _Reject("option", f"‘{flabel}’ 칸에 없는 선택지입니다 — ‘{choice}’")
         value, shown = choice, sp["options"][choice]
     if not numbers_of(shown) <= numbers_of(quote):        # "2년"이라 했는데 "3년" — 말에 없는 숫자를 고르지 않는다
-        raise _Reject("numbers", f"말씀 ‘{quote}’에 없는 숫자예요 — ‘{shown}’")
+        raise _Reject("numbers", f"말씀 ‘{quote}’에 없는 숫자입니다 — ‘{shown}’")
     return copy.deepcopy(value), shown
 
 
 def _read_number(sp: dict, quote: str) -> tuple[Any, str]:
     found = list(_NUM.finditer(quote))
     if len(found) != 1:
-        raise _Reject("number_count", f"말씀 ‘{quote}’에서 숫자 하나를 읽지 못했어요")
+        raise _Reject("number_count", f"말씀 ‘{quote}’에서 숫자 하나 읽기 실패")
     m = found[0]
     if quote[:m.start()].rstrip().endswith(("-", "−", "마이너스")):
-        raise _Reject("negative", "음수는 말로 넣지 않아요 — 설정 탭에서 넣어 주세요")
+        raise _Reject("negative", "음수는 말로 넣지 않습니다 — 설정 탭에서 입력하십시오")
     rest = quote[m.end():].lstrip()
     if rest.startswith(MAGNITUDE):
-        raise _Reject("unit", f"‘{quote}’ — 만·억 같은 큰 단위는 숫자로 적어 주세요")
+        raise _Reject("unit", f"‘{quote}’ — 만·억 같은 큰 단위는 숫자로 입력하십시오")
     said = next((u for w, u in UNIT_WORDS if rest.lower().startswith(w)), None)
     if said is not None and said != sp.get("unit"):
-        raise _Reject("unit", f"‘{quote}’의 단위가 ‘{sp['label']}’ 칸의 단위({sp.get('unit') or '단위 없음'})와 달라요")
+        raise _Reject("unit", f"‘{quote}’의 단위가 ‘{sp['label']}’ 칸의 단위({sp.get('unit') or '단위 없음'})와 다릅니다")
     d = Decimal(m.group().replace(",", ""))
     whole = d == d.to_integral_value()
     if sp.get("integer") and not whole:
-        raise _Reject("integer", f"‘{sp['label']}’ 칸은 정수만 받아요 — ‘{quote}’")
+        raise _Reject("integer", f"‘{sp['label']}’ 칸은 정수만 받습니다 — ‘{quote}’")
     return (int(d) if whole else float(d)), quote
 
 
@@ -174,7 +174,7 @@ def _read_tickers(names: list[str], quote: str, resolve: Callable[[str], dict]) 
         if not nm:
             continue
         if nm.lower() not in quote.lower():
-            bad.append(("ticker_quote", f"말씀 조각에 없는 종목 이름이에요 — ‘{nm}’"))
+            bad.append(("ticker_quote", f"말씀 조각에 없는 종목 이름입니다 — ‘{nm}’"))
             continue
         r = resolve(nm) or {}
         if isinstance(r.get("code"), str) and r["code"]:
@@ -182,10 +182,10 @@ def _read_tickers(names: list[str], quote: str, resolve: Callable[[str], dict]) 
                 codes.append(r["code"])
                 shown.append(str(r.get("name") or r["code"]))
         elif r.get("candidates"):
-            bad.append(("ticker_ambiguous", f"여러 종목이 맞아요 — ‘{nm}’: "
-                                            f"{' · '.join(str(c.get('name')) for c in r['candidates'][:3])}. 이름을 정확히 말해 주세요"))
+            bad.append(("ticker_ambiguous", f"여러 종목이 맞습니다 — ‘{nm}’: "
+                                            f"{' · '.join(str(c.get('name')) for c in r['candidates'][:3])}. 이름을 정확히 말하십시오"))
         else:
-            bad.append(("ticker_unknown", f"종목표에서 찾지 못했어요 — ‘{nm}’"))
+            bad.append(("ticker_unknown", f"종목표에서 찾지 못했습니다 — ‘{nm}’"))
     return codes, " · ".join(shown), bad
 
 
@@ -212,7 +212,7 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
     res = {"understood": True, "cannot": None, "draft": draft, "rejected": bad}
     if (not isinstance(raw, dict) or set(raw) != TOP_KEYS or not isinstance(raw.get("understood"), bool)
             or not all(isinstance(raw.get(k), list) for k in ("add", "connect", "set"))):
-        bad.append(_rej("draft", "shape", "답의 형식이 맞지 않아요"))
+        bad.append(_rej("draft", "shape", "답의 형식이 맞지 않습니다"))
         return res
     if not raw["understood"]:
         res["understood"] = False
@@ -232,27 +232,27 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
         if name in refs:
             return refs[name]
         if name in failed:
-            raise _Reject("depends", f"앞의 더하기(‘{failed[name]}’)가 빠져서 함께 뺐어요")
+            raise _Reject("depends", f"앞의 더하기(‘{failed[name]}’)가 빠져서 함께 뺐습니다")
         if name in existing:
             return existing[name]
-        raise _Reject("no_node", f"그래프에 없는 노드예요 — ‘{name}’")
+        raise _Reject("no_node", f"그래프에 없는 노드입니다 — ‘{name}’")
 
     # ① 더하기
     for it in raw["add"]:
         if not _strs(it, ADD_KEYS):
-            bad.append(_rej("add", "shape", "더하기의 형식이 맞지 않아요"))
+            bad.append(_rej("add", "shape", "더하기의 형식이 맞지 않습니다"))
             continue
         ref, kind = it["ref"], it["kind"]
         kl = (kinds.get(kind) or {}).get("plain_label") or kind
         if len(draft["add"]) >= MAX_ADD:
             failed.setdefault(ref, kl)
-            bad.append(_rej("add", "limit", f"더하기는 {MAX_ADD}개까지예요"))
+            bad.append(_rej("add", "limit", f"더하기는 {MAX_ADD}개까지입니다"))
         elif kind not in kinds:
             failed.setdefault(ref, kl)
-            bad.append(_rej("add", "unknown_kind", f"카탈로그에 없는 종류예요 — ‘{kind}’"))
+            bad.append(_rej("add", "unknown_kind", f"카탈로그에 없는 종류입니다 — ‘{kind}’"))
         elif ref in existing or ref in refs:
             failed.setdefault(ref, kl)
-            bad.append(_rej("add", "ref", f"이름표가 겹쳐요 — ‘{ref}’"))
+            bad.append(_rej("add", "ref", f"이름표가 겹칩니다 — ‘{ref}’"))
         else:
             nid, i = kind, 2
             while nid in ids:
@@ -267,10 +267,10 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
     keys = {_key(e) for e in validate(doc)["errors"]}
     for it in raw["connect"]:
         if not _strs(it, CONNECT_KEYS):
-            bad.append(_rej("connect", "shape", "잇기의 형식이 맞지 않아요"))
+            bad.append(_rej("connect", "shape", "잇기의 형식이 맞지 않습니다"))
             continue
         if len(draft["connect"]) >= MAX_CONNECT:
-            bad.append(_rej("connect", "limit", f"잇기는 {MAX_CONNECT}개까지예요"))
+            bad.append(_rej("connect", "limit", f"잇기는 {MAX_CONNECT}개까지입니다"))
             continue
         try:
             s, t = node_of(it["from"]), node_of(it["to"])
@@ -281,14 +281,14 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
                 "target": t["id"], "target_port": it["to_port"]}
         if any(isinstance(e, dict) and all(e.get(k) == edge[k] for k in ("source", "source_port", "target", "target_port"))
                for e in doc["edges"]):
-            bad.append(_rej("connect", "duplicate", f"이미 있는 선이에요 — ‘{label(s)}’ → ‘{label(t)}’"))
+            bad.append(_rej("connect", "duplicate", f"이미 있는 선입니다 — ‘{label(s)}’ → ‘{label(t)}’"))
             continue
         trial = {**doc, "edges": [*doc["edges"], edge]}
         errs = validate(trial)["errors"]
         new = [e for e in errs if _key(e) not in keys]
         if new:
             code = str(new[0].get("code") or "connection")
-            bad.append(_rej("connect", code, f"‘{label(s)}’ → ‘{label(t)}’ 선: {_PLAIN.get(code, '잇는 선이 맞지 않아요')}"))
+            bad.append(_rej("connect", code, f"‘{label(s)}’ → ‘{label(t)}’ 선: {_PLAIN.get(code, '잇는 선이 맞지 않습니다')}"))
             continue
         doc, keys = trial, {_key(e) for e in errs}
         draft["connect"].append(edge)
@@ -299,32 +299,32 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
         if not _strs(it, SET_KEYS, allow_blank=("choice",)) or not isinstance(it["names"], list) \
                 or not all(isinstance(x, str) for x in it["names"]):
             extra = ", ".join(sorted(map(str, set(it) - SET_KEYS))) if isinstance(it, dict) else ""
-            bad.append(_rej("set", "shape", "값 넣기의 형식이 맞지 않아요" + (f"(모르는 칸: {extra})" if extra else "")))
+            bad.append(_rej("set", "shape", "값 넣기의 형식이 맞지 않습니다" + (f"(모르는 칸: {extra})" if extra else "")))
             continue
         how, choice, names = it["how"], it["choice"].strip(), it["names"]
         if how not in HOWS or (how in ("number", "tickers") and choice) or (how != "tickers" and names):
-            bad.append(_rej("set", "shape", "읽는 법과 고른 것이 맞지 않아요"))
+            bad.append(_rej("set", "shape", "읽는 법과 고른 것이 맞지 않습니다"))
             continue
         if len(draft["set"]) >= MAX_SET:
-            bad.append(_rej("set", "limit", f"값 넣기는 {MAX_SET}개까지예요"))
+            bad.append(_rej("set", "limit", f"값 넣기는 {MAX_SET}개까지입니다"))
             continue
         try:
             node = node_of(it["node"])
             kind, field = str(node.get("type")), it["field"]
             schema = (kinds.get(kind) or {}).get("params_schema") or {}
             if field not in (schema.get("properties") or {}):
-                raise _Reject("no_field", f"‘{label(node)}’ 노드에 없는 칸이에요 — ‘{field}’")
+                raise _Reject("no_field", f"‘{label(node)}’ 노드에 없는 칸입니다 — ‘{field}’")
             sp = speakable(schema).get(field)
             if sp is None:
                 flabel = ((schema["properties"][field].get("x-ui") or {}).get("label") or field)
-                raise _Reject("not_speakable", f"‘{label(node)}’의 ‘{flabel}’ 칸은 말로 넣을 수 없어요 — 설정 탭에서 넣어 주세요")
+                raise _Reject("not_speakable", f"‘{label(node)}’의 ‘{flabel}’ 칸은 말로 넣을 수 없습니다 — 설정 탭에서 입력하십시오")
             if (node["id"], field) in done:
-                raise _Reject("duplicate", f"‘{sp['label']}’ 칸은 앞에서 이미 넣었어요")
+                raise _Reject("duplicate", f"‘{sp['label']}’ 칸은 앞에서 이미 넣었습니다")
             if how not in sp["read"]:
-                raise _Reject("how", f"‘{sp['label']}’ 칸은 그렇게 읽을 수 없어요")
+                raise _Reject("how", f"‘{sp['label']}’ 칸은 그렇게 읽을 수 없습니다")
             quote = norm(it["quote"])
             if not quote or len(quote) > MAX_QUOTE or quote not in g["sentence"]:
-                raise _Reject("quote", f"말씀에 없는 말이에요 — ‘{quote}’")
+                raise _Reject("quote", f"말씀에 없는 말입니다 — ‘{quote}’")
             extra_bad: list[tuple[str, str]] = []
             if how in ("preset", "option"):
                 value, shown = _read_choice(sp, how, quote, choice)
@@ -332,7 +332,7 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
                 value, shown = _read_number(sp, quote)
             else:
                 if not names or len(names) > MAX_NAMES:
-                    raise _Reject("tickers", f"종목 이름은 1~{MAX_NAMES}개예요")
+                    raise _Reject("tickers", f"종목 이름은 1~{MAX_NAMES}개입니다")
                 value, shown, extra_bad = _read_tickers(names, quote, resolve_ticker)
                 bad.extend(_rej("set", c, r) for c, r in extra_bad)
                 if not value:
@@ -340,7 +340,7 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
             after = {**(node.get("params") or {}), field: value}
             before_errs = {e for e in field_errors(kind, node.get("params") or {}) if e[0] == field}
             if {e for e in field_errors(kind, after) if e[0] == field} - before_errs:
-                raise _Reject("bad_value", f"‘{sp['label']}’ 칸에 맞지 않는 값이에요(범위·형식) — ‘{shown}’")
+                raise _Reject("bad_value", f"‘{sp['label']}’ 칸에 맞지 않는 값입니다(범위·형식) — ‘{shown}’")
         except _Reject as r:
             bad.append(_rej("set", r.code, r.reason))
             continue
@@ -356,11 +356,11 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
         word = next((w for w in BANNED if w in s), None)
         extra = numbers_of(s) - numbers_of(g["sentence"])
         if len(s) > MAX_SUMMARY:
-            bad.append(_rej("summary", "too_long", f"요약이 {MAX_SUMMARY}자를 넘어요"))
+            bad.append(_rej("summary", "too_long", f"요약이 {MAX_SUMMARY}자를 넘습니다"))
         elif word:
-            bad.append(_rej("summary", "banned", f"요약에 쓰지 않는 표현이 있어요 — ‘{word}’"))
+            bad.append(_rej("summary", "banned", f"요약에 쓰지 않는 표현이 있습니다 — ‘{word}’"))
         elif extra:
-            bad.append(_rej("summary", "numbers", f"요약에 말씀에 없는 숫자가 있어요 — {', '.join(sorted(extra))}"))
+            bad.append(_rej("summary", "numbers", f"요약에 말씀에 없는 숫자가 있습니다 — {', '.join(sorted(extra))}"))
         else:
             draft["summary"] = s
 
@@ -370,7 +370,7 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
         if e.get("code") == "missing_input" and e.get("node_id") in new_ids:
             n = next(x for x in doc["nodes"] if x["id"] == e["node_id"])
             draft["empty"].append({"node": n["id"], "port": e.get("port"),
-                                   "why": e.get("fix") or f"‘{label(n)}’의 입력 ‘{e.get('port')}’이 비어 있어요"})
+                                   "why": e.get("fix") or f"‘{label(n)}’의 입력 ‘{e.get('port')}’이 비어 있습니다"})
     for n in doc["nodes"]:
         if n["id"] not in new_ids:
             continue
@@ -378,5 +378,5 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
         for f, kind_of_error in sorted(field_errors(n["type"], n.get("params") or {})):
             if kind_of_error == "missing":
                 fl = ((props.get(f) or {}).get("x-ui") or {}).get("label") or f
-                draft["empty"].append({"node": n["id"], "field": f, "why": f"‘{label(n)}’의 ‘{fl}’ 칸이 비어 있어요 — 말씀에 없어요"})
+                draft["empty"].append({"node": n["id"], "field": f, "why": f"‘{label(n)}’의 ‘{fl}’ 칸이 비어 있습니다 — 말씀에 없습니다"})
     return res

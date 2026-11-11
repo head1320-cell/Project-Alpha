@@ -28,7 +28,7 @@ from src.services import pb_clients as svc
 
 router = APIRouter(prefix="/api/v1/pb/clients", tags=["pb-clients"])
 
-_NOT_FOUND = "그 고객이 없어요."
+_NOT_FOUND = "그 고객이 없습니다."
 _DATE = r"^\d{4}-\d{2}-\d{2}$"
 _FORBID = ConfigDict(extra="forbid")
 
@@ -39,9 +39,9 @@ def _past_date(v: str | None) -> str | None:
     try:
         d = dt.date.fromisoformat(v)
     except ValueError as e:
-        raise ValueError("평가일을 읽을 수 없어요 — YYYY-MM-DD 로 적어 주세요.") from e
+        raise ValueError("평가일을 읽을 수 없습니다 — YYYY-MM-DD 로 입력하십시오.") from e
     if d > dt.date.today():
-        raise ValueError("평가일이 미래예요 — 성향을 평가한 날을 적어 주세요.")
+        raise ValueError("평가일이 미래입니다 — 성향을 평가한 날을 입력하십시오.")
     return v
 
 
@@ -58,7 +58,7 @@ class ClientIn(BaseModel):
     def _alias(cls, v: str) -> str:
         v = v.strip()
         if not v:
-            raise ValueError("별칭을 적어 주세요 — 실명·연락처 말고 PB 가 알아볼 이름이에요.")
+            raise ValueError("별칭을 입력하십시오 — 실명·연락처 말고 PB 가 알아볼 이름입니다.")
         return v
 
     @field_validator("assessed_at")
@@ -129,7 +129,7 @@ def update_client(cid: str, body: ClientPatch, p: Principal = Depends(require_lo
     changes = body.model_dump(exclude_unset=True)
     if "alias" in changes:
         if changes["alias"] is None or not changes["alias"].strip():
-            raise HTTPException(422, "별칭은 비울 수 없어요.")
+            raise HTTPException(422, "별칭은 비울 수 없습니다.")
         changes["alias"] = changes["alias"].strip()
     if "profile_source" in changes and changes["profile_source"] is None:
         changes["profile_source"] = SOURCE_UNKNOWN
@@ -165,7 +165,7 @@ def save_doc(cid: str, did: str, body: DocSave, p: Principal = Depends(require_l
 # ── 고객 한 장 (PB4) ─────────────────────────────────────────────────────
 
 class SheetIn(BaseModel):
-    """한 장 만들기 — 서버가 다시 계산하고, ★모든 노드의★ `view_hash` 가 `preview`(PB 가 본 계산 — 노드 id → 해시, 계산 못 한
+    """한 장 만들기 — 서버가 재계산하고, ★모든 노드의★ `view_hash` 가 `preview`(PB 가 본 계산 — 노드 id → 해시, 계산 못 한
     노드는 null)와 같을 때만 둔다."""
     model_config = _FORBID
     graph: dict
@@ -184,7 +184,7 @@ class SheetAsk(BaseModel):
     @classmethod
     def _q(cls, v: str) -> str:
         if not v.strip():
-            raise ValueError("질문이 비어 있어요")
+            raise ValueError("질문이 비어 있습니다")
         return v.strip()
 
 
@@ -246,7 +246,7 @@ def _link_call(fn, *args, **kw):
     try:
         return _call(fn, *args, **kw)
     except pb_links.LinkNotFound:
-        raise HTTPException(404, "그 주소가 없어요.") from None
+        raise HTTPException(404, "그 주소가 없습니다.") from None
     except pb_links.LinkClosed as e:
         raise HTTPException(409, str(e)) from None
 

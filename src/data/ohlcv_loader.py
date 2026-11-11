@@ -50,7 +50,7 @@ _MOCK_LEVELS: dict[str, float] = {
 def mock_price_level(ticker: str) -> float:
     """종목의 mock 가격 수준 — 기준일(`_MOCK_ANCHOR`)의 mock 종가.
 
-    날짜와 무관한 상수다. 예전에는 이 숫자가 그대로 "지금 주가"였고
+    날짜와 무관한 상수다. 예전에는 이 숫자가 그대로 "현재가"였고
     (`screener._mock_price`) 시세 이력은 다른 걸음에서 나와 둘이 어긋났다.
     """
     if ticker in _MOCK_LEVELS:
@@ -60,7 +60,7 @@ def mock_price_level(ticker: str) -> float:
 
 
 def _mock_today() -> datetime:
-    """mock 의 "오늘" — 지금 주가를 읽는 날. 시험이 날짜를 고정할 수 있게 한 곳에 둔다."""
+    """mock 의 "오늘" — 현재가를 읽는 날. 시험이 날짜를 고정할 수 있게 한 곳에 둔다."""
     return datetime.now()
 
 
@@ -110,7 +110,7 @@ def _mock_scale(ticker: str) -> float:
 
     걸음은 종목마다 10,000~99,000 에서 출발해 26년을 걸으므로 2026년의 수준이
     mock 재무와 무관하다(실측: 005930 이 56,512 · 표에 없는 123456 이 138 —
-    같은 종목의 "지금 주가"는 71,000 · 52,333 이었다). 상수를 곱하면 수익률과
+    같은 종목의 "현재가"는 71,000 · 52,333 이었다). 상수를 곱하면 수익률과
     거래량은 그대로이고 수준만 맞는다. 지수는 맞출 수준이 없어 그대로 둔다.
     """
     if ticker.replace(".KS", "").replace(".KQ", "").upper() in _MOCK_INDEX:
@@ -123,10 +123,10 @@ def _mock_scale(ticker: str) -> float:
 def mock_close_asof(ticker: str, as_of: str | datetime | None = None) -> float | None:
     """`as_of`(없으면 mock 의 오늘) 이하 마지막 거래일의 mock 종가.
 
-    ★mock 가격의 출처는 이 걸음 하나다★ — 지금 주가(`screener._mock_price`)도
+    ★mock 가격의 출처는 이 걸음 하나다★ — 현재가(`screener._mock_price`)도
     시점 가격(`PITStore.get_price_asof`)도 여기서 읽고(원 단위로 반올림해서 —
     `mock_price_asof`), 일봉(`_mock_ohlcv_df`)도 같은 걸음·같은 배율이다. 그래서
-    "지금 주가 = 시세 이력의 마지막 종가" 이고 "as_of 가격 = 그 날의 종가" 다.
+    "현재가 = 시세 이력의 마지막 종가" 이고 "as_of 가격 = 그 날의 종가" 다.
 
     기점(`_MOCK_EPOCH`) 이전에는 봉이 없다 → `None`.
     """
@@ -146,10 +146,10 @@ def mock_close_asof(ticker: str, as_of: str | datetime | None = None) -> float |
 def mock_price_asof(ticker: str, as_of: str | datetime | None = None) -> float | None:
     """`mock_close_asof` 를 ★원 단위로 반올림★한 값 — "가격"으로 내보내는 쪽이 읽는다.
 
-    걸음의 종가는 소수다(73,922.10…). 그대로 "지금 주가"로 내면 응답에 소수점이
+    걸음의 종가는 소수다(73,922.10…). 그대로 "현재가"로 내면 응답에 소수점이
     실린다 — 예전 고정 표는 늘 정수였고 KRX 가격도 원 단위다. 반은 올린다
     (화면의 `Math.round` 와 같은 규칙 — 파이썬 `round` 는 반을 짝수로 보낸다).
-    일봉은 반올림하지 않는다(수익률이 바뀐다) — 그래서 지금 주가와 마지막 종가는
+    일봉은 반올림하지 않는다(수익률이 바뀐다) — 그래서 현재가와 마지막 종가는
     0.5원까지 다를 수 있고, 화면은 둘 다 원 단위로 적어 같은 글자가 된다.
     """
     px = mock_close_asof(ticker, as_of)

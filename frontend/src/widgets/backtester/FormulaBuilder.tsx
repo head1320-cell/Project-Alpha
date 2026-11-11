@@ -72,7 +72,7 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
       {/* 식 줄 — 눌러서 지운다 */}
       <div className="fb-line" aria-label="만드는 식">
         {tokens.length === 0 && (
-          <span className="fb-empty">아래에서 팩터와 연산자를 더해 식을 만들어요. 예: 종가 − 이동평균(종가, 20)</span>
+          <span className="fb-empty">아래에서 팩터와 연산자를 더해 식을 만듭니다. 예: 종가 − 이동평균(종가, 20)</span>
         )}
         {tokens.map((tk, i) => {
           if (tk.t === "factor") {
@@ -124,10 +124,10 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
         </button>
         <span className="fb-gap" />
         <button type="button" className="fb-ctrl fb-ctrl--wide" onClick={popLast} disabled={tokens.length === 0}>
-          <Delete size={14} aria-hidden /> 마지막 지우기
+          <Delete size={14} aria-hidden /> 마지막 삭제
         </button>
         {tokens.length > 0 && (
-          <button type="button" className="fb-ctrl fb-ctrl--wide" onClick={() => onChange([])}>모두 지우기</button>
+          <button type="button" className="fb-ctrl fb-ctrl--wide" onClick={() => onChange([])}>모두 삭제</button>
         )}
       </div>
 

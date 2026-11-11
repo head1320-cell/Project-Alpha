@@ -350,7 +350,7 @@ def weights_for_model(model: str, R: np.ndarray, mu_override: np.ndarray | None 
 
 
 #: 대체 사유 — 풀이가 왜 답을 못 냈는지는 `_raw_weights_for_model` 이 말하지 않는다(그 함수는 점수→비중과 함께 쓴다).
-_NO_ANSWER = "풀이가 수렴하지 않았거나 쓸 수 없는 값을 냈어요(어느 쪽인지는 기록하지 않았어요)."
+_NO_ANSWER = "풀이가 수렴하지 않았거나 쓸 수 없는 값을 냈습니다(어느 쪽인지는 기록하지 않았습니다)."
 
 
 def weights_for_model_traced(model: str, R: np.ndarray, mu_override: np.ndarray | None = None,
@@ -447,13 +447,13 @@ def optimize(model: str, names: list[str], R: np.ndarray,
                     # 사후는 됐지만 비중은 시장 비중 그대로다(CF3 기록 · K1 라벨 — 아래 `views_applied`).
                     view_solve_failed = True
                     fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
-                                      "reason": "생각을 넣은 기대 수익으로 비중을 풀지 못해 시장 비중을 그대로 썼어요.",
+                                      "reason": "생각을 넣은 기대 수익으로 비중을 풀지 못해 시장 비중을 그대로 썼습니다.",
                                       "affects_weights": model == "bl"})
             except Exception as e:  # 특이 공분산 등 — prior 폴백(정직 보고)
                 logger.warning(f"BL posterior 실패, prior 폴백: {e}")
                 mu_bl = None
                 fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
-                                  "reason": f"생각을 넣은 기대 수익을 계산하지 못했어요({type(e).__name__}).",
+                                  "reason": f"생각을 넣은 기대 수익 산출 실패({type(e).__name__}).",
                                   "affects_weights": model == "bl"})
 
     ep_report: dict | None = None
@@ -629,13 +629,13 @@ def _mu_reach(model: str, has_views: bool, constrained: bool) -> str:
 
 
 _STILL = {
-    "none": "이 방식은 기대 수익을 쓰지 않아 기대 수익을 흔들어도 비중이 움직이지 않아요.",
+    "none": "이 방식은 기대 수익을 쓰지 않아 기대 수익을 흔들어도 비중이 움직이지 않습니다.",
     "none_bl": ("생각(뷰)이 없으면 이 방식의 비중은 시가총액 비중이라 기대 수익을 쓰지 않아 기대 수익을 흔들어도 "
-                "비중이 움직이지 않아요."),
+                "비중이 움직이지 않습니다."),
     "none_bl_failed": ("생각을 넣은 기대 수익을 계산하지 못해 이 방식의 비중이 시가총액 비중이라, 기대 수익을 쓰지 않아 "
-                       "기대 수익을 흔들어도 비중이 움직이지 않아요."),
+                       "기대 수익을 흔들어도 비중이 움직이지 않습니다."),
     "own": ("이 방식은 기대 수익을 수익률에서 스스로 다시 추정해서, 여기서 흔든 기대 수익이 들어가지 않아 "
-            "비중이 움직이지 않아요."),
+            "비중이 움직이지 않습니다."),
 }
 
 

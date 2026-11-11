@@ -34,9 +34,9 @@ const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinit
 /** 질의 하나 → 줄 하나(또는 여럿). 불러오는 중·실패·못 함·값을 가른다. */
 function fromQuery<T>(q: UseQueryResult<T>, key: string, label: string, pick: (d: T) => Omit<LadRow, "key" | "label">): LadRow {
   if (q.isPending) return { key, label, wait: true };
-  if (q.isError || !q.data) return { key, label, reason: "서버에 닿지 못해 이 모형을 그리지 못했어요" };
+  if (q.isError || !q.data) return { key, label, reason: "서버에 닿지 못해 이 모형을 그리지 못했습니다" };
   const d = q.data as T & { available?: boolean; reason?: string | null };
-  if (d.available === false) return { key, label, reason: d.reason ?? "서버가 사유 없이 못 했다고 답했어요" };
+  if (d.available === false) return { key, label, reason: d.reason ?? "서버가 사유 없이 못 했다고 답했습니다" };
   return { key, label, ...pick(d) };
 }
 
@@ -44,9 +44,9 @@ function fromQuery<T>(q: UseQueryResult<T>, key: string, label: string, pick: (d
 export function buildLadderRows(sb: UseQueryResult<ValuationSandbox>, m: CompanyModels): LadRow[] {
   const band = (id: string, label: string): LadRow => {
     if (sb.isPending) return { key: id, label, wait: true };
-    if (sb.isError || !sb.data) return { key: id, label, reason: "가치 샌드박스를 받지 못했어요" };
+    if (sb.isError || !sb.data) return { key: id, label, reason: "가치 샌드박스 수신 실패" };
     const b = sb.data.football_field?.bands.find((x) => x.id === id);
-    if (!b || b.available === false || !fin(b.lo) || !fin(b.hi)) return { key: id, label, reason: b?.note ?? "이 모형은 값을 내지 못했어요" };
+    if (!b || b.available === false || !fin(b.lo) || !fin(b.hi)) return { key: id, label, reason: b?.note ?? "이 모형은 값 산출 실패" };
     return { key: id, label, v: fin(b.mid) ? b.mid : null, lo: b.lo, hi: b.hi, basis: "실측 기본값" };
   };
   const rows: LadRow[] = [
@@ -64,20 +64,20 @@ export function buildLadderRows(sb: UseQueryResult<ValuationSandbox>, m: Company
         fin(L.asset?.per_share) ? { label: "자산", v: L.asset.per_share as number } : null,
         fin(L.epv?.per_share) ? { label: "수익력", v: L.epv.per_share as number } : null,
       ].filter((x): x is { label: string; v: number } => x !== null);
-      return fin(d.full_per_share) ? { v: d.full_per_share, extra } : { reason: d.weighted_reason ?? "성장까지 잰 값을 내지 못했어요", extra };
+      return fin(d.full_per_share) ? { v: d.full_per_share, extra } : { reason: d.weighted_reason ?? "성장까지 잰 값 산출 실패", extra };
     }),
     fromQuery(m.eva, "eva", "EVA(경제적 부가가치)", (d) => (fin(d.valuation?.per_share)
-      ? { v: d.valuation!.per_share } : { reason: d.valuation?.per_share_reason ?? "주당 가치를 내지 못했어요" })),
+      ? { v: d.valuation!.per_share } : { reason: d.valuation?.per_share_reason ?? "주당 가치 산출 실패" })),
     fromQuery(m.multiples, "jper", "정당 PER", (d) => (fin(d.justified?.per_price)
-      ? { v: d.justified!.per_price } : { reason: d.justified?.reason ?? "정당 PER 을 내지 못했어요" })),
+      ? { v: d.justified!.per_price } : { reason: d.justified?.reason ?? "정당 PER 을 내지 못했습니다" })),
     fromQuery(m.multiples, "jpbr", "정당 PBR", (d) => (fin(d.justified?.pbr_price)
-      ? { v: d.justified!.pbr_price } : { reason: d.justified?.reason ?? "정당 PBR 을 내지 못했어요" })),
-    fromQuery(m.multiples, "peer", "같은 업종 PER 중앙값", (d) => (fin(d.peer?.per_price)
-      ? { v: d.peer!.per_price } : { reason: "같은 업종 PER 을 받지 못했어요" })),
+      ? { v: d.justified!.pbr_price } : { reason: d.justified?.reason ?? "정당 PBR 을 내지 못했습니다" })),
+    fromQuery(m.multiples, "peer", "동종업계 PER 중앙값", (d) => (fin(d.peer?.per_price)
+      ? { v: d.peer!.per_price } : { reason: "동종업계 PER 을 받지 못했습니다" })),
     fromQuery(m.scenarios, "scen", "시나리오 가중", (d) => {
       const vs = (d.rows ?? []).map((r) => r.value).filter(fin);
       return fin(d.weighted) ? { v: d.weighted, lo: vs.length ? Math.min(...vs) : null, hi: vs.length ? Math.max(...vs) : null, basis: "사람이 정한 확률" }
-        : { reason: "확률로 묶은 값을 내지 못했어요" };
+        : { reason: "확률로 묶은 값 산출 실패" };
     }),
   ];
   return rows;
@@ -107,7 +107,7 @@ export function ModelLadder({ rows, price, intrinsic, compact }: { rows: LadRow[
           <div key={r.key} className="ci-lad-row" data-key={r.key}>
             <span className="ci-lad-name">{compact ? SHORT[r.key] ?? r.label : r.label}</span>
             <span className="ci-lad-track">
-              {r.wait ? <span className="ci-lad-wait">계산하는 중이에요</span>
+              {r.wait ? <span className="ci-lad-wait">계산 중</span>
                 : r.reason && !fin(r.v) ? <span className="ci-lad-reason" data-server>{r.reason}</span>
                 : (
                   <>
@@ -135,8 +135,8 @@ export function ModelLadder({ rows, price, intrinsic, compact }: { rows: LadRow[
         {!compact && <span className="ci-lad-key"><i className="ci-lad-sw range" aria-hidden />범위(분포는 10~90%, 모형은 약세~강세 가정)</span>}
       </figcaption>
       <p className="ci-lad-sum">
-        {mains.length ? `값을 낸 모형 ${mains.length}개 중 ${below}개가 현재가보다 낮게 봤어요` : "아직 값을 낸 모형이 없어요"}
-        {!compact && " · 축은 로그 눈금이에요"}
+        {mains.length ? `값을 낸 모형 ${mains.length}개 중 ${below}개가 현재가보다 낮게 봤습니다` : "아직 값을 낸 모형 없음"}
+        {!compact && " · 축은 로그 눈금입니다"}
       </p>
     </figure>
   );

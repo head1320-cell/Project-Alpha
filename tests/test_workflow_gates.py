@@ -7,7 +7,7 @@ CLAUDE.md §1 의 관문 순서 8개. 상태: confirmed · assumed · partial ·
 
 ## 거는 것 (짝으로 항상-확인·항상-건너뜀 구현을 배제한다)
 - 백테스트가 없으면 비용·처음 보는 기간 = 건너뜀, 있으면 가정·부분(짝).
-- mock → 데이터 = 몰라요("연습용"); 등급이 기록돼 있으면 확인(짝).
+- mock → 데이터 = 모릅니다("합성"); 등급이 기록돼 있으면 확인(짝).
 - 실패·막힘은 확인이 되지 않는다. 경제적 가치·모의/실계좌는 이 그래프에서 **절대 확인되지 않는다**.
 - 요약의 확인 개수는 관문 상태와 같다.
 """
@@ -78,9 +78,9 @@ def test_with_a_backtest_cost_is_assumed_and_oos_is_partial():
 def test_practice_data_is_unknown_and_recorded_grade_is_confirmed():
     mock = wg.evaluate(_nodes("returns"), {"returns": RET_MOCK}, STAGE)
     assert _gate(mock, "data")["state"] == "unknown"
-    assert "연습용" in _gate(mock, "data")["reasons"][0]["text"]
+    assert "합성" in _gate(mock, "data")["reasons"][0]["text"]
     db = wg.evaluate(_nodes("returns"), {"returns": RET_DB}, STAGE)
-    assert _gate(db, "data")["state"] == "unknown" and "몰라요" in _gate(db, "data")["reasons"][0]["text"]
+    assert _gate(db, "data")["state"] == "unknown" and "미상" in _gate(db, "data")["reasons"][0]["text"]
     graded = wg.evaluate(_nodes("returns"), {"returns": RET_GRADED}, STAGE)
     assert _gate(graded, "data")["state"] == "confirmed"          # ★짝★
 
@@ -121,7 +121,7 @@ def test_the_summary_counts_what_the_gates_say():
                       {"returns": RET_MOCK, "optimizer": OPT, "backtest": BT}, STAGE)
     n = sum(g["state"] == "confirmed" for g in rep["gates"])
     assert rep["summary"]["confirmed"] == n == 1
-    assert rep["summary"]["text"] == "8개 관문 중 1개만 확인했어요."
+    assert rep["summary"]["text"] == "8개 관문 중 1개만 확인했습니다."
 
 
 def test_the_pure_module_reads_nothing_outside():
@@ -160,7 +160,7 @@ def test_any_build_stage_node_counts_for_the_build_gate():
 
 # ── CF3 · 요청한 방식 대신 다른 비중이 쓰였으면 '비중 계산'은 확인이 아니다 ───────────────
 
-FB_TEXT = "‘흔들림 최소’ 방식이 답을 내지 못해 역변동성 비중으로 대신했어요 — 사유."
+FB_TEXT = "‘흔들림 최소’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다 — 사유."
 
 
 def test_a_fallback_that_reached_the_weights_makes_the_build_gate_partial():

@@ -35,7 +35,7 @@ export function PerfSheet({ view, fallbackTitle, open, onClose, gates, after }: 
           <MonthGrid view={view} />
         </section>
         <section className="pf-sec">
-          <h4 className="pg-h4">큰 낙폭 사건</h4>
+          <h4 className="pg-h4">주요 낙폭 구간</h4>
           <DrawdownEpisodes view={view} />
         </section>
         <MetricGroups view={view} open grid />

@@ -218,7 +218,7 @@ test("Backtest: completed run → results workspace renders + refresh recovery (
   // attribution chart (from engine contribution_pct) + honest omission note
   await expect(page.locator(".brun-card-t", { hasText: /^기여도/ })).toBeVisible();   // BU4: 한국어 제목(종목별 성과의 "기여도 순" 과 겹치지 않게 앞에서 잡는다)
   await expect(page.locator(".brun-diag-omit")).toContainText("MFE/MAE");
-  await expect(page.getByText("연습용 데이터").first()).toBeVisible();   // BU4: "MOCK 데이터" → 연습용 칩(실데이터라고 부르지 않는다)
+  await expect(page.getByText("합성 데이터").first()).toBeVisible();   // BU4: "MOCK 데이터" → 연습용 칩(실데이터라고 부르지 않는다)
   // 픽스처에는 `pit_evidence` 가 없다 — 판정할 자료가 없으면 '미검증'이 아니라 '판정불가'다
   // (a7b2765 의 네 상태 배지). 옛 단언은 '미검증' 이었고 그 뒤로 조용히 깨져 있었다.
   await expect(page.getByText("시점 정합: 판정 불가").first()).toBeVisible();   // BU4 라벨

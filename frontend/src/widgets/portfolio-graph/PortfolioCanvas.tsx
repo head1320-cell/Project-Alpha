@@ -341,7 +341,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   wireToolRef.current = (edgeId, action, arg) => {
     const st = usePortfolioGraph.getState();
     if (action === "cut") st.act(() => deleteNote(st.deleteElements([], [edgeId])));
-    else if (action === "insert" && arg) st.act(() => (st.insertOnEdge(edgeId, arg.kind, arg.inPort, arg.outPort) ? "선 사이에 노드를 넣었어요." : null));
+    else if (action === "insert" && arg) st.act(() => (st.insertOnEdge(edgeId, arg.kind, arg.inPort, arg.outPort) ? "선 사이에 노드를 넣었습니다." : null));
     else if (action === "waypoint") {
       const w = drawnWire(edgeId);
       const e = st.edges.find((x) => x.id === edgeId);
@@ -378,7 +378,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       rf.current.setCenter(cx + (ins.right - ins.left) / 2 / z, cy + ins.bottom / 2 / z, { zoom: z, duration: 250 });
     }
     const entry = usePortfolioGraph.getState().catalog?.find((c) => c.type === n?.data.kind);
-    setAnnounce(n ? `${entry?.plain_label ?? n.data.kind} 노드를 골랐어요` : "");
+    setAnnounce(n ? `${entry?.plain_label ?? n.data.kind} 노드를 골랐습니다` : "");
   }, []);
   // U3 — 미니맵 칸을 누르면 그 카드를 고르고 떠 있는 판 사이 가운데로(확대 그대로 — 찾기와 같은 `focusNode`). 상자·갈래 틀은 미니맵에 칸이
   // 없다(React Flow 에 크기를 주지 않아 그리지 않음 — 재서 확인). 늘 같은 함수(U1 — 미니맵은 받은 손잡이가 바뀌면 칸을 모두 다시 그린다).
@@ -401,7 +401,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     const at = dropAt ? snapPt(dropAt) : ghostsRef.current.find((g) => g.key === suggestionKey(sug))?.at ?? undefined;
     st.act(() => {
       const id = st.applySuggestion(sug, at);
-      return id ? `‘${sug.label}’를 붙이고 이었어요.` : "선을 이었어요.";
+      return id ? `‘${sug.label}’를 붙이고 이었습니다.` : "선을 이었습니다.";
     });
   }, []);
   fixRef.current = applySuggestion;
@@ -501,22 +501,22 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
     switch (id) {
       case "cause": {
         const f = order.find((nid) => ["failed", "blocked"].includes(st.report?.nodes[nid]?.status ?? ""));
-        if (f) { focusNode(f); st.showCause(f); say("처음 막힌 곳부터 거슬러 보여 드려요"); }
+        if (f) { focusNode(f); st.showCause(f); say("처음 막힌 곳부터 거슬러 보여 드립니다"); }
         return;
       }
       case "wire_check": {
         const eid = Object.entries(st.report?.edges ?? {}).find(([, r]) => (r.issues ?? []).length > 0)?.[0];
-        if (eid) { onFlag(eid); say("빠지거나 바뀐 것이 있는 선을 열었어요"); }
+        if (eid) { onFlag(eid); say("빠지거나 바뀐 것이 있는 선을 열었습니다"); }
         return;
       }
-      case "run": void run(); say("계산하고 있어요"); return;
-      case "layout": st.autoLayout(); fit(); say("흐름 순서대로 다시 놓았어요"); return;
+      case "run": void run(); say("계산하고 있습니다"); return;
+      case "layout": st.autoLayout(); fit(); say("흐름 순서대로 다시 놓았습니다"); return;
       case "branch": {
         const root = order.find(isWeight);
         if (root) st.act(() => `${st.makeBranch(root)} · ${where}`);
         return;
       }
-      case "strategy_add": setStratOpen(true); say("무엇을 더할지 골라 주세요"); return;
+      case "strategy_add": setStratOpen(true); say("무엇을 더할지 선택하십시오"); return;
       case "compare": {
         usePortfolioGraph.setState({ picked: order.filter(isWeight).slice(0, 4), pickedByUser: true });
         st.act(() => `${usePortfolioGraph.getState().comparePicked()} · ${where}`);
@@ -525,16 +525,16 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       case "story_ai":
         openRight(); st.select(null); st.selectEdge(null); st.setTab("story");
         requestAnimationFrame(() => (document.querySelector(".pg-ai-story-ask, .pg-ai-story-login") as HTMLElement | null)?.focus());
-        say("이야기 탭 맨 위에서 AI 로 풀어 쓸 수 있어요");
+        say("이야기 탭 맨 위에서 AI 로 풀어 쓸 수 있습니다");
         return;
       case "ask_ai": {
         const t = [...order].reverse().find(isWeight) ?? order[order.length - 1];
-        if (t) { focusNode(t); openRight(); window.setTimeout(() => askFocus.current(), 60); say("고른 노드에게 물어보세요"); }
+        if (t) { focusNode(t); openRight(); window.setTimeout(() => askFocus.current(), 60); say("고른 노드에게 물어보십시오"); }
         return;
       }
-      case "records": setDrawer("records"); say("기록함을 열었어요"); return;
-      case "lanes": if (!st.showLanes) toggleLanes(); say("단계 레인을 켰어요"); return;
-      case "minimap": if (!st.showMinimap) toggleMinimap(); say("미니맵을 켰어요"); return;
+      case "records": setDrawer("records"); say("기록함을 열었습니다"); return;
+      case "lanes": if (!st.showLanes) toggleLanes(); say("단계 레인을 켰습니다"); return;
+      case "minimap": if (!st.showMinimap) toggleMinimap(); say("미니맵을 켰습니다"); return;
     }
   };
   const hereStep = stepOfNode(s.validation?.procedure, s.selectedId)?.key ?? null;
@@ -610,14 +610,14 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
 
 
       {s.catalogError && (
-        <p className="pg-banner pg-banner--err">노드 목록을 불러오지 못했어요 — {s.catalogError}. 서버가 켜져 있는지 확인해 주세요.</p>
+        <p className="pg-banner pg-banner--err">노드 목록 조회 실패 — {s.catalogError}. 서버가 켜져 있는지 확인하십시오.</p>
       )}
-      {s.runError && <p className="pg-banner pg-banner--err">계산 요청이 실패했어요 — {s.runError}</p>}
+      {s.runError && <p className="pg-banner pg-banner--err">계산 요청이 실패했습니다 — {s.runError}</p>}
       {legacy && (
         <div className="pg-banner pg-legacy" role="note">
-          <span>예전 ‘{legacy.title}’ 화면은 이제 이 캔버스에서 해요. {legacy.nodes.length
-            ? "그 일을 하는 노드를 왼쪽 목록에 찾아 두었어요."
-            : "요약은 캔버스 전체와 이야기 탭이 그 자리를 대신해요."}</span>
+          <span>예전 ‘{legacy.title}’ 화면은 이제 이 캔버스에서 합니다. {legacy.nodes.length
+            ? "그 일을 하는 노드를 왼쪽 목록에 찾아 두었습니다."
+            : "요약은 캔버스 전체와 이야기 탭이 그 자리를 대신합니다."}</span>
           {legacy.template && (
             <button type="button" className="pg-btn pg-legacy-template" onClick={() => loadTemplate(legacy.template!)}>
               ‘{TEMPLATES.find((t) => t.key === legacy.template)?.name ?? legacy.template}’ 흐름 열기
@@ -632,7 +632,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       )}
       {s.loadProblems.length > 0 && (
         <div className="pg-banner pg-banner--warn pg-load-problems">
-          불러오면서 건너뛴 항목이 {s.loadProblems.length}개 있어요:
+          불러오면서 건너뛴 항목이 {s.loadProblems.length}개 있습니다:
           <ul>{s.loadProblems.map((p, i) => <li key={i}>{p}</li>)}</ul>
         </div>
       )}
@@ -774,7 +774,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             {cause && (
               <Panel position="top-center" className="pg-cause-banner" role="status">
                 <span>
-                  {cause.roots.length === 1 && cause.roots[0] === cause.from ? "이 노드가 첫 원인이에요" : "첫 원인"}
+                  {cause.roots.length === 1 && cause.roots[0] === cause.from ? "이 노드가 첫 원인입니다" : "첫 원인"}
                   {" — "}
                   {cause.roots.map((r) => {
                     const n = s.nodes.find((x) => x.id === r);
@@ -795,19 +795,19 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
                 고른 것이 한 상자의 구성원 전부면(방금 묶었을 때) 상자 머리가 그 역할을 하므로 띄우지 않는다. */}
             {!s.simple && s.picked.length > 1 && !pickedIsOneGroup && (
               <SelBar ids={s.picked}>
-                <span className="pg-selbar-n">{s.picked.length}개 골랐어요</span>
+                <span className="pg-selbar-n">{s.picked.length}개 골랐습니다</span>
                 <AlignMenu n={s.picked.length} onPick={(k) => usePortfolioGraph.getState().alignPicked(k)} />
                 <button type="button" className="pg-selbar-b" onClick={() => usePortfolioGraph.getState().groupPicked()}
-                        title="고른 노드를 상자로 묶어요 (Ctrl+G)">
+                        title="고른 노드를 상자로 묶습니다 (Ctrl+G)">
                   <Boxes size={14} aria-hidden="true" /> 묶기
                 </button>
                 <button type="button" className="pg-selbar-b pg-selbar-compare" aria-disabled={!compareCheck.ok || undefined}
-                        title={compareCheck.ok ? "고른 노드를 ‘견고성 비교’에 이어요 — 같이 무너지는지 봐요" : compareCheck.reason}
+                        title={compareCheck.ok ? "고른 노드를 ‘견고성 비교’에 잇습니다 — 같이 무너지는지 봅니다" : compareCheck.reason}
                         onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.comparePicked()); }}>
                   <Scale size={14} aria-hidden="true" /> 견고성 비교
                 </button>
                 <button type="button" className="pg-selbar-b pg-selbar-branch"
-                        title="고른 노드만 복제해 갈래를 만들어요 — 뿌리는 흐름 맨 앞, 밖으로 나가는 선은 잇지 않아요"
+                        title="고른 노드만 복제해 갈래를 만듭니다 — 뿌리는 흐름 맨 앞, 밖으로 나가는 선은 잇지 않습니다"
                         onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.branchPicked()); }}>
                   <GitBranch size={14} aria-hidden="true" /> 갈래
                 </button>
@@ -839,7 +839,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
                   onFocusNode={focusNode} onApply={applySuggestion} />}
           {s.catalog && s.nodes.length === 0 && (
             <div className="pg-empty-start">
-              <p>비어 있어요. 무엇을 하려는지 고르면 흐름을 만들어 드려요.</p>
+              <p>비어 있습니다. 무엇을 하려는지 고르면 흐름을 만들어 드립니다.</p>
               <button type="button" className="pg-btn pg-btn--primary" onClick={() => setGoalOpen(true)}>
                 <Sparkles size={14} aria-hidden="true" /> 목표로 시작
               </button>
@@ -847,7 +847,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
           )}
           {welcome && !dragOver ? (
             <div className="pg-welcome" role="region" aria-label="처음 오셨을 때">
-              <p>처음이세요? 하려는 일을 고르면 흐름을 만들어 드려요.</p>
+              <p>처음 사용하는 경우 작업을 선택하면 흐름을 자동으로 구성합니다.</p>
               <button type="button" className="pg-welcome-go" onClick={() => { closeWelcome(); setGoalOpen(true); }}>
                 <Sparkles size={14} aria-hidden="true" /> 목표로 시작
               </button>
@@ -870,10 +870,10 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             <GuideBar g={guide} session={session} onTry={tryTool}
                       onLater={(id) => setDismissed((d) => new Set(d).add(`guide|${id}`))}
                       extra={aiShown ? <AiAsk session={session} ai={ai.ai} onAsk={() => { void ai.ask(); }} /> : null} />
-          ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러와요"
-            : s.picked.length > 1 ? `${s.picked.length}개 골랐어요 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 지우기`
+          ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러옵니다"
+            : s.picked.length > 1 ? `${s.picked.length}개 골랐습니다 · Ctrl+G 묶기 · Ctrl+C 복사 · Delete 삭제`
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"
-            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보세요. 선을 빈 곳에 놓으면 이을 노드를 찾아요 · 단축키 ?"}
+            : "노드를 끌어 놓고, 같은 색 점끼리 이어 보십시오. 선을 빈 곳에 놓으면 이을 노드를 찾습니다 · 단축키 ?"}
             {aiShown && !dragOver && <AiAsk session={session} ai={ai.ai} onAsk={() => { void ai.ask(); }} />}</div>}
           {quick && s.catalog && (
             <QuickAdd at={quick} catalog={s.catalog} stageKeys={stages.map((x) => x.key)}

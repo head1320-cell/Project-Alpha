@@ -42,7 +42,7 @@ export function YieldCurveResult({ v }: { v: Dict }) {
   const dips = pts.slice(1).map((p, i) => ({ a: pts[i], b: p, at: [i, i + 1] as [number, number] }))
     .filter(({ a, b }) => a.y !== null && b.y !== null && (b.y as number) < (a.y as number));
   const inv = Boolean(r.inversion);
-  const read = pts.map((p) => ({ head: p.t, cells: [{ key: "y", label: "금리", text: p.y === null ? "몰라요" : `${p.y.toFixed(2)}%` }] }));
+  const read = pts.map((p) => ({ head: p.t, cells: [{ key: "y", label: "금리", text: p.y === null ? "N/A" : `${p.y.toFixed(2)}%` }] }));
   return (
     <>
       {/* 직접 SVG (ADR 004 · 2026-11-10) — 점 위 금리 글자 + 읽는 줄(←→) + 표 쌍둥이 · 뒤집힌 이웃 쌍은 칠한다 */}
@@ -53,9 +53,9 @@ export function YieldCurveResult({ v }: { v: Dict }) {
       <KV rows={[
         ["10년 − 2년", <span key="s" className={num(r.spread_2y10y_bp) !== null && (r.spread_2y10y_bp as number) < 0 ? "pg-neg" : ""}>
           {sg(r.spread_2y10y_bp, 0, "bp")}</span>],
-        ["판정", inv ? "역전 — 짧은 금리가 더 높아요" : "정상 — 긴 금리가 더 높아요"],
+        ["판정", inv ? "역전 — 짧은 금리가 더 높습니다" : "정상 — 긴 금리가 더 높습니다"],
       ]} />
-      {dips.length > 0 && <p className="pg-note"><span className="pg-dot-inv" aria-hidden="true" />칠한 구간은 만기가 길어지는데 금리가 낮아지는 곳이에요.</p>}
+      {dips.length > 0 && <p className="pg-note"><span className="pg-dot-inv" aria-hidden="true" />칠한 구간은 만기가 길어지는데 금리가 낮아지는 곳입니다.</p>}
       <p className="pg-note"><span className="pg-tag pg-tag--assumed">경험칙</span> {String(r.interpretation ?? "")}</p>
     </>
   );
@@ -96,7 +96,7 @@ export function MacroDashboardResult({ v }: { v: Dict }) {
           </table>
         </div>
       ))}
-      <p className="pg-note">막대 가운데가 최근 5년 평균, 양 끝이 ±3 표준편차예요. 추이선은 최근 24개 관측이에요.</p>
+      <p className="pg-note">막대 가운데가 최근 5년 평균, 양 끝이 ±3 표준편차입니다. 추이선은 최근 24개 관측입니다.</p>
     </>
   );
 }
@@ -111,7 +111,7 @@ export function ConsensusResult({ v }: { v: Dict }) {
   return (
     <>
       <p className={`pg-model-type pg-model-type--${r.consensus ? "hist" : "hypo"}`}>
-        {r.tie ? "표가 갈려 결론이 없어요" : r.consensus ? `모두 ${rk(r.verdict)}` : `다수 ${rk(r.verdict)} · 갈림`}
+        {r.tie ? "표가 갈려 결론 없음" : r.consensus ? `모두 ${rk(r.verdict)}` : `다수 ${rk(r.verdict)} · 갈림`}
       </p>
       <table className="pg-table pg-consensus"><tbody>
         {Object.keys({ ...per, ...reasons }).map((k) => (
@@ -124,7 +124,7 @@ export function ConsensusResult({ v }: { v: Dict }) {
         ))}
       </tbody></table>
       <KV rows={[["답한 방법", `${String(r.n_available ?? 0)}개`], ["갈림 정도", fx(dis.score, 2)]]} />
-      <p className="pg-note">{String(r.note ?? "")} 세 방법을 평균 내지 않아요.</p>
+      <p className="pg-note">{String(r.note ?? "")} 세 방법을 평균 내지 않습니다.</p>
     </>
   );
 }
@@ -153,7 +153,7 @@ export function CoverageResult({ v }: { v: Dict }) {
         <Meter label="목표" value={tgt} max={1} text={tgt === null ? "—" : `${(tgt * 100).toFixed(0)}%`} tone="mute" />
         <Meter label="실측" value={cov} max={1} text={cov === null ? "—" : `${(cov * 100).toFixed(1)}%`} />
       </div>
-      <p className="pg-note">적중률은 목표 근처로 나오게 만들어져요 — 비교는 아래 집합 크기로 해요.</p>
+      <p className="pg-note">적중률은 목표 근처로 나오게 만들어집니다 — 비교는 아래 집합 크기로 합니다.</p>
       <div className="pg-bars">
         <Meter label="전이 모형" value={mine} max={mx} text={fx(mine, 2, "개")} />
         <Meter label="기저율" value={base} max={mx} text={fx(base, 2, "개")} tone="mute" />
@@ -220,7 +220,7 @@ function Outputs({ o }: { o: Dict }) {
     } else if (k === "edges" && Array.isArray(x)) {
       tables.push(
         <div key={k} className="pg-edges">
-          {x.length === 0 ? <p className="pg-note">유의한 선후 관계가 없었어요.</p>
+          {x.length === 0 ? <p className="pg-note">유의한 선후 관계가 없었습니다.</p>
             : (x as Dict[]).map((e, i) => (
               <div key={i} className="pg-edge-row">{String(e.source ?? e.from ?? "?")} → {String(e.target ?? e.to ?? "?")}
                 {num(e.p_value) !== null ? <span className="pg-muted"> · p {fx(e.p_value, 3)}</span> : null}</div>
@@ -251,7 +251,7 @@ export function StudioResult({ v }: { v: Dict }) {
     <>
       <p className="pg-note"><b>{String(s.question ?? "")}</b></p>
       <KV rows={[["돌린 엔진", String(r.engine ?? s.substitute ?? "—")]]} />
-      <p className="pg-note pg-studio-frontier">프런티어 엔진 ‘{String(s.frontier ?? "—")}’ — 이 노드는 돌리지 않아요. 돌릴 수 있는지는 매크로 화면의 능력 사다리가 판정해요.</p>
+      <p className="pg-note pg-studio-frontier">프런티어 엔진 ‘{String(s.frontier ?? "—")}’ — 이 노드는 돌리지 않습니다. 돌릴 수 있는지는 매크로 화면의 능력 사다리가 판정합니다.</p>
       <Outputs o={(r.outputs as Dict) ?? {}} />
       {r.note ? <p className="pg-warn">{plain(r.note)}</p> : null}
     </>

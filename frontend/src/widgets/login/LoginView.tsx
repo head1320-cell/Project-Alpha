@@ -30,12 +30,12 @@ import { AccessMap } from "./AccessMap";
 type Fail = { say: string; raw: string | null };
 
 function failOf(status: number | null, body: unknown): Fail {
-  if (status === null) return { say: "서버에 닿지 못했어요. 잠시 뒤 다시 해 주세요.", raw: null };
+  if (status === null) return { say: "서버 연결 실패. 잠시 뒤 다시 하십시오.", raw: null };
   const raw = extractErrorDetail(body, "") || null;
-  if (status === 401) return { say: "아이디 또는 비밀번호가 맞지 않아요.", raw };
-  if (status === 422) return { say: "아이디와 비밀번호를 다시 확인해 주세요.", raw };
-  if (status === 502 || status === 504) return { say: "서버에 닿지 못했어요. 잠시 뒤 다시 해 주세요.", raw };
-  return { say: `로그인하지 못했어요(HTTP ${status}).`, raw };
+  if (status === 401) return { say: "아이디 또는 비밀번호가 맞지 않습니다.", raw };
+  if (status === 422) return { say: "아이디와 비밀번호를 다시 확인하십시오.", raw };
+  if (status === 502 || status === 504) return { say: "서버 연결 실패. 잠시 뒤 다시 하십시오.", raw };
+  return { say: `로그인 실패(HTTP ${status}).`, raw };
 }
 
 function Brand() {
@@ -76,7 +76,7 @@ export function LoginView() {
     }
     const body = await res.json().catch(() => null);
     if (!res.ok || typeof body?.access_token !== "string") {
-      setFail(res.ok ? { say: "로그인 응답에 토큰이 없어요.", raw: null } : failOf(res.status, body));
+      setFail(res.ok ? { say: "로그인 응답에 토큰 없음", raw: null } : failOf(res.status, body));
       setBusy(false);
       return;
     }
@@ -91,11 +91,11 @@ export function LoginView() {
       <main className="lg-main">
         <form className="lg-form" onSubmit={submit} aria-busy={busy}>
           <h1 className="lg-h1">로그인</h1>
-          <p className="lg-note">계정은 관리자에게 받아요. 따로 가입하는 곳은 없어요.</p>
+          <p className="lg-note">계정은 관리자에게 받습니다. 따로 가입하는 곳은 없습니다.</p>
 
           {session.kind === "signed_in" ? (
             <p className="lg-already" role="status">
-              이미 <b>{session.username}</b>({ROLE_KO[session.role] ?? session.role}) 계정으로 로그인했어요.{" "}
+              이미 <b>{session.username}</b>({ROLE_KO[session.role] ?? session.role}) 계정으로 로그인했습니다.{" "}
               <Link href={next ?? "/dashboard"} className="lg-already-go">이어서 가기</Link>
             </p>
           ) : null}
@@ -124,11 +124,11 @@ export function LoginView() {
           ) : null}
 
           <button className="login-submit lg-submit" type="submit" disabled={busy}>
-            {busy ? "확인하는 중이에요" : "로그인"}
+            {busy ? "확인 중" : "로그인"}
           </button>
 
           <p className="lg-foot">
-            로그인하지 않아도 연구 화면은 그대로 써요. <Link href="/dashboard" className="lg-home">홈으로</Link>
+            로그인하지 않아도 연구 화면은 그대로 씁니다. <Link href="/dashboard" className="lg-home">홈으로</Link>
           </p>
         </form>
         <AccessMap />

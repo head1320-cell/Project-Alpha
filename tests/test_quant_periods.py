@@ -1,7 +1,7 @@
-"""기간별 수익 · 큰 낙폭 사건 — 자본곡선에서 **옮기기만** 하는 순수 함수 둘 (2026-11-09 · 캔버스 성과 그림 문법).
+"""기간별 수익 · 주요 낙폭 구간 — 자본곡선에서 **옮기기만** 하는 순수 함수 둘 (2026-11-09 · 캔버스 성과 그림 문법).
 
 설계: `docs/superpowers/specs/2026-11-09-canvas-performance-viz-design.md` §4.5.
-- 화면은 새 수를 만들지 않으므로(BJ 원칙) 해마다·달마다 수익과 낙폭 사건은 서버가 낸다. 지표 공식은 `quant_metrics` 한 곳
+- 화면은 새 수를 만들지 않으므로(BJ 원칙) 해마다·월별 수익률과 낙폭 구간은 서버가 낸다. 지표 공식은 `quant_metrics` 한 곳
   (`tests/test_metrics_single_source.py`).
 - ★부분 기간은 연환산하지 않는다★ — 3개월짜리 해를 "연 수익" 처럼 보이면 거짓이다. `partial` 로 표시만 한다.
 - ★모르는 것은 None★ — 회복 못 한 낙폭의 회복일은 `None` 이지 오늘도 0 도 아니다. 빈 곡선은 빈 목록이다.
@@ -54,7 +54,7 @@ def test_partial_periods_are_flagged_and_never_annualized():
 
 
 def test_yearly_rows_carry_that_years_max_drawdown_from_the_curve():
-    """해마다 '가장 크게 빠진 폭' 은 그 해 안의 최고점 대비 — 다른 해의 고점을 끌어오지 않는다."""
+    """해마다 'MDD(최대낙폭)' 은 그 해 안의 최고점 대비 — 다른 해의 고점을 끌어오지 않는다."""
     dates, eq = _curve({"2025-01-02": 1.0, "2025-03-03": 1.5, "2025-06-02": 1.2, "2025-12-30": 1.6,
                         "2026-01-02": 1.6, "2026-02-02": 1.44})
     p = period_returns(dates, eq)

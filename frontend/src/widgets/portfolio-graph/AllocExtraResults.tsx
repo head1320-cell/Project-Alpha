@@ -21,7 +21,7 @@ function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="pg-kv">{rows.map(([a, b]) => (<div key={a}><dt>{a}</dt><dd>{b}</dd></div>))}</dl>;
 }
 
-const VERDICT: Record<string, string> = { trade: "거래할 가치가 있어요", hold: "그대로 두는 게 나아요", undetermined: "판단할 수 없어요" };
+const VERDICT: Record<string, string> = { trade: "거래할 가치가 있습니다", hold: "그대로 두는 게 낫습니다", undetermined: "판단 불가" };
 
 /** ★이 웨이브의 한 곳★ 저울 — 막대 = 보유 기간 동안의 효용 개선, 선 = 비용 × (1 + 머뭇거림 폭). */
 function Scale({ gain, cost, mult, over }: { gain: number; cost: number; mult: number; over: boolean }) {
@@ -32,7 +32,7 @@ function Scale({ gain, cost, mult, over }: { gain: number; cost: number; mult: n
   // 넘었는지는 서버 판정(decision)이 말한다 — 화면이 부등식을 다시 풀지 않는다.
   return (
     <svg className="pg-scale" viewBox={`0 0 ${W} ${H + 18}`} role="img"
-         aria-label={`효용 개선 ${gain.toFixed(3)}% 가 문턱 ${bar.toFixed(3)}% 를 ${over ? "넘어요" : "넘지 못해요"}`}>
+         aria-label={`효용 개선 ${gain.toFixed(3)}% 가 문턱 ${bar.toFixed(3)}% 를 ${over ? "넘습니다" : "넘지 못합니다"}`}>
       <rect x={pad} y={14} width={W - 2 * pad} height={16} rx={8} className="pg-scale-track" />
       <rect x={pad} y={14} width={Math.max(2, X(gain) - pad)} height={16} rx={8}
             className={over ? "pg-scale-gain pg-scale-gain--over" : "pg-scale-gain"} />
@@ -60,14 +60,14 @@ export function RebalanceResult({ v }: { v: Dict }) {
       </div>
       {d !== "undetermined" && gain !== null && cost !== null
         ? <Scale gain={gain} cost={cost} mult={mult} over={d === "trade"} />
-        : <p className="pg-warn">편익을 몰라 저울을 그리지 않아요 — {String(b.reason ?? "사유 미상")}</p>}
+        : <p className="pg-warn">편익을 몰라 저울을 그리지 않습니다 — {String(b.reason ?? "사유 미상")}</p>}
       <KV rows={[
         ["거래비용", `${krw(c.cost_krw)} (${pc(c.cost_pct, 3)} · ${String(c.cost_bp ?? "—")}bp)`],
         ["회전율 · 주문", `${pc(c.turnover_pct)} · ${String(c.n_orders ?? "—")}건`],
         ["보유 기간", `${String(b.horizon_days ?? "—")}영업일`],
       ]} />
       {(b.provenance as Dict)?.self_referential ? (
-        <p className="pg-note">편익을 잰 기대수익이 이 목표를 고른 바로 그 추정이에요 — 이득은 구조적으로 보장되고, 전망이 맞았다는 증거가 아니에요.</p>
+        <p className="pg-note">편익을 잰 기대수익이 이 목표를 고른 바로 그 추정입니다 — 이득은 구조적으로 보장되고, 전망이 맞았다는 증거가 아닙니다.</p>
       ) : null}
       {Object.keys(band).length > 0 && (
         <table className="pg-table pg-scen">
@@ -137,7 +137,7 @@ export function ImpactResult({ v }: { v: Dict }) {
     <>
       <div className="pg-risk-lead">
         <span className="pg-risk-big">{num(r.total_impact_bps) === null ? "—" : `${(r.total_impact_bps as number).toFixed(1)}bp`}</span>
-        <span className="pg-risk-say">주문이 가격을 이만큼 밀 것으로 봐요 — 예상 비용 {krw(r.estimated_cost_krw)}</span>
+        <span className="pg-risk-say">주문이 가격을 이만큼 밀 것으로 봅니다 — 예상 비용 {krw(r.estimated_cost_krw)}</span>
       </div>
       <KV rows={[["영구 · 일시", `${String(r.permanent_impact_bps ?? "—")} · ${String(r.temporary_impact_bps ?? "—")}bp`],
                  ["거래대금 대비", pc(num(r.participation_rate) === null ? null : (r.participation_rate as number) * 100, 2)]]} />

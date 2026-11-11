@@ -14,9 +14,9 @@ import { CAT_N, IND_KR, catColor, signed, zFill as lvFill } from "./macroKo";
 
 // ── 포맷·색 helpers ── 모르는 값은 "몰라요"(0 이나 "—" 로 그리지 않는다)
 export const fmtNum = (v: number | null | undefined, d = 2): string =>
-  v == null || !Number.isFinite(v) ? "몰라요" : Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(d);
-export const fmtZ = (z: number | null | undefined): string => (z == null || !Number.isFinite(z) ? "몰라요" : signed(z));
-export const fmtPct = (v: number | null | undefined, d = 1): string => (v == null || !Number.isFinite(v) ? "몰라요" : `${signed(v, d)}%`);
+  v == null || !Number.isFinite(v) ? "N/A" : Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(d);
+export const fmtZ = (z: number | null | undefined): string => (z == null || !Number.isFinite(z) ? "N/A" : signed(z));
+export const fmtPct = (v: number | null | undefined, d = 1): string => (v == null || !Number.isFinite(v) ? "N/A" : `${signed(v, d)}%`);
 export const clamp1 = (v: number): number => Math.max(-1, Math.min(1, v));
 /** 수준 색(z) — 주황(평균보다 높음)/청록(낮음) 양쪽 색. 등락 빨강·파랑이 아니다. */
 export const zFill = lvFill;
@@ -88,13 +88,13 @@ export function ArcGauge({ value, max = 100, label, sub, ends }: { value: number
   const frac = known ? Math.max(0, Math.min(1, (value as number) / max)) : 0;
   const arc = `M 20 90 A ${AG_R} ${AG_R} 0 0 1 160 90`;
   return (
-    <div className="mc-gauge" role="img" aria-label={known ? `${Math.round(value as number)}${label}${sub ? `, ${sub}` : ""}` : "값을 받지 못했어요"}>
+    <div className="mc-gauge" role="img" aria-label={known ? `${Math.round(value as number)}${label}${sub ? `, ${sub}` : ""}` : "값 수신 실패"}>
       <div className="mc-gauge-dial">
         <svg viewBox="0 0 180 100" width="200" height="111" aria-hidden>
           <path d={arc} className="mc-gauge-track" fill="none" strokeWidth="14" strokeLinecap="round" />
           {known && frac > 0 && <path d={arc} className="mc-gauge-fill" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray={`${frac * AG_L} ${AG_L}`} />}
         </svg>
-        <div className="mc-gauge-c">{known ? <><b>{Math.round(value as number)}</b><span>{label}</span></> : <span>몰라요</span>}</div>
+        <div className="mc-gauge-c">{known ? <><b>{Math.round(value as number)}</b><span>{label}</span></> : <span>N/A</span>}</div>
       </div>
       {ends && <div className="mc-gauge-ends" aria-hidden><span>{ends[0]}</span><span>{ends[1]}</span></div>}
       {sub && <div className="mc-gauge-sub">{sub}</div>}
@@ -139,7 +139,7 @@ export function IndicatorCard({ ind, onClick }: { ind: MacroIndicator; onClick?:
       {/* 선은 중립색 — 오름/내림 색은 ▲▼(지난번 대비) 하나만 쓴다(24개월 처음↔끝 비교로 칠하면 ▲▼ 와 반대 색이 나올 수 있었다) */}
       <Sparkline values={ind.spark} w={210} h={28} color="var(--mc-neutral)" />
       <div className="mc-ind-pct" aria-hidden><i style={{ width: `${Math.max(2, Math.min(100, ind.percentile ?? 0))}%`, opacity: ind.percentile == null ? 0 : 1 }} /></div>
-      <span className="mc-ind-pctlbl">{ind.percentile != null ? `지난 5년 중 위치 ${Math.round(ind.percentile)}%` : "지난 5년 중 위치 몰라요"}</span>
+      <span className="mc-ind-pctlbl">{ind.percentile != null ? `지난 5년 중 위치 ${Math.round(ind.percentile)}%` : "지난 5년 중 위치 미상"}</span>
     </button>
   );
 }
@@ -161,14 +161,14 @@ export function ZHeatmap({ themes, onPick }: { themes: MacroTheme[]; onPick: (in
                 <span className="mc-heat-z">{fmtZ(ind.z_score)}</span>
               </button>
             ))}
-            {!t.indicators.length && <span className="mc-heat-empty">이 묶음에는 지표가 없어요</span>}
+            {!t.indicators.length && <span className="mc-heat-empty">이 묶음에는 지표 없음</span>}
           </div>
         </div>
       ))}
       <p className="mc-readout" aria-live="polite">
         {cur
           ? <><b>{cur.name}</b> {fmtNum(cur.latest)} {cur.unit} · z {fmtZ(cur.z_score)}{cur.percentile != null && ` · 지난 5년 중 위치 ${Math.round(cur.percentile)}%`}</>
-          : "칸에 마우스를 올리거나 Tab 으로 옮기면 여기에 값이 나와요"}
+          : "칸에 마우스를 올리거나 Tab 으로 옮기면 여기에 값이 나옵니다"}
       </p>
     </div>
   );
@@ -206,7 +206,7 @@ export function HoldingsDonut({ holdings, size = 116 }: { holdings: TacticalHold
   const total = data.reduce((a, d) => a + d.value, 0);
   return (
     <svg className="tx-donut" width={size} height={size} viewBox="0 0 88 88" role="img"
-         aria-label={data.length ? `보유 비중 ${data.map((d) => `${d.name} ${d.value}%`).join(", ")}` : "보유 비중 자료가 없어요"}>
+         aria-label={data.length ? `보유 비중 ${data.map((d) => `${d.name} ${d.value}%`).join(", ")}` : "보유 비중 자료 없음"}>
       <DonutRing total={total} r={33} width={15} trackClass="tx-donut-track" arcClass="tx-donut-arc"
         slices={data.map((d, i) => ({ key: String(i), value: d.value, color: d.color, data: { slice: d.name } }))} />
     </svg>
@@ -253,7 +253,7 @@ export function ProbBars({ probs, compact = false }: { probs: Record<string, num
           <div key={q} className="mc-pb-row" data-regime={q}>
             <span className="mc-pb-k">{regimeName(q)}</span>
             <div className="mc-pb-track" aria-hidden><i style={{ width: `${known ? Math.max(1.5, p) : 0}%`, background: Q_FILL[q] }} /></div>
-            <span className="mc-pb-v">{known ? `${p.toFixed(0)}%` : "몰라요"}</span>
+            <span className="mc-pb-v">{known ? `${p.toFixed(0)}%` : "N/A"}</span>
           </div>
         );
       })}
@@ -276,7 +276,7 @@ export function AxisBreakdown({ title, detail }: { title: string; detail?: { sco
                 <td>{IND_KR[c.key] ?? c.key}</td>
                 <td>{c.transform === "yoy" ? "전년 대비" : "수준"}</td>
                 <td><span className="mc-zcell" style={{ background: zFill(c.z) }}>{signed(c.z)}</span></td>
-                <td>{c.z_mom == null ? "몰라요" : signed(c.z_mom)}</td>
+                <td>{c.z_mom == null ? "N/A" : signed(c.z_mom)}</td>
                 <td>{(c.weight * 100).toFixed(0)}%</td>
                 <td><b>{signed(c.contribution, 3)}</b></td>
               </tr>
@@ -295,7 +295,7 @@ export function CbGauge({ name, bank }: { name: string; bank?: { available: bool
     return (
       <div className="mc-cbg">
         <div className="mc-cbg-h">{name}</div>
-        <p className="mc-cbg-none">점수를 내지 못했어요. <span data-server>{bank.note ?? "정책문을 받지 못했어요"}</span></p>
+        <p className="mc-cbg-none">점수 산출 실패. <span data-server>{bank.note ?? "정책문 수신 실패"}</span></p>
       </div>
     );
   }
@@ -342,7 +342,7 @@ export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label
           <b className="mc-attr-final">{r.final.toFixed(1)}%</b>
         </div>
       ))}
-      <p className="mc-attr-legend">기본 + 성장 + 물가 + 스트레스 = 최종 비중이에요(규칙의 각 항을 그대로 나눈 값, %p).</p>
+      <p className="mc-attr-legend">기본 + 성장 + 물가 + 스트레스 = 최종 비중입니다(규칙의 각 항을 그대로 나눈 값, %p).</p>
     </div>
   );
 }
@@ -362,7 +362,7 @@ export function AllocBands({ bands }: { bands: Array<{ ticker: string; label: st
           <span className="mc-band-v">{b.p10.toFixed(0)}~{b.p90.toFixed(0)}%</span>
         </div>
       ))}
-      <p className="mc-attr-legend">띠는 400번 중 가운데 80%가 들어간 범위, 진한 표식은 가운데값이에요.</p>
+      <p className="mc-attr-legend">띠는 400번 중 가운데 80%가 들어간 범위, 진한 표식은 가운데값입니다.</p>
     </div>
   );
 }
@@ -370,7 +370,7 @@ export function AllocBands({ bands }: { bands: Array<{ ticker: string; label: st
 // CausalGraphView — 그레인저(예측적) 인과: 원형 배치 + 방향 화살표. 선 굵기 = 유의확률이 낮을수록 굵게.
 //   BU5b-2: 선 안 SVG <title>(툴팁) 대신 아래 관계 목록이 모든 선을 글로 말한다(부모 카드). 색은 한 계열 강조색.
 export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; label: string }>; edges: Array<{ from: string; to: string; lag: number; p: number }> }) {
-  if (!nodes.length) return <div className="mc-empty-sm">그래프를 그릴 지표가 없어요(시계열 표본이 부족해요)</div>;
+  if (!nodes.length) return <div className="mc-empty-sm">그래프를 그릴 지표가 없습니다(시계열 표본이 부족합니다)</div>;
   const R = 112, CX = 210, CY = 160;
   const pos: Record<string, { x: number; y: number }> = {};
   nodes.forEach((n, k) => {

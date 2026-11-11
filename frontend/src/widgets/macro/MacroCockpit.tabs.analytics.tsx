@@ -44,28 +44,28 @@ export function CorrelationsTab({ corr, market, setMarket, onRetryCorr, causal, 
   const mkt = market === "kr" ? "국내 ETF" : "미국 ETF";
   const edges = causal?.edges ?? [];
   const edgeLine = (e: (typeof edges)[number]) => (
-    <><span data-server>{e.from_label}</span> → <b data-server>{e.to_label}</b> <em>{e.lag}개월 앞서요 · 유의확률 {e.p}</em></>
+    <><span data-server>{e.from_label}</span> → <b data-server>{e.to_label}</b> <em>{e.lag}개월 앞섭니다 · 유의확률 {e.p}</em></>
   );
   return (
     <div className="mc-stack">
       <div className="mc-strat-bar">
-        <div className="mc-strat-title">자산끼리 함께 움직이는 정도 <span className="mc-card-sub">{corr?.matrix ? `자산 ${corr.matrix.tickers.length}개 · ` : ""}매일 수익률로 쟀어요</span></div>
+        <div className="mc-strat-title">자산끼리 함께 움직이는 정도 <span className="mc-card-sub">{corr?.matrix ? `자산 ${corr.matrix.tickers.length}개 · ` : ""}매일 수익률로 측정했습니다</span></div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
-      {corr === undefined && <p className="mc-loading">{mkt} 상관을 계산하는 중이에요</p>}
-      {corr === null && <TabFail title={`${mkt} 상관을 불러오지 못했어요`} onRetry={onRetryCorr} />}
+      {corr === undefined && <p className="mc-loading">{mkt} 상관 계산 중</p>}
+      {corr === null && <TabFail title={`${mkt} 상관 조회 실패`} onRetry={onRetryCorr} />}
       {corr && (
         <div className="mc-grid">
           <div className="mc-card span2">
-            <div className="mc-card-h">주식과 채권이 서로 받쳐 주나요
+            <div className="mc-card-h">주식·채권 상관관계
               {sb?.corr != null && <span className="mc-card-sub">지금 상관 {signed(sb.corr)} · 판정 <b className="mc-verdict" data-server>{sb.verdict}</b></span>}</div>
             <RollingCorrChart pairs={corr.pairs} />
-            <p className="mc-card-note">주식·장기채(SPY·TLT) 상관이 0보다 작으면 채권이 주식이 떨어질 때 받쳐 줘요(주식 60·채권 40, 위험 균등 배분이 잘 맞는 환경). 0보다 크면 함께 움직여 분산 효과가 약해져요(2022년 같은 환경).</p>
+            <p className="mc-card-note">주식·장기채(SPY·TLT) 상관이 0보다 작으면 채권이 주식이 떨어질 때 받쳐 줍니다(주식 60·채권 40, 위험 균등 배분이 잘 맞는 환경). 0보다 크면 함께 움직여 분산 효과가 약해집니다(2022년 같은 환경).</p>
           </div>
           <div className="mc-card span2">
-            <div className="mc-card-h">모든 자산 쌍의 평균 상관 <span className="mc-card-sub">1에 가까울수록 다 같이 움직여 분산이 잘 안 돼요</span></div>
+            <div className="mc-card-h">모든 자산 쌍의 평균 상관 <span className="mc-card-sub">1에 가까울수록 다 같이 움직여 분산이 잘 안 됩니다</span></div>
             <AvgCorrChart avg={corr.avg_corr} />
-            <p className="mc-card-note">점선 0.6은 화면이 그은 참고선이에요(서버가 내린 판정이 아니에요). 위기 때는 평균 상관이 1 쪽으로 몰리는 일이 잦아요.</p>
+            <p className="mc-card-note">점선 0.6은 화면이 그은 참고선입니다(서버가 내린 판정이 아닙니다). 위기 때는 평균 상관이 1 쪽으로 몰리는 일이 잦습니다.</p>
           </div>
           <div className="mc-card span2">
             <div className="mc-card-h">상관 지도(최근 1년)</div>
@@ -76,9 +76,9 @@ export function CorrelationsTab({ corr, market, setMarket, onRetryCorr, causal, 
       {/* 상관(방향 없음)을 넘어서 — 누가 누구보다 먼저 움직이나(그레인저 예측 인과). 상관과 따로 불러오므로 따로 실패한다. */}
       <div className="mc-grid">
         <div className="mc-card span2">
-          <div className="mc-card-h">먼저 움직이는 지표(그레인저 인과) <span className="mc-card-sub">한 지표의 과거 값이 다른 지표를 미리 맞히는지 검정했어요. 원인이라는 뜻은 아니에요.</span></div>
-          {causal === undefined && <p className="mc-loading">관계를 검정하는 중이에요</p>}
-          {causal === null && <TabFail title="먼저 움직이는 지표를 불러오지 못했어요" onRetry={onRetryCausal} />}
+          <div className="mc-card-h">먼저 움직이는 지표(그레인저 인과) <span className="mc-card-sub">한 지표의 과거 값이 다른 지표를 미리 맞히는지 검정했습니다. 원인이라는 뜻은 아닙니다.</span></div>
+          {causal === undefined && <p className="mc-loading">관계 검정 중</p>}
+          {causal === null && <TabFail title="먼저 움직이는 지표 조회 실패" onRetry={onRetryCausal} />}
           {causal && <CausalGraphView nodes={causal.nodes} edges={causal.edges} />}
           {causal && (edges.length ? (
             <>
@@ -92,8 +92,8 @@ export function CorrelationsTab({ corr, market, setMarket, onRetryCorr, causal, 
                 </details>
               )}
             </>
-          ) : <div className="mc-empty-sm">유의한 관계가 없어요</div>)}
-          {causal && <p className="mc-card-note">선이 굵을수록 유의확률이 낮아요(우연일 가능성이 작아요). 계산 방법: <span data-server>{causal.method}</span>{causal.note && <> · <span data-server>{causal.note}</span></>}</p>}
+          ) : <div className="mc-empty-sm">유의한 관계 없음</div>)}
+          {causal && <p className="mc-card-note">선이 굵을수록 유의확률이 낮습니다(우연일 가능성이 작습니다). 계산 방법: <span data-server>{causal.method}</span>{causal.note && <> · <span data-server>{causal.note}</span></>}</p>}
         </div>
       </div>
     </div>
@@ -112,12 +112,12 @@ export function TimingTab({ timing, market, setMarket, onRetry }: {
   return (
     <div className="mc-stack">
       <div className="mc-strat-bar">
-        <div className="mc-strat-title">시장 타이밍 <span className="mc-card-sub">위험을 더 질 때인지, 줄일 때인지 여러 신호로 쟀어요</span></div>
+        <div className="mc-strat-title">시장 타이밍 <span className="mc-card-sub">위험을 더 질 때인지, 줄일 때인지 여러 신호로 측정했습니다</span></div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
-      {timing === undefined && <p className="mc-loading">{mkt} 타이밍을 계산하는 중이에요</p>}
-      {timing === null && <TabFail title={`${mkt} 타이밍을 불러오지 못했어요`} onRetry={onRetry} />}
-      {timing && !comp && <div className="mc-empty-sm">종합 점수를 받지 못했어요</div>}
+      {timing === undefined && <p className="mc-loading">{mkt} 타이밍 계산 중</p>}
+      {timing === null && <TabFail title={`${mkt} 타이밍 조회 실패`} onRetry={onRetry} />}
+      {timing && !comp && <div className="mc-empty-sm">종합 점수 수신 실패</div>}
       {timing && comp && (
         <div className="mc-grid">
           <div className="mc-card">
@@ -125,7 +125,7 @@ export function TimingTab({ timing, market, setMarket, onRetry }: {
             <ArcGauge value={comp.score} label="/100" sub={comp.label} ends={["0 · 위험 회피", "100 · 위험 선호"]} />
           </div>
           <div className="mc-card">
-            <div className="mc-card-h">신호별 점수 <span className="mc-card-sub">0~100, 가중을 곱해 합친 값이 종합 점수예요</span></div>
+            <div className="mc-card-h">신호별 점수 <span className="mc-card-sub">0~100, 가중을 곱해 합친 값이 종합 점수입니다</span></div>
             <ComponentBars comps={timing.components} />
           </div>
           <div className="mc-card span2">

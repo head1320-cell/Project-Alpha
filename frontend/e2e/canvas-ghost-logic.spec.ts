@@ -11,11 +11,11 @@ import type { AiSuggestion, AttachEdge, Procedure, ProcedureSuggestion } from ".
  */
 
 const EST: ProcedureSuggestion = {
-  action: "add", kind: "estimate", label: "기대 수익 추정", text: "‘기대 수익 추정’을 붙여 이을까요?",
+  action: "add", kind: "estimate", label: "기대 수익 추정", text: "‘기대 수익 추정’을 추가해 연결하시겠습니까?",
   attach: [{ source: "@new", source_port: "belief", target: "optimizer", target_port: "belief" }], unlocks: [],
 };
 const BT: ProcedureSuggestion = {
-  action: "add", kind: "backtest", label: "과거로 돌려 보기", text: "거래비용과 처음 보는 기간을 아직 재지 않았어요.",
+  action: "add", kind: "backtest", label: "과거로 돌려 보기", text: "거래비용과 처음 보는 기간을 아직 측정하지 않았습니다.",
   attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" },
            { source: "returns", source_port: "returns", target: "@new", target_port: "returns" }],
   unlocks: ["cost", "oos"],
@@ -51,7 +51,7 @@ test(`많아도 ${MAX_GHOSTS}개까지`, () => {
 
 test("문서에 없는 노드를 가리키는 추천은 뺀다 — 짝: 있는 노드·잇기만 하는 추천은 남는다", () => {
   const stale: ProcedureSuggestion = { ...BT, attach: [{ source: "gone", source_port: "weights", target: "@new", target_port: "weights" }] };
-  const conn: ProcedureSuggestion = { action: "connect", kind: null, label: null, text: "이어 주세요",
+  const conn: ProcedureSuggestion = { action: "connect", kind: null, label: null, text: "연결하십시오",
                                       attach: [{ source: "universe", source_port: "universe", target: "returns", target_port: "universe" }], unlocks: [] };
   expect(ghostSuggestions(proc(stale, {}), IDS)).toEqual([]);
   const g = ghostSuggestions(proc(conn, { cost: BT }), IDS);
@@ -90,7 +90,7 @@ test("자리: 붙을 곳이 없으면 빈 캔버스는 0,0 · 아니면 맨 아�
 });
 
 test("잇기 칩 자리: 선 가운데가 비면 거기 · 아니면 두 카드 위 · 위도 막히면 아래 빈 자리", () => {
-  const conn: ProcedureSuggestion = { action: "connect", kind: null, label: null, text: "이어 주세요",
+  const conn: ProcedureSuggestion = { action: "connect", kind: null, label: null, text: "연결하십시오",
                                       attach: [{ source: "universe", source_port: "universe", target: "returns", target_port: "universe" }], unlocks: [] };
   // 이웃한 열(틈 80) — 칩(카드 폭)은 선 가운데에선 카드에 걸린다 → 두 카드 바로 위(선과 가깝다).
   const near = [node("universe", "universe", 0, 0), node("returns", "returns", 320, 0)];

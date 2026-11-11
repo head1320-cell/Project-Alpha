@@ -7,7 +7,7 @@
 
 - `steps` — 여섯 단계(데이터 · 신호 · 생각 · 비중 · 확인 · 실행)가 채워졌는지. 필수·권장·선택을 가른다.
 - `next` — 다음에 붙일 것 **하나**. 빠진 **단계**만 제안하고 설정값은 추천하지 않는다(BM 기각: 자동 스윕·
-  "가장 좋은" 고르기). 문장은 "잴 수 있게 돼요"까지만 쓴다 — 붙인다고 관문을 통과하는 것이 아니다.
+  "가장 좋은" 고르기). 문장은 "잴 수 있게 됩니다"까지만 쓴다 — 붙인다고 관문을 통과하는 것이 아니다.
 - `by_gate` — 관문마다 그것을 잴 수 있게 하는 한 걸음(없으면 `None` + 사유).
 - `unmet_needs` — 타입은 맞지만 받는 쪽이 요구하는 값(`needs`)을 보내는 쪽이 **확실히** 주지 않는 선.
   계산할 때 실패할 것을 편집하는 순간 말한다. 확실하지 않으면(조건부) 말하지 않는다.
@@ -194,8 +194,8 @@ def _fix_missing(nid: str, p: Mapping, by_id, out_adj, kinds, stage_order, port_
     if existing:
         src_label = _label(kinds, str(by_id[existing[0]]["type"]))
         return _suggest("connect", None,
-                        f"{_subj(me)} 받을 {_obj(what)} 아직 잇지 않았어요 — {_subj(src_label)} 내는 "
-                        f"{_obj(what)} 이을까요?",
+                        f"{_subj(me)} 받을 {_obj(what)} 아직 잇지 않았습니다 — {_subj(src_label)} 내는 "
+                        f"{_obj(what)} 연결하시겠습니까?",
                         [{"source": existing[0], "source_port": existing[1],
                           "target": nid, "target_port": p["name"]}], [], kinds)
     prod = _producer(kinds, p["type"], stage_order)
@@ -203,8 +203,8 @@ def _fix_missing(nid: str, p: Mapping, by_id, out_adj, kinds, stage_order, port_
         return None
     out = _out_port(kinds, prod, p["type"])
     return _suggest("add", prod,
-                    f"{_subj(me)} 받을 {_obj(what)} 내는 노드가 없어요 — "
-                    f"{_obj(_label(kinds, prod))} 붙여 이을까요?",
+                    f"{_subj(me)} 받을 {_obj(what)} 내는 노드가 없습니다 — "
+                    f"{_obj(_label(kinds, prod))} 추가해 연결하시겠습니까?",
                     [{"source": NEW, "source_port": out, "target": nid, "target_port": p["name"]}],
                     [], kinds)
 
@@ -248,10 +248,10 @@ def _add_returns(by_id, kinds) -> dict | None:
         if "universe" not in kinds:
             return None
         return _suggest("add", "universe",
-                        f"먼저 {_obj(_label(kinds, 'universe'))} 붙여 무엇을 볼지 정해요. 그다음 수익률을 불러오면 "
-                        "데이터·시점 관문을 잴 수 있게 돼요.", [], [], kinds)
+                        f"먼저 {_obj(_label(kinds, 'universe'))} 붙여 무엇을 볼지 정합니다. 그다음 수익률을 불러오면 "
+                        "데이터·시점 관문을 잴 수 있게 됩니다.", [], [], kinds)
     return _suggest("add", "returns",
-                    f"{_obj(_label(kinds, 'returns'))} 붙이면 데이터·시점 관문을 잴 수 있게 돼요.",
+                    f"{_obj(_label(kinds, 'returns'))} 붙이면 데이터·시점 관문을 잴 수 있게 됩니다.",
                     [{"source": uni, "source_port": _out_port(kinds, "universe", "Universe"),
                       "target": NEW, "target_port": _in_port(kinds, "returns", "Universe")}],
                     ["data", "pit"], kinds)
@@ -264,8 +264,8 @@ def _add_optimizer(by_id, kinds) -> dict | None:
     attach = ([{"source": ret, "source_port": _out_port(kinds, "returns", "Returns"),
                 "target": NEW, "target_port": _in_port(kinds, "optimizer", "Returns")}] if ret else [])
     return _suggest("add", "optimizer",
-                    f"비중을 정하는 단계가 없어요 — {_obj(_label(kinds, 'optimizer'))} 붙이면 비중 관문을 잴 수 "
-                    "있게 돼요.", attach, ["build"], kinds)
+                    f"비중을 정하는 단계가 없습니다 — {_obj(_label(kinds, 'optimizer'))} 붙이면 비중 관문을 잴 수 "
+                    "있게 됩니다.", attach, ["build"], kinds)
 
 
 def _add_backtest(by_id, incoming, kinds) -> dict | None:
@@ -279,8 +279,8 @@ def _add_backtest(by_id, incoming, kinds) -> dict | None:
         attach.append({"source": ret, "source_port": _out_port(kinds, "returns", "Returns"),
                        "target": NEW, "target_port": _in_port(kinds, "backtest", "Returns")})
     return _suggest("add", "backtest",
-                    f"거래비용과 처음 보는 기간을 아직 재지 않았어요 — ‘{_label(kinds, 'optimizer')}’ 뒤에 "
-                    f"{_obj(_label(kinds, 'backtest'))} 붙이면 잴 수 있게 돼요.", attach, ["cost", "oos"], kinds)
+                    f"거래비용과 처음 보는 기간을 아직 측정하지 않았습니다 — ‘{_label(kinds, 'optimizer')}’ 뒤에 "
+                    f"{_obj(_label(kinds, 'backtest'))} 붙이면 잴 수 있게 됩니다.", attach, ["cost", "oos"], kinds)
 
 
 def _add_risk(by_id, incoming, kinds) -> dict | None:
@@ -292,8 +292,8 @@ def _add_risk(by_id, incoming, kinds) -> dict | None:
         out = _out_port(kinds, str(node["type"]), "Weights")
         if out and all(supply(k, nid, out, by_id, incoming, kinds) != NO for k in need):
             return _suggest("add", "risk",
-                            f"확인하는 단계가 없어요 — {_subj(_label(kinds, str(node['type'])))} 낸 비중에 "
-                            f"{_obj(_label(kinds, 'risk'))} 붙여 어느 종목이 흔들림을 만드는지 봐요.",
+                            f"확인하는 단계가 없습니다 — {_subj(_label(kinds, str(node['type'])))} 낸 비중에 "
+                            f"{_obj(_label(kinds, 'risk'))} 붙여 어느 종목이 흔들림을 만드는지 봅니다.",
                             [{"source": nid, "source_port": out, "target": NEW, "target_port": port}], [], kinds)
     return None
 
@@ -309,12 +309,12 @@ def _step_text(state: str, need: str, labels: list[str]) -> str:
         head = " · ".join(f"‘{x}’" for x in labels[:2])
         return head + (f" 외 {len(labels) - 2}개" if len(labels) > 2 else "")
     if state == BLOCKED:
-        return f"{_subj(labels[0])} 받을 입력이 아직 이어지지 않았어요."
+        return f"{_subj(labels[0])} 받을 입력이 아직 이어지지 않았습니다."
     if need == REQUIRED:
-        return "아직 없어요 — 꼭 있어야 해요."
+        return "아직 없습니다 — 꼭 있어야 합니다."
     if need == RECOMMENDED:
-        return "아직 없어요 — 있으면 거래비용·처음 보는 기간을 잴 수 있어요."
-    return "없어도 돼요."
+        return "아직 없습니다 — 있으면 거래비용·처음 보는 기간을 측정할 수 있습니다."
+    return "없어도 됩니다."
 
 
 def evaluate(nodes: Sequence[Mapping], edges: Sequence[Mapping], kinds: Mapping[str, Mapping],
@@ -362,7 +362,7 @@ def evaluate(nodes: Sequence[Mapping], edges: Sequence[Mapping], kinds: Mapping[
            or (_add_risk(by_id, incoming, kinds) if "check" not in has_stage else None))
 
     return {"steps": steps, "next": nxt, "by_gate": by_gate, "fixes": fixes,
-            "done_text": None if nxt else "절차를 다 채웠어요 — 계산해 보세요."}
+            "done_text": None if nxt else "절차를 다 채웠습니다 — 계산하십시오."}
 
 
 #: 다른 모듈이 같은 조사 규칙을 쓰도록(‘수익률’을 · ‘비중’을).

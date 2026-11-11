@@ -66,7 +66,7 @@ def test_every_distribution_shaped_route_is_registered(app):
     unregistered = sorted(set(_marked(_routes(app))) - set(DISTRIBUTION_SURFACE))
     assert not unregistered, (
         "등록부에 없는 유통 형태 라우트가 생겼습니다. 유통은 업권 사항이라 여는 경로는 관문 뒤에만 둡니다 — "
-        f"`src/api/distribution_surface.py` 에 여는 것/닫는 것과 사유를 적고 관문을 맨 앞에 거세요: {unregistered}"
+        f"`src/api/distribution_surface.py` 에 여는 것/닫는 것과 사유를 적고 관문을 맨 앞에 거십시오: {unregistered}"
     )
 
 

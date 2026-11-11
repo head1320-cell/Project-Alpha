@@ -15,7 +15,7 @@ import { PeriodBars } from "@/shared/ui/perf/PeriodBars";
 import { PerfSheet } from "./PerfSheet";
 import { useCanvasGates } from "./useCanvasGates";
 
-const TRUST_TEXT: Record<string, string> = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패", partial: "절반 확인", skipped: "건너뜀", fallback: "대체" };
+const TRUST_TEXT: Record<string, string> = { confirmed: "확인", assumed: "가정", unknown: "미상", failed: "실패", partial: "부분 확인", skipped: "건너뜀", fallback: "대체" };
 
 /** 믿어도 되나요(trust 칩) + 재지 않은 것 — 서버 explain 그대로. 패널과 시트가 같이 쓴다. */
 export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explain: PerfExplain | null; openUnmeasured?: boolean }) {
@@ -25,7 +25,7 @@ export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explai
     <>
       {trust.length > 0 && (
         <div className="pg-trust pf-trust">
-          <div className="pg-trust-q">믿어도 되나요?</div>
+          <div className="pg-trust-q">신뢰도 점검</div>
           {trust.map((t, i) => (
             <div key={i} className="pg-trust-a"><span className={`pg-tag pg-tag--${t.state}`}>{TRUST_TEXT[t.state] ?? t.state}</span><span>{t.text}</span></div>
           ))}

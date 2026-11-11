@@ -24,7 +24,7 @@ export function markWelcomed() {
 }
 
 export const FILTERS: [FilterKey, string][] = [
-  ["failed", "실패"], ["blocked", "막힘"], ["practice", "연습용"], ["forward", "지금 시점 전용"], ["assumed", "가정 있음"],
+  ["failed", "실패"], ["blocked", "막힘"], ["practice", "합성"], ["forward", "지금 시점 전용"], ["assumed", "가정 있음"],
 ];
 export function matchFilter(k: FilterKey, r: NodeRunResult): boolean {
   return (k === "failed" && r.status === "failed") || (k === "blocked" && r.status === "blocked")
@@ -43,9 +43,9 @@ export type DrawerKey = "execution" | "records" | "alphas";
 /** 서랍 셋 — 예전 EXECUTION·JOURNAL·ALPHA LAB 화면의 기록 관리를 옮겼다(BL2). 계산은 노드, 기록 관리는 서랍. */
 export const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof Archive; Body: () => ReactNode }[] = [
   { key: "execution", label: "실행실", Icon: ClipboardList, Body: ExecutionSheetBody,
-    sub: "저장한 실행 목표로 주문 계획을 만들고 검토·승인해요. 주문은 나가지 않아요." },
+    sub: "저장한 실행 목표로 주문 계획을 만들고 검토·승인합니다. 주문은 나가지 않습니다." },
   { key: "records", label: "기록함", Icon: Archive, Body: RecordsSheetBody,
-    sub: "판단 기록·연구 기록·실행 목표·국면 스냅샷을 다시 보고 고쳐요." },
+    sub: "판단 기록·연구 기록·실행 목표·국면 스냅샷을 다시 보고 고칩니다." },
   { key: "alphas", label: "알파", Icon: Sigma, Body: AlphaSheetBody,
-    sub: "알파 식을 등록하고 단계를 올리거나 내려요." },
+    sub: "알파 식을 등록하고 단계를 올리거나 내립니다." },
 ];

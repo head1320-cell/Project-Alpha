@@ -21,13 +21,13 @@ const TABS: { id: Tab; label: string }[] = [
 const DQ_KO: Record<DecisionQuality, string> = {
   good_outcome_good_process: "결과 좋음 · 판단 좋음", good_outcome_bad_process: "결과 좋음 · 판단 나쁨(운)",
   bad_outcome_good_process: "결과 나쁨 · 판단 좋음(불운)", bad_outcome_bad_process: "결과 나쁨 · 판단 나쁨",
-  too_early: "판단하기 일러요",
+  too_early: "판단하기 이릅니다",
 };
 const when = (t: number) => new Date(t * 1000).toLocaleString("ko-KR", { year: "2-digit", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
-function Loading() { return <p className="pg-help" role="status">불러오는 중이에요.</p>; }
+function Loading() { return <p className="pg-help" role="status">조회 중</p>; }
 function Failed({ what, err }: { what: string; err: unknown }) {
-  return <p className="pg-field-err" role="alert">{what}을(를) 불러오지 못했어요 — {err instanceof Error ? err.message : "사유 미상"}. 기록이 없는 것과 달라요.</p>;
+  return <p className="pg-field-err" role="alert">{what}을(를) 불러오지 못했습니다 — {err instanceof Error ? err.message : "사유 미상"}. 기록이 없는 것과 다릅니다.</p>;
 }
 
 function JournalRow({ e }: { e: JournalEntry }) {
@@ -47,15 +47,15 @@ function JournalRow({ e }: { e: JournalEntry }) {
         <b className="pg-rec-name">{e.title}</b>
         {e.decision_quality && <span className="pg-tag pg-tag--unknown">{DQ_KO[e.decision_quality]}</span>}
       </div>
-      <p className="pg-pick-sub">{when(e.created_at)}{e.run_id ? ` · 연구 기록 ${e.run_id}` : " · 연구 기록과 이어지지 않았어요"}</p>
+      <p className="pg-pick-sub">{when(e.created_at)}{e.run_id ? ` · 연구 기록 ${e.run_id}` : " · 연구 기록과 이어지지 않았습니다"}</p>
       {e.record.decision && <p className="pg-rec-text">{e.record.decision}</p>}
       {!edit && (
         <>
-          {e.review ? <p className="pg-rec-text">회고: {e.review}</p> : <p className="pg-help">회고가 아직 없어요 — 결과가 나온 뒤 실제와 대조해 적어요.</p>}
+          {e.review ? <p className="pg-rec-text">회고: {e.review}</p> : <p className="pg-help">회고가 아직 없습니다 — 결과가 나온 뒤 실제와 대조해 적습니다.</p>}
           <div className="pg-rec-actions">
             <button type="button" className="pg-btn" onClick={() => setEdit(true)}>{e.review ? "회고 고치기" : "회고 쓰기"}</button>
             <button type="button" className="pg-btn" aria-label={`${e.title} 삭제`} disabled={del.isPending}
-                    onClick={() => { if (window.confirm(`‘${e.title}’ 기록을 지울까요? 되돌릴 수 없어요.`)) del.mutate(); }}>지우기</button>
+                    onClick={() => { if (window.confirm(`‘${e.title}’ 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) del.mutate(); }}>삭제</button>
           </div>
         </>
       )}
@@ -63,7 +63,7 @@ function JournalRow({ e }: { e: JournalEntry }) {
         <div className="pg-rec-edit">
           <label className="pg-rec-field">회고
             <textarea className="pg-field-input" rows={3} value={review} onChange={(ev) => setReview(ev.target.value)}
-                      placeholder="예: 3개월 뒤 실제 +8%p — 방향은 맞았고 확신은 낮게 잡았어요" />
+                      placeholder="예: 3개월 뒤 실제 +8%p — 방향은 맞았고 확신은 낮게 잡았습니다" />
           </label>
           <label className="pg-rec-field">판단의 질
             <select className="pg-field-input" value={dq} onChange={(ev) => setDq(ev.target.value as DecisionQuality | "")}>
@@ -75,8 +75,8 @@ function JournalRow({ e }: { e: JournalEntry }) {
             <button type="button" className="pg-btn pg-btn--primary" disabled={save.isPending} onClick={() => save.mutate()}>회고 저장</button>
             <button type="button" className="pg-btn" onClick={() => setEdit(false)}>그만두기</button>
           </div>
-          {save.data && !save.data.ok && <p className="pg-warn" role="status">저장하지 않았어요 — {save.data.reason ?? "사유 미상"}</p>}
-          {save.isError && <p className="pg-field-err">저장하지 못했어요 — {(save.error as Error).message}</p>}
+          {save.data && !save.data.ok && <p className="pg-warn" role="status">저장하지 않았습니다 — {save.data.reason ?? "사유 미상"}</p>}
+          {save.isError && <p className="pg-field-err">저장 실패 — {(save.error as Error).message}</p>}
         </div>
       )}
     </li>
@@ -88,7 +88,7 @@ function JournalTab() {
   if (q.isLoading) return <Loading />;
   if (q.isError) return <Failed what="판단 기록" err={q.error} />;
   const list = q.data?.entries ?? [];
-  if (list.length === 0) return <p className="pg-help">판단 기록이 없어요 — 캔버스의 ‘판단 기록’ 노드에서 저장하면 여기에 모여요.</p>;
+  if (list.length === 0) return <p className="pg-help">판단 기록이 없습니다 — 캔버스의 ‘판단 기록’ 노드에서 저장하면 여기에 모입니다.</p>;
   return <ul className="pg-rec-list">{list.map((e) => <JournalRow key={e.entry_id} e={e} />)}</ul>;
 }
 
@@ -98,12 +98,12 @@ function JournalTab() {
  */
 function Verdict({ r }: { r: ReproduceResult }) {
   if (!r.reproducible) {
-    return <p className="pg-warn pg-rec-verdict" role="status" data-verdict="refused">재현할 수 없어요 — {r.reason}</p>;
+    return <p className="pg-warn pg-rec-verdict" role="status" data-verdict="refused">재현할 수 없습니다 — {r.reason}</p>;
   }
   const tag = r.verdict === "identical" ? "confirmed" : r.verdict === "drifted" ? "assumed" : "unknown";
-  const text = r.verdict === "identical" ? "같은 비중이 다시 나왔어요"
-    : r.verdict === "drifted" ? `비중이 달라졌어요 — 가장 큰 차이 ${r.max_delta_pp == null ? "미상" : r.max_delta_pp.toFixed(2)}%p`
-      : `대조할 것이 없었어요 — ${r.reason ?? "사유 미상"}`;
+  const text = r.verdict === "identical" ? "같은 비중이 다시 나왔습니다"
+    : r.verdict === "drifted" ? `비중이 달라졌습니다 — 가장 큰 차이 ${r.max_delta_pp == null ? "미상" : r.max_delta_pp.toFixed(2)}%p`
+      : `대조할 것이 없었습니다 — ${r.reason ?? "사유 미상"}`;
   const moved = (r.deltas ?? []).slice().sort((a, b) => Math.abs(b.delta_pp) - Math.abs(a.delta_pp)).slice(0, 3);
   return (
     <div className="pg-rec-verdict" role="status" data-verdict={r.verdict}>
@@ -130,9 +130,9 @@ function RunsTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["records", "runs"] }) });
   if (q.isLoading) return <Loading />;
   if (q.isError) return <Failed what="연구 기록" err={q.error} />;
-  if (q.data && !q.data.available) return <p className="pg-warn">{q.data.reason ?? "연구 기록 저장소를 읽을 수 없어요 — 기록이 없는 것과 달라요."}</p>;
+  if (q.data && !q.data.available) return <p className="pg-warn">{q.data.reason ?? "연구 기록 저장소를 읽을 수 없습니다 — 기록이 없는 것과 다릅니다."}</p>;
   const list = q.data?.runs ?? [];
-  if (list.length === 0) return <p className="pg-help">연구 기록이 없어요 — ‘비중 계산’ 노드의 ‘연구 기록 남기기’로 남겨요.</p>;
+  if (list.length === 0) return <p className="pg-help">연구 기록이 없습니다 — ‘비중 계산’ 노드의 ‘연구 기록 남기기’로 남깁니다.</p>;
   return (
     <ul className="pg-rec-list">{list.map((r) => {
       const cov = r.snapshot?.coverage;
@@ -142,13 +142,13 @@ function RunsTab() {
           <p className="pg-pick-sub">{when(r.created_at)} · {r.run_id}{cov?.start ? ` · 데이터 ${cov.start} ~ ${cov.end ?? "미상"}` : " · 데이터 기간 기록 없음"}</p>
           <div className="pg-rec-actions">
             <button type="button" className="pg-btn" disabled={repro.isPending && repro.variables === r.run_id}
-                    onClick={() => repro.mutate(r.run_id)}>다시 계산해 대조</button>
+                    onClick={() => repro.mutate(r.run_id)}>재계산해 대조</button>
             <button type="button" className="pg-btn" aria-label={`${r.run_id} 삭제`} disabled={del.isPending}
-                    onClick={() => { if (window.confirm("이 연구 기록을 지울까요? 되돌릴 수 없어요.")) del.mutate(r.run_id); }}>지우기</button>
+                    onClick={() => { if (window.confirm("이 연구 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.")) del.mutate(r.run_id); }}>삭제</button>
           </div>
           {res[r.run_id] && <Verdict r={res[r.run_id]} />}
           {repro.isError && repro.variables === r.run_id && (
-            <p className="pg-field-err pg-rec-verdict" data-verdict="network">응답을 받지 못했어요 — 재현이 실패한 것과 달라요. 연결을 확인하고 다시 눌러 주세요. ({(repro.error as Error).message})</p>
+            <p className="pg-field-err pg-rec-verdict" data-verdict="network">응답 수신 실패 — 재현이 실패한 것과 다릅니다. 연결을 확인하고 다시 누르십시오. ({(repro.error as Error).message})</p>
           )}
         </li>
       );
@@ -162,7 +162,7 @@ function TargetsTab() {
   if (q.isError) return <Failed what="실행 목표" err={q.error} />;
   if (q.data && !q.data.available) return <p className="pg-warn">{q.data.reason}</p>;
   const list = q.data?.versions ?? [];
-  if (list.length === 0) return <p className="pg-help">실행 목표가 없어요 — ‘실행 목표 만들기’ 노드에서 저장해요.</p>;
+  if (list.length === 0) return <p className="pg-help">실행 목표가 없습니다 — ‘실행 목표 만들기’ 노드에서 저장합니다.</p>;
   return (
     <ul className="pg-rec-list">{list.map((t) => (
       <li key={t.tpv_id ?? ""} className="pg-rec-item" data-tpv={t.tpv_id}>
@@ -195,14 +195,14 @@ function SnapshotsTab() {
           {make.isPending ? "만드는 중" : "지금 국면으로 스냅샷 만들기"}
         </button>
       </div>
-      <p className="pg-note">지금 수집한 값으로 만든 스냅샷은 앞으로의 연구에만 써요 — 과거 백테스트에는 쓸 수 없어요(빈티지 미상).</p>
-      {make.isError && <p className="pg-field-err" role="alert">만들지 못했어요 — {(make.error as Error).message}</p>}
+      <p className="pg-note">지금 수집한 값으로 만든 스냅샷은 앞으로의 연구에만 씁니다 — 과거 백테스트에는 쓸 수 없습니다(빈티지 미상).</p>
+      {make.isError && <p className="pg-field-err" role="alert">생성 실패 — {(make.error as Error).message}</p>}
       {make.data && (make.data.recorded
-        ? <p className="pg-save-msg" role="status">스냅샷을 만들었어요 · {make.data.snapshot_id}</p>
-        : <p className="pg-warn" role="status">저장하지 않았어요 — {make.data.message ?? "사유 미상"}</p>)}
+        ? <p className="pg-save-msg" role="status">스냅샷을 만들었습니다 · {make.data.snapshot_id}</p>
+        : <p className="pg-warn" role="status">저장하지 않았습니다 — {make.data.message ?? "사유 미상"}</p>)}
       {q.isLoading && <Loading />}
       {q.isError && <Failed what="국면 스냅샷" err={q.error} />}
-      {q.data && q.data.length === 0 && <p className="pg-help">스냅샷이 없어요 — 위 버튼으로 지금 국면을 굳혀 두면 ‘경기 국면’ 노드가 읽어요.</p>}
+      {q.data && q.data.length === 0 && <p className="pg-help">스냅샷이 없습니다 — 위 버튼으로 지금 국면을 굳혀 두면 ‘경기 국면’ 노드가 읽습니다.</p>}
       {q.data && q.data.length > 0 && (
         <ul className="pg-rec-list">{q.data.map((s) => (
           <li key={s.snapshot_id} className="pg-rec-item" data-snapshot={s.snapshot_id}>

@@ -49,7 +49,7 @@ export function wireType(s: Pick<PgState, "edges" | "nodes" | "catalog" | "catal
   return { type, plain: type ? (s.catalogMeta?.portPlain ?? PORT_PLAIN)[type] ?? type : "이 값" };
 }
 /** 넣을 노드가 없을 때의 까닭 — 도구줄 목록과 우클릭 메뉴가 같은 문장을 쓴다. */
-export const insertNone = (plain: string) => `${josa(`‘${plain}’`, ["을", "를"])} 받아 ${josa(`‘${plain}’`, ["을", "를"])} 내는 노드가 없어요`;
+export const insertNone = (plain: string) => `${josa(`‘${plain}’`, ["을", "를"])} 받아 ${josa(`‘${plain}’`, ["을", "를"])} 내는 노드가 없습니다`;
 
 /** 그린 선(화면의 path)에서 캔버스 좌표의 두 끝과 가운데 — 선 모양·경유점이 반영된 실제 선. */
 export function drawnWire(edgeId: string): { src: Pt; tgt: Pt; mid: Pt } | null {
@@ -86,11 +86,11 @@ export function WireToolbar({ id, at, via, onTool }: { id: string; at: Pt; via: 
              ? `translate(${at.x}px, ${at.y - PILL_GAP}px) scale(${1 / zoom}) translate(-50%, -100%) translate(0, -${GAP_PX}px)`
              : `translate(${at.x}px, ${at.y + PILL_GAP}px) scale(${1 / zoom}) translate(-50%, 0) translate(0, ${GAP_PX}px)` }}
            onClick={stop} onPointerDown={stop} onMouseDown={stop} onDoubleClick={stop} onContextMenu={stop}>
-        <button type="button" className="pg-edge-tb-b" data-action="cut" aria-label="이 선 끊기 — 토스트의 되돌리기나 Ctrl+Z 로 돌려요"
+        <button type="button" className="pg-edge-tb-b" data-action="cut" aria-label="이 선 끊기 — 토스트의 되돌리기나 Ctrl+Z 로 돌립니다"
                 onClick={() => onTool(id, "cut")}><Scissors size={14} aria-hidden="true" />끊기</button>
         <button type="button" className="pg-edge-tb-b" data-action="insert" aria-expanded={open} aria-haspopup="menu" aria-label="선 사이에 노드 넣기"
                 onClick={() => setOpen((v) => !v)}><ListPlus size={14} aria-hidden="true" />사이에 넣기</button>
-        <button type="button" className="pg-edge-tb-b" data-action="waypoint" aria-label="선 가운데에 꺾는 점 넣기 — 끌어서 길을 바꿔요"
+        <button type="button" className="pg-edge-tb-b" data-action="waypoint" aria-label="선 가운데에 꺾는 점 넣기 — 끌어서 길을 바꿉니다"
                 onClick={() => onTool(id, "waypoint")}><Spline size={14} aria-hidden="true" />꺾는 점</button>
         <button type="button" className="pg-edge-tb-b" data-action="ask" aria-label="이 선에 대해 AI 에게 묻기 — 오른쪽 창의 묻기 칸으로"
                 onClick={() => onTool(id, "ask")}><MessageCircleQuestion size={14} aria-hidden="true" />묻기</button>

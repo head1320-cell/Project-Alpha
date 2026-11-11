@@ -93,7 +93,7 @@ test("캔버스: 카탈로그 팔레트 · 기본 사슬 실행 → 7 노드 완
     await expect(status(page, id), id).toHaveText("완료");
   }
   // mock 수익률은 합성이다 — 노드 칩이 그렇게 말해야 한다(실데이터처럼 보이면 안 된다).
-  await expect(node(page, "returns").locator(".pg-node-ev")).toContainText("연습용");
+  await expect(node(page, "returns").locator(".pg-node-ev")).toContainText("합성");
   await node(page, "optimizer").click();
   await tab(page, "detail");
   await expect(page.locator(".pg-side .pg-table tr")).toHaveCount(3);
@@ -163,7 +163,7 @@ test("왕복: 내보내기 → 새 탭 불러오기 → 같은 문서가 즉시 
   const page2 = await context.newPage();
   await openCanvas(page2);
   await importText(page2, "roundtrip.portfolio-graph.json", JSON.stringify(exported));
-  await expect(page2.locator(".pg-file-note")).toContainText("불러왔어요");
+  await expect(page2.locator(".pg-file-note")).toContainText("불러왔습니다");
   await expect(page2.locator(".pg-name")).toHaveValue("왕복 테스트");
   const again = await exportDoc(page2);
   expect(strip(again)).toEqual(strip(exported));
@@ -189,25 +189,25 @@ test("모르는 노드는 버리지 않는다 · 다른 포맷은 캔버스를 �
 
   // 다른 포맷 — 거부하고, 캔버스는 그대로(노드 8개).
   await importText(page, "comfy.json", JSON.stringify({ format: "comfyui", nodes: [] }));
-  await expect(page.locator(".pg-file-note")).toContainText("불러오지 않았어요");
+  await expect(page.locator(".pg-file-note")).toContainText("불러오지 않았습니다");
   await expect(page.locator(".pg-node")).toHaveCount(8);
   await importText(page, "broken.json", "{not json");
-  await expect(page.locator(".pg-file-note")).toContainText("JSON 형식이 아니에요");
+  await expect(page.locator(".pg-file-note")).toContainText("JSON 형식이 아닙니다");
   await expect(page.locator(".pg-node")).toHaveCount(8);
 });
 
-test("이야기: 노드 번호 순서의 서버 설명 · 연습용 경고 · 카드를 누르면 노드가 선택된다", async ({ page }) => {
+test("이야기: 노드 번호 순서의 서버 설명 · 합성 경고 · 카드를 누르면 노드가 선택된다", async ({ page }) => {
   await openCanvas(page);
   await expect(page.locator(".pg-step")).toHaveCount(7);
-  await expect(page.locator(".pg-notice"), "계산 전에는 연습용 경고가 없다(짝)").toHaveCount(0);
+  await expect(page.locator(".pg-notice"), "계산 전에는 합성 경고가 없다(짝)").toHaveCount(0);
   const body = await run(page);
-  await expect(page.locator(".pg-notice").first()).toContainText("연습용 결과예요");
+  await expect(page.locator(".pg-notice").first()).toContainText("합성 데이터 결과입니다");
   // 제목은 서버 explain.title 그대로 — 화면이 문장을 짓지 않는다.
   const first = page.locator(".pg-step").first();
   const id = await first.getAttribute("data-node-id");
   await expect(first.locator(".pg-step-title")).toHaveText(body.nodes[id!].explain.title);
   await expect(page.locator('.pg-step[data-node-id="optimizer"] .pg-bar-row')).toHaveCount(3);
-  await expect(page.locator('.pg-step[data-node-id="returns"] .pg-trust')).toContainText("몰라요");
+  await expect(page.locator('.pg-step[data-node-id="returns"] .pg-trust')).toContainText("N/A");
   await page.locator('.pg-step[data-node-id="risk"] .pg-step-title button').click();
   await expect(node(page, "risk")).toHaveClass(/pg-node--selected/);
   await expect(node(page, "optimizer")).not.toHaveClass(/pg-node--selected/);
@@ -442,7 +442,7 @@ test("노출 조절(BK W3): 직접 정한 노출 60% → 조절 후 막대에 �
   }
 });
 
-test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 번 · 연습용 데이터 목표는 연구용 · 낡으면 잠김", async ({ page }) => {
+test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 번 · 합성 데이터 목표는 연구용 · 낡으면 잠김", async ({ page }) => {
   await openCanvas(page);
   const doc = await exportDoc(page);
   doc.nodes.push({ id: "q", type: "order_preview", params: { portfolio_value: 100000000 }, position: { x: 1000, y: 380 } });
@@ -460,8 +460,8 @@ test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 
   const body = await run(page);
   for (const id of ["q", "tv", "jr"]) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
   expect(saves).toEqual([]);
-  expect(body.nodes.tv.view.target.status, "mock 수익률 → 연습용 계보 → 연구용 목표").toBe("research_only");
-  expect(body.nodes.tv.view.target.status_reason).toContain("연습용");
+  expect(body.nodes.tv.view.target.status, "mock 수익률 → 합성 계보 → 연구용 목표").toBe("research_only");
+  expect(body.nodes.tv.view.target.status_reason).toContain("합성");
 
   await node(page, "tv").click();
   await tab(page, "detail");
@@ -470,12 +470,12 @@ test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 
   const save = page.locator(".pg-save-btn");
   await expect(save).toBeEnabled();
   await save.click();
-  await expect(page.locator(".pg-save-msg")).toContainText("연구용 실행 목표로 저장했어요");
+  await expect(page.locator(".pg-save-msg")).toContainText("연구용 실행 목표로 저장했습니다");
   expect(saves).toHaveLength(1);
 
   await node(page, "jr").click();
   await page.locator(".pg-save-btn").click();
-  await expect(page.locator(".pg-save-msg")).toContainText("결정을 기록했어요");
+  await expect(page.locator(".pg-save-msg")).toContainText("결정을 기록했습니다");
   expect(saves).toHaveLength(2);
   // 뒷정리 — E2E DB 는 스펙끼리 공유된다. 남기면 마법사 저널 화면 스펙이 이 항목을 보고 달라진다.
   const entryId = /·\s*(\S+)\s*$/.exec((await page.locator(".pg-save-msg").textContent()) ?? "")?.[1];
@@ -487,7 +487,7 @@ test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 
   await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
   await node(page, "tv").click();
   await expect(page.locator(".pg-save-btn")).toBeDisabled();
-  await expect(page.locator(".pg-save .pg-help")).toContainText("다시 계산한 뒤");
+  await expect(page.locator(".pg-save .pg-help")).toContainText("재계산한 뒤");
 });
 
 test("기업·가치평가(BK W5): 기업 전망은 비중까지 가고 과거 검증은 막힘 · 가치평가 점수 → 비중", async ({ page }) => {
@@ -552,7 +552,7 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
 
     await node(page, "m").click();
     await tab(page, "settings");
-    await expect(page.locator('.pg-basic-field[data-field="strategy_ids"]')).toContainText("등록된 전략이 없어요");
+    await expect(page.locator('.pg-basic-field[data-field="strategy_ids"]')).toContainText("등록된 전략 없음");
 
     await node(page, "a").click();
     const row = page.locator('.pg-basic-field[data-field="run_id"] .pg-pick-row', { hasText: "E2E 되짚기" });
@@ -645,7 +645,7 @@ test("여기까지 계산(BL1): 올리면 돌 경로가 밝아지고, 누르면 
   expect(Object.keys(body.nodes).sort()).toEqual(["estimate", "optimizer", "returns", "universe", "views"]);
   expect(body.gates).toBeNull();
   await expect(page.locator(".pg-summary--partial")).toContainText("여기까지 계산 · 5개");
-  await expect(page.locator(".pg-rail-pill")).toContainText("관문은 전체를 계산해야 봐요");
+  await expect(page.locator(".pg-rail-pill")).toContainText("관문은 전체를 계산해야 봅니다");
   await page.locator(".pg-rail-pill").click();
   await expect(page.locator(".pg-rail-summary")).toContainText("전체를 계산할 때");
 
@@ -655,7 +655,7 @@ test("여기까지 계산(BL1): 올리면 돌 경로가 밝아지고, 누르면 
   await page.keyboard.press("Shift+Enter");
   await expect(page.locator(".pg-summary--partial")).toBeVisible();
   await expect(node(page, "backtest")).toHaveClass(/pg-node--previous/);
-  await expect(node(page, "backtest")).toContainText("이전 계산 결과예요");
+  await expect(node(page, "backtest")).toContainText("이전 계산 결과입니다");
   await expect(node(page, "risk"), "짝 — 이번에 계산한 노드는 이전 표시가 없다").not.toHaveClass(/pg-node--previous/);
 });
 
@@ -675,7 +675,7 @@ test("편집 도구(BL1): 되돌리기·다시하기 · 복사·붙여넣기(링
   // 두 노드(종목 고르기 → 수익률 불러오기)를 함께 골라 복사 → 붙이면 둘과 그 사이 링크 하나만 따라온다.
   await node(page, "universe").click();
   await node(page, "returns").click({ modifiers: [mod === "Meta" ? "Meta" : "Control"] });
-  await expect(page.locator(".pg-hint")).toContainText("2개 골랐어요");
+  await expect(page.locator(".pg-hint")).toContainText("2개 골랐습니다");
   const before = await exportDoc(page);
   await page.keyboard.press(`${mod}+c`);
   await page.keyboard.press(`${mod}+v`);
@@ -801,8 +801,8 @@ test("실행실 서랍(BL2): 저장된 실행 목표에서만 계획 · 연구�
   // 사전 점검이 막았다면 승인 버튼이 잠기고 사유가 보인다(짝: 막히지 않았다면 열려 있다).
   const approve = flow.locator('button[data-to="approved"]');
   if (sb.pretrade.can_approve) await expect(approve).toBeEnabled();
-  else { await expect(approve).toBeDisabled(); await expect(flow.locator(".pg-warn")).toContainText("승인할 수 없어요"); }
-  await expect(flow.locator(".pg-note")).toContainText("실제 주문은 나가지 않아요");
+  else { await expect(approve).toBeDisabled(); await expect(flow.locator(".pg-warn")).toContainText("승인 불가"); }
+  await expect(flow.locator(".pg-note")).toContainText("실제 주문은 나가지 않습니다");
   // Esc 로 닫힌다.
   await page.keyboard.press("Escape");
   await expect(s).toBeHidden();
@@ -829,7 +829,7 @@ test("실행실 서랍(BL2): 서버가 막은 목표는 계획을 만들지 않�
   await expect(s.getByRole("button", { name: "계획 저장" })).toHaveCount(0);
 });
 
-test("기록함 서랍(BL2): 판단 기록 회고 쓰기·지우기 · 연구 기록 대조 · 스냅샷 · 못 읽음 ≠ 없음", async ({ page }) => {
+test("기록함 서랍(BL2): 판단 기록 회고 쓰기·삭제 · 연구 기록 대조 · 스냅샷 · 못 읽음 ≠ 없음", async ({ page }) => {
   const j = await (await page.request.post(`${API}/allocation/journal`, {
     data: { title: "E2E BL2 판단", record: { decision: "비중을 유지" } } })).json();
   expect(j.saved).toBe(true);
@@ -838,28 +838,28 @@ test("기록함 서랍(BL2): 판단 기록 회고 쓰기·지우기 · 연구 �
   const s = sheet(page, "records");
   const item = s.locator(`[data-entry="${j.entry_id}"]`);
   await expect(item).toContainText("E2E BL2 판단");
-  await expect(item).toContainText("연구 기록과 이어지지 않았어요");
+  await expect(item).toContainText("연구 기록과 이어지지 않았습니다");
   await item.getByRole("button", { name: "회고 쓰기" }).click();
   await item.getByRole("textbox").fill("석 달 뒤 확인");
   await item.locator("select").selectOption("too_early");
   await item.getByRole("button", { name: "회고 저장" }).click();
   await expect(item).toContainText("회고: 석 달 뒤 확인");
-  await expect(item).toContainText("판단하기 일러요");
+  await expect(item).toContainText("판단하기 이릅니다");
   page.once("dialog", (d) => d.accept());
   await item.getByRole("button", { name: "E2E BL2 판단 삭제" }).click();
   await expect(item).toHaveCount(0);
 
   await s.getByRole("tab", { name: "국면 스냅샷" }).click();
-  await expect(s.locator(".pg-note", { hasText: "과거 백테스트에는 쓸 수 없어요" })).toBeVisible();
+  await expect(s.locator(".pg-note", { hasText: "과거 백테스트에는 쓸 수 없습니다" })).toBeVisible();
 
   // ★못 읽은 것과 없는 것은 다른 문장★ — 목록 요청을 실패시키면 '없어요' 가 아니라 '불러오지 못했어요'.
   await page.route("**/research-runs?**", (r) => r.fulfill({ status: 500, body: "x" }));
   await s.getByRole("tab", { name: "연구 기록" }).click();
-  await expect(s.locator(".pg-field-err")).toContainText("불러오지 못했어요");
-  await expect(s.locator(".pg-help", { hasText: "연구 기록이 없어요" })).toHaveCount(0);
+  await expect(s.locator(".pg-field-err")).toContainText("조회 실패");
+  await expect(s.locator(".pg-help", { hasText: "연구 기록 없음" })).toHaveCount(0);
 });
 
-test("알파 목록 서랍(BL2): 식 점검 → 초안 등록 → 실험으로 올리기 · 검증 단계는 검증 기록 없이 거절 · 지우기", async ({ page }) => {
+test("알파 목록 서랍(BL2): 식 점검 → 초안 등록 → 실험으로 올리기 · 검증 단계는 검증 기록 없이 거절 · 삭제", async ({ page }) => {
   await openCanvas(page);
   await openSheet(page, "알파");
   const s = sheet(page, "alphas");
@@ -886,7 +886,7 @@ test("알파 목록 서랍(BL2): 식 점검 → 초안 등록 → 실험으로 �
   await expect(row).toHaveCount(0);
 });
 
-test("저장 버튼(BL2): 비중 계산은 '연구 기록 남기기' · 기록함에서 그 기록을 다시 계산해 대조", async ({ page }) => {
+test("저장 버튼(BL2): 비중 계산은 '연구 기록 남기기' · 기록함에서 그 기록을 재계산해 대조", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   await node(page, "optimizer").click();
@@ -895,14 +895,14 @@ test("저장 버튼(BL2): 비중 계산은 '연구 기록 남기기' · 기록�
   await expect(btn).toHaveText("연구 기록 남기기");
   await btn.click();
   const msg = page.locator(".pg-save-msg");
-  await expect(msg).toContainText("연구 기록으로 남겼어요");
+  await expect(msg).toContainText("연구 기록으로 남겼습니다");
   const rid = /·\s*(\S+)\s*$/.exec((await msg.textContent()) ?? "")?.[1];
   expect(rid).toBeTruthy();
   await openSheet(page, "기록함");
   const s = sheet(page, "records");
   await s.getByRole("tab", { name: "연구 기록" }).click();
   const item = s.locator(`[data-run="${rid}"]`);
-  await item.getByRole("button", { name: "다시 계산해 대조" }).click();
+  await item.getByRole("button", { name: "재계산해 대조" }).click();
   await expect(item.locator(".pg-rec-verdict, .pg-warn")).toBeVisible({ timeout: 60_000 });
   page.once("dialog", (d) => d.accept());
   await item.getByRole("button", { name: `${rid} 삭제` }).click();
@@ -1114,7 +1114,7 @@ test("알파 검증 → 알파 서랍(BL2b): 검증 기록 전엔 '검증 단계
   await tab(page, "settings");
   await expect(page.locator(".pg-save-btn")).toHaveText("검증 기록 남기기");
   await page.locator(".pg-save-btn").click();
-  await expect(page.locator(".pg-save-msg")).toContainText("알파에 붙였어요");
+  await expect(page.locator(".pg-save-msg")).toContainText("알파에 붙였습니다");
   const rid = /·\s*(\S+)\s*·/.exec((await page.locator(".pg-save-msg").textContent()) ?? "")?.[1];
 
   await openSheet(page, "알파");
@@ -1151,7 +1151,7 @@ test("백테스트(BL3 W1): 설정 계산은 아무것도 시작하지 않고 ·
   await page.locator(".pg-save-btn").click();
   const sv = await (await saved).json();
   expect(sv.ok, sv.message).toBe(true);
-  await expect(page.locator(".pg-save-msg")).toContainText("백테스트를 시작했어요");
+  await expect(page.locator(".pg-save-msg")).toContainText("백테스트를 시작했습니다");
   await page.locator(".pg-save-follow").click();                               // 결과 불러오기 노드 추가
   const loader = page.locator(".pg-node").filter({ hasText: "백테스트 결과 보기" });
   await expect(loader).toHaveCount(1);
@@ -1160,7 +1160,7 @@ test("백테스트(BL3 W1): 설정 계산은 아무것도 시작하지 않고 ·
   await page.locator(".pg-run").click();
   await tab(page, "detail");
   const prog = page.locator(".pg-runprog");
-  const done = page.locator(".pg-kv", { hasText: "총수익" });
+  const done = page.locator(".pg-kv", { hasText: "총수익률" });
   await expect(prog.or(done)).toBeVisible({ timeout: 60_000 });
   if (await prog.isVisible()) {
     await expect(prog.getByRole("button", { name: "결과 불러오기" })).toBeEnabled({ timeout: 180_000 });
@@ -1227,7 +1227,7 @@ test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리�
   await page.route("**/allocation/graph/run**", async (route) => {
     const resp = await route.fetch();
     const j = await resp.json();
-    j.nodes.lo = { ...j.nodes.lo, status: "failed", view: null, reason: "아직 끝나지 않았어요 — 45% · 시뮬레이션. 끝나면 다시 계산해 주세요." };
+    j.nodes.lo = { ...j.nodes.lo, status: "failed", view: null, reason: "아직 끝나지 않았습니다 — 45% · 시뮬레이션. 끝나면 재계산하십시오." };
     await route.fulfill({ response: resp, json: j });
   });
   await page.locator(".pg-run").click();
@@ -1244,11 +1244,11 @@ test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리�
   }
   step = 1;                                                               // 다음 읽기에서 끝남
   await expect(card.getByRole("button", { name: "결과 불러오기" })).toBeEnabled({ timeout: 10_000 });
-  await expect(card).toContainText("끝났어요");
+  await expect(card).toContainText("끝났습니다");
   await page.unroute("**/allocation/graph/run**");
   await card.getByRole("button", { name: "결과 불러오기" }).click();
   // 이 실행은 진짜로 끝났을 수도, 아직일 수도 있다 — 어느 쪽이든 화면은 그 사실을 말한다.
-  await expect(page.locator(".pg-side .pg-kv", { hasText: "총수익" }).or(page.locator(".pg-runprog"))).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator(".pg-side .pg-kv", { hasText: "총수익률" }).or(page.locator(".pg-runprog"))).toBeVisible({ timeout: 60_000 });
 });
 
 test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·장기 관계·스튜디오가 돌고 그림으로 · 못 돌면 사유 · 대비 AA", async ({ page }) => {
@@ -1285,7 +1285,7 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   expect(body.nodes.l8.status).toBe("failed");
   expect(body.nodes.l8.reason).toContain("최대 7개");
   expect(body.nodes.pt.status).toBe("failed");
-  expect(body.nodes.pt.reason).toContain("돌리지 못했어요");
+  expect(body.nodes.pt.reason).toContain("돌리지 못했습니다");
 
   // 곡선: mock 곡선은 역전이다 — 칠한 구간과 '경험칙' 라벨
   await pick("yc");
@@ -1341,7 +1341,7 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   // 스튜디오: 대체 엔진이 낸 수열 · 프런티어는 돌리지 않는다고 적는다
   await pick("st");
   expect(await page.locator(".pg-side .pg-spark-cell").count()).toBeGreaterThan(0);
-  await expect(page.locator(".pg-side .pg-studio-frontier")).toContainText("이 노드는 돌리지 않아요");
+  await expect(page.locator(".pg-side .pg-studio-frontier")).toContainText("이 노드는 돌리지 않습니다");
 
   for (const dark of [false, true]) {
     if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
@@ -1397,7 +1397,7 @@ test("기업 노드(BL3 W3): 일곱 노드가 돌고 풋볼필드·분포·표�
   const bands = (body.nodes.cv.view.result.football_field.bands as unknown[]).length;
   await expect(page.locator(".pg-side .pg-ff-row")).toHaveCount(bands);
   await expect(page.locator(".pg-side .pg-ff-row .pg-ff-price")).toHaveCount(bands);
-  await expect(page.locator(".pg-side .pg-assume .pg-tag--unknown").first()).toContainText("연습용");
+  await expect(page.locator(".pg-side .pg-assume .pg-tag--unknown").first()).toContainText("합성");
   await expect(page.locator(".pg-side .pg-sens-base")).toHaveCount(1);
   await pick("vd");
   await expect(page.locator(".pg-side .pg-q-row")).toHaveCount(1 + Object.keys(body.nodes.vd.view.result.by_model).length);
@@ -1589,7 +1589,7 @@ test("리스크 노드(BL3 W4): VaR·MC·변동성·보유기간·FRTB·롤링 �
 
   await pick("vm");
   await expect(page.locator(".pg-side .pg-risk-line")).toHaveCount(2);
-  await expect(page.locator(".pg-side .pg-note").first()).toContainText("앞날을 더 잘 맞힌다는 뜻이 아니에요");
+  await expect(page.locator(".pg-side .pg-note").first()).toContainText("앞날을 더 잘 맞힌다는 뜻이 아닙니다");
   await pick("hv");
   await expect(page.locator(".pg-side .pg-scen tbody tr")).toHaveCount(8);
   await pick("fr");
@@ -1728,13 +1728,13 @@ test("배분 추가(BL3 W5): 리밸런싱 저울 · 기록은 버튼 한 번 · 
     await expect(page.locator(".pg-side .pg-scale-bar")).toHaveCount(1);
     await expect(page.locator(".pg-side .pg-scale-gain--over")).toHaveCount(d === "trade" ? 1 : 0);
   }
-  await expect(page.locator(".pg-side .pg-verdict")).toHaveText(d === "trade" ? "거래할 가치가 있어요" : d === "hold" ? "그대로 두는 게 나아요" : "판단할 수 없어요");
+  await expect(page.locator(".pg-side .pg-verdict")).toHaveText(d === "trade" ? "거래할 가치가 있습니다" : d === "hold" ? "그대로 두는 게 낫습니다" : "판단 불가");
   // 짝 — 문턱이 51배면 같은 효용 개선도 넘지 못한다: 판정 '그대로' · 막대는 연하게
   expect(body.nodes.rh.view.result.decision).toBe("hold");
   await pick("rh");
   await expect(page.locator(".pg-side .pg-scale-bar")).toHaveCount(1);
   await expect(page.locator(".pg-side .pg-scale-gain--over")).toHaveCount(0);
-  await expect(page.locator(".pg-side .pg-verdict")).toHaveText("그대로 두는 게 나아요");
+  await expect(page.locator(".pg-side .pg-verdict")).toHaveText("그대로 두는 게 낫습니다");
   await pick("cy");
   await expect(page.locator(".pg-side .pg-co-head .pg-tag")).toHaveText(body.nodes.cy.view.result.rf_is_assumed ? "기본값(가정)" : String(body.nodes.cy.view.result.rf_source));
   await pick("sc");
@@ -1749,7 +1749,7 @@ test("배분 추가(BL3 W5): 리밸런싱 저울 · 기록은 버튼 한 번 · 
   const saves: string[] = [];
   page.on("request", (q) => { if (q.url().includes("/allocation/graph/save")) saves.push(q.url()); });
   await page.locator(".pg-save-btn").click();
-  await expect(page.locator(".pg-save-msg")).toContainText("결정 기록으로 남겼어요");
+  await expect(page.locator(".pg-save-msg")).toContainText("결정 기록으로 남겼습니다");
   expect(saves).toHaveLength(1);
 
   for (const dark of [false, true]) {
@@ -1821,7 +1821,7 @@ test("롱숏(BL4): 숏이 있으면 gross·net·롱·숏과 gross 기준 집중�
   await expect(exp).toContainText("2,423");
   await detail(page, "tv");
   const blocked = page.locator(".pg-side .pg-ls-blocked");
-  await expect(blocked).toContainText("실행할 수 없어요");
+  await expect(blocked).toContainText("실행 불가");
   const items = blocked.locator(".pg-ls-blocked-l li");
   await expect(items).toHaveCount(3);
   await expect(items.nth(0)).toContainText("차입");
@@ -1845,7 +1845,7 @@ test("μ 엔진(BL4): 라벨은 서버 mu_engine 그대로 — model 이 bl 이�
   await run(page);
   await detail(page, "optimizer");
   await expect(eng).toHaveText("Entropy Pooling");
-  await expect(page.locator(".pg-side .pg-eng")).toContainText("신뢰도를 쓰지 않아요");
+  await expect(page.locator(".pg-side .pg-eng")).toContainText("신뢰도를 쓰지 않습니다");
   await expect(page.locator(".pg-side .pg-eng")).toContainText("756 → 640");
 
   // 쓸 수 없는 엔진은 비중 숫자가 아니라 사유가 온다 — 실제 서버 경로. 같은 종목을 +40% 이상이자 −40% 이하로 보는 두 뷰는
@@ -1960,7 +1960,7 @@ test("시나리오 팩 신원(BL4): 가정 충격은 '실제로 일어난 적 �
   expect(body.nodes.k2.status, body.nodes.k2.reason).toBe("ok");
   await detail(page, "k2");
   await expect(page.locator(".pg-side .pg-model-type--hist")).toContainText("실제 시세");
-  await expect(page.locator(".pg-side .pg-pack-id")).toContainText("강도 배율을 쓰지 않아요");
+  await expect(page.locator(".pg-side .pg-pack-id")).toContainText("강도 배율을 쓰지 않습니다");
   await expect(page.locator(".pg-side .pg-linear")).toHaveCount(0);   // 재생은 선형 합이 아니다
 });
 
@@ -1981,7 +1981,7 @@ test("타이밍 신호(BL4): 소스 없는 신호·목록에 없는 신호는 �
   expect(body.nodes.t2.reason).toContain("no_such_factor");
   expect(body.nodes.t3.status, body.nodes.t3.reason).toBe("ok");
   await detail(page, "t1");
-  await expect(page.locator(".pg-side .pg-node-status-why")).toContainText("쓸 수 없어요");
+  await expect(page.locator(".pg-side .pg-node-status-why")).toContainText("쓸 수 없습니다");
 });
 
 test("알파(BL4): 보유 기간별 IC 와 앞/뒤 절반을 따로 · 못 잰 IC 를 약세로 칠하지 않음 · 상위 종목 점수의 날짜 · 포트폴리오 경고·상관 · 미승인은 사유", async ({ page }) => {
@@ -2020,7 +2020,7 @@ test("알파(BL4): 보유 기간별 IC 와 앞/뒤 절반을 따로 · 못 잰 I
     await run(page);
     await detail(page, "av");
     const ic = page.locator(".pg-side .pg-av-ic");
-    await expect(ic).toContainText("못 쟀어요");
+    await expect(ic).toContainText("측정 불가");
     await expect(ic).not.toHaveClass(/pg-neg/);
     await detail(page, "ap");
     const warns = page.locator(".pg-side .pg-ap-warn");
@@ -2045,7 +2045,7 @@ test("국면 설명(BL4): 관측 창을 적고 · 전환 확률은 90% 신용구
   await expect(page.locator(".pg-side .pg-regime-matrix tbody tr")).toHaveCount(4);
   await expect(page.locator(".pg-side .pg-regime-matrix .pg-ci").first()).toContainText("~");
   await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("=");
-  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("맞아요");
+  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("맞습니다");
 
   // 얇은 행은 숫자만 두지 않는다 · 효율성 잔차가 있으면 어긋난다고 말한다(맞는다고 적지 않는다).
   await patchRun(page, (b) => {
@@ -2055,8 +2055,8 @@ test("국면 설명(BL4): 관측 창을 적고 · 전환 확률은 90% 신용구
   });
   await run(page);
   await detail(page, "rx");
-  await expect(page.locator(".pg-side .pg-regime-sparse")).toContainText("관측이 적어요");
-  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("어긋나요");
+  await expect(page.locator(".pg-side .pg-regime-sparse")).toContainText("관측이 적습니다");
+  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("어긋납니다");
 });
 
 test("기록함(BL4): 연구 기록 — 없음 ≠ 저장소 장애 ≠ 네트워크 · 재현 다섯 상태의 문장이 모두 다르다 · 재현은 기록하지 않는다", async ({ page }) => {
@@ -2074,9 +2074,9 @@ test("기록함(BL4): 연구 기록 — 없음 ≠ 저장소 장애 ≠ 네트�
   await stubList((r) => r.fulfill({ json: { available: true, runs: [] } }));
   await openRuns();
   texts.push(await runs.locator('[role="tabpanel"]').innerText());
-  await expect(runs.locator(".pg-help")).toContainText("연구 기록이 없어요");
+  await expect(runs.locator(".pg-help")).toContainText("연구 기록 없음");
   await page.keyboard.press("Escape");
-  await stubList((r) => r.fulfill({ json: { available: false, runs: [], reason: "연구 기록 저장소를 읽을 수 없어요 — 테이블이 없어요." } }));
+  await stubList((r) => r.fulfill({ json: { available: false, runs: [], reason: "연구 기록 저장소를 읽을 수 없습니다 — 테이블이 없습니다." } }));
   await page.reload({ waitUntil: "domcontentloaded" });
   await openRuns();
   await expect(runs.locator(".pg-warn")).toContainText("저장소");
@@ -2085,7 +2085,7 @@ test("기록함(BL4): 연구 기록 — 없음 ≠ 저장소 장애 ≠ 네트�
   await stubList((r) => r.abort());
   await page.reload({ waitUntil: "domcontentloaded" });
   await openRuns();
-  await expect(runs.locator(".pg-field-err")).toContainText("기록이 없는 것과 달라요", { timeout: 20_000 });
+  await expect(runs.locator(".pg-field-err")).toContainText("기록이 없는 것과 다릅니다", { timeout: 20_000 });
   texts.push(await runs.locator('[role="tabpanel"]').innerText());
   expect(new Set(texts).size, texts.join(" | ")).toBe(3);
   await page.keyboard.press("Escape");
@@ -2112,7 +2112,7 @@ test("기록함(BL4): 연구 기록 — 없음 ≠ 저장소 장애 ≠ 네트�
       bodies.push(route.request().postData() ?? "");
       return c === "abort" ? route.abort() : route.fulfill({ json: c });
     });
-    await runs.getByRole("button", { name: "다시 계산해 대조" }).click();
+    await runs.getByRole("button", { name: "재계산해 대조" }).click();
     const out = runs.locator(`[data-run="${RID}"] .pg-rec-verdict`).last();
     await expect(out).toBeVisible({ timeout: 20_000 });
     const state = c === "abort" ? "network" : c.reproducible === false ? "refused" : String(c.verdict);

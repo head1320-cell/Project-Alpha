@@ -21,7 +21,7 @@ const CORE = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930
                        e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")] };
 const EMPTY = { ...F, nodes: [], edges: [] };
 const DRAFT = {
-  summary: "과거로 돌려 보기를 붙이고 5년 기준으로 바꿔요",
+  summary: "과거로 돌려 보기를 붙이고 5년 기준으로 바꿉니다",
   add: [{ ref: "b", id: "backtest", kind: "backtest", label: "과거로 돌려 보기" }],
   connect: [{ id: "returns.returns->backtest.returns", source: "returns", source_port: "returns", target: "backtest", target_port: "returns" }],
   set: [{ node: "backtest", field: "cost_bps", label: "거래비용", value: 30, display: "0.3%", quote: "0.3%", read: "preset" }],
@@ -92,7 +92,7 @@ async function pick(page: Page, ids: string[]) {
   await blank(page);
   await node(page, ids[0]).click({ position: HEAD });
   for (const id of ids.slice(1)) await node(page, id).click({ position: HEAD, modifiers: ["Control"] });
-  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐어요`);
+  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
 }
 /** 선 위 한 점(길이의 t)의 화면 좌표. */
 const onWire = (page: Page, id: string, t = 0.5) => page.locator(`.react-flow__edge[data-id="${id}"] path.react-flow__edge-path`).evaluate((el, k) => {

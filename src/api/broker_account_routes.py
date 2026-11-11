@@ -1,4 +1,4 @@
-"""내 증권 계좌 — 목록 · 연결 · 지우기 · 연결 확인 (BV4)
+"""내 증권 계좌 — 목록 · 연결 · 삭제 · 연결 확인 (BV4)
 ==============================================================================
 계획: BV4 · 사용자 결정(2026-10-08·09) "사용자마다 자기 KIS 계좌를 연결하고 계좌마다 모의투자/실계좌를 고른다".
 저장·암호화·가림은 `src/execution/broker_accounts.py`(BV3)가 한다. 이 파일은 그 앞의 문이다.
@@ -10,7 +10,7 @@
 
 ## ★연결 확인은 '확인한 만큼만' 말한다★
 
-- 연습용 모드(`KIS_USE_MOCK=1`)에서는 증권사에 묻지 않는다 → `practice` — '연결됨' 이라 말하지 않는다.
+- 합성 데이터 모드(`KIS_USE_MOCK=1`)에서는 증권사에 묻지 않는다 → `practice` — '연결됨' 이라 말하지 않는다.
 - 운영에서는 잔고 조회 한 번 → 받아 주면 `ok`, 증권사·네트워크 실패면 `failed` + 사람 말 사유 + 원문(비밀은 가림).
 - 그 밖 예외(프로그램 오류)는 잡지 않는다 — '연결 실패' 로 꾸미지 않는다.
 - 결과(상태·사람 말 사유만)는 감사에 남긴다 — 실계좌 준비 목록이 읽는다(BV7). 잔고 숫자는 싣지 않는다(잔고는 `/balance` — BV9).
@@ -38,17 +38,17 @@ from src.execution.kis_client import KISCallError, get_kis_client
 
 router = APIRouter(prefix="/api/v1/broker-accounts", tags=["broker-accounts"])
 
-_NOT_FOUND = "그 계좌가 없어요."
+_NOT_FOUND = "그 계좌가 없습니다."
 
 #: 실패 종류 → 사람 말. 원문은 `detail` 에 따로 싣는다.
 _REASON_BY_KIND = {
-    KIND_TOKEN: "증권사가 토큰을 내주지 않았어요. 앱 키·시크릿이 맞는지, 1분 안에 다시 묻지 않았는지 확인해 주세요.",
-    KIND_BUSINESS: "증권사가 요청을 거절했어요. 계좌번호와 상품 코드, 모의투자/실계좌 선택이 맞는지 확인해 주세요.",
-    KIND_TRANSPORT: "증권사에 닿지 못했어요. 잠시 뒤 다시 해 주세요.",
-    KIND_HTTP_STATUS: "증권사에 닿지 못했어요. 잠시 뒤 다시 해 주세요.",
-    KIND_BLOCKED: "실패가 이어져 이 계좌의 호출을 잠시 멈췄어요. 잠시 뒤 다시 해 주세요.",
+    KIND_TOKEN: "증권사가 토큰을 내주지 않았습니다. 앱 키·시크릿이 맞는지, 1분 안에 다시 묻지 않았는지 확인하십시오.",
+    KIND_BUSINESS: "증권사가 요청을 거절했습니다. 계좌번호와 상품 코드, 모의투자/실계좌 선택이 맞는지 확인하십시오.",
+    KIND_TRANSPORT: "증권사 연결 실패. 잠시 뒤 다시 하십시오.",
+    KIND_HTTP_STATUS: "증권사 연결 실패. 잠시 뒤 다시 하십시오.",
+    KIND_BLOCKED: "실패가 이어져 이 계좌의 호출을 잠시 멈췄습니다. 잠시 뒤 다시 하십시오.",
 }
-_REASON_OTHER = "증권사 확인에 실패했어요. 아래 원래 사유를 확인해 주세요."
+_REASON_OTHER = "증권사 확인에 실패했습니다. 아래 원래 사유를 확인하십시오."
 
 
 class ConnectRequest(BaseModel):
@@ -135,12 +135,12 @@ def check_account(account_id: str, p: Principal = Depends(require_login)):
     client, secrets = _open_client(account_id)
     if mock_allowed():
         return _record_check(account_id, p.username, {**out, "state": "practice",
-                "reason": "연습용 모드라 증권사에 묻지 않았어요. 키가 맞는지는 아직 몰라요."})
+                "reason": "합성 데이터 모드라 증권사에 묻지 않았습니다. 키가 맞는지는 미상입니다."})
     _, failed = _ask_balance(client, secrets)
     if failed:
         return _record_check(account_id, p.username, {**out, **failed})
     return _record_check(account_id, p.username, {**out, "state": "ok",
-            "reason": "증권사가 이 키와 계좌로 잔고 조회를 받아 줬어요."})
+            "reason": "증권사가 이 키와 계좌로 잔고 조회를 받아 줬습니다."})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -172,9 +172,9 @@ def account_balance(account_id: str, p: Principal = Depends(require_login)):
 # 모든 경로가 ★소유 확인을 먼저★ 한다(남의 계좌 자격으로 클라이언트를 만들지 않는다). 누가 했는지는 토큰에서.
 # LIVE 는 여기서 열지 않는다 — 실계좌 관문(BV1 `live_gate`)을 거치는 BV7 에서.
 
-_LIVE_CLOSED = "실제 돈으로 주문하는 모드는 아직 열리지 않았어요. 운영자가 실계좌 관문을 연 뒤에 쓸 수 있어요."
-_PAPER_ON_REAL = ("이 계좌는 실계좌로 연결돼 있어요. 가상으로 체결하는 모드(PAPER)는 모의투자 계좌에서만 써요. "
-                  "모의투자 계좌를 따로 연결해 주세요.")
+_LIVE_CLOSED = "실제 돈으로 주문하는 모드는 아직 열리지 않았습니다. 운영자가 실계좌 관문을 연 뒤에 쓸 수 있습니다."
+_PAPER_ON_REAL = ("이 계좌는 실계좌로 연결돼 있습니다. 가상으로 체결하는 모드(PAPER)는 모의투자 계좌에서만 씁니다. "
+                  "모의투자 계좌를 따로 연결하십시오.")
 
 
 class AccountModeRequest(BaseModel):
@@ -218,7 +218,7 @@ def cancel_account_order(account_id: str, client_order_id: str, p: Principal = D
     who = observed_actor(p, None)
     out = _executor(account_id).cancel_order(client_order_id, who["actor"])
     if out.get("status") == "not_found":
-        raise HTTPException(404, "그 주문이 없어요.")
+        raise HTTPException(404, "그 주문이 없습니다.")
     return {**out, **who}
 
 
@@ -300,25 +300,25 @@ def live_readiness(account_id: str, p: Principal = Depends(require_login)):
     practiced = _broker_accepted_paper_orders(p.username)
 
     if check is None:
-        conn = (False, "이 계좌로 연결 확인을 한 적이 없어요. '연결 확인'을 먼저 해 주세요.")
+        conn = (False, "이 계좌로 연결 확인을 한 적이 없습니다. '연결 확인'을 먼저 하십시오.")
     elif check["decision"] == "ok":
-        conn = (True, "증권사가 이 계좌의 잔고 조회를 받아 줬어요.")
+        conn = (True, "증권사가 이 계좌의 잔고 조회를 받아 줬습니다.")
     elif check["decision"] == "practice":
-        conn = (False, "마지막 확인이 연습용 모드라 증권사에 묻지 않았어요. 연습용 확인은 세지 않아요.")
+        conn = (False, "마지막 확인이 합성 데이터 모드라 증권사에 묻지 않았습니다. 합성 확인은 세지 않습니다.")
     else:
-        conn = (False, f"마지막 연결 확인이 실패했어요: {check.get('message') or '사유 없음'}")
+        conn = (False, f"마지막 연결 확인이 실패했습니다: {check.get('message') or '사유 없음'}")
 
     items = [
         {"key": "gate", "ok": gate["state"] == LIVE_ALLOWED,
-         "reason": "운영자가 이 계정에 실계좌를 열었어요." if gate["state"] == LIVE_ALLOWED else gate["reason"]},
+         "reason": "운영자가 이 계정에 실계좌를 열었습니다." if gate["state"] == LIVE_ALLOWED else gate["reason"]},
         {"key": "real_account", "ok": not acc["is_paper"],
-         "reason": ("실계좌로 연결한 계좌예요." if not acc["is_paper"]
-                    else "모의투자 계좌예요. 실계좌 주문은 실계좌로 연결한 계좌에서만 해요.")},
+         "reason": ("실계좌로 연결한 계좌입니다." if not acc["is_paper"]
+                    else "모의투자 계좌입니다. 실계좌 주문은 실계좌로 연결한 계좌에서만 합니다.")},
         {"key": "connection", "ok": conn[0], "reason": conn[1]},
         {"key": "paper_practice", "ok": practiced > 0,
-         "reason": (f"내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 {practiced}건 있어요." if practiced
-                    else "내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 아직 없어요. 연습용(mock) 주문은 세지 않아요.")},
+         "reason": (f"내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 {practiced}건 있습니다." if practiced
+                    else "내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 아직 없습니다. 합성(mock) 주문은 세지 않습니다.")},
         {"key": "reconciliation", "ok": False,
-         "reason": "이 계좌를 증권사 잔고와 맞춰 보는 대조 감시가 아직 없어요. 그래서 실계좌 전환은 열지 않아요."},
+         "reason": "이 계좌를 증권사 잔고와 맞춰 보는 대조 감시가 아직 없습니다. 그래서 실계좌 전환은 열지 않습니다."},
     ]
     return {"account_id": account_id, "ready": all(i["ok"] for i in items), "items": items}

@@ -1,6 +1,6 @@
 """BU7a — 위험 점검 화면의 "취약" 기준 문장이 서버 스트레스 판정과 같은지.
 
-화면(`frontend/src/widgets/risk/StressCheck.tsx` 의 `STRESS_WEAK_PCT`)은 "종합점수가 N% 넘게 떨어지면 ‘취약’으로 셌어요"
+화면(`frontend/src/widgets/risk/StressCheck.tsx` 의 `STRESS_WEAK_PCT`)은 "종합점수가 N% 넘게 떨어지면 ‘취약’으로 셌습니다"
 라고 말한다. 서버(`src/engine/stress_test_analyzer.py::stress_test`)의 `survived` 판정이 따로 바뀌면 화면이 틀린 기준을 말한다 —
 ★서버 동작이 진실이고 화면 상수는 거울이다★. 소스 글자가 아니라 경계 양쪽 값을 넣어 판정을 본다.
 """

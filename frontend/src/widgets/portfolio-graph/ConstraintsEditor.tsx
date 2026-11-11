@@ -74,11 +74,11 @@ function SectorCard({ value, check, hasNames, onChange }: {
   const unknown = (data?.unapplied ?? []).find((u) => u.kind === "unknown_sector");
   return (
     <div className="pg-cons-card pg-cons-card--sectors" data-key="group_caps_pct">
-      <span className="pg-cons-card-q">업종마다 최대 얼마까지 둘까요?</span>
-      {!hasNames ? <p className="pg-help pg-cons-sectors-wait">종목을 먼저 정하면 업종을 고를 수 있어요.</p>
+      <span className="pg-cons-card-q">업종별 최대 비중</span>
+      {!hasNames ? <p className="pg-help pg-cons-sectors-wait">종목을 먼저 정하면 업종을 고를 수 있습니다.</p>
         : !data ? <p className="pg-help pg-cons-sectors-wait">이 종목들의 업종을 확인하는 중…</p>
         : !data.sectors_readable ? (
-          <p className="pg-cons-sectors-none" role="note">이 종목들의 업종을 읽지 못했어요 — 업종 상한을 걸어도 적용되지 않아요.</p>
+          <p className="pg-cons-sectors-none" role="note">이 종목들의 업종 읽기 실패 — 업종 상한을 걸어도 적용되지 않습니다.</p>
         ) : free.length > 0 && (
           <div className="pg-chips">
             {free.map((g) => (
@@ -96,7 +96,7 @@ function SectorCard({ value, check, hasNames, onChange }: {
                    if (e.target.value !== "" && Number.isFinite(n)) onChange(setCap(value, g, n));
                  }} />
           <span className="pg-cons-unit">%</span>
-          <button type="button" className="pg-cons-cap-x" aria-label={`${g} 상한 지우기`}
+          <button type="button" className="pg-cons-cap-x" aria-label={`${g} 상한 삭제`}
                   onClick={() => { setPending((p) => p.filter((x) => x !== g)); onChange(setCap(value, g, undefined)); }}>
             <X size={14} />
           </button>
@@ -137,13 +137,13 @@ export function ConstraintsEditor({ f, value, root, names, model, onChange }: {
           })}
         </div>
       )}
-      {check.state === "error" && <p className="pg-cons-check pg-cons-check--bad" role="alert">확인하지 못했어요 — {check.message}</p>}
+      {check.state === "error" && <p className="pg-cons-check pg-cons-check--bad" role="alert">확인 실패 — {check.message}</p>}
       {data?.checked && data.ok === false && (
-        <p className="pg-cons-check pg-cons-check--bad" role="alert">이 조합은 풀 수 없어요 — {data.reason}</p>
+        <p className="pg-cons-check pg-cons-check--bad" role="alert">이 조합은 풀 수 없습니다 — {data.reason}</p>
       )}
       {capWarn.map((u, i) => <p key={i} className="pg-cons-check pg-cons-check--warn">{u.text}</p>)}
       {allowsShort(cur) && (
-        <p className="pg-cons-short" role="note">{data?.short_note ?? "공매도가 들어간 비중이에요 — 확인하는 중…"}</p>
+        <p className="pg-cons-short" role="note">{data?.short_note ?? "공매도가 들어간 비중입니다 — 확인하는 중…"}</p>
       )}
       <details className="pg-cons-more" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
         <summary>더 정하기{summary && <span className="pg-cons-more-sum"> · {summary}</span>}</summary>

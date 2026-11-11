@@ -295,7 +295,7 @@ def test_weights_facts_speak_plainly():
 def test_facts_without_alignment_say_unmeasured():
     R = pd.DataFrame(np.zeros((10, 2)))
     fs = ho.facts_returns({"returns": R, "coverage": {"start": "a", "end": "b"}, "universe": {}})
-    assert {"key": "alignment", "label": "날짜 맞추기", "text": "재지 않았어요", "value": None} in fs
+    assert {"key": "alignment", "label": "날짜 맞추기", "text": "측정하지 않았습니다", "value": None} in fs
 
 
 def test_facts_never_judge(gappy):

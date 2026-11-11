@@ -191,8 +191,8 @@ def rolling_sharpe(
 
     # ★값이 없으면 0 이 아니라 '없음' + 사유★ (BL3 M3) — 예전에는 창보다 짧은 계열에 `current: 0` 을 냈다.
     if len(rolling_sh) == 0:
-        reason = (f"수익률이 {len(returns)}일이라 {window}일 창을 한 번도 채우지 못했어요." if len(returns) < window
-                  else "창마다 변동성이 0 이라 샤프 비율을 정의할 수 없어요.")
+        reason = (f"수익률이 {len(returns)}일이라 {window}일 창을 한 번도 채우지 못했습니다." if len(returns) < window
+                  else "창마다 변동성이 0 이라 샤프 비율을 정의할 수 없습니다.")
         return {"dates": [], "values": [], "window": window,
                 "current": None, "mean": None, "min": None, "max": None, "reason": reason}
 

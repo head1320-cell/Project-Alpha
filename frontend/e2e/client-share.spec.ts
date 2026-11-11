@@ -131,16 +131,16 @@ test("PB6 · 주소 → 고객 PIN(틀리면 같은 말) → 한 장(메뉴 없�
   await expect(c.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   await expect(c.locator('meta[name="referrer"]')).toHaveAttribute("content", "no-referrer");
   await enter(c, "902817");
-  await expect(c.locator(".sv-err")).toHaveText("주소나 PIN 이 맞지 않아요.");
+  await expect(c.locator(".sv-err")).toHaveText("주소나 PIN 이 맞지 않습니다.");
   await enter(c, PIN);
   await expect(c.locator(".cs-sheet")).toBeVisible();
   await expect(c.locator(".cs-sheet .cs-weight")).toHaveCount(weights);
-  await expect(c.locator(".cs-weights-sec .cs-sub")).toHaveText("이번 점검에서 정한 비중이에요.");   // 고객에게는 '노드' 를 말하지 않는다
+  await expect(c.locator(".cs-weights-sec .cs-sub")).toHaveText("이번 점검에서 정한 비중입니다.");   // 고객에게는 '노드' 를 말하지 않는다
   await expect(c.locator(".terminal-nav")).toHaveCount(0);
-  await expect(c.locator(".sv-until")).toContainText("까지 열려요");
+  await expect(c.locator(".sv-until")).toContainText("까지 열립니다");
 
   await c.route("**/api/v1/share/ask", (r) => r.fulfill({ json: {
-    available: true, source: "claude", answer: { answerable: true, cannot: null, sentences: [{ text: "가장 큰 비중은 34.04% 예요.", fact_ids: ["f1"] }] },
+    available: true, source: "claude", answer: { answerable: true, cannot: null, sentences: [{ text: "가장 큰 비중은 34.04% 입니다.", fact_ids: ["f1"] }] },
     facts: { f1: { where: "비중 계산", part: "비중", index: 0, text: "삼성전자 34.04%" } }, rejected: [], notice: null } }));
   await c.locator(".cs-ask-input").fill("가장 큰 비중은요?");
   await c.locator(".cs-ask-go").click();
@@ -151,7 +151,7 @@ test("PB6 · 주소 → 고객 PIN(틀리면 같은 말) → 한 장(메뉴 없�
   page.once("dialog", (d) => void d.accept());
   await page.locator(".cs-share-row .cs-share-revoke").click();
   await expect(page.locator('.cs-share-row[data-state="revoked"]')).toHaveCount(1);
-  await c.locator(".cs-ask-input").fill("다시 물어요");
+  await c.locator(".cs-ask-input").fill("다시 묻습니다");
   await c.locator(".cs-ask-go").click();
   await expect(c.locator(".sv-stop")).toContainText("끝난 주소");
   await c.context().close();
@@ -189,7 +189,7 @@ test("PB6 · 관문을 닫으면 열려 있던 고객 화면도 막히고, PB �
   await gate(page, false);
   await c.locator(".cs-ask-input").fill("비중은요?");
   await c.locator(".cs-ask-go").click();
-  await expect(c.locator(".sv-stop")).toContainText("지금은 열 수 없어요");
+  await expect(c.locator(".sv-stop")).toContainText("지금은 열 수 없습니다");
   await expect(c.locator(".sv-stop")).not.toContainText("인가");                 // 고객에게 운영 사유를 보이지 않는다
   await page.reload();
   await expect(page.locator(".cs-share-blocked")).toBeVisible();
@@ -218,7 +218,7 @@ test("PB6 · 390 — PIN·묻기 칸이 납작해지지 않고 가로로 넘치�
 
 test("PB6 · 토큰 없는 주소는 열 수 없다고 말한다", async ({ page }) => {
   await page.goto("/c");
-  await expect(page.locator(".sv-missing")).toContainText("주소가 완전하지 않아요");
+  await expect(page.locator(".sv-missing")).toContainText("주소가 완전하지 않습니다");
   await expect(page.locator(".terminal-nav")).toHaveCount(0);
 });
 

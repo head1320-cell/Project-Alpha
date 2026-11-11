@@ -60,7 +60,7 @@ def declare(by: str, **fields: str) -> dict:
     rec = LicenseRecord(**{k: fields.get(k) for k in LICENSE_FIELDS})
     missing = rec.missing()
     if missing:
-        raise ValueError(f"인가 기록이 불완전해요. 빠진 항목: {', '.join(missing)}")
+        raise ValueError(f"인가 기록이 불완전합니다. 빠진 항목: {', '.join(missing)}")
     now = dt.datetime.now(dt.timezone.utc)
     with session_scope() as s:
         old = _active(s)

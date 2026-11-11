@@ -113,7 +113,7 @@ export function ListRow({ title, sub, right, href, onClick, className }: {
 // ── 숫자 하나 ───────────────────────────────────────────────────────────────
 
 const GLYPH: Record<Direction, string> = { up: "▲", down: "▼", flat: "", unknown: "" };
-const SAID: Record<Direction, string> = { up: "올랐어요", down: "내렸어요", flat: "그대로예요", unknown: "변화를 몰라요" };
+const SAID: Record<Direction, string> = { up: "상승", down: "하락", flat: "보합", unknown: "변화 미상" };
 
 /** 잰 값 하나 + (있으면) 등락. delta.text 는 호출자가 krFormat 으로 만든 글자(+2.1%p 등) — 미상이면 dir "unknown". */
 export function Stat({ label, value, delta }: {
@@ -218,8 +218,8 @@ export function Notice({ tone, title, children }: { tone: "practice" | "warn" | 
 export function RetryFail({ title, onRetry, children }: { title: string; onRetry: () => void; children?: ReactNode }) {
   return (
     <Notice tone="danger" title={title}>
-      {children ?? "서버에 닿지 못했거나 계산이 실패했어요."}
-      <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>
+      {children ?? "서버 연결 실패 또는 계산 실패"}
+      <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>재시도</button></div>
     </Notice>
   );
 }

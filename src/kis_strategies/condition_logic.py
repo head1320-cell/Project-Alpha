@@ -104,7 +104,7 @@ def parse_logic(expr: str, n_conditions: int) -> tuple:
             take()
             expect("(", f"{low}(조건, 기간) 형식이어야 합니다 — 예: {low}(A, 3)")
             inner = parse_or()
-            expect(",", f"{low}(조건, 기간) 형식이어야 합니다 — 쉼표 뒤에 기간을 넣어 주세요")
+            expect(",", f"{low}(조건, 기간) 형식이어야 합니다 — 쉼표 뒤에 기간을 입력하십시오")
             n_tok = take()
             if n_tok is None or not n_tok.isdigit():
                 raise ValueError(f"{low}의 기간은 정수여야 합니다 — 예: {low}(A, 3)")

@@ -21,12 +21,12 @@ import { MacroAnswer } from "./MacroAnswer";
 
 /** 하는 일 순서 — 포트폴리오 설계가 제품의 중심(BK·BL)이라 맨 위. 설명은 하는 일 한 줄(수를 세지 않는다 — 세면 낡는다). */
 const TODO = [
-  { label: "포트폴리오 설계", href: "/allocation", sub: "종목·비중·점검을 한 화면에서 이어 설계해요" },
-  { label: "종목 찾기", href: "/screener", sub: "조건을 걸어 종목을 골라요" },
-  { label: "백테스트", href: "/backtest", sub: "전략을 지난 데이터로 돌려 봐요" },
-  { label: "매크로 분석", href: "/macro", sub: "경기와 물가가 어느 쪽으로 가는지 봐요" },
-  { label: "기업 분석", href: "/insights", sub: "한 종목의 가치와 재무를 자세히 봐요" },
-  { label: "위험 점검", href: "/risk-tools", sub: "충격이 오면 얼마나 잃을지 재 봐요" },
+  { label: "포트폴리오 설계", href: "/allocation", sub: "종목·비중·점검을 한 화면에서 이어 설계합니다" },
+  { label: "종목 찾기", href: "/screener", sub: "조건을 걸어 종목을 고릅니다" },
+  { label: "백테스트", href: "/backtest", sub: "전략을 지난 데이터로 돌려 봅니다" },
+  { label: "매크로 분석", href: "/macro", sub: "경기와 물가가 어느 쪽으로 가는지 봅니다" },
+  { label: "기업 분석", href: "/insights", sub: "한 종목의 가치와 재무를 자세히 봅니다" },
+  { label: "위험 점검", href: "/risk-tools", sub: "충격이 오면 얼마나 잃을지 재 봅니다" },
 ];
 
 /** 홈 점수 표의 요청 — 바꾸면 화면 설명(아래 절 sub)도 같이 바꾼다. */
@@ -39,7 +39,7 @@ const PICKS_REQ = {
 type SnapStatus = { persist_enabled: boolean; db_rows: number };
 
 function Retry({ onClick }: { onClick: () => void }) {
-  return <button type="button" className="tx-btn tx-btn--sub home-retry" onClick={onClick}>다시 시도</button>;
+  return <button type="button" className="tx-btn tx-btn--sub home-retry" onClick={onClick}>재시도</button>;
 }
 
 function Picks() {
@@ -47,22 +47,22 @@ function Picks() {
   const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
   const items = q.data?.items.slice(0, 5) ?? [];
   const chips: Chip[] = [];
-  if (cs.data?.mock_allowed) chips.push({ label: "연습용 시세", tone: "practice" });
+  if (cs.data?.mock_allowed) chips.push({ label: "합성 시세", tone: "practice" });
   const ing = q.data?.ingested_count, size = q.data?.universe_size;
   if (typeof ing === "number" && typeof size === "number") chips.push({ label: `재무 적재 ${num(ing)}/${num(size)}`, tone: "plain" });
 
   return (
     <div className="home-picks">
       <Section title="점수 높은 종목" sub="코스피 200 중 PER 이 양수인 종목을 종합점수 순으로" aside={<Chips items={chips} label="이 목록의 근거" />}>
-        {q.isLoading ? <LoadingState label="종목 점수를 불러오는 중이에요" />
+        {q.isLoading ? <LoadingState label="종목 점수 조회 중" />
           : q.isError ? (
-            <Notice tone="danger" title="종목 점수를 불러오지 못했어요">
-              스크리너 계산에 닿지 못했어요.
+            <Notice tone="danger" title="종목 점수 조회 실패">
+              스크리너 계산 연결 실패.
               <div className="home-act"><Retry onClick={() => { void q.refetch(); }} /></div>
             </Notice>
           ) : items.length === 0 ? (
             <div className="home-empty">
-              <p>점수를 낼 종목이 아직 없어요. 데이터가 적재됐는지 먼저 확인해 주세요.</p>
+              <p>점수를 낼 종목이 아직 없습니다. 데이터가 적재됐는지 먼저 확인하십시오.</p>
               <Link href="/admin/data" className="tx-btn tx-btn--sub">데이터 상태 보기</Link>
             </div>
           ) : (
@@ -96,8 +96,8 @@ function DataRow() {
       return r.json();
     },
   });
-  const right = q.isLoading ? "…" : q.isError || !q.data ? <Unknown reason="적재 현황을 불러오지 못했어요" /> : `${num(q.data.db_rows)}행`;
-  const sub = q.data && !q.data.persist_enabled ? "종목 스냅샷 · 영속 저장이 꺼져 있어요" : "종목 스냅샷(재무 + 가격)";
+  const right = q.isLoading ? "…" : q.isError || !q.data ? <Unknown reason="적재 현황 조회 실패" /> : `${num(q.data.db_rows)}행`;
+  const sub = q.data && !q.data.persist_enabled ? "종목 스냅샷 · 영속 저장이 꺼져 있습니다" : "종목 스냅샷(재무 + 가격)";
   return (
     <div className="home-data">
       <Section title="데이터">
@@ -110,11 +110,11 @@ function DataRow() {
 export function HomeView() {
   return (
     <div className="tx-page home">
-      <PageHead title="홈" lede="시장 흐름을 보고, 오늘 할 일을 골라요." />
+      <PageHead title="홈" lede="시장 흐름을 보고, 오늘 할 일을 고릅니다." />
       <MacroAnswer className="home-macro" action={<Link href="/macro" className="tx-btn tx-btn--main">매크로 분석 보기</Link>} />
       <div className="home-grid">
         <div className="home-todo">
-          <Section title="무엇을 할까요">
+          <Section title="작업 선택">
             {TODO.map((m) => <ListRow key={m.href} className="dash-mod" href={m.href} title={m.label} sub={m.sub} />)}
           </Section>
         </div>

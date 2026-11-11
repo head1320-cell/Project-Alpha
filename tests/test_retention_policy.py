@@ -292,7 +292,7 @@ def test_every_deletion_site_names_a_classified_table():
             unclassified[path] = hits
     assert not unclassified, (
         "분류되지 않은 표를 지웁니다 — `src/data/retention.py` 에 부류와 사유를 "
-        f"먼저 적으세요: {unclassified}")
+        f"먼저 적으십시오: {unclassified}")
 
 
 def test_only_the_known_helper_deletes_a_table_it_cannot_name():
@@ -306,7 +306,7 @@ def test_only_the_known_helper_deletes_a_table_it_cannot_name():
                       if any(t is None for _n, _raw, t in sites)})
     assert unknown == ["src/screener_pipeline.py"], (
         "테이블명을 동적으로 받는 삭제가 새로 생겼습니다 — 호출부 가드를 "
-        f"함께 넓히세요: {unknown}")
+        f"함께 넓히십시오: {unknown}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -326,7 +326,7 @@ def test_every_declared_table_is_classified():
                      if t not in CLASSIFIED)
     assert not missing, (
         "표는 선언됐는데 보존 분류가 없습니다 — `src/data/retention.py` 에 "
-        f"부류와 사유를 적으세요: {missing}")
+        f"부류와 사유를 적으십시오: {missing}")
 
 
 def test_every_classified_table_is_actually_declared():

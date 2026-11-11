@@ -23,7 +23,7 @@ from src.domain import design_procedure as proc  # noqa: E402
 
 KINDS = routes._kinds()
 F = {"format": "project-alpha.portfolio-graph", "version": 1}
-BANNED = ("검증됨", "입증됨", "견고함", "프로덕션 레디", "투자 우위", "더 나은 전략", "통과해요", "좋아져요")
+BANNED = ("검증됨", "입증됨", "견고함", "프로덕션 레디", "투자 우위", "더 나은 전략", "통과합니다", "좋아집니다")
 
 
 def _n(i, t, **p):

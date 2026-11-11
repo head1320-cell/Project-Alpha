@@ -110,9 +110,9 @@ test("실제 계산: 문제가 있는 선에만 칩 하나 · 단계·개수·�
 test("주입: lost·unused 둘이면 lost 하나로 · `[]`·`null` 엔 칩 없음 (상수·전부 표시 배제)", async ({ page }) => {
   await openWith(page, STRESS);
   await patchRun(page, (b) => {
-    b.edges[OPT_RET].issues = [{ level: "unused", code: "u", text: "쓰지 않아요" }, { level: "lost", code: "l", text: "빠졌어요" }];
+    b.edges[OPT_RET].issues = [{ level: "unused", code: "u", text: "쓰지 않습니다" }, { level: "lost", code: "l", text: "빠졌습니다" }];
     b.edges[SENS].issues = [];
-    b.edges[EST].issues = null; b.edges[EST].issues_reason = "이 자리는 아직 점검 규칙이 없어요.";
+    b.edges[EST].issues = null; b.edges[EST].issues_reason = "이 자리는 아직 점검 규칙 없음";
   });
   await run(page);
   await expect(flag(page, OPT_RET)).toHaveAttribute("data-level", "lost");
@@ -123,7 +123,7 @@ test("주입: lost·unused 둘이면 lost 하나로 · `[]`·`null` 엔 칩 없�
 
 test("자리: 칩은 받는 쪽 끝에 있고 카드·선 요약과 겹치지 않는다(중간·가까이) · 멀리에서는 글자 없는 점", async ({ page }) => {
   await openWith(page, STRESS);
-  await patchRun(page, (b) => { for (const r of Object.values(b.edges)) r.issues = [{ level: "changed", code: "x", text: "바뀌었어요" }]; });
+  await patchRun(page, (b) => { for (const r of Object.values(b.edges)) r.issues = [{ level: "changed", code: "x", text: "바뀌었습니다" }]; });
   await run(page);
   await expect(page.locator(".pg-wire-flag")).toHaveCount(STRESS.edges.length);
   type Box = { x: number; y: number; width: number; height: number };
@@ -163,7 +163,7 @@ test("자리: 칩은 받는 쪽 끝에 있고 카드·선 요약과 겹치지 �
 test("칩을 누르면 선 판: 관계 문장 · 건너간 것 · 문제 글 = 서버 · `[]` 이면 점검한 것 · `null` 이면 사유", async ({ page }) => {
   await openWith(page, STRESS);
   // 실제 문제가 있는 선은 수익률 → 기대 수익 추정(쓰지 않음) · 실제로 깨끗한 선은 비중 계산 → 민감도(K3) · 점검하지 않은 선은 주입.
-  await patchRun(page, (b) => { b.edges[SCEN].issues = null; b.edges[SCEN].issues_reason = "이 자리는 아직 점검 규칙이 없어요."; });
+  await patchRun(page, (b) => { b.edges[SCEN].issues = null; b.edges[SCEN].issues_reason = "이 자리는 아직 점검 규칙 없음"; });
   const body = await run(page);
   await flag(page, EST).click();
   await expect(page.locator(".pg-wire-sheet")).toBeVisible();
@@ -183,14 +183,14 @@ test("칩을 누르면 선 판: 관계 문장 · 건너간 것 · 문제 글 = �
   const sens = body.edges[SENS];
   expect(sens.issues).toEqual([]);
   await page.locator(`.react-flow__edge[data-testid="rf__edge-${SENS}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  await expect(row(page, "issues")).toContainText("잃거나 바뀐 것을 찾지 못했어요");
+  await expect(row(page, "issues")).toContainText("잃거나 바뀐 것을 찾지 못했습니다");
   for (const c of sens.checks) await expect(row(page, "issues")).toContainText(c);
   await expect(row(page, "issues").locator("li.pg-wire-issue")).toHaveCount(0);
 
   // 짝 — 점검하지 않은 선: 사유(지어내지 않는다).
   await page.locator(`.react-flow__edge[data-testid="rf__edge-${SCEN}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  await expect(row(page, "issues")).toContainText("이 자리는 아직 점검 규칙이 없어요.");
-  await expect(row(page, "issues")).not.toContainText("찾지 못했어요");
+  await expect(row(page, "issues")).toContainText("이 자리는 아직 점검 규칙 없음");
+  await expect(row(page, "issues")).not.toContainText("찾지 못했습니다");
 });
 
 test("계산 전 관계 문장에는 요약 괄호가 없고, 계산 뒤엔 서버 요약이 들어간다", async ({ page }) => {
@@ -205,10 +205,10 @@ test("계산 전 관계 문장에는 요약 괄호가 없고, 계산 뒤엔 서�
   expect(body.relations[SENS].brief).toBeTruthy();
 });
 
-test("여기까지 계산 뒤에도 다시 계산하지 않은 받는 쪽의 기록은 남는다 · 받는 쪽이 예전 결과면 칩을 숨긴다(짝)", async ({ page }) => {
+test("여기까지 계산 뒤에도 재계산하지 않은 받는 쪽의 기록은 남는다 · 받는 쪽이 예전 결과면 칩을 숨긴다(짝)", async ({ page }) => {
   await openWith(page, STRESS);
   // 화면이 기록을 합치고 숨기는 규칙을 본다 — 비중 계산 → 민감도 선에 문제 하나를 주입한다(K3 부터 실제로는 깨끗하다).
-  await patchRun(page, (b) => { if (b.edges[SENS]) b.edges[SENS].issues = [{ level: "changed", code: "x", text: "바뀌었어요" }]; });
+  await patchRun(page, (b) => { if (b.edges[SENS]) b.edges[SENS].issues = [{ level: "changed", code: "x", text: "바뀌었습니다" }]; });
   await run(page);
   await expect(flag(page, SENS)).toHaveCount(1);
   await expect(flag(page, EST)).toHaveCount(1);
@@ -243,7 +243,7 @@ test("고른 방식 대신 다른 비중이면 카드에 '고른 방식 대신�
 
   await patchRun(page, (b) => {
     const trust = b.nodes.optimizer.explain!.trust!;
-    trust.push({ state: "assumed", kind: "fallback", text: "‘위험 똑같이’ 방식이 답을 내지 못해 역변동성 비중으로 대신했어요." });
+    trust.push({ state: "assumed", kind: "fallback", text: "‘위험 똑같이’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다." });
   });
   await run(page);
   await expect(card.locator(".pg-tag--fallback")).toHaveText("고른 방식 대신함");

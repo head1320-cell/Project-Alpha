@@ -129,7 +129,7 @@ async function pick(page: Page, ids: string[]) {
   await page.locator(".react-flow__pane").click({ position: { x: 350, y: 20 } });
   await card(page, ids[0]).locator(".pg-node").click({ position: HEAD });
   for (const id of ids.slice(1)) await card(page, id).locator(".pg-node").click({ position: HEAD, modifiers: [mod] });
-  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐어요`);
+  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
 }
 async function align(page: Page, label: string) {
   await page.locator(".pg-align-open").click();
@@ -232,10 +232,10 @@ test("자동 정리는 자란 카드의 실제 높이로 쌓는다 — 아래 �
     const res = await route.fetch();
     const body = await res.json();
     // 카드는 막힘 사유로 설명의 첫 사실(`.pg-node-why`, 줄 제한 없음)을 그린다 — 그 글을 길게 해 카드를 정말 자라게 한다.
-    const why = "시나리오를 계산하지 못했어요 — " + "충격을 넣을 종목의 과거 시세가 모자라 이 시나리오의 손실을 잴 수 없어요. ".repeat(12);
+    const why = "시나리오 산출 실패 — " + "충격을 넣을 종목의 과거 시세가 모자라 이 시나리오의 손실을 측정할 수 없습니다. ".repeat(12);
     body.nodes.scenario.status = "failed";
     body.nodes.scenario.reason = why;
-    body.nodes.scenario.explain = { ...(body.nodes.scenario.explain ?? { title: "시나리오를 계산하지 못했어요" }), facts: [why] };
+    body.nodes.scenario.explain = { ...(body.nodes.scenario.explain ?? { title: "시나리오 산출 실패" }), facts: [why] };
     await route.fulfill({ response: res, json: body });
   });
   await page.locator(".pg-run").click();
@@ -574,7 +574,7 @@ test("갈래 틀 머리 — 카드 하나짜리 좁은 틀에서도 이름은 �
   expect(over, "머리 안 요소가 틀 오른쪽 밖으로 넘친다").toEqual([]);
   await expect(frame.getByRole("button", { name: "이 갈래를 원본으로" })).toBeVisible();
   await expect(frame.getByRole("button", { name: "전략으로 묶기" })).toBeVisible();
-  await expect(frame.getByRole("button", { name: "갈래 B 지우기" })).toBeVisible();
+  await expect(frame.getByRole("button", { name: "갈래 B 삭제" })).toBeVisible();
   // 멀리 보기 — 이름 글자가 화면 크기 바닥을 지키려 캔버스 단위로 커져(최대 40) 좁은 틀에서 다시 밀린다. 거기서도 한 줄(말줄임).
   for (let i = 0; i < 12 && (await page.locator(".pg-canvas").getAttribute("data-zoom")) !== "far"; i++) {
     await page.locator(".react-flow__controls-zoomout").click();

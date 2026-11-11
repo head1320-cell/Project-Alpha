@@ -183,7 +183,7 @@ class RiskGateway:
         if isinstance(price, bool) or not isinstance(price, (int, float)) or price <= 0:
             result.tier_failures.append(
                 "Tier1: 주문 기준 가격 미상 — 한도(회전·비중·집중)를 잴 수 없어 주문하지 않습니다. "
-                "지정가로 내거나 가격을 넣어 주세요.")
+                "지정가로 내거나 가격을 입력하십시오.")
             return False
 
         # ① 시장 시간

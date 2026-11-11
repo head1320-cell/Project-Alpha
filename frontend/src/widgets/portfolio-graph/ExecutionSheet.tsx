@@ -43,7 +43,7 @@ function PlanSummary({ plan, pre }: { plan: ExecutionPlan; pre: PreTrade }) {
         <div><dt>주문</dt><dd>{s.n_orders}건 (사기 {s.n_buy} · 팔기 {s.n_sell})</dd></div>
         <div><dt>회전율</dt><dd>{s.turnover_pct}%</dd></div>
         <div><dt>예상 비용</dt><dd>{won(s.est_cost)} · {s.est_cost_bp}bp</dd></div>
-        <div><dt>사전 점검</dt><dd>{pre.can_approve ? "승인할 수 있어요" : "막힌 항목이 있어 승인할 수 없어요"}</dd></div>
+        <div><dt>사전 점검</dt><dd>{pre.can_approve ? "승인할 수 있습니다" : "막힌 항목이 있어 승인 불가"}</dd></div>
       </dl>
       <Checks pre={pre} />
       {plan.missing_price.length > 0 && <p className="pg-warn">시세가 없어 주문에서 뺀 종목: {plan.missing_price.join(", ")}</p>}
@@ -66,14 +66,14 @@ function NewPlan({ onSaved }: { onSaved: (id: string) => void }) {
     onSuccess: (r) => { if (r.saved && r.plan_id) onSaved(r.plan_id); },
   });
 
-  if (targets.isLoading) return <p className="pg-help" role="status">실행 목표를 불러오는 중이에요.</p>;
-  if (targets.isError) return <p className="pg-field-err">실행 목표를 불러오지 못했어요 — {(targets.error as Error).message}</p>;
+  if (targets.isLoading) return <p className="pg-help" role="status">실행 목표 조회 중</p>;
+  if (targets.isError) return <p className="pg-field-err">실행 목표 조회 실패 — {(targets.error as Error).message}</p>;
   if (targets.data && !targets.data.available) return <p className="pg-warn">{targets.data.reason}</p>;
   const list = targets.data?.versions ?? [];
   return (
     <section className="pg-rec-sec" aria-label="새 실행 계획">
       <h3 className="pg-h4">1. 실행 목표 고르기</h3>
-      {list.length === 0 && <p className="pg-help">저장된 실행 목표가 없어요 — 캔버스의 ‘실행 목표 만들기’ 노드에서 저장하면 여기에 나와요.</p>}
+      {list.length === 0 && <p className="pg-help">저장된 실행 목표가 없습니다 — 캔버스의 ‘실행 목표 만들기’ 노드에서 저장하면 여기에 나옵니다.</p>}
       {tv && (
         <button type="button" className="pg-btn pg-btn--ghost pg-rec-change" onClick={() => { setTv(null); preview.reset(); save.reset(); }}>
           다른 목표 고르기
@@ -90,7 +90,7 @@ function NewPlan({ onSaved }: { onSaved: (id: string) => void }) {
               <span className="pg-pick-main">
                 <b>{Object.keys(t.final_weights).length}종목{t.cash_weight ? ` · 현금 ${t.cash_weight.toFixed(1)}%` : ""}</b>
                 <span className="pg-pick-sub">{t.tpv_id}{t.created_at ? ` · ${when(t.created_at)}` : ""}</span>
-                {!ok && <span className="pg-pick-sub">{t.status_reason ?? "실행할 수 없는 목표예요."}</span>}
+                {!ok && <span className="pg-pick-sub">{t.status_reason ?? "실행할 수 없는 목표입니다."}</span>}
               </span>
               <span className={`pg-tag pg-tag--${ok ? "confirmed" : "assumed"}`}>{ok ? "실행 가능" : "연구용"}</span>
             </button>
@@ -112,11 +112,11 @@ function NewPlan({ onSaved }: { onSaved: (id: string) => void }) {
           <button type="button" className="pg-btn" disabled={preview.isPending} onClick={() => preview.mutate()}>
             {preview.isPending ? "계산하는 중" : "주문 목록 미리 보기"}
           </button>
-          {preview.isError && <p className="pg-field-err">미리보기가 실패했어요 — {(preview.error as Error).message}</p>}
-          {preview.data?.blocked && <p className="pg-warn" role="status">계획을 만들지 않았어요 — {preview.data.reason ?? "사유 미상"}</p>}
+          {preview.isError && <p className="pg-field-err">미리보기가 실패했습니다 — {(preview.error as Error).message}</p>}
+          {preview.data?.blocked && <p className="pg-warn" role="status">계획을 만들지 않았습니다 — {preview.data.reason ?? "사유 미상"}</p>}
           {preview.data && !preview.data.blocked && (
             <>
-              <p className="pg-note">현재 보유는 비워 두고 계산해요 — 전부 현금에서 시작한다고 가정한 주문이에요.</p>
+              <p className="pg-note">현재 보유는 비워 두고 계산합니다 — 전부 현금에서 시작한다고 가정한 주문입니다.</p>
               <PlanSummary plan={preview.data.plan} pre={preview.data.pretrade} />
             </>
           )}
@@ -130,7 +130,7 @@ function NewPlan({ onSaved }: { onSaved: (id: string) => void }) {
                 </button>
               </div>
               {save.data && !save.data.saved && (
-                <p className="pg-warn" role="status">저장하지 않았어요 — {save.data.reason ?? save.data.message ?? "사유 미상"}</p>
+                <p className="pg-warn" role="status">저장하지 않았습니다 — {save.data.reason ?? save.data.message ?? "사유 미상"}</p>
               )}
             </>
           )}
@@ -147,15 +147,15 @@ function PlanFlow({ planId }: { planId: string }) {
   const refresh = () => { qc.invalidateQueries({ queryKey: ["execution", "plan", planId] }); qc.invalidateQueries({ queryKey: ["execution", "plans"] }); };
   const move = useMutation({
     mutationFn: (to: PlanStatus) => executionApi.transition(planId, to),
-    onSuccess: (r, to) => { setMsg(r.ok ? `‘${STATUS_KO[to]}’로 바꿨어요.` : `바꾸지 못했어요 — ${r.reason ?? "사유 미상"}`); refresh(); },
+    onSuccess: (r, to) => { setMsg(r.ok ? `‘${STATUS_KO[to]}’로 바꿨습니다.` : `변경 실패 — ${r.reason ?? "사유 미상"}`); refresh(); },
   });
   const fills = useMutation({
     mutationFn: () => executionApi.fills(planId, (plan.data?.plan?.orders ?? []).map((o) => ({
       stock_code: o.stock_code, filled_qty: o.quantity, avg_price: o.price_est }))),
-    onSuccess: (r) => { setMsg(r.ok ? "체결을 전량으로 입력했어요." : `체결을 입력하지 못했어요 — ${r.reason ?? "사유 미상"}`); refresh(); },
+    onSuccess: (r) => { setMsg(r.ok ? "체결을 전량으로 입력했습니다." : `체결 입력 실패 — ${r.reason ?? "사유 미상"}`); refresh(); },
   });
-  if (plan.isLoading) return <p className="pg-help" role="status">계획을 불러오는 중이에요.</p>;
-  if (plan.isError || !plan.data) return <p className="pg-field-err">계획을 불러오지 못했어요.</p>;
+  if (plan.isLoading) return <p className="pg-help" role="status">계획 조회 중</p>;
+  if (plan.isError || !plan.data) return <p className="pg-field-err">계획 조회 실패</p>;
   const p = plan.data;
   const blocked = p.pretrade ? !p.pretrade.can_approve : false;
   return (
@@ -165,7 +165,7 @@ function PlanFlow({ planId }: { planId: string }) {
         <b>{p.name}</b>
       </div>
       {p.plan && p.pretrade && <PlanSummary plan={p.plan} pre={p.pretrade} />}
-      {blocked && <p className="pg-warn" role="status">사전 점검에 막힌 항목이 있어 승인할 수 없어요 — 위 ‘막힘’ 항목을 풀어야 해요.</p>}
+      {blocked && <p className="pg-warn" role="status">사전 점검에 막힌 항목이 있어 승인할 수 없습니다 — 위 ‘막힘’ 항목을 풀어야 합니다.</p>}
       <div className="pg-rec-actions">
         {FORWARD[p.status].map((to) => (
           <button key={to} type="button" className={`pg-btn${to === "approved" ? " pg-btn--primary" : ""}`}
@@ -178,7 +178,7 @@ function PlanFlow({ planId }: { planId: string }) {
         )}
       </div>
       {msg && <p className="pg-save-msg" role="status">{msg}</p>}
-      <p className="pg-note">실제 주문은 나가지 않아요 — 모의 제출 뒤 체결은 사람이 입력해요(브로커 미연결).</p>
+      <p className="pg-note">실제 주문은 나가지 않습니다 — 모의 제출 뒤 체결은 사람이 입력합니다(브로커 미연결).</p>
       <details className="pg-rec-audit">
         <summary>기록 {p.audit.length}줄</summary>
         <ul className="pg-list">{p.audit.slice().reverse().map((a, i) => (
@@ -205,9 +205,9 @@ export function ExecutionSheetBody() {
       {mode === "new" && <NewPlan onSaved={(id) => { qc.invalidateQueries({ queryKey: ["execution", "plans"] }); setPicked(id); setMode("list"); }} />}
       {mode === "list" && (
         <section className="pg-rec-sec" aria-label="저장된 계획">
-          {plans.isLoading && <p className="pg-help" role="status">계획을 불러오는 중이에요.</p>}
-          {plans.isError && <p className="pg-field-err">계획 목록을 불러오지 못했어요 — {(plans.error as Error).message}</p>}
-          {plans.data && plans.data.plans.length === 0 && <p className="pg-help">저장된 계획이 없어요 — ‘새 계획 만들기’에서 실행 목표로 만들어요.</p>}
+          {plans.isLoading && <p className="pg-help" role="status">계획 조회 중</p>}
+          {plans.isError && <p className="pg-field-err">계획 목록 조회 실패 — {(plans.error as Error).message}</p>}
+          {plans.data && plans.data.plans.length === 0 && <p className="pg-help">저장된 계획이 없습니다 — ‘새 계획 만들기’에서 실행 목표로 만듭니다.</p>}
           <div className="pg-pick" role="radiogroup">
             {(plans.data?.plans ?? []).map((p) => (
               <button key={p.plan_id} type="button" role="radio" aria-checked={picked === p.plan_id}

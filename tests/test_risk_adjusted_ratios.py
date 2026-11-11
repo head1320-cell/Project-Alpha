@@ -227,7 +227,7 @@ def test_every_unknown_carries_a_reason():
 # compute_metrics 와의 통합 — ★두 벌이 되지 않게★
 # ══════════════════════════════════════════════════════════════════════════
 def test_compute_metrics_now_carries_the_ratios():
-    """호출부가 바로 다음 줄에서 다시 계산할 이유가 없어야 한다."""
+    """호출부가 바로 다음 줄에서 재계산할 이유가 없어야 한다."""
     r = _series(n=500, seed=9)
     m = compute_metrics(r, _equity(r), risk_free=0.035)
     for k in ("sharpe_ratio", "sortino_ratio", "calmar_ratio",

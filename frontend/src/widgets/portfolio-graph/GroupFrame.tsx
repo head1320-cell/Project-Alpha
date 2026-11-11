@@ -59,9 +59,9 @@ const SNODE_PORT_TOP = 46;
 
 /** 몫을 모를 때의 이유 — 계산 전 · 포트폴리오에 잇지 않음 · 이었는데 서버 값이 없음(지어내지 않는다). */
 function shareWhy(computed: boolean, linked: boolean | undefined): string {
-  if (!computed) return "계산하면 보여요";
-  if (!linked) return "포트폴리오에 잇지 않았어요";
-  return "몫을 모름 — 포트폴리오 노드를 확인하세요";
+  if (!computed) return "계산하면 보입니다";
+  if (!linked) return "포트폴리오에 잇지 않았습니다";
+  return "몫을 모름 — 포트폴리오 노드를 확인하십시오";
 }
 const known = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 
@@ -100,7 +100,7 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
       <div className="pg-group-head">
         <button type="button" className="pg-group-toggle nodrag" aria-expanded={!data.collapsed}
                 aria-label={data.collapsed ? `${noun} 펼치기` : `${noun} 접기`}
-                title={strategy ? "접으면 노드 한 장이 돼요 — 계산은 그대로예요" : undefined} onClick={() => toggle(data.groupId)}>
+                title={strategy ? "접으면 노드 한 장이 됩니다 — 계산은 그대로입니다" : undefined} onClick={() => toggle(data.groupId)}>
           <ChevronDown size={14} aria-hidden="true" className={data.collapsed ? "pg-palette-chev--closed" : undefined} />
         </button>
         <input className="pg-group-label nodrag" value={data.label} aria-label={`${noun} 이름`}
@@ -122,30 +122,30 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
         <span className="pg-group-tools">
           {strategy && (
             <button type="button" className="pg-group-run nodrag" disabled={running} onClick={() => data.onRunStrategy?.(data.groupId)}
-                    title="이 전략의 노드만 계산해요 — 나머지는 이전 계산으로 남아요">
+                    title="이 전략의 노드만 계산합니다 — 나머지는 이전 계산으로 남습니다">
               <Play size={12} aria-hidden="true" /> 이 전략만 계산
             </button>
           )}
           <button type="button" className="pg-group-x pg-group-dive nodrag" aria-label={`${noun} 안으로 들어가기`}
-                  title="이 상자만 밝혀 봐요 (두 번 눌러도 돼요)" onClick={() => dive(data.groupId)}>
+                  title="이 상자만 밝혀 봅니다 (두 번 눌러도 됩니다)" onClick={() => dive(data.groupId)}>
             <LogIn size={14} aria-hidden="true" />
           </button>
           {strategy && (
             <button type="button" className="pg-group-x pg-group-branch nodrag" aria-label="전략째 갈래 만들기"
-                    title="이 전략의 노드를 모두 복제해 설정만 바꿔 나란히 봐요" onClick={() => data.onBranchStrategy?.(data.groupId)}>
+                    title="이 전략의 노드를 모두 복제해 설정만 바꿔 나란히 봅니다" onClick={() => data.onBranchStrategy?.(data.groupId)}>
               <GitBranch size={14} aria-hidden="true" />
             </button>
           )}
           <button type="button" className="pg-group-x pg-group-save nodrag" aria-label="내 블록으로 저장"
-                  title="이 상자를 내 블록에 넣어요 (이 브라우저)" onClick={() => saveBlock(data.groupId)}>
+                  title="이 상자를 내 블록에 넣습니다 (이 브라우저)" onClick={() => saveBlock(data.groupId)}>
             <BookmarkPlus size={14} aria-hidden="true" />
           </button>
           <button type="button" className="pg-group-x pg-group-file nodrag" aria-label="블록 파일로 받기"
-                  title="이 상자를 .pgblock.json 파일로 받아요"
+                  title="이 상자를 .pgblock.json 파일로 받습니다"
                   onClick={() => { const b = saveBlock(data.groupId); if (b) downloadBlock(b); }}>
             <Download size={14} aria-hidden="true" />
           </button>
-          <button type="button" className="pg-group-x pg-group-unwrap nodrag" aria-label={`${noun} 풀기`} title={`${noun} 풀기 (노드는 남아요)`}
+          <button type="button" className="pg-group-x pg-group-unwrap nodrag" aria-label={`${noun} 풀기`} title={`${noun} 풀기 (노드는 남습니다)`}
                   onClick={() => ungroup(data.groupId)}>
             <Ungroup size={14} aria-hidden="true" />
           </button>
@@ -157,7 +157,7 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
           <span>{head.label}</span>
         </div>
       )}
-      {strategy && data.output === null && <div className="pg-group-warn">비중을 내는 노드가 없어 포트폴리오에 합칠 수 없어요.</div>}
+      {strategy && data.output === null && <div className="pg-group-warn">비중을 내는 노드가 없어 포트폴리오에 합칠 수 없습니다.</div>}
       {data.collapsed && data.proxyIn.map((p, i) => (
         <div key={p.id} className="pg-proxy pg-proxy--in" style={{ top: PROXY_TOP + i * PROXY_GAP }} title={p.label}>
           <Handle type="target" position={Position.Left} id={p.id} className="pg-handle" isConnectable={false}
@@ -195,7 +195,7 @@ function StrategyNode({ data, ok, blocked, failed, total, computed }: {
     <div className={`pg-group pg-group--strategy pg-group--collapsed pg-snode pg-band-${data.color}`}
          data-group-id={data.groupId} data-kind="strategy" style={{ minHeight: SNODE_PORT_TOP + ports * PROXY_GAP + 8 }}>
       <button type="button" className="pg-group-toggle pg-snode-open nodrag" aria-expanded={false} aria-label="전략 펼치기"
-              title="펼쳐서 안의 노드를 봐요" onClick={() => toggle(data.groupId)}>
+              title="펼쳐서 안의 노드를 봅니다" onClick={() => toggle(data.groupId)}>
         <ChevronDown size={15} aria-hidden="true" className="pg-palette-chev--closed" />
       </button>
       <div className="pg-node-k">
@@ -225,9 +225,9 @@ function StrategyNode({ data, ok, blocked, failed, total, computed }: {
           {total !== null && <span className="pg-group-time"> · 계산 {fmtElapsed(total)}</span>}
         </p>
       )}
-      {data.output === null && <p className="pg-group-warn">비중을 내는 노드가 없어 포트폴리오에 합칠 수 없어요.</p>}
+      {data.output === null && <p className="pg-group-warn">비중을 내는 노드가 없어 포트폴리오에 합칠 수 없습니다.</p>}
       <button type="button" className="pg-group-run pg-snode-run nodrag" disabled={running} onClick={() => data.onRunStrategy?.(data.groupId)}
-              title="이 전략의 노드만 계산해요 — 나머지는 이전 계산으로 남아요">
+              title="이 전략의 노드만 계산합니다 — 나머지는 이전 계산으로 남습니다">
         <Play size={12} aria-hidden="true" /> 이 전략만 계산
       </button>
       {data.proxyIn.map((p, i) => (

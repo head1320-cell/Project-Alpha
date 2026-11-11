@@ -114,14 +114,14 @@ def test_every_client_route_refuses_someone_elses_client(client, method, path):
     body = _body_for(method, path)
     r = client.request(method, url, json=body, headers=b)
     assert r.status_code == 404, (method, path, r.status_code, r.text)
-    assert r.json()["detail"] == "그 고객이 없어요."
+    assert r.json()["detail"] == "그 고객이 없습니다."
     # 짝 — 본인은 통과한다(늘 404 인 구현 배제)
     assert client.request(method, url, json=body, headers=a).status_code in (200, 201), (method, path)
 
 
 def test_unknown_client_gets_the_same_answer_as_someone_elses(client):
     r = client.get(f"{BASE}/cl_0000000000000000", headers=_auth(client, "alice"))
-    assert r.status_code == 404 and r.json()["detail"] == "그 고객이 없어요."
+    assert r.status_code == 404 and r.json()["detail"] == "그 고객이 없습니다."
 
 
 def test_doc_id_of_another_client_is_404_even_for_the_owner(client):

@@ -136,7 +136,7 @@ test("R5 · 끊기 — Delete 키·선 탭과 같은 문장 · 한 단계", asyn
   await btn(page, "waypoint").click({ button: "right" });
   await expect(page.locator(".pg-ctx")).toHaveCount(0);
   await btn(page, "cut").click();
-  await expect(page.locator(".pg-note")).toHaveText(/^선 1개를 끊었어요\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^선 1개를 끊었습니다\.\s*되돌리기/);
   await expect.poll(async () => (await wip(page)).edges.some((x) => x.id === UR)).toBe(false);
   await expect(page.locator('.pg-tab[data-tab="wire"]')).toHaveCount(0);           // 끊은 선을 다시 고르지 않는다(누름이 선까지 번지지 않음)
   await page.keyboard.press("Control+z");
@@ -145,7 +145,7 @@ test("R5 · 끊기 — Delete 키·선 탭과 같은 문장 · 한 단계", asyn
   // 선 탭 [선 끊기]도 같은 길·같은 문장
   await pickWire(page, UR);
   await page.locator(".pg-wire-cut").click();
-  await expect(page.locator(".pg-note")).toHaveText(/^선 1개를 끊었어요\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^선 1개를 끊었습니다\.\s*되돌리기/);
 });
 
 test("R5 · (짝) 계산 뒤 끊으면 하류 수를 말한다", async ({ page }) => {
@@ -154,7 +154,7 @@ test("R5 · (짝) 계산 뒤 끊으면 하류 수를 말한다", async ({ page }
   await compute(page);
   await pickWire(page, EO);
   await btn(page, "cut").click();
-  await expect(page.locator(".pg-note")).toHaveText(/선 1개를 끊었어요 — 하류 노드 1개는 이제 예전 결과예요\./);
+  await expect(page.locator(".pg-note")).toHaveText(/선 1개를 끊었습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
 });
 
 test("R5 · 사이에 넣기 — 후보 = 카탈로그에서 센 것 · 고르면 두 선 사이 · 한 단계 (짝: 후보 없는 선은 까닭)", async ({ page }) => {
@@ -195,7 +195,7 @@ test("R5 · 사이에 넣기 — 후보 = 카탈로그에서 센 것 · 고르�
   await btn(page, "insert").click();
   await expect(page.locator(".pg-edge-tb-list [data-kind]")).toHaveCount(0);
   await expect(page.locator(".pg-edge-tb-list")).toContainText("받아");
-  await expect(page.locator(".pg-edge-tb-list")).toContainText("노드가 없어요");
+  await expect(page.locator(".pg-edge-tb-list")).toContainText("노드 없음");
 });
 
 test("R5 · 꺾는 점 — 그린 선 가운데에 하나 · 한 단계", async ({ page }) => {
@@ -244,7 +244,7 @@ test("R5 · 묻기 — 오른쪽 창의 묻기 칸으로 · 로그아웃이면 �
   await page.waitForTimeout(400);
   await pickWire(page, UR);
   await btn(page, "ask").click();
-  await expect(page.locator(".pg-ask")).toContainText("계산한 뒤에 물을 수 있어요");     // 묻기 칸은 계산한 뒤에만 열린다
+  await expect(page.locator(".pg-ask")).toContainText("계산한 뒤에 물을 수 있습니다");     // 묻기 칸은 계산한 뒤에만 열린다
   await compute(page);
   await pickWire(page, UR);
   await btn(page, "ask").click();
@@ -271,7 +271,7 @@ test("R5 · 우클릭 — 같은 넷 · 사이에 넣기…는 후보 + [뒤로]
   const at2 = await onWire(page, EO, 0.5);
   await page.mouse.click(at2.x, at2.y, { button: "right" });
   await expect(menu.locator('[data-action="insert"]')).toBeDisabled();
-  await expect(menu.locator('[data-action="insert"]')).toContainText("노드가 없어요");
+  await expect(menu.locator('[data-action="insert"]')).toContainText("노드 없음");
   await page.keyboard.press("Escape");
   // 짝 — 빈 곳
   await page.locator(".react-flow__pane").click({ position: { x: 700, y: 640 }, button: "right" });

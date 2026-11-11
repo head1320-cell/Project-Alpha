@@ -165,7 +165,7 @@ def pair_spread(long_code: str, short_code: str, betas: dict[str, float],
     missing = [c for c, b in ((long_code, bl), (short_code, bs)) if b is None]
     if missing:
         net_beta, neutral = None, None
-        beta_reason = f"{', '.join(missing)} 의 β 를 몰라 순 β 를 계산하지 않았어요."
+        beta_reason = f"{', '.join(missing)} 의 β 를 몰라 순 β 를 계산하지 않았습니다."
     else:
         net_beta = round(float(bl - hedge_ratio * bs), 6)
         neutral = abs(net_beta) < 1e-4

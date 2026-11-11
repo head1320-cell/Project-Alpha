@@ -148,7 +148,7 @@ test("현실성 요청 골든: 처음엔 요청 0 · 계산하기는 전략을 �
   await close("03 계산하기");
   await expect(act(page, "calc")).toBeEnabled({ timeout: 20_000 });
   await act(page, "calc").click();
-  await close("04 다시 계산하기");
+  await close("04 재계산");
 
   expect(out["01 첫 화면"], "처음엔 아무것도 묻지 않는다").toEqual({ writes: [], reads: [] });
   expect(out["02 전략 없이 계산하기"].writes, "전략이 없으면 계산을 보내지 않는다").toEqual([]);

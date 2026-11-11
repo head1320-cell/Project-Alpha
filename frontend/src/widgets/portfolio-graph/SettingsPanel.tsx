@@ -45,7 +45,7 @@ function ObjectList({ f, item, value, onChange }: {
   return (
     <div className="pg-basic-field" data-field={f.name}>
       <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
-      {rows.length === 0 && <p className="pg-help">아직 없어요.</p>}
+      {rows.length === 0 && <p className="pg-help">아직 없습니다.</p>}
       {rows.map((row, i) => (
         <div key={i} className="pg-objrow">
           {fields.map((x) => (
@@ -72,7 +72,7 @@ function ObjectList({ f, item, value, onChange }: {
               )}
             </label>
           ))}
-          <button type="button" className="pg-icon-btn" aria-label={`${i + 1}번째 항목 지우기`}
+          <button type="button" className="pg-icon-btn" aria-label={`${i + 1}번째 항목 삭제`}
                   onClick={() => onChange(rows.filter((_, j) => j !== i))}><X size={14} /></button>
         </div>
       ))}
@@ -148,7 +148,7 @@ function PerPort({ f, value, ports, onChange }: {
     <div className="pg-basic-field" data-field={f.name}>
       <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
       {ports.length === 0
-        ? <p className="pg-help">전략을 이어 주면 전략마다 고를 수 있어요.</p>
+        ? <p className="pg-help">전략을 이어 주면 전략마다 고를 수 있습니다.</p>
         : (
           <div className="pg-perport">
             {ports.map((p) => {
@@ -196,7 +196,7 @@ function PerPortNumber({ f, value, ports, onChange }: {
     <div className="pg-basic-field" data-field={f.name}>
       <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
       {ports.length === 0
-        ? <p className="pg-help">전략을 이어 주면 전략마다 정할 수 있어요.</p>
+        ? <p className="pg-help">전략을 이어 주면 전략마다 정할 수 있습니다.</p>
         : (
           <div className="pg-perport">
             {ports.map((p) => (
@@ -212,12 +212,12 @@ function PerPortNumber({ f, value, ports, onChange }: {
             ))}
             <p className="pg-perport-sum" data-ok={ok ? "1" : "0"} aria-live="polite">
               {!filled
-                ? `${ports.length - vals.length}개 전략이 비어 있어요`
+                ? `${ports.length - vals.length}개 전략이 비어 있습니다`
                 : target === undefined
                   ? `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""}`
                   : ok
-                    ? `합 ${target}${f.ui.unit ?? ""} — 맞아요`
-                    : `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""} — ${left > 0 ? `${left}${f.ui.unit ?? ""} 더 정해 주세요` : `${-left}${f.ui.unit ?? ""} 줄여 주세요`}`}
+                    ? `합 ${target}${f.ui.unit ?? ""} — 맞습니다`
+                    : `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""} — ${left > 0 ? `${left}${f.ui.unit ?? ""} 더 정하십시오` : `${-left}${f.ui.unit ?? ""} 줄이십시오`}`}
             </p>
           </div>
         )}
@@ -421,8 +421,8 @@ function SaveBox({ result, stale, onSave, label, followUp }: {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const ready = result?.status === "ok" && !!result.view_hash && !stale;
-  const why = !result ? "먼저 계산해 주세요." : stale ? "바뀐 설정으로 다시 계산한 뒤 저장할 수 있어요."
-    : result.status !== "ok" ? "이 노드가 계산되지 않아 저장할 것이 없어요." : null;
+  const why = !result ? "먼저 계산하십시오." : stale ? "바뀐 설정으로 재계산한 뒤 저장할 수 있습니다."
+    : result.status !== "ok" ? "이 노드가 계산되지 않아 저장할 것 없음" : null;
   return (
     <div className="pg-save">
       <button type="button" className="pg-btn pg-btn--primary pg-save-btn" disabled={!ready || busy}
@@ -430,14 +430,14 @@ function SaveBox({ result, stale, onSave, label, followUp }: {
                 setBusy(true); setMsg(null);
                 try {
                   const r = await onSave();
-                  setMsg(r.ok ? { ok: true, text: r.text ?? "저장했어요" } : { ok: false, text: r.message });
+                  setMsg(r.ok ? { ok: true, text: r.text ?? "저장했습니다" } : { ok: false, text: r.message });
                   setSavedId(r.ok ? r.saved_id : null);
                 } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
                 finally { setBusy(false); }
               }}>
         {busy ? "저장하는 중…" : label ?? "이 미리보기를 저장하기"}
       </button>
-      <p className="pg-help">{why ?? "지금 본 미리보기를 한 번 저장해요. 주문은 나가지 않아요."}</p>
+      <p className="pg-help">{why ?? "지금 본 미리보기를 한 번 저장합니다. 주문은 나가지 않습니다."}</p>
       {msg && <p className={`pg-save-msg${msg.ok ? "" : " pg-save-msg--err"}`} role="status">{msg.text}</p>}
       {followUp && savedId && (
         <button type="button" className="pg-btn pg-btn--primary pg-save-follow" onClick={() => followUp.run(savedId)}>{followUp.label}</button>
@@ -485,12 +485,12 @@ function SourcePicks({ node, entry, nodes, edges, catalog, plainOf, onRewire }: 
         const dup = (id: string) => opts.filter((o) => o.node === id).length > 1;
         return (
           <label key={p.name} className="pg-io-pick" data-port={p.name}>
-            <span>{`‘${many ? `${nm} · ${p.name}` : nm}’ 어디서 받을까요`}</span>
+            <span>{`‘${many ? `${nm} · ${p.name}` : nm}’ 입력 출처`}</span>
             <select value={value} onChange={(ev) => {
               const [src, h] = ev.target.value ? ev.target.value.split("|") : [null, null];
               onRewire(p.name, src, h);
             }}>
-              <option value="">{p.required === false ? "받지 않아요(선택 입력)" : "아직 고르지 않았어요"}</option>
+              <option value="">{p.required === false ? "받지 않습니다(선택 입력)" : "아직 고르지 않았습니다"}</option>
               {cur && !opts.some((o) => o.node === cur.source && o.port === cur.sourceHandle) && (
                 <option value={value}>{plainOf(cur.source)}</option>
               )}
@@ -528,7 +528,7 @@ function Gives({ node, entry, edges, plainOf, onFocus }: {
                   <button type="button" className="pg-gives-node" data-node={e.target} onClick={() => onFocus?.(e.target)}>{plainOf(e.target)}</button>
                 </span>
               ))}</span>
-            ) : <span className="pg-gives-none"> — 아직 아무 노드도 받지 않아요</span>}
+            ) : <span className="pg-gives-none"> — 아직 아무 노드도 받지 않습니다</span>}
           </li>
         );
       })}
@@ -545,12 +545,12 @@ function Passport({ stage, result, stale }: { stage: string | null; result?: Nod
   const trust = live?.explain?.trust ?? [];
   const n = (st: string) => trust.filter((t) => t.state === st).length;
   const lin = live?.lineage;
-  const chips = [lin?.practice && "연습용", lin?.pit === "forward_only" && "지금 시점 전용", lin?.overlay && "노출 조절"].filter(Boolean) as string[];
+  const chips = [lin?.practice && "합성", lin?.pit === "forward_only" && "지금 시점 전용", lin?.overlay && "노출 조절"].filter(Boolean) as string[];
   return (
     <dl className="pg-passport">
       {stage && <div data-k="stage"><dt>단계</dt><dd>{stage}</dd></div>}
       {!live ? (
-        <div data-k="state"><dt>결과</dt><dd>{result && stale ? "예전 결과예요 — 다시 계산하면 나와요" : result ? "계산되지 않았어요" : "아직 계산 전이에요"}</dd></div>
+        <div data-k="state"><dt>결과</dt><dd>{result && stale ? "예전 결과입니다 — 재계산하면 나옵니다" : result ? "계산되지 않았습니다" : "아직 계산 전입니다"}</dd></div>
       ) : (
         <>
           <div data-k="assumed"><dt>가정</dt><dd>{n("assumed")}개</dd></div>
@@ -572,7 +572,7 @@ function SwapPick({ node, nodes, edges, catalog, onSwap }: {
   node: PgNode; nodes: PgNode[]; edges: Edge[]; catalog: NodeCatalogEntry[]; onSwap: (kind: string) => void;
 }) {
   const options = swapCandidates(node.id, nodes, edges, catalog);
-  if (!options.length) return <p className="pg-swap pg-swap--none">같은 단계에서 지금 선을 그대로 받을 다른 노드가 없어요.</p>;
+  if (!options.length) return <p className="pg-swap pg-swap--none">같은 단계에서 지금 선을 그대로 받을 다른 노드 없음</p>;
   return (
     <label className="pg-swap">
       <span>다른 방법으로 바꾸기</span>
@@ -592,8 +592,8 @@ function Impact({ node, edges, onImpact }: { node: PgNode; edges: Edge[]; onImpa
     <p className="pg-impact" data-count={ids.length} tabIndex={0}
        onMouseEnter={() => onImpact?.(ids)} onMouseLeave={() => onImpact?.(null)}
        onFocus={() => onImpact?.(ids)} onBlur={() => onImpact?.(null)}>
-      {down.length ? `이 노드를 바꾸면 ${ids.length}개 노드가 다시 계산돼요 — 이 노드와 그 뒤 ${down.length}개.`
-        : "이 노드를 바꾸면 이 노드만 다시 계산돼요 — 뒤에 이어진 노드가 없어요."}
+      {down.length ? `이 노드를 바꾸면 ${ids.length}개 노드가 재계산됩니다 — 이 노드와 그 뒤 ${down.length}개.`
+        : "이 노드를 바꾸면 이 노드만 재계산됩니다 — 뒤에 이어진 노드가 없습니다."}
     </p>
   );
 }
@@ -658,8 +658,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
       {entry && onSwap && <SwapPick node={node} nodes={nodes} edges={edges} catalog={catalog} onSwap={onSwap} />}
       {entry && (
         <dl className="pg-io">
-          <div><dt>받는 것</dt><dd>{receives.length ? receives.join(", ") : "없어요 — 여기서 시작해요."}</dd></div>
-          <div><dt>내는 것</dt><dd>{entry.outputs.length === 0 ? "없어요" : <Gives node={node} entry={entry} edges={edges} plainOf={plainOf} onFocus={onFocus} />}</dd></div>
+          <div><dt>받는 것</dt><dd>{receives.length ? receives.join(", ") : "없습니다 — 여기서 시작합니다."}</dd></div>
+          <div><dt>내는 것</dt><dd>{entry.outputs.length === 0 ? "없습니다" : <Gives node={node} entry={entry} edges={edges} plainOf={plainOf} onFocus={onFocus} />}</dd></div>
         </dl>
       )}
       {entry && <Impact node={node} edges={edges} onImpact={onImpact} />}
@@ -668,8 +668,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
       {!expert && entry && (
         <div className="pg-basic">
           {basicRendered.map((x) => x.el)}
-          {basic.length === 0 && <p className="pg-help">바꿀 설정이 없어요.</p>}
-          <p className="pg-help">바꾸지 않은 칸은 서버 기본값을 써요.</p>
+          {basic.length === 0 && <p className="pg-help">바꿀 설정 없음</p>}
+          <p className="pg-help">바꾸지 않은 칸은 서버 기본값을 씁니다.</p>
         </div>
       )}
       {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} label={entry.save_label}

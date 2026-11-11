@@ -112,7 +112,7 @@ export function RunMonitor({ runId }: { runId: string }) {
     return (
       <div className="tx-page brun-shell rs">
         <div className="brun-err rs-state">
-          <Notice tone="warn" title="이 실행을 찾지 못했어요">만료되었거나 잘못된 링크일 수 있어요. 편집기에서 다시 실행해 주세요.</Notice>
+          <Notice tone="warn" title="이 실행을 찾지 못했습니다">만료되었거나 잘못된 링크일 수 있습니다. 편집기에서 다시 실행하십시오.</Notice>
           <div className="rs-acts"><Link href="/backtest" className="tx-btn tx-btn--sub">편집기로 돌아가기</Link></div>
         </div>
       </div>
@@ -121,7 +121,7 @@ export function RunMonitor({ runId }: { runId: string }) {
   // 아직 첫 상태가 없음 — 로딩 중(또는 일시적 오류로 재시도 중, 폴링은 계속됨)
   if (!st) {
     return <div className="tx-page brun-shell rs"><div className="brun-loading">
-      {statusQ.isError ? "실행 상태를 불러오는 중이에요 — 연결이 불안정해 다시 묻고 있어요" : "실행 상태를 불러오는 중이에요"}
+      {statusQ.isError ? "실행 상태 조회 중 — 연결이 불안정해 다시 묻고 있습니다" : "실행 상태 조회 중"}
     </div></div>;
   }
 
@@ -136,19 +136,19 @@ export function RunMonitor({ runId }: { runId: string }) {
 
   const failed = st.status === "failed" || st.status === "cancelled";
   // 데이터 출처 — ★"실데이터" 라고 부르지 않는다★ mock 이면 연습용, 아니면 말하지 않는다(결과 화면 PerfLabel 이 말한다), 모르면 모른다.
-  const dataChip = st.is_mock_data === true ? { label: "연습용 데이터", tone: "practice" }
-    : st.is_mock_data == null ? { label: "데이터 출처를 아직 몰라요", tone: "unknown" } : null;
+  const dataChip = st.is_mock_data === true ? { label: "합성 데이터", tone: "practice" }
+    : st.is_mock_data == null ? { label: "데이터 출처 미상", tone: "unknown" } : null;
 
   const doCancel = async () => {
     setCancelling(true); setActErr(null);
     try { await backtestRunApi.cancel(runId); await statusQ.refetch(); }
-    catch (e) { setActErr({ what: "실행을 취소하지 못했어요", detail: (e as Error).message || "알 수 없는 오류" }); }
+    catch (e) { setActErr({ what: "실행 취소 실패", detail: (e as Error).message || "알 수 없는 오류" }); }
     setCancelling(false);
   };
   const doRetry = async () => {
     setActErr(null);
     try { const r = await backtestRunApi.retry(runId); router.replace(`/backtest/runs/${r.run_id}/loading`); }
-    catch (e) { setActErr({ what: "다시 실행하지 못했어요", detail: (e as Error).message || "알 수 없는 오류" }); }
+    catch (e) { setActErr({ what: "다시 실행하지 못했습니다", detail: (e as Error).message || "알 수 없는 오류" }); }
   };
   const stageName = STAGE_LABELS[st.status] ?? st.status;
 
@@ -158,7 +158,7 @@ export function RunMonitor({ runId }: { runId: string }) {
 
       {failed ? (
         <div className="brun-err-panel">
-          <div className="brun-err-title">{st.status === "cancelled" ? "실행이 취소되었어요" : "실행이 실패했어요"}</div>
+          <div className="brun-err-title">{st.status === "cancelled" ? "실행이 취소되었습니다" : "실행이 실패했습니다"}</div>
           {st.error_message && <div className="brun-err-msg">{st.error_message}</div>}
           {st.correlation_id && <div className="brun-err-cid">추적 번호 <span className="rs-id">{st.correlation_id}</span></div>}
           <div className="brun-err-actions rs-acts">
@@ -169,7 +169,7 @@ export function RunMonitor({ runId }: { runId: string }) {
       ) : (
         <>
           <section className="tx-answer rs-answer" aria-label="한 줄 답">
-            <p className="tx-answer-s">백테스트를 돌리는 중이에요 — {stageName}</p>
+            <p className="tx-answer-s">백테스트 실행 중 — {stageName}</p>
             <ul className="tx-chips" aria-label="이 실행의 근거">
               {dataChip && <li className="tx-chip" data-tone={dataChip.tone}>{dataChip.label}</li>}
               <li className="tx-chip" data-tone="plain">지난 시간 {elapsedStr}</li>
@@ -198,13 +198,13 @@ export function RunMonitor({ runId }: { runId: string }) {
               <div className="brun-msg">
                 {st.status_message}
                 {stalled && (
-                  <span className="brun-stalled">· 예상보다 오래 걸리고 있어요(여전히 실행 중이에요 — 취소하거나 기다릴 수 있어요)</span>
+                  <span className="brun-stalled">· 예상보다 오래 걸리고 있습니다(여전히 실행 중입니다 — 취소하거나 기다릴 수 있습니다)</span>
                 )}
                 {reconnecting && (
                   <>
                     <span className="brun-reconnect">
-                      · 상태를 불러오지 못하고 있어요 — 위 숫자는 마지막으로 받은 값이에요.
-                      서버에서는 계속 실행 중일 수 있어요.
+                      · 상태를 불러오지 못하고 있습니다 — 위 숫자는 마지막으로 받은 값입니다.
+                      서버에서는 계속 실행 중일 수 있습니다.
                       {storeCauseText && ` (${storeCauseText})`}
                     </span>
                     <button type="button" className="brun-recheck" onClick={recheck}>지금 다시 확인</button>
@@ -212,7 +212,7 @@ export function RunMonitor({ runId }: { runId: string }) {
                 )}
               </div>
             </div>
-            <p className="rs-why">끝나면 결과 화면으로 저절로 옮겨 가요. 이 창을 닫아도 실행은 계속돼요.</p>
+            <p className="rs-why">끝나면 결과 화면으로 저절로 옮겨 갑니다. 이 창을 닫아도 실행은 계속됩니다.</p>
           </section>
 
           <section className="brun-card rs-card">
@@ -225,19 +225,19 @@ export function RunMonitor({ runId }: { runId: string }) {
                   <li key={s} className={`brun-tl ${state}`}>
                     <span className="brun-tl-dot" />
                     <span className="brun-tl-lab">{STAGE_LABELS[s]}</span>
-                    {state === "done" && <span className="rs-tl-st">끝났어요</span>}
+                    {state === "done" && <span className="rs-tl-st">끝났습니다</span>}
                     {state === "active" && <span className="rs-tl-st">하는 중</span>}
                   </li>
                 );
               })}
             </ul>
             <div className="rs-acts">
-              <button type="button" className="brun-btn tx-btn tx-btn--sub" disabled={cancelling} onClick={doCancel}>{cancelling ? "취소하는 중이에요" : "실행 취소"}</button>
+              <button type="button" className="brun-btn tx-btn tx-btn--sub" disabled={cancelling} onClick={doCancel}>{cancelling ? "취소 중" : "실행 취소"}</button>
             </div>
             {actErr && (
               <Notice tone="danger" title={actErr.what}>
-                실행 상태는 그대로예요. 잠시 뒤 다시 눌러 주세요.
-                <details className="scr-err-detail"><summary>자세히</summary><code>{actErr.detail}</code></details>
+                실행 상태는 그대로입니다. 잠시 뒤 다시 누르십시오.
+                <details className="scr-err-detail"><summary>상세</summary><code>{actErr.detail}</code></details>
               </Notice>
             )}
           </section>
@@ -250,18 +250,18 @@ export function RunMonitor({ runId }: { runId: string }) {
                   {CONFIG_ROWS.filter(([k]) => cfg[k] != null && cfg[k] !== "").map(([k, label]) => (
                     <tr key={k}><td>{label}</td><td className="num">{fmtVal(cfg[k])}</td></tr>
                   ))}
-                  {Object.keys(cfg).length === 0 && <tr><td colSpan={2} className="brun-note">설정을 불러오는 중이에요</td></tr>}
+                  {Object.keys(cfg).length === 0 && <tr><td colSpan={2} className="brun-note">설정 조회 중</td></tr>}
                 </tbody>
               </table>
-              <p className="brun-note">가격·비용은 실행 전에 정한 추정이에요. 결과는 끝난 뒤 고정 주소에서 다시 볼 수 있어요.</p>
+              <p className="brun-note">가격·비용은 실행 전에 정한 추정입니다. 결과는 끝난 뒤 고정 주소에서 다시 볼 수 있습니다.</p>
             </details>
           </section>
         </>
       )}
       {failed && actErr && (
         <Notice tone="danger" title={actErr.what}>
-          잠시 뒤 다시 눌러 주세요.
-          <details className="scr-err-detail"><summary>자세히</summary><code>{actErr.detail}</code></details>
+          잠시 뒤 다시 누르십시오.
+          <details className="scr-err-detail"><summary>상세</summary><code>{actErr.detail}</code></details>
         </Notice>
       )}
     </div>

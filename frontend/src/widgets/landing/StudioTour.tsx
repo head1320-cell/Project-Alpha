@@ -15,23 +15,23 @@ import { useEffect, useRef, useState } from "react";
 type Box = { x: number; y: number; w: number; h: number };
 const STEPS: { t: string; d: string; box: Box }[] = [
   {
-    t: "필요한 부품을 골라요",
-    d: "종목 고르기부터 신호, 점검까지 왼쪽 목록에서 골라 캔버스에 놓아요. 절차 탭이 다음에 붙일 것을 알려 줘요.",
+    t: "필요한 부품을 고릅니다",
+    d: "종목 고르기부터 신호, 점검까지 왼쪽 목록에서 골라 캔버스에 놓습니다. 절차 탭이 다음에 붙일 것을 알려 줍니다.",
     box: { x: 5.31, y: 16.63, w: 16.25, h: 50 },
   },
   {
-    t: "선으로 이어 흐름을 만들어요",
-    d: "같은 색 점끼리 이으면 값이 흘러요. 선 모양은 근거를 말해요. 점선이면 연습용 값이, 끊긴 회색이면 흐르지 않은 값이에요.",
+    t: "선으로 이어 흐름을 만듭니다",
+    d: "같은 색 점끼리 이으면 값이 흐릅니다. 선 모양은 근거를 말합니다. 점선이면 합성 값이, 끊긴 회색이면 흐르지 않은 값입니다.",
     box: { x: 22.5, y: 43.5, w: 48.8, h: 33.5 },
   },
   {
-    t: "계산하면 관문을 확인해요",
-    d: "데이터 무결성부터 실계좌까지 관문마다 확인했는지, 건너뛰었는지 알려 줘요. 건너뛴 관문은 통과가 아니에요.",
+    t: "계산하면 관문을 확인합니다",
+    d: "데이터 무결성부터 실계좌까지 관문마다 확인했는지, 건너뛰었는지 알려 줍니다. 건너뛴 관문은 통과가 아닙니다.",
     box: { x: 37.21, y: 16.63, w: 19.34, h: 4.5 },
   },
   {
-    t: "결과를 이야기로 읽어요",
-    d: "숫자마다 어디서 왔고 무엇을 재지 않았는지 오른쪽 이야기가 풀어 줘요. 연습용 데이터면 그 사실부터 말해요.",
+    t: "결과를 이야기로 읽습니다",
+    d: "숫자마다 어디서 왔고 무엇을 재지 않았는지 오른쪽 이야기가 풀어 줍니다. 합성 데이터면 그 사실부터 말합니다.",
     box: { x: 72.19, y: 16.63, w: 26.88, h: 45 },
   },
 ];
@@ -89,17 +89,17 @@ export function StudioTour() {
                  style={{ transform: `translate(${v.tx}%, ${v.ty}%) scale(${v.z})` }}>
               <Image className="ld-shot-light" src="/landing/studio-light.webp" width={1920} height={1200} unoptimized
                      sizes="(max-width: 1080px) 100vw, 720px"
-                     alt="포트폴리오 설계 스튜디오 화면. 왼쪽에 노드 목록, 가운데에 종목 고르기에서 비중 계산까지 선으로 이은 노드들, 위에 관문 확인 알약, 오른쪽에 연습용 결과라는 안내와 설계 이야기가 있어요." />
+                     alt="포트폴리오 설계 스튜디오 화면. 왼쪽에 노드 목록, 가운데에 종목 고르기에서 비중 계산까지 선으로 이은 노드들, 위에 관문 확인 알약, 오른쪽에 합성 데이터 결과라는 안내와 설계 이야기가 있습니다." />
               <Image className="ld-shot-dark" src="/landing/studio-dark.webp" width={1920} height={1200} unoptimized
                      sizes="(max-width: 1080px) 100vw, 720px"
-                     alt="포트폴리오 설계 스튜디오 화면(어두운 테마). 노드 목록, 선으로 이은 노드들, 관문 알약, 설계 이야기가 있어요." />
+                     alt="포트폴리오 설계 스튜디오 화면(어두운 테마). 노드 목록, 선으로 이은 노드들, 관문 알약, 설계 이야기가 있습니다." />
               {STEPS.map((s, i) => (
                 <span key={s.t} className="ld-spot" data-spot={i + 1} data-on={active === i + 1 || undefined} aria-hidden
                       style={{ left: `${s.box.x}%`, top: `${s.box.y}%`, width: `${s.box.w}%`, height: `${s.box.h}%` }} />
               ))}
             </div>
           </div>
-          <figcaption className="ld-shot-cap">연습용 데이터로 계산한 실제 스튜디오 화면이에요(2026년 10월). 실제 성과가 아니에요.</figcaption>
+          <figcaption className="ld-shot-cap">합성 데이터로 계산한 실제 스튜디오 화면입니다(2026년 10월). 실제 성과가 아닙니다.</figcaption>
         </figure>
       </div>
     </div>

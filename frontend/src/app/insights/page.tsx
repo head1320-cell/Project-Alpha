@@ -111,10 +111,10 @@ function CompanyPage() {
         </div>
       </div>
 
-      {core.isLoading && <LoadingState label="가치평가·재무·팩터·같은 업종을 불러오는 중이에요" />}
+      {core.isLoading && <LoadingState label="가치평가·재무·팩터·동종업계 조회 중" />}
       {core.isError && !core.isLoading && (notFound
-        ? <Notice tone="warn" title={`종목 ${code}을(를) 찾지 못했어요`}>종목코드를 다시 확인하거나 위에서 이름으로 찾아보세요.</Notice>
-        : <RetryFail title="기업 분석을 불러오지 못했어요" onRetry={() => void core.refetch()} />)}
+        ? <Notice tone="warn" title={`종목 ${code}을(를) 찾지 못했습니다`}>종목코드를 다시 확인하거나 위에서 이름으로 찾아보십시오.</Notice>
+        : <RetryFail title="기업 분석 조회 실패" onRetry={() => void core.refetch()} />)}
       {data && !core.isLoading && <CompanyCockpit company={data} onPick={setCode} lazy={lazy} onRetry={() => void core.refetch()} />}
     </div>
   );

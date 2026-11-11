@@ -14,7 +14,7 @@ import { chartModule } from "@/shared/ui/lazyChart";
 export const loadCharts = chartModule(() => import("./charts"));
 
 export type Raw = Record<string, string>;
-export const EMPTY = "값을 넣어 주세요";
+export const EMPTY = "값을 입력하십시오";
 
 /** 문자열 → 숫자. 빈 칸·숫자가 아님 → null(0 으로 바꾸지 않는다). */
 export function parse(s: string): number | null {
@@ -63,8 +63,8 @@ export function useCalc<B, R>(fn: (body: B) => Promise<R>) {
 export function StaleNote({ onRerun }: { onRerun: () => void }) {
   return (
     <div className="dv-stale" role="status">
-      <Notice tone="warn" title="입력이 바뀌었어요. 아래 결과는 이전 입력으로 계산한 값이에요.">
-        <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRerun}>다시 계산하기</button></div>
+      <Notice tone="warn" title="입력이 바뀌었습니다. 아래 결과는 이전 입력으로 계산한 값입니다.">
+        <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRerun}>재계산</button></div>
       </Notice>
     </div>
   );
@@ -72,7 +72,7 @@ export function StaleNote({ onRerun }: { onRerun: () => void }) {
 
 export function CalcFail({ what, error, onRetry }: { what: string; error: unknown; onRetry: () => void }) {
   return (
-    <RetryFail title={`${what}을 계산하지 못했어요`} onRetry={onRetry}>
+    <RetryFail title={`${what} 산출 실패`} onRetry={onRetry}>
       <span data-server>{error instanceof Error ? error.message : String(error)}</span>
     </RetryFail>
   );

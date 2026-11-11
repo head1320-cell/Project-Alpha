@@ -3,7 +3,7 @@
 - `verify_facts` — 화면이 돌려보낸 설명을 지금 문서로 확인한다(`fact_seal`). 깨진 것은 버리지 않고 `dropped` 에 사유와 함께.
 - `ground` — 확인된 설명을 흐름 순서로(노드 이름·title·headline·facts·trust·unmeasured). 번호는 싣지 않는다(화면 칩이 말한다).
 - `check` — 문단 검사: 근거 노드 ≥1 이고 확인된 것 · ★그 문단의 근거 노드 숫자만★ · 금지 표현 · 길이 · 최대 5. 탈락은 사유와 함께.
-- 연습용 경고는 ★모델이 아니라 서버가★ 붙인다(`NOTICE` — 스펙 검사 ⑤).
+- 합성 경고는 ★모델이 아니라 서버가★ 붙인다(`NOTICE` — 스펙 검사 ⑤).
 
 한계(적어 둠): 숫자 검사는 아라비아 숫자만 본다("세 개"는 잡지 않는다) · 문장이 사실을 ★바르게 이었는지★(인과·비교)는 재지 않는다.
 """
@@ -17,9 +17,9 @@ from src.services.canvas_assist.ground import numbers_of
 
 MAX_PARAGRAPHS = 5
 MAX_CHARS = 600
-NOTICE = "연습용 결과예요. 실제 시세가 아니라 합성 데이터로 계산했어요. 투자 판단에 쓰기 전에 실데이터로 다시 계산해 주세요."
-_STALE = "서명이 맞지 않아요(그래프가 바뀌었거나 서버가 다시 시작했어요). 다시 계산하면 풀어 쓸 수 있어요"
-_MISSING = "그래프에 없는 노드예요"
+NOTICE = "합성 데이터 결과입니다. 실제 시세가 아니라 합성 데이터로 계산했습니다. 투자 판단에 쓰기 전에 실데이터로 재계산하십시오."
+_STALE = "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 풀어 쓸 수 있습니다"
+_MISSING = "그래프에 없는 노드입니다"
 
 
 def flow_order(graph: dict) -> list[str]:
@@ -88,23 +88,23 @@ def _problem(it: Any, by_id: dict[str, dict]) -> tuple[str, str] | None:
     if not isinstance(it, dict) or set(it) != {"text", "node_ids"} or not isinstance(it.get("text"), str) \
             or not it["text"].strip() or not isinstance(it.get("node_ids"), list) \
             or not all(isinstance(i, str) for i in it["node_ids"]):
-        return "shape", "문단의 형식이 맞지 않아요"
+        return "shape", "문단의 형식이 맞지 않습니다"
     text, ids = it["text"], it["node_ids"]
     if not ids:
-        return "no_source", "근거로 댄 노드가 없어요"
+        return "no_source", "근거로 댄 노드가 없습니다"
     if any(i not in by_id for i in ids):
-        return "unknown_node", "근거로 댄 노드가 확인된 계산 결과에 없어요"
+        return "unknown_node", "근거로 댄 노드가 확인된 계산 결과에 없습니다"
     word = next((w for w in BANNED if w in text), None)
     if word:
-        return "banned", f"쓰지 않는 표현 ‘{word}’이 들어 있어요"
+        return "banned", f"쓰지 않는 표현 ‘{word}’이 들어 있습니다"
     if len(text) > MAX_CHARS:
-        return "too_long", f"문단이 {MAX_CHARS}자를 넘어요"
+        return "too_long", f"문단이 {MAX_CHARS}자를 넘습니다"
     allowed: set[str] = set()
     for i in ids:
         allowed |= numbers_of({k: v for k, v in by_id[i].items() if k != "id"})
     extra = numbers_of(text) - allowed
     if extra:
-        return "numbers", f"근거 노드에 없는 숫자 {', '.join(sorted(extra))} 를 썼어요"
+        return "numbers", f"근거 노드에 없는 숫자 {', '.join(sorted(extra))} 를 썼습니다"
     return None
 
 
@@ -112,13 +112,13 @@ def check(raw: Any, grounding: dict) -> tuple[list[dict], list[dict]]:
     """`(통과 문단, 탈락)`. 통과 = `{text, node_ids}`(겹친 노드는 하나로), 탈락 = `{code, reason}`."""
     items = raw.get("paragraphs") if isinstance(raw, dict) else None
     if not isinstance(items, list):
-        return [], [_rej("shape", "답에 문단 목록이 없어요")]
+        return [], [_rej("shape", "답에 문단 목록이 없습니다")]
     by_id = {n["id"]: n for n in grounding["nodes"]}
     ok: list[dict] = []
     bad: list[dict] = []
     for it in items:
         if len(ok) >= MAX_PARAGRAPHS:
-            bad.append(_rej("limit", f"{MAX_PARAGRAPHS}문단을 넘어요"))
+            bad.append(_rej("limit", f"{MAX_PARAGRAPHS}문단을 넘습니다"))
             continue
         why = _problem(it, by_id)
         if why:

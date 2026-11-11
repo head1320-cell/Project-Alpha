@@ -173,7 +173,7 @@ def test_in_development_synthetic_history_is_kept(monkeypatch):
 
 
 def test_practice_follows_the_mock_gate_even_when_the_result_is_not_flagged(monkeypatch):
-    """결과에 `is_mock` 이 없어도 mock 이 허용된 환경이면 연습용이다(짝: 운영 환경이면 연습용이 아니다)."""
+    """결과에 `is_mock` 이 없어도 mock 이 허용된 환경이면 합성 데이터다(짝: 운영 환경이면 합성 데이터가 아니다)."""
     fake = {"available": True, "inputs": [], "eps": 1.0, "per": 1.0, "peg": None, "justified": {}, "peer": {},
             "matrix": {}, "is_mock": False}
     monkeypatch.setattr(cmr, "company_model_multiples", lambda code, req: fake)
@@ -249,7 +249,7 @@ def test_real_option_equals_the_route_and_labels_the_risk_free_rate_source():
 
 
 def test_default_rows_are_published_in_the_schema_so_the_settings_show_what_the_server_uses():
-    """`default_factory` 는 JSON 스키마에 기본값을 싣지 않는다 — 설정이 '아직 없어요' 라고 보이며 서버는 기본 행으로 계산하던 어긋남."""
+    """`default_factory` 는 JSON 스키마에 기본값을 싣지 않는다 — 설정이 '아직 없습니다' 라고 보이며 서버는 기본 행으로 계산하던 어긋남."""
     cat = {e["type"]: e for e in gn.REGISTRY.catalog()}
     sc = cat["company_scenarios"]["params_schema"]["properties"]["scenarios"]["default"]
     tr = cat["company_decision_tree"]["params_schema"]["properties"]["branches"]["default"]

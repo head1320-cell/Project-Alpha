@@ -16,9 +16,9 @@ import { insertCandidates, josa, type EdgeRecord, type EdgeRelation, type GraphE
 import { descendantsOf } from "./store";
 
 const LINEAGE_TEXT = {
-  practice: "연습용(합성) 값이 흘러요",
-  forward: "지금 시점 전용이에요 — 과거 검증에 쓸 수 없어요",
-  overlay: "오늘 판단한 노출 조절이 얹힌 비중이에요",
+  practice: "합성 값이 흐릅니다",
+  forward: "지금 시점 전용입니다 — 과거 검증에 쓸 수 없습니다",
+  overlay: "오늘 판단한 노출 조절이 얹힌 비중입니다",
 };
 const LEVEL_TEXT: Record<IssueLevel, string> = { lost: "빠짐", changed: "바뀜", structural: "구조", unused: "쓰지 않음" };
 
@@ -74,14 +74,14 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
             <table className="pg-wire-facts"><tbody>
               {record.facts.map((f) => <tr key={f.key} data-key={f.key}><th scope="row">{f.label}</th><td>{f.text}</td></tr>)}
             </tbody></table>
-          ) : <p className="pg-wire-muted">{record.facts_reason ?? "건너간 값을 재지 못했어요."}</p>}
+          ) : <p className="pg-wire-muted">{record.facts_reason ?? "건너간 값 측정 불가"}</p>}
         </div>
       )}
       {(record || recordGap) && (
         <div className="pg-wire-row" data-row="issues">
           <h3>빠지거나 바뀐 것</h3>
           {!record ? <p className="pg-wire-muted">{recordGap}</p>
-            : record.issues === null ? <p className="pg-wire-muted">{record.issues_reason ?? "이 선은 점검하지 않았어요."}</p>
+            : record.issues === null ? <p className="pg-wire-muted">{record.issues_reason ?? "이 선은 점검하지 않았습니다."}</p>
             : record.issues.length ? (
               <ul className="pg-wire-issues">
                 {record.issues.map((i) => (
@@ -91,13 +91,13 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
                   </li>
                 ))}
               </ul>
-            ) : <p>점검한 것: {record.checks.join(" · ")} — 잃거나 바뀐 것을 찾지 못했어요.</p>}
+            ) : <p>점검한 것: {record.checks.join(" · ")} — 잃거나 바뀐 것을 찾지 못했습니다.</p>}
         </div>
       )}
       <div className="pg-wire-row" data-row="what">
-        <h3>무엇이 흐르나요</h3>
+        <h3>전달 데이터</h3>
         <p><b className="pg-wire-type-name">{typeName}</b>{brief ? <> · <span className="pg-wire-brief-text">{brief}</span></>
-          : <span className="pg-wire-muted"> — {live ? "요약할 수 없는 값이에요" : "계산하면 무엇이 흘렀는지 보여 드려요"}</span>}</p>
+          : <span className="pg-wire-muted"> — {live ? "요약할 수 없는 값입니다" : "계산하면 무엇이 흘렀는지 보여 드립니다"}</span>}</p>
       </div>
       <div className="pg-wire-row" data-row="route">
         <h3>어디서 어디로</h3>
@@ -110,23 +110,23 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       </div>
       {inp?.role && (
         <div className="pg-wire-row" data-row="role">
-          <h3>무엇에 쓰이나요</h3>
+          <h3>용도</h3>
           <p>{inp.role}</p>
         </div>
       )}
       <div className="pg-wire-row" data-row="trust">
-        <h3>믿을 수 있나요</h3>
-        {!live ? <p className="pg-wire-muted">계산하면 이 값의 출처를 보여 드려요.</p>
-          : live.status !== "ok" ? <p className="pg-wire-muted">보내는 노드가 계산되지 않아 값이 흐르지 않았어요.</p>
+        <h3>신뢰도</h3>
+        {!live ? <p className="pg-wire-muted">계산하면 이 값의 출처를 보여 드립니다.</p>
+          : live.status !== "ok" ? <p className="pg-wire-muted">보내는 노드가 계산되지 않아 값이 흐르지 않았습니다.</p>
           : chips.length ? (
             <ul className="pg-wire-chips">{chips.map((k) => <li key={k} className={`pg-wire-chip pg-wire-chip--${k}`}>{LINEAGE_TEXT[k]}</li>)}</ul>
-          ) : <p>연습용 합성이 아니에요 — 데이터 등급은 ‘{src?.plain_label}’ 노드에서 확인해요.</p>}
+          ) : <p>합성이 아닙니다 — 데이터 등급은 ‘{src?.plain_label}’ 노드에서 확인합니다.</p>}
         {problem && <p className="pg-wire-warn" role="note">{problem.message}{problem.fix ? ` ${problem.fix}` : ""}</p>}
       </div>
       <div className="pg-wire-row" data-row="cut">
         <h3>끊으면</h3>
-        <p>{required ? `‘${dst?.plain_label}’부터 ${stops.length}개 노드가 계산되지 않아요.`
-          : `이 입력은 없어도 돼요 — ${josa(`‘${dst?.plain_label ?? ""}’`, ["은", "는"])} 이 값 없이 계산해요.`}</p>
+        <p>{required ? `‘${dst?.plain_label}’부터 ${stops.length}개 노드가 계산되지 않습니다.`
+          : `이 입력은 없어도 됩니다 — ${josa(`‘${dst?.plain_label ?? ""}’`, ["은", "는"])} 이 값 없이 계산합니다.`}</p>
         {stops.length > 1 && <p className="pg-wire-muted pg-wire-stops">{stops.map(label).join(", ")}</p>}
       </div>
       <div className="pg-wire-actions">
@@ -135,7 +135,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       {inserts.length > 0 && (
         <div className="pg-wire-row" data-row="insert">
           <h3>사이에 넣기</h3>
-          <p className="pg-wire-muted">{josa(typeName, ["을", "를"])} 받아 {josa(typeName, ["을", "를"])} 내는 노드만 보여요.</p>
+          <p className="pg-wire-muted">{josa(typeName, ["을", "를"])} 받아 {josa(typeName, ["을", "를"])} 내는 노드만 보입니다.</p>
           <ul className="pg-wire-inserts">
             {inserts.map((c) => (
               <li key={c.kind}>

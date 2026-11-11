@@ -2,7 +2,7 @@
 
 - 끝난 실행: `perf.drawdown_pct` = 저장된 비율 ×100(엔진은 비율로 저장하고 통계는 %) · `periods`·`drawdowns` = 같은 곡선의 `quant_metrics` 재계산.
 - 낙폭 곡선이 없는 결과: `drawdown_pct: None`(0 배열이 아니다).
-- 끝나지 않은 실행 / result 없음: `perf: None` — 화면이 "주지 않았어요" 라고 말한다.
+- 끝나지 않은 실행 / result 없음: `perf: None` — 화면이 "주지 않았습니다" 라고 말한다.
 - 기존 키는 그대로(짝 — `test_perf_label_wiring` 과 같은 규율).
 """
 from __future__ import annotations

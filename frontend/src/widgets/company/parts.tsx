@@ -57,7 +57,7 @@ export function ScoreRing({ score, size = 84 }: { score: number; size?: number }
 //    기업 분석 화면 뿌리(app/insights)가 붙자마자 `loadCharts()` 로 미리 받아 둔다. 이름·prop 은 그대로라 소비자는 바뀌지 않는다.
 export const loadCharts = chartModule(() => import("./charts"));
 export const PriceChart = lazyChart(loadCharts, (m) => m.PriceChart, { height: (p) => (p.height ?? 200) + 76, label: "1년 주가" });
-export const PriceValueChart = lazyChart(loadCharts, (m) => m.PriceValueChart, { height: (p) => (p.height ?? 260) + 56 + 76, label: "주가와 가치 범위" });
+export const PriceValueChart = lazyChart(loadCharts, (m) => m.PriceValueChart, { height: (p) => (p.height ?? 260) + 56 + 76, label: "주가와 밸류에이션 밴드" });
 export const KpiBars = lazyChart(loadCharts, (m) => m.KpiBars, { height: (p) => (p.height ?? 130) + 48, label: "기간별 막대" });
 
 export type ValueBandIn = { id: string; label: string; lo: number; hi: number };
@@ -116,7 +116,7 @@ export function FactorBar({ fac, showPct = true }: { fac: FactorVal; showPct?: b
       <span className="ca-fbar-lbl" data-server>{fac.label}</span>
       <span className="ca-fbar-val">{factorValue(fac)}</span>
       <span className="ca-fbar-track">{fac.pct != null && <span className="ca-fbar-fill" style={{ width: `${fac.pct}%`, background: pctFill(fac.pct) }} />}</span>
-      {showPct && <span className="ca-fbar-pct">{fac.pct ?? "몰라요"}</span>}
+      {showPct && <span className="ca-fbar-pct">{fac.pct ?? "N/A"}</span>}
     </div>
   );
 }
@@ -126,7 +126,7 @@ export function Radar({ groups: all, size = 240 }: { groups: FactorGroup[]; size
   const known = all.map((g) => ({ g, k: g.factors.map((f) => f.pct).filter((p): p is number => p != null) })).filter((x) => x.k.length);
   const groups = known.map((x) => x.g);
   const n = groups.length, cx = size / 2, cy = size / 2, R = size / 2 - 34;
-  if (n < 3) return <p className="ci-note">백분위를 아는 묶음이 셋보다 적어 레이더를 그리지 않았어요.</p>;
+  if (n < 3) return <p className="ci-note">백분위를 아는 묶음이 셋보다 적어 레이더를 그리지 않았습니다.</p>;
   const avg = known.map((x) => x.k.reduce((s, v) => s + v, 0) / x.k.length);
   const pt = (i: number, r: number) => {
     const a = -Math.PI / 2 + (i / n) * Math.PI * 2;

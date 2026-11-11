@@ -185,15 +185,15 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object
 /** 블록 파일 읽기 — ★다른 포맷·다른 버전은 거부★(사유), 노드 타입은 검사하지 않는다(모르는 노드는 캔버스가 빨갛게 남긴다). */
 export function parseBlock(text: string): { block: GraphBlock | null; problem: string | null } {
   let raw: unknown;
-  try { raw = JSON.parse(text); } catch { return { block: null, problem: "JSON 이 아니에요." }; }
+  try { raw = JSON.parse(text); } catch { return { block: null, problem: "JSON 이 아닙니다." }; }
   if (!isObj(raw) || raw.format !== BLOCK_FORMAT) {
-    return { block: null, problem: `블록 파일이 아니에요(format 이 "${BLOCK_FORMAT}" 이어야 해요).` };
+    return { block: null, problem: `블록 파일이 아닙니다(format 이 "${BLOCK_FORMAT}" 이어야 합니다).` };
   }
-  if (raw.version !== BLOCK_VERSION) return { block: null, problem: `모르는 블록 버전 ${String(raw.version)} 이에요(지원: ${BLOCK_VERSION}).` };
-  if (!Array.isArray(raw.nodes) || !raw.nodes.length || !Array.isArray(raw.edges)) return { block: null, problem: "노드가 없는 블록이에요." };
+  if (raw.version !== BLOCK_VERSION) return { block: null, problem: `모르는 블록 버전 ${String(raw.version)} 입니다(지원: ${BLOCK_VERSION}).` };
+  if (!Array.isArray(raw.nodes) || !raw.nodes.length || !Array.isArray(raw.edges)) return { block: null, problem: "노드가 없는 블록입니다." };
   const nodes: GraphDocNode[] = [];
   for (const n of raw.nodes) {
-    if (!isObj(n) || typeof n.id !== "string" || typeof n.type !== "string") return { block: null, problem: "id·type 이 없는 노드가 있어요." };
+    if (!isObj(n) || typeof n.id !== "string" || typeof n.type !== "string") return { block: null, problem: "id·type 이 없는 노드가 있습니다." };
     const p = isObj(n.position) ? n.position : {};
     nodes.push({ id: n.id, type: n.type, params: isObj(n.params) ? n.params : {},
                  position: { x: Number(p.x) || 0, y: Number(p.y) || 0 } });

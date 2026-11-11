@@ -177,7 +177,7 @@ def transition(plan_id: str, to_status: str, actor: str = "user",
     if to_status == "approved":
         pt = p.get("pretrade") or {}
         if not pt.get("can_approve", False):
-            return {"ok": False, "reason": "pre-trade가 block 상태 — 승인 불가 (지시서 §4). block 항목을 해소하세요."}
+            return {"ok": False, "reason": "pre-trade가 block 상태 — 승인 불가 (지시서 §4). block 항목을 해소하십시오."}
     try:
         engine = _engine()
         from sqlalchemy import text

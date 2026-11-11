@@ -30,7 +30,7 @@ export function useGuide(doc: GraphDoc, state: GuideState, dismissed: ReadonlySe
   const live = useRef({ key, doc, state, applicable, session, ai });
   live.current = { key, doc, state, applicable, session, ai };
   useEffect(() => {
-    if ((ai.state === "ready" || ai.state === "loading") && ai.key !== key) setAi({ state: "idle", note: "캔버스가 바뀌어 AI 길잡이를 지웠어요" });
+    if ((ai.state === "ready" || ai.state === "loading") && ai.key !== key) setAi({ state: "idle", note: "캔버스가 바뀌어 AI 길잡이를 지웠습니다" });
   }, [key, ai]);
 
   const ask = useCallback(async () => {
@@ -39,12 +39,12 @@ export function useGuide(doc: GraphDoc, state: GuideState, dismissed: ReadonlySe
     const asked = now.key;
     setAi({ state: "loading", key: asked });
     const res = await portfolioGraphApi.assistGuide(now.doc, now.state, now.applicable);
-    if (live.current.key !== asked) { setAi({ state: "idle", note: "캔버스가 바뀌어 AI 길잡이를 지웠어요" }); return; }
-    if (!res.available) { setAi({ state: "idle", note: `AI 길잡이를 보여 줄 수 없어요: ${res.reason}` }); return; }
+    if (live.current.key !== asked) { setAi({ state: "idle", note: "캔버스가 바뀌어 AI 길잡이를 지웠습니다" }); return; }
+    if (!res.available) { setAi({ state: "idle", note: `AI 길잡이를 보여 줄 수 없습니다: ${res.reason}` }); return; }
     const tips = res.tips.filter((t) => live.current.applicable.includes(t.feature as GuideId));
-    const why = res.rejected.length ? `${res.rejected.length}개는 검사에서 빠졌어요: ${res.rejected[0].reason}` : null;
+    const why = res.rejected.length ? `${res.rejected.length}개는 검사에서 빠졌습니다: ${res.rejected[0].reason}` : null;
     setAi(tips.length ? { state: "ready", key: asked, tips, at: 0, note: why }
-                      : { state: "idle", note: why ? `AI 가 고른 도구가 없어요 · ${why}` : "AI 가 고른 도구가 없어요" });
+                      : { state: "idle", note: why ? `AI 가 고른 도구가 없습니다 · ${why}` : "AI 가 고른 도구 없음" });
   }, []);
 
   const shown = ai.state === "ready" ? ai.tips.filter((t) => !dismissed.has(t.feature)) : [];

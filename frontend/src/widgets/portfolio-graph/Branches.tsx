@@ -58,24 +58,24 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
         <b className="pg-branch-name">{data.label}</b>
         <span className="pg-branch-of">‘{data.rootName}’에서 갈라짐</span>
         <button type="button" className="pg-branch-promote nodrag" disabled={data.diffs.length === 0}
-                title="이 갈래의 바꾼 설정을 원본에 옮기고 갈래를 지워요 (되돌리기 가능)"
+                title="이 갈래의 바꾼 설정을 원본에 옮기고 갈래를 지웁니다 (되돌리기 가능)"
                 onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.promoteBranch(data.branchId)); }}>
           <ArrowUpToLine size={13} aria-hidden="true" /><span className="pg-branch-btn-t">이 갈래를 원본으로</span>
         </button>
         {!data.boxed && (
-          <button type="button" className="pg-branch-strategy nodrag" title="이 갈래를 전략 상자로 묶어요 — 비중을 내는 노드가 있어야 해요 (되돌리기 가능)"
+          <button type="button" className="pg-branch-strategy nodrag" title="이 갈래를 전략 상자로 묶습니다 — 비중을 내는 노드가 있어야 합니다 (되돌리기 가능)"
                   onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.branchStrategy(data.branchId)); }}>
             <Boxes size={13} aria-hidden="true" /><span className="pg-branch-btn-t">전략으로 묶기</span>
           </button>
         )}
-        <button type="button" className="pg-group-x pg-branch-x nodrag" aria-label={`${data.label} 지우기`}
-                title="갈래와 복제한 노드를 지워요" onClick={() => remove(data.branchId)}>
+        <button type="button" className="pg-group-x pg-branch-x nodrag" aria-label={`${data.label} 삭제`}
+                title="갈래와 복제한 노드를 지웁니다" onClick={() => remove(data.branchId)}>
           <Trash2 size={14} aria-hidden="true" />
         </button>
       </div>
       <div className="pg-branch-diffs">
         {data.diffs.length === 0
-          ? <span className="pg-branch-same">아직 원본과 같아요 — 설정을 바꿔 보세요</span>
+          ? <span className="pg-branch-same">아직 원본과 같습니다 — 설정을 바꿔 보십시오</span>
           : data.diffs.slice(0, 3).map((d) => <span key={d} className="pg-branch-chip">{d}</span>)}
         {data.diffs.length > 3 && <span className="pg-branch-chip">외 {data.diffs.length - 3}개</span>}
       </div>
@@ -98,7 +98,7 @@ function headlineText(r: NodeRunResult | undefined, previous: boolean): string {
 /** 오른쪽 패널 "갈래" 탭 — 원본 뿌리마다 표 하나. */
 /** 확률 한 칸 — 모르면 "—" 와 그 사유(마우스를 올리면). 0 으로 채우지 않는다. */
 function probCell(v: number | null | undefined, why: string | null | undefined): { text: string; title?: string } {
-  return typeof v === "number" && Number.isFinite(v) ? { text: `${Math.round(v * 100)}%` } : { text: "—", title: why ?? "잴 수 없어요" };
+  return typeof v === "number" && Number.isFinite(v) ? { text: `${Math.round(v * 100)}%` } : { text: "—", title: why ?? "측정할 수 없습니다" };
 }
 
 /**
@@ -125,7 +125,7 @@ function DsrRows({ name, labels, curves }: { name: string; labels: string[]; cur
     return (
       <tr className="pg-branch-row--dsr" data-row={`dsr:${name}`}>
         <th scope="row">보정 · {name}</th>
-        <td colSpan={colspan - 1} className="pg-branch-dsr-why">{missing.join(", ")}의 과거 성과가 아직 없어요 — 모두 계산해야 보정할 수 있어요.</td>
+        <td colSpan={colspan - 1} className="pg-branch-dsr-why">{missing.join(", ")}의 과거 성과가 아직 없습니다 — 모두 계산해야 보정할 수 있습니다.</td>
       </tr>
     );
   }
@@ -163,7 +163,7 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
   results: Record<string, NodeRunResult> | null; staleIds: ReadonlySet<string>;
 }) {
   const roots = [...new Set(branches.map((b) => b.of_root))];
-  if (!roots.length) return <p className="pg-empty">노드를 골라 ‘갈래 만들기’를 누르면 여기서 원본과 나란히 봐요.</p>;
+  if (!roots.length) return <p className="pg-empty">노드를 골라 ‘갈래 만들기’를 누르면 여기서 원본과 나란히 봅니다.</p>;
   return (
     <div className="pg-branch-compare">
       {roots.map((root) => {
@@ -204,25 +204,25 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
           const c = r?.status === "ok" && !r.previous ? (r.view as { equity_curve?: unknown } | undefined)?.equity_curve : null;
           return Array.isArray(c) && c.every((x) => typeof x === "number") ? (c as number[]) : null;
         };
-        const evNote = btests.length ? "지금 남아 있는 갈래만 셌어요 — 그 전에 바꿔 보고 지운 설정까지 치면 실제로 비교한 수는 더 많을 수 있어요." : null;
+        const evNote = btests.length ? "지금 남아 있는 갈래만 셌습니다 — 그 전에 바꿔 보고 지운 설정까지 치면 실제로 비교한 수는 더 많을 수 있습니다." : null;
         return (
           <section key={root} className="pg-branch-table-wrap" data-root={root}>
             <h4 className="pg-h4">‘{rootEntry?.plain_label ?? root}’ 갈래 {bs.length}개</h4>
             <p className="pg-branch-honest" role="note">
-              갈래 {bs.length}개를 같은 과거로 비교했어요 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커져요.
-              표본 밖에서 확인하기 전에는 결론 내리지 마세요.
+              갈래 {bs.length}개를 같은 과거로 비교했습니다 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커집니다.
+              표본 밖에서 확인하기 전에는 결론 내리지 마십시오.
             </p>
             {btests.length > 0 && (
               <p className="pg-branch-n" data-n={bs.length + 1}>
-                원본과 갈래 {bs.length}개, 모두 {bs.length + 1}번 비교했어요 — 아래 ‘운을 감안한 확률’은 이 수로 보정한 값이에요.
+                원본과 갈래 {bs.length}개, 모두 {bs.length + 1}번 비교했습니다 — 아래 ‘운을 감안한 확률’은 이 수로 보정한 값입니다.
                 {evNote && <> {evNote}</>}
               </p>
             )}
             {btests.length === 0 && (
-              <p className="pg-help pg-branch-dsr-none">과거 성과 노드가 갈래에 들어 있어야 여러 번 비교한 운을 감안해 보정할 수 있어요.</p>
+              <p className="pg-help pg-branch-dsr-none">과거 성과 노드가 갈래에 들어 있어야 여러 번 비교한 운을 감안해 보정할 수 있습니다.</p>
             )}
             {rows.length === 0 && btests.length === 0 ? (
-              <p className="pg-help">아직 원본과 다른 값이 없어요 — 갈래의 설정을 바꾸고 계산해 보세요.</p>
+              <p className="pg-help">아직 원본과 다른 값이 없습니다 — 갈래의 설정을 바꾸고 계산하십시오.</p>
             ) : (
               <table className="pg-table pg-branch-table">
                 <thead><tr><th scope="col">다른 값만</th><th scope="col">원본</th>{bs.map((b) => <th key={b.id} scope="col">{b.label}</th>)}</tr></thead>
@@ -241,7 +241,7 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
                 </tbody>
               </table>
             )}
-            {stale && <p className="pg-help">설정이 바뀐 칸은 비워 두었어요 — 다시 계산해 주세요.</p>}
+            {stale && <p className="pg-help">설정이 바뀐 칸은 비워 두었습니다 — 재계산하십시오.</p>}
           </section>
         );
       })}

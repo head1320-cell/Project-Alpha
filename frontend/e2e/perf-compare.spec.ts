@@ -86,7 +86,7 @@ test("(b) 같은 날짜면 정렬 글 0 · B 끝 2점을 빼면 합집합 5 + �
   await expect(fig3.locator(".pf-read-date")).toHaveText("5일째");
 });
 
-test("(c) 해마다 차이 행 = 해 합집합 · 한쪽만 있는 해는 '주지 않았어요' · 차이는 '비교할 수 없어요'", async ({ page }) => {
+test("(c) 연도별 차이 행 = 해 합집합 · 한쪽만 있는 해는 '미제공' · 차이는 '비교 불가'", async ({ page }) => {
   await openCompare(page);
   const tbl = card(page).locator(".pf-year-diff");
   await expect(tbl.locator("tbody tr")).toHaveCount(1);
@@ -95,19 +95,19 @@ test("(c) 해마다 차이 행 = 해 합집합 · 한쪽만 있는 해는 '주�
   await openCompare(page, (b) => { (b.perf as { periods: { yearly: { year: number }[] } }).periods.yearly[0].year = 2024; });
   const tbl2 = card(page).locator(".pf-year-diff");
   await expect(tbl2.locator("tbody tr")).toHaveCount(2);
-  await expect(tbl2.locator("tbody tr").first()).toContainText("주지 않았어요");
-  await expect(tbl2.locator("tbody tr").first()).toContainText("비교할 수 없어요");
+  await expect(tbl2.locator("tbody tr").first()).toContainText("미제공");
+  await expect(tbl2.locator("tbody tr").first()).toContainText("비교 불가");
 });
 
-test("(d) 지표 표의 차이는 서버 rows — 총수익률 +12.6%p · B 값을 지우면 '비교할 수 없어요'(0 아님)", async ({ page }) => {
+test("(d) 지표 표의 차이는 서버 rows — 총수익률 +12.6%p · B 값을 지우면 '비교 불가'(0 아님)", async ({ page }) => {
   await openCompare(page);
   const delta = (label: string) => page.locator(".brun-cmp tr", { hasText: label }).first().locator("td").nth(3);
   await expect(delta("총수익률")).toHaveText("+12.6%p");
   await expect(delta("최대낙폭")).toHaveText("-3.8%p");
   await page.unrouteAll();
   await openCompare(page, (b) => { delete bt(b).statistics.sharpe_ratio; });
-  await expect(delta("샤프 지수")).toHaveText("비교할 수 없어요");
-  await expect(page.locator(".tx-answer")).toContainText("샤프 지수는 비교할 수 없어요 — B 에 값이 없어요");
+  await expect(delta("샤프 지수")).toHaveText("비교 불가");
+  await expect(page.locator(".tx-answer")).toContainText("샤프 지수는 비교할 수 없습니다 — B 에 값이 없습니다");
 });
 
 test("(e) recharts 0 · 새 부품에 title= 0", async ({ page }) => {

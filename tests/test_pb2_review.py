@@ -46,9 +46,9 @@ def _lines(out, state=None):
 def test_same_holdings_are_confirmed(market):
     out = _orders(HOLD, HOLD)
     assert out["view"]["holdings_vs_universe"]["state"] == "same"
-    same = [t for t in _lines(out, "confirmed") if "유니버스 노드의 ‘지금 비중’과 같아요" in t]
+    same = [t for t in _lines(out, "confirmed") if "유니버스 노드의 ‘지금 비중’과 같습니다" in t]
     assert len(same) == 1
-    assert not any("달라요" in t for t in _lines(out))                       # 짝 — 같은데 다르다고 하지 않는다
+    assert not any("다릅니다" in t for t in _lines(out))                       # 짝 — 같은데 다르다고 하지 않는다
 
 
 def test_differing_holdings_name_each_code_with_both_values(market):
@@ -56,11 +56,11 @@ def test_differing_holdings_name_each_code_with_both_values(market):
     cmp_ = out["view"]["holdings_vs_universe"]
     assert cmp_["state"] == "differs"
     assert [d["code"] for d in cmp_["differs"]] == ["000660", "005930"]      # 다른 종목만 — 035420 은 같다
-    lines = [t for t in _lines(out, "assumed") if "달라요" in t]
+    lines = [t for t in _lines(out, "assumed") if "다릅니다" in t]
     assert len(lines) == 1
     assert "005930" in lines[0] and "40" in lines[0] and "50" in lines[0] and "000660" in lines[0]
     assert "035420" not in lines[0]
-    assert not any("같아요" in t for t in _lines(out))                       # 짝 — 다른데 같다고 하지 않는다
+    assert not any("같습니다" in t for t in _lines(out))                       # 짝 — 다른데 같다고 하지 않는다
 
 
 def test_code_missing_on_one_side_counts_as_zero_there(market):

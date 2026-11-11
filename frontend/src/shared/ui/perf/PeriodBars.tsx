@@ -7,12 +7,12 @@ import { fmtSignedPct, type PerfView } from "./perfView";
 
 export function PeriodBars({ view }: { view: PerfView }) {
   const rows = view.periods?.yearly ?? null;
-  if (!rows) return <p className="pg-note pf-years-none">해마다 수익은 이 결과에 없어요 — 서버가 기간별 수익을 주지 않았어요.</p>;
-  if (!rows.length) return <p className="pg-note pf-years-none">해마다 수익을 셀 만큼 긴 곡선이 아니에요.</p>;
+  if (!rows) return <p className="pg-note pf-years-none">연도별 수익률은 이 결과에 없습니다 — 서버가 기간별 수익을 주지 않았습니다.</p>;
+  if (!rows.length) return <p className="pg-note pf-years-none">연도별 수익률을 셀 만큼 긴 곡선이 아닙니다.</p>;
   const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.return_pct)));
   return (
     <div className="pf-years">
-      <h4 className="pg-h4">해마다</h4>
+      <h4 className="pg-h4">연도별 수익률</h4>
       <ul className="pf-year-list">
         {rows.map((r) => {
           const w = Math.min(50, (Math.abs(r.return_pct) / max) * 50);
@@ -28,7 +28,7 @@ export function PeriodBars({ view }: { view: PerfView }) {
           );
         })}
       </ul>
-      {rows.some((r) => r.partial) && <p className="pg-note">‘일부’는 1월부터 12월까지 다 채우지 않은 해예요 — 그 기간 수익 그대로이고 연환산하지 않았어요.</p>}
+      {rows.some((r) => r.partial) && <p className="pg-note">‘일부’는 1월부터 12월까지 다 채우지 않은 해입니다 — 그 기간 수익 그대로이고 연환산하지 않았습니다.</p>}
     </div>
   );
 }

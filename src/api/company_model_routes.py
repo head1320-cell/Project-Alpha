@@ -124,7 +124,7 @@ def load_inputs(code: str, price: float, *, history_years: int = 5, history: boo
     client = DARTClient()
     loaded = ValuationEngine(client).load_statement(code, price, market_cap=_mcap(code))
     if not loaded["available"]:
-        return {"available": False, "reason": loaded["reason"] or "재무제표를 가져오지 못했어요"}
+        return {"available": False, "reason": loaded["reason"] or "재무제표를 가져오지 못했습니다"}
     hist: list = []
     dropped = 0
     corp = get_corp_code(code) if history else None
@@ -151,8 +151,8 @@ def _wrap(code: str, data: dict, out: dict) -> dict:
     extra: dict[str, Any] = {"code": str(code), "corp_name": data["corp_name"], "is_mock": data["is_mock"],
                              "history_years": len(data["history"]), "dropped_mock_years": data["dropped_mock"]}
     if data["dropped_mock"]:
-        extra["history_note"] = (f"DART 를 못 읽어 합성으로 채워진 {data['dropped_mock']}개 연도를 버렸어요 — "
-                                 "이 환경은 합성 재무를 쓰지 않아요.")
+        extra["history_note"] = (f"DART 를 못 읽어 합성으로 채워진 {data['dropped_mock']}개 연도를 버렸습니다 — "
+                                 "이 환경은 합성 재무를 쓰지 않습니다.")
     return {**out, **extra}
 
 
@@ -301,7 +301,7 @@ def company_model_sotp(code: str, req: SotpRequest):
         name = get_stock_name(s.code)
         mc = _mcap(s.code) if name else None
         subs.append({"code": s.code, "name": name, "stake_pct": s.stake_pct, "market_cap": mc,
-                     "reason": None if name else "모르는 종목코드예요"})
+                     "reason": None if name else "모르는 종목코드입니다"})
     tl = fs.total_liabilities
     net_debt = req.net_debt_eok if req.net_debt_eok is not None else ((tl or 0.0) / 1e8)
     out = pm.sotp([x.model_dump() for x in req.segments], subs, net_debt=net_debt,

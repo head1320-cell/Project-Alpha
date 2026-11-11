@@ -20,7 +20,7 @@
     source_registry.EVIDENCE_GRADES   확신도 E2 = 메타 API 응답에서 관측
 
 그리고 빈 필드의 주석은 ★확신도 쪽★을 가리키고 있었다. CLAUDE.md 가
-`capability.py` 의 `L0~L3` 에 대해 *"방향이 정반대니 절대 섞지 마세요"* 라고
+`capability.py` 의 `L0~L3` 에 대해 *"방향이 정반대니 절대 섞지 마십시오"* 라고
 적어 둔 바로 그 위험이다. 신호에는 **출처 척도**를 쓰고, 상수 이름을 달리해
 (`PROV_*`) 섞이지 않게 한다. ★`source_registry` 는 임포트하지 않는다★ —
 AST 테스트가 지킨다.

@@ -30,7 +30,7 @@ function Head({ v }: { v: Dict }) {
 }
 
 /** 출처 문구 → 칩 톤. 합성·기본값은 '모름' 톤 — 실측처럼 보이지 않게. */
-const srcTone = (s: string) => (/연습용|mock|기본값|확인 안 됨/.test(s) ? "unknown" : /표준|근사|도출/.test(s) ? "assumed" : "confirmed");
+const srcTone = (s: string) => (/합성|mock|기본값|확인 안 됨/.test(s) ? "unknown" : /표준|근사|도출/.test(s) ? "assumed" : "confirmed");
 
 // ── 가치평가 샌드박스 ───────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ type Band = { id: string; label: string; available?: boolean; lo?: number | null
 function FootballField({ bands, price }: { bands: Band[]; price: number | null }) {
   const ok = bands.filter((b) => b.available && num(b.lo) !== null && num(b.hi) !== null);
   const xs = [...ok.flatMap((b) => [b.lo as number, b.hi as number]), ...(price !== null ? [price] : [])];
-  if (!xs.length) return <p className="pg-note">범위를 낸 방법이 없어요.</p>;
+  if (!xs.length) return <p className="pg-note">범위를 낸 방법 없음</p>;
   const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.06 || hi * 0.05 || 1;
   const x0 = lo - pad, span = hi + pad - x0;
   const at = (x: number) => `${((x - x0) / span) * 100}%`;
@@ -132,7 +132,7 @@ export function ReverseDcfResult({ v }: { v: Dict }) {
       <GrowthBars implied={num(r.implied_growth_pct)} current={num(r.current_growth_pct)} />
       <KV rows={[["할인율(WACC)", fx(r.wacc_pct, 2, "%")], ["기본 가정의 DCF 값", won(r.base_dcf_price)],
                  ["마지막 해 현금흐름 마진", fx(((r.implied_fcf_margin_pct as Dict) ?? {}).value_pct, 1, "%")]]} />
-      {r.current_growth_reason ? <p className="pg-warn">지금까지의 성장률을 재지 못했어요 — {String(r.current_growth_reason)}</p> : null}
+      {r.current_growth_reason ? <p className="pg-warn">지금까지의 성장률 측정 불가 — {String(r.current_growth_reason)}</p> : null}
       <p className="pg-note">{String(r.note ?? "").replace(/\*\*/g, "")}</p>
     </>
   );
@@ -181,7 +181,7 @@ export function ValuationDistributionResult({ v }: { v: Dict }) {
       <KV rows={[["현재가의 백분위", num(u.price_percentile) === null ? "—" : `${fx(u.price_percentile, 1)}번째`],
                  ["모델끼리 갈린 정도", `${fx(((r.model_disagreement as Dict) ?? {}).spread_ratio, 2)}배`],
                  ["쓴 표본", `${String(r.n_used ?? "—")} / ${String(r.n_requested ?? "—")}`]]} />
-      {assumed && <p className="pg-note"><span className="pg-tag pg-tag--assumed">가정</span> 가정마다 흔드는 폭은 잰 값이 아니라 정한 값이에요.</p>}
+      {assumed && <p className="pg-note"><span className="pg-tag pg-tag--assumed">가정</span> 가정마다 흔드는 폭은 잰 값이 아니라 정한 값입니다.</p>}
     </>
   );
 }
@@ -252,7 +252,7 @@ export function MacroSensitivityResult({ v }: { v: Dict }) {
         ))}</tbody>
       </table>
       {num(((r.asymmetry as Dict) ?? {}).ratio) !== null && (
-        <p className="pg-note">오를 때와 내릴 때 크기가 {fx(((r.asymmetry as Dict) ?? {}).ratio, 2)}배 달라요 — 한 방향만 재면 이 사실이 사라져요.</p>
+        <p className="pg-note">오를 때와 내릴 때 크기가 {fx(((r.asymmetry as Dict) ?? {}).ratio, 2)}배 다릅니다 — 한 방향만 재면 이 사실이 사라집니다.</p>
       )}
       {((r.unavailable as Dict[]) ?? []).map((x, i) => (
         <p key={i} className="pg-warn">{String(x.shock)} → {String(x.target)}: {String(x.reason ?? "").replace(/\*\*/g, "")}</p>
@@ -308,7 +308,7 @@ export function ThesisCheckResult({ v }: { v: Dict }) {
       {((r.overdue_catalysts as string[]) ?? []).length > 0 && (
         <p className="pg-warn">기한이 지난 촉매: {((r.overdue_catalysts as string[]) ?? []).join(", ")}</p>
       )}
-      <p className="pg-note">저장하지 않아요 — 논지를 다듬는 동안 기록이 쌓이지 않게요.</p>
+      <p className="pg-note">저장하지 않습니다. 논지를 다듬는 동안 기록이 쌓이지 않도록 하기 위함입니다.</p>
     </>
   );
 }

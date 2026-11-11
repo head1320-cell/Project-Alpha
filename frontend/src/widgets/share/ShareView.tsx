@@ -11,8 +11,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ClientSheet, SheetAsk, askShared, openShare, readShared, type Sheet } from "@/entities/pb-client";
 
 const KEY = "pa.share.t";
-const CLOSED = "담당 PB 에게 물어 주세요 — 다시 열리면 같은 주소와 PIN 으로 볼 수 있어요.";
-const EXPIRED = "시간이 지나 다시 PIN 을 넣어 주세요.";
+const CLOSED = "담당 PB 에게 문의하십시오 — 다시 열리면 같은 주소와 PIN 으로 볼 수 있습니다.";
+const EXPIRED = "시간이 지나 다시 PIN 을 입력하십시오.";
 
 type Phase =
   | { kind: "boot" }
@@ -33,9 +33,9 @@ function readToken(): string | null {
 
 /** 멈출 실패면 멈춤 화면, 아니면(401) null. */
 function stopFor(status: number, error: string): Phase | null {
-  if (status === 403) return { kind: "stop", title: "지금은 열 수 없어요", why: CLOSED };
-  if (status === 410) return { kind: "stop", title: "끝난 주소예요", why: error };
-  if (status === 423) return { kind: "stop", title: "잠긴 주소예요", why: error };
+  if (status === 403) return { kind: "stop", title: "지금은 열 수 없습니다", why: CLOSED };
+  if (status === 410) return { kind: "stop", title: "끝난 주소입니다", why: error };
+  if (status === 423) return { kind: "stop", title: "잠긴 주소입니다", why: error };
   return null;
 }
 
@@ -62,7 +62,7 @@ export function ShareView() {
       setBusy(false);
       const stop = stopFor(s.status, s.error);
       if (stop) setPhase(stop);
-      else setErr(s.status === 401 ? s.error : "지금은 열지 못했어요 — 잠시 뒤에 다시 해 주세요.");
+      else setErr(s.status === 401 ? s.error : "지금은 열지 못했습니다 — 잠시 뒤에 다시 하십시오.");
       return;
     }
     const got = await readShared(s.value.session);
@@ -95,17 +95,17 @@ export function ShareView() {
         )}
       </header>
       <main className="sv-main">
-        {phase.kind === "boot" && <p className="sv-sub" aria-busy="true">주소를 읽는 중이에요.</p>}
+        {phase.kind === "boot" && <p className="sv-sub" aria-busy="true">주소 조회 중</p>}
         {phase.kind === "no_token" && (
           <section className="sv-card sv-missing">
-            <h1 className="sv-h1">주소가 완전하지 않아요</h1>
-            <p className="sv-sub">담당 PB 가 보낸 주소를 그대로 열어 주세요 — 주소 끝까지 함께 있어야 열려요.</p>
+            <h1 className="sv-h1">주소가 완전하지 않습니다</h1>
+            <p className="sv-sub">담당 PB 가 보낸 주소를 그대로 여십시오 — 주소 끝까지 함께 있어야 열립니다.</p>
           </section>
         )}
         {phase.kind === "pin" && (
           <section className="sv-card sv-pin-card">
-            <h1 className="sv-h1">PIN 을 넣어 주세요</h1>
-            <p className="sv-sub">담당 PB 에게 따로 받은 숫자 6자리예요.</p>
+            <h1 className="sv-h1">PIN 을 입력하십시오</h1>
+            <p className="sv-sub">담당 PB 에게 따로 받은 숫자 6자리입니다.</p>
             <form className="sv-pin-form" onSubmit={(e) => void open(e)}>
               <input className="sv-pin" value={pin} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
                      aria-label="PIN 6자리" placeholder="숫자 6자리"
@@ -126,13 +126,13 @@ export function ShareView() {
         )}
         {phase.kind === "open" && (
           <>
-            {phase.until && <p className="sv-until">이 주소는 {phase.until.slice(0, 10)}까지 열려요.</p>}
+            {phase.until && <p className="sv-until">이 주소는 {phase.until.slice(0, 10)}까지 열립니다.</p>}
             <ClientSheet sheet={phase.sheet} audience="client" />
-            <SheetAsk title="이 한 장에 묻기" sub="한 장에 적힌 내용으로만 답해요. 투자 판단은 담당 PB와 상담해 주세요." ask={ask} />
+            <SheetAsk title="이 한 장에 묻기" sub="한 장에 적힌 내용으로만 답합니다. 투자 판단은 담당 PB와 상담하십시오." ask={ask} />
           </>
         )}
       </main>
-      <footer className="sv-foot">이 화면은 담당 PB 가 보낸 주소와 PIN 으로만 열려요. 주소와 PIN 을 다른 사람과 나누지 마세요.</footer>
+      <footer className="sv-foot">이 화면은 담당 PB 가 보낸 주소와 PIN 으로만 열립니다. 주소와 PIN 을 다른 사람과 나누지 마십시오.</footer>
     </div>
   );
 }

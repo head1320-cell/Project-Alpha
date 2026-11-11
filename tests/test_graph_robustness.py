@@ -81,9 +81,9 @@ def test_without_dated_prices_there_are_no_dates_and_it_says_why_pair(market, mo
 
 def test_market_missing_is_labelled_pair(market, monkeypatch):
     from src.api import robustness_inputs as ri
-    monkeypatch.setattr(ri, "market_on_dates", lambda t, dates: (None, "시장 대용 시세가 없어요(테스트)"))
+    monkeypatch.setattr(ri, "market_on_dates", lambda t, dates: (None, "시장 대용 시세가 없습니다(테스트)"))
     c = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]["crisis"]
-    assert c["basis"] == "strategy_mean" and "부풀" in c["note"] and c["market_reason"] == "시장 대용 시세가 없어요(테스트)"
+    assert c["basis"] == "strategy_mean" and "부풀" in c["note"] and c["market_reason"] == "시장 대용 시세가 없습니다(테스트)"
     monkeypatch.setattr(ri, "market_on_dates",
                         lambda t, dates: (np.random.default_rng(1).normal(0, .01, len(dates)), None))
     c2 = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]["crisis"]
@@ -128,7 +128,7 @@ def test_story_mentions_effective_count_and_shock(market):
     text = " ".join(rob["story"])
     assert f"약 {rob['effective_n']['value']:.1f}개" in text
     ex = _run(_graph(3))["nodes"]["p"]["explain"]
-    assert any("처럼 움직였어요" in f for f in ex["facts"])
+    assert any("처럼 움직였습니다" in f for f in ex["facts"])
 
 
 # ══ R1b · 견고성 비교 노드(`sleeve_analytics` 올림) ═══════════════════════════════
@@ -168,7 +168,7 @@ def test_compare_node_carries_robustness_and_the_old_table(market):
     assert v["requested_days"] == 252 and v["ports"] == ["a", "b", "c"]
     assert r["glance"]["kind"] == "bars" and len(r["glance"]["points"]) == 3
     ex = r["explain"]
-    assert any(t["state"] == "assumed" and "실제 운용 기록이 아니에요" in t["text"] for t in ex["trust"])
+    assert any(t["state"] == "assumed" and "실제 운용 기록이 아닙니다" in t["text"] for t in ex["trust"])
     assert "앞으로도 같을지" in " ".join(ex["unmeasured"])
     json.dumps(r, allow_nan=False)
 

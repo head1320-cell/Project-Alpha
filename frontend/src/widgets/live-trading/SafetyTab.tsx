@@ -29,14 +29,14 @@ export const SOURCE_KO: Record<string, string> = {
   manual: "관리자가 손으로", manual_admin: "관리자가 손으로",
   auto_dd: "누적 손실 자동 정지", auto_cb: "하루 손실 자동 정지", auto_risk: "시장 위험 자동 정지", auto_api: "증권사 연결 실패 자동 정지",
 };
-export const ACTION_STATE_KO: Record<string, string> = { done: "했어요", skipped: "하지 않았어요", failed: "실패했어요", unknown: "몰라요" };
+export const ACTION_STATE_KO: Record<string, string> = { done: "했습니다", skipped: "하지 않았습니다", failed: "실패했습니다", unknown: "미상" };
 const MODE_KO: Record<string, string> = { SHADOW: "기록만", PAPER: "모의 체결", LIVE: "실계좌" };
 const SEV_ORDER = ["CRITICAL", "ERROR", "WARN", "INFO"] as const;
 const SEV_KO: Record<string, string> = { CRITICAL: "심각", ERROR: "오류", WARN: "주의", INFO: "알림" };
 
 /** 서버 열거값 번역 — 모르는 값은 원문(지어내지 않는다). */
 const ko = (map: Record<string, string>, v: string | null | undefined) =>
-  v == null ? <span>몰라요</span> : map[v] ? <span>{map[v]}</span> : <span data-server>{v}</span>;
+  v == null ? <span>N/A</span> : map[v] ? <span>{map[v]}</span> : <span data-server>{v}</span>;
 
 export function SafetyTab({ isAdmin, signedIn, gate, onChanged }: {
   isAdmin: boolean; signedIn: boolean; gate: UseQueryResult<GateState>; onChanged: () => void;
@@ -52,7 +52,7 @@ export function SafetyTab({ isAdmin, signedIn, gate, onChanged }: {
           <AuditSec />
         </>
       ) : (
-        <p className="tx-sec-sub lvs-login">로그인하면 비상 정지 이력과 감사 기록을 볼 수 있어요.</p>
+        <p className="tx-sec-sub lvs-login">로그인하면 비상 정지 이력과 감사 기록을 볼 수 있습니다.</p>
       )}
     </div>
   );
@@ -70,17 +70,17 @@ function Sec({ id, title, sub, children }: { id: string; title: string; sub: str
   );
 }
 
-const Loading = ({ what }: { what: string }) => <p className="tx-sec-sub" aria-busy="true">{what}을 불러오는 중이에요.</p>;
+const Loading = ({ what }: { what: string }) => <p className="tx-sec-sub" aria-busy="true">{what} 조회 중</p>;
 
 // ── 비상 정지 이력 ──────────────────────────────────────────────────────────
 
 function KillHistory() {
   const r = useQuery({ queryKey: ["live", "safety", "kill-events"], queryFn: q(readKillEvents), ...opts });
   return (
-    <Sec id="kill-events" title="비상 정지 이력" sub="운영 계좌에 걸었던 비상 정지와, 그때 서버가 실제로 한 조치예요. 최근 20건까지 보여요.">
-      {r.isError ? <RetryFail title="비상 정지 이력을 불러오지 못했어요" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
+    <Sec id="kill-events" title="비상 정지 이력" sub="운영 계좌에 걸었던 비상 정지와, 그때 서버가 실제로 한 조치입니다. 최근 20건까지 보입니다.">
+      {r.isError ? <RetryFail title="비상 정지 이력 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !r.data ? <Loading what="비상 정지 이력" />
-        : !r.data.events.length ? <p className="tx-sec-sub lvs-empty">운영 계좌에 비상 정지를 건 적이 없어요.</p>
+        : !r.data.events.length ? <p className="tx-sec-sub lvs-empty">운영 계좌에 비상 정지를 건 적 없음</p>
         : <ol className="lvs-kills">{r.data.events.map((e) => <KillRow key={e.event_id} e={e} />)}</ol>}
     </Sec>
   );
@@ -94,12 +94,12 @@ function KillRow({ e }: { e: KillEvent }) {
       <span className="lvs-kill-dot" aria-hidden />
       <div className="lvs-kill-b">
         <p className="lvs-kill-t">
-          {krDateTime(e.triggered_at) ?? "언제인지 몰라요"} · {ko(SOURCE_KO, e.trigger_source)}
-          {open ? <> · <strong>지금 걸려 있어요</strong></>
-            : <> · {krDateTime(e.resolved_at) ?? "언제인지 모르는 때"}에 {e.resolved_by ?? "누군가"} 님이 풀었어요</>}
+          {krDateTime(e.triggered_at) ?? "시각 미상"} · {ko(SOURCE_KO, e.trigger_source)}
+          {open ? <> · <strong>지금 걸려 있습니다</strong></>
+            : <> · {krDateTime(e.resolved_at) ?? "언제인지 모르는 때"}에 {e.resolved_by ?? "누군가"} 님이 풀었습니다</>}
         </p>
-        <p className="lvs-kill-why">사유 <span data-server>{e.trigger_reason ?? "적혀 있지 않아요"}</span>
-          {" · "}취소한 미체결 {e.n_orders_cancelled == null ? "몰라요" : `${num(e.n_orders_cancelled)}건`}</p>
+        <p className="lvs-kill-why">사유 <span data-server>{e.trigger_reason ?? "적혀 있지 않습니다"}</span>
+          {" · "}취소한 미체결 {e.n_orders_cancelled == null ? "N/A" : `${num(e.n_orders_cancelled)}건`}</p>
         {recs.length ? (
           <ul className="lvs-acts" aria-label="이 정지가 한 조치">
             {recs.map((a) => (
@@ -110,7 +110,7 @@ function KillRow({ e }: { e: KillEvent }) {
               </li>
             ))}
           </ul>
-        ) : <p className="tx-sec-sub">이 정지가 한 조치를 서버가 기록하지 않았어요.</p>}
+        ) : <p className="tx-sec-sub">이 정지가 한 조치를 서버가 기록하지 않았습니다.</p>}
       </div>
     </li>
   );
@@ -127,19 +127,19 @@ function ReadinessSec() {
   const codes = useQuery({ queryKey: ["live", "safety", "kis-codes"], queryFn: q(readKisCodes), ...opts });
   const d = r.data;
   return (
-    <Sec id="readiness" title="자동 비상 정지 준비 상태" sub="서버가 스스로 비상 정지를 걸 수 있는 조건 넷이에요. 잴 재료가 없는 조건은 한도를 넘어도 걸리지 않아요.">
-      {r.isError ? <RetryFail title="자동 비상 정지 준비 상태를 불러오지 못했어요" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
+    <Sec id="readiness" title="자동 비상 정지 준비 상태" sub="서버가 스스로 비상 정지를 걸 수 있는 조건 넷입니다. 잴 재료가 없는 조건은 한도를 넘어도 걸리지 않습니다.">
+      {r.isError ? <RetryFail title="자동 비상 정지 준비 상태 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !d ? <Loading what="준비 상태" />
         : (
           <>
             <p className="lvs-ready-ans">
-              조건 {num(d.armed.length + d.inoperable.length)}개 중 <strong>{num(d.armed.length)}개</strong>가 지금 걸 수 있어요.
+              조건 {num(d.armed.length + d.inoperable.length)}개 중 <strong>{num(d.armed.length)}개</strong>가 지금 걸 수 있습니다.
             </p>
             {d.account_state_reason ? <p className="lv-err" data-server>{d.account_state_reason}</p> : null}
             <ul className="lvs-ready">
               {[...d.armed.map((t) => ({ ...t, ok: true })), ...d.inoperable.map((t) => ({ ...t, ok: false }))].map((t) => (
                 <li key={t.trigger} className="lvs-ready-row" data-ok={t.ok ? "true" : "false"} data-trigger={t.trigger}>
-                  <span className="lvs-ready-mark">{t.ok ? "걸 수 있어요" : "걸 수 없어요"}</span>
+                  <span className="lvs-ready-mark">{t.ok ? "걸 수 있습니다" : "걸 수 없습니다"}</span>
                   <span className="lvs-ready-n">{TRIGGER_KO[t.trigger] ? TRIGGER_KO[t.trigger] : <span data-server>{t.trigger}</span>}</span>
                   {t.reason ? <span className="lvs-ready-why" data-server>{t.reason}</span> : null}
                 </li>
@@ -150,7 +150,7 @@ function ReadinessSec() {
         )}
       <div className="lvs-codes" data-part="kis-codes">
         <p className="lvs-codes-h">증권사 응답 코드 뜻 표</p>
-        {codes.isError ? <RetryFail title="증권사 응답 코드 표를 불러오지 못했어요" onRetry={() => void codes.refetch()}>{codes.error.message}</RetryFail>
+        {codes.isError ? <RetryFail title="증권사 응답 코드 표 조회 실패" onRetry={() => void codes.refetch()}>{codes.error.message}</RetryFail>
           : !codes.data ? <Loading what="응답 코드 표" />
           : (
             <>
@@ -173,10 +173,10 @@ function ReadinessSec() {
 function PnlSec() {
   const r = useQuery({ queryKey: ["live", "safety", "daily-pnl"], queryFn: q(readDailyPnl), ...opts });
   return (
-    <Sec id="daily-pnl" title="일 손익" sub="운영 계좌의 하루 끝 평가 자산과 수익률이에요. 날마다 그날의 실행 모드가 함께 적혀요.">
-      {r.isError ? <RetryFail title="일 손익을 불러오지 못했어요" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
+    <Sec id="daily-pnl" title="일 손익" sub="운영 계좌의 하루 끝 평가 자산과 수익률입니다. 날마다 그날의 실행 모드가 함께 적힙니다.">
+      {r.isError ? <RetryFail title="일 손익 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !r.data ? <Loading what="일 손익" />
-        : !r.data.pnl_history.length ? <p className="tx-sec-sub lvs-empty">기록된 날이 아직 없어요.</p>
+        : !r.data.pnl_history.length ? <p className="tx-sec-sub lvs-empty">기록된 날이 아직 없습니다.</p>
         : (
           <div className="lvs-tbl-wrap">
             <table className="lvs-tbl">
@@ -196,9 +196,9 @@ function PnlTr({ p }: { p: PnlRow }) {
     <tr>
       <td>{p.trade_date}</td>
       <td>{ko(MODE_KO, p.execution_mode)}</td>
-      <td className="num">{p.ending_equity_krw == null ? "몰라요" : priceWon(p.ending_equity_krw)}</td>
-      <td className="num"><span className="tx-delta" data-dir={dir}>{ret == null ? "몰라요" : `${ret > 0 ? "+" : ret < 0 ? "−" : ""}${Math.abs(ret).toFixed(2)}%`}</span></td>
-      <td className="num">{p.n_orders == null ? "몰라요" : `${num(p.n_orders)}건`}</td>
+      <td className="num">{p.ending_equity_krw == null ? "N/A" : priceWon(p.ending_equity_krw)}</td>
+      <td className="num"><span className="tx-delta" data-dir={dir}>{ret == null ? "N/A" : `${ret > 0 ? "+" : ret < 0 ? "−" : ""}${Math.abs(ret).toFixed(2)}%`}</span></td>
+      <td className="num">{p.n_orders == null ? "N/A" : `${num(p.n_orders)}건`}</td>
     </tr>
   );
 }
@@ -210,33 +210,33 @@ function AuditSec() {
   const sum = useQuery({ queryKey: ["live", "safety", "audit-summary"], queryFn: q(readAuditSummary), ...opts });
   const s = sum.data;
   return (
-    <Sec id="audit" title="최근 감사 기록" sub="운영 계좌에서 서버가 남긴 기록이에요. 누가 무엇을 했는지 지우지 않고 쌓아요.">
-      {sum.isError ? <RetryFail title="오늘 요약을 불러오지 못했어요" onRetry={() => void sum.refetch()}>{sum.error.message}</RetryFail>
+    <Sec id="audit" title="최근 감사 기록" sub="운영 계좌에서 서버가 남긴 기록입니다. 누가 무엇을 했는지 지우지 않고 쌓습니다.">
+      {sum.isError ? <RetryFail title="오늘 요약 조회 실패" onRetry={() => void sum.refetch()}>{sum.error.message}</RetryFail>
         : !s ? <Loading what="오늘 요약" />
         : s.error ? (
-          <RetryFail title="오늘 요약을 서버가 읽지 못했어요" onRetry={() => void sum.refetch()}><span data-server>{s.error}</span></RetryFail>
+          <RetryFail title="오늘 요약을 서버가 읽지 못했습니다" onRetry={() => void sum.refetch()}><span data-server>{s.error}</span></RetryFail>
         ) : (
           <p className="lvs-audit-sum">
             {s.date} 기록 {num(s.total_events ?? 0)}건
             {SEV_ORDER.map((k) => <span key={k} className="lvs-sev" data-sev={k} data-any={(s.by_severity?.[k] ?? 0) > 0 ? "true" : "false"}> · {SEV_KO[k]} {num(s.by_severity?.[k] ?? 0)}</span>)}
           </p>
         )}
-      {list.isError ? <RetryFail title="감사 기록을 불러오지 못했어요" onRetry={() => void list.refetch()}>{list.error.message}</RetryFail>
+      {list.isError ? <RetryFail title="감사 기록 조회 실패" onRetry={() => void list.refetch()}>{list.error.message}</RetryFail>
         : !list.data ? <Loading what="감사 기록" />
         : !list.data.events.length ? (
           // 서버가 읽지 못하면 500 + 사유로 답한다(R1) — 그래서 여기 0건은 진짜 0건이다.
-          <p className="tx-sec-sub lvs-empty">운영 계좌에 남은 감사 기록이 없어요.</p>
+          <p className="tx-sec-sub lvs-empty">운영 계좌에 남은 감사 기록 없음</p>
         ) : (
           <ol className="lvs-audit">
             {list.data.events.map((a) => (
               <li key={a.audit_id} className="lvs-audit-row" data-sev={a.severity ?? "unknown"}>
-                <span className="lvs-audit-time">{krDateTime(a.timestamp) ?? "언제인지 몰라요"}</span>
+                <span className="lvs-audit-time">{krDateTime(a.timestamp) ?? "시각 미상"}</span>
                 <span className="lvs-audit-sev">{ko(SEV_KO, a.severity)}</span>
                 <span className="lvs-audit-what">
                   <span data-mono>{a.event_type}</span>{a.ticker ? <> · <span data-mono>{a.ticker}</span></> : null}
                   {a.message ? <> · <span data-server>{a.message}</span></> : null}
                 </span>
-                <span className="lvs-audit-who">{a.actor ?? "누군지 몰라요"}</span>
+                <span className="lvs-audit-who">{a.actor ?? "주체 미상"}</span>
               </li>
             ))}
           </ol>

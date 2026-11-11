@@ -50,7 +50,7 @@ export function YieldCurveChart({ points }: { points: YieldCurvePoint[]; inversi
   const anim = useChartAnimation();
   const data = useMemo(() => points.map((p) => ({ label: p.label, y: p.yield_pct })), [points]);
   // 읽는 줄 — 만기마다 수익률(소수 둘째 자리 — 캔버스의 수익률곡선과 같은 서식). 처음 자리 = 가장 긴 만기. 값은 호버가 아니라 늘 보이는 줄·표에 있다(ADR 004 §2.4).
-  const rows: ReadRow[] = data.map((d) => ({ head: d.label, cells: [{ key: "y", label: "수익률", text: Number.isFinite(d.y) ? `${d.y.toFixed(2)}%` : "없어요" }] }));
+  const rows: ReadRow[] = data.map((d) => ({ head: d.label, cells: [{ key: "y", label: "수익률", text: Number.isFinite(d.y) ? `${d.y.toFixed(2)}%` : "없습니다" }] }));
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
   const cur = idx >= 0 ? data[idx] : null;
   return (

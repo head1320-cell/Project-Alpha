@@ -70,12 +70,12 @@ def _sleeve_return_series(sleeves: list[dict], ret_matrix: dict[str, list[float]
     every_of = dict(rebalance_every or {})
     bad = {k: v for k, v in every_of.items() if not isinstance(v, int) or isinstance(v, bool) or v < 1}
     if bad:
-        raise ValueError(f"리밸런싱 주기는 1 이상의 거래일 수여야 해요: {bad}")
+        raise ValueError(f"리밸런싱 주기는 1 이상의 거래일 수여야 합니다: {bad}")
     cost_of = dict(cost_bps or {})
     bad_cost = {k: v for k, v in cost_of.items()
                 if not isinstance(v, (int, float)) or isinstance(v, bool) or not np.isfinite(v) or not 0 <= v <= COST_BPS_MAX}
     if bad_cost:
-        raise ValueError(f"거래비용은 0~{COST_BPS_MAX:g}bp 의 숫자여야 해요: {bad_cost}")
+        raise ValueError(f"거래비용은 0~{COST_BPS_MAX:g}bp 의 숫자여야 합니다: {bad_cost}")
     codes = sorted({c for s in sleeves for c in s.get("weights", {})})
     codes = [c for c in codes if c in ret_matrix and len(ret_matrix[c]) >= 2]
     if not codes:
@@ -173,17 +173,17 @@ def _fb(method: str, reason: str) -> dict[str, Any]:
 def _crisis_rows(market_returns: list[float] | None, T: int) -> np.ndarray:
     """시장 대용의 가장 나빴던 `CRISIS_Q` 날 — 흐름과 **끝을 맞춘다**(합치기가 종목을 줄 세우는 방식과 같다)."""
     if market_returns is None:
-        raise _MethodFailure("위기 때 위험 균형에는 시장 대용 흐름이 필요해요 — 시장을 정할 수 없어 계산하지 않았어요.")
+        raise _MethodFailure("위기 때 위험 균형에는 시장 대용 흐름이 필요합니다 — 시장을 정할 수 없어 계산하지 않았습니다.")
     m = np.asarray(market_returns, dtype=float)
     if m.size < T:
-        raise _MethodFailure(f"시장 대용 흐름({m.size}일)이 전략 흐름({T}일)보다 짧아 위기일을 맞출 수 없어요.")
+        raise _MethodFailure(f"시장 대용 흐름({m.size}일)이 전략 흐름({T}일)보다 짧아 위기일을 맞출 수 없습니다.")
     m = m[-T:]
     if not np.all(np.isfinite(m)) or float(np.var(m)) <= 0:
-        raise _MethodFailure("시장 대용 흐름에 빈 값이 있거나 흔들림이 없어 위기일을 고를 수 없어요.")
+        raise _MethodFailure("시장 대용 흐름에 빈 값이 있거나 흔들림이 없어 위기일을 고를 수 없습니다.")
     crisis = m <= np.quantile(m, CRISIS_Q)
     if int(crisis.sum()) < CRISIS_MIN_DAYS:
-        raise _MethodFailure(f"위기일이 {int(crisis.sum())}일뿐이라(최소 {CRISIS_MIN_DAYS}일) 위기 때 공분산을 믿을 수 없어요 — "
-                             "기간을 늘려 주세요.")
+        raise _MethodFailure(f"위기일이 {int(crisis.sum())}일뿐이라(최소 {CRISIS_MIN_DAYS}일) 위기 때 공분산을 믿을 수 없습니다 — "
+                             "기간을 늘려 주십시오.")
     return crisis
 
 
@@ -203,7 +203,7 @@ def _max_diversification(cov: np.ndarray, vols: np.ndarray) -> np.ndarray:
     from src.engine.risk_allocations import _opt
     w = _opt(lambda w: -float(w @ vols) / float(np.sqrt(max(w @ cov @ w, 1e-18))), len(vols))
     if w is None:
-        raise _MethodFailure("분산 효과 최대 계산이 풀리지 않았어요 — 다른 방법을 골라 주세요.")
+        raise _MethodFailure("분산 효과 최대 계산이 풀리지 않았습니다 — 다른 방법을 선택하십시오.")
     w = np.clip(np.asarray(w, dtype=float), 0.0, None)
     return w / w.sum()
 
@@ -226,7 +226,7 @@ def _allocate(method: str, S: np.ndarray, cov: np.ndarray, vols: np.ndarray, nam
             alloc = sc_ / sc_.sum()
         else:
             alloc = np.ones(n) / n
-            fallback = _fb(method, "점수가 모두 0 이라 똑같이 나눴어요.")
+            fallback = _fb(method, "점수가 모두 0 이라 똑같이 나눴습니다.")
     elif method == "min_var":
         alloc = None
         try:
@@ -237,14 +237,14 @@ def _allocate(method: str, S: np.ndarray, cov: np.ndarray, vols: np.ndarray, nam
         if alloc is None:
             # 예전에는 `_opt` 가 None 을 내면(풀리지 않음) 다음 줄에서 터졌고, 예외일 때만 조용히 역변동성으로 갔다.
             alloc = _inverse_vol(vols)
-            fallback = _fb(method, "흔들림 최소 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했어요.")
+            fallback = _fb(method, "흔들림 최소 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했습니다.")
     elif method == "hrp":
         try:
             from src.engine.risk_allocations import _hrp_weights
             alloc = _hrp_weights(cov)
         except Exception:
             alloc = _inverse_vol(vols)
-            fallback = _fb(method, "계층 위험 균형 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했어요.")
+            fallback = _fb(method, "계층 위험 균형 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했습니다.")
     elif method == "risk_budget" and risk_budget:
         b = np.array([max(risk_budget.get(nm, 1.0), 1e-6) for nm in names])
         alloc = _risk_budget_weights(cov, b)
@@ -260,21 +260,21 @@ def _allocate(method: str, S: np.ndarray, cov: np.ndarray, vols: np.ndarray, nam
         alloc = _risk_budget_weights(cov, np.ones(n))
         if method != "risk_parity":
             why = {"score": "점수를 주지 않아", "risk_budget": "위험 예산을 주지 않아"}.get(method, f"모르는 방식({method})이라")
-            fallback = _fb(method, f"{why} 위험 똑같이로 계산했어요.")
+            fallback = _fb(method, f"{why} 위험 똑같이로 계산했습니다.")
     return alloc, fallback, crisis
 
 
 def _manual_shares(shares: dict[str, float] | None, names: list[str]) -> np.ndarray:
     if not shares:
-        raise _MethodFailure("몫 직접 정하기에는 전략마다 몫(%)이 필요해요.")
+        raise _MethodFailure("몫 직접 정하기에는 전략마다 몫(%)이 필요합니다.")
     missing = [nm for nm in names if nm not in shares]
     if missing:
-        raise _MethodFailure(f"몫을 정하지 않은 전략이 있어요: {', '.join(missing)}")
+        raise _MethodFailure(f"몫을 정하지 않은 전략이 있습니다: {', '.join(missing)}")
     v = np.array([float(shares[nm]) for nm in names])
     if not np.all(np.isfinite(v)) or (v < 0).any():
-        raise _MethodFailure("몫에 음수나 빈 값이 있어요 — 0 이상으로 정해 주세요.")
+        raise _MethodFailure("몫에 음수나 빈 값이 있습니다 — 0 이상으로 정하십시오.")
     if abs(float(v.sum()) - 100.0) > MANUAL_SUM_TOL:
-        raise _MethodFailure(f"몫의 합이 {float(v.sum()):g}% 예요 — 100% 가 되게 맞춰 주세요.")
+        raise _MethodFailure(f"몫의 합이 {float(v.sum()):g}% 입니다 — 100% 가 되게 맞춰 주십시오.")
     return v / 100.0
 
 
@@ -359,7 +359,7 @@ def compare_sleeve_methods(sleeves: list[dict], ret_matrix: dict[str, list[float
         ret_matrix = _load_ret_matrix(sleeves)
     names, S = _sleeve_return_series(sleeves, ret_matrix, rebalance_every, rebalance_cost_bps)
     if S.size == 0 or S.shape[1] < 2:
-        return {"available": False, "rows": [], "reason": "전략 둘 이상의 흐름이 있어야 방법을 비교할 수 있어요."}
+        return {"available": False, "rows": [], "reason": "전략 둘 이상의 흐름이 있어야 방법을 비교할 수 있습니다."}
     cov = _cov_local(S)
     vols = np.sqrt(np.clip(np.diag(cov), 1e-12, None))
     rows = []
@@ -377,8 +377,8 @@ def compare_sleeve_methods(sleeves: list[dict], ret_matrix: dict[str, list[float
                      "effective_n": round(1.0 / float(np.sum(w ** 2)), 3),
                      "fallback": fb})
     return {"available": True, "rows": rows, "n_days": int(S.shape[0]),
-            "note": "같은 과거 흐름 위에서 방법마다 몫을 나란히 본 거예요 — 어느 방법이 낫다는 뜻이 아니에요. "
-                    "분산 효과는 몫을 정한 공분산 기준이에요."}
+            "note": "같은 과거 흐름 위에서 방법마다 몫을 나란히 본 것입니다 — 어느 방법이 낫다는 뜻이 아닙니다. "
+                    "분산 효과는 몫을 정한 공분산 기준입니다."}
 
 
 def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | None = None,
@@ -440,7 +440,7 @@ def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | N
                 "슬리브는 분산효과가 작아 함께 무너지기 쉬움 — 중복 알파 점검.",
     }
     if flat:
-        out["correlation_reasons"] = {names[j]: "흔들림이 없어 상관을 잴 수 없어요(비중이 비었거나 숏만 있어 흐름이 0 이에요)"
+        out["correlation_reasons"] = {names[j]: "흔들림이 없어 상관을 측정할 수 없습니다(비중이 비었거나 숏만 있어 흐름이 0 입니다)"
                                       for j in flat}
     return out
 

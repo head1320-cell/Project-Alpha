@@ -255,7 +255,7 @@ def test_every_w3_node_speaks_politely_without_overclaiming(market, states, snap
         for nid in ("g", "t", "x"):
             r = rep["nodes"][nid]
             assert r["status"] == "ok", (nid, r["reason"])
-            assert r["explain"]["title"].endswith("요"), (nid, r["explain"]["title"])
+            assert r["explain"]["title"].endswith("다"), (nid, r["explain"]["title"])
             assert not [t for t in _texts(r["explain"]) for w in FORBIDDEN if w in t], nid
 
 
@@ -274,9 +274,9 @@ def test_the_overlay_node_never_imports_policy_tables_it_could_change():
 
 
 @pytest.mark.parametrize("sts,title", [
-    ([S.RISK_OFF, S.RISK_OFF, S.RISK_ON], "타이밍 신호는 ‘위험-오프’예요"),
-    ([S.RISK_ON, S.RISK_ON, S.RISK_ON], "타이밍 신호는 ‘위험-온’이에요"),
-    ([S.UNAVAILABLE] * 3, "신호를 하나도 읽지 못해 규칙상 ‘위험-오프’로 셌어요"),
+    ([S.RISK_OFF, S.RISK_OFF, S.RISK_ON], "타이밍 신호는 ‘위험-오프’입니다"),
+    ([S.RISK_ON, S.RISK_ON, S.RISK_ON], "타이밍 신호는 ‘위험-온’입니다"),
+    ([S.UNAVAILABLE] * 3, "신호를 하나도 읽지 못해 규칙상 ‘위험-오프’로 셌습니다"),
 ])
 def test_the_timing_title_is_grammatical_and_does_not_hide_unreadable_signals(states, sts, title):
     states["states"] = sts

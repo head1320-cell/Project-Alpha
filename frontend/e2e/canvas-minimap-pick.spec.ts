@@ -54,7 +54,7 @@ test("U3 · 미니맵 칸을 누르면 그 카드를 고르고 판 사이 가운
   // focusNode 와 같은 자리 — 판 사이 가운데(판 바깥 여백까지 같은 식이라 ±16 안)
   expect(Math.abs(box.x + box.width / 2 - r.mid), `카드 가운데 x ${box.x + box.width / 2} · 판 사이 가운데 ${r.mid}`).toBeLessThanOrEqual(16);
   expect(Math.abs(box.y + box.height / 2 - r.cy), `카드 가운데 y ${box.y + box.height / 2} · 캔버스 가운데 ${r.cy}`).toBeLessThanOrEqual(16);
-  await expect(page.locator(".pg-sr-live")).toHaveText(/노드를 골랐어요/);
+  await expect(page.locator(".pg-sr-live")).toHaveText(/노드를 골랐습니다/);
 
   // 짝 — 미니맵을 끌면 화면만 옮겨진다(고름 그대로)
   const mm = (await page.locator(".pg-minimap svg").boundingBox())!;

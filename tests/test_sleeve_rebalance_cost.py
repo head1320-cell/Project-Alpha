@@ -7,7 +7,7 @@ BO O2 는 주기만 넣고 거래비용은 "넣지 않았다" 고 말했다(자�
 - 손 계산 골든 — 되돌리는 날 회전율(목표와 흘러간 비중의 차의 절댓값 합, 사고판 양쪽) × 비용을 그날 수익에서 뺀다.
   매일 주기라도 비용이 있으면 매일 되돌리는 비용을 낸다(짝: 비용 0 이면 R @ w).
 - 비용이 클수록 슬리브 평균 수익이 낮아진다(단조) · 자주 되돌릴수록 비용 총량이 크다.
-- 노드: `cost_bps` 범위·프리셋 · 0 이면 설명이 "넣지 않았어요", 양수면 "회전율 × n bp 를 뺐어요" + 재지 않은 것에 슬리피지.
+- 노드: `cost_bps` 범위·프리셋 · 0 이면 설명이 "넣지 않았습니다", 양수면 "회전율 × n bp 를 뺐습니다" + 재지 않은 것에 슬리피지.
 """
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ def test_node_zero_cost_equals_before_and_says_no_cost():
     b = pg.run(_with_cost(0, {"s1": "M"}), gn.REGISTRY)["nodes"]["pc"]
     assert a["view"]["result"]["sleeve_allocation"] == b["view"]["result"]["sleeve_allocation"]
     trust = " ".join(t["text"] for t in b["explain"]["trust"])
-    assert "거래비용은 넣지 않았어요" in trust
+    assert "거래비용은 넣지 않았습니다" in trust
     assert "되돌릴 때 드는 거래비용" in b["explain"]["unmeasured"]
 
 
@@ -138,7 +138,7 @@ def test_node_cost_moves_numbers_and_explains(monkeypatch):
     assert seen[1] and set(seen[1].values()) == {30.0} and sorted(seen[1]) == sorted(x["label"] for x in c["view"]["strategies"])
     assert c["view"]["cost_bps"] == 30
     trust = " ".join(t["text"] for t in c["explain"]["trust"])
-    assert "30bp" in trust and "거래비용은 넣지 않았어요" not in trust
+    assert "30bp" in trust and "거래비용은 넣지 않았습니다" not in trust
     assert "되돌릴 때 드는 거래비용" not in c["explain"]["unmeasured"]
     assert any("슬리피지" in u for u in c["explain"]["unmeasured"])
 
@@ -156,8 +156,8 @@ def test_analytics_uses_the_costed_series():
 
 
 def test_cadence_help_points_to_the_cost_field():
-    """주기 칸 도움말이 '거래비용은 넣지 않아요' 라고 말하면 비용 칸이 생긴 지금은 거짓이다(점검 스크린샷에서 찾았다)."""
+    """주기 칸 도움말이 '거래비용은 넣지 않습니다' 라고 말하면 비용 칸이 생긴 지금은 거짓이다(점검 스크린샷에서 찾았다)."""
     from src.api.allocation_graph_nodes_portfolio import PortfolioCombineParams as P
     props = P.model_json_schema()["properties"]
     help_ = props["rebalance"]["x-ui"]["help"]
-    assert "넣지 않아요" not in help_ and props["cost_bps"]["x-ui"]["label"] in help_
+    assert "넣지 않습니다" not in help_ and props["cost_bps"]["x-ui"]["label"] in help_

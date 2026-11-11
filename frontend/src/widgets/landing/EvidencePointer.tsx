@@ -11,9 +11,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 const EV = [
-  { k: "source", t: "어디서 왔는지", d: "답에 쓴 데이터가 연습용인지 실데이터인지, 서버 연결 상태로 밝혀요." },
-  { k: "model", t: "무엇으로 쟀는지", d: "어떤 모형으로 쟀는지 적어서, 무엇을 재지 않았는지도 알 수 있어요." },
-  { k: "asof", t: "언제 기준인지", d: "언제 계산한 값인지 기준 시각을 붙여요." },
+  { k: "source", t: "어디서 왔는지", d: "답에 쓴 데이터가 합성 데이터인지 실데이터인지, 서버 연결 상태로 밝힙니다." },
+  { k: "model", t: "무엇으로 쟀는지", d: "어떤 모형으로 쟀는지 적어서, 무엇을 재지 않았는지도 알 수 있습니다." },
+  { k: "asof", t: "언제 기준인지", d: "언제 계산한 값인지 기준 시각을 붙입니다." },
 ] as const;
 type Key = (typeof EV)[number]["k"];
 
@@ -41,7 +41,7 @@ export function EvidencePointer({ className = "", style }: { className?: string;
   const cur = EV.find((e) => e.k === on);
   return (
     <div className={`ld-ev ${className}`.trim()} style={style} ref={ref} onMouseLeave={() => { if (touched.current) setOn(null); }}>
-      <p className="ld-ev-k">답마다 근거가 함께 붙어요</p>
+      <p className="ld-ev-k">답마다 근거가 함께 붙습니다</p>
       <div className="ld-ev-row" role="group" aria-label="답 카드에서 짚어 볼 근거">
         {EV.map((e) => (
           <button key={e.k} type="button" className="ld-ev-btn" data-ev={e.k} aria-pressed={on === e.k}
@@ -50,7 +50,7 @@ export function EvidencePointer({ className = "", style }: { className?: string;
           </button>
         ))}
       </div>
-      <p className="ld-ev-d">{cur ? cur.d : "누르면 답 카드에서 그 근거를 짚어 드려요."}</p>
+      <p className="ld-ev-d">{cur ? cur.d : "누르면 답 카드에서 그 근거를 짚어 드립니다."}</p>
     </div>
   );
 }

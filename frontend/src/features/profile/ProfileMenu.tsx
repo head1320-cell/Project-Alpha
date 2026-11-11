@@ -49,7 +49,7 @@ export function ProfileMenu() {
   const role = signedIn ? (ROLE_KO[session.role] ?? session.role) : null;
   const label = signedIn ? `내 계정 — ${session.username}${role ? ` (${role})` : ""}`
     : session.kind === "loading" ? "내 계정 — 확인하는 중"
-    : session.kind === "unknown" ? "내 계정 — 확인하지 못했어요" : "내 계정 — 로그인 안 됨";
+    : session.kind === "unknown" ? "내 계정 — 확인 실패" : "내 계정 — 로그인 안 됨";
   const ready = darkReady(pathname);
 
   return (
@@ -65,11 +65,11 @@ export function ProfileMenu() {
             <div className="pf-who-t">
               {signedIn ? (
                 <><strong className="pf-name">{session.username}</strong>{role ? <span className="pf-role">{role}</span> : null}
-                  {session.mustChange ? <span className="pf-sub pf-must">비밀번호를 바꿀 차례예요</span> : null}</>
+                  {session.mustChange ? <span className="pf-sub pf-must">비밀번호를 바꿀 차례입니다</span> : null}</>
               ) : session.kind === "unknown" ? (
-                <><strong className="pf-name">계정 정보를 확인하지 못했어요</strong><span className="pf-sub">{session.reason}</span></>
+                <><strong className="pf-name">계정 정보 확인 실패</strong><span className="pf-sub">{session.reason}</span></>
               ) : session.kind === "loading" ? (
-                <strong className="pf-name">확인하는 중이에요</strong>
+                <strong className="pf-name">확인 중</strong>
               ) : (
                 <><strong className="pf-name">로그인 안 됨</strong>
                   {session.note ? <span className="pf-sub pf-note" role="status">{session.note}</span> : null}</>
@@ -87,7 +87,7 @@ export function ProfileMenu() {
             </div>
             {!ready && theme !== "light" ? (
               <p className="pf-sub pf-theme-note">
-                이 화면은 아직 밝게만 볼 수 있어요. 다른 화면은 고른 테마를 따라요.
+                이 화면은 아직 밝게만 볼 수 있습니다. 다른 화면은 고른 테마를 따릅니다.
               </p>
             ) : null}
           </div>
@@ -99,7 +99,7 @@ export function ProfileMenu() {
             {signedIn ? (
               <button type="button" className="pf-logout" onClick={logout}>로그아웃</button>
             ) : session.kind === "unknown" ? (
-              <button type="button" className="pf-retry" onClick={() => void retry()}>다시 시도</button>
+              <button type="button" className="pf-retry" onClick={() => void retry()}>재시도</button>
             ) : session.kind === "signed_out" ? (
               <Link href={loginHref(pathname)} className="pf-login" onClick={() => setOpen(false)}>로그인</Link>
             ) : null}

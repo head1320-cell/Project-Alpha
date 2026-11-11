@@ -84,7 +84,7 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
   }
 
   async function act(what: "revoke" | "reopen" | "switch", l: ShareLink) {
-    if (what === "revoke" && !window.confirm("이 주소를 끌까요? 고객이 바로 볼 수 없게 돼요.")) return;
+    if (what === "revoke" && !window.confirm("이 주소를 비활성화하시겠습니까? 고객이 바로 볼 수 없게 됩니다.")) return;
     setErr(null);
     const r = what === "revoke" ? await revokeLink(cid, l.link_id)
       : what === "reopen" ? await reopenLink(cid, l.link_id) : await switchLinkSheet(cid, l.link_id, sid);
@@ -100,19 +100,19 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
   return (
     <section className="cs-share" aria-label="고객 주소">
       <h2 className="cs-h2">고객 주소</h2>
-      <p className="cs-sub">고객이 이 한 장을 보고 묻도록 주소를 만들어요. 고객은 주소와 PIN 으로 열고, 언제든 끌 수 있어요.</p>
-      {q.isLoading && <p className="cs-sub" aria-busy="true">주소 목록을 읽는 중이에요.</p>}
-      {q.isError && <p className="cl-err" role="alert">주소 목록을 읽지 못했어요 — {(q.error as Error).message}</p>}
+      <p className="cs-sub">고객이 이 한 장을 보고 묻도록 주소를 만듭니다. 고객은 주소와 PIN 으로 열고, 언제든 끌 수 있습니다.</p>
+      {q.isLoading && <p className="cs-sub" aria-busy="true">주소 목록 조회 중</p>}
+      {q.isError && <p className="cl-err" role="alert">주소 목록 읽기 실패 — {(q.error as Error).message}</p>}
       {gate && closed && (
         <div className="cs-share-blocked" role="note">
-          <p className="cs-share-blocked-why">유통 관문이 닫혀 있어 지금은 고객 주소를 만들 수 없어요.</p>
+          <p className="cs-share-blocked-why">유통 관문이 닫혀 있어 지금은 고객 주소를 만들 수 없습니다.</p>
           {gate.reason && <p className="cs-share-blocked-reason">{gate.reason}</p>}
           {gate.missing.length > 0 && (
             <p className="cs-share-missing">빠진 인가 기록 — {gate.missing.map((m) => LICENSE_PLAIN[m] ?? m).join(" · ")}</p>
           )}
         </div>
       )}
-      {gate && !closed && archived && <p className="cs-sub">보관한 고객이라 새 주소를 만들 수 없어요.</p>}
+      {gate && !closed && archived && <p className="cs-sub">보관한 고객이라 새 주소를 만들 수 없습니다.</p>}
       {gate && (
         <form className="cs-share-form" onSubmit={make}>
           <label className="cs-share-field">
@@ -132,17 +132,17 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
         </form>
       )}
       {gate && !closed && !archived && (
-        <p className="cs-share-hint">PIN 은 주소와 다른 길(전화·대면)로 알려 주세요. 같은 숫자·차례대로·되풀이는 쓸 수 없고, 5번 틀리면 잠겨요.</p>
+        <p className="cs-share-hint">PIN 은 주소와 다른 길(전화·대면)로 알려 주십시오. 같은 숫자·차례대로·되풀이는 쓸 수 없고, 5번 틀리면 잠깁니다.</p>
       )}
       {err && <p className="cl-err cs-share-err" role="alert">{err}</p>}
       {made && (
         <div className="cs-share-once" role="status">
-          <p className="cs-share-once-t">주소를 만들었어요 — 이 주소는 지금 한 번만 보여요.</p>
+          <p className="cs-share-once-t">주소를 만들었습니다 — 이 주소는 지금 한 번만 보입니다.</p>
           <div className="cs-share-url-row">
             <input className="cs-share-url" readOnly value={made} aria-label="고객 주소" onFocus={(e) => e.currentTarget.select()} />
-            <button type="button" className="tx-btn tx-btn--sub cs-share-copy" onClick={() => void copy()}>{copied ? "복사했어요" : "복사"}</button>
+            <button type="button" className="tx-btn tx-btn--sub cs-share-copy" onClick={() => void copy()}>{copied ? "복사했습니다" : "복사"}</button>
           </div>
-          <button type="button" className="cs-share-done" onClick={() => setMade(null)}>주소를 옮겼어요 — 닫기</button>
+          <button type="button" className="cs-share-done" onClick={() => setMade(null)}>주소를 옮겼습니다 — 닫기</button>
         </div>
       )}
       {q.data && q.data.links.length > 0 && (
@@ -150,7 +150,7 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
           {q.data.links.map((l) => <Row key={l.link_id} l={l} sid={sid} closed={closed} act={(w, x) => void act(w, x)} />)}
         </ul>
       )}
-      {q.data && q.data.links.length === 0 && <p className="cs-sub cs-share-empty">아직 만든 주소가 없어요.</p>}
+      {q.data && q.data.links.length === 0 && <p className="cs-sub cs-share-empty">아직 만든 주소 없음</p>}
     </section>
   );
 }

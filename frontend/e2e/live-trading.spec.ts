@@ -75,13 +75,13 @@ test("BU9b: 로그아웃이면 로그인 링크가 이 화면으로 돌아온다
 
 // ── 답 문장 ────────────────────────────────────────────────────────────────
 
-test("BU9b: 답 문장은 서버 모드·연습용 값을 따른다 (기록만 / 모의+연습용 / 모의+실 / 모의+모름 / 실계좌)", async ({ page }) => {
+test("BU9b: 답 문장은 서버 모드·합성 값을 따른다 (기록만 / 모의+합성 / 모의+실 / 모의+모름 / 실계좌)", async ({ page }) => {
   const cases: [Partial<LiveState>, boolean | "fail", RegExp][] = [
-    [{ mode: "SHADOW" }, true, /기록만 돼요\. 증권사로 보내지 않아요/],
-    [{ mode: "PAPER" }, true, /연습용 체결기로 가요/],
-    [{ mode: "PAPER" }, false, /모의 체결로 가요\. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절해요/],
-    [{ mode: "PAPER" }, "fail", /지금 모의 체결로 가요\.$/],
-    [{ mode: "LIVE" }, true, /실제 돈으로 나가요/],
+    [{ mode: "SHADOW" }, true, /기록만 됩니다\. 증권사로 보내지 않습니다/],
+    [{ mode: "PAPER" }, true, /가상 체결기로 갑니다/],
+    [{ mode: "PAPER" }, false, /모의 체결로 갑니다\. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다/],
+    [{ mode: "PAPER" }, "fail", /지금 모의 체결로 갑니다\.$/],
+    [{ mode: "LIVE" }, true, /실제 돈으로 나갑니다/],
   ];
   for (const [o, mock, want] of cases) {
     const p = await page.context().newPage();
@@ -92,17 +92,17 @@ test("BU9b: 답 문장은 서버 모드·연습용 값을 따른다 (기록만 /
   }
 });
 
-test("BU9b: 비상 정지 — 이벤트가 있으면 '모든 사용자 계좌' 까지, 없으면 '어떤 정지인지 읽지 못했어요' (짝)", async ({ page }) => {
+test("BU9b: 비상 정지 — 이벤트가 있으면 '모든 사용자 계좌' 까지, 없으면 '어떤 정지인지 읽지 못했습니다' (짝)", async ({ page }) => {
   const ev = { event_id: "K-1", trigger_reason: "Manual emergency stop from cockpit", triggered_at: "2026-10-09T12:05:00+00:00" };
   await open(page, { st: liveState({ kill: { is_active: true, active_event: ev } }) });
-  await expect(sentence(page)).toContainText("모든 사용자 계좌의 새 주문이 나가지 않아요");
+  await expect(sentence(page)).toContainText("모든 사용자 계좌의 새 주문이 나가지 않습니다");
   await expect(page.locator('.tx-st[data-st="kill"]')).toHaveAttribute("data-blocked", "true");
   await expect(page.locator('.tx-st[data-st="kill"]')).toContainText("10월 9일 21:05");   // UTC → 한국 시간
   await expect(act(page, "resolve")).toBeVisible();
   await expect(act(page, "kill-open")).toHaveCount(0);
   const p = await page.context().newPage();
   await open(p, { st: liveState({ kill: { is_active: true, active_event: null } }) });
-  await expect(sentence(p)).toContainText("어떤 정지인지 읽지 못했어요");
+  await expect(sentence(p)).toContainText("어떤 정지인지 읽지 못했습니다");
   await p.close();
 });
 
@@ -117,13 +117,13 @@ test("BU9b: 읽기 실패는 사유와 함께 · 불러오는 중은 '기록만'
   // ★routeLive 뒤에★ — 나중에 건 경로가 먼저 받는다. 모드 읽기를 붙잡아 '불러오는 중'을 본다.
   await page.route("**/api/v1/live/mode", async (r) => { await gate; return r.fallback(); });
   await page.goto("/admin/live-trading", { waitUntil: "domcontentloaded" });
-  await expect(sentence(page)).toHaveText("운영 계좌 상태를 확인하는 중이에요.");
+  await expect(sentence(page)).toHaveText("운영 계좌 상태 확인 중");
   await expect(page.locator('.tx-mode-b[aria-pressed="true"]'), "모르는 동안 눌린 모드가 없다").toHaveCount(0);
   release();
-  await expect(sentence(page)).toHaveText("운영 계좌의 실행 모드를 확인하지 못했어요.");
-  await expect(page.locator(".lv .tx-notice[data-tone=\"danger\"]").first()).toContainText("모드를 읽지 못했어요");
-  await expect(page.locator(".lv-hold")).toContainText("잔고를 읽지 못했어요");
-  await expect(page.locator(".tx-fig", { hasText: "평가 자산" })).toContainText("몰라요");
+  await expect(sentence(page)).toHaveText("운영 계좌의 실행 모드 확인 실패");
+  await expect(page.locator(".lv .tx-notice[data-tone=\"danger\"]").first()).toContainText("모드 읽기 실패");
+  await expect(page.locator(".lv-hold")).toContainText("잔고 읽기 실패");
+  await expect(page.locator(".tx-fig", { hasText: "평가 자산" })).toContainText("N/A");
   // 짝 — 정상이면 서버 숫자 그대로(0 이나 몰라요가 아니다)
   st.fail = {};
   await act(page, "refresh").click();
@@ -131,7 +131,7 @@ test("BU9b: 읽기 실패는 사유와 함께 · 불러오는 중은 '기록만'
   // 칸이 빠진 잔고 → 몰라요(0 아님)
   st.balance = { ...LIVE_BALANCE, evaluated_total: null };
   await act(page, "refresh").click();
-  await expect(page.locator(".tx-fig", { hasText: "평가 자산" })).toContainText("몰라요");
+  await expect(page.locator(".tx-fig", { hasText: "평가 자산" })).toContainText("N/A");
   await expect(page.locator(".tx-fig", { hasText: "평가 자산" })).not.toContainText("0원");
 });
 
@@ -143,7 +143,7 @@ test("BU9b: 모의 체결로는 확인을 거친다(취소 0 · 바꾸기 1) · 
   await expect(act(page, "mode-shadow")).toHaveAttribute("aria-pressed", "true");
   await expect(act(page, "mode-paper"), "짝: 다른 모드는 켜져 있다").toBeEnabled();
   await act(page, "mode-paper").click();
-  await expect(page.locator(".lv-paper-confirm")).toContainText("연습용 체결기로 보내요");
+  await expect(page.locator(".lv-paper-confirm")).toContainText("가상 체결기로 보냅니다");
   await act(page, "paper-no").click();
   await page.waitForTimeout(500);
   expect(posts, "취소면 아무것도 보내지 않는다").toEqual([]);
@@ -161,13 +161,13 @@ test("BU9b: 모의 체결로는 확인을 거친다(취소 0 · 바꾸기 1) · 
 
 test("BU9b: 모드 바꾸기 실패는 서버 사유와 함께 (조용히 넘기지 않는다)", async ({ page }) => {
   const { st } = await open(page);
-  st.modeReply = { status: 500, json: { detail: "실행기를 만들지 못했어요" } };
+  st.modeReply = { status: 500, json: { detail: "실행기 생성 실패" } };
   await act(page, "mode-paper").click();
   await act(page, "paper-yes").click();
   const alert = page.locator('.live-mode-refused[data-mode="PAPER"]');
   await expect(alert).toBeVisible();
-  await expect(alert).toContainText("모의 체결로 바꾸지 못했어요");
-  await expect(alert).toContainText("실행기를 만들지 못했어요");
+  await expect(alert).toContainText("모의 체결로 바꾸지 못했습니다");
+  await expect(alert).toContainText("실행기 생성 실패");
 });
 
 test("BU9b: 실계좌 시트 — dialog · Esc · 취소면 0 · 관문 닫힘이면 서버 거절 사유 (짝: 받아들이면 문구 없음)", async ({ page }) => {
@@ -176,7 +176,7 @@ test("BU9b: 실계좌 시트 — dialog · Esc · 취소면 0 · 관문 닫힘�
   const sheet = page.locator('[data-sheet="live"]');
   await expect(sheet).toBeVisible();
   await expect(page.getByRole("dialog", { name: "실계좌로 바꾸기" })).toBeVisible();
-  await expect(sheet.locator(".lv-gate-line")).toContainText("관문이 닫혀 있어요");
+  await expect(sheet.locator(".lv-gate-line")).toContainText("관문이 닫혀 있습니다");
   expect(await page.evaluate(() => !!document.activeElement?.closest('[data-sheet="live"]')), "초점이 시트 안").toBe(true);
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
@@ -187,7 +187,7 @@ test("BU9b: 실계좌 시트 — dialog · Esc · 취소면 0 · 관문 닫힘�
   await act(page, "mode-live").click();
   await act(page, "live-yes").click();
   const refused = page.locator('.live-mode-refused[data-mode="LIVE"]');
-  await expect(refused).toContainText("실계좌로 바꾸지 못했어요");
+  await expect(refused).toContainText("실계좌로 바꾸지 못했습니다");
   await expect(refused).toContainText(LIVE_REFUSED);
   expect(posts[0].body).toEqual({ mode: "LIVE", confirm_token: "EXPLICIT_LIVE_CONFIRMED" });
   // 짝 — 받아들이면 거절 문구가 없고 모드가 실계좌로
@@ -207,7 +207,7 @@ test("BU9b: 관문이 열려 있으면 실계좌 시트가 허용한 사용자�
   await page.goto("/admin/live-trading");
   await expect(act(page, "mode-live")).toContainText("관문 열림");
   await act(page, "mode-live").click();
-  await expect(page.locator('[data-sheet="live"] .lv-gate-line')).toContainText("열려 있어요");
+  await expect(page.locator('[data-sheet="live"] .lv-gate-line')).toContainText("열려 있습니다");
   await expect(page.locator('[data-sheet="live"] .lv-user')).toHaveText(["admin"]);
 });
 
@@ -216,18 +216,18 @@ test("BU9b: 관문이 열려 있으면 실계좌 시트가 허용한 사용자�
 test("BU9b: 비상 정지 걸기·풀기 — 취소면 0 · 본문 바이트 그대로 · 결과와 실패를 말한다", async ({ page }) => {
   const { st, posts } = await open(page);
   await act(page, "kill-open").click();
-  await expect(page.locator('[data-sheet="kill"]')).toContainText("모든 사용자 계좌의 새 주문을 멈춰요");
+  await expect(page.locator('[data-sheet="kill"]')).toContainText("모든 사용자 계좌의 새 주문을 멈춥니다");
   await act(page, "kill-no").click();
   await page.waitForTimeout(400);
   expect(posts).toEqual([]);
-  st.triggerReply = { status: 500, json: { detail: "잔고를 읽지 못해 정지 기록을 남기지 못했어요" } };
+  st.triggerReply = { status: 500, json: { detail: "잔고를 읽지 못해 정지 기록을 남기지 못했습니다" } };
   await act(page, "kill-open").click();
   await act(page, "kill-yes").click();
   await expect(page.locator('[data-sheet="kill"] [role="alert"]')).toContainText("잔고를 읽지 못해");
   await expect(page.locator('[data-sheet="kill"]'), "실패하면 시트를 닫지 않는다").toBeVisible();
   st.triggerReply = null;
   await act(page, "kill-yes").click();
-  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 걸었어요. 운영 계좌의 미체결 1건을 취소했어요.");
+  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 걸었습니다. 운영 계좌의 미체결 1건을 취소했습니다.");
   expect(posts.at(-1)).toEqual({ path: "POST /api/v1/live/kill-switch/trigger", body: { reason: "Manual emergency stop from cockpit", liquidation_mode: "hold" } });
   await expect(act(page, "resolve")).toBeVisible();
   const before = posts.length;
@@ -237,7 +237,7 @@ test("BU9b: 비상 정지 걸기·풀기 — 취소면 0 · 본문 바이트 그
   expect(posts.length, "풀기도 취소면 0").toBe(before);
   await act(page, "resolve").click();
   await act(page, "resolve-yes").click();
-  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 풀었어요. 새 주문을 다시 받아요.");
+  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 풀었습니다. 새 주문을 다시 받습니다.");
   expect(posts.at(-1)).toEqual({ path: "POST /api/v1/live/kill-switch/resolve", body: { notes: "Manual resolution from cockpit" } });
   // 짝 — 서버가 이미 풀려 있었다고 답하면 그대로
   st.kill = { is_active: true, active_event: null };
@@ -245,7 +245,7 @@ test("BU9b: 비상 정지 걸기·풀기 — 취소면 0 · 본문 바이트 그
   await act(page, "refresh").click();
   await act(page, "resolve").click();
   await act(page, "resolve-yes").click();
-  await expect(page.locator(".lv-done")).toHaveText("이미 풀려 있었어요.");
+  await expect(page.locator(".lv-done")).toHaveText("이미 풀려 있었습니다.");
 });
 
 // ── 길 · 표 ────────────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ test("BU9b: 주문이 가는 길 네 역 · 보유 손익 등락색(짝) · 최�
   await expect(page.locator('.lv-pos[data-ticker="000660"] .tx-delta')).toHaveAttribute("data-dir", "down");
   await expect(page.locator('.lv-pos[data-ticker="005930"]')).toContainText("삼성전자");
   await expect(page.locator(".lv-ord")).toHaveCount(4);
-  await expect(page.locator('.lv-ord[data-coid="CO-2"] .lv-ord-status')).toHaveText("주문하지 않았어요");
+  await expect(page.locator('.lv-ord[data-coid="CO-2"] .lv-ord-status')).toHaveText("주문하지 않았습니다");
   await expect(page.locator('.lv-ord[data-coid="CO-2"] .lv-ord-stop')).toHaveAttribute("data-stop", "risk");
   await expect(page.locator('.lv-ord[data-coid="CO-0"] .lv-ord-status [data-server]'), "모르는 상태는 원문").toHaveText("WEIRD_STATE");
   await page.locator('.lv-ord-filter [data-f="stopped"]').click();

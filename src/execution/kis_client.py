@@ -1115,7 +1115,7 @@ def get_order_client():
     if not (account_no or "").strip():
         raise KISCredentialsMissing(
             "KIS_ACCOUNT_NO 미설정 — 주문 실행기를 만들 수 없습니다. 운영 모드에서는 빈 계좌번호로 "
-            "주문하지 않습니다. 계좌번호를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰세요.")
+            "주문하지 않습니다. 계좌번호를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰십시오.")
     return client
 
 
@@ -1143,7 +1143,7 @@ def _build_kis_client():
         # 운영에서 실패하면 합성이 아니라 **사유**를 낸다.
         raise KISCredentialsMissing(
             "KIS_APP_KEY/KIS_APP_SECRET 미설정 — 운영 모드에서는 합성 데이터로 "
-            "대체하지 않습니다. 키를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰세요.")
+            "대체하지 않습니다. 키를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰십시오.")
 
     is_paper = os.getenv("KIS_IS_PAPER", "1") == "1"
     creds = KISCredentials(

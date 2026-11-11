@@ -61,7 +61,7 @@ def test_a_real_decision_comes_back(client):
 
 
 def test_the_decision_names_both_sides_of_the_comparison(client):
-    """★편익 대 비용이 근거다★ 숫자 없이 '거래하세요' 라고 하지 않는다."""
+    """★편익 대 비용이 근거다★ 숫자 없이 '거래하십시오' 라고 하지 않는다."""
     b = _post(client)
     assert b["cost"]["cost_pct"] is not None
     assert b["benefit"]["gain_pct"] is not None

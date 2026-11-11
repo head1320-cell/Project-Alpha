@@ -19,7 +19,7 @@ import { trackErrors, uniq } from "./helpers";
 // 아래 중첩 테스트가 그 필드가 살아 있는지를 지키는 유일한 장치다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SEARCH = "조건을 단어로 입력하세요";
+const SEARCH = "조건을 단어로 입력하십시오";
 const FACTOR = "시가총액";
 
 async function openFromScreener(page: import("@playwright/test").Page) {
@@ -58,7 +58,7 @@ test("Factor picker: 팩터를 고르기 전에는 함수 설정이 나타나지
 
   // 우측 패널은 셸의 빈 상태다. 미리보기도 적용 버튼도 아직 없다 —
   // 없는 것을 단정해야 "선택이 실제로 무언가를 연다"가 증명된다.
-  await expect(page.getByText("왼쪽에서 항목을 선택하세요")).toBeVisible();
+  await expect(page.getByText("왼쪽에서 항목을 선택하십시오")).toBeVisible();
   await expect(page.getByText("조건식 미리보기")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "입력", exact: true })).toHaveCount(0);
 
@@ -129,7 +129,7 @@ test("Factor picker: 미지원 팩터는 사유가 목록에 적히고 적용이
     const [ok, all] = t.split("/").map(Number);
     return Number.isFinite(ok) && Number.isFinite(all) && ok < all;
   });
-  expect(idx, "미지원이 하나라도 있는 카테고리가 없습니다 — 지원맵을 확인하세요")
+  expect(idx, "미지원이 하나라도 있는 카테고리가 없습니다 — 지원맵을 확인하십시오")
     .toBeGreaterThanOrEqual(0);
   await page.locator(".tfm-fams button").nth(idx).click();
 

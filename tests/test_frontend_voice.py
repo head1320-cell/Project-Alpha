@@ -30,42 +30,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC = ROOT / "frontend" / "src"
 
 #: 아직 옮기지 않은 폴더(저장소 뿌리 기준 접두). ★단계마다 줄인다 — 늘리지 않는다★
-PENDING: tuple[str, ...] = (
-    "frontend/src/app",                                    # 69
-    "frontend/src/entities/backtest",                      # 19
-    "frontend/src/entities/broker-account",                # 22
-    "frontend/src/entities/company",                       # 3
-    "frontend/src/entities/macro",                         # 4
-    "frontend/src/entities/multibacktest",                 # 1
-    "frontend/src/entities/pb-client",                     # 8
-    "frontend/src/entities/perf",                          # 1
-    "frontend/src/entities/portfolio-graph",               # 141
-    "frontend/src/entities/realism",                       # 5
-    "frontend/src/entities/regime-snapshot",               # 5
-    "frontend/src/entities/session",                       # 6
-    "frontend/src/features/case-bar",                      # 16
-    "frontend/src/features/factor-picker",                 # 7
-    "frontend/src/features/portfolio-graph-io",            # 7
-    "frontend/src/features/profile",                       # 6
-    "frontend/src/features/settings",                      # 50
-    "frontend/src/shared",                                 # 105
-    "frontend/src/widgets/admin",                          # 94
-    "frontend/src/widgets/backtester",                     # 281
-    "frontend/src/widgets/clients",                        # 52
-    "frontend/src/widgets/company",                        # 203
-    "frontend/src/widgets/derivatives",                    # 84
-    "frontend/src/widgets/home",                           # 23
-    "frontend/src/widgets/landing",                        # 34
-    "frontend/src/widgets/layout",                         # 4
-    "frontend/src/widgets/live-trading",                   # 244
-    "frontend/src/widgets/login",                          # 18
-    "frontend/src/widgets/macro",                          # 268
-    "frontend/src/widgets/my-account",                     # 126
-    "frontend/src/widgets/portfolio-graph",                # 760
-    "frontend/src/widgets/risk",                           # 37
-    "frontend/src/widgets/screener",                       # 29
-    "frontend/src/widgets/share",                          # 19
-)
+PENDING: tuple[str, ...] = ()        # 2026-11-11 변환기로 전 폴더를 한 번에 옮겨 비었다(HISTORY)
 
 #: (경로, 그 줄에 있어야 하는 문장 조각) — 해요체를 **인용**하는 문장만(예: 사용자가 쓴 글을 그대로 보이는 자리). 지금은 없다.
 ALLOW: tuple[tuple[str, str], ...] = ()

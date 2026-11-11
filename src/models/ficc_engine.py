@@ -22,13 +22,13 @@ class FICCEngine:
         """
         # ★불가능한 입력에 0 을 돌려주지 않는다★ (BL3 M2) — 예전에는 모든 값 0 이었다(가격 0 원 옵션을 지어냈다).
         if S <= 0:
-            raise ValueError("기초자산 가격은 0보다 커야 해요.")
+            raise ValueError("기초자산 가격은 0보다 커야 합니다.")
         if K <= 0:
-            raise ValueError("행사가는 0보다 커야 해요.")
+            raise ValueError("행사가는 0보다 커야 합니다.")
         if sigma <= 0:
-            raise ValueError("변동성은 0보다 커야 해요.")
+            raise ValueError("변동성은 0보다 커야 합니다.")
         if T < 0:
-            raise ValueError("만기는 0 이상이어야 해요.")
+            raise ValueError("만기는 0 이상이어야 합니다.")
         if T == 0:
             # 만기 — 내재가치만 남는다(예전에는 가격 0). 델타는 계단, 등가격에선 정의되지 않는다.
             call = option_type.lower() == "call"

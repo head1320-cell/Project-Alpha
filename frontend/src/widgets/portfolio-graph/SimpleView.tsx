@@ -29,7 +29,7 @@ function ResultCard({ id, entry, r, onCause }: { id: string; entry: NodeCatalogE
   return (
     <article className={`pg-simple-result pg-simple-result--${r.status}`} data-node-id={id}>
       <p className="pg-simple-kind">{entry?.plain_label ?? r.type}</p>
-      <h3 className="pg-simple-title">{ex?.title ?? (r.status === "ok" ? "계산했어요" : "계산하지 못했어요")}</h3>
+      <h3 className="pg-simple-title">{ex?.title ?? (r.status === "ok" ? "계산했습니다" : "산출 실패")}</h3>
       {h && h.value !== null && (
         <p className="pg-simple-headline"><b>{Number.isInteger(Number(h.value)) ? Number(h.value) : Number(h.value).toFixed(1)}</b>
           <span>{h.unit} {h.label}</span></p>
@@ -42,7 +42,7 @@ function ResultCard({ id, entry, r, onCause }: { id: string; entry: NodeCatalogE
       )}
       {r.status === "ok" && r.glance && <Glance glance={r.glance} />}
       {r.status === "ok" && (ex?.trust?.length ?? 0) > 0 && (
-        <ul className="pg-simple-trust" aria-label="믿어도 되나요">
+        <ul className="pg-simple-trust" aria-label="신뢰도 점검">
           {ex!.trust!.map((t, i) => (
             <li key={i}><span className={`pg-tag pg-tag--${t.state}`}>{TRUST_WORD[t.state]}</span> {t.text}</li>
           ))}
@@ -83,14 +83,14 @@ export function SimpleView({ nodes, edges, groups, catalog, results, staleIds, r
     <div className="pg-simple" aria-label="간단히 보기">
       <header className="pg-simple-top">
         <div>
-          <h2 className="pg-simple-h">정할 것만 고르고, 결과만 봐요</h2>
-          <p className="pg-simple-sub">여기서 바꾼 값은 캔버스의 노드 설정에 그대로 들어가요. 바꾸지 않은 칸은 서버 기본값이에요.</p>
+          <h2 className="pg-simple-h">정할 것만 고르고, 결과만 봅니다</h2>
+          <p className="pg-simple-sub">여기서 바꾼 값은 캔버스의 노드 설정에 그대로 들어갑니다. 바꾸지 않은 칸은 서버 기본값입니다.</p>
         </div>
         <button type="button" className="pg-btn pg-btn--primary pg-simple-run" disabled={running || !nodes.length} onClick={onRun}>
           {running ? <><Loader2 size={14} className="spin" /> 계산하는 중</> : "계산하기"}
         </button>
       </header>
-      {stale && <p className="pg-simple-stale">설정이 바뀌었어요 — 바뀐 곳 {staleIds.size}개는 다시 계산하면 결과가 새로 나와요.</p>}
+      {stale && <p className="pg-simple-stale">설정이 바뀌었습니다 — 바뀐 곳 {staleIds.size}개는 재계산하면 결과가 새로 나옵니다.</p>}
       {sections.map((sec) => {
         const asks = sec.ids.filter(hasQuestions);
         const outs = sec.ids.filter((id) => live?.[id] && (live[id].status !== "ok" || live[id].explain?.headline || live[id].glance));
@@ -98,7 +98,7 @@ export function SimpleView({ nodes, edges, groups, catalog, results, staleIds, r
           <section key={sec.key} className="pg-simple-sec" data-section={sec.key}>
             <h2 className="pg-simple-sec-h">{sec.title}</h2>
             <h3 className="pg-simple-step">① 정할 것</h3>
-            {asks.length === 0 && <p className="pg-help">정할 것이 없어요.</p>}
+            {asks.length === 0 && <p className="pg-help">정할 것 없음</p>}
             {asks.map((id) => {
               const n = nodes.find((x) => x.id === id)!;
               const entry = entryOf(id);
@@ -110,8 +110,8 @@ export function SimpleView({ nodes, edges, groups, catalog, results, staleIds, r
               );
             })}
             <h3 className="pg-simple-step">② 결과</h3>
-            {!live && <p className="pg-help">아직 계산하지 않았어요 — 위의 ‘계산하기’를 눌러 주세요.</p>}
-            {live && outs.length === 0 && <p className="pg-help">이 묶음에서 보여 줄 결과가 없어요.</p>}
+            {!live && <p className="pg-help">아직 계산하지 않았습니다 — 위의 ‘계산하기’를 누르십시오.</p>}
+            {live && outs.length === 0 && <p className="pg-help">이 묶음에서 보여 줄 결과 없음</p>}
             {outs.map((id) => <ResultCard key={id} id={id} entry={entryOf(id)} r={live![id]} onCause={() => onCause(id)} />)}
           </section>
         );

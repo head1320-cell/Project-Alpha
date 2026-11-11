@@ -55,7 +55,7 @@ test("바꿔 끼우기: 종류만 바뀌고 자리·선은 그대로 · 설정�
 
   await pick.selectOption("scenario_stress");
   await expect(node(page, "risk")).toHaveAttribute("data-kind", "scenario_stress");
-  await expect(page.locator(".pg-note")).toContainText("설정은 기본값이에요");
+  await expect(page.locator(".pg-note")).toContainText("설정은 기본값입니다");
   const d1 = await wip(page);
   const after = d1.nodes.find((n) => n.id === "risk")!;
   expect(after.type).toBe("scenario_stress");
@@ -74,11 +74,11 @@ test("바꿀 후보가 없으면 고르기 칸 대신 이유 · 우클릭 메뉴
   await openCanvas(page);
   await settingsOf(page, "optimizer");
   await expect(page.locator(".pg-swap select")).toHaveCount(0);
-  await expect(page.locator(".pg-swap--none")).toContainText("다른 노드가 없어요");
+  await expect(page.locator(".pg-swap--none")).toContainText("다른 노드 없음");
   await node(page, "optimizer").click({ button: "right" });
   const item = page.locator('.pg-ctx-item[data-action="swap"]');
   await expect(item).toBeDisabled();
-  await expect(item).toContainText("같은 선을 받는 다른 노드가 없어요");
+  await expect(item).toContainText("같은 선을 받는 다른 노드 없음");
   await page.keyboard.press("Escape");
 
   // ★짝★ 후보가 있는 노드 — 메뉴 항목이 살아 있고, 누르면 설정 판의 바꾸기 칸에 초점이 간다
@@ -106,7 +106,7 @@ test("혼자 쓰는 도구: 연결점 없이 '선 없이' 줄 · 흐름 노드�
   await group.locator(`.pg-palette-item[data-kind="${solo.type}"]`).click();
   const card = page.locator(`.pg-node[data-kind="${solo.type}"]`);
   await expect(card).toHaveClass(/pg-node--solo/);
-  await expect(card.locator(".pg-node-solo")).toHaveText("선 없이 혼자 계산해요");
+  await expect(card.locator(".pg-node-solo")).toHaveText("선 없이 혼자 계산합니다");
   await expect(card.locator(".react-flow__handle")).toHaveCount(0);
   await expect(node(page, "optimizer").locator(".react-flow__handle")).not.toHaveCount(0);   // ★짝★
   await expect(node(page, "optimizer")).not.toHaveClass(/pg-node--solo/);
@@ -115,7 +115,7 @@ test("혼자 쓰는 도구: 연결점 없이 '선 없이' 줄 · 흐름 노드�
   await expect(node(page, "universe").locator(".react-flow__handle")).not.toHaveCount(0);
 });
 
-test("지금 이을 수 있어요: 고른 노드가 있을 때만(짝) · 모두 그 출력 타입을 받음 · 누르면 선 하나", async ({ page }) => {
+test("지금 이을 수 있습니다: 고른 노드가 있을 때만(짝) · 모두 그 출력 타입을 받음 · 누르면 선 하나", async ({ page }) => {
   await openCanvas(page);
   const cat = await catalogOf(page);
   await expect(page.locator(".pg-palette-next")).toHaveCount(0);                            // ★짝★ 아무것도 고르지 않음

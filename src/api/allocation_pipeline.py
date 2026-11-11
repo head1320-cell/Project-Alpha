@@ -71,7 +71,7 @@ _VIEW_MODELS = ("bl", "ep")
 def _regime_path_for(req) -> dict:            # req: AnalyzeRequest (덕 타이핑)
     """월별 국면 경로 — **저장된 것 우선, 없으면 재계산 + 라벨**.
 
-    ★Brief §16 이 금지하는 것이 "과거 결정을 현재 데이터로 다시 계산" 이다.★
+    ★Brief §16 이 금지하는 것이 "과거 결정을 현재 데이터로 재계산" 이다.★
     스냅샷에 굳혀 둔 경로가 있으면 그것이 그 시점에 알 수 있었던 분류다. 없으면
     재계산할 수밖에 없지만, 그때는 `path_source: "recomputed"` 와 함께 그 사실을
     응답에 적는다 — 하되 숨기지 않는다.
@@ -101,7 +101,7 @@ def _regime_path_for(req) -> dict:            # req: AnalyzeRequest (덕 타이�
                           "무조건부 추정으로 계산했습니다."}
     return {
         "points": pts, "path_source": "recomputed", "reason": None,
-        "path_note": ("이 경로는 **현재 데이터로** 다시 계산했습니다 — 결정 시점에 "
+        "path_note": ("이 경로는 **현재 데이터로** 재계산했습니다 — 결정 시점에 "
                       "알 수 있었던 분류가 아닙니다. 고정된 국면 경로를 쓰려면 "
                       "경로가 함께 굳혀진 스냅샷(mes_id)을 지정하십시오."),
     }

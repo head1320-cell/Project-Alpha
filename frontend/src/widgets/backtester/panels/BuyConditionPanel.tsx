@@ -27,17 +27,17 @@ export default function BuyConditionPanel({ s, set }: {
         enabled={s.buy.enabled} onToggle={(v) => patchBuy({ enabled: v })}>
         <ConditionFormulaEditor tone="buy" conditions={s.buy.conditions} onChange={(c: Condition[]) => patchBuy({ conditions: c })}
           logicExpr={s.buy.logicExpr} onLogicChange={(v) => patchBuy({ logicExpr: v })} logicDefaultLabel="모두 AND" sideKey="buy" />
-        <SubToggle tone="buy" act="buy-fundamentals" label="재무 조건도 평가" hint="지금 스냅샷 기준이라 과거 시점에는 미래 정보가 섞일 수 있어요"
+        <SubToggle tone="buy" act="buy-fundamentals" label="재무 조건도 평가" hint="지금 스냅샷 기준이라 과거 시점에는 미래 정보가 섞일 수 있습니다"
           on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
         <div className="bte-col">
           <p className="bte-sub-h">고급 체결</p>
-          <SubToggle tone="buy" label="나눠 사기 (래더)" hint="가격이 움직일 때마다 비중을 나눠 체결해요"
+          <SubToggle tone="buy" label="나눠 사기 (래더)" hint="가격이 움직일 때마다 비중을 나눠 체결합니다"
             on={s.buy.splitBuy}
             onChange={(v) => patchBuy({ splitBuy: v, ladder: v && s.buy.ladder.length === 0 ? [{ movePct: 0, weightPct: 50 }, { movePct: -2, weightPct: 50 }] : s.buy.ladder })} />
           {s.buy.splitBuy && (
             <LadderEditor side="buy" steps={s.buy.ladder} onChange={(ladder) => patchBuy({ ladder })} />
           )}
-          <SubToggle tone="buy" label="돌파할 때만 사기" hint="기준가를 넘었을 때만 들어가요" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
+          <SubToggle tone="buy" label="돌파할 때만 사기" hint="기준가를 넘었을 때만 들어갑니다" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
           {s.buy.breakthrough && (
             <div className="bte-col">
               <div className="bte-row">
@@ -51,15 +51,15 @@ export default function BuyConditionPanel({ s, set }: {
               </div>
               <OffsetInput value={s.buy.breakthroughOffsetPct}
                 onChange={(breakthroughOffsetPct) => patchBuy({ breakthroughOffsetPct })} />
-              <p className="bte-note bte-note--warn">당일 시초가처럼 크게 흔들리는 기준은 불공정 거래 소지가 있으니 조심하세요.</p>
+              <p className="bte-note bte-note--warn">당일 시초가처럼 크게 흔들리는 기준은 불공정 거래 소지가 있으니 조심하십시오.</p>
             </div>
           )}
           <Field label="사는 때">
             <Segmented tone="buy" value={s.buy.buyTiming} onChange={(t) => patchBuy({ buyTiming: t })}
               options={[{ id: "pre_open", label: "장 시작 전" }, { id: "intraday", label: "장중 주문" }]} />
-            <p className="bte-note">장중 주문은 지정가로 살 때 시가 갭으로 체결되는 경우를 빼요(보수적).</p>
+            <p className="bte-note">장중 주문은 지정가로 살 때 시가 갭으로 체결되는 경우를 뺍니다(보수적).</p>
           </Field>
-          <p className="bte-note">TWAP·VWAP 체결은 아래 ‘체결가 유형’에서 골라요.</p>
+          <p className="bte-note">TWAP·VWAP 체결은 아래 ‘체결가 유형’에서 고릅니다.</p>
         </div>
       </Section>
 
@@ -73,7 +73,7 @@ export default function BuyConditionPanel({ s, set }: {
             onChange={(dir: SortDir) => patchBuy({ primarySort: { ...s.buy.primarySort, dir } })}
             options={[{ id: "DESC", label: "높은순" }, { id: "ASC", label: "낮은순" }]} />
         </Field>
-        <SubToggle tone="buy" label="순서를 식으로 (매일)" hint="위 순서 대신, 매일 식 값으로 사는 순서를 정해요"
+        <SubToggle tone="buy" label="순서를 식으로 (매일)" hint="위 순서 대신, 매일 식 값으로 사는 순서를 정합니다"
           on={s.buy.sortExpr.trim() !== ""} onChange={(on) => patchBuy({ sortExpr: on ? "{종합점수}" : "" })}>
           <input value={s.buy.sortExpr} spellCheck={false} className="bte-input bte-input--mono bte-input--wide" aria-label="순서 식"
             onChange={(e) => patchBuy({ sortExpr: e.target.value })}
@@ -103,7 +103,7 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="최대 보유 수">
           <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} max={30} act="max-stocks" />
-          <p className="bte-note">동시에 들고 있을 수 있는 종목 수예요. 후보를 몇 종목까지 볼지는 ③ ‘평가 종목 상한’에서 따로 정해요.</p>
+          <p className="bte-note">동시에 들고 있을 수 있는 종목 수입니다. 후보를 몇 종목까지 볼지는 ③ ‘평가 종목 상한’에서 따로 정합니다.</p>
         </Field>
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
@@ -113,7 +113,7 @@ export default function BuyConditionPanel({ s, set }: {
             <input value={s.buy.fillExpr} spellCheck={false} className="bte-input bte-input--mono bte-input--wide" aria-label="기준가 식"
               onChange={(e) => patchBuy({ fillExpr: e.target.value })}
               placeholder="예: (과거값({고가},{1일})+과거값({저가},{1일}))/2" />
-            <p className="bte-note">마지막 봉의 값이 기준가예요. 당일 종가가 들어간 식은 미래 정보를 써요 — 과거값(…)을 권해요.</p>
+            <p className="bte-note">마지막 봉의 값이 기준가입니다. 당일 종가가 들어간 식은 미래 정보를 씁니다 — 과거값(…)을 권합니다.</p>
           </Field>
         )}
         <Field label="사는 가격">
@@ -130,24 +130,24 @@ export default function BuyConditionPanel({ s, set }: {
         </SubToggle>
         <Field label="다시 사기까지">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />
-          <p className="bte-note">판 뒤 N일(달력 기준) 동안 같은 종목을 다시 사지 않아요. 0이면 쓰지 않아요.</p>
+          <p className="bte-note">판 뒤 N일(달력 기준) 동안 같은 종목을 다시 사지 않습니다. 0이면 쓰지 않습니다.</p>
         </Field>
       </Section>
 
       {!s.assetAlloc.enabled && (
-        <Section title="현금 남겨 두기" hint="평가자산 대비 현금을 늘 들고 있어요" tone="neutral"
+        <Section title="현금 남겨 두기" hint="평가자산 대비 현금을 늘 들고 있습니다" tone="neutral"
           enabled={s.cashReservePct > 0} onToggle={(on) => set((x) => ({ ...x, cashReservePct: on ? 10 : 0 }))}>
           <Field label="현금 비중">
             <QuickStepper value={s.cashReservePct} onChange={(v) => set((x) => ({ ...x, cashReservePct: v }))}
               chips={[10, 20, 30]} unit="%" min={0} max={90} />
-            <p className="bte-note">평가자산의 N%를 늘 현금으로 두고 살 돈에서 빼요. ETF 자산배분을 켜면 그쪽으로 합쳐져요.</p>
+            <p className="bte-note">평가자산의 N%를 늘 현금으로 두고 살 돈에서 뺍니다. ETF 자산배분을 켜면 그쪽으로 합쳐집니다.</p>
           </Field>
         </Section>
       )}
 
       <AssetAllocPanel s={s} set={set} />
 
-      <Section title="시장이 나쁠 때 멈추기" hint="지수 조건으로 포트폴리오 전체를 막아요(마켓타이밍)" tone="neutral"
+      <Section title="시장이 나쁠 때 멈추기" hint="지수 조건으로 포트폴리오 전체를 막습니다(마켓타이밍)" tone="neutral"
         enabled={s.marketTiming.on} onToggle={(on) => patchMt({ on })}>
         <Field label="기준 지수">
           <Segmented value={s.marketTiming.index} onChange={(index) => patchMt({ index })}
@@ -160,7 +160,7 @@ export default function BuyConditionPanel({ s, set }: {
         <ConditionFormulaEditor tone="neutral" conditions={s.marketTiming.conditions}
           onChange={(c: Condition[]) => patchMt({ conditions: c })} />
         <p className="bte-note">
-          지수 봉으로 평가해요(모두 맞으면 켬). 평균모멘텀스코어·변화율_기간 같은 가격 함수를 권해요. 평가할 수 없는 조건은 빼고 봐요.
+          지수 봉으로 평가합니다(모두 맞으면 켬). 평균모멘텀스코어·변화율_기간 같은 가격 함수를 권합니다. 평가할 수 없는 조건은 빼고 봅니다.
         </p>
       </Section>
 

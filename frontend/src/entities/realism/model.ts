@@ -48,11 +48,11 @@ export async function runRealism(strategyIds: number[], flags: Record<string, bo
   try {
     const r = await postJson("/api/v1/realism/backtest", { strategy_ids: strategyIds, ...RECIPE, ...flags });
     const body = await r.json().catch(() => null);
-    if (!r.ok) return { ok: false, reason: unavailableReason(body) ?? extractErrorDetail(body, `서버가 ${r.status} 로 답했어요. 사유를 받지 못했어요.`) };
-    if (!body?.success) return { ok: false, reason: String(body?.message ?? "서버가 계산하지 못했다고 답했어요. 사유를 받지 못했어요.") };
+    if (!r.ok) return { ok: false, reason: unavailableReason(body) ?? extractErrorDetail(body, `서버가 ${r.status} 로 답했습니다. 사유 수신 실패`) };
+    if (!body?.success) return { ok: false, reason: String(body?.message ?? "서버가 계산하지 못했다고 답했습니다. 사유 수신 실패") };
     return { ok: true, run: body as RealismRun };
   } catch {
-    return { ok: false, reason: "서버에 닿지 못했어요." };
+    return { ok: false, reason: "서버 연결 실패" };
   }
 }
 

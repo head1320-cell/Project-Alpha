@@ -110,7 +110,7 @@ def me(p: Principal = Depends(get_current_principal)):
     있어야 운영자가 "이 배포는 안전한가" 를 화면으로 확인할 수 있다. 값을 숨기면
     열화가 있었는지 없었는지 아무도 모른다.
 
-    ★바꿀 차례여도 열린다★ — 화면이 "비밀번호를 먼저 바꿔 주세요" 를 알아야 한다(BS1).
+    ★바꿀 차례여도 열린다★ — 화면이 "비밀번호를 먼저 변경하십시오" 를 알아야 한다(BS1).
     """
     from src.database import account_state
 
@@ -159,16 +159,16 @@ def change_password(req: PasswordChange, p: Principal = Depends(require_login_to
     fails = _recent_failures(p.username, now)
     if len(fails) >= _FAIL_LIMIT:
         wait = max(1, int((_FAIL_WINDOW_S - (now - fails[0])) // 60) + 1)
-        raise HTTPException(429, f"지금 비밀번호를 {_FAIL_LIMIT}번 틀려 잠시 막았어요 — 약 {wait}분 뒤에 다시 해 주세요.")
+        raise HTTPException(429, f"지금 비밀번호를 {_FAIL_LIMIT}번 틀려 잠시 막았습니다 — 약 {wait}분 뒤에 다시 하십시오.")
     if not verify_user(p.username, req.current_password):
         fails.append(now)
         logger.info("비밀번호 바꾸기 거절(지금 비밀번호 틀림): username=%r", p.username)
-        raise HTTPException(400, "지금 비밀번호가 맞지 않아요.")
+        raise HTTPException(400, "지금 비밀번호가 맞지 않습니다.")
     problems = password_problems(req.new_password, current=req.current_password, username=p.username)
     if problems:
-        raise HTTPException(400, "새 비밀번호를 쓸 수 없어요 — " + " ".join(problems))
+        raise HTTPException(400, "새 비밀번호를 쓸 수 없습니다 — " + " ".join(problems))
     if set_password(p.username, req.new_password, must_change=False) is None:
-        raise HTTPException(401, "계정을 찾을 수 없어요 — 다시 로그인하세요.")
+        raise HTTPException(401, "계정을 찾을 수 없습니다 — 다시 로그인하십시오.")
     _FAILURES.pop(p.username, None)
     logger.info("비밀번호를 바꿈: username=%r", p.username)
     return _issue_token(p.username, p.role)
@@ -199,7 +199,7 @@ def issue_user(req: IssueAccount, p: Principal = Depends(require_admin)):
 
     temp = issue_account(req.username, req.role)
     if temp is None:
-        raise HTTPException(409, f"이미 있는 아이디예요({req.username}).")
+        raise HTTPException(409, f"이미 있는 아이디입니다({req.username}).")
     logger.info("계정 발급: username=%r role=%r by=%r", req.username, req.role, p.username)
     return {"username": req.username, "role": req.role, "temporary_password": temp,
             "must_change_password": True}
@@ -212,6 +212,6 @@ def reset_user_password(username: str = Path(..., pattern=_USERNAME), p: Princip
 
     temp = reset_account_password(username)
     if temp is None:
-        raise HTTPException(404, f"그 아이디의 계정이 없어요({username}).")
+        raise HTTPException(404, f"그 아이디의 계정이 없습니다({username}).")
     logger.info("비밀번호 초기화: username=%r by=%r", username, p.username)
     return {"username": username, "temporary_password": temp, "must_change_password": True}

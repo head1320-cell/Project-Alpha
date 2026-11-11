@@ -74,7 +74,7 @@ export function ScoresResult({ v }: { v: Dict }) {
 export function ScoresToWeightsResult({ v }: { v: Dict }) {
   return (
     <>
-      {!v.has_sigma && <p className="pg-warn">공분산이 없어 ‘흔들림 나눠 보기’에는 쓸 수 없어요 — 수익률을 이어 주세요.</p>}
+      {!v.has_sigma && <p className="pg-warn">공분산이 없어 ‘흔들림 나눠 보기’에는 쓸 수 없습니다 — 수익률을 연결하십시오.</p>}
       <h4 className="pg-h4">비중</h4>
       <Bars values={(v.weights as Record<string, number>) ?? {}} labels={v.labels as Record<string, string>} unit="%" />
     </>
@@ -88,7 +88,7 @@ export function NeutralizeResult({ v }: { v: Dict }) {
   const names = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
   return (
     <>
-      <p className="pg-note">연구용 비중이에요 — 중립화는 사후 변환이라 실행 목표로 쓰지 않아요.</p>
+      <p className="pg-note">연구용 비중입니다 — 중립화는 사후 변환이라 실행 목표로 쓰지 않습니다.</p>
       <table className="pg-table">
         <thead><tr><th>종목</th><th className="pg-td-num">전</th><th className="pg-td-num">후</th></tr></thead>
         <tbody>{names.map((n) => (
@@ -120,7 +120,7 @@ export function SleeveResult({ v }: { v: Dict }) {
  */
 function MethodCompare({ mc, names }: { mc: Dict | undefined; names: string[] }) {
   if (!mc) return null;
-  if (!mc.available) return <p className="pg-help pg-mc-na">방법을 비교하지 못했어요 — {String(mc.reason ?? "사유 없음")}</p>;
+  if (!mc.available) return <p className="pg-help pg-mc-na">방법 비교 실패 — {String(mc.reason ?? "사유 없음")}</p>;
   const rows = (mc.rows as Dict[] | undefined) ?? [];
   const color = (i: number) => `var(--cat-${(i % 10) + 1})`;
   return (
@@ -196,7 +196,7 @@ export function PortfolioCombineResult({ v }: { v: Dict }) {
             {corr.labels.map((l, i) => (
               <tr key={l}><th scope="row">{l}</th>
                 {corr.matrix[i].map((x, j) => (i === j || num(x) === null
-                  ? <td key={j} className="pg-td-num" title={i === j ? undefined : "흔들림이 없는 전략이 있어 잴 수 없어요"}>{i === j ? "" : "—"}</td>
+                  ? <td key={j} className="pg-td-num" title={i === j ? undefined : "흔들림이 없는 전략이 있어 측정할 수 없습니다"}>{i === j ? "" : "—"}</td>
                   // 발산 색 — 세기 = |ρ|, 같은 방향 파랑 · 반대 방향 빨강. 글자 값이 늘 함께 있다(색만으로 읽지 않는다).
                   : <td key={j} className={`pg-td-num ${(x as number) < 0 ? "neg" : "pos"}`}
                         style={{ ["--pg-heat" as string]: `${Math.round(Math.abs(x as number) * 32)}%` }}>{fx(x, 2)}</td>))}
@@ -204,7 +204,7 @@ export function PortfolioCombineResult({ v }: { v: Dict }) {
             ))}
           </tbody>
         </table>
-      ) : <p className="pg-help">상관을 재지 못했어요 — {String(v.correlation_reason ?? "사유 없음")}</p>}
+      ) : <p className="pg-help">상관 측정 불가 — {String(v.correlation_reason ?? "사유 없음")}</p>}
       <RobustnessView rob={v.robustness as Dict | undefined} />
       <h4 className="pg-h4">합친 종목 비중</h4>
       <Bars values={(r.combined_weights_pct as Record<string, number>) ?? {}} labels={v.labels as Record<string, string>} unit="%" />

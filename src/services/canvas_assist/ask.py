@@ -25,12 +25,12 @@ MAX_SENTENCES = 4
 MAX_CHARS = 240
 WHY_NOT = ("none", "not_in_facts", "judgement", "off_topic")
 CANNOT = {
-    "not_in_facts": "이 노드·선의 계산 결과로는 답할 수 없어요.",
-    "judgement": "투자 판단은 말하지 않아요 — 계산이 무엇을 냈는지만 답해요.",
-    "off_topic": "이 노드·선의 계산에 대해 물어 주세요.",
+    "not_in_facts": "이 노드·선의 계산 결과로는 답할 수 없습니다.",
+    "judgement": "투자 판단은 말하지 않습니다 — 계산이 무엇을 냈는지만 답합니다.",
+    "off_topic": "이 노드·선의 계산에 대해 문의하십시오.",
 }
-_STALE = "서명이 맞지 않아요(그래프가 바뀌었거나 서버가 다시 시작했어요). 다시 계산하면 물을 수 있어요"
-_MISSING = "그래프에 없는 선이에요"
+_STALE = "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 물을 수 있습니다"
+_MISSING = "그래프에 없는 선입니다"
 _PART = {"title": "제목", "headline": "핵심 값", "fact": "사실", "trust": "믿음", "unmeasured": "재지 않은 것",
          "relation": "관계", "carried": "건너간 것", "issue": "빠지거나 바뀐 것", "checked": "점검"}
 
@@ -118,7 +118,7 @@ def _edge_lines(rec: dict) -> list[tuple[str, int, str]]:
         out += [("issue", i, str(x.get("text")) + (f" {x['fix']}" if x.get("fix") else "")) for i, x in enumerate(issues)
                 if isinstance(x, dict)]
     elif isinstance(issues, list):
-        out.append(("checked", 0, f"점검한 것: {' · '.join(map(str, rec.get('checks') or []))} — 잃거나 바뀐 것을 찾지 못했어요."))
+        out.append(("checked", 0, f"점검한 것: {' · '.join(map(str, rec.get('checks') or []))} — 잃거나 바뀐 것을 찾지 못했습니다."))
     elif rec.get("issues_reason"):
         out.append(("checked", 0, str(rec["issues_reason"])))
     return out
@@ -177,23 +177,23 @@ def _problem(it: Any, by_id: dict[str, dict]) -> tuple[str, str] | None:
     if not isinstance(it, dict) or set(it) != {"text", "fact_ids"} or not isinstance(it.get("text"), str) \
             or not it["text"].strip() or not isinstance(it.get("fact_ids"), list) \
             or not all(isinstance(i, str) for i in it["fact_ids"]):
-        return "shape", "문장의 형식이 맞지 않아요"
+        return "shape", "문장의 형식이 맞지 않습니다"
     text, ids = it["text"], it["fact_ids"]
     if not ids:
-        return "no_source", "근거로 댄 사실 줄이 없어요"
+        return "no_source", "근거로 댄 사실 줄이 없습니다"
     if any(i not in by_id for i in ids):
-        return "unknown_fact", "근거로 댄 사실 줄이 근거에 없어요"
+        return "unknown_fact", "근거로 댄 사실 줄이 근거에 없습니다"
     word = next((w for w in BANNED if w in text), None)
     if word:
-        return "banned", f"쓰지 않는 표현 ‘{word}’이 들어 있어요"
+        return "banned", f"쓰지 않는 표현 ‘{word}’이 들어 있습니다"
     if len(text) > MAX_CHARS:
-        return "too_long", f"문장이 {MAX_CHARS}자를 넘어요"
+        return "too_long", f"문장이 {MAX_CHARS}자를 넘습니다"
     allowed: set[str] = set()
     for i in ids:
         allowed |= numbers_of(by_id[i]["text"])
     extra = numbers_of(text) - allowed
     if extra:
-        return "numbers", f"댄 사실 줄에 없는 숫자 {', '.join(sorted(extra))} 를 썼어요"
+        return "numbers", f"댄 사실 줄에 없는 숫자 {', '.join(sorted(extra))} 를 썼습니다"
     return None
 
 
@@ -201,13 +201,13 @@ def check(raw: Any, grounding: dict, cannot: Mapping[str, str] = CANNOT) -> tupl
     """`(답 {answerable, cannot, sentences}, 탈락 [{code, reason}])` — 통과 문장의 줄 id 는 겹친 것을 하나로.
     `cannot` 은 답할 수 없을 때의 ★서버 고정 문장★ 표(PB4 고객 한 장은 고객용 문장을 쓴다)."""
     if not isinstance(raw, dict) or not isinstance(raw.get("sentences"), list) or not isinstance(raw.get("answerable"), bool):
-        return {"answerable": False, "cannot": cannot["not_in_facts"], "sentences": []}, [_rej("shape", "답의 형식이 맞지 않아요")]
+        return {"answerable": False, "cannot": cannot["not_in_facts"], "sentences": []}, [_rej("shape", "답의 형식이 맞지 않습니다")]
     by_id = {x["id"]: x for x in grounding["lines"]}
     ok: list[dict] = []
     bad: list[dict] = []
     for it in raw["sentences"]:
         if len(ok) >= MAX_SENTENCES:
-            bad.append(_rej("limit", f"{MAX_SENTENCES}문장을 넘어요"))
+            bad.append(_rej("limit", f"{MAX_SENTENCES}문장을 넘습니다"))
             continue
         why = _problem(it, by_id)
         if why:

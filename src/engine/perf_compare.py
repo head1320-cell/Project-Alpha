@@ -13,21 +13,21 @@ from typing import Any
 
 #: 캔버스 비교 노드의 지표 7(이전 `_STAT_KO` — 표 7행이 E2E 계약).
 NODE_METRICS: tuple[tuple[str, str, str], ...] = (
-    ("total_return_pct", "총수익", "%"), ("cagr", "연평균(CAGR)", "%"), ("sharpe_ratio", "샤프", ""),
-    ("max_drawdown_pct", "최대 낙폭", "%"), ("win_rate", "승률", "%"), ("num_trades", "거래 수", "회"),
+    ("total_return_pct", "총수익률", "%"), ("cagr", "연평균(CAGR)", "%"), ("sharpe_ratio", "샤프", ""),
+    ("max_drawdown_pct", "최대 낙폭", "%"), ("win_rate", "승률", "%"), ("num_trades", "거래 횟수", "회"),
     ("profit_factor", "손익비", ""),
 )
 #: 비교 화면의 지표 10(이전 `CMP_METRICS`).
 PAGE_METRICS: tuple[tuple[str, str, str], ...] = (
     ("total_return_pct", "총수익률", "%"), ("cagr", "연평균 수익률", "%"), ("max_drawdown_pct", "최대낙폭", "%"),
-    ("volatility_pct", "변동성(연)", "%"), ("sharpe_ratio", "샤프 지수", ""), ("sortino_ratio", "소르티노 지수", ""),
+    ("volatility_pct", "연환산 변동성", "%"), ("sharpe_ratio", "샤프 지수", ""), ("sortino_ratio", "소르티노 지수", ""),
     ("calmar_ratio", "칼마 비율", ""), ("win_rate", "이긴 거래 비율", "%"), ("profit_factor", "손익비", ""),
-    ("num_trades", "거래 수", "회"),
+    ("num_trades", "거래 횟수", "회"),
 )
 METRIC_SPECS = {"page": PAGE_METRICS, "node": NODE_METRICS}
 
-INDEX_NOTE = "두 실행의 기간이 달라 날짜가 아니라 시작부터 {n}일째로 맞췄어요 — 같은 날끼리가 아니에요."
-MISSING_NOTE = "한쪽에 없는 날이 있어요 — 그날은 그쪽 값이 비어요."
+INDEX_NOTE = "두 실행의 기간이 달라 날짜가 아니라 시작부터 {n}일째로 맞췄습니다 — 같은 날끼리가 아닙니다."
+MISSING_NOTE = "한쪽에 없는 날이 있습니다 — 그날은 그쪽 값이 빕니다."
 
 
 def _num(v: Any) -> float | None:
@@ -75,7 +75,7 @@ def align_curves(dates_a: Iterable[Any], eq_a: Iterable[Any], dates_b: Iterable[
 
 
 def yearly_diff(periods_a: dict | None, periods_b: dict | None) -> list[dict]:
-    """해마다 차이 — `period_returns` 출력 둘을 해 합집합으로. 한쪽이 없으면 그쪽 None · 차이 None(0 아님)."""
+    """연도별 차이 — `period_returns` 출력 둘을 해 합집합으로. 한쪽이 없으면 그쪽 None · 차이 None(0 아님)."""
     ya = {int(r["year"]): r for r in ((periods_a or {}).get("yearly") or [])}
     yb = {int(r["year"]): r for r in ((periods_b or {}).get("yearly") or [])}
     out = []
@@ -90,7 +90,7 @@ def yearly_diff(periods_a: dict | None, periods_b: dict | None) -> list[dict]:
 
 
 def metric_rows(stats_a: dict | None, stats_b: dict | None, spec: Iterable[tuple[str, str, str]]) -> list[dict]:
-    """지표 차이 행 — 한쪽이 없으면 `diff: None`(0 이 아니다 · 화면이 "비교할 수 없어요" 라고 말한다)."""
+    """지표 차이 행 — 한쪽이 없으면 `diff: None`(0 이 아니다 · 화면이 "비교할 수 없습니다" 라고 말한다)."""
     rows = []
     for key, label, unit in spec:
         a = _num((stats_a or {}).get(key))

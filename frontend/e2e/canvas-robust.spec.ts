@@ -136,32 +136,32 @@ test("견고성 절(BR R1a): 모르면 '—' 와 서버 사유 — 0 으로 그�
       if (!rob) continue;
       pfId = id;
       const pairs = (rob.crisis as { pairs: Dict[] }).pairs;
-      pairs[0].co_drops = null; pairs[0].expected_co_drops = null; pairs[0].reason = "흔들림이 없어요(테스트)";
-      rob.effective_n = { available: false, value: null, n: 2, reason: "상관을 못 잰 쌍이 있어요(테스트)" };
-      rob.shock = { available: false, reason: "충격을 넣지 못했어요(테스트)" };
+      pairs[0].co_drops = null; pairs[0].expected_co_drops = null; pairs[0].reason = "흔들림이 없습니다(테스트)";
+      rob.effective_n = { available: false, value: null, n: 2, reason: "상관을 못 잰 쌍이 있습니다(테스트)" };
+      rob.shock = { available: false, reason: "충격을 넣지 못했습니다(테스트)" };
     }
   });
   await run(page);
   await openCombine(page, pfId);
   const cs = await openSection(page, "위기 때 상관");
   await expect(cs.locator(".pg-rob-codrop").first()).toHaveText("같이 떨어진 날 —");
-  await expect(cs.locator(".pg-rob-codrop").first()).toHaveAttribute("title", "흔들림이 없어요(테스트)");
+  await expect(cs.locator(".pg-rob-codrop").first()).toHaveAttribute("title", "흔들림이 없습니다(테스트)");
   const more = await openSection(page, "더 보기");
   await expect(more.locator(".pg-kv div").first()).toContainText("—");
-  await expect(more).toContainText("상관을 못 잰 쌍이 있어요(테스트)");
+  await expect(more).toContainText("상관을 못 잰 쌍이 있습니다(테스트)");
   const sh = await openSection(page, "상관 급등 충격");
-  await expect(sh).toContainText("충격을 넣지 못했어요(테스트)");
+  await expect(sh).toContainText("충격을 넣지 못했습니다(테스트)");
 
   // 짝 — 절 전체를 못 재면 그 사유 한 줄만(빈 표를 그리지 않는다).
   await page.unroute("**/api/v1/allocation/graph/run**");
   await patchRun(page, (b) => {
     for (const r of Object.values(b.nodes)) {
-      if (r.view?.robustness) r.view.robustness = { available: false, reason: "견고성 계산이 깨졌어요(테스트)" };
+      if (r.view?.robustness) r.view.robustness = { available: false, reason: "견고성 계산이 깨졌습니다(테스트)" };
     }
   });
   await run(page);
   await openCombine(page, pfId);
-  await expect(page.locator(".pg-side .pg-rob")).toContainText("견고성을 재지 못했어요 — 견고성 계산이 깨졌어요(테스트)");
+  await expect(page.locator(".pg-side .pg-rob")).toContainText("견고성 측정 불가 — 견고성 계산이 깨졌습니다(테스트)");
   await expect(page.locator(".pg-side .pg-rob-sec")).toHaveCount(0);
 });
 
@@ -177,7 +177,7 @@ test("고른 노드 견고성 비교(BR R1b): 비중 노드 둘을 고르면 막
   await node(page, bottom.id).click({ modifiers: [mod] });
   const bar = page.locator(".pg-selbar");
   await expect(bar).toBeVisible();
-  await expect(bar.locator(".pg-selbar-n")).toHaveText("2개 골랐어요");
+  await expect(bar.locator(".pg-selbar-n")).toHaveText("2개 골랐습니다");
   await expect(bar.locator(".pg-selbar-compare")).not.toHaveAttribute("aria-disabled", "true");
   const before = doc.nodes.length;
   await bar.locator(".pg-selbar-compare").click();
@@ -331,7 +331,7 @@ test("기록끼리 견고성(BS3): 정책 백테스트 둘을 고르면 막대�
   const items = page.locator(".pg-side .pg-rec-item");
   await expect(items).toHaveCount(2);
   await expect(items.first()).toHaveAttribute("data-source", "backtest_result");
-  await expect(items.first()).toContainText("연습용(합성)");                  // mock — 실데이터라고 하지 않는다
+  await expect(items.first()).toContainText("합성");                  // mock — 실데이터라고 하지 않는다
   const period = (r.view!.robustness as Dict).period as { start: string; end: string };
   await expect(page.locator(".pg-side .pg-rob-basis")).toContainText(`${period.start}~${period.end}`);
   await expect(page.locator(".pg-side .pg-rob-basis")).toContainText("실거래 기록이 아니고");

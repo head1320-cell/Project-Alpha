@@ -126,9 +126,9 @@ export function ShellSearch({ screens }: { screens: ScreenLink[] }) {
               </li>
             ))}
           </ul>
-          {pending && <p className="tx-find-note" role="status">종목을 찾는 중이에요</p>}
-          {failed && <p className="tx-find-note tx-find-note--err" role="alert">종목 검색에 닿지 못했어요. 화면 이름으로는 찾을 수 있어요.</p>}
-          {!pending && !failed && !items.length && <p className="tx-find-note" role="status">‘{q.trim()}’ — 맞는 종목·화면이 없어요</p>}
+          {pending && <p className="tx-find-note" role="status">종목을 찾는 중입니다</p>}
+          {failed && <p className="tx-find-note tx-find-note--err" role="alert">종목 검색 연결 실패. 화면 이름으로는 찾을 수 있습니다.</p>}
+          {!pending && !failed && !items.length && <p className="tx-find-note" role="status">‘{q.trim()}’ — 맞는 종목·화면이 없습니다</p>}
         </div>
       )}
     </div>

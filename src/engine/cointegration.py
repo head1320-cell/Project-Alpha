@@ -96,7 +96,7 @@ def analyze_long_run(series: dict[str, list[float]], *,
             f"코어 변수는 최대 {MAX_CORE_VARS}개입니다 — {len(series)}개가 들어왔습니다. "
             f"VECM 의 모수는 대략 K²p 라, K={len(series)} 면 관측 수를 크게 넘어 "
             "추정 결과가 노이즈가 됩니다. 차원 축소(PCA)로 줄이지 않는 이유는 요인이 "
-            "해석을 잃기 때문입니다 — 코어 변수를 골라 주세요."
+            "해석을 잃기 때문입니다 — 코어 변수를 선택하십시오."
         )
 
     names, cols, n = _clean(series)

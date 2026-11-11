@@ -17,7 +17,7 @@ export default function MacroLayout({ children }: { children: React.ReactNode })
   const root = usePathname() === "/macro";
   return (
     <div className={`ms-root${root ? " ms-root--home" : ""}`}>
-      {root && <PageHead title="매크로 분석" lede="경기와 물가가 어느 쪽으로 가는지 봐요." />}
+      {root && <PageHead title="매크로 분석" lede="경기와 물가가 어느 쪽으로 가는지 봅니다." />}
       <StudioNav />
       {children}
     </div>

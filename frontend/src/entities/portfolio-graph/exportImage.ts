@@ -49,15 +49,15 @@ export function captionLines(r: { name?: string; now: Date; computed: boolean; p
   const d = r.now;
   const when = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
   const out = [`‘${r.name || "이름 없는 설계"}’ · ${when} 내보냄`];
-  if (!r.computed) out.push("계산 전이에요 — 카드에 결과가 없어요");
-  if (r.computed && r.practice) out.push("연습용(합성) 데이터로 계산한 결과예요 — 실제 시세가 아니에요");
-  if (r.computed && r.stale) out.push("바꾼 뒤 다시 계산하지 않은 예전 결과가 섞여 있어요");
+  if (!r.computed) out.push("계산 전입니다 — 카드에 결과가 없습니다");
+  if (r.computed && r.practice) out.push("합성 데이터로 계산한 결과입니다 — 실제 시세가 아닙니다");
+  if (r.computed && r.stale) out.push("바꾼 뒤 재계산하지 않은 예전 결과가 섞여 있습니다");
   return out;
 }
 /** 받은 뒤 알림 — 띠에 적은 성격을 그대로 말한다(띠는 그림 안이라 화면에서 다시 알린다). */
 export function exportNote(lines: string[]): string {
   const nature = lines.slice(1);
-  return nature.length ? `그림(PNG)을 받았어요. 그림 아래에 적었어요: ${nature.join(" · ")}.` : "그림(PNG)을 받았어요.";
+  return nature.length ? `그림(PNG)을 받았습니다. 그림 아래에 적었습니다: ${nature.join(" · ")}.` : "그림(PNG)을 받았습니다.";
 }
 
 /** html-to-image `filter` — 겹침 클래스가 하나라도 있으면 뺀다. */

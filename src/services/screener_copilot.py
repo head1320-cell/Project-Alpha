@@ -75,9 +75,9 @@ def build_copilot_system_prompt() -> str:
 
 
 def build_user_prompt(query: str, retry_error: str | None = None) -> str:
-    base = f'다음 요청을 필터 JSON으로 변환하세요:\n"{query}"'
+    base = f'다음 요청을 필터 JSON으로 변환하십시오:\n"{query}"'
     if retry_error:
-        base += f'\n\n이전 시도가 실패했습니다. 오류: {retry_error}\n반드시 사용 가능한 필드 id만 사용하여 다시 생성하세요.'
+        base += f'\n\n이전 시도가 실패했습니다. 오류: {retry_error}\n반드시 사용 가능한 필드 id만 사용하여 다시 생성하십시오.'
     return base
 
 
@@ -238,7 +238,7 @@ def _rule_based_fallback(query: str) -> dict:
         # 기본: 종합점수 상위
         matched_conditions.append({"kind": "field", "field": "composite_score", "op": "gte", "value": 50})
         matched_labels.append("종합점수 50 이상")
-        explanation = f'"{query}"를 명확히 해석하지 못해 기본 필터를 적용했습니다. 좌측에서 직접 조건을 추가하세요.'
+        explanation = f'"{query}"를 명확히 해석하지 못해 기본 필터를 적용했습니다. 좌측에서 직접 조건을 추가하십시오.'
         confidence = 0.3
     else:
         explanation = f"규칙 기반 해석: {' + '.join(matched_labels)}"

@@ -83,11 +83,11 @@ async function sameGrammar(page: Page, n: RunBody["nodes"][string], dates: strin
   await page.keyboard.press("End");
   await expect(read).toContainText(dates[dates.length - 1]);
   const yearly = (n.view!.periods as { yearly: unknown[] }).yearly;
-  expect(yearly.length, "서버가 해마다 수익을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(0);
+  expect(yearly.length, "서버가 연도별 수익률을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(0);
   await expect(side(page).locator(".pf-year")).toHaveCount(yearly.length);
   await expect(side(page).locator(".recharts-wrapper, .recharts-tooltip-wrapper")).toHaveCount(0);
   await expect(side(page).locator(NEW_PART_TITLES)).toHaveCount(0);
-  await expect(side(page).locator(".pf-kv")).toContainText("총수익");
+  await expect(side(page).locator(".pf-kv")).toContainText("총수익률");
   await expect(side(page).locator(".pg-perf .perf-label")).toBeVisible();
   await expect(side(page).locator(".pg-result")).not.toContainText("NaN");
   const det = side(page).locator("details.pf-table");
@@ -154,7 +154,7 @@ test("(d) 해마다 막대 수 = 서버 periods.yearly · 부분 연도는 '일�
   await openCanvas(page);
   const body = await run(page);
   const yearly = (body.nodes.backtest.view!.periods as { yearly: { year: number; return_pct: number; partial: boolean }[] }).yearly;
-  expect(yearly.length, "서버가 해마다 수익을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(0);
+  expect(yearly.length, "서버가 연도별 수익률을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(0);
   await detail(page, "backtest");
   const rows = side(page).locator(".pf-year");
   await expect(rows).toHaveCount(yearly.length);
@@ -182,11 +182,11 @@ test("(e) 벤치마크가 없으면 범례가 그렇게 말한다 — 짝: 있�
   await expect(side(page).locator(".pf-curve .pf-line-bench")).toHaveCount(0);
 });
 
-test("(f) 합성 데이터면 띠 범례에 '연습용 데이터' — 짝: 실데이터라고 말하면 없다", async ({ page }) => {
+test("(f) 합성 데이터면 띠 범례에 '합성 데이터' — 짝: 실데이터라고 말하면 없다", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   await detail(page, "backtest");
-  await expect(side(page).locator(".pf-strip-legend")).toContainText("연습용 데이터");
+  await expect(side(page).locator(".pf-strip-legend")).toContainText("합성 데이터");
   await expect(side(page).locator(".pf-curve .pf-strip-practice")).toHaveCount(1);
   await patchRun(page, (b) => {
     const n = b.nodes.backtest as unknown as { provenance?: { perf_label?: { data_real?: boolean | null } } };
@@ -195,7 +195,7 @@ test("(f) 합성 데이터면 띠 범례에 '연습용 데이터' — 짝: 실�
   });
   await run(page);
   await detail(page, "backtest");
-  await expect(side(page).locator(".pf-strip-legend")).not.toContainText("연습용 데이터");
+  await expect(side(page).locator(".pf-strip-legend")).not.toContainText("합성 데이터");
   await expect(side(page).locator(".pf-curve .pf-strip-practice")).toHaveCount(0);
 });
 
@@ -232,20 +232,19 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("(i) 기존 계약 그대로 — .pg-kv 총수익 · .pg-chart 보임 · [data-lookahead] · .pg-bt-cf · 성과 라벨", async ({ page }) => {
+test("(i) 기존 계약 그대로 — .pg-kv 총수익률 · .pg-chart 보임 · [data-lookahead] · .pg-bt-cf · 성과 라벨", async ({ page }) => {
   await openCanvas(page);
   await run(page);
   await detail(page, "backtest");
-  await expect(side(page).locator(".pg-kv", { hasText: "총수익" }).first()).toBeVisible();
+  await expect(side(page).locator(".pg-kv", { hasText: "총수익률" }).first()).toBeVisible();
   const kv = side(page).locator(".pf-kv");
-  await expect(kv).toContainText("총수익");
+  await expect(kv).toContainText("총수익률");
   await expect(side(page).locator(".pg-chart").first()).toBeVisible();
   await expect(side(page).locator("[data-lookahead]")).toHaveCount(1);
   await expect(side(page).locator(".pg-bt-cf, .pg-bt-cf-na").first()).toBeVisible();
   await expect(side(page).locator(".pg-perf .perf-label")).toBeVisible();
-  // 영어 약어 라벨은 없다 — 한글로.
-  await expect(kv).not.toContainText("CAGR");
-  await expect(kv).not.toContainText("MDD");
+  // 약어는 용어집 §5 의 것만 쓰고, 국문을 괄호로 붙인다(ADR 005).
+  await expect(kv).toContainText("MDD(최대낙폭)");
 });
 
 test("(j) 백테스트 불러오기 — 같은 문법 · 낙폭은 서버가 % 로 옮긴 값 · 벤치마크 · 리밸런싱을 모르면 띠가 말하지 않는다", async ({ page }) => {
@@ -281,9 +280,9 @@ test("(j) 백테스트 불러오기 — 같은 문법 · 낙폭은 서버가 % �
   // 리밸런싱 날짜도 횟수도 모르는 노드 — 띠는 리밸런싱을 말하지 않는다(0번이라고도 하지 않는다 · 모름 ≠ 0).
   await expect(side(page).locator(".pf-strip-legend")).not.toContainText("리밸런싱");
   await expect(side(page).locator(".pf-curve .pf-strip-rebal")).toHaveCount(0);
-  await expect(side(page).locator(".pf-strip-legend")).toContainText("연습용 데이터");          // is_mock_data → data_real=false
+  await expect(side(page).locator(".pf-strip-legend")).toContainText("합성 데이터");          // is_mock_data → data_real=false
   await expect(side(page).locator(".pg-note", { hasText: `실행 ${rid}` })).toBeVisible();          // 아래 절(실행 id) 그대로
-  await expect(side(page).locator(".pg-kv", { hasText: "총수익" }).first()).toBeVisible();          // BL3 W1 계약
+  await expect(side(page).locator(".pg-kv", { hasText: "총수익률" }).first()).toBeVisible();          // BL3 W1 계약
 });
 
 test("(k) 전략 묶음 — 같은 문법(서버 모양 픽스처) · 낙폭은 숨은 오른쪽 축이 아니라 같은 물속 · 벤치마크 없음 · 리밸런싱 날짜 없음 · 아래 절 그대로", async ({ page }) => {
@@ -310,11 +309,11 @@ test("(k) 전략 묶음 — 같은 문법(서버 모양 픽스처) · 낙폭은 
       curve: dates.map((d, i) => ({ date: d, equity: Math.round(eq[i] * 1e8), dd: dd[i] })),       // 원 단위 · 같은 모양(비율이라 기간별 수익·낙폭 사건은 그대로)
       periods: bv.periods, drawdowns: bv.drawdowns, last_weights: { "1": 0.6, "2": 0.4 },
     },
-    explain: { title: "전략 2개를 묶어 돌려 봤어요",
+    explain: { title: "전략 2개를 묶어 돌려 봤습니다",
                headline: { label: "전체 수익", value: total, unit: "%", text: `${total >= 0 ? "+" : ""}${total.toFixed(1)}%` },
-               facts: ["전략 2개를 ‘같은 비중’ 방식으로 달마다 다시 나눴어요."],
-               trust: [{ state: "confirmed", text: "기록하지 않고 계산만 했어요 — 실행 기록은 남지 않아요." }],
-               unmeasured: ["표본 밖 성과 — 등록된 전략의 과거 기록을 다시 나눈 결과예요"] },
+               facts: ["전략 2개를 ‘같은 비중’ 방식으로 달마다 다시 나눴습니다."],
+               trust: [{ state: "confirmed", text: "기록하지 않고 계산만 했습니다 — 실행 기록은 남지 않습니다." }],
+               unmeasured: ["표본 밖 성과 — 등록된 전략의 과거 기록을 다시 나눈 결과입니다"] },
   };
   await importText(page, "pf-strategy.json", JSON.stringify({ ...DOC, nodes: [{ id: "m", type: "strategy_backtest", params: {}, position: { x: 0, y: 0 } }] }));
   await patchRun(page, (b) => { b.ok = true; (b as unknown as { errors: unknown[] }).errors = []; b.nodes.m = { ...b.nodes.m, ...fixture }; });
@@ -327,11 +326,11 @@ test("(k) 전략 묶음 — 같은 문법(서버 모양 픽스처) · 낙폭은 
   await expect(side(page).locator(".pf-curve .pf-line-bench")).toHaveCount(0);
   // 리밸런싱 횟수는 알지만 날짜는 없다 — 눈금 0 · 글로 그렇게 말한다(눈금 없이 횟수만 그리지 않는다)
   await expect(side(page).locator(".pf-curve .pf-strip-rebal")).toHaveCount(0);
-  await expect(side(page).locator(".pf-strip-legend")).toContainText(`리밸런싱 ${nReb}번 (날짜는 기록에 없어요)`);
-  await expect(side(page).locator(".pf-strip-legend")).toContainText("연습용 데이터");
+  await expect(side(page).locator(".pf-strip-legend")).toContainText(`리밸런싱 ${nReb}번 (날짜는 기록에 없습니다)`);
+  await expect(side(page).locator(".pf-strip-legend")).toContainText("합성 데이터");
   // 아래 절 그대로 — 기간·다시 나눈 횟수 · 전략 비중 · 수익 나눠 보기(안 잰 칸 넷은 '안 쟀어요') · 전략 출처 둘
   await expect(side(page).locator(".pg-kv", { hasText: "다시 나눈 횟수" })).toContainText(`${nReb}번`);
   await expect(side(page).locator(".pg-h4", { hasText: "마지막 날 전략 비중" })).toBeVisible();
-  await expect(side(page).locator(".pg-tag--unknown", { hasText: "안 쟀어요" })).toHaveCount(4);
+  await expect(side(page).locator(".pg-tag--unknown", { hasText: "안 측정했습니다" })).toHaveCount(4);
   await expect(side(page).locator(".pg-src li")).toHaveCount(2);
 });

@@ -44,9 +44,9 @@ const SECS = [
   { id: "value", label: "가치", title: "주가와 가치" },
   { id: "models", label: "여러 모형", title: "여러 모형으로 본 가치" },
   { id: "numbers", label: "핵심 숫자", title: "핵심 숫자" },
-  { id: "money", label: "돈 버는 힘", title: "돈 버는 힘" },
+  { id: "money", label: "수익성", title: "수익성" },
   { id: "risk", label: "위험", title: "위험" },
-  { id: "peers", label: "같은 업종", title: "같은 업종" },
+  { id: "peers", label: "동종업계", title: "동종업계" },
   { id: "factors", label: "팩터", title: "팩터로 본 위치" },
   { id: "ai", label: "AI", title: "AI 설명" },
 ] as const;
@@ -198,13 +198,13 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   // ── 답 ──
   const hasIntrinsic = c.intrinsic > 0 && Number.isFinite(c.gapPct);
   const sentence = hasIntrinsic
-    ? <>우리 추정 내재가치 {priceWon(c.intrinsic)}보다 {Math.round(Math.abs(c.gapPct))}% {c.gapPct < 0 ? "낮게" : "높게"} 거래돼요</>
-    : <>내재가치를 계산하지 못했어요. 지금은 판단하지 않아요.</>;
+    ? <>내재가치(추정) {priceWon(c.intrinsic)}보다 {Math.round(Math.abs(c.gapPct))}% {c.gapPct < 0 ? "낮게" : "높게"} 거래됩니다</>
+    : <>내재가치 산출 실패. 지금은 판단하지 않습니다.</>;
   const chips: Chip[] = [];
   // 연습용 = connection-status(mock 게이트) 또는 머리 문장 응답의 is_mock — 어느 하나라도 연습용이면 말한다.
-  if (cs.data?.mock_allowed || c.isMock) chips.push({ label: "연습용 시세·재무", tone: "practice" });
+  if (cs.data?.mock_allowed || c.isMock) chips.push({ label: "합성 시세·재무", tone: "practice" });
   if (!c.failed.includes("valuation")) chips.push({ label: `가치 모형 ${c.models.length}개로 계산(RIM·DCF·DDM 중)`, tone: "info" });
-  if (c.failed.includes("valuation")) chips.push({ label: "가치평가를 불러오지 못했어요", tone: "unknown" });
+  if (c.failed.includes("valuation")) chips.push({ label: "가치평가 조회 실패", tone: "unknown" });
   if (!c.price1y.length && !c.failed.includes("prices")) chips.push({ label: "시세 없음", tone: "unknown" });
 
   const bands: ValueBandIn[] = (sb.data?.football_field.bands ?? [])
@@ -259,22 +259,22 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {/* ── 주가와 가치 ── */}
       {sec("value", (
         <>
-          <p className="ci-sec-lede">1년 주가 선(날마다의 종가) 오른쪽에 모형별 가치 범위를 막대로 세웠어요. 가는 실선은 지금 주가예요. 종가와 받아 오는 곳과 때가 달라 선 끝과 높이가 다를 수 있어요. 점선은 우리 추정 내재가치예요.</p>
-          {c.failed.includes("prices") && <RetryFail title="시세를 불러오지 못했어요" onRetry={onRetry} />}
-          {!c.price1y.length && !c.failed.includes("prices") && <p className="ci-pv-noprice">시세가 아직 적재되지 않았어요. 주가 선 없이 가치 범위만 보여 드려요.</p>}
-          {sb.isError && <RetryFail title="가치 범위를 불러오지 못했어요" onRetry={() => void sb.refetch()} />}
+          <p className="ci-sec-lede">1년 주가 선(날마다의 종가) 오른쪽에 모형별 밸류에이션 밴드를 막대로 세웠습니다. 가는 실선은 현재가입니다. 종가와 받아 오는 곳과 때가 달라 선 끝과 높이가 다를 수 있습니다. 점선은 내재가치(추정)입니다.</p>
+          {c.failed.includes("prices") && <RetryFail title="시세 조회 실패" onRetry={onRetry} />}
+          {!c.price1y.length && !c.failed.includes("prices") && <p className="ci-pv-noprice">시세가 아직 적재되지 않았습니다. 주가 선 없이 밸류에이션 밴드만 보여 드립니다.</p>}
+          {sb.isError && <RetryFail title="밸류에이션 밴드 조회 실패" onRetry={() => void sb.refetch()} />}
           <PriceValueChart data={c.price1y} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : 0} bands={bands} />
 
           <div className="ci-block">
             <h3 className="ci-block-h">모형 한눈에</h3>
-            <p className="ci-assume-diff">위 문장의 내재가치는 무위험수익률 3.5%·베타 1.0 고정 가정이에요. 아래 줄들은 실측 기본값
+            <p className="ci-assume-diff">위 문장의 내재가치는 무위험수익률 3.5%·베타 1.0 고정 가정입니다. 아래 줄들은 실측 기본값
               {sb.data ? <>(무위험 <span data-server>{(sb.data.assumptions.find((a) => a.key === "rf")?.source) ?? "출처 모름"}</span>, 베타 <span data-server>{(sb.data.assumptions.find((a) => a.key === "beta")?.source) ?? "출처 모름"}</span>)</> : null}
-              을 써서 값이 다를 수 있어요.</p>
+              을 써서 값이 다를 수 있습니다.</p>
             <ModelLadder rows={ladder} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : null} />
           </div>
 
           {c.failed.includes("valuation")
-            ? <RetryFail title="가치평가를 불러오지 못했어요" onRetry={onRetry}>서버에 닿지 못했어요. 모형별 값은 다시 시도하면 나와요.</RetryFail>
+            ? <RetryFail title="가치평가 조회 실패" onRetry={onRetry}>서버 연결 실패. 모형별 값은 재시도하면 나옵니다.</RetryFail>
             : c.models.length ? (
               <div className="ci-models">
                 {c.models.map((m) => (
@@ -290,22 +290,22 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                   </div>
                 ))}
               </div>
-            ) : <p className="ci-models-none">가치 모형이 이번에는 값을 내지 못했어요(재무 자료가 부족해요).</p>}
+            ) : <p className="ci-models-none">가치 모형이 이번에는 값 산출 실패(재무 자료가 부족합니다).</p>}
 
           {c.scenarios.length >= 2 && (
             <div className="ci-block">
-              <h3 className="ci-block-h">가정을 바꿔 다시 계산하면</h3>
+              <h3 className="ci-block-h">가정을 바꿔 재계산하면</h3>
               <ScenarioCards scenarios={c.scenarios} price={c.price} />
             </div>
           )}
 
           <details className="ci-more">
-            <summary>가치를 더 자세히 보기(1년 주가·가치 밴드·모형별 범위·가정 바꿔 보기·민감도·업종 안 위치·상대가치)</summary>
+            <summary>가치를 더 상세 보기(1년 주가·가치 밴드·모형별 범위·가정 바꿔 보기·민감도·업종 안 위치·상대가치)</summary>
             {c.price1y.length > 0 && (
               <div className="ci-block">
                 <h3 className="ci-block-h">1년 주가</h3>
                 <PriceChart data={c.price1y} intrinsic={hasIntrinsic ? c.intrinsic : undefined} />
-                <p className="ci-note">점선은 우리 추정 내재가치예요.</p>
+                <p className="ci-note">점선은 내재가치(추정)입니다.</p>
               </div>
             )}
             <div className="ci-block">
@@ -313,7 +313,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
               <ValueBand price={c.price} models={c.models} intrinsic={c.intrinsic} />
             </div>
             {sb.data && <ValuationTab code={c.code} price={c.price} base={sb.data} />}
-            {sb.isLoading && <p className="ca-cp-note">가치 범위를 계산하는 중이에요</p>}
+            {sb.isLoading && <p className="ca-cp-note">밸류에이션 밴드 계산 중</p>}
           </details>
         </>
       ))}
@@ -348,7 +348,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                   ))}
                 </div>
               </div>
-              <p className="ci-note">100점 만점. 점수는 서버가 계산한 값이에요.</p>
+              <p className="ci-note">100점 만점. 점수는 서버가 계산한 값입니다.</p>
             </div>
             <div className="ci-block ca-cp-card">
               <h3 className="ci-block-h">최근 추세(연도별)</h3>
@@ -359,8 +359,8 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                   ))}
                 </div>
               ) : c.failed.includes("financials")
-                ? <RetryFail title="재무 시계열을 불러오지 못했어요" onRetry={onRetry} />
-                : <p className="ca-cp-empty">재무 시계열 자료가 없어요.</p>}
+                ? <RetryFail title="재무 시계열 조회 실패" onRetry={onRetry} />
+                : <p className="ca-cp-empty">재무 시계열 자료 없음</p>}
             </div>
             <div className="ci-block ca-cp-card">
               <h3 className="ci-block-h">강한 점과 약한 점(비교 표본 안 백분위)</h3>
@@ -373,10 +373,10 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
             <div className="ci-block ca-cp-card">
               <h3 className="ci-block-h">기술 신호와 시장 국면</h3>
               <dl className="ci-dl">
-                <div><dt>기술 신호</dt><dd>{signal === undefined ? "확인하는 중이에요" : signal === null ? "신호를 받지 못했어요" : signalKo(signal.action)}</dd></div>
+                <div><dt>기술 신호</dt><dd>{signal === undefined ? "확인 중" : signal === null ? "신호 수신 실패" : signalKo(signal.action)}</dd></div>
                 {signal?.strategy && <div><dt>근거 전략</dt><dd data-server>{signal.strategy}</dd></div>}
                 {signal?.reason && <div><dt>이유</dt><dd data-server>{signal.reason}</dd></div>}
-                <div><dt>시장 국면</dt><dd>{macro ? regimeName(macro.regime) : "국면을 받지 못했어요"}</dd></div>
+                <div><dt>시장 국면</dt><dd>{macro ? regimeName(macro.regime) : "국면 수신 실패"}</dd></div>
                 {macro?.riskFree != null && <div><dt>무위험수익률</dt><dd>{(macro.riskFree * 100).toFixed(1)}%</dd></div>}
               </dl>
             </div>
@@ -394,8 +394,8 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
           {riskSeen && <RiskDeepTab code={c.code} price={c.price} />}
           <div className="ci-mrisk">
           <h3 className="ci-block-h">시세로 잰 위험</h3>
-          {risk === undefined ? <p className="ca-cp-empty">위험 지표를 계산하는 중이에요</p>
-            : risk === null ? <RetryFail title="위험 지표를 불러오지 못했어요" onRetry={() => { setRisk(undefined); setRiskTry((n) => n + 1); }} />
+          {risk === undefined ? <p className="ca-cp-empty">위험 지표 계산 중</p>
+            : risk === null ? <RetryFail title="위험 지표 조회 실패" onRetry={() => { setRisk(undefined); setRiskTry((n) => n + 1); }} />
             : risk.note ? <p className="ca-cp-empty">{risk.note}</p>
             : (
               <div className="ca-cp-riskgrid">
@@ -408,7 +408,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                 ] as [string, string][]).map(([k, v]) => <div key={k} className="ca-cp-riskcard"><span>{k}</span><b>{v}</b></div>)}
               </div>
             )}
-          <p className="ci-note">종목 일별 시세(최근 400거래일까지)로 직접 계산해요. 시세가 적재되지 않은 종목은 표본이 부족해 나오지 않을 수 있어요.</p>
+          <p className="ci-note">종목 일별 시세(최근 400거래일까지)로 직접 계산합니다. 시세가 적재되지 않은 종목은 표본이 부족해 나오지 않을 수 있습니다.</p>
           </div>
         </div>
       ))}
@@ -416,13 +416,13 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {/* ── 같은 업종 ── (BU6b: 모르면 몰라요 · 시가총액을 하나도 모르면 열 대신 사유 · 실패는 alert) */}
       {sec("peers", (
         <div className="ca-cp-pad">
-          {c.failed.includes("peers") ? <RetryFail title="같은 업종 기업을 불러오지 못했어요" onRetry={onRetry} />
-            : !c.sector ? <p className="ca-cp-empty">업종을 몰라 같은 업종 기업을 찾지 못했어요.</p>
+          {c.failed.includes("peers") ? <RetryFail title="동종업계 기업 조회 실패" onRetry={onRetry} />
+            : !c.sector ? <p className="ca-cp-empty">업종을 몰라 동종업계 기업을 찾지 못했습니다.</p>
             : (() => {
               const capKnown = c.peers.some((p) => p.mktcap != null);
               return (
                 <>
-                  <p className="ci-sec-lede"><span data-server>{c.sector}</span> 업종의 다른 기업이에요. 괴리가 작은 순이고, 줄을 누르면 그 기업을 열어요.</p>
+                  <p className="ci-sec-lede"><span data-server>{c.sector}</span> 업종의 다른 기업입니다. 괴리가 작은 순이고, 줄을 누르면 그 기업을 엽니다.</p>
                   <div className="ci-tablewrap">
                     <table className="ca-cp-peertbl">
                       <thead><tr><th scope="col">종목</th><th scope="col" className="n">현재가</th><th scope="col" className="n">PER</th><th scope="col" className="n">PBR</th><th scope="col" className="n">ROE</th><th scope="col" className="n">내재가치와 괴리</th>{capKnown && <th scope="col" className="n">시가총액</th>}</tr></thead>
@@ -437,15 +437,15 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                       ))}</tbody>
                     </table>
                   </div>
-                  {!capKnown && <p className="ci-note ci-peer-note">같은 업종 기업의 시가총액이 아직 적재되지 않아 시가총액 열을 뺐어요.</p>}
-                  <p className="ci-note">괴리는 서버가 계산한 (현재가 − 내재가치) ÷ 내재가치예요. 크고 작음을 좋고 나쁨으로 칠하지 않았어요.</p>
+                  {!capKnown && <p className="ci-note ci-peer-note">동종업계 기업의 시가총액이 아직 적재되지 않아 시가총액 열을 뺐습니다.</p>}
+                  <p className="ci-note">괴리는 서버가 계산한 (현재가 − 내재가치) ÷ 내재가치입니다. 크고 작음을 좋고 나쁨으로 칠하지 않았습니다.</p>
                 </>
               );
             })()}
           <div className="ci-net">
             <h3 className="ci-block-h">공급·고객·경쟁 관계</h3>
-            {network === undefined ? <p className="ca-cp-empty">관계도를 불러오는 중이에요</p>
-              : network === null ? <RetryFail title="관계도를 불러오지 못했어요" onRetry={() => { setNetwork(undefined); setNetTry((n) => n + 1); }} />
+            {network === undefined ? <p className="ca-cp-empty">관계도 조회 중</p>
+              : network === null ? <RetryFail title="관계도 조회 실패" onRetry={() => { setNetwork(undefined); setNetTry((n) => n + 1); }} />
               : network.groups.length ? (
                 <div className="ca-cp-net">
                   {network.groups.map((grp) => (
@@ -457,7 +457,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                     </div>
                   ))}
                 </div>
-              ) : <p className="ca-cp-empty">{network.note ?? "등록된 관계가 없어요."}</p>}
+              ) : <p className="ca-cp-empty">{network.note ?? "등록된 관계 없음"}</p>}
           </div>
         </div>
       ))}
@@ -469,19 +469,19 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {sec("ai", (
         <div className="ca-cp-pad">
           <div className="ca-cp-ai-head">
-            <p className="ci-sec-lede">가치평가·재무·팩터를 모아 AI 가 설명 글을 써요. 누를 때마다 비용이 들어요.</p>
-            <button type="button" className="tx-btn tx-btn--sub ca-cp-ai-btn" onClick={runNarrative} disabled={narrLoading}>{narrLoading ? "쓰는 중이에요" : narr ? "다시 쓰기" : "AI 설명 받기"}</button>
+            <p className="ci-sec-lede">가치평가·재무·팩터를 모아 AI 가 설명 글을 씁니다. 누를 때마다 비용이 듭니다.</p>
+            <button type="button" className="tx-btn tx-btn--sub ca-cp-ai-btn" onClick={runNarrative} disabled={narrLoading}>{narrLoading ? "쓰는 중입니다" : narr ? "다시 쓰기" : "AI 설명 받기"}</button>
           </div>
-          {narr === null && !narrLoading && <RetryFail title="AI 설명을 받지 못했어요" onRetry={runNarrative} />}
-          {narr?.error && <p className="ci-ai-reason">AI 가 설명을 쓰지 못했다고 답했어요: <span data-server>{narr.error}</span></p>}
+          {narr === null && !narrLoading && <RetryFail title="AI 설명 수신 실패" onRetry={runNarrative} />}
+          {narr?.error && <p className="ci-ai-reason">AI 가 설명을 쓰지 못했다고 답했습니다: <span data-server>{narr.error}</span></p>}
           {narr && !narr.error && (
             <div className="ca-cp-ai-body">
               <div className="ca-cp-ai-content" data-server>{narr.content}</div>
-              <div className="ca-cp-ai-meta">AI 가 읽고 쓴 양 {narr.tokens.toLocaleString("ko-KR")}토큰, 비용 약 {narr.costKrw.toFixed(1)}원{narr.cached ? "(저장해 둔 글이라 이번엔 비용이 없어요)" : ""}</div>
+              <div className="ca-cp-ai-meta">AI 가 읽고 쓴 양 {narr.tokens.toLocaleString("ko-KR")}토큰, 비용 약 {narr.costKrw.toFixed(1)}원{narr.cached ? "(저장해 둔 글이라 이번엔 비용이 없습니다)" : ""}</div>
             </div>
           )}
-          {narrLoading && <p className="ca-cp-empty">AI 가 설명을 쓰는 중이에요. 보통 10~30초 걸려요.</p>}
-          {narr === undefined && !narrLoading && <details className="ci-note"><summary>켜는 방법</summary>관리자가 서버 설정에 AI 키를 넣어 두면 켜져요. 키가 없으면 누른 뒤 사유를 보여 드려요.</details>}
+          {narrLoading && <p className="ca-cp-empty">AI 가 설명을 쓰는 중입니다. 보통 10~30초 걸립니다.</p>}
+          {narr === undefined && !narrLoading && <details className="ci-note"><summary>켜는 방법</summary>관리자가 서버 설정에 AI 키를 넣어 두면 켜집니다. 키가 없으면 누른 뒤 사유를 보여 드립니다.</details>}
         </div>
       ))}
       </div>
@@ -502,7 +502,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
           <ModelLadder rows={ladder} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : null} compact />
         </section>
         <section className="ci-rail-card">
-          <h2 className="ci-rail-h">같은 업종 바꾸기</h2>
+          <h2 className="ci-rail-h">동종업계 바꾸기</h2>
           <ul className="ci-rail-peers">
             {c.peers.map((p) => (
               <li key={p.code}>

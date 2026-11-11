@@ -95,7 +95,7 @@ test("비중까지만: 확인하기가 비어 있고 붙이면 과거로 돌려 
   expect(bt.edges.filter((x: { target: string }) => x.target === id).map((x: { source: string; target_port: string }) => `${x.source}.${x.target_port}`).sort())
     .toEqual(["optimizer.weights", "returns.returns"]);
   await expect(step(page, "check")).toHaveAttribute("data-state", "filled");
-  await expect(page.locator(".pg-proc-done")).toContainText("절차를 다 채웠어요");
+  await expect(page.locator(".pg-proc-done")).toContainText("절차를 다 채웠습니다");
 });
 
 test("양방향: 단계에 올리면 그 노드만 또렷하고, 노드를 고르면 그 단계가 켜진다", async ({ page }) => {
@@ -136,10 +136,10 @@ test("관문 알약: 판정한 노드로 가고, 건너뛴 관문의 [붙이기]
   await expect(edges(page)).toHaveCount(before + 2);
 });
 
-test("서버에 닿지 못하면 절차를 지어내지 않는다 · 다시 시도하면 나온다", async ({ page }) => {
+test("서버에 닿지 못하면 절차를 지어내지 않는다 · 재시도하면 나온다", async ({ page }) => {
   await page.route("**/allocation/graph/validate", (r) => r.abort());
   await openWith(page, BUILD_ONLY, "proc");
-  await expect(page.locator(".pg-proc-empty")).toContainText("절차를 불러오지 못했어요");
+  await expect(page.locator(".pg-proc-empty")).toContainText("절차 조회 실패");
   await expect(page.locator(".pg-proc-step")).toHaveCount(0);
   await page.unroute("**/allocation/graph/validate");
   await page.locator(".pg-proc-retry").click();
@@ -164,7 +164,7 @@ test("다음 한 걸음: 서버 문장 그대로 · [붙이기] 뒤 다음 규�
   await openWith(page, BUILD_ONLY, "add");
   const next = page.locator(".pg-next");
   await expect(next).toContainText("‘과거로 돌려 보기’");
-  await expect(next).toContainText("잴 수 있게 돼요");
+  await expect(next).toContainText("잴 수 있게 됩니다");
   const before = await edges(page).count();
   await next.locator(".pg-next-go").click();
   await expect(nodeOf(page, "backtest")).toHaveCount(1);
@@ -201,7 +201,7 @@ test("사람이 고른 노드 뒤에 붙인다 · 고르지 않았으면 잇지 
   await page.locator('.pg-palette-item[data-kind="risk"]').click();
   await expect(nodeOf(page, "risk")).toHaveCount(1);
   await expect(edges(page)).toHaveCount(base + 1);
-  await expect(page.locator(".pg-note")).toContainText("‘비중 계산’ 뒤에 이었어요");
+  await expect(page.locator(".pg-note")).toContainText("‘비중 계산’ 뒤에 이었습니다");
   // 새 노드가 자동으로 골라졌지만 사람이 고른 것이 아니다 — 한 번 더 눌러도 사슬로 잇지 않는다.
   // ★공허하지 않게★ 비중을 받아 비중을 내는 노출 조절로 본다(자기 자신 뒤에 이을 수 있는 종류 — 흔들림 나눠 보기는 그럴 수 없다).
   await nodeOf(page, "optimizer").click();
@@ -218,7 +218,7 @@ test("사람이 고른 노드 뒤에 붙인다 · 고르지 않았으면 잇지 
   await expect(edges(page)).toHaveCount(base + 2);
 });
 
-test("‘기대 수익’을 이어 주세요 — 이름을 누르면 그 값을 내는 노드만 보이고, 고르면 잇는다", async ({ page }) => {
+test("‘기대 수익’을 연결하십시오 — 이름을 누르면 그 값을 내는 노드만 보이고, 고르면 잇는다", async ({ page }) => {
   const doc = { ...BUILD_ONLY, edges: BUILD_ONLY.edges.filter((x) => x.target_port !== "belief") };
   await openWith(page, doc, "add");
   await atLeastMid(page);

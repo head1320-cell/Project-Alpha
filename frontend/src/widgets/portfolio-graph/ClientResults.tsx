@@ -35,14 +35,14 @@ function KV({ rows, className }: { rows: [string, ReactNode][]; className?: stri
 export function ClientProfileResult({ v }: { v: Dict }) {
   const risk = typeof v.risk_tolerance === "string" ? RISK[v.risk_tolerance] ?? v.risk_tolerance : "모름";
   const src = typeof v.profile_source === "string" ? SOURCE[v.profile_source] ?? v.profile_source : "모름";
-  const when = typeof v.assessed_at === "string" ? `${v.assessed_at} · ${fmt(v.assessed_age_days)}일 지났어요` : "모름";
+  const when = typeof v.assessed_at === "string" ? `${v.assessed_at} · ${fmt(v.assessed_age_days)}일 지났습니다` : "모름";
   return (
     <>
       <KV className="pg-client-kv" rows={[
         ["별칭", typeof v.alias === "string" ? v.alias : "없음"], ["위험 성향", risk], ["성향 출처", src],
         ["평가일", when], ["투자 기간", num(v.horizon_years) === null ? "모름" : `${fmt(v.horizon_years)}년`],
       ]} />
-      <p className="pg-note">성향·기간은 비중을 바꾸지 않아요 — 최적화기는 이 고객을 모른 채 계산해요.</p>
+      <p className="pg-note">성향·기간은 비중을 바꾸지 않습니다 — 최적화기는 이 고객을 모른 채 계산합니다.</p>
     </>
   );
 }
@@ -51,13 +51,13 @@ function RiskyShare({ rs }: { rs: Dict | undefined }) {
   if (!rs) return null;
   const iv = rs.interval as Dict | undefined;
   if (!rs.available || !iv) {
-    return <p className="pg-acct-risky pg-note">위험자산 비중을 재지 않았어요 — {plain(rs.reason ?? "사유 없음")}</p>;
+    return <p className="pg-acct-risky pg-note">위험자산 비중을 측정하지 않았습니다 — {plain(rs.reason ?? "사유 없음")}</p>;
   }
   const un = num(rs.unassigned_pct) ?? 0;
   return (
     <p className="pg-acct-risky">
       위험자산 비중 <b>{fmt(iv.lo)}~{fmt(iv.hi)}%</b>
-      {un > 0 && <span className="pg-note"> — 자산군을 모르는 보유 {fmt(un)}% 만큼 구간이 넓어요(모름을 0으로 접지 않아요)</span>}
+      {un > 0 && <span className="pg-note"> — 자산군을 모르는 보유 {fmt(un)}% 만큼 구간이 넓습니다(모름을 0으로 접지 않습니다)</span>}
     </p>
   );
 }
@@ -97,7 +97,7 @@ export function AccountResult({ v }: { v: Dict }) {
     <>
       <RiskyShare rs={r.risky_share as Dict | undefined} />
       <Verdicts verdicts={verdicts} />
-      {!verdicts.length && <p className="pg-note">{String(r.note ?? "이 계좌 유형에는 이 저장소가 아는 한도가 없어요.")}</p>}
+      {!verdicts.length && <p className="pg-note">{String(r.note ?? "이 계좌 유형에는 이 저장소가 아는 한도 없음")}</p>}
       {((r.ignored_limits as string[]) ?? []).length > 0 && (
         <p className="pg-note">이 계좌에 없는 한도라 보지 않은 것: {((r.ignored_limits as string[]) ?? []).map((k) => LIMIT[k] ?? k).join(", ")}</p>
       )}
@@ -127,14 +127,14 @@ export function GoalResult({ v }: { v: Dict }) {
       <RiskyShare rs={r.risky_share as Dict | undefined} />
       {target !== null && (
         <p className="pg-goal-gap" data-state={st}>
-          {st === "above" ? `지금 위험자산 비중이 목표보다 ${fmt(gap.lo)}~${fmt(gap.hi)}%p 많아요`
-            : st === "below" ? `지금 위험자산 비중이 목표보다 ${fmt(-(num(gap.hi) ?? 0))}~${fmt(-(num(gap.lo) ?? 0))}%p 적어요`
-            : `지금 비중과 목표의 차이는 몰라요 — ${plain(gap.reason)}`}
+          {st === "above" ? `지금 위험자산 비중이 목표보다 ${fmt(gap.lo)}~${fmt(gap.hi)}%p 많습니다`
+            : st === "below" ? `지금 위험자산 비중이 목표보다 ${fmt(-(num(gap.hi) ?? 0))}~${fmt(-(num(gap.lo) ?? 0))}%p 적습니다`
+            : `지금 비중과 목표의 차이는 미상입니다 — ${plain(gap.reason)}`}
         </p>
       )}
       <p className="pg-note">
         {num(contrib.months) === null ? `적립만으로 좁히는 데 걸리는 개월: 내지 않음${contrib.reason ? ` — ${plain(contrib.reason)}` : ""}`
-          : `적립 계획대로라면 격차를 좁히는 데 ${fmt(contrib.months)}개월(계획이지 실적이 아니에요)`}
+          : `적립 계획대로라면 격차를 좁히는 데 ${fmt(contrib.months)}개월(계획이지 실적이 아닙니다)`}
       </p>
       <Verdicts verdicts={(((r.limits as Dict) ?? {}).verdicts as Dict[]) ?? []} />
       <p className="pg-note">{plain(r.optimizer_note)}</p>
@@ -161,17 +161,17 @@ export function HoldingsCheckResult({ v }: { v: Dict }) {
             </tbody></table>
             <p className="pg-note">포트폴리오 변동성 {fmt(risk.portfolio_volatility_pct)}% · 공분산 출처 {String(risk.sigma_source ?? "모름")}</p>
           </>
-        ) : <p className="pg-warn">재지 못했어요 — {plain(risk.reason ?? "사유 없음")}</p>}
+        ) : <p className="pg-warn">측정 불가 — {plain(risk.reason ?? "사유 없음")}</p>}
       </section>
       <section className="pg-hold-conc">
         <h4 className="pg-h4">팩터 집중도</h4>
         {conc.available ? <p className="pg-note">실질 팩터 수 {fmt(conc.effective_factors)}개(팩터 {fmt(conc.n_factors)}개 중) — {plain(conc.note)}</p>
-          : <p className="pg-warn">재지 못했어요 — {plain(conc.reason ?? "사유 없음")}</p>}
+          : <p className="pg-warn">측정 불가 — {plain(conc.reason ?? "사유 없음")}</p>}
       </section>
       <section className="pg-hold-liq">
         <h4 className="pg-h4">유동성</h4>
-        {liq.available ? <p className="pg-note">{Object.keys((liq.by_ticker as Dict) ?? {}).length}종목의 거래대금·시가총액을 봤어요 — {plain(liq.note)}</p>
-          : <p className="pg-warn">재지 못했어요 — {plain(liq.reason ?? "사유 없음")}</p>}
+        {liq.available ? <p className="pg-note">{Object.keys((liq.by_ticker as Dict) ?? {}).length}종목의 거래대금·시가총액을 봤습니다 — {plain(liq.note)}</p>
+          : <p className="pg-warn">측정 불가 — {plain(liq.reason ?? "사유 없음")}</p>}
       </section>
       <p className="pg-note">{plain(r.note)}</p>
     </>

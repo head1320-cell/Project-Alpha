@@ -50,21 +50,21 @@ export default function CapitalPanel({ s, set }: {
         {/* ── 누락 비용 옵트인 셋 (AK) ★전부 기본 꺼짐★ — 켜면 백엔드가 `market_rules` 의 같은 요율을 쓴다.
             기본을 켜지 않는 이유는 켜는 순간 저장된 실행들의 뜻이 바뀌기 때문이다. */}
         <div className="bte-col">
-          <p className="bte-sub-h">추가 비용 — 기본은 꺼져 있어요</p>
-          <SubToggle tone="sell" act="sell-tax" label="증권거래세" hint="팔 때 한 번 0.18% · 수수료보다 커요"
+          <p className="bte-sub-h">추가 비용 — 기본은 꺼져 있습니다</p>
+          <SubToggle tone="sell" act="sell-tax" label="증권거래세" hint="팔 때 한 번 0.18% · 수수료보다 큽니다"
             on={s.chargeSellTax} onChange={(v) => set((x) => ({ ...x, chargeSellTax: v }))} />
           <SubToggle tone="sell" label="호가 스프레드" hint="한 번 거래에 0.025% (스프레드의 절반)"
             on={s.chargeSpread} onChange={(v) => set((x) => ({ ...x, chargeSpread: v }))} />
-          <SubToggle tone="sell" label="시장충격" hint="주문 금액 ÷ 거래대금에 비례 · 거래대금이 없으면 몰라요"
+          <SubToggle tone="sell" label="시장충격" hint="주문 금액 ÷ 거래대금에 비례 · 거래대금이 없으면 미상"
             on={s.chargeMarketImpact} onChange={(v) => set((x) => ({ ...x, chargeMarketImpact: v }))} />
           <p className="bte-note">
             {(s.chargeSellTax || s.chargeSpread || s.chargeMarketImpact)
-              ? "켠 비용은 실행 준비실과 같은 요율을 써요. 결과의 비용 분해에 하나씩 실려요."
-              : "끄면 수수료·슬리피지만 봐요. 0원이라는 뜻이 아니라 재지 않았다는 뜻이고, 결과가 그 사실을 적어요."}
+              ? "켠 비용은 실행 준비실과 같은 요율을 씁니다. 결과의 비용 분해에 하나씩 실립니다."
+              : "끄면 수수료·슬리피지만 봅니다. 0원이라는 뜻이 아니라 재지 않았다는 뜻이고, 결과가 그 사실을 적습니다."}
           </p>
           {s.chargeMarketImpact && (
             <p className="bte-note bte-note--warn">
-              거래대금이 없는 종목·기간은 시장충격을 0이 아니라 ‘몰라요’로 남겨요. 그만큼 비용이 낮게 잡혀요.
+              거래대금이 없는 종목·기간은 시장충격을 0이 아니라 ‘N/A’로 남깁니다. 그만큼 비용이 낮게 잡힙니다.
             </p>
           )}
         </div>
@@ -80,7 +80,7 @@ export default function CapitalPanel({ s, set }: {
             ]} />
           {s.rebalancePeriod !== "daily" && (
             <p className="bte-note">
-              순위에서 밀린 보유 종목은 {REBALANCE_PERIOD_UNIT[s.rebalancePeriod]} 첫 거래일에만 정리해요. 빈자리 채우기·손익절은 매일 봐요.
+              순위에서 밀린 보유 종목은 {REBALANCE_PERIOD_UNIT[s.rebalancePeriod]} 첫 거래일에만 정리합니다. 빈자리 채우기·손익절은 매일 봅니다.
             </p>
           )}
         </Field>
@@ -89,10 +89,10 @@ export default function CapitalPanel({ s, set }: {
             options={[{ id: "0", label: "당일 종가" }, { id: "1", label: "전일 종가 기준" }]} />
           {s.signalLag === 0 && (s.buy.fillType !== "close" || s.sell.fillType !== "close") ? (
             <p className="bte-note bte-note--warn">
-              당일 종가로 만든 신호를 시가·전일가에 체결하면 미래 정보를 쓰게 돼요(look-ahead). 전일 종가 기준을 권해요.
+              당일 종가로 만든 신호를 시가·전일가에 체결하면 미래 정보를 쓰게 됩니다(look-ahead). 전일 종가 기준을 권합니다.
             </p>
           ) : (
-            <p className="bte-note">전일 종가로 종목을 고르고 다음 날 사고팔아요(체결은 그날 가격).</p>
+            <p className="bte-note">전일 종가로 종목을 고르고 다음 날 사고팝니다(체결은 그날 가격).</p>
           )}
         </Field>
         <Field label="분봉 정밀 체결">
@@ -100,8 +100,8 @@ export default function CapitalPanel({ s, set }: {
             onChange={(v) => set((x) => ({ ...x, intradayFill: v === "on" }))}
             options={[{ id: "off", label: "일봉 모델" }, { id: "on", label: "분봉 정밀" }]} />
           <p className="bte-note">
-            적재된 (종목, 날짜) 분봉으로 매매 시간 안에서 지정가·시장가·TWAP 을 정밀하게 체결해요. 분봉이 없는 날은 일봉으로 계산하고,
-            결과에 그 비율을 적어요.
+            적재된 (종목, 날짜) 분봉으로 매매 시간 안에서 지정가·시장가·TWAP 을 정밀하게 체결합니다. 분봉이 없는 날은 일봉으로 계산하고,
+            결과에 그 비율을 적습니다.
           </p>
         </Field>
         {s.intradayFill && (
@@ -111,7 +111,7 @@ export default function CapitalPanel({ s, set }: {
             <span className="bte-sm">~</span>
             <input className="bte-input bte-input--time" aria-label="매수 끝 시각" value={s.buy.timeEnd}
               onChange={(e) => patchBuy({ timeEnd: e.target.value })} placeholder="15:30" />
-            <p className="bte-note">이 시간 안의 분봉으로만 사요.</p>
+            <p className="bte-note">이 시간 안의 분봉으로만 삽니다.</p>
           </Field>
         )}
       </Section>

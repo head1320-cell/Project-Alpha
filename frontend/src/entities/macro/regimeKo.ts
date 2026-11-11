@@ -20,7 +20,7 @@ export const regimeName = (regime: string): string => REGIME_KO[regime] ?? regim
 export function regimeFig(r: { regime: string; regime_probs?: Record<string, number> }): string {
   const name = regimeName(r.regime);
   const p = r.regime_probs?.[r.regime];
-  return typeof p === "number" && Number.isFinite(p) ? `${name} ${pct(p, 0)}` : `${name} 확률 몰라요`;
+  return typeof p === "number" && Number.isFinite(p) ? `${name} ${pct(p, 0)}` : `${name} 확률 미상`;
 }
 
 /** 기준 시각 칩 글자. 날짜가 아니면 null(칩을 빼고, 지어내지 않는다). */
@@ -36,10 +36,10 @@ export type ConnStatus = { mock_allowed: boolean; bok_configured: boolean };
 /** 데이터 출처 칩 — connection-status 응답으로만. 실패는 "확인하지 못했어요"(연습용·실데이터 어느 쪽도 단정하지 않는다). */
 export function sourceChip(cs: { data?: ConnStatus | null; isError: boolean; isLoading: boolean }): Chip[] {
   if (cs.isLoading) return [];
-  if (cs.isError || !cs.data) return [{ label: "데이터 출처를 확인하지 못했어요", tone: "unknown" }];
+  if (cs.isError || !cs.data) return [{ label: "데이터 출처 확인 실패", tone: "unknown" }];
   const { mock_allowed, bok_configured } = cs.data;
-  if (mock_allowed && !bok_configured) return [{ label: "연습용 데이터", tone: "practice" }];
+  if (mock_allowed && !bok_configured) return [{ label: "합성 데이터", tone: "practice" }];
   if (bok_configured && !mock_allowed) return [{ label: "한국은행 실데이터", tone: "ok" }];
-  if (!bok_configured) return [{ label: "한국은행 연결이 없어 일부 지표를 몰라요", tone: "unknown" }];
-  return [{ label: "연습용 모드 — 키가 없는 지표는 합성값이에요", tone: "practice" }];
+  if (!bok_configured) return [{ label: "한국은행 연결이 없어 일부 지표 미상", tone: "unknown" }];
+  return [{ label: "합성 데이터 모드 — 키가 없는 지표는 합성값입니다", tone: "practice" }];
 }

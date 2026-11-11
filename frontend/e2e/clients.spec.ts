@@ -217,8 +217,8 @@ test("PB3 · 없는(남의) 고객 주소 — 사유를 말하고 일반 캔버�
   await login(page);
   await page.goto("/allocation?client=cl_0000000000000000&doc=cd_0000000000000000", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("고객 문서를 열지 못했어요")).toBeVisible();
-  await expect(page.getByText("그 고객이 없어요")).toBeVisible();
+  await expect(page.getByText("고객 문서 열기 실패")).toBeVisible();
+  await expect(page.getByText("그 고객 없음")).toBeVisible();
   await expect(page.locator(".pg-client-chip")).toHaveCount(0);
 });
 

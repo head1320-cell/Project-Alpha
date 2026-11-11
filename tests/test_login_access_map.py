@@ -1,12 +1,12 @@
 """BU8b · 로그인 화면의 '로그인이 여는 것' 지도는 서버 보호 목록과 같은 말을 한다.
 
-화면(`frontend/src/entities/session/accessMap.json`)이 "로그인하면 열려요 · 거래 권한이 있는 계정만" 을 말하는데,
+화면(`frontend/src/entities/session/accessMap.json`)이 "로그인하면 열립니다 · 거래 권한이 있는 계정만" 을 말하는데,
 그 근거는 서버의 단일 레지스트리 `src/api/protected_routes.py::PROTECTED` 다. 화면이 지어내거나 낡지 않게:
 
   ① 로그인·관리자 층 경로의 합집합 == PROTECTED 키 전부 — ★양방향★: 서버가 새로 잠그면 화면도 말해야 하고,
      화면이 잠겼다고 말한 것은 실제로 잠겨 있어야 한다.
   ② 층 == 요구 수준 — 관리자 층은 REQUIRE_ADMIN 만, 로그인 층은 REQUIRE_LOGIN·REQUIRE_SELF_OR_ADMIN 만.
-  ③ 열린 층 화면들이 부르는 API 접두사로 시작하는 보호 경로는 없다("로그인 없이 열려 있어요" 가 참).
+  ③ 열린 층 화면들이 부르는 API 접두사로 시작하는 보호 경로는 없다("로그인 없이 열려 있습니다" 가 참).
   ④ 글자: em-dash·금지 표현 0, 항목은 비어 있지 않다.
 """
 from __future__ import annotations

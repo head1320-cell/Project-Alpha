@@ -212,7 +212,7 @@ def promote_alpha(alpha_id: str, to_status: str, note: str = "") -> dict:
             return {"ok": False,
                     "reason": f"{cur} → {to_status} 직행 불가 — 순서: draft → experimental → validated → approved."}
         if to_status == "validated" and not a["last_run_id"]:
-            return {"ok": False, "reason": "검증 리포트(run) 없이 validated 승격 불가 — 먼저 검증을 실행하세요."}
+            return {"ok": False, "reason": "검증 리포트(run) 없이 validated 승격 불가 — 먼저 검증을 실행하십시오."}
         if to_status == "approved" and not note.strip():
             return {"ok": False, "reason": "approved 승격에는 승인 노트가 필요합니다 (정식 승인 워크플로는 P4)."}
     try:

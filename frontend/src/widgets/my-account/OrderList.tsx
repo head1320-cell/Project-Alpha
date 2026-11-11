@@ -24,13 +24,13 @@ const FILTERS: { key: Filter; label: string; has: (status: string) => boolean }[
 ];
 
 function cancelSaid(r: CancelReply): { text: string; raw?: string } {
-  if (r.status === "cancelled") return { text: "주문을 취소했어요." };
+  if (r.status === "cancelled") return { text: "주문을 취소했습니다." };
   if (r.status === "not_cancellable") {
     const cur = r.current ? STATUS_KO[r.current] ?? r.current : "다른";
-    return { text: `이미 ‘${cur}’ 상태라 취소할 수 없어요.` };
+    return { text: `이미 ‘${cur}’ 상태라 취소할 수 없습니다.` };
   }
-  if (r.status === "cancel_failed") return { text: "증권사가 취소를 받지 않았어요.", raw: r.error };
-  return { text: "서버가 알 수 없는 답을 했어요.", raw: r.status };
+  if (r.status === "cancel_failed") return { text: "증권사가 취소를 받지 않았습니다.", raw: r.error };
+  return { text: "서버가 알 수 없는 답을 했습니다.", raw: r.status };
 }
 
 export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResult<{ count: number; orders: OrderRow[] }> }) {
@@ -48,7 +48,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
       return r.value;
     },
     onSuccess: (r) => { setAsking(null); setSaid(cancelSaid(r)); void qc.invalidateQueries({ queryKey: ["acct", accountId] }); },
-    onError: (e: Error) => { setAsking(null); setSaid({ text: "취소하지 못했어요.", raw: e.message, fail: true }); },
+    onError: (e: Error) => { setAsking(null); setSaid({ text: "취소 실패", raw: e.message, fail: true }); },
   });
 
   return (
@@ -56,7 +56,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="ma-orders-h">최근 주문</h2>
-          <p className="tx-sec-sub">이 계좌로 낸 주문이에요. 줄마다 어디서 멈췄는지 보여요.</p>
+          <p className="tx-sec-sub">이 계좌로 낸 주문입니다. 줄마다 어디서 멈췄는지 보입니다.</p>
         </div>
         <div className="tx-sec-aside">
           <button type="button" className="tx-btn tx-btn--sub ma-sm" onClick={() => void q.refetch()} disabled={q.isFetching}>새로 고침</button>
@@ -69,11 +69,11 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
           </p>
         ) : null}
         {q.isError ? (
-          <RetryFail title="주문 목록을 불러오지 못했어요" onRetry={() => void q.refetch()}>{q.error.message}</RetryFail>
+          <RetryFail title="주문 목록 조회 실패" onRetry={() => void q.refetch()}>{q.error.message}</RetryFail>
         ) : !q.data ? (
-          <p className="tx-sec-sub" aria-busy="true">주문 목록을 불러오는 중이에요.</p>
+          <p className="tx-sec-sub" aria-busy="true">주문 목록 조회 중</p>
         ) : all.length === 0 ? (
-          <p className="tx-sec-sub">아직 낸 주문이 없어요.</p>
+          <p className="tx-sec-sub">아직 낸 주문 없음</p>
         ) : (
           <>
           <div className="ma-chips ma-ord-filter" role="group" aria-label="주문 거르기">
@@ -84,7 +84,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
               </button>
             ))}
           </div>
-          {rows.length === 0 ? <p className="tx-sec-sub ma-ord-none">이 무리에 든 주문이 없어요.</p> : (
+          {rows.length === 0 ? <p className="tx-sec-sub ma-ord-none">이 무리에 든 주문 없음</p> : (
           <ul className="ma-ord-l">
             {rows.map((o) => {
               const stop = stopOf(o.status, o.reason_code);
@@ -92,18 +92,18 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
               const status = STATUS_KO[o.status];
               return (
                 <li key={o.client_order_id} className="ma-ord" data-coid={o.client_order_id}>
-                  <span className="ma-ord-when">{when(o.created_at) ?? "시각 몰라요"}</span>
+                  <span className="ma-ord-when">{when(o.created_at) ?? "시각 미상"}</span>
                   <span className="ma-ord-what">
                     <strong>{name ?? o.ticker}</strong>
                     {name ? <span className="ma-code" data-mono>{o.ticker}</span> : null}
                     <span className="ma-ord-side">{o.side === "BUY" ? "사기" : o.side === "SELL" ? "팔기" : <span data-server>{o.side}</span>}</span>
-                    <span>{o.quantity === null ? "수량 몰라요" : `${num(o.quantity)}주`}</span>
+                    <span>{o.quantity === null ? "수량 미상" : `${num(o.quantity)}주`}</span>
                     <span>{priceWon(o.price)}</span>
                   </span>
                   <span className="ma-ord-state">
                     <span className="ma-ord-status">{status ?? <span data-server>{o.status}</span>}</span>
                     <span className="tx-chip ma-ord-stop" data-tone="plain" data-stop={stop}>
-                      {stop === "unknown" ? "멈춘 곳 몰라요" : stop === "broker" ? "끝까지 갔어요" : `${STOPS.find((s) => s.key === stop)?.label}에서 멈춤`}
+                      {stop === "unknown" ? "멈춘 곳 미상" : stop === "broker" ? "끝까지 갔습니다" : `${STOPS.find((s) => s.key === stop)?.label}에서 멈춤`}
                     </span>
                     {o.execution_mode ? <span className="ma-ord-mode">{MODE_KO[o.execution_mode] ?? <span data-server>{o.execution_mode}</span>}</span> : null}
                   </span>
@@ -111,7 +111,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
                   {CANCELLABLE.has(o.status) ? (
                     asking === o.client_order_id ? (
                       <span className="ma-confirm tx-confirm ma-ord-confirm" role="group" aria-label="주문 취소 확인">
-                        <span>이 주문을 취소할까요?</span>
+                        <span>이 주문을 취소하시겠습니까?</span>
                         <button type="button" className="tx-btn tx-btn--main ma-sm ma-ord-cancel-yes" disabled={cancel.isPending}
                                 onClick={() => cancel.mutate(o.client_order_id)}>취소하기</button>
                         <button type="button" className="tx-btn tx-btn--sub ma-sm ma-ord-cancel-no" onClick={() => setAsking(null)}>그대로 두기</button>

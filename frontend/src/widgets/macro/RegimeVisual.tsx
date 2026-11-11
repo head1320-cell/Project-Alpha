@@ -55,7 +55,7 @@ function Donut({ probs, now, label }: { probs: [string, number][] | null; now: s
         {now && <b>{regimeName(now)}</b>}
         {probs && sum > 0
           ? <span>{pct(probs.find(([k]) => k === now)?.[1] ?? NaN, 0)}</span>
-          : <span className="rv-donut-unk">{now ? "확률 몰라요" : "몰라요"}</span>}
+          : <span className="rv-donut-unk">{now ? "확률 미상" : "N/A"}</span>}
       </div>
     </div>
   );
@@ -99,8 +99,8 @@ function RegimeCard({ market, label, st }: { market: "kr" | "us"; label: string;
       <article className="rv-card" data-market={market}>
         <h3 className="rv-t">{label}</h3>
         <div className="rv-row">
-          <Donut probs={null} now="" label={`${label} 국면을 받지 못했어요`} />
-          <p className="rv-none"><Unknown reason="미국 국면을 받지 못했어요" /></p>
+          <Donut probs={null} now="" label={`${label} 국면 수신 실패`} />
+          <p className="rv-none"><Unknown reason="미국 국면 수신 실패" /></p>
         </div>
       </article>
     );
@@ -108,7 +108,7 @@ function RegimeCard({ market, label, st }: { market: "kr" | "us"; label: string;
   const probs = probsOf(st);
   const ranked = probs ? [...probs].sort((a, b) => b[1] - a[1]) : null;
   const gDrv = topDriver(st.axis_detail?.growth), iDrv = topDriver(st.axis_detail?.inflation);
-  const desc = `${label} 국면: ${ranked ? ranked.map(([k, p]) => `${regimeName(k)} ${pct(p, 0)}`).join(", ") : "확률 몰라요"}`;
+  const desc = `${label} 국면: ${ranked ? ranked.map(([k, p]) => `${regimeName(k)} ${pct(p, 0)}`).join(", ") : "확률 미상"}`;
   return (
     <article className="rv-card" data-market={market}>
       <h3 className="rv-t">{label}</h3>
@@ -123,11 +123,11 @@ function RegimeCard({ market, label, st }: { market: "kr" | "us"; label: string;
               </li>
             ))}
           </ul>
-        ) : <p className="rv-none">국면별 확률을 받지 못했어요. 판정 이름만 보여 드려요.</p>}
+        ) : <p className="rv-none">국면별 확률 수신 실패. 판정 이름만 보여 드립니다.</p>}
       </div>
       <div className="rv-axes">
-        <Axis id="growth" label="성장" lo="약해요" hi="강해요" v={st.growth_axis} />
-        <Axis id="inflation" label="물가" lo="낮아요" hi="높아요" v={st.inflation_axis} />
+        <Axis id="growth" label="성장" lo="약합니다" hi="강합니다" v={st.growth_axis} />
+        <Axis id="inflation" label="물가" lo="낮습니다" hi="높습니다" v={st.inflation_axis} />
       </div>
       {(gDrv || iDrv) && (
         <p className="rv-note">
@@ -159,9 +159,9 @@ function StressCard({ st }: { st: RegimeState }) {
           )}
         </svg>
         <div className="rv-gauge-c">
-          {known ? <><b className="rv-gauge-v">{Math.round(s)}</b><span>/100</span></> : <Unknown reason="스트레스 값을 받지 못했어요" />}
+          {known ? <><b className="rv-gauge-v">{Math.round(s)}</b><span>/100</span></> : <Unknown reason="스트레스 값 수신 실패" />}
         </div>
-        <div className="rv-gauge-ends" aria-hidden><span>0 · 잔잔해요</span><span>100 · 불안해요</span></div>
+        <div className="rv-gauge-ends" aria-hidden><span>0 · 잔잔합니다</span><span>100 · 불안합니다</span></div>
       </div>
       <dl className="rv-facts">
         <div><dt>권장 단계</dt><dd>{mode}</dd></div>
@@ -172,7 +172,7 @@ function StressCard({ st }: { st: RegimeState }) {
       </dl>
       {comps.length ? (
         <>
-          <p className="rv-sub">항목별 점수(0~100, 높을수록 불안). 가중치를 매겨 합친 값이 위 숫자예요</p>
+          <p className="rv-sub">항목별 점수(0~100, 높을수록 불안). 가중치를 매겨 합친 값이 위 숫자입니다</p>
           <ul className="rv-sc">
             {comps.map(([k, v]) => (
               <li key={k} data-key={k}>
@@ -183,7 +183,7 @@ function StressCard({ st }: { st: RegimeState }) {
             ))}
           </ul>
         </>
-      ) : <p className="rv-none">구성 항목 점수를 받지 못했어요.</p>}
+      ) : <p className="rv-none">구성 항목 점수 수신 실패</p>}
     </article>
   );
 }

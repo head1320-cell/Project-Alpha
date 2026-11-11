@@ -59,7 +59,7 @@ def declare(by: str, *, basis: str, authority: str, reference_no: str, verified_
                             verified_at=verified_at, scope=scope, allowed_users=tuple(allowed_users))
     missing = rec.missing()
     if missing:
-        raise ValueError(f"확인 기록이 불완전해요. 빠진 항목: {', '.join(missing)}")
+        raise ValueError(f"확인 기록이 불완전합니다. 빠진 항목: {', '.join(missing)}")
     now = dt.datetime.now(dt.timezone.utc)
     with session_scope() as s:
         old = _active(s)

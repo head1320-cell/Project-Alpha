@@ -99,7 +99,7 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
     리밸런스뿐이다.
 
     ★단위를 **일평균**으로 맞추는 이유★
-    구간 총수익으로 비교하면 예측을 만들 때 "이 구간이 며칠짜리인지" 를 알아야 하는데,
+    구간 총수익률으로 비교하면 예측을 만들 때 "이 구간이 며칠짜리인지" 를 알아야 하는데,
     그건 리밸런스 시점에 알 수 없는 값이다(look-ahead). 그래서 예측은 학습창의 일평균
     기대수익, 실현은 자산곡선 비율의 기하평균 일수익으로 둔다. 둘 다 하루 단위라
     비교가 성립하고 미래를 쓰지 않는다.
@@ -455,7 +455,7 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
 
     rb = _rebalance_indices(list(dates), rebalance, min_train)
     if len(rb) < 2:
-        return {"error": True, "message": "리밸런싱 구간이 부족합니다 — 기간을 늘리거나 리밸런싱 주기를 줄이세요."}
+        return {"error": True, "message": "리밸런싱 구간이 부족합니다 — 기간을 늘리거나 리밸런싱 주기를 줄이십시오."}
 
     start = rb[0]                                  # 시뮬레이션 시작(첫 리밸런싱)
     T = R.shape[0]

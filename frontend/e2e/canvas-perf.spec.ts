@@ -292,10 +292,10 @@ test("R8 · 전제 — 잴 200노드 문서는 서버 검증 문제 0 · 노드�
   expect((vb.errors as { node_id?: string; code: string }[]).some((x) => x.node_id === "r0" && x.code === "missing_input")).toBe(true);
   await open(page, doc);
   await expect(page.locator(".react-flow__edge")).toHaveCount(200);
-  await expect(page.getByText("노드가 겹쳐요")).toHaveCount(0);
+  await expect(page.getByText("노드가 겹칩니다")).toHaveCount(0);
   const p2 = await page.context().newPage();
   await open(p2, chainDoc(10, 100));
-  await expect(p2.getByText("노드가 겹쳐요")).toBeVisible();
+  await expect(p2.getByText("노드가 겹칩니다")).toBeVisible();
 });
 
 const rrStart = (page: Page) => page.evaluate(() => (window as never as { __rrStart: () => void }).__rrStart());

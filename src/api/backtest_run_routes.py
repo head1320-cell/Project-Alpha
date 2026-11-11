@@ -176,7 +176,7 @@ def _on_worker_done(run_id: str | None, fut) -> None:
             run_id, "worker_died",
             "실행 워커가 비정상 종료했습니다("
             f"{type(exc).__name__}). 메모리 부족이나 프로세스 종료일 수 있습니다 — "
-            "유니버스 범위를 줄여 다시 실행해 보세요.")
+            "유니버스 범위를 줄여 다시 실행하십시오.")
     except Exception:                           # noqa: BLE001
         logger.exception(f"워커 사망을 기록하지 못했다 (run={run_id})")
 
@@ -294,10 +294,10 @@ _STORE_FAILURE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 #: 사용자에게 보일 문구 — ★원문은 절대 싣지 않는다★ DB 예외 문자열에는 접속
 #: URL(자격증명 포함)이 섞일 수 있다. 분류만 내보내고 원문은 로그에 남긴다.
 _STORE_FAILURE_MESSAGE = {
-    "pool_exhausted": "실행 저장소 커넥션이 모두 사용 중입니다 — 잠시 후 재시도하세요.",
-    "store_locked": "실행 저장소가 잠겨 있습니다(동시 쓰기) — 잠시 후 재시도하세요.",
-    "store_unreachable": "실행 저장소에 연결할 수 없습니다 — 잠시 후 재시도하세요.",
-    "unknown": "실행 저장소를 일시적으로 사용할 수 없습니다 — 원인을 확인 중입니다. 잠시 후 재시도하세요.",
+    "pool_exhausted": "실행 저장소 커넥션이 모두 사용 중입니다 — 잠시 후 재시도하십시오.",
+    "store_locked": "실행 저장소가 잠겨 있습니다(동시 쓰기) — 잠시 후 재시도하십시오.",
+    "store_unreachable": "실행 저장소에 연결할 수 없습니다 — 잠시 후 재시도하십시오.",
+    "unknown": "실행 저장소를 일시적으로 사용할 수 없습니다 — 원인을 확인 중입니다. 잠시 후 재시도하십시오.",
 }
 
 
@@ -587,7 +587,7 @@ def create_run(req: CreateRunRequest):
                 logger.exception("디스패치 실패를 기록하지 못했다")
             # ★사유를 지우지 않는다★ "처리 중 오류" 로 뭉개면 원인을 못 찾는다.
             raise HTTPException(
-                503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+                503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 재시도하십시오 "
                      f"({type(e).__name__}).") from e
         return {"run_id": run_id, "status": "queued"}
     except HTTPException:
@@ -657,8 +657,8 @@ def _perf_block(row: dict) -> dict | None:
     """★화면이 세지 않도록 서버가 낸다★ (2026-11-09 · 결과 화면 성과 그림 문법 §3.2)
 
     저장된 `drawdown_curve` 는 비율(−0.15)이고 통계 `max_drawdown_pct` 는 %(14.9)다 — 화면이 비율을 %처럼 그리던 결함을
-    여기서 고친다(이름에 단위를 적은 `drawdown_pct`). 해마다·달마다 수익·낙폭 사건은 캔버스 불러오기 노드와 같은 함수
-    (`quant_metrics`)라 같은 실행이면 같은 수다. 곡선이 없으면 None — 화면이 "주지 않았어요" 라고 말한다(0 으로 채우지 않는다).
+    여기서 고친다(이름에 단위를 적은 `drawdown_pct`). 해마다·월별 수익률·낙폭 구간은 캔버스 불러오기 노드와 같은 함수
+    (`quant_metrics`)라 같은 실행이면 같은 수다. 곡선이 없으면 None — 화면이 "주지 않았습니다" 라고 말한다(0 으로 채우지 않는다).
     """
     result = row.get("result")
     if row.get("status") != "completed" or not isinstance(result, dict):
@@ -735,7 +735,7 @@ def run_retry(run_id: str):
         except Exception:                       # noqa: BLE001
             logger.exception("디스패치 실패를 기록하지 못했다")
         raise HTTPException(
-            503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+            503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 재시도하십시오 "
                  f"({type(e).__name__}).") from e
     return {"run_id": new_id, "status": "queued", "retried_from": run_id}
 
@@ -843,7 +843,7 @@ def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
     흡수한다. 팩터별 VIF 를 함께 내며, 높은 팩터의 기여는 짝과 상쇄되므로
     **개별 값으로 읽지 말라**는 라벨이 붙는다.
 
-    ★산술 합과 복리 총수익은 다른 숫자다★ 항등식은 월별 수익률의 산술 합에
+    ★산술 합과 복리 총수익률은 다른 숫자다★ 항등식은 월별 수익률의 산술 합에
     대해 닫히고, 복리와의 차이는 `compounding_gap_pct` 로 나간다.
 
     아직 끝나지 않았거나 옛 스키마라 월별 수익률이 없으면 **200 + 사유**다 —

@@ -157,8 +157,8 @@ def test_a_finished_run_loads_like_the_route_with_its_performance_label(runs):
 
 def test_a_loaded_run_ships_its_drawdown_in_percent_and_period_returns_from_the_same_curve(runs):
     """★낙폭은 % 로★ (2026-11-09 성과 그림 문법) — 저장된 결과의 `drawdown_curve` 는 비율(−0.15)이고 통계의 `max_drawdown_pct` 는
-    %(14.9)다. 뷰는 % 로 옮긴 `drawdown_pct` 를 싣는다(화면이 단위를 추측하지 않게 · 7번 `drawdown_curve` 와 같은 단위). 해마다 수익·
-    낙폭 사건은 같은 곡선에서 다시 계산한 값과 같고, 단위 없는 이름 `drawdown` 은 없다."""
+    %(14.9)다. 뷰는 % 로 옮긴 `drawdown_pct` 를 싣는다(화면이 단위를 추측하지 않게 · 7번 `drawdown_curve` 와 같은 단위). 연도별 수익률·
+    낙폭 구간은 같은 곡선에서 재계산한 값과 같고, 단위 없는 이름 `drawdown` 은 없다."""
     from src.api.backtest_run_routes import run_full
     from src.engine.quant_metrics import drawdown_episodes, period_returns
     r = _run(_g([_load("run_ok")]))["nodes"]["l"]
@@ -178,7 +178,7 @@ def test_a_loaded_run_ships_its_drawdown_in_percent_and_period_returns_from_the_
     ("run_busy", ("아직", "45%")),
     ("run_bad", ("실패", "오류가 발생")),
     ("run_nope", ("찾지 못",)),
-    (None, ("골라",)),
+    (None, ("선택",)),
 ])
 def test_unfinished_failed_missing_or_unset_runs_each_say_what_happened(runs, rid, words):
     r = _run(_g([_load(rid)]))["nodes"]["l"]
@@ -238,7 +238,7 @@ def test_comparing_runs_under_different_conditions_warns_first(runs):
     r = _run(_cmp("run_ok", "run_ok2"))["nodes"]["c"]
     labels = {d["key"] for d in r["view"]["differences"]}
     assert {"commission_rate", "end_date"} <= labels
-    assert "같은 조건이 아니에요" in r["explain"]["title"] or any("같은 조건" in t["text"] for t in r["explain"]["trust"])
+    assert "같은 조건이 아닙니다" in r["explain"]["title"] or any("같은 조건" in t["text"] for t in r["explain"]["trust"])
 
 
 # ══ 시점 고정 스크리너 ═══════════════════════════════════════════════════════

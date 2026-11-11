@@ -201,7 +201,7 @@ def test_the_counterfactual_response_declares_its_kind(monkeypatch):
 
 
 def test_the_strategy_detail_response_declares_its_kind(monkeypatch):
-    """전략 상세 모달의 총수익·CAGR — ★`perf` **안에** 붙인다★
+    """전략 상세 모달의 총수익률·CAGR — ★`perf` **안에** 붙인다★
 
     화면이 `detail.perf.summary` 를 그리므로 라벨도 그 옆에 있어야 같은 것을
     말한다는 사실이 읽힌다. 최상위에 두면 어느 숫자를 가리키는지 흐려진다.

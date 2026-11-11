@@ -23,14 +23,14 @@ export function MacroAnswer({ className, action }: { className: string; action?:
   const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
   const st: RegimeState | null | undefined = q.data;
 
-  if (q.isLoading) return <div className={className}><LoadingState label="매크로 분석을 불러오는 중이에요" /></div>;
+  if (q.isLoading) return <div className={className}><LoadingState label="매크로 분석 조회 중" /></div>;
   if (q.isError || !st) {
     return (
       <div className={className}>
-        <Notice tone="danger" title="매크로 분석을 불러오지 못했어요">
-          서버에 닿지 못했거나 계산이 실패했어요. 잠시 뒤 다시 시도해 주세요.
+        <Notice tone="danger" title="매크로 분석 조회 실패">
+          서버 연결 실패 또는 계산 실패 잠시 뒤 재시도하십시오.
           <div className="home-act">
-            <button type="button" className="tx-btn tx-btn--sub home-retry" onClick={() => { void q.refetch(); }}>다시 시도</button>
+            <button type="button" className="tx-btn tx-btn--sub home-retry" onClick={() => { void q.refetch(); }}>재시도</button>
           </div>
         </Notice>
       </div>
@@ -39,18 +39,18 @@ export function MacroAnswer({ className, action }: { className: string; action?:
 
   const stress = Math.round(st.stress_score);
   const mode = MODE_KO[st.recommended_mode];
-  const sentence = mode ? `지금 경제 흐름은 ‘${mode}’ 단계예요` : `지금 시장 스트레스는 ${stress}/100이에요`;
+  const sentence = mode ? `지금 경제 흐름은 ‘${mode}’ 단계입니다` : `지금 시장 스트레스는 ${stress}/100입니다`;
   const us = st.markets?.us;
   const figures: Figure[] = [
     { label: "시장 스트레스", value: `${stress}/100` },
     { label: "한국", value: regimeFig(st) },
-    { label: "미국", value: us ? regimeFig(us) : <Unknown reason="미국 국면을 받지 못했어요" /> },
+    { label: "미국", value: us ? regimeFig(us) : <Unknown reason="미국 국면 수신 실패" /> },
   ];
   const at = when(st.timestamp);
   // `ev` = 어떤 근거인지(출처 · 잰 모형 · 기준 시각) — 첫 화면 '근거 짚기' 가 이 칩들을 짚는다. 글자·색은 그대로다.
   const chips: Chip[] = [
     ...sourceChip({ data: cs.data, isError: cs.isError, isLoading: cs.isLoading }).map((c) => ({ ...c, ev: "source" })),
-    { label: "국면 확률은 축 모형 하나로 쟀어요", tone: "info", ev: "model" },
+    { label: "국면 확률은 축 모형 하나로 측정했습니다", tone: "info", ev: "model" },
     ...(at ? [{ label: at, tone: "plain" as const, ev: "asof" }] : []),
   ];
   return (

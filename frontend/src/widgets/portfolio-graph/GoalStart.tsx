@@ -71,7 +71,7 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
       </header>
       {step === 0 && (
         <section>
-          <h2 className="pg-goal-q">무엇을 해 볼까요?</h2>
+          <h2 className="pg-goal-q">작업 선택</h2>
           <div className="pg-goal-grid">
             {GOALS.map((x) => (
               <button key={x.key} type="button" className="pg-goal-card" data-goal={x.key} aria-pressed={goal === x.key}
@@ -80,12 +80,12 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
               </button>
             ))}
           </div>
-          <p className="pg-goal-foot">지금 캔버스는 되돌리기(Ctrl+Z)로 돌아갈 수 있어요.</p>
+          <p className="pg-goal-foot">지금 캔버스는 되돌리기(Ctrl+Z)로 돌아갈 수 있습니다.</p>
         </section>
       )}
       {step === 1 && g && (
         <section>
-          <h2 className="pg-goal-q">{g.tickers === "one" ? "어느 기업을 볼까요?" : "어떤 종목으로 할까요?"}</h2>
+          <h2 className="pg-goal-q">{g.tickers === "one" ? "분석 대상 기업" : "대상 종목"}</h2>
           <label className="pg-goal-field">
             <span>{g.tickers === "one" ? "종목 코드 하나 — 또는 이름으로 찾기" : "종목 코드를 쉼표로, 또는 이름으로 찾기 — 두 개 이상"}</span>
             <TickerInput value={text} onText={setText}
@@ -95,15 +95,15 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
             {tickers.map((t) => <StockChip key={t} code={t} name={names[t]} className="pg-goal-chip" />)}
           </div>
           <p id="pg-goal-tickers-help" className="pg-goal-help">
-            {parsed.rejected.length ? `‘${parsed.rejected.join(", ")}’은 종목 코드로 읽지 못해 뺐어요 — 이름이면 위의 후보에서 골라 주세요. ` : ""}
-            {g.tickers === "one" && parsed.tickers.length > 1 ? "첫 번째 종목만 써요. " : ""}
+            {parsed.rejected.length ? `‘${parsed.rejected.join(", ")}’은 종목 코드로 읽지 못해 뺐습니다 — 이름이면 위의 후보에서 선택하십시오. ` : ""}
+            {g.tickers === "one" && parsed.tickers.length > 1 ? "첫 번째 종목만 씁니다. " : ""}
           </p>
           {nav(tickersOk)}
         </section>
       )}
       {step === 2 && g && (
         <section>
-          <h2 className="pg-goal-q">과거를 얼마나 길게 볼까요?</h2>
+          <h2 className="pg-goal-q">과거 분석 기간</h2>
           <div className="pg-goal-periods" role="radiogroup" aria-label="기간">
             <button type="button" role="radio" aria-checked={lookback === null} className="pg-goal-period"
                     onClick={() => setLookback(null)}>기본값</button>
@@ -112,13 +112,13 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
                       data-days={p.value} onClick={() => setLookback(p.value)}>{p.label}</button>
             ))}
           </div>
-          <p className="pg-goal-help">길수록 여러 국면이 들어가지만, 오래전 시장이 지금과 다를 수 있어요.</p>
+          <p className="pg-goal-help">길수록 여러 국면이 들어가지만, 오래전 시장이 지금과 다를 수 있습니다.</p>
           {nav()}
         </section>
       )}
       {step === 3 && g && (
         <section>
-          <h2 className="pg-goal-q">위험을 얼마나 피할까요?</h2>
+          <h2 className="pg-goal-q">위험 회피 수준</h2>
           <div className="pg-goal-periods pg-goal-risks" role="radiogroup" aria-label="위험 성향">
             <button type="button" role="radio" aria-checked={risk === null} className="pg-goal-risk"
                     onClick={() => setRisk(null)}>지금 방식 그대로</button>
@@ -129,8 +129,8 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
           </div>
           <p className="pg-goal-help">
             {risk === null
-              ? "흐름에 들어 있는 계산 방식을 그대로 써요."
-              : "‘위험 성향에 맞춰’ 방식으로 나눠요 — 많이 피할수록 흔들림이 작은 쪽, 덜 피할수록 기대 수익 쪽이에요. 세 값은 관례적인 크기라서 나에게 맞는지는 가정이에요. 나중에 설정에서 직접 정할 수 있어요."}
+              ? "흐름에 들어 있는 계산 방식을 그대로 씁니다."
+              : "‘위험 성향에 맞춰’ 방식으로 나눕니다 — 많이 피할수록 흔들림이 작은 쪽, 덜 피할수록 기대 수익 쪽입니다. 세 값은 관례적인 크기라서 나에게 맞는지는 가정입니다. 나중에 설정에서 직접 정할 수 있습니다."}
           </p>
           {nav()}
         </section>

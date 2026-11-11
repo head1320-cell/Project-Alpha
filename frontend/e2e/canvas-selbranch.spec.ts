@@ -33,7 +33,7 @@ async function pick(page: Page, ids: string[]) {
   await page.locator(".react-flow__pane").click({ position: { x: 350, y: 20 } });
   await node(page, ids[0]).click({ position: HEAD });
   for (const id of ids.slice(1)) await node(page, id).click({ position: HEAD, modifiers: [mod] });
-  await expect(bar(page).locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐어요`);
+  await expect(bar(page).locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
   // 막대의 단추는 모두 정말 누를 수 있다 — 떠 있는 판·미니맵(CF5b 기본 켬) 밑에 깔리지 않는다.
   await page.waitForTimeout(200);
   const covered = await bar(page).locator("button").evaluateAll((els) => els.filter((b) => {
@@ -185,7 +185,7 @@ test("포트폴리오 노드는 갈래에 넣지 않고 그렇다고 말한다 �
   await pick(page, ["pf", "optimizer"]);
   await bar(page).locator(".pg-selbar-branch").click();
   await expect(page.locator(".pg-note")).toContainText("노드 1개");
-  await expect(page.locator(".pg-note")).toContainText("포트폴리오 노드는 넣지 않았어요");
+  await expect(page.locator(".pg-note")).toContainText("포트폴리오 노드는 넣지 않았습니다");
   const b = (await wip(page)).branches![0];
   expect(Object.values(b.map)).toEqual(["optimizer"]);
 });

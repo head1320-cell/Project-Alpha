@@ -5,7 +5,7 @@ import { DerivativesCalc } from "@/widgets/derivatives/DerivativesCalc";
 
 export default function DerivativesPage() {
   return (
-    <Suspense fallback={<p className="dv-wait">계산기를 여는 중이에요</p>}>
+    <Suspense fallback={<p className="dv-wait">계산기 로딩 중</p>}>
       <DerivativesCalc />
     </Suspense>
   );

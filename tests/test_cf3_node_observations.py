@@ -2,7 +2,7 @@
 ==============================================================================
 - 옵티마이저 view `fallbacks` — 엔진 기록 + 서버 문장(방식 쉬운 이름). 설명은 "문제없이"를 빼고 가정 줄(`kind: fallback`)을 단다.
 - 옵티마이저 view `view_legs_dropped` — BL·EP 에서 유니버스 밖 종목 때문에 다리를 잃은 생각(그 생각은 남되 일부만 반영).
-- 점수→비중 view `sigma_missing`·`dropped_zero` — 공분산을 왜 함께 보내지 못했는지, 비중 0 이라 뺀 종목. 틀린 설명("수익률을 이어 주세요") 정정.
+- 점수→비중 view `sigma_missing`·`dropped_zero` — 공분산을 왜 함께 보내지 못했는지, 비중 0 이라 뺀 종목. 틀린 설명("수익률을 연결하십시오") 정정.
 - 백테스트 설명 — 리밸런싱마다 방식이 답을 냈는지는 세지 않았다는 사실.
 """
 from __future__ import annotations
@@ -44,23 +44,23 @@ def test_no_fallback_keeps_the_old_view_and_sentence(market):
     """짝 — 대체가 없으면 view 에 키가 없고 설명은 예전 그대로."""
     o = _run(_chain("mvo"))["o"]
     assert "fallbacks" not in o["view"]
-    assert "비중 계산은 문제없이 끝났어요." in _texts(o["explain"])
+    assert "비중 계산은 문제없이 끝났습니다." in _texts(o["explain"])
     assert not any(t.get("kind") == "fallback" for t in o["explain"]["trust"])
 
 
 def test_bl_market_fallback_corrects_the_views_sentence(market, monkeypatch):
-    """BL 사후는 됐는데 비중을 풀지 못함 — '내 생각을 반영했어요' 대신 무엇이 반영됐는지 말한다(라벨 `views_applied` 도 K1 부터 거짓)."""
+    """BL 사후는 됐는데 비중을 풀지 못함 — '내 생각을 반영했습니다' 대신 무엇이 반영됐는지 말한다(라벨 `views_applied` 도 K1 부터 거짓)."""
     monkeypatch.setattr("src.engine.allocation_studio._opt", _opt_none)
     o = _run(_chain("bl", views=VIEWS))["o"]
     assert o["view"]["views_applied"] is False
     texts = _texts(o["explain"])
-    assert "내 생각을 반영했어요." not in texts
+    assert "내 생각을 반영했습니다." not in texts
     assert any("시가총액 비중" in t for t in texts)
 
 
 def test_bl_normal_still_says_views_were_applied(market):
     texts = _texts(_run(_chain("bl", views=VIEWS))["o"]["explain"])
-    assert "내 생각을 반영했어요." in texts
+    assert "내 생각을 반영했습니다." in texts
 
 
 def test_bl_posterior_failure_under_mvo_is_recorded_but_not_assumed(market, monkeypatch):
@@ -108,14 +108,14 @@ def test_sigma_missing_names_the_missing_codes(market):
     view, texts = _scores("equal", {**S5, "999999": 2.8})
     assert view["sigma_missing"] == {"reason": "codes_missing", "codes": ["999999"]}
     assert any("수익률에 없는 종목" in t and "999999" in t for t in texts)
-    assert not any("수익률을 이어 주세요" in t for t in texts)
+    assert not any("수익률을 연결하십시오" in t for t in texts)
 
 
 def test_sigma_missing_without_returns_keeps_the_old_sentence(market):
     """짝 — 수익률을 잇지 않았으면 그 말이 맞다."""
     view, texts = _scores("equal", S5, with_returns=False)
     assert view["sigma_missing"] == {"reason": "no_returns", "codes": []}
-    assert any("수익률을 이어 주세요" in t for t in texts)
+    assert any("수익률을 연결하십시오" in t for t in texts)
 
 
 def test_sigma_present_no_key(market):

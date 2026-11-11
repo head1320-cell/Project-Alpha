@@ -28,17 +28,17 @@ export function OperatorOrders({ result, onRetry }: { result: Result<OpOrders> |
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="lv-orders-h">최근 주문</h2>
-          <p className="tx-sec-sub">운영 계좌로 나간 주문을 최근 20건까지 보여요. 모든 모드가 섞여 있고, 줄마다 어디서 멈췄는지 보여요.</p>
+          <p className="tx-sec-sub">운영 계좌로 나간 주문을 최근 20건까지 보입니다. 모든 모드가 섞여 있고, 줄마다 어디서 멈췄는지 보입니다.</p>
         </div>
       </header>
       <div className="tx-sec-body">
         {!result ? (
-          <p className="tx-sec-sub" aria-busy="true">주문 목록을 불러오는 중이에요.</p>
+          <p className="tx-sec-sub" aria-busy="true">주문 목록 조회 중</p>
         ) : !result.ok ? (
-          result.status === 401 ? <p className="tx-sec-sub">로그인해야 주문 목록을 볼 수 있어요.</p>
-            : <RetryFail title="주문 목록을 불러오지 못했어요" onRetry={onRetry}>{result.error}</RetryFail>
+          result.status === 401 ? <p className="tx-sec-sub">로그인해야 주문 목록을 볼 수 있습니다.</p>
+            : <RetryFail title="주문 목록 조회 실패" onRetry={onRetry}>{result.error}</RetryFail>
         ) : all.length === 0 ? (
-          <p className="tx-sec-sub">아직 나간 주문이 없어요.</p>
+          <p className="tx-sec-sub">아직 나간 주문 없음</p>
         ) : (
           <>
             <div className="lv-chips lv-ord-filter" role="group" aria-label="주문 거르기">
@@ -49,16 +49,16 @@ export function OperatorOrders({ result, onRetry }: { result: Result<OpOrders> |
                 </button>
               ))}
             </div>
-            {rows.length === 0 ? <p className="tx-sec-sub lv-ord-none">이 무리에 든 주문이 없어요.</p> : (
+            {rows.length === 0 ? <p className="tx-sec-sub lv-ord-none">이 무리에 든 주문 없음</p> : (
               <ul className="lv-ord-l">
                 {rows.map((o) => {
                   const stop = stopOf(o.status, o.reason_code);
                   const status = STATUS_KO[o.status];
                   const filled = typeof o.filled_quantity === "number" && typeof o.quantity === "number"
-                    ? `체결 ${num(o.filled_quantity)}/${num(o.quantity)}주` : typeof o.quantity === "number" ? `${num(o.quantity)}주` : "수량 몰라요";
+                    ? `체결 ${num(o.filled_quantity)}/${num(o.quantity)}주` : typeof o.quantity === "number" ? `${num(o.quantity)}주` : "수량 미상";
                   return (
                     <li key={o.client_order_id} className="lv-ord" data-coid={o.client_order_id} data-status={o.status}>
-                      <span className="lv-ord-when">{krDateTime(o.created_at) ?? "시각 몰라요"}</span>
+                      <span className="lv-ord-when">{krDateTime(o.created_at) ?? "시각 미상"}</span>
                       <span className="lv-ord-what">
                         <strong data-mono>{o.ticker}</strong>
                         <span className="lv-ord-side">
@@ -71,7 +71,7 @@ export function OperatorOrders({ result, onRetry }: { result: Result<OpOrders> |
                       <span className="lv-ord-state">
                         <span className="lv-ord-status">{status ?? <span data-server>{o.status}</span>}</span>
                         <span className="tx-chip lv-ord-stop" data-tone="plain" data-stop={stop}>
-                          {stop === "unknown" ? "멈춘 곳 몰라요" : stop === "broker" ? "끝까지 갔어요" : `${STOPS.find((s) => s.key === stop)?.label}에서 멈춤`}
+                          {stop === "unknown" ? "멈춘 곳 미상" : stop === "broker" ? "끝까지 갔습니다" : `${STOPS.find((s) => s.key === stop)?.label}에서 멈춤`}
                         </span>
                         {o.execution_mode ? <span className="lv-ord-mode">{MODE_KO[o.execution_mode] ?? <span data-server>{o.execution_mode}</span>}</span> : null}
                       </span>

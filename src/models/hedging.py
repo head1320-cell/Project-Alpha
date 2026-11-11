@@ -36,7 +36,7 @@ class HedgingSimulator:
             reason = None
         else:
             reduction = None
-            reason = "지금 β 가 0 이라 줄일 시장 위험이 없어요 — 감소율을 계산하지 않아요."
+            reason = "지금 β 가 0 이라 줄일 시장 위험이 없습니다 — 감소율을 계산하지 않습니다."
 
         return {
             "current_beta":             current_beta,

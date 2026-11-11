@@ -29,14 +29,14 @@ export function DrillDownModal({ series, loading, failed, onRetry, onClose }: { 
       <DialogContent className="mc-modal" aria-describedby={undefined}>
         <DialogTitle className="sr-only">{series?.name ?? "지표 흐름"}</DialogTitle>
         <button type="button" className="mc-modal-x" onClick={onClose} aria-label="닫기"><X size={16} /></button>
-        {loading && <div className="mc-modal-load">36개월 흐름을 불러오는 중이에요</div>}
+        {loading && <div className="mc-modal-load">36개월 흐름 조회 중</div>}
         {!loading && failed && (
-          <Notice tone="danger" title="지표 흐름을 불러오지 못했어요">
-            서버에 닿지 못했거나 계산이 실패했어요.
-            {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>}
+          <Notice tone="danger" title="지표 흐름 조회 실패">
+            서버 연결 실패 또는 계산 실패
+            {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>재시도</button></div>}
           </Notice>
         )}
-        {!loading && !failed && !series && <div className="mc-modal-load">이 지표는 흐름 자료가 없어요</div>}
+        {!loading && !failed && !series && <div className="mc-modal-load">이 지표는 흐름 자료 없음</div>}
         {!loading && series && (
           <>
             <div className="mc-modal-h">
@@ -44,10 +44,10 @@ export function DrillDownModal({ series, loading, failed, onRetry, onClose }: { 
               <div className="mc-modal-latest"><b>{fmtNum(series.latest)}</b><em>{series.unit}</em></div>
             </div>
             <DrillSeriesChart data={data} name={series.name} unit={series.unit} mean5y={series.mean_5y} />
-            <p className="mc-modal-note">점선은 지난 5년 평균이에요.</p>
+            <p className="mc-modal-note">점선은 지난 5년 평균입니다.</p>
             <dl className="mc-modal-stats">
               {[["최근 값", `${fmtNum(series.latest)} ${series.unit}`], ["지난 5년 평균", fmtNum(series.mean_5y)], ["지난 5년 표준편차", fmtNum(series.std_5y)],
-                ["z(평균에서 떨어진 정도)", fmtZ(series.z_score)], ["지난 5년 중 위치", series.percentile != null ? `${Math.round(series.percentile)}%` : "몰라요"], ["전년 대비", fmtPct(series.yoy)]].map(([k, v]) => (
+                ["z(평균에서 떨어진 정도)", fmtZ(series.z_score)], ["지난 5년 중 위치", series.percentile != null ? `${Math.round(series.percentile)}%` : "N/A"], ["전년 대비", fmtPct(series.yoy)]].map(([k, v]) => (
                 <div key={k} className="mc-modal-stat"><dt>{k}</dt><dd>{v}</dd></div>
               ))}
             </dl>

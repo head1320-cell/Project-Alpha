@@ -69,9 +69,9 @@ const TAB_NEEDS: Partial<Record<TabId, { main?: CoreKey; also?: CoreKey[] }>> = 
 
 function CoreFail({ k, retry }: { k: CoreKey; retry: () => void }) {
   return (
-    <Notice tone="danger" title={`${CORE_KO[k]} 불러오지 못했어요`}>
-      서버에 닿지 못했거나 계산이 실패했어요. 받은 데이터로 그릴 수 있는 것만 보여 드려요.
-      <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={retry}>다시 시도</button></div>
+    <Notice tone="danger" title={`${CORE_KO[k]} 불러오지 못했습니다`}>
+      서버 연결 실패 또는 계산 실패 받은 데이터로 그릴 수 있는 것만 보여 드립니다.
+      <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={retry}>재시도</button></div>
     </Notice>
   );
 }
@@ -193,12 +193,12 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
   const kr = regime.markets?.kr ?? regime;
   const us = regime.markets?.us;
   const sentence = us
-    ? `한국은 ‘${regimeName(kr.regime)}’, 미국은 ‘${regimeName(us.regime)}’ 쪽이에요`
-    : `한국은 ‘${regimeName(kr.regime)}’ 쪽이에요`;
+    ? `한국은 ‘${regimeName(kr.regime)}’, 미국은 ‘${regimeName(us.regime)}’ 쪽입니다`
+    : `한국은 ‘${regimeName(kr.regime)}’ 쪽입니다`;
   const figures: Figure[] = [
     { label: "한국", value: regimeFig(kr) },
-    { label: "미국", value: us ? regimeFig(us) : <Unknown reason="미국 국면을 받지 못했어요" /> },
-    { label: "시장 스트레스", value: Number.isFinite(regime.stress_score) ? `${Math.round(regime.stress_score)}/100` : <Unknown reason="스트레스 값을 받지 못했어요" /> },
+    { label: "미국", value: us ? regimeFig(us) : <Unknown reason="미국 국면 수신 실패" /> },
+    { label: "시장 스트레스", value: Number.isFinite(regime.stress_score) ? `${Math.round(regime.stress_score)}/100` : <Unknown reason="스트레스 값 수신 실패" /> },
     { label: "권장 단계", value: MODE_KO[regime.recommended_mode] ?? regime.recommended_mode },
     ...(typeof regime.yield_inversion === "boolean" ? [{
       label: "수익률 곡선",
@@ -210,7 +210,7 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
   const at = when(regime.timestamp);
   const chips: Chip[] = [
     ...sourceChip({ data: cs.data, isError: cs.isError, isLoading: cs.isLoading }),
-    { label: "국면 확률은 축 모형 하나로 쟀어요", tone: "info" },
+    { label: "국면 확률은 축 모형 하나로 측정했습니다", tone: "info" },
     ...(at ? [{ label: at, tone: "plain" as const }] : []),
   ];
   const need = TAB_NEEDS[tab];
@@ -224,12 +224,12 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
           action={onOpenInAAS ? (<>
             {/* 현재 국면을 불변 스냅샷으로 고정해 캔버스로 — 휘발성 복사가 아니라 서버 ID 전달 */}
             <button type="button" className="tx-btn tx-btn--main mc-open-aas" onClick={onOpenInAAS} disabled={aasBusy}>
-              {aasBusy ? "스냅샷을 저장하는 중이에요…" : "포트폴리오 설계에 넣기"}
+              {aasBusy ? "스냅샷 저장 중…" : "포트폴리오 설계에 넣기"}
             </button>
-            <span className="mc-head-note">지금 국면을 스냅샷으로 저장해 포트폴리오 설계의 국면 노드에 넣어요.</span>
+            <span className="mc-head-note">지금 국면을 스냅샷으로 저장해 포트폴리오 설계의 국면 노드에 넣습니다.</span>
           </>) : undefined} />
         {aasError && (
-          <Notice tone="danger" title="포트폴리오 설계로 넘기지 못했어요">{aasError}</Notice>
+          <Notice tone="danger" title="포트폴리오 설계로 넘기지 못했습니다">{aasError}</Notice>
         )}
       </header>
 

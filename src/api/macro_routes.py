@@ -722,7 +722,7 @@ def long_run_view(vars: str | None, months: int) -> dict:
             f"코어 변수는 최대 {MAX_CORE_VARS}개입니다 — {len(requested)}개를 "
             "요청했습니다. VECM 의 모수는 대략 K²p 라 관측 수를 넘으면 결과가 "
             "노이즈가 됩니다. 차원 축소(PCA)로 줄이지 않는 이유는 요인이 해석을 "
-            "잃기 때문입니다 — 코어 변수를 골라 주세요.")
+            "잃기 때문입니다 — 코어 변수를 선택하십시오.")
 
     try:
         series = load_series(tuple(requested), months)

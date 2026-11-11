@@ -35,13 +35,13 @@ function droppedTail(unknown: number, bad: number, over: number): string {
     bad ? `코드 모양이 아닌 값 ${bad}개` : "",
     over ? `${MAX_BRIDGE_TICKERS}개를 넘은 코드 ${over}개` : "",
   ].filter(Boolean);
-  return parts.length ? ` ${parts.join(" · ")}는 뺐어요.` : "";
+  return parts.length ? ` ${parts.join(" · ")}는 뺐습니다.` : "";
 }
 
 export async function bridgeFromTickers(raw: string | null): Promise<BridgeBoot | null> {
   const { codes, bad, over } = parseTickers(raw);
   if (!codes.length && !bad) return null;
-  if (!codes.length) return { doc: null, note: `가져올 종목이 없어요.${droppedTail(0, bad, over)}` };
+  if (!codes.length) return { doc: null, note: `가져올 종목이 없습니다.${droppedTail(0, bad, over)}` };
   let labels: Record<string, string>;
   try {
     const r = await fetch(`${API_BASE}/api/v1/allocation/resolve-names`, {
@@ -50,12 +50,12 @@ export async function bridgeFromTickers(raw: string | null): Promise<BridgeBoot 
     if (!r.ok) throw new Error(String(r.status));
     labels = ((await r.json()) as { labels?: Record<string, string> }).labels ?? {};
   } catch {
-    return { doc: null, note: "종목 이름을 확인하지 못해 가져오지 않았어요. 잠시 뒤 다시 넘겨 주세요." };
+    return { doc: null, note: "종목 이름을 확인하지 못해 가져오지 않았습니다. 잠시 뒤 다시 넘기십시오." };
   }
   const known = codes.filter((c) => typeof labels[c] === "string" && labels[c] !== c);
   const tail = droppedTail(codes.length - known.length, bad, over);
-  if (!known.length) return { doc: null, note: `가져올 종목이 없어요.${tail}` };
-  return { doc: tickersDoc(known), note: `종목 찾기에서 가져온 ${known.length}종목으로 기본 흐름을 열었어요.${tail}` };
+  if (!known.length) return { doc: null, note: `가져올 종목이 없습니다.${tail}` };
+  return { doc: tickersDoc(known), note: `종목 찾기에서 가져온 ${known.length}종목으로 기본 흐름을 열었습니다.${tail}` };
 }
 
 /**
@@ -66,7 +66,7 @@ export async function bridgeFromTickers(raw: string | null): Promise<BridgeBoot 
 export async function bridgeFromCompany(raw: string | null): Promise<BridgeBoot | null> {
   if (raw === null) return null;
   const code = raw.trim();
-  if (!/^\d{6}$/.test(code)) return { doc: null, note: "기업 코드 모양이 아니라 가져오지 않았어요." };
+  if (!/^\d{6}$/.test(code)) return { doc: null, note: "기업 코드 모양이 아니라 가져오지 않았습니다." };
   try {
     const r = await fetch(`${API_BASE}/api/v1/allocation/resolve-names`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codes: [code] }),
@@ -74,9 +74,9 @@ export async function bridgeFromCompany(raw: string | null): Promise<BridgeBoot 
     if (!r.ok) throw new Error(String(r.status));
     const labels = ((await r.json()) as { labels?: Record<string, string> }).labels ?? {};
     const name = labels[code];
-    if (typeof name !== "string" || name === code) return { doc: null, note: `알 수 없는 코드 ${code}라 가져오지 않았어요.` };
-    return { doc: goalDoc("company", [code], null), note: `기업 분석에서 넘어온 ${name}(${code})로 ‘기업 하나 깊게’ 흐름을 열었어요. 가정이 필요한 모형은 노드 추가에서 고르세요.` };
+    if (typeof name !== "string" || name === code) return { doc: null, note: `알 수 없는 코드 ${code}라 가져오지 않았습니다.` };
+    return { doc: goalDoc("company", [code], null), note: `기업 분석에서 넘어온 ${name}(${code})로 ‘기업 하나 깊게’ 흐름을 열었습니다. 가정이 필요한 모형은 노드 추가에서 고르십시오.` };
   } catch {
-    return { doc: null, note: "종목 이름을 확인하지 못해 가져오지 않았어요. 잠시 뒤 다시 넘겨 주세요." };
+    return { doc: null, note: "종목 이름을 확인하지 못해 가져오지 않았습니다. 잠시 뒤 다시 넘기십시오." };
   }
 }

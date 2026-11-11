@@ -76,7 +76,7 @@ export function parseFile(text: string): ParseResult {
   try {
     raw = JSON.parse(text);
   } catch (e) {
-    return { doc: null, problems: [`JSON 형식이 아니에요 — ${(e as Error).message}. 파일이 잘렸거나 다른 형식인지 확인해 주세요`] };
+    return { doc: null, problems: [`JSON 형식이 아닙니다 — ${(e as Error).message}. 파일이 잘렸거나 다른 형식인지 확인하십시오`] };
   }
   if (!isObj(raw)) return { doc: null, problems: ["문서가 객체가 아닙니다."] };
   const problems: string[] = [];
@@ -107,17 +107,17 @@ export function parseFile(text: string): ParseResult {
     seen.add(n.id);
     const pos = isObj(n.position) ? n.position : {};
     const said = saidOf(n.said);
-    if (said.bad) problems.push(`노드 ${n.id} 의 ‘말씀에서’ 출처가 형식에 맞지 않아 뺐어요 — 값은 그대로예요.`);
+    if (said.bad) problems.push(`노드 ${n.id} 의 ‘말씀에서’ 출처가 형식에 맞지 않아 뺐습니다 — 값은 그대로입니다.`);
     // 결과 칸 높이(R3) — 숫자가 아니면 빼고, 범위 밖이면 맞춘다. 둘 다 말한다(말없이 고치지 않음). 기본이면 쓰지 않는다.
     let slot: number | null = null;
     if (n.size !== undefined) {
       const raw = isObj(n.size) ? n.size.slot_h : undefined;
       if (typeof raw !== "number" || !Number.isFinite(raw)) {
-        problems.push(`노드 ${n.id} 의 결과 칸 높이가 숫자가 아니라 뺐어요 — 기본 높이로 보여요.`);
+        problems.push(`노드 ${n.id} 의 결과 칸 높이가 숫자가 아니라 뺐습니다 — 기본 높이로 보입니다.`);
       } else {
         slot = slotHeight(n.type, raw);
         if (slot !== Math.round(raw)) {
-          problems.push(`노드 ${n.id} 의 결과 칸 높이 ${raw} 은 범위(${slotBase(n.type)}~${slotBase(n.type) * SLOT_MAX_K}) 밖이라 ${slot} 으로 맞췄어요.`);
+          problems.push(`노드 ${n.id} 의 결과 칸 높이 ${raw} 은 범위(${slotBase(n.type)}~${slotBase(n.type) * SLOT_MAX_K}) 밖이라 ${slot} 으로 맞췄습니다.`);
         }
         if (slot <= slotBase(n.type)) slot = null;
       }
@@ -146,7 +146,7 @@ export function parseFile(text: string): ParseResult {
       continue;
     }
     const wp = waypointsOf(e.waypoints);
-    if (wp.bad) problems.push(`링크 #${i + 1} 의 경유점이 숫자 자리가 아니라 버렸어요 — 선은 그대로 이어요.`);
+    if (wp.bad) problems.push(`링크 #${i + 1} 의 경유점이 숫자 자리가 아니라 버렸습니다 — 선은 그대로 잇습니다.`);
     edges.push({
       id: typeof e.id === "string" && e.id ? e.id
         : `${e.source}.${e.source_port}->${e.target}.${e.target_port}`,
@@ -160,11 +160,11 @@ export function parseFile(text: string): ParseResult {
   if (Array.isArray(raw.groups)) {
     for (const [i, g] of (raw.groups as unknown[]).entries()) {
       if (!isObj(g) || typeof g.id !== "string" || !Array.isArray(g.members)) {
-        problems.push(`묶음 #${i + 1} 에 id·members 가 없어 건너뛰었어요.`);
+        problems.push(`묶음 #${i + 1} 에 id·members 가 없어 건너뛰었습니다.`);
         continue;
       }
       const members = (g.members as unknown[]).filter((m): m is string => typeof m === "string" && seen.has(m));
-      if (!members.length) { problems.push(`묶음 "${String(g.label ?? g.id)}" 에 남은 노드가 없어 건너뛰었어요.`); continue; }
+      if (!members.length) { problems.push(`묶음 "${String(g.label ?? g.id)}" 에 남은 노드가 없어 건너뛰었습니다.`); continue; }
       const strategy = g.kind === "strategy";
       groups.push({ id: g.id, label: typeof g.label === "string" ? g.label : g.id, members, collapsed: g.collapsed === true,
                     // 전략 상자(BM C2) — 선택 칸. 모르는 값은 버리고 그냥 묶음으로 읽는다(옛 문서는 그대로).
@@ -180,27 +180,27 @@ export function parseFile(text: string): ParseResult {
   if (Array.isArray(raw.branches)) {
     for (const [i, b] of (raw.branches as unknown[]).entries()) {
       if (!isObj(b) || typeof b.id !== "string" || typeof b.root !== "string" || typeof b.of_root !== "string" || !isObj(b.map)) {
-        problems.push(`갈래 #${i + 1} 에 id·root·of_root·map 이 없어 건너뛰었어요.`);
+        problems.push(`갈래 #${i + 1} 에 id·root·of_root·map 이 없어 건너뛰었습니다.`);
         continue;
       }
       const map = Object.fromEntries(Object.entries(b.map as Record<string, unknown>)
         .filter(([c, o]) => typeof o === "string" && seen.has(c) && seen.has(o)) as [string, string][]);
-      if (!(b.root in map) || !seen.has(b.of_root)) { problems.push(`갈래 "${String(b.label ?? b.id)}" 의 뿌리가 없어 건너뛰었어요.`); continue; }
+      if (!(b.root in map) || !seen.has(b.of_root)) { problems.push(`갈래 "${String(b.label ?? b.id)}" 의 뿌리가 없어 건너뛰었습니다.`); continue; }
       branches.push({ id: b.id, label: typeof b.label === "string" ? b.label : b.id, root: b.root, of_root: b.of_root, map });
     }
   }
   // 그림 고정(BN N2) — 문서에 있는 노드만. 없는 노드를 가리키는 고정은 빼고 말한다(갈래와 같은 규칙).
   const pinRaw = Array.isArray(raw.pinned) ? (raw.pinned as unknown[]) : [];
   const pinned = [...new Set(pinRaw.filter((x): x is string => typeof x === "string" && seen.has(x)))];
-  if (pinRaw.length > pinned.length) problems.push(`없는 노드를 가리키는 그림 고정 ${pinRaw.length - pinned.length}개는 뺐어요.`);
+  if (pinRaw.length > pinned.length) problems.push(`없는 노드를 가리키는 그림 고정 ${pinRaw.length - pinned.length}개는 뺐습니다.`);
   // 접기(CF1) — 고정과 같은 규칙. 없는 노드를 가리키면 빼고 말한다.
   const foldRaw = Array.isArray(raw.folded) ? (raw.folded as unknown[]) : [];
   const folded = [...new Set(foldRaw.filter((x): x is string => typeof x === "string" && seen.has(x)))];
-  if (foldRaw.length > folded.length) problems.push(`없는 노드를 가리키는 접기 ${foldRaw.length - folded.length}개는 뺐어요.`);
+  if (foldRaw.length > folded.length) problems.push(`없는 노드를 가리키는 접기 ${foldRaw.length - folded.length}개는 뺐습니다.`);
   // 목표(AI1) — 네 키만. 모르는 값은 빼고 말한다(화면이 보낸 글이 AI 근거가 되지 않게 — 서버도 키로만 받는다).
   const rawGoal = isObj(raw.meta) ? raw.meta.goal : undefined;
   if (rawGoal !== undefined && !isGoalKey(rawGoal)) {
-    problems.push(`모르는 목표 ‘${typeof rawGoal === "string" ? rawGoal : "형식이 틀린 값"}’는 뺐어요.`);
+    problems.push(`모르는 목표 ‘${typeof rawGoal === "string" ? rawGoal : "형식이 틀린 값"}’는 뺐습니다.`);
   }
   const meta = isObj(raw.meta) ? {
     name: typeof raw.meta.name === "string" ? raw.meta.name : undefined,

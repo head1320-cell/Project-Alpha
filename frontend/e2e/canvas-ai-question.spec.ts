@@ -21,7 +21,7 @@ const CORE = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930
                        e("returns", "returns", "optimizer", "returns"), e("estimate", "belief", "optimizer", "belief")] };
 const RO = "returns.returns->optimizer.returns";
 const ASK = "**/api/v1/assist/canvas/ask";
-const NOTICE = "연습용 결과예요. 실제 시세가 아니라 합성 데이터로 계산했어요. 투자 판단에 쓰기 전에 실데이터로 다시 계산해 주세요.";
+const NOTICE = "합성 데이터 결과입니다. 실제 시세가 아니라 합성 데이터로 계산했습니다. 투자 판단에 쓰기 전에 실데이터로 재계산하십시오.";
 type RunNode = { explain?: unknown; explain_sig?: string };
 type RunEdge = Record<string, unknown> & { sig?: string; target: string };
 type Report = { nodes: Record<string, RunNode>; edges: Record<string, RunEdge> };
@@ -29,11 +29,11 @@ type Sent = { graph: { nodes: { id: string }[] }; target: { kind: string; id: st
               previous: { question: string; answer: string } | null;
               facts: { node_id: string; explain: unknown; sig: string }[]; records: { edge_id: string; record: unknown; sig: string }[] };
 
-const SENTS = [{ text: "기대 수익을 과거 평균으로 잡았어요.", fact_ids: ["f5"] },
-               { text: "비중은 수익 대비 위험 최적으로 나눴어요.", fact_ids: ["f9", "f11"] }];
+const SENTS = [{ text: "기대 수익을 과거 평균으로 잡았습니다.", fact_ids: ["f5"] },
+               { text: "비중은 수익 대비 위험 최적으로 나눴습니다.", fact_ids: ["f9", "f11"] }];
 const FACTS = {
-  f5: { target_kind: "node", target_id: "estimate", part: "사실", index: 1, text: "기대 수익은 과거 평균이에요" },
-  f9: { target_kind: "node", target_id: "optimizer", part: "제목", index: 0, text: "비중을 수익 대비 위험 최적으로 나눴어요" },
+  f5: { target_kind: "node", target_id: "estimate", part: "사실", index: 1, text: "기대 수익은 과거 평균입니다" },
+  f9: { target_kind: "node", target_id: "optimizer", part: "제목", index: 0, text: "비중을 수익 대비 위험 최적으로 나눴습니다" },
   f11: { target_kind: "edge", target_id: RO, part: "건너간 것", index: 0, text: "기간: 756일" },
 };
 const ok = (extra: Record<string, unknown> = {}) => ({
@@ -101,9 +101,9 @@ test("아무것도 고르지 않으면 묻기 칸이 없다 — 짝: 노드를 �
   await expect(dock(page)).toHaveCount(0);
   await pick(page, "optimizer");
   await expect(dock(page).locator(".pg-ask-to")).toHaveText("4 비중 계산에게 묻기");                      // ★짝★
-  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 3의 계산 설명으로 답해요");          // 0 인 쪽은 말하지 않는다
+  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 3의 계산 설명으로 답합니다");          // 0 인 쪽은 말하지 않는다
   await pick(page, "estimate");
-  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 2 · 아래 1의 계산 설명으로 답해요");
+  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 2 · 아래 1의 계산 설명으로 답합니다");
   await page.locator(".react-flow__pane").click({ position: { x: 600, y: 600 } });
   await expect(dock(page)).toHaveCount(0);
 });
@@ -112,7 +112,7 @@ test("계산 전에는 안내 + [여기까지 계산] — 누르면 그 노드�
   await signIn(page);
   await openWith(page, CORE);
   await pick(page, "estimate");
-  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산한 뒤에 물을 수 있어요");
+  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산한 뒤에 물을 수 있습니다");
   await expect(box(page)).toHaveCount(0);
   const res = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
   await dock(page).locator(".pg-ask-run").click();
@@ -127,7 +127,7 @@ test("로그아웃이면 로그인 링크 · 요청 0", async ({ page }) => {
   await openWith(page, CORE);
   await runAll(page);
   await pick(page, "optimizer");
-  await expect(dock(page).locator(".pg-ask-login")).toHaveText("로그인하면 AI 에게 물을 수 있어요");
+  await expect(dock(page).locator(".pg-ask-login")).toHaveText("로그인하면 AI 에게 물을 수 있습니다");
   await expect(dock(page).locator(".pg-ask-login")).toHaveAttribute("href", "/login");
   await expect(box(page)).toHaveCount(0);
   await page.waitForTimeout(400);
@@ -143,7 +143,7 @@ test("물으면 /run 의 설명·봉인과 전달 점검·봉인을 그대로 �
   const rep = await runAll(page);
   await pick(page, "optimizer");
   await askText(page, "왜 이렇게 나눴나요?");
-  await expect(send(page)).toHaveText("묻는 중이에요");
+  await expect(send(page)).toHaveText("질의 중");
   await expect(send(page)).toBeDisabled();
   await expect(box(page)).toBeDisabled();
   release();
@@ -174,7 +174,7 @@ test("물으면 /run 의 설명·봉인과 전달 점검·봉인을 그대로 �
   await expect(turn.locator(".pg-ask-fact")).toHaveCount(0);
   await chip.click();
   await expect(chip).toHaveAttribute("aria-expanded", "true");
-  await expect(turn.locator(".pg-ask-fact-text")).toHaveText("기대 수익은 과거 평균이에요");
+  await expect(turn.locator(".pg-ask-fact-text")).toHaveText("기대 수익은 과거 평균입니다");
   await expect(page.locator(".pg-side-title")).toContainText("비중 계산");                 // 펼치기만 — 고른 것은 그대로
   await turn.locator(".pg-ask-goto").click();
   await expect(page.locator(".pg-side-title")).toContainText("기대 수익 추정");
@@ -187,32 +187,32 @@ test("자주 묻는 질문 칩은 누르면 바로 묻는다 · 노드와 선은
   await openWith(page, CORE);
   await runAll(page);
   await pick(page, "optimizer");
-  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["이 결과는 어디서 왔나요?", "무엇을 재지 않았나요?", "이 결과를 믿어도 되나요?"]);
+  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["이 결과의 산출 근거는 무엇입니까?", "미측정 항목은 무엇입니까?", "이 결과의 신뢰 수준은 어떻습니까?"]);
   await dock(page).locator(".pg-ask-preset").nth(1).click();
   await expect.poll(() => seen.length).toBe(1);
-  expect(seen[0].question).toBe("무엇을 재지 않았나요?");
+  expect(seen[0].question).toBe("미측정 항목은 무엇입니까?");
   await pickEdge(page, RO);
   await expect(dock(page).locator(".pg-ask-to")).toHaveText("2 수익률 불러오기 → 4 비중 계산 선에게 묻기");
-  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["무엇이 건너가나요?", "빠지거나 바뀐 것이 있나요?"]);
+  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["어떤 데이터가 전달됩니까?", "누락되거나 변경된 항목이 있습니까?"]);
   await dock(page).locator(".pg-ask-preset").first().click();
   await expect.poll(() => seen.length).toBe(2);
   expect(seen[1].target).toEqual({ kind: "edge", id: RO });
-  expect(seen[1].question).toBe("무엇이 건너가나요?");
+  expect(seen[1].question).toBe("어떤 데이터가 전달됩니까?");
 });
 
-test("답할 수 없으면 서버 고정 문장 · 연습용 경고는 서버가 붙였을 때만(짝)", async ({ page }) => {
+test("답할 수 없으면 서버 고정 문장 · 합성 경고는 서버가 붙였을 때만(짝)", async ({ page }) => {
   await signIn(page);
   await answer(page, async (route, i) => {
     await route.fulfill({ json: i === 0
-      ? ok({ answer: { answerable: false, cannot: "투자 판단은 말하지 않아요 — 계산이 무엇을 냈는지만 답해요.", sentences: [] }, facts: {} })
+      ? ok({ answer: { answerable: false, cannot: "투자 판단은 말하지 않습니다 — 계산이 무엇을 냈는지만 답합니다.", sentences: [] }, facts: {} })
       : ok({ notice: null }) });
   });
   await openWith(page, CORE);
   await runAll(page);
   await pick(page, "optimizer");
-  await askText(page, "사도 돼요?");
+  await askText(page, "사도 됩니다?");
   const first = dock(page).locator(".pg-ask-turn").first();
-  await expect(first.locator(".pg-ask-cannot")).toHaveText("투자 판단은 말하지 않아요 — 계산이 무엇을 냈는지만 답해요.");
+  await expect(first.locator(".pg-ask-cannot")).toHaveText("투자 판단은 말하지 않습니다 — 계산이 무엇을 냈는지만 답합니다.");
   await expect(first.locator(".pg-ask-sent")).toHaveCount(0);
   await expect(first.locator(".pg-ask-notice")).toHaveText(NOTICE);
   await askText(page, "그럼 무엇을 냈나요?");
@@ -226,27 +226,27 @@ test("못 보이면 서버 사유 · 검사에서 빠진 문장과 확인 못 �
   await signIn(page);
   await answer(page, async (route, i) => {
     await route.fulfill({ json: i === 0
-      ? { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요", dropped: [] }
+      ? { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다", dropped: [] }
       : ok({ answer: { answerable: true, cannot: null, sentences: [SENTS[0]] },
-             rejected: [{ code: "numbers", reason: "댄 사실 줄에 없는 숫자 9 를 썼어요" }],
-             dropped: [{ node_id: "estimate", reason: "서명이 맞지 않아요(그래프가 바뀌었거나 서버가 다시 시작했어요). 다시 계산하면 물을 수 있어요" }] }) });
+             rejected: [{ code: "numbers", reason: "댄 사실 줄에 없는 숫자 9 를 썼습니다" }],
+             dropped: [{ node_id: "estimate", reason: "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 물을 수 있습니다" }] }) });
   });
   await openWith(page, CORE);
   await runAll(page);
   await pick(page, "optimizer");
   await askText(page, "왜요?");
   await expect(dock(page).locator(".pg-ask-turn").first().locator(".pg-ask-note"))
-    .toHaveText("AI 답을 보여 줄 수 없어요: 한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요");
+    .toHaveText("AI 답을 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
   await askText(page, "다시 왜요?");
   const note = dock(page).locator(".pg-ask-turn").nth(1).locator(".pg-ask-note");
-  await expect(note).toContainText("1문장은 검사에서 빠졌어요: 댄 사실 줄에 없는 숫자 9 를 썼어요");
-  await expect(note).toContainText("1개 결과는 확인하지 못해 뺐어요: 서명이 맞지 않아요");
+  await expect(note).toContainText("1문장은 검사에서 빠졌습니다: 댄 사실 줄에 없는 숫자 9 를 썼습니다");
+  await expect(note).toContainText("1개 결과는 확인하지 못해 뺐습니다: 서명이 맞지 않습니다");
 });
 
 test("이어 묻기는 직전 문답 하나만 보낸다 · Enter 는 보내고 Shift+Enter 는 줄을 바꾼다", async ({ page }) => {
   await signIn(page);
   const seen = await answer(page, async (route, i) => {
-    await route.fulfill({ json: ok({ answer: { answerable: true, cannot: null, sentences: [{ text: `답 ${i + 1}이에요.`, fact_ids: ["f9"] }] } }) });
+    await route.fulfill({ json: ok({ answer: { answerable: true, cannot: null, sentences: [{ text: `답 ${i + 1}입니다.`, fact_ids: ["f9"] }] } }) });
   });
   await openWith(page, CORE);
   await runAll(page);
@@ -263,8 +263,8 @@ test("이어 묻기는 직전 문답 하나만 보낸다 · Enter 는 보내고 
   await askText(page, "셋째");
   await expect.poll(() => seen.length).toBe(3);
   expect(seen[0].previous).toBeNull();
-  expect(seen[1].previous).toEqual({ question: "첫\n질문", answer: "답 1이에요." });
-  expect(seen[2].previous).toEqual({ question: "둘째", answer: "답 2이에요." });               // 하나만 — 첫 문답은 없다
+  expect(seen[1].previous).toEqual({ question: "첫\n질문", answer: "답 1입니다." });
+  expect(seen[2].previous).toEqual({ question: "둘째", answer: "답 2입니다." });               // 하나만 — 첫 문답은 없다
   await expect(dock(page).locator(".pg-ask-turn")).toHaveCount(3);
 });
 
@@ -293,8 +293,8 @@ test("대상마다 문답이 남는다 — 다른 노드에 갔다 오면 그대
   await page.keyboard.press("Delete");
   await pick(page, "optimizer");
   await expect(dock(page).locator(".pg-ask-turn")).toHaveCount(0);
-  await expect(dock(page).locator(".pg-ask-stale")).toHaveText("계산 결과가 바뀌어 답을 지웠어요");
-  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산한 뒤에 물을 수 있어요");
+  await expect(dock(page).locator(".pg-ask-stale")).toHaveText("계산 결과가 바뀌어 답을 지웠습니다");
+  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산한 뒤에 물을 수 있습니다");
 });
 
 test("Ctrl+K '고른 것에게 묻기' 는 칸에 초점을 둔다 · Esc 는 초점을 놓는다", async ({ page }) => {
@@ -321,10 +321,10 @@ test("가로채지 않은 실제 서버: 실제 계산 → 실제 봉인(설명�
   await runAll(page);
   await pickEdge(page, RO);
   const res = page.waitForResponse((r) => r.url().includes("/assist/canvas/ask"));
-  await askText(page, "무엇이 건너가나요?");
+  await askText(page, "어떤 데이터가 전달됩니까?");
   const body = await (await res).json();
   expect(body).toMatchObject({ available: false, source: "unavailable", reason_code: "no_key", dropped: [] });
-  await expect(dock(page).locator(".pg-ask-note")).toHaveText("AI 답을 보여 줄 수 없어요: 서버에 Claude 키가 없어요");
+  await expect(dock(page).locator(".pg-ask-note")).toHaveText("AI 답을 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
 });
 
 for (const scheme of ["light", "dark"] as const) {

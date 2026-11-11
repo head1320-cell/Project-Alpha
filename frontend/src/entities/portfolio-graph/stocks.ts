@@ -13,15 +13,15 @@ export type SearchResult = { ok: true; items: StockHit[] } | { ok: false; reason
 export async function searchStocks(q: string, limit = 8, signal?: AbortSignal): Promise<SearchResult> {
   try {
     const r = await getWithAuth(`/api/v1/screener/stock-search?q=${encodeURIComponent(q)}&limit=${limit}`, { signal });
-    if (!r.ok) return { ok: false, reason: `종목 검색이 응답하지 않았어요 (HTTP ${r.status})` };
+    if (!r.ok) return { ok: false, reason: `종목 검색이 응답하지 않았습니다 (HTTP ${r.status})` };
     const body = await r.json().catch(() => null);
     const items = Array.isArray(body?.items) ? body.items : null;
-    if (!items) return { ok: false, reason: "종목 검색 응답을 읽지 못했어요" };
+    if (!items) return { ok: false, reason: "종목 검색 응답 읽기 실패" };
     return { ok: true, items: items.filter((x: unknown): x is StockHit =>
       !!x && typeof (x as StockHit).code === "string" && typeof (x as StockHit).name === "string") };
   } catch (e) {
     if ((e as Error).name === "AbortError") throw e;
-    return { ok: false, reason: "종목 검색에 닿지 못했어요" };
+    return { ok: false, reason: "종목 검색 연결 실패" };
   }
 }
 

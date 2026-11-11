@@ -50,17 +50,17 @@ test("옵션 결과 = 서버 값(고치면 따라간다) · σ·r 은 %로 넣�
   await open(page);
   await page.getByRole("button", { name: "가격 계산하기" }).click();
   await expect(page.locator(".dv-ans")).toContainText("12.3456원", { timeout: 20_000 });
-  await expect(page.getByTestId("option-greeks")).toContainText("기초자산이 1원 오르면 옵션 가격이 약 +0.5000원 움직여요.");
+  await expect(page.getByTestId("option-greeks")).toContainText("기초자산이 1원 오르면 옵션 가격이 약 +0.5000원 움직입니다.");
   expect(bodies).toEqual([{ S: 100, K: 100, sigma: 0.25, r: 0.035, T: 0.25, option_type: "call" }]);
 });
 
-test("★빈 칸은 0 이 아니다★ — 요청 0 + '값을 넣어 주세요' · 짝: 채우면 요청 1", async ({ page }) => {
+test("★빈 칸은 0 이 아니다★ — 요청 0 + '값을 입력하십시오' · 짝: 채우면 요청 1", async ({ page }) => {
   let calls = 0;
   page.on("request", (q) => { if (q.url().includes("/analyze-option")) calls += 1; });
   await open(page);
   await page.getByLabel("기초자산 가격").fill("");
   await page.getByRole("button", { name: "가격 계산하기" }).click();
-  await expect(page.locator(".dv-field-miss")).toHaveText(["값을 넣어 주세요"]);
+  await expect(page.locator(".dv-field-miss")).toHaveText(["값을 입력하십시오"]);
   await page.waitForTimeout(500);
   expect(calls).toBe(0);
   await expect(page.getByTestId("option-greeks")).toHaveCount(0);
@@ -70,29 +70,29 @@ test("★빈 칸은 0 이 아니다★ — 요청 0 + '값을 넣어 주세요' 
   expect(calls).toBe(1);
 });
 
-test("★실패 500 → alert + 다시 시도, 옛 결과는 남지 않는다★ · 풀면 회복", async ({ page }) => {
+test("★실패 500 → alert + 재시도, 옛 결과는 남지 않는다★ · 풀면 회복", async ({ page }) => {
   await open(page);
   const go = page.getByRole("button", { name: "가격 계산하기" });
   await go.click();
   await expect(page.getByTestId("option-greeks")).toBeVisible({ timeout: 20_000 });
   await page.route("**/analyze-option", (r) => r.fulfill(fail500));
   await go.click();
-  await expect(page.locator(".dv").getByRole("alert")).toContainText("옵션 가격을 계산하지 못했어요");
+  await expect(page.locator(".dv").getByRole("alert")).toContainText("옵션 가격 산출 실패");
   await expect(page.getByTestId("option-greeks")).toHaveCount(0);
   await page.unroute("**/analyze-option");
-  await page.locator(".dv").getByRole("button", { name: "다시 시도" }).click();
+  await page.locator(".dv").getByRole("button", { name: "재시도" }).click();
   await expect(page.getByTestId("option-greeks")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".dv [role=alert]")).toHaveCount(0);
 });
 
-test("입력을 바꾸면 결과에 '입력이 바뀌었어요' · 짝: 바꾸기 전엔 없음 · 다시 계산하면 사라진다", async ({ page }) => {
+test("입력을 바꾸면 결과에 '입력이 바뀌었습니다' · 짝: 바꾸기 전엔 없음 · 재계산하면 사라진다", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "가격 계산하기" }).click();
   await expect(page.getByTestId("option-greeks")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".dv-stale")).toHaveCount(0);
   await page.getByLabel("행사가").fill("110");
-  await expect(page.locator(".dv-stale")).toContainText("입력이 바뀌었어요");
-  await page.locator(".dv-stale").getByRole("button", { name: "다시 계산하기" }).click();
+  await expect(page.locator(".dv-stale")).toContainText("입력이 바뀌었습니다");
+  await page.locator(".dv-stale").getByRole("button", { name: "재계산" }).click();
   await expect(page.locator(".dv-stale")).toHaveCount(0, { timeout: 20_000 });
 });
 
@@ -114,7 +114,7 @@ test("채권 · 선물 헤지 결과 = 서버 값 — 헤지 방향은 한국어
   await open(page, "?tab=bond");
   await page.getByRole("button", { name: "채권 계산하기" }).click();
   await expect(page.locator(".dv-ans")).toContainText("9,999.50원", { timeout: 20_000 });
-  await expect(page.getByTestId("bond-figs")).toContainText("수익률이 0.01%p 오르면 가격이 약 1.2345원 내려요.");
+  await expect(page.getByTestId("bond-figs")).toContainText("수익률이 0.01%p 오르면 가격이 약 1.2345원 내립니다.");
 
   await open(page, "?tab=hedge");
   await page.getByRole("button", { name: "헤지 계산하기" }).click();
@@ -123,8 +123,8 @@ test("채권 · 선물 헤지 결과 = 서버 값 — 헤지 방향은 한국어
   await page.getByLabel("지금 베타").fill("0");
   await page.getByRole("button", { name: "헤지 계산하기" }).click();
   const red = page.locator('.dv-fig[data-k="reduction"]');
-  await expect(red).toContainText("계산하지 않아요", { timeout: 20_000 });
-  await expect(red).toContainText("줄일 시장 위험이 없어요");
+  await expect(red).toContainText("계산하지 않습니다", { timeout: 20_000 });
+  await expect(red).toContainText("줄일 시장 위험 없음");
   await expect(red).not.toContainText("0%");
 });
 
@@ -147,7 +147,7 @@ test("★아직 계산하지 않는 모형 — 설명만, 결과처럼 보이는
   await expect(page.locator(".dv-model")).toHaveCount(3);
   const text = await page.locator(".dv").innerText();
   expect(text).not.toMatch(/10,000|\bON\b|Antithetic|Stratified/);
-  await expect(page.locator(".dv")).toContainText("설명만 있어요");
+  await expect(page.locator(".dv")).toContainText("설명만 있습니다");
 });
 
 test("글 · 대비 · 390 — em-dash·영어 대문자·툴팁 0 · 탭마다 결과까지 라이트/다크 AA · 가로 넘침 0", async ({ page }) => {

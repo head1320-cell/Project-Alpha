@@ -19,11 +19,11 @@ const assistFailed = (reason_code: string, reason: string) =>
 /** AI 도우미 경로 하나를 부른다 — ★던지지 않는다★: 401 은 "로그인이 끝났어요", 그 밖 HTTP 는 서버 detail, 네트워크·형식 오류도 사유 문장. */
 async function assistCall<T>(path: string, body: unknown): Promise<T | ReturnType<typeof assistFailed>> {
   let res: Response;
-  try { res = await postJson(`${ASSIST}/${path}`, body); } catch { return assistFailed("network", "서버에 닿지 못했어요"); }
+  try { res = await postJson(`${ASSIST}/${path}`, body); } catch { return assistFailed("network", "서버 연결 실패"); }
   const json = await res.json().catch(() => null);
-  if (res.status === 401) return assistFailed("signed_out", "로그인이 끝났어요. 다시 로그인해 주세요");
-  if (!res.ok) return assistFailed(`http_${res.status}`, extractErrorDetail(json, `서버가 ${res.status} 오류로 답했어요`));
-  if (!json || typeof json.available !== "boolean") return assistFailed("bad_body", "서버 답의 형식을 읽을 수 없어요");
+  if (res.status === 401) return assistFailed("signed_out", "로그인이 끝났습니다. 다시 로그인하십시오");
+  if (!res.ok) return assistFailed(`http_${res.status}`, extractErrorDetail(json, `서버가 ${res.status} 오류로 답했습니다`));
+  if (!json || typeof json.available !== "boolean") return assistFailed("bad_body", "서버 답의 형식을 읽을 수 없습니다");
   return json as T;
 }
 
@@ -56,7 +56,7 @@ export const portfolioGraphApi = {
     let buf = "";
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) throw new Error("진행 곁줄이 끝을 알리지 않고 닫혔어요");
+      if (done) throw new Error("진행 곁줄이 끝을 알리지 않고 닫혔습니다");
       buf += dec.decode(value, { stream: true });
       const parts = buf.split("\n\n");
       buf = parts.pop() ?? "";
@@ -66,7 +66,7 @@ export const portfolioGraphApi = {
         let ev: RunEvent;
         try { ev = JSON.parse(line.slice(5).trim()) as RunEvent; } catch { continue; }
         if (ev.type === "end") return;
-        if (ev.type === "timeout") throw new Error("진행 곁줄이 계산 시작을 기다리다 끝났어요");
+        if (ev.type === "timeout") throw new Error("진행 곁줄이 계산 시작을 기다리다 끝났습니다");
         onEvent(ev);
       }
     }

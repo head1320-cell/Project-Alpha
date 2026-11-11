@@ -51,7 +51,7 @@ async function makeSheet(page: Page): Promise<string> {
   return page.url().split("/").pop()!;
 }
 
-test("PB4 · 계산 뒤 '한 장' — 비중은 서버 계산 그대로 · 단계 전부(계산 못 한 단계는 사유와 함께) · 연습용 띠 · 꼬리말 · 고객 화면에 한 장", async ({ page }) => {
+test("PB4 · 계산 뒤 '한 장' — 비중은 서버 계산 그대로 · 단계 전부(계산 못 한 단계는 사유와 함께) · 합성 띠 · 꼬리말 · 고객 화면에 한 장", async ({ page }) => {
   const token = await login(page);
   const { cid, alias, body } = await reviewRun(page, token, false);
   const sid = await makeSheet(page);
@@ -65,13 +65,13 @@ test("PB4 · 계산 뒤 '한 장' — 비중은 서버 계산 그대로 · 단�
   await expect(sheet.locator(".cs-step")).toHaveCount(13);
   await expect(sheet.locator('.cs-step[data-node-id="account"][data-status="failed"] .cs-step-failed')).toContainText("계좌 유형");
   await expect(sheet.locator('.cs-step[data-node-id="goal"][data-status="blocked"]')).toHaveCount(1);
-  await expect(sheet.locator(".cs-practice")).toContainText("연습용");
-  await expect(sheet.locator(".cs-foot")).toContainText("새 숫자를 만들지 않았어요");
+  await expect(sheet.locator(".cs-practice")).toContainText("합성");
+  await expect(sheet.locator(".cs-foot")).toContainText("새 숫자를 만들지 않았습니다");
   await page.goto(`/clients?client=${cid}`, { waitUntil: "domcontentloaded" });
   await expect(page.locator(`.cl-sheet[data-sheet-id="${sid}"]`)).toBeVisible();
 });
 
-test("PB4 · 고친 뒤에는 '한 장' 이 꺼진다 — 다시 계산하라고 말한다", async ({ page }) => {
+test("PB4 · 고친 뒤에는 '한 장' 이 꺼진다 — 재계산하라고 말한다", async ({ page }) => {
   const token = await login(page);
   await reviewRun(page, token);
   await expect(page.locator(".pg-client-chip .pg-client-sheet")).toBeEnabled();
@@ -80,10 +80,10 @@ test("PB4 · 고친 뒤에는 '한 장' 이 꺼진다 — 다시 계산하라고
   await page.locator('.pg-basic-field[data-field="risk_tolerance"] .pg-choice[data-choice="aggressive"]').click();
   const btn = page.locator(".pg-client-chip .pg-client-sheet");
   await expect(btn).toBeDisabled();
-  await expect(btn).toHaveAttribute("title", /다시 계산/);
+  await expect(btn).toHaveAttribute("title", /재계산/);
 });
 
-test("PB4 · 인쇄 — 메뉴·도구는 숨고 한 장만 · 미리 묻기(답·사실 칩 · 투자 판단은 고객용 고정 문장) · 지우기", async ({ page }) => {
+test("PB4 · 인쇄 — 메뉴·도구는 숨고 한 장만 · 미리 묻기(답·사실 칩 · 투자 판단은 고객용 고정 문장) · 삭제", async ({ page }) => {
   const token = await login(page);
   const { cid } = await reviewRun(page, token);
   const sid = await makeSheet(page);
@@ -112,15 +112,15 @@ test("PB4 · 인쇄 — 메뉴·도구는 숨고 한 장만 · 미리 묻기(답
 
   let n = 0;
   await page.route("**/snapshots/*/ask", (r) => r.fulfill({ json: n++ === 0
-    ? { available: true, source: "claude", answer: { answerable: true, cannot: null, sentences: [{ text: "가장 큰 비중은 34.04% 예요.", fact_ids: ["f1"] }] },
+    ? { available: true, source: "claude", answer: { answerable: true, cannot: null, sentences: [{ text: "가장 큰 비중은 34.04% 입니다.", fact_ids: ["f1"] }] },
         facts: { f1: { target_kind: "sheet", target_id: sid, where: "비중 계산", part: "비중", index: 0, text: "삼성전자 34.04%" } },
-        rejected: [], notice: "연습용 결과예요." }
-    : { available: true, source: "claude", answer: { answerable: false, cannot: "투자 판단은 담당 PB와 상담해 주세요 — 여기서는 이 한 장에 적힌 내용만 설명해요.", sentences: [] },
+        rejected: [], notice: "합성 데이터 결과입니다." }
+    : { available: true, source: "claude", answer: { answerable: false, cannot: "투자 판단은 담당 PB와 상담하십시오 — 여기서는 이 한 장에 적힌 내용만 설명합니다.", sentences: [] },
         facts: {}, rejected: [], notice: null } }));
   const ask = page.locator(".cs-ask");
-  await ask.locator(".cs-ask-input").fill("가장 큰 비중은 얼마예요?");
+  await ask.locator(".cs-ask-input").fill("가장 큰 비중은 얼마입니다?");
   await ask.locator(".cs-ask-go").click();
-  await expect(ask.locator(".cs-ask-answer")).toContainText("가장 큰 비중은 34.04% 예요.");
+  await expect(ask.locator(".cs-ask-answer")).toContainText("가장 큰 비중은 34.04% 입니다.");
   await expect(ask.locator(".cs-ask-fact")).toContainText("사실 1");
   await ask.locator(".cs-ask-input").fill("지금 사도 되나요?");
   await ask.locator(".cs-ask-go").click();

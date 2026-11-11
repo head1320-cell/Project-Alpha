@@ -30,10 +30,10 @@ function rowsOf(c: CompanyData, mode: "annual" | "quarter"): Row[] {
 /** 답 한 문장 — 매출을 아는 첫 기간과 마지막 기간(서버 값). 둘이 없으면 흐름을 말하지 않는다. */
 function answer(rows: Row[]): string {
   const known = rows.filter((r) => ok(r.revenue));
-  if (known.length < 2) return "매출을 두 기간 이상 받지 못해 흐름을 말할 수 없어요.";
+  if (known.length < 2) return "매출을 두 기간 이상 받지 못해 흐름을 말할 수 없습니다.";
   const a = known[0], b = known[known.length - 1];
-  const verb = (b.revenue as number) > (a.revenue as number) ? "늘었어요" : (b.revenue as number) < (a.revenue as number) ? "줄었어요" : "같았어요";
-  const m = ok(b.opMargin) ? ` ${periodKo(b.k)} 영업이익률은 ${pctTxt(b.opMargin)}예요.` : "";
+  const verb = (b.revenue as number) > (a.revenue as number) ? "늘었습니다" : (b.revenue as number) < (a.revenue as number) ? "줄었습니다" : "같았습니다";
+  const m = ok(b.opMargin) ? ` ${periodKo(b.k)} 영업이익률은 ${pctTxt(b.opMargin)}입니다.` : "";
   return `매출은 ${periodKo(a.k)} ${eokWon(a.revenue)}에서 ${periodKo(b.k)} ${eokWon(b.revenue)}으로 ${verb}.${m}`;
 }
 
@@ -48,7 +48,7 @@ function SumCard({ k, label, vals, periods, fmt, delta }: { k: string; label: st
     <div className="ci-sumcard" data-k={k}>
       <span className="ci-sumcard-k">{label}</span>
       <b className="ci-sumcard-v">{fmt(v)}</b>
-      <span className="ci-sumcard-d" data-dir={dir}>{d == null ? "바로 전 기간과 비교할 수 없어요" : `${periodKo(periods[last - 1])}보다 ${delta(d)}`}</span>
+      <span className="ci-sumcard-d" data-dir={dir}>{d == null ? "바로 전 기간과 비교 불가" : `${periodKo(periods[last - 1])}보다 ${delta(d)}`}</span>
       <Spark values={vals} w={120} h={30} />
     </div>
   );
@@ -94,9 +94,9 @@ export function MoneySection({ c, onRetry, seen }: { c: CompanyData; onRetry: ()
           <div className="ca-cp-fintabs" role="group" aria-label="기간 단위">
             <button type="button" aria-pressed={!q} className={!q ? "on" : ""} onClick={() => setMode("annual")}>연도</button>
             <button type="button" aria-pressed={q} className={q ? "on" : ""} disabled={!c.quarters.length} onClick={() => c.quarters.length && setMode("quarter")}>분기</button>
-            {!c.quarters.length && !c.failed.includes("quarters") && <span className="ci-note">분기 자료가 없어요(전자공시 분기보고서가 적재되면 켜져요)</span>}
+            {!c.quarters.length && !c.failed.includes("quarters") && <span className="ci-note">분기 자료가 없습니다(전자공시 분기보고서가 적재되면 켜집니다)</span>}
           </div>
-          {c.failed.includes("quarters") && <RetryFail title="분기 재무를 불러오지 못했어요" onRetry={onRetry} />}
+          {c.failed.includes("quarters") && <RetryFail title="분기 재무 조회 실패" onRetry={onRetry} />}
           <StoryChart rows={rows} />
           <div className="ci-money-cards">
             <SumCard k="roe" label="ROE(자기자본이익률)" vals={rows.map((r) => r.roe)} periods={rows.map((r) => r.k)} fmt={(v) => pctTxt(v)} delta={(d) => ppSigned(d, 1)} />
@@ -114,8 +114,8 @@ export function MoneySection({ c, onRetry, seen }: { c: CompanyData; onRetry: ()
           </details>
         </>
       ) : c.failed.includes("financials")
-        ? <RetryFail title="재무 시계열을 불러오지 못했어요" onRetry={onRetry} />
-        : <p className="ca-cp-empty">재무 시계열 자료가 없어요(전자공시에 없는 종목일 수 있어요).</p>}
+        ? <RetryFail title="재무 시계열 조회 실패" onRetry={onRetry} />
+        : <p className="ca-cp-empty">재무 시계열 자료가 없습니다(전자공시에 없는 종목일 수 있습니다).</p>}
       {seen && <FinancialsDeepTab code={c.code} />}
     </div>
   );

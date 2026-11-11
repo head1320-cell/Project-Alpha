@@ -1,13 +1,13 @@
-"""CF 3부 PB4 — 고객 한 장 (★서버가 다시 계산 · 새 숫자를 만들지 않는다 · PB 본인 고객만★)
+"""CF 3부 PB4 — 고객 한 장 (★서버가 재계산 · 새 숫자를 만들지 않는다 · PB 본인 고객만★)
 ==============================================================================
-계획 PB4 · 리포트 AD5 규율: 한 장은 ★서버가 같은 그래프를 다시 계산한 보고에서 옮기기만★ 한다.
+계획 PB4 · 리포트 AD5 규율: 한 장은 ★서버가 같은 그래프를 재계산한 보고에서 옮기기만★ 한다.
 
-  ① 만들기 — 서버가 다시 계산하고, ★모든 노드의★ `view_hash` 가 PB 가 본 계산과 같을 때만 저장(`pg.save_node` 와 같은 규율 —
+  ① 만들기 — 서버가 재계산하고, ★모든 노드의★ `view_hash` 가 PB 가 본 계산과 같을 때만 저장(`pg.save_node` 와 같은 규율 —
      한 장은 모든 단계의 설명을 싣는다)
   ② ★한 장의 모든 숫자가 같은 그래프의 서버 계산 보고에 있다★(전수) · 주인공 비중 = 그 노드 view 의 비중 그대로
-  ③ 실패 노드는 빠지지 않는다 — '계산 못 함 + 사유' · 연습용(합성) 계보면 한 장이 그렇다고 말한다
+  ③ 실패 노드는 빠지지 않는다 — '산출 불가 + 사유' · 합성 계보면 한 장이 그렇다고 말한다
   ④ 주인공은 비중 표를 내는 계산된 노드만 · 남의 고객 404(전수) · 보관한 고객은 만들 수 없다(읽기는 된다)
-  ⑤ 지우기는 ★고객에게 보여 준 적 없는 한 장만★(PB6 가 보여 준 때를 적는다)
+  ⑤ 삭제는 ★고객에게 보여 준 적 없는 한 장만★(PB6 가 보여 준 때를 적는다)
   ⑥ 미리 묻기(AI) — 근거는 ★그 한 장의 줄뿐★ · 문장마다 줄 · 그 줄의 숫자만 · 투자 판단은 고객용 고정 문장 · 키 없으면 사유
 """
 from __future__ import annotations
@@ -176,7 +176,7 @@ def test_stale_preview_is_refused_and_nothing_is_saved(client):
         stale = {**seen, nid: "0" * 64}
         r = client.post(f"{BASE}/{cid}/snapshots", json={"graph": g, "focus_node_id": "o", "preview": stale, "title": "낡음"},
                         headers=h)
-        assert r.status_code == 409 and "다시 계산" in r.text, nid
+        assert r.status_code == 409 and "재계산" in r.text, nid
     missing = {k: v for k, v in seen.items() if k != "a"}                     # 본 적 없는 노드가 있어도
     r = client.post(f"{BASE}/{cid}/snapshots", json={"graph": g, "focus_node_id": "o", "preview": missing, "title": "낡음"},
                     headers=h)
@@ -207,12 +207,12 @@ def test_practice_lineage_is_said_on_the_sheet(client):
     assert rep["nodes"]["o"]["lineage"]["practice"] is True                   # 전제 — 연습 모드
     assert r.json()["practice"] is True
     sheet = client.get(f"{BASE}/{cid}/snapshots/{r.json()['sheet_id']}", headers=h).json()["sheet"]
-    assert sheet["practice"] is True and "연습용" in sheet["practice_note"]
+    assert sheet["practice"] is True and "합성" in sheet["practice_note"]
 
 
 # ── ④ 주인공 · 소유 · 보관 ───────────────────────────────────────────────
 
-@pytest.mark.parametrize("focus,word", [("r", "비중"), ("zz", "없어요")])
+@pytest.mark.parametrize("focus,word", [("r", "비중"), ("zz", "없습니다")])
 def test_focus_must_be_a_computed_weights_node(client, focus, word):
     h = _auth(client, "alice")
     cid = _cid(client, h)
@@ -253,7 +253,7 @@ def test_every_sheet_route_refuses_someone_elses_client(client, method, path):
     elif path.endswith("/ask"):
         body = {"question": "비중이 어떻게 되나요?"}
     r = client.request(method, url, json=body, headers=b)
-    assert r.status_code == 404 and r.json()["detail"] == "그 고객이 없어요.", (method, path, r.text)
+    assert r.status_code == 404 and r.json()["detail"] == "그 고객이 없습니다.", (method, path, r.text)
 
 
 def test_archived_client_cannot_get_a_new_sheet_but_old_ones_are_readable(client):
@@ -328,12 +328,12 @@ def test_ask_is_grounded_only_in_the_sheet(client, monkeypatch):
     cid, sid, sheet = _sheet(client, h)
     w = sheet["focus"]["weights"][0]
     sdk = _fake({"answerable": True, "why_not": "none", "sentences": [
-        {"text": f"{w['name']} 비중은 {w['pct']}% 예요.", "fact_ids": ["f1"]},
-        {"text": "기대 수익은 77.7% 예요.", "fact_ids": ["f1"]}]}, monkeypatch)
+        {"text": f"{w['name']} 비중은 {w['pct']}% 입니다.", "fact_ids": ["f1"]},
+        {"text": "기대 수익은 77.7% 입니다.", "fact_ids": ["f1"]}]}, monkeypatch)
     r = client.post(f"{BASE}/{cid}/snapshots/{sid}/ask", json={"question": "비중은요?"}, headers=h)
     body = r.json()
     assert body["available"] is True, body
-    assert [s["text"] for s in body["answer"]["sentences"]] == [f"{w['name']} 비중은 {w['pct']}% 예요."]
+    assert [s["text"] for s in body["answer"]["sentences"]] == [f"{w['name']} 비중은 {w['pct']}% 입니다."]
     assert [x["code"] for x in body["rejected"]] == ["numbers"]               # 한 장에 없는 숫자는 버린다
     sent = sdk.beta.messages.calls[-1] if sdk.beta.messages.calls else sdk.messages.calls[-1]
     prompt = json.dumps(sent, ensure_ascii=False, default=str)
@@ -387,7 +387,7 @@ def test_ask_does_not_take_facts_from_the_request(client):
 
 
 def test_archived_client_is_refused_before_any_recomputation(client, monkeypatch):
-    """보관한 고객이면 다시 계산하기 ★전에★ 멈춘다(무거운 계산을 헛되이 돌리지 않는다)."""
+    """보관한 고객이면 재계산 ★전에★ 멈춘다(무거운 계산을 헛되이 돌리지 않는다)."""
     from src.api import pb_client_routes as routes
     h = _auth(client, "alice")
     cid = _cid(client, h)

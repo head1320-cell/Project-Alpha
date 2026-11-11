@@ -182,7 +182,7 @@ def test_dsr_eff_uses_n_eff_and_is_not_below_dsr():
 
 def test_n_eff_below_two_says_why():
     out = ds.compare([{"label": str(i), "returns": r} for i, r in enumerate(_corr_series(0.97, 5))])
-    assert out["sr0_eff"] is None and "2 보다 작아" in out["n_eff_reason"]
+    assert out["sr0_eff"] is None and "2 보다 작" in out["n_eff_reason"]
     assert all(r["dsr_eff"] is None for r in out["rows"])
     assert out["sr0"] is not None                      # N(하한) 기준 보정은 그대로 있다
 

@@ -15,7 +15,7 @@ import { recordApi, stableJson } from "./helpers";
 
 const GOLDEN = path.join(__dirname, "golden", "screener-requests.json");
 const act = (page: Page, a: string) => page.locator(`[data-act="${a}"]`);
-const SEARCH = "조건을 단어로 입력하세요";
+const SEARCH = "조건을 단어로 입력하십시오";
 
 async function openExpert(page: Page) {
   const ex = act(page, "expert");
@@ -64,7 +64,7 @@ async function scenario(page: Page): Promise<Record<string, unknown>> {
   await rec.step("09 조건식 팩터1 or 팩터2");
 
   await act(page, "cond-remove").first().click();
-  await rec.step("10 팩터1 지우기");
+  await rec.step("10 팩터1 삭제");
 
   await act(page, "send-backtest").click();
   await page.waitForURL(/\/backtest/);

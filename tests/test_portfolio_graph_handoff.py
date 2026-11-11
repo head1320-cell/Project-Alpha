@@ -62,7 +62,7 @@ def test_no_rule_is_unknown_not_clean():
     """★미상 ≠ 깨끗함★ — 점검 규칙이 없으면 `issues` 는 None + 사유이지 [] 가 아니다."""
     rep = pg.run(_CHAIN, _reg(intake=False))
     r = _edges(rep)["c1.out->s.a"]
-    assert r["issues"] is None and "점검 규칙이 없어요" in r["issues_reason"]
+    assert r["issues"] is None and "점검 규칙이 없습니다" in r["issues_reason"]
     assert r["facts"]                                      # 사실은 여전히 있다
 
 
@@ -83,10 +83,10 @@ def test_override_beats_the_type_default():
     reg = _reg()
     reg.set_intake("label", "x", lambda h: {"checks": ["글자로 바꿈"],
                                             "issues": [{"level": "changed", "code": "to_text",
-                                                        "text": f"{h.target_kind} 가 수를 글자로 바꿨어요."}]})
+                                                        "text": f"{h.target_kind} 가 수를 글자로 바꿨습니다."}]})
     rep = pg.run(_CHAIN, reg)
     assert _edges(rep)["s.out->t.x"]["issues"] == [
-        {"level": "changed", "code": "to_text", "text": "label 가 수를 글자로 바꿨어요."}]
+        {"level": "changed", "code": "to_text", "text": "label 가 수를 글자로 바꿨습니다."}]
     assert _edges(rep)["c1.out->s.a"]["issues"] == []          # 다른 선은 기본 규칙
 
 

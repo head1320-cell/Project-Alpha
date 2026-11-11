@@ -135,7 +135,7 @@ def _screener(view):
 def _corr_stress(view):
     r = view.get("result") or {}
     return _values([("평소", _get(r, "base", "port_vol_pct")), ("위기", _get(r, "stressed", "port_vol_pct"))],
-                   unit="%", caption="변동성(연)")
+                   unit="%", caption="연환산 변동성")
 
 
 def _factor_xray(view):

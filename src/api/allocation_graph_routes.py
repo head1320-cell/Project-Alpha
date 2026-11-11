@@ -66,15 +66,15 @@ def _needs_errors(nodes: list, edges: list, kinds: dict[str, dict]) -> list[dict
                          for g in o["gives"] if g["key"] == u["key"] and g.get("when")), None)
         if own_when:
             ptype = next((i["type"] for i in src["inputs"] if i["name"] == own_when), own_when)
-            fix = f"‘{src['plain_label']}’에 {proc.quote_obj(PORT_PLAIN.get(ptype, own_when))} 이으면 줄 수 있어요."
+            fix = f"‘{src['plain_label']}’에 {proc.quote_obj(PORT_PLAIN.get(ptype, own_when))} 이으면 줄 수 있습니다."
         else:
-            fix = f"{' · '.join(f'‘{g}’' for g in always)}의 비중을 이어 주세요." if always else None
+            fix = f"{' · '.join(f'‘{g}’' for g in always)}의 비중을 연결하십시오." if always else None
         edge = next((e for e in edges if isinstance(e, dict) and e.get("source") == u["source"]
                      and e.get("source_port") == u["source_port"] and e.get("target") == u["target"]
                      and e.get("target_port") == u["target_port"]), {})
         out.append({"code": "needs_unmet", "node_id": u["target"], "edge_id": pg._edge_id(edge) if edge else None,
-                    "message": f"‘{dst['plain_label']}’에 필요한 {what}이 ‘{src['plain_label']}’의 비중에는 없어요 — "
-                               "이대로 계산하면 실패해요.",
+                    "message": f"‘{dst['plain_label']}’에 필요한 {what}이 ‘{src['plain_label']}’의 비중에는 없습니다 — "
+                               "이대로 계산하면 실패합니다.",
                     "fix": fix})
     return out
 
@@ -120,8 +120,8 @@ def _type_fix(graph: dict, edge_id: Any, kinds: dict[str, dict]) -> str | None:
     if not (src and dst and out and inp):
         return None
     want, got = PORT_PLAIN.get(inp["type"], inp["type"]), PORT_PLAIN.get(out["type"], out["type"])
-    return (f"‘{dst['plain_label']}’의 이 자리는 {proc.quote_obj(want)} 받아요 — 이 선은 {proc.quote_obj(got)} 보내요. "
-            f"선을 끊고 {proc.quote_obj(want)} 내는 노드에서 이어 주세요.")
+    return (f"‘{dst['plain_label']}’의 이 자리는 {proc.quote_obj(want)} 받습니다 — 이 선은 {proc.quote_obj(got)} 보냅니다. "
+            f"선을 끊고 {proc.quote_obj(want)} 내는 노드에서 연결하십시오.")
 
 
 @router.post("/validate")
@@ -188,7 +188,7 @@ def _graph_run(graph: Any, targets: str | None, on_node) -> dict:
     _seal_explains(graph, report)
     if ids is not None:
         report["gates"] = None
-        report["gates_reason"] = "일부만 계산했어요 — 증거 관문은 전체를 계산할 때 판정해요."
+        report["gates_reason"] = "일부만 계산했습니다 — 증거 관문은 전체를 계산할 때 판정합니다."
         return report
     # ★증거 관문★ (BJ1) — 그래프 구성과 노드 출처로 8 관문을 판정한다. 건너뛴 관문은 건너뜀이다.
     nodes = graph.get("nodes") if isinstance(graph, dict) and isinstance(graph.get("nodes"), list) else []
@@ -225,7 +225,7 @@ class GraphSaveRequest(BaseModel):
 def graph_save(req: GraphSaveRequest) -> dict:
     """★저장은 여기서만★ (BK0) — `/run` 은 어떤 노드도 DB 에 쓰지 않는다(사용자 결정).
 
-    그래프를 다시 계산해 그 노드의 미리보기 해시가 같을 때만 노드의 저장 함수를 **한 번** 부른다.
+    그래프를 재계산해 그 노드의 미리보기 해시가 같을 때만 노드의 저장 함수를 **한 번** 부른다.
     거절(`ok: false` + `code`)은 200 으로 — 캔버스가 사유를 그 노드 옆에 그린다.
     """
     return pg.save_node(req.graph, req.node_id, req.preview_hash, REGISTRY)

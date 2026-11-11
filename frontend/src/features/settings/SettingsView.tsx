@@ -46,17 +46,17 @@ export function SettingsView() {
       <h1 className="set-title">설정</h1>
 
       {session.kind === "loading" ? (
-        <section className="set-card set-head" aria-busy="true"><p className="set-sub">계정을 확인하는 중이에요.</p></section>
+        <section className="set-card set-head" aria-busy="true"><p className="set-sub">계정 확인 중</p></section>
       ) : session.kind === "unknown" ? (
         <section className="set-card set-unknown" role="alert">
-          <p className="set-strong">계정 정보를 확인하지 못했어요</p>
-          <p className="set-sub">{session.reason} 로그인은 그대로 두었어요.</p>
-          <button type="button" className="set-btn set-retry" onClick={() => void retry()}>다시 시도</button>
+          <p className="set-strong">계정 정보 확인 실패</p>
+          <p className="set-sub">{session.reason} 로그인은 그대로 두었습니다.</p>
+          <button type="button" className="set-btn set-retry" onClick={() => void retry()}>재시도</button>
         </section>
       ) : session.kind === "signed_out" ? (
         <section className="set-card set-signed-out">
-          <p className="set-strong">{session.note ?? "로그인하면 계정과 비밀번호를 볼 수 있어요."}</p>
-          <p className="set-sub">계정은 관리자에게 받아요. 따로 가입하는 곳은 없어요.</p>
+          <p className="set-strong">{session.note ?? "로그인하면 계정과 비밀번호를 볼 수 있습니다."}</p>
+          <p className="set-sub">계정은 관리자에게 받습니다. 따로 가입하는 곳은 없습니다.</p>
           <Link href={loginHref("/settings")} className="set-btn set-btn--primary">로그인</Link>
         </section>
       ) : (
@@ -67,14 +67,14 @@ export function SettingsView() {
               <strong className="set-name">{session.username}</strong>
               <span className="set-role">{ROLE_KO[session.role] ?? session.role}</span>
               <span className="set-sub">
-                {session.mustChange ? "관리자가 준 임시 비밀번호로 들어왔어요"
-                  : day(session.changedAt) ? `비밀번호를 바꾼 날 ${day(session.changedAt)}` : "비밀번호를 바꾼 적이 없어요"}
+                {session.mustChange ? "관리자가 준 임시 비밀번호로 들어왔습니다"
+                  : day(session.changedAt) ? `비밀번호를 바꾼 날 ${day(session.changedAt)}` : "비밀번호를 바꾼 적 없음"}
               </span>
             </div>
           </section>
           {session.mustChange ? (
             <p className="set-must" role="alert">
-              비밀번호를 먼저 바꿔 주세요 — 바꾸기 전에는 계좌·주문·감사 화면이 열리지 않아요.
+              비밀번호를 먼저 변경하십시오 — 바꾸기 전에는 계좌·주문·감사 화면이 열리지 않습니다.
             </p>
           ) : null}
           <PasswordForm formRef={pwRef} username={session.username} onChanged={() => void refresh()}
@@ -148,12 +148,12 @@ function PasswordForm({ formRef, username, onChanged, adminWarning }: {
           {rules.map((r) => (
             <li key={r.id} className="set-rule" data-rule={r.id} data-ok={String(r.ok)}>
               <span className="set-rule-mark" aria-hidden="true">{r.ok ? "✓" : "·"}</span>
-              {r.text}<span className="sr-only">{r.ok ? " — 맞아요" : " — 아직이에요"}</span>
+              {r.text}<span className="sr-only">{r.ok ? " — 충족" : " — 미충족"}</span>
             </li>
           ))}
         </ul>
         {error ? <p className="set-error" role="alert">{error}</p> : null}
-        {done ? <p className="set-done" role="status">비밀번호를 바꿨어요 — 다른 곳에 남아 있던 로그인은 모두 끝났어요.</p> : null}
+        {done ? <p className="set-done" role="status">비밀번호를 바꿨습니다 — 다른 곳에 남아 있던 로그인은 모두 끝났습니다.</p> : null}
         <button type="submit" className="set-btn set-btn--primary set-pw-submit" disabled={!ready || busy}>
           {busy ? "바꾸는 중…" : "비밀번호 바꾸기"}
         </button>
@@ -180,10 +180,10 @@ function ThemeSection() {
         </div>
         {theme !== "light" ? (
           <p className="set-sub set-theme-note">
-            {DARK_EXCEPTIONS.map((x) => x.label).join("·")}은 밝게만 보여요. 나머지는 고른 테마를 따라요.
+            {DARK_EXCEPTIONS.map((x) => x.label).join("·")}은 밝게만 보입니다. 나머지는 고른 테마를 따릅니다.
           </p>
         ) : null}
-        <p className="set-sub">이 브라우저에만 남아요.</p>
+        <p className="set-sub">이 브라우저에만 남습니다.</p>
       </div>
     </section>
   );
@@ -231,14 +231,14 @@ function AdminAccounts({ me }: { me: string }) {
     <section className="set-sec set-admin" aria-labelledby="set-admin-h">
       <h2 className="set-h" id="set-admin-h">계정 관리</h2>
       <p className="set-sub set-sub--lead">
-        계정은 여기서만 만들어요 — 로그인하면 계좌·주문 화면이 열리기 때문에 누구나 가입하는 길은 두지 않았어요.
+        계정은 여기서만 만듭니다 — 로그인하면 계좌·주문 화면이 열리기 때문에 누구나 가입하는 길은 두지 않았습니다.
       </p>
       <form className="set-card set-issue-form" onSubmit={issue} noValidate>
         <label className="set-field">
           <span className="set-label">새 계정 아이디</span>
           <input className="set-input" name="new-username" autoComplete="off" spellCheck={false}
                  value={name} onChange={(e) => setName(e.target.value.trim())} aria-invalid={name.length > 0 && !nameOk} />
-          {name.length > 0 && !nameOk ? <span className="set-hint">영문·숫자·. _ - 만, 64자까지 쓸 수 있어요.</span> : null}
+          {name.length > 0 && !nameOk ? <span className="set-hint">영문·숫자·. _ - 만, 64자까지 쓸 수 있습니다.</span> : null}
         </label>
         <div className="set-row">
           <span className="set-label set-label--row" id="set-role-l">역할</span>
@@ -249,7 +249,7 @@ function AdminAccounts({ me }: { me: string }) {
             ))}
           </div>
         </div>
-        {role === "admin" ? <p className="set-sub">관리자는 실주문·실행 모드·다른 계정까지 다룰 수 있어요.</p> : null}
+        {role === "admin" ? <p className="set-sub">관리자는 실주문·실행 모드·다른 계정까지 다룰 수 있습니다.</p> : null}
         {error ? <p className="set-error" role="alert">{error}</p> : null}
         <button type="submit" className="set-btn set-btn--primary set-issue" disabled={!nameOk || busy}>
           {busy ? "만드는 중…" : "계정 만들기"}
@@ -259,8 +259,8 @@ function AdminAccounts({ me }: { me: string }) {
       {issued ? <IssuedCard issued={issued} onClose={() => setIssued(null)} /> : null}
 
       <div className="set-card set-list">
-        {loadError ? <p className="set-error" role="alert">계정 목록을 불러오지 못했어요 — {loadError}</p>
-          : rows === null ? <p className="set-sub">불러오는 중이에요.</p>
+        {loadError ? <p className="set-error" role="alert">계정 목록 조회 실패 — {loadError}</p>
+          : rows === null ? <p className="set-sub">조회 중</p>
           : rows.map((a) => (
             <div key={a.username} className="set-acct" data-username={a.username}>
               <div className="set-acct-t">
@@ -274,7 +274,7 @@ function AdminAccounts({ me }: { me: string }) {
               </div>
               {asking === a.username ? (
                 <div className="set-confirm" role="group" aria-label={`${a.username} 비밀번호 초기화 확인`}>
-                  <span className="set-sub">그 사람의 로그인이 모두 끝나요.</span>
+                  <span className="set-sub">그 사람의 로그인이 모두 끝납니다.</span>
                   <button type="button" className="set-btn set-btn--sm set-btn--danger" onClick={() => void reset(a.username)}>초기화</button>
                   <button type="button" className="set-btn set-btn--sm" onClick={() => setAsking(null)}>취소</button>
                 </div>
@@ -296,20 +296,20 @@ function IssuedCard({ issued, onClose }: { issued: Issued; onClose: () => void }
   return (
     <div className="set-card set-issued" role="status">
       <p className="set-strong">
-        {issued.kind === "new" ? `${issued.username} 계정을 만들었어요` : `${issued.username} 비밀번호를 초기화했어요`}
+        {issued.kind === "new" ? `${issued.username} 계정을 만들었습니다` : `${issued.username} 비밀번호를 초기화했습니다`}
       </p>
       <p className="set-label">임시 비밀번호</p>
       <div className="set-issued-row">
         <code className="set-issued-pw">{issued.temp}</code>
         <button type="button" className="set-btn set-btn--sm set-copy" onClick={() => void copy()}>
-          {copied === "ok" ? "복사했어요" : "복사"}
+          {copied === "ok" ? "복사했습니다" : "복사"}
         </button>
       </div>
-      {copied === "fail" ? <p className="set-error">복사하지 못했어요 — 글자를 직접 골라 복사해 주세요.</p> : null}
+      {copied === "fail" ? <p className="set-error">복사 실패 — 글자를 직접 골라 복사하십시오.</p> : null}
       <p className="set-sub">
-        이 창을 닫으면 다시 볼 수 없어요. 받을 사람에게 안전하게 전해 주세요 — 처음 로그인하면 비밀번호를 바꾸게 돼요.
+        이 창을 닫으면 다시 볼 수 없습니다. 받을 사람에게 안전하게 전하십시오 — 처음 로그인하면 비밀번호를 바꾸게 됩니다.
       </p>
-      <button type="button" className="set-btn set-issued-close" onClick={onClose}>다 전했어요 · 닫기</button>
+      <button type="button" className="set-btn set-issued-close" onClick={onClose}>다 전했습니다 · 닫기</button>
     </div>
   );
 }

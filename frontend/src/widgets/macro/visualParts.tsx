@@ -24,9 +24,9 @@ function stripName(key: string, label: string, transform?: string) {
 // ── 사이클 띠: 지표 × 달 색 띠 ──
 export function CycleStripGrid({ data }: { data: CycleStrips }) {
   const [cur, setCur] = useState<string | null>(null);
-  if (!data.indicators.length) return <div className="mc-empty-sm">띠를 그릴 지표가 없어요</div>;
+  if (!data.indicators.length) return <div className="mc-empty-sm">띠를 그릴 지표 없음</div>;
   const months = data.months;
-  const say = (label: string, i: number, z: number | null) => `${ym(months[i])} · ${label} · z ${z == null ? "몰라요" : signed(z)}`;
+  const say = (label: string, i: number, z: number | null) => `${ym(months[i])} · ${label} · z ${z == null ? "N/A" : signed(z)}`;
   return (
     <div className="mv-strips">
       {data.indicators.map((row) => {
@@ -42,15 +42,15 @@ export function CycleStripGrid({ data }: { data: CycleStrips }) {
                 <i key={i} style={{ background: zFill(z) }} onMouseEnter={() => setCur(say(nameTxt, i, z))} />
               ))}
             </div>
-            <b className="mv-strip-now">{row.cells[last] == null ? "몰라요" : signed(row.cells[last], 1)}</b>
+            <b className="mv-strip-now">{row.cells[last] == null ? "N/A" : signed(row.cells[last], 1)}</b>
           </div>
         );
       })}
       <div className="mv-strip-axis" aria-hidden>
         <span>{ym(months[0])}</span><span>{ym(months[Math.floor(months.length / 2)])}</span><span>{ym(months.at(-1))}</span>
       </div>
-      <LevelLegend lo="평균보다 낮아요" hi="평균보다 높아요" />
-      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 값이 나와요"}</p>
+      <LevelLegend lo="평균보다 낮습니다" hi="평균보다 높습니다" />
+      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
     </div>
   );
 }
@@ -67,15 +67,15 @@ export const AxisStackChart = lazyChart(loadVisualCharts, (m) => m.AxisStackChar
 // ── 자산군 가격 위치 띠(지난 5년 중 몇 백분위) ──
 export function AssetStripGrid({ data }: { data: AssetStrips }) {
   const [cur, setCur] = useState<string | null>(null);
-  if (!data.assets.length) return <div className="mc-empty-sm">자산 시세가 아직 없어요(ETF 시세를 적재하면 보여요)</div>;
-  const say = (label: string, i: number, n: number, p: number | null) => `${label} · ${n - i}달 전${i === n - 1 ? "(지금)" : ""} · ${p == null ? "몰라요" : `지난 5년 중 ${p}%`}`;
+  if (!data.assets.length) return <div className="mc-empty-sm">자산 시세가 아직 없습니다(ETF 시세를 적재하면 보입니다)</div>;
+  const say = (label: string, i: number, n: number, p: number | null) => `${label} · ${n - i}달 전${i === n - 1 ? "(지금)" : ""} · ${p == null ? "N/A" : `지난 5년 중 ${p}%`}`;
   return (
     <div className="mv-strips">
       {data.assets.map((a) => {
         const n = a.cells.length;
         return (
           <div key={a.ticker} className="mv-strip-row" tabIndex={0} role="group"
-               aria-label={`${a.label}: 지금 지난 5년 중 ${a.now == null ? "몰라요" : `${a.now}%`}`}
+               aria-label={`${a.label}: 지금 지난 5년 중 ${a.now == null ? "N/A" : `${a.now}%`}`}
                onFocus={() => setCur(say(a.label, n - 1, n, a.cells[n - 1]))}>
             <span className="mv-strip-lbl">{a.label} <em data-mono>{a.ticker}</em></span>
             <div className="mv-strip-cells">
@@ -83,21 +83,21 @@ export function AssetStripGrid({ data }: { data: AssetStrips }) {
                 <i key={i} style={{ background: pctFill(p) }} onMouseEnter={() => setCur(say(a.label, i, n, p))} />
               ))}
             </div>
-            <b className="mv-strip-now">{a.now == null ? "몰라요" : `${a.now}%`}</b>
+            <b className="mv-strip-now">{a.now == null ? "N/A" : `${a.now}%`}</b>
           </div>
         );
       })}
       <LevelLegend lo="지난 5년 중 가격이 낮은 편" hi="높은 편" />
-      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 값이 나와요"}</p>
+      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
     </div>
   );
 }
 
 // ── 한국 · 미국 비교 표(같은 방식으로 바꾼 z) ──
 export function KrUsCompareTable({ data }: { data: KrUsCompare }) {
-  if (!data.rows.length) return <div className="mc-empty-sm">비교할 지표가 없어요</div>;
+  if (!data.rows.length) return <div className="mc-empty-sm">비교할 지표 없음</div>;
   const cell = (z: number | null) => (
-    <td><span className="mc-zcell" style={{ background: zFill(z) }}>{z == null ? "몰라요" : signed(z)}</span></td>
+    <td><span className="mc-zcell" style={{ background: zFill(z) }}>{z == null ? "N/A" : signed(z)}</span></td>
   );
   return (
     <div className="mc-tablewrap">
@@ -108,7 +108,7 @@ export function KrUsCompareTable({ data }: { data: KrUsCompare }) {
             <tr key={r.label}>
               <td data-server>{r.label}</td>
               {cell(r.kr)}{cell(r.us)}
-              <td>{r.gap == null ? "몰라요" : signed(r.gap)}</td>
+              <td>{r.gap == null ? "N/A" : signed(r.gap)}</td>
             </tr>
           ))}
         </tbody>

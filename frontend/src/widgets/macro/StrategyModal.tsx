@@ -45,10 +45,10 @@ function StrategyPerf({ detail }: { detail: StrategyDetail }) {
   return (
     <div className="sm-perf">
       <PerfCurve view={view} height={200} title="과거로 돌려 본 성과" benchNoneText={null} />
-      {view.periods && <><h4 className="pg-h4">해마다</h4><YearTable view={view} nLabel="달" /></>}
+      {view.periods && <><h4 className="pg-h4">연도별 수익률</h4><YearTable view={view} nLabel="달" /></>}
       {view.drawdowns && (view.drawdowns.length
-        ? <><h4 className="pg-h4">큰 낙폭 사건</h4><DrawdownEpisodes view={view} compact /></>
-        : <p className="pg-note">고점 아래로 내려간 달이 없어요</p>)}
+        ? <><h4 className="pg-h4">주요 낙폭 구간</h4><DrawdownEpisodes view={view} compact /></>
+        : <p className="pg-note">고점 아래로 내려간 달 없음</p>)}
     </div>
   );
 }
@@ -80,14 +80,14 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
         {/* 접근 가능한 이름 — 불러오는 중·실패에도 이름이 있어야 하므로 늘 그린다. */}
         <DialogTitle className="sr-only">{detail?.name ?? "전략 자세히"}</DialogTitle>
         <button type="button" className="mc-modal-x" onClick={onClose} aria-label="닫기"><X size={16} /></button>
-        {loading && <div className="mc-modal-load">전략 설명을 불러오는 중이에요</div>}
+        {loading && <div className="mc-modal-load">전략 설명 조회 중</div>}
         {!loading && failed && (
-          <Notice tone="danger" title="전략 설명을 불러오지 못했어요">
-            서버에 닿지 못했거나 계산이 실패했어요.
-            {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>다시 시도</button></div>}
+          <Notice tone="danger" title="전략 설명 조회 실패">
+            서버 연결 실패 또는 계산 실패
+            {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>재시도</button></div>}
           </Notice>
         )}
-        {!loading && !failed && !detail && <div className="mc-modal-load">이 전략은 설명이 아직 없어요</div>}
+        {!loading && !failed && !detail && <div className="mc-modal-load">이 전략은 설명이 아직 없습니다</div>}
         {!loading && detail && (
           <div className="sm-body">
             <div className="sm-head">
@@ -97,8 +97,8 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
               </div>
               {onBacktest && <button type="button" className="mc-bt-btn sm tx-btn tx-btn--sub" onClick={() => onBacktest(detail)}>백테스트하기</button>}
             </div>
-            <Section title="어떤 전략인가요"><p className="sm-text" data-server>{detail.profile.concept}</p></Section>
-            <Section title="어떻게 움직이나요">
+            <Section title="전략 개요"><p className="sm-text" data-server>{detail.profile.concept}</p></Section>
+            <Section title="운용 방식">
               <ol className="sm-steps" data-server>{detail.profile.mechanism.map((m, i) => <li key={i}>{m}</li>)}</ol>
               {!!Object.keys(detail.profile.params).length && (
                 <div className="sm-params">{Object.entries(detail.profile.params).map(([k, v]) => (
@@ -106,7 +106,7 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
                 ))}</div>
               )}
             </Section>
-            <Section title="왜 통한다고 보나요"><p className="sm-text" data-server>{detail.profile.rationale}</p></Section>
+            <Section title="투자 논거"><p className="sm-text" data-server>{detail.profile.rationale}</p></Section>
             <Section title="잘 맞는 국면 · 안 맞는 국면"><p className="sm-text" data-server>{detail.profile.regime_note}</p></Section>
             <Section title="국면 적합도(0~100)">
               <div className="sm-fits">
@@ -152,7 +152,7 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
                       ))}
                     </dl>
                   </>
-                ) : <div className="mc-empty-sm">성과 곡선 자료가 없어요</div>}
+                ) : <div className="mc-empty-sm">성과 곡선 자료 없음</div>}
               </Section>
             </div>
             <Section title="참고 문헌">
@@ -165,11 +165,11 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
             <Section title="AI 분석">
               <div className="sm-ai">
                 <button type="button" className="sm-ai-btn tx-btn tx-btn--sub" onClick={runAi} disabled={aiLoading}>
-                  {aiLoading ? "AI 분석을 만드는 중이에요" : ai ? "AI 분석 다시 만들기" : "AI 분석 만들기"}
+                  {aiLoading ? "AI 분석을 만드는 중입니다" : ai ? "AI 분석 다시 만들기" : "AI 분석 만들기"}
                 </button>
-                {ai === undefined && !aiLoading && <span className="sm-ai-hint">지금 국면과 배분을 함께 읽고 이 전략이 맞는지 써 드려요. 관리자가 AI 키를 넣어야 하고, 부를 때마다 비용이 들어요.</span>}
+                {ai === undefined && !aiLoading && <span className="sm-ai-hint">지금 국면과 배분을 함께 읽고 이 전략이 맞는지 써 드립니다. 관리자가 AI 키를 넣어야 하고, 부를 때마다 비용이 듭니다.</span>}
                 {ai === null && !aiLoading && (
-                  <Notice tone="danger" title="AI 분석을 받지 못했어요">서버에 닿지 못했거나 만들기에 실패했어요. 단추를 다시 눌러 주세요.</Notice>
+                  <Notice tone="danger" title="AI 분석 수신 실패">서버에 닿지 못했거나 만들기에 실패했습니다. 단추를 다시 누르십시오.</Notice>
                 )}
                 {ai?.error && <div className="sm-ai-err" data-server>{ai.error}</div>}
                 {ai && !ai.error && ai.content && (

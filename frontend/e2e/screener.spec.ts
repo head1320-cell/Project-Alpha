@@ -44,20 +44,20 @@ async function settled(page: Page) {
   await expect(answer(page)).toBeVisible({ timeout: 30_000 });
 }
 
-test("답 = 서버 total_passed — 137 로 고치면 '137개' · 0 이면 '없어요'(짝)", async ({ page }) => {
+test("답 = 서버 total_passed — 137 로 고치면 '137개' · 0 이면 '없습니다'(짝)", async ({ page }) => {
   await patchStream(page, (r) => { r.total_passed = 137; });
   await open(page);
   await settled(page);
-  await expect(answer(page)).toHaveText("조건에 맞는 종목 137개예요");
+  await expect(answer(page)).toHaveText("조건에 맞는 종목 137개입니다");
 
   await page.unroute("**/api/v1/screener/run-advanced-stream");
   await patchStream(page, (r) => { r.total_passed = 0; r.items = []; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("조건에 맞는 종목이 없어요", { timeout: 30_000 });
+  await expect(answer(page)).toHaveText("조건에 맞는 종목 없음", { timeout: 30_000 });
   await expect(rows(page)).toHaveCount(0);
 });
 
-test("★스트림 실패는 alert + 다시 시도 — 옛 결과 표를 남기지 않는다★ · 정상이면 alert 없음(짝)", async ({ page }) => {
+test("★스트림 실패는 alert + 재시도 — 옛 결과 표를 남기지 않는다★ · 정상이면 alert 없음(짝)", async ({ page }) => {
   await open(page);
   await settled(page);
   await expect(page.locator(".scr [role='alert']")).toHaveCount(0);
@@ -66,23 +66,23 @@ test("★스트림 실패는 alert + 다시 시도 — 옛 결과 표를 남기�
   await page.route("**/api/v1/screener/run-advanced-stream", (r) => r.fulfill({ status: 500, body: "x" }));
   await page.locator('[data-act="universe"]').selectOption("kosdaq150");           // 새 실행이 실패한다
   const alert = page.locator(".scr-answer-wrap [role='alert']");
-  await expect(alert).toContainText("종목을 거르지 못했어요", { timeout: 30_000 });
+  await expect(alert).toContainText("종목을 거르지 못했습니다", { timeout: 30_000 });
   await expect(rows(page), "실패했는데 옛 결과가 남아 있다").toHaveCount(0);
   await expect(answer(page)).toHaveCount(0);
 
   await page.unroute("**/api/v1/screener/run-advanced-stream");
-  await alert.locator("button", { hasText: "다시 시도" }).click();
+  await alert.locator("button", { hasText: "재시도" }).click();
   await expect(answer(page)).toBeVisible({ timeout: 30_000 });
   await expect(alert).toHaveCount(0);
 });
 
-test("연습용 칩은 서버 게이트로만 · '일부만 평가했어요'는 서버 capped 로만(짝)", async ({ page }) => {
+test("합성 칩은 서버 게이트로만 · '일부만 평가했습니다'는 서버 capped 로만(짝)", async ({ page }) => {
   const chip = (tone: string, text?: string) => page.locator(`.scr-answer .tx-chip[data-tone="${tone}"]`, text ? { hasText: text } : undefined);
   await patchStream(page, (r) => { r.capped = true; });
   await open(page);
   await settled(page);
-  await expect(chip("practice")).toHaveText("연습용 시세");
-  await expect(chip("assumed", "일부만 평가했어요")).toHaveCount(1);
+  await expect(chip("practice")).toHaveText("합성 시세");
+  await expect(chip("assumed", "일부만 평가했습니다")).toHaveCount(1);
 
   await page.unroute("**/api/v1/screener/run-advanced-stream");
   await patchStream(page, (r) => { r.capped = false; });
@@ -90,7 +90,7 @@ test("연습용 칩은 서버 게이트로만 · '일부만 평가했어요'는 
   await page.reload({ waitUntil: "domcontentloaded" });
   await settled(page);
   await expect(chip("practice")).toHaveCount(0);
-  await expect(chip("assumed", "일부만 평가했어요")).toHaveCount(0);
+  await expect(chip("assumed", "일부만 평가했습니다")).toHaveCount(0);
 });
 
 test("전문가 설정은 접혀 있다 — 게이트·조건식이 안 보이고, 펼치면 보인다 · 게이트는 꺼짐", async ({ page }) => {
@@ -143,13 +143,13 @@ test("설계에 넣기: 표 위 10개 코드 그대로 캔버스 종목 고르�
 test("짝: 알 수 없는 코드는 빠지고 메모가 말한다 · 이름 확인이 실패하면 아무 코드도 싣지 않는다", async ({ page }) => {
   await page.goto("/allocation?tickers=000270,999999,abc", { waitUntil: "domcontentloaded" });
   // 명단에 없는 코드(999999)와 코드 모양이 아닌 값(abc)은 따로 센다 — 뭉뚱그리지 않는다
-  await expect(page.locator(".pg-file-note")).toContainText("알 수 없는 코드 1개 · 코드 모양이 아닌 값 1개는 뺐어요", { timeout: 30_000 });
+  await expect(page.locator(".pg-file-note")).toContainText("알 수 없는 코드 1개 · 코드 모양이 아닌 값 1개는 뺐습니다", { timeout: 30_000 });
   await expect.poll(() => wipTickers(page)).toEqual(["000270"]);
 
   const p2 = await page.context().newPage();
   await p2.route("**/api/v1/allocation/resolve-names", (r) => r.fulfill({ status: 500, body: "x" }));
   await p2.goto("/allocation?tickers=000270,005380", { waitUntil: "domcontentloaded" });
-  await expect(p2.locator(".pg-file-note")).toContainText("종목 이름을 확인하지 못해 가져오지 않았어요", { timeout: 30_000 });
+  await expect(p2.locator(".pg-file-note")).toContainText("종목 이름을 확인하지 못해 가져오지 않았습니다", { timeout: 30_000 });
   await expect(p2.locator(".pg-node").first()).toBeVisible({ timeout: 30_000 });
   const t = await wipTickers(p2);
   expect(t ?? [], "확인 못 한 코드를 싣지 않는다").not.toContain("005380");

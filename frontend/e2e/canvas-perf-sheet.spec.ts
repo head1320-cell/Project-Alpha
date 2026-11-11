@@ -56,7 +56,7 @@ async function openSheet(page: Page): Promise<RunBody> {
 }
 
 const sheet = (page: Page) => page.locator('dialog.pg-sheet--wide[data-sheet="perf"]');
-const STATE_TEXT: Record<string, string> = { confirmed: "확인", assumed: "가정", partial: "절반 확인", unknown: "몰라요", skipped: "건너뜀", failed: "실패" };
+const STATE_TEXT: Record<string, string> = { confirmed: "확인", assumed: "가정", partial: "부분 확인", unknown: "미상", skipped: "건너뜀", failed: "실패" };
 const signed = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
 
 test("(l) 열림·닫힘 — '크게 보기' → 넓은 시트 · 제목은 서버 explain · Esc 로 닫히고 초점은 단추로", async ({ page }) => {
@@ -93,7 +93,7 @@ test("(m) 질문 띠 — 답하는 것 · 답하지 않는 것은 관문 oos·ec
   await page.keyboard.press("Escape");
   await patchRun(page, (b) => { b.gates = null; });
   await openSheet(page);
-  await expect(sheet(page).locator(".pf-q")).toContainText("관문 판정이 없어요");
+  await expect(sheet(page).locator(".pf-q")).toContainText("관문 판정 없음");
   await expect(sheet(page).locator(".pf-q-gate")).toHaveCount(0);
 });
 
@@ -101,7 +101,7 @@ test("(n) 달마다 격자 — 칸 수 = 서버 periods.monthly · 칸 글자 = 
   await openCanvas(page);
   const body = await openSheet(page);
   const monthly = (body.nodes.backtest.view!.periods as { monthly: { year: number; month: number; return_pct: number; partial: boolean }[] }).monthly;
-  expect(monthly.length, "서버가 달마다 수익을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(3);
+  expect(monthly.length, "서버가 월별 수익률을 줘야 이 시험이 공허하지 않다").toBeGreaterThan(3);
   const cells = sheet(page).locator("td.pf-month[data-month]");
   await expect(cells).toHaveCount(monthly.length);
   for (const m of [monthly[0], monthly[Math.floor(monthly.length / 2)], monthly[monthly.length - 1]]) {
@@ -122,11 +122,11 @@ test("(n) 달마다 격자 — 칸 수 = 서버 periods.monthly · 칸 글자 = 
   await expect(sheet(page).locator(`td.pf-month[data-month="${key}"]`)).toHaveAttribute("data-tone", "down");
 });
 
-test("(o) 큰 낙폭 사건 — 수 = 서버 drawdowns · 날짜·깊이·며칠 · 짝: 회복 못 한 사건은 그렇게 말한다", async ({ page }) => {
+test("(o) 주요 낙폭 구간 — 수 = 서버 drawdowns · 날짜·깊이·며칠 · 짝: 회복 못 한 사건은 그렇게 말한다", async ({ page }) => {
   await openCanvas(page);
   const body = await openSheet(page);
   const eps = body.nodes.backtest.view!.drawdowns as { peak_date: string; trough_date: string; recovery_date: string | null; depth_pct: number; days_to_trough: number; days_to_recover: number | null }[];
-  expect(eps.length, "낙폭 사건이 있어야 이 시험이 공허하지 않다").toBeGreaterThan(0);
+  expect(eps.length, "낙폭 구간이 있어야 이 시험이 공허하지 않다").toBeGreaterThan(0);
   const rows = sheet(page).locator(".pf-dd-ep");
   await expect(rows).toHaveCount(eps.length);
   const e0 = eps[0];
@@ -143,10 +143,10 @@ test("(o) 큰 낙폭 사건 — 수 = 서버 drawdowns · 날짜·깊이·며칠
   await patchRun(page, (b) => { const d = (b.nodes.backtest.view!.drawdowns as { recovery_date: string | null; days_to_recover: number | null }[])[0]; d.recovery_date = null; d.days_to_recover = null; });
   await openSheet(page);
   await expect(sheet(page).locator(".pf-dd-ep").first()).toHaveAttribute("data-recovered", "false");
-  await expect(sheet(page).locator(".pf-dd-ep").first()).toContainText("아직 고점을 되찾지 못했어요");
+  await expect(sheet(page).locator(".pf-dd-ep").first()).toContainText("고점 미회복");
 });
 
-test("(p) 리밸런싱 기록 — 행 수 = 서버 rebalances · 날짜·회전율 · 짝: 기록이 없으면 '없어요'", async ({ page }) => {
+test("(p) 리밸런싱 기록 — 행 수 = 서버 rebalances · 날짜·회전율 · 짝: 기록이 없으면 '없습니다'", async ({ page }) => {
   await openCanvas(page);
   const body = await openSheet(page);
   const rebs = body.nodes.backtest.view!.rebalances as { date: string; turnover_pct: number }[];
@@ -159,7 +159,7 @@ test("(p) 리밸런싱 기록 — 행 수 = 서버 rebalances · 날짜·회전�
   await patchRun(page, (b) => { b.nodes.backtest.view!.rebalances = []; b.nodes.backtest.view!.n_rebalances = 0; });
   await openSheet(page);
   await expect(sheet(page).locator("table.pf-rebal-table")).toHaveCount(0);
-  await expect(sheet(page).locator(".pf-rebal-none")).toContainText("리밸런싱 날짜 기록이 없어요");
+  await expect(sheet(page).locator(".pf-rebal-none")).toContainText("리밸런싱 날짜 기록 없음");
 });
 
 for (const scheme of ["light", "dark"] as const) {

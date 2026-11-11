@@ -25,7 +25,7 @@ type Sug = { action: string; kind: string | null; label: string | null; text: st
 type Proc = { next: Sug | null; by_gate: Record<string, Sug | null> };
 type Doc = { nodes: { id: string; type: string; position: { x: number; y: number } }[]; edges: Edge[] };
 const SUGGEST = "**/api/v1/assist/canvas/suggest";
-const RISK = { action: "add", kind: "risk", label: "흔들림 나눠 보기", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있어요.",
+const RISK = { action: "add", kind: "risk", label: "흔들림 나눠 보기", reason: "비중이 어디에서 흔들리는지 나눠 볼 수 있습니다.",
                attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" }] };
 const ok = (suggestions: object[], rejected: object[] = []) => ({
   available: true, source: "claude", model: "claude-opus-5-5", suggestions, rejected, cached: false,
@@ -90,7 +90,7 @@ test("로그아웃이면 단추 대신 로그인 안내 · Ctrl+K 로 물어도 
   await page.getByLabel("명령 찾기").last().fill("AI 에게");
   await expect(page.locator('.pg-cmd-item[data-cmd="ai-ask"]')).toContainText("AI 에게 다음 노드 묻기");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".pg-note")).toContainText("로그인하면 AI 추천을 받을 수 있어요");
+  await expect(page.locator(".pg-note")).toContainText("로그인하면 AI 추천을 받을 수 있습니다");
   await page.waitForTimeout(500);
   expect(sent, "로그아웃인데 물었다").toEqual([]);
 
@@ -115,7 +115,7 @@ test("누르면 묻는 중 → 'AI 추천' 유령과 이유 · 요청 본문은 
   await openWith(page, CHAIN);
   await expect(page.locator('.pg-ghost[data-source="rule"]')).toHaveCount(2);
   await ask(page).click();
-  await expect(ask(page)).toHaveText("AI 추천을 묻는 중이에요");
+  await expect(ask(page)).toHaveText("AI 추천 질의 중");
   await expect(ask(page)).toBeDisabled();
   release();
   await expect(aiGhosts(page)).toHaveCount(1);
@@ -128,7 +128,7 @@ test("누르면 묻는 중 → 'AI 추천' 유령과 이유 · 요청 본문은 
   expect(await g.getAttribute("aria-label")).toMatch(/^AI 추천: /);
   await expect(page.locator('.pg-ghost-wire[data-to="risk"][data-from="optimizer"]')).toHaveCount(1);
   await expect(page.locator('.pg-ghost[data-source="rule"]')).toHaveCount(2);         // 규칙 유령은 그대로
-  await expect(page.locator(".pg-ai-note")).toHaveText("AI 추천 1개를 보였어요.");
+  await expect(page.locator(".pg-ai-note")).toHaveText("AI 추천 1개를 보였습니다.");
   await expect(ask(page)).toBeEnabled();
   expect(seen).toHaveLength(1);
   expect(seen[0].nodes.map((x) => x.id).sort()).toEqual(["optimizer", "returns", "universe"]);
@@ -158,7 +158,7 @@ test("규칙과 같은 AI 추천은 유령 하나에 두 칩 — 규칙 글 + AI
   await expect(page.locator('.pg-ghost[data-kind="risk"]')).toHaveAttribute("data-source", "claude");
 });
 const BT_SAME: { action: string; kind: string; label: string; reason: string; attach: Edge[] } = {
-  action: "add", kind: "backtest", label: "과거로 돌려 보기", reason: "거래비용을 넣어 과거로 돌려 볼 수 있어요.", attach: [] };
+  action: "add", kind: "backtest", label: "과거로 돌려 보기", reason: "거래비용을 넣어 과거로 돌려 볼 수 있습니다.", attach: [] };
 
 test("AI 유령 [붙이기] → 유령이 보인 자리에 진짜 노드 + 추천 선 · 되돌리기 한 번에 원래", async ({ page }) => {
   await signIn(page);
@@ -180,10 +180,10 @@ test("AI 유령 [붙이기] → 유령이 보인 자리에 진짜 노드 + 추�
 
 test("못 보일 때는 서버 사유를 그대로 말한다 · AI 유령 0 · 규칙 유령은 남는다", async ({ page }) => {
   await signIn(page);
-  await answer(page, unavailable("rate_limited", "한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요"));
+  await answer(page, unavailable("rate_limited", "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다"));
   await openWith(page, CHAIN);
   await ask(page).click();
-  await expect(page.locator(".pg-ai-note")).toHaveText("AI 답을 보여 줄 수 없어요: 한 시간에 30번까지 물을 수 있어요. 이번 시간에는 다 썼어요");
+  await expect(page.locator(".pg-ai-note")).toHaveText("AI 답을 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
   await expect(aiGhosts(page)).toHaveCount(0);
   await expect(page.locator('.pg-ghost[data-source="rule"]')).toHaveCount(2);
   await expect(ask(page)).toHaveText("AI 추천 받기");
@@ -194,23 +194,23 @@ test("로그인이 끝났으면(401) 그렇게 말한다 — 이름을 지어내
   await answer(page, { detail: "인증이 필요합니다" }, 401);
   await openWith(page, CHAIN);
   await ask(page).click();
-  await expect(page.locator(".pg-ai-note")).toContainText("AI 답을 보여 줄 수 없어요: 로그인이 끝났어요");
+  await expect(page.locator(".pg-ai-note")).toContainText("AI 답을 보여 줄 수 없습니다: 로그인이 끝났습니다");
   await expect(aiGhosts(page)).toHaveCount(0);
 });
 
 test("검사에서 빠진 AI 추천은 수와 사유를 말한다 — 통과한 것만 유령 · 모두 빠지면 그렇게", async ({ page }) => {
   await signIn(page);
-  const bad = { kind: "magic", code: "unknown_kind", reason: "카탈로그에 없는 종류 ‘magic’예요" };
+  const bad = { kind: "magic", code: "unknown_kind", reason: "카탈로그에 없는 종류 ‘magic’입니다" };
   let reply: object = ok([RISK], [bad]);
   await answer(page, async (route) => route.fulfill({ json: reply }));
   await openWith(page, CHAIN);
   await ask(page).click();
-  await expect(page.locator(".pg-ai-note")).toHaveText("AI 추천 1개를 보였어요 · 1개는 검사에서 빠졌어요: 카탈로그에 없는 종류 ‘magic’예요");
+  await expect(page.locator(".pg-ai-note")).toHaveText("AI 추천 1개를 보였습니다 · 1개는 검사에서 빠졌습니다: 카탈로그에 없는 종류 ‘magic’입니다");
   await expect(aiGhosts(page)).toHaveCount(1);
-  reply = ok([], [bad, { kind: "risk", code: "numbers", reason: "근거에 없는 숫자 0.3 를 썼어요" }]);
+  reply = ok([], [bad, { kind: "risk", code: "numbers", reason: "근거에 없는 숫자 0.3 를 썼습니다" }]);
   await expect(ask(page)).toBeVisible();                                              // 상태 줄이 단추를 가리지 않는다
   await ask(page).click();
-  await expect(page.locator(".pg-ai-note")).toHaveText("AI 추천 2개는 검사에서 빠졌어요: 카탈로그에 없는 종류 ‘magic’예요");
+  await expect(page.locator(".pg-ai-note")).toHaveText("AI 추천 2개는 검사에서 빠졌습니다: 카탈로그에 없는 종류 ‘magic’입니다");
   await expect(aiGhosts(page)).toHaveCount(0);                                         // 다시 물으면 새 답으로 바꾼다
 });
 
@@ -234,7 +234,7 @@ test("그래프 구조가 바뀌면 AI 유령을 지우고 말한다 — 짝: �
   // 구조가 바뀐다 — 규칙 next(기대 수익 추정)를 붙인다.
   await page.locator('.pg-ghost[data-kind="estimate"] .pg-ghost-add').click();
   await expect(aiGhosts(page)).toHaveCount(0);
-  await expect(page.locator(".pg-ai-stale")).toHaveText("그래프가 바뀌어 AI 추천을 지웠어요");
+  await expect(page.locator(".pg-ai-stale")).toHaveText("그래프가 바뀌어 AI 추천을 지웠습니다");
   await expect(ask(page)).toHaveText("다시 묻기");
 });
 
@@ -248,7 +248,7 @@ test("가로채지 않은 실제 서버: 로그인 → 경로·프록시·인증
   await ask(page).click();
   const body = await (await res).json();
   expect(body).toMatchObject({ available: false, source: "unavailable", reason_code: "no_key" });
-  await expect(page.locator(".pg-ai-note")).toHaveText("AI 답을 보여 줄 수 없어요: 서버에 Claude 키가 없어요");
+  await expect(page.locator(".pg-ai-note")).toHaveText("AI 답을 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
   await expect(aiGhosts(page)).toHaveCount(0);
   await expect(page.locator('.pg-ghost[data-source="rule"]')).toHaveCount(2);
 });

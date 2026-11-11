@@ -26,7 +26,7 @@ export function AxisStackChart({ hist, axis }: { hist: AxisHistory; axis: "growt
     { key: "score", label: `${axisName} 점수`, text: signed(p[axis], 3), color: "var(--tx-ink)" },
     ...keys.map((k, i) => {
       const v = p[partsKey]?.[k];
-      return { key: k, label: IND_KR[k] ?? k, text: typeof v === "number" ? signed(v, 3) : "없어요", color: catColor(i) };
+      return { key: k, label: IND_KR[k] ?? k, text: typeof v === "number" ? signed(v, 3) : "없습니다", color: catColor(i) };
     }),
   ] }));
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);

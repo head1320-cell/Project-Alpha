@@ -13,7 +13,7 @@ const AXIS = { tick: AXIS_TICK, stroke: "var(--tx-line)" } as const;
 const sixth = (n: number) => Math.max(0, Math.floor(n / 6));
 const head = (i: number) => `관측 ${i}번째`;
 /** 그 관측에 값이 없으면 "없어요" — 0 으로 적지 않는다. */
-const cell = (v: number | undefined, fmt: (x: number) => string) => (typeof v === "number" && Number.isFinite(v) ? fmt(v) : "없어요");
+const cell = (v: number | undefined, fmt: (x: number) => string) => (typeof v === "number" && Number.isFinite(v) ? fmt(v) : "없습니다");
 
 /** 요인이 지나온 길 — 행 = { i, f1, f2, … } · 요인 k 개(하나면 강조색, 여럿이면 범주색). */
 export function FactorLines({ rows, k }: { rows: Record<string, number>[]; k: number }) {

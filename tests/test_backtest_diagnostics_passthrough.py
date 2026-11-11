@@ -113,7 +113,7 @@ def test_the_key_list_is_pinned():
     """★공허한 하네스는 증거가 아니다★ 목록이 비거나 줄면 ① 은 언제나 통과한다."""
     assert DIAGNOSTIC_KEYS == EXPECTED_DIAGNOSTIC_KEYS, (
         "진단 키 목록이 바뀌었다 — 프런트 타입과 텔레메트리도 함께 고쳤는지 확인하고 "
-        "이 스냅샷을 갱신하세요."
+        "이 스냅샷을 갱신하십시오."
     )
     assert len(set(DIAGNOSTIC_KEYS)) == len(DIAGNOSTIC_KEYS), "중복된 키"
 

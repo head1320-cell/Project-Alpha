@@ -26,7 +26,7 @@ _KR_CODE = re.compile(r"^\d{6}$")
 #: 시장 대용 — 한국은 KODEX 200(타이밍 신호 `timing_factors._KOSPI_ETF` 와 같은 대용).
 KR_PROXY = ("069500", "KODEX 200")
 #: 미국 기호 — 그래프는 "kr" 로 값을 매기므로 `US_TO_KR` 가 같은 길로 원화 상장 ETF 에 대응시킨다(SPY → 379800).
-US_PROXY = ("SPY", "KODEX 미국S&P500 — 미국 종목을 원화 상장 ETF 로 쟀어요")
+US_PROXY = ("SPY", "KODEX 미국S&P500 — 미국 종목을 원화 상장 ETF 로 측정했습니다")
 
 
 def _codes(sleeves: Sequence[dict]) -> list[str]:
@@ -43,7 +43,7 @@ def market_proxy(tickers: Sequence[str]) -> dict[str, Any]:
     if ts and not kr:
         return {"ticker": US_PROXY[0], "label": US_PROXY[1], "reason": None}
     return {"ticker": None, "label": None,
-            "reason": "한국·미국 종목이 섞여 있어 시장 하나로 위기일을 고를 수 없어요" if ts else "종목이 없어요"}
+            "reason": "한국·미국 종목이 섞여 있어 시장 하나로 위기일을 고를 수 없습니다" if ts else "종목이 없습니다"}
 
 
 def _indexed(ticker: str, days: int) -> list[tuple[str, float]]:
@@ -64,7 +64,7 @@ def dated_sleeve_returns(sleeves: Sequence[dict], *, lookback: int = 252,
     from src.engine import sleeve_combine as sc
     codes = _codes(sleeves)
     if not codes:
-        return {"available": False, "reason": "비중이 있는 종목이 없어요"}
+        return {"available": False, "reason": "비중이 있는 종목이 없습니다"}
     series: dict[str, dict[str, float]] = {}
     empty = []
     for c in codes:
@@ -74,18 +74,18 @@ def dated_sleeve_returns(sleeves: Sequence[dict], *, lookback: int = 252,
         else:
             series[c] = dict(rows)
     if empty:
-        return {"available": False, "reason": f"날짜 있는 시세가 모자란 종목이 있어요({', '.join(empty)}) — 빼거나 기간을 줄여 주세요"}
+        return {"available": False, "reason": f"날짜 있는 시세가 모자란 종목이 있습니다({', '.join(empty)}) — 빼거나 기간을 줄이십시오"}
     common = sorted(set.intersection(*(set(v) for v in series.values())))
     common = common[-(lookback + 1):]
     if len(common) < 31:
-        return {"available": False, "reason": f"모든 종목에 공통인 날이 {len(common)}일뿐이라 흐름을 만들 수 없어요"}
+        return {"available": False, "reason": f"모든 종목에 공통인 날이 {len(common)}일뿐이라 흐름을 만들 수 없습니다"}
     ret = {}
     for c, byday in series.items():
         px = np.asarray([byday[d] for d in common], dtype=float)
         ret[c] = (px[1:] / px[:-1] - 1.0).tolist()
     names, S = sc._sleeve_return_series(list(sleeves), ret, rebalance_every, cost_bps)
     if S.size == 0:
-        return {"available": False, "reason": "전략 흐름을 만들 수 없어요"}
+        return {"available": False, "reason": "전략 흐름을 만들 수 없습니다"}
     dates = common[1:][-S.shape[0]:]
     return {"available": True, "names": names, "S": S, "dates": dates}
 
@@ -98,40 +98,40 @@ def alignment_check(sleeves: Sequence[dict], *, lookback: int = 252,
     from src.engine import sleeve_combine as sc
     d = dated or dated_sleeve_returns(sleeves, lookback=lookback, rebalance_every=rebalance_every, cost_bps=cost_bps)
     if not d.get("available"):
-        return {"same": None, "differing_days": None, "reason": f"날짜로 맞춘 흐름이 없어 비교하지 못했어요 — {d.get('reason')}"}
+        return {"same": None, "differing_days": None, "reason": f"날짜로 맞춘 흐름이 없어 비교하지 못했습니다 — {d.get('reason')}"}
     _, T = sc._sleeve_return_series(list(sleeves), sc._load_ret_matrix(list(sleeves), lookback=lookback),
                                     rebalance_every, cost_bps)
     D = d["S"]
     n = min(T.shape[0], D.shape[0])
     if n == 0:
-        return {"same": None, "differing_days": None, "reason": "끝 맞춤 흐름이 비어 비교하지 못했어요"}
+        return {"same": None, "differing_days": None, "reason": "끝 맞춤 흐름이 비어 비교하지 못했습니다"}
     diff = np.abs(T[-n:] - D[-n:]).max(axis=1) > 1e-12
     k = int(diff.sum()) + abs(T.shape[0] - D.shape[0])
     if k == 0:
         return {"same": True, "differing_days": 0, "reason": None}
     return {"same": False, "differing_days": k,
-            "reason": f"몫을 정하는 계산은 종목마다 끝을 맞춰 줄을 세워요 — 날짜로 맞추면 {k}일이 달라요. "
-                      "견고성은 날짜로 맞춘 흐름으로 쟀고, 몫은 그대로예요."}
+            "reason": f"몫을 정하는 계산은 종목마다 끝을 맞춰 줄을 세웁니다 — 날짜로 맞추면 {k}일이 다릅니다. "
+                      "견고성은 날짜로 맞춘 흐름으로 쟀고, 몫은 그대로입니다."}
 
 
 def market_on_dates(ticker: str, dates: Sequence[str]) -> tuple[np.ndarray | None, str | None]:
     """시장 대용의 일별 수익을 **같은 날짜**에 — 하루라도 없으면 맞추지 않고 사유."""
     rows = _indexed(ticker, len(dates) + 40)
     if not dates:
-        return None, "맞출 날짜가 없어요"
+        return None, "맞출 날짜가 없습니다"
     byday = dict(rows)
     order = [d for d, _ in rows]
     missing = [d for d in dates if d not in byday]
     if missing:
-        return None, f"시장 대용 시세에 없는 날이 {len(missing)}일 있어 날짜를 맞출 수 없어요"
+        return None, f"시장 대용 시세에 없는 날이 {len(missing)}일 있어 날짜를 맞출 수 없습니다"
     # 구간은 전략 흐름과 같게 — 앞 날짜(전략이 빠진 날을 건너뛰었으면 그 앞)부터. 첫 구간만 시장의 바로 앞 거래일부터.
     pos = {d: i for i, d in enumerate(order)}
     first = pos[dates[0]]
     if first == 0:
-        return None, "시장 대용 시세가 첫날 전을 담고 있지 않아요"
+        return None, "시장 대용 시세가 첫날 전을 담고 있지 않습니다"
     prev = [order[first - 1], *dates[:-1]]
     out = [byday[d] / byday[p] - 1.0 for d, p in zip(dates, prev)]
     r = np.asarray(out, dtype=float)
     if not np.all(np.isfinite(r)):
-        return None, "시장 대용 시세에 빈 값이 있어요"
+        return None, "시장 대용 시세에 빈 값이 있습니다"
     return r, None

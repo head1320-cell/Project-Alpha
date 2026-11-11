@@ -35,17 +35,17 @@ export function HedgeCalc() {
     <div className="dv-calc" data-calc="hedge">
       <section className="tx-sec dv-form">
         <h2 className="tx-sec-t">선물 헤지 값 넣기</h2>
-        <p className="tx-sec-sub">지수 선물을 몇 계약 사고팔면 포트폴리오의 시장 민감도(베타)가 목표에 가까워지는지 계산해요.</p>
+        <p className="tx-sec-sub">지수 선물을 몇 계약 사고팔면 포트폴리오의 시장 민감도(베타)가 목표에 가까워지는지 계산합니다.</p>
         <div className="dv-grid">
-          <NumField id="dv-pv" label="포트폴리오 금액" unit="원" value={raw.pv} onChange={set("pv")} missing={miss("pv")} hint={v.pv != null ? `${wonK(v.pv)}이에요` : undefined} />
+          <NumField id="dv-pv" label="포트폴리오 금액" unit="원" value={raw.pv} onChange={set("pv")} missing={miss("pv")} hint={v.pv != null ? `${wonK(v.pv)}입니다` : undefined} />
           <NumField id="dv-beta" label="지금 베타" value={raw.beta} onChange={set("beta")} missing={miss("beta")} hint="시장이 1% 움직일 때 포트폴리오가 움직이는 %" />
-          <NumField id="dv-tgt" label="목표 베타" value={raw.target} onChange={set("target")} missing={miss("target")} hint="0 이면 시장 위험을 모두 덜어요" />
+          <NumField id="dv-tgt" label="목표 베타" value={raw.target} onChange={set("target")} missing={miss("target")} hint="0 이면 시장 위험을 모두 덥니다" />
           <NumField id="dv-fut" label="선물 가격" unit="포인트" value={raw.fut} onChange={set("fut")} missing={miss("fut")} />
           <NumField id="dv-mult" label="계약 승수" unit="원" value={raw.mult} onChange={set("mult")} missing={miss("mult")} step="1" hint="1포인트가 몇 원인지(코스피200 선물 25만 원)" />
         </div>
-        {bad && <p className="dv-bad" role="alert">포트폴리오 금액·선물 가격은 0보다 크고, 계약 승수는 양의 정수여야 계산할 수 있어요.</p>}
+        {bad && <p className="dv-bad" role="alert">포트폴리오 금액·선물 가격은 0보다 크고, 계약 승수는 양의 정수여야 계산할 수 있습니다.</p>}
         <button type="button" className="tx-btn tx-btn--main dv-go" onClick={run} disabled={calc.m.isPending}>
-          {calc.m.isPending ? "계산하는 중이에요" : "헤지 계산하기"}
+          {calc.m.isPending ? "계산 중" : "헤지 계산하기"}
         </button>
       </section>
 
@@ -54,16 +54,16 @@ export function HedgeCalc() {
         <section className="tx-sec dv-out" aria-live="polite" data-action-raw={h.action}>
           {calc.stale(raw) && <StaleNote onRerun={run} />}
           <p className="dv-ans">
-            {n === 0 ? <>계약 수가 0이라 거래하지 않아요. 베타는 {h.current_beta}에서 그대로예요.</>
-              : <>선물 <b>{n}계약을 {act ?? <span data-server>{h.action}</span>}</b>하면 베타가 {h.current_beta}에서 <b>{h.beta_after_rounding.toFixed(2)}</b>로 바뀌어요.</>}
+            {n === 0 ? <>계약 수가 0이라 거래하지 않습니다. 베타는 {h.current_beta}에서 그대로입니다.</>
+              : <>선물 <b>{n}계약을 {act ?? <span data-server>{h.action}</span>}</b>하면 베타가 {h.current_beta}에서 <b>{h.beta_after_rounding.toFixed(2)}</b>로 바뀝니다.</>}
           </p>
           <dl className="dv-figs" data-testid="hedge-figs">
-            <Fig k="contracts" label="거래할 계약 수" value={`${n}계약${n && act ? ` ${act}` : ""}`} why={`계산으로는 ${sgn(h.raw_contracts, 2)}계약(음수는 매도)인데, 계약은 정수라 반올림했어요.`} />
-            <Fig k="beta_after" label="헤지 뒤 베타" value={h.beta_after_rounding.toFixed(2)} why={`목표는 ${h.target_beta}였어요. 반올림 때문에 목표와 다를 수 있어요.`} />
-            <Fig k="reduction" label="시장 위험 감소" value={h.expected_var_reduction_pct == null ? "계산하지 않아요" : `${h.expected_var_reduction_pct}%`}
-              why={h.expected_var_reduction_pct == null ? <span data-server>{h.reduction_reason ?? "서버가 사유를 보내지 않았어요."}</span> : <span data-server>{h.reduction_basis}</span>} />
-            <Fig k="contract_value" label="계약 한 개 금액" value={won(h.contract_value)} why="선물 가격 × 계약 승수예요." />
-            <Fig k="notional" label="헤지 금액" value={won(h.hedge_notional)} why="거래할 계약 수 × 계약 한 개 금액이에요." />
+            <Fig k="contracts" label="거래할 계약 수" value={`${n}계약${n && act ? ` ${act}` : ""}`} why={`계산으로는 ${sgn(h.raw_contracts, 2)}계약(음수는 매도)인데, 계약은 정수라 반올림했습니다.`} />
+            <Fig k="beta_after" label="헤지 뒤 베타" value={h.beta_after_rounding.toFixed(2)} why={`목표는 ${h.target_beta}였습니다. 반올림 때문에 목표와 다를 수 있습니다.`} />
+            <Fig k="reduction" label="시장 위험 감소" value={h.expected_var_reduction_pct == null ? "계산하지 않습니다" : `${h.expected_var_reduction_pct}%`}
+              why={h.expected_var_reduction_pct == null ? <span data-server>{h.reduction_reason ?? "서버가 사유를 보내지 않았습니다."}</span> : <span data-server>{h.reduction_basis}</span>} />
+            <Fig k="contract_value" label="계약 한 개 금액" value={won(h.contract_value)} why="선물 가격 × 계약 승수입니다." />
+            <Fig k="notional" label="헤지 금액" value={won(h.hedge_notional)} why="거래할 계약 수 × 계약 한 개 금액입니다." />
           </dl>
         </section>
       ) : null}

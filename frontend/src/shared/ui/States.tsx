@@ -24,7 +24,7 @@ import type { ReactNode } from "react";
 // 타입 수준에서 강제하므로 사유 없는 unavailable 은 tsc 가 거부한다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function LoadingState({ label = "불러오는 중이에요", sub }: { label?: string; sub?: ReactNode }) {
+export function LoadingState({ label = "조회 중", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-loading" role="status" aria-live="polite">
       <span className="tstate-skel" aria-hidden><i /><i /><i /></span>
@@ -34,7 +34,7 @@ export function LoadingState({ label = "불러오는 중이에요", sub }: { lab
   );
 }
 
-export function EmptyState({ label = "표시할 데이터가 없어요", sub }: { label?: string; sub?: ReactNode }) {
+export function EmptyState({ label = "데이터 없음", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-empty">
       <span className="tstate-label">{label}</span>
@@ -43,7 +43,7 @@ export function EmptyState({ label = "표시할 데이터가 없어요", sub }: 
   );
 }
 
-export function ErrorState({ label = "불러오지 못했어요", sub }: { label?: string; sub?: ReactNode }) {
+export function ErrorState({ label = "조회 실패", sub }: { label?: string; sub?: ReactNode }) {
   return (
     <div className="tstate tstate-error" role="alert">
       <span className="tstate-label">{label}</span>
@@ -59,10 +59,10 @@ export function ErrorState({ label = "불러오지 못했어요", sub }: { label
  * 구분되지 않는다. 그렇다고 오류(빨강)도 아니다. 오류는 고장이지만 이것은 한계이고,
  * 한계를 고장처럼 그리면 사용자가 재시도로 해결하려 든다.
  */
-export function UnavailableState({ label = "지금은 잴 수 없어요", reason }: { label?: string; reason: ReactNode }) {
+export function UnavailableState({ label = "현재 측정할 수 없습니다", reason }: { label?: string; reason: ReactNode }) {
   return (
     <div className="tstate tstate-unavail">
-      <span className="tstate-unavail-tag">지금은 못 재요</span>
+      <span className="tstate-unavail-tag">측정 불가</span>
       <span className="tstate-unavail-l">{label}</span>
       <span className="tstate-sub">{reason}</span>
     </div>

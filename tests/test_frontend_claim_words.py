@@ -22,7 +22,7 @@ BANNED = ("검증됨", "입증됨", "견고함", "프로덕션 레디", "투자 
 
 #: (경로, 그 줄에 있어야 하는 문장 조각) — 금지 표현을 **부정하는** 문장만.
 ALLOW: tuple[tuple[str, str], ...] = (
-    ("frontend/src/widgets/backtester/BacktestResults.tsx", '이 실행은 "검증됨" 이 되지 않아요'),
+    ("frontend/src/widgets/backtester/BacktestResults.tsx", '이 실행은 "검증됨" 이 되지 않습니다'),
 )
 
 
@@ -113,7 +113,7 @@ def test_the_scanner_ignores_comments_but_keeps_strings_with_slashes(snippet):
 
 
 def test_the_allowlist_opens_only_the_exact_file_and_sentence():
-    neg = 'msg = `제외 전 기준이고, 그래서 이 실행은 "검증됨" 이 되지 않아요.`;'
+    neg = 'msg = `제외 전 기준이고, 그래서 이 실행은 "검증됨" 이 되지 않습니다.`;'
     rel = ALLOW[0][0]
     assert findings(rel, neg) == []
     assert findings("frontend/src/other.tsx", neg), "다른 파일에서는 열리지 않는다"

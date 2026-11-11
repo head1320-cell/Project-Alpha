@@ -65,7 +65,7 @@ def test_a_company_view_optimizer_is_recorded_with_company_views(client, market,
 
 def test_a_record_that_would_not_match_the_preview_is_refused(client, market, recorded, monkeypatch):
     """★기록은 /analyze 가 남긴다 — 그 경로가 캔버스와 다른 비중을 내면 기록하지 않는다★
-    회사 뷰 노드의 '수렴 기간' 은 /analyze 에 없는 칸이다. 기록 경로는 기본값으로 다시 계산하므로 비중이 갈라진다 —
+    회사 뷰 노드의 '수렴 기간' 은 /analyze 에 없는 칸이다. 기록 경로는 기본값으로 재계산하므로 비중이 갈라진다 —
     그 기록은 재현하면 미리보기와 다른 것이 나오는 거짓 기록이다."""
     import src.engine.company_views as cv
 

@@ -31,7 +31,7 @@ from src.domain.strategy_scorecard import Scorecard, unmeasured_from_signals
 
 logger = logging.getLogger("engine.scorecard")
 
-_NO_RUN_REASON = "검증 리포트가 연결되지 않았습니다 — 먼저 알파를 검증하세요."
+_NO_RUN_REASON = "검증 리포트가 연결되지 않았습니다 — 먼저 알파를 검증하십시오."
 _NO_ALPHA_REASON = "알파를 찾을 수 없습니다."
 
 

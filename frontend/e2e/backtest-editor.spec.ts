@@ -56,20 +56,20 @@ test("'지금' 줄은 설정을 되읽는다 — 투자 금액을 바꾸면 ④ 
   await expect(nowLine(page, 3)).not.toContainText("5,000만원");
 });
 
-test("★아직 세지 않은 대상 수는 0이 아니라 '세어요'★ — ③을 열면 서버가 센 수로 바뀐다(짝)", async ({ page }) => {
+test("★아직 세지 않은 대상 수는 0이 아니라 '셉니다'★ — ③을 열면 서버가 센 수로 바뀐다(짝)", async ({ page }) => {
   await open(page);
-  await expect(nowLine(page, 2)).toContainText("③을 열면 세어요");
+  await expect(nowLine(page, 2)).toContainText("③을 열면 셉니다");
   await expect(nowLine(page, 2)).not.toContainText("0 종목");
   await steps(page).nth(2).click();
   await expect(nowLine(page, 2)).toContainText(/[1-9][\d,]* 종목/, { timeout: 15_000 });
-  await expect(nowLine(page, 2)).not.toContainText("③을 열면 세어요");
+  await expect(nowLine(page, 2)).not.toContainText("③을 열면 셉니다");
 });
 
 test("★업종 목록 실패는 alert★(예전에는 빈 칸) · 정상이면 alert 없음(짝)", async ({ page }) => {
   await page.route("**/api/v1/screener/theme-tree", (r) => r.fulfill({ status: 500, json: { detail: "x" } }));
   await open(page);
   await steps(page).nth(2).click();
-  await expect(page.locator(".bte-step-body [role='alert']")).toContainText("업종 목록을 불러오지 못했어요");
+  await expect(page.locator(".bte-step-body [role='alert']")).toContainText("업종 목록 조회 실패");
   await page.unroute("**/api/v1/screener/theme-tree");
   await page.reload({ waitUntil: "domcontentloaded" });
   await steps(page).nth(2).click();
@@ -92,7 +92,7 @@ test("★거짓 약속 없음★ — 결과가 뜨지 않는 결과 자리 문�
   await open(page);
   const body = page.locator(".terminal-main");
   await expect(body).not.toContainText("AWAITING");
-  await expect(body).not.toContainText("결과가 여기에 표시돼요");
+  await expect(body).not.toContainText("결과가 여기에 표시됩니다");
   await expect(body).not.toContainText("자산곡선·성과지표·거래내역이 여기에");
   await expect(page.locator(".bte-run-note")).toContainText("진행 화면");
 });
@@ -103,7 +103,7 @@ test("★실행 실패는 alert, 주소 그대로★ · 정상이면 진행 화�
   await open(page);
   await act(page, "run").click();
   const alert = page.locator(".bte [role='alert']");
-  await expect(alert).toContainText("실행을 시작하지 못했어요", { timeout: 15_000 });
+  await expect(alert).toContainText("실행 시작 실패", { timeout: 15_000 });
   await expect(page).toHaveURL(/\/backtest$/);
 
   await page.unroute("**/api/v1/backtest/runs");

@@ -30,7 +30,7 @@ export function useReadout(n: number, initial?: number) {
 }
 
 /** 읽는 줄 — 값이 없으면 빈칸이 아니라 그렇다고 말한다. */
-export function ReadLine({ row, empty = "읽을 값이 없어요" }: { row: ReadRow | null; empty?: string }) {
+export function ReadLine({ row, empty = "값 없음" }: { row: ReadRow | null; empty?: string }) {
   return (
     <p className="cr-read" aria-live="polite">
       {row ? (
@@ -84,7 +84,7 @@ export function ReadoutFrame({ id, label, headLabel, rows, idx, onKeyDown, table
   table?: boolean; children: ReactNode;
 }) {
   return (
-    <div className="cr" data-chart={id} role="group" tabIndex={0} aria-label={`${label}. 화살표로 옮겨 읽어요.`}
+    <div className="cr" data-chart={id} role="group" tabIndex={0} aria-label={`${label}. 화살표 키로 이동해 값을 읽습니다.`}
          onKeyDown={(e) => { if (e.target === e.currentTarget) onKeyDown(e); }}>
       {children}
       <ReadLine row={idx >= 0 ? rows[idx] ?? null : null} />

@@ -126,7 +126,7 @@ test("★05 VIEWS: 시나리오 없이 컴파일하면 '검사하지 않았다' 
   await expect(page.locator(".ms-card-sub .tstate-unavail-l", { hasText: "실현가능성" }))
     .toBeVisible();
   const body = (await page.locator(".ms-card-sub").textContent()) ?? "";
-  expect(body, "검사하지 않았다는 사실").toContain("검사하지 않았어요");
+  expect(body, "검사하지 않았다는 사실").toContain("검사하지 않았습니다");
   // 삭제 버튼은 아이콘 하나이므로 접근 가능한 이름이 있어야 한다.
   await expect(page.locator(".ms-vdel").first()).toHaveAttribute("aria-label", /삭제/);
 });
@@ -287,12 +287,12 @@ test("BU5c 답 줄 짝 — 원래 값(잠재 요인)", async ({ page }) => {
   await expect(ans).toContainText(`요인 ${o.k_factors}개`, { timeout: 20_000 });
   await expect(ans).toContainText(`${(o.explained_var * 100).toFixed(1)}%`);
 });
-test("BU5c 답 줄 = 서버 값(기간 구조) — inverted 를 뒤집으면 '역전됐어요'(짝: 원래 '역전되지 않았어요')", async ({ page }) => {
+test("BU5c 답 줄 = 서버 값(기간 구조) — inverted 를 뒤집으면 '역전됐습니다'(짝: 원래 '역전되지 않았습니다')", async ({ page }) => {
   await openStudio(page, "neural-sde");
-  await expect(page.locator(".ms-studio .ms-answer")).toContainText("역전되지 않았어요", { timeout: 20_000 });
+  await expect(page.locator(".ms-studio .ms-answer")).toContainText("역전되지 않았습니다", { timeout: 20_000 });
   await patchRun(page, "neural-sde", (o) => { o.inverted = true; });
   await openStudio(page, "neural-sde");
-  await expect(page.locator(".ms-studio .ms-answer")).toContainText("역전됐어요", { timeout: 20_000 });
+  await expect(page.locator(".ms-studio .ms-answer")).toContainText("역전됐습니다", { timeout: 20_000 });
 });
 
 test("BU5c 그림 — 잠재 요인: 요인 추이 선 + 적재 막대 수 = loadings 키 수", async ({ page }) => {
@@ -309,9 +309,9 @@ test("BU5c 그림 — 기간 구조: 수준·기울기·곡률 세 선 + 기간�
   // 옛 화면의 스파크라인 4(level·slope·curvature·term_premium_proxy)는 표에 그대로
   expect(await page.locator(".ms-out .ms-spark").count()).toBeGreaterThanOrEqual(4);
 });
-test("BU5c 그림 — 인과: 간선을 넣은 응답이면 그래프 선 수 = 간선 수(짝: 빈 간선은 그래프 없이 '찾지 못했어요')", async ({ page }) => {
+test("BU5c 그림 — 인과: 간선을 넣은 응답이면 그래프 선 수 = 간선 수(짝: 빈 간선은 그래프 없이 '찾지 못했습니다')", async ({ page }) => {
   await openStudio(page, "causal-deepm");
-  await expect(page.locator(".ms-studio .ms-answer")).toContainText("찾지 못했어요", { timeout: 20_000 });
+  await expect(page.locator(".ms-studio .ms-answer")).toContainText("찾지 못했습니다", { timeout: 20_000 });
   expect(await page.locator(".ms-studio .mc-causal").count()).toBe(0);
   await patchRun(page, "causal-deepm", (o) => {
     o.nodes = [{ id: "KR_CPI", label: "KR_CPI" }, { id: "KR_10Y", label: "KR_10Y" }, { id: "KOSPI", label: "KOSPI" }];
@@ -325,7 +325,7 @@ test("BU5c 그림 — 인과: 간선을 넣은 응답이면 그래프 선 수 = 
   await expect(page.locator(".ms-studio .ms-answer")).toContainText("관계 2개");
 });
 
-test("BU5c 실패 — 스튜디오 목록 500: alert + 다시 시도 → 풀면 회복(짝: 정상 alert 0)", async ({ page }) => {
+test("BU5c 실패 — 스튜디오 목록 500: alert + 재시도 → 풀면 회복(짝: 정상 alert 0)", async ({ page }) => {
   await openStudio(page, "neural-sde");
   await expect(page.locator(".ms-studio h1")).toHaveText("기간 구조", { timeout: 20_000 });
   expect(await page.locator(".ms-studio [role=alert]").count(), "정상인데 alert").toBe(0);
@@ -334,27 +334,27 @@ test("BU5c 실패 — 스튜디오 목록 500: alert + 다시 시도 → 풀면 
   const alert = page.locator(".ms-studio [role=alert]").first();
   await expect(alert).toBeVisible({ timeout: 20_000 });
   await page.unroute(/\/api\/backend\/api\/v1\/macro\/studios(\?.*)?$/);
-  await alert.getByRole("button", { name: "다시 시도" }).click();
+  await alert.getByRole("button", { name: "재시도" }).click();
   await expect(page.locator(".ms-card-frontier")).toBeVisible({ timeout: 20_000 });
 });
-test("BU5c 실패 — 실행 500: 대체 카드 안 alert + 다시 시도 → 풀면 결과", async ({ page }) => {
+test("BU5c 실패 — 실행 500: 대체 카드 안 alert + 재시도 → 풀면 결과", async ({ page }) => {
   await page.route(`${API}/neural-sde**`, (r) => r.fulfill(fail500));
   await openStudio(page, "neural-sde");
   const alert = page.locator(".ms-card-sub [role=alert]");
   await expect(alert).toBeVisible({ timeout: 20_000 });
-  await expect(alert.getByRole("button", { name: "다시 시도" })).toBeVisible();
+  await expect(alert.getByRole("button", { name: "재시도" })).toBeVisible();
   await page.unroute(`${API}/neural-sde**`);
-  await alert.getByRole("button", { name: "다시 시도" }).click();
+  await alert.getByRole("button", { name: "재시도" }).click();
   await expect(page.locator(".ms-card-sub .ms-outcome")).toBeVisible({ timeout: 20_000 });
 });
-test("BU5c 실패 — 뷰 컴파일 500: alert + 다시 시도 → 풀면 결과", async ({ page }) => {
+test("BU5c 실패 — 뷰 컴파일 500: alert + 재시도 → 풀면 결과", async ({ page }) => {
   await page.route(`${API}/agentic-mcp`, (r) => (r.request().method() === "POST" ? r.fulfill(fail500) : r.continue()));
   await openStudio(page, "agentic-mcp");
   await page.locator(".ms-vbtn-run").click();
   const alert = page.locator(".ms-card-sub [role=alert]");
   await expect(alert).toBeVisible({ timeout: 20_000 });
   await page.unroute(`${API}/agentic-mcp`);
-  await alert.getByRole("button", { name: "다시 시도" }).click();
+  await alert.getByRole("button", { name: "재시도" }).click();
   await expect(page.locator(".ms-outcome")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".ms-card-sub [role=alert]")).toHaveCount(0);
 });

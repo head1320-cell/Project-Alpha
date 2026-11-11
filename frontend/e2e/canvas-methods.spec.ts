@@ -80,13 +80,13 @@ test("합치기 방법(BS4): 카드 = 서버 순서·이름·설명 · 기본 �
   await expect(shares.locator(".pg-perport-row")).toHaveCount(2);
   await expect(shares.locator(`.pg-perport-row[data-port="${pa}"] .pg-perport-name`)).toHaveText(a.label);
   const sum = shares.locator(".pg-perport-sum");
-  await expect(sum).toHaveText("2개 전략이 비어 있어요");
+  await expect(sum).toHaveText("2개 전략이 비어 있습니다");
   await expect(sum).toHaveAttribute("data-ok", "0");
   await shares.locator(`.pg-perport-row[data-port="${pa}"] input`).fill("60");
   await shares.locator(`.pg-perport-row[data-port="${pb}"] input`).fill("30");
-  await expect(sum).toHaveText("합 90% — 10% 더 정해 주세요");
+  await expect(sum).toHaveText("합 90% — 10% 더 정하십시오");
   await shares.locator(`.pg-perport-row[data-port="${pb}"] input`).fill("40");
-  await expect(sum).toHaveText("합 100% — 맞아요");
+  await expect(sum).toHaveText("합 100% — 맞습니다");
   await expect(sum).toHaveAttribute("data-ok", "1");
   expect((await wip(page)).nodes.find((n) => n.id === pf.id)!.params).toMatchObject({ method: "manual", shares: { [pa]: 60, [pb]: 40 } });
 
@@ -115,11 +115,11 @@ test("합치기 방법(BS4) 짝: 몫 칸을 비우면 노드가 비어 있는 �
   const r = body.nodes[pf.id];
   expect(r.status).toBe("failed");
   expect(r.reason).toContain(b.label);
-  expect(r.reason).toContain("대신 계산하지 않았어요");
+  expect(r.reason).toContain("대신 계산하지 않았습니다");
   await expect(page.locator(`.pg-node[data-node-id="${pf.id}"]`)).toContainText(b.label);
 });
 
-test("방법 비교(BS4): 자세히 = 서버 view.method_compare 그대로 — 줄 · 지금 방법 · 막대 = 몫 · 숫자 · '낫다는 뜻이 아니에요' · 라이트·다크 AA", async ({ page }) => {
+test("방법 비교(BS4): 자세히 = 서버 view.method_compare 그대로 — 줄 · 지금 방법 · 막대 = 몫 · 숫자 · '낫다는 뜻이 아닙니다' · 라이트·다크 AA", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   const doc = await wip(page);
@@ -131,7 +131,7 @@ test("방법 비교(BS4): 자세히 = 서버 view.method_compare 그대로 — �
   await openTab(page, pf.id, "detail");
   const root = page.locator(".pg-side .pg-mc");
   await expect(root.locator(".pg-mc-note")).toHaveText(mc.note);
-  expect(mc.note).toContain("낫다는 뜻이 아니에요");
+  expect(mc.note).toContain("낫다는 뜻이 아닙니다");
   await expect(root.locator(".pg-mc-row")).toHaveCount(mc.rows.length);
   await expect(root.locator(".pg-mc-row .pg-mc-head b")).toHaveText(mc.rows.map((x) => x.label));
   await expect(root.locator('.pg-mc-row[data-current="1"]')).toHaveCount(1);
@@ -184,7 +184,7 @@ test("방법 비교(BS4) 짝: 서버가 못 잰 줄은 막대·숫자 없이 서
       if (!mc) continue;
       const crisis = mc.rows.find((x) => x.method === "crisis_risk_parity")!;
       for (const k of ["shares", "vol_pct", "div_ratio", "effective_n", "fallback"]) delete crisis[k];
-      Object.assign(crisis, { available: false, reason: "시장 대용 시세가 모자라요(12일)" });
+      Object.assign(crisis, { available: false, reason: "시장 대용 시세가 모자랍니다(12일)" });
       Object.assign(mc.rows.find((x) => x.method === "min_var")!, { fallback: { used: true, from: "min_var", reason: "풀리지 않아 역변동성" } });
     }
     await route.fulfill({ response: res, json: body });
@@ -197,7 +197,7 @@ test("방법 비교(BS4) 짝: 서버가 못 잰 줄은 막대·숫자 없이 서
   await openTab(page, pf.id, "detail");
   const crisis = page.locator('.pg-side .pg-mc-row[data-method="crisis_risk_parity"]');
   await expect(crisis).toHaveAttribute("data-available", "0");
-  await expect(crisis.locator(".pg-mc-reason")).toHaveText("시장 대용 시세가 모자라요(12일)");
+  await expect(crisis.locator(".pg-mc-reason")).toHaveText("시장 대용 시세가 모자랍니다(12일)");
   await expect(crisis.locator(".pg-mc-bar, .pg-mc-nums")).toHaveCount(0);
   await expect(page.locator('.pg-side .pg-mc-row[data-method="min_var"] .pg-mc-chip--fb')).toHaveText("대신 계산");
   await expect(page.locator('.pg-side .pg-mc-row[data-method="equal"] .pg-mc-chip--fb')).toHaveCount(0);   // 짝

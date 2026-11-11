@@ -68,7 +68,7 @@ export function PerfCompare({ view, height = 260, focus = "both", title = "두 �
   }, [view.unit, view.base, va, vb, vd, width, height, n]);
 
   if (n < 2) {
-    return <p className="pg-note pf-empty">겹쳐 그릴 곡선이 없어요 — 서버가 맞춘 날짜·값을 주지 않았어요.</p>;
+    return <p className="pg-note pf-empty">겹쳐 그릴 곡선이 없습니다 — 서버가 맞춘 날짜·값을 주지 않았습니다.</p>;
   }
 
   const { x, yEq, yDf, L, plotW, idxs, stripY, lastA, lastB, base } = geo;
@@ -109,8 +109,8 @@ export function PerfCompare({ view, height = 260, focus = "both", title = "두 �
   const xLabelIdx = Array.from(new Set(plotW >= labW * 3 + 16 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1]));
   const xLabels = xLabelIdx.map((i) => ({ i, text: view.x[i].slice(0, 10) }));
   const stripBottom = stripY + STRIP_H - 4;
-  const unitText = view.unit === "x" ? " (처음을 1로)" : view.unit === "base100" ? " (처음을 100으로)" : "";
-  const ariaLabel = `${title} — ${view.a.label} ${fmtValue(view.unit, lastA)}, ${view.b.label} ${fmtValue(view.unit, lastB)}, 차이 ${fmtSignedPp(lastOf(vd))}. 화살표로 날짜를 옮겨 읽어요.`;
+  const unitText = view.unit === "x" ? " (시작값 1)" : view.unit === "base100" ? " (시작값 100)" : "";
+  const ariaLabel = `${title} — ${view.a.label} ${fmtValue(view.unit, lastA)}, ${view.b.label} ${fmtValue(view.unit, lastB)}, 차이 ${fmtSignedPp(lastOf(vd))}. 화살표 키로 날짜를 이동해 값을 읽습니다.`;
 
   return (
     <div className={`pg-chart pf-fig pf-cmp pf-cmp--focus-${focus}`} ref={wrap} data-alignment={view.alignment}>
@@ -192,8 +192,8 @@ export function PerfCompare({ view, height = 260, focus = "both", title = "두 �
             {view.missingA > 0 ? ` ${view.a.label}에 없는 날 ${view.missingA}일.` : ""}{view.missingB > 0 ? ` ${view.b.label}에 없는 날 ${view.missingB}일.` : ""}
           </span>
         )}
-        {view.practice === true && <span className="pf-strip-legend-practice"><i className="pf-skey pf-skey--practice" aria-hidden="true" />연습용 데이터</span>}
-        {view.practice === null && <span className="pf-strip-legend-unknown">데이터가 실제인지 몰라요</span>}
+        {view.practice === true && <span className="pf-strip-legend-practice"><i className="pf-skey pf-skey--practice" aria-hidden="true" />합성 데이터</span>}
+        {view.practice === null && <span className="pf-strip-legend-unknown">데이터 출처 미상</span>}
       </p>
       {/* 표 쌍둥이 */}
       <details className="pf-table pf-cmp-table">

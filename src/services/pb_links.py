@@ -46,10 +46,10 @@ SESSION_TTL = dt.timedelta(minutes=30)
 ASK_PER_HOUR = 10
 SESSION_PURPOSE = "pb-share-session"
 
-DENIED = "주소나 PIN 이 맞지 않아요."
-GONE = "이 주소는 더 이상 열 수 없어요 — 담당 PB 에게 새 주소를 받아 주세요."
-LOCKED = "PIN 을 여러 번 틀려 잠겼어요 — 담당 PB 에게 다시 열어 달라고 해 주세요."
-ASK_LIMITED = f"이 주소로는 한 시간에 {ASK_PER_HOUR}번까지 물을 수 있어요 — 잠시 뒤에 다시 물어 주세요."
+DENIED = "주소나 PIN 이 맞지 않습니다."
+GONE = "이 주소는 더 이상 열 수 없습니다 — 담당 PB 에게 새 주소를 받아 주십시오."
+LOCKED = "PIN 을 여러 번 틀려 잠겼습니다 — 담당 PB 에게 다시 열어 달라고 하십시오."
+ASK_LIMITED = f"이 주소로는 한 시간에 {ASK_PER_HOUR}번까지 물을 수 있습니다 — 잠시 뒤에 다시 문의하십시오."
 
 _ask_limiter = HourlyLimiter()
 
@@ -77,11 +77,11 @@ class ShareLocked(RuntimeError):
 def pin_reason(pin: object) -> str | None:
     """쓸 수 없는 PIN 이면 사유. 숫자 6자리 · 같은 숫자 · 차례대로(오르내림) · 2·3자리 되풀이는 거절."""
     if not isinstance(pin, str) or len(pin) != PIN_LEN or not pin.isascii() or not pin.isdigit():
-        return f"PIN 은 숫자 {PIN_LEN}자리예요."
+        return f"PIN 은 숫자 {PIN_LEN}자리입니다."
     d = [int(x) for x in pin]
     steps = {b - a for a, b in zip(d, d[1:])}
     if len(set(pin)) == 1 or steps in ({1}, {-1}) or pin[:2] * 3 == pin or pin[:3] * 2 == pin:
-        return "쉬운 PIN 이에요 — 같은 숫자·차례대로 이어지는 숫자·되풀이는 쓰지 않아요."
+        return "쉬운 PIN 입니다 — 같은 숫자·차례대로 이어지는 숫자·되풀이는 쓰지 않습니다."
     return None
 
 
@@ -139,7 +139,7 @@ def create_link(owner: str, client_id: str, *, sheet_id: str, pin: str, days: in
     if why:
         raise ValueError(why)
     if days not in DAYS:
-        raise ValueError(f"기간은 {'·'.join(map(str, DAYS))}일 중에서 골라 주세요.")
+        raise ValueError(f"기간은 {'·'.join(map(str, DAYS))}일 중에서 선택하십시오.")
     token = secrets.token_urlsafe(32)
     now = pc._now()
     with session_scope() as s:
@@ -172,7 +172,7 @@ def revoke_link(owner: str, client_id: str, link_id: str) -> dict:
 
 def _live(x: PbClientLink) -> None:
     if x.revoked_at is not None or _aware(x.expires_at) <= pc._now():
-        raise LinkClosed("철회했거나 만료된 주소는 다시 열 수 없어요 — 새 주소를 만들어 주세요.")
+        raise LinkClosed("철회했거나 만료된 주소는 다시 열 수 없습니다 — 새 주소를 생성하십시오.")
 
 
 def reopen_link(owner: str, client_id: str, link_id: str) -> dict:

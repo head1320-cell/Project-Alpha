@@ -31,27 +31,27 @@ export function reviewDocFor(c: PbClient): GraphDoc {
 export async function openClientDoc(clientId: string, docId: string | null, fresh: string | null): Promise<ClientOpen> {
   if (docId) {
     const r = await getDoc(clientId, docId);
-    if (!r.ok) return { ok: false, note: `고객 문서를 열지 못했어요 — ${r.error}` };
+    if (!r.ok) return { ok: false, note: `고객 문서 열기 실패 — ${r.error}` };
     const d = r.value;
     return {
       ok: true,
       ctx: { clientId, docId: d.doc_id, alias: d.client_alias, name: d.name, archived: d.client_archived },
       boot: { doc: d.graph, restack: false, isolate: true,
-              note: `‘${d.client_alias}’ 의 ‘${d.name}’ 이에요.${d.client_archived ? " 보관한 고객이라 읽기만 해요." : ""}` },
+              note: `‘${d.client_alias}’ 의 ‘${d.name}’ 입니다.${d.client_archived ? " 보관한 고객이라 읽기만 합니다." : ""}` },
     };
   }
   if (fresh === "review") {
     const r = await getClient(clientId);
-    if (!r.ok) return { ok: false, note: `고객 문서를 열지 못했어요 — ${r.error}` };
+    if (!r.ok) return { ok: false, note: `고객 문서 열기 실패 — ${r.error}` };
     const c = r.value;
     return {
       ok: true,
       ctx: { clientId, docId: null, alias: c.alias, name: `정기 점검 ${localDate()}`, archived: c.archived },
       boot: { doc: reviewDocFor(c), isolate: true,
-              note: `‘${c.alias}’ 의 새 정기 점검이에요 — 위 ‘저장’ 으로 고객 문서에 남겨요.` },
+              note: `‘${c.alias}’ 의 새 정기 점검입니다 — 위 ‘저장’ 으로 고객 문서에 남깁니다.` },
     };
   }
-  return { ok: false, note: "고객 문서를 열지 못했어요 — 주소에 열 문서가 없어요." };
+  return { ok: false, note: "고객 문서 열기 실패 — 주소에 열 문서가 없습니다." };
 }
 
 /** 고객 모드를 떠날 때 — 캔버스를 비우고 되돌리기 기록도 비운다(일반 캔버스가 이 탭의 작업 중 문서를 다시 싣는다). */

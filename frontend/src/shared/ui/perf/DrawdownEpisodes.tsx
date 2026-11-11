@@ -10,12 +10,12 @@ import { fmtPct, type DdEpisode, type PerfView } from "./perfView";
 export function DrawdownEpisodes({ view, episodes, compact = false }: { view?: PerfView; episodes?: DdEpisode[] | null; compact?: boolean }) {
   const eps = episodes !== undefined ? episodes : (view?.drawdowns ?? null);
   const fmtD = (d: string) => (compact ? d.slice(2, 10).replace(/-/g, ".") : d.slice(0, 10));
-  if (eps === null) return <p className="pg-note">큰 낙폭 사건은 이 결과에 없어요 — 서버가 낙폭 사건을 주지 않았어요.</p>;
-  if (!eps.length) return <p className="pg-note">고점 아래로 내려간 적이 없어요 — 낙폭 사건이 없어요.</p>;
+  if (eps === null) return <p className="pg-note">주요 낙폭 구간은 이 결과에 없습니다 — 서버가 낙폭 구간을 주지 않았습니다.</p>;
+  if (!eps.length) return <p className="pg-note">고점 아래로 내려간 적이 없습니다 — 낙폭 구간이 없습니다.</p>;
   return (
     <div className="pf-eps-wrap">
     <table className={`pg-table pf-dd-eps${compact ? " pf-dd-eps--compact" : ""}`}>
-      <thead><tr><th>고점</th><th>바닥</th><th className="pg-td-num">깊이</th><th className="pg-td-num">바닥까지</th><th>되찾은 날</th><th className="pg-td-num">되찾기까지</th></tr></thead>
+      <thead><tr><th>고점</th><th>저점</th><th className="pg-td-num">낙폭</th><th className="pg-td-num">하락 기간</th><th>회복일</th><th className="pg-td-num">회복 기간</th></tr></thead>
       <tbody>
         {eps.map((e, i) => (
           <tr key={`${e.peak_date}-${i}`} className="pf-dd-ep" data-recovered={e.recovery_date ? "true" : "false"}>
@@ -25,7 +25,7 @@ export function DrawdownEpisodes({ view, episodes, compact = false }: { view?: P
             <td className="pg-td-num">{e.days_to_trough}일</td>
             {e.recovery_date
               ? <><td>{fmtD(e.recovery_date)}</td><td className="pg-td-num">{e.days_to_recover ?? "—"}일</td></>
-              : <td colSpan={2} className="pf-dd-ep-open">{compact ? "아직이에요" : "아직 고점을 되찾지 못했어요"}</td>}
+              : <td colSpan={2} className="pf-dd-ep-open">{compact ? "미회복" : "고점 미회복"}</td>}
           </tr>
         ))}
       </tbody>

@@ -60,10 +60,10 @@ export function boxDropPlan(dragIds: string[], now: N[], start: N[], groups: Gra
       if (share >= JOIN_SHARE && (!best || share > best.share)) best = { g, share };
     }
     const output = !!own && own.kind === "strategy" && own.output === d.id;
-    const keep = `‘${own?.label ?? ""}’의 비중을 내는 노드라 상자 밖으로 뺄 수 없어요.`;
+    const keep = `‘${own?.label ?? ""}’의 비중을 내는 노드라 상자 밖으로 뺄 수 없습니다.`;
     if (best) {
       if (d.data.kind === PORTFOLIO_NODE && best.g.kind === "strategy") {
-        blocked.push({ id: d.id, why: `전략을 합치는 노드라 ‘${best.g.label}’ 같은 전략 상자에 넣을 수 없어요.` });
+        blocked.push({ id: d.id, why: `전략을 합치는 노드라 ‘${best.g.label}’ 같은 전략 상자에 넣을 수 없습니다.` });
       } else if (output) blocked.push({ id: d.id, why: keep });
       else moves.push({ id: d.id, from: own?.id ?? null, to: best.g.id });
       continue;

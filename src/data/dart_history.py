@@ -294,7 +294,7 @@ def backfill_vintages(engine=None, client=None, max_calls: int | None = None,
 
         성공                  빈티지가 생긴다 → 다음부터 갭이 아니다(수렴)
         접수번호 없음          **시도 흔적**을 남긴다 → 다시 묻지 않는다
-        조회 실패(None·예외)   ★흔적을 남기지 않는다★ → 다음에 다시 시도한다
+        조회 실패(None·예외)   ★흔적을 남기지 않는다★ → 다음에 재시도한다
 
     마지막이 핵심이다: 일시적 실패를 항구적으로 표시하면 **되찾을 수 있는
     데이터를 영영 잃는다.** 대신 `failed` 로 세어 사용자가 본다.
@@ -305,7 +305,7 @@ def backfill_vintages(engine=None, client=None, max_calls: int | None = None,
     from src.data.dart_client import DARTClient, get_corp_code
     client = client or DARTClient()
     if not getattr(client, "is_configured", False):
-        return {"error": True, "message": "DART_API_KEY 미설정 — .env에 키를 넣고 실행하세요"}
+        return {"error": True, "message": "DART_API_KEY 미설정 — .env에 키를 넣고 실행하십시오"}
     engine = _get_engine(engine)
     if engine is None:
         return {"error": True, "message": "DB engine 없음"}
@@ -709,7 +709,7 @@ def backfill_financials(tickers: list[str] | None = None, all_listed: bool = Fal
     from src.data.dart_client import DARTClient, get_corp_code
     client = client or DARTClient()
     if not client.is_configured:
-        return {"error": True, "message": "DART_API_KEY 미설정 — .env에 키를 넣고 실행하세요"}
+        return {"error": True, "message": "DART_API_KEY 미설정 — .env에 키를 넣고 실행하십시오"}
 
     engine = _get_engine(engine)
     if engine is None:
@@ -1061,7 +1061,7 @@ def main() -> None:
                     help="★소급 백필★ 이미 적재된 기간 중 빈티지가 없는 것만 다시 "
                          "받아 접수일을 채운다(정규 백필은 건드리지 않는다)")
     ap.add_argument("--retry-probed", action="store_true",
-                    help="접수번호를 못 받아 표시해 둔 기간도 다시 시도한다")
+                    help="접수번호를 못 받아 표시해 둔 기간도 재시도한다")
     args = ap.parse_args()
 
     if args.vintages:
@@ -1074,7 +1074,7 @@ def main() -> None:
         print(f"→ 채움 {stats['saved']} · 접수번호 없음 {stats['no_rcept']}"
               f"(다시 묻지 않음 — `--retry-probed` 로 재개) · "
               f"조회 실패 {stats['failed']}(★흔적을 남기지 않았으므로 다음 실행에서 "
-              f"다시 시도합니다★)")
+              f"재시도합니다★)")
         if stats.get("stopped_at_quota"):
             print("→ 쿼터 도달로 중단 — 같은 명령으로 재실행하면 이어서 채웁니다"
                   "(갭이 줄어들므로 수렴합니다)")

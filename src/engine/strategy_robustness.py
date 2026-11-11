@@ -19,7 +19,7 @@ import numpy as np
 
 #: 분산이 이보다 작으면 "흔들림이 없다"고 본다(일별 수익 기준 — 0.001% 변동보다 작음).
 _FLAT_VAR = 1e-16
-_FLAT_REASON = "이 구간에 흔들림이 없어 상관을 잴 수 없어요(비중이 비었거나 값이 그대로예요)"
+_FLAT_REASON = "이 구간에 흔들림이 없어 상관을 측정할 수 없습니다(비중이 비었거나 값이 그대로입니다)"
 #: 위기일이 이보다 적으면 표본이 작다고 적는다.
 SMALL_CRISIS_DAYS = 20
 
@@ -53,7 +53,7 @@ def rolling_correlation(names: Sequence[str], S: np.ndarray, window: int = 60) -
     T, n = S.shape
     if T < window + 10:
         return {"available": False, "window": window,
-                "reason": f"흐름이 {T}거래일이라 {window}일 창으로 추이를 볼 수 없어요(적어도 {window + 10}일)"}
+                "reason": f"흐름이 {T}거래일이라 {window}일 창으로 추이를 볼 수 없습니다(적어도 {window + 10}일)"}
     m = T - window + 1
     c = np.vstack([np.zeros((1, n)), np.cumsum(S, axis=0)])
     c2 = np.vstack([np.zeros((1, n)), np.cumsum(S * S, axis=0)])
@@ -85,7 +85,7 @@ def rolling_correlation(names: Sequence[str], S: np.ndarray, window: int = 60) -
     return {"available": True, "window": window, "ago": [m - 1 - t for t in range(m)], "pairs": pairs,
             "avg": avg, "avg_current": avg[-1], "avg_max": max(got_avg) if got_avg else None,
             "avg_min": min(got_avg) if got_avg else None,
-            "note": f"{window}거래일 창의 상관 · 띠는 표본 오차 95%(Fisher z) — 띠가 넓으면 창 안의 날이 적어 흔들린 값이에요."}
+            "note": f"{window}거래일 창의 상관 · 띠는 표본 오차 95%(Fisher z) — 띠가 넓으면 창 안의 날이 적어 흔들린 값입니다."}
 
 
 # ── 위기 때 상관 ─────────────────────────────────────────────────────────────
@@ -110,8 +110,8 @@ def crisis_correlation(names: Sequence[str], S: np.ndarray, market: np.ndarray |
         ref, basis = np.asarray(market, dtype=float), "market"
     else:
         ref, basis = S.mean(axis=1), "strategy_mean"
-        note = ("시장 자료가 없어 전략 평균이 가장 나빴던 날을 위기일로 골랐어요 — 전략 스스로 고른 날이라 "
-                "위기일 상관이 부풀 수 있어요.")
+        note = ("시장 자료가 없어 전략 평균이 가장 나빴던 날을 위기일로 골랐습니다 — 전략 스스로 고른 날이라 "
+                "위기일 상관이 부풀 수 있습니다.")
     crisis = ref <= np.quantile(ref, q)
     m = int(crisis.sum())
     zq = float(norm.ppf(q))
@@ -166,7 +166,7 @@ def drawdown_overlap(names: Sequence[str], S: np.ndarray, shares: Sequence[float
     for j in range(n):
         md = _max_drawdown(S[:, j])
         if md is None:
-            rows.append({"name": names[j], "max_drawdown_pct": None, "reason": "이 기간에 잃은 적이 없어요"})
+            rows.append({"name": names[j], "max_drawdown_pct": None, "reason": "이 기간에 잃은 적이 없습니다"})
             spans.append(None)
             continue
         dd, p, k = md
@@ -177,7 +177,7 @@ def drawdown_overlap(names: Sequence[str], S: np.ndarray, shares: Sequence[float
     for i, j in _pairs(n):
         if spans[i] is None or spans[j] is None:
             pairs.append({"a": names[i], "b": names[j], "overlap": None,
-                          "reason": "잃은 적이 없는 쪽이 있어 겹침을 잴 수 없어요"})
+                          "reason": "잃은 적이 없는 쪽이 있어 겹침을 측정할 수 없습니다"})
             continue
         inter, union = len(spans[i] & spans[j]), len(spans[i] | spans[j])
         pairs.append({"a": names[i], "b": names[j], "overlap_days": inter, "union_days": union,
@@ -186,7 +186,7 @@ def drawdown_overlap(names: Sequence[str], S: np.ndarray, shares: Sequence[float
     out: dict[str, Any] = {"available": True, "strategies": rows, "pairs": pairs, "shares_basis": basis}
     if T < worst_window:
         out["worst_window"] = None
-        out["worst_window_reason"] = f"흐름이 {T}거래일이라 {worst_window}일 최악 구간을 볼 수 없어요"
+        out["worst_window_reason"] = f"흐름이 {T}거래일이라 {worst_window}일 최악 구간을 볼 수 없습니다"
         return out
     P = S @ w
     lp = np.log1p(np.clip(P, -0.999999, None))
@@ -205,7 +205,7 @@ def drawdown_overlap(names: Sequence[str], S: np.ndarray, shares: Sequence[float
 # ── 안정성 · 실질 개수 · 분산 효과 ───────────────────────────────────────────
 
 def correlation_stability(names: Sequence[str], S: np.ndarray) -> dict[str, Any]:
-    """앞 절반 대 뒤 절반 상관 — Fisher z 차이가 1.96 을 넘으면 '우연으로 보기엔 커요'."""
+    """앞 절반 대 뒤 절반 상관 — Fisher z 차이가 1.96 을 넘으면 '우연으로 보기엔 큽니다'."""
     T, n = S.shape
     h = T // 2
     pairs = []
@@ -213,14 +213,14 @@ def correlation_stability(names: Sequence[str], S: np.ndarray) -> dict[str, Any]
         r1, r2 = _corr(S[:h, i], S[:h, j]), _corr(S[h:, i], S[h:, j])
         if r1 is None or r2 is None or h < 10:
             pairs.append({"a": names[i], "b": names[j], "first": _r(r1), "second": _r(r2), "changed": None,
-                          "reason": _FLAT_REASON if h >= 10 else "흐름이 짧아 절반씩 나눠 볼 수 없어요"})
+                          "reason": _FLAT_REASON if h >= 10 else "흐름이 짧아 절반씩 나눠 볼 수 없습니다"})
             continue
         f = lambda r: math.atanh(min(max(r, -0.999999), 0.999999))  # noqa: E731
         z = (f(r1) - f(r2)) / math.sqrt(1.0 / max(h - 3, 1) + 1.0 / max(T - h - 3, 1))
         pairs.append({"a": names[i], "b": names[j], "first": _r(r1), "second": _r(r2), "z": _r(z, 2),
                       "changed": bool(abs(z) > 1.96)})
     return {"available": True, "half_days": h, "pairs": pairs,
-            "note": "앞 절반과 뒤 절반의 상관 — 차이가 표본 오차로 설명되기 어려우면(|z|>1.96) 관계가 바뀐 거예요."}
+            "note": "앞 절반과 뒤 절반의 상관 — 차이가 표본 오차로 설명되기 어려우면(|z|>1.96) 관계가 바뀐 것입니다."}
 
 
 def effective_count(names: Sequence[str], S: np.ndarray) -> dict[str, Any]:
@@ -230,10 +230,10 @@ def effective_count(names: Sequence[str], S: np.ndarray) -> dict[str, Any]:
     flat = [names[j] for j in range(n) if np.var(S[:, j]) <= _FLAT_VAR]
     if flat:
         return {"available": False, "value": None, "n": n,
-                "reason": f"흔들림이 없는 흐름({', '.join(flat)})이 있어 서로 얼마나 닮았는지 잴 수 없어요"}
+                "reason": f"흔들림이 없는 흐름({', '.join(flat)})이 있어 서로 얼마나 닮았는지 측정할 수 없습니다"}
     C = np.corrcoef(S.T)
     if not np.all(np.isfinite(C)):
-        return {"available": False, "value": None, "n": n, "reason": "상관을 계산하지 못했어요"}
+        return {"available": False, "value": None, "n": n, "reason": "상관 산출 실패"}
     return {"available": True, "value": round(participation_ratio(C), 3), "n": n}
 
 
@@ -243,7 +243,7 @@ def diversification(S: np.ndarray, shares: Sequence[float] | None = None) -> dic
     sig = S.std(axis=0)
     sp = float((S @ w).std())
     if sp <= math.sqrt(_FLAT_VAR):
-        return {"available": False, "ratio": None, "shares_basis": basis, "reason": "합친 흐름에 흔들림이 없어요"}
+        return {"available": False, "ratio": None, "shares_basis": basis, "reason": "합친 흐름에 흔들림이 없습니다"}
     return {"available": True, "ratio": round(float(np.abs(w) @ sig) / sp, 3), "shares_basis": basis,
             "vol_pct": round(sp * math.sqrt(252) * 100, 2)}
 
@@ -278,12 +278,12 @@ def robustness_report(names: Sequence[str], S: np.ndarray, shares: Sequence[floa
     names = list(names)
     S = np.asarray(S, dtype=float)
     if S.ndim != 2 or S.shape[1] < 2 or len(names) != S.shape[1]:
-        return {"available": False, "reason": "견고성은 흐름이 둘 이상 있어야 볼 수 있어요"}
+        return {"available": False, "reason": "견고성은 흐름이 둘 이상 있어야 볼 수 있습니다"}
     if S.shape[0] < 30:
-        return {"available": False, "reason": f"흐름이 {S.shape[0]}거래일뿐이라 견고성을 볼 수 없어요(적어도 30일)"}
+        return {"available": False, "reason": f"흐름이 {S.shape[0]}거래일뿐이라 견고성을 볼 수 없습니다(적어도 30일)"}
     if dates is not None and len(dates) != S.shape[0]:
         return {"available": False,
-                "reason": f"날짜 수({len(dates)})가 흐름 길이({S.shape[0]})와 달라 어느 날의 값인지 말할 수 없어요"}
+                "reason": f"날짜 수({len(dates)})가 흐름 길이({S.shape[0]})와 달라 어느 날의 값인지 말할 수 없습니다"}
     _, basis = _shares(shares, len(names))
     rep = {
         "available": True, "names": names, "n_days": int(S.shape[0]), "axis": "trading_days_ago",

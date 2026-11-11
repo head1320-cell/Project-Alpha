@@ -138,8 +138,8 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
 
     // BU0 — 글자 표지(`[ LOADING ]`·`[ ERROR ]`)를 해요체 문장으로 바꿨다. 문장은 바뀔 수 있으니 클래스로 보고,
     // 표지가 다시 생기지 않는지만 짝으로 본다.
-    await expect(g.locator(".tstate-loading .tstate-label").first()).toHaveText("불러오는 중이에요");
-    await expect(g.locator(".tstate-error .tstate-label").first()).toHaveText("불러오지 못했어요");
+    await expect(g.locator(".tstate-loading .tstate-label").first()).toHaveText("조회 중");
+    await expect(g.locator(".tstate-error .tstate-label").first()).toHaveText("조회 실패");
     expect(await g.locator(".tstate").allInnerTexts(), "대괄호 표지가 남아 있지 않다").not.toContainEqual(expect.stringMatching(/\[ (LOADING|ERROR|N\/A) \]/));
 
     // ★뼈대는 400ms 지연 뒤에만 보인다★(깜빡임 방지) — 지연은 CSS 가 갖는다. 짝: 빈 상태에는 지연이 없다.
@@ -154,7 +154,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     // "문제 없음" 으로 읽힌다. 클래스가 다르다는 것만으로는 부족하므로 실제 계산된
     // 배경색이 서로 다른지까지 본다.
     await expect(g.locator(".tstate-unavail .tstate-unavail-tag")).toHaveCount(3);
-    await expect(g.locator(".tstate-unavail-tag").first()).toHaveText("지금은 못 재요");
+    await expect(g.locator(".tstate-unavail-tag").first()).toHaveText("측정 불가");
     const bg = (l: string) => g.locator(l).first().evaluate((e) => getComputedStyle(e).backgroundColor);
     expect(await bg(".tstate-unavail"), "unavailable 이 empty 와 같은 배경이면 안 된다")
       .not.toBe(await bg(".tstate-empty"));
@@ -472,14 +472,14 @@ test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
     await expect(d("up")).toHaveText("▲ +2.1%p");
     await expect(d("down")).toHaveText("▼ −3.0%p");
     await expect(d("flat")).toHaveText("0.0%p");                 // ★짝★ 그대로에는 화살표가 없다
-    await expect(d("unknown")).toHaveText("몰라요");               // 미상은 0 이 아니다
+    await expect(d("unknown")).toHaveText("N/A");               // 미상은 0 이 아니다
     expect(await color("unknown")).not.toBe(await color("up"));
   });
 
   test("Unknown 은 사유를 보이는 글자로 싣는다 · ListRow 는 누를 수 있을 때만 화살표가 있다(짝)", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const u = page.locator(".devui-tx .tx-unknown").first();
-    await expect(u.locator(".tx-unknown-v")).toHaveText("몰라요");
+    await expect(u.locator(".tx-unknown-v")).toHaveText("N/A");
     await expect(u.locator(".tx-unknown-why")).toBeVisible();
     expect((await u.locator(".tx-unknown-why").innerText()).trim().length).toBeGreaterThan(5);
 
@@ -492,7 +492,7 @@ test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
     expect(await plain.evaluate((e) => e.tagName)).toBe("DIV");
   });
 
-  test("krFormat: 한국식 단위·부호·비율 — 미상은 '몰라요'(0·NaN 으로 그리지 않는다)", async ({ page }) => {
+  test("krFormat: 한국식 단위·부호·비율 — 미상은 'N/A'(0·NaN 으로 그리지 않는다)", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const want: [string, string, string][] = [
       ["num", "1234.5", "1,235"], ["num", "1234.5, 1", "1,234.5"], ["num", "-0.0001", "0"],
@@ -501,8 +501,8 @@ test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
       ["krUnit", "-2.5e8", "−3억"], ["won", "1234", "1,234원"], ["won", "3.4e11", "3,400억원"],
       ["pct", "0.241", "24.1%"], ["pct", "-0.03", "−3.0%"], ["signedPct", "0.241", "+24.1%"],
       ["signedPct", "0", "0.0%"], ["signedPct", "-0.00004", "0.0%"], ["pp", "0.021", "+2.1%p"],
-      ["pp", "-0.03", "−3.0%p"], ["num", "null", "몰라요"], ["pct", "NaN", "몰라요"], ["won", "Infinity", "몰라요"],
-      ["priceWon", "71200", "71,200원"], ["priceWon", "undefined", "몰라요"],
+      ["pp", "-0.03", "−3.0%p"], ["num", "null", "N/A"], ["pct", "NaN", "N/A"], ["won", "Infinity", "N/A"],
+      ["priceWon", "71200", "71,200원"], ["priceWon", "undefined", "N/A"],
       ["direction", "0.1", "up"], ["direction", "-1", "down"], ["direction", "0", "flat"], ["direction", "null", "unknown"],
     ];
     const rows = page.locator(".devui-krfmt-table tr");

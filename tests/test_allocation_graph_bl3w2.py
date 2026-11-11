@@ -5,7 +5,7 @@
 
 ## 거는 것
 - **운영 = 저장된 관측만** — 여섯 노드 모두 외부 호출 0 · 관측 적재 0. 저장된 것이 없으면 사유 있는 실패(짝: 있으면 계산).
-- **개발 = `/macro` 라우트와 같은 수집기 출력 + 연습용 계보**.
+- **개발 = `/macro` 라우트와 같은 수집기 출력 + 합성 계보**.
 - 장기 관계·스튜디오는 엔진 안의 `load_series` 가 수집기를 직접 부른다 — 노드는 그 자리에 저장된 계열을 **주입**하고,
   계산이 끝나면 주입을 거둔다(짝: 노드 밖의 `load_series` 는 원래대로 수집기를 부른다).
 - 코어 변수 상한(7)은 **요청** 개수로 잰다 — 라우트의 422 와 같은 문장으로 실패(짝: 7개는 통과).
@@ -68,7 +68,7 @@ def test_yield_curve_equals_the_route_and_is_practice(monkeypatch):
     # 공용 함수라 골든은 양쪽이 같이 빠뜨려도 통과한다 — 해석 문장이 실제로 실리는지 따로 본다
     assert r["view"]["result"]["interpretation"] and len(r["view"]["result"]["points"]) >= 3
     assert r["lineage"]["practice"] is True
-    assert any("연습용" in t["text"] for t in r["explain"]["trust"])
+    assert any("합성" in t["text"] for t in r["explain"]["trust"])
     # 해석 문장은 경험칙이다 — 예측이라고 쓰지 않는다
     assert any("경험칙" in t["text"] for t in r["explain"]["trust"])
 

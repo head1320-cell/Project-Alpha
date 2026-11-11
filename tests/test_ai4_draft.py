@@ -90,7 +90,7 @@ BUILD = _raw(add=[_add("u", "universe"), _add("r", "returns"), _add("e", "estima
              sets=[_set("u", "tickers", "삼성전자, SK하이닉스, NAVER", "tickers", names=["삼성전자", "SK하이닉스", "NAVER"]),
                    _set("r", "lookback_days", "3년", "preset", "3년"),
                    _set("o", "model", "위험 똑같이", "option", "risk_parity")],
-             summary="세 종목으로 비중 계산 흐름을 만들어요")
+             summary="세 종목으로 비중 계산 흐름을 만듭니다")
 
 
 def _check(raw, graph=EMPTY, sentence=SENT, resolve=fake_resolve):
@@ -170,7 +170,7 @@ def test_a_whole_build_on_an_empty_canvas_reads_every_value_from_the_sentence():
     assert by["lookback_days"]["display"] == "3년" and by["lookback_days"]["quote"] == "3년" and by["lookback_days"]["read"] == "preset"
     assert by["lookback_days"]["label"] == "기간"
     assert by["model"]["display"] == "위험 똑같이" and by["tickers"]["display"] == "삼성전자 · SK하이닉스 · NAVER"
-    assert d["empty"] == [] and d["summary"] == "세 종목으로 비중 계산 흐름을 만들어요"
+    assert d["empty"] == [] and d["summary"] == "세 종목으로 비중 계산 흐름을 만듭니다"
 
 
 def test_a_value_written_by_the_model_is_refused():
@@ -317,7 +317,7 @@ def test_what_the_words_leave_out_is_listed_as_empty():
     empty = res["draft"]["empty"]
     assert {(x["node"], x.get("field"), x.get("port")) for x in empty} == {("universe", "tickers", None), ("optimizer", None, "belief")}
     by = {(x.get("field") or x.get("port")): x["why"] for x in empty}
-    assert "종목" in by["tickers"] and "말씀에 없어요" in by["tickers"]
+    assert "종목" in by["tickers"] and "말씀에 없습니다" in by["tickers"]
     assert "기대 수익" in by["belief"]
     res = _check(BUILD)                                                                    # ★짝★ 다 말했으면 비어 있는 것 없음
     assert res["draft"]["empty"] == []
@@ -326,13 +326,13 @@ def test_what_the_words_leave_out_is_listed_as_empty():
 @pytest.mark.parametrize("why,text", [("judgement", dr.CANNOT["judgement"]), ("off_topic", dr.CANNOT["off_topic"]),
                                       ("none", dr.CANNOT["off_topic"])])
 def test_not_understood_gives_a_fixed_server_sentence_and_no_draft(why, text):
-    res = _check({**BUILD, "understood": False, "why_not": why, "summary": "삼성전자를 사세요"})
+    res = _check({**BUILD, "understood": False, "why_not": why, "summary": "삼성전자를 사십시오"})
     assert res["understood"] is False and res["cannot"] == text
     assert res["draft"] == {"summary": None, "add": [], "connect": [], "set": [], "empty": []}
-    assert "사세요" not in _blob(res)
+    assert "사십시오" not in _blob(res)
 
 
-@pytest.mark.parametrize("summary,code", [("5개 종목으로 짜요", "numbers"), ("견고함이 확인된 설계예요", "banned"), ("가" * 81, "too_long")])
+@pytest.mark.parametrize("summary,code", [("5개 종목으로 짭니다", "numbers"), ("견고함이 확인된 설계입니다", "banned"), ("가" * 81, "too_long")])
 def test_a_bad_summary_is_dropped_with_a_reason_and_the_draft_stays(summary, code):
     res = _check({**BUILD, "summary": summary})
     assert res["draft"]["summary"] is None and _codes(res) == [code] and len(res["draft"]["add"]) == 4

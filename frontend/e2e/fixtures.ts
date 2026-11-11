@@ -25,7 +25,7 @@ export function closeAfterUse(r: APIRequestContext): APIRequestContext {
   const t = r as unknown as Inner;
   if (t.__closeAfterUse) return r;
   if (typeof t._innerFetch !== "function") {
-    throw new Error("Playwright API 클라이언트에 _innerFetch 가 없어요 — 버전이 바뀌었으니 e2e/fixtures.ts 의 '쉰 연결 다시 쓰지 않기'를 고쳐야 해요.");
+    throw new Error("Playwright API 클라이언트에 _innerFetch 가 없습니다 — 버전이 바뀌었으니 e2e/fixtures.ts 의 '쉰 연결 다시 쓰지 않기'를 고쳐야 합니다.");
   }
   const inner = t._innerFetch.bind(r);
   t._innerFetch = (options: FetchOptions = {}) => {

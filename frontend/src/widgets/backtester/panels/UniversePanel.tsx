@@ -97,11 +97,11 @@ export default function UniversePanel({ s, set, live = true }: {
 
   return (
     <div className="bte-col">
-      <Section title="매매 대상" hint="어떤 종목 안에서 고를지 정해요" tone="neutral" enabled>
+      <Section title="매매 대상" hint="어떤 종목 안에서 고를지 정합니다" tone="neutral" enabled>
         <div className="bte-uni-count" aria-live="polite">
           <span className="bte-sm">지금 고른 종목</span>
           <b className={counting ? "is-counting" : undefined}>{u.matched.toLocaleString("ko-KR")}</b>
-          <span className="bte-sm">/ 전체 {u.totalUniverse.toLocaleString("ko-KR")}종목{counting ? " · 다시 세는 중이에요" : ""}</span>
+          <span className="bte-sm">/ 전체 {u.totalUniverse.toLocaleString("ko-KR")}종목{counting ? " · 다시 세는 중입니다" : ""}</span>
         </div>
 
         {/* 유니버스 구성 방식 — 생존편향 보정: 시작일 당시 실제 거래 종목(상장폐지 포함) 기준.
@@ -116,8 +116,8 @@ export default function UniversePanel({ s, set, live = true }: {
             ]} />
           <p className="bte-note">
             {(u.survivorshipMode ?? "off") === "off"
-              ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 써요."
-              : "시작일 당시 실제로 거래된 종목(상장폐지 포함)으로 골라요. 아래 시총군·업종·ETF·관심그룹 선택은 쓰지 않아요."}
+              ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 씁니다."
+              : "시작일 당시 실제로 거래된 종목(상장폐지 포함)으로 고릅니다. 아래 시총군·업종·ETF·관심그룹 선택은 쓰지 않습니다."}
           </p>
         </Field>
 
@@ -127,9 +127,9 @@ export default function UniversePanel({ s, set, live = true }: {
             onChange={(t) => set((x) => ({ ...x, liquidityGate: t as BacktestStrategy["liquidityGate"] }))}
             options={[{ id: "off", label: "전종목" }, { id: "relaxed", label: "완화" }, { id: "standard", label: "표준" }]} />
           <p className="bte-note">
-            {s.liquidityGate === "off" ? "고른 종목을 모두 넣어요(적자·소형 포함)."
-              : s.liquidityGate === "relaxed" ? "시가총액 300억 이상 · 하루 거래대금 3억 이상만 남겨요."
-              : "시가총액 1,000억 이상 · 하루 거래대금 10억 이상만 남겨요."}
+            {s.liquidityGate === "off" ? "고른 종목을 모두 넣습니다(적자·소형 포함)."
+              : s.liquidityGate === "relaxed" ? "시가총액 300억 이상 · 하루 거래대금 3억 이상만 남깁니다."
+              : "시가총액 1,000억 이상 · 하루 거래대금 10억 이상만 남깁니다."}
           </p>
         </Field>
 
@@ -162,13 +162,13 @@ export default function UniversePanel({ s, set, live = true }: {
         <Field label="평가 종목 상한" width={96}>
           <select value={s.evalCap ?? 200} className="kit-select" aria-label="평가 종목 상한"
             onChange={(e) => set((x) => ({ ...x, evalCap: Number(e.target.value) }))}>
-            <option value={200}>200종목 (기본, 빨라요)</option>
+            <option value={200}>200종목 (기본, 빠릅니다)</option>
             <option value={500}>500종목</option>
             <option value={1000}>1,000종목</option>
             <option value={2000}>2,000종목</option>
-            <option value={4000}>전체 (제한 없음 — 큰 유니버스는 몇 분 걸릴 수 있어요)</option>
+            <option value={4000}>전체 (제한 없음 — 큰 유니버스는 몇 분 걸릴 수 있습니다)</option>
           </select>
-          <p className="bte-note">처음 실행은 적재되지 않은 종목의 시세를 모으느라 몇 분 걸릴 수 있어요(진행률을 보여 드려요). 그다음부터는 바로예요.</p>
+          <p className="bte-note">처음 실행은 적재되지 않은 종목의 시세를 모으느라 몇 분 걸릴 수 있습니다(진행률을 보여 드립니다). 그다음부터는 바로입니다.</p>
         </Field>
       </Section>
 
@@ -178,14 +178,14 @@ export default function UniversePanel({ s, set, live = true }: {
       </Section>
 
       {/* 관심그룹 (watchlistStorage 연동) */}
-      <Section title="관심그룹" hint="묶어 둔 종목을 넣거나 빼요" tone="neutral" enabled>
+      <Section title="관심그룹" hint="묶어 둔 종목을 넣거나 뺍니다" tone="neutral" enabled>
         <div className="bte-row">
           <button type="button" ref={triggerRef} className="tx-btn tx-btn--sub bte-group-add" onClick={() => setGroupModalOpen(true)}>
             <Plus size={16} aria-hidden /> 그룹 추가
           </button>
         </div>
         {u.groups.length === 0 ? (
-          <p className="bte-note">관심그룹이 없어요. ‘그룹 추가’로 종목을 묶어 보세요.</p>
+          <p className="bte-note">관심그룹이 없습니다. ‘그룹 추가’로 종목을 묶어 보십시오.</p>
         ) : (
           <ul className="bte-groups">
             {u.groups.map((g, i) => (

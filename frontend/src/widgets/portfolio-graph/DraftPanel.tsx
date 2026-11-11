@@ -14,7 +14,7 @@ import { draftKey, draftSig, pickDraft, portfolioGraphApi, type AssistDraft, typ
 import type { Session } from "@/entities/session";
 import { STAGE_VAR } from "./GraphNode";
 
-const STALE = "캔버스가 바뀌어 초안을 지웠어요 — 다시 말해 주세요";
+const STALE = "캔버스가 바뀌어 초안을 지웠습니다 — 다시 말하십시오";
 const MAX = 300;
 /** 예시(규칙 글 — AI 글이 아니다). 누르면 칸에 채우기만 한다. */
 const EXAMPLES = ["삼성전자, SK하이닉스, NAVER로 3년 기준 비중을 짜 줘", "과거로 돌려 보기를 붙이고 거래비용은 0.3%로 해 줘",
@@ -48,7 +48,7 @@ export function useDraft(doc: GraphDoc, session: Session) {
     setSt({ state: "loading", sig: asked, sentence: words });
     const res = await portfolioGraphApi.assistDraft(now.doc, words);
     if (live.current.sig !== asked) { setSt({ state: "idle", note: STALE }); return; }
-    if (!res.available) { setSt({ state: "idle", note: `초안을 보여 줄 수 없어요: ${res.reason}` }); return; }
+    if (!res.available) { setSt({ state: "idle", note: `초안을 보여 줄 수 없습니다: ${res.reason}` }); return; }
     setOff(new Set());
     setSt({ state: "ready", sig: asked, sentence: words, res });
   }, []);
@@ -108,12 +108,12 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
 
   let composer = null;
   if (session.kind === "signed_out") {
-    composer = <Link href="/login" className="pg-say-login">로그인하면 말로 설계를 쓸 수 있어요</Link>;
+    composer = <Link href="/login" className="pg-say-login">로그인하면 말로 설계를 쓸 수 있습니다</Link>;
   } else if (session.kind === "signed_in") {
     composer = (
       <>
         {!text && st.state === "idle" && (
-          <div className="pg-say-examples" aria-label="이렇게 말해 보세요">
+          <div className="pg-say-examples" aria-label="이렇게 말해 보십시오">
             {EXAMPLES.map((x) => <button key={x} type="button" className="pg-say-ex" onClick={() => setText(x)}>{x}</button>)}
           </div>
         )}
@@ -209,10 +209,10 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
 
   return (
     <section className="pg-say" aria-label="말로 설계">
-      <p className="pg-say-intro">말로 지금 캔버스를 고쳐요 — 노드를 더하고, 잇고, 말한 값을 넣어요. 받아들일 때만 바뀌어요.</p>
+      <p className="pg-say-intro">말로 지금 캔버스를 고칩니다 — 노드를 더하고, 잇고, 말한 값을 넣습니다. 받아들일 때만 바뀝니다.</p>
       {composer}
       {st.state === "idle" && st.note && <p className="pg-say-note" role="status">{st.note}</p>}
-      {st.state === "loading" && <p className="pg-say-wait" role="status">초안을 만드는 중이에요</p>}
+      {st.state === "loading" && <p className="pg-say-wait" role="status">초안을 만드는 중입니다</p>}
       {result}
     </section>
   );

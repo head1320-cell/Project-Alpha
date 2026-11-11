@@ -3,13 +3,13 @@
 ## 무엇이 문제였나 (실측)
 
 `tests/test_factor_stack_respects_as_of.py` 6건과 `tests/test_factor_attribution_vintage.py` 1건이
-2026-12-01 부터 빨개진다. 코드가 바뀌어서가 아니라 달력이 넘어가서다 — 연습용 매크로 계열은 오늘 기준
+2026-12-01 부터 빨개진다. 코드가 바뀌어서가 아니라 달력이 넘어가서다 — 합성 매크로 계열은 오늘 기준
 최근 60개월인데 시험은 고정 날짜(`2024-06-30` · 2021-01~2023-12)를 썼다. 남는 달이 24 → 23 이 된다.
 
 이 파일은 그 시험들이 쓰는 날짜(`tests/factor_asof.py`)를 ★여러 "오늘"로 훑어★, 어느 날에 돌려도
 대리계열이 최소 관측 수(`MIN_MONTHS`)를 채우는지 본다. 고정 날짜로 되돌리면 여기서 빨개진다.
 
-수집기를 날마다 통째로 돌리면 한 번에 2초가 넘는다. 그래서 ★연습용 계열의 길이와 "어느 계열이 비는가"는
+수집기를 날마다 통째로 돌리면 한 번에 2초가 넘는다. 그래서 ★합성 계열의 길이와 "어느 계열이 비는가"는
 실제 수집 경로에서 한 번 읽고★(60 을 여기 박지 않는다) 날짜별 계열은 같은 생성기로 바로 만든다.
 """
 from __future__ import annotations
@@ -38,12 +38,12 @@ class _Series:
 
 @pytest.fixture(scope="module")
 def mock_shape() -> dict[str, int]:
-    """실제 수집 경로가 내는 연습용 계열의 모양 — {계열 이름: 관측 수}. 빈 계열은 빠진다."""
+    """실제 수집 경로가 내는 합성 계열의 모양 — {계열 이름: 관측 수}. 빈 계열은 빠진다."""
     snap = mc.MacroCollector().collect_all(use_cache=False)
     shape = {k: len(s.timestamps) for k, s in snap.series.items()
              if s.timestamps and getattr(s, "source", "") == "MOCK"}
     used = {n for cands in FACTOR_PROXIES.values() for n in cands}
-    assert used & set(shape), "팩터 대리계열이 연습용 자료에 하나도 없다 — 이 훑기는 공허하다"
+    assert used & set(shape), "팩터 대리계열이 합성 데이터에 하나도 없다 — 이 훑기는 공허하다"
     return shape
 
 
@@ -62,7 +62,7 @@ def _days():
 
 
 def _series_map_on(monkeypatch, day: date, shape: dict[str, int]) -> dict:
-    """수집기의 "오늘"이 `day` 일 때의 연습용 계열 묶음."""
+    """수집기의 "오늘"이 `day` 일 때의 합성 계열 묶음."""
     pinned = datetime(day.year, day.month, day.day, 9, 0, 0)
 
     class _Pinned(datetime):

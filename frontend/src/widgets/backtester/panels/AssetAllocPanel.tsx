@@ -49,9 +49,9 @@ export default function AssetAllocPanel({ s, set }: {
   };
 
   return (
-    <Section title="ETF로 나눠 담기" hint="ETF 바스켓을 주식 전략과 함께 · 정한 주기마다 다시 맞춰요(자산배분)" tone="neutral"
+    <Section title="ETF로 나눠 담기" hint="ETF 바스켓을 주식 전략과 함께 · 정한 주기마다 다시 맞춥니다(자산배분)" tone="neutral"
       enabled={a.enabled} onToggle={(on) => patch({ enabled: on })}>
-      <p className="bte-note">포트폴리오의 일정 비율을 ETF로 늘 들고 있어요. 남는 비율은 현금이에요.</p>
+      <p className="bte-note">포트폴리오의 일정 비율을 ETF로 늘 들고 있습니다. 남는 비율은 현금입니다.</p>
 
       <Field label="나누는 비율">
         <span className="bte-sm">ETF</span>
@@ -59,7 +59,7 @@ export default function AssetAllocPanel({ s, set }: {
         <span className="bte-sm">주식</span>
         <QuickStepper value={a.stockPct} onChange={(v) => patch({ stockPct: v })} chips={[30, 60]} unit="%" min={0} max={100} />
         <span className={`bte-note${a.etfPct + a.stockPct > 100 ? " bte-note--bad" : ""}`}>
-          현금 {cashPct}%{a.etfPct + a.stockPct > 100 ? " — 합이 100%를 넘어요" : ""}
+          현금 {cashPct}%{a.etfPct + a.stockPct > 100 ? " — 합이 100%를 넘습니다" : ""}
         </span>
       </Field>
 
@@ -85,11 +85,11 @@ export default function AssetAllocPanel({ s, set }: {
           <span role="columnheader">종목코드</span><span role="columnheader">종목명</span><span role="columnheader" className="num">비중</span><span />
         </div>
         {a.basket.length === 0 ? (
-          <p className="bte-note bte-basket-empty">담은 ETF가 없어요. 자산군을 고르거나 ‘자산군 추가’로 ETF를 담아요.</p>
+          <p className="bte-note bte-basket-empty">담은 ETF가 없습니다. 자산군을 고르거나 ‘자산군 추가’로 ETF를 담습니다.</p>
         ) : a.basket.map((l, i) => (
           <div key={l.ticker} className="bte-basket-row" role="row">
             <span className="scr-code" role="cell">{l.ticker}</span>
-            <span className="bte-basket-n" role="cell">{l.name || "몰라요"}</span>
+            <span className="bte-basket-n" role="cell">{l.name || "N/A"}</span>
             <span role="cell" className="num">
               <input type="number" value={l.weightPct} min={0} max={100} className="kit-num kit-num--sm" aria-label={`${l.name || l.ticker} 비중 %`}
                 onChange={(e) => setWeight(i, Number(e.target.value) || 0)} />
@@ -106,14 +106,14 @@ export default function AssetAllocPanel({ s, set }: {
           <button type="button" className="kit-chip" onClick={equalize}>똑같이 나누기</button>
         )}
         <span className={`bte-note${wsum !== 100 ? " bte-note--warn" : ""}`}>
-          비중 합 {wsum}%{wsum !== 100 ? " — 실행할 때 100%로 맞춰 계산해요" : ""}
+          비중 합 {wsum}%{wsum !== 100 ? " — 실행할 때 100%로 맞춰 계산합니다" : ""}
         </span>
       </div>
 
       <p className="bte-note bte-note--warn">
-        레버리지·인버스 ETF를 실제로 사려면 기본 예탁금과 사전 교육이 필요해요. 백테스트에는 상관없어요.
+        레버리지·인버스 ETF를 실제로 사려면 기본 예탁금과 사전 교육이 필요합니다. 백테스트에는 상관없습니다.
       </p>
-      <p className="bte-note">ETF 몫은 주식 전략과 따로 들고 있어요. 매수 기준가에 닿지 못한 몫은 다음 주기에 다시 시도해요(보수적).</p>
+      <p className="bte-note">ETF 몫은 주식 전략과 따로 들고 있습니다. 매수 기준가에 닿지 못한 몫은 다음 주기에 재시도합니다(보수적).</p>
 
       <WatchGroupModal open={modalOpen} etfOnly title="자산군 그룹 관리"
         onClose={() => { setModalOpen(false); // ★언마운트 뒤에 포커스를 준다★ 같은 틱에 주면 Radix 의 포커스 가드가 아직

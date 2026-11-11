@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 P = pg.Port
 _FORBID = ConfigDict(extra="forbid")
 
-_TODAY = "오늘 기준 값으로 골랐어요 — 이 종목들로 과거를 돌려 보면 미래를 보고 고른 셈이라 과거 검증은 막아요."
-_DEV = "개발 모드라 재무·시세 값이 합성일 수 있어요 — 실제 종목 선택을 말해 주지 않아요."
+_TODAY = "오늘 기준 값으로 골랐습니다 — 이 종목들로 과거를 돌려 보면 미래를 보고 고른 셈이라 과거 검증은 막습니다."
+_DEV = "개발 모드라 재무·시세 값이 합성일 수 있습니다 — 실제 종목 선택을 말해 주지 않습니다."
 
 
 def _plain_items(items: list[dict], keys: tuple[str, ...]) -> list[dict]:
@@ -66,15 +66,15 @@ def _presets_filter() -> list[dict]:
 class ScreenerParams(BaseModel):
     model_config = _FORBID
     universe: Literal[tuple(_UNIVERSE_LABEL)] = Field("kospi50", json_schema_extra={"x-ui": _ui(
-        "후보 범위", question="어디서 고를까요?", widget="cards", options=_UNIVERSE_LABEL,
-        help="앞에 ‘종목 고르기’를 이으면 그 종목들 안에서 골라요.")})
+        "후보 범위", question="종목 유니버스", widget="cards", options=_UNIVERSE_LABEL,
+        help="앞에 ‘종목 고르기’를 이으면 그 종목들 안에서 고릅니다.")})
     filter_ast: _sr.FilterGroupModel = Field(
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
-        json_schema_extra={"x-ui": _ui("조건", question="어떤 조건으로 거를까요?", widget="filter",
+        json_schema_extra={"x-ui": _ui("조건", question="스크리닝 조건", widget="filter",
                                        presets=_presets_filter(),
-                                       help="조건은 서버가 필드 목록으로 검사해요 — 모르는 필드는 계산하지 않아요.")})
+                                       help="조건은 서버가 필드 목록으로 검사합니다 — 모르는 필드는 계산하지 않습니다.")})
     top_n: int = Field(10, ge=3, le=30, json_schema_extra={"x-ui": _ui(
-        "넘길 종목 수", question="몇 종목을 넘길까요?", unit="개",
+        "넘길 종목 수", question="전달 종목 수", unit="개",
         presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
     sort_by: str = Field("composite_score", max_length=60, json_schema_extra={"x-ui": _ui(
         "정렬 기준", "advanced", help="필드 id 예: composite_score · roe · per")})
@@ -83,8 +83,8 @@ class ScreenerParams(BaseModel):
         "standard", json_schema_extra={"x-ui": _ui("유동성 문턱", "advanced", options={
             "off": "없음", "relaxed": "느슨하게", "standard": "보통", "institutional": "기관 수준"})})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
-        "과거 시점", "advanced", help="넣으면 그날 알 수 있던 값으로만 걸러요(시점 고정 스크리너). 비우면 지금 값이에요. "
-                                    "과거 시점 거르기는 유동성 문턱·정렬 방향을 쓰지 않아요.")})
+        "과거 시점", "advanced", help="넣으면 그날 알 수 있던 값으로만 거릅니다(시점 고정 스크리너). 비우면 지금 값입니다. "
+                                    "과거 시점 거르기는 유동성 문턱·정렬 방향을 쓰지 않습니다.")})
 
 
 def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
@@ -94,11 +94,11 @@ def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
             universe=p.universe, custom_tickers=list(cand["tickers"]) if cand else None, filter_ast=p.filter_ast,
             as_of_date=p.as_of, sort_by=p.sort_by, limit=max(p.top_n, 50)))
     except HTTPException as e:
-        raise pg.NodeFailure(f"과거 시점으로 거르지 못했어요 — {e.detail}") from e
+        raise pg.NodeFailure(f"과거 시점으로 거르지 못했습니다 — {e.detail}") from e
     picked = (out.get("items") or [])[: p.top_n]
     tickers = [it["stock_code"] for it in picked if it.get("stock_code")]
     if len(tickers) < 2:
-        raise pg.NodeFailure(f"{p.as_of}에 조건에 맞는 종목이 {len(tickers)}개뿐이에요 — 조건을 넓히거나 날짜를 바꿔 주세요.")
+        raise pg.NodeFailure(f"{p.as_of}에 조건에 맞는 종목이 {len(tickers)}개뿐입니다 — 조건을 넓히거나 날짜를 변경하십시오.")
     practice = mock_allowed()
     view = {"tickers": tickers, "labels": _ar._labels(tickers),
             "items": _plain_items(picked, ("stock_code", "corp_name", "composite_score", "per", "pbr", "roe",
@@ -122,12 +122,12 @@ def _screener(inputs: dict, p: ScreenerParams) -> pg.NodeOutput:
     try:
         out = _sr._run_advanced_core(req)
     except HTTPException as e:
-        raise pg.NodeFailure(f"조건을 확인해 주세요 — {e.detail}") from e
+        raise pg.NodeFailure(f"조건을 확인하십시오 — {e.detail}") from e
     items = out.get("items") or []
     picked = items[: p.top_n]
     tickers = [it["stock_code"] for it in picked if it.get("stock_code")]
     if len(tickers) < 2:
-        raise pg.NodeFailure(f"조건에 맞는 종목이 {len(tickers)}개뿐이에요 — 조건을 넓히거나 후보 범위를 키워 주세요.")
+        raise pg.NodeFailure(f"조건에 맞는 종목이 {len(tickers)}개뿐입니다 — 조건을 넓히거나 후보 범위를 키워 주십시오.")
     ds = out.get("data_source") or {}
     practice = not bool(ds.get("fully_real"))
     view = {"tickers": tickers, "labels": _ar._labels(tickers),
@@ -145,14 +145,14 @@ def _screener(inputs: dict, p: ScreenerParams) -> pg.NodeOutput:
 def _explain_screener(view: dict, prov: dict, params: Any) -> dict:
     n = len(view.get("tickers") or [])
     passed, evaluated = view.get("total_passed"), view.get("total_evaluated")
-    facts = [f"{view.get('universe')}에서 {evaluated}종목을 보고 {passed}종목이 조건을 통과했어요."]
+    facts = [f"{view.get('universe')}에서 {evaluated}종목을 보고 {passed}종목이 조건을 통과했습니다."]
     names = [view["labels"].get(c, c) for c in (view.get("tickers") or [])[:3]]
     if names:
         facts.append("앞쪽 종목: " + ", ".join(names) + ".")
-    trust = [_t(CONFIRMED, "조건은 서버의 필드 목록으로 검사했어요."), _t(UNKNOWN, _TODAY)]
+    trust = [_t(CONFIRMED, "조건은 서버의 필드 목록으로 검사했습니다."), _t(UNKNOWN, _TODAY)]
     if not (view.get("data_source") or {}).get("fully_real"):
-        trust.append(_t(UNKNOWN, "재무나 시세 중 하나 이상이 합성(mock) 데이터예요 — 실제 선택을 말해 주지 않아요."))
-    return {"title": f"조건에 맞는 종목 {n}개를 골랐어요",
+        trust.append(_t(UNKNOWN, "재무나 시세 중 하나 이상이 합성(mock) 데이터입니다 — 실제 선택을 말해 주지 않습니다."))
+    return {"title": f"조건에 맞는 종목 {n}개를 골랐습니다",
             "headline": {"label": "넘긴 종목", "value": n, "unit": "개", "text": f"{n}개"},
             "facts": facts, "trust": trust,
             "unmeasured": ["이 조건이 과거에도 좋은 종목을 골랐는지", "고른 뒤의 성과"]}
@@ -167,7 +167,7 @@ def _factor_options() -> dict[str, str]:
 
 FactorItem = _subset("FactorItem", _ar.FactorSpec, ("id", "weight", "direction"), ui={
     "id": _ui("팩터", options=_factor_options()),
-    "weight": _ui("가중치", help="상대 비중이에요(합이 1일 필요 없어요)."),
+    "weight": _ui("가중치", help="상대 비중입니다(합이 1일 필요 없습니다)."),
     "direction": _ui("방향", options={"0": "자동", "1": "높을수록 좋음", "-1": "낮을수록 좋음"}),
 })
 
@@ -176,10 +176,10 @@ class FactorScoreParams(BaseModel):
     model_config = _FORBID
     factors: list[FactorItem] = Field(
         default_factory=lambda: [FactorItem(id="per"), FactorItem(id="roe")], min_length=1, max_length=12,
-        json_schema_extra={"x-ui": _ui("팩터", question="어떤 성격에 점수를 줄까요?",
-                                       help="방향 ‘자동’은 필드가 알고 있는 좋은 방향을 따라요.")})
+        json_schema_extra={"x-ui": _ui("팩터", question="점수 산출 팩터",
+                                       help="방향 ‘자동’은 필드가 알고 있는 좋은 방향을 따릅니다.")})
     sample_size: int = Field(400, ge=50, le=1500, json_schema_extra={"x-ui": _ui(
-        "표본 크기", "advanced", help="앞에 종목을 잇지 않으면 유니버스 표본에서 점수를 매겨요.")})
+        "표본 크기", "advanced", help="앞에 종목을 잇지 않으면 유니버스 표본에서 점수를 매깁니다.")})
 
 
 def _factor_scores(inputs: dict, p: FactorScoreParams) -> pg.NodeOutput:
@@ -189,7 +189,7 @@ def _factor_scores(inputs: dict, p: FactorScoreParams) -> pg.NodeOutput:
     specs = [_ar.FactorSpec(**f.model_dump()) for f in p.factors]
     ranked, meta, cov_w = _ar.factor_scores(rows, specs)
     if len(ranked) < 2:
-        raise pg.NodeFailure("고른 팩터로 점수를 매길 수 있는 종목이 부족해요(팩터 값 결측) — 팩터나 후보를 바꿔 주세요.")
+        raise pg.NodeFailure("고른 팩터로 점수를 매길 수 있는 종목이 부족합니다(팩터 값 결측) — 팩터나 후보를 변경하십시오.")
     scores = {c: round(s, 3) for c, s in ranked}
     view = {"scores": scores, "labels": _ar._labels([c for c, _ in ranked[:30]]), "factors": meta,
             "coverage": {c: round(cov_w.get(c, 0.0) * 100, 0) for c, _ in ranked[:30]},
@@ -203,18 +203,18 @@ def _explain_factor_scores(view: dict, prov: dict, params: Any) -> dict:
     top = next(iter(scores), None)
     meta = view.get("factors") or []
     miss = [m["label"] for m in meta if not m.get("covered")]
-    facts = [f"후보 {view.get('candidates')}종목 중 {len(scores)}종목에 점수를 매겼어요."]
+    facts = [f"후보 {view.get('candidates')}종목 중 {len(scores)}종목에 점수를 매겼습니다."]
     if top:
-        facts.append(f"1위는 {view['labels'].get(top, top)}예요.")
-    trust = [_t(CONFIRMED, "팩터마다 표준점수를 방향에 맞춰 더했어요(±3으로 자름).")]
+        facts.append(f"1위는 {view['labels'].get(top, top)}입니다.")
+    trust = [_t(CONFIRMED, "팩터마다 표준점수를 방향에 맞춰 더했습니다(±3으로 자름).")]
     if miss:
-        trust.append(_t(UNKNOWN, f"값이 모자란 팩터는 점수에 넣지 않았어요: {', '.join(miss)}."))
+        trust.append(_t(UNKNOWN, f"값이 모자란 팩터는 점수에 넣지 않았습니다: {', '.join(miss)}."))
     if view.get("source") == "sample":
-        trust.append(_t(ASSUMED, "유니버스 표본에서 골랐어요 — 표본 순서가 고정돼 있지 않아 다시 하면 후보가 달라질 수 있어요."))
+        trust.append(_t(ASSUMED, "유니버스 표본에서 골랐습니다 — 표본 순서가 고정돼 있지 않아 다시 하면 후보가 달라질 수 있습니다."))
     trust.append(_t(UNKNOWN, _TODAY))
     if mock_allowed():
         trust.append(_t(UNKNOWN, _DEV))
-    return {"title": f"{len(scores)}종목에 팩터 점수를 매겼어요", "facts": facts, "trust": trust,
+    return {"title": f"{len(scores)}종목에 팩터 점수를 매겼습니다", "facts": facts, "trust": trust,
             "unmeasured": ["이 점수가 앞으로의 수익을 예측하는지", "팩터끼리 겹치는 정도"]}
 
 
@@ -223,17 +223,17 @@ def _explain_factor_scores(view: dict, prov: dict, params: Any) -> dict:
 class AlphaParams(BaseModel):
     model_config = _FORBID
     expr: str = Field("zscore(mom_6m) - zscore(vol_60d)", min_length=1, max_length=400, json_schema_extra={
-        "x-ui": _ui("알파 식", question="어떤 식으로 점수를 낼까요?", presets=[
+        "x-ui": _ui("알파 식", question="점수 산출 식", presets=[
             {"label": "추세 − 변동성", "value": "zscore(mom_6m) - zscore(vol_60d)"},
             {"label": "12-1 모멘텀", "value": "zscore(mom_12_1)"},
             {"label": "싸고 잘 버는", "value": "zscore(earnings_yield) + zscore(roe)"},
             {"label": "단기 반전", "value": "zscore(reversal_5d)"}],
-            help="알파 실험실과 같은 식이에요. 필드: mom_6m · vol_60d · roe · earnings_yield …")})
+            help="알파 실험실과 같은 식입니다. 필드: mom_6m · vol_60d · roe · earnings_yield …")})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
-        "기준일", "advanced", help="비우면 오늘이에요. 과거 날짜를 넣으면 그날까지의 값으로 계산해요.")})
+        "기준일", "advanced", help="비우면 오늘입니다. 과거 날짜를 넣으면 그날까지의 값으로 계산합니다.")})
     alpha_id: str | None = Field(None, max_length=40, json_schema_extra={"x-ui": _ui(
-        "등록된 알파", question="등록한 알파를 쓸까요?", widget="pick", source="alphas",
-        help="고르면 그 알파의 식을 써요(위 식 칸보다 먼저예요). 알파 서랍에서 등록해요.")})
+        "등록된 알파", question="등록 알파 사용", widget="pick", source="alphas",
+        help="고르면 그 알파의 식을 씁니다(위 식 칸보다 먼저입니다). 알파 서랍에서 등록합니다.")})
 
 
 def registry_expr(alpha_id: str) -> tuple[str, dict]:
@@ -241,7 +241,7 @@ def registry_expr(alpha_id: str) -> tuple[str, dict]:
     from src.data.alpha_registry import get_alpha
     row = get_alpha(alpha_id)
     if not row or not row.get("expr"):
-        raise pg.NodeFailure(f"등록된 알파 {alpha_id} 을(를) 찾지 못했어요 — 알파 서랍에서 확인하거나 비워 두세요.")
+        raise pg.NodeFailure(f"등록된 알파 {alpha_id} 을(를) 찾지 못했습니다 — 알파 서랍에서 확인하거나 비워 두십시오.")
     return str(row["expr"]), {"alpha_id": alpha_id, "name": row.get("name"), "version": row.get("version")}
 
 
@@ -251,7 +251,7 @@ def _alpha_score(inputs: dict, p: AlphaParams) -> pg.NodeOutput:
     expr, source = (registry_expr(p.alpha_id) if p.alpha_id else (p.expr, None))
     out = alpha_lab.score_alpha(expr, tickers, as_of=p.as_of)
     if not out.get("available"):
-        raise pg.NodeFailure(f"알파 점수를 내지 못했어요 — {out.get('reason')}")
+        raise pg.NodeFailure(f"알파 점수 산출 실패 — {out.get('reason')}")
     ranked = sorted(out["scores"].items(), key=lambda kv: kv[1], reverse=True)
     scores = {c: round(float(s), 4) for c, s in ranked}
     view = {"scores": scores, "labels": _ar._labels([c for c, _ in ranked[:30]]), "expr": out["expr"],
@@ -265,18 +265,18 @@ def _alpha_score(inputs: dict, p: AlphaParams) -> pg.NodeOutput:
 
 def _explain_alpha(view: dict, prov: dict, params: Any) -> dict:
     n = len(view.get("scores") or {})
-    trust = [_t(CONFIRMED, f"{view.get('as_of_effective')}까지의 값으로 계산했어요.")]
+    trust = [_t(CONFIRMED, f"{view.get('as_of_effective')}까지의 값으로 계산했습니다.")]
     if getattr(params, "as_of", None):
-        trust.append(_t(UNKNOWN, "재무 값은 공시 지연을 둔 근사라 그날 실제로 알 수 있었는지는 확인하지 않았어요."))
+        trust.append(_t(UNKNOWN, "재무 값은 공시 지연을 둔 근사라 그날 실제로 알 수 있었는지는 확인하지 않았습니다."))
     else:
         trust.append(_t(UNKNOWN, _TODAY))
     if mock_allowed():
         trust.append(_t(UNKNOWN, _DEV))
     src = view.get("expr_source")
-    return {"title": f"{n}종목에 알파 점수를 매겼어요",
+    return {"title": f"{n}종목에 알파 점수를 매겼습니다",
             "facts": [f"식: {view.get('expr')}",
-                      *([f"등록된 알파 ‘{src.get('name')}’ v{src.get('version')}의 식이에요."] if src else []), f"{view.get('n_universe')}종목 중 {view.get('coverage')}종목이 유한한 점수를 가졌어요."],
-            "trust": trust, "unmeasured": ["이 알파의 예측력(IC) — 알파 실험실에서 따로 재요", "거래 비용"]}
+                      *([f"등록된 알파 ‘{src.get('name')}’ v{src.get('version')}의 식입니다."] if src else []), f"{view.get('n_universe')}종목 중 {view.get('coverage')}종목이 유한한 점수를 가졌습니다."],
+            "trust": trust, "unmeasured": ["이 알파의 예측력(IC) — 알파 실험실에서 따로 측정합니다", "거래 비용"]}
 
 
 # ── 점수로 비중 ──────────────────────────────────────────────────────────────
@@ -289,11 +289,11 @@ _RETURN_BASED = {"inverse_vol", "risk_parity", "min_var", "hrp"}
 class ScoresToWeightsParams(BaseModel):
     model_config = _FORBID
     top_k: int = Field(10, ge=2, le=30, json_schema_extra={"x-ui": _ui(
-        "담을 종목 수", question="상위 몇 종목을 담을까요?", unit="개",
+        "담을 종목 수", question="편입 종목 수(상위)", unit="개",
         presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
     weighting: Literal[tuple(_WEIGHTING)] = Field("equal", json_schema_extra={"x-ui": _ui(
-        "나누는 방식", question="어떻게 나눌까요?", widget="cards", options=_WEIGHTING,
-        help="흔들림을 쓰는 방식은 ‘수익률 불러오기’를 이어야 해요.")})
+        "나누는 방식", question="비중 배분 방식", widget="cards", options=_WEIGHTING,
+        help="흔들림을 쓰는 방식은 ‘수익률 불러오기’를 이어야 합니다.")})
 
 
 def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
@@ -306,16 +306,16 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
     observed: dict = {}                        # CF3 — 관측만(공분산을 왜 못 보냈나 · 비중 0 이라 뺀 종목)
     if p.weighting in _RETURN_BASED:
         if r is None:
-            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’은 흔들림을 써요 — ‘수익률 불러오기’를 이어 주세요 "
-                                 "(균등 비중으로 몰래 바꾸지 않아요).")
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’은 흔들림을 씁니다 — ‘수익률 불러오기’를 연결하십시오 "
+                                 "(균등 비중으로 몰래 바꾸지 않습니다).")
         missing = [c for c in codes if c not in r["returns"].columns]
         if missing:
-            raise pg.NodeFailure(f"수익률에 없는 종목이 있어요: {', '.join(missing)} — 같은 종목의 수익률을 이어 주세요.")
+            raise pg.NodeFailure(f"수익률에 없는 종목이 있습니다: {', '.join(missing)} — 같은 종목의 수익률을 연결하십시오.")
         R = r["returns"][codes].values
         S = _cov(R) * 252.0
         w = _inverse_vol_w(R) if p.weighting == "inverse_vol" else _raw_weights_for_model(p.weighting, R, None, S)
         if w is None or not np.all(np.isfinite(w)):
-            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 계산이 풀리지 않았어요 — 역변동성으로 몰래 바꾸지 않아요.")
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 계산이 풀리지 않았습니다 — 역변동성으로 몰래 바꾸지 않습니다.")
         w = np.asarray(w, dtype=float)
         sigma = S
     else:
@@ -342,18 +342,18 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
 def _explain_scores_to_weights(view: dict, prov: dict, params: Any) -> dict:
     w = view.get("weights") or {}
     top = max(w, key=lambda k: w[k]) if w else None
-    trust = [_t(CONFIRMED, f"점수 상위 {len(w)}종목을 ‘{_WEIGHTING.get(view.get('weighting'), view.get('weighting'))}’ 방식으로 나눴어요.")]
+    trust = [_t(CONFIRMED, f"점수 상위 {len(w)}종목을 ‘{_WEIGHTING.get(view.get('weighting'), view.get('weighting'))}’ 방식으로 나눴습니다.")]
     if not view.get("has_sigma"):
         miss = view.get("sigma_missing") or {}
         if miss.get("reason") == "codes_missing":
-            trust.append(_t(UNKNOWN, "이은 수익률에 없는 종목이 있어 공분산을 함께 보내지 못해요("
-                                     + ", ".join(miss.get("codes") or []) + ") — ‘흔들림 나눠 보기’는 이 비중을 계산하지 못해요."))
+            trust.append(_t(UNKNOWN, "이은 수익률에 없는 종목이 있어 공분산을 함께 보내지 못합니다("
+                                     + ", ".join(miss.get("codes") or []) + ") — ‘흔들림 나눠 보기’는 이 비중을 계산하지 못합니다."))
         else:
-            trust.append(_t(UNKNOWN, "공분산이 없어 ‘흔들림 나눠 보기’는 이 비중을 계산하지 못해요 — 수익률을 이어 주세요."))
-    return {"title": f"점수로 {len(w)}종목의 비중을 정했어요",
+            trust.append(_t(UNKNOWN, "공분산이 없어 ‘흔들림 나눠 보기’는 이 비중을 계산하지 못합니다 — 수익률을 연결하십시오."))
+    return {"title": f"점수로 {len(w)}종목의 비중을 정했습니다",
             "headline": ({"label": f"가장 큰 비중 · {view['labels'].get(top, top)}", "value": w[top], "unit": "%",
                           "text": _pct(w[top])} if top else None),
-            "trust": trust, "unmeasured": ["이 비중의 과거 성과(규칙이 아니라 한 시점의 비중이라 정책 백테스트가 없어요)"]}
+            "trust": trust, "unmeasured": ["이 비중의 과거 성과(규칙이 아니라 한 시점의 비중이라 정책 백테스트가 없습니다)"]}
 
 
 # ── 중립화 ───────────────────────────────────────────────────────────────────
@@ -361,7 +361,7 @@ def _explain_scores_to_weights(view: dict, prov: dict, params: Any) -> dict:
 class NeutralizeParams(BaseModel):
     model_config = _FORBID
     mode: Literal["beta", "sector", "both"] = Field("beta", json_schema_extra={"x-ui": _ui(
-        "무엇을 없앨까요", question="무엇에 대한 치우침을 없앨까요?", widget="cards",
+        "중립화 대상", question="중립화할 노출", widget="cards",
         options={"beta": "시장 민감도(베타)", "sector": "업종 쏠림", "both": "둘 다"})})
     target_beta: float = Field(0.0, ge=-2.0, le=2.0, json_schema_extra={"x-ui": _ui("목표 베타", "advanced")})
     dollar_neutral: bool = Field(False, json_schema_extra={"x-ui": _ui("롱·숏 금액 맞추기", "advanced")})
@@ -374,7 +374,7 @@ def _neutralize(inputs: dict, p: NeutralizeParams) -> pg.NodeOutput:
     out = neutralize_portfolio(pct, mode=p.mode, target_beta=p.target_beta, dollar_neutral=p.dollar_neutral)
     errs = [str(out[k].get("message")) for k in ("beta", "sector") if isinstance(out.get(k), dict) and out[k].get("error")]
     if errs:
-        raise pg.NodeFailure("중립화를 하지 못했어요 — " + " / ".join(errs))
+        raise pg.NodeFailure("중립화를 하지 못했습니다 — " + " / ".join(errs))
     after = out["weights"]
     names = list(after)
     arr = np.array([after[n] / 100.0 for n in names], dtype=float)
@@ -392,10 +392,10 @@ def _explain_neutralize(view: dict, prov: dict, params: Any) -> dict:
         facts.append(f"베타 {b.get('beta_before', b.get('portfolio_beta_before'))} → {b.get('beta_after', b.get('portfolio_beta_after'))}")
     shorts = [k for k, v in (view.get("after") or {}).items() if v < 0]
     if shorts:
-        facts.append(f"숏 포지션이 생긴 종목 {len(shorts)}개가 있어요.")
-    return {"title": "치우침을 없앤 비중을 만들었어요", "facts": facts,
-            "trust": [_t(ASSUMED, "과거 베타·업종 분류로 맞췄어요 — 앞으로도 그 베타일지는 몰라요."),
-                      _t(UNKNOWN, "중립화한 비중은 최적화 제약이 아니라 사후 변환이라 실행 목표로는 쓸 수 없어요.")],
+        facts.append(f"숏 포지션이 생긴 종목 {len(shorts)}개가 있습니다.")
+    return {"title": "치우침을 없앤 비중을 만들었습니다", "facts": facts,
+            "trust": [_t(ASSUMED, "과거 베타·업종 분류로 맞췄습니다 — 앞으로도 그 베타일지는 미상입니다."),
+                      _t(UNKNOWN, "중립화한 비중은 최적화 제약이 아니라 사후 변환이라 실행 목표로는 쓸 수 없습니다.")],
             "unmeasured": ["중립화 뒤의 기대 수익", "숏 비용"]}
 
 
@@ -408,7 +408,7 @@ _SLEEVE_METHODS = {"risk_parity": "위험 똑같이", "equal": "똑같이", "inv
 class SleeveParams(BaseModel):
     model_config = _FORBID
     method: Literal[tuple(_SLEEVE_METHODS)] = Field("risk_parity", json_schema_extra={"x-ui": _ui(
-        "합치는 방식", question="묶음끼리 어떻게 나눌까요?", widget="cards", options=_SLEEVE_METHODS)})
+        "합치는 방식", question="슬리브 간 배분 방식", widget="cards", options=_SLEEVE_METHODS)})
 
 
 def _sleeve_combine(inputs: dict, p: SleeveParams) -> pg.NodeOutput:
@@ -435,11 +435,11 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     alloc = r.get("sleeve_allocation") or {}
     facts = [f"{k}: {_pct(float(v))}" for k, v in alloc.items()]
-    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 묶음의 수익 흐름으로 묶음 비중을 정하고 종목 비중을 합쳤어요.")]
+    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 묶음의 수익 흐름으로 묶음 비중을 정하고 종목 비중을 합쳤습니다.")]
     if r.get("method") in ("min_var", "hrp"):
-        trust.append(_t(UNKNOWN, "이 방식은 계산이 안 풀리면 엔진이 역변동성으로 바꿔요 — 이 결과가 그 경우인지는 표시되지 않아요."))
-    trust.append(_t(ASSUMED, "묶음 수익은 각 묶음의 지금 비중을 과거에 고정해 만든 흐름이에요."))
-    return {"title": f"{r.get('n_sleeves')}개 묶음을 {r.get('n_stocks')}종목 비중으로 합쳤어요", "facts": facts,
+        trust.append(_t(UNKNOWN, "이 방식은 계산이 안 풀리면 엔진이 역변동성으로 바꿉니다 — 이 결과가 그 경우인지는 표시되지 않습니다."))
+    trust.append(_t(ASSUMED, "묶음 수익은 각 묶음의 지금 비중을 과거에 고정해 만든 흐름입니다."))
+    return {"title": f"{r.get('n_sleeves')}개 묶음을 {r.get('n_stocks')}종목 비중으로 합쳤습니다", "facts": facts,
             "trust": trust, "unmeasured": ["묶음 사이 상관이 앞으로 유지될지"]}
 
 
@@ -448,33 +448,33 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("screener", "스크리너", stage="signal", plain_label="조건으로 종목 거르기",
-                    plain_description="재무·시세 조건으로 후보를 걸러 종목 목록을 만들어요.",
+                    plain_description="재무·시세 조건으로 후보를 걸러 종목 목록을 만듭니다.",
                     inputs=(P("universe", "Universe", required=False),), outputs=(P("universe", "Universe"),),
                     run=_screener, params_model=ScreenerParams, explain=_explain_screener, category="신호",
                     description="유동성 게이트 → 필터 → 정렬(/screener/run-advanced 와 같다)."),
         pg.NodeSpec("factor_scores", "팩터 점수", stage="signal", plain_label="팩터로 점수 매기기",
-                    plain_description="가치·수익성 같은 성격에 점수를 매겨요.",
+                    plain_description="가치·수익성 같은 성격에 점수를 매깁니다.",
                     inputs=(P("universe", "Universe", required=False),), outputs=(P("scores", "Scores"),),
                     run=_factor_scores, params_model=FactorScoreParams, explain=_explain_factor_scores, category="신호",
                     description="방향 인지 z-score 가중합(/factor-portfolio 의 점수와 같다)."),
         pg.NodeSpec("alpha_score", "알파 점수", stage="signal", plain_label="알파 식으로 점수 매기기",
-                    plain_description="알파 실험실의 식으로 오늘(또는 기준일)의 점수를 내요.",
+                    plain_description="알파 실험실의 식으로 오늘(또는 기준일)의 점수를 냅니다.",
                     inputs=(P("universe", "Universe"),), outputs=(P("scores", "Scores"),),
                     run=_alpha_score, params_model=AlphaParams, explain=_explain_alpha, category="신호",
                     description="score_alpha — 라이브 크로스섹션 점수."),
         pg.NodeSpec("scores_to_weights", "점수 → 비중", stage="build", plain_label="점수로 비중 정하기",
-                    plain_description="점수 상위 종목을 골라 비중을 나눠요.",
+                    plain_description="점수 상위 종목을 골라 비중을 나눕니다.",
                     inputs=(P("scores", "Scores"), P("returns", "Returns", required=False)),
                     outputs=(P("weights", "Weights"),), run=_scores_to_weights, params_model=ScoresToWeightsParams,
                     explain=_explain_scores_to_weights, category="배분",
                     description="상위 K → 균등·틸트·역변동성·위험균등·최소분산·HRP(폴백 없음)."),
         pg.NodeSpec("neutralize", "중립화", stage="build", plain_label="치우침 없애기",
-                    plain_description="시장 민감도나 업종 쏠림을 없앤 비중을 만들어요.",
+                    plain_description="시장 민감도나 업종 쏠림을 없앤 비중을 만듭니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("weights", "Weights"),),
                     run=_neutralize, params_model=NeutralizeParams, explain=_explain_neutralize, category="배분",
                     description="베타·섹터 중립화(/neutralize 와 같다). 결과는 연구용 — 실행 목표가 아니다."),
         pg.NodeSpec("sleeve_combine", "슬리브 결합", stage="build", plain_label="묶음 합치기",
-                    plain_description="비중 묶음 2~3개를 위험 기준으로 하나로 합쳐요.",
+                    plain_description="비중 묶음 2~3개를 위험 기준으로 하나로 합칩니다.",
                     inputs=(P("a", "Weights"), P("b", "Weights"), P("c", "Weights", required=False)),
                     outputs=(P("weights", "Weights"),), run=_sleeve_combine, params_model=SleeveParams,
                     explain=_explain_sleeves, category="배분",

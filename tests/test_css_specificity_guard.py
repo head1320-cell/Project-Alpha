@@ -182,7 +182,7 @@ def test_the_known_collision_baseline_does_not_silently_grow_stale():
     found = _scan()
     gone = sorted(KNOWN_COLLISIONS - set(found))
     assert not gone, (
-        "이미 해결된 충돌이 기준선에 남아 있습니다 — KNOWN_COLLISIONS 에서 지우세요:\n  "
+        "이미 해결된 충돌이 기준선에 남아 있습니다 — KNOWN_COLLISIONS 에서 지우십시오:\n  "
         + "\n  ".join(gone))
 
 
@@ -196,4 +196,4 @@ def test_globals_css_layer_split_is_recorded_honestly():
     css = GLOBALS_CSS.read_text()
     assert "@layer utilities {" in css, "레이어 블록이 사라졌습니다 — 감사 기록과 어긋납니다"
     # 최상위(레이어 밖) 클래스 규칙이 여전히 다수라는 사실 자체가 이 가드의 존재 이유다.
-    assert len(_legacy_rules()) > 500, "최상위 레거시 규칙이 급감했습니다 — 기록을 갱신하세요"
+    assert len(_legacy_rules()) > 500, "최상위 레거시 규칙이 급감했습니다 — 기록을 갱신하십시오"

@@ -157,7 +157,7 @@ def get_current_price(
     최신 종가를 DB에서 조회 (현재가 근사값).
 
     실시간이 아니라 마지막 저장된 일봉 종가를 반환합니다.
-    실시간이 필요하면 KISClient.get_current_price()를 직접 사용하세요.
+    실시간이 필요하면 KISClient.get_current_price()를 직접 사용하십시오.
 
     Returns:
         dict: price, high, low, volume, change_rate, w52_high, w52_low

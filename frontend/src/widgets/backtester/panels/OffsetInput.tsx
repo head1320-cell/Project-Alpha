@@ -23,7 +23,7 @@ export default function OffsetInput({ value, onChange }: {
         </span>
       </div>
       {value !== 0 && (
-        <p className="bte-note">기준가 × (1 {value > 0 ? "+" : "−"} {Math.abs(value)}%)를 지정가로 주문해요. 그날 닿지 않으면 체결되지 않아요.</p>
+        <p className="bte-note">기준가 × (1 {value > 0 ? "+" : "−"} {Math.abs(value)}%)를 지정가로 주문합니다. 그날 닿지 않으면 체결되지 않습니다.</p>
       )}
     </div>
   );

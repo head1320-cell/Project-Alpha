@@ -56,8 +56,8 @@ export function ViewsStudio() {
     <div className="ms-studio tx-page tx-page--wide tpage-fade">
       <StudioHead id="agentic-mcp" d={d} answer={res?.available ? studioAnswer("agentic-mcp", res.outputs) : null} />
 
-      {listQ.isLoading && <LoadingState label="스튜디오 정보를 불러오는 중이에요" />}
-      {listQ.isError && <StudioFail title="스튜디오 정보를 불러오지 못했어요" onRetry={() => void listQ.refetch()} />}
+      {listQ.isLoading && <LoadingState label="스튜디오 정보 조회 중" />}
+      {listQ.isError && <StudioFail title="스튜디오 정보 조회 실패" onRetry={() => void listQ.refetch()} />}
       {d && <FrontierCard d={d} />}
 
       <section className="ms-card ms-card-sub">
@@ -66,7 +66,7 @@ export function ViewsStudio() {
 
         <form className="ms-views" onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
           <label className="ms-vf">
-            자산 코드(쉼표로 나눠요)
+            자산 코드(쉼표로 나눕니다)
             <input className="ms-vi ms-vi-w" data-mono value={assetsText}
                    onChange={(e) => setAssetsText(e.target.value)} />
           </label>
@@ -103,19 +103,19 @@ export function ViewsStudio() {
               <Plus size={16} aria-hidden /> 뷰 더하기
             </button>
             <button type="submit" className="ms-vbtn ms-vbtn-run" disabled={m.isPending || !assets.length}>
-              {m.isPending ? "제약으로 바꾸는 중이에요" : "제약으로 바꾸기"}
+              {m.isPending ? "제약으로 바꾸는 중입니다" : "제약으로 바꾸기"}
             </button>
           </div>
         </form>
 
-        {m.isError && <StudioFail title="뷰를 제약으로 바꾸지 못했어요" onRetry={() => m.mutate()} />}
+        {m.isError && <StudioFail title="뷰를 제약으로 바꾸지 못했습니다" onRetry={() => m.mutate()} />}
         {res && !m.isError && <StudioOutcome res={res} id="agentic-mcp" />}
         {res?.available && !m.isError && res.outputs.feasible === null && (
           // 서버의 note 가 이미 같은 말을 하지만, 이 한 줄은 **검사 결과 자리**에 놓인다 —
           // 빈 자리를 남기면 "검사했고 문제없음" 으로 읽힌다.
           <UnavailableState
-            label="실현가능성: 검사하지 않았어요"
-            reason="시나리오를 주지 않았어요. 모순이 없다는 뜻이 아니라, 확인하지 않았다는 뜻이에요." />
+            label="실현가능성: 검사하지 않았습니다"
+            reason="시나리오를 주지 않았습니다. 모순이 없다는 뜻이 아니라, 확인하지 않았다는 뜻입니다." />
         )}
       </section>
     </div>

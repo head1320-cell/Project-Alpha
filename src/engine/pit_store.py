@@ -339,9 +339,9 @@ class PITStore:
     def get_price_asof(self, stock_code: str, as_of_date: str, current_price: float) -> float:
         """as_of_date 시점 종가.
 
-        ★연습용(mock)에서는 그 날의 mock 종가다(원 단위)★(`ohlcv_loader.mock_price_asof` —
-        시세 이력·지금 주가와 같은 걸음). 예전 식은 넘겨받은 지금 주가에 분기 수와
-        난수를 곱한 값이라 과거 종가가 아니었고, as_of = 오늘이어도 지금 주가와 달랐다.
+        ★합성(mock)에서는 그 날의 mock 종가다(원 단위)★(`ohlcv_loader.mock_price_asof` —
+        시세 이력·현재가와 같은 걸음). 예전 식은 넘겨받은 현재가에 분기 수와
+        난수를 곱한 값이라 과거 종가가 아니었고, as_of = 오늘이어도 현재가와 달랐다.
 
         운영(`KIS_USE_MOCK≠1`)과 mock 봉이 없는 날짜(기점 2000-01-03 이전)는 예전 식
         그대로다 — 운영 동작은 이 변경의 범위가 아니다.

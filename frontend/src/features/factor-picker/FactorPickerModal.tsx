@@ -132,8 +132,8 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
     backtestBridgeApi.conditionTokens()
       .then((s) => { _supportCache = s; setSupport(s); setCatalogError(null); })
       .catch(() => setCatalogError(
-        "팩터 목록을 백엔드에서 받지 못해 매크로 그룹은 기본값을 보이는 중이에요 — "
-        + "최신 목록이 아닐 수 있어요."));
+        "팩터 목록을 백엔드에서 받지 못해 매크로 그룹은 기본값을 보이는 중입니다 — "
+        + "최신 목록이 아닐 수 있습니다."));
   }, [open, support]);
 
   // ★목록의 근거는 백엔드다★ 못 받으면 폴백이되, 위 catalogError 가 화면에 뜬다.
@@ -252,9 +252,9 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       open={open}
       onClose={onClose}
       title="팩터 선택"
-      subtitle="팩터를 고르고 함수를 씌워 조건식 한 항을 만들어요"
+      subtitle="팩터를 고르고 함수를 씌워 조건식 한 항을 만듭니다"
       ariaLabel="팩터 선택"
-      searchPlaceholder="조건을 단어로 입력하세요"
+      searchPlaceholder="조건을 단어로 입력하십시오"
       families={families}
       family={family}
       onFamilyChange={setFamily}
@@ -267,7 +267,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       applyDisabled={applyDisabled}
       error={catalogError != null}
       errorText={catalogError ?? undefined}
-      note="쓸 수 있는지는 서버의 조건 토큰 목록이 정해요 — 미가용 팩터는 계산에서 빠지므로 넣을 수 없어요."
+      note="쓸 수 있는지는 서버의 조건 토큰 목록이 정합니다 — 미가용 팩터는 계산에서 빠지므로 넣을 수 없습니다."
       // 매수·매도 문맥 색 — 셸이 `data-tone` 으로 얹고 CSS 가 `--tx-*` 에서 고른다(BU3c).
       tone={tone}
     >
@@ -288,7 +288,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
           {selInfo && !selInfo.ok && (support?.substitutes?.[factor.name]?.length ?? 0) > 0 && (
             <div className="fp-subs">
               <div className="fp-plabel">
-                대신 쓸 수 있는 팩터 — 누르면 골라져요
+                대신 쓸 수 있는 팩터 — 누르면 골라집니다
               </div>
               <div className="fp-chips">
                 {support!.substitutes![factor.name].map((n) => {

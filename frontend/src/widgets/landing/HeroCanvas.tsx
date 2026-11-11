@@ -55,8 +55,8 @@ const WIRES = HERO_WIRES.map(([from, to, t]) => {
 });
 
 const SUMMARY =
-  "포트폴리오 설계 스튜디오의 기본 흐름을 줄여 그린 그림이에요. 종목 고르기와 내 생각 넣기에서 시작해 수익률 불러오기와 비중 계산을 거쳐 " +
-  "흔들림 나눠 보기, 상황에 넣어 보기, 과거로 돌려 보기로 값이 흘러요. 계산하면 데이터부터 모의·실계좌까지 관문 여덟 곳을 차례로 확인해요.";
+  "포트폴리오 설계 스튜디오의 기본 흐름을 줄여 그린 그림입니다. 종목 고르기와 내 생각 넣기에서 시작해 수익률 불러오기와 비중 계산을 거쳐 " +
+  "흔들림 나눠 보기, 상황에 넣어 보기, 과거로 돌려 보기로 값이 흐릅니다. 계산하면 데이터부터 모의·실계좌까지 관문 여덟 곳을 차례로 확인합니다.";
 
 export function HeroCanvas() {
   return (
@@ -99,7 +99,7 @@ export function HeroCanvas() {
           </div>
         </div>
       </div>
-      <figcaption className="ld-cv-cap">스튜디오의 기본 흐름을 줄여 그렸어요. 노드 이름과 관문은 스튜디오에 있는 그대로예요.</figcaption>
+      <figcaption className="ld-cv-cap">스튜디오의 기본 흐름을 줄여 그렸습니다. 노드 이름과 관문은 스튜디오에 있는 그대로입니다.</figcaption>
     </figure>
   );
 }

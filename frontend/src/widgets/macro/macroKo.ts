@@ -51,7 +51,7 @@ export { zStep, zFill, pctFill, catColor, CAT_N, type LvStep } from "@/shared/ui
 
 /** 부호 있는 수(진짜 마이너스 기호). 모르면 "몰라요". */
 export function signed(v: number | null | undefined, d = 2): string {
-  if (v == null || !Number.isFinite(v)) return "몰라요";
+  if (v == null || !Number.isFinite(v)) return "N/A";
   return `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(d)}`;
 }
 
@@ -69,13 +69,13 @@ export const STUDIO_OUT_KO: Record<string, string> = {
 
 /** 사다리·고급 엔진 요건 코드 → 사람 말. 모르는 코드는 서버 사유 그대로. */
 export const MISSING_KO: Record<string, string> = {
-  torch: "딥러닝 도구가 이 서버에 설치되어 있지 않아요",
-  cvxpylayers: "미분 가능한 최적화 도구가 설치되어 있지 않아요",
-  trends_api: "검색 트렌드 키(네이버·구글)가 설정되지 않았어요",
-  llm: "AI 설명 키가 설정되지 않았어요",
-  frontier_sample: "이 엔진은 더 긴 기간의 자료가 필요해요",
-  statsmodels: "통계 도구가 설치되어 있지 않아요",
-  causal_sample: "검정에 쓸 표본이 짧아요",
+  torch: "딥러닝 도구가 이 서버에 설치되어 있지 않습니다",
+  cvxpylayers: "미분 가능한 최적화 도구가 설치되어 있지 않습니다",
+  trends_api: "검색 트렌드 키(네이버·구글)가 설정되지 않았습니다",
+  llm: "AI 설명 키가 설정되지 않았습니다",
+  frontier_sample: "이 엔진은 더 긴 기간의 자료가 필요합니다",
+  statsmodels: "통계 도구가 설치되어 있지 않습니다",
+  causal_sample: "검정에 쓸 표본이 짧습니다",
 };
 
 /** 서버 사유 "code: 글 / code: 글" 을 조각으로. 코드가 없는 조각은 code=null. */

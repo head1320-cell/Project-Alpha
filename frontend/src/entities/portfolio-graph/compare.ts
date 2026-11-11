@@ -23,9 +23,9 @@ export type CompareCheck =
 
 export function compareTargets(picked: string[], nodes: N[], catalog: NodeCatalogEntry[]): CompareCheck {
   const chosen = picked.map((id) => nodes.find((n) => n.id === id)).filter((n): n is N => !!n);
-  if (chosen.length < 2) return { ok: false, reason: "비중이나 기록을 내는 노드를 둘 이상 골라 주세요." };
+  if (chosen.length < 2) return { ok: false, reason: "비중이나 기록을 내는 노드를 둘 이상 선택하십시오." };
   if (chosen.length > COMPARE_PORTS.length) {
-    return { ok: false, reason: `넷까지 비교할 수 있어요 — 지금 ${chosen.length}개를 골랐어요.` };
+    return { ok: false, reason: `넷까지 비교할 수 있습니다 — 지금 ${chosen.length}개를 골랐습니다.` };
   }
   type Row = { id: string; handle: string; type: string; x: number; y: number };
   const rows: Row[] = [];
@@ -38,12 +38,12 @@ export function compareTargets(picked: string[], nodes: N[], catalog: NodeCatalo
     else rows.push({ id: n.id, handle: port.name, type: port.type, x: n.position.x, y: n.position.y });
   }
   if (bad.length) {
-    return { ok: false, reason: `비중이나 기록을 내는 노드끼리만 비교할 수 있어요 — ${bad.join(", ")}은(는) 둘 다 내지 않아요.` };
+    return { ok: false, reason: `비중이나 기록을 내는 노드끼리만 비교할 수 있습니다 — ${bad.join(", ")}은(는) 둘 다 내지 않습니다.` };
   }
   rows.sort((a, b) => a.y - b.y || a.x - b.x);
   const weights = rows.filter((r) => r.type === "Weights");
   if (weights.length && weights.length < rows.length) {
-    return { ok: false, reason: "비중과 기록은 따로 비교해요 — 비중은 '들고 있었다면'의 흐름이고 기록은 이미 있는 곡선이라 같은 것이 아니에요." };
+    return { ok: false, reason: "비중과 기록은 따로 비교합니다 — 비중은 '들고 있었다면'의 흐름이고 기록은 이미 있는 곡선이라 같은 것이 아닙니다." };
   }
   if (weights.length) {
     return { ok: true, kind: COMPARE_KIND, label: "견고성 비교",
@@ -56,7 +56,7 @@ export function compareTargets(picked: string[], nodes: N[], catalog: NodeCatalo
     const k = used[r.type] ?? 0;
     if (k >= slots.length) {
       return { ok: false, reason: r.type === "BacktestResult"
-        ? "정책 백테스트 결과는 둘까지 비교할 수 있어요." : "백테스트 실행은 넷까지 비교할 수 있어요." };
+        ? "정책 백테스트 결과는 둘까지 비교할 수 있습니다." : "백테스트 실행은 넷까지 비교할 수 있습니다." };
     }
     used[r.type] = k + 1;
     sources.push({ id: r.id, handle: r.handle, port: slots[k] });

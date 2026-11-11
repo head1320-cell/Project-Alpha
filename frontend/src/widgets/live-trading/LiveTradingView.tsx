@@ -29,7 +29,7 @@ import { SafetyTab } from "./SafetyTab";
 import { opSentence } from "./sentence";
 
 const TITLE = "실거래";
-const LEDE = "운영 계좌로 주문이 어디로 가는지 보고, 멈추고, 실계좌 관문을 관리해요.";
+const LEDE = "운영 계좌로 주문이 어디로 가는지 보고, 멈추고, 실계좌 관문을 관리합니다.";
 
 /** 탭 — 주소 `?tab=` 와 같이 움직인다(기본 지금). 답 문장과 [비상 정지] 는 탭 위에 늘 보인다(사용자 결정 "탭 셋"). */
 type Tab = "now" | "safety" | "realism";
@@ -79,20 +79,20 @@ export function LiveTradingView() {
   const k = kill.value;
 
   const chips: Chip[] = [
-    ...(practice === true ? [{ label: "연습용 데이터", tone: "practice" as const, ev: "source" }]
-      : cs.isError ? [{ label: "연습용인지 확인하지 못했어요", tone: "unknown" as const, ev: "source" }] : []),
+    ...(practice === true ? [{ label: "합성 데이터", tone: "practice" as const, ev: "source" }]
+      : cs.isError ? [{ label: "합성 데이터인지 확인하지 못했습니다", tone: "unknown" as const, ev: "source" }] : []),
     ...(r?.mode.ok && r.mode.value.changed_by
-      ? [{ label: `${r.mode.value.changed_by} 님이 ${krDateTime(r.mode.value.last_mode_change) ?? "언제인지 모르는 때"}에 모드를 바꿨어요`, tone: "plain" as const }]
+      ? [{ label: `${r.mode.value.changed_by} 님이 ${krDateTime(r.mode.value.last_mode_change) ?? "언제인지 모르는 때"}에 모드를 바꿨습니다`, tone: "plain" as const }]
       : []),
   ];
   const unknownMoney = bal === null;
   const held = bal ? (bal.n_positions ?? bal.positions?.length ?? null) : null;
   const figures = [
-    { label: "평가 자산", value: unknownMoney ? "몰라요" : priceWon(bal.evaluated_total) },
-    { label: "예수금", value: unknownMoney ? "몰라요" : priceWon(bal.cash_krw) },
-    { label: "주식 평가액", value: unknownMoney ? "몰라요" : priceWon(bal.stock_value) },
-    { label: "보유", value: held === null ? "몰라요" : `${num(held)}종목` },
-    { label: "최근 주문", value: orders ? `${num(orders.count)}건` : "몰라요" },
+    { label: "평가 자산", value: unknownMoney ? "N/A" : priceWon(bal.evaluated_total) },
+    { label: "예수금", value: unknownMoney ? "N/A" : priceWon(bal.cash_krw) },
+    { label: "주식 평가액", value: unknownMoney ? "N/A" : priceWon(bal.stock_value) },
+    { label: "보유", value: held === null ? "N/A" : `${num(held)}종목` },
+    { label: "최근 주문", value: orders ? `${num(orders.count)}건` : "N/A" },
   ];
   const action = !isAdmin ? null : k?.is_active ? (
     <button type="button" className="tx-btn tx-btn--sub lv-resolve-open" data-act="resolve"
@@ -106,7 +106,7 @@ export function LiveTradingView() {
     <PageHead title={TITLE} lede={LEDE} actions={
       <div className="lv-head-act">
         <span className="lv-polled" aria-live="polite">
-          {snap.isFetching ? "새로 읽는 중이에요" : snap.dataUpdatedAt ? `10초마다 새로 읽어요 · 마지막 ${clock(snap.dataUpdatedAt)}` : "10초마다 새로 읽어요"}
+          {snap.isFetching ? "새로 읽는 중입니다" : snap.dataUpdatedAt ? `10초마다 새로 읽습니다 · 마지막 ${clock(snap.dataUpdatedAt)}` : "10초마다 새로 읽습니다"}
         </span>
         <button type="button" className="tx-btn tx-btn--sub lv-refresh" data-act="refresh" onClick={refetch}>
           <RefreshCw size={14} aria-hidden /> 새로 고침
@@ -120,29 +120,29 @@ export function LiveTradingView() {
       {head}
       {session.kind === "signed_out" || unauthorized ? (
         <div className="live-auth-banner lv-auth" role="status">
-          <span>로그인해야 운영 계좌의 잔고와 주문을 볼 수 있어요.</span>
+          <span>로그인해야 운영 계좌의 잔고와 주문을 볼 수 있습니다.</span>
           <Link href={loginHref("/admin/live-trading")} className="live-auth-banner__link tx-btn tx-btn--main lv-sm">로그인</Link>
         </div>
       ) : session.kind === "unknown" ? (
-        <RetryFail title="계정 정보를 확인하지 못했어요" onRetry={() => void retry()}>{session.reason}</RetryFail>
+        <RetryFail title="계정 정보 확인 실패" onRetry={() => void retry()}>{session.reason}</RetryFail>
       ) : signedIn && session.mustChange ? (
         <section className="tx-sec lv-must" role="alert">
-          <p className="lv-strong">비밀번호를 먼저 바꿔 주세요.</p>
-          <p className="tx-sec-sub">관리자가 준 임시 비밀번호로는 모드를 바꾸거나 비상 정지를 걸 수 없어요.</p>
+          <p className="lv-strong">비밀번호를 먼저 변경하십시오.</p>
+          <p className="tx-sec-sub">관리자가 준 임시 비밀번호로는 모드를 바꾸거나 비상 정지를 걸 수 없습니다.</p>
           <Link href="/settings#password" className="tx-btn tx-btn--main">비밀번호 바꾸러 가기</Link>
         </section>
       ) : signedIn && !isAdmin ? (
-        <div className="lv-readonly"><Notice tone="warn" title="관리자만 모드를 바꾸거나 비상 정지를 걸 수 있어요.">이 화면은 읽기만 해요.</Notice></div>
+        <div className="lv-readonly"><Notice tone="warn" title="관리자만 모드를 바꾸거나 비상 정지를 걸 수 있습니다.">이 화면은 읽기만 합니다.</Notice></div>
       ) : null}
 
       {mode.value === "LIVE" ? (
-        <div className="lv-live-on"><Notice tone="warn" title="운영 계좌가 지금 실제 돈으로 주문해요.">비상 정지는 이 화면 위쪽 단추로 걸 수 있어요.</Notice></div>
+        <div className="lv-live-on"><Notice tone="warn" title="운영 계좌가 지금 실제 돈으로 주문합니다.">비상 정지는 이 화면 위쪽 단추로 걸 수 있습니다.</Notice></div>
       ) : null}
 
       <Answer sentence={opSentence(mode, kill, practice)} figures={figures} chips={chips} action={action} />
       {done ? <p className="lv-done" role="status">{done}</p> : null}
       {r && !r.mode.ok && r.mode.status !== 401 ? (
-        <RetryFail title="실행 모드를 확인하지 못했어요" onRetry={refetch}>{r.mode.error}</RetryFail>
+        <RetryFail title="실행 모드 확인 실패" onRetry={refetch}>{r.mode.error}</RetryFail>
       ) : null}
 
       <Tabs label="실거래 보기" tabs={TABS} value={tab} onChange={pick}>

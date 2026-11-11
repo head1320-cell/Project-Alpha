@@ -45,9 +45,9 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
   const quantity = /^\d+$/.test(qty) ? Number(qty) : NaN;
   const priceN = Number(price.replace(/,/g, ""));
   const filled = name !== null && side !== null && quantity > 0 && Number.isFinite(priceN) && priceN > 0;
-  const blocked = mode === null ? "실행 모드를 확인하지 못해 주문을 받지 않아요."
-    : killActive === null ? "비상 정지 상태를 확인하지 못해 주문을 받지 않아요."
-    : killActive ? "비상 정지 중이라 주문을 받지 않아요." : null;
+  const blocked = mode === null ? "실행 모드를 확인하지 못해 주문을 받지 않습니다."
+    : killActive === null ? "비상 정지 상태를 확인하지 못해 주문을 받지 않습니다."
+    : killActive ? "비상 정지 중이라 주문을 받지 않습니다." : null;
   const loading = mode === undefined || killActive === undefined;
 
   const send = useMutation({
@@ -67,10 +67,10 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
   const body = (): OrderRequest => ({
     strategy_id: 0, ticker: code, side: side ?? "BUY", quantity, price: priceN, order_type: type, source: "manual",
   });
-  const verb = side === "SELL" ? "팔아요" : "사요";
+  const verb = side === "SELL" ? "팝니다" : "삽니다";
   const what = type === "LIMIT"
     ? `${name}(${code}) ${quantity}주를 지정가 ${priceWon(priceN)}에 ${verb}.`
-    : `${name}(${code}) ${quantity}주를 시장가로 ${verb}. 기준 가격은 ${priceWon(priceN)}이에요.`;
+    : `${name}(${code}) ${quantity}주를 시장가로 ${verb}. 기준 가격은 ${priceWon(priceN)}입니다.`;
 
   return (
     <form className="tx-sec ma-order" aria-labelledby="ma-order-h" noValidate aria-busy={send.isPending}
@@ -78,7 +78,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="ma-order-h">주문 내기</h2>
-          <p className="tx-sec-sub">보내기 전에 무엇을 어디로 보내는지 한 번 더 보여 드려요.</p>
+          <p className="tx-sec-sub">보내기 전에 무엇을 어디로 보내는지 한 번 더 보여 드립니다.</p>
         </div>
       </header>
       <div className="tx-sec-body ma-form">
@@ -90,7 +90,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
                 <button key={h.ticker} type="button" className="ma-hold" data-ticker={h.ticker} aria-pressed={code === h.ticker}
                         onClick={() => {
                           setCode(h.ticker); setAsking(false);
-                          if (h.current_price && h.current_price > 0) { setPrice(String(h.current_price)); setPriceFrom("잔고의 지금 값으로 채웠어요. 바꿔도 돼요."); }
+                          if (h.current_price && h.current_price > 0) { setPrice(String(h.current_price)); setPriceFrom("잔고의 지금 값으로 채웠습니다. 바꿔도 됩니다."); }
                         }}>
                   <span className="ma-hold-n">{holdingNames.known(h.ticker) ?? h.ticker}</span>
                   <span className="ma-hold-q">{num(h.quantity)}주</span>
@@ -103,11 +103,11 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
           <span className="ma-label">종목 코드</span>
           <input className="ma-input" name="ma-ticker" inputMode="numeric" maxLength={6} autoComplete="off"
                  value={code} onChange={(e) => { setCode(e.target.value.trim()); setPriceFrom(null); setAsking(false); }} />
-          {!codeOk ? <span className="ma-hint">숫자 6자리예요.</span>
+          {!codeOk ? <span className="ma-hint">숫자 6자리입니다.</span>
             : name ? <span className="ma-ticker-name">{name}</span>
-            : names.failed ? <span className="ma-ticker-bad">종목을 확인하지 못했어요. 확인된 종목만 주문해요.</span>
-            : names.pending ? <span className="ma-hint">종목을 확인하는 중이에요.</span>
-            : <span className="ma-ticker-bad">알 수 없는 종목 코드예요.</span>}
+            : names.failed ? <span className="ma-ticker-bad">종목 확인 실패. 확인된 종목만 주문합니다.</span>
+            : names.pending ? <span className="ma-hint">종목 확인 중</span>
+            : <span className="ma-ticker-bad">알 수 없는 종목 코드입니다.</span>}
         </label>
         {/* 넓으면 둘씩 나란히(사기/팔기 · 방식 / 수량 · 가격) — 폼을 짧게 해 잔고·최근 주문 옆에 선다 */}
         <div className="ma-pair">
@@ -152,7 +152,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
                    value={price} onChange={(e) => { setPrice(e.target.value.trim()); setPriceFrom(null); setAsking(false); }} />
             {priceFrom ? <span className="ma-hint ma-price-from">{priceFrom}</span> : null}
             {type === "MARKET" ? (
-              <span className="ma-hint">시장가도 서버가 거래 한도를 재려면 기준 가격이 필요해요. 이 가격에 체결된다는 뜻은 아니에요.</span>
+              <span className="ma-hint">시장가도 서버가 거래 한도를 재려면 기준 가격이 필요합니다. 이 가격에 체결된다는 뜻은 아닙니다.</span>
             ) : null}
           </label>
 
@@ -162,7 +162,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
             <span className="ma-amount-k">주문 금액 어림</span>
             <strong className="ma-amount-v">{priceWon(quantity * priceN)}</strong>
             {cash !== null && cash > 0 ? <span className="ma-amount-r">예수금의 {pct((quantity * priceN) / cash)}</span> : null}
-            <span className="ma-hint">수수료와 세금은 빠졌어요.</span>
+            <span className="ma-hint">수수료와 세금은 빠졌습니다.</span>
           </p>
         ) : null}
         {blocked ? <p className="ma-order-why">{blocked}</p> : null}
@@ -171,7 +171,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
             <p>{what} 지금 모드는 {MODE_KO[mode] ?? mode}이라 {destination(mode, practice)}.</p>
             <div className="ma-confirm-act tx-confirm-act">
               <button type="button" className="tx-btn tx-btn--main ma-order-send" disabled={send.isPending}
-                      onClick={() => send.mutate(body())}>{send.isPending ? "보내는 중이에요" : "주문 내기"}</button>
+                      onClick={() => send.mutate(body())}>{send.isPending ? "보내는 중입니다" : "주문 내기"}</button>
               <button type="button" className="tx-btn tx-btn--sub ma-order-edit" onClick={() => setAsking(false)}>고치기</button>
             </div>
           </div>
@@ -179,9 +179,9 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
           <button type="submit" className="tx-btn tx-btn--main ma-order-check" disabled={!filled || blocked !== null || loading}>주문 확인</button>
         )}
         {send.isError ? (
-          <p className="ma-err" role="alert">주문을 보내지 못했어요. <span data-server>{send.error.message}</span></p>
+          <p className="ma-err" role="alert">주문을 보내지 못했습니다. <span data-server>{send.error.message}</span></p>
         ) : null}
-        {send.isSuccess ? <p className="ma-order-result tx-sec-sub" role="status">서버가 답했어요. 위 ‘주문이 가는 길’에서 어디까지 갔는지 보여요.</p> : null}
+        {send.isSuccess ? <p className="ma-order-result tx-sec-sub" role="status">서버가 답했습니다. 위 ‘주문이 가는 길’에서 어디까지 갔는지 보입니다.</p> : null}
       </div>
     </form>
   );

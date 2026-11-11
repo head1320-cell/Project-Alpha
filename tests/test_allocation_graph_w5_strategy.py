@@ -6,7 +6,7 @@
 - 노드 == 문(`save=False`) — 요약·출처·라벨·비용·전략 이름. ★실행 기록이 늘지 않는다★(런 목록 0).
 - 기간을 비우면 **고른 전략이 함께 기록된 전체** — 명시한 같은 기간의 문과 같은 수이고, 화면이 그렇다고 말한다.
 - `hrp_macro` 는 선택지에 없다(배분기 `METHODS` 그대로) · 노드의 리밸런싱 선택지는 엔진이 전부 받는다.
-- 없는 전략은 엔진의 사유 그대로 실패한다. 원천이 mock 이면 결과도 연습용.
+- 없는 전략은 엔진의 사유 그대로 실패한다. 원천이 mock 이면 결과도 합성.
 
 ★숫자는 아무것도 말하지 않는다★ — 결정적 합성 계열이다(`tests/test_strategy_registry.py`).
 """
@@ -116,7 +116,7 @@ def test_every_offered_rebalance_policy_is_accepted_by_the_engine():
 def test_the_strategy_node_speaks_politely_without_overclaiming(client):
     from tests.test_allocation_graph_explain import FORBIDDEN, _texts
     m = _node(strategy_ids=_ids(client), **_KNOBS)
-    assert m["explain"]["title"].endswith("요")
+    assert m["explain"]["title"].endswith("다")
     assert not [t for t in _texts(m["explain"]) for w in FORBIDDEN if w in t]
     assert any("기록하지 않고" in t["text"] for t in m["explain"]["trust"])
 

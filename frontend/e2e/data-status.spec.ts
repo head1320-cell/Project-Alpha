@@ -47,55 +47,55 @@ test("답 = 서버 등급 세기 — 과거 검증에 쓸 수 있는 원천 수(
   await page.route(`${API}/source-honesty`, (r) => r.fulfill({ json: { mock_mode: false, sources: [
     src("a", "backtest_eligible"), src("b", "backtest_eligible"), src("c", "forward_only"), src("d", "unavailable", "unavailable"), src("e", "forward_only")] } }));
   await open(page);
-  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 5개 중 2개를 과거 검증에 쓸 수 있어요.", { timeout: 20_000 });
+  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 5개 중 2개를 과거 검증에 쓸 수 있습니다.", { timeout: 20_000 });
   const figs = page.locator(".tx-answer .tx-fig");
   await expect(figs.filter({ hasText: "과거 검증 가능" }).locator("dd")).toHaveText("2개");
   await expect(figs.filter({ hasText: "전방 전용" }).locator("dd")).toHaveText("2개");
   await expect(figs.filter({ hasText: "사용 불가" }).locator("dd")).toHaveText("1개");
 });
 
-test("짝 — 과거 검증 원천이 0 이면 '아직 없어요'(0개라고 숫자를 지어 넣지 않는 문장) · 등급 500 이면 '몰라요' 문장", async ({ page }) => {
+test("짝 — 과거 검증 원천이 0 이면 '아직 없습니다'(0개라고 숫자를 지어 넣지 않는 문장) · 등급 500 이면 'N/A' 문장", async ({ page }) => {
   await page.route(`${API}/source-honesty`, (r) => r.fulfill({ json: { mock_mode: true, sources: [src("a", "forward_only"), src("b", "unavailable")] } }));
   await open(page);
-  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 2개 중 과거 검증에 쓸 수 있는 원천은 아직 없어요.", { timeout: 20_000 });
+  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 2개 중 과거 검증에 쓸 수 있는 원천은 아직 없습니다.", { timeout: 20_000 });
   await page.unroute(`${API}/source-honesty`);
   await page.route(`${API}/source-honesty`, (r) => r.fulfill(fail500));
   await open(page);
-  await expect(page.locator(".tx-answer-s")).toContainText("아직 몰라요", { timeout: 20_000 });
+  await expect(page.locator(".tx-answer-s")).toContainText("아직 미상", { timeout: 20_000 });
 });
 
-test("★출처 등급 500 → 그 절 alert + 다시 시도 → 풀면 회복★(옛 화면은 절이 조용히 사라졌다) · 짝: 정상은 alert 0", async ({ page }) => {
+test("★출처 등급 500 → 그 절 alert + 재시도 → 풀면 회복★(옛 화면은 절이 조용히 사라졌다) · 짝: 정상은 alert 0", async ({ page }) => {
   let fail = true;
   await page.route(`${API}/source-honesty`, (r) => (fail ? r.fulfill(fail500) : r.fallback()));
   await open(page);
   const sec = page.locator(".t-honesty");
-  await expect(sec.getByRole("alert")).toContainText("원천별 연구 등급을 불러오지 못했어요", { timeout: 20_000 });
+  await expect(sec.getByRole("alert")).toContainText("원천별 연구 등급 조회 실패", { timeout: 20_000 });
   await expect(sec.locator(".t-honesty-row")).toHaveCount(0);
   fail = false;
-  await sec.getByRole("button", { name: "다시 시도" }).click();
+  await sec.getByRole("button", { name: "재시도" }).click();
   await expect(sec.locator(".t-honesty-row").first()).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".terminal-main [role=alert]")).toHaveCount(0);
 });
 
-test("★실행 모드를 모르면 '몰라요' — 연습용으로 그리지 않는다★ · 짝: kis_real true → 실제 · mock_mode → 연습용", async ({ page }) => {
+test("★실행 모드를 모르면 'N/A' — 합성 데이터로 그리지 않는다★ · 짝: kis_real true → 실제 · mock_mode → 합성", async ({ page }) => {
   await page.route(`${API}/db-status`, (r) => r.fulfill(fail500));
   await open(page);
   const badge = page.locator(".t-mode-badge");
-  await expect(badge).toHaveText("실행 모드를 몰라요", { timeout: 20_000 });
+  await expect(badge).toHaveText("실행 모드 미상", { timeout: 20_000 });
   await expect(badge).not.toHaveAttribute("data-real", /.+/);
-  await expect(page.locator(".dsx").getByRole("alert").filter({ hasText: "데이터 상태를 불러오지 못했어요" })).toBeVisible();
-  await expect(badge, "모름을 연습용으로 그리지 않는다").not.toContainText(/MOCK|연습용/);
+  await expect(page.locator(".dsx").getByRole("alert").filter({ hasText: "데이터 상태 조회 실패" })).toBeVisible();
+  await expect(badge, "모름을 합성 데이터로 그리지 않는다").not.toContainText(/MOCK|합성/);
 
   await page.unroute(`${API}/db-status`);
   await patchDb(page, (b) => { (b.config as Record<string, boolean>).kis_real = true; });
   await open(page);
-  await expect(badge).toHaveText("실제 시세로 돌아요", { timeout: 20_000 });
+  await expect(badge).toHaveText("실제 시세 사용 중", { timeout: 20_000 });
   await expect(badge).toHaveAttribute("data-real", "1");
 
   await page.unroute(`${API}/db-status`);
   await page.route(`${API}/source-honesty`, (r) => r.fulfill({ json: { mock_mode: true, sources: [src("a", "forward_only", "mock")] } }));
   await open(page);
-  await expect(badge).toHaveText("연습용 시세로 돌아요", { timeout: 20_000 });
+  await expect(badge).toHaveText("합성 시세 사용 중", { timeout: 20_000 });
   await expect(badge).toHaveAttribute("data-real", "0");
 });
 
@@ -107,7 +107,7 @@ test("★적재 확인 창 — 취소하면 요청 0, 시작하면 같은 요청
 
   await all.click();
   const dlg = page.getByRole("dialog");
-  await expect(dlg).toContainText("전체 적재를 시작할까요?");
+  await expect(dlg).toContainText("전체 적재를 시작하시겠습니까?");
   await expect(dlg).toContainText("전자공시(DART) 하루 요청 한도");
   await dlg.getByRole("button", { name: "취소" }).click();
   await expect(dlg).toHaveCount(0);
@@ -116,18 +116,18 @@ test("★적재 확인 창 — 취소하면 요청 0, 시작하면 같은 요청
 
   await all.click();
   await page.getByRole("dialog").getByRole("button", { name: "적재 시작" }).click();
-  await expect(page.locator('.dsx-ing-row[data-ds="all"] .dsx-ing-res')).toContainText("적재를 시작했어요", { timeout: 10_000 });
+  await expect(page.locator('.dsx-ing-row[data-ds="all"] .dsx-ing-res')).toContainText("적재를 시작했습니다", { timeout: 10_000 });
   expect(posts).toEqual([{ path: "/api/backend/api/v1/data/ingest/all", body: "{}" }]);
 
   const one = page.locator('[data-act="ingest-stocks"]');
   await one.click();
-  await expect(page.getByRole("dialog")).toContainText("‘주식 일봉’ 적재를 시작할까요?");
+  await expect(page.getByRole("dialog")).toContainText("‘주식 일봉’ 적재를 시작하시겠습니까?");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
   expect(posts.length, "Esc → 요청 0").toBe(1);
   await one.click();
   await page.getByRole("dialog").getByRole("button", { name: "적재 시작" }).click();
-  await expect(page.locator('.dsx-ing-row[data-ds="stocks"] .dsx-ing-res')).toContainText("적재를 시작했어요", { timeout: 10_000 });
+  await expect(page.locator('.dsx-ing-row[data-ds="stocks"] .dsx-ing-res')).toContainText("적재를 시작했습니다", { timeout: 10_000 });
   expect(posts[1]).toEqual({ path: "/api/backend/api/v1/data/ingest/stocks", body: "{}" });
   expect(posts.length).toBe(2);
 });
@@ -137,14 +137,14 @@ test("적재 결과는 그 단추 옆 — 이미 실행 중(started 비어 있�
   await open(page);
   await page.locator('[data-act="ingest-index"]').click();
   await page.getByRole("dialog").getByRole("button", { name: "적재 시작" }).click();
-  await expect(page.locator('.dsx-ing-row[data-ds="index"] .dsx-ing-res')).toContainText("이미 실행 중이에요", { timeout: 10_000 });
+  await expect(page.locator('.dsx-ing-row[data-ds="index"] .dsx-ing-res')).toContainText("이미 실행 중입니다", { timeout: 10_000 });
   await page.locator('[data-act="ingest-etf"]').click();
   await page.getByRole("dialog").getByRole("button", { name: "적재 시작" }).click();
-  await expect(page.locator('.dsx-ing-row[data-ds="etf"]').getByRole("alert")).toContainText("적재를 시작하지 못했어요", { timeout: 10_000 });
+  await expect(page.locator('.dsx-ing-row[data-ds="etf"]').getByRole("alert")).toContainText("적재 시작 실패", { timeout: 10_000 });
   await expect(page.locator('.dsx-ing-row[data-ds="index"]').getByRole("alert")).toHaveCount(0);
 });
 
-test("★폴링 실패 + 옛 값 → '마지막으로 받은 값' 알림 + 다시 시도★(옛 화면은 낡은 값을 새 값처럼) · 짝: 받기 전엔 알림 0", async ({ page }) => {
+test("★폴링 실패 + 옛 값 → '마지막으로 받은 값' 알림 + 재시도★(옛 화면은 낡은 값을 새 값처럼) · 짝: 받기 전엔 알림 0", async ({ page }) => {
   let n = 0;
   await page.route(`${API}/db-status`, async (route) => {
     n += 1;
@@ -154,14 +154,14 @@ test("★폴링 실패 + 옛 값 → '마지막으로 받은 값' 알림 + 다�
     await route.fulfill({ response: res, json: body });
   });
   await open(page);
-  await expect(page.locator('[data-act="ingest-stocks"]')).toHaveText("적재하는 중이에요", { timeout: 20_000 });
-  await expect(page.getByText("마지막으로 받은 값이에요")).toHaveCount(0);
-  await expect(page.getByText(/마지막으로 받은 값이에요/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-act="ingest-stocks"]')).toHaveText("적재 중", { timeout: 20_000 });
+  await expect(page.getByText("마지막으로 받은 값입니다")).toHaveCount(0);
+  await expect(page.getByText(/마지막으로 받은 값입니다/)).toBeVisible({ timeout: 15_000 });
   // 옛 값은 남아 있다(지우지 않는다) — 다만 낡았다고 말한다.
   await expect(page.locator(".dsx-tables .trisk-table")).toBeVisible();
 });
 
-test("유니버스 적재 막대 — 폭 = 적재/전체 · ★전체 0 이면 막대 없이 몰라요(0% 아님)★", async ({ page }) => {
+test("유니버스 적재 막대 — 폭 = 적재/전체 · ★전체 0 이면 막대 없이 미상(0% 아님)★", async ({ page }) => {
   await patchDb(page, (b) => {
     b.universe_progress = { progress: { kospi: { master: 200, ingested: 50 }, kosdaq: { master: 0, ingested: 3 } }, composition: {} };
   });
@@ -171,21 +171,21 @@ test("유니버스 적재 막대 — 폭 = 적재/전체 · ★전체 0 이면 �
   const ratio = await kospi.locator(".dsx-uni-bar").evaluate((t) => (t.querySelector("i") as HTMLElement).getBoundingClientRect().width / t.getBoundingClientRect().width);
   expect(ratio).toBeGreaterThan(0.23); expect(ratio).toBeLessThan(0.27);
   const kosdaq = page.locator('.dsx-uni-row[data-uni="kosdaq"]');
-  await expect(kosdaq).toContainText("몰라요");
+  await expect(kosdaq).toContainText("N/A");
   await expect(kosdaq).not.toContainText("0%");
   await expect(kosdaq.locator(".dsx-uni-bar i")).toHaveCount(0);
 });
 
-test("표별 적재 — 미상은 '몰라요'(옛 '—') · 못 읽은 표의 원래 사유는 닫힌 칸 안에 그대로", async ({ page }) => {
+test("표별 적재 — 미상은 'N/A'(옛 '—') · 못 읽은 표의 원래 사유는 닫힌 칸 안에 그대로", async ({ page }) => {
   await open(page);
   const t = page.locator(".dsx-tables .trisk-table");
   await expect(t).toBeVisible({ timeout: 20_000 });
   await expect(t).not.toContainText("—");
   const vint = t.locator('tr[data-table="financials_vintages"]');
-  await expect(vint).toContainText("이 표를 읽지 못했어요");
+  await expect(vint).toContainText("이 표 읽기 실패");
   await expect(vint.locator("details.dsx-raw")).not.toHaveAttribute("open", "");
   await expect(vint.locator("details.dsx-raw [data-server]")).toBeHidden();
-  await expect(t.locator('tr[data-table="daily_prices"]')).toContainText("몰라요");
+  await expect(t.locator('tr[data-table="daily_prices"]')).toContainText("N/A");
 });
 
 test("글 · 대비 · 390 — 영어 대문자 소제목·이모지·툴팁·em-dash 0 · 라이트/다크 AA · 확인 창 AA · 가로 넘침 0", async ({ page }) => {

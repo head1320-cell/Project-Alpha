@@ -16,19 +16,19 @@ export function Holdings({ result, onRetry }: { result: Result<OpBalance> | null
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="lv-hold-h">보유 종목</h2>
-          <p className="tx-sec-sub">증권사 잔고 그대로예요. 10초마다 함께 새로 읽어요.</p>
+          <p className="tx-sec-sub">증권사 잔고 그대로입니다. 10초마다 함께 새로 읽습니다.</p>
         </div>
       </header>
       <div className="tx-sec-body">
         {!result ? (
-          <p className="tx-sec-sub" aria-busy="true">잔고를 불러오는 중이에요.</p>
+          <p className="tx-sec-sub" aria-busy="true">잔고 조회 중</p>
         ) : !result.ok ? (
-          result.status === 401 ? <p className="tx-sec-sub">로그인해야 잔고를 볼 수 있어요.</p>
-            : <RetryFail title="잔고를 불러오지 못했어요" onRetry={onRetry}>{result.error}</RetryFail>
+          result.status === 401 ? <p className="tx-sec-sub">로그인해야 잔고를 볼 수 있습니다.</p>
+            : <RetryFail title="잔고 조회 실패" onRetry={onRetry}>{result.error}</RetryFail>
         ) : positions === null ? (
-          <p className="tx-sec-sub">서버가 보유 종목 목록을 주지 않았어요.</p>
+          <p className="tx-sec-sub">서버가 보유 종목 목록을 주지 않았습니다.</p>
         ) : positions.length === 0 ? (
-          <p className="tx-sec-sub">보유 종목이 없어요.</p>
+          <p className="tx-sec-sub">보유 종목 없음</p>
         ) : (
           <ul className="lv-pos-l" aria-label="보유 종목">
             {positions.map((p) => {
@@ -39,10 +39,10 @@ export function Holdings({ result, onRetry }: { result: Result<OpBalance> | null
                     <strong>{p.name || p.ticker}</strong>
                     {p.name ? <span className="lv-code" data-mono>{p.ticker}</span> : null}
                   </span>
-                  <span className="lv-pos-q">{typeof p.quantity === "number" ? `${num(p.quantity)}주` : "수량 몰라요"}</span>
+                  <span className="lv-pos-q">{typeof p.quantity === "number" ? `${num(p.quantity)}주` : "수량 미상"}</span>
                   <span className="lv-pos-p">평균 {priceWon(p.avg_price)} · 지금 {priceWon(p.current_price)} · 평가 {priceWon(p.eval_amount)}</span>
                   <span className="tx-delta lv-pos-pnl" data-dir={direction(pnl)}>
-                    {pnl === null ? "손익 몰라요" : signedPct(pnl)}
+                    {pnl === null ? "손익 미상" : signedPct(pnl)}
                     {typeof p.pnl_krw === "number" ? <span className="lv-pos-krw"> {p.pnl_krw > 0 ? "+" : ""}{priceWon(p.pnl_krw)}</span> : null}
                   </span>
                 </li>

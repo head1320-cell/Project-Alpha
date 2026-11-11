@@ -20,8 +20,8 @@ export function Payoff({ kind, K, S, price }: { kind: Kind; K: number; S: number
   });
   return (
     <div className="dv-chart" data-testid="payoff" data-breakeven={be.toFixed(4)}>
-      <h3 className="dv-h3">만기에 얼마를 벌거나 잃나요</h3>
-      <p className="dv-note">옵션 한 개를 지금 이론가에 사서 만기까지 들고 있을 때예요. 손익분기는 <b className="dv-be">{f4(be)}원</b>(행사가 {kind === "call" ? "+" : "−"} 이론가)이고, 가장 크게 잃는 금액은 이론가 {f4(price)}원이에요.</p>
+      <h3 className="dv-h3">만기 손익 구조</h3>
+      <p className="dv-note">옵션 한 개를 지금 이론가에 사서 만기까지 들고 있을 때입니다. 손익분기는 <b className="dv-be">{f4(be)}원</b>(행사가 {kind === "call" ? "+" : "−"} 이론가)이고, 가장 크게 잃는 금액은 이론가 {f4(price)}원입니다.</p>
       <div className="dv-chart-box" role="img" aria-label={`만기 손익 그림. 손익분기 ${f4(be)}원, 최대 손실 ${f4(price)}원`}>
         <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
@@ -49,8 +49,8 @@ export function ExposureCurve({ ee, T, epe, peak, pos }: { ee: number[]; T: numb
   const cur = idx >= 0 ? pts[idx] : null;
   return (
     <div className="dv-chart" data-testid="cva-curve" data-points={ee.length}>
-      <h3 className="dv-h3">시간에 따라 얼마나 물려 있나요(기대 노출)</h3>
-      <p className="dv-note">상대방이 그 시점에 부도나면 잃을 수 있는 금액의 기대값이에요. {POS_KO[pos]} 모양으로 {ee.length}개 시점을 계산했어요. 가장 클 때 {wonK(peak)}, 평균 {wonK(epe)}이에요.</p>
+      <h3 className="dv-h3">기대 노출(EE) 추이</h3>
+      <p className="dv-note">상대방이 그 시점에 부도나면 잃을 수 있는 금액의 기대값입니다. {POS_KO[pos]} 모양으로 {ee.length}개 시점을 계산했습니다. 가장 클 때 {wonK(peak)}, 평균 {wonK(epe)}입니다.</p>
       <div className="dv-chart-box">
         <ReadoutFrame id="cva-exposure" label={`기대 노출 곡선 ${ee.length}개 점. 가장 클 때 ${wonK(peak)}, 평균 ${wonK(epe)}`} headLabel="시점" rows={rows} idx={idx} onKeyDown={onKeyDown}>
           <ResponsiveContainer width="100%" height={240}>

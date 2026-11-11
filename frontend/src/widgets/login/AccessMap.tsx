@@ -29,9 +29,9 @@ const TIERS: { key: TierKey; Icon: LucideIcon }[] = [
 
 /** 실행 모드 뜻 — 서버 `ExecutionMode`(SHADOW·PAPER·LIVE). 어휘 밖이면 서버 값 그대로 보인다. */
 const MODE_SAY: Record<string, string> = {
-  SHADOW: "주문 없이 신호만 기록해요",
-  PAPER: "가상으로 체결해요",
-  LIVE: "실제 돈으로 주문해요",
+  SHADOW: "주문 없이 신호만 기록합니다",
+  PAPER: "가상으로 체결합니다",
+  LIVE: "실제 돈으로 주문합니다",
 };
 
 async function liveMode(): Promise<string | null> {
@@ -43,7 +43,7 @@ async function liveMode(): Promise<string | null> {
 
 function modeChip(q: { data?: string | null; isError: boolean; isLoading: boolean }): Chip[] {
   if (q.isLoading) return [];
-  if (q.isError || !q.data) return [{ label: "실행 모드를 확인하지 못했어요", tone: "unknown", ev: "mode" }];
+  if (q.isError || !q.data) return [{ label: "실행 모드 확인 실패", tone: "unknown", ev: "mode" }];
   return [{ label: `실행 모드: ${MODE_SAY[q.data] ?? q.data}`, tone: "plain", ev: "mode" }];
 }
 
@@ -83,7 +83,7 @@ export function AccessMap() {
           );
         })}
       </ol>
-      <p className="lg-map-cap">서버의 보호 목록과 같은 내용이에요.</p>
+      <p className="lg-map-cap">서버의 보호 목록과 같은 내용입니다.</p>
     </section>
   );
 }

@@ -13,7 +13,7 @@ const time = (t: number) => new Date(t).toLocaleTimeString("ko-KR", { hour: "2-d
 
 export function RunHistory({ nodeId, runs }: { nodeId: string; runs: RunRecord[] }) {
   const rows = runs.map((r) => ({ r, n: r.nodes[nodeId] })).filter((x) => x.n);
-  if (rows.length === 0) return <p className="pg-note">이 노드는 아직 계산 기록이 없어요.</p>;
+  if (rows.length === 0) return <p className="pg-note">이 노드는 아직 계산 기록 없음</p>;
   return (
     <table className="pg-history">
       <thead><tr><th>언제</th><th>상태</th><th className="pg-td-num">결과</th><th className="pg-td-num">앞과 차이</th></tr></thead>

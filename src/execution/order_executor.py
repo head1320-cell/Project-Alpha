@@ -378,7 +378,7 @@ class OrderExecutor:
             # ★실계좌 관문(BV7)★ — 토큰만으로는 열리지 않는다. 운영자가 선언한 기록에 이 사람의 이름이 있어야 한다.
             if self.account_id is not None:
                 # 사용자 계좌의 LIVE 는 계좌별 대조 감시가 생길 때 연다(경로도 먼저 거절한다 — 두 겹).
-                raise ValueError("사용자 계좌의 실계좌 주문은 아직 열리지 않았어요.")
+                raise ValueError("사용자 계좌의 실계좌 주문은 아직 열리지 않았습니다.")
             from src.domain.live_gate import LIVE_ALLOWED, live_gate
             from src.execution import live_gate_store
             gate = live_gate(live_gate_store.current(), actor)
@@ -519,7 +519,7 @@ class OrderExecutor:
             # **구조적으로 발동할 수 없었다**. 이제 못 재면 `None` + 사유다(P1-a).
             # 에쿼티 이력은 운영자 계좌의 것이다 — 계좌 실행기는 빌려 쓰지 않는다(BV6, 계좌별 이력은 아직 없다).
             dd = (drawdown_from_history(self.engine) if self.account_id is None else
-                  Drawdown(None, None, "계좌별 자산 이력은 아직 기록하지 않아요 — 드로다운을 잴 수 없어요."))
+                  Drawdown(None, None, "계좌별 자산 이력은 아직 기록하지 않습니다 — 드로다운을 측정할 수 없습니다."))
             # ★`auto_api` 의 재료★(AQ) — 연속 실패 횟수는 이미 `CircuitBreaker` 가
             # 세고 있었다. 세는 로직은 0줄 바뀌지 않고, 여기서 **읽어 실을** 뿐이다.
             return observe_into({

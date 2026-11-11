@@ -189,7 +189,7 @@ def _period_end(label) -> str | None:
 
     ★날짜를 글자로 견주지 않는다★ `as_of` 는 `YYYY-MM-DD` 인데 타임스탬프는 출처마다
     모양이 다르다(`macro_collector` — 한국은행 월별 `YYYYMM` · 일별 `YYYYMMDD` ·
-    연별 `YYYY` · FRED `YYYY-MM-DD` · 연습용 `YYYYMM`). 예전의 `str(t)[:10] <= as_of`
+    연별 `YYYY` · FRED `YYYY-MM-DD` · 합성 `YYYYMM`). 예전의 `str(t)[:10] <= as_of`
     는 다섯째 글자에서 `"0"` 과 `"-"` 가 만나, `YYYYMM` 계열을 as_of 가 든 해의 **앞 해
     12월**에서 잘랐고(2024-06-30 도 2024-12-31 도 202312) `YYYY` 는 끝나지 않은 해를
     넣었다. 응답은 그 절단일을 지켰다고 적었다.

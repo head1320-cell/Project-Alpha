@@ -62,12 +62,12 @@ export function RegisterAsStrategy({ runId, defaultName }: { runId: string; defa
 
   return (
     <div className="rs-reg" role="group" aria-label="전략으로 등록">
-      {phase.k === "checking" && <p className="rs-reg-note">이미 등록했는지 확인하는 중이에요.</p>}
+      {phase.k === "checking" && <p className="rs-reg-note">이미 등록했는지 확인하는 중입니다.</p>}
 
       {phase.k === "already" && (
         <p className="rs-reg-ok">
-          이 실행은 이미 ‘{phase.s.name}’ 전략(#{phase.s.id})으로 등록돼 있어요
-          {phase.s.is_active ? "." : " · 지금은 비활성이에요."}
+          이 실행은 이미 ‘{phase.s.name}’ 전략(#{phase.s.id})으로 등록돼 있습니다
+          {phase.s.is_active ? "." : " · 지금은 비활성입니다."}
         </p>
       )}
 
@@ -79,17 +79,17 @@ export function RegisterAsStrategy({ runId, defaultName }: { runId: string; defa
               onChange={(e) => setName(e.target.value)} disabled={phase.k === "busy"} />
             <button type="button" className="tx-btn tx-btn--sub" data-act="reg-go" onClick={submit}
               disabled={phase.k === "busy"} aria-busy={phase.k === "busy"}>
-              {phase.k === "busy" ? "다시 돌려 확인하는 중이에요" : "등록하기"}
+              {phase.k === "busy" ? "다시 돌려 확인하는 중입니다" : "등록하기"}
             </button>
           </div>
           <p className="rs-reg-note">
-            서버가 이 실행을 다시 돌려 자산곡선이 저장본과 같을 때만 받아요. 몇십 초 걸릴 수 있어요.
+            서버가 이 실행을 다시 돌려 자산곡선이 저장본과 같을 때만 받습니다. 몇십 초 걸릴 수 있습니다.
           </p>
         </>
       )}
 
       {phase.k === "refused" && (
-        <Notice tone="danger" title="등록하지 않았어요">
+        <Notice tone="danger" title="등록하지 않았습니다">
           <span data-server>{phase.reason}</span>
           {phase.date && <> · 처음 달라진 날 {phase.date}</>}
         </Notice>
@@ -97,14 +97,14 @@ export function RegisterAsStrategy({ runId, defaultName }: { runId: string; defa
 
       {phase.k === "done" && (
         <p className="rs-reg-ok" role="status">
-          ‘{phase.s.name}’ 전략(#{phase.s.id})으로 등록했어요. <Link href="/allocation">포트폴리오 설계</Link>의 전략 노드에서 고를 수 있어요.
+          ‘{phase.s.name}’ 전략(#{phase.s.id})으로 등록했습니다. <Link href="/allocation">포트폴리오 설계</Link>의 전략 노드에서 고를 수 있습니다.
         </p>
       )}
 
       {phase.k === "failed" && (
-        <Notice tone="danger" title="등록 상태를 확인하지 못했어요">
+        <Notice tone="danger" title="등록 상태 확인 실패">
           <span data-server>{phase.reason}</span>
-          <button type="button" className="tx-btn tx-btn--sub rs-reg-retry" onClick={open}>다시 시도</button>
+          <button type="button" className="tx-btn tx-btn--sub rs-reg-retry" onClick={open}>재시도</button>
         </Notice>
       )}
     </div>

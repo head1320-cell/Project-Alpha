@@ -26,8 +26,8 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
     },
     onSuccess: (r) => {
       const n = r.n_orders_cancelled;
-      onDone(n === null || n === undefined ? "비상 정지를 걸었어요. 미체결 주문을 몇 건 취소했는지는 몰라요."
-        : `비상 정지를 걸었어요. 미체결 ${n}건을 취소했어요.`);
+      onDone(n === null || n === undefined ? "비상 정지를 걸었습니다. 미체결 주문을 몇 건 취소했는지는 미상입니다."
+        : `비상 정지를 걸었습니다. 미체결 ${n}건을 취소했습니다.`);
       setReason("");
     },
   });
@@ -38,7 +38,7 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
       return r.value;
     },
     onSuccess: (r) => {
-      onDone(r.status === "no_active_event" ? "이미 풀려 있었어요." : "비상 정지를 풀었어요. 새 주문을 다시 받아요.");
+      onDone(r.status === "no_active_event" ? "이미 풀려 있었습니다." : "비상 정지를 풀었습니다. 새 주문을 다시 받습니다.");
       setNotes("");
     },
   });
@@ -46,36 +46,36 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
   return (
     <>
       <Sheet open={open === "kill"} onClose={onClose} title="비상 정지" testId="kill" className="ma-sheet"
-             sub="새 주문과 미체결 주문을 멈춰요. 보유 종목은 팔지 않아요.">
+             sub="새 주문과 미체결 주문을 멈춥니다. 보유 종목은 팔지 않습니다.">
         <div className="ma-chips ma-kill-presets" role="group" aria-label="자주 쓰는 사유">
           {PRESETS.map((t) => (
             <button key={t} type="button" className="ma-chip-b ma-kill-preset" aria-pressed={reason === t} onClick={() => setReason(t)}>{t}</button>
           ))}
         </div>
         <label className="ma-field">
-          <span className="ma-label">왜 멈추나요</span>
+          <span className="ma-label">정지 사유</span>
           <textarea className="ma-input ma-textarea" name="ma-kill-reason" rows={3} maxLength={500}
                     value={reason} onChange={(e) => setReason(e.target.value)} />
-          <span className="ma-hint">{MIN_REASON}자 이상 적어 주세요. 기록에 남아요.</span>
+          <span className="ma-hint">{MIN_REASON}자 이상 입력하십시오. 기록에 남습니다.</span>
         </label>
-        {trigger.isError ? <p className="ma-err" role="alert">비상 정지를 걸지 못했어요. <span data-server>{trigger.error.message}</span></p> : null}
+        {trigger.isError ? <p className="ma-err" role="alert">비상 정지를 걸지 못했습니다. <span data-server>{trigger.error.message}</span></p> : null}
         <div className="ma-confirm-act tx-confirm-act">
           <button type="button" className="tx-btn ma-btn-danger ma-kill-go" disabled={reason.trim().length < MIN_REASON || trigger.isPending}
-                  onClick={() => trigger.mutate()}>{trigger.isPending ? "거는 중이에요" : "비상 정지 걸기"}</button>
+                  onClick={() => trigger.mutate()}>{trigger.isPending ? "설정 중" : "비상 정지 걸기"}</button>
           <button type="button" className="tx-btn tx-btn--sub" onClick={onClose}>닫기</button>
         </div>
       </Sheet>
       <Sheet open={open === "resolve"} onClose={onClose} title="비상 정지 풀기" testId="resolve" className="ma-sheet"
-             sub="풀면 이 계좌로 새 주문을 다시 받아요.">
+             sub="풀면 이 계좌로 새 주문을 다시 받습니다.">
         <label className="ma-field">
-          <span className="ma-label">남길 말(없어도 돼요)</span>
+          <span className="ma-label">남길 말(없어도 됩니다)</span>
           <textarea className="ma-input ma-textarea" name="ma-kill-notes" rows={2} maxLength={500}
                     value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
-        {resolve.isError ? <p className="ma-err" role="alert">비상 정지를 풀지 못했어요. <span data-server>{resolve.error.message}</span></p> : null}
+        {resolve.isError ? <p className="ma-err" role="alert">비상 정지를 풀지 못했습니다. <span data-server>{resolve.error.message}</span></p> : null}
         <div className="ma-confirm-act tx-confirm-act">
           <button type="button" className="tx-btn tx-btn--main ma-kill-resolve" disabled={resolve.isPending}
-                  onClick={() => resolve.mutate()}>{resolve.isPending ? "푸는 중이에요" : "다시 열기"}</button>
+                  onClick={() => resolve.mutate()}>{resolve.isPending ? "해제 중" : "다시 열기"}</button>
           <button type="button" className="tx-btn tx-btn--sub" onClick={onClose}>닫기</button>
         </div>
       </Sheet>

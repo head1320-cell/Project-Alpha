@@ -9,7 +9,7 @@
 - ★저장은 버튼으로 한 번★ — `/graph/save` 가 미리보기 해시가 같을 때만 저장 함수를 **정확히 한 번**
   부르고, 저장된 목표 == 미리보기 목표. 낡은 미리보기는 쓰지 않는다.
 - 주문 미리보기 == `/execution-plan` 미리보기(같은 목표·같은 가격).
-- ★연습용 데이터로 만든 비중은 실행 목표가 아니다★ — 상태가 연구용으로 내려가고 사유를 말한다
+- ★합성 데이터로 만든 비중은 실행 목표가 아니다★ — 상태가 연구용으로 내려가고 사유를 말한다
   (짝: 적재 데이터면 실행 가능). 노출 조절 목표는 다시 만들지 않고 그대로 쓴다. 중립화 비중은 연구용.
 """
 from __future__ import annotations
@@ -103,7 +103,7 @@ def test_practice_data_never_makes_an_executable_target(monkeypatch, prices):
     t = _run(_act_graph())["nodes"]["t"]
     assert t["lineage"]["practice"] is True
     assert t["view"]["target"]["status"] == "research_only"
-    assert "연습용" in t["view"]["target"]["status_reason"]
+    assert "합성" in t["view"]["target"]["status_reason"]
 
 
 def test_an_overlay_target_is_reused_not_recompiled(market, prices):
@@ -183,7 +183,7 @@ def test_every_act_node_speaks_politely_without_overclaiming(market, prices):
     rep = _run(_act_graph())
     for nid in ("q", "t", "j"):
         r = rep["nodes"][nid]
-        assert r["explain"]["title"].endswith("요"), (nid, r["explain"]["title"])
+        assert r["explain"]["title"].endswith("다"), (nid, r["explain"]["title"])
         assert not [t for t in _texts(r["explain"]) for w in FORBIDDEN if w in t], nid
         assert gn.REGISTRY.get(r["type"]).stage == "act"
 

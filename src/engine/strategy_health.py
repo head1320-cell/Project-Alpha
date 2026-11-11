@@ -76,7 +76,7 @@ def _alpha_health(alpha: dict, run_getter) -> dict[str, Any]:
         if ic is None and icir is None:
             signals.append({"key": "ic_icir", "label": "IC/ICIR", "value": None,
                             "status": "unmeasured", "basis": "unavailable",
-                            "detail": "검증 리포트 없음 — 먼저 알파를 검증하세요."})
+                            "detail": "검증 리포트 없음 — 먼저 알파를 검증하십시오."})
             status = "watch"
         else:
             bad = (icir is not None and icir < 0) or (ic is not None and ic < 0)

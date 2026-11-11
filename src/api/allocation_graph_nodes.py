@@ -133,23 +133,23 @@ STAGES = [
 ]
 
 UniverseParams = _subset("UniverseParams", AnalyzeRequest, ("tickers", "weights", "benchmark"), ui={
-    "tickers": _ui("종목", question="어떤 종목으로 할까요?", widget="tickers",
-                   help="종목 코드를 쉼표로 넣거나, 이름을 치고 후보에서 골라요."),
-    "weights": _ui("지금 비중", "advanced", help="들고 있는 비중을 알려 주면 회전율 제약에 써요."),
-    "benchmark": _ui("비교 기준", "advanced", help="성과를 비교할 지수예요."),
+    "tickers": _ui("종목", question="대상 종목", widget="tickers",
+                   help="종목 코드를 쉼표로 넣거나, 이름을 치고 후보에서 고릅니다."),
+    "weights": _ui("지금 비중", "advanced", help="들고 있는 비중을 알려 주면 회전율 제약에 씁니다."),
+    "benchmark": _ui("비교 기준", "advanced", help="성과를 비교할 지수입니다."),
 })
 ReturnsParams = _subset("ReturnsParams", AnalyzeRequest, ("lookback_days", "as_of"), ui={
-    "lookback_days": _ui("기간", question="얼마나 긴 과거를 볼까요?", unit="거래일",
+    "lookback_days": _ui("기간", question="과거 관측 기간", unit="거래일",
                          presets=[{"label": "1년", "value": 252}, {"label": "3년", "value": 756},
                                   {"label": "5년", "value": 1260}]),
     "as_of": _ui("기준일", "advanced",
-                 help="비우면 오늘이에요. 과거 날짜로 고정하면 그날까지의 데이터만 써요."),
+                 help="비우면 오늘입니다. 과거 날짜로 고정하면 그날까지의 데이터만 씁니다."),
 })
 EstimateParams = _subset("EstimateParams", AnalyzeRequest,
                          ("conditional", "require_verified_macro", "regime_weighting",
                           "regime_mode", "rebalance"), ui={
-    "conditional": _ui("경기 국면 반영", question="경기 국면을 반영할까요?",
-                       help="켜면 지금 국면과 비슷했던 과거로 기대 수익을 잡아요."),
+    "conditional": _ui("경기 국면 반영", question="경기 국면 반영 여부",
+                       help="켜면 지금 국면과 비슷했던 과거로 기대 수익을 잡습니다."),
     "require_verified_macro": _ui("확인된 국면 판정만 쓰기", "advanced"),
     "regime_weighting": _ui("국면 가중 방식", "advanced",
                             options={"hard": "확정 국면", "probabilistic": "확률 가중"}),
@@ -162,41 +162,41 @@ OptimizerParams = _subset(
         # (`allocation_studio.optimize`). 다른 방식에서는 비중이 움직이지 않으니 초심자 질문("위험을 얼마나 피할까요?")으로 두지 않는다.
         # 옵티마이저 의미는 그대로 — 표시만 사실에 맞춘다(tests/test_optimizer_delta_honest.py).
         "delta": _ui("시장 균형 수익 크기 δ", "advanced", widget="slider", ends=["내 생각 쪽", "시장 균형 쪽"],
-                     help="블랙-리터먼에서 내 생각이 있을 때만 비중에 영향을 줘요 — 클수록 시장 균형 쪽으로 기울어요. "
-                          "다른 계산 방식에서는 비중이 바뀌지 않아요."),
-        "tau": _ui("내 생각 불확실성 τ", "advanced", help="클수록 내 생각이 비중을 더 크게 움직여요."),
+                     help="블랙-리터먼에서 내 생각이 있을 때만 비중에 영향을 줍니다 — 클수록 시장 균형 쪽으로 기웁니다. "
+                          "다른 계산 방식에서는 비중이 바뀌지 않습니다."),
+        "tau": _ui("내 생각 불확실성 τ", "advanced", help="클수록 내 생각이 비중을 더 크게 움직입니다."),
         # BO O1 — 사용자가 승인한 "움직이는 손잡이". ★`mv_utility` 를 골랐을 때만 보인다★(`show_if`) —
         # 다른 방식에서는 비중이 바뀌지 않으니 초심자 질문으로 내놓지 않는다(δ 의 교훈).
         # 프리셋은 초보자용, 슬라이더("직접 정하기")는 전문가용 — 같은 값 하나를 두 방식으로 고른다.
         "risk_aversion": _ui(
-            "위험 회피 λ", question="위험을 얼마나 피할까요?", widget="slider",
+            "위험 회피 λ", question="위험 회피 수준", widget="slider",
             ends=["수익 쪽", "안정 쪽"], show_if={"model": ["mv_utility"]},
             # 비워 두면 서버가 쓰는 값 — 화면이 "보통(기본)" 을 표시만 한다(문서에 값을 쓰지 않는다).
             empty_value=_studio.RISK_AVERSION_DEFAULT,
             presets=[{"label": "덜 피함", "value": 1.5},
                      {"label": "보통", "value": _studio.RISK_AVERSION_DEFAULT},
                      {"label": "많이 피함", "value": 10.0}],
-            help="클수록 흔들림을 줄이는 쪽으로, 작을수록 기대 수익 쪽으로 나눠요. "
-                 "세 값은 관례적인 크기라 나에게 맞는 값은 가정이에요 — 비우면 ‘보통’을 써요."),
+            help="클수록 흔들림을 줄이는 쪽으로, 작을수록 기대 수익 쪽으로 나눕니다. "
+                 "세 값은 관례적인 크기라 나에게 맞는 값은 가정입니다 — 비우면 ‘보통’을 씁니다."),
         # CF 3부 P2 — 기본 칩은 그대로(한 종목 최대 · 칩은 그 키만 바꾼다), `widget="constraints"` 가 나머지 아홉 칸을
         # 질문 카드로 연다(범위는 이 스키마의 `ConstraintsInput`, 판정은 `/allocation/constraints/check`).
-        "constraints": _ui("제약", question="한 종목에 최대 얼마까지 둘까요?", widget="constraints",
+        "constraints": _ui("제약", question="종목별 최대 비중", widget="constraints",
                            presets=[{"label": "제한 없음", "value": None},
                                     {"label": "40%", "value": {"max_weight_pct": 40}},
                                     {"label": "30%", "value": {"max_weight_pct": 30}},
                                     {"label": "20%", "value": {"max_weight_pct": 20}}],
-                           help="‘더 정하기’ 에서 업종 상한·회전율·시장 민감도·현금·공매도 노출까지 정할 수 있어요. "
-                                "풀 수 없는 조합이면 계산 전에 알려 줘요."),
+                           help="‘더 정하기’ 에서 업종 상한·회전율·시장 민감도·현금·공매도 노출까지 정할 수 있습니다. "
+                                "풀 수 없는 조합이면 계산 전에 알려 줍니다."),
     },
     model=(Literal[_MODELS], Field("mvo", json_schema_extra={"x-ui": _ui(
-        "계산 방식", question="어떤 방식으로 나눌까요?", widget="cards",
+        "계산 방식", question="비중 산출 방식", widget="cards",
         options={m: MODEL_PLAIN.get(m, m) for m in _MODELS})})))
 BacktestParams = _subset("BacktestParams", BacktestRequest,
                          ("rebalance", "window_days", "cost_bps"), ui={
-    "rebalance": _ui("리밸런싱 주기", question="얼마나 자주 비중을 맞출까요?",
+    "rebalance": _ui("리밸런싱 주기", question="리밸런싱 주기",
                      options={"M": "매월", "Q": "분기마다"}),
-    "window_days": _ui("학습 기간", "advanced", help="비우면 처음부터 모든 과거를 써요(확장 창)."),
-    "cost_bps": _ui("거래비용", question="거래비용을 얼마로 볼까요?", unit="bp",
+    "window_days": _ui("학습 기간", "advanced", help="비우면 처음부터 모든 과거를 씁니다(확장 창)."),
+    "cost_bps": _ui("거래비용", question="거래비용 가정", unit="bp",
                     presets=[{"label": "0.05%", "value": 5}, {"label": "0.1%", "value": 10},
                              {"label": "0.3%", "value": 30}]),
 })
@@ -206,8 +206,8 @@ class ViewsParams(BaseModel):
     model_config = _FORBID
     views: list[AllocationView] = Field(
         default_factory=list, max_length=30,
-        json_schema_extra={"x-ui": _ui("내 생각", question="어떤 전망을 넣을까요?",
-                                       help="종목의 1년 기대 수익과 확신을 적어요.")})
+        json_schema_extra={"x-ui": _ui("내 생각", question="투자 전망(뷰) 입력",
+                                       help="종목의 1년 기대 수익과 확신을 적습니다.")})
 
 
 # ── 노드 처리기 ──────────────────────────────────────────────────────────────
@@ -232,7 +232,7 @@ def _returns(inputs: dict, p) -> pg.NodeOutput:
     if returns is None or len(returns.columns) < 2:
         why = "; ".join(f"{x['ticker']}: {x['reason']}" for x in excluded) or "없음"
         raise pg.NodeFailure("분석 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 "
-                             f"추가하세요. (제외: {why})")
+                             f"추가하십시오. (제외: {why})")
     names = list(returns.columns)
     source = coverage.get("source")
     provenance = {
@@ -280,15 +280,15 @@ def _fallback_texts(fallbacks: list[dict], model: str, constraints_report: dict 
     out = []
     for f in fallbacks:
         if f.get("stage") == "optimized":
-            text = f"‘{name}’ 방식이 답을 내지 못해 역변동성 비중으로 대신했어요. {f.get('reason')}"
+            text = f"‘{name}’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다. {f.get('reason')}"
             if resolved:
-                text += " 그 뒤 제약을 걸어 다시 풀어서, 최종 비중이 이 대체를 얼마나 따랐는지는 재지 않았어요."
+                text += " 그 뒤 제약을 걸어 다시 풀어서, 최종 비중이 이 대체를 얼마나 따랐는지는 측정하지 않았습니다."
         else:
             text = str(f.get("reason") or "")
-            text += (" 그래서 비중은 시가총액 비중이에요." if f.get("affects_weights")
-                     else " 그 뒤 제약을 걸어 생각을 넣은 기대 수익으로 다시 풀어서, 최종 비중에는 생각이 들어갔어요."
+            text += (" 그래서 비중은 시가총액 비중입니다." if f.get("affects_weights")
+                     else " 그 뒤 제약을 걸어 생각을 넣은 기대 수익으로 다시 풀어서, 최종 비중에는 생각이 들어갔습니다."
                      if f.get("resolved_by") == "constraints"
-                     else f" ‘{name}’ 방식은 생각을 쓰지 않아 최종 비중에는 닿지 않아요.")
+                     else f" ‘{name}’ 방식은 생각을 쓰지 않아 최종 비중에는 닿지 않습니다.")
         out.append({**f, "text": text})
     return out
 
@@ -387,8 +387,8 @@ def _risk(inputs: dict, p) -> pg.NodeOutput:
     w = inputs["weights"]
     names, sigma = w["names"], w.get("sigma_annual")
     if sigma is None:
-        raise pg.NodeFailure("이 비중에는 공분산이 함께 오지 않아 위험을 나눌 수 없어요 — "
-                             "공분산을 추정하는 노드(비중 계산)의 비중을 이어 주세요.")
+        raise pg.NodeFailure("이 비중에는 공분산이 함께 오지 않아 위험을 나눌 수 없습니다 — "
+                             "공분산을 추정하는 노드(비중 계산)의 비중을 연결하십시오.")
     sigma_source = w.get("sigma_source") or "미상"
     view = {
         "risk_contribution_optimized": _risk_contribution_report(
@@ -404,11 +404,11 @@ def _risk(inputs: dict, p) -> pg.NodeOutput:
 def _backtest_admits(lineage: dict) -> str | None:
     """정책 백테스트가 받지 않는 계보 (BK0) — 조용히 벗겨 내지 않고 거절한다."""
     if lineage.get("overlay"):
-        return ("오늘 계산한 노출 조절이 얹힌 비중이에요. 오늘의 판단을 과거 전체에 쓰면 미래를 "
-                "보고 한 계산이 돼요 — ‘시점별 타이밍 시뮬레이션’으로 과거를 확인해 주세요.")
+        return ("오늘 계산한 노출 조절이 얹힌 비중입니다. 오늘의 판단을 과거 전체에 쓰면 미래를 "
+                "보고 한 계산이 됩니다 — ‘시점별 타이밍 시뮬레이션’으로 과거를 확인하십시오.")
     if lineage.get("pit") == "forward_only":
-        return ("지금 시점에만 쓸 수 있는 값(전망·국면 스냅샷)이 섞여 있어요. 과거에 쓰면 미래를 "
-                "보고 한 계산이 돼서 백테스트하지 않아요.")
+        return ("지금 시점에만 쓸 수 있는 값(전망·국면 스냅샷)이 섞여 있습니다. 과거에 쓰면 미래를 "
+                "보고 한 계산이 돼서 백테스트하지 않습니다.")
     return None
 
 
@@ -418,8 +418,8 @@ def _backtest(inputs: dict, p) -> pg.NodeOutput:
     if req is None:
         # 이 노드는 비중을 되돌리지 않고 **규칙(옵티마이저 요청)** 을 다시 돌린다. 규칙 없는
         # 비중을 받아 옵티마이저 성과를 그 비중의 성과처럼 보이면 안 된다.
-        raise pg.NodeFailure("이 비중에는 과거로 되돌려 볼 규칙이 없어요 — 정책 백테스트는 "
-                             "‘비중 계산’ 노드의 규칙을 시점마다 다시 풀어요. 비중 계산 노드를 이어 주세요.")
+        raise pg.NodeFailure("이 비중에는 과거로 되돌려 볼 규칙이 없습니다 — 정책 백테스트는 "
+                             "‘비중 계산’ 노드의 규칙을 시점마다 다시 풉니다. 비중 계산 노드를 연결하십시오.")
     try:
         breq = BacktestRequest(
             tickers=r["universe"]["tickers"], benchmark=r["universe"]["benchmark"],
@@ -465,37 +465,37 @@ def _save_research_run(values: dict, view: dict, params: Any) -> dict:
     got = (probe.get("weights") or {}).get("optimized") or {}
     want = view.get("weights") or {}
     if set(got) != set(want) or any(abs(float(got[k]) - float(want[k])) > 1e-6 for k in want):
-        raise pg.NodeFailure("기록 경로(/analyze)가 이 미리보기와 다른 비중을 내서 기록하지 않았어요 — "
-                             "/analyze 에 없는 설정(예: 회사 뷰의 수렴 기간)을 기본값으로 돌리면 기록할 수 있어요.")
+        raise pg.NodeFailure("기록 경로(/analyze)가 이 미리보기와 다른 비중을 내서 기록하지 않았습니다 — "
+                             "/analyze 에 없는 설정(예: 회사 뷰의 수렴 기간)을 기본값으로 돌리면 기록할 수 있습니다.")
     out = run_analyze(req.model_copy(update={**upd, "record_run": True}))
     rid = out.get("run_id")
     if not rid:
-        raise pg.NodeFailure("DB 를 쓸 수 없어 연구 기록을 남기지 못했어요.")
-    return {"saved_id": rid, "text": f"연구 기록으로 남겼어요 · {rid}"}
+        raise pg.NodeFailure("DB 를 쓸 수 없어 연구 기록을 남기지 못했습니다.")
+    return {"saved_id": rid, "text": f"연구 기록으로 남겼습니다 · {rid}"}
 
 
 REGISTRY = pg.Registry(port_types=PORT_TYPES)
 for _spec in (
     pg.NodeSpec("universe", "유니버스", stage="data", plain_label="종목 고르기",
-                plain_description="분석할 종목과 지금 비중을 정해요.", explain=EXPLAINERS["universe"], inputs=(), outputs=(P("universe", "Universe"),),
+                plain_description="분석할 종목과 지금 비중을 정합니다.", explain=EXPLAINERS["universe"], inputs=(), outputs=(P("universe", "Universe"),),
                 run=_universe, params_model=UniverseParams, category="입력",
                 description="종목 목록 · 현재 비중(선택) · 벤치마크."),
     pg.NodeSpec("returns", "수익률", stage="data", plain_label="수익률 불러오기",
-                plain_description="기간과 기준일을 정해요.", explain=EXPLAINERS["returns"], inputs=(P("universe", "Universe"),),
+                plain_description="기간과 기준일을 정합니다.", explain=EXPLAINERS["returns"], inputs=(P("universe", "Universe"),),
                 outputs=(P("returns", "Returns"),), run=_returns, params_model=ReturnsParams,
                 category="데이터",
                 description="적재된 일별 수익률(lookback·절단일). 운영에서는 합성하지 않는다."),
     pg.NodeSpec("views", "BL 뷰", stage="belief", plain_label="내 생각 넣기",
-                plain_description="“삼성전자가 오를 것” 같은 전망을 넣어요.", explain=EXPLAINERS["views"], inputs=(), outputs=(P("views", "Views"),), run=_views,
+                plain_description="“삼성전자가 오를 것” 같은 전망을 넣습니다.", explain=EXPLAINERS["views"], inputs=(), outputs=(P("views", "Views"),), run=_views,
                 params_model=ViewsParams, category="입력",
                 description="절대(assets) 또는 부호 있는 조합(weights) 뷰."),
     pg.NodeSpec("estimate", "추정 설정", stage="belief", plain_label="기대 수익 추정",
-                plain_description="과거 기준 또는 경기 국면을 반영해요.", explain=EXPLAINERS["estimate"], inputs=(P("returns", "Returns"),),
+                plain_description="과거 기준 또는 경기 국면을 반영합니다.", explain=EXPLAINERS["estimate"], inputs=(P("returns", "Returns"),),
                 outputs=(P("belief", "Belief"),), run=_estimate, params_model=EstimateParams,
                 category="추정",
                 description="표본 또는 국면조건부 μ/Σ 설정. 계산은 옵티마이저가 자기 모델로 한다."),
     pg.NodeSpec("optimizer", "옵티마이저", stage="build", plain_label="비중 계산",
-                plain_description="여러 방식 중 하나로 비중을 나눠요.", explain=EXPLAINERS["optimizer"],
+                plain_description="여러 방식 중 하나로 비중을 나눕니다.", explain=EXPLAINERS["optimizer"],
                 inputs=(P("returns", "Returns"), P("belief", "Belief"),
                         P("views", "Views", required=False)),
                 outputs=(P("weights", "Weights"),), run=_optimizer,
@@ -503,11 +503,11 @@ for _spec in (
                 save=_save_research_run, save_label="연구 기록 남기기",
                 description="/analyze 와 같은 최적화·제약. 결과는 가중치와 정책을 함께 나른다."),
     pg.NodeSpec("risk", "리스크 분해", stage="check", plain_label="흔들림 나눠 보기",
-                plain_description="어느 종목이 위험을 얼마나 만드는지 봐요.", explain=EXPLAINERS["risk"], inputs=(P("weights", "Weights"),),
+                plain_description="어느 종목이 위험을 얼마나 만드는지 봅니다.", explain=EXPLAINERS["risk"], inputs=(P("weights", "Weights"),),
                 outputs=(P("risk", "RiskReport"),), run=_risk, category="분석",
                 description="오일러 리스크 기여 · ENB/Neff (추천 포트폴리오 기준)."),
     pg.NodeSpec("backtest", "정책 백테스트", stage="check", plain_label="과거로 돌려 보기",
-                plain_description="이 규칙대로 했다면 어땠을지 봐요.", explain=EXPLAINERS["backtest"],
+                plain_description="이 규칙대로 했다면 어땠을지 봅니다.", explain=EXPLAINERS["backtest"],
                 inputs=(P("returns", "Returns"), P("weights", "Weights")),
                 outputs=(P("backtest", "BacktestResult"),), run=_backtest, admits=_backtest_admits,
                 params_model=BacktestParams, category="분석",

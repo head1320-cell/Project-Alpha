@@ -17,7 +17,7 @@ import { contrastAudit, type AuditResult } from "./helpers";
 
 const API = "**/api/backend/api/v1";
 const SECS = ["value", "models", "numbers", "money", "risk", "peers", "factors", "ai"] as const;
-const TOC = ["가치", "여러 모형", "핵심 숫자", "돈 버는 힘", "위험", "같은 업종", "팩터", "AI"];
+const TOC = ["가치", "여러 모형", "핵심 숫자", "수익성", "위험", "동종업계", "팩터", "AI"];
 
 async function open(page: Page, code = "005930") {
   await page.goto(`/insights?code=${code}`, { waitUntil: "domcontentloaded" });
@@ -64,7 +64,7 @@ test("답 짝 — 원래 응답 그대로면 그 값", async ({ page }) => {
   await expect(s).toContainText(`${Math.round(ev.intrinsic_value).toLocaleString("ko-KR")}원`, { timeout: 40_000 });
   await expect(s).toContainText(`${Math.round(Math.abs(ev.gap_pct))}% ${ev.gap_pct < 0 ? "낮게" : "높게"}`);
 });
-test("내재가치가 없으면(0) 판단 없이 '계산하지 못했어요' — 0% 를 지어내지 않는다", async ({ page }) => {
+test("내재가치가 없으면(0) 판단 없이 '산출 실패' — 0% 를 지어내지 않는다", async ({ page }) => {
   await patchBaseEval(page, (b) => { b.intrinsic_value = 0; b.gap_pct = 0; b.models = []; });
   await page.route(`${API}/screener/run-advanced`, async (route) => {
     const res = await route.fetch(); const body = await res.json();
@@ -73,13 +73,13 @@ test("내재가치가 없으면(0) 판단 없이 '계산하지 못했어요' —
   });
   await open(page);
   const s = page.locator(".ci .tx-answer-s");
-  await expect(s).toContainText("계산하지 못했어요", { timeout: 40_000 });
+  await expect(s).toContainText("산출 실패", { timeout: 40_000 });
   expect(await s.innerText()).not.toMatch(/%/);
 });
 
 // ── 연습용 표시 ──
 // BU6a+: 연습용 칩 = connection-status ∨ evaluate is_mock(아래 BU6a+ 테스트가 is_mock 쪽을 건다). 여기서는 is_mock 을 false 로 묶고 connection-status 만 본다.
-test("연습용 칩 — connection-status mock_allowed true 면 있다(짝: false 이고 응답도 연습용이 아니면 없다)", async ({ page }) => {
+test("합성 칩 — connection-status mock_allowed true 면 있다(짝: false 이고 응답도 합성 데이터가 아니면 없다)", async ({ page }) => {
   await patchBaseEval(page, (b) => { b.is_mock = false; });
   await page.route(`${API}/macro/connection-status`, (r) => r.fulfill({ json: { mock_allowed: true, bok_configured: false, fred_configured: false } }));
   await open(page);
@@ -93,24 +93,24 @@ test("연습용 칩 — connection-status mock_allowed true 면 있다(짝: fals
 });
 
 // ── ★주가를 지어 그리지 않는다★ ──
-test("★시세가 비면 주가 선이 없다★ — 합성 경로 대신 '시세가 아직 적재되지 않았어요'(짝: 정상은 선 1)", async ({ page }) => {
+test("★시세가 비면 주가 선이 없다★ — 합성 경로 대신 '시세가 아직 적재되지 않았습니다'(짝: 정상은 선 1)", async ({ page }) => {
   await open(page);
   const fig = page.locator(".ci-sec[data-sec=value] .ci-pv");
   await expect(fig.locator(".recharts-line")).toHaveCount(1, { timeout: 40_000 });
   await page.route(`${API}/prices/**`, (r) => r.fulfill({ json: { ticker: "005930", count: 0, prices: [] } }));
   await open(page);
-  await expect(page.locator(".ci-sec[data-sec=value] .ci-pv-noprice")).toContainText("시세가 아직 적재되지 않았어요", { timeout: 40_000 });
+  await expect(page.locator(".ci-sec[data-sec=value] .ci-pv-noprice")).toContainText("시세가 아직 적재되지 않았습니다", { timeout: 40_000 });
   expect(await page.locator(".ci-sec[data-sec=value] .ci-pv .recharts-line").count()).toBe(0);
   // 그림 자리에 "합성" 표시가 없다(서버가 보낸 출처 글 — 예: 무위험수익률 "연습용 합성 (mock)" — 은 `data-server` 라 여기서 보지 않는다).
   expect(await page.locator(".ci-sec[data-sec=value] .ci-pv").innerText()).not.toContain("합성");
   expect(await page.locator(".ca-mockbadge").count()).toBe(0);
 });
-test("시세 요청 실패(500) 는 '없음'이 아니라 실패 — 가치 절에 alert + 다시 시도", async ({ page }) => {
+test("시세 요청 실패(500) 는 '없음'이 아니라 실패 — 가치 절에 alert + 재시도", async ({ page }) => {
   await page.route(`${API}/prices/**`, (r) => r.fulfill(fail500));
   await open(page);
   const alert = page.locator(".ci-sec[data-sec=value] [role=alert]");
   await expect(alert.first()).toBeVisible({ timeout: 40_000 });
-  await expect(alert.first().getByRole("button", { name: "다시 시도" })).toBeVisible();
+  await expect(alert.first().getByRole("button", { name: "재시도" })).toBeVisible();
 });
 
 // ── 실패 ≠ 값 없음 ──
@@ -206,7 +206,7 @@ test("추세 스파크라인은 등락색 — 오름 = --tx-up, 내림 = --tx-do
 });
 
 // ── 0 ≠ 미상 ──
-test("배당 0% 는 '0%'(짝: 값이 없으면 '몰라요') — 0 과 미상을 섞지 않는다", async ({ page }) => {
+test("배당 0% 는 '0%'(짝: 값이 없으면 'N/A') — 0 과 미상을 섞지 않는다", async ({ page }) => {
   await page.route(`${API}/screener/run-advanced`, async (route) => {
     const res = await route.fetch(); const body = await res.json();
     for (const it of body.items ?? []) { if (it.stock_code === "005930") { it.dividend_yield_pct = 0; it.debt_ratio_pct = null; } }
@@ -216,15 +216,15 @@ test("배당 0% 는 '0%'(짝: 값이 없으면 '몰라요') — 0 과 미상을 
   await open(page);
   const nums = page.locator(".ci-sec[data-sec=numbers] .ci-num");
   await expect(nums.filter({ hasText: "배당" }).locator("dd")).toHaveText("0%", { timeout: 30_000 });
-  await expect(nums.filter({ hasText: "부채비율" }).locator("dd")).toContainText("몰라요");
+  await expect(nums.filter({ hasText: "부채비율" }).locator("dd")).toContainText("N/A");
 });
 
 // ── 이동 ──
-test("?code= 로 연 종목이 h1 · 설계에 넣기 = /allocation?tickers=그 코드 · 같은 업종 행을 누르면 그 종목", async ({ page }) => {
+test("?code= 로 연 종목이 h1 · 설계에 넣기 = /allocation?tickers=그 코드 · 동종업계 행을 누르면 그 종목", async ({ page }) => {
   await open(page, "000660");
   await expect(page.locator(".ci-head h1")).toContainText("SK하이닉스", { timeout: 40_000 });
   await expect(page.locator(".ci-head a.ci-bridge")).toHaveAttribute("href", "/allocation?tickers=000660");
-  await page.locator(".ci-toc-item", { hasText: "같은 업종" }).click();
+  await page.locator(".ci-toc-item", { hasText: "동종업계" }).click();
   const row = page.locator(".ci-sec[data-sec=peers] tr[data-code]:not(.self)").first();
   await expect(row).toBeVisible({ timeout: 30_000 });
   const code = await row.getAttribute("data-code");
@@ -366,14 +366,14 @@ test("여러 모형 — 시나리오 가중: '현재가보다 높을 확률' = �
   await expect(c.locator(".tx-chip[data-tone=assumed]").first()).toBeVisible();
 });
 test("★못 낸 모형은 사유 — 숫자를 지어내지 않고 alert 도 아니다★ (EVA available:false)", async ({ page }) => {
-  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "재무 연도가 둘보다 적어 EVA 를 재지 못했어요", code: "005930", is_mock: true } }));
+  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "재무 연도가 둘보다 적어 EVA 를 재지 못했습니다", code: "005930", is_mock: true } }));
   await openModels(page);
   const c = card(page, "eva");
   await expect(c.locator(".ci-mcard-reason")).toContainText("재무 연도가 둘보다 적어", { timeout: 40_000 });
   expect(await c.locator("[role=alert]").count()).toBe(0);
   expect(await c.locator(".ci-mcard-ans").count()).toBe(0);
 });
-test("★모형 요청 실패(500)는 그 카드 alert + 다시 시도 → 풀면 회복★ · 짝: 다른 카드는 alert 0", async ({ page }) => {
+test("★모형 요청 실패(500)는 그 카드 alert + 재시도 → 풀면 회복★ · 짝: 다른 카드는 alert 0", async ({ page }) => {
   let fail = true;
   await page.route(`${CO}/models/multiples`, (r) => (fail ? r.fulfill(fail500) : r.continue()));
   await openModels(page);
@@ -381,7 +381,7 @@ test("★모형 요청 실패(500)는 그 카드 alert + 다시 시도 → 풀�
   await expect(c.locator("[role=alert]")).toBeVisible({ timeout: 40_000 });
   expect(await card(page, "rdcf").locator("[role=alert]").count()).toBe(0);
   fail = false;
-  await c.getByRole("button", { name: "다시 시도" }).click();
+  await c.getByRole("button", { name: "재시도" }).click();
   await expect(c.locator(".ci-mcard-ans, .ci-mcard-reason").first()).toBeVisible({ timeout: 40_000 });
   expect(await c.locator("[role=alert]").count()).toBe(0);
 });
@@ -407,10 +407,10 @@ test("캔버스 다리 ?company= — 기업 하나 깊게 흐름이 그 코드�
 });
 
 test("모형 한눈에 — 줄마다 점 또는 사유 · 현재가 선 1 · 'n개 중 m개' = 세어 본 값 · 못 낸 모형도 줄이 남는다", async ({ page }) => {
-  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "EVA 를 재지 못했어요(시험)", code: "005930", is_mock: true } }));
+  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "EVA 를 재지 못했습니다(시험)", code: "005930", is_mock: true } }));
   await openModels(page);
   const lad = page.locator(".ci-sec[data-sec=value] .ci-ladder");
-  await expect(lad.locator(".ci-lad-row[data-key=eva] .ci-lad-reason")).toContainText("재지 못했어요", { timeout: 40_000 });
+  await expect(lad.locator(".ci-lad-row[data-key=eva] .ci-lad-reason")).toContainText("측정 불가", { timeout: 40_000 });
   await page.waitForTimeout(4000);
   const rows = await lad.locator(".ci-lad-row").evaluateAll((els) => els.map((e) => ({
     dots: e.querySelectorAll(".ci-lad-dot").length, reason: !!e.querySelector(".ci-lad-reason"), wait: !!e.querySelector(".ci-lad-wait"),
@@ -446,7 +446,7 @@ test("미니 머리 — 위에선 없고 내려가면 붙는다 · 전일 대비
   expect(await page.locator(".ci-mini .ci-mini-chg").count()).toBe(0);
 });
 
-test("오른쪽 레일 — 1440 에선 보이고 내려가도 화면 안 · 같은 업종을 누르면 그 종목(짝: 1180 에선 없다)", async ({ page }) => {
+test("오른쪽 레일 — 1440 에선 보이고 내려가도 화면 안 · 동종업계을 누르면 그 종목(짝: 1180 에선 없다)", async ({ page }) => {
   await open(page);
   const rail = page.locator(".ci-rail");
   await expect(rail).toBeVisible({ timeout: 30_000 });
@@ -479,7 +479,7 @@ test("매크로 민감도(위험 절) — 막대 수 = 서버 가용 충격 수 
   await expect(box.locator(".ci-macro-na li")).toHaveCount(m.unavailable.length);
 });
 
-test("연습용 칩 — 응답의 is_mock 도 본다(connection-status 가 false 여도) · 짝: 둘 다 false 면 없다", async ({ page }) => {
+test("합성 칩 — 응답의 is_mock 도 본다(connection-status 가 false 여도) · 짝: 둘 다 false 면 없다", async ({ page }) => {
   await page.route(`${API}/macro/connection-status`, (r) => r.fulfill({ json: { mock_allowed: false, bok_configured: true, fred_configured: true } }));
   await patchBaseEval(page, (b) => { b.is_mock = true; });
   await open(page);
@@ -580,31 +580,31 @@ const visibleTexts = (root: Element) => {
 };
 
 // ── 돈 버는 힘 ──
-test("돈 버는 힘 — 답 문장 = 서버 첫·마지막 해 매출(고치면 따라간다) · 짝: 줄면 '줄었어요'", async ({ page }) => {
+test("수익성 — 답 문장 = 서버 첫·마지막 해 매출(고치면 따라간다) · 짝: 줄면 '줄었습니다'", async ({ page }) => {
   await patchAnnual(page, (rows) => {
     const ys = rows.map((r) => Number(r.year)); const lo = Math.min(...ys), hi = Math.max(...ys);
     for (const r of rows) { if (Number(r.year) === lo) r["revenue_억"] = 12345; if (Number(r.year) === hi) r["revenue_억"] = 23456; }
   });
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   const a = sec(page, "money").locator(".ci-money-ans");
   await expect(a).toContainText("1.2조원", { timeout: 30_000 });
   await expect(a).toContainText("2.3조원");
-  await expect(a).toContainText("늘었어요");
+  await expect(a).toContainText("늘었습니다");
   await page.unroute(`${API}/valuation/financial/*`);
   await patchAnnual(page, (rows) => {
     const ys = rows.map((r) => Number(r.year)); const lo = Math.min(...ys), hi = Math.max(...ys);
     for (const r of rows) { if (Number(r.year) === lo) r["revenue_억"] = 23456; if (Number(r.year) === hi) r["revenue_억"] = 12345; }
   });
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
-  await expect(sec(page, "money").locator(".ci-money-ans")).toContainText("줄었어요", { timeout: 30_000 });
+  await goSec(page, "money", "수익성");
+  await expect(sec(page, "money").locator(".ci-money-ans")).toContainText("줄었습니다", { timeout: 30_000 });
 });
-test("돈 버는 힘 — 이야기 그림(매출 막대 = 연도 수 · 이익률 선 둘 + 글자 범례) · 표는 접혀 있고 펼치면 9줄 · '항목(억원)' 거짓 단위 0", async ({ page }) => {
+test("수익성 — 이야기 그림(매출 막대 = 연도 수 · 이익률 선 둘 + 글자 범례) · 표는 접혀 있고 펼치면 9줄 · '항목(억원)' 거짓 단위 0", async ({ page }) => {
   const finP = page.waitForResponse((r) => r.url().includes("/valuation/financial/") && r.url().includes("period=annual"));
   await open(page);
   const n = ((await (await finP).json()).financials ?? []).length as number;
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   const story = sec(page, "money").locator(".ci-story");
   await expect(story.locator(".recharts-bar-rectangle")).toHaveCount(n, { timeout: 30_000 });
   await expect(story.locator(".recharts-line")).toHaveCount(2);
@@ -619,25 +619,25 @@ test("돈 버는 힘 — 이야기 그림(매출 막대 = 연도 수 · 이익�
   await expect(sec(page, "money").locator("table.ca-cp-fin thead th").first()).toHaveText("항목");
   expect(await sec(page, "money").innerText()).not.toContain("억원)");
 });
-test("돈 버는 힘 — 모르는 해 매출은 '몰라요'(0억 아님) · 연도 재무 500 은 alert + 다시 시도('자료가 없어요' 아님)", async ({ page }) => {
+test("수익성 — 모르는 해 매출은 'N/A'(0억 아님) · 연도 재무 500 은 alert + 재시도('자료 없음' 아님)", async ({ page }) => {
   await patchAnnual(page, (rows) => { rows[1]["revenue_억"] = null; });
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   await sec(page, "money").locator("details.ci-fin-more summary").click();
   const row = sec(page, "money").locator("table.ca-cp-fin tbody tr").first();
-  await expect(row.locator("td")).toContainText(["몰라요"], { timeout: 30_000 });
+  await expect(row.locator("td")).toContainText(["N/A"], { timeout: 30_000 });
   await page.unroute(`${API}/valuation/financial/*`);
   await page.route(`${API}/valuation/financial/*`, (r) => (r.request().url().includes("period=annual") ? r.fulfill(fail500) : r.continue()));
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   await expect(sec(page, "money").locator("[role=alert]").first()).toBeVisible({ timeout: 30_000 });
-  await expect(sec(page, "money").getByRole("button", { name: "다시 시도" }).first()).toBeVisible();
+  await expect(sec(page, "money").getByRole("button", { name: "재시도" }).first()).toBeVisible();
 });
 test("재무 심화 — 이익의 질 두 선 + 글자 범례 · 경고는 '주의' 칩 + 서버 문장 · 자본비용 대비 이익률은 중립색 + 부호(짝: 음수도 같은 색)", async ({ page }) => {
   const neg = clone(FX_FIN) as { roic_wacc: { spread: number; verdict: string } };
   await deep(page);
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   const fd = sec(page, "money").locator(".ci-fd");
   await expect(fd.locator(".ci-fd-qoe svg.ca-fd-mini polyline")).toHaveCount(2, { timeout: 30_000 });
   await expect(fd.locator(".ci-fd-qoe .ci-fd-key")).toContainText(["순이익", "영업현금흐름"]);
@@ -651,31 +651,31 @@ test("재무 심화 — 이익의 질 두 선 + 글자 범례 · 경고는 '주�
   await page.unroute(`${CO}/financial-deep`);
   await page.route(`${CO}/financial-deep`, (r) => r.fulfill({ json: neg }));
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   const sp2 = sec(page, "money").locator(".ci-fd-spread");
   await expect(sp2).toHaveText("−2.40%p", { timeout: 30_000 });
   expect(await sp2.evaluate((e) => getComputedStyle(e).color)).toBe(c1);
 });
-test("★재무 심화 500 → alert + 다시 시도 → 풀면 그림★ · 짝: 미적재(available:false)는 사람 말 사유이고 alert 0", async ({ page }) => {
+test("★재무 심화 500 → alert + 재시도 → 풀면 그림★ · 짝: 미적재(available:false)는 사람 말 사유이고 alert 0", async ({ page }) => {
   await page.route(`${CO}/financial-deep`, (r) => r.fulfill(fail500));
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   const fd = sec(page, "money").locator(".ci-fd");
   await expect(fd.locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
   expect(await fd.innerText()).not.toMatch(/failed|로드 실패/);
   await page.unroute(`${CO}/financial-deep`);
   await page.route(`${CO}/financial-deep`, (r) => r.fulfill({ json: FX_FIN }));
-  await fd.getByRole("button", { name: "다시 시도" }).click();
+  await fd.getByRole("button", { name: "재시도" }).click();
   await expect(fd.locator(".ci-fd-qoe")).toBeVisible({ timeout: 30_000 });
   await page.unroute(`${CO}/financial-deep`);
   await open(page);
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   await expect(sec(page, "money").locator(".ci-fd .ci-fd-reason")).toContainText("적재되지 않아", { timeout: 30_000 });
   await expect(sec(page, "money").locator(".ci-fd [role=alert]")).toHaveCount(0);
 });
 
 // ── 위험 ──
-test("부도 위험 점수(알트만 Z) — 구간 막대의 점 위치 = 서버 z · 경계 1.8·3.0 · 짝: z 를 바꾸면 점이 움직인다 · 기여 막대는 한 색", async ({ page }) => {
+test("Altman Z-Score(알트만 Z) — 구간 막대의 점 위치 = 서버 z · 경계 1.8·3.0 · 짝: z 를 바꾸면 점이 움직인다 · 기여 막대는 한 색", async ({ page }) => {
   await deep(page);
   await open(page);
   await goSec(page, "risk", "위험");
@@ -700,7 +700,7 @@ test("부도 위험 점수(알트만 Z) — 구간 막대의 점 위치 = 서버
   await expect(dot2).toHaveAttribute("data-v", "3.6", { timeout: 30_000 });
   expect(parseFloat(await dot2.evaluate((e) => (e as HTMLElement).style.left))).toBeCloseTo(72, 0);
 });
-test("위험 심화 — 이익 조작 점검 8줄(근거 칩) · 금리 충격 표는 원 · 모르는 값 '몰라요'(₩·— 0) · 커버리지 범례는 글자", async ({ page }) => {
+test("위험 심화 — Beneish M-Score 8줄(근거 칩) · 금리 충격 표는 원 · 모르는 값 'N/A'(₩·— 0) · 커버리지 범례는 글자", async ({ page }) => {
   await deep(page);
   await open(page);
   await goSec(page, "risk", "위험");
@@ -709,13 +709,13 @@ test("위험 심화 — 이익 조작 점검 8줄(근거 칩) · 금리 충격 �
   await expect(rd.locator(".ci-ben .ci-basis")).toHaveCount(8);
   const st = rd.locator(".ci-stress");
   await expect(st).toContainText("20,596원");
-  await expect(st).toContainText("몰라요");
+  await expect(st).toContainText("N/A");
   const t = await rd.innerText();
   expect(t).not.toContain("₩");
   await expect(rd.locator(".ci-cov .ci-fd-key")).toContainText(["이자보상배율", "순부채/EBITDA"]);
   expect(t).not.toMatch(/\((검정|파랑)\)/);
 });
-test("★위험 심화 500 → alert + 다시 시도 → 회복★ · 시세 500 이면 '시세로 잰 위험'도 alert(계산할 수 없다는 사유가 아니다)", async ({ page }) => {
+test("★위험 심화 500 → alert + 재시도 → 회복★ · 시세 500 이면 '시세로 잰 위험'도 alert(계산할 수 없다는 사유가 아니다)", async ({ page }) => {
   await page.route(`${CO}/risk-deep*`, (r) => r.fulfill(fail500));
   await open(page);
   await goSec(page, "risk", "위험");
@@ -723,7 +723,7 @@ test("★위험 심화 500 → alert + 다시 시도 → 회복★ · 시세 500
   await expect(rd.locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
   await page.unroute(`${CO}/risk-deep*`);
   await page.route(`${CO}/risk-deep*`, (r) => r.fulfill({ json: FX_RISK }));
-  await rd.getByRole("button", { name: "다시 시도" }).click();
+  await rd.getByRole("button", { name: "재시도" }).click();
   await expect(rd.locator(".ci-alt-dot")).toBeVisible({ timeout: 30_000 });
   await page.unroute(`${CO}/risk-deep*`);
   await page.route(`${API}/prices/*`, (r) => r.fulfill(fail500));
@@ -735,7 +735,7 @@ test("★위험 심화 500 → alert + 다시 시도 → 회복★ · 시세 500
 });
 
 // ── 같은 업종 ──
-test("같은 업종 — 괴리를 모르면 '몰라요'(+0.0% 아님) · 시가총액을 하나도 모르면 열 대신 사유 한 줄(짝: 있으면 열) · 업종 피어 500 → alert", async ({ page }) => {
+test("동종업계 — 괴리를 모르면 'N/A'(+0.0% 아님) · 시가총액을 하나도 모르면 열 대신 사유 한 줄(짝: 있으면 열) · 업종 피어 500 → alert", async ({ page }) => {
   await page.route(`${API}/screener/run-advanced`, async (route) => {
     const body = route.request().postDataJSON() as { universe: string };
     const res = await route.fetch(); const j = await res.json();
@@ -745,17 +745,17 @@ test("같은 업종 — 괴리를 모르면 '몰라요'(+0.0% 아님) · 시가�
     await route.fulfill({ response: res, json: j });
   });
   await open(page);
-  await goSec(page, "peers", "같은 업종");
+  await goSec(page, "peers", "동종업계");
   const pe = sec(page, "peers");
   await expect(pe.locator("tr[data-code]").first()).toBeVisible({ timeout: 30_000 });
   const gaps = await pe.locator("tr[data-code]:not(.self) td.gap").allInnerTexts();
   expect(gaps.length).toBeGreaterThan(1);
-  for (const g of gaps) expect(g).toBe("몰라요");
+  for (const g of gaps) expect(g).toBe("N/A");
   await expect(pe.locator("thead th", { hasText: "시가총액" })).toHaveCount(0);
   await expect(pe.locator(".ci-peer-note")).toContainText("시가총액");
   await page.unroute(`${API}/screener/run-advanced`);
   await open(page);
-  await goSec(page, "peers", "같은 업종");
+  await goSec(page, "peers", "동종업계");
   await expect(sec(page, "peers").locator("tr[data-code]").first()).toBeVisible({ timeout: 30_000 });
   // 짝은 서버 그대로 — 시가총액을 하나라도 알면 열이 있다
   const anyCap = await sec(page, "peers").locator(".ci-peer-note").count();
@@ -766,17 +766,17 @@ test("같은 업종 — 괴리를 모르면 '몰라요'(+0.0% 아님) · 시가�
     return route.continue();
   });
   await open(page);
-  await goSec(page, "peers", "같은 업종");
+  await goSec(page, "peers", "동종업계");
   await expect(sec(page, "peers").locator("[role=alert]").first()).toBeVisible({ timeout: 30_000 });
 });
-test("★관계도 500 → alert + 다시 시도★(옛 코드는 '등록된 관계가 없어요'로 삼켰다)", async ({ page }) => {
+test("★관계도 500 → alert + 재시도★(옛 코드는 '등록된 관계 없음'로 삼켰다)", async ({ page }) => {
   await page.route(`${API}/screener/graph-relations/*`, (r) => r.fulfill(fail500));
   await open(page);
-  await goSec(page, "peers", "같은 업종");
+  await goSec(page, "peers", "동종업계");
   const net = sec(page, "peers").locator(".ci-net");
   await expect(net.locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
   await page.unroute(`${API}/screener/graph-relations/*`);
-  await net.getByRole("button", { name: "다시 시도" }).click();
+  await net.getByRole("button", { name: "재시도" }).click();
   await expect(net.locator(".ca-cp-net-node").first()).toBeVisible({ timeout: 30_000 });
 });
 
@@ -873,7 +873,7 @@ test("팩터 카탈로그 500 → alert(빈 절이 아니다)", async ({ page })
 });
 
 // ── AI ──
-test("★AI 요청 500 → alert + 다시 시도★(서버 글로 위장하지 않는다) · 짝: 서버가 사유를 답하면 사유(alert 0)", async ({ page }) => {
+test("★AI 요청 500 → alert + 재시도★(서버 글로 위장하지 않는다) · 짝: 서버가 사유를 답하면 사유(alert 0)", async ({ page }) => {
   await page.route(`${API}/narrative/stock`, (r) => r.fulfill(fail500));
   await open(page);
   await goSec(page, "ai", "AI");
@@ -881,15 +881,15 @@ test("★AI 요청 500 → alert + 다시 시도★(서버 글로 위장하지 �
   await expect(sec(page, "ai").locator("[role=alert]")).toBeVisible({ timeout: 30_000 });
   expect(await sec(page, "ai").innerText()).not.toContain("narrative failed");
   await page.unroute(`${API}/narrative/stock`);
-  await page.route(`${API}/narrative/stock`, (r) => r.fulfill({ json: { content: "", total_tokens: 0, cost_krw: 0, cached: false, error: "AI 키가 설정되지 않았어요" } }));
-  await sec(page, "ai").getByRole("button", { name: "다시 시도" }).click();
-  await expect(sec(page, "ai").locator(".ci-ai-reason")).toContainText("AI 키가 설정되지 않았어요", { timeout: 30_000 });
+  await page.route(`${API}/narrative/stock`, (r) => r.fulfill({ json: { content: "", total_tokens: 0, cost_krw: 0, cached: false, error: "AI 키가 설정되지 않았습니다" } }));
+  await sec(page, "ai").getByRole("button", { name: "재시도" }).click();
+  await expect(sec(page, "ai").locator(".ci-ai-reason")).toContainText("AI 키가 설정되지 않았습니다", { timeout: 30_000 });
   await expect(sec(page, "ai").locator("[role=alert]")).toHaveCount(0);
 });
 
 // ── 다섯 절 공통: 글 · 대비 · 390 ──
-const BANNED_B = /\b(Z-Score|M-Score|QoE|NWC|OCF|CapEx|Value Creation|ANTHROPIC_API_KEY|Data Infra|quality|safety|composite)\b/;
-test("돈 버는 힘·위험·같은 업종·팩터·AI — em-dash 0 · 영어 꼬리표 0 · ₩ 0 · 툴팁 0 · 라이트/다크 AA · 390 넘침 0", async ({ page }) => {
+const BANNED_B = /\b(NWC|OCF|CapEx|Value Creation|ANTHROPIC_API_KEY|Data Infra|quality|safety|composite)\b/;
+test("수익성·위험·동종업계·팩터·AI — em-dash 0 · 영어 꼬리표 0 · ₩ 0 · 툴팁 0 · 라이트/다크 AA · 390 넘침 0", async ({ page }) => {
   await deep(page);
   await open(page);
   await scrollAll(page);
@@ -945,14 +945,14 @@ async function noSeen(page: Page) {
   });
 }
 
-test("U9 · 목차로 '같은 업종'을 고르면 그 절이 화면에 들지 않아도 관계도를 부른다 (짝: 목차를 누르지 않으면 부르지 않는다 — 게으름 그대로)", async ({ page }) => {
+test("U9 · 목차로 '동종업계'을 고르면 그 절이 화면에 들지 않아도 관계도를 부른다 (짝: 목차를 누르지 않으면 부르지 않는다 — 게으름 그대로)", async ({ page }) => {
   await noSeen(page);
   const rel: string[] = [];
   page.on("request", (r) => { if (r.url().includes("/screener/graph-relations/")) rel.push(r.url()); });
   await open(page);
   await page.waitForTimeout(1500);
   expect(rel, "목차를 누르기 전에는 관계도를 부르지 않는다").toHaveLength(0);
-  await page.locator(".ci-toc-item", { hasText: "같은 업종" }).first().click();
+  await page.locator(".ci-toc-item", { hasText: "동종업계" }).first().click();
   await expect.poll(() => rel.length, { timeout: 15_000, message: "목차로 고른 절은 늦은 내용을 부른다" }).toBeGreaterThan(0);
   await expect(sec(page, "peers").locator(".ci-net")).toBeVisible({ timeout: 30_000 });
 });
@@ -978,7 +978,7 @@ test("이야기 그림 — ★이중 축 0★: 매출 칸·이익률 칸(칸마�
   const years = fin.map((f) => Number(f.year)).sort((a, b) => a - b);
   expect(years.length, "두 해 이상이어야 이 검사가 뜻이 있다").toBeGreaterThan(2);
   const hi = years[years.length - 1], pv = years[years.length - 2];
-  await goSec(page, "money", "돈 버는 힘");
+  await goSec(page, "money", "수익성");
   const story = sec(page, "money").locator(".ci-story");
   await expect(story.locator(".recharts-bar-rectangle").first()).toBeVisible({ timeout: 30_000 });
   // ⑴ 두 칸 · 칸마다 y 축 하나(오른쪽 축 없음) — ★이 단언이 먼저다★(이중 축이 돌아오면 여기서 빨강)
@@ -1088,7 +1088,7 @@ function bars130(base: number, lastClose: number) {
   return Array.from({ length: 130 }, (_, i) => ({ date: new Date(day0 + i * 86_400_000).toISOString().slice(0, 10), close: i === 129 ? lastClose : base + (i % 7) * 100 }));
 }
 
-test("★주가 선은 서버 종가 그대로★ — 선 끝 = 마지막 종가(지금 주가가 달라도) · 솎아도 마지막 봉이 남는다 · 지금 주가는 따로 선 · 1년 주가 눈금 = 서버 종가 범위", async ({ page }) => {
+test("★주가 선은 서버 종가 그대로★ — 선 끝 = 마지막 종가(현재가가 달라도) · 솎아도 마지막 봉이 남는다 · 현재가는 따로 선 · 1년 주가 눈금 = 서버 종가 범위", async ({ page }) => {
   const P = await headerPrice(page);
   const base = Math.round((P * 0.6) / 100) * 100, lastClose = base + 300;          // 지금 주가보다 40% 낮은 이력(배율이 있으면 선이 통째로 올라간다)
   const prices = bars130(base, lastClose);
@@ -1103,7 +1103,7 @@ test("★주가 선은 서버 종가 그대로★ — 선 끝 = 마지막 종가
   await f.locator(".cr-table summary").click();
   await expect(f.locator(".cr-table tbody tr"), "두 칸씩 솎은 65 점 + 마지막 봉").toHaveCount(66);
   // ⑶ 지금 주가는 따로 — 글자로도(헤더와 같은 값)
-  await expect(fig.locator(".ci-pv-now")).toContainText(`지금 주가 ${wonS(P)}`);
+  await expect(fig.locator(".ci-pv-now")).toContainText(`현재가 ${wonS(P)}`);
   // ⑴ 선 끝은 마지막 종가의 높이에 있다. 세로 눈금은 높이를 아는 두 선(지금 주가 · 내재가치)으로 잰다.
   const intr = Number(((await fig.locator(".ci-pv-key").textContent()) ?? "").match(/내재가치 ([\d,]+)원/)?.[1].replace(/,/g, "") ?? NaN);
   expect(intr, "내재가치 선이 없으면 높이를 잴 수 없다").toBeGreaterThan(0);
@@ -1111,8 +1111,8 @@ test("★주가 선은 서버 종가 그대로★ — 선 끝 = 마지막 종가
   await page.waitForTimeout(600);
   const nowY = await midY(fig.locator(".ci-pv-nowline line")), intrY = await midY(fig.locator(".ci-pv-intr line")), endY = await midY(fig.locator(".ci-pv-end circle"));
   const valueAt = (y: number) => P + ((y - nowY) * (intr - P)) / (intrY - nowY);
-  expect(Math.abs(valueAt(endY) - lastClose) / lastClose, `선 끝의 높이 ${Math.round(valueAt(endY))} · 마지막 종가 ${lastClose} · 지금 주가 ${P}`).toBeLessThan(0.02);
-  expect(Math.abs(endY - nowY), "지금 주가 선과 선 끝은 다른 높이(값이 40% 다르다)").toBeGreaterThan(15);
+  expect(Math.abs(valueAt(endY) - lastClose) / lastClose, `선 끝의 높이 ${Math.round(valueAt(endY))} · 마지막 종가 ${lastClose} · 현재가 ${P}`).toBeLessThan(0.02);
+  expect(Math.abs(endY - nowY), "현재가 선과 선 끝은 다른 높이(값이 40% 다르다)").toBeGreaterThan(15);
   // 1년 주가(자세히 보기) — 세로 눈금이 서버 종가 범위 안(배율이 있으면 지금 주가 근처로 올라간다)
   await page.locator(".ci-sec[data-sec=value] details.ci-more > summary").click();
   const p1 = crIn(page.locator(".ci-sec[data-sec=value]"), "price-1y");
@@ -1125,7 +1125,7 @@ test("★주가 선은 서버 종가 그대로★ — 선 끝 = 마지막 종가
   await expect(p1.locator(".cr-read")).toContainText(`종가 ${wonS(lastClose)}`);
 });
 
-test("짝 — 마지막 종가가 지금 주가와 같으면 선 끝과 지금 주가 선이 한 점에서 만난다", async ({ page }) => {
+test("짝 — 마지막 종가가 현재가와 같으면 선 끝과 현재가 선이 한 점에서 만난다", async ({ page }) => {
   const P = await headerPrice(page);
   const prices = bars130(P - 600, P);
   await page.route(`${API}/prices/**`, (r) => r.fulfill({ json: { ticker: "005930", count: prices.length, prices } }));
@@ -1135,7 +1135,7 @@ test("짝 — 마지막 종가가 지금 주가와 같으면 선 끝과 지금 �
   await expect(crIn(fig, "price-value").locator(".cr-read")).toContainText(`종가 ${wonS(P)}`);
   await page.waitForTimeout(600);
   const nowY = await midY(fig.locator(".ci-pv-nowline line")), endY = await midY(fig.locator(".ci-pv-end circle"));
-  expect(Math.abs(endY - nowY), `선 끝 ${endY} · 지금 주가 선 ${nowY}`).toBeLessThan(1.5);
+  expect(Math.abs(endY - nowY), `선 끝 ${endY} · 현재가 선 ${nowY}`).toBeLessThan(1.5);
 });
 
 // ── 연습용 자료에서도 지금 주가 = 시세의 마지막 종가 (2026-11-11 · 서버 mock 가격의 출처를 하나로) ──
@@ -1143,17 +1143,17 @@ test("짝 — 마지막 종가가 지금 주가와 같으면 선 끝과 지금 �
 // 같은 출처인지를 본다. 예전에는 헤더 71,000원 · 선 끝 56,512원이었다(고정 표 대 날짜 주소 가능한 걸음). 표에 없는 종목(KB금융)은 차이가 더 컸다.
 // 연습용 서버에서만 뜻이 있는 계약이라(실데이터는 장중에 헤더와 어제 종가가 다른 게 맞다) 연습용 칩이 있는지 먼저 본다.
 for (const code of ["005930", "105560"]) {
-  test(`★연습용 자료의 지금 주가 = 시세의 마지막 종가★ (${code}) — 읽는 줄의 종가 = 헤더 가격 · 지금 주가 선이 선 끝과 만난다`, async ({ page }) => {
+  test(`★합성 데이터의 현재가 = 시세의 마지막 종가★ (${code}) — 읽는 줄의 종가 = 헤더 가격 · 현재가 선이 선 끝과 만난다`, async ({ page }) => {
     await open(page, code);
-    await expect(page.locator(".ci .tx-answer .tx-chip[data-tone=practice]"), "연습용 서버가 아니면 이 계약은 성립하지 않는다").toHaveCount(1, { timeout: 30_000 });
+    await expect(page.locator(".ci .tx-answer .tx-chip[data-tone=practice]"), "합성 서버가 아니면 이 계약은 성립하지 않는다").toHaveCount(1, { timeout: 30_000 });
     const P = Number(((await page.locator(".ci-head .ci-price").textContent()) ?? "").replace(/[^\d]/g, ""));
     expect(P, "헤더 가격을 못 읽으면 이 검사는 공허하다").toBeGreaterThan(1000);
     const fig = page.locator(".ci-sec[data-sec=value] .ci-pv");
     await expect(fig.locator(".recharts-line")).toHaveCount(1, { timeout: 40_000 });
     await expect(crIn(fig, "price-value").locator(".cr-read")).toContainText(`종가 ${wonS(P)}`);
-    await expect(fig.locator(".ci-pv-now")).toContainText(`지금 주가 ${wonS(P)}`);
+    await expect(fig.locator(".ci-pv-now")).toContainText(`현재가 ${wonS(P)}`);
     await page.waitForTimeout(600);
     const nowY = await midY(fig.locator(".ci-pv-nowline line")), endY = await midY(fig.locator(".ci-pv-end circle"));
-    expect(Math.abs(endY - nowY), `선 끝 ${endY} · 지금 주가 선 ${nowY}`).toBeLessThan(1.5);
+    expect(Math.abs(endY - nowY), `선 끝 ${endY} · 현재가 선 ${nowY}`).toBeLessThan(1.5);
   });
 }

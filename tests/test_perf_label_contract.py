@@ -143,7 +143,7 @@ def test_every_metric_widget_labels_what_the_numbers_are():
     missing = sorted(k for k, labeled in found.items() if not labeled and k not in ALLOWED)
     assert not missing, (
         "성과 지표를 그리면서 `PerfLabel` 을 쓰지 않는 위젯입니다. "
-        "붙이거나, ALLOWED 에 **사유와 함께** 등록하세요:\n  " + "\n  ".join(missing))
+        "붙이거나, ALLOWED 에 **사유와 함께** 등록하십시오:\n  " + "\n  ".join(missing))
 
 
 def test_the_allowlist_is_not_stale():
@@ -152,11 +152,11 @@ def test_the_allowlist_is_not_stale():
     ghosts = sorted(k for k in ALLOWED if k not in found)
     assert not ghosts, (
         "허용 목록에 있는데 더 이상 지표를 그리지 않는(또는 사라진) 파일입니다 — "
-        "ALLOWED 에서 지우세요:\n  " + "\n  ".join(ghosts))
+        "ALLOWED 에서 지우십시오:\n  " + "\n  ".join(ghosts))
 
     now_labeled = sorted(k for k in ALLOWED if found.get(k))
     assert not now_labeled, (
-        "이미 `PerfLabel` 을 쓰는데 허용 목록에 남아 있습니다 — 지우세요:\n  "
+        "이미 `PerfLabel` 을 쓰는데 허용 목록에 남아 있습니다 — 지우십시오:\n  "
         + "\n  ".join(now_labeled))
 
 
@@ -209,7 +209,7 @@ def test_the_scan_is_not_vacuous():
     # 그리지 않게 되어 화면 쪽 수가 줄었다 — 검출기가 아니라 자리가 옮겨진 것(아래 실측 8: 백테스트 결과·비교·칵핏·현실성 …).
     """★공허 배제★ 검출 대상이 0개면 이 파일 전체가 아무 말도 하지 않는다."""
     found = _scan()
-    assert len(found) >= 8, f"지표를 그리는 위젯이 {len(found)}개뿐입니다 — 검출기를 의심하세요"
+    assert len(found) >= 8, f"지표를 그리는 위젯이 {len(found)}개뿐입니다 — 검출기를 의심하십시오"
     assert sum(found.values()) >= 5, "PerfLabel 을 쓰는 위젯이 너무 적습니다"
 
 

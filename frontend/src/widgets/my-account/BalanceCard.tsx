@@ -21,21 +21,21 @@ export function BalanceCard({ q }: { q: UseQueryResult<Balance> }) {
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="ma-bal-h">잔고</h2>
-          {b ? <p className="tx-sec-sub">기준 {when(b.as_of) ?? "시각 몰라요"}</p> : null}
+          {b ? <p className="tx-sec-sub">기준 {when(b.as_of) ?? "시각 미상"}</p> : null}
         </div>
         <div className="tx-sec-aside">
-          {b?.practice ? <span className="tx-chip ma-bal-practice" data-tone="practice">연습용 잔고예요</span> : null}
+          {b?.practice ? <span className="tx-chip ma-bal-practice" data-tone="practice">가상 잔고입니다</span> : null}
           <button type="button" className="tx-btn tx-btn--sub ma-sm" onClick={() => void q.refetch()} disabled={q.isFetching}>새로 고침</button>
         </div>
       </header>
       <div className="tx-sec-body">
         {q.isError ? (
-          <RetryFail title="잔고를 불러오지 못했어요" onRetry={() => void q.refetch()}>{q.error.message}</RetryFail>
+          <RetryFail title="잔고 조회 실패" onRetry={() => void q.refetch()}>{q.error.message}</RetryFail>
         ) : !b ? (
-          <p className="tx-sec-sub" aria-busy="true">잔고를 불러오는 중이에요.</p>
+          <p className="tx-sec-sub" aria-busy="true">잔고 조회 중</p>
         ) : b.state === "failed" ? (
           <div className="ma-bal-failed" role="status">
-            <p className="ma-strong">잔고를 받지 못했어요.</p>
+            <p className="ma-strong">잔고 수신 실패</p>
             <p className="tx-sec-sub" data-server>{b.reason}</p>
             {b.detail ? (
               <details className="ma-raw"><summary>원래 사유 보기</summary><code data-server>{b.detail}</code></details>
@@ -44,12 +44,12 @@ export function BalanceCard({ q }: { q: UseQueryResult<Balance> }) {
         ) : (
           <>
             <dl className="ma-bal-figs">
-              <div><dt>예수금</dt><dd className="ma-bal-cash">{money(b.cash_krw, "서버가 예수금을 주지 않았어요")}</dd></div>
-              <div><dt>평가 자산</dt><dd className="ma-bal-total">{money(b.evaluated_total, "서버가 평가 자산을 주지 않았어요")}</dd></div>
+              <div><dt>예수금</dt><dd className="ma-bal-cash">{money(b.cash_krw, "서버가 예수금을 주지 않았습니다")}</dd></div>
+              <div><dt>평가 자산</dt><dd className="ma-bal-total">{money(b.evaluated_total, "서버가 평가 자산을 주지 않았습니다")}</dd></div>
             </dl>
             <AssetMix cash={b.cash_krw} positions={positions} label={(t) => names.known(t) ?? t} />
             {positions.length === 0 ? (
-              <p className="tx-sec-sub">보유 종목이 없어요.</p>
+              <p className="tx-sec-sub">보유 종목 없음</p>
             ) : (
               <ul className="ma-pos-l" aria-label="보유 종목">
                 {positions.map((p) => {
@@ -61,17 +61,17 @@ export function BalanceCard({ q }: { q: UseQueryResult<Balance> }) {
                         <strong>{name ?? p.ticker}</strong>
                         {name ? <span className="ma-code" data-mono>{p.ticker}</span> : null}
                       </span>
-                      <span className="ma-pos-q">{p.quantity === null ? "수량 몰라요" : `${num(p.quantity)}주`}</span>
+                      <span className="ma-pos-q">{p.quantity === null ? "수량 미상" : `${num(p.quantity)}주`}</span>
                       <span className="ma-pos-p">평균 {priceWon(p.avg_price)} · 지금 {priceWon(p.current_price)}</span>
                       <span className="tx-delta ma-pos-pnl" data-dir={direction(pnl)}>
-                        {pnl === null ? "손익 몰라요" : signedPct(pnl)}
+                        {pnl === null ? "손익 미상" : signedPct(pnl)}
                       </span>
                     </li>
                   );
                 })}
               </ul>
             )}
-            {names.failed ? <p className="tx-sec-sub">종목 이름을 확인하지 못해 코드로 보여요.</p> : null}
+            {names.failed ? <p className="tx-sec-sub">종목 이름을 확인하지 못해 코드로 보입니다.</p> : null}
           </>
         )}
       </div>
@@ -93,7 +93,7 @@ function AssetMix({ cash, positions, label }: {
   const held = positions.filter((p) => p.eval_amount !== 0);
   const parts = [{ key: "cash", name: "예수금", v: cash }, ...held.map((p) => ({ key: p.ticker, name: label(p.ticker), v: p.eval_amount }))];
   if (parts.some((p) => p.v === null || p.v === undefined || p.v < 0)) {
-    return <p className="tx-sec-sub ma-mix-none">자산 구성은 그리지 않았어요. 서버가 모르는 값을 줬어요.</p>;
+    return <p className="tx-sec-sub ma-mix-none">자산 구성은 그리지 않았습니다. 서버가 모르는 값을 줬습니다.</p>;
   }
   const total = parts.reduce((s, p) => s + (p.v as number), 0);
   if (!(total > 0)) return null;

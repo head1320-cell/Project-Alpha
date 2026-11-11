@@ -50,7 +50,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
                 disabled={s.nodes.length === 0} onClick={() => { s.autoLayout(); fit(); }}><LayoutGrid size={16} /></button>
         <button type="button" className="pg-icon-tool" aria-label="고른 노드 묶기 (Ctrl+G)" title="고른 노드 묶기 (Ctrl+G)"
                 disabled={s.picked.length < 2} onClick={() => s.groupPicked()}><Boxes size={16} /></button>
-        <button type="button" className="pg-icon-tool pg-goal-open" aria-label="목표로 시작" title="목표로 시작 — 무엇을 하려는지 고르면 흐름을 만들어 계산해요"
+        <button type="button" className="pg-icon-tool pg-goal-open" aria-label="목표로 시작" title="목표로 시작 — 무엇을 하려는지 고르면 흐름을 만들어 계산합니다"
                 disabled={!s.catalog} onClick={() => setGoalOpen(true)}><Sparkles size={16} /></button>
         <button type="button" className={`pg-icon-tool pg-simple-toggle${s.simple ? " on" : ""}`} aria-pressed={s.simple}
                 aria-label="간단히 보기" title="간단히 보기 — 노드 없이 정할 것과 결과만" onClick={() => s.setSimple(!s.simple)}>
@@ -63,7 +63,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
           </button>
           {stratOpen && (
             <div className="pg-strat-menu" role="menu" aria-label="전략 추가">
-              <p className="pg-strat-menu-h">새 전략 띠로 넣고 ‘전략 합치기’에 이어요</p>
+              <p className="pg-strat-menu-h">새 전략 띠로 넣고 ‘전략 합치기’에 잇습니다</p>
               {strategySources.map((x) => (
                 <button key={x.key} type="button" role="menuitem" className="pg-strat-item" data-source={x.key}
                         onClick={() => addStrategy(x.src)}>
@@ -82,12 +82,12 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
       </div>
       <NameWithGoal name={s.name} onName={s.setName} goal={s.goal} onGoal={s.setGoal} />
       <span className="pg-toolbar-spacer" />
-      {nErrors > 0 && <span className="pg-summary pg-summary--err">설정을 확인할 곳이 {nErrors}군데 있어요</span>}
+      {nErrors > 0 && <span className="pg-summary pg-summary--err">설정을 확인할 곳이 {nErrors}군데 있습니다</span>}
       {s.reportStale && (
         <span className="pg-summary pg-summary--stale" data-count={s.staleIds.length}>
           예전 결과 {s.staleIds.length}개
           <button type="button" className="pg-stale-run" disabled={s.running} onClick={() => void runStale()}
-                  title="바뀐 노드와 그 하류만 다시 계산해요">바뀐 곳만 계산</button>
+                  title="바뀐 노드와 그 하류만 재계산합니다">바뀐 곳만 계산</button>
         </span>
       )}
       {s.report?.partial && !s.reportStale && (
@@ -100,7 +100,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
           {Object.values(s.report.nodes).filter((r) => r.status === "failed").length}
           {/* 좁은 화면에서도 누르지 않고 보이는 연습용 표시(BQ Q1) — 오른쪽 창이 닫혀 있고 노드 칩이 멀리 확대에서 숨어도 합성 수가 실데이터처럼 읽히지 않게. */}
           {Object.values(s.report.nodes).some((r) => r.lineage?.practice) && (
-            <b className="pg-summary-practice" title="연습용 합성 데이터로 계산한 결과예요 — 실제 시세가 아니에요"> · 연습용</b>
+            <b className="pg-summary-practice" title="합성 데이터로 계산한 결과입니다 — 실제 시세가 아닙니다"> · 합성</b>
           )}
         </span>
       )}
@@ -120,7 +120,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
                     disabled={s.nodes.length === 0} />
       {/* 그림(R7) — 그래프 전체를 PNG 한 장으로 · 아래 띠에 이름·때·결과의 성격 */}
       <button type="button" className="pg-export-png pg-btn" disabled={s.nodes.length === 0} onClick={() => void exportCanvasPng()}
-              aria-label="그래프 전체를 그림(PNG)으로 받기 — 아래 띠에 이름·때·결과의 성격을 적어요">
+              aria-label="그래프 전체를 그림(PNG)으로 받기 — 아래 띠에 이름·때·결과의 성격을 적습니다">
         <ImageDown size={13} aria-hidden="true" /> <span className="pg-tl">그림</span>
       </button>
       <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"

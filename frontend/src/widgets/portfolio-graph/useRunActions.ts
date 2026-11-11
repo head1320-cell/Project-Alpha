@@ -55,8 +55,8 @@ export function useRunActions(s: PgState, stages: WorkflowStage[], rf: RefObject
     const name = (k?: string) => st.catalog?.find((c) => c.type === k)?.plain_label ?? k ?? "";
     const from = name(st.nodes.find((n) => n.id === id)?.data.kind);
     st.act(() => (st.swapNode(id, kind)
-      ? `${josa(`‘${from}’`, ["을", "를"])} ${euro(`‘${name(kind)}’`)} 바꿨어요 — 선과 자리는 그대로, 설정은 기본값이에요.`
-      : "바꿀 수 없어요 — 지금 선을 그대로 받을 수 없는 노드예요."));
+      ? `${josa(`‘${from}’`, ["을", "를"])} ${euro(`‘${name(kind)}’`)} 바꿨습니다 — 선과 자리는 그대로, 설정은 기본값입니다.`
+      : "바꿀 수 없습니다 — 지금 선을 그대로 받을 수 없는 노드입니다."));
   }, []);
   /** 바뀐 곳만 계산(BT5) — 낡은 노드들을 목표로 하는 부분 계산("여기까지 계산" 과 같은 길). 관문은 부분 계산이라 내지 않는다(기존 사유 문구). */
   const runStale = useCallback(() => {
@@ -69,7 +69,7 @@ export function useRunActions(s: PgState, stages: WorkflowStage[], rf: RefObject
     const st = usePortfolioGraph.getState();
     st.act(() => {
       st.loadDoc(restackDoc(goalDoc(goal, tickers, lookback, riskAversion), st.catalog));
-      return "답으로 흐름을 만들었어요 — 계산하고 있어요. 노드를 눌러 설정을 바꿀 수 있어요.";
+      return "답으로 흐름을 만들었습니다 — 계산하고 있습니다. 노드를 눌러 설정을 바꿀 수 있습니다.";
     });
     setGoalOpen(false);
     st.setGrowing(true);

@@ -175,12 +175,12 @@ def alpha_validate(req: ValidateRequest):
         from src.engine.alpha_lab import lint_alpha, validate_alpha
         lint = lint_alpha(req.expr)
         if not lint["ok"]:
-            return {"error": True, "message": "lint 실패 — 식을 수정하세요.", "lint": lint}
+            return {"error": True, "message": "lint 실패 — 식을 수정하십시오.", "lint": lint}
 
         tickers = _resolve_universe_capped(req)
         if len(tickers) < 8:
             return {"error": True,
-                    "message": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers를 직접 지정하세요."}
+                    "message": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers를 직접 지정하십시오."}
 
         report = validate_alpha(req.expr, tickers, months=req.months, quantiles=req.quantiles)
         if report.get("error"):
@@ -258,7 +258,7 @@ def alpha_portfolio(req: AlphaPortfolioRequest):
             ValidateRequest(expr="rank(mom_1m)", tickers=req.tickers, universe=req.universe))
         if len(tickers) < 8:
             return {"available": False,
-                    "reason": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers 를 직접 지정하세요."}
+                    "reason": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers 를 직접 지정하십시오."}
 
         # ── 2. 결합 (+ 중복 진단) ──
         combo = combine_alphas(specs, tickers, as_of=req.as_of)

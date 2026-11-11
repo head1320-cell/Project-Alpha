@@ -52,34 +52,34 @@ def _won(x: Any) -> str:
 
 class EvaParams(_Priced):
     fade_years: int = Field(5, ge=1, le=30, json_schema_extra={"x-ui": _ui(
-        "초과이익 소멸 기간", question="지금의 초과이익(EVA)이 몇 년에 걸쳐 사라진다고 볼까요?", unit="년",
+        "초과이익 소멸 기간", question="초과이익(EVA) 소멸 기간 가정", unit="년",
         presets=[{"label": "3년", "value": 3}, {"label": "5년", "value": 5}, {"label": "10년", "value": 10}],
-        help="경쟁이 초과이익을 깎아 먹는 속도예요 — 가정이에요.")})
+        help="경쟁이 초과이익을 깎아 먹는 속도입니다 — 가정입니다.")})
     g: float | None = Field(None, ge=-0.05, le=0.15, json_schema_extra={"x-ui": _ui(
-        "성장률", "advanced", help="가치 동인 공식의 성장률이에요. 비우면 영구성장률을 써요.")})
+        "성장률", "advanced", help="가치 동인 공식의 성장률입니다. 비우면 영구성장률을 씁니다.")})
     ronic: float | None = Field(None, gt=-1, le=1, json_schema_extra={"x-ui": _ui(
-        "새 투자 수익률", "advanced", help="새로 투자한 돈이 버는 수익률(RONIC)이에요. 비우면 최근 ROIC 를 써요.")})
+        "새 투자 수익률", "advanced", help="새로 투자한 돈이 버는 수익률(RONIC)입니다. 비우면 최근 ROIC 를 씁니다.")})
 
 
 def _eva(inputs: dict, p: EvaParams) -> pg.NodeOutput:
     head = _priced(p)
     return _call(cmr.company_model_eva, head,
                  cmr.EvaRequest(price=head["price"], fade_years=p.fade_years, g=p.g, ronic=p.ronic),
-                 "EVA 를 계산하지 못했어요")
+                 "EVA 를 계산하지 못했습니다")
 
 
 def _explain_eva(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     last, vd = r.get("latest") or {}, r.get("value_driver") or {}
     eva, roic, wacc = last.get("eva"), last.get("roic"), last.get("wacc")
-    title = ((f"자본비용을 {eva / _EOK:,.0f}억 넘게 벌어요" if eva >= 0 else f"자본비용보다 {-eva / _EOK:,.0f}억 덜 벌어요")
-             if isinstance(eva, (int, float)) else "EVA 를 계산했어요")
+    title = ((f"자본비용을 {eva / _EOK:,.0f}억 넘게 법니다" if eva >= 0 else f"자본비용보다 {-eva / _EOK:,.0f}억 덜 법니다")
+             if isinstance(eva, (int, float)) else "EVA 를 계산했습니다")
     facts = []
     if isinstance(roic, (int, float)) and isinstance(wacc, (int, float)):
         facts.append(f"투하자본수익률 {roic:.1%} · 자본비용 {wacc:.1%}")
     if vd.get("available"):
-        facts.append("성장이 가치를 만들어요(새 투자 수익률 > 자본비용)" if vd.get("growth_creates_value")
-                     else "성장이 가치를 깎아요(새 투자 수익률 < 자본비용) — 덜 자랄수록 나아요")
+        facts.append("성장이 가치를 만듭니다(새 투자 수익률 > 자본비용)" if vd.get("growth_creates_value")
+                     else "성장이 가치를 깎습니다(새 투자 수익률 < 자본비용) — 덜 자랄수록 낫습니다")
     trust = [*_base_trust(view, prov), *_history_trust(r), *_inputs_trust(r)]
     if not vd.get("available") and vd.get("reason"):
         trust.append(_t(UNKNOWN, f"가치 동인 공식: {vd['reason']}"))
@@ -95,7 +95,7 @@ class LayersParams(_Priced):
     w_asset: float = Field(0.25, ge=0, le=1, json_schema_extra={"x-ui": _ui(
         "자산가치 가중", question="회사가 지금 가진 것만큼만 가치가 있을 확률은?",
         presets=[{"label": "10%", "value": 0.1}, {"label": "25%", "value": 0.25}, {"label": "50%", "value": 0.5}],
-        help="세 가중의 합은 1 이어야 해요 — 맞지 않으면 계산하지 않아요.")})
+        help="세 가중의 합은 1 이어야 합니다 — 맞지 않으면 계산하지 않습니다.")})
     w_epv: float = Field(0.25, ge=0, le=1, json_schema_extra={"x-ui": _ui(
         "수익력가치 가중", question="지금 버는 만큼만 계속 벌 확률은?",
         presets=[{"label": "20%", "value": 0.2}, {"label": "25%", "value": 0.25}, {"label": "30%", "value": 0.3}])})
@@ -108,7 +108,7 @@ def _layers(inputs: dict, p: LayersParams) -> pg.NodeOutput:
     head = _priced(p)
     return _call(cmr.company_model_value_layers, head,
                  cmr.LayersRequest(price=head["price"], w_asset=p.w_asset, w_epv=p.w_epv, w_full=p.w_full),
-                 "가치의 층을 쌓지 못했어요")
+                 "가치의 층을 쌓지 못했습니다")
 
 
 def _explain_layers(view: dict, prov: dict, params: Any) -> dict:
@@ -119,8 +119,8 @@ def _explain_layers(view: dict, prov: dict, params: Any) -> dict:
             ("full", r.get("full_per_share"))]
     names = {"asset": "자산가치", "epv": "수익력가치", "full": "성장까지 넣은 가치"}
     covered = [k for k, v in tops if isinstance(v, (int, float)) and isinstance(price, (int, float)) and v >= price]
-    title = (f"지금 가격은 {names[covered[0]]} 안에 들어와요" if covered else
-             "지금 가격은 성장까지 넣은 가치보다도 높아요" if isinstance(price, (int, float)) else "가치의 층을 쌓았어요")
+    title = (f"지금 가격은 {names[covered[0]]} 안에 들어옵니다" if covered else
+             "지금 가격은 성장까지 넣은 가치보다도 높습니다" if isinstance(price, (int, float)) else "가치의 층을 쌓았습니다")
     facts = [f"{names[k]}: {_won(v)}" for k, v in tops]
     if isinstance(r.get("weighted_per_share"), (int, float)):
         facts.append(f"확률로 묶은 값: {_won(r['weighted_per_share'])}")
@@ -133,20 +133,20 @@ def _explain_layers(view: dict, prov: dict, params: Any) -> dict:
     if ep.get("reason"):
         trust.append(_t(UNKNOWN, f"수익력가치: {ep['reason']}"))
     return {"title": title, "facts": facts, "trust": trust,
-            "unmeasured": ["자산을 다시 만드는 데 드는 돈(재생산원가) — 장부가로 대신했어요"]}
+            "unmeasured": ["자산을 다시 만드는 데 드는 돈(재생산원가) — 장부가로 대신했습니다"]}
 
 
 # ── 배수 · PEG · 정당 배수 ───────────────────────────────────────────────────
 
 class MultiplesParams(_Priced):
     peers: bool = Field(True, json_schema_extra={"x-ui": _ui(
-        "피어 PER 함께", "advanced", help="같은 업종 종목들의 PER 중앙값으로 본 가격도 함께 봐요(업종 표를 계산해 느려요).")})
+        "피어 PER 함께", "advanced", help="동종업계 종목들의 PER 중앙값으로 본 가격도 함께 봅니다(업종 표를 계산해 느립니다).")})
 
 
 def _multiples(inputs: dict, p: MultiplesParams) -> pg.NodeOutput:
     head = _priced(p)
     return _call(cmr.company_model_multiples, head, cmr.MultiplesRequest(price=head["price"], peers=p.peers),
-                 "배수로 보지 못했어요")
+                 "배수로 보지 못했습니다")
 
 
 def _explain_multiples(view: dict, prov: dict, params: Any) -> dict:
@@ -154,7 +154,7 @@ def _explain_multiples(view: dict, prov: dict, params: Any) -> dict:
     j = r.get("justified") or {}
     per, peg = r.get("per"), r.get("peg")
     title = (f"PER {per:.1f}배 · PEG {peg:.2f}" if isinstance(per, (int, float)) and isinstance(peg, (int, float))
-             else f"PER {per:.1f}배 (PEG 는 못 냈어요)" if isinstance(per, (int, float)) else "배수를 봤어요")
+             else f"PER {per:.1f}배 (PEG 는 못 냈습니다)" if isinstance(per, (int, float)) else "배수를 봤습니다")
     facts = []
     if isinstance(j.get("pbr"), (int, float)):
         facts.append(f"ROE 로 본 정당 PBR {j['pbr']:.2f}배 → {_won(j.get('pbr_price'))}")
@@ -164,7 +164,7 @@ def _explain_multiples(view: dict, prov: dict, params: Any) -> dict:
     if isinstance(peer.get("per_price"), (int, float)):
         facts.append(f"피어 PER 중앙값 {peer['per_median']:.1f}배 → {_won(peer['per_price'])}")
     trust = [*_base_trust(view, prov), *_history_trust(r), *_inputs_trust(r),
-             _t(ASSUMED, "PEG 1 이 적정이라는 것은 관행이지 법칙이 아니에요 — 격자는 가정을 바꿔 보는 표예요.")]
+             _t(ASSUMED, "PEG 1 이 적정이라는 것은 관행이지 법칙이 아닙니다 — 격자는 가정을 바꿔 보는 표입니다.")]
     for k in ("peg_reason",):
         if r.get(k):
             trust.append(_t(UNKNOWN, r[k]))
@@ -179,42 +179,42 @@ def _explain_multiples(view: dict, prov: dict, params: Any) -> dict:
 
 class DriverMcParams(_Priced):
     sigma_growth: float = Field(0.03, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
-        "매출 성장률 흔들림", question="매출 성장률이 해마다 얼마나 빗나갈 수 있을까요?",
+        "매출 성장률 흔들림", question="매출 성장률 연간 변동성 가정",
         presets=[{"label": "±1%p", "value": 0.01}, {"label": "±3%p", "value": 0.03}, {"label": "±6%p", "value": 0.06}],
-        help="표준편차예요. 중심은 지난 재무에서 읽어요.")})
+        help="표준편차입니다. 중심은 지난 재무에서 읽습니다.")})
     sigma_margin: float = Field(0.02, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
-        "영업이익률 흔들림", question="영업이익률은 얼마나 빗나갈 수 있을까요?",
+        "영업이익률 흔들림", question="영업이익률 변동성 가정",
         presets=[{"label": "±1%p", "value": 0.01}, {"label": "±2%p", "value": 0.02}, {"label": "±4%p", "value": 0.04}])})
     sigma_reinvest: float = Field(0.01, ge=0, le=0.5, json_schema_extra={"x-ui": _ui("재투자율 흔들림", "advanced")})
     years: int = Field(5, ge=3, le=15, json_schema_extra={"x-ui": _ui("예측 기간", "advanced", unit="년")})
     n: int = Field(2000, ge=100, le=20000, json_schema_extra={"x-ui": _ui("경로 수", "advanced")})
     seed: int = Field(20260927, json_schema_extra={"x-ui": _ui("난수 씨앗", "advanced",
-                                                               help="같은 씨앗이면 같은 결과가 나와요.")})
+                                                               help="같은 씨앗이면 같은 결과가 나옵니다.")})
 
 
 def _driver_mc(inputs: dict, p: DriverMcParams) -> pg.NodeOutput:
     head = _priced(p)
     req = cmr.DriverMcRequest(price=head["price"], sigma_growth=p.sigma_growth, sigma_margin=p.sigma_margin,
                               sigma_reinvest=p.sigma_reinvest, years=p.years, n=p.n, seed=p.seed)
-    return _call(cmr.company_model_driver_mc, head, req, "영업 동인으로 가치 범위를 만들지 못했어요")
+    return _call(cmr.company_model_driver_mc, head, req, "영업 동인으로 밸류에이션 밴드 생성 실패")
 
 
 def _explain_driver_mc(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     q = r.get("quantiles") or {}
     pp = r.get("price_percentile")
-    title = (f"지금 가격은 가치 범위의 {pp:.0f}번째 백분위예요" if isinstance(pp, (int, float))
-             else "영업 동인으로 가치 범위를 만들었어요")
+    title = (f"지금 가격은 밸류에이션 밴드의 {pp:.0f}번째 백분위입니다" if isinstance(pp, (int, float))
+             else "영업 동인으로 밸류에이션 밴드를 만들었습니다")
     facts = [f"10~90%: {_won(q.get('p10'))} ~ {_won(q.get('p90'))} · 중앙 {_won(q.get('p50'))}"] if q else []
     if isinstance(r.get("negative_share"), (int, float)) and r["negative_share"] > 0:
-        facts.append(f"경로의 {r['negative_share']:.0%} 는 주당 가치가 0 아래예요(부채가 더 커요)")
+        facts.append(f"경로의 {r['negative_share']:.0%} 는 주당 가치가 0 아래입니다(부채가 더 큽니다)")
     trust = [*_base_trust(view, prov), *_history_trust(r), *_inputs_trust(r)]
     if r.get("n_rejected"):
-        trust.append(_t(UNKNOWN, f"매출이 사라지는 경로 {r['n_rejected']}개는 모형 밖이라 버렸어요"))
+        trust.append(_t(UNKNOWN, f"매출이 사라지는 경로 {r['n_rejected']}개는 모형 밖이라 버렸습니다"))
     if r.get("note"):
         trust.append(_t(ASSUMED, r["note"].replace("**", "")))
     return {"title": title, "facts": facts, "trust": trust,
-            "unmeasured": ["동인끼리의 상관(함께 나빠지는 해) — 독립으로 뒀어요"]}
+            "unmeasured": ["동인끼리의 상관(함께 나빠지는 해) — 독립으로 뒀습니다"]}
 
 
 # ══ C2 — 가정형 ══════════════════════════════════════════════════════════════
@@ -242,7 +242,7 @@ class ScenariosParams(_Priced):
         default=[ScenarioItem(name="약세", prob=0.25, g=0.01, beta=1.3), ScenarioItem(name="기본", prob=0.5),
                  ScenarioItem(name="강세", prob=0.25, g=0.03, beta=0.9)],
         max_length=8, json_schema_extra={"x-ui": _ui(
-            "시나리오", question="어떤 경우들을 얼마의 확률로 볼까요?",
+            "시나리오", question="시나리오별 확률 가정",
             help="2~5개 · 확률의 합은 1 · 비운 가정은 기본값(가치평가 샌드박스와 같다).")})
 
 
@@ -250,7 +250,7 @@ def _scenarios(inputs: dict, p: ScenariosParams) -> pg.NodeOutput:
     head = _priced(p)
     return _call(cmr.company_model_scenarios, head,
                  cmr.ScenariosRequest(price=head["price"], scenarios=_rows(p.scenarios, cmr.ScenarioRow)),
-                 "시나리오로 묶지 못했어요")
+                 "시나리오로 묶지 못했습니다")
 
 
 def _explain_scenarios(view: dict, prov: dict, params: Any) -> dict:
@@ -261,7 +261,7 @@ def _explain_scenarios(view: dict, prov: dict, params: Any) -> dict:
     if isinstance(pa, (int, float)):
         facts.append(f"지금 가격 이상일 확률 {pa:.0%}")
     trust = [*_base_trust(view, prov), *_inputs_trust(r),
-             _t(ASSUMED, "확률은 사람이 정한 값이에요 — 측정한 빈도가 아니에요.")]
+             _t(ASSUMED, "확률은 사람이 정한 값입니다 — 측정한 빈도가 아닙니다.")]
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["정한 확률이 맞는지"]}
 
 
@@ -270,7 +270,7 @@ def _explain_scenarios(view: dict, prov: dict, params: Any) -> dict:
 class BranchItem(BaseModel):
     model_config = _FORBID
     id: str = Field("A", max_length=20, json_schema_extra={"x-ui": _ui("가지 id")})
-    parent: str = Field("", max_length=20, json_schema_extra={"x-ui": _ui("부모 id", help="비우면 맨 처음 갈림길이에요.")})
+    parent: str = Field("", max_length=20, json_schema_extra={"x-ui": _ui("부모 id", help="비우면 맨 처음 갈림길입니다.")})
     label: str = Field("", max_length=40, json_schema_extra={"x-ui": _ui("사건")})
     prob: float = Field(0.5, ge=0, le=1, json_schema_extra={"x-ui": _ui("확률")})
     value: float | None = Field(None, json_schema_extra={"x-ui": _ui("주당 가치(끝 가지)")})
@@ -283,7 +283,7 @@ class TreeParams(_Priced):
             BranchItem(id="A1", parent="A", label="시장 안착", prob=0.7, value=80000),
             BranchItem(id="A2", parent="A", label="경쟁 심화", prob=0.3, value=55000)],
         max_length=30, json_schema_extra={"x-ui": _ui(
-            "가지", question="어떤 사건이 어떻게 갈리나요?",
+            "가지", question="사건별 분기 구조",
             help="같은 부모 아래 확률의 합은 1 · 끝 가지에는 주당 가치 · 깊이 4단계까지.")})
 
 
@@ -291,7 +291,7 @@ def _tree(inputs: dict, p: TreeParams) -> pg.NodeOutput:
     head = _priced(p)
     return _call(cmr.company_model_decision_tree, head,
                  cmr.DecisionTreeRequest(price=head["price"], branches=_rows(p.branches, cmr.TreeBranch)),
-                 "의사결정 나무를 계산하지 못했어요")
+                 "의사결정 나무 산출 실패")
 
 
 def _explain_tree(view: dict, prov: dict, params: Any) -> dict:
@@ -299,9 +299,9 @@ def _explain_tree(view: dict, prov: dict, params: Any) -> dict:
     paths = r.get("paths") or []
     facts = [f"{' → '.join(str(x) for x in pth['labels'])}: {pth['prob']:.0%} · {_won(pth['value'])}" for pth in paths[:4]]
     trust = [*_base_trust(view, prov), *_inputs_trust(r),
-             _t(ASSUMED, "가지·확률·값은 모두 사람이 정했어요 — 나무는 그 가정을 정직하게 접을 뿐이에요.")]
+             _t(ASSUMED, "가지·확률·값은 모두 사람이 정했습니다 — 나무는 그 가정을 정직하게 접을 뿐입니다.")]
     if r.get("ignored_values"):
-        trust.append(_t(UNKNOWN, f"중간 가지의 값은 쓰지 않았어요(아래 가지로 계산): {', '.join(r['ignored_values'])}"))
+        trust.append(_t(UNKNOWN, f"중간 가지의 값은 쓰지 않았습니다(아래 가지로 계산): {', '.join(r['ignored_values'])}"))
     return {"title": f"기대 가치 {_won(r.get('expected_value'))}", "facts": facts, "trust": trust,
             "unmeasured": ["사건의 확률 자체"]}
 
@@ -323,15 +323,15 @@ class SubsidiaryItem(BaseModel):
 
 class SotpParams(_Priced):
     segments: list[SegmentItem] = Field(default_factory=list, max_length=12, json_schema_extra={"x-ui": _ui(
-        "사업 부문", question="직접 하는 사업을 부문별로 나누면?", help="부문 실적은 저장소에 없어요 — 직접 넣어요.")})
+        "사업 부문", question="직접 하는 사업을 부문별로 나누면?", help="부문 실적은 저장소에 없습니다 — 직접 넣습니다.")})
     subsidiaries: list[SubsidiaryItem] = Field(default_factory=list, max_length=12, json_schema_extra={"x-ui": _ui(
-        "상장 자회사", question="가진 상장 자회사와 지분율은?", help="시가총액은 조회하고, 지분율은 직접 넣어요.")})
+        "상장 자회사", question="가진 상장 자회사와 지분율은?", help="시가총액은 조회하고, 지분율은 직접 넣습니다.")})
     holding_discount_pct: float = Field(0.0, ge=0, lt=100, json_schema_extra={"x-ui": _ui(
-        "지주사 할인", question="합계에서 얼마를 깎을까요?", unit="%",
+        "지주사 할인", question="합산 가치 할인율", unit="%",
         presets=[{"label": "없음", "value": 0}, {"label": "30%", "value": 30}, {"label": "50%", "value": 50}],
-        help="한국 지주사는 흔히 NAV 에서 할인돼 거래돼요 — 할인율은 가정이에요.")})
+        help="한국 지주사는 흔히 NAV 에서 할인돼 거래됩니다 — 할인율은 가정입니다.")})
     net_debt_eok: float | None = Field(None, json_schema_extra={"x-ui": _ui(
-        "순차입금(억원)", "advanced", help="비우면 총부채로 근사해요(DCF 와 같은 다리 — 보수적).")})
+        "순차입금(억원)", "advanced", help="비우면 총부채로 근사합니다(DCF 와 같은 다리 — 보수적).")})
 
 
 def _sotp(inputs: dict, p: SotpParams) -> pg.NodeOutput:
@@ -339,7 +339,7 @@ def _sotp(inputs: dict, p: SotpParams) -> pg.NodeOutput:
     req = cmr.SotpRequest(price=head["price"], segments=_rows(p.segments, cmr.SotpSegment),
                           subsidiaries=_rows(p.subsidiaries, cmr.SotpSubsidiary),
                           holding_discount_pct=p.holding_discount_pct, net_debt_eok=p.net_debt_eok)
-    return _call(cmr.company_model_sotp, head, req, "합산가치를 계산하지 못했어요")
+    return _call(cmr.company_model_sotp, head, req, "합산가치 산출 실패")
 
 
 def _explain_sotp(view: dict, prov: dict, params: Any) -> dict:
@@ -349,7 +349,7 @@ def _explain_sotp(view: dict, prov: dict, params: Any) -> dict:
     facts += [f"{x.get('name') or x['code']} 지분 {x['stake_pct']:.0f}%: {x['value']:,.0f}억" for x in r.get("subsidiaries") or []]
     trust = [*_base_trust(view, prov), *_history_trust(r), *_inputs_trust(r)]
     for x in r.get("excluded") or []:
-        trust.append(_t(UNKNOWN, f"{x.get('code')}: 합계에서 뺐어요 — {x.get('reason')}"))
+        trust.append(_t(UNKNOWN, f"{x.get('code')}: 합계에서 뺐습니다 — {x.get('reason')}"))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["부문별 적정 배수(피어 부문 자료 없음)"]}
 
 
@@ -357,19 +357,19 @@ def _explain_sotp(view: dict, prov: dict, params: Any) -> dict:
 
 class RealOptionParams(_Priced):
     kind: str = Field("call", pattern="^(call|put)$", json_schema_extra={"x-ui": _ui(
-        "옵션 종류", question="어떤 선택권의 값을 볼까요?", widget="cards",
+        "옵션 종류", question="평가 대상 실물옵션", widget="cards",
         options={"call": "확장·연기(들어갈 권리)", "put": "포기(빠져나올 권리)"})})
     S: float = Field(1000.0, gt=0, json_schema_extra={"x-ui": _ui(
-        "사업 가치(억원)", question="그 사업의 지금 가치는?", help="현금흐름의 현재가치 — 가정이에요.")})
+        "사업 가치(억원)", question="그 사업의 지금 가치는?", help="현금흐름의 현재가치 — 가정입니다.")})
     K: float = Field(1200.0, gt=0, json_schema_extra={"x-ui": _ui(
         "투자비·처분가(억원)", question="들어가려면(또는 빠져나오면) 얼마?")})
     T: float = Field(3.0, gt=0, le=30, json_schema_extra={"x-ui": _ui(
         "결정까지", unit="년", presets=[{"label": "1년", "value": 1}, {"label": "3년", "value": 3}, {"label": "5년", "value": 5}])})
     sigma: float = Field(0.35, gt=0, le=2, json_schema_extra={"x-ui": _ui(
         "사업 가치 변동성", presets=[{"label": "20%", "value": 0.2}, {"label": "35%", "value": 0.35}, {"label": "60%", "value": 0.6}],
-        help="옵션 값을 가장 크게 좌우하는 가정이에요.")})
+        help="옵션 값을 가장 크게 좌우하는 가정입니다.")})
     q: float = Field(0.0, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
-        "누수율", "advanced", help="기다리는 동안 놓치는 현금흐름 비율(배당처럼 다뤄요).")})
+        "누수율", "advanced", help="기다리는 동안 놓치는 현금흐름 비율(배당처럼 다룹니다).")})
     n_steps: int = Field(500, ge=50, le=2000, json_schema_extra={"x-ui": _ui("이항 단계 수", "advanced")})
 
 
@@ -377,14 +377,14 @@ def _real_option(inputs: dict, p: RealOptionParams) -> pg.NodeOutput:
     head = _priced(p)
     req = cmr.RealOptionRequest(price=head["price"], S=p.S, K=p.K, T=p.T, sigma=p.sigma, q=p.q, kind=p.kind,
                                 n_steps=p.n_steps)
-    return _call(cmr.company_model_real_option, head, req, "실물옵션을 계산하지 못했어요")
+    return _call(cmr.company_model_real_option, head, req, "실물옵션 산출 실패")
 
 
 def _explain_real_option(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     bs, bi = (r.get("black_scholes") or {}).get("value"), (r.get("binomial") or {}).get("value")
     title = (f"선택권의 값 {bs:,.0f}억(유럽형) · {bi:,.0f}억(미국형)" if isinstance(bs, (int, float)) and isinstance(bi, (int, float))
-             else "실물옵션을 계산했어요")
+             else "실물옵션을 계산했습니다")
     npv = r.get("static_npv")
     facts = []
     if isinstance(npv, (int, float)):
@@ -404,35 +404,35 @@ def register(registry: pg.Registry) -> None:
     common = {"inputs": (), "outputs": (), "category": "기업", "stage": "signal"}
     for spec in (
         pg.NodeSpec("company_eva", "EVA·가치 동인", plain_label="자본비용을 넘게 버나",
-                    plain_description="투하자본에 드는 비용을 빼고도 남는 이익(EVA)과, 성장이 가치를 만드는지 봐요.",
+                    plain_description="투하자본에 드는 비용을 빼고도 남는 이익(EVA)과, 성장이 가치를 만드는지 봅니다.",
                     run=_eva, params_model=EvaParams, explain=_explain_eva,
                     description="company_model_eva 라우트 함수 그대로(practice_models.eva_analysis).", **common),
         pg.NodeSpec("company_value_layers", "가치의 층", plain_label="가치가 어디서 나오나",
-                    plain_description="자산 → 지금의 이익력 → 성장으로 가치를 층층이 쌓고, 층마다 확률을 둬요.",
+                    plain_description="자산 → 지금의 이익력 → 성장으로 가치를 층층이 쌓고, 층마다 확률을 둡니다.",
                     run=_layers, params_model=LayersParams, explain=_explain_layers,
                     description="company_model_value_layers 라우트 함수 그대로(Greenwald 3층 + 확률 가중).", **common),
         pg.NodeSpec("company_multiples", "배수·PEG", plain_label="성장 대비 몇 배가 맞나",
-                    plain_description="성장률과 PEG 를 바꿔 가며 맞는 주가를 보고, ROE·배당으로 정당한 배수를 봐요.",
+                    plain_description="성장률과 PEG 를 바꿔 가며 맞는 주가를 보고, ROE·배당으로 정당한 배수를 봅니다.",
                     run=_multiples, params_model=MultiplesParams, explain=_explain_multiples,
                     description="company_model_multiples 라우트 함수 그대로.", **common),
         pg.NodeSpec("company_driver_mc", "영업 동인 몬테카를로", plain_label="매출·마진이 흔들리면",
-                    plain_description="매출 성장·마진·재투자를 흔들어 주당 가치가 어디서 어디까지 나오는지 봐요.",
+                    plain_description="매출 성장·마진·재투자를 흔들어 주당 가치가 어디서 어디까지 나오는지 봅니다.",
                     run=_driver_mc, params_model=DriverMcParams, explain=_explain_driver_mc,
                     description="company_model_driver_mc 라우트 함수 그대로(시드 고정 재현).", **common),
         pg.NodeSpec("company_scenarios", "시나리오 가중", plain_label="경우를 확률로 묶기",
-                    plain_description="약세·기본·강세처럼 경우마다 가정을 바꾸고 확률을 둬 적정가를 묶어요.",
+                    plain_description="약세·기본·강세처럼 경우마다 가정을 바꾸고 확률을 둬 적정가를 묶습니다.",
                     run=_scenarios, params_model=ScenariosParams, explain=_explain_scenarios,
                     description="company_model_scenarios 라우트 함수 그대로(행마다 샌드박스와 같은 엔진).", **common),
         pg.NodeSpec("company_decision_tree", "의사결정 나무", plain_label="사건이 갈리면",
-                    plain_description="승인·실패처럼 갈리는 사건을 나무로 그려 기대 가치를 접어요.",
+                    plain_description="승인·실패처럼 갈리는 사건을 나무로 그려 기대 가치를 접습니다.",
                     run=_tree, params_model=TreeParams, explain=_explain_tree,
                     description="company_model_decision_tree 라우트 함수 그대로.", **common),
         pg.NodeSpec("company_sotp", "합산가치(SOTP)", plain_label="부문·자회사 합치기",
-                    plain_description="사업 부문과 상장 자회사 지분을 더하고 지주사 할인을 반영해요.",
+                    plain_description="사업 부문과 상장 자회사 지분을 더하고 지주사 할인을 반영합니다.",
                     run=_sotp, params_model=SotpParams, explain=_explain_sotp,
                     description="company_model_sotp 라우트 함수 그대로(자회사 시총 조회).", **common),
         pg.NodeSpec("company_real_option", "실물옵션", plain_label="선택권의 값",
-                    plain_description="확장·연기·포기처럼 나중에 정할 수 있는 선택권의 값을 블랙-숄즈와 이항으로 봐요.",
+                    plain_description="확장·연기·포기처럼 나중에 정할 수 있는 선택권의 값을 블랙-숄즈와 이항으로 봅니다.",
                     run=_real_option, params_model=RealOptionParams, explain=_explain_real_option,
                     description="company_model_real_option 라우트 함수 그대로(BS + CRR 이항).", **common),
     ):

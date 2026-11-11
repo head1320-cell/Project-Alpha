@@ -22,8 +22,8 @@ import numpy as np
 from src.engine.valuation.valuation_models import ValuationParams
 
 OBSERVED, APPROX, ASSUMED, UNKNOWN = "관측", "근사", "가정", "미상"
-WACC_NOTE = ("WACC 는 DCF 엔진과 같은 식(Kd=Rf+1.5%p · 세율 22% · 부채 = 총부채)이에요. 재무 심층의 ROIC−WACC 카드는 다른 근사"
-             "(Kd=Rf+2%p)를 써서 값이 조금 달라요.")
+WACC_NOTE = ("WACC 는 DCF 엔진과 같은 식(Kd=Rf+1.5%p · 세율 22% · 부채 = 총부채)입니다. 재무 심층의 ROIC−WACC 카드는 다른 근사"
+             "(Kd=Rf+2%p)를 써서 값이 조금 다릅니다.")
 
 
 def _inp(key: str, label: str, value: Any, basis: str, source: str = "", unit: str | None = None) -> dict:
@@ -76,7 +76,7 @@ IC_METHOD_NO_CL = "총자산(유동부채를 몰라 빼지 못함 — EVA 를 �
 def _eva_row(fs, params: ValuationParams, wacc: float) -> dict:
     op, ta, cl = _num(fs.operating_profit), _num(fs.total_assets), _num(fs.current_liabilities)
     if op is None or ta is None:
-        return {"year": str(fs.bsns_year), "available": False, "reason": "영업이익이나 총자산이 없어요"}
+        return {"year": str(fs.bsns_year), "available": False, "reason": "영업이익이나 총자산이 없습니다"}
     nopat = op * (1 - params.tax_rate)
     # 유동부채를 모르면 총자산 그대로 — 투하자본을 크게(EVA 를 낮게) 잡는 쪽의 근사이고, 행마다 방법을 적는다
     ic, method = (ta - cl, IC_METHOD) if cl is not None else (ta, IC_METHOD_NO_CL)
@@ -101,7 +101,7 @@ def eva_analysis(history: list, latest, params: ValuationParams, *, fade_years: 
                    (last or {}).get("ic_method") or IC_METHOD, unit="원"),
               _inp("fade_years", "EVA 소멸 기간", fade_years, ASSUMED, "초과이익이 사라지는 데 걸리는 해", unit="년")]
     if not last or not last["available"]:
-        return _off("최근 연도의 투하자본(총자산)이나 영업이익을 알 수 없어요", years=years, inputs=inputs)
+        return _off("최근 연도의 투하자본(총자산)이나 영업이익을 알 수 없습니다", years=years, inputs=inputs)
 
     eva0, ic, nopat = last["eva"], last["invested_capital"], last["nopat"]
     n = max(1, int(fade_years))
@@ -111,17 +111,17 @@ def eva_analysis(history: list, latest, params: ValuationParams, *, fade_years: 
     firm = ic + pv
     valuation = {"pv_eva": pv, "firm_value": firm, "equity_value": firm - tl,
                  "per_share": (firm - tl) / shares if shares else None,
-                 "per_share_reason": None if shares else "발행주식수를 몰라 주당 가치를 낼 수 없어요"}
+                 "per_share_reason": None if shares else "발행주식수를 몰라 주당 가치를 낼 수 없습니다"}
 
     vd: dict
     if g is None and ronic is None:
-        vd = _off("성장률·RONIC 을 정하지 않았어요")
+        vd = _off("성장률·RONIC 을 정하지 않았습니다")
     elif nopat <= 0:
-        vd = _off("영업이익이 적자라 가치 동인 공식을 쓸 수 없어요(성장이 적자를 키운다)")
+        vd = _off("영업이익이 적자라 가치 동인 공식을 쓸 수 없습니다(성장이 적자를 키운다)")
     elif ronic is None or ronic <= 0:
-        vd = _off("새 투자의 수익률(RONIC)이 0 이하라 공식이 성립하지 않아요")
+        vd = _off("새 투자의 수익률(RONIC)이 0 이하라 공식이 성립하지 않습니다")
     elif g is None or g >= wacc - 1e-6:
-        vd = _off(f"성장률({(g or 0):.1%})이 WACC({wacc:.1%}) 이상이면 가치가 발산해요")
+        vd = _off(f"성장률({(g or 0):.1%})이 WACC({wacc:.1%}) 이상이면 가치가 발산합니다")
     else:
         value = nopat * (1 + g) * (1 - g / ronic) / (wacc - g)
         no_growth = nopat / wacc
@@ -147,10 +147,10 @@ def value_layers(history: list, latest, params: ValuationParams, *, full_value_p
               _inp("maintenance", "유지 투자", "감가상각과 같다고 봄", ASSUMED, "감가상각 자료 없음"),
               _inp("weights", "층별 가중", [wa, we, wf], ASSUMED, "자산층·수익력층·통합 적정가")]
     if abs(wa + we + wf - 1.0) > 1e-6 or min(wa, we, wf) < 0:
-        return _off(f"층별 가중의 합이 1 이어야 해요(지금 {wa + we + wf:.2f}) — 나눠 맞추지 않아요", inputs=inputs)
+        return _off(f"층별 가중의 합이 1 이어야 합니다(지금 {wa + we + wf:.2f}) — 나눠 맞추지 않습니다", inputs=inputs)
     shares = _shares(latest)
     if not shares:
-        return _off("발행주식수를 몰라 주당 가치를 낼 수 없어요", inputs=inputs)
+        return _off("발행주식수를 몰라 주당 가치를 낼 수 없습니다", inputs=inputs)
     wacc = dcf_wacc(latest, params)
     te, tl = _num(latest.total_equity), _num(latest.total_liabilities) or 0.0
     asset_ps = te / shares if te is not None else None
@@ -160,33 +160,33 @@ def value_layers(history: list, latest, params: ValuationParams, *, full_value_p
     rev0 = _num(latest.revenue)
     epv: dict = {"key": "epv", "label": "수익력가치(EPV)"}
     if not margins or not rev0 or rev0 <= 0:
-        epv.update(per_share=None, reason="매출·영업이익 이력이 없어 정상화할 수 없어요")
+        epv.update(per_share=None, reason="매출·영업이익 이력이 없어 정상화할 수 없습니다")
     else:
         margin = sum(margins) / len(margins)
         nopat = margin * rev0 * (1 - params.tax_rate)
         if nopat <= 0:
-            epv.update(per_share=None, reason="정상화한 영업이익이 적자라 수익력가치가 없어요")
+            epv.update(per_share=None, reason="정상화한 영업이익이 적자라 수익력가치가 없습니다")
         else:
             epv.update(per_share=(nopat / wacc - tl) / shares, normalized_margin=margin, nopat=nopat)
     layers = [{"key": "asset", "label": "자산가치", "per_share": asset_ps,
-               "reason": None if asset_ps is not None else "자본총계가 없어요"},
+               "reason": None if asset_ps is not None else "자본총계가 없습니다"},
               {**epv, "reason": epv.get("reason")}]
     full = _num(full_value_per_share)
     growth_ps = (full - epv["per_share"]) if (full is not None and epv.get("per_share") is not None) else None
     layers.append({"key": "growth", "label": "성장가치", "per_share": growth_ps,
-                   "reason": None if growth_ps is not None else "통합 적정가나 EPV 가 없어 성장층을 잴 수 없어요"})
+                   "reason": None if growth_ps is not None else "통합 적정가나 EPV 가 없어 성장층을 측정할 수 없습니다"})
 
     vals = {"asset": asset_ps, "epv": epv.get("per_share"), "full": full}
     need = [k for k, w in zip(("asset", "epv", "full"), (wa, we, wf)) if w > 0 and vals[k] is None]
     weighted = None if need else sum(w * (vals[k] or 0.0) for k, w in zip(("asset", "epv", "full"), (wa, we, wf)))
     return {"available": True, "reason": None, "layers": layers, "full_per_share": full,
             "weighted_per_share": weighted,
-            "weighted_reason": (f"가중을 둔 층({', '.join('EPV' if k == 'epv' else k for k in need)})을 잴 수 없어요 — "
-                                "0 으로 채우지 않아요") if need else None,
+            "weighted_reason": (f"가중을 둔 층({', '.join('EPV' if k == 'epv' else k for k in need)})을 측정할 수 없습니다 — "
+                                "0 으로 채우지 않습니다") if need else None,
             "normalization": {"years": len(margins), "wacc": wacc},
             "franchise": (None if epv.get("per_share") is None or asset_ps is None else
-                          "수익력이 자산보다 커요(초과이익을 내는 무언가가 있다)" if epv["per_share"] > asset_ps else
-                          "수익력이 자산보다 작아요(자산을 제값에 못 쓰고 있다)"),
+                          "수익력이 자산보다 큽니다(초과이익을 내는 무언가가 있다)" if epv["per_share"] > asset_ps else
+                          "수익력이 자산보다 작습니다(자산을 제값에 못 쓰고 있다)"),
             "inputs": inputs, "note": WACC_NOTE}
 
 
@@ -208,13 +208,13 @@ def multiples_matrix(fs, *, price: float, params: ValuationParams, eps_growth_pc
               _inp("g", "영구성장률", params.terminal_growth_rate, ASSUMED),
               _inp("ke", "자기자본비용", round(params.ke, 4), APPROX, "CAPM")]
     if eps is None or eps <= 0:
-        return _off("EPS 가 0 이하라 배수(PER·PEG)가 뜻을 잃어요 — 적자 기업은 배수로 보지 않아요", inputs=inputs)
+        return _off("EPS 가 0 이하라 배수(PER·PEG)가 뜻을 잃습니다 — 적자 기업은 배수로 보지 않습니다", inputs=inputs)
     per = price / eps
     peg, peg_reason = None, None
     if eps_growth_pct is None:
-        peg_reason = "EPS 성장률을 몰라 PEG 를 낼 수 없어요"
+        peg_reason = "EPS 성장률을 몰라 PEG 를 낼 수 없습니다"
     elif eps_growth_pct <= 0:
-        peg_reason = "EPS 성장률이 0 이하라 PEG 가 뜻을 잃어요"
+        peg_reason = "EPS 성장률이 0 이하라 PEG 가 뜻을 잃습니다"
     else:
         peg = per / eps_growth_pct
     prices = [[eps * p * gr for p in peg_axis] for gr in growth_axis]
@@ -227,7 +227,7 @@ def multiples_matrix(fs, *, price: float, params: ValuationParams, eps_growth_pc
     bps = _num(fs.bps) or (te / shares if (te is not None and shares) else None)
     just: dict = {"roe": roe, "ke": ke, "g": g}
     if ke - g <= 1e-3:
-        just.update(pbr=None, per=None, reason=f"Ke({ke:.1%})가 성장률({g:.1%})보다 커야 정당 배수가 성립해요")
+        just.update(pbr=None, per=None, reason=f"Ke({ke:.1%})가 성장률({g:.1%})보다 커야 정당 배수가 성립합니다")
     else:
         pbr = (roe - g) / (ke - g) if roe is not None else None
         payout = (dps / eps) if dps is not None else None
@@ -235,9 +235,9 @@ def multiples_matrix(fs, *, price: float, params: ValuationParams, eps_growth_pc
         just.update(pbr=pbr, per=jper, payout=payout,
                     pbr_price=(pbr * bps) if (pbr is not None and pbr > 0 and bps) else None,
                     per_price=(jper * eps) if jper is not None else None,
-                    reason=None if roe is not None else "ROE 를 몰라 정당 PBR 을 낼 수 없어요")
+                    reason=None if roe is not None else "ROE 를 몰라 정당 PBR 을 낼 수 없습니다")
         if pbr is not None and pbr <= 0:
-            just["pbr_note"] = "ROE 가 성장률보다 낮아 정당 PBR 이 0 이하예요 — 자본이 가치를 만들지 못한다는 뜻"
+            just["pbr_note"] = "ROE 가 성장률보다 낮아 정당 PBR 이 0 이하입니다 — 자본이 가치를 만들지 못한다는 뜻"
     return {"available": True, "reason": None, "eps": eps, "per": per, "peg": peg, "peg_reason": peg_reason,
             "matrix": {"growth_axis": list(growth_axis), "peg_axis": list(peg_axis), "prices": prices,
                        "nearest": list(near) if near else None},
@@ -275,13 +275,13 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
               _inp("reinvest", "재투자", "NOPAT − (영업CF − CAPEX)", APPROX, "감가상각은 영업CF 에 들어 있다고 봄"),
               _inp("independence", "동인끼리 관계", "서로 독립", ASSUMED)]
     if len(hist) < 2:
-        return _off("매출 이력이 2개 연도 이상 있어야 성장률 중심을 잴 수 있어요", inputs=inputs)
+        return _off("매출 이력이 2개 연도 이상 있어야 성장률 중심을 측정할 수 있습니다", inputs=inputs)
     shares = _shares(latest)
     if not shares:
-        return _off("발행주식수를 몰라 주당 가치를 낼 수 없어요", inputs=inputs)
+        return _off("발행주식수를 몰라 주당 가치를 낼 수 없습니다", inputs=inputs)
     wacc, gt = dcf_wacc(latest, params), params.terminal_growth_rate
     if gt >= wacc - 1e-3:
-        return _off(f"영구성장률({gt:.1%})이 WACC({wacc:.1%}) 이상이면 잔존가치가 발산해요", inputs=inputs)
+        return _off(f"영구성장률({gt:.1%})이 WACC({wacc:.1%}) 이상이면 잔존가치가 발산합니다", inputs=inputs)
 
     first, last = _num(hist[0].revenue), _num(hist[-1].revenue)
     cg = (last / first) ** (1 / (len(hist) - 1)) - 1
@@ -291,7 +291,7 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
              if (op := _num(fs.operating_profit)) is not None and (ocf := _num(fs.operating_cf)) is not None
              and (cx := _num(fs.capex)) is not None]
     if not margins:
-        return _off("영업이익 이력이 없어 마진 중심을 잴 수 없어요", inputs=inputs)
+        return _off("영업이익 이력이 없어 마진 중심을 측정할 수 없습니다", inputs=inputs)
     cm = sum(margins) / len(margins)
     cr = sum(reinv) / len(reinv) if reinv else 0.0
     inputs = [_inp("growth", "매출 성장률 중심", cg, OBSERVED, f"{len(hist)}개 연도 연평균"),
@@ -299,7 +299,7 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
               _inp("reinvest_rate", "재투자율 중심", cr, APPROX if reinv else UNKNOWN,
                    f"{len(reinv)}개 연도 평균" if reinv else "영업CF·CAPEX 이력 없음 — 0 으로 두지 않고 미상"), *inputs]
     if not reinv:
-        return _off("영업현금흐름·CAPEX 이력이 없어 재투자율을 모르면 현금흐름을 만들 수 없어요", inputs=inputs)
+        return _off("영업현금흐름·CAPEX 이력이 없어 재투자율을 모르면 현금흐름을 만들 수 없습니다", inputs=inputs)
 
     rng = np.random.default_rng(seed)
     g = cg + sigma_growth * rng.standard_normal(n)
@@ -314,7 +314,7 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
     det = float(_path_values(rev0, np.array([cg]), np.array([cm]), np.array([cr]), years=years,
                              tax=params.tax_rate, wacc=wacc, gt=gt, debt=debt, shares=shares)[0])
     if vals.size == 0:
-        return _off("쓸 수 있는 경로가 하나도 없었어요", inputs=inputs)
+        return _off("쓸 수 있는 경로가 하나도 없었습니다", inputs=inputs)
     q = {f"p{k}": float(np.percentile(vals, k)) for k in _Q}
     counts, edges = np.histogram(vals, bins=20)
     return {"available": True, "reason": None, "centers": {"growth": cg, "margin": cm, "reinvest": cr},
@@ -324,8 +324,8 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
             "n_requested": n, "n_used": int(vals.size), "n_rejected": int(n - vals.size),
             "negative_share": float((vals < 0).mean()), "wacc": wacc, "terminal_growth": gt, "years": years,
             "seed": seed, "inputs": inputs,
-            "note": ("'가치 분포' 노드는 할인율·성장률 **가정**을 흔들고, 이 노드는 매출·마진·재투자라는 **영업**을 흔들어요 — "
-                     "다른 불확실성이에요. 폭(σ)은 잰 값이 아니라 정한 값이에요.")}
+            "note": ("'가치 분포' 노드는 할인율·성장률 **가정**을 흔들고, 이 노드는 매출·마진·재투자라는 **영업**을 흔듭니다 — "
+                     "다른 불확실성입니다. 폭(σ)은 잰 값이 아니라 정한 값입니다.")}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -342,15 +342,15 @@ def scenario_weighted(rows: list[dict], *, price: float | None) -> dict:
     """
     inputs = [_inp("prob", "시나리오 확률", [r.get("prob") for r in rows], ASSUMED, "사람이 정한 확률")]
     if not 2 <= len(rows) <= 5:
-        return _off("시나리오는 2~5개여야 해요", inputs=inputs)
+        return _off("시나리오는 2~5개여야 합니다", inputs=inputs)
     probs = [_num(r.get("prob")) for r in rows]
     if any(p is None or p < 0 or p > 1 for p in probs):
-        return _off("확률은 0 과 1 사이여야 해요", inputs=inputs)
+        return _off("확률은 0 과 1 사이여야 합니다", inputs=inputs)
     if abs(sum(probs) - 1.0) > _TOL:
-        return _off(f"확률의 합이 1 이어야 해요(지금 {sum(probs):.2f}) — 나눠 맞추지 않아요", inputs=inputs)
+        return _off(f"확률의 합이 1 이어야 합니다(지금 {sum(probs):.2f}) — 나눠 맞추지 않습니다", inputs=inputs)
     missing = [str(r.get("name")) for r in rows if _num(r.get("value")) is None]
     if missing:
-        return _off(f"값을 내지 못한 시나리오가 있어요: {', '.join(missing)} — 빼고 가중하지 않아요", inputs=inputs)
+        return _off(f"값을 내지 못한 시나리오가 있습니다: {', '.join(missing)} — 빼고 가중하지 않습니다", inputs=inputs)
     vals = [float(r["value"]) for r in rows]
     w = sum(p * v for p, v in zip(probs, vals))
     std = math.sqrt(sum(p * (v - w) ** 2 for p, v in zip(probs, vals)))
@@ -374,16 +374,16 @@ def decision_tree(branches: list[dict], *, price: float | None) -> dict:
     """
     inputs = [_inp("branches", "가지·확률·값", len(branches), ASSUMED, "사람이 그린 나무")]
     if not branches:
-        return _off("가지가 하나도 없어요 — 사건을 하나 이상 그려 주세요", inputs=inputs)
+        return _off("가지가 하나도 없습니다 — 사건을 하나 이상 그려 주십시오", inputs=inputs)
     if len(branches) > _TREE_MAX_BRANCHES:
-        return _off(f"가지는 {_TREE_MAX_BRANCHES}개까지예요", inputs=inputs)
+        return _off(f"가지는 {_TREE_MAX_BRANCHES}개까지입니다", inputs=inputs)
     ids = [str(b.get("id") or "").strip() for b in branches]
     if any(not i for i in ids) or len(set(ids)) != len(ids):
-        return _off("가지 id 가 비었거나 중복됐어요", inputs=inputs)
+        return _off("가지 id 가 비었거나 중복됐습니다", inputs=inputs)
     by = {i: {**b, "id": i, "parent": str(b.get("parent") or "").strip()} for i, b in zip(ids, branches)}
     for b in by.values():
         if b["parent"] and b["parent"] not in by:
-            return _off(f"‘{b['id']}’의 부모 ‘{b['parent']}’가 없어요", inputs=inputs)
+            return _off(f"‘{b['id']}’의 부모 ‘{b['parent']}’가 없습니다", inputs=inputs)
     kids: dict[str, list[str]] = {}
     for b in by.values():
         kids.setdefault(b["parent"], []).append(b["id"])
@@ -392,7 +392,7 @@ def decision_tree(branches: list[dict], *, price: float | None) -> dict:
 
     def _depth(i: str, seen: set[str]) -> int:
         if i in seen:
-            raise ValueError(f"가지 ‘{i}’에서 순환이 있어요")
+            raise ValueError(f"가지 ‘{i}’에서 순환이 있습니다")
         if i in depth:
             return depth[i]
         p = by[i]["parent"]
@@ -404,17 +404,17 @@ def decision_tree(branches: list[dict], *, price: float | None) -> dict:
     except ValueError as e:
         return _off(str(e), inputs=inputs)
     if max(depth.values()) > _TREE_MAX_DEPTH:
-        return _off(f"깊이는 {_TREE_MAX_DEPTH}단계까지예요", inputs=inputs)
+        return _off(f"깊이는 {_TREE_MAX_DEPTH}단계까지입니다", inputs=inputs)
     for parent, ch in kids.items():
         ps = [_num(by[c].get("prob")) for c in ch]
         if any(p is None or p < 0 or p > 1 for p in ps):
-            return _off(f"‘{parent or '처음'}’ 아래 확률은 0 과 1 사이여야 해요", inputs=inputs)
+            return _off(f"‘{parent or '처음'}’ 아래 확률은 0 과 1 사이여야 합니다", inputs=inputs)
         if abs(sum(ps) - 1.0) > _TOL:
-            return _off(f"‘{parent or '처음'}’ 아래 확률의 합이 1 이어야 해요(지금 {sum(ps):.2f})", inputs=inputs)
+            return _off(f"‘{parent or '처음'}’ 아래 확률의 합이 1 이어야 합니다(지금 {sum(ps):.2f})", inputs=inputs)
     leaves = [i for i in by if i not in kids]
     no_val = [i for i in leaves if _num(by[i].get("value")) is None]
     if no_val:
-        return _off(f"끝 가지에는 값이 있어야 해요: {', '.join(no_val)}", inputs=inputs)
+        return _off(f"끝 가지에는 값이 있어야 합니다: {', '.join(no_val)}", inputs=inputs)
 
     ev: dict[str, float] = {}
 
@@ -456,24 +456,24 @@ def sotp(segments: list[dict], subsidiaries: list[dict], *, net_debt: float, hol
               _inp("discount", "지주사 할인", holding_discount_pct, ASSUMED, unit="%"),
               _inp("net_debt", "순차입금", net_debt, APPROX, unit="억")]
     if not segments and not subsidiaries:
-        return _off("부문이나 자회사를 하나 이상 넣어 주세요", inputs=inputs)
+        return _off("부문이나 자회사를 하나 이상 입력하십시오", inputs=inputs)
     if any((_num(s.get("multiple")) or 0) < 0 for s in segments):
-        return _off("배수는 0 이상이어야 해요", inputs=inputs)
+        return _off("배수는 0 이상이어야 합니다", inputs=inputs)
     if not 0 <= holding_discount_pct < 100:
-        return _off("지주사 할인은 0~100% 사이여야 해요", inputs=inputs)
+        return _off("지주사 할인은 0~100% 사이여야 합니다", inputs=inputs)
     seg_rows = []
     for s in segments:
         m, x = _num(s.get("metric")), _num(s.get("multiple"))
         if m is None or x is None:
-            return _off(f"부문 ‘{s.get('name')}’의 지표나 배수가 비었어요", inputs=inputs)
+            return _off(f"부문 ‘{s.get('name')}’의 지표나 배수가 비었습니다", inputs=inputs)
         seg_rows.append({"name": s.get("name"), "metric": m, "multiple": x, "value": m * x})
     sub_rows, excluded = [], []
     for s in subsidiaries:
         mc, st = _num(s.get("market_cap")), _num(s.get("stake_pct"))
         if st is None or not 0 <= st <= 100:
-            excluded.append({**s, "reason": "지분율은 0~100% 여야 해요"})
+            excluded.append({**s, "reason": "지분율은 0~100% 여야 합니다"})
         elif mc is None:
-            excluded.append({**s, "reason": s.get("reason") or "시가총액을 구하지 못했어요"})
+            excluded.append({**s, "reason": s.get("reason") or "시가총액을 구하지 못했습니다"})
         else:
             sub_rows.append({**s, "value": mc * st / 100})
     gross = sum(r["value"] for r in seg_rows) + sum(r["value"] for r in sub_rows)
@@ -483,7 +483,7 @@ def sotp(segments: list[dict], subsidiaries: list[dict], *, net_debt: float, hol
     return {"available": True, "reason": None, "segments": seg_rows, "subsidiaries": sub_rows, "excluded": excluded,
             "gross": gross, "net_debt": net_debt, "nav": nav, "discount_pct": holding_discount_pct,
             "after_discount": after, "per_share": per(after), "per_share_before_discount": per(nav),
-            "per_share_reason": None if shares else "발행주식수를 몰라 주당 가치를 낼 수 없어요", "inputs": inputs}
+            "per_share_reason": None if shares else "발행주식수를 몰라 주당 가치를 낼 수 없습니다", "inputs": inputs}
 
 
 def real_option(*, S: float, K: float, T: float, sigma: float, r: float, q: float, kind: str,
@@ -501,9 +501,9 @@ def real_option(*, S: float, K: float, T: float, sigma: float, r: float, q: floa
               _inp("T", "만기", T, ASSUMED, unit="년"), _inp("sigma", "사업 가치 변동성", sigma, ASSUMED),
               _inp("q", "누수율", q, ASSUMED), _inp("r", "무위험수익률", r, APPROX)]
     if S <= 0 or K <= 0:
-        return _off("사업 가치와 행사가는 0 보다 커야 해요", inputs=inputs)
+        return _off("사업 가치와 행사가는 0 보다 커야 합니다", inputs=inputs)
     if T <= 0 or sigma <= 0:
-        return _off("만기와 변동성은 0 보다 커야 해요 — 불확실성이 없으면 옵션 가치도 없어요", inputs=inputs)
+        return _off("만기와 변동성은 0 보다 커야 합니다 — 불확실성이 없으면 옵션 가치도 없습니다", inputs=inputs)
     kind = "put" if kind == "put" else "call"
     g = FICCEngine.bs_greeks(S * math.exp(-q * T), K, T, r, sigma, kind)
     bs = float(g["Price"])
@@ -511,11 +511,11 @@ def real_option(*, S: float, K: float, T: float, sigma: float, r: float, q: floa
     npv = (S - K) if kind == "call" else (K - S)
     gap = binom - bs
     tol = max(0.005 * bs, 1e-9)
-    ee = ({"premium": gap, "note": "조기에 행사할 수 있어서 생기는 값이에요(미국형 − 유럽형)."} if gap > tol else
-          {"premium": 0.0, "note": f"두 값의 차이 {gap:+.4f} 는 이항 격자의 오차 범위예요 — 조기 행사로 얻는 값은 없어요."})
+    ee = ({"premium": gap, "note": "조기에 행사할 수 있어서 생기는 값입니다(미국형 − 유럽형)."} if gap > tol else
+          {"premium": 0.0, "note": f"두 값의 차이 {gap:+.4f} 는 이항 격자의 오차 범위입니다 — 조기 행사로 얻는 값은 없습니다."})
     return {"available": True, "reason": None, "kind": kind,
             "black_scholes": {"value": bs, "delta": g.get("Delta"), "vega": g.get("Vega"), "engine": "블랙-숄즈(유럽형)"},
             "binomial": {"value": binom, "steps": int(n_steps), "engine": "CRR 이항(미국형)"},
             "early_exercise": ee, "static_npv": npv, "option_premium": bs - max(npv, 0.0),
             "inputs": inputs,
-            "note": "옵션 가치는 입력 가정(특히 변동성)의 함수예요 — 시장에서 관측한 가격이 아니에요."}
+            "note": "옵션 가치는 입력 가정(특히 변동성)의 함수입니다 — 시장에서 관측한 가격이 아닙니다."}

@@ -612,14 +612,14 @@ def execute_graph_backtest(req: GraphBacktestRequest) -> GraphBacktestResponse:
         if not graph.data_sources:
             return GraphBacktestResponse(
                 success=False,
-                message="데이터 소스 노드가 없습니다. DataSource 노드를 추가하세요.",
+                message="데이터 소스 노드가 없습니다. DataSource 노드를 추가하십시오.",
                 parsed_strategy=graph.to_dict(),
             )
 
         if not graph.actions:
             return GraphBacktestResponse(
                 success=False,
-                message="매매 실행 노드가 없습니다. Action 노드를 추가하세요.",
+                message="매매 실행 노드가 없습니다. Action 노드를 추가하십시오.",
                 parsed_strategy=graph.to_dict(),
             )
 

@@ -456,7 +456,7 @@ class ImpactAssumptions:
     def impact_bps(self, turnover: float, notional_krw: float) -> dict:
         """편도 회전율(분수)과 KRW notional → 충격 추정.
 
-        ★√법칙을 여기서 다시 계산하지 않는다★ 저장소가 이미 가진 모델을 부른다 —
+        ★√법칙을 여기서 재계산하지 않는다★ 저장소가 이미 가진 모델을 부른다 —
         베끼면 두 벌이 갈라지고, 갈라져도 타입 에러가 나지 않는다(P1·P2′ 에서
         두 번 물린 형태). `turnover_pct` 단위(%)는 `realism_engine` 호출부와
         같게 맞춘다.

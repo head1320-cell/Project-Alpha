@@ -11,8 +11,8 @@ const MIX_MIN = 8, MIX_MAX = 45;      // 색 세기(%) — 글자(잉크)가 늘
 
 export function MonthGrid({ view }: { view: PerfView }) {
   const rows = view.periods?.monthly ?? null;
-  if (!rows) return <p className="pg-note">달마다 수익은 이 결과에 없어요 — 서버가 기간별 수익을 주지 않았어요.</p>;
-  if (!rows.length) return <p className="pg-note">달마다 수익을 셀 만큼 긴 곡선이 아니에요.</p>;
+  if (!rows) return <p className="pg-note">월별 수익률은 이 결과에 없습니다 — 서버가 기간별 수익을 주지 않았습니다.</p>;
+  if (!rows.length) return <p className="pg-note">월별 수익률을 셀 만큼 긴 곡선이 아닙니다.</p>;
   const years = [...new Set(rows.map((r) => r.year))].sort((a, b) => a - b);
   const byKey = new Map(rows.map((r) => [`${r.year}-${String(r.month).padStart(2, "0")}`, r]));
   const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.return_pct)));
@@ -20,7 +20,7 @@ export function MonthGrid({ view }: { view: PerfView }) {
   return (
     <div className="pf-months-wrap">
       <table className="pf-months">
-        <thead><tr><th className="pf-months-y">해</th>{MONTHS.map((m) => <th key={m}>{m}월</th>)}</tr></thead>
+        <thead><tr><th className="pf-months-y">연도</th>{MONTHS.map((m) => <th key={m}>{m}월</th>)}</tr></thead>
         <tbody>
           {years.map((y) => (
             <tr key={y}>
@@ -42,8 +42,8 @@ export function MonthGrid({ view }: { view: PerfView }) {
         </tbody>
       </table>
       <p className="pg-note pf-months-note">
-        빨강은 오른 달, 파랑은 내린 달이고 진할수록 폭이 커요. 빈 칸은 자료가 없는 달이에요(0 이 아니에요).
-        {anyPartial ? " 점선 테두리는 곡선이 시작하거나 끝나는 달이에요 — 달 전체가 아닐 수 있어서 그 기간 수익을 그대로 적었어요." : ""}
+        빨강은 상승 월, 파랑은 하락 월이며 진할수록 변동 폭이 큽니다. 빈 칸은 데이터가 없는 월입니다(0 이 아닙니다).
+        {anyPartial ? " 점선 테두리는 곡선이 시작하거나 끝나는 달입니다 — 달 전체가 아닐 수 있어서 그 기간 수익을 그대로 적었습니다." : ""}
       </p>
     </div>
   );

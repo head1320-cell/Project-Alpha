@@ -98,7 +98,7 @@ def combine_studio_views(views: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "n_available": 0, "per_tool": {}, "unavailable": unavailable,
             "reasons": reasons, "disagreement": dis,
             "note": ("가용한 도구가 하나도 없습니다 — 결론을 내지 않습니다. "
-                     "미가용 사유는 `reasons` 를 보세요."),
+                     "미가용 사유는 `reasons` 를 보십시오."),
         }
 
     counts = Counter(available.values())
@@ -112,7 +112,7 @@ def combine_studio_views(views: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
     if n_available == 1:
         note = (f"가용한 도구가 {next(iter(available))} 하나뿐입니다 — 합의가 아니라 "
-                "단일 관측입니다. 다른 도구의 미가용 사유를 함께 읽으세요.")
+                "단일 관측입니다. 다른 도구의 미가용 사유를 함께 읽으십시오.")
     elif tie:
         note = (f"판정이 {top[0][1]}:{top[1][1]} 로 동수입니다 — 임의로 한쪽을 고르지 "
                 "않습니다. 동수는 결론이 아니라 그 자체가 정보입니다.")

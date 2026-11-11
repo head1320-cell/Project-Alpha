@@ -25,9 +25,9 @@ export async function exportCanvasPng(): Promise<void> {
   busy = true;
   try {
     const { fontsMissed } = await exportPng(canvasEl, lines, pngFileName(st.name || undefined));
-    st.setNote(exportNote(lines) + (fontsMissed ? ` 글꼴 조각 ${fontsMissed}개를 받지 못해 그 글자는 비슷한 글꼴로 그렸어요.` : ""));
+    st.setNote(exportNote(lines) + (fontsMissed ? ` 글꼴 조각 ${fontsMissed}개를 받지 못해 그 글자는 비슷한 글꼴로 그렸습니다.` : ""));
   } catch (e) {
-    st.setNote(`그림을 만들지 못했어요 — ${(e as Error).message || "까닭을 모르는 오류"}`);
+    st.setNote(`그림 생성 실패 — ${(e as Error).message || "까닭을 모르는 오류"}`);
   } finally {
     busy = false;
   }

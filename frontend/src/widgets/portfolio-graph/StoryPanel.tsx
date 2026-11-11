@@ -9,7 +9,7 @@
 import { memo, type ReactNode } from "react";
 import type { NodeCatalogEntry, NodeRunResult, PgNode } from "@/entities/portfolio-graph";
 
-const TRUST_TEXT = { confirmed: "확인", assumed: "가정", unknown: "몰라요", failed: "실패" } as const;
+const TRUST_TEXT = { confirmed: "확인", assumed: "가정", unknown: "미상", failed: "실패" } as const;
 
 function Bars({ weights, labels }: { weights: Record<string, number | null>; labels?: Record<string, string> }) {
   // ★모르는 비중은 0 으로 그리지 않는다★ — 수가 아닌 칸은 막대 없이 "—".
@@ -45,7 +45,7 @@ const Step = memo(function Step({ id, n, node, entry, result, stale, current, on
       <button type="button" className="pg-step-num" onClick={onSelect} aria-label={`${n}번 노드 선택`}>{n}</button>
       <div className="pg-step-body">
         <h3 className="pg-step-title"><button type="button" onClick={onSelect}>{title}</button></h3>
-        {!ex && <p className="pg-step-p">{stale && result ? "설정을 바꿔서 다시 계산해야 해요." : "계산하면 여기서 설명해 드려요."}</p>}
+        {!ex && <p className="pg-step-p">{stale && result ? "설정을 바꿔서 재계산해야 합니다." : "계산하면 여기서 설명해 드립니다."}</p>}
         {ex && result?.status === "ok" && node.data.kind === "optimizer" && view.weights ? (
           <Bars weights={view.weights as Record<string, number>} labels={view.labels as Record<string, string>} />
         ) : ex?.headline && ex.headline.value !== null ? (
@@ -54,7 +54,7 @@ const Step = memo(function Step({ id, n, node, entry, result, stale, current, on
         {(ex?.facts ?? []).map((f, i) => <p key={i} className="pg-step-p">{f}</p>)}
         {trust.length > 0 && (
           <div className="pg-trust">
-            <div className="pg-trust-q">믿어도 되나요?</div>
+            <div className="pg-trust-q">신뢰도 점검</div>
             {trust.map((t, i) => (
               <div key={i} className="pg-trust-a"><span className={`pg-tag pg-tag--${t.state}`}>{TRUST_TEXT[t.state]}</span><span>{t.text}</span></div>
             ))}
@@ -66,7 +66,7 @@ const Step = memo(function Step({ id, n, node, entry, result, stale, current, on
             <ul>{ex!.unmeasured!.map((u, i) => <li key={i}>{u}</li>)}</ul>
           </details>
         )}
-        {ex && <button type="button" className="pg-more" onClick={onDetail}>숫자 자세히 보기</button>}
+        {ex && <button type="button" className="pg-more" onClick={onDetail}>숫자 상세 보기</button>}
       </div>
     </li>
   );
@@ -89,19 +89,19 @@ export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedI
   const practice = Object.entries(results ?? {}).filter(([id]) => !staleIds.has(id)).map(([, r]) => r).some((r) =>
     (r.explain?.trust ?? []).some((t) => t.kind === "practice"));
   if (!nodes.length) {
-    return <p className="pg-empty">캔버스가 비어 있어요. 왼쪽에서 노드를 끌어 오거나 ‘빠른 시작’을 눌러 보세요.</p>;
+    return <p className="pg-empty">캔버스가 비어 있습니다. 왼쪽에서 노드를 끌어 오거나 ‘빠른 시작’을 누르십시오.</p>;
   }
   return (
     <div className="pg-story">
       {top}
       {practice && (
         <div className="pg-notice" role="note">
-          <b>연습용 결과예요.</b> 실제 시세가 아니라 합성 데이터로 계산했어요. 투자 판단에 쓰기 전에 실데이터로 다시 계산해 주세요.
+          <b>합성 데이터 결과입니다.</b> 실제 시세가 아니라 합성 데이터로 계산했습니다. 투자 판단에 쓰기 전에 실데이터로 재계산하십시오.
         </div>
       )}
       {staleIds.size > 0 && results && (
         <div className="pg-notice pg-notice--stale" role="note">
-          그래프가 바뀌어서 {staleIds.size}개 단계의 설명이 예전 결과예요. ‘바뀐 곳만 계산’을 누르면 그 단계만 새로 나와요.
+          그래프가 바뀌어서 {staleIds.size}개 단계의 설명이 예전 결과입니다. ‘바뀐 곳만 계산’을 누르면 그 단계만 새로 나옵니다.
         </div>
       )}
       <ol className="pg-steps">

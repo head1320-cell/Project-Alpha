@@ -26,7 +26,7 @@ from src.domain import design_procedure as proc  # noqa: E402
 
 KINDS = routes._kinds()
 F = {"format": "project-alpha.portfolio-graph", "version": 1}
-BANNED = ("검증됨", "입증됨", "견고함", "프로덕션 레디", "투자 우위", "더 나은 전략", "통과해요", "좋아져요")
+BANNED = ("검증됨", "입증됨", "견고함", "프로덕션 레디", "투자 우위", "더 나은 전략", "통과합니다", "좋아집니다")
 
 
 def _n(i, t, **p):
@@ -169,7 +169,7 @@ def test_rule6_a_full_procedure_has_no_next_and_says_so():
     nodes = CORE + [_n("b", "backtest")]
     edges = CORE_E + [_e("o", "weights", "b", "weights"), _e("r", "returns", "b", "returns")]
     p = _proc(nodes, edges)
-    assert p["next"] is None and p["done_text"] == "절차를 다 채웠어요 — 계산해 보세요."
+    assert p["next"] is None and p["done_text"] == "절차를 다 채웠습니다 — 계산하십시오."
     assert _proc(CORE, CORE_E)["done_text"] is None                               # ★짝★
 
 

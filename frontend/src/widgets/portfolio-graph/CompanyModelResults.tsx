@@ -107,7 +107,7 @@ export function ValueLayersResult({ v }: { v: Dict }) {
     <>
       <Head v={v} />
       <Floors floors={floors} price={num(v.price)} />
-      {floors.filter((f) => f.value === null).map((f) => <p key={f.key} className="pg-warn">{f.label}층을 재지 못했어요 — {f.reason ?? "사유 미상"}</p>)}
+      {floors.filter((f) => f.value === null).map((f) => <p key={f.key} className="pg-warn">{f.label}층 측정 불가 — {f.reason ?? "사유 미상"}</p>)}
       <KV rows={[
         ["성장이 더한 몫", num(L.growth?.per_share) === null ? "—" : won(L.growth?.per_share)],
         ["확률로 묶은 값", num(r.weighted_per_share) === null ? `— ${String(r.weighted_reason ?? "")}` : won(r.weighted_per_share)],
@@ -150,9 +150,9 @@ export function EvaResult({ v }: { v: Dict }) {
         ["자본비용(WACC)", pc(((r.latest as Dict) ?? {}).wacc)],
         ["EVA 로 본 주당 가치", num(val.per_share) === null ? `— ${String(val.per_share_reason ?? "")}` : won(val.per_share)],
         ["가치 동인 공식 주당", vd.available ? won(vd.per_share) : `— ${String(vd.reason ?? "")}`],
-        ["성장이 가치를", vd.available ? (vd.growth_creates_value ? "만들어요" : "깎아요") : "—"],
+        ["성장이 가치를", vd.available ? (vd.growth_creates_value ? "만듭니다" : "깎습니다") : "—"],
       ]} />
-      {noCl && <p className="pg-note">유동부채를 몰라 투하자본을 총자산으로 잡은 해가 있어요 — EVA 를 낮게 보는 쪽이에요.</p>}
+      {noCl && <p className="pg-note">유동부채를 몰라 투하자본을 총자산으로 잡은 해가 있습니다 — EVA 를 낮게 보는 쪽입니다.</p>}
       <HistoryNote r={r} />
       <InputsTable r={r} />
     </>
@@ -185,7 +185,7 @@ export function MultiplesResult({ v }: { v: Dict }) {
           </tr>
         ))}</tbody>
       </table>
-      <p className="pg-note">굵은 칸이 현재가에 가장 가까운 조합이고, 흐린 칸은 현재가보다 낮은 가격이에요.</p>
+      <p className="pg-note">굵은 칸이 현재가에 가장 가까운 조합이고, 흐린 칸은 현재가보다 낮은 가격입니다.</p>
       <table className="pg-table pg-just">
         <caption>정당한 배수</caption>
         <tbody>
@@ -244,7 +244,7 @@ export function DriverMcResult({ v }: { v: Dict }) {
         ["경로", `${String(r.n_used ?? "—")} / ${String(r.n_requested ?? "—")}`],
       ]} />
       {num(r.negative_share) !== null && (r.negative_share as number) > 0 && (
-        <p className="pg-note">경로의 {pc(r.negative_share, 0)} 는 주당 가치가 0 아래예요 — 부채가 기업가치보다 커요.</p>
+        <p className="pg-note">경로의 {pc(r.negative_share, 0)} 는 주당 가치가 0 아래입니다 — 부채가 기업가치보다 큽니다.</p>
       )}
       <p className="pg-note">{String(r.note ?? "").replace(/\*\*/g, "")}</p>
       <HistoryNote r={r} />
@@ -312,7 +312,7 @@ export function DecisionTreeResult({ v }: { v: Dict }) {
             <td className="pg-td-num">{pc(pth.prob, 0)}</td><td className="pg-td-num">{won(pth.value)}</td></tr>
         ))}</tbody>
       </table>
-      {((r.ignored_values as string[]) ?? []).length > 0 && <p className="pg-note">중간 가지의 값은 쓰지 않았어요: {((r.ignored_values as string[]) ?? []).join(", ")}</p>}
+      {((r.ignored_values as string[]) ?? []).length > 0 && <p className="pg-note">중간 가지의 값은 쓰지 않았습니다: {((r.ignored_values as string[]) ?? []).join(", ")}</p>}
       <InputsTable r={r} />
     </>
   );
@@ -341,7 +341,7 @@ export function SotpResult({ v }: { v: Dict }) {
       </table>
       <KV rows={[["주당", num(r.per_share) === null ? `— ${String(r.per_share_reason ?? "")}` : won(r.per_share)],
                  ["할인 전 주당", won(r.per_share_before_discount)]]} />
-      {((r.excluded as Dict[]) ?? []).map((x, i) => <p key={i} className="pg-warn">{String(x.code)}: 합계에서 뺐어요 — {String(x.reason ?? "사유 미상")}</p>)}
+      {((r.excluded as Dict[]) ?? []).map((x, i) => <p key={i} className="pg-warn">{String(x.code)}: 합계에서 뺐습니다 — {String(x.reason ?? "사유 미상")}</p>)}
       <HistoryNote r={r} />
       <InputsTable r={r} />
     </>

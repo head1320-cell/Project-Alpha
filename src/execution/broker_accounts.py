@@ -66,7 +66,7 @@ def _vault() -> Fernet:
     if not raw:
         raise CredentialVaultUnavailable(
             f"{KEY_ENV} 미설정 — 증권 계좌 자격을 암호화할 키가 없어 저장하지 않습니다. "
-            "`.env.example` 의 한 줄로 키를 만들어 서버에 넣어 주세요.")
+            "`.env.example` 의 한 줄로 키를 만들어 서버에 입력하십시오.")
     try:
         return Fernet(raw.encode())
     except ValueError:
@@ -97,16 +97,16 @@ def connect(owner: str, *, label: str, app_key: str, app_secret: str, account_no
     account_no = (account_no or "").strip()
     account_prdt = (account_prdt or "").strip()
     if not label or len(label) > 64:
-        raise ValueError("계좌 이름은 1~64자로 넣어 주세요.")
+        raise ValueError("계좌 이름은 1~64자로 입력하십시오.")
     if not app_key or not app_secret:
-        raise ValueError("앱 키와 앱 시크릿을 모두 넣어 주세요.")
+        raise ValueError("앱 키와 앱 시크릿을 모두 입력하십시오.")
     if not _ACCOUNT_NO.fullmatch(account_no):
-        raise ValueError("계좌번호는 앞 8자리 숫자만 넣어 주세요.")
+        raise ValueError("계좌번호는 앞 8자리 숫자만 입력하십시오.")
     if not _PRDT.fullmatch(account_prdt):
-        raise ValueError("상품 코드는 숫자 2자리예요(위탁 계좌는 01).")
+        raise ValueError("상품 코드는 숫자 2자리입니다(위탁 계좌는 01).")
     if not isinstance(is_paper, bool):
         # 돈이 걸린 선택이다 — "false" 같은 글자를 참·거짓으로 짐작하지 않는다.
-        raise ValueError("모의투자 계좌인지 실계좌인지 정해 주세요.")
+        raise ValueError("모의투자 계좌인지 실계좌인지 정하십시오.")
 
     vault = _vault()
     seal = lambda v: vault.encrypt(v.encode()).decode()  # noqa: E731
@@ -161,6 +161,6 @@ def open_account(account_id: str) -> AccountSecrets:
         app_key, app_secret, account_no = (vault.decrypt(v.encode()).decode() for v in sealed)
     except InvalidToken:
         raise CredentialVaultUnavailable(
-            f"저장된 자격을 풀 수 없습니다 — {KEY_ENV} 가 연결할 때의 키와 다를 수 있어요. "
-            "키를 되돌리거나 계좌를 다시 연결해 주세요.") from None
+            f"저장된 자격을 풀 수 없습니다 — {KEY_ENV} 가 연결할 때의 키와 다를 수 있습니다. "
+            "키를 되돌리거나 계좌를 다시 연결하십시오.") from None
     return AccountSecrets(*meta, app_key=app_key, app_secret=app_secret, account_no=account_no)

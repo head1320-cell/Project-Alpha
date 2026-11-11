@@ -14,12 +14,12 @@ export const FIELD_KO: Record<GateField, string> = {
   basis: "근거", authority: "확인한 곳", reference_no: "확인 번호", verified_at: "확인한 날", scope: "범위", allowed_users: "허용할 사용자",
 };
 const HINT: Record<GateField, string> = {
-  basis: "왜 실계좌를 여는지 적어요. 예: 본인 계좌로만 주문하는 개인 운영",
-  authority: "근거를 확인한 기관이나 문서예요. 예: 한국투자증권 오픈API 약관",
-  reference_no: "그 문서나 확인의 번호예요.",
-  verified_at: "근거를 확인한 날이에요.",
-  scope: "어디까지 여는지 적어요. 예: 운영 계좌 하나, 국내 주식",
-  allowed_users: `이름을 하나씩 더해요. 모두에게 여는 값(예: ${WILDCARD_EXAMPLES.join(", ")})은 서버가 받지 않아요.`,
+  basis: "왜 실계좌를 여는지 적습니다. 예: 본인 계좌로만 주문하는 개인 운영",
+  authority: "근거를 확인한 기관이나 문서입니다. 예: 한국투자증권 오픈API 약관",
+  reference_no: "그 문서나 확인의 번호입니다.",
+  verified_at: "근거를 확인한 날입니다.",
+  scope: "어디까지 여는지 적습니다. 예: 운영 계좌 하나, 국내 주식",
+  allowed_users: `이름을 하나씩 더합니다. 모두에게 여는 값(예: ${WILDCARD_EXAMPLES.join(", ")})은 서버가 받지 않습니다.`,
 };
 type Text = Exclude<GateField, "allowed_users">;
 const EMPTY: Record<Text, string> = { basis: "", authority: "", reference_no: "", verified_at: "", scope: "" };
@@ -55,8 +55,8 @@ export function GateForm({ open, hasCurrent, onClose, onDone }: {
 
   return (
     <Sheet open={open} onClose={() => { declare.reset(); onClose(); }} title="실계좌 관문 선언하기" testId="gate-declare" className="lv-sheet lvg-sheet"
-           sub={hasCurrent ? "새로 선언하면 지금 선언은 거둔 것으로 남아요. 실계좌로 돌던 운영 계좌는 기록만으로 돌아가요."
-             : "선언하면 허용한 사용자만 실계좌로 주문할 수 있어요. 무엇을 근거로 여는지 기록에 남아요."}>
+           sub={hasCurrent ? "새로 선언하면 지금 선언은 거둔 것으로 남습니다. 실계좌로 돌던 운영 계좌는 기록만으로 돌아갑니다."
+             : "선언하면 허용한 사용자만 실계좌로 주문할 수 있습니다. 무엇을 근거로 여는지 기록에 남습니다."}>
       <form className="lvg-form" onSubmit={(e) => { e.preventDefault(); if (full) declare.mutate(); }}>
         {(Object.keys(EMPTY) as Text[]).map((k) => (
           <label key={k} className="lv-field" data-k={k}>
@@ -89,17 +89,17 @@ export function GateForm({ open, hasCurrent, onClose, onDone }: {
         </div>
         {declare.isError ? (
           <div className="lv-err lvg-refused" role="alert">
-            <p>선언하지 못했어요. <span data-server>{declare.error.message}</span></p>
+            <p>선언 실패. <span data-server>{declare.error.message}</span></p>
             {named.length ? <p className="lvg-refused-k">다시 볼 칸: {named.join(", ")}</p> : null}
           </div>
         ) : null}
         <div className="tx-confirm-act">
           <button type="submit" className="tx-btn tx-btn--main lvg-declare-go" disabled={!full || declare.isPending}>
-            {declare.isPending ? "선언하는 중이에요" : "선언하기"}
+            {declare.isPending ? "선언 중" : "선언하기"}
           </button>
           <button type="button" className="tx-btn tx-btn--sub" onClick={() => { declare.reset(); onClose(); }}>닫기</button>
         </div>
-        {!full ? <p className="lv-hint lvg-need">여섯 칸을 모두 채우면 선언할 수 있어요.</p> : null}
+        {!full ? <p className="lv-hint lvg-need">여섯 칸을 모두 채우면 선언할 수 있습니다.</p> : null}
       </form>
     </Sheet>
   );

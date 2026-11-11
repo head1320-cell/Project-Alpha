@@ -32,10 +32,10 @@ export default function LadderEditor({ steps, onChange, side }: {
           + 단계 더하기
         </button>
         <span className={`bte-note${total > 100 ? " bte-note--bad" : ""}`} role={total > 100 ? "alert" : undefined}>
-          비중 합 {total}%{total > 100 ? " — 100%를 넘을 수 없어요" : ""}
+          비중 합 {total}%{total > 100 ? " — 100%를 넘을 수 없습니다" : ""}
         </span>
       </div>
-      <p className="bte-note">기준가 × (1 + 변동%)에 단계별 지정가를 걸어요. 그날 닿은 단계만 체결되고 나머지는 사라져요(보수적).</p>
+      <p className="bte-note">기준가 × (1 + 변동%)에 단계별 지정가를 설정합니다. 그날 닿은 단계만 체결되고 나머지는 사라집니다(보수적).</p>
     </div>
   );
 }

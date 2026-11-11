@@ -45,7 +45,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
         let id = "";
         st.act(() => {
           id = st.addLinked(kind, { x: src.position.x + COL, y: src.position.y }, { node: src.id, handle: pair[0].name, side: "source", port: pair[1].name });
-          return `‘${srcEntry.plain_label}’ 뒤에 이었어요.`;
+          return `‘${srcEntry.plain_label}’ 뒤에 이었습니다.`;
         });
         st.setTab("settings");
         return id;
@@ -98,12 +98,12 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
       // 입력에 이미 선이 있으면(입력 하나에 선 하나) 잇지 않고 놓기만 하고 말한다.
       const taken = q.from.side === "target" && st.edges.some((e) => e.target === q.from!.node && e.targetHandle === q.from!.handle);
       if (!taken) {
-        st.act(() => { st.addLinked(kind, at, { ...q.from!, port }); return "노드를 놓고 이었어요."; });
+        st.act(() => { st.addLinked(kind, at, { ...q.from!, port }); return "노드를 놓고 이었습니다."; });
         st.setTab("settings");
         return;
       }
       st.addNode(kind, at);
-      st.setNote("노드를 놓았어요 — 그 입력에는 이미 선이 있어 잇지 않았어요.");
+      st.setNote("노드를 놓았습니다 — 그 입력에는 이미 선이 있어 잇지 않았습니다.");
       return;
     }
     addAt(kind, at);
@@ -126,7 +126,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
       const gid = folded.get(e.source) ?? folded.get(e.target);
       if (gid) {
         return [
-          { key: "proxy-why", label: "접힌 상자에 걸린 선이에요 — 상자를 펼치면 고칠 수 있어요", icon: <Info size={14} aria-hidden="true" />, disabled: true, run: () => {} },
+          { key: "proxy-why", label: "접힌 상자에 걸린 선입니다 — 상자를 펼치면 고칠 수 있습니다", icon: <Info size={14} aria-hidden="true" />, disabled: true, run: () => {} },
           { key: "unfold", label: "상자 펼치기", icon: <ChevronsUpDown size={14} aria-hidden="true" />, run: () => usePortfolioGraph.getState().toggleGroup(gid) },
         ];
       }
@@ -170,7 +170,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
       // BT6 — 바꿀 종류는 설정 판에서 고른다(메뉴는 그 칸으로 데려간다). 후보가 없으면 흐리게, 이유를 이름에.
       ...(() => {
         const none = swapCandidates(id, st.nodes, st.edges, st.catalog ?? []).length === 0;
-        return [{ key: "swap", label: none ? "다른 노드로 바꾸기 — 같은 선을 받는 다른 노드가 없어요" : "다른 노드로 바꾸기…",
+        return [{ key: "swap", label: none ? "다른 노드로 바꾸기 — 같은 선을 받는 다른 노드가 없습니다" : "다른 노드로 바꾸기…",
                   icon: <Replace size={14} aria-hidden="true" />, disabled: none,
                   run: () => {
                     const x = usePortfolioGraph.getState();
@@ -188,9 +188,9 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
                                       run: () => usePortfolioGraph.getState().showCause(id) }] : []),
       // 여럿 고른 것 안의 노드면 그 여럿을 한 번에(R2) — 되돌리기 한 번.
       ...(st.picked.length > 1 && st.picked.includes(id)
-        ? [{ key: "remove-picked", label: `고른 노드 ${st.picked.length}개 지우기`, icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
+        ? [{ key: "remove-picked", label: `고른 노드 ${st.picked.length}개 삭제`, icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
              run: () => { const x = usePortfolioGraph.getState(); x.act(() => deleteNote(x.deleteElements(x.picked, []))); } }] : []),
-      { key: "remove", label: st.picked.length > 1 && st.picked.includes(id) ? "이 노드만 지우기" : "지우기", icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
+      { key: "remove", label: st.picked.length > 1 && st.picked.includes(id) ? "이 노드만 삭제" : "삭제", icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
         run: () => { const x = usePortfolioGraph.getState(); x.act(() => deleteNote(x.deleteElements([id], []))); } },
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 메뉴를 열 때마다 새로 만든다

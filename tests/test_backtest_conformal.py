@@ -117,7 +117,7 @@ def test_coverage_absence_is_a_reason_not_a_fabricated_number():
 def test_the_prediction_does_not_depend_on_the_period_length():
     """★단위를 일평균으로 맞춘 이유★
 
-    구간 총수익으로 비교하려면 예측 시점에 "이 구간이 며칠짜리인가" 를 알아야 하는데
+    구간 총수익률으로 비교하려면 예측 시점에 "이 구간이 며칠짜리인가" 를 알아야 하는데
     그건 미래다. 일평균이면 그 값이 필요 없다. 여기서는 그 성질을 **꼬리를 잘라도
     앞부분 예측이 변하지 않는다**로 잰다 — 뒤가 바뀌어도 앞의 예측은 그대로여야 한다.
     """

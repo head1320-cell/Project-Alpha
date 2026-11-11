@@ -11,9 +11,9 @@ export async function call<T>(res: Promise<Response>): Promise<Result<T>> {
   try {
     const r = await res;
     const body = await r.json().catch(() => null);
-    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(body, `서버가 ${r.status} 로 답했어요 — 사유를 받지 못했어요.`) };
+    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(body, `서버가 ${r.status} 로 답했습니다 — 사유 수신 실패`) };
     return { ok: true, value: body as T };
   } catch {
-    return { ok: false, status: 0, error: "서버에 닿지 못했어요." };
+    return { ok: false, status: 0, error: "서버 연결 실패" };
   }
 }

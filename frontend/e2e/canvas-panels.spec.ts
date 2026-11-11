@@ -352,7 +352,7 @@ test("판 밑 노드(BQ Q1): 판 밑 노드로 스크롤·초점이 가도 화�
   expect(scrolled.every((v) => v === 0)).toBe(true);
 });
 
-test("연습용 표시(BQ Q1): 결과 요약에 '연습용 데이터' — 연습용 결과가 하나도 없으면 없다(짝)", async ({ page }) => {
+test("합성 표시(BQ Q1): 결과 요약에 '합성 데이터' — 합성 데이터 결과가 하나도 없으면 없다(짝)", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCanvas(page);
   const mark = page.locator(".pg-summary .pg-summary-practice");

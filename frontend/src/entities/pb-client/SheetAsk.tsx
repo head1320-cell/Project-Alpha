@@ -40,12 +40,12 @@ export function SheetAsk({ ask, title, sub }: {
       <h2 className="cs-h2">{title}</h2>
       <p className="cs-sub">{sub}</p>
       <form className="cs-ask-form" onSubmit={submit}>
-        <input className="cs-ask-input" value={q} maxLength={300} placeholder="예: 가장 큰 비중은 어느 종목이에요?"
+        <input className="cs-ask-input" value={q} maxLength={300} placeholder="예: 가장 큰 비중은 어느 종목입니다?"
                aria-label="질문" onChange={(e) => setQ(e.target.value)} />
         <button type="submit" className="tx-btn tx-btn--main cs-ask-go" disabled={busy || !q.trim()}>{busy ? "묻는 중" : "묻기"}</button>
       </form>
       {err && <p className="cs-ask-err" role="alert">{err}</p>}
-      {reply && !reply.available && <p className="cs-ask-unavailable" role="status">지금은 답할 수 없어요 — {reply.reason}</p>}
+      {reply && !reply.available && <p className="cs-ask-unavailable" role="status">지금은 답할 수 없습니다 — {reply.reason}</p>}
       {reply?.available && reply.answer && (
         <div className="cs-ask-reply" aria-live="polite">
           <p className="cs-ask-q">{last!.question}</p>

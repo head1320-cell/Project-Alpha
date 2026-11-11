@@ -31,7 +31,7 @@ import { ReasonWhy, RetryFail } from "./studioBits";
 function Reason({ text }: { text: string }) {
   return (
     <div className="mx-reason">
-      <EvidenceBadge kind="unavailable" reason={<span data-server>{text}</span>}>지금은 못 재요</EvidenceBadge>
+      <EvidenceBadge kind="unavailable" reason={<span data-server>{text}</span>}>측정 불가</EvidenceBadge>
     </div>
   );
 }
@@ -60,8 +60,8 @@ function CoverageBlock() {
     queryFn: () => macroIntelApi.sourceCoverage(true),
   });
   return (
-    <Block title="데이터 출처가 어디까지 열렸는지" q={q} loading="데이터 출처를 확인하는 중이에요"
-           fail="데이터 출처를 불러오지 못했어요">
+    <Block title="데이터 출처가 어디까지 열렸는지" q={q} loading="데이터 출처 확인 중"
+           fail="데이터 출처 조회 실패">
       {() => {
         if (!q.data) return null;
         const { providers, keys, ladder } = q.data;
@@ -69,7 +69,7 @@ function CoverageBlock() {
           <>
             {ladder && (
               <div className="mx-ladder">
-                <p>지금 분석 단계는 <b>레벨 {ladder.level}</b>이에요. 레벨은 L0 이 가장 높아요.</p>
+                <p>지금 분석 단계는 <b>레벨 {ladder.level}</b>입니다. 레벨은 L0 이 가장 높습니다.</p>
                 {ladder.note && <p className="mx-why" data-server>{ladder.note}</p>}
                 {ladder.blocked_level && ladder.blocked_reason && (
                   <div className="mx-ladder-why">
@@ -97,8 +97,8 @@ function CoverageBlock() {
                       <td className="num">{p.verified}</td>
                       <td>
                         {p.backtest_eligible
-                          ? <span className="mx-ok">쓸 수 있어요</span>
-                          : <span className="mx-fwd">앞으로만 써요</span>}
+                          ? <span className="mx-ok">쓸 수 있습니다</span>
+                          : <span className="mx-fwd">앞으로만 씁니다</span>}
                       </td>
                     </tr>
                   ))}
@@ -113,7 +113,7 @@ function CoverageBlock() {
               </p>
             ))}
 
-            <h4 className="mx-sub">이 키를 넣으면 무엇이 열리나요</h4>
+            <h4 className="mx-sub">키 등록 시 제공 기능</h4>
             <ul className="mx-keys">
               {keys.map((k) => (
                 <li key={k.env_vars.join(",")} className={k.configured ? "on" : ""}>
@@ -138,8 +138,8 @@ function LongRunBlock() {
     queryFn: () => macroIntelApi.longRun(240),
   });
   return (
-    <Block title="지표 사이 장기 관계(공적분 검정)" q={q} loading="장기 관계를 검정하는 중이에요"
-           fail="장기 관계 검정을 불러오지 못했어요">
+    <Block title="지표 사이 장기 관계(공적분 검정)" q={q} loading="장기 관계 검정 중"
+           fail="장기 관계 검정 조회 실패">
       {() => {
         if (!q.data) return null;
         if (!q.data.available) return <Reason text={q.data.reason} />;
@@ -160,7 +160,7 @@ function LongRunBlock() {
             <p className="mx-why" data-server>{d.reason}</p>
             {d.missing_note && <p className="mx-bias" role="note"><span data-server>{d.missing_note}</span></p>}
             <figure className="mx-trace">
-              <figcaption>가설마다 검정 통계량과 95% 임계값(눈금). 막대가 눈금을 넘으면 그 가설을 기각해요.</figcaption>
+              <figcaption>가설마다 검정 통계량과 95% 임계값(눈금). 막대가 눈금을 넘으면 그 가설을 기각합니다.</figcaption>
               <ul>
                 {ev.trace_stat.map((s, i) => (
                   <li key={i} className="mx-trace-row">
@@ -210,8 +210,8 @@ function ForecastBlock() {
     queryFn: () => macroIntelApi.forecastCoverage(1, 0.1),
   });
   return (
-    <Block title="국면 예측이 맞은 비율" q={q} loading="예측 적중률을 재는 중이에요"
-           fail="예측 적중률을 불러오지 못했어요">
+    <Block title="국면 예측이 맞은 비율" q={q} loading="예측 적중률 측정 중"
+           fail="예측 적중률 조회 실패">
       {() => {
         if (!q.data) return null;
         if (!q.data.available) return <Reason text={q.data.reason} />;
@@ -241,7 +241,7 @@ function ForecastBlock() {
               <i className="mx-cov-fill" style={{ width: `${Math.min(100, d.coverage * 100)}%` }} />
               <i className="mx-cov-target" style={{ left: `${Math.min(100, d.target * 100)}%` }} />
             </div>
-            <p className="mx-cov-cap">막대는 실제로 맞은 비율, 눈금은 목표예요.</p>
+            <p className="mx-cov-cap">막대는 실제로 맞은 비율, 눈금은 목표입니다.</p>
             <p className="mx-why" data-server>{d.note}</p>
           </>
         );
@@ -257,8 +257,8 @@ function ConsensusBlock() {
     queryFn: () => macroIntelApi.regimeConsensus("kr", 60),
   });
   return (
-    <Block title="국면 판정 도구끼리 맞는지" q={q} loading="국면 도구를 대조하는 중이에요"
-           fail="국면 합의를 불러오지 못했어요">
+    <Block title="국면 판정 도구끼리 맞는지" q={q} loading="국면 도구 대조 중"
+           fail="국면 합의 조회 실패">
       {() => {
         if (!q.data) return null;
         const d = q.data;
@@ -266,13 +266,13 @@ function ConsensusBlock() {
           <>
             <p className="mx-verdict">
               {d.verdict
-                ? <>여럿이 고른 국면은 <b>{regimeName(d.verdict)}</b>이에요</>
+                ? <>여럿이 고른 국면은 <b>{regimeName(d.verdict)}</b>입니다</>
                 : <><b>판정 없음</b>{d.tie ? "(동수)" : ""}</>}
             </p>
             <p className="mx-verdict-s">
               {d.consensus
-                ? <span className="mx-ok">쓸 수 있는 도구가 모두 같아요</span>
-                : <span className="mx-split">도구끼리 갈렸어요</span>}
+                ? <span className="mx-ok">쓸 수 있는 도구가 모두 같습니다</span>
+                : <span className="mx-split">도구끼리 갈렸습니다</span>}
               <span>불일치 점수 <b className="num">{d.disagreement.score.toFixed(2)}</b></span>
             </p>
             {/* ★평균 옆에 원본이 남는다★ 남지 않으면 결론을 되짚을 수 없다. */}
@@ -287,7 +287,7 @@ function ConsensusBlock() {
                 <li key={tool} className="off">
                   <span className="mx-tool-n">{TOOL_KO[tool] ?? tool} <em data-mono>{tool}</em></span>
                   {/* 사유를 배지가 직접 들고 있다 — 옆에 흘려 놓으면 떼어 낼 수 있다. */}
-                  <EvidenceBadge kind="unavailable" reason={<span data-server>{d.reasons[tool]}</span>}>못 썼어요</EvidenceBadge>
+                  <EvidenceBadge kind="unavailable" reason={<span data-server>{d.reasons[tool]}</span>}>못 썼습니다</EvidenceBadge>
                 </li>
               ))}
             </ul>

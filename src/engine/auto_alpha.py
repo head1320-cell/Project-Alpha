@@ -147,7 +147,7 @@ def selection_bias_note(n_trials: int) -> dict[str, Any]:
         "expected_max_z": round(inflation, 2),
         "note": f"{n}개 후보를 탐색해 최고를 고르면 최고 IC의 t-stat은 약 +{round(inflation, 2)}σ "
                 "위로 편향됩니다(다중검정). 단일 검증 임계를 그만큼 상향하고, walk-forward·"
-                "out-of-sample·PBO 등으로 과적합을 별도 확인하세요 — 이 편향은 자동 보정되지 않습니다.",
+                "out-of-sample·PBO 등으로 과적합을 별도 확인하십시오 — 이 편향은 자동 보정되지 않습니다.",
     }
 
 

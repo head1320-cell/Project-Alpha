@@ -103,13 +103,13 @@ test("실제 계산: 목록 순서·상태·시간 = 보고서 · 곁줄이 프�
   }
 });
 
-test("곁줄이 끊기면 '진행을 받지 못했어요' — 짝: 끝나면 보고서로 목록이 채워진다", async ({ page }) => {
+test("곁줄이 끊기면 '진행 수신 실패' — 짝: 끝나면 보고서로 목록이 채워진다", async ({ page }) => {
   await openWith(page, OK);
   const release = await holdRun(page);
   await page.route(isProgress, (route) => route.abort());
   await page.locator(".pg-run").click();
-  await expect(page.locator(".pg-runline-note")).toHaveText(/진행을 받지 못했어요/);
-  await expect(page.locator(".pg-rail-pill-text")).toContainText("진행을 받지 못했어요");
+  await expect(page.locator(".pg-runline-note")).toHaveText(/진행 수신 실패/);
+  await expect(page.locator(".pg-rail-pill-text")).toContainText("진행 수신 실패");
   const resp = page.waitForResponse((r) => isRun(new URL(r.url())));
   release();
   const body = (await (await resp).json()) as RunBody;
@@ -117,7 +117,7 @@ test("곁줄이 끊기면 '진행을 받지 못했어요' — 짝: 끝나면 보
   for (const id of IDS) await expect(row(page, id)).toHaveAttribute("data-status", body.nodes[id].status);
 });
 
-test("곁줄이 끝을 알리지 않고 닫혀도 끊긴 것 — '진행을 받지 못했어요'(짝: 위 첫 테스트는 끝을 알려 안내가 없다)", async ({ page }) => {
+test("곁줄이 끝을 알리지 않고 닫혀도 끊긴 것 — '진행 수신 실패'(짝: 위 첫 테스트는 끝을 알려 안내가 없다)", async ({ page }) => {
   await openWith(page, OK);
   const release = await holdRun(page);
   await page.route(isProgress, (route) => route.fulfill({
@@ -126,7 +126,7 @@ test("곁줄이 끝을 알리지 않고 닫혀도 끊긴 것 — '진행을 받�
   }));
   await page.locator(".pg-run").click();
   await expect(chip(page, "universe")).toHaveAttribute("data-phase", "running");     // 받은 만큼은 그대로 보인다
-  await expect(page.locator(".pg-runline-note")).toHaveText(/진행을 받지 못했어요/);
+  await expect(page.locator(".pg-runline-note")).toHaveText(/진행 수신 실패/);
   release();
 });
 

@@ -82,7 +82,7 @@ export function ClientDocChip({ ctx }: { ctx: ClientDocCtx }) {
     setSaving(false);
     if (!r.ok) {
       setErr(r.error);
-      usePortfolioGraph.getState().setNote(`고객 문서를 저장하지 못했어요 — ${r.error}`);
+      usePortfolioGraph.getState().setNote(`고객 문서 저장 실패 — ${r.error}`);
       return null;
     }
     if (!docId) {
@@ -96,11 +96,11 @@ export function ClientDocChip({ ctx }: { ctx: ClientDocCtx }) {
   }
 
   const focus = sheetFocus(report, catalog, selectedId);
-  const sheetWhy = ctx.archived ? "보관한 고객이라 한 장을 만들 수 없어요."
-    : !report ? "계산한 뒤에 한 장을 만들 수 있어요."
-    : report.partial ? "전체를 계산한 뒤에 한 장을 만들 수 있어요 — ‘여기까지 계산’ 은 일부만 계산해요."
-    : staleIds.length ? "고친 것이 있어요 — 다시 계산한 뒤 한 장을 만들 수 있어요."
-    : !focus ? "비중을 낸 노드가 없어요 — 비중 계산 노드를 계산한 뒤 만들 수 있어요."
+  const sheetWhy = ctx.archived ? "보관한 고객이라 한 장을 만들 수 없습니다."
+    : !report ? "계산한 뒤에 한 장을 만들 수 있습니다."
+    : report.partial ? "전체를 계산한 뒤에 한 장을 만들 수 있습니다 — ‘여기까지 계산’ 은 일부만 계산합니다."
+    : staleIds.length ? "고친 것이 있습니다 — 재계산한 뒤 한 장을 만들 수 있습니다."
+    : !focus ? "비중을 낸 노드가 없습니다 — 비중 계산 노드를 계산한 뒤 만들 수 있습니다."
     : null;
   const [making, setMaking] = useState(false);
 
@@ -114,19 +114,19 @@ export function ClientDocChip({ ctx }: { ctx: ClientDocCtx }) {
                                                 title: `${ctx.alias} ${ymd()} 한 장`, doc_id: id });
     if (!r.ok) {
       setMaking(false);
-      usePortfolioGraph.getState().setNote(`한 장을 만들지 못했어요 — ${r.error}`);
+      usePortfolioGraph.getState().setNote(`한 장 생성 실패 — ${r.error}`);
       return;
     }
     window.location.assign(`/clients/${encodeURIComponent(ctx.clientId)}/sheets/${encodeURIComponent(r.value.sheet_id)}`);
   }
 
   // [상태, 칩에 보이는 짧은 말, 긴 문장(title)]
-  const state = ctx.archived ? ["archived", "보관 · 읽기만", "보관한 고객이라 읽기만 해요 — 고객 화면에서 다시 꺼내면 저장할 수 있어요."]
-    : err ? ["error", "저장 못 함", `저장하지 못했어요 — ${err}`]
-    : saving ? ["saving", "저장 중", "저장하는 중이에요."]
-    : !docId ? ["new", "저장 전", "아직 고객 문서로 저장하지 않았어요 — 이 탭의 작업 중 문서에도 남지 않아요."]
-    : dirty ? ["dirty", "고친 것 있음", "저장한 뒤 고친 것이 있어요."]
-    : ["saved", savedAt ? `저장함 · ${savedAt}` : "저장함", "고객 문서에 저장한 그대로예요."];
+  const state = ctx.archived ? ["archived", "보관 · 읽기만", "보관한 고객이라 읽기만 합니다 — 고객 화면에서 다시 꺼내면 저장할 수 있습니다."]
+    : err ? ["error", "저장 못 함", `저장 실패 — ${err}`]
+    : saving ? ["saving", "저장 중", "저장 중"]
+    : !docId ? ["new", "저장 전", "아직 고객 문서로 저장하지 않았습니다 — 이 탭의 작업 중 문서에도 남지 않습니다."]
+    : dirty ? ["dirty", "고친 것 있음", "저장한 뒤 고친 것이 있습니다."]
+    : ["saved", savedAt ? `저장함 · ${savedAt}` : "저장함", "고객 문서에 저장한 그대로입니다."];
 
   return (
     <div className="pg-client-chip" role="group" aria-label={`고객 문서 — ${ctx.alias} · ${ctx.name}`} data-state={state[0]}>
@@ -139,7 +139,7 @@ export function ClientDocChip({ ctx }: { ctx: ClientDocCtx }) {
         저장
       </button>
       <button type="button" className="pg-btn pg-client-sheet" onClick={() => void makeSheet()} disabled={!!sheetWhy || making}
-              title={sheetWhy ?? "서버가 다시 계산해 고객 한 장을 만들어요"} aria-label="고객 한 장 만들기">
+              title={sheetWhy ?? "서버가 재계산해 고객 한 장을 만듭니다"} aria-label="고객 한 장 만들기">
         {making ? "만드는 중" : "한 장"}
       </button>
     </div>

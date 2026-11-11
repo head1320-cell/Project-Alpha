@@ -33,7 +33,7 @@
 (`run_evidence` 가 `macro`·`fundamentals` 를 다루는 규율과 같다).
 
 ★`macro` 축이 진짜 look-ahead 를 잡는다★ — `allocation_pipeline._regime_path_for`
-는 스냅샷이 없으면 **현재 데이터로** 국면 경로를 다시 계산하고, 그 사실을
+는 스냅샷이 없으면 **현재 데이터로** 국면 경로를 재계산하고, 그 사실을
 `path_source: "recomputed"` + *"결정 시점에 알 수 있었던 분류가 아닙니다"* 로 이미
 적고 있었다. 아무도 그것을 판정으로 접어 올리지 않았을 뿐이다.
 
@@ -146,7 +146,7 @@ def _macro_axis(regime_path: Any) -> dict[str, Any] | None:
         # ★관측된 look-ahead 다★ 상류가 이미 그렇게 적었다.
         return _axis(AXIS_DEGRADED,
                      path.get("path_note")
-                     or ("국면 경로를 **현재 데이터로** 다시 계산했습니다 — "
+                     or ("국면 경로를 **현재 데이터로** 재계산했습니다 — "
                          "결정 시점에 알 수 있었던 분류가 아닙니다."),
                      path_source=source)
     return _axis(AXIS_UNKNOWN, path.get("reason") or _NO_MEASUREMENT,
