@@ -984,19 +984,20 @@ class ValuationScreener:
 
     @staticmethod
     def _mock_price(stock_code: str) -> float:
-        """현재가 데이터 — 실제 운영 시 KIS API 또는 외부 시세 사용."""
-        MOCK_PRICES: dict[str, float] = {
-            "005930": 71000,    "000660": 200000,
-            "035420": 175000,   "035720": 42000,
-            "373220": 380000,   "051910": 380000,
-            "006400": 280000,   "207940": 850000,
-            "005380": 230000,   "068270": 165000,
-        }
-        if stock_code in MOCK_PRICES:
-            return MOCK_PRICES[stock_code]
-        # Random 안정적 fallback (deterministic by hash)
-        h = sum(ord(c) for c in stock_code)
-        return float(10_000 + (h * 137) % 200_000)
+        """현재가 데이터 — 실제 운영 시 KIS API 또는 외부 시세 사용.
+
+        ★연습용(mock)에서는 시세 이력과 같은 걸음의 오늘 종가다★ — 예전에는 날짜와
+        무관한 고정 표였고 일봉은 다른 걸음에서 나와, 같은 종목의 지금 주가(71,000)와
+        마지막 종가(56,512)가 어긋났다. 운영(`KIS_USE_MOCK≠1`)에서는 예전과 같은
+        바탕값(`mock_price_level`)을 낸다 — `_enrich_kis_quotes` 가 실시세로 덮어 쓴다.
+        """
+        from src.data.mock_gate import mock_allowed
+        from src.data.ohlcv_loader import mock_close_asof, mock_price_level
+        if mock_allowed():
+            px = mock_close_asof(stock_code)
+            if px is not None:
+                return px
+        return mock_price_level(stock_code)
 
     # ─────────────────────────────────────────────────────────────────────
     # 캐시 관리

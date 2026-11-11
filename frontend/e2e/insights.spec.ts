@@ -1137,3 +1137,23 @@ test("짝 — 마지막 종가가 지금 주가와 같으면 선 끝과 지금 �
   const nowY = await midY(fig.locator(".ci-pv-nowline line")), endY = await midY(fig.locator(".ci-pv-end circle"));
   expect(Math.abs(endY - nowY), `선 끝 ${endY} · 지금 주가 선 ${nowY}`).toBeLessThan(1.5);
 });
+
+// ── 연습용 자료에서도 지금 주가 = 시세의 마지막 종가 (2026-11-11 · 서버 mock 가격의 출처를 하나로) ──
+// ★가로채지 않는다★ — 위 두 시험은 `/prices` 를 가로채 화면의 그리기만 본다. 이 시험은 서버가 내는 값 둘(스크리너의 지금 주가 · 시세 이력)이
+// 같은 출처인지를 본다. 예전에는 헤더 71,000원 · 선 끝 56,512원이었다(고정 표 대 날짜 주소 가능한 걸음). 표에 없는 종목(KB금융)은 차이가 더 컸다.
+// 연습용 서버에서만 뜻이 있는 계약이라(실데이터는 장중에 헤더와 어제 종가가 다른 게 맞다) 연습용 칩이 있는지 먼저 본다.
+for (const code of ["005930", "105560"]) {
+  test(`★연습용 자료의 지금 주가 = 시세의 마지막 종가★ (${code}) — 읽는 줄의 종가 = 헤더 가격 · 지금 주가 선이 선 끝과 만난다`, async ({ page }) => {
+    await open(page, code);
+    await expect(page.locator(".ci .tx-answer .tx-chip[data-tone=practice]"), "연습용 서버가 아니면 이 계약은 성립하지 않는다").toHaveCount(1, { timeout: 30_000 });
+    const P = Number(((await page.locator(".ci-head .ci-price").textContent()) ?? "").replace(/[^\d]/g, ""));
+    expect(P, "헤더 가격을 못 읽으면 이 검사는 공허하다").toBeGreaterThan(1000);
+    const fig = page.locator(".ci-sec[data-sec=value] .ci-pv");
+    await expect(fig.locator(".recharts-line")).toHaveCount(1, { timeout: 40_000 });
+    await expect(crIn(fig, "price-value").locator(".cr-read")).toContainText(`종가 ${wonS(P)}`);
+    await expect(fig.locator(".ci-pv-now")).toContainText(`지금 주가 ${wonS(P)}`);
+    await page.waitForTimeout(600);
+    const nowY = await midY(fig.locator(".ci-pv-nowline line")), endY = await midY(fig.locator(".ci-pv-end circle"));
+    expect(Math.abs(endY - nowY), `선 끝 ${endY} · 지금 주가 선 ${nowY}`).toBeLessThan(1.5);
+  });
+}
