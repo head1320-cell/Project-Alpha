@@ -180,7 +180,7 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     { id: "strategy-picked", group: "전략", label: "고른 노드를 전략으로 묶기", hint: "비중을 내는 노드가 들어 있어야 합니다",
       run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.strategyPicked()); } },
     { id: "compare-picked", group: "비교", label: "고른 노드 견고성 비교",
-      hint: "비중을 내는 노드 2~4개를 골라, 평소·위기 때 같이 움직이는지와 크게 잃은 구간이 겹치는지 봅니다",
+      hint: "비중을 산출하는 노드 2~4개를 골라 평시·위기 상관과 낙폭 구간의 중첩을 비교합니다",
       run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.comparePicked()); } },
     ...strategySources.map((x) => ({ id: `strategy:${x.key}`, group: "전략", label: `전략 추가: ${x.label}`, hint: x.sub,
                                      run: () => addStrategy(x.src) })),
