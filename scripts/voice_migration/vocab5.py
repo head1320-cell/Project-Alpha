@@ -406,6 +406,7 @@ _FIX = [
     ('"내가 정한 몫" in _trust(r)', '"사용자가 지정한 값" in _trust(r)'),
     ('assert "설명하지 못한" in unexp', 'assert "미설명 잔차" in unexp'), ('text.split("설명하지 못한 몫 ")', 'text.split("미설명 잔차 ")'),
     ('and "몫은 똑같이" in text', 'and "동일 가중으로 가정" in text'),
+    ('and "끝을 맞춰" in a["reason"]', 'and "최근 시점 기준으로 정렬" in a["reason"]'),
 ]
 
 PAIRS = _DESC + _METHODS + _FIELDS + _GLOBAL + _PLEASE + _RESULTS + _SHARE + _FIX

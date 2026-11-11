@@ -108,7 +108,7 @@ def test_tail_alignment_differences_are_observed_pair(monkeypatch):
     _patch_prices(monkeypatch, {"A": _closes(d, 1), "B": _closes(gap, 2)})
     sleeves = [{"name": "가", "weights": {"A": 100.0}}, {"name": "나", "weights": {"B": 100.0}}]
     a = ri.alignment_check(sleeves, lookback=252)
-    assert a["same"] is False and a["differing_days"] > 0 and "끝을 맞춰" in a["reason"]
+    assert a["same"] is False and a["differing_days"] > 0 and "최근 시점 기준으로 정렬" in a["reason"]
     # 짝 — 빠진 날이 없으면 같다.
     _patch_prices(monkeypatch, {"A": _closes(d, 1), "B": _closes(d, 2)})
     b = ri.alignment_check(sleeves, lookback=252)
