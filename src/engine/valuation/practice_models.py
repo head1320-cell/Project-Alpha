@@ -128,7 +128,7 @@ def eva_analysis(history: list, latest, params: ValuationParams, *, fade_years: 
         vd = {"available": True, "value": value, "no_growth_value": no_growth, "g": g, "ronic": ronic,
               "growth_creates_value": ronic > wacc,
               "per_share": (value - tl) / shares if shares else None}
-        inputs += [_inp("g", "성장률", g, ASSUMED), _inp("ronic", "새 투자 수익률 RONIC", ronic, ASSUMED)]
+        inputs += [_inp("g", "성장률", g, ASSUMED), _inp("ronic", "신규 투자 수익률 RONIC", ronic, ASSUMED)]
     return {"available": True, "reason": None, "years": years, "latest": last, "valuation": valuation,
             "value_driver": vd, "inputs": inputs, "note": WACC_NOTE}
 

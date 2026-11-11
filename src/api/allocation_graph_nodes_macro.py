@@ -175,7 +175,7 @@ def _explain_timing(view: dict, prov: dict, params: Any) -> dict:
     c = view.get("composite") or {}
     st = _STATE_PLAIN.get(c.get("state"), c.get("state"))
     facts = [f"{f['label']}: {_STATE_PLAIN.get(f['state'], f['state'])}" for f in view.get("factor_states") or []]
-    facts.append(f"합치는 규칙: {_COMBOS.get(view.get('combination'), view.get('combination'))}.")
+    facts.append(f"결합 규칙: {_COMBOS.get(view.get('combination'), view.get('combination'))}.")
     trust = [_t(CONFIRMED, "규칙대로 신호를 읽고 합쳤습니다.")]
     if c.get("unavailable_count"):
         trust.append(_t(UNKNOWN, f"읽지 못한 신호 {c['unavailable_count']}개는 규칙대로 위험-오프로 셌습니다."))
@@ -223,7 +223,7 @@ def _overlay(inputs: dict, p: OverlayParams) -> pg.NodeOutput:
     legs, conflict, unavailable, n_signals = {}, None, 0, 0
     if p.follow in ("timing", "timing_macro"):
         if sig is None:
-            raise pg.NodeFailure("‘따를 판단’이 타이밍이라 ‘타이밍 신호’를 연결하십시오.")
+            raise pg.NodeFailure("‘적용 신호’가 타이밍이라 ‘타이밍 신호’를 연결하십시오.")
         if p.follow == "timing_macro" and reg is None:
             raise pg.NodeFailure("‘타이밍 + 경기 국면’을 고르셨습니다 — ‘경기 국면’을 연결하십시오.")
     overlay = overlay_from_snapshot(reg, enabled=True) if reg is not None else None
@@ -292,7 +292,7 @@ def _explain_overlay(view: dict, prov: dict, params: Any) -> dict:
         facts.append(str(view["conflict"]))
     trust = []
     if view.get("follow") == "manual":
-        trust.append(_t(ASSUMED, "직접 정한 노출입니다 — 근거가 된 신호가 없습니다."))
+        trust.append(_t(ASSUMED, "수동 지정 노출입니다 — 근거가 된 신호가 없습니다."))
     elif float(view.get("strength_pct") or 100) >= 100:
         trust.append(_t(CONFIRMED, "기존 규칙이 낸 노출을 그대로 비중에 곱했습니다 — 줄인 만큼은 현금입니다."))
     else:

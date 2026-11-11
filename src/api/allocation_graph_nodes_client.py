@@ -251,7 +251,7 @@ def _goal(inputs: dict, p: GoalParams) -> pg.NodeOutput:
         curve=[CurvePoint(**c.model_dump()) for c in p.curve] or None,
         contribution=ContributionPlan(monthly_krw=p.monthly_krw, bucket=p.bucket, portfolio_value_krw=p.portfolio_value_krw),
         limits=[DeclaredLimit(**lim) for lim in acc["limits"]],
-        contributed_ytd_krw=p.contributed_ytd_krw, total_contributed_krw=p.total_contributed_krw), "목표까지 측정 불가")
+        contributed_ytd_krw=p.contributed_ytd_krw, total_contributed_krw=p.total_contributed_krw), "글라이드패스 측정 불가")
     client = inputs.get("client") or acc.get("client")
     return pg.NodeOutput(values={}, view={"result": res, "account_type": acc["account_type"],
                                           "client_alias": (client or {}).get("alias")})
@@ -281,7 +281,7 @@ def _explain_goal(view: dict, prov: dict, params: Any) -> dict:
     if months is not None:
         facts.append(f"적립 계획대로라면 격차를 좁히는 데 {months}개월")
     trust.append(_t(UNKNOWN, "최적화기는 이 목표를 모른 채 비중을 냈습니다 — 격차를 배분에 반영하지 않습니다."))
-    return {"title": "목표까지 얼마나 남았는지 봤습니다", "facts": facts, "trust": trust,
+    return {"title": "글라이드패스 대비 괴리를 측정했습니다", "facts": facts, "trust": trust,
             "unmeasured": ["목표 곡선이 이 고객에게 맞는지", "앞으로의 수익률(적립만으로 좁히는 데 걸리는 개월만 봅니다)"]}
 
 

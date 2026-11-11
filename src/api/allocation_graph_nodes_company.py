@@ -251,7 +251,7 @@ def _explain_macro_sens(view: dict, prov: dict, params: Any) -> dict:
              _t(CONFIRMED, "금리 블록은 할인율 공식을 그대로 따라간 값입니다(표본이 아니라 항등식)."),
              *[_t(UNKNOWN, f"{x.get('shock')} → {x.get('target')}: {x.get('reason')}") for x in r.get("unavailable") or []][:3]]
     if "statistical" in r:
-        trust.append(_t(ASSUMED, "통계 블록은 과거에 같이 움직인 정도입니다 — 원인이라는 뜻은 아닙니다."))
+        trust.append(_t(ASSUMED, "통계 분석은 과거에 같이 움직인 정도입니다 — 원인이라는 뜻은 아닙니다."))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["실제 이익(EPS)에 미치는 영향 — 채널이 없습니다"]}
 
 
@@ -269,7 +269,7 @@ class ThesisParams(_Company):
 def _thesis(inputs: dict, p: ThesisParams) -> pg.NodeOutput:
     head = _company(p)
     if p.kill_conditions.groups:
-        raise pg.NodeFailure("버릴 조건은 한 줄씩 나열하십시오 — 그룹(그룹)은 논지 점검에서 쓰지 않습니다.")
+        raise pg.NodeFailure("철회 조건은 한 줄씩 나열하십시오 — 그룹 조건은 논지 점검에서 쓰지 않습니다.")
     kills = [c.model_dump(exclude_none=True) for c in p.kill_conditions.conditions]
     out = cr.company_thesis_check(p.code, cr.ThesisCheckRequest(claim=p.claim, kill_conditions=kills))
     if out.get("available") is False:
@@ -288,7 +288,7 @@ def _explain_thesis(view: dict, prov: dict, params: Any) -> dict:
     trust = [*_base_trust(view, prov)]
     if counts.get("screen_only_backtest_lookahead"):
         trust.append(_t(ASSUMED, "일부 조건은 스냅샷 값이라 과거 검증에 쓰면 미래 정보가 섞입니다."))
-    return {"title": f"버릴 조건 {sum(counts.values())}개를 점검했습니다", "facts": facts, "trust": trust,
+    return {"title": f"철회 조건 {sum(counts.values())}개를 점검했습니다", "facts": facts, "trust": trust,
             "unmeasured": ["논지가 맞는지 — 이 점검은 반증할 수 있는지만 봅니다"]}
 
 

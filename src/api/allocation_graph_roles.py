@@ -87,7 +87,7 @@ for _p in ("r1", "r2", "r3", "r4"):
 for _p in ("t1", "t2"):
     ROLES[("record_robustness", _p)] = "날짜를 맞춰 함께 무너졌는지 볼 정책 백테스트 결과입니다."
 for _k in ("var_es", "mc_var", "vol_models", "holding_var", "frtb_es", "rolling_sharpe"):
-    ROLES.setdefault((_k, "weights"), "‘무엇을 볼까’가 포트폴리오일 때 이 비중으로 포트폴리오 수익률을 만듭니다.")
+    ROLES.setdefault((_k, "weights"), "‘분석 대상’이 포트폴리오일 때 이 비중으로 포트폴리오 수익률을 만듭니다.")
 ROLES[("futures_hedge", "weights")] = "수익률과 함께 이으면 이 비중의 포트폴리오 β 를 측정합니다 — 없으면 설정한 β 를 씁니다."
 
 #: (노드 종류, 입력 포트) → 보내는 쪽이 꼭 실어야 하는 값. 코드에서 확인한 실패 조건 그대로다.

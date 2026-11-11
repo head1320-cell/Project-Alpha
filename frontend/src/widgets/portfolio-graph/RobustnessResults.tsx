@@ -257,7 +257,7 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
         {roll.available ? <Trend r={roll} /> : <Unknown text="상관 추이를 보지 못했습니다" reason={roll.reason} />}
       </details>
       <details className="pg-rob-sec">
-        <summary>위기 때 상관</summary>
+        <summary>위기 상관</summary>
         <Crisis c={(rob.crisis as Dict) ?? {}} />
       </details>
       <details className="pg-rob-sec">

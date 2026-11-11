@@ -78,7 +78,7 @@ def _series(inputs: dict, series: str) -> dict:
     if series == PORTFOLIO:
         w = inputs.get("weights")
         if w is None:
-            raise pg.NodeFailure("포트폴리오의 위험을 재려면 비중을 연결하십시오 — 한 종목만 보려면 '무엇을 볼까' 에 종목 코드를 적습니다.")
+            raise pg.NodeFailure("포트폴리오의 위험을 재려면 비중을 연결하십시오 — 한 종목만 보려면 '분석 대상' 에 종목 코드를 입력합니다.")
         arr, gross = _aligned_weights(R, w)
         if abs(gross - 1.0) > 1e-9:
             notes.append({"key": "gross", "label": "비중 합(절댓값)", "value": round(gross, 4), "basis": "가정",

@@ -35,7 +35,7 @@ class _Priced(BaseModel):
 class EvaRequest(_Priced):
     fade_years: int = Field(5, ge=1, le=30)
     g: float | None = Field(None, ge=-0.05, le=0.15, description="가치 동인 공식의 성장률 — 비우면 영구성장률")
-    ronic: float | None = Field(None, gt=-1, le=1, description="새 투자 수익률 — 비우면 최근 ROIC")
+    ronic: float | None = Field(None, gt=-1, le=1, description="신규 투자 수익률 — 비우면 최근 ROIC")
 
 
 class LayersRequest(_Priced):
@@ -188,7 +188,7 @@ def company_model_eva(code: str, req: EvaRequest):
     out = pm.eva_analysis(data["history"], data["fs"], p, fade_years=req.fade_years, g=g, ronic=ronic)
     for i in out.get("inputs") or []:
         if i["key"] == "ronic" and req.ronic is None:
-            i.update(basis=pm.APPROX, source="최근 ROIC 를 새 투자 수익률로 씀")
+            i.update(basis=pm.APPROX, source="최근 ROIC 를 신규 투자 수익률로 씀")
         if i["key"] == "g" and req.g is None:
             i.update(source="영구성장률 가정 그대로")
     return _wrap(code, data, out)

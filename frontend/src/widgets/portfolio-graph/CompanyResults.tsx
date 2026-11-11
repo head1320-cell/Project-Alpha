@@ -293,7 +293,7 @@ export function ThesisCheckResult({ v }: { v: Dict }) {
       <Head v={v} />
       {r.claim ? <blockquote className="pg-claim">{String(r.claim)}</blockquote> : null}
       <table className="pg-table pg-thesis">
-        <caption>버릴 조건</caption>
+        <caption>철회 조건</caption>
         <tbody>{rows.map((x, i) => {
           const c = (x.condition as Dict) ?? {};
           const [label, tone] = TIER[String(x.tier)] ?? ["분류 못 함", "unknown"];

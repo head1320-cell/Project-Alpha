@@ -78,8 +78,8 @@ def _explain_eva(view: dict, prov: dict, params: Any) -> dict:
     if isinstance(roic, (int, float)) and isinstance(wacc, (int, float)):
         facts.append(f"투하자본수익률 {roic:.1%} · 자본비용 {wacc:.1%}")
     if vd.get("available"):
-        facts.append("성장이 가치를 만듭니다(새 투자 수익률 > 자본비용)" if vd.get("growth_creates_value")
-                     else "성장이 가치를 깎습니다(새 투자 수익률 < 자본비용) — 덜 자랄수록 낫습니다")
+        facts.append("성장이 가치를 만듭니다(신규 투자 수익률 > 자본비용)" if vd.get("growth_creates_value")
+                     else "성장이 가치를 깎습니다(신규 투자 수익률 < 자본비용) — 덜 자랄수록 낫습니다")
     trust = [*_base_trust(view, prov), *_history_trust(r), *_inputs_trust(r)]
     if not vd.get("available") and vd.get("reason"):
         trust.append(_t(UNKNOWN, f"가치 동인 공식: {vd['reason']}"))
