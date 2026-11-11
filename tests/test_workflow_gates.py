@@ -160,7 +160,7 @@ def test_any_build_stage_node_counts_for_the_build_gate():
 
 # ── CF3 · 요청한 방식 대신 다른 비중이 쓰였으면 '비중 계산'은 확인이 아니다 ───────────────
 
-FB_TEXT = "‘흔들림 최소’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다 — 사유."
+FB_TEXT = "‘최소분산’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다 — 사유."
 
 
 def test_a_fallback_that_reached_the_weights_makes_the_build_gate_partial():

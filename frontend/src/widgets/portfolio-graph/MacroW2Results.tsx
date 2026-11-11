@@ -202,7 +202,7 @@ export function LongRunResult({ v }: { v: Dict }) {
 
 /** 엔진 출력 키 → 쉬운 이름. 모르는 키는 원래 이름 그대로(지어내지 않는다). */
 const OUT_KO: Record<string, string> = {
-  series: "쓴 계열", series_used: "쓴 계열", k_factors: "요인 수", explained_var: "설명한 분산 몫", loadings: "요인 적재",
+  series: "쓴 계열", series_used: "쓴 계열", k_factors: "요인 수", explained_var: "설명 분산 비율", loadings: "요인 적재",
   latest: "마지막 값", factors: "요인", level: "수준", slope: "기울기", curvature: "곡률", lambda: "감쇠 λ",
   tenors: "만기(년)", n_series: "계열 수", nodes: "지표", edges: "선후 관계", target: "대상",
 };

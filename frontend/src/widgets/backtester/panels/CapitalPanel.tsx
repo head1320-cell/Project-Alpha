@@ -17,7 +17,7 @@ export default function CapitalPanel({ s, set }: {
 
   return (
     <div className="bte-col">
-      <Section title="돈과 기간" hint="얼마로 · 언제부터 언제까지" tone="neutral" enabled>
+      <Section title="투자금·기간" hint="얼마로 · 언제부터 언제까지" tone="neutral" enabled>
         <Field label="투자 금액">
           <QuickStepper value={s.capital} onChange={(v) => set((x) => ({ ...x, capital: v }))} chips={[1000, 5000]} unit="만원" min={0} act="capital" />
         </Field>
@@ -70,7 +70,7 @@ export default function CapitalPanel({ s, set }: {
         </div>
       </Section>
 
-      <Section title="언제 다시 맞출까" hint="리밸런싱 · 신호 기준 · 체결 모델" tone="neutral" enabled>
+      <Section title="리밸런싱 주기" hint="리밸런싱 · 신호 기준 · 체결 모델" tone="neutral" enabled>
         <Field label="리밸런싱 주기">
           <Segmented act="rebalance" value={s.rebalancePeriod} onChange={(v) => set((x) => ({ ...x, rebalancePeriod: v }))}
             options={[

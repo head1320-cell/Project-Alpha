@@ -295,7 +295,7 @@ def test_the_three_way_scenario_equals_the_route(market, monkeypatch):
     assert w["view"]["result"] == ref
     # 이야기: 판정한 다리는 손실을 말하고(충격이 있으니까), 판정 못 한 다리(국면 미연결)는 '미계산'
     facts = w["explain"]["facts"]
-    assert any(f.startswith("그대로 두기") and "손실 " in f and "미계산" not in f for f in facts), facts
+    assert any(f.startswith("현 비중 유지") and "손실 " in f and "미계산" not in f for f in facts), facts
     assert any(f.startswith("타이밍 + 국면") and "미계산" in f for f in facts), facts
 
 

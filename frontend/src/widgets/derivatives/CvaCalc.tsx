@@ -60,8 +60,8 @@ export function CvaCalc() {
           <div className="dv-grid">
             <NumField id="dv-rf" label="무위험 금리(연)" unit="%" value={raw.rf} onChange={set("rf")} missing={miss("rf")} />
             <NumField id="dv-vol" label="노출 연환산 변동성" unit="%" value={raw.vol} onChange={set("vol")} missing={miss("vol")} />
-            <NumField id="dv-bank" label="우리 CDS 스프레드" unit="bp" value={raw.bank} onChange={set("bank")} missing={miss("bank")} />
-            <NumField id="dv-bankRec" label="우리 회수율" unit="%" value={raw.bankRec} onChange={set("bankRec")} missing={miss("bankRec")} />
+            <NumField id="dv-bank" label="자사 CDS 스프레드" unit="bp" value={raw.bank} onChange={set("bank")} missing={miss("bank")} />
+            <NumField id="dv-bankRec" label="자사 회수율" unit="%" value={raw.bankRec} onChange={set("bankRec")} missing={miss("bankRec")} />
             <NumField id="dv-shock" label="스트레스 스프레드 충격" unit="bp" value={raw.shock} onChange={set("shock")} missing={miss("shock")} />
           </div>
         </details>

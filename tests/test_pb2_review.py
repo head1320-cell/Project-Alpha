@@ -1,11 +1,11 @@
-"""CF 3부 PB2 — 정기 점검 흐름 · 주문 목록이 '지금 비중' 두 곳을 견준다 (★관측만 — 주문은 그대로★)
+"""CF 3부 PB2 — 정기 점검 흐름 · 주문 목록이 '현재 비중' 두 곳을 견준다 (★관측만 — 주문은 그대로★)
 ==============================================================================
 스펙 `docs/superpowers/specs/2026-10-16-cf-comfy-canvas-claude-design.md` §8.2 · 계획 PB2.
 
-정기 점검 템플릿에서 '현재 보유 비중' 은 유니버스 노드 한 곳에 적는다 — 지금 비중·계좌 점검·보유 진단·리밸런싱 판단
+정기 점검 템플릿에서 '현재 보유 비중' 은 유니버스 노드 한 곳에 적는다 — 현재 비중·계좌 점검·보유 진단·리밸런싱 판단
 (설정을 비우면 유니버스 쪽을 쓴다)이 모두 그것을 읽는다. 주문 목록만 제 칸(`current_weights`)을 따로 갖는다(이 노드를 고치지
 않는다 — 실행 층). 그래서 주문 목록이 ★두 값이 같은지 말한다★: 같음(확인) · 다름(종목과 두 값) · 주문 쪽을 비워 새로 사는 주문.
-유니버스에 지금 비중이 없으면 견주지 않는다(말하지 않는다). ★주문 계산은 바꾸지 않는다★ — 견주기만.
+유니버스에 현재 비중이 없으면 견주지 않는다(말하지 않는다). ★주문 계산은 바꾸지 않는다★ — 견주기만.
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def _lines(out, state=None):
 def test_same_holdings_are_confirmed(market):
     out = _orders(HOLD, HOLD)
     assert out["view"]["holdings_vs_universe"]["state"] == "same"
-    same = [t for t in _lines(out, "confirmed") if "유니버스 노드의 ‘지금 비중’과 같습니다" in t]
+    same = [t for t in _lines(out, "confirmed") if "유니버스 노드의 ‘현재 비중’과 같습니다" in t]
     assert len(same) == 1
     assert not any("다릅니다" in t for t in _lines(out))                       # 짝 — 같은데 다르다고 하지 않는다
 
@@ -79,11 +79,11 @@ def test_empty_order_holdings_say_new_buy_while_universe_has_holdings(market):
 def test_no_universe_holdings_means_no_comparison(market):
     out = _orders(None, HOLD)
     assert "holdings_vs_universe" not in out["view"]
-    assert not any("유니버스 노드의 ‘지금 비중’" in t for t in _lines(out))   # 견줄 것이 없으면 말하지 않는다
+    assert not any("유니버스 노드의 ‘현재 비중’" in t for t in _lines(out))   # 견줄 것이 없으면 말하지 않는다
 
 
 def test_comparison_never_changes_the_orders(market):
-    """관측만 — 유니버스에 지금 비중이 있든 없든, 같은 주문 칸이면 주문 목록·사전 점검이 같다."""
+    """관측만 — 유니버스에 현재 비중이 있든 없든, 같은 주문 칸이면 주문 목록·사전 점검이 같다."""
     g_with, g_without = _graph(HOLD, MOVED), _graph(None, MOVED)
     a, b = pg.run(g_with, gn.REGISTRY)["nodes"], pg.run(g_without, gn.REGISTRY)["nodes"]
     assert a["o"]["view"]["weights"] == b["o"]["view"]["weights"]            # 전제 — 목표 비중이 같다

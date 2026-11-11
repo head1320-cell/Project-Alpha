@@ -41,7 +41,7 @@ export function FrontierResult({ v }: { v: Dict }) {
   const best = all.reduce<Dict | null>((b, r) => (b && (num(b.sharpe) ?? -1e9) >= (num(r.sharpe) ?? -1e9) ? b : r), null);
   const bestAt = best ? onCurve.indexOf(best) : -1;                // 읽는 줄의 처음 자리 = 아래 KV 의 "가장 좋은 점" 과 같은 점
   const read = onCurve.map((r, i) => ({ head: `${i + 1}번째 점`, cells: [
-    { key: "vol", label: "흔들림", text: pct(r.volatility) }, { key: "ret", label: "수익", text: pct(r.return) },
+    { key: "vol", label: "변동성", text: pct(r.volatility) }, { key: "ret", label: "수익", text: pct(r.return) },
     { key: "sharpe", label: "샤프", text: num(r.sharpe) === null ? "N/A" : (r.sharpe as number).toFixed(2) },
   ] }));
   return (
@@ -50,12 +50,12 @@ export function FrontierResult({ v }: { v: Dict }) {
       <div className="pg-chart pg-frontier">
         <FrontierPlot dots={dots} curve={curve} point={pt && num(pt.volatility) !== null && num(pt.return) !== null ? { x: pt.volatility, y: pt.return } : null}
           rows={read} initial={bestAt >= 0 ? bestAt : 0}
-          label={`흔들림 대비 수익 경계 ${all.length}점${pt ? ` · 이은 비중 연 ${pt.return}% · 흔들림 ${pt.volatility}%` : ""}`} />
+          label={`변동성 대비 수익 경계 ${all.length}점${pt ? ` · 이은 비중 연 ${pt.return}% · 변동성 ${pt.volatility}%` : ""}`} />
       </div>
       <KV rows={[
         ["곡선", `${all.length}점`],
-        ["가장 좋은 점", best ? `연 ${pct(best.return)} · 흔들림 ${pct(best.volatility)}` : "—"],
-        ["이은 비중", pt ? <><span className="pg-dot-point" aria-hidden="true" />연 {pct(pt.return)} · 흔들림 {pct(pt.volatility)}</>
+        ["가장 좋은 점", best ? `연 ${pct(best.return)} · 변동성 ${pct(best.volatility)}` : "—"],
+        ["이은 비중", pt ? <><span className="pg-dot-point" aria-hidden="true" />연 {pct(pt.return)} · 변동성 {pct(pt.volatility)}</>
                        : "비중을 이으면 곡선 위에 찍습니다"],
       ]} />
       {cloud === null && <p className="pg-warn">무작위 조합 구름은 그리지 못했습니다 — {String(v.cloud_reason ?? "사유 미상")}</p>}
@@ -178,7 +178,7 @@ export function RegimeExplainResult({ v }: { v: Dict }) {
 
 // ── 세 갈래 시나리오 ────────────────────────────────────────────────────────
 
-const LEG_KO: Record<string, string> = { baseline: "그대로 두기", timing_only: "타이밍만", timing_macro: "타이밍 + 국면" };
+const LEG_KO: Record<string, string> = { baseline: "현 비중 유지", timing_only: "타이밍만", timing_macro: "타이밍 + 국면" };
 const STATE_KO: Record<string, string> = { risk_on: "위험-온", risk_off: "위험-오프", unavailable: "판단 불가", partial: "일부" };
 
 export function ThreeWayResult({ v }: { v: Dict }) {
@@ -261,12 +261,12 @@ export function SleeveAnalyticsResult({ v }: { v: Dict }) {
         </ul>
       ) : null}
       <RobustnessView rob={v.robustness as Dict | undefined} />
-      <h4 className="pg-h4">그룹 사이 상관 · 위험 몫</h4>
+      <h4 className="pg-h4">그룹 간 상관 · 위험 기여 비중</h4>
       <KV rows={[["평균 상관", num(r.avg_correlation) === null ? "—" : (r.avg_correlation as number).toFixed(2)],
                  ["군집", `${String(r.n_clusters ?? "—")}개`],
                  ["함께 빠지는 정도", num(tail.lower_tail_coexceedance) === null ? "—" : `${(tail.lower_tail_coexceedance as number).toFixed(2)} (1 = 서로 무관)`]]} />
       <table className="pg-table pg-corr">
-        <thead><tr><th />{names.map((n) => <th key={n} className="pg-td-num">{n}</th>)}<th className="pg-td-num">위험 몫</th></tr></thead>
+        <thead><tr><th />{names.map((n) => <th key={n} className="pg-td-num">{n}</th>)}<th className="pg-td-num">위험 기여 비중</th></tr></thead>
         <tbody>{names.map((a) => (
           <tr key={a}><td className="pg-td-name">{a}</td>
             {names.map((b) => <td key={b} className="pg-td-num">{num(corr[a]?.[b]) === null ? "—" : corr[a][b].toFixed(2)}</td>)}

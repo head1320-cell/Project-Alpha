@@ -132,7 +132,7 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
         </form>
       )}
       {gate && !closed && !archived && (
-        <p className="cs-share-hint">PIN 은 주소와 다른 길(전화·대면)로 알려 주십시오. 같은 숫자·차례대로·되풀이는 쓸 수 없고, 5번 틀리면 잠깁니다.</p>
+        <p className="cs-share-hint">PIN 은 주소와 다른 경로(전화·대면)로 안내하십시오. 같은 숫자·차례대로·되풀이는 쓸 수 없고, 5번 틀리면 잠깁니다.</p>
       )}
       {err && <p className="cl-err cs-share-err" role="alert">{err}</p>}
       {made && (

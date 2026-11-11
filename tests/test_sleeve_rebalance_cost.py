@@ -112,13 +112,13 @@ def test_node_zero_cost_equals_before_and_says_no_cost():
     assert a["view"]["result"]["sleeve_allocation"] == b["view"]["result"]["sleeve_allocation"]
     trust = " ".join(t["text"] for t in b["explain"]["trust"])
     assert "거래비용은 넣지 않았습니다" in trust
-    assert "되돌릴 때 드는 거래비용" in b["explain"]["unmeasured"]
+    assert "리밸런싱 거래비용" in b["explain"]["unmeasured"]
 
 
 def test_node_cost_moves_numbers_and_explains(monkeypatch):
     """노드가 비용을 엔진까지 나르고(계약) 설명이 그 값을 말한다.
 
-    ★예전에는 30bp 로 반올림한 변동성·몫이 달라지는지를 봤다★ — 비용은 대체로 평균만 끌어내리고 흔들림은 거의 그대로라,
+    ★예전에는 30bp 로 반올림한 변동성·몫이 달라지는지를 봤다★ — 비용은 대체로 평균만 끌어내리고 변동성은 거의 그대로라,
     합성 시세 날짜에 따라 차이가 반올림(0.01) 아래로 숨었다(2026-09-29 합성 시세에서 빨개짐 · 커밋된 코드에서도 같음).
     숫자가 실제로 움직이는지는 엔진 테스트(`test_analytics_uses_the_costed_series`, 1000bp)가 본다. 여기서는 전달을 본다.
     """
@@ -139,7 +139,7 @@ def test_node_cost_moves_numbers_and_explains(monkeypatch):
     assert c["view"]["cost_bps"] == 30
     trust = " ".join(t["text"] for t in c["explain"]["trust"])
     assert "30bp" in trust and "거래비용은 넣지 않았습니다" not in trust
-    assert "되돌릴 때 드는 거래비용" not in c["explain"]["unmeasured"]
+    assert "리밸런싱 거래비용" not in c["explain"]["unmeasured"]
     assert any("슬리피지" in u for u in c["explain"]["unmeasured"])
 
 

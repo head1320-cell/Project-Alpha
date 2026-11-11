@@ -31,10 +31,10 @@ CONFIRMED, ASSUMED, UNKNOWN, FAILED = "confirmed", "assumed", "unknown", "failed
 _MARKET_PRIOR_MODELS = frozenset({"bl", "ep"})
 
 MODEL_PLAIN = {
-    "mvo": "수익 대비 위험 최적", "bl": "내 생각 반영", "ep": "내 생각 반영(엔트로피 풀링)",
-    "risk_parity": "위험 똑같이", "hrp": "비슷한 것끼리 묶어", "min_var": "흔들림 최소",
-    "max_div": "분산 최대", "min_cvar": "큰 손실 최소", "robust": "추정 오차에 강하게",
-    "mv_utility": "위험 성향에 맞춰",
+    "mvo": "평균-분산 최적화", "bl": "블랙-리터먼", "ep": "엔트로피 풀링",
+    "risk_parity": "리스크 패리티", "hrp": "계층적 리스크 패리티(HRP)", "min_var": "최소분산",
+    "max_div": "최대분산화", "min_cvar": "CVaR 최소화", "robust": "강건 최적화",
+    "mv_utility": "평균-분산 효용",
 }
 
 _PRACTICE = "합성 데이터입니다 — 실제 시세가 아니라서 실제 성과를 말해 주지 않습니다."
@@ -89,7 +89,7 @@ def explain_universe(view: dict, prov: dict, params: Any) -> dict:
     tickers = view.get("tickers") or []
     labels = view.get("labels") or {}
     facts = [_names(tickers, labels)]
-    facts.append("지금 들고 있는 비중도 알려 주었습니다." if view.get("weights")
+    facts.append("현재 보유 비중도 함께 전달했습니다." if view.get("weights")
                  else "현재 보유 비중은 알려 주지 않았습니다.")
     trust = []
     unk = (view.get("unknown_tickers") or {}).get("codes") or []
@@ -140,8 +140,8 @@ def explain_views(view: dict, prov: dict, params: Any) -> dict:
             w = v.get("weights") or {}
             parts = ", ".join(f"{_names([c], _labels([c]))} {x:+g}" for c, x in w.items())
             facts.append(f"조합({parts})의 1년 기대 수익을 {_signed_pct(mag)}로 봤습니다 (확신 {conf:.0f}%).")
-    return {"title": f"내 생각 {len(views)}개를 넣었습니다", "facts": facts,
-            "trust": [_t(ASSUMED, "내 생각은 입력한 가정입니다 — 맞는지는 이 계산이 확인하지 않습니다.")]}
+    return {"title": f"투자 뷰 {len(views)}개를 넣었습니다", "facts": facts,
+            "trust": [_t(ASSUMED, "투자 뷰는 입력한 가정입니다 — 맞는지는 이 계산이 확인하지 않습니다.")]}
 
 
 #: CF 3부 P1 — 추정 노드는 수익률 입력을 받지만 쓰지 않는다(설정만 넘긴다). 선이 뜻하는 의존과 실제가 달라서 말한다.
@@ -230,12 +230,12 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
                                      "이 값이 나에게 맞는지는 이 계산이 말해 주지 않습니다."))
     if view.get("views_unused"):
         trust.append(_t(ASSUMED, f"이어진 생각 {view['views_unused']}개는 이 계산 방식에서 쓰이지 않습니다 — "
-                                 "‘내 생각 반영’을 고르면 비중에 들어갑니다."))
+                                 "‘블랙-리터먼’·‘엔트로피 풀링’을 고르면 비중에 반영됩니다."))
     if model in _MARKET_PRIOR_MODELS:
         market = any(f.get("stage") == "view_applied" for f in used)
         # K1 — 생각을 넣은 비중을 못 만들어 시가총액 비중을 썼으면 그렇게 말한다(`views_applied` 는 그때 거짓이다).
         facts.append("생각을 반영한 비중을 만들지 못해 시가총액 비중을 썼습니다." if market
-                     else "내 생각을 반영했습니다." if view.get("views_applied") else "반영된 생각이 없습니다.")
+                     else "투자 뷰를 반영했습니다." if view.get("views_applied") else "반영된 투자 뷰가 없습니다.")
     return {"title": "비중을 이렇게 나눴습니다", "headline": headline, "facts": facts, "trust": trust}
 
 
@@ -244,14 +244,14 @@ def explain_risk(view: dict, prov: dict, params: Any) -> dict:
     enb = view.get("enb") or {}
     vol = rc.get("portfolio_volatility_pct")
     if vol is None:
-        return {"title": "흔들림 산출 실패",
+        return {"title": "변동성 산출 실패",
                 "trust": [_t(UNKNOWN, str(rc.get("reason") or "사유 수신 실패"))]}
     facts = []
     if enb.get("enb") is not None:
         facts.append(f"종목들이 함께 움직여서, 실제로 나뉜 베팅은 {enb['enb']:.1f}개 정도입니다.")
     else:
         facts.append("실제로 나뉜 베팅 수는 미상입니다 — " + str(enb.get("enb_reason") or ""))
-    return {"title": "1년에 이 정도 흔들릴 수 있습니다",
+    return {"title": "연환산 변동성입니다",
             "headline": {"label": "변동성", "value": round(float(vol), 1), "unit": "%",
                          "text": f"{_pct(float(vol))} / 년"},
             "facts": facts,

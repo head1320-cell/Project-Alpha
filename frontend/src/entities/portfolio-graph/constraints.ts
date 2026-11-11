@@ -18,7 +18,7 @@ export const NUMBER_CARDS: { key: string; group: string; label: string; unit: st
   { key: "min_weight_pct", group: "floor", label: "종목별 최소 비중", unit: "%",
     help: "음수로 두면 그만큼 공매도할 수 있습니다(공매도는 연구용)." },
   { key: "turnover_cap_pct", group: "turnover", label: "회전율 상한(1회 리밸런싱)", unit: "%",
-    help: "지금 비중을 적어 두었을 때만 걸립니다." },
+    help: "현재 비중을 적어 두었을 때만 걸립니다." },
   { key: "beta_min", group: "beta", label: "시장 민감도(베타) 아래 끝", unit: "",
     help: "벤치마크가 있을 때만 걸립니다." },
   { key: "beta_max", group: "beta", label: "시장 민감도(베타) 위 끝", unit: "" },

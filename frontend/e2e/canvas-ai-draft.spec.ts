@@ -206,7 +206,7 @@ test("설정 탭의 '말씀에서' 칩 — 그 칸을 고치면 사라지고 다
 test("출처가 망가진 문서: 값은 그대로 두고 출처만 빼며 그렇게 말한다 · 값 없는 칸의 출처는 버린다(짝: 멀쩡한 출처는 남는다)", async ({ page }) => {
   const doc = { ...CORE, nodes: CORE.nodes.map((x) =>
     x.id === "returns" ? { ...x, params: { lookback_days: 1260 }, said: { lookback_days: 5 } }                 // 글이 아니다 — 망가짐
-      : x.id === "optimizer" ? { ...x, said: { model: "위험 똑같이" } }                                      // 값 없는 칸의 출처
+      : x.id === "optimizer" ? { ...x, said: { model: "리스크 패리티" } }                                      // 값 없는 칸의 출처
         : x.id === "universe" ? { ...x, said: { tickers: "삼성전자, SK하이닉스" } } : x) };                   // ★짝★ 멀쩡함
   await openWith(page, doc);
   await expect(page.locator(".pg-load-problems")).toContainText("노드 returns 의 ‘말씀에서’ 출처가 형식에 맞지 않아 뺐습니다 — 값은 그대로입니다.");

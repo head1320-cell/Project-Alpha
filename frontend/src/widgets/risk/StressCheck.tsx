@@ -78,7 +78,7 @@ export function StressCheck() {
 
   return (
     <div className="rk tx-page">
-      <PageHead title="위험 점검" lede="경제 충격이 오면 어떤 종목의 점수가 크게 흔들리는지 미리 봅니다." />
+      <PageHead title="위험 점검" lede="경제 충격 시나리오별 종목 점수 변동을 사전에 점검합니다." />
       <Answer sentence={sentence} chips={chips} />
 
       {list.isError ? <RetryFail title="충격 목록 조회 실패" onRetry={() => list.refetch()} />
@@ -122,7 +122,7 @@ export function StressCheck() {
 
             <section className="tx-sec rk-mapsec" aria-labelledby="rk-map-h">
               <h2 id="rk-map-h" className="tx-sec-t">종목마다 충격별 점수 변화</h2>
-              <p className="tx-sec-sub">서버는 충격마다 취약한 10종목, 버틴 5종목, 가장 덜 흔들린 5종목만 보냅니다. 그 밖의 칸은 ‘목록 밖’으로 비워 둡니다.</p>
+              <p className="tx-sec-sub">서버는 충격마다 취약한 10종목, 버틴 5종목, 충격이 가장 작은 5종목만 보냅니다. 그 밖의 칸은 ‘목록 밖’으로 비워 둡니다.</p>
               {map.codes.length ? (
                 <>
                   <div className="rk-mapwrap">
@@ -216,7 +216,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
 
             <div className="rk-lists">
               <div>
-                <h3 className="rk-h3">가장 덜 흔들린 종목</h3>
+                <h3 className="rk-h3">충격이 가장 작은 종목</h3>
                 <ul className="rk-chiplist">{r.most_resilient.map((c) => (
                   <li key={c.stock_code}><button type="button" className="rk-chip" onClick={() => onPick(c.stock_code)}>{c.corp_name} <b className="rk-dir" data-dir={dir(c.shock_pct)}>{sgn(c.shock_pct)}%</b></button></li>))}</ul>
               </div>

@@ -220,8 +220,8 @@ def _explain_account(view: dict, prov: dict, params: Any) -> dict:
 
 class CurveRow(BaseModel):
     model_config = _FORBID
-    years_to_target: float = Field(..., ge=0, le=80, json_schema_extra={"x-ui": _ui("목표까지 남은 해")})
-    risky_target_pct: float = Field(..., ge=0, le=100, json_schema_extra={"x-ui": _ui("그때 위험자산 목표(%)")})
+    years_to_target: float = Field(..., ge=0, le=80, json_schema_extra={"x-ui": _ui("목표까지 잔여 연수")})
+    risky_target_pct: float = Field(..., ge=0, le=100, json_schema_extra={"x-ui": _ui("해당 시점 위험자산 목표(%)")})
 
 
 class GoalParams(BaseModel):
@@ -236,9 +236,9 @@ class GoalParams(BaseModel):
         "적립 대상", "advanced", options={"risky": "위험자산", "safe": "안전자산"})})
     portfolio_value_krw: float | None = Field(None, gt=0, json_schema_extra={"x-ui": _ui("평가 금액", "advanced", unit="원")})
     contributed_ytd_krw: float | None = Field(None, ge=0, json_schema_extra={"x-ui": _ui(
-        "올해 이미 낸 금액", "advanced", unit="원", help="★실적★ — 계획이 아닙니다. 연간 납입 한도 판정에 씁니다.")})
+        "당해 연도 납입액", "advanced", unit="원", help="★실적★ — 계획이 아닙니다. 연간 납입 한도 판정에 씁니다.")})
     total_contributed_krw: float | None = Field(None, ge=0, json_schema_extra={"x-ui": _ui(
-        "지금까지 낸 금액", "advanced", unit="원", help="★실적★ — 총 납입 한도 판정에 씁니다.")})
+        "누적 납입액", "advanced", unit="원", help="★실적★ — 총 납입 한도 판정에 씁니다.")})
 
 
 def _goal(inputs: dict, p: GoalParams) -> pg.NodeOutput:
@@ -275,7 +275,7 @@ def _explain_goal(view: dict, prov: dict, params: Any) -> dict:
     elif target is not None and gap.get("state") == "below":
         facts.append(f"지금 위험자산 비중이 목표보다 {-gap['hi']:.1f}~{-gap['lo']:.1f}%p 적습니다")
     elif target is not None:
-        facts.append("지금 비중과 목표의 차이는 미상입니다" + (f" — {_plain(gap['reason'])}" if gap.get("reason") else ""))
+        facts.append("현재 비중과 목표의 차이는 미상입니다" + (f" — {_plain(gap['reason'])}" if gap.get("reason") else ""))
         trust.append(_t(UNKNOWN, "격차의 부호를 모르면 0으로 보지 않습니다 — 미배정 자산군 때문입니다."))
     months = (r.get("contribution") or {}).get("months")
     if months is not None:
@@ -290,7 +290,7 @@ def _explain_goal(view: dict, prov: dict, params: Any) -> dict:
 class HoldingsCheckParams(BaseModel):
     model_config = _FORBID
     lookback_days: int = Field(500, ge=60, le=2000, json_schema_extra={"x-ui": _ui(
-        "볼 기간", unit="영업일", presets=[{"label": "1년", "value": 252}, {"label": "2년", "value": 500}])})
+        "분석 기간", unit="영업일", presets=[{"label": "1년", "value": 252}, {"label": "2년", "value": 500}])})
     as_of: str | None = Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui("기준일", "advanced")})
     benchmark: str | None = Field(None, max_length=20, json_schema_extra={"x-ui": _ui("벤치마크", "advanced")})
 
@@ -324,21 +324,21 @@ def _explain_holdings(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("client_profile", "고객", plain_label="고객", category="고객", stage="data",
-                    plain_description="별칭·위험 성향·투자 기간을 적습니다. 비중은 바꾸지 않습니다.",
+                    plain_description="별칭·위험 성향·투자 기간을 입력합니다. 비중은 변경하지 않습니다.",
                     inputs=(), outputs=(P("client", "Client"),), run=_client, params_model=ClientParams,
                     explain=_explain_client, description="PB 가 정한 별칭과 성향(출처·평가일). 개인정보 모양은 받지 않는다."),
         pg.NodeSpec("account", "계좌 점검", plain_label="계좌 점검", category="고객", stage="check",
-                    plain_description="고객 계좌의 유형과 선언한 한도로 이 비중을 점검합니다. 선언하지 않은 한도는 판정하지 않습니다.",
+                    plain_description="고객 계좌 유형과 선언 한도로 비중을 점검합니다. 선언하지 않은 한도는 판정하지 않습니다.",
                     inputs=(P("weights", "Weights"), P("client", "Client", required=False)),
                     outputs=(P("account", "Account"),), run=_account, params_model=AccountParams,
                     explain=_explain_account, description="`/accounts/diagnose` 그대로 — 관측만. 공매도 비중은 받지 않는다."),
-        pg.NodeSpec("goal", "목표까지", plain_label="목표까지", category="고객", stage="check",
-                    plain_description="고객의 목표 연도·곡선으로 지금 위험자산 비중이 목표와 얼마나 다른지 봅니다.",
+        pg.NodeSpec("goal", "글라이드패스 점검", plain_label="글라이드패스 점검", category="고객", stage="check",
+                    plain_description="고객의 목표 연도·글라이드패스 대비 현재 위험자산 비중의 괴리를 산출합니다.",
                     inputs=(P("account", "Account"), P("client", "Client", required=False)), outputs=(),
                     run=_goal, params_model=GoalParams, explain=_explain_goal,
                     description="`/accounts/glidepath` 그대로 — 관측만. 곡선이 없으면 목표를 내지 않는다."),
         pg.NodeSpec("holdings_check", "보유 진단", plain_label="보유 진단", category="고객", stage="check",
-                    plain_description="고객이 들고 있는 비중의 팩터 노출·집중도·위험 기여·유동성을 봅니다.",
+                    plain_description="고객 보유 비중의 팩터 노출·집중도·위험 기여도·유동성을 진단합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(), run=_holdings_check,
                     params_model=HoldingsCheckParams, explain=_explain_holdings,
                     description="`/diagnostics/holdings` 그대로 — 관측만."),

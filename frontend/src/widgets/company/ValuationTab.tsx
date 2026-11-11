@@ -18,7 +18,7 @@ const fmtK = (v: number) => `${Math.round(v / 1000).toLocaleString()}천`;
 const SLIDERS: { key: "rf" | "beta" | "erp" | "g" | "years"; label: string;
   min: number; max: number; step: number; pct?: boolean }[] = [
   { key: "rf", label: "무위험수익률(Rf)", min: 0.01, max: 0.08, step: 0.001, pct: true },
-  { key: "beta", label: "베타(β, 시장 대비 흔들림)", min: 0.3, max: 2.5, step: 0.05 },
+  { key: "beta", label: "베타(β, 시장 민감도)", min: 0.3, max: 2.5, step: 0.05 },
   { key: "erp", label: "시장 위험 프리미엄(ERP)", min: 0.03, max: 0.10, step: 0.001, pct: true },
   { key: "g", label: "영구성장률(g)", min: 0.0, max: 0.04, step: 0.001, pct: true },
   { key: "years", label: "예측 기간(년)", min: 5, max: 15, step: 1 },

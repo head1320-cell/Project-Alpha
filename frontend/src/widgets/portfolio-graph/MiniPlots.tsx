@@ -90,7 +90,7 @@ export function FrontierPlot({ dots, curve, point, rows, initial, label, height 
           {(xt.length - 1 - i) % every === 0 && <text className="pg-plot-xtick" x={sx(t)} y={height - bottom + 13} textAnchor="middle">{fx(t)}</text>}
         </g>
       ))}
-      <text className="pg-plot-axis" x={(left + width - RIGHT) / 2} y={height - 4} textAnchor="middle">흔들림(연)</text>
+      <text className="pg-plot-axis" x={(left + width - RIGHT) / 2} y={height - 4} textAnchor="middle">변동성(연)</text>
       {dots.map((p, i) => <circle key={i} className="pg-plot-dot" cx={sx(p.x)} cy={sy(p.y)} r={2} />)}
       {curve.length > 1 && <path className="pg-plot-line" d={xyPath(curve.map((p) => ({ x: sx(p.x), y: sy(p.y) })))} />}
       {cur && <circle className="pg-plot-active" cx={sx(cur.x)} cy={sy(cur.y)} r={MARK.dotR} />}

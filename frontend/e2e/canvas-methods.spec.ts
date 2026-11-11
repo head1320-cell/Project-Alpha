@@ -56,7 +56,7 @@ async function methodUi(page: Page): Promise<Ui> {
   return cat.nodes.find((c: { type: string }) => c.type === "portfolio_combine").params_schema.properties.method["x-ui"] as Ui;
 }
 
-test("합치기 방법(BS4): 카드 = 서버 순서·이름·설명 · 기본 위험 똑같이 · 몫 직접 정하기는 합을 늘 보이고 계산하면 그 몫", async ({ page }) => {
+test("합치기 방법(BS4): 카드 = 서버 순서·이름·설명 · 기본 리스크 패리티 · 몫 직접 정하기는 합을 늘 보이고 계산하면 그 몫", async ({ page }) => {
   const sink = trackErrors(page);
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
@@ -158,7 +158,7 @@ test("방법 비교(BS4): 자세히 = 서버 view.method_compare 그대로 — �
   }
 });
 
-test("위기 때 위험 똑같이(BS4): 고르면 계산되고 믿음 칸이 시장 대용·위기일 수를 말한다 · 비교표에서 그 줄이 '지금'", async ({ page }) => {
+test("위기 리스크 패리티(BS4): 고르면 계산되고 믿음 칸이 시장 대용·위기일 수를 말한다 · 비교표에서 그 줄이 '지금'", async ({ page }) => {
   await openCanvas(page);
   await addStrategy(page, "tpl:stress");
   const doc = await wip(page);

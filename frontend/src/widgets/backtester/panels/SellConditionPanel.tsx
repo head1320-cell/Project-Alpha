@@ -78,7 +78,7 @@ export default function SellConditionPanel({ s, set }: {
         </div>
       </Section>
 
-      <Section title="얼마나 들고 있을까" hint={v.dayTrade ? "당일 매매" : "최소·최대 보유일"} tone="sell"
+      <Section title="보유 기간" hint={v.dayTrade ? "당일 매매" : "최소·최대 보유일"} tone="sell"
         enabled={v.holdPeriod.on || v.dayTrade} onToggle={(on) => patch({ holdPeriod: { ...v.holdPeriod, on }, dayTrade: on ? v.dayTrade : false })}>
         <Field label="보유 방식">
           <Segmented tone="sell" value={v.dayTrade ? "day" : "period"}
@@ -120,12 +120,12 @@ export default function SellConditionPanel({ s, set }: {
         </>)}
       </Section>
 
-      <Section title="조건으로 팔기" hint="팩터·논리식이 맞으면 팝니다" tone="sell" enabled>
+      <Section title="조건부 매도" hint="팩터·논리식이 맞으면 팝니다" tone="sell" enabled>
         <ConditionFormulaEditor tone="sell" conditions={v.conditions} onChange={(c: Condition[]) => patch({ conditions: c })}
           logicExpr={v.logicExpr} onLogicChange={(logicExpr) => patch({ logicExpr })} logicDefaultLabel="하나라도 (OR)" sideKey="sell" />
       </Section>
 
-      <Section title="장 마감에 정리하기" hint="장마감·시간 지정 청산" tone="sell"
+      <Section title="장 마감 청산" hint="장마감·시간 지정 청산" tone="sell"
         enabled={v.liquidate.on} onToggle={(on) => patch({ liquidate: { ...v.liquidate, on } })}>
         <Field label="정리 시점">
           <IntradayOnly>
@@ -135,7 +135,7 @@ export default function SellConditionPanel({ s, set }: {
         </Field>
       </Section>
 
-      <Section title="파는 시간" hint={`${v.timeStart} ~ ${v.timeEnd}`} tone="sell" enabled>
+      <Section title="매도 시점" hint={`${v.timeStart} ~ ${v.timeEnd}`} tone="sell" enabled>
         <Field label="시간대">
           {s.intradayFill ? (
             <>

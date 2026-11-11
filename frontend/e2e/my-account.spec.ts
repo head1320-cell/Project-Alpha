@@ -664,9 +664,9 @@ test("BV9: 자주 쓰는 사유를 누르면 칸이 채워지고, 고쳐 쓴 글
   await page.locator(".ma-kill-open").click();
   const sheet = page.locator('[data-sheet="kill"]');
   const box = sheet.locator('textarea[name="ma-kill-reason"]');
-  const preset = sheet.locator(".ma-kill-preset", { hasText: "시장이 크게 흔들려서" });
+  const preset = sheet.locator(".ma-kill-preset", { hasText: "시장 급변동" });
   await preset.click();
-  await expect(box).toHaveValue("시장이 크게 흔들려서");
+  await expect(box).toHaveValue("시장 급변동");
   await expect(preset).toHaveAttribute("aria-pressed", "true");
   await expect(sheet.locator(".ma-kill-go")).toBeEnabled();
   await box.fill("시장이 크게 흔들려서 오늘은 쉽니다");

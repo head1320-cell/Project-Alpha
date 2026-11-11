@@ -77,10 +77,10 @@ test("PB2 · 계산 — 계좌 유형이 없어 계좌 점검은 사유와 함�
   expect(inputs.find((x) => x.key === "holdings")!.source).toContain("유니버스");
   // 주문 목록은 두 '지금 비중' 이 같다고 말한다
   const trust = (body.nodes.orders.explain?.trust ?? []).map((t) => t.text);
-  expect(trust.some((t) => t.includes("유니버스 노드의 ‘지금 비중’과 같습니다"))).toBe(true);
+  expect(trust.some((t) => t.includes("유니버스 노드의 ‘현재 비중’과 같습니다"))).toBe(true);
   await expect(node(page, "account").locator(".pg-node-status-why")).toContainText("계좌 유형");
   await tab(page, "story");
-  await expect(page.locator('.pg-step[data-node-id="orders"]')).toContainText("유니버스 노드의 ‘지금 비중’과 같습니다");
+  await expect(page.locator('.pg-step[data-node-id="orders"]')).toContainText("유니버스 노드의 ‘현재 비중’과 같습니다");
 });
 
 test("PB2 · 계좌 유형을 고르면 계좌 점검·목표까지가 돈다 — 목표는 연도·곡선이 없어 목표 비중을 내지 않는다고 말한다", async ({ page }) => {

@@ -227,7 +227,7 @@ test("여기까지 계산 뒤에도 재계산하지 않은 받는 쪽의 기록�
   // 비중 계산 방식을 바꾸면 비중 계산과 하류가 예전 결과 — 그쪽으로 가는 칩은 숨고, 기대 수익 추정으로 가는 칩은 남는다.
   await page.locator('.pg-node[data-node-id="optimizer"]').click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "최소분산" }).click();
   await expect(page.locator(".pg-summary--stale")).toBeVisible();
   await expect(flag(page, SENS)).toHaveCount(0);
   await expect(flag(page, EST)).toHaveCount(1);
@@ -243,7 +243,7 @@ test("고른 방식 대신 다른 비중이면 카드에 '고른 방식 대신�
 
   await patchRun(page, (b) => {
     const trust = b.nodes.optimizer.explain!.trust!;
-    trust.push({ state: "assumed", kind: "fallback", text: "‘위험 똑같이’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다." });
+    trust.push({ state: "assumed", kind: "fallback", text: "‘리스크 패리티’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다." });
   });
   await run(page);
   await expect(card.locator(".pg-tag--fallback")).toHaveText("고른 방식 대신함");
@@ -259,7 +259,7 @@ async function sensDetail(page: Page) {
   await page.locator('.pg-tab[data-tab="detail"]').click();
 }
 
-test("민감도(K3): 위험 똑같이는 기대 수익을 쓰지 않아 0 칸 히트맵 대신 서버 문장 · 짝: 수익 대비 위험 최적은 히트맵", async ({ page }) => {
+test("민감도(K3): 리스크 패리티는 기대 수익을 쓰지 않아 0 칸 히트맵 대신 서버 문장 · 짝: 평균-분산 최적화는 히트맵", async ({ page }) => {
   await openWith(page, STRESS);
   await patchRun(page);
   const body = await run(page);
@@ -271,7 +271,7 @@ test("민감도(K3): 위험 똑같이는 기대 수익을 쓰지 않아 0 칸 �
   await expect(page.locator(".pg-heat")).toHaveCount(0);
 });
 
-test("민감도(K3) 짝: 수익 대비 위험 최적이면 히트맵이 서버 행렬을 그린다 · 문장 없음", async ({ page }) => {
+test("민감도(K3) 짝: 평균-분산 최적화이면 히트맵이 서버 행렬을 그린다 · 문장 없음", async ({ page }) => {
   const doc = { ...STRESS, nodes: STRESS.nodes.map((x) => (x.id === "optimizer" ? { ...x, params: { model: "mvo" } } : x)) };
   await openWith(page, doc);
   await patchRun(page);

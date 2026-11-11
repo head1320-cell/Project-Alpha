@@ -669,7 +669,7 @@ def regime_mixture_moments(returns_df, regime_by_month: dict[str, str] | None,
         note = (f"{len(keep)}개 국면의 조건부 적률을 {h_hold}개월 홀딩 기간의 "
                 f"국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 "
                 f"{out['A_contribution_pct']:.2f}% 를 차지합니다 — 국면을 모를수록 "
-                "이 값이 커지며, 그것이 리스크로 정직하게 옮겨간 몫입니다.")
+                "이 값이 커지며, 그것이 리스크로 정직하게 이전된 부분입니다.")
         if dropped:
             note += (f" ★{', '.join(dropped)} 국면은 표본이 없어 제외하고 "
                      f"재정규화했습니다(최대 {dropped_mass:.1%}) — 축소된 사슬은 근사입니다.")

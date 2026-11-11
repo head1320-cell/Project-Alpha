@@ -48,7 +48,7 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
               </div>
               <p className="ci-alt-axis"><span>0</span><span>{ALT_MAX} 이상</span></p>
               {out && <p className="ci-note">점수가 눈금 밖이라 끝에 붙여 그렸습니다.</p>}
-              <p className="ci-fd-lede">다섯 요소가 점수에 더한 몫입니다(가중치 × 비율).</p>
+              <p className="ci-fd-lede">다섯 요소의 점수 기여분입니다(가중치 × 비율).</p>
               <div className="ci-alt-rows">
                 {alt.components.map((c) => (
                   <div key={c.id} className="ci-alt-row">

@@ -223,7 +223,7 @@ def _explain_risk(view: dict, prov: dict, params: Any) -> dict:
 
 class MacroSensParams(_Priced):
     statistical: bool = Field(True, json_schema_extra={"x-ui": _ui(
-        "통계 블록", "advanced", help="매크로 계열과의 월별 회귀도 함께 볼지입니다(상관이지 인과가 아닙니다).")})
+        "통계 분석", "advanced", help="매크로 계열과의 월별 회귀를 함께 산출합니다(상관이며 인과가 아닙니다).")})
 
 
 def _macro_sens(inputs: dict, p: MacroSensParams) -> pg.NodeOutput:
@@ -262,8 +262,8 @@ class ThesisParams(_Company):
         "논지", question="투자 논지", help="한두 문장이면 충분합니다.")})
     kill_conditions: _sr.FilterGroupModel = Field(
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
-        json_schema_extra={"x-ui": _ui("버릴 조건", question="논지 폐기 조건", widget="filter",
-                                       help="조건 하나하나가 ‘이렇게 되면 틀렸다’ 입니다. 그룹(그룹)은 쓰지 않습니다.")})
+        json_schema_extra={"x-ui": _ui("철회 조건", question="논지 폐기 조건", widget="filter",
+                                       help="조건 하나하나가 논지 철회 기준입니다. 그룹 조건은 쓰지 않습니다.")})
 
 
 def _thesis(inputs: dict, p: ThesisParams) -> pg.NodeOutput:
@@ -298,31 +298,31 @@ def register(registry: pg.Registry) -> None:
     common = {"inputs": (), "outputs": (), "category": "기업", "stage": "signal"}
     for spec in (
         pg.NodeSpec("company_valuation", "가치평가 샌드박스", plain_label="기업 가치평가",
-                    plain_description="가정을 바꿔 가며 기업의 적정가와 그 민감도를 봅니다.",
+                    plain_description="가정별 기업 적정가와 그 민감도를 산출합니다.",
                     run=_sandbox, params_model=SandboxParams, explain=_explain_sandbox,
                     description="company_valuation_sandbox 라우트 함수 그대로.", **common),
         pg.NodeSpec("reverse_dcf", "역DCF", plain_label="역DCF",
-                    plain_description="지금 가격을 정당화하려면 얼마나 자라야 하는지 거꾸로 풉니다.",
+                    plain_description="현재 주가에 내재된 성장률을 역산합니다.",
                     run=_reverse, params_model=_Priced, explain=_explain_reverse,
                     description="company_reverse_dcf 라우트 함수 그대로.", **common),
         pg.NodeSpec("valuation_distribution", "가치 분포", plain_label="내재가치 분포",
-                    plain_description="가정을 흔들어 적정가가 어디서 어디까지 나오는지 봅니다.",
+                    plain_description="가정을 확률적으로 변동시켜 적정가 분포를 산출합니다.",
                     run=_distribution, params_model=DistributionParams, explain=_explain_distribution,
                     description="company_valuation_distribution 라우트 함수 그대로.", **common),
         pg.NodeSpec("financial_deep", "재무 심층", plain_label="이익의 질(QoE)",
-                    plain_description="이익이 현금으로 들어오는지, 운전자본·자본배치는 어떤지 봅니다.",
+                    plain_description="이익의 현금 전환과 운전자본·자본배분을 분석합니다.",
                     run=_financial, params_model=_Company, explain=_explain_financial,
                     description="company_financial_deep 라우트 함수 그대로.", **common),
         pg.NodeSpec("risk_deep", "위험 심층", plain_label="재무 위험 분석",
-                    plain_description="부도 판별 점수와 금리가 오를 때의 버팀을 봅니다.",
+                    plain_description="부도 판별 점수(Altman·Beneish)와 금리 상승 스트레스를 분석합니다.",
                     run=_risk, params_model=_Priced, explain=_explain_risk,
                     description="company_risk_deep 라우트 함수 그대로.", **common),
         pg.NodeSpec("company_macro_sensitivity", "매크로 민감도", plain_label="매크로 민감도",
-                    plain_description="금리 같은 거시 충격에 적정가가 얼마나 움직이는지 봅니다.",
+                    plain_description="금리 등 거시 충격에 대한 적정가 민감도를 산출합니다.",
                     run=_macro_sens, params_model=MacroSensParams, explain=_explain_macro_sens,
                     description="macro_sensitivity_for + statistical_sensitivity(저장된 매크로 관측).", **common),
         pg.NodeSpec("thesis_check", "테제 점검", plain_label="투자 논지 점검",
-                    plain_description="내 논지와 버릴 조건을 적으면 검증할 수 있는 조건인지 가려 줍니다.",
+                    plain_description="투자 논지와 철회 조건을 입력하면 검증 가능한 조건인지 판별합니다.",
                     run=_thesis, params_model=ThesisParams, explain=_explain_thesis,
                     description="company_thesis_check 라우트 함수(저장하지 않는다).", **common),
     ):

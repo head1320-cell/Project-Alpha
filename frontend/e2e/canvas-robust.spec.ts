@@ -96,7 +96,7 @@ test("견고성 절(BR R1a): 전략 결합 자세히 = 서버 view.robustness �
   await expect(trend.locator(".pg-rob-band")).toHaveCount(1);
 
   const crisis = rob.crisis as { pairs: { co_drops: number; expected_co_drops: number }[]; crisis_days: number };
-  const cs = await openSection(page, "위기 때 상관");
+  const cs = await openSection(page, "위기 상관");
   await expect(cs.locator(".pg-rob-pair")).toHaveCount(crisis.pairs.length);
   const p0 = crisis.pairs[0];
   await expect(cs.locator(".pg-rob-codrop").first()).toHaveText(`같이 떨어진 날 ${p0.co_drops}일 · 평소 관계라면 약 ${p0.expected_co_drops.toFixed(0)}일`);
@@ -136,16 +136,16 @@ test("견고성 절(BR R1a): 모르면 '—' 와 서버 사유 — 0 으로 그�
       if (!rob) continue;
       pfId = id;
       const pairs = (rob.crisis as { pairs: Dict[] }).pairs;
-      pairs[0].co_drops = null; pairs[0].expected_co_drops = null; pairs[0].reason = "흔들림이 없습니다(테스트)";
+      pairs[0].co_drops = null; pairs[0].expected_co_drops = null; pairs[0].reason = "변동성이 없습니다(테스트)";
       rob.effective_n = { available: false, value: null, n: 2, reason: "상관을 못 잰 쌍이 있습니다(테스트)" };
       rob.shock = { available: false, reason: "충격을 넣지 못했습니다(테스트)" };
     }
   });
   await run(page);
   await openCombine(page, pfId);
-  const cs = await openSection(page, "위기 때 상관");
+  const cs = await openSection(page, "위기 상관");
   await expect(cs.locator(".pg-rob-codrop").first()).toHaveText("같이 떨어진 날 —");
-  await expect(cs.locator(".pg-rob-codrop").first()).toHaveAttribute("title", "흔들림이 없습니다(테스트)");
+  await expect(cs.locator(".pg-rob-codrop").first()).toHaveAttribute("title", "변동성이 없습니다(테스트)");
   const more = await openSection(page, "더 보기");
   await expect(more.locator(".pg-kv div").first()).toContainText("—");
   await expect(more).toContainText("상관을 못 잰 쌍이 있습니다(테스트)");
@@ -230,7 +230,7 @@ test("견고성 절 대비(BR R1): 라이트·다크 AA — 펼친 네 절 모�
   const doc = await wip(page);
   const pf = doc.nodes.find((n) => n.type === "portfolio_combine")!;
   await openCombine(page, pf.id);
-  for (const name of ["위기 때 상관", "상관 급등 충격", "최악 구간 겹침", "더 보기"]) await openSection(page, name);
+  for (const name of ["위기 상관", "상관 급등 충격", "최악 구간 겹침", "더 보기"]) await openSection(page, name);
   for (const dark of [false, true]) {
     await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), dark);
     await page.waitForTimeout(150);

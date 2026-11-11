@@ -23,7 +23,7 @@ export default function BuyConditionPanel({ s, set }: {
   return (
     <div className="bte-col">
 
-      <Section title="살 조건" hint="팩터·함수로 만든 조건식" tone="buy"
+      <Section title="매수 조건" hint="팩터·함수로 만든 조건식" tone="buy"
         enabled={s.buy.enabled} onToggle={(v) => patchBuy({ enabled: v })}>
         <ConditionFormulaEditor tone="buy" conditions={s.buy.conditions} onChange={(c: Condition[]) => patchBuy({ conditions: c })}
           logicExpr={s.buy.logicExpr} onLogicChange={(v) => patchBuy({ logicExpr: v })} logicDefaultLabel="모두 AND" sideKey="buy" />
@@ -51,7 +51,7 @@ export default function BuyConditionPanel({ s, set }: {
               </div>
               <OffsetInput value={s.buy.breakthroughOffsetPct}
                 onChange={(breakthroughOffsetPct) => patchBuy({ breakthroughOffsetPct })} />
-              <p className="bte-note bte-note--warn">당일 시초가처럼 크게 흔들리는 기준은 불공정 거래 소지가 있으니 조심하십시오.</p>
+              <p className="bte-note bte-note--warn">당일 시초가처럼 변동이 큰 기준은 불공정 거래 소지가 있으니 조심하십시오.</p>
             </div>
           )}
           <Field label="사는 때">
@@ -63,7 +63,7 @@ export default function BuyConditionPanel({ s, set }: {
         </div>
       </Section>
 
-      <Section title="얼마씩 살까" hint="순서 · 종목당 비중 · 보유 수" tone="buy" enabled>
+      <Section title="매수 금액" hint="순서 · 종목당 비중 · 보유 수" tone="buy" enabled>
         <Field label="사는 순서">
           <select value={s.buy.primarySort.expr} className="kit-select" aria-label="사는 순서 기준"
             onChange={(e) => patchBuy({ primarySort: { ...s.buy.primarySort, expr: e.target.value } })}>
@@ -103,7 +103,7 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="최대 보유 수">
           <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} max={30} act="max-stocks" />
-          <p className="bte-note">동시에 들고 있을 수 있는 종목 수입니다. 후보를 몇 종목까지 볼지는 ③ ‘평가 종목 상한’에서 따로 정합니다.</p>
+          <p className="bte-note">동시 보유 가능 종목 수입니다. 후보를 몇 종목까지 볼지는 ③ ‘평가 종목 상한’에서 따로 정합니다.</p>
         </Field>
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
@@ -135,7 +135,7 @@ export default function BuyConditionPanel({ s, set }: {
       </Section>
 
       {!s.assetAlloc.enabled && (
-        <Section title="현금 남겨 두기" hint="평가자산 대비 현금을 늘 들고 있습니다" tone="neutral"
+        <Section title="현금 비중 유지" hint="평가자산 대비 현금을 상시 보유합니다" tone="neutral"
           enabled={s.cashReservePct > 0} onToggle={(on) => set((x) => ({ ...x, cashReservePct: on ? 10 : 0 }))}>
           <Field label="현금 비중">
             <QuickStepper value={s.cashReservePct} onChange={(v) => set((x) => ({ ...x, cashReservePct: v }))}
@@ -147,7 +147,7 @@ export default function BuyConditionPanel({ s, set }: {
 
       <AssetAllocPanel s={s} set={set} />
 
-      <Section title="시장이 나쁠 때 멈추기" hint="지수 조건으로 포트폴리오 전체를 막습니다(마켓타이밍)" tone="neutral"
+      <Section title="시장 필터(약세장 매매 중단)" hint="지수 조건으로 포트폴리오 전체를 막습니다(마켓타이밍)" tone="neutral"
         enabled={s.marketTiming.on} onToggle={(on) => patchMt({ on })}>
         <Field label="기준 지수">
           <Segmented value={s.marketTiming.index} onChange={(index) => patchMt({ index })}

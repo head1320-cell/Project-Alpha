@@ -117,7 +117,7 @@ def _out(s: dict, result: dict, inputs: list[dict]) -> pg.NodeOutput:
 
 def _need(s: dict, n: int, what: str) -> None:
     if s["meta"]["obs"] < n:
-        raise pg.NodeFailure(f"{what}은(는) 최소 {n} 관측이 필요합니다 — 지금 {s['meta']['obs']}일입니다. 수익률 기간을 늘려 주십시오.")
+        raise pg.NodeFailure(f"{what}은(는) 최소 {n} 관측이 필요합니다 — 지금 {s['meta']['obs']}일입니다. 수익률 기간을 늘리십시오.")
 
 
 def _eok(x: Any) -> str:
@@ -135,9 +135,9 @@ def _base_trust(view: dict) -> list[dict]:
 
 # ── 공통 파라미터 ────────────────────────────────────────────────────────────
 
-_SERIES_UI = _ui("무엇을 볼까", question="위험 측정 대상 계열",
+_SERIES_UI = _ui("분석 대상", question="위험 측정 대상 계열",
                  presets=[{"label": "포트폴리오", "value": PORTFOLIO}],
-                 help="'portfolio' 면 이어진 비중으로 묶은 포트폴리오, 종목 코드를 적으면 그 종목 하나만 봅니다.")
+                 help="'portfolio' 면 연결된 비중의 포트폴리오, 종목 코드를 입력하면 해당 종목만 분석합니다.")
 
 
 class _SeriesParams(BaseModel):
@@ -149,12 +149,12 @@ class _Valued(_SeriesParams):
     portfolio_value: float = Field(1e8, gt=0, le=1e13, json_schema_extra={"x-ui": _ui(
         "평가 금액", question="평가 금액 가정", unit="원",
         presets=[{"label": "1천만", "value": 1e7}, {"label": "1억", "value": 1e8}, {"label": "10억", "value": 1e9}],
-        help="손실을 금액으로 보여 주려는 값입니다 — 계좌 잔고를 읽지 않습니다.")})
+        help="손실을 금액으로 환산하는 값입니다 — 계좌 잔고를 조회하지 않습니다.")})
 
 
 _CL_UI = _ui("신뢰수준", question="신뢰수준(손실 분위)",
              presets=[{"label": "95%", "value": 0.95}, {"label": "99%", "value": 0.99}],
-             help="99% 면 '100일 중 하루 정도' 겪을 만한 손실입니다.")
+             help="99% 면 100거래일 중 1일 초과가 예상되는 손실 수준입니다.")
 
 
 # ── VaR·ES ───────────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ class McVarParams(_Valued):
         "보유 기간", question="보유 기간 가정", unit="일",
         presets=[{"label": "1일", "value": 1}, {"label": "5일", "value": 5}, {"label": "10일", "value": 10}])})
     n_simulations: int = Field(10000, ge=1000, le=50000, json_schema_extra={"x-ui": _ui(
-        "경로 수", "advanced", help="많을수록 추정 오차가 줍니다 — 상한 5만.")})
+        "경로 수", "advanced", help="많을수록 추정 오차가 감소합니다 — 상한 5만.")})
     use_ewma: bool = Field(True, json_schema_extra={"x-ui": _ui(
         "최근 변동성 가중(EWMA)", "advanced", help="끄면 전체 표본의 표준편차를 씁니다.")})
     ewma_lambda: float = Field(0.94, ge=0.8, le=0.999, json_schema_extra={"x-ui": _ui("EWMA 감쇠", "advanced")})
@@ -272,7 +272,7 @@ class VolModelsParams(_SeriesParams):
     ewma_lambda: float = Field(0.94, ge=0.8, le=0.999, json_schema_extra={"x-ui": _ui(
         "EWMA 감쇠", question="최근 관측 가중(감쇠계수)",
         presets=[{"label": "0.94", "value": 0.94}, {"label": "0.97", "value": 0.97}],
-        help="클수록 오래된 날도 오래 기억합니다.")})
+        help="클수록 과거 관측의 가중이 천천히 감소합니다.")})
 
 
 def _vol_models(inputs: dict, p: VolModelsParams) -> pg.NodeOutput:
@@ -334,7 +334,7 @@ def _holding_var(inputs: dict, p: HoldingVarParams) -> pg.NodeOutput:
 def _explain_holding_var(view: dict, prov: dict, params: Any) -> dict:
     rows = (view.get("result") or {}).get("results") or []
     top = max(rows, key=lambda x: (x.get("confidence_level") or 0, x.get("holding_period_days") or 0)) if rows else None
-    title = (f"{top['holding_period_days']}일 들고 있으면 {top['confidence_level']:.0%} 확률로 손실이 "
+    title = (f"{top['holding_period_days']}일 보유 시 {top['confidence_level']:.0%} 확률로 손실이 "
              f"{_eok(top['var_amount'])}을 넘지 않는다고 봅니다" if top else "보유기간 VaR 를 측정했습니다")
     trust = [*_base_trust(view),
              _t(ASSUMED, "하루 값을 √보유일로 늘렸습니다 — 날마다 독립이라는 가정이라 변동성이 뭉치는 시기엔 작게 나올 수 있습니다.")]
@@ -382,7 +382,7 @@ def _explain_frtb(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(ASSUMED, "스트레스 구간은 받은 표본 안의 최악 250일입니다 — 표본 밖 위기(예: 2008)는 들어 있지 않습니다."))
     else:
         trust.append(_t(UNKNOWN, f"표본이 {r.get('observations')}일이라 250일 스트레스 구간을 찾지 못했습니다 — "
-                                 "스트레스 ES 자리에 현재 ES 를 그대로 둔 값입니다. 수익률 기간을 늘려 주십시오."))
+                                 "스트레스 ES 자리에 현재 ES 를 그대로 둔 값입니다. 수익률 기간을 늘리십시오."))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["모형 승인·백테스트 예외(규제 트래픽 라이트)"]}
 
 
@@ -545,8 +545,8 @@ class HedgeParams(BaseModel):
     portfolio_value: float = Field(1e9, gt=0, le=1e13, json_schema_extra={"x-ui": _ui(
         "헤지할 금액", unit="원", presets=[{"label": "1억", "value": 1e8}, {"label": "10억", "value": 1e9}])})
     current_beta: float | None = Field(1.0, ge=-3, le=5, json_schema_extra={"x-ui": _ui(
-        "지금 β", question="시장 1% 변동 시 민감도(β)",
-        help="비우고 수익률·비중을 이으면 과거 표본으로 측정합니다.")})
+        "현재 β", question="시장 1% 변동 시 민감도(β)",
+        help="비우고 수익률·비중을 연결하면 과거 표본으로 측정합니다.")})
     target_beta: float = Field(0.0, ge=-3, le=5, json_schema_extra={"x-ui": _ui(
         "목표 β", presets=[{"label": "0(시장 중립)", "value": 0.0}, {"label": "0.5", "value": 0.5}])})
     futures_price: float = Field(350.0, gt=0, json_schema_extra={"x-ui": _ui(
@@ -578,13 +578,13 @@ def _hedge(inputs: dict, p: HedgeParams) -> pg.NodeOutput:
     wired = inputs.get("returns") is not None and inputs.get("weights") is not None
     if wired:
         beta, n, span = _measured_beta(inputs)
-        beta_in = {"key": "beta", "label": "지금 β", "value": f"{beta:.3f}", "basis": "관측",
+        beta_in = {"key": "beta", "label": "현재 β", "value": f"{beta:.3f}", "basis": "관측",
                    "source": f"포트폴리오 대 비교 기준 일간 수익률 {n}일({span}) 공분산/분산 — 과거 표본"}
     elif p.current_beta is None:
-        raise pg.NodeFailure("지금 β 가 없습니다 — 값을 넣거나 수익률·비중을 이어 과거 표본으로 재 주십시오.")
+        raise pg.NodeFailure("현재 β 가 없습니다 — 값을 넣거나 수익률·비중을 이어 과거 표본으로 측정하십시오.")
     else:
         beta = float(p.current_beta)
-        beta_in = _assumed("beta", "지금 β", f"{beta:.3f}")
+        beta_in = _assumed("beta", "현재 β", f"{beta:.3f}")
     # 반올림 뒤 β·감소율·β=0 사유는 모델이 낸다(BL3 M5) — 노드는 그대로 싣는다.
     res = HedgingSimulator(p.futures_price, p.multiplier).equity_futures_hedge(p.portfolio_value, beta, p.target_beta)
     return _calc_out(res, [beta_in, _assumed("target", "목표 β", f"{p.target_beta:.3f}"),
@@ -626,17 +626,17 @@ class CvaParams(BaseModel):
     maturity_years: float = Field(5.0, gt=0, le=30, json_schema_extra={"x-ui": _ui("만기", unit="년")})
     position_type: Literal["irs", "fx_forward", "option"] = Field("irs", json_schema_extra={"x-ui": _ui(
         "거래 종류", presets=[{"label": "금리스왑", "value": "irs"}, {"label": "통화선도", "value": "fx_forward"},
-                               {"label": "옵션", "value": "option"}], help="노출 곡선의 모양을 정합니다.")})
+                               {"label": "옵션", "value": "option"}], help="익스포저 곡선의 형태를 정합니다.")})
     cds_spread_bps: float = Field(150.0, gt=0, le=5000, json_schema_extra={"x-ui": _ui(
         "상대방 CDS 스프레드", unit="bp", question="거래상대방 신용위험의 시장 가격(CDS)")})
     recovery_rate: float = Field(0.40, ge=0, lt=1, json_schema_extra={"x-ui": _ui("회수율", "advanced")})
     risk_free_rate: float = Field(0.03, ge=-0.05, le=0.3, json_schema_extra={"x-ui": _ui("무위험수익률", "advanced")})
     volatility: float = Field(0.02, gt=0, le=1, json_schema_extra={"x-ui": _ui(
-        "노출 변동성", "advanced", help="양식화된 노출 곡선의 높이를 정합니다.")})
-    bank_cds_spread_bps: float = Field(50.0, gt=0, le=5000, json_schema_extra={"x-ui": _ui("우리 CDS 스프레드", "advanced", unit="bp")})
-    bank_recovery: float = Field(0.40, ge=0, lt=1, json_schema_extra={"x-ui": _ui("우리 회수율", "advanced")})
+        "노출 변동성", "advanced", help="정형화된 익스포저 곡선의 수준을 정합니다.")})
+    bank_cds_spread_bps: float = Field(50.0, gt=0, le=5000, json_schema_extra={"x-ui": _ui("자사 CDS 스프레드", "advanced", unit="bp")})
+    bank_recovery: float = Field(0.40, ge=0, lt=1, json_schema_extra={"x-ui": _ui("자사 회수율", "advanced")})
     spread_shock_bps: float = Field(100.0, ge=0, le=5000, json_schema_extra={"x-ui": _ui("스프레드 충격", "advanced", unit="bp")})
-    cds_1y: float = Field(0.0, ge=0, le=5000, json_schema_extra={"x-ui": _ui("CDS 1년", "advanced", unit="bp", help="두 칸 이상 넣으면 기간구조를 만듭니다.")})
+    cds_1y: float = Field(0.0, ge=0, le=5000, json_schema_extra={"x-ui": _ui("CDS 1년", "advanced", unit="bp", help="두 칸 이상 입력하면 기간구조를 구성합니다.")})
     cds_3y: float = Field(0.0, ge=0, le=5000, json_schema_extra={"x-ui": _ui("CDS 3년", "advanced", unit="bp")})
     cds_5y: float = Field(0.0, ge=0, le=5000, json_schema_extra={"x-ui": _ui("CDS 5년", "advanced", unit="bp")})
     cds_10y: float = Field(0.0, ge=0, le=5000, json_schema_extra={"x-ui": _ui("CDS 10년", "advanced", unit="bp")})
@@ -724,19 +724,19 @@ def register(registry: pg.Registry) -> None:
     common = {"outputs": (), "category": "리스크", "stage": "check"}
     for spec in (
         pg.NodeSpec("var_es", "VaR·ES", plain_label="VaR·ES",
-                    plain_description="정규·EWMA·과거 그대로 세 방법으로 드문 날의 손실과 그 너머 평균 손실을 측정합니다.",
+                    plain_description="모수(정규)·EWMA·역사적 시뮬레이션 세 방법으로 VaR(꼬리 손실 임계치)와 ES(초과 손실 평균)를 측정합니다.",
                     inputs=rw, run=_var_es, params_model=VarEsParams, explain=_explain_var_es,
                     description="ParametricRiskModel·PortfolioRiskModel(/calculate-var 와 같은 모델) · 수익률 노드 계열.", **common),
         pg.NodeSpec("mc_var", "몬테카를로 VaR", plain_label="몬테카를로 VaR",
-                    plain_description="수만 개의 가격 경로를 만들어 손실 분포의 꼬리를 봅니다.",
+                    plain_description="수만 개의 가격 경로를 시뮬레이션해 손실 분포의 꼬리를 측정합니다.",
                     inputs=rw, run=_mc_var, params_model=McVarParams, explain=_explain_mc_var,
                     description="MonteCarloVaR(seed=42)(/mc-var·/mc-portfolio-var 와 같은 모델).", **common),
         pg.NodeSpec("vol_models", "변동성 모델", plain_label="변동성 모형",
-                    plain_description="GARCH 와 EWMA 로 지금의 변동성과 앞으로 며칠의 흐름을 나란히 봅니다.",
+                    plain_description="GARCH·EWMA로 현재 변동성과 단기 변동성 전망을 비교합니다.",
                     inputs=rw, run=_vol_models, params_model=VolModelsParams, explain=_explain_vol_models,
                     description="VolatilityModelComparison(/garch-compare 와 같은 모델).", **common),
         pg.NodeSpec("holding_var", "보유기간 VaR", plain_label="보유기간 VaR",
-                    plain_description="하루 손실을 보유 기간에 맞게 늘려 1·5·10·20일 손실을 봅니다.",
+                    plain_description="1일 VaR를 보유 기간으로 확장해 1·5·10·20일 VaR를 산출합니다.",
                     inputs=rw, run=_holding_var, params_model=HoldingVarParams, explain=_explain_holding_var,
                     description="holding_period_var_es(/holding-period-var 와 같은 함수).", **common),
         pg.NodeSpec("frtb_es", "FRTB ES", plain_label="FRTB ES",
@@ -744,32 +744,32 @@ def register(registry: pg.Registry) -> None:
                     inputs=rw, run=_frtb_es, params_model=FrtbParams, explain=_explain_frtb,
                     description="FRTBExpectedShortfall.single_ticker_report(/frtb-es 와 같은 모델).", **common),
         pg.NodeSpec("rolling_sharpe", "롤링 샤프", plain_label="롤링 샤프지수",
-                    plain_description="같은 길이의 창을 밀어 가며 샤프 비율이 어떻게 변했는지 봅니다.",
+                    plain_description="고정 길이 롤링 창으로 샤프지수의 시계열 변화를 산출합니다.",
                     inputs=rw, run=_rolling_sharpe, params_model=RollingSharpeParams, explain=_explain_rolling_sharpe,
                     description="rolling_sharpe(/rolling-sharpe 와 같은 함수) · 창보다 짧으면 실패.", **common),
         pg.NodeSpec("dcc_corr", "동적 상관", plain_label="동적 상관(DCC)",
-                    plain_description="종목 쌍의 상관이 시간에 따라 어떻게 바뀌었는지 DCC-GARCH 로 봅니다.",
+                    plain_description="DCC-GARCH로 종목 쌍의 시변 상관을 추정합니다.",
                     inputs=(P("returns", "Returns"),), run=_dcc, params_model=DccParams, explain=_explain_dcc,
                     description="dcc_garch_full_report(/dcc-garch 와 같은 모델) · 종목 6개까지.", **common),
         pg.NodeSpec("option_calc", "옵션 계산기", plain_label="옵션 가격 계산", category="파생·신용", stage="check",
-                    plain_description="기초자산·행사가·만기·변동성을 넣어 옵션값과 그릭을 봅니다.",
+                    plain_description="기초자산·행사가·만기·변동성으로 옵션 가격과 그릭스를 산출합니다.",
                     inputs=(), outputs=(), run=_option, params_model=OptionParams, explain=_explain_option,
                     description="FICCEngine.bs_greeks(/analyze-option 과 같다) · 0 이하 입력은 거절."),
         pg.NodeSpec("bond_calc", "채권 계산기", plain_label="채권 가격·듀레이션", category="파생·신용", stage="check",
-                    plain_description="쿠폰·만기·수익률을 넣어 가격·듀레이션·볼록성을 봅니다.",
+                    plain_description="쿠폰·만기·수익률로 가격·듀레이션·볼록성을 산출합니다.",
                     inputs=(), outputs=(), run=_bond, params_model=BondParams, explain=_explain_bond,
                     description="FICCEngine.bond_analytics(/analyze-bond 와 같다)."),
         pg.NodeSpec("futures_hedge", "선물 헤지", plain_label="선물 헤지", category="파생·신용", stage="check",
-                    plain_description="지수 선물 몇 계약으로 β 를 목표까지 낮출지 계산합니다.",
+                    plain_description="목표 β 달성에 필요한 지수 선물 계약 수를 산출합니다.",
                     inputs=(P("returns", "Returns", required=False), P("weights", "Weights", required=False)), outputs=(),
                     run=_hedge, params_model=HedgeParams, explain=_explain_hedge,
                     description="HedgingSimulator.equity_futures_hedge(/calculate-hedge 와 같다) · 이으면 β 를 관측."),
         pg.NodeSpec("cva_calc", "CVA", plain_label="CVA", category="파생·신용", stage="check",
-                    plain_description="장외 거래 상대가 부도날 위험을 가격(CVA·DVA)으로 봅니다.",
+                    plain_description="장외파생 거래상대방 신용위험을 가격 조정(CVA·DVA)으로 산출합니다.",
                     inputs=(), outputs=(), run=_cva, params_model=CvaParams, explain=_explain_cva,
                     description="CVAEngine.full_cva_report(/calculate-cva 와 같다) · 양식화 노출 곡선."),
         pg.NodeSpec("irc_calc", "IRC", plain_label="IRC", category="파생·신용", stage="check",
-                    plain_description="등급 강등·부도로 생길 수 있는 손실의 추가 위험 자본을 봅니다.",
+                    plain_description="등급 하락·부도 손실에 대한 증분위험자본(IRC)을 산출합니다.",
                     inputs=(), outputs=(), run=_irc, params_model=IrcParams, explain=_explain_irc,
                     description="IncrementalRiskCharge.calculate_irc(/calculate-irc 와 같다) · 시드 42."),
     ):

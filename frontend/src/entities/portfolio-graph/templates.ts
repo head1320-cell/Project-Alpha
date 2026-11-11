@@ -201,7 +201,7 @@ export const TEMPLATES: GraphTemplate[] = [
   { key: "stress", name: "충격 점검", doc: STRESS_TEMPLATE,
     description: "정한 비중을 위기 상황·상관 급등·기대 수익 오차에 넣어 봅니다." },
   { key: "screener", name: "조건으로 고른 종목 나누기", doc: SCREENER_TEMPLATE,
-    description: "조건으로 거른 종목에 팩터 점수를 매겨 흔들림 기준으로 나눕니다." },
+    description: "조건으로 거른 종목에 팩터 점수를 매겨 변동성 기준으로 나눕니다." },
   { key: "timing", name: "타이밍 적용 → 실행 목표", doc: TIMING_TEMPLATE,
     description: "타이밍 신호로 노출을 줄이고 실행 목표·주문 목록·결정 기록까지 잇습니다." },
   { key: "risk", name: "포트폴리오 위험 점검", doc: RISK_TEMPLATE,
@@ -209,5 +209,5 @@ export const TEMPLATES: GraphTemplate[] = [
   { key: "rebalance", name: "리밸런싱 판단", doc: REBALANCE_TEMPLATE,
     description: "현재 보유 비중에서 목표로 옮길 가치가 있는지 효용과 비용을 견줘 보고 주문 목록까지 봅니다." },
   { key: "review", name: "정기 점검", doc: REVIEW_TEMPLATE,
-    description: "고객·계좌·목표를 점검하고, 지금 비중에서 목표로 옮길지 본 뒤 주문 목록·결정 기록까지 잇습니다. 고객 정보는 비워 두었습니다 — 채워야 계좌 점검이 실행됩니다." },
+    description: "고객·계좌·목표를 점검하고, 현재 비중에서 목표로 옮길지 본 뒤 주문 목록·결정 기록까지 잇습니다. 고객 정보는 비워 두었습니다 — 채워야 계좌 점검이 실행됩니다." },
 ];

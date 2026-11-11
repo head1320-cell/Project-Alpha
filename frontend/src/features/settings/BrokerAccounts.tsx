@@ -214,7 +214,7 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
           <p className="set-error" data-server>{error.text}</p>
           {error.vault ? (
             <p className="set-sub set-broker-vault">
-              서버에 자격을 암호화할 키가 없어 아무것도 저장하지 않았습니다. 운영자에게 알려 주십시오.
+              서버에 자격을 암호화할 키가 없어 아무것도 저장하지 않았습니다. 운영자에게 문의하십시오.
             </p>
           ) : null}
         </div>

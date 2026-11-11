@@ -63,7 +63,7 @@ def _assumed(key: str, label: str, value: Any, unit: str | None = None, source: 
 class HoldingRow(BaseModel):
     model_config = _FORBID
     code: str = Field("005930", pattern=r"^[0-9A-Z.]{1,12}$", json_schema_extra={"x-ui": _ui("종목코드")})
-    pct: float = Field(0.0, ge=0, le=100, json_schema_extra={"x-ui": _ui("지금 비중(%)")})
+    pct: float = Field(0.0, ge=0, le=100, json_schema_extra={"x-ui": _ui("현재 비중(%)")})
 
 
 class RebalanceParams(BaseModel):
@@ -71,14 +71,14 @@ class RebalanceParams(BaseModel):
     holdings: list[HoldingRow] = Field(
         [], max_length=30, json_schema_extra={"x-ui": _ui(
             "현재 보유 비중", question="현재 보유 종목·비중",
-            help="비우면 유니버스 노드의 '지금 비중' 을 씁니다. 둘 다 없으면 판단할 수 없습니다.")})
+            help="비우면 유니버스 노드의 '현재 비중' 을 씁니다. 둘 다 없으면 판단할 수 없습니다.")})
     portfolio_value: float = Field(1e8, gt=0, le=1e13, json_schema_extra={"x-ui": _ui(
         "평가 금액", unit="원", presets=[{"label": "1천만", "value": 1e7}, {"label": "1억", "value": 1e8}],
-        help="거래비용을 금액으로 재려는 값입니다 — 계좌를 읽지 않습니다.")})
+        help="거래비용을 금액으로 환산하는 값입니다 — 계좌를 조회하지 않습니다.")})
     horizon_days: int = Field(63, ge=1, le=756, json_schema_extra={"x-ui": _ui(
-        "보유 기간", "advanced", unit="영업일", help="연 효용 개선을 이 기간으로 환산해 일회성 비용과 견줍니다.")})
+        "보유 기간", "advanced", unit="영업일", help="연간 효용 개선을 이 기간으로 환산해 일회성 거래비용과 비교합니다.")})
     hysteresis_mult: float = Field(0.5, ge=0, le=50, json_schema_extra={"x-ui": _ui(
-        "머뭇거림 폭", "advanced", help="비용 × (1 + 이 값)을 넘어야 거래합니다 — 잦은 거래를 막는 문턱입니다.")})
+        "히스테리시스 폭", "advanced", help="기대 효용이 비용 × (1 + 이 값)을 넘어야 거래합니다 — 과잉 거래 방지 임계치입니다.")})
 
 
 def _rebalance_request(inputs: dict, p: RebalanceParams, *, record: bool):
@@ -89,7 +89,7 @@ def _rebalance_request(inputs: dict, p: RebalanceParams, *, record: bool):
         raise pg.NodeFailure("이 비중에는 만든 규칙(유니버스·기간·모델)이 없습니다 — 포트폴리오 최적화 노드의 비중을 연결하십시오.")
     holdings = {h.code: h.pct for h in p.holdings if h.pct > 0} or dict(req.weights or {})
     if not holdings:
-        raise pg.NodeFailure("현재 보유 비중이 없습니다 — 설정에 적거나 유니버스 노드의 '지금 비중' 을 채워 주십시오.")
+        raise pg.NodeFailure("현재 보유 비중이 없습니다 — 설정에 적거나 유니버스 노드의 '현재 비중' 을 입력하십시오.")
     target = {n: float(x) * 100 for n, x in zip(w["names"], np.asarray(w["weights"], dtype=float))}
     base = req.model_dump()
     return RebalanceDecisionRequest(**{**base, "holdings": holdings, "weight_unit": "percent",
@@ -105,11 +105,11 @@ def _rebalance(inputs: dict, p: RebalanceParams) -> pg.NodeOutput:
     res = {k: v for k, v in res.items() if k != "research_context"}
     res["hysteresis_mult"] = p.hysteresis_mult               # 저울의 문턱(비용 × (1 + 이 값))을 화면이 그린다
     res["inputs"] = [
-        {"key": "holdings", "label": "지금 비중", "value": f"{len(req.holdings)}종목", "basis": "가정",
-         "source": "직접 적은 값" if p.holdings else "유니버스 노드의 '지금 비중'"},
+        {"key": "holdings", "label": "현재 비중", "value": f"{len(req.holdings)}종목", "basis": "가정",
+         "source": "직접 적은 값" if p.holdings else "유니버스 노드의 '현재 비중'"},
         _assumed("value", "평가 금액", p.portfolio_value, "원", "직접 정한 금액 — 계좌 잔고가 아닙니다"),
         _assumed("horizon", "보유 기간", p.horizon_days, "영업일"),
-        _assumed("hyst", "머뭇거림 폭", f"{p.hysteresis_mult:g}", source="비용 × (1 + 이 값) 을 넘어야 거래"),
+        _assumed("hyst", "히스테리시스 폭", f"{p.hysteresis_mult:g}", source="비용 × (1 + 이 값) 을 넘어야 거래"),
     ]
     view = {"result": _finite(res), "labels": _labels(sorted(set(req.holdings) | set(req.target_weights or {})))}
     return pg.NodeOutput(values={"weights": inputs["weights"]}, view=view,
@@ -174,7 +174,7 @@ class ImplementParams(BaseModel):
     exposures: list[ExposureRow] = Field(
         [{"exposure": "equity", "pct": 60.0}, {"exposure": "duration", "pct": 40.0}],
         min_length=1, max_length=12, validate_default=True, json_schema_extra={"x-ui": _ui(
-            "노출 비중", question="시장별 노출 비중", help="합이 100 이 아니어도 됩니다 — 남는 비중은 현금입니다.")})
+            "노출 비중", question="시장별 노출 비중", help="합이 100 이 아니어도 됩니다 — 잔여 비중은 현금입니다.")})
     market: Literal["kr", "us", "any"] = Field("kr", json_schema_extra={"x-ui": _ui(
         "상장 시장", options={"kr": "국내 상장 우선", "us": "미국 상장", "any": "어디든"})})
     portfolio_value: float = Field(1e8, gt=0, le=1e13, json_schema_extra={"x-ui": _ui("평가 금액", "advanced", unit="원")})
@@ -219,10 +219,10 @@ def _explain_implement(view: dict, prov: dict, params: Any) -> dict:
 
 class PairParams(BaseModel):
     model_config = _FORBID
-    long_code: str = Field("005930", pattern=r"^[0-9A-Z.]{1,12}$", json_schema_extra={"x-ui": _ui("살 종목")})
-    short_code: str = Field("000660", pattern=r"^[0-9A-Z.]{1,12}$", json_schema_extra={"x-ui": _ui("팔 종목")})
+    long_code: str = Field("005930", pattern=r"^[0-9A-Z.]{1,12}$", json_schema_extra={"x-ui": _ui("매수 종목")})
+    short_code: str = Field("000660", pattern=r"^[0-9A-Z.]{1,12}$", json_schema_extra={"x-ui": _ui("매도 종목")})
     hedge_ratio: float | None = Field(None, gt=0, le=10, json_schema_extra={"x-ui": _ui(
-        "헤지 비율", "advanced", help="비우면 두 종목의 β 비율(β_살 ÷ β_팔)로 정합니다.")})
+        "헤지 비율", "advanced", help="비우면 두 종목의 β 비율(β_매수 ÷ β_매도)로 산출합니다.")})
 
 
 def _pair(inputs: dict, p: PairParams) -> pg.NodeOutput:
@@ -276,8 +276,8 @@ class ImpactParams(BaseModel):
     order_value_krw: float = Field(1e8, gt=0, le=1e13, json_schema_extra={"x-ui": _ui(
         "주문 금액", unit="원", question="1회 주문 금액")})
     adv_krw: float = Field(5e9, gt=0, le=1e14, json_schema_extra={"x-ui": _ui(
-        "하루 평균 거래대금", unit="원", help="그 종목이 하루에 거래되는 금액입니다 — 직접 넣는 값입니다.")})
-    daily_volatility: float = Field(0.018, gt=0, le=1, json_schema_extra={"x-ui": _ui("하루 변동성", "advanced")})
+        "일평균 거래대금(ADV)", unit="원", help="종목의 일평균 거래대금입니다 — 직접 입력하는 값입니다.")})
+    daily_volatility: float = Field(0.018, gt=0, le=1, json_schema_extra={"x-ui": _ui("일간 변동성", "advanced")})
     asset_class: Literal[_asset_classes()] = Field("kospi_mid", json_schema_extra={"x-ui": _ui(  # type: ignore[valid-type]
         "종목 규모", "advanced")})
     side: Literal["BUY", "SELL"] = Field("BUY", json_schema_extra={"x-ui": _ui(
@@ -290,8 +290,8 @@ def _impact(inputs: dict, p: ImpactParams) -> pg.NodeOutput:
     cal = realism_market_impact_calibration()
     res = {**res, "formula": cal.get("formula"), "split": cal.get("permanent_temporary_split"),
            "inputs": [_assumed("order", "주문 금액", p.order_value_krw, "원"),
-                      _assumed("adv", "하루 평균 거래대금", p.adv_krw, "원", "직접 넣은 값 — 시세 저장소를 읽지 않았습니다"),
-                      _assumed("vol", "하루 변동성", p.daily_volatility),
+                      _assumed("adv", "일평균 거래대금(ADV)", p.adv_krw, "원", "직접 넣은 값 — 시세 저장소를 읽지 않았습니다"),
+                      _assumed("vol", "일간 변동성", p.daily_volatility),
                       _assumed("alpha", "충격 계수 α", res.get("alpha"), source=f"코드 상수표의 '{p.asset_class}' 칸")]}
     return pg.NodeOutput(values={}, view={"result": _finite(res)})
 
@@ -313,7 +313,7 @@ def _explain_impact(view: dict, prov: dict, params: Any) -> dict:
 class CashParams(BaseModel):
     model_config = _FORBID
     invested_ratio: float = Field(0.9, ge=0, le=1, json_schema_extra={"x-ui": _ui(
-        "투자 비중", question="투자 비중(자산 대비 %)", help="비중 노드를 이으면 그 비중의 합(절댓값, 최대 1)을 씁니다.")})
+        "투자 비중", question="투자 비중(자산 대비 %)", help="비중 노드를 연결하면 해당 비중의 합(절댓값, 최대 1)을 적용합니다.")})
     as_of_date: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
         "기준일", "advanced", help="비우면 오늘입니다. 그날까지 저장된 금리만 봅니다.")})
     cash_floor: float = Field(0.0, ge=0, le=1, json_schema_extra={"x-ui": _ui("최소 현금", "advanced")})
@@ -366,9 +366,9 @@ class CapacityParams(BaseModel):
     strategy_ids: list[int] = Field([], max_length=20, json_schema_extra={"x-ui": _STRATEGY_UI})
     as_of_date: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui("기준일", "advanced")})
     max_pct_of_adv: float = Field(0.05, gt=0, le=1, json_schema_extra={"x-ui": _ui(
-        "거래대금 대비 최대 비율", "advanced", help="하루 거래대금의 몇 %까지 사고팔 수 있다고 볼지입니다.")})
-    holding_period_days: int = Field(5, ge=1, le=60, json_schema_extra={"x-ui": _ui("쌓는 기간", "advanced", unit="일")})
-    safety_buffer: float = Field(0.7, gt=0, le=1, json_schema_extra={"x-ui": _ui("안전 여유", "advanced")})
+        "거래대금 대비 최대 비율", "advanced", help="일평균 거래대금 대비 매매 가능 비율(%)입니다.")})
+    holding_period_days: int = Field(5, ge=1, le=60, json_schema_extra={"x-ui": _ui("포지션 구축 기간", "advanced", unit="일")})
+    safety_buffer: float = Field(0.7, gt=0, le=1, json_schema_extra={"x-ui": _ui("안전 계수", "advanced")})
 
 
 def _capacity(inputs: dict, p: CapacityParams) -> pg.NodeOutput:
@@ -380,8 +380,8 @@ def _capacity(inputs: dict, p: CapacityParams) -> pg.NodeOutput:
         strategy_ids=p.strategy_ids, as_of_date=as_of, max_pct_of_adv=p.max_pct_of_adv,
         holding_period_days=p.holding_period_days, safety_buffer=p.safety_buffer), "용량 추정 실패")
     res = {**res, "inputs": [_assumed("max_pct", "거래대금 대비 최대 비율", p.max_pct_of_adv),
-                             _assumed("hold", "쌓는 기간", p.holding_period_days, "일"),
-                             _assumed("buffer", "안전 여유", p.safety_buffer),
+                             _assumed("hold", "포지션 구축 기간", p.holding_period_days, "일"),
+                             _assumed("buffer", "안전 계수", p.safety_buffer),
                              {"key": "adv", "label": "거래대금", "value": "종가×거래량 평균", "basis": "관측",
                               "source": "benchmark_prices — 전략의 종목들"}]}
     return pg.NodeOutput(values={}, view={"result": _finite(res)})
@@ -403,9 +403,9 @@ class CounterfactualParams(BaseModel):
     model_config = _FORBID
     strategy_ids: list[int] = Field([], max_length=20, json_schema_extra={"x-ui": _STRATEGY_UI})
     start_date: str = Field("2023-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui("시작일")})
-    end_date: str = Field("2025-12-31", pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui("끝일")})
+    end_date: str = Field("2025-12-31", pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui("종료일")})
     base_allocation_method: Literal["hrp", "inverse_vol"] = Field("hrp", json_schema_extra={"x-ui": _ui(
-        "기준 배분", options={"hrp": "비슷한 것끼리 묶어", "inverse_vol": "덜 흔들리는 쪽에 더"})})
+        "기준 배분", options={"hrp": "계층적 리스크 패리티(HRP)", "inverse_vol": "역변동성 가중"})})
     scenarios: list[str] = Field(["baseline", "no_netting", "equal_weight"], min_length=1, max_length=8,
                                  json_schema_extra={"x-ui": _ui("시나리오", "advanced")})
     regime_market: Literal["kr", "us"] = Field("kr", json_schema_extra={"x-ui": _ui("국면 시장", "advanced")})
@@ -442,32 +442,32 @@ def _explain_counterfactual(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("rebalance_decision", "리밸런싱 판단", plain_label="리밸런싱 판단", category="실행", stage="act",
-                    plain_description="목표 비중으로 옮길 때 얻는 효용과 드는 비용을 견줘 거래할지 판단합니다.",
+                    plain_description="목표 비중 이행의 기대 효용과 거래비용을 비교해 리밸런싱 여부를 판단합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(), run=_rebalance, params_model=RebalanceParams,
                     explain=_explain_rebalance, save=_save_decision, save_label="투자 결정 기록",
                     description="rebalance_decision_route(record_decision=False) — 기록은 저장 버튼만."),
         pg.NodeSpec("implement_exposures", "노출 → 상품", plain_label="노출의 상품 구현", category="배분", stage="build",
-                    plain_description="국내 주식·금리·원자재 같은 비중을 실제로 살 수 있는 상장 상품으로 바꿉니다.",
+                    plain_description="자산군 노출(국내 주식·금리·원자재 등)을 매매 가능한 상장 상품으로 구현합니다.",
                     inputs=(), outputs=(P("weights", "Weights"),), run=_implement, params_model=ImplementParams,
                     explain=_explain_implement, description="implement_exposures_route(/implement 와 같다)."),
         pg.NodeSpec("pair_spread", "페어 스프레드", plain_label="페어 트레이딩", category="배분", stage="build",
-                    plain_description="두 종목을 사고팔아 시장 방향 노출을 줄이는 비율을 봅니다.",
+                    plain_description="두 종목의 롱·숏으로 시장 방향 노출을 줄이는 헤지 비율을 산출합니다.",
                     inputs=(), outputs=(), run=_pair, params_model=PairParams, explain=_explain_pair,
                     description="sleeve_routes.pair_spread(/pair-spread 와 같다)."),
         pg.NodeSpec("market_impact", "시장 충격", plain_label="시장충격 추정", category="실행", stage="act",
-                    plain_description="주문 금액과 거래대금으로 체결 때 가격이 얼마나 움직일지 추정합니다.",
+                    plain_description="주문 금액과 거래대금으로 체결 시 시장충격(가격 변동)을 추정합니다.",
                     inputs=(), outputs=(), run=_impact, params_model=ImpactParams, explain=_explain_impact,
                     description="realism_market_impact(/realism/market-impact/estimate 와 같다)."),
         pg.NodeSpec("cash_yield", "현금 수익", plain_label="현금 수익", category="실행", stage="act",
-                    plain_description="투자하지 않은 현금이 무위험 금리로 얼마를 버는지 봅니다.",
+                    plain_description="미투자 현금의 무위험 금리 수익을 산출합니다.",
                     inputs=(P("weights", "Weights", required=False),), outputs=(), run=_cash, params_model=CashParams,
                     explain=_explain_cash, description="realism_cash_yield(/realism/cash-yield/estimate 와 같다) · 금리 출처 표시."),
         pg.NodeSpec("strategy_capacity", "전략 용량", plain_label="운용 가능 규모", category="전략", stage="check",
-                    plain_description="전략 종목들의 거래대금으로 그 전략에 넣을 수 있는 돈의 한도를 추정합니다.",
+                    plain_description="편입 종목의 거래대금으로 전략의 운용 가능 규모(capacity)를 추정합니다.",
                     inputs=(), outputs=(), run=_capacity, params_model=CapacityParams, explain=_explain_capacity,
                     description="realism_capacity_estimate(/realism/capacity/estimate 와 같다) · 모르면 무한대가 아니라 모름."),
         pg.NodeSpec("counterfactual", "멀티전략 반사실", plain_label="멀티전략 반사실", category="전략", stage="check",
-                    plain_description="같은 전략 그룹을 상계·균등 배분 같은 다른 규칙으로 돌렸을 때와 나란히 봅니다.",
+                    plain_description="같은 전략 그룹을 상계·균등 배분 등 다른 결합 규칙으로 실행한 결과와 비교합니다.",
                     inputs=(), outputs=(), run=_counterfactual, params_model=CounterfactualParams,
                     explain=_explain_counterfactual,
                     description="multibacktest_counterfactual(/multibacktest/counterfactual 와 같다) · 멀티전략 문 그대로."),

@@ -106,7 +106,7 @@ def _frontier(view):
     curve = view.get("curve") or []
     if len(curve) < 2:
         return None
-    return {"kind": "line", "unit": "%", "caption": "흔들림 → 연 수익",
+    return {"kind": "line", "unit": "%", "caption": "변동성 → 연 수익",
             "points": [{"label": f"{_num(c.get('volatility')) or 0:.1f}" if _num(c.get("volatility")) is not None else "?",
                         "value": _num(c.get("return"))} for c in curve[:LINE_POINTS]]}
 
@@ -170,7 +170,7 @@ def _overlay(view):
 
 
 def _sleeves(view):
-    return _bars_from(_get(view, "result", "sleeve_allocation"), caption="그룹 몫")
+    return _bars_from(_get(view, "result", "sleeve_allocation"), caption="그룹 비중")
 
 
 def _holding_var(view):

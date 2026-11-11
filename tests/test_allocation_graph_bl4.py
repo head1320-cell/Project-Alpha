@@ -1,4 +1,4 @@
-"""BL4 · 마법사 제거 전에 옮기는 계약 — `current_weights` 노드 (지금 비중 → Weights)
+"""BL4 · 마법사 제거 전에 옮기는 계약 — `current_weights` 노드 (현재 비중 → Weights)
 ==============================================================================
 계획 `happy-percolating-falcon.md` §BL4 B4-1 ④. 대응표 `docs/specs/2026-09-27-bl4-wizard-contract-map.md`.
 
@@ -6,12 +6,12 @@
 충격 노드에 이을 수 있어 **지금 보유의 충격**을 볼 길이 없었다. 이 노드가 그 길이다.
 
 ## 거는 것
-- 유니버스 노드의 '지금 비중' 을 그대로 Weights 로 — gross(Σ|w|)로 나눠 합 100%(`/analyze` 의 PortfolioAnalyzer 와 같은 규칙).
+- 유니버스 노드의 '현재 비중' 을 그대로 Weights 로 — gross(Σ|w|)로 나눠 합 100%(`/analyze` 의 PortfolioAnalyzer 와 같은 규칙).
   ★부호 보존★ 숏은 음수 그대로.
-- ★없으면 만들지 않는다★ 지금 비중을 안 적었으면 균등 비중으로 바꿔치기하지 않고 사유와 함께 실패한다(마법사 계약:
+- ★없으면 만들지 않는다★ 현재 비중을 안 적었으면 균등 비중으로 바꿔치기하지 않고 사유와 함께 실패한다(마법사 계약:
   "목표가 없으면 복사하지 않고 미계산"). 모두 0 · 목록에 없는 종목도 사유 실패.
 - 공분산·규칙은 싣지 않는다 — 하류 위험 분해·정책 백테스트는 기존 규칙대로 사유와 함께 실패한다(지어내지 않는다).
-- 지금 비중의 충격과 목표 비중의 충격은 **다른 수**다(같은 값을 복사하지 않는다 — 짝).
+- 현재 비중의 충격과 목표 비중의 충격은 **다른 수**다(같은 값을 복사하지 않는다 — 짝).
 """
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def test_a_ticker_left_out_of_the_weights_is_zero_not_dropped():
 def test_without_current_weights_it_fails_instead_of_inventing_equal_weights():
     r = _run(_cw_graph(None))["nodes"]["c"]
     assert r["status"] == "failed"
-    assert "지금 비중" in r["reason"] and "균등" in r["reason"]        # 무엇을 하지 않았는지까지 말한다
+    assert "현재 비중" in r["reason"] and "균등" in r["reason"]        # 무엇을 하지 않았는지까지 말한다
 
 
 def test_all_zero_weights_fail_with_a_reason():
@@ -133,7 +133,7 @@ def test_the_explainer_names_the_source_and_what_it_does_not_carry():
     a, b, c = T3
     r = _run(_cw_graph({a: 50.0, b: 30.0, c: 20.0}))["nodes"]["c"]
     text = json.dumps(r["explain"], ensure_ascii=False)
-    assert "지금 비중" in text and "공분산" in text
+    assert "현재 비중" in text and "공분산" in text
 
 
 # ══ 타이밍 신호 — 쓸 수 없는 팩터는 위험-오프로 조용히 세지 않는다 (마법사 팩터 창의 계약) ═════════════

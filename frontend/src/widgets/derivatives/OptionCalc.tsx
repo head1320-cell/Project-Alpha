@@ -47,7 +47,7 @@ export function OptionCalc() {
         <div className="dv-grid">
           <NumField id="dv-S" label="기초자산 가격" unit="원" value={raw.S} onChange={set("S")} missing={miss("S")} />
           <NumField id="dv-K" label="행사가" unit="원" value={raw.K} onChange={set("K")} missing={miss("K")} />
-          <NumField id="dv-sig" label="연환산 변동성" unit="%" value={raw.sigma} onChange={set("sigma")} missing={miss("sigma")} hint="1년 동안 가격이 흔들리는 정도" />
+          <NumField id="dv-sig" label="연환산 변동성" unit="%" value={raw.sigma} onChange={set("sigma")} missing={miss("sigma")} hint="연율 가격 변동성" />
           <NumField id="dv-r" label="무위험 금리(연)" unit="%" value={raw.r} onChange={set("r")} missing={miss("r")} />
           <NumField id="dv-T" label="남은 만기" unit="년" value={raw.T} onChange={set("T")} missing={miss("T")} hint="3개월이면 0.25" />
         </div>

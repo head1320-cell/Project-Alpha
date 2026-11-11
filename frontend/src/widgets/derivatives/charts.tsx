@@ -21,7 +21,7 @@ export function Payoff({ kind, K, S, price }: { kind: Kind; K: number; S: number
   return (
     <div className="dv-chart" data-testid="payoff" data-breakeven={be.toFixed(4)}>
       <h3 className="dv-h3">만기 손익 구조</h3>
-      <p className="dv-note">옵션 한 개를 지금 이론가에 사서 만기까지 들고 있을 때입니다. 손익분기는 <b className="dv-be">{f4(be)}원</b>(행사가 {kind === "call" ? "+" : "−"} 이론가)이고, 가장 크게 잃는 금액은 이론가 {f4(price)}원입니다.</p>
+      <p className="dv-note">옵션 1계약을 현재 이론가에 매수해 만기까지 보유한 경우입니다. 손익분기는 <b className="dv-be">{f4(be)}원</b>(행사가 {kind === "call" ? "+" : "−"} 이론가)이고, 가장 크게 잃는 금액은 이론가 {f4(price)}원입니다.</p>
       <div className="dv-chart-box" role="img" aria-label={`만기 손익 그림. 손익분기 ${f4(be)}원, 최대 손실 ${f4(price)}원`}>
         <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>

@@ -53,7 +53,7 @@ test("바꾼 노드와 하류만 낡고 상류는 결과를 둔다 · 수가 하
   expect(down.size).toBeGreaterThan(1);
   expect(up.length).toBeGreaterThan(1);
 
-  await setModel(page, "흔들림 최소");
+  await setModel(page, "최소분산");
   await expect(page.locator(".pg-summary--stale")).toBeVisible();
   await expect(page.locator(".pg-summary--stale")).toHaveAttribute("data-count", String(down.size));
   await expect(page.locator(".pg-summary--stale")).toContainText(`예전 결과 ${down.size}개`);
@@ -78,7 +78,7 @@ test("위만 재계산해도 그 전 값으로 계산한 아래 노드는 계속
   const doc = await wip(page);
   const below = [...downstream(doc, "optimizer")].filter((id) => id !== "optimizer");
   expect(below.length).toBeGreaterThan(0);
-  await setModel(page, "흔들림 최소");
+  await setModel(page, "최소분산");
   await node(page, "optimizer").click();
   const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
   await page.keyboard.press("Shift+Enter");                                                // 여기까지 계산 — 조상만
@@ -91,7 +91,7 @@ test("위만 재계산해도 그 전 값으로 계산한 아래 노드는 계속
 test("되돌리기로 계산한 그래프로 돌아가면 낡음이 풀리고, 다시하기로 돌아오면 다시 낡는다(짝)", async ({ page }) => {
   await openCanvas(page);
   await run(page);
-  await setModel(page, "흔들림 최소");
+  await setModel(page, "최소분산");
   await expect(page.locator(".pg-summary--stale")).toBeVisible();
   await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
   await page.keyboard.press("Control+z");

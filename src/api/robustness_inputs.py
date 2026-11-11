@@ -110,8 +110,8 @@ def alignment_check(sleeves: Sequence[dict], *, lookback: int = 252,
     if k == 0:
         return {"same": True, "differing_days": 0, "reason": None}
     return {"same": False, "differing_days": k,
-            "reason": f"몫을 정하는 계산은 종목마다 끝을 맞춰 줄을 세웁니다 — 날짜로 맞추면 {k}일이 다릅니다. "
-                      "견고성은 날짜로 맞춘 흐름으로 쟀고, 몫은 그대로입니다."}
+            "reason": f"배분 비중 산출은 종목별 최근 시점 기준으로 정렬합니다 — 날짜로 정렬하면 {k}일이 다릅니다. "
+                      "견고성은 날짜 정렬 흐름으로 측정했고, 배분 비중은 그대로입니다."}
 
 
 def market_on_dates(ticker: str, dates: Sequence[str]) -> tuple[np.ndarray | None, str | None]:

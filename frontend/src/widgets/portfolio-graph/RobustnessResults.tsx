@@ -83,7 +83,7 @@ function Crisis({ c }: { c: Dict }) {
     <>
       <p className="pg-note">
         {c.basis === "market" ? `시장(${String(c.market_label ?? "KODEX 200")})이 가장 나빴던 ${String(c.crisis_days)}일` : `전략 평균이 가장 나빴던 ${String(c.crisis_days)}일`}을 위기일로 봤습니다
-        {c.small_sample ? " — 날이 적어 흔들리는 값입니다." : "."}
+        {c.small_sample ? " — 표본 일수가 적어 불안정한 값입니다." : "."}
       </p>
       {/* 쌍마다 한 덩어리 — 네 칸 표는 판 폭에서 머리글이 음절 가운데서 꺾였다(스크린샷). */}
       <ul className="pg-rob-pairs">{pairs.map((p) => (
@@ -115,7 +115,7 @@ function Shock({ s }: { s: Dict }) {
         <div key={String(r.kind)} className="pg-rob-shock" data-kind={String(r.kind)}>
           <p className="pg-rob-shock-h">
             <span className={`pg-tag pg-tag--${r.kind === "assumed" ? "assumed" : "confirmed"}`}>{r.kind === "assumed" ? "가정" : "관측"}</span>
-            {r.kind === "assumed" ? `상관이 ${fx(r.rho, 1)}로 치솟으면` : `실제로 본 가장 높은 상관(${fx(r.rho)})일 때`}
+            {r.kind === "assumed" ? `상관이 ${fx(r.rho, 1)}로 급등하면` : `실제로 본 가장 높은 상관(${fx(r.rho)})일 때`}
           </p>
           {r.available ? (
             <>
@@ -128,14 +128,14 @@ function Shock({ s }: { s: Dict }) {
                   <td className="pg-td-num">{pct(r.stressed_vol_pct)}</td></tr>
               </tbody></table>
               <dl className="pg-kv">
-                <div><dt>흔들림(연) 변화</dt><dd>{signed(r.delta_vol_pct)}</dd></div>
+                <div><dt>변동성(연) 변화</dt><dd>{signed(r.delta_vol_pct)}</dd></div>
                 <div><dt>하루 VaR 95%</dt><dd>{pct(r.base_var_pct, 2)} → {pct(r.stressed_var_pct, 2)}</dd></div>
               </dl>
             </>
           ) : <p className="pg-help">{String(r.reason ?? "")}</p>}
         </div>
       ))}
-      <p className="pg-help">상관만 바꾸고 각 전략의 흔들림은 그대로 둔 계산입니다 — 실제 위기에는 흔들림도 함께 커집니다.</p>
+      <p className="pg-help">상관만 바꾸고 각 전략의 변동성은 그대로 둔 계산입니다 — 실제 위기에는 변동성도 함께 커집니다.</p>
     </>
   );
 }
@@ -240,14 +240,14 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
     <section className="pg-rob" aria-label="견고성">
       <h4 className="pg-h4">견고성 — 같이 무너지나</h4>
       {/* 성과 종류는 응답이 선언한 것 그대로 — 없으면 PerfLabel 이 '모름'을 그린다(지어내지 않는다). */}
-      <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·흔들림" compact /></div>
+      <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·변동성" compact /></div>
       <ul className="pg-rob-story">{story.map((s) => <li key={s}>{s}</li>)}</ul>
       <p className="pg-help pg-rob-basis">
         {period ? `${period.start}~${period.end} · ${nDays}거래일을 날짜로 맞춰 측정했습니다. ` : ""}
         {basis === "records"
           ? "과거 백테스트 기록끼리입니다 — 실거래 기록이 아니고, 앞으로도 같다는 뜻도 아닙니다."
-          : `지금 비중을 ${period ? "이 기간" : `지난 ${nDays}거래일`} 그대로 들고 있었다고 보고 측정했습니다 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아닙니다.`}
-        {rob.shares_basis === "equal" ? " 몫은 똑같이 나눴다고 봤습니다." : ""}
+          : `현재 비중을 ${period ? "이 기간" : `지난 ${nDays}거래일`} 그대로 보유했다고 가정하고 측정했습니다 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아닙니다.`}
+        {rob.shares_basis === "equal" ? " 배분 비중은 동일 가중으로 가정했습니다." : ""}
         {shorts > 0 ? ` 숏 비중 ${shorts}개는 빼고 측정했습니다.` : ""}
       </p>
       {rob.dates_reason ? <p className="pg-help pg-rob-dates-reason">{String(rob.dates_reason)}</p> : null}

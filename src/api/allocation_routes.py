@@ -56,9 +56,9 @@ class AllocationView(BaseModel):
     direction: int = Field(1, json_schema_extra={                        # +1 상회 / -1 하회
         "x-ui": {"label": "방향", "tier": "basic", "options": {"1": "오른다", "-1": "내린다"}}})
     magnitude_pct: float = Field(2.0, ge=0, le=50, json_schema_extra={   # 연간 기대수익 크기(%)
-        "x-ui": {"label": "1년 기대 수익(%)", "tier": "basic"}})
+        "x-ui": {"label": "1년 기대수익률(%)", "tier": "basic"}})
     confidence: float = Field(50, ge=0, le=100, json_schema_extra={
-        "x-ui": {"label": "확신(%)", "tier": "basic", "widget": "slider", "ends": ["조금", "아주"]}})
+        "x-ui": {"label": "확신도(%)", "tier": "basic", "widget": "slider", "ends": ["조금", "아주"]}})
     label: str | None = Field(None, json_schema_extra={                  # 테제 문장 (표시용, 계산 미사용)
         "x-ui": {"label": "메모", "tier": "advanced"}})
 

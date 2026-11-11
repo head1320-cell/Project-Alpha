@@ -109,7 +109,7 @@ export function ValueLayersResult({ v }: { v: Dict }) {
       <Floors floors={floors} price={num(v.price)} />
       {floors.filter((f) => f.value === null).map((f) => <p key={f.key} className="pg-warn">{f.label}층 측정 불가 — {f.reason ?? "사유 미상"}</p>)}
       <KV rows={[
-        ["성장이 더한 몫", num(L.growth?.per_share) === null ? "—" : won(L.growth?.per_share)],
+        ["성장 기여 가치", num(L.growth?.per_share) === null ? "—" : won(L.growth?.per_share)],
         ["확률로 묶은 값", num(r.weighted_per_share) === null ? `— ${String(r.weighted_reason ?? "")}` : won(r.weighted_per_share)],
         ["가중(자산·수익력·성장까지)", w ? w.map((x) => pc(x, 0)).join(" · ") : "—"],
       ]} />
@@ -239,7 +239,7 @@ export function DriverMcResult({ v }: { v: Dict }) {
       <KV rows={[
         ["10% · 중앙 · 90%", `${won(q.p10)} · ${won(q.p50)} · ${won(q.p90)}`],
         ["현재가의 백분위", num(r.price_percentile) === null ? "—" : `${(r.price_percentile as number).toFixed(1)}번째`],
-        ["흔들지 않았을 때", won(r.deterministic_per_share)],
+        ["기준 가정(변동 없음)", won(r.deterministic_per_share)],
         ["중심(성장·마진·재투자)", `${pc(c.growth)} · ${pc(c.margin)} · ${pc(c.reinvest)}`],
         ["경로", `${String(r.n_used ?? "—")} / ${String(r.n_requested ?? "—")}`],
       ]} />

@@ -5,7 +5,7 @@
 - 견고성은 합치기와 **같은 흐름**(`_sleeve_return_series` — 주기·비용 포함)으로 잰다.
 - 시장 대용이 없으면 위기일을 전략 평균으로 고르고 라벨과 사유를 단다 · 있으면 라벨 없음(짝).
 - 계산이 깨지면 합치기는 성공하고 이 절만 `available: False` + 사유(조용히 비우지 않는다).
-- 충격: 지금 상관이 이미 목표 이상이면 올리지 않고 사유 · 아니면 흔들림이 커진다(짝).
+- 충격: 지금 상관이 이미 목표 이상이면 올리지 않고 사유 · 아니면 변동성이 커진다(짝).
 - 숏 비중은 흐름에서 빠진다 — 그 수를 밝힌다 · 없으면 0(짝).
 - 날짜는 로더가 준 것만(BS3) · 못 받으면 날짜 키 없이 사유 · 이야기에 판정 어휘가 없다.
 """
@@ -203,10 +203,10 @@ def test_compare_node_failure_is_a_failure_not_an_empty_ok(market, monkeypatch):
 
 
 def test_robustness_declares_what_the_numbers_are_pair(market, monkeypatch):
-    """낙폭·흔들림은 '지금 비중을 과거에 들고 있었다면'의 과거 데이터 위 시뮬레이션 — 응답이 성과 종류를 선언한다(PerfLabel 계약).
+    """낙폭·변동성은 '현재 비중을 과거에 들고 있었다면'의 과거 데이터 위 시뮬레이션 — 응답이 성과 종류를 선언한다(PerfLabel 계약).
     짝: mock 이면 데이터 축이 합성(False), 아니면 실데이터(True) — 화면이 지어내지 않고 이 값을 그린다."""
     rob = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]
     lab = rob["perf_label"]
-    assert lab["kind"] == "backtest" and lab["data_real"] is False and "지금 비중" in lab["kind_reason"]
+    assert lab["kind"] == "backtest" and lab["data_real"] is False and "현재 비중" in lab["kind_reason"]
     monkeypatch.setattr(agr, "mock_allowed", lambda: False)
     assert agr.robustness_view(["A", "B"], np.random.default_rng(1).normal(0, 0.01, (300, 2)), None)["perf_label"]["data_real"] is True

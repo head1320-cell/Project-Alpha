@@ -67,18 +67,18 @@ class ScreenerParams(BaseModel):
     model_config = _FORBID
     universe: Literal[tuple(_UNIVERSE_LABEL)] = Field("kospi50", json_schema_extra={"x-ui": _ui(
         "후보 범위", question="종목 유니버스", widget="cards", options=_UNIVERSE_LABEL,
-        help="앞에 ‘유니버스’를 이으면 그 종목들 안에서 고릅니다.")})
+        help="앞에 ‘유니버스’를 연결하면 해당 종목 내에서 선별합니다.")})
     filter_ast: _sr.FilterGroupModel = Field(
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
         json_schema_extra={"x-ui": _ui("조건", question="스크리닝 조건", widget="filter",
                                        presets=_presets_filter(),
                                        help="조건은 서버가 필드 목록으로 검사합니다 — 모르는 필드는 계산하지 않습니다.")})
     top_n: int = Field(10, ge=3, le=30, json_schema_extra={"x-ui": _ui(
-        "넘길 종목 수", question="전달 종목 수", unit="개",
+        "선별 종목 수", question="전달 종목 수", unit="개",
         presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
     sort_by: str = Field("composite_score", max_length=60, json_schema_extra={"x-ui": _ui(
         "정렬 기준", "advanced", help="필드 id 예: composite_score · roe · per")})
-    ascending: bool = Field(False, json_schema_extra={"x-ui": _ui("작은 값 먼저", "advanced")})
+    ascending: bool = Field(False, json_schema_extra={"x-ui": _ui("오름차순", "advanced")})
     liquidity_floor: Literal["off", "relaxed", "standard", "institutional"] = Field(
         "standard", json_schema_extra={"x-ui": _ui("유동성 문턱", "advanced", options={
             "off": "없음", "relaxed": "느슨하게", "standard": "보통", "institutional": "기관 수준"})})
@@ -127,7 +127,7 @@ def _screener(inputs: dict, p: ScreenerParams) -> pg.NodeOutput:
     picked = items[: p.top_n]
     tickers = [it["stock_code"] for it in picked if it.get("stock_code")]
     if len(tickers) < 2:
-        raise pg.NodeFailure(f"조건에 맞는 종목이 {len(tickers)}개뿐입니다 — 조건을 넓히거나 후보 범위를 키워 주십시오.")
+        raise pg.NodeFailure(f"조건에 맞는 종목이 {len(tickers)}개뿐입니다 — 조건을 넓히거나 후보 범위를 넓히십시오.")
     ds = out.get("data_source") or {}
     practice = not bool(ds.get("fully_real"))
     view = {"tickers": tickers, "labels": _ar._labels(tickers),
@@ -177,9 +177,9 @@ class FactorScoreParams(BaseModel):
     factors: list[FactorItem] = Field(
         default_factory=lambda: [FactorItem(id="per"), FactorItem(id="roe")], min_length=1, max_length=12,
         json_schema_extra={"x-ui": _ui("팩터", question="점수 산출 팩터",
-                                       help="방향 ‘자동’은 필드가 알고 있는 좋은 방향을 따릅니다.")})
+                                       help="방향 ‘자동’은 필드에 정의된 선호 방향을 따릅니다.")})
     sample_size: int = Field(400, ge=50, le=1500, json_schema_extra={"x-ui": _ui(
-        "표본 크기", "advanced", help="앞에 종목을 잇지 않으면 유니버스 표본에서 점수를 매깁니다.")})
+        "표본 크기", "advanced", help="종목을 연결하지 않으면 유니버스 표본에서 점수를 산출합니다.")})
 
 
 def _factor_scores(inputs: dict, p: FactorScoreParams) -> pg.NodeOutput:
@@ -281,19 +281,19 @@ def _explain_alpha(view: dict, prov: dict, params: Any) -> dict:
 
 # ── 점수로 비중 ──────────────────────────────────────────────────────────────
 
-_WEIGHTING = {"equal": "똑같이", "factor_tilt": "점수만큼 더", "inverse_vol": "덜 흔들리는 쪽에 더",
-              "risk_parity": "위험 똑같이", "min_var": "흔들림 최소", "hrp": "비슷한 것끼리 묶어"}
+_WEIGHTING = {"equal": "동일 가중", "factor_tilt": "점수 비례 틸트", "inverse_vol": "역변동성 가중",
+              "risk_parity": "리스크 패리티", "min_var": "최소분산", "hrp": "계층적 리스크 패리티(HRP)"}
 _RETURN_BASED = {"inverse_vol", "risk_parity", "min_var", "hrp"}
 
 
 class ScoresToWeightsParams(BaseModel):
     model_config = _FORBID
     top_k: int = Field(10, ge=2, le=30, json_schema_extra={"x-ui": _ui(
-        "담을 종목 수", question="편입 종목 수(상위)", unit="개",
+        "편입 종목 수", question="편입 종목 수(상위)", unit="개",
         presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
     weighting: Literal[tuple(_WEIGHTING)] = Field("equal", json_schema_extra={"x-ui": _ui(
-        "나누는 방식", question="비중 배분 방식", widget="cards", options=_WEIGHTING,
-        help="흔들림을 쓰는 방식은 ‘수익률 데이터’를 이어야 합니다.")})
+        "배분 방식", question="비중 배분 방식", widget="cards", options=_WEIGHTING,
+        help="변동성을 쓰는 방식은 ‘수익률 데이터’ 연결이 필요합니다.")})
 
 
 def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
@@ -306,7 +306,7 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
     observed: dict = {}                        # CF3 — 관측만(공분산을 왜 못 보냈나 · 비중 0 이라 뺀 종목)
     if p.weighting in _RETURN_BASED:
         if r is None:
-            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’은 흔들림을 씁니다 — ‘수익률 데이터’를 연결하십시오 "
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 방식은 변동성을 씁니다 — ‘수익률 데이터’를 연결하십시오 "
                                  "(균등 비중으로 몰래 바꾸지 않습니다).")
         missing = [c for c in codes if c not in r["returns"].columns]
         if missing:
@@ -364,7 +364,7 @@ class NeutralizeParams(BaseModel):
         "중립화 대상", question="중립화할 노출", widget="cards",
         options={"beta": "시장 민감도(베타)", "sector": "업종 쏠림", "both": "둘 다"})})
     target_beta: float = Field(0.0, ge=-2.0, le=2.0, json_schema_extra={"x-ui": _ui("목표 베타", "advanced")})
-    dollar_neutral: bool = Field(False, json_schema_extra={"x-ui": _ui("롱·숏 금액 맞추기", "advanced")})
+    dollar_neutral: bool = Field(False, json_schema_extra={"x-ui": _ui("달러 중립(롱·숏 금액 일치)", "advanced")})
 
 
 def _neutralize(inputs: dict, p: NeutralizeParams) -> pg.NodeOutput:
@@ -401,14 +401,14 @@ def _explain_neutralize(view: dict, prov: dict, params: Any) -> dict:
 
 # ── 슬리브 합치기 ────────────────────────────────────────────────────────────
 
-_SLEEVE_METHODS = {"risk_parity": "위험 똑같이", "equal": "똑같이", "inverse_vol": "덜 흔들리는 쪽에 더",
-                   "min_var": "흔들림 최소", "hrp": "비슷한 것끼리 묶어"}
+_SLEEVE_METHODS = {"risk_parity": "리스크 패리티", "equal": "동일 가중", "inverse_vol": "역변동성 가중",
+                   "min_var": "최소분산", "hrp": "계층적 리스크 패리티(HRP)"}
 
 
 class SleeveParams(BaseModel):
     model_config = _FORBID
     method: Literal[tuple(_SLEEVE_METHODS)] = Field("risk_parity", json_schema_extra={"x-ui": _ui(
-        "합치는 방식", question="슬리브 간 배분 방식", widget="cards", options=_SLEEVE_METHODS)})
+        "결합 방식", question="슬리브 간 배분 방식", widget="cards", options=_SLEEVE_METHODS)})
 
 
 def _sleeve_combine(inputs: dict, p: SleeveParams) -> pg.NodeOutput:
@@ -438,7 +438,7 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 그룹의 수익 흐름으로 그룹 비중을 정하고 종목 비중을 합쳤습니다.")]
     if r.get("method") in ("min_var", "hrp"):
         trust.append(_t(UNKNOWN, "이 방식은 계산이 안 풀리면 엔진이 역변동성으로 바꿉니다 — 이 결과가 그 경우인지는 표시되지 않습니다."))
-    trust.append(_t(ASSUMED, "그룹 수익은 각 그룹의 지금 비중을 과거에 고정해 만든 흐름입니다."))
+    trust.append(_t(ASSUMED, "그룹 수익은 각 그룹의 현재 비중을 과거에 고정해 만든 흐름입니다."))
     return {"title": f"{r.get('n_sleeves')}개 그룹을 {r.get('n_stocks')}종목 비중으로 합쳤습니다", "facts": facts,
             "trust": trust, "unmeasured": ["그룹 사이 상관이 앞으로 유지될지"]}
 
@@ -448,33 +448,33 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("screener", "스크리너", stage="signal", plain_label="스크리닝",
-                    plain_description="재무·시세 조건으로 후보를 걸러 종목 목록을 만듭니다.",
+                    plain_description="재무·시세 조건으로 종목을 선별합니다.",
                     inputs=(P("universe", "Universe", required=False),), outputs=(P("universe", "Universe"),),
                     run=_screener, params_model=ScreenerParams, explain=_explain_screener, category="신호",
                     description="유동성 게이트 → 필터 → 정렬(/screener/run-advanced 와 같다)."),
         pg.NodeSpec("factor_scores", "팩터 점수", stage="signal", plain_label="팩터 스코어링",
-                    plain_description="가치·수익성 같은 성격에 점수를 매깁니다.",
+                    plain_description="가치·수익성 등 팩터별 점수를 산출합니다.",
                     inputs=(P("universe", "Universe", required=False),), outputs=(P("scores", "Scores"),),
                     run=_factor_scores, params_model=FactorScoreParams, explain=_explain_factor_scores, category="신호",
                     description="방향 인지 z-score 가중합(/factor-portfolio 의 점수와 같다)."),
         pg.NodeSpec("alpha_score", "알파 점수", stage="signal", plain_label="알파 스코어링",
-                    plain_description="알파 실험실의 식으로 오늘(또는 기준일)의 점수를 냅니다.",
+                    plain_description="알파 실험실의 수식으로 당일(또는 기준일) 점수를 산출합니다.",
                     inputs=(P("universe", "Universe"),), outputs=(P("scores", "Scores"),),
                     run=_alpha_score, params_model=AlphaParams, explain=_explain_alpha, category="신호",
                     description="score_alpha — 라이브 크로스섹션 점수."),
         pg.NodeSpec("scores_to_weights", "점수 → 비중", stage="build", plain_label="스코어 기반 비중",
-                    plain_description="점수 상위 종목을 골라 비중을 나눕니다.",
+                    plain_description="점수 상위 종목을 선정해 비중을 배분합니다.",
                     inputs=(P("scores", "Scores"), P("returns", "Returns", required=False)),
                     outputs=(P("weights", "Weights"),), run=_scores_to_weights, params_model=ScoresToWeightsParams,
                     explain=_explain_scores_to_weights, category="배분",
                     description="상위 K → 균등·틸트·역변동성·위험균등·최소분산·HRP(폴백 없음)."),
         pg.NodeSpec("neutralize", "중립화", stage="build", plain_label="노출 중립화",
-                    plain_description="시장 민감도나 업종 쏠림을 없앤 비중을 만듭니다.",
+                    plain_description="시장 베타·업종 노출을 중립화한 비중을 산출합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("weights", "Weights"),),
                     run=_neutralize, params_model=NeutralizeParams, explain=_explain_neutralize, category="배분",
                     description="베타·섹터 중립화(/neutralize 와 같다). 결과는 연구용 — 실행 목표가 아니다."),
         pg.NodeSpec("sleeve_combine", "슬리브 결합", stage="build", plain_label="슬리브 결합",
-                    plain_description="비중 그룹 2~3개를 위험 기준으로 하나로 합칩니다.",
+                    plain_description="비중 그룹 2~3개를 위험 기준으로 결합합니다.",
                     inputs=(P("a", "Weights"), P("b", "Weights"), P("c", "Weights", required=False)),
                     outputs=(P("weights", "Weights"),), run=_sleeve_combine, params_model=SleeveParams,
                     explain=_explain_sleeves, category="배분",

@@ -129,7 +129,7 @@ export function GoalResult({ v }: { v: Dict }) {
         <p className="pg-goal-gap" data-state={st}>
           {st === "above" ? `지금 위험자산 비중이 목표보다 ${fmt(gap.lo)}~${fmt(gap.hi)}%p 많습니다`
             : st === "below" ? `지금 위험자산 비중이 목표보다 ${fmt(-(num(gap.hi) ?? 0))}~${fmt(-(num(gap.lo) ?? 0))}%p 적습니다`
-            : `지금 비중과 목표의 차이는 미상입니다 — ${plain(gap.reason)}`}
+            : `현재 비중과 목표의 차이는 미상입니다 — ${plain(gap.reason)}`}
         </p>
       )}
       <p className="pg-note">

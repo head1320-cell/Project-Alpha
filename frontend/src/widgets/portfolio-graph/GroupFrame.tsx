@@ -61,7 +61,7 @@ const SNODE_PORT_TOP = 46;
 function shareWhy(computed: boolean, linked: boolean | undefined): string {
   if (!computed) return "계산하면 보입니다";
   if (!linked) return "포트폴리오에 잇지 않았습니다";
-  return "몫을 모름 — 포트폴리오 노드를 확인하십시오";
+  return "배분 비중 미상 — 포트폴리오 노드를 확인하십시오";
 }
 const known = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 
@@ -107,8 +107,8 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
                onChange={(e) => rename(data.groupId, e.target.value)} />
         {strategy && (
           <span className="pg-group-share" data-share={known(data.share) ? data.share : ""}
-                title={known(data.share) ? "포트폴리오에서 이 전략이 차지하는 몫(서버 계산)" : shareWhy(!!results, data.linked)}>
-            몫 <b>{known(data.share) ? `${data.share.toFixed(1)}%` : "—"}</b>
+                title={known(data.share) ? "포트폴리오 내 이 전략의 배분 비중(서버 계산)" : shareWhy(!!results, data.linked)}>
+            비중 <b>{known(data.share) ? `${data.share.toFixed(1)}%` : "—"}</b>
           </span>
         )}
         {strategy && data.rebalance && (
@@ -206,7 +206,7 @@ function StrategyNode({ data, ok, blocked, failed, total, computed }: {
       <div className="pg-node-far" aria-hidden="true">
         <span className="pg-node-far-name">{data.label}</span>
         <span className={`pg-node-far-v pg-node-far-v--${share === null ? "idle" : "ok"}`}>
-          {share === null ? "몫 —" : <>{share.toFixed(1)}<small>%</small></>}
+          {share === null ? "비중 —" : <>{share.toFixed(1)}<small>%</small></>}
         </span>
       </div>
       <input className="pg-group-label pg-snode-name nodrag" value={data.label} aria-label="전략 이름"
@@ -214,7 +214,7 @@ function StrategyNode({ data, ok, blocked, failed, total, computed }: {
       <p className="pg-snode-share" data-share={share ?? ""}>
         {share === null
           ? <><b>—</b><small>{shareWhy(computed, data.linked)}</small></>
-          : <><b>{share.toFixed(1)}<i>%</i></b><small>포트폴리오 몫</small></>}
+          : <><b>{share.toFixed(1)}<i>%</i></b><small>포트폴리오 비중</small></>}
       </p>
       {data.rebalance && <p className="pg-snode-rebal">리밸런싱 {data.rebalance}</p>}
       {computed && (

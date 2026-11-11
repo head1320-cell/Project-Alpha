@@ -67,7 +67,7 @@ PORT_TYPES = ("Universe", "Returns", "Belief", "Views", "Weights", "RiskReport",
 
 #: 포트 타입 → 사람이 읽는 이름(BT1 — 캔버스·절차 문장이 같은 말을 쓴다. 화면 사본은 이것을 받는다).
 PORT_PLAIN = {
-    "Universe": "종목", "Returns": "수익률", "Belief": "기대 수익", "Views": "내 생각",
+    "Universe": "종목", "Returns": "수익률", "Belief": "기대 수익", "Views": "투자 뷰",
     "Weights": "비중", "RiskReport": "위험 나눔", "BacktestResult": "과거 성과",
     "Scenario": "시나리오", "StressReport": "충격 결과", "Scores": "점수", "RegimeState": "경기 국면",
     "TimingSignal": "타이밍 신호", "Trades": "주문 목록", "TargetVersion": "실행 목표",
@@ -135,7 +135,7 @@ STAGES = [
 UniverseParams = _subset("UniverseParams", AnalyzeRequest, ("tickers", "weights", "benchmark"), ui={
     "tickers": _ui("종목", question="대상 종목", widget="tickers",
                    help="종목 코드를 쉼표로 넣거나, 이름을 치고 후보에서 고릅니다."),
-    "weights": _ui("지금 비중", "advanced", help="들고 있는 비중을 알려 주면 회전율 제약에 씁니다."),
+    "weights": _ui("현재 비중", "advanced", help="보유 비중을 입력하면 회전율 제약에 반영합니다."),
     "benchmark": _ui("비교 기준", "advanced", help="성과를 비교할 지수입니다."),
 })
 ReturnsParams = _subset("ReturnsParams", AnalyzeRequest, ("lookback_days", "as_of"), ui={
@@ -149,7 +149,7 @@ EstimateParams = _subset("EstimateParams", AnalyzeRequest,
                          ("conditional", "require_verified_macro", "regime_weighting",
                           "regime_mode", "rebalance"), ui={
     "conditional": _ui("경기 국면 반영", question="경기 국면 반영 여부",
-                       help="켜면 지금 국면과 비슷했던 과거로 기대 수익을 잡습니다."),
+                       help="켜면 현재 국면과 유사한 과거 구간으로 기대수익률을 추정합니다."),
     "require_verified_macro": _ui("확인된 국면 판정만 쓰기", "advanced"),
     "regime_weighting": _ui("국면 가중 방식", "advanced",
                             options={"hard": "확정 국면", "probabilistic": "확률 가중"}),
@@ -161,10 +161,10 @@ OptimizerParams = _subset(
         # BN N2 — δ 는 시장 균형 수익 π = δΣw_mkt 에만 들어가고, π 는 블랙-리터먼 + 내 생각이 있을 때만 쓰인다
         # (`allocation_studio.optimize`). 다른 방식에서는 비중이 움직이지 않으니 초심자 질문("위험을 얼마나 피할까요?")으로 두지 않는다.
         # 옵티마이저 의미는 그대로 — 표시만 사실에 맞춘다(tests/test_optimizer_delta_honest.py).
-        "delta": _ui("시장 균형 수익 크기 δ", "advanced", widget="slider", ends=["내 생각 쪽", "시장 균형 쪽"],
-                     help="블랙-리터먼에서 내 생각이 있을 때만 비중에 영향을 줍니다 — 클수록 시장 균형 쪽으로 기웁니다. "
+        "delta": _ui("시장 위험회피계수 δ", "advanced", widget="slider", ends=["투자 뷰 쪽", "시장 균형 쪽"],
+                     help="블랙-리터먼에서 투자 뷰가 있을 때만 비중에 영향을 줍니다 — 클수록 시장 균형 쪽으로 기웁니다. "
                           "다른 계산 방식에서는 비중이 바뀌지 않습니다."),
-        "tau": _ui("내 생각 불확실성 τ", "advanced", help="클수록 내 생각이 비중을 더 크게 움직입니다."),
+        "tau": _ui("투자 뷰 불확실성 τ", "advanced", help="클수록 투자 뷰가 비중을 더 크게 움직입니다."),
         # BO O1 — 사용자가 승인한 "움직이는 손잡이". ★`mv_utility` 를 골랐을 때만 보인다★(`show_if`) —
         # 다른 방식에서는 비중이 바뀌지 않으니 초심자 질문으로 내놓지 않는다(δ 의 교훈).
         # 프리셋은 초보자용, 슬라이더("직접 정하기")는 전문가용 — 같은 값 하나를 두 방식으로 고른다.
@@ -173,11 +173,11 @@ OptimizerParams = _subset(
             ends=["수익 쪽", "안정 쪽"], show_if={"model": ["mv_utility"]},
             # 비워 두면 서버가 쓰는 값 — 화면이 "보통(기본)" 을 표시만 한다(문서에 값을 쓰지 않는다).
             empty_value=_studio.RISK_AVERSION_DEFAULT,
-            presets=[{"label": "덜 피함", "value": 1.5},
+            presets=[{"label": "낮음", "value": 1.5},
                      {"label": "보통", "value": _studio.RISK_AVERSION_DEFAULT},
-                     {"label": "많이 피함", "value": 10.0}],
-            help="클수록 흔들림을 줄이는 쪽으로, 작을수록 기대 수익 쪽으로 나눕니다. "
-                 "세 값은 관례적인 크기라 나에게 맞는 값은 가정입니다 — 비우면 ‘보통’을 씁니다."),
+                     {"label": "높음", "value": 10.0}],
+            help="클수록 변동성 축소 쪽으로, 작을수록 기대수익률 쪽으로 배분합니다. "
+                 "세 값은 관례적 수준이며 투자자별 적정값은 가정입니다 — 비우면 ‘보통’을 적용합니다."),
         # CF 3부 P2 — 기본 칩은 그대로(한 종목 최대 · 칩은 그 키만 바꾼다), `widget="constraints"` 가 나머지 아홉 칸을
         # 질문 카드로 연다(범위는 이 스키마의 `ConstraintsInput`, 판정은 `/allocation/constraints/check`).
         "constraints": _ui("제약", question="종목별 최대 비중", widget="constraints",
@@ -185,8 +185,8 @@ OptimizerParams = _subset(
                                     {"label": "40%", "value": {"max_weight_pct": 40}},
                                     {"label": "30%", "value": {"max_weight_pct": 30}},
                                     {"label": "20%", "value": {"max_weight_pct": 20}}],
-                           help="‘더 정하기’ 에서 업종 상한·회전율·시장 민감도·현금·공매도 노출까지 정할 수 있습니다. "
-                                "풀 수 없는 조합이면 계산 전에 알려 줍니다."),
+                           help="‘더 정하기’ 에서 업종 상한·회전율·시장 베타·현금·공매도 노출을 지정합니다. "
+                                "해가 없는(실현 불가능한) 조합이면 계산 전에 표시합니다."),
     },
     model=(Literal[_MODELS], Field("mvo", json_schema_extra={"x-ui": _ui(
         "계산 방식", question="비중 산출 방식", widget="cards",
@@ -206,8 +206,8 @@ class ViewsParams(BaseModel):
     model_config = _FORBID
     views: list[AllocationView] = Field(
         default_factory=list, max_length=30,
-        json_schema_extra={"x-ui": _ui("내 생각", question="투자 전망(뷰) 입력",
-                                       help="종목의 1년 기대 수익과 확신을 적습니다.")})
+        json_schema_extra={"x-ui": _ui("투자 뷰", question="투자 전망(뷰) 입력",
+                                       help="종목별 1년 기대수익률과 확신도를 입력합니다.")})
 
 
 # ── 노드 처리기 ──────────────────────────────────────────────────────────────
@@ -477,25 +477,25 @@ def _save_research_run(values: dict, view: dict, params: Any) -> dict:
 REGISTRY = pg.Registry(port_types=PORT_TYPES)
 for _spec in (
     pg.NodeSpec("universe", "유니버스", stage="data", plain_label="유니버스",
-                plain_description="분석할 종목과 지금 비중을 정합니다.", explain=EXPLAINERS["universe"], inputs=(), outputs=(P("universe", "Universe"),),
+                plain_description="분석 대상 종목과 현재 보유 비중을 지정합니다.", explain=EXPLAINERS["universe"], inputs=(), outputs=(P("universe", "Universe"),),
                 run=_universe, params_model=UniverseParams, category="입력",
                 description="종목 목록 · 현재 비중(선택) · 벤치마크."),
     pg.NodeSpec("returns", "수익률", stage="data", plain_label="수익률 데이터",
-                plain_description="기간과 기준일을 정합니다.", explain=EXPLAINERS["returns"], inputs=(P("universe", "Universe"),),
+                plain_description="분석 기간과 기준일을 지정합니다.", explain=EXPLAINERS["returns"], inputs=(P("universe", "Universe"),),
                 outputs=(P("returns", "Returns"),), run=_returns, params_model=ReturnsParams,
                 category="데이터",
                 description="적재된 일별 수익률(lookback·절단일). 운영에서는 합성하지 않는다."),
     pg.NodeSpec("views", "BL 뷰", stage="belief", plain_label="투자 뷰(BL)",
-                plain_description="“삼성전자가 오를 것” 같은 전망을 넣습니다.", explain=EXPLAINERS["views"], inputs=(), outputs=(P("views", "Views"),), run=_views,
+                plain_description="종목별 기대수익률 전망(투자 뷰)과 확신도를 입력합니다.", explain=EXPLAINERS["views"], inputs=(), outputs=(P("views", "Views"),), run=_views,
                 params_model=ViewsParams, category="입력",
                 description="절대(assets) 또는 부호 있는 조합(weights) 뷰."),
     pg.NodeSpec("estimate", "추정 설정", stage="belief", plain_label="기대수익률 추정",
-                plain_description="과거 기준 또는 경기 국면을 반영합니다.", explain=EXPLAINERS["estimate"], inputs=(P("returns", "Returns"),),
+                plain_description="과거 표본 또는 경기 국면 조건부로 기대수익률을 추정합니다.", explain=EXPLAINERS["estimate"], inputs=(P("returns", "Returns"),),
                 outputs=(P("belief", "Belief"),), run=_estimate, params_model=EstimateParams,
                 category="추정",
                 description="표본 또는 국면조건부 μ/Σ 설정. 계산은 옵티마이저가 자기 모델로 한다."),
     pg.NodeSpec("optimizer", "옵티마이저", stage="build", plain_label="포트폴리오 최적화",
-                plain_description="여러 방식 중 하나로 비중을 나눕니다.", explain=EXPLAINERS["optimizer"],
+                plain_description="최적화 방식을 선택해 자산별 비중을 산출합니다.", explain=EXPLAINERS["optimizer"],
                 inputs=(P("returns", "Returns"), P("belief", "Belief"),
                         P("views", "Views", required=False)),
                 outputs=(P("weights", "Weights"),), run=_optimizer,
@@ -503,11 +503,11 @@ for _spec in (
                 save=_save_research_run, save_label="연구 기록 남기기",
                 description="/analyze 와 같은 최적화·제약. 결과는 가중치와 정책을 함께 나른다."),
     pg.NodeSpec("risk", "리스크 분해", stage="check", plain_label="위험 기여도 분해",
-                plain_description="어느 종목이 위험을 얼마나 만드는지 봅니다.", explain=EXPLAINERS["risk"], inputs=(P("weights", "Weights"),),
+                plain_description="종목별 위험 기여도(포트폴리오 변동성 분해)를 산출합니다.", explain=EXPLAINERS["risk"], inputs=(P("weights", "Weights"),),
                 outputs=(P("risk", "RiskReport"),), run=_risk, category="분석",
                 description="오일러 리스크 기여 · ENB/Neff (추천 포트폴리오 기준)."),
     pg.NodeSpec("backtest", "정책 백테스트", stage="check", plain_label="정책 백테스트",
-                plain_description="이 규칙대로 했다면 어땠을지 봅니다.", explain=EXPLAINERS["backtest"],
+                plain_description="배분 정책을 과거 구간에 적용한 성과를 산출합니다.", explain=EXPLAINERS["backtest"],
                 inputs=(P("returns", "Returns"), P("weights", "Weights")),
                 outputs=(P("backtest", "BacktestResult"),), run=_backtest, admits=_backtest_admits,
                 params_model=BacktestParams, category="분석",

@@ -102,7 +102,7 @@ test("예전 결과: 바꾼 노드와 하류로 들어가는 선만 흐려진다
 
   await page.locator('.pg-node[data-node-id="optimizer"]').click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "최소분산" }).click();
   await expect(page.locator(".pg-summary--stale")).toBeVisible();
 
   await page.keyboard.press("Escape");                              // 고른 노드를 놓는다 — 고른 노드와 닿지 않은 선은 따로 옅어진다(faint)

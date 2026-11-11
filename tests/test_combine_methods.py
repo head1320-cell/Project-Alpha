@@ -4,9 +4,9 @@
 그대로 두고, 고를 때만 쓰이는 방법을 더한다(CLAUDE.md §3 별도 승인 사항). 기존 방법의 답은 `test_bs4_golden.py` 가 건다.
 
 거는 것:
-- 새 방법 셋 — `manual`(몫 직접) · `crisis_risk_parity`(위기일 공분산으로 위험 균형) · `max_diversification`(분산 효과 최대).
+- 새 방법 셋 — `manual`(몫 직접) · `crisis_risk_parity`(위기일 공분산으로 위험 균형) · `max_diversification`(최대분산화).
   ★입력·풀이가 모자라면 실패 + 사유★ — 평소 공분산이나 다른 방법으로 조용히 가지 않는다.
-- 엔진의 조용한 대체(점수·위험 예산 입력 없음 → 위험 똑같이 · 흔들림 최소·HRP 풀이 실패 → 역변동성 · 모르는 방식)를
+- 엔진의 조용한 대체(점수·위험 예산 입력 없음 → 리스크 패리티 · 최소분산·HRP 풀이 실패 → 역변동성 · 모르는 방식)를
   `fallback{used, from, reason}` 로 드러낸다 — 값은 그대로(골든).
 - 방법 비교표는 관측이다 — "어느 방법이 낫다는 뜻이 아닙니다".
 """
@@ -40,7 +40,7 @@ def test_no_fallback_is_reported_as_not_used(method):
 def test_missing_inputs_or_unknown_method_say_they_fell_back_to_risk_parity(method, word):
     out = _run(method=method)
     fb = out["fallback"]
-    assert fb["used"] is True and fb["from"] == method and word in fb["reason"] and "위험 똑같이" in fb["reason"]
+    assert fb["used"] is True and fb["from"] == method and word in fb["reason"] and "리스크 패리티" in fb["reason"]
     assert out["sleeve_allocation"] == _run(method="risk_parity")["sleeve_allocation"]   # 값은 그대로
 
 
@@ -317,4 +317,4 @@ def test_the_view_carries_the_method_table_with_the_current_method(market):
     assert rows["risk_parity"]["shares"] == r["view"]["result"]["sleeve_allocation"]
     assert rows["crisis_risk_parity"]["available"] is True           # mock 에서는 KODEX 200 이 있다
     assert "낫다는 뜻이 아닙니다" in mc["note"]
-    assert {x["method"]: x["label"] for x in mc["rows"]}["max_diversification"] == "분산 효과 최대"
+    assert {x["method"]: x["label"] for x in mc["rows"]}["max_diversification"] == "최대분산화"

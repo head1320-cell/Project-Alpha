@@ -1,10 +1,10 @@
 """전략끼리 견고성 — 관측만 (BR R1).
 
 입력 `S` 는 전략(또는 비교할 비중 그룹)마다 일별 수익을 담은 T×n 행렬이다. 흐름은 `sleeve_combine._sleeve_return_series`
-가 만든 것 — **지금 비중을 지난 기간 내내 들고 있었다면**의 흐름이지 실제 운용 기록이 아니다(부르는 쪽이 밝힌다).
+가 만든 것 — **현재 비중을 지난 기간 내내 들고 있었다면**의 흐름이지 실제 운용 기록이 아니다(부르는 쪽이 밝힌다).
 로더에 날짜가 없어 가로축은 "n거래일 전"(`ago`, 0 = 가장 최근)이다 — 날짜를 지어내지 않는다.
 
-★모르면 0 이 아니다★ 흔들림이 없어 상관을 잴 수 없는 자리는 `None` + 사유. 이 모듈은 배분을 바꾸지 않는다
+★모르면 0 이 아니다★ 변동성이 없어 상관을 잴 수 없는 자리는 `None` + 사유. 이 모듈은 배분을 바꾸지 않는다
 (질문 ② 전달 안정성에 대한 관측 — 예측력·경제적 가치의 증거가 아니다).
 
 스펙: docs/superpowers/specs/2026-09-28-br-robustness-profile-design.md
@@ -19,7 +19,7 @@ import numpy as np
 
 #: 분산이 이보다 작으면 "흔들림이 없다"고 본다(일별 수익 기준 — 0.001% 변동보다 작음).
 _FLAT_VAR = 1e-16
-_FLAT_REASON = "이 구간에 흔들림이 없어 상관을 측정할 수 없습니다(비중이 비었거나 값이 그대로입니다)"
+_FLAT_REASON = "이 구간에 변동성이 없어 상관을 측정할 수 없습니다(비중이 비었거나 값이 그대로입니다)"
 #: 위기일이 이보다 적으면 표본이 작다고 적는다.
 SMALL_CRISIS_DAYS = 20
 
@@ -85,7 +85,7 @@ def rolling_correlation(names: Sequence[str], S: np.ndarray, window: int = 60) -
     return {"available": True, "window": window, "ago": [m - 1 - t for t in range(m)], "pairs": pairs,
             "avg": avg, "avg_current": avg[-1], "avg_max": max(got_avg) if got_avg else None,
             "avg_min": min(got_avg) if got_avg else None,
-            "note": f"{window}거래일 창의 상관 · 띠는 표본 오차 95%(Fisher z) — 띠가 넓으면 창 안의 날이 적어 흔들린 값입니다."}
+            "note": f"{window}거래일 창의 상관 · 띠는 표본 오차 95%(Fisher z) — 띠가 넓으면 창 안의 표본 일수가 적어 불안정한 값입니다."}
 
 
 # ── 위기 때 상관 ─────────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ def effective_count(names: Sequence[str], S: np.ndarray) -> dict[str, Any]:
     flat = [names[j] for j in range(n) if np.var(S[:, j]) <= _FLAT_VAR]
     if flat:
         return {"available": False, "value": None, "n": n,
-                "reason": f"흔들림이 없는 흐름({', '.join(flat)})이 있어 서로 얼마나 닮았는지 측정할 수 없습니다"}
+                "reason": f"변동성이 없는 흐름({', '.join(flat)})이 있어 서로 얼마나 닮았는지 측정할 수 없습니다"}
     C = np.corrcoef(S.T)
     if not np.all(np.isfinite(C)):
         return {"available": False, "value": None, "n": n, "reason": "상관 산출 실패"}
@@ -238,12 +238,12 @@ def effective_count(names: Sequence[str], S: np.ndarray) -> dict[str, Any]:
 
 
 def diversification(S: np.ndarray, shares: Sequence[float] | None = None) -> dict[str, Any]:
-    """분산 효과 Σ|w|σ / σ_p — 1 이면 따로 움직여 줄어든 흔들림이 없다."""
+    """분산 효과 Σ|w|σ / σ_p — 1 이면 따로 움직여 줄어든 변동성이 없다."""
     w, basis = _shares(shares, S.shape[1])
     sig = S.std(axis=0)
     sp = float((S @ w).std())
     if sp <= math.sqrt(_FLAT_VAR):
-        return {"available": False, "ratio": None, "shares_basis": basis, "reason": "합친 흐름에 흔들림이 없습니다"}
+        return {"available": False, "ratio": None, "shares_basis": basis, "reason": "합친 흐름에 변동성이 없습니다"}
     return {"available": True, "ratio": round(float(np.abs(w) @ sig) / sp, 3), "shares_basis": basis,
             "vol_pct": round(sp * math.sqrt(252) * 100, 2)}
 

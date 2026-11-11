@@ -178,7 +178,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
               <div className="mc-reco-r">
                 <h4 className="mc-subh">비중이 정해진 이유</h4>
                 <AllocAttribution rows={ma.attribution} />
-                <h4 className="mc-subh mc-subh--gap">비중이 흔들릴 수 있는 폭(몬테카를로 400회)</h4>
+                <h4 className="mc-subh mc-subh--gap">비중의 변동 가능 폭(몬테카를로 400회)</h4>
                 <AllocBands bands={ma.bands} />
               </div>
             </div>
@@ -224,7 +224,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
               ))}
             </div>
           </div>
-          <p className="mc-card-note">12개월 성과는 각 전략의 지금 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치입니다(합성 데이터에서는 합성 시세). 앞으로의 수익을 보장하지 않습니다.</p>
+          <p className="mc-card-note">12개월 성과는 각 전략의 현재 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치입니다(합성 데이터에서는 합성 시세). 앞으로의 수익을 보장하지 않습니다.</p>
           {recommend.data_lag_note && <p className="mc-card-note" data-server>{recommend.data_lag_note}</p>}
         </div>
       </div>

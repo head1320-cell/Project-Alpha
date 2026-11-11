@@ -157,7 +157,7 @@ def _explain_scenario(view: dict, prov: dict, params: Any) -> dict:
         rows = r.get("rows") or []
         if rows:
             worst = rows[0]
-            facts.append(f"가장 크게 흔들린 종목은 {worst.get('corp_name') or worst.get('stock_code')}"
+            facts.append(f"변동폭이 가장 큰 종목은 {worst.get('corp_name') or worst.get('stock_code')}"
                          f"({_signed_pct(float(worst.get('shock_pct') or 0))})입니다.")
         trust.append(_t(ASSUMED, "가정 충격입니다 — 실제로 일어난 적이 없고, 종목 민감도로 추정한 값입니다."))
         for n in r.get("notes") or []:
@@ -174,7 +174,7 @@ def _explain_scenario(view: dict, prov: dict, params: Any) -> dict:
 CorrParams = _subset(
     "CorrStressParams", StressCorrRequest, ("target_rho", "intensity", "confidence_level", "portfolio_value"),
     ui={
-        "target_rho": _ui("위기 때 상관", question="위기 시 종목 간 상관계수 가정",
+        "target_rho": _ui("위기 상관", question="위기 시 종목 간 상관계수 가정",
                           presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
                                    {"label": "0.9", "value": 0.9}]),
         "intensity": _ui("강도", widget="slider", ends=["없음", "완전히"],
@@ -223,7 +223,7 @@ def _explain_corr(view: dict, prov: dict, params: Any) -> dict:
 # ── 기대수익 민감도 ───────────────────────────────────────────────────────────
 
 SensParams = _subset("SensitivityParams", SensitivityRequest, ("bump_pct",), ui={
-    "bump_pct": _ui("틀리는 크기", question="기대수익률 추정오차 가정", unit="%p",
+    "bump_pct": _ui("추정 오차 크기", question="기대수익률 추정오차 가정", unit="%p",
                     presets=[{"label": "1%p", "value": 1.0}, {"label": "2%p", "value": 2.0},
                              {"label": "5%p", "value": 5.0}]),
 })
@@ -274,7 +274,7 @@ def _explain_sensitivity(view: dict, prov: dict, params: Any) -> dict:
         + (["같은 제약"] if r.get("constraints_applied") else []) + (["같은 위험 회피 λ"] if model == "mv_utility" else [])
     redo = (f"‘{MODEL_PLAIN.get(model, model)}’ 방식에 {'·'.join(passed)}{'를' if passed[-1].endswith('λ') else '을'} 넣어 다시 풀었습니다."
             if r.get("model")
-            else "같은 수익률과 같은 생각(뷰)으로 다시 풀었습니다.")
+            else "같은 수익률과 같은 투자 뷰로 다시 풀었습니다.")
     if r.get("still"):
         # 기대 수익을 쓰지 않는 방식 — 0 칸을 '가장 큰 변화' 로 세우지 않고 그렇다고 말한다(사용자 결정 2026-10-18).
         return {"title": "기대수익이 틀려도 이 비중은 움직이지 않습니다", "headline": None, "facts": [str(r["still"])],
@@ -347,23 +347,23 @@ def _explain_xray(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("scenario_stress", "시나리오 충격", stage="check", plain_label="시나리오 스트레스",
-                    plain_description="과거 위기나 가정한 충격에 이 비중을 넣어 봅니다.",
+                    plain_description="과거 위기 또는 가상 충격을 현재 비중에 적용합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("stress", "StressReport"),),
                     run=_scenario_stress, params_model=ScenarioParams, explain=_explain_scenario,
                     category="확인", description="역사 리플레이 · M8 가정 충격 · 국내 시나리오팩(/stress · /kr-scenario 와 같다)."),
         pg.NodeSpec("corr_stress", "상관 스트레스", stage="check", plain_label="상관 스트레스",
-                    plain_description="위기 때 종목들이 같이 움직이면 흔들림이 얼마나 커지는지 봅니다.",
+                    plain_description="위기 시 상관이 높아질 때 포트폴리오 변동성의 증가폭을 산출합니다.",
                     inputs=(P("returns", "Returns"), P("weights", "Weights")),
                     outputs=(P("stress", "StressReport"),), run=_corr_stress, params_model=CorrParams,
                     explain=_explain_corr, category="확인",
                     description="위기 상관 수렴 가정 → 변동성·VaR·기여 VaR 변화(/stress-correlation 과 같다)."),
         pg.NodeSpec("sensitivity", "기대수익 민감도", stage="check", plain_label="기대수익 민감도",
-                    plain_description="기대수익이 조금 틀렸을 때 비중이 얼마나 바뀌는지 봅니다.",
+                    plain_description="기대수익률 추정 오차에 대한 최적 비중의 민감도를 산출합니다.",
                     inputs=(P("returns", "Returns"), P("weights", "Weights")), outputs=(),
                     run=_sensitivity, params_model=SensParams, explain=_explain_sensitivity, category="확인",
                     description="자산별 μ +bump → 재최적화 비중 변화 N×N(/sensitivity 와 같다)."),
         pg.NodeSpec("factor_xray", "팩터 X-ray", stage="check", plain_label="팩터 노출 분석",
-                    plain_description="가치·모멘텀·규모 같은 성격이 어디로 기울었는지 봅니다.",
+                    plain_description="가치·모멘텀·규모 등 팩터 노출(틸트)을 분석합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(),
                     run=_factor_xray, explain=_explain_xray, category="확인",
                     description="가중 팩터 z 노출 vs 유니버스·KOSPI200(/factor-xray 와 같다)."),

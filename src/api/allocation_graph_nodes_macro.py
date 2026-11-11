@@ -118,7 +118,7 @@ class TimingParams(BaseModel):
         min_length=1, max_length=12, json_schema_extra={"x-ui": _ui(
             "신호", question="판단 신호", help="신호마다 위험-온/오프/판단 불가 셋 중 하나가 나옵니다.")})
     combination: Literal[tuple(_COMBOS)] = Field("all", json_schema_extra={"x-ui": _ui(
-        "합치는 규칙", question="신호 결합 규칙", widget="cards", options=_COMBOS)})
+        "결합 규칙", question="신호 결합 규칙", widget="cards", options=_COMBOS)})
     k: int = Field(1, ge=1, le=12, json_schema_extra={"x-ui": _ui("k", "advanced", help="‘k개 이상’일 때만 씁니다.")})
     market: Literal["kr", "us"] = Field("kr", json_schema_extra={"x-ui": _ui(
         "시장", "advanced", options={"kr": "한국", "us": "미국"})})
@@ -144,7 +144,7 @@ def _refuse_unreadable_factors(p: TimingParams) -> None:
                                  f"{c.get('unavailable_reason') or '데이터 소스를 보유하고 있지 않습니다.'}")
         if c.get("requires_as_of") and not p.as_of:
             raise pg.NodeFailure(f"‘{c['label']}’은(는) 기준일(as_of)이 있어야 그 시점의 값을 읽을 수 있습니다 — "
-                                 "기준일을 넣거나 이 신호를 빼 주십시오.")
+                                 "기준일을 넣거나 이 신호를 제외하십시오.")
 
 
 def _timing_signal(inputs: dict, p: TimingParams) -> pg.NodeOutput:
@@ -201,15 +201,15 @@ _FOLLOW = {"timing": "타이밍 신호대로", "timing_macro": "타이밍 + 경�
 class OverlayParams(BaseModel):
     model_config = _FORBID
     follow: Literal[tuple(_FOLLOW)] = Field("timing", json_schema_extra={"x-ui": _ui(
-        "따를 판단", question="적용할 판단", widget="cards", options=_FOLLOW,
-        help="세 판단을 결과에 나란히 보여 드립니다. 적용은 고른 것 하나만 합니다.")})
+        "적용 신호", question="적용할 판단", widget="cards", options=_FOLLOW,
+        help="세 판정을 결과에 함께 표시합니다. 적용은 선택한 하나만 합니다.")})
     manual_exposure_pct: float = Field(100.0, ge=0.0, le=100.0, json_schema_extra={"x-ui": _ui(
-        "직접 정한 노출", unit="%", presets=[{"label": "100%", "value": 100.0}, {"label": "80%", "value": 80.0},
+        "수동 지정 노출", unit="%", presets=[{"label": "100%", "value": 100.0}, {"label": "80%", "value": 80.0},
                                           {"label": "60%", "value": 60.0}, {"label": "40%", "value": 40.0}],
-        help="‘직접 지정’를 고른 경우에만 씁니다.")})
+        help="‘직접 지정’을 선택한 경우에만 적용합니다.")})
     strength_pct: float = Field(100.0, ge=0.0, le=100.0, json_schema_extra={"x-ui": _ui(
         "적용 강도", "advanced", unit="%",
-        help="100%는 규칙 그대로, 50%는 규칙이 줄이라는 만큼의 절반만 줄입니다. 노출을 늘리는 쪽으로는 쓰지 않습니다.")})
+        help="100%는 규칙 그대로, 50%는 규칙상 축소폭의 절반만 축소합니다. 노출 확대에는 적용하지 않습니다.")})
 
 
 def _overlay(inputs: dict, p: OverlayParams) -> pg.NodeOutput:
@@ -308,7 +308,7 @@ def _explain_overlay(view: dict, prov: dict, params: Any) -> dict:
             "headline": {"label": "주식 노출", "value": round(e * 100, 1), "unit": "%", "text": _pct(e * 100)},
             "facts": facts, "trust": trust,
             "unmeasured": ["이 조절이 과거에 손실을 줄였는지 — ‘타이밍 시뮬레이션’으로 따로 봅니다",
-                           "현금으로 둔 몫의 기회비용"]}
+                           "현금 보유분의 기회비용"]}
 
 
 # ── 시점별 타이밍 시뮬레이션 ──────────────────────────────────────────────────
@@ -377,20 +377,20 @@ def register(registry: pg.Registry) -> None:
                     inputs=(), outputs=(P("regime", "RegimeState"),), run=_regime, params_model=RegimeParams,
                     explain=_explain_regime, category="거시", description="RegimeSnapshot 읽기(쓰기 없음)."),
         pg.NodeSpec("timing_signal", "타이밍 신호", stage="signal", plain_label="타이밍 신호",
-                    plain_description="추세·변동성 같은 신호로 지금 위험-온인지 봅니다.",
+                    plain_description="추세·변동성 신호로 현재 위험선호(위험-온) 여부를 판정합니다.",
                     inputs=(), outputs=(P("signal", "TimingSignal"),), run=_timing_signal, params_model=TimingParams,
                     explain=_explain_timing, category="타이밍",
                     save=_save_timing_rules, save_label="타이밍 규칙 저장",
                     description="V2 룰셋 → 팩터별 3-상태 → 조합(3자 비교와 같은 파생)."),
         pg.NodeSpec("exposure_overlay", "노출 조절", stage="build", plain_label="노출 오버레이",
-                    plain_description="타이밍·경기 국면 판단대로 주식 비중을 줄이고 나머지는 현금으로 둡니다.",
+                    plain_description="타이밍·경기 국면 판정에 따라 주식 비중을 축소하고 잔여분은 현금으로 보유합니다.",
                     inputs=(P("weights", "Weights"), P("signal", "TimingSignal", required=False),
                             P("regime", "RegimeState", required=False)),
                     outputs=(P("weights", "Weights"),), run=_overlay, params_model=OverlayParams,
                     explain=_explain_overlay, category="배분",
                     description="three_way 노출 × compile_target(기존 함수만 · 줄이는 쪽으로만)."),
         pg.NodeSpec("timing_simulation", "타이밍 시뮬레이션", stage="check", plain_label="타이밍 시뮬레이션",
-                    plain_description="과거 시점마다 신호가 어땠는지 재계산해 봅니다.",
+                    plain_description="과거 시점별 타이밍 신호를 재계산합니다.",
                     inputs=(P("signal", "TimingSignal"),), outputs=(), run=_simulation, params_model=SimulationParams,
                     explain=_explain_simulation, category="확인",
                     description="simulate_rule_set — backtest 모드는 부적격 팩터면 거부."),

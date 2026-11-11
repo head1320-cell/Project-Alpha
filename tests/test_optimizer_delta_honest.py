@@ -2,12 +2,12 @@
 ==============================================================================
 BN 계획은 옵티마이저 `delta` 에 "위험 성향" 프리셋(1 · 2.5 · 5)을 달기로 했다. 구현 전에 재 보니 **δ 는 기본 계산 방식(mvo)을
 포함해 9 방식 모두에서 비중을 움직이지 않았다**. δ 는 시장 균형 수익 π = δΣw_mkt 에만 들어가고, π 는 블랙-리터먼(bl)에
-내 생각(뷰)이 있을 때만 쓰인다(`allocation_studio.optimize`). 그래서 초심자 질문 "위험 회피 수준" 는 거짓 손잡이였다.
+투자 뷰가 있을 때만 쓰인다(`allocation_studio.optimize`). 그래서 초심자 질문 "위험 회피 수준" 는 거짓 손잡이였다.
 
 ## 거는 것
 - ★사실 못 박기★ — δ 를 1·2.5·5 로 바꿔도 mvo(기본)·min_var·risk_parity 비중은 같다. 짝: bl + 뷰에서는 달라진다.
   (옵티마이저 의미는 그대로다 — 이 테스트는 **표시가 사실과 맞는지**만 건다. δ 가 비중을 움직이게 바뀌면 이 테스트가 깨져 표시를 다시 보게 한다.)
-- 카탈로그 — δ 는 초심자(basic) 질문이 아니다(tier advanced · question 없음) · 도움말이 "블랙-리터먼·내 생각이 있을 때만" 을 말한다 ·
+- 카탈로그 — δ 는 초심자(basic) 질문이 아니다(tier advanced · question 없음) · 도움말이 "블랙-리터먼·투자 뷰가 있을 때만" 을 말한다 ·
   프리셋을 달지 않는다(움직이지 않는 손잡이에 선택지를 달지 않는다) · 기본값·범위는 그대로(2.5 · 0.5~10).
 """
 from __future__ import annotations
@@ -57,7 +57,7 @@ def test_the_catalog_does_not_ask_beginners_about_delta_and_says_where_it_matter
     ui = s["x-ui"]
     assert ui["tier"] == "advanced"
     assert "question" not in ui and "presets" not in ui
-    assert "블랙-리터먼" in ui["help"] and "내 생각" in ui["help"] and "바뀌지 않습니다" in ui["help"]
+    assert "블랙-리터먼" in ui["help"] and "투자 뷰" in ui["help"] and "바뀌지 않습니다" in ui["help"]
     assert "위험 회피 수준" not in str(ui)
 
 

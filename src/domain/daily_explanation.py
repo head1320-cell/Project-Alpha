@@ -290,7 +290,7 @@ def summarize_ko(exp: DailyExplanation) -> str:
     else:
         why = exp.residual_reason or "일부 축의 커버리지가 불완전합니다"
         parts.append(
-            f"설명하지 못한 몫 {_pct(exp.residual_pct)} 가 남았습니다 — {why}.")
+            f"미설명 잔차 {_pct(exp.residual_pct)} 가 남았습니다 — {why}.")
 
     # ⑤ 가격 기준 — 보유 수준에서만
     if exp.driver_set == DRIVER_SET_HOLDING and exp.price_basis:

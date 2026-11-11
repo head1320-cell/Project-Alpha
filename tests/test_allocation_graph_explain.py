@@ -111,7 +111,7 @@ def test_the_view_sentence_matches_black_litterman_semantics(market):
     """절대 뷰는 "그 종목의 1년 기대 수익 = 방향 × 크기" 다 — "더 오른다" 가 아니다."""
     down = {**VIEW, "direction": -1, "magnitude_pct": 3.0, "confidence": 40}
     ex = _run(chain(views=[VIEW, down]))["nodes"]["v"]["explain"]
-    assert ex["title"] == "내 생각 2개를 넣었습니다"
+    assert ex["title"] == "투자 뷰 2개를 넣었습니다"
     assert "기대 수익을 +4%로 봤습니다" in ex["facts"][0] and "확신 60%" in ex["facts"][0]
     assert "기대 수익을 −3%로 봤습니다" in ex["facts"][1]
 

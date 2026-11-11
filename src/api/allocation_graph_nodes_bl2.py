@@ -86,7 +86,7 @@ class FrontierParams(BaseModel):
     n_points: int = Field(30, ge=10, le=60, json_schema_extra={"x-ui": _ui(
         "곡선 점 수", question="곡선 표본점 수", unit="점",
         presets=[{"label": "20점", "value": 20}, {"label": "30점", "value": 30}, {"label": "60점", "value": 60}],
-        help="점이 많을수록 곡선이 매끄럽고 계산이 느려집니다.")})
+        help="점이 많을수록 곡선 해상도가 높고 계산이 느려집니다.")})
 
 
 def _frontier(inputs: dict, p: FrontierParams) -> pg.NodeOutput:
@@ -131,18 +131,18 @@ def _frontier(inputs: dict, p: FrontierParams) -> pg.NodeOutput:
 def _explain_frontier(view: dict, prov: dict, params: Any) -> dict:
     curve = view.get("curve") or []
     best = max(curve, key=lambda r: float(r.get("sharpe") or 0)) if curve else None
-    facts = [f"곡선 {len(curve)}점 · 흔들림 {_pct(float(curve[0]['volatility']))} ~ {_pct(float(curve[-1]['volatility']))}."] if curve else []
+    facts = [f"곡선 {len(curve)}점 · 변동성 {_pct(float(curve[0]['volatility']))} ~ {_pct(float(curve[-1]['volatility']))}."] if curve else []
     if best:
-        facts.append(f"흔들림 대비 수익이 가장 좋은 점: 연 {_pct(float(best['return']))} · 흔들림 {_pct(float(best['volatility']))}.")
+        facts.append(f"변동성 대비 수익이 가장 좋은 점: 연 {_pct(float(best['return']))} · 변동성 {_pct(float(best['volatility']))}.")
     pt = view.get("point")
     if pt:
-        facts.append(f"이은 비중은 연 {_pct(pt['return'])} · 흔들림 {_pct(pt['volatility'])} 자리에 있습니다.")
+        facts.append(f"이은 비중은 연 {_pct(pt['return'])} · 변동성 {_pct(pt['volatility'])} 자리에 있습니다.")
     trust = [_t(CONFIRMED, "불러온 기간의 평균 수익률과 공분산으로 그렸습니다."),
              _t(ASSUMED, "과거 평균이 앞으로도 같다고 가정한 곡선입니다 — 예측이 아닙니다.")]
     if view.get("cloud") is None:
         trust.append(_t(UNKNOWN, f"무작위 조합 구름은 그리지 못했습니다 — {view.get('cloud_reason') or '사유 미상'}."))
-    return {"title": "같은 흔들림에서 가장 높은 수익의 경계를 그렸습니다",
-            "headline": ({"label": "가장 좋은 점의 흔들림", "value": best["volatility"], "unit": "%",
+    return {"title": "같은 변동성에서 가장 높은 수익의 경계를 그렸습니다",
+            "headline": ({"label": "가장 좋은 점의 변동성", "value": best["volatility"], "unit": "%",
                           "text": _pct(float(best["volatility"]))} if best else None),
             "facts": facts, "trust": trust,
             "unmeasured": ["추정 오차(기대수익이 조금 틀려도 곡선이 크게 움직입니다)", "거래 비용", "앞으로의 수익"]}
@@ -156,12 +156,12 @@ class EnsembleParams(BaseModel):
         "시장", question="국면 판단 대상 시장", widget="cards", options=_MARKETS)})
     months: int = Field(60, ge=24, le=240, json_schema_extra={"x-ui": _ui(
         "기간", "advanced", unit="개월", presets=[{"label": "3년", "value": 36}, {"label": "5년", "value": 60}],
-        help="상태 전환·군집 모형이 배우는 기간입니다. 짧으면 모형이 서지 않을 수 있습니다.")})
+        help="상태 전환·군집 모형의 추정 기간입니다. 짧으면 모형이 추정되지 않을 수 있습니다.")})
 
 
 class ExplainParams(EnsembleParams):
     forecast_k: int = Field(3, ge=1, le=12, json_schema_extra={"x-ui": _ui(
-        "몇 달 뒤까지", "advanced", unit="개월", help="전환 위험을 몇 달 뒤까지 볼지입니다.")})
+        "전이 예측 기간", "advanced", unit="개월", help="국면 전이 확률을 산출할 기간(개월)입니다.")})
 
 
 def _regime_ensemble(inputs: dict, p: EnsembleParams) -> pg.NodeOutput:
@@ -243,7 +243,7 @@ def _three_way(inputs: dict, p: ThreeWayParams) -> pg.NodeOutput:
     return pg.NodeOutput(values={}, view={"result": out}, tags={"practice": mock_allowed()})
 
 
-_LEG = {"baseline": "그대로 두기", "timing_only": "타이밍만", "timing_macro": "타이밍 + 국면"}
+_LEG = {"baseline": "현 비중 유지", "timing_only": "타이밍만", "timing_macro": "타이밍 + 국면"}
 
 
 def _explain_three_way(view: dict, prov: dict, params: Any) -> dict:
@@ -273,7 +273,7 @@ def _factor_field(fid: str) -> Any:
     return (float, Field(0.0, ge=-100, le=100, json_schema_extra={"x-ui": _ui(
         FACTORS[fid], tier, unit="%", presets=[{"label": "−5%", "value": -5.0}, {"label": "0", "value": 0.0},
                                                {"label": "+5%", "value": 5.0}],
-        help="이 성격이 1σ 강한 종목에 더하는 충격입니다(음수 = 악재).")}))
+        help="팩터 노출 1σ 종목에 가산하는 충격입니다(음수 = 악재).")}))
 
 
 class _CustomBase(BaseModel):
@@ -285,7 +285,7 @@ class _CustomBase(BaseModel):
         presets=[{"label": "−10%", "value": -10.0}, {"label": "−5%", "value": -5.0}, {"label": "+5%", "value": 5.0}])})
     pack_id: str | None = Field(None, max_length=80, json_schema_extra={"x-ui": _ui(
         "저장된 시나리오", "advanced", widget="pick", source="scenario_packs",
-        help="고르면 아래 충격 대신 저장된 시나리오를 씁니다.")})
+        help="선택하면 아래 충격 대신 저장된 시나리오를 적용합니다.")})
 
 
 from pydantic import create_model  # noqa: E402
@@ -363,16 +363,16 @@ PERIODS: dict[str, tuple[int, str]] = {"1y": (252, "최근 1년"), "3y": (756, "
 class RobustCompareParams(BaseModel):
     model_config = _FORBID
     period: Literal[tuple(PERIODS)] = Field("1y", json_schema_extra={"x-ui": _ui(
-        "볼 기간", question="과거 관측 기간", widget="cards", options={k: v[1] for k, v in PERIODS.items()},
-        help="길수록 나빴던 날이 더 많이 들어옵니다. 시세가 모자라면 있는 만큼만 보고 실제 길이를 적습니다.")})
+        "분석 기간", question="과거 관측 기간", widget="cards", options={k: v[1] for k, v in PERIODS.items()},
+        help="길수록 하락 국면 표본이 늘어납니다. 시세가 부족하면 가용 구간만 사용하고 실제 길이를 표시합니다.")})
     window: Literal[20, 60, 120] = Field(60, json_schema_extra={"x-ui": _ui(
         "상관 창", "advanced", unit="거래일", presets=[{"label": "한 달", "value": 20}, {"label": "석 달", "value": 60},
                                                     {"label": "반년", "value": 120}],
-        help="상관 추이를 몇 거래일씩 끊어 볼지입니다. 짧을수록 빨리 바뀌지만 흔들립니다.")})
+        help="상관 추이를 계산할 롤링 창(거래일)입니다. 짧을수록 민감하지만 잡음이 큽니다.")})
     shock_rho: Literal[0.7, 0.8, 0.9] = Field(0.8, json_schema_extra={"x-ui": _ui(
-        "치솟는 상관", "advanced", presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
+        "충격 상관", "advanced", presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
                                          {"label": "0.9", "value": 0.9}],
-        help="그룹끼리 상관이 이 값으로 오른다고 가정하고 합친 흔들림을 다시 측정합니다.")})
+        help="그룹 간 상관이 이 값으로 상승한다고 가정하고 결합 변동성을 재측정합니다.")})
 
 
 def _sleeve_analytics(inputs: dict, p: RobustCompareParams) -> pg.NodeOutput:
@@ -396,8 +396,8 @@ def _sleeve_analytics(inputs: dict, p: RobustCompareParams) -> pg.NodeOutput:
 def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
     rob = view.get("robustness") or {}
     n_days, want = rob.get("n_days"), view.get("requested_days")
-    trust = [_t(ASSUMED, "지금 비중을 이 기간 내내 들고 있었다고 보고 잰 흐름입니다 — 실제 운용 기록이 아닙니다."),
-             _t(ASSUMED, "그룹끼리 몫은 똑같이 나눴다고 봤습니다(합친 흔들림·충격 계산).")]
+    trust = [_t(ASSUMED, "현재 비중을 이 기간 내내 보유했다고 가정한 흐름입니다 — 실제 운용 기록이 아닙니다."),
+             _t(ASSUMED, "그룹 간 배분 비중은 동일 가중으로 가정했습니다(결합 변동성·충격 계산).")]
     if rob.get("available"):
         trust.insert(0, _t(CONFIRMED, f"그룹 {view.get('n')}개의 과거 {n_days}거래일 수익으로 상관 추이·위기일·최악 구간을 측정했습니다."))
         if isinstance(n_days, int) and isinstance(want, int) and n_days < want:
@@ -405,7 +405,7 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
         crisis = rob.get("crisis") or {}
         if crisis.get("basis") != "market":
             trust.append(_t(UNKNOWN, str(crisis.get("note") or "시장 자료 없이 위기일을 골랐습니다.")))
-        trust.append(_t(ASSUMED, "치솟는 상관은 내가 정한 값입니다 — 실제 위기에는 흔들림도 함께 커집니다."))
+        trust.append(_t(ASSUMED, "충격 상관은 사용자가 지정한 가정입니다 — 실제 위기에는 변동성도 함께 커집니다."))
         if rob.get("shorts_dropped"):
             trust.append(_t(UNKNOWN, f"숏 비중 {rob['shorts_dropped']}개는 흐름에서 빼고 측정했습니다."))
         if rob.get("axis") == "date":
@@ -511,8 +511,8 @@ def _explain_validate(view: dict, prov: dict, params: Any) -> dict:
             "facts": facts, "trust": trust, "unmeasured": ["표본 밖 예측력", "거래 비용을 뺀 성과"]}
 
 
-_WEIGHTINGS = {"equal": "똑같이", "factor_tilt": "점수만큼 더", "inverse_vol": "덜 흔들리는 쪽에 더",
-               "risk_parity": "위험을 똑같이", "min_var": "흔들림 최소", "hrp": "계층 위험 균형"}
+_WEIGHTINGS = {"equal": "동일 가중", "factor_tilt": "점수 비례 틸트", "inverse_vol": "역변동성 가중",
+               "risk_parity": "리스크 패리티", "min_var": "최소분산", "hrp": "계층적 리스크 패리티(HRP)"}
 
 
 class AlphaPortfolioParams(BaseModel):
@@ -523,9 +523,9 @@ class AlphaPortfolioParams(BaseModel):
     universe: Literal[tuple(_UNIVERSES)] = Field("kospi200", json_schema_extra={"x-ui": _ui(
         "종목 범위", "advanced", widget="cards", options=_UNIVERSES)})
     top_k: int = Field(10, ge=2, le=30, json_schema_extra={"x-ui": _ui(
-        "담을 종목 수", "advanced", unit="개", presets=[{"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
+        "편입 종목 수", "advanced", unit="개", presets=[{"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
     weighting: Literal[tuple(_WEIGHTINGS)] = Field("equal", json_schema_extra={"x-ui": _ui(
-        "나누는 방식", "advanced", widget="cards", options=_WEIGHTINGS)})
+        "배분 방식", "advanced", widget="cards", options=_WEIGHTINGS)})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
         "기준일", "advanced", help="비우면 오늘입니다.")})
 
@@ -574,51 +574,51 @@ def _explain_alpha_portfolio(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("frontier", "효율적 프런티어", stage="check", plain_label="효율적 프런티어",
-                    plain_description="같은 흔들림에서 가장 높은 수익을 내는 조합들을 곡선으로 그립니다.",
+                    plain_description="동일 변동성에서 기대수익률이 최대인 포트폴리오 집합을 곡선으로 표시합니다.",
                     inputs=(P("returns", "Returns"), P("weights", "Weights", required=False)), outputs=(),
                     run=_frontier, params_model=FrontierParams, explain=_explain_frontier, category="확인",
                     description="PortfolioAnalyzer.efficient_frontier + MC 구름(/analyze 3·4 단계와 같다)."),
         pg.NodeSpec("regime_ensemble", "국면 앙상블", stage="signal", plain_label="국면 앙상블",
-                    plain_description="축·상태 전환·군집 세 방법이 각각 어떤 국면을 가리키는지 나란히 봅니다.",
+                    plain_description="축 판정·상태 전환·군집 세 방법의 국면 판정을 비교합니다.",
                     inputs=(), outputs=(), run=_regime_ensemble, params_model=EnsembleParams,
                     explain=_explain_ensemble, category="거시",
                     description="regime_ensemble(/macro/regime-ensemble 과 같다) · 운영은 저장된 관측만."),
         pg.NodeSpec("regime_explain", "국면 설명", stage="signal", plain_label="국면 판정 근거",
-                    plain_description="지금 국면을 만든 지표와 다음 달들로 넘어갈 확률을 봅니다.",
+                    plain_description="현재 국면 판정의 근거 지표와 향후 국면 전이 확률을 표시합니다.",
                     inputs=(), outputs=(), run=_regime_explain, params_model=ExplainParams,
                     explain=_explain_regime_explain, category="거시",
                     description="regime_transitions + regime_drivers(/macro/regime-explain 과 같다) · 운영은 저장된 관측만."),
         pg.NodeSpec("scenario_three_way", "세 갈래 시나리오", stage="check", plain_label="3-시나리오 비교",
-                    plain_description="그대로 두기 · 타이밍만 · 타이밍+국면을 같은 충격 아래서 비교합니다.",
+                    plain_description="현 비중 유지 · 타이밍 · 타이밍+국면을 동일 충격 아래서 비교합니다.",
                     inputs=(P("weights", "Weights"), P("signal", "TimingSignal"),
                             P("regime", "RegimeState", required=False)), outputs=(),
                     run=_three_way, params_model=ThreeWayParams, explain=_explain_three_way, category="확인",
                     description="/scenario-three-way 라우트 함수 — 같은 rule_set_states·three_way."),
         pg.NodeSpec("custom_scenario", "직접 만든 시나리오", stage="check", plain_label="사용자 정의 시나리오",
-                    plain_description="시장과 성격별 충격을 직접 정해 이 비중에 넣어 봅니다.",
+                    plain_description="시장·팩터별 충격을 직접 지정해 현재 비중에 적용합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("stress", "StressReport"),),
                     run=_custom_scenario, params_model=CustomParams, explain=_explain_custom, category="확인",
                     description="/scenario-run 라우트 함수(인라인 팩 · 저장된 팩) — model_type 은 서버가 정한다."),
         pg.NodeSpec("strategy_health", "전략 건강", stage="check", plain_label="알파 건전성 점검",
-                    plain_description="등록한 알파들이 건강한지, 줄이거나 멈출 것이 있는지 봅니다.",
+                    plain_description="등록 알파의 성과 건전성을 점검하고 축소·중단 대상을 표시합니다.",
                     inputs=(), outputs=(), run=_strategy_health, explain=_explain_health, category="알파",
                     description="/strategy-health 라우트 함수(읽기만)."),
         pg.NodeSpec("sleeve_analytics", "견고성 비교", stage="check", plain_label="견고성 비교",
-                    plain_description="비중 그룹 2~4개가 평소·위기 때 얼마나 같이 움직이는지, 상관 스트레스 어떻게 되는지, "
-                                      "크게 잃은 구간이 겹치는지 봅니다.",
+                    plain_description="비중 그룹 2~4개의 평시·위기 상관, 상관 급등 시 변동성 변화, "
+                                      "낙폭 구간의 중첩을 비교합니다.",
                     inputs=(P("a", "Weights"), P("b", "Weights"), P("c", "Weights", required=False),
                             P("d", "Weights", required=False)), outputs=(),
                     run=_sleeve_analytics, params_model=RobustCompareParams, explain=_explain_sleeves,
                     glance=_glance_sleeves, category="확인",
                     description="sleeve_analytics(/sleeve-analytics 와 같은 표) + strategy_robustness(관측만)."),
         pg.NodeSpec("alpha_validate", "알파 검증", stage="signal", plain_label="알파 검증",
-                    plain_description="알파 식의 점수가 과거에 다음 달 수익 순위와 얼마나 맞았는지 측정합니다.",
+                    plain_description="알파 점수와 익월 수익률 순위의 정보계수(IC)를 과거 구간에서 측정합니다.",
                     inputs=(), outputs=(), run=_alpha_validate, params_model=AlphaValidateParams,
                     explain=_explain_validate, category="알파",
                     save=_save_alpha_validation, save_label="검증 기록 남기기",
                     description="/alpha-lab/validate 라우트 함수 record_run=False · 저장은 버튼으로 한 번."),
         pg.NodeSpec("alpha_portfolio", "알파 포트폴리오", stage="build", plain_label="알파 포트폴리오",
-                    plain_description="승인된 알파 여럿의 점수를 합쳐 상위 종목의 비중을 정합니다.",
+                    plain_description="승인된 복수 알파의 점수를 결합해 상위 종목의 비중을 산출합니다.",
                     inputs=(), outputs=(P("weights", "Weights"),), run=_alpha_portfolio,
                     params_model=AlphaPortfolioParams, explain=_explain_alpha_portfolio, category="알파",
                     description="/alpha-lab/portfolio 라우트 함수 record_run=False — 승인 사다리 차단 그대로."),

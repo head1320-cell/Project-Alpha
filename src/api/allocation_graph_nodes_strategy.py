@@ -53,7 +53,7 @@ def _detail_reason(detail: Any) -> str:
 
 # ── 전략 묶음 돌려 보기 ───────────────────────────────────────────────────────
 
-_METHOD = {"hrp": "비슷한 것끼리 묶어", "inverse_vol": "덜 흔들리는 쪽에 더"}
+_METHOD = {"hrp": "계층적 리스크 패리티(HRP)", "inverse_vol": "역변동성 가중"}
 #: 배분기 엔진(`_validate_config`)이 받는 리밸런싱 정책 — 테스트가 엔진이 다 받는지 확인한다.
 _POLICY = {"monthly": "매달", "quarterly": "분기마다", "weekly": "매주", "daily": "매일",
            "regime_change": "국면이 바뀔 때"}
@@ -66,22 +66,22 @@ StrategyParams = _subset(
         "strategy_ids": _ui("전략", question="결합 대상 전략", widget="pick", source="strategies",
                             help="백테스트 실행을 전략으로 등록하면 여기에 나옵니다."),
         "initial_capital": _ui("시작 금액", "advanced", unit="원"),
-        "netting_enabled": _ui("주문 상계", "advanced", help="전략끼리 반대 주문을 서로 지워 비용을 줄입니다."),
+        "netting_enabled": _ui("주문 상계", "advanced", help="전략 간 반대 주문을 상계해 거래비용을 줄입니다."),
         "commission_rate": _ui("수수료율", "advanced"),
         "slippage_rate": _ui("슬리피지율", "advanced"),
-        "lookback_days": _ui("포트폴리오 최적화 기간", "advanced", unit="일"),
-        "max_weight": _ui("전략 하나의 최대 비중", "advanced"),
-        "min_weight": _ui("전략 하나의 최소 비중", "advanced"),
-        "regime_market": _ui("국면을 볼 시장", "advanced", options={"kr": "한국", "us": "미국"}),
+        "lookback_days": _ui("최적화 추정 기간", "advanced", unit="일"),
+        "max_weight": _ui("전략별 최대 비중", "advanced"),
+        "min_weight": _ui("전략별 최소 비중", "advanced"),
+        "regime_market": _ui("국면 판정 시장", "advanced", options={"kr": "한국", "us": "미국"}),
     },
     allocation_method=(Literal[tuple(METHODS)], Field("hrp", json_schema_extra={"x-ui": _ui(
-        "나누는 방식", question="전략 간 배분 방식", widget="cards", options=_METHOD)})),
+        "배분 방식", question="전략 간 배분 방식", widget="cards", options=_METHOD)})),
     rebalance_policy=(Literal[tuple(_POLICY)], Field("monthly", json_schema_extra={"x-ui": _ui(
-        "다시 나누는 때", question="리밸런싱 시점", options=_POLICY)})),
+        "리밸런싱 시점", question="리밸런싱 시점", options=_POLICY)})),
     start_date=(str | None, Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui(
-        "시작일", "advanced", help="비우면 고른 전략들이 함께 기록된 첫날부터입니다.")})),
+        "시작일", "advanced", help="비우면 선택 전략의 공통 기록 시작일부터입니다.")})),
     end_date=(str | None, Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui(
-        "종료일", "advanced", help="비우면 함께 기록된 마지막 날까지입니다.")})),
+        "종료일", "advanced", help="비우면 공통 기록 종료일까지입니다.")})),
 )
 
 
@@ -180,7 +180,7 @@ def _explain_strategy(view: dict, prov: dict, params: Any) -> dict:
 class CompanyViewsParams(BaseModel):
     model_config = _FORBID
     convergence_years: float | None = Field(None, ge=1, le=30, json_schema_extra={"x-ui": _ui(
-        "차이가 좁혀지는 기간", question="내재가치 괴리 수렴 기간 가정", unit="년",
+        "괴리 수렴 기간", question="내재가치 괴리 수렴 기간 가정", unit="년",
         presets=[{"label": "가치평가 가정 그대로", "value": None}, {"label": "3년", "value": 3},
                  {"label": "5년", "value": 5}],
         help="가정입니다 — 잰 값이 아닙니다.")})
@@ -210,7 +210,7 @@ def _explain_company(view: dict, prov: dict, params: Any) -> dict:
     views, reasons = view.get("views") or [], view.get("reasons") or {}
     facts = [f"종목 {len(views)}개에 전망을 만들었습니다" + (f" · {len(reasons)}개는 만들지 못했습니다" if reasons else "") + "."]
     if view.get("n_user_views"):
-        facts.append(f"내 생각 {view['n_user_views']}개와 함께 넘깁니다.")
+        facts.append(f"투자 뷰 {view['n_user_views']}개와 함께 넘깁니다.")
     trust = [_t(ASSUMED, "적정가와의 차이가 일정 기간에 걸쳐 좁혀진다고 가정했습니다 — 폭은 잰 값이 아닙니다."),
              _t(UNKNOWN, _TODAY_ONLY)]
     if view.get("saturated"):
@@ -225,9 +225,9 @@ def _explain_company(view: dict, prov: dict, params: Any) -> dict:
 
 ValuationParams_ = _subset("ValuationScoresParams", EvaluateRequest, ("beta", "projection_years"), ui={
     "beta": _ui("베타", question="시장 대비 민감도(베타) 가정",
-                presets=[{"label": "시장과 같게(1.0)", "value": 1.0}, {"label": "덜 흔들림(0.8)", "value": 0.8},
-                         {"label": "더 흔들림(1.2)", "value": 1.2}], help="가정입니다 — 할인율에 들어갑니다."),
-    "projection_years": _ui("내다보는 기간", "advanced", unit="년"),
+                presets=[{"label": "시장과 같게(1.0)", "value": 1.0}, {"label": "변동성 낮음(0.8)", "value": 0.8},
+                         {"label": "변동성 높음(1.2)", "value": 1.2}], help="가정입니다 — 할인율에 들어갑니다."),
+    "projection_years": _ui("예측 기간", "advanced", unit="년"),
 })
 
 
@@ -344,23 +344,23 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("strategy_backtest", "전략 그룹 백테스트", stage="check", plain_label="멀티전략 백테스트",
-                    plain_description="등록한 전략 여러 개를 한 계좌처럼 나눠 담았다면 어땠을지 봅니다. 기록은 남기지 않습니다.",
+                    plain_description="복수 등록 전략을 단일 계좌로 운용한 성과를 산출합니다. 기록은 남기지 않습니다.",
                     inputs=(), outputs=(P("result", "StrategyResult"),), run=_strategy_backtest,
                     params_model=StrategyParams, explain=_explain_strategy, category="전략",
                     description="/multibacktest/run(save=False) — 같은 가드·비용·출처. hrp_macro 는 선택지에 없다."),
         pg.NodeSpec("company_views", "기업 전망", stage="belief", plain_label="기업 전망",
-                    plain_description="재무로 계산한 적정가와 지금 가격의 차이를 전망으로 바꿔 넣습니다.",
+                    plain_description="재무 기반 적정가와 현재가의 괴리를 투자 뷰로 변환합니다.",
                     inputs=(P("returns", "Returns"), P("views", "Views", required=False)),
                     outputs=(P("views", "Views"),), run=_company_views, params_model=CompanyViewsParams,
                     explain=_explain_company, category="추정",
                     description="/analyze use_company_views 와 같은 company_views. 지금 시점 전용(forward_only)."),
         pg.NodeSpec("valuation_scores", "가치평가 점수", stage="signal", plain_label="밸류에이션 스코어링",
-                    plain_description="종목마다 적정가를 계산해 얼마나 싼지 점수로 매깁니다.",
+                    plain_description="종목별 적정가 대비 저평가 정도를 점수로 산출합니다.",
                     inputs=(P("universe", "Universe"),), outputs=(P("scores", "Scores"),), run=_valuation_scores,
                     params_model=ValuationParams_, explain=_explain_valuation, category="신호",
                     description="/valuation/compare 와 같은 3-모델 가치평가. 점수 = −괴리율, 적정가 없음은 제외."),
         pg.NodeSpec("attribution_review", "성과 귀인", stage="act", plain_label="결정 사후 검토",
-                    plain_description="저장한 결정이 그 뒤 실제로 어땠는지 기대와 비교합니다.",
+                    plain_description="저장된 결정의 사후 실적을 당시 기대와 비교합니다.",
                     inputs=(), outputs=(), run=_attribution, params_model=AttributionParams,
                     explain=_explain_attribution, category="기록",
                     description="/attribution/{run_id} 와 같은 _attribution_for — 읽기만 한다."),

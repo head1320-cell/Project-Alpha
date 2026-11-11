@@ -263,15 +263,15 @@ def _path_values(rev0: float, g: np.ndarray, m: np.ndarray, r: np.ndarray, *, ye
 
 def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_growth: float, sigma_margin: float,
                        sigma_reinvest: float, years: int, n: int, seed: int, price: float | None) -> dict:
-    """매출 성장률·영업이익률·재투자율을 흔들어 주당 가치의 분포를 낸다(세 동인 독립 가정).
+    """매출 성장률·영업이익률·재투자율을 변동시켜 주당 가치의 분포를 낸다(세 동인 독립 가정).
 
     분포의 **중심**은 재무 이력에서 읽고(관측·근사), **폭**은 사람이 정한다(가정). FCF = 매출 × (마진 × (1−t) − 재투자율),
     재투자율 = (NOPAT − (영업CF − CAPEX))/매출 — 감가상각 자료가 없어 영업CF 로 대신한다(근사). 영구성장률은 가정 그대로.
     """
     hist = [fs for fs in _years(history) if (_num(fs.revenue) or 0) > 0]
-    inputs = [_inp("sigma_growth", "성장률 흔들림(σ)", sigma_growth, ASSUMED),
-              _inp("sigma_margin", "마진 흔들림(σ)", sigma_margin, ASSUMED),
-              _inp("sigma_reinvest", "재투자율 흔들림(σ)", sigma_reinvest, ASSUMED),
+    inputs = [_inp("sigma_growth", "성장률 표준편차(σ)", sigma_growth, ASSUMED),
+              _inp("sigma_margin", "마진 표준편차(σ)", sigma_margin, ASSUMED),
+              _inp("sigma_reinvest", "재투자율 표준편차(σ)", sigma_reinvest, ASSUMED),
               _inp("reinvest", "재투자", "NOPAT − (영업CF − CAPEX)", APPROX, "감가상각은 영업CF 에 들어 있다고 봄"),
               _inp("independence", "동인끼리 관계", "서로 독립", ASSUMED)]
     if len(hist) < 2:
@@ -324,7 +324,7 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
             "n_requested": n, "n_used": int(vals.size), "n_rejected": int(n - vals.size),
             "negative_share": float((vals < 0).mean()), "wacc": wacc, "terminal_growth": gt, "years": years,
             "seed": seed, "inputs": inputs,
-            "note": ("'가치 분포' 노드는 할인율·성장률 **가정**을 흔들고, 이 노드는 매출·마진·재투자라는 **영업**을 흔듭니다 — "
+            "note": ("'가치 분포' 노드는 할인율·성장률 **가정**을 변동시키고, 이 노드는 매출·마진·재투자라는 **영업 동인**을 변동시킵니다 — "
                      "다른 불확실성입니다. 폭(σ)은 잰 값이 아니라 정한 값입니다.")}
 
 
@@ -374,7 +374,7 @@ def decision_tree(branches: list[dict], *, price: float | None) -> dict:
     """
     inputs = [_inp("branches", "가지·확률·값", len(branches), ASSUMED, "사람이 그린 나무")]
     if not branches:
-        return _off("가지가 하나도 없습니다 — 사건을 하나 이상 그려 주십시오", inputs=inputs)
+        return _off("가지가 하나도 없습니다 — 사건을 하나 이상 입력하십시오", inputs=inputs)
     if len(branches) > _TREE_MAX_BRANCHES:
         return _off(f"가지는 {_TREE_MAX_BRANCHES}개까지입니다", inputs=inputs)
     ids = [str(b.get("id") or "").strip() for b in branches]
@@ -499,7 +499,7 @@ def real_option(*, S: float, K: float, T: float, sigma: float, r: float, q: floa
 
     inputs = [_inp("S", "사업 가치(기초자산)", S, ASSUMED, unit="억"), _inp("K", "투자비·처분가(행사가)", K, ASSUMED, unit="억"),
               _inp("T", "만기", T, ASSUMED, unit="년"), _inp("sigma", "사업 가치 변동성", sigma, ASSUMED),
-              _inp("q", "누수율", q, ASSUMED), _inp("r", "무위험수익률", r, APPROX)]
+              _inp("q", "가치 누수율", q, ASSUMED), _inp("r", "무위험수익률", r, APPROX)]
     if S <= 0 or K <= 0:
         return _off("사업 가치와 행사가는 0 보다 커야 합니다", inputs=inputs)
     if T <= 0 or sigma <= 0:

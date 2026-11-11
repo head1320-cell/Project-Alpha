@@ -153,7 +153,7 @@ def facts_universe(v: dict) -> list[dict]:
     t = list(v.get("tickers") or [])
     return [_f("n", "종목", f"{len(t)}개 · " + _names(t), len(t)),
             _f("bench", "벤치마크", str(v.get("benchmark") or "없음")),
-            _f("current", "지금 비중", "함께 보냅니다" if v.get("weights") else "없습니다")]
+            _f("current", "현재 비중", "함께 보냅니다" if v.get("weights") else "없습니다")]
 
 
 def facts_regime(v: dict) -> list[dict]:
@@ -171,7 +171,7 @@ def facts_timing(v: dict) -> list[dict]:
     u = sum(1 for s in states if s == "unavailable")
     out = [_f("n", "신호", f"{len(states)}개 · 읽지 못함 {u}개", len(states)), _f("unread", "읽지 못한 신호", f"{u}개", u)]
     if v.get("combination"):
-        out.append(_f("combination", "합치는 규칙", str(v["combination"])))
+        out.append(_f("combination", "결합 규칙", str(v["combination"])))
     if v.get("as_of"):
         out.append(_f("as_of", "기준일", str(v["as_of"])))
     return out
@@ -266,7 +266,7 @@ def intake_optimizer_views(h: pg.Handoff) -> dict:
     issues = []
     if view.get("views_unused"):
         issues.append(_i("unused", "views_unused", f"이 계산 방식은 생각을 쓰지 않습니다 — 이어진 생각 {view['views_unused']}개가 비중에 들어가지 않습니다.",
-                         "‘내 생각 반영’ 방식을 고르면 비중에 들어갑니다."))
+                         "‘블랙-리터먼’·‘엔트로피 풀링’ 방식을 고르면 비중에 반영됩니다."))
     skipped = [s for s in view.get("skipped_views") or [] if ((s or {}).get("view") or {}).get("source") != "conditional"]
     if skipped:
         issues.append(_i("lost", "skipped", f"생각 {len(skipped)}개는 쓸 수 없어 빠졌습니다 — " + str(skipped[0].get("reason") or "")))

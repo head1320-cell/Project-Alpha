@@ -30,10 +30,10 @@ type Sent = { graph: { nodes: { id: string }[] }; target: { kind: string; id: st
               facts: { node_id: string; explain: unknown; sig: string }[]; records: { edge_id: string; record: unknown; sig: string }[] };
 
 const SENTS = [{ text: "기대 수익을 과거 평균으로 잡았습니다.", fact_ids: ["f5"] },
-               { text: "비중은 수익 대비 위험 최적으로 나눴습니다.", fact_ids: ["f9", "f11"] }];
+               { text: "비중은 평균-분산 최적화로 나눴습니다.", fact_ids: ["f9", "f11"] }];
 const FACTS = {
   f5: { target_kind: "node", target_id: "estimate", part: "사실", index: 1, text: "기대 수익은 과거 평균입니다" },
-  f9: { target_kind: "node", target_id: "optimizer", part: "제목", index: 0, text: "비중을 수익 대비 위험 최적으로 나눴습니다" },
+  f9: { target_kind: "node", target_id: "optimizer", part: "제목", index: 0, text: "비중을 평균-분산 최적화로 나눴습니다" },
   f11: { target_kind: "edge", target_id: RO, part: "건너간 것", index: 0, text: "기간: 756일" },
 };
 const ok = (extra: Record<string, unknown> = {}) => ({

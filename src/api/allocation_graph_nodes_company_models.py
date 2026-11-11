@@ -54,11 +54,11 @@ class EvaParams(_Priced):
     fade_years: int = Field(5, ge=1, le=30, json_schema_extra={"x-ui": _ui(
         "초과이익 소멸 기간", question="초과이익(EVA) 소멸 기간 가정", unit="년",
         presets=[{"label": "3년", "value": 3}, {"label": "5년", "value": 5}, {"label": "10년", "value": 10}],
-        help="경쟁이 초과이익을 깎아 먹는 속도입니다 — 가정입니다.")})
+        help="경쟁으로 초과이익이 소멸하는 기간입니다 — 가정입니다.")})
     g: float | None = Field(None, ge=-0.05, le=0.15, json_schema_extra={"x-ui": _ui(
         "성장률", "advanced", help="가치 동인 공식의 성장률입니다. 비우면 영구성장률을 씁니다.")})
     ronic: float | None = Field(None, gt=-1, le=1, json_schema_extra={"x-ui": _ui(
-        "새 투자 수익률", "advanced", help="새로 투자한 돈이 버는 수익률(RONIC)입니다. 비우면 최근 ROIC 를 씁니다.")})
+        "신규 투자 수익률", "advanced", help="신규 투자자본의 수익률(RONIC)입니다. 비우면 최근 ROIC 를 씁니다.")})
 
 
 def _eva(inputs: dict, p: EvaParams) -> pg.NodeOutput:
@@ -100,7 +100,7 @@ class LayersParams(_Priced):
         "수익력가치 가중", question="지금 버는 만큼만 계속 벌 확률은?",
         presets=[{"label": "20%", "value": 0.2}, {"label": "25%", "value": 0.25}, {"label": "30%", "value": 0.3}])})
     w_full: float = Field(0.5, ge=0, le=1, json_schema_extra={"x-ui": _ui(
-        "성장까지 가중", question="성장까지 이뤄질 확률은?",
+        "성장가치 가중", question="성장까지 이뤄질 확률은?",
         presets=[{"label": "20%", "value": 0.2}, {"label": "50%", "value": 0.5}, {"label": "70%", "value": 0.7}])})
 
 
@@ -140,7 +140,7 @@ def _explain_layers(view: dict, prov: dict, params: Any) -> dict:
 
 class MultiplesParams(_Priced):
     peers: bool = Field(True, json_schema_extra={"x-ui": _ui(
-        "피어 PER 함께", "advanced", help="동종업계 종목들의 PER 중앙값으로 본 가격도 함께 봅니다(업종 표를 계산해 느립니다).")})
+        "피어 PER 비교", "advanced", help="동종업계 PER 중앙값 기준 가격을 함께 산출합니다(업종 표 계산으로 느립니다).")})
 
 
 def _multiples(inputs: dict, p: MultiplesParams) -> pg.NodeOutput:
@@ -179,17 +179,17 @@ def _explain_multiples(view: dict, prov: dict, params: Any) -> dict:
 
 class DriverMcParams(_Priced):
     sigma_growth: float = Field(0.03, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
-        "매출 성장률 흔들림", question="매출 성장률 연간 변동성 가정",
+        "매출 성장률 표준편차", question="매출 성장률 연간 변동성 가정",
         presets=[{"label": "±1%p", "value": 0.01}, {"label": "±3%p", "value": 0.03}, {"label": "±6%p", "value": 0.06}],
         help="표준편차입니다. 중심은 지난 재무에서 읽습니다.")})
     sigma_margin: float = Field(0.02, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
-        "영업이익률 흔들림", question="영업이익률 변동성 가정",
+        "영업이익률 표준편차", question="영업이익률 변동성 가정",
         presets=[{"label": "±1%p", "value": 0.01}, {"label": "±2%p", "value": 0.02}, {"label": "±4%p", "value": 0.04}])})
-    sigma_reinvest: float = Field(0.01, ge=0, le=0.5, json_schema_extra={"x-ui": _ui("재투자율 흔들림", "advanced")})
+    sigma_reinvest: float = Field(0.01, ge=0, le=0.5, json_schema_extra={"x-ui": _ui("재투자율 표준편차", "advanced")})
     years: int = Field(5, ge=3, le=15, json_schema_extra={"x-ui": _ui("예측 기간", "advanced", unit="년")})
     n: int = Field(2000, ge=100, le=20000, json_schema_extra={"x-ui": _ui("경로 수", "advanced")})
-    seed: int = Field(20260927, json_schema_extra={"x-ui": _ui("난수 씨앗", "advanced",
-                                                               help="같은 씨앗이면 같은 결과가 나옵니다.")})
+    seed: int = Field(20260927, json_schema_extra={"x-ui": _ui("난수 시드", "advanced",
+                                                               help="같은 시드면 같은 결과가 나옵니다.")})
 
 
 def _driver_mc(inputs: dict, p: DriverMcParams) -> pg.NodeOutput:
@@ -364,12 +364,12 @@ class RealOptionParams(_Priced):
     K: float = Field(1200.0, gt=0, json_schema_extra={"x-ui": _ui(
         "투자비·처분가(억원)", question="들어가려면(또는 빠져나오면) 얼마?")})
     T: float = Field(3.0, gt=0, le=30, json_schema_extra={"x-ui": _ui(
-        "결정까지", unit="년", presets=[{"label": "1년", "value": 1}, {"label": "3년", "value": 3}, {"label": "5년", "value": 5}])})
+        "결정 만기", unit="년", presets=[{"label": "1년", "value": 1}, {"label": "3년", "value": 3}, {"label": "5년", "value": 5}])})
     sigma: float = Field(0.35, gt=0, le=2, json_schema_extra={"x-ui": _ui(
         "사업 가치 변동성", presets=[{"label": "20%", "value": 0.2}, {"label": "35%", "value": 0.35}, {"label": "60%", "value": 0.6}],
-        help="옵션 값을 가장 크게 좌우하는 가정입니다.")})
+        help="옵션 가치에 가장 민감한 가정입니다.")})
     q: float = Field(0.0, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
-        "누수율", "advanced", help="기다리는 동안 놓치는 현금흐름 비율(배당처럼 다룹니다).")})
+        "가치 누수율", "advanced", help="결정 대기 중 유실되는 현금흐름 비율(배당수익률처럼 처리합니다).")})
     n_steps: int = Field(500, ge=50, le=2000, json_schema_extra={"x-ui": _ui("이항 단계 수", "advanced")})
 
 
@@ -404,35 +404,35 @@ def register(registry: pg.Registry) -> None:
     common = {"inputs": (), "outputs": (), "category": "기업", "stage": "signal"}
     for spec in (
         pg.NodeSpec("company_eva", "EVA·가치 동인", plain_label="EVA 분석",
-                    plain_description="투하자본에 드는 비용을 빼고도 남는 이익(EVA)과, 성장이 가치를 만드는지 봅니다.",
+                    plain_description="투하자본 비용 차감 후 경제적 이익(EVA)과 성장의 가치 창출 여부를 분석합니다.",
                     run=_eva, params_model=EvaParams, explain=_explain_eva,
                     description="company_model_eva 라우트 함수 그대로(practice_models.eva_analysis).", **common),
         pg.NodeSpec("company_value_layers", "가치의 층", plain_label="가치 구성 분해",
-                    plain_description="자산 → 지금의 이익력 → 성장으로 가치를 층층이 쌓고, 층마다 확률을 둡니다.",
+                    plain_description="자산가치 → 현재 수익력 → 성장 가치 순으로 가치를 분해하고 층별 확률을 부여합니다.",
                     run=_layers, params_model=LayersParams, explain=_explain_layers,
                     description="company_model_value_layers 라우트 함수 그대로(Greenwald 3층 + 확률 가중).", **common),
         pg.NodeSpec("company_multiples", "배수·PEG", plain_label="PEG·멀티플",
-                    plain_description="성장률과 PEG 를 바꿔 가며 맞는 주가를 보고, ROE·배당으로 정당한 배수를 봅니다.",
+                    plain_description="성장률·PEG 별 적정 주가와 ROE·배당 기반 정당 배수를 산출합니다.",
                     run=_multiples, params_model=MultiplesParams, explain=_explain_multiples,
                     description="company_model_multiples 라우트 함수 그대로.", **common),
         pg.NodeSpec("company_driver_mc", "영업 동인 몬테카를로", plain_label="영업 동인 몬테카를로",
-                    plain_description="매출 성장·마진·재투자를 흔들어 주당 가치가 어디서 어디까지 나오는지 봅니다.",
+                    plain_description="매출 성장·마진·재투자율을 확률적으로 변동시켜 주당 가치 분포를 산출합니다.",
                     run=_driver_mc, params_model=DriverMcParams, explain=_explain_driver_mc,
                     description="company_model_driver_mc 라우트 함수 그대로(시드 고정 재현).", **common),
         pg.NodeSpec("company_scenarios", "시나리오 가중", plain_label="확률가중 시나리오",
-                    plain_description="약세·기본·강세처럼 경우마다 가정을 바꾸고 확률을 둬 적정가를 묶습니다.",
+                    plain_description="약세·기본·강세 시나리오별 가정과 확률로 확률가중 적정가를 산출합니다.",
                     run=_scenarios, params_model=ScenariosParams, explain=_explain_scenarios,
                     description="company_model_scenarios 라우트 함수 그대로(행마다 샌드박스와 같은 엔진).", **common),
         pg.NodeSpec("company_decision_tree", "의사결정 나무", plain_label="의사결정 나무",
-                    plain_description="승인·실패처럼 갈리는 사건을 나무로 그려 기대 가치를 접습니다.",
+                    plain_description="승인·실패 등 분기 사건을 의사결정 나무로 구성해 기대 가치를 산출합니다.",
                     run=_tree, params_model=TreeParams, explain=_explain_tree,
                     description="company_model_decision_tree 라우트 함수 그대로.", **common),
         pg.NodeSpec("company_sotp", "합산가치(SOTP)", plain_label="SOTP 가치평가",
-                    plain_description="사업 부문과 상장 자회사 지분을 더하고 지주사 할인을 반영합니다.",
+                    plain_description="사업 부문 가치와 상장 자회사 지분가치를 합산하고 지주사 할인을 반영합니다.",
                     run=_sotp, params_model=SotpParams, explain=_explain_sotp,
                     description="company_model_sotp 라우트 함수 그대로(자회사 시총 조회).", **common),
         pg.NodeSpec("company_real_option", "실물옵션", plain_label="실물옵션",
-                    plain_description="확장·연기·포기처럼 나중에 정할 수 있는 실물옵션을 블랙-숄즈와 이항으로 봅니다.",
+                    plain_description="확장·연기·포기 실물옵션의 가치를 블랙-숄즈·이항 모형으로 산출합니다.",
                     run=_real_option, params_model=RealOptionParams, explain=_explain_real_option,
                     description="company_model_real_option 라우트 함수 그대로(BS + CRR 이항).", **common),
     ):

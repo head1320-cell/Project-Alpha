@@ -133,7 +133,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             </>
           )} />
 
-        <MCard id="dist" title="가치 분포" what="할인율·성장률 가정을 흔들어 적정가가 어디쯤 모이는지 봅니다." q={m.dist}
+        <MCard id="dist" title="가치 분포" what="할인율·성장률 가정을 변동시켜 적정가가 어디쯤 모이는지 봅니다." q={m.dist}
           chips={(d) => (Object.values(d.widths ?? {}).some((w) => typeof w === "object" && w.measured === false)
             ? [{ label: "흔든 폭은 잰 값이 아니라 정한 값입니다", tone: "assumed" }] : [])}
           body={(d) => {
@@ -156,7 +156,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             );
           }} />
 
-        <MCard id="driver" title="영업 동인 흔들기" what="매출 성장·마진·재투자를 흔들어 주당 가치가 어떻게 퍼지는지 봅니다." q={m.driver}
+        <MCard id="driver" title="영업 동인 시뮬레이션" what="매출 성장·마진·재투자율을 변동시켜 주당 가치가 어떻게 퍼지는지 봅니다." q={m.driver}
           chips={() => [{ label: "흔든 폭은 정한 값입니다", tone: "assumed" }]}
           body={(d) => (
             <>
@@ -301,7 +301,7 @@ export function MacroBlock({ q }: { q: UseQueryResult<import("@/entities/company
   const d = q.data;
   return (
     <div className="ci-block ci-macro">
-      <h3 className="ci-block-h">경제 충격에 가치가 얼마나 흔들리나</h3>
+      <h3 className="ci-block-h">경제 충격별 가치 민감도</h3>
       {q.isPending && !q.isError ? <p className="ci-mcard-wait">계산 중</p>
         : q.isError ? <RetryFail title="매크로 민감도 조회 실패" onRetry={() => void q.refetch()} />
         : d && d.available === false ? <p className="ci-mcard-reason" data-server>{clean(d.reason)}</p>

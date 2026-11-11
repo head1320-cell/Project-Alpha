@@ -14,7 +14,7 @@ export function StrategyDonut({ slices, size = 88 }: { slices: DonutSlice[]; siz
   return (
     <div className="pg-donut" data-slices={known.length}>
       <svg width={size} height={size} viewBox="0 0 88 88" role="img"
-           aria-label={`전략 몫 — ${slices.map((x) => `${x.label} ${x.share === null ? "모름" : `${x.share.toFixed(1)}%`}`).join(", ")}`}>
+           aria-label={`전략 배분 비중 — ${slices.map((x) => `${x.label} ${x.share === null ? "모름" : `${x.share.toFixed(1)}%`}`).join(", ")}`}>
         <DonutRing total={100} trackClass="pg-donut-track"
           slices={known.map((x) => ({ key: x.port, value: x.share, color: x.color, data: { port: x.port, share: x.share } }))} />
         <text x="44" y="42" textAnchor="middle" className="pg-donut-n">{slices.length}</text>

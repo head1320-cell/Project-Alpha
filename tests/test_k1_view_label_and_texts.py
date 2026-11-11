@@ -91,7 +91,7 @@ def test_constraints_resolve_with_the_posterior_so_views_reach_the_weights(marke
     assert f["affects_weights"] is False
     assert "제약" in f["text"] and "그래서 비중은 시가총액 비중입니다." not in f["text"]
     texts = _texts(o["explain"])
-    assert "내 생각을 반영했습니다." in texts
+    assert "투자 뷰를 반영했습니다." in texts
     assert not any(t.get("kind") == "fallback" for t in o["explain"]["trust"])
     assert "views_market" not in {i["code"] for i in rep["edges"]["v.views->o.views"]["issues"] or []}
 
@@ -125,13 +125,13 @@ def test_market_fallback_sentence_says_what_happened(market, monkeypatch, target
     monkeypatch.setattr(target, _opt_none if target.endswith("_opt") else _raise)
     texts = _texts(_run(_chain("bl", views=VIEWS))["nodes"]["o"]["explain"])
     assert MARKET_SENTENCE in texts
-    assert "반영된 생각이 없습니다." not in texts and "내 생각을 반영했습니다." not in texts
+    assert "반영된 투자 뷰가 없습니다." not in texts and "투자 뷰를 반영했습니다." not in texts
 
 
 def test_bl_without_views_still_says_none(market):
     """짝 — 생각이 없으면 대체도 없고 문장은 예전 그대로."""
     texts = _texts(_run(_chain("bl"))["nodes"]["o"]["explain"])
-    assert "반영된 생각이 없습니다." in texts and MARKET_SENTENCE not in texts
+    assert "반영된 투자 뷰가 없습니다." in texts and MARKET_SENTENCE not in texts
 
 
 # ── 2. 시가총액 모름 ─────────────────────────────────────────────────────────

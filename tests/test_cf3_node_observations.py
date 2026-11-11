@@ -34,7 +34,7 @@ def test_optimizer_fallback_is_in_the_view_and_the_explanation(market, monkeypat
     o = _run(_chain("mvo"))["o"]
     [f] = o["view"]["fallbacks"]
     assert f["stage"] == "optimized" and f["affects_weights"] is True
-    assert "수익 대비 위험 최적" in f["text"] and "역변동성" in f["text"]
+    assert "평균-분산 최적화" in f["text"] and "역변동성" in f["text"]
     kinds = [t for t in o["explain"]["trust"] if t.get("kind") == "fallback"]
     assert kinds and kinds[0]["state"] == "assumed" and kinds[0]["text"] == f["text"]
     assert not any("문제없이" in t for t in _texts(o["explain"]))
@@ -49,18 +49,18 @@ def test_no_fallback_keeps_the_old_view_and_sentence(market):
 
 
 def test_bl_market_fallback_corrects_the_views_sentence(market, monkeypatch):
-    """BL 사후는 됐는데 비중을 풀지 못함 — '내 생각을 반영했습니다' 대신 무엇이 반영됐는지 말한다(라벨 `views_applied` 도 K1 부터 거짓)."""
+    """BL 사후는 됐는데 비중을 풀지 못함 — '투자 뷰를 반영했습니다' 대신 무엇이 반영됐는지 말한다(라벨 `views_applied` 도 K1 부터 거짓)."""
     monkeypatch.setattr("src.engine.allocation_studio._opt", _opt_none)
     o = _run(_chain("bl", views=VIEWS))["o"]
     assert o["view"]["views_applied"] is False
     texts = _texts(o["explain"])
-    assert "내 생각을 반영했습니다." not in texts
+    assert "투자 뷰를 반영했습니다." not in texts
     assert any("시가총액 비중" in t for t in texts)
 
 
 def test_bl_normal_still_says_views_were_applied(market):
     texts = _texts(_run(_chain("bl", views=VIEWS))["o"]["explain"])
-    assert "내 생각을 반영했습니다." in texts
+    assert "투자 뷰를 반영했습니다." in texts
 
 
 def test_bl_posterior_failure_under_mvo_is_recorded_but_not_assumed(market, monkeypatch):

@@ -24,7 +24,7 @@ const NOTICE = "합성 데이터 결과입니다. 실제 시세가 아니라 합
 type Fact = { node_id: string; explain: unknown; sig: string };
 type RunNode = { explain?: unknown; explain_sig?: string };
 const PARAS = [{ text: "종목 둘을 골라 최근 수익률을 불러왔습니다.", node_ids: ["universe", "returns"] },
-               { text: "비중은 수익 대비 위험 최적으로 나눴습니다.", node_ids: ["optimizer"] }];
+               { text: "비중은 평균-분산 최적화로 나눴습니다.", node_ids: ["optimizer"] }];
 const ok = (paragraphs = PARAS, extra: Record<string, unknown> = {}) => ({
   available: true, source: "claude", model: "claude-opus-5-5", paragraphs, rejected: [], dropped: [], notice: NOTICE, cached: false,
   usage: { input_tokens: 2400, output_tokens: 400, cost_usd: 0.0176, cost_note: null }, ...extra });

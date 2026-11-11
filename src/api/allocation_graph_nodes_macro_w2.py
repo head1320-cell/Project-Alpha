@@ -152,10 +152,10 @@ class CoverageParams(BaseModel):
         "기간", "advanced", unit="개월", presets=[{"label": "10년", "value": 120}, {"label": "20년", "value": 240}],
         help="국면 경로를 만드는 기간입니다. 저장된 관측이 더 짧으면 있는 만큼만 씁니다.")})
     k: int = Field(1, ge=1, le=12, json_schema_extra={"x-ui": _ui(
-        "몇 달 뒤", "advanced", unit="개월", help="몇 달 뒤 국면을 맞히는지 채점합니다.")})
+        "예측 시차", "advanced", unit="개월", help="몇 개월 뒤 국면 예측의 적중 여부를 평가합니다.")})
     alpha: float = Field(0.1, ge=0.01, le=0.5, json_schema_extra={"x-ui": _ui(
-        "놓쳐도 되는 비율", "advanced", presets=[{"label": "10%", "value": 0.1}, {"label": "20%", "value": 0.2}],
-        help="예측 집합이 목표로 덮을 몫은 1 − 이 값입니다.")})
+        "미포함 허용 비율 α", "advanced", presets=[{"label": "10%", "value": 0.1}, {"label": "20%", "value": 0.2}],
+        help="예측 집합의 목표 포함 확률은 1 − 이 값입니다.")})
 
 
 def _coverage(inputs: dict, p: CoverageParams) -> pg.NodeOutput:
@@ -287,32 +287,32 @@ def _explain_studio(view: dict, prov: dict, params: Any) -> dict:
 
 def register(registry: pg.Registry) -> None:
     for spec in (
-        pg.NodeSpec("yield_curve", "수익률 곡선", stage="signal", plain_label="수익률 곡선 보기",
-                    plain_description="짧은 금리와 긴 금리의 모양, 뒤집혔는지를 봅니다.",
+        pg.NodeSpec("yield_curve", "수익률 곡선", stage="signal", plain_label="수익률 곡선",
+                    plain_description="단기·장기 금리의 기간 구조와 역전 여부를 표시합니다.",
                     inputs=(), outputs=(), run=_yield_curve, explain=_explain_yield_curve, category="거시",
                     description="macro_routes.yield_curve_view(/macro/yield-curve 본문) · 운영은 저장된 관측만."),
         pg.NodeSpec("macro_dashboard", "지표 대시보드", stage="signal", plain_label="매크로 지표 대시보드",
-                    plain_description="성장·물가·금리 같은 테마별로 지표가 평소와 얼마나 먼지 봅니다.",
+                    plain_description="성장·물가·금리 등 테마별 지표의 평시 대비 이탈도(z-score)를 표시합니다.",
                     inputs=(), outputs=(), run=_dashboard, params_model=DashboardParams,
                     explain=_explain_dashboard, category="거시",
                     description="macro_routes.dashboard_themes(/macro/dashboard 본문) · 운영은 저장된 관측만."),
         pg.NodeSpec("regime_consensus", "국면 합의", stage="signal", plain_label="국면 합의도",
-                    plain_description="세 방법의 국면 판정이 같은 곳을 가리키는지, 갈리는지 봅니다.",
+                    plain_description="세 방법의 국면 판정 일치 여부를 표시합니다.",
                     inputs=(), outputs=(), run=_consensus, params_model=EnsembleParams,
                     explain=_explain_consensus, category="거시",
                     description="macro_routes.regime_consensus_view(/macro/regime-consensus 본문) · 운영은 저장된 관측만."),
         pg.NodeSpec("regime_forecast_coverage", "국면 예측 적중률", stage="signal", plain_label="국면 예측 적중률",
-                    plain_description="다음 국면을 예측했을 때 실제로 얼마나 맞았는지 과거로 채점합니다.",
+                    plain_description="다음 국면 예측의 과거 적중률을 평가합니다.",
                     inputs=(), outputs=(), run=_coverage, params_model=CoverageParams,
                     explain=_explain_coverage, category="거시",
                     description="macro_routes.forecast_coverage_view(/macro/regime-forecast-coverage 본문)."),
         pg.NodeSpec("long_run", "장기 관계", stage="signal", plain_label="장기 균형관계(VECM)",
-                    plain_description="지표들이 길게 보면 함께 움직이는 균형이 있는지 검정합니다.",
+                    plain_description="지표 간 장기 균형관계(공적분) 존재 여부를 검정합니다.",
                     inputs=(), outputs=(), run=_long_run, params_model=LongRunParams,
                     explain=_explain_long_run, category="거시",
                     description="macro_routes.long_run_view(/macro/long-run 본문) · 계열은 저장된 관측 주입."),
         pg.NodeSpec("macro_studio", "스튜디오 모델", stage="signal", plain_label="매크로 모델 스튜디오",
-                    plain_description="금리 요인·잠재 상태·선후 관계·꼬리 위험 모델을 지금 설치된 엔진으로 돌립니다.",
+                    plain_description="금리 요인·잠재 상태·선후 관계·꼬리 위험 모델을 설치된 엔진으로 실행합니다.",
                     inputs=(), outputs=(), run=_studio, params_model=StudioParams,
                     explain=_explain_studio, category="거시",
                     description="macro_models.run_studio(/macro/studios/{id}) 대체 엔진 · 계열은 저장된 관측 주입."),

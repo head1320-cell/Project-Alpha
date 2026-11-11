@@ -37,7 +37,7 @@ function Bars({ rows, labels, fmt = (x) => pct(x, 2) }: {
 
 // ── 전략 묶음 ────────────────────────────────────────────────────────────────
 
-const EFFECT: [string, string][] = [["allocation_effect_pct", "나누는 방식"], ["cost_effect_pct", "거래 비용"],
+const EFFECT: [string, string][] = [["allocation_effect_pct", "배분 방식"], ["cost_effect_pct", "거래 비용"],
   ["netting_effect_pct", "주문 상계"], ["cash_effect_pct", "현금 이자"], ["macro_effect_pct", "매크로 조정"]];
 
 /** 성과 그림 문법(2026-11-09) — 7번·불러오기와 같은 부품(`perf/PerfPanel`): 숨은 오른쪽 축 낙폭 대신 같은 물속 그림. 아래 절은 그대로. */
@@ -115,7 +115,7 @@ export function CompanyViewsResult({ v }: { v: Dict }) {
           );
         })}</tbody>
       </table>
-      {num(v.n_user_views) ? <p className="pg-note">내 생각 {String(v.n_user_views)}개와 함께 ‘포트폴리오 최적화’로 넘깁니다.</p> : null}
+      {num(v.n_user_views) ? <p className="pg-note">투자 뷰 {String(v.n_user_views)}개와 함께 ‘포트폴리오 최적화’로 넘깁니다.</p> : null}
       <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="전망을 만들지 못한 종목" />
     </>
   );
@@ -170,7 +170,7 @@ export function AttributionResult({ v }: { v: Dict }) {
                  [`${String(ret.benchmark_label ?? "비교 기준")} 대비`, num(ret.excess_pct) === null ? NOT_MEASURED : signed(ret.excess_pct, 2)],
                  ["기대했던 수익", num(eva.expected_return_pct) === null ? NOT_MEASURED : signed(eva.expected_return_pct, 2)],
                  ["기대와의 차이", num(eva.gap_pct) === null ? NOT_MEASURED : signed(eva.gap_pct, 2)],
-                 ["흔들림 (기대 → 실제)", `${pct((rc.ex_ante as Dict)?.vol_pct)} → ${pct((rc.ex_post as Dict)?.vol_pct)}`],
+                 ["변동성 (기대 → 실제)", `${pct((rc.ex_ante as Dict)?.vol_pct)} → ${pct((rc.ex_post as Dict)?.vol_pct)}`],
                  ["가격을 잰 종목", `${String(cov.covered ?? 0)}/${String(cov.tickers ?? 0)}`]]} />
       {assets.length > 0 && (<><h4 className="pg-h4">종목별 기여</h4><Bars rows={assets} labels={(v.labels as Record<string, string>) ?? {}} /></>)}
       {unmeasured.length > 0 && (

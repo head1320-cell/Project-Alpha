@@ -342,7 +342,7 @@ function UniverseResult({ v }: { v: Dict }) {
           </tbody>
         </table>
       )}
-      {!weights && <p className="pg-note">지금 비중은 적지 않았습니다 — 비중이 필요한 노드는 이 목록만 받습니다.</p>}
+      {!weights && <p className="pg-note">현재 비중은 적지 않았습니다 — 비중이 필요한 노드는 이 목록만 받습니다.</p>}
       {(unknown.codes ?? []).length > 0 && (
         <p className="pg-warn">이름을 찾지 못한 종목: {(unknown.codes ?? []).join(", ")}{unknown.note ? ` — ${unknown.note}` : ""}</p>
       )}

@@ -42,7 +42,7 @@ from tests.test_ai0_canvas_assist import (  # noqa: E402
 KINDS = car._draft_kinds()
 EMPTY = {**F, "nodes": [], "edges": []}
 STOCKS = {"삼성전자": "005930", "SK하이닉스": "000660", "NAVER": "035420"}
-SENT = "삼성전자, SK하이닉스, NAVER로 3년 기준 비중을 위험 똑같이 짜 줘"
+SENT = "삼성전자, SK하이닉스, NAVER로 3년 기준 비중을 리스크 패리티 짜 줘"
 
 
 def fake_resolve(name: str) -> dict:
@@ -89,7 +89,7 @@ BUILD = _raw(add=[_add("u", "universe"), _add("r", "returns"), _add("e", "estima
                       _con("r", "returns", "o", "returns"), _con("e", "belief", "o", "belief")],
              sets=[_set("u", "tickers", "삼성전자, SK하이닉스, NAVER", "tickers", names=["삼성전자", "SK하이닉스", "NAVER"]),
                    _set("r", "lookback_days", "3년", "preset", "3년"),
-                   _set("o", "model", "위험 똑같이", "option", "risk_parity")],
+                   _set("o", "model", "리스크 패리티", "option", "risk_parity")],
              summary="세 종목으로 포트폴리오 최적화 흐름을 만듭니다")
 
 
@@ -115,7 +115,7 @@ def test_speakable_fields_say_how_they_are_read():
     assert ret["label"] == "기간" and set(ret["read"]) == {"preset", "number"}
     assert ret["presets"] == ["1년", "3년", "5년"] and ret["unit"] == "거래일"
     model = dr.speakable(KINDS["optimizer"]["params_schema"])["model"]
-    assert model["read"] == ["option"] and model["options"]["risk_parity"] == "위험 똑같이"
+    assert model["read"] == ["option"] and model["options"]["risk_parity"] == "리스크 패리티"
     reb = dr.speakable(KINDS["backtest"]["params_schema"])["rebalance"]            # enum 이 아니라 pattern + 옵션
     assert reb["read"] == ["option"] and reb["options"] == {"M": "매월", "Q": "분기마다"}
     assert dr.speakable(KINDS["universe"]["params_schema"])["tickers"]["read"] == ["tickers"]
@@ -169,7 +169,7 @@ def test_a_whole_build_on_an_empty_canvas_reads_every_value_from_the_sentence():
     by = {s["field"]: s for s in d["set"]}
     assert by["lookback_days"]["display"] == "3년" and by["lookback_days"]["quote"] == "3년" and by["lookback_days"]["read"] == "preset"
     assert by["lookback_days"]["label"] == "기간"
-    assert by["model"]["display"] == "위험 똑같이" and by["tickers"]["display"] == "삼성전자 · SK하이닉스 · NAVER"
+    assert by["model"]["display"] == "리스크 패리티" and by["tickers"]["display"] == "삼성전자 · SK하이닉스 · NAVER"
     assert d["empty"] == [] and d["summary"] == "세 종목으로 포트폴리오 최적화 흐름을 만듭니다"
 
 
@@ -186,14 +186,14 @@ def test_a_preset_label_with_a_number_the_words_lack_is_refused_and_the_pair_pas
         assert _sets(res) == {} and _codes(res) == ["numbers"], quote
     res = _check(_raw(add=[_add("r", "returns")], sets=[_set("r", "lookback_days", "5년", "preset", "5년")]), sentence="5년 기준")
     assert _sets(res) == {("returns", "lookback_days"): 1260}                          # ★짝★
-    res = _check(_raw(add=[_add("o", "optimizer")], sets=[_set("o", "risk_aversion", "위험을 많이 피하게", "preset", "많이 피함")]),
+    res = _check(_raw(add=[_add("o", "optimizer")], sets=[_set("o", "risk_aversion", "위험을 많이 피하게", "preset", "높음")]),
                  sentence="위험을 많이 피하게 해 줘")
     assert _sets(res) == {("optimizer", "risk_aversion"): 10.0}                         # 숫자 없는 라벨 — 말을 닫힌 집합으로
 
 
 def test_unknown_presets_and_options_are_refused():
     res = _check(_raw(add=[_add("r", "returns"), _add("o", "optimizer")],
-                      sets=[_set("r", "lookback_days", "3년", "preset", "7년"), _set("o", "model", "위험 똑같이", "option", "zzz")]))
+                      sets=[_set("r", "lookback_days", "3년", "preset", "7년"), _set("o", "model", "리스크 패리티", "option", "zzz")]))
     assert _sets(res) == {} and _codes(res) == ["preset", "option"]
 
 

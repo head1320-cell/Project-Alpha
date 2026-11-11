@@ -54,9 +54,9 @@ export function buildLadderRows(sb: UseQueryResult<ValuationSandbox>, m: Company
     band("dcf", "DCF(현금흐름할인)"),
     band("ddm", "DDM(배당할인)"),
     band("graham", "그레이엄 넘버"),
-    fromQuery(m.dist, "dist", "가치 분포(가정 흔들기)", (d) => ({
+    fromQuery(m.dist, "dist", "가치 분포(가정 민감도)", (d) => ({
       v: d.unified?.p50 ?? null, lo: d.unified?.p10 ?? null, hi: d.unified?.p90 ?? null, basis: "흔든 폭은 정한 값" })),
-    fromQuery(m.driver, "driver", "영업 동인 흔들기", (d) => ({
+    fromQuery(m.driver, "driver", "영업 동인 시뮬레이션", (d) => ({
       v: d.quantiles?.p50 ?? null, lo: d.quantiles?.p10 ?? null, hi: d.quantiles?.p90 ?? null, basis: "흔든 폭은 정한 값" })),
     fromQuery(m.layers, "layers", "가치의 층(성장까지)", (d) => {
       const L = Object.fromEntries((d.layers ?? []).map((x) => [x.key, x]));

@@ -245,9 +245,9 @@ test("설정: 기본 질문이 파라미터를 바꾸고, 전문가 토글이 �
   await expect(page.locator(".pg-inspector"), "기본 화면에는 전문가 칸이 없다").toHaveCount(0);
   await expect(page.locator(".pg-io")).toContainText("수익률");
   const model = page.locator('.pg-basic-field[data-field="model"]');
-  await expect(model.locator(".pg-choice.on")).toHaveText("내 생각 반영");
-  await model.locator(".pg-choice", { hasText: "흔들림 최소" }).click();
-  await expect(model.locator(".pg-choice.on")).toHaveText("흔들림 최소");
+  await expect(model.locator(".pg-choice.on")).toHaveText("블랙-리터먼");
+  await model.locator(".pg-choice", { hasText: "최소분산" }).click();
+  await expect(model.locator(".pg-choice.on")).toHaveText("최소분산");
   await page.locator('.pg-basic-field[data-field="constraints"] .pg-chip', { hasText: "30%" }).click();
   const doc = await exportDoc(page);
   const params = doc.nodes.find((n: { id: string }) => n.id === "optimizer").params;
@@ -284,7 +284,7 @@ test("복제해서 비교: 같은 입력·같은 설정으로 하나 더 · 나�
   await openCanvas(page);
   await node(page, "optimizer").click();
   await tab(page, "settings");
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "위험 똑같이" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "리스크 패리티" }).click();
   await page.locator(".pg-dup").click();
   await expect(page.locator(".pg-node")).toHaveCount(8);
   const doc = await exportDoc(page);
@@ -296,7 +296,7 @@ test("복제해서 비교: 같은 입력·같은 설정으로 하나 더 · 나�
   expect(into(dup.id).length).toBe(3);
   expect(doc.edges.filter((e: { source: string }) => e.source === dup.id), "나가는 링크는 복제하지 않는다").toEqual([]);
   // 복제본만 설정을 바꿔 나란히 — 원본은 그대로.
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "최소분산" }).click();
   const resp = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
   // 입력 칸 밖 빈 캔버스를 누른다 — 떠 있는 판(BQ Q1) 밑이 아닌 곳.
   const ep = await page.evaluate(() => {
@@ -484,7 +484,7 @@ test("실행·기록(BK W4): 계산은 쓰지 않고 저장은 버튼으로 한 
 
   // 설정을 바꾸면 미리보기가 낡는다 — 다시 계산하기 전에는 저장할 수 없다.
   await node(page, "optimizer").click();
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "최소분산" }).click();
   await node(page, "tv").click();
   await expect(page.locator(".pg-save-btn")).toBeDisabled();
   await expect(page.locator(".pg-save .pg-help")).toContainText("재계산한 뒤");
@@ -982,11 +982,11 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
     "격자가 있고 전부 실선").toEqual([true, "none"]);
   expect(await fr.locator(".pg-plot-line").evaluate((e) => getComputedStyle(e).strokeWidth)).toBe("2px");
   const bestI = fv.curve.reduce((b, r, i) => (fv.curve[b].sharpe >= r.sharpe ? b : i), 0);
-  await expect(fr.locator(".cr-read"), "읽는 줄의 처음 자리 = 가장 좋은 점").toContainText(`흔들림 ${fv.curve[bestI].volatility.toFixed(1)}%`);
+  await expect(fr.locator(".cr-read"), "읽는 줄의 처음 자리 = 가장 좋은 점").toContainText(`변동성 ${fv.curve[bestI].volatility.toFixed(1)}%`);
   await expect(fr.locator(".cr-read")).toContainText(`수익 ${fv.curve[bestI].return.toFixed(1)}%`);
   await fr.locator(".pg-plot").focus();
   await page.keyboard.press("Home");                                                             // ★짝★ 키보드로 자리를 옮기면 다른 점의 값
-  await expect(fr.locator(".cr-read")).toContainText(`흔들림 ${fv.curve[0].volatility.toFixed(1)}%`);
+  await expect(fr.locator(".cr-read")).toContainText(`변동성 ${fv.curve[0].volatility.toFixed(1)}%`);
   await expect(fr.locator(".cr-read")).toContainText("1번째 점");
   await fr.locator(".cr-table summary").click();
   await expect(fr.locator(".cr-table tbody tr")).toHaveCount(fv.curve.length);                   // 표 쌍둥이 = 경계 점 전부
@@ -1826,7 +1826,7 @@ test("롱숏(BL4): 숏이 있으면 gross·net·롱·숏과 gross 기준 집중�
   await expect(items).toHaveCount(3);
   await expect(items.nth(0)).toContainText("차입");
   await expect(items.nth(1)).toContainText("공매도");
-  await expect(items.nth(2)).toContainText("들고 있지 않은");
+  await expect(items.nth(2)).toContainText("미보유 종목");
 });
 
 test("μ 엔진(BL4): 라벨은 서버 mu_engine 그대로 — model 이 bl 이어도 mvo 면 MVO · EP 는 신뢰도를 안 쓴다고 말한다 · 쓸 수 없는 엔진은 비중 대신 사유", async ({ page }) => {
@@ -1904,7 +1904,7 @@ test("룩어헤드·예측 구간(BL4): 배지는 응답이 말한 상태만 —
   await expect(cf).not.toContainText("~");
 });
 
-test("지금 비중 대 목표(BL4): '지금 비중' 노드를 충격에 이으면 두 충격이 나란히 · 지금 비중을 안 적으면 균등으로 바꾸지 않고 사유(짝)", async ({ page }) => {
+test("현재 비중 대 목표(BL4): '현재 비중' 노드를 충격에 이으면 두 충격이 나란히 · 현재 비중을 안 적으면 균등으로 바꾸지 않고 사유(짝)", async ({ page }) => {
   await openCanvas(page);
   const doc = await exportDoc(page);
   const uni = doc.nodes.find((n: { id: string }) => n.id === "universe");
@@ -1926,7 +1926,7 @@ test("지금 비중 대 목표(BL4): '지금 비중' 노드를 충격에 이으�
   const shock = (id: string) => (body.nodes[id].view as { result: { portfolio_shock_pct: number } }).result.portfolio_shock_pct;
   expect(shock("sc"), "지금 보유의 충격이 목표의 충격을 복사했다").not.toBe(shock("st"));
   await detail(page, "cw");
-  await expect(page.locator(".pg-side .pg-current-basis")).toContainText("지금 비중");
+  await expect(page.locator(".pg-side .pg-current-basis")).toContainText("현재 비중");
   await expect(page.locator(".pg-side .pg-table tr").first()).toContainText("70.00%");
 
   // 짝: 지금 비중을 안 적으면 만들지 않는다 — 충격은 막히고 목표 쪽은 그대로 돈다.
@@ -2152,7 +2152,7 @@ function nullNumbers(x: unknown): unknown {
 }
 const FAKE_ZERO = /(^|[^\d.,])[+−-]?0\.0+(%|%p|배|원)?(?![\d])|NaN|Infinity|undefined/;
 
-test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그리지 않고 깨지지도 않는다 — 템플릿 모두 + 지금 비중 · 수를 전부 지운 응답으로", async ({ page }) => {
+test("미계산 ≠ 0(BL4): 수를 모르면 어느 노드도 0.0·NaN 을 그리지 않고 깨지지도 않는다 — 템플릿 모두 + 현재 비중 · 수를 전부 지운 응답으로", async ({ page }) => {
   test.setTimeout(600_000);
   let lastError = "";
   page.on("pageerror", (e) => { lastError = e.message; });

@@ -333,7 +333,7 @@ test("증거 선(BM C1): 선 모양 = 원천 계보 · 계산 전과 낡은 결�
   await expect(page.locator(".pg-summary--stale")).toHaveCount(0);
   await node(page, "optimizer").click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "최소분산" }).click();
   await expect(page.locator(".pg-summary--stale")).toBeVisible();
   const down = new Set<string>(["optimizer"]);                                     // 비중 계산과 그 하류
   for (let grew = true; grew;) {
@@ -1104,7 +1104,7 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   await expect(card.locator(".pg-snode-name")).toHaveValue(a.label);
   await expect(card.locator(".pg-snode-share")).toHaveAttribute("data-share", "");
   await expect(card.locator(".pg-snode-share")).toContainText("계산하면 보입니다");
-  await expect(frameB.locator(".pg-group-share")).toHaveText("몫 —");
+  await expect(frameB.locator(".pg-group-share")).toHaveText("비중 —");
 
   const fake: Record<string, number> = { [portOf(doc, a)]: 61.2, [portOf(doc, b)]: 38.8 };
   await patchRun(page, (body) => { for (const r of shareRows(body, pf.id)) r.share_pct = fake[r.port]; });
@@ -1137,7 +1137,7 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   await expect(card.locator(".pg-snode-share")).toContainText("몫을 모름");
   await expect(donut.locator(`circle[data-port="${portOf(doc, a)}"]`)).toHaveCount(0);
   await expect(donut.locator(`li[data-port="${portOf(doc, a)}"] b`)).toHaveText("—");
-  await expect(frameB.locator(".pg-group-share")).not.toHaveText("몫 —");
+  await expect(frameB.locator(".pg-group-share")).not.toHaveText("비중 —");
 });
 
 test("포트폴리오 노드의 입력 자리(BN N1): 이은 자리 + 빈 자리 하나만 · 이은 자리 이름 = 전략 이름 · 잇지 않은 전략 카드는 그 이유(짝)", async ({ page }) => {
@@ -1783,7 +1783,7 @@ test("위험 성향(BO O1): 그 방식을 고를 때만 질문 · 칩 = 서버 �
   await page.locator('.pg-tab[data-tab="settings"]').click();
   const field = page.locator('.pg-basic-field[data-field="risk_aversion"]');
   await expect(field).toHaveCount(0);                                            // 템플릿 방식(bl)에서는 없음
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "위험 성향에 맞춰" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "평균-분산 효용" }).click();
   await expect(field).toBeVisible();
   await expect(field.locator(".pg-q")).toHaveText(ui.question);
   const chips = field.locator(".pg-chip:not(.pg-chip--custom)");
@@ -1812,7 +1812,7 @@ test("위험 성향(BO O1): 그 방식을 고를 때만 질문 · 칩 = 서버 �
   for (let i = 0; i < ui.presets.length; i++) await expect(chips.nth(i)).toHaveAttribute("aria-pressed", "false");
   await expect(field.locator(".pg-slider-v")).toHaveText("7.0");
   // 짝 — 방식을 바꾸면 질문이 사라진다
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "흔들림 최소" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "최소분산" }).click();
   await expect(field).toHaveCount(0);
 });
 
@@ -1821,7 +1821,7 @@ test("위험 성향(BO O1): 칩 밖의 값이면 처음부터 직접 정하기 �
   const ui = await optimizerUi(page);
   await node(page, "optimizer").click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "위험 성향에 맞춰" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "평균-분산 효용" }).click();
   const field = page.locator('.pg-basic-field[data-field="risk_aversion"]');
   const lo = ui.presets[0], hi = ui.presets[ui.presets.length - 1];
 
@@ -1880,7 +1880,7 @@ for (const scheme of ["light", "dark"] as const) {
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
     await node(page, "optimizer").click();
     await page.locator('.pg-tab[data-tab="settings"]').click();
-    await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "위험 성향에 맞춰" }).click();
+    await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "평균-분산 효용" }).click();
     const field = page.locator('.pg-basic-field[data-field="risk_aversion"]');
     let audit = await page.evaluate<AuditResult>(contrastAudit('.pg-basic-field[data-field="risk_aversion"]'));
     expect(audit.low, `${scheme} 칩 AA`).toEqual([]);

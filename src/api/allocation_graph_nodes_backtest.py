@@ -69,13 +69,13 @@ class SetupParams(BaseModel):
                                        presets=_presets_filter(),
                                        help="조건은 서버가 필드 목록으로 검사합니다 — 모르는 필드는 시작하지 않습니다.")})
     strategy_name: Literal[tuple(_STRATEGIES)] = Field("GoldenCross", json_schema_extra={"x-ui": _ui(
-        "사고파는 규칙", question="매매 규칙", widget="cards", options=_STRATEGIES)})
+        "매매 규칙", question="매매 규칙", widget="cards", options=_STRATEGIES)})
     start_date: str = Field("2023-01-01", pattern=_DATE, json_schema_extra={"x-ui": _ui(
-        "시작", question="백테스트 시작일", presets=[{"label": "2021년부터", "value": "2021-01-01"},
+        "시작일", question="백테스트 시작일", presets=[{"label": "2021년부터", "value": "2021-01-01"},
                                                      {"label": "2023년부터", "value": "2023-01-01"}])})
-    end_date: str = Field("2024-12-31", pattern=_DATE, json_schema_extra={"x-ui": _ui("끝", "advanced")})
+    end_date: str = Field("2024-12-31", pattern=_DATE, json_schema_extra={"x-ui": _ui("종료일", "advanced")})
     max_tickers: int = Field(10, ge=1, le=30, json_schema_extra={"x-ui": _ui(
-        "종목 수", "advanced", unit="개", help="조건을 통과한 상위 몇 종목으로 돌릴지입니다.")})
+        "종목 수", "advanced", unit="개", help="조건을 통과한 상위 종목 중 실행에 쓸 종목 수입니다.")})
     max_positions: int = Field(5, ge=1, le=30, json_schema_extra={"x-ui": _ui("동시 보유", "advanced", unit="개")})
     initial_capital: float = Field(100_000_000, gt=0, json_schema_extra={"x-ui": _ui("시작 금액", "advanced", unit="원")})
     commission_rate: float = Field(0.0015, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("수수료율", "advanced")})
@@ -239,14 +239,14 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(UNKNOWN, "서로 비슷하게 움직이는 팩터가 있어 개별 기여는 서로 상쇄될 수 있습니다 — 따로 읽지 마십시오."))
     trust += ([_practice("개발 모드라 매크로 지표가 합성(합성)입니다.")] if prov.get("practice") else [])
     return {"title": "무엇이 이 수익을 만들었는지 나눠 봤습니다",
-            "facts": ([f"가장 큰 몫: {FACTOR_KO.get(top.get('factor'), top.get('factor'))} {_signed_pct(float(top.get('contribution_pct') or 0))}"] if top else [])
+            "facts": ([f"최대 기여 팩터: {FACTOR_KO.get(top.get('factor'), top.get('factor'))} {_signed_pct(float(top.get('contribution_pct') or 0))}"] if top else [])
                      + ([f"설명력(R²) {r['diagnostics']['r_squared']:.2f}"] if (r.get("diagnostics") or {}).get("r_squared") is not None else []),
             "trust": trust, "unmeasured": ["인과(회귀는 같이 움직였다는 것만 말합니다)"]}
 
 
 # ── 두 실행 비교 ─────────────────────────────────────────────────────────────
 
-_COND_KO = {"start_date": "시작", "end_date": "끝", "commission_rate": "수수료율", "slippage_rate": "슬리피지율",
+_COND_KO = {"start_date": "시작일", "end_date": "종료일", "commission_rate": "수수료율", "slippage_rate": "슬리피지율",
             "charge_sell_tax": "매도세", "charge_spread": "스프레드", "charge_market_impact": "시장충격",
             "universe": "후보 범위", "strategy_name": "규칙"}
 
@@ -321,22 +321,22 @@ def _explain_compare(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("backtest_setup", "조건식 백테스트 설정", stage="check", plain_label="조건식 백테스트",
-                    plain_description="조건으로 고른 종목을 정한 규칙대로 과거에 사고팔아 봅니다. 시작은 버튼으로 합니다.",
+                    plain_description="조건식으로 선별한 종목을 지정 매매 규칙에 따라 과거 구간에서 매매합니다. 실행은 버튼으로 시작합니다.",
                     inputs=(), outputs=(), run=_setup, params_model=SetupParams, explain=_explain_setup,
                     category="백테스트", save=_start_backtest, save_label="백테스트 시작",
                     description="ScreenToBacktestRequest 검증만(쓰기 0) · 시작 = create_run 라우트 함수(같은 워커)."),
         pg.NodeSpec("backtest_load", "백테스트 결과 불러오기", stage="check", plain_label="백테스트 결과 조회",
-                    plain_description="백그라운드에서 끝난 백테스트의 결과를 불러옵니다.",
+                    plain_description="백그라운드에서 완료된 백테스트 결과를 조회합니다.",
                     inputs=(), outputs=(P("run", "BacktestRun"),), run=_load, params_model=LoadParams,
                     explain=_explain_load, category="백테스트",
                     description="run_full 라우트 함수(성과 라벨·실행 가정) · 진행 중·실패·없음·저장소 장애는 각각 실패."),
         pg.NodeSpec("backtest_attribution", "매크로 팩터 귀인", stage="check", plain_label="매크로 팩터 귀인",
-                    plain_description="백테스트 수익이 어떤 매크로 흐름에서 왔는지 나눠 봅니다.",
+                    plain_description="백테스트 수익을 매크로 팩터별 기여로 분해합니다.",
                     inputs=(P("run", "BacktestRun"),), outputs=(), run=_attribution,
                     explain=_explain_attribution, category="백테스트",
                     description="factor_attribution_for_run(라우트와 같은 본문) · 운영은 저장된 관측만."),
         pg.NodeSpec("backtest_compare", "두 실행 비교", stage="check", plain_label="백테스트 비교",
-                    plain_description="두 백테스트의 지표를 나란히 놓고, 조건이 다르면 먼저 알려 줍니다.",
+                    plain_description="두 백테스트의 성과 지표를 비교합니다. 실행 조건이 다르면 먼저 표시합니다.",
                     inputs=(P("a", "BacktestRun"), P("b", "BacktestRun")), outputs=(), run=_compare,
                     explain=_explain_compare, category="백테스트",
                     description="이미 계산된 statistics 나란히 · 차이는 뺄셈뿐 · 조건 차이 경고."),

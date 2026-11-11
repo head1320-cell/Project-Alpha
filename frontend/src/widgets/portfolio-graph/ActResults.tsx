@@ -75,7 +75,7 @@ export function TargetResult({ v }: { v: Dict }) {
           <ul className="pg-list pg-ls-blocked-l">
             <li>차입 가능 여부가 연동돼 있지 않습니다 — 빌릴 수 있는지 늘 모름입니다.</li>
             <li>KIS 주문 유형에 공매도가 없습니다 — 사기·팔기 주문은 일반 현금 주문입니다.</li>
-            <li>실행기가 들고 있지 않은 종목의 매도를 건너뜁니다 — 숏 진입이 주문으로 나가지 않습니다.</li>
+            <li>실행기 미보유 종목의 매도를 건너뜁니다 — 숏 진입이 주문으로 나가지 않습니다.</li>
           </ul>
         </div>
       )}

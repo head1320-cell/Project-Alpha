@@ -165,14 +165,14 @@ def _optimizer_schema() -> dict:
 def test_catalog_question_presets_and_show_if():
     props = _optimizer_schema()["properties"]
     assert "mv_utility" in props["model"]["enum"]
-    assert props["model"]["x-ui"]["options"]["mv_utility"] == "위험 성향에 맞춰"
+    assert props["model"]["x-ui"]["options"]["mv_utility"] == "평균-분산 효용"
     ui = props["risk_aversion"]["x-ui"]
     assert ui["tier"] == "basic"
     assert ui["question"] == "위험 회피 수준"
     assert ui["show_if"] == {"model": ["mv_utility"]}
     assert ui["widget"] == "slider"
     labels = [p["label"] for p in ui["presets"]]
-    assert labels == ["덜 피함", "보통", "많이 피함"]
+    assert labels == ["낮음", "보통", "높음"]
     values = [p["value"] for p in ui["presets"]]
     assert values == sorted(values) and len(set(values)) == 3
     assert all(0.5 <= v <= 20 for v in values)

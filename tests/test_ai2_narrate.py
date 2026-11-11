@@ -190,7 +190,7 @@ def _sealed(nid, type_, explain, doc=DOC, key=KEY):
 
 EX_U = {"title": "종목 2개를 골랐습니다", "facts": ["삼성전자, SK하이닉스"], "trust": []}
 EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 위험 똑같이"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}]}
+        "facts": ["계산 방식: 리스크 패리티"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}]}
 PRACTICE = {"state": "unknown", "text": "합성 데이터입니다.", "kind": "practice"}
 
 

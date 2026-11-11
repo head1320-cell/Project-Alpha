@@ -2,7 +2,7 @@
 ==============================================================================
 설계 `docs/superpowers/specs/2026-09-29-bs-br-leftovers-design.md` §BS3. 테스트 `tests/test_record_robustness.py`.
 
-'견고성 비교'(`sleeve_analytics`)는 **지금 비중을 과거에 들고 있었다면**의 흐름을 잰다. 이 노드는 기록을 잰다:
+'견고성 비교'(`sleeve_analytics`)는 **현재 비중을 과거에 들고 있었다면**의 흐름을 잰다. 이 노드는 기록을 잰다:
 - 등록한 전략 — `StrategyRegistry.load_returns_matrix`(백테스트를 다시 돌려 곡선이 맞는지 확인한 뒤 남긴 일별 수익)
 - 불러온 백테스트 실행(`BacktestRun` — `equity_dates`·`equity_curve`)
 - 정책 백테스트 결과(`BacktestResult` — `dates`·`equity_curve`)
@@ -35,12 +35,12 @@ class RecordParams(BaseModel):
     model_config = _FORBID
     strategy_ids: list[int] = Field(default_factory=list, max_length=6, json_schema_extra={"x-ui": _ui(
         "등록한 전략", question="함께 볼 등록 전략", widget="pick", source="strategies",
-        help="백테스트 실행을 전략으로 등록하면 여기에 나옵니다. 이어 둔 실행·결과와 함께 봅니다.")})
+        help="백테스트 실행을 전략으로 등록하면 여기에 표시됩니다. 연결한 실행·결과와 함께 분석합니다.")})
     window: Literal[20, 60, 120] = Field(60, json_schema_extra={"x-ui": _ui(
         "상관 창", "advanced", unit="거래일", presets=[{"label": "한 달", "value": 20}, {"label": "석 달", "value": 60},
                                                     {"label": "반년", "value": 120}])})
     shock_rho: Literal[0.7, 0.8, 0.9] = Field(0.8, json_schema_extra={"x-ui": _ui(
-        "치솟는 상관", "advanced", presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
+        "충격 상관", "advanced", presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
                                          {"label": "0.9", "value": 0.9}])})
 
 
@@ -171,7 +171,7 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
     rob = view.get("robustness") or {}
     series = view.get("series") or []
     trust = [_t(ASSUMED, "기록은 모두 과거 백테스트에서 나왔습니다 — 실거래 기록이 아닙니다."),
-             _t(ASSUMED, "기록끼리 몫은 똑같이 나눴다고 봤습니다(합친 흔들림·충격 계산).")]
+             _t(ASSUMED, "기록 간 배분 비중은 동일 가중으로 가정했습니다(결합 변동성·충격 계산).")]
     for s in series:
         state = CONFIRMED if s.get("data") == "real" else UNKNOWN if s.get("data") == "unknown" else ASSUMED
         pit = "시점 고정 확인" if s.get("pit") is True else "시점 고정 미확인"
@@ -203,8 +203,8 @@ def _glance(view: dict) -> dict | None:
 def register(registry: pg.Registry) -> None:
     registry.register(
         pg.NodeSpec("record_robustness", "기록끼리 견고성", stage="check", plain_label="기록 기반 견고성 비교",
-                    plain_description="등록한 전략·백테스트 실행·정책 백테스트 결과끼리 평소·위기 때 얼마나 같이 움직였는지, "
-                                      "크게 잃은 구간이 겹쳤는지 날짜를 맞춰 봅니다.",
+                    plain_description="등록 전략·백테스트 실행·정책 백테스트 결과 간 평시·위기 상관과 "
+                                      "낙폭 구간의 중첩을 날짜 정렬 후 비교합니다.",
                     inputs=tuple(P(k, "BacktestRun", required=False) for k in RUN_PORTS)
                     + tuple(P(k, "BacktestResult", required=False) for k in RESULT_PORTS),
                     outputs=(), run=_record_robustness, params_model=RecordParams, explain=_explain,

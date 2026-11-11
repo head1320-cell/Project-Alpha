@@ -293,7 +293,7 @@ def _add_risk(by_id, incoming, kinds) -> dict | None:
         if out and all(supply(k, nid, out, by_id, incoming, kinds) != NO for k in need):
             return _suggest("add", "risk",
                             f"확인하는 단계가 없습니다 — {_subj(_label(kinds, str(node['type'])))} 낸 비중에 "
-                            f"{_obj(_label(kinds, 'risk'))} 붙여 어느 종목이 흔들림을 만드는지 봅니다.",
+                            f"{_obj(_label(kinds, 'risk'))} 붙여 어느 종목이 변동성을 만드는지 봅니다.",
                             [{"source": nid, "source_port": out, "target": NEW, "target_port": port}], [], kinds)
     return None
 

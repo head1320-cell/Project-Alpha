@@ -180,7 +180,7 @@ def _srec(eid, rec, doc=DOC, key=KEY):
 
 
 EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 위험 똑같이", "종목 2개"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}],
+        "facts": ["계산 방식: 리스크 패리티", "종목 2개"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}],
         "unmeasured": ["거래비용"]}
 EX_ES = {"title": "기대 수익을 잡았습니다", "facts": ["과거 평균 7.2%"], "trust": [{"state": "assumed", "text": "과거 평균이 이어진다는 가정입니다."}]}
 EX_BT = {"title": "과거로 돌려 봤습니다", "facts": ["누적 수익 31.4%"], "trust": []}
@@ -205,7 +205,7 @@ def test_lines_get_server_ids_and_cover_explain_parts_relations_and_records_in_s
     ids = [x["id"] for x in g["lines"]]
     assert ids == [f"f{i}" for i in range(1, len(ids) + 1)] and set(refs) == set(ids)
     texts = " | ".join(x["text"] for x in g["lines"])
-    for must in ("비중을 이렇게 나눴습니다", "삼성전자 50.5%", "계산 방식: 위험 똑같이", "포트폴리오 최적화는 문제없이 끝났습니다.", "거래비용",
+    for must in ("비중을 이렇게 나눴습니다", "삼성전자 50.5%", "계산 방식: 리스크 패리티", "포트폴리오 최적화는 문제없이 끝났습니다.", "거래비용",
                  "과거 평균 7.2%", "누적 수익 31.4%", "756일", "빈 날 4일을 뺐습니다"):
         assert must in texts, must
     assert "NAVER 99" not in texts                                                     # 범위 밖 갈래

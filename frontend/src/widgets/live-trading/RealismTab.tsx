@@ -52,7 +52,7 @@ export function RealismTab() {
         <header className="tx-sec-head"><div>
           <h2 className="tx-sec-t" id="rl-h">현실성 점검</h2>
           <p className="tx-sec-sub">
-            등록한 전략 전부를 {RECIPE.start_date} ~ {RECIPE.end_date}, 초기 자본 {eokWon(RECIPE.initial_capital)}, 계층 위험 균형(HRP)·매월
+            등록한 전략 전부를 {RECIPE.start_date} ~ {RECIPE.end_date}, 초기 자본 {eokWon(RECIPE.initial_capital)}, 계층적 리스크 패리티(HRP)·매월
             리밸런싱으로 두 번 계산합니다. 한 번은 현실 조건 없이(이상), 한 번은 시장 충격·현금 이자·매수 여력·적응 모드를 넣어서(현실).
           </p>
         </div>
@@ -113,7 +113,7 @@ function Compared({ i, r, names }: { i: RealismRun; r: RealismRun; names: Record
         </dl>
         <div className="rl-label"><PerfLabel value={r.perf_label ?? null} /></div>
         {gap != null && gap > 0 ? (
-          <p className="tx-sec-sub rl-note">현실 쪽이 더 높게 나올 수도 있습니다. 적응 모드는 비중 자체를 바꿔서 이상과 다른 배분으로 실행됩니다. 그 몫은 아래 폭포의 나머지에 들어 있습니다.</p>
+          <p className="tx-sec-sub rl-note">현실 쪽이 더 높게 나올 수도 있습니다. 적응 모드는 비중 자체를 바꿔서 이상과 다른 배분으로 실행됩니다. 그 차이는 아래 폭포의 나머지에 들어 있습니다.</p>
         ) : null}
       </section>
       <GapChart i={i} r={r} />
@@ -182,7 +182,7 @@ function Waterfall({ i, r }: { i: RealismRun; r: RealismRun }) {
     <section className="tx-sec rl-sec" data-sec="waterfall" aria-labelledby="rl-wf-h">
       <header className="tx-sec-head"><div>
         <h2 className="tx-sec-t" id="rl-wf-h">어디서 달라졌나</h2>
-        <p className="tx-sec-sub">서버가 따로 센 두 금액(시장 충격 비용 · 현금 이자)만 세웠습니다. 나머지는 매수 여력·적응 모드·복리가 섞인 몫이라 서버가 나누지 않았습니다.</p>
+        <p className="tx-sec-sub">서버가 따로 센 두 금액(시장 충격 비용 · 현금 이자)만 세웠습니다. 나머지는 매수 여력·적응 모드·복리가 섞인 부분이라 서버가 나누지 않았습니다.</p>
       </div></header>
       <div className="tx-sec-body">
         {!steps ? <p className="tx-sec-sub">끝 자산이나 두 금액 중 하나를 서버가 주지 않아 나눌 수 없습니다.</p> : <Bars steps={steps} />}
@@ -236,7 +236,7 @@ function WhatItDid({ r }: { r: RealismRun }) {
         <ul className="rl-cards">
           <li className="rl-card" data-k="impact"><p className="rl-card-t">시장 충격</p>
             <p className="rl-card-v">{known(s.total_market_impact_cost, (v) => eokWon(v))}</p>
-            <p className="rl-card-d">리밸런싱 한 번에 평균 {known(s.avg_market_impact_bps_per_rebalance, (v) => `${v.toFixed(1)}bp`)}. 큰 주문이 값을 미는 몫입니다.</p></li>
+            <p className="rl-card-d">리밸런싱 한 번에 평균 {known(s.avg_market_impact_bps_per_rebalance, (v) => `${v.toFixed(1)}bp`)}. 큰 주문의 가격 충격분입니다.</p></li>
           <li className="rl-card" data-k="cash"><p className="rl-card-t">현금 이자</p>
             <p className="rl-card-v">{known(s.total_cash_yield, (v) => eokWon(v))}</p>
             <p className="rl-card-d">놀린 현금에 붙은 이자, 연 {known(s.cash_yield_annualized_pct, (v) => `${v.toFixed(2)}%`)}.</p></li>

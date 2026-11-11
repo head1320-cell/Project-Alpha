@@ -11,7 +11,7 @@ import { Sheet } from "@/shared/ui/tx";
 
 const MIN_REASON = 4;   // 서버 AccountKillRequest.reason min_length
 /** 자주 쓰는 사유 — 누르면 칸을 채울 뿐(고쳐 써도 된다). 기록에는 칸의 글이 남는다. */
-const PRESETS = ["시장이 크게 흔들려서", "주문을 잘못 낸 것 같아서", "전략을 다시 점검하려고"];
+const PRESETS = ["시장 급변동", "주문 오류 의심", "전략 재점검"];
 
 export function KillSheet({ accountId, open, onClose, onDone }: {
   accountId: string; open: "kill" | "resolve" | null; onClose: () => void; onDone: (said: string) => void;

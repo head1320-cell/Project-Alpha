@@ -42,7 +42,7 @@ def _pct_of(w: dict) -> dict[str, float]:
 OrderParams = _subset(
     "OrderPreviewParams", ExecPlanRequest, ("current_weights", "portfolio_value", "restricted"),
     ui={
-        "current_weights": _ui("지금 비중", question="현재 보유 비중",
+        "current_weights": _ui("현재 비중", question="현재 보유 비중",
                                presets=[{"label": "없습니다(새로 사기)", "value": {}}],
                                help="종목 코드별 비중(%)은 전문가 설정에서 넣습니다."),
         "portfolio_value": _ui("평가 금액", question="평가 금액 기준", unit="원",
@@ -60,8 +60,8 @@ _SAME_PCT = 0.01
 
 
 def _holdings_vs_universe(order_w: dict, w: dict) -> dict | None:
-    """주문 목록의 '지금 비중' 과 유니버스 노드의 '지금 비중'(비중이 실어 온 요청) 견주기 (PB2 — ★관측만★).
-    유니버스에 지금 비중이 없으면 견주지 않는다(None). 한쪽에 없는 종목은 그쪽 0%."""
+    """주문 목록의 '현재 비중' 과 유니버스 노드의 '현재 비중'(비중이 실어 온 요청) 견주기 (PB2 — ★관측만★).
+    유니버스에 현재 비중이 없으면 견주지 않는다(None). 한쪽에 없는 종목은 그쪽 0%."""
     req = w.get("req")
     uni = {str(k): float(v) for k, v in ((getattr(req, "weights", None) or {}).items())}
     if not uni:
@@ -96,14 +96,14 @@ def _holdings_line(cmp_: dict | None) -> dict | None:
     if not cmp_:
         return None
     if cmp_["state"] == "same":
-        return _t(CONFIRMED, "주문 목록의 ‘지금 비중’이 유니버스 노드의 ‘지금 비중’과 같습니다 — 같은 보유에서 출발했습니다.")
+        return _t(CONFIRMED, "주문 목록의 ‘현재 비중’이 유니버스 노드의 ‘현재 비중’과 같습니다 — 같은 보유에서 출발했습니다.")
     if cmp_["state"] == "order_empty":
-        return _t(ASSUMED, "주문 목록의 ‘지금 비중’을 비워 새로 사는 주문으로 만들었습니다 — 유니버스 노드에는 ‘지금 비중’"
-                           f"({cmp_['universe_count']}종목)이 있습니다. 들고 있는 것에서 옮기려면 같은 값을 입력하십시오.")
+        return _t(ASSUMED, "주문 목록의 ‘현재 비중’을 비워 새로 사는 주문으로 만들었습니다 — 유니버스 노드에는 ‘현재 비중’"
+                           f"({cmp_['universe_count']}종목)이 있습니다. 보유분에서 이행하려면 같은 값을 입력하십시오.")
     d = cmp_["differs"]
     shown = " · ".join(f"{x['code']} {x['order_pct']:g}% / {x['universe_pct']:g}%" for x in d[:5])
     more = f" 외 {len(d) - 5}종목" if len(d) > 5 else ""
-    return _t(ASSUMED, f"주문 목록의 ‘지금 비중’이 유니버스 노드의 ‘지금 비중’과 다릅니다(주문 목록 / 유니버스) — {shown}{more}. "
+    return _t(ASSUMED, f"주문 목록의 ‘현재 비중’이 유니버스 노드의 ‘현재 비중’과 다릅니다(주문 목록 / 유니버스) — {shown}{more}. "
                        "주문은 주문 목록 쪽 값으로 만들었습니다 — 유니버스 쪽을 읽는 노드와 출발점이 다릅니다.")
 
 
@@ -255,18 +255,18 @@ def _explain_journal(view: dict, prov: dict, params: Any) -> dict:
 def register(registry: pg.Registry) -> None:
     for spec in (
         pg.NodeSpec("order_preview", "주문 목록", stage="act", plain_label="주문 미리보기",
-                    plain_description="지금 비중에서 목표로 가려면 무엇을 사고팔지 미리 봅니다. 주문은 나가지 않습니다.",
+                    plain_description="현재 비중에서 목표 비중까지의 매매 내역을 미리 산출합니다. 주문은 전송하지 않습니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("trades", "Trades"),),
                     run=_order_preview, params_model=OrderParams, explain=_explain_orders, category="실행",
                     description="/execution-plan 미리보기와 같은 오더 diff·비용·사전 점검(저장·승인 없음)."),
         pg.NodeSpec("target_version", "실행 목표", stage="act", plain_label="실행 목표 비중",
-                    plain_description="비중을 실행 목표로 만듭니다. 저장은 버튼으로 한 번만 합니다.",
+                    plain_description="산출 비중을 실행 목표 비중으로 확정합니다. 저장은 버튼으로 한 번만 실행합니다.",
                     inputs=(P("weights", "Weights"),), outputs=(P("target", "TargetVersion"),),
                     run=_target_version, params_model=TargetParams, explain=_explain_target, category="실행",
                     wants_lineage=True, save=_save_target_version, save_label="실행 목표로 저장",
                     description="compile_target 미리보기 · 저장은 /graph/save → save_target."),
         pg.NodeSpec("decision_journal", "결정 기록", stage="act", plain_label="투자 결정 기록",
-                    plain_description="무엇을 왜 정했는지 저널에 남깁니다. 저장은 버튼으로 합니다.",
+                    plain_description="결정 내용과 근거를 투자 저널에 기록합니다. 저장은 버튼으로 실행합니다.",
                     inputs=(P("target", "TargetVersion"), P("trades", "Trades", required=False),
                             P("stress", "StressReport", required=False)),
                     outputs=(), run=_journal, params_model=JournalParams, explain=_explain_journal, category="기록",

@@ -55,7 +55,7 @@ def shock_block(names: Sequence[str], S: np.ndarray, shares: Sequence[float] | N
     from src.api.allocation_stress_routes import stress_correlation_report
     n = len(names)
     if any(float(np.var(S[:, j])) <= 1e-16 for j in range(n)):
-        return {"available": False, "reason": "흔들림이 없는 흐름이 있어 상관 충격을 넣을 수 없습니다"}
+        return {"available": False, "reason": "변동성이 없는 흐름이 있어 상관 충격을 넣을 수 없습니다"}
     w = np.ones(n) / n if shares is None else np.asarray([float(x) for x in shares], dtype=float)
     df = pd.DataFrame(S, columns=list(names))
     C = np.corrcoef(S.T)
@@ -70,7 +70,7 @@ def shock_block(names: Sequence[str], S: np.ndarray, shares: Sequence[float] | N
         if now >= rho:
             # 이름·숫자 뒤 조사는 소리에 따라 달라진다 — 괄호로 두어 조사를 붙이지 않는다(스크린샷에서 "1.00 라" 를 찾았다).
             row.update(available=False,
-                       reason=f"지금 평균 상관({now:.2f})이 이미 정한 값({rho:.2f}) 이상이라 올려도 흔들림이 커지지 않습니다")
+                       reason=f"지금 평균 상관({now:.2f})이 이미 정한 값({rho:.2f}) 이상이라 올려도 변동성이 커지지 않습니다")
         else:
             rep = stress_correlation_report(df, w, target_rho=rho, intensity=1.0, confidence_level=0.95,
                                             portfolio_value=_VALUE)
@@ -94,7 +94,7 @@ def story(rep: dict[str, Any]) -> list[str]:
     if rows:
         top = max(rows, key=lambda p: p["co_drops"] / p["expected_co_drops"])
         more = top["co_drops"] >= 1.5 * top["expected_co_drops"] and top["co_drops"] - top["expected_co_drops"] >= 3
-        small = " 날이 적어 흔들리는 값입니다." if crisis.get("small_sample") else ""
+        small = " 표본 일수가 적어 불안정한 값입니다." if crisis.get("small_sample") else ""
         # 사용자가 지은 이름 뒤에는 조사를 붙이지 않는다('충격 점검가' 처럼 어긋난다) — 쌍은 문장 끝에 둔다.
         pair = f"{top['a']}·{top['b']} {top['co_drops']}일 대 약 {top['expected_co_drops']:.0f}일"
         if more:
@@ -104,7 +104,7 @@ def story(rep: dict[str, Any]) -> list[str]:
     shock = rep.get("shock") or {}
     first = next((s for s in shock.get("scenarios") or [] if s.get("kind") == "assumed"), None)
     if first and first.get("available") and first.get("delta_vol_pct") is not None:
-        lines.append(f"상관이 {first['rho']:.1f}로 치솟는다고 가정하면 합친 흔들림이 {first['delta_vol_pct']:+.0f}% 달라집니다.")
+        lines.append(f"상관이 {first['rho']:.1f}로 급등한다고 가정하면 결합 변동성이 {first['delta_vol_pct']:+.0f}% 달라집니다.")
     dd = rep.get("drawdown") or {}
     pairs = [p for p in dd.get("pairs") or [] if p.get("overlap") is not None]
     if pairs:
@@ -145,7 +145,7 @@ def robustness_view(names: Sequence[str], S: np.ndarray, shares: Sequence[float]
         # 낙폭·흔들림은 '지금 비중을 과거에 들고 있었다면'의 과거 데이터 위 시뮬레이션이다 — 성과 종류를 응답이 선언한다
         # (PerfLabel 계약 · 화면은 그리기만). 데이터 축은 mock 게이트가 정한다.
         rep["perf_label"] = {**backtest_label(is_mock_data=mock_allowed()).to_dict(),
-                             "kind_reason": f"지금 비중을 지난 {rep['n_days']}거래일 들고 있었다고 본 과거 데이터 위 "
+                             "kind_reason": f"현재 비중을 지난 {rep['n_days']}거래일 보유했다고 가정한 과거 데이터 위 "
                                             "시뮬레이션입니다 — 실제 운용 기록이 아닙니다."}
         return rep
     except Exception as e:  # noqa: BLE001 — 배분은 그대로 두고 이 절만 모른다고 말한다

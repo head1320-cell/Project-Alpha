@@ -77,7 +77,7 @@ def moments(r: np.ndarray) -> dict[str, Any]:
                 "reason": f"수익이 {T}개뿐입니다 — {MIN_OBS}개 이상이어야 분포 모양을 믿을 만하게 측정합니다"}
     sd = float(r.std(ddof=1))
     if not math.isfinite(sd) or sd <= FLAT_SD:
-        return {"t": T, "sr": None, "skew": None, "kurt": None, "reason": "수익이 흔들리지 않아(표준편차 0) 샤프를 정의할 수 없습니다"}
+        return {"t": T, "sr": None, "skew": None, "kurt": None, "reason": "수익률 변동이 없어(표준편차 0) 샤프를 정의할 수 없습니다"}
     mu = float(r.mean())
     z = (r - mu) / float(r.std(ddof=0))
     return {"t": T, "sr": mu / sd, "skew": float(np.mean(z ** 3)), "kurt": float(np.mean(z ** 4)), "reason": None}
@@ -115,7 +115,7 @@ def _n_eff(series: list[dict], rows: list[dict]) -> tuple[float | None, str | No
     M = np.vstack([a[-t:] for a in arrs])                     # 끝을 맞춘다(같은 날까지의 흐름)
     C = np.corrcoef(M)
     if not np.all(np.isfinite(C)):
-        return None, "상관 산출 실패(흔들림이 없는 흐름이 있습니다)"
+        return None, "상관 산출 실패(변동성이 없는 흐름이 있습니다)"
     return participation_ratio(C), None
 
 

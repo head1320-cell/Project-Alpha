@@ -615,7 +615,7 @@ def _market_df(prefix: str) -> pd.DataFrame | None:
     """지수 OHLCV 로드(캐시). ★실패는 시효를 두고 재시도한다★
 
     예전 독스트링은 "실패 시 None 캐시(반복 시도 방지)" 였다. 반복 시도를 막는
-    의도는 옳지만 **영구히** 막으면 기동 시 한 번의 네트워크 흔들림이 그 토큰을
+    의도는 옳지만 **영구히** 막으면 기동 시 한 번의 네트워크 장애가 그 토큰을
     프로세스 수명 내내 죽인다.
     """
     if prefix in _market_cache and not (_market_cache[prefix] is None

@@ -187,7 +187,7 @@ def _dominant_driver(fs, base: ValuationParams, widths: dict) -> dict:
     return {
         "available": True, "driver": top,
         "spread_by_param": {k: round(v, 0) for k, v in spreads.items()},
-        "note": "각 파라미터를 홀로 ±1σ 흔들었을 때의 통합값 폭입니다(일변량).",
+        "note": "각 파라미터를 단독으로 ±1σ 변동시켰을 때의 통합값 폭입니다(일변량).",
     }
 
 
@@ -308,7 +308,7 @@ def valuation_distribution(fs, base_params: ValuationParams | None = None,
             "p90": round(float(np.percentile(ke_arr, 90)) * 100, 3),
             "base_pct": round((base.risk_free_rate + base.beta * base.market_premium) * 100, 3),
             "note": ("넷을 동시에 뽑으므로 유도된 ke 폭이 민감도 격자의 ±1%p 보다 "
-                     "넓습니다 — 격자는 한 번에 하나씩만 흔들기 때문입니다."),
+                     "넓습니다 — 격자는 한 번에 한 변수만 변동시키기 때문입니다."),
         },
         "dominant_driver": _dominant_driver(fs, base, w),
         "reason": None,

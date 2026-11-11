@@ -106,7 +106,7 @@ export function BacktestAttributionResult({ v }: { v: Dict }) {
     <>
       <KV rows={[["기간", `${String(r.months_from_run ?? "—")}개월`],
                  ["설명력(R²)", fmt(((r.diagnostics as Dict) ?? {}).r_squared, 2)],
-                 ["팩터 몫 · 설명 안 된 몫", `${signed(r.factor_contribution_pct, 2, "%")} · ${signed(r.alpha_contribution_pct, 2, "%")}`]]} />
+                 ["팩터 기여 · 미설명 기여", `${signed(r.factor_contribution_pct, 2, "%")} · ${signed(r.alpha_contribution_pct, 2, "%")}`]]} />
       <table className="pg-table pg-attr"><tbody>{rows.map((x) => {
         const c = num(x.contribution_pct) ?? 0;
         return (

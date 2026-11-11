@@ -179,11 +179,11 @@ def _crisis_rows(market_returns: list[float] | None, T: int) -> np.ndarray:
         raise _MethodFailure(f"시장 대용 흐름({m.size}일)이 전략 흐름({T}일)보다 짧아 위기일을 맞출 수 없습니다.")
     m = m[-T:]
     if not np.all(np.isfinite(m)) or float(np.var(m)) <= 0:
-        raise _MethodFailure("시장 대용 흐름에 빈 값이 있거나 흔들림이 없어 위기일을 고를 수 없습니다.")
+        raise _MethodFailure("시장 대용 흐름에 빈 값이 있거나 변동성이 없어 위기일을 고를 수 없습니다.")
     crisis = m <= np.quantile(m, CRISIS_Q)
     if int(crisis.sum()) < CRISIS_MIN_DAYS:
         raise _MethodFailure(f"위기일이 {int(crisis.sum())}일뿐이라(최소 {CRISIS_MIN_DAYS}일) 위기 때 공분산을 믿을 수 없습니다 — "
-                             "기간을 늘려 주십시오.")
+                             "기간을 늘리십시오.")
     return crisis
 
 
@@ -203,7 +203,7 @@ def _max_diversification(cov: np.ndarray, vols: np.ndarray) -> np.ndarray:
     from src.engine.risk_allocations import _opt
     w = _opt(lambda w: -float(w @ vols) / float(np.sqrt(max(w @ cov @ w, 1e-18))), len(vols))
     if w is None:
-        raise _MethodFailure("분산 효과 최대 계산이 풀리지 않았습니다 — 다른 방법을 선택하십시오.")
+        raise _MethodFailure("최대분산화 계산이 풀리지 않았습니다 — 다른 방법을 선택하십시오.")
     w = np.clip(np.asarray(w, dtype=float), 0.0, None)
     return w / w.sum()
 
@@ -237,14 +237,14 @@ def _allocate(method: str, S: np.ndarray, cov: np.ndarray, vols: np.ndarray, nam
         if alloc is None:
             # 예전에는 `_opt` 가 None 을 내면(풀리지 않음) 다음 줄에서 터졌고, 예외일 때만 조용히 역변동성으로 갔다.
             alloc = _inverse_vol(vols)
-            fallback = _fb(method, "흔들림 최소 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했습니다.")
+            fallback = _fb(method, "최소분산 계산이 풀리지 않아 역변동성 가중으로 계산했습니다.")
     elif method == "hrp":
         try:
             from src.engine.risk_allocations import _hrp_weights
             alloc = _hrp_weights(cov)
         except Exception:
             alloc = _inverse_vol(vols)
-            fallback = _fb(method, "계층 위험 균형 계산이 풀리지 않아 역변동성(덜 흔들리는 쪽에 더)으로 계산했습니다.")
+            fallback = _fb(method, "계층적 리스크 패리티(HRP) 계산이 풀리지 않아 역변동성 가중으로 계산했습니다.")
     elif method == "risk_budget" and risk_budget:
         b = np.array([max(risk_budget.get(nm, 1.0), 1e-6) for nm in names])
         alloc = _risk_budget_weights(cov, b)
@@ -260,21 +260,21 @@ def _allocate(method: str, S: np.ndarray, cov: np.ndarray, vols: np.ndarray, nam
         alloc = _risk_budget_weights(cov, np.ones(n))
         if method != "risk_parity":
             why = {"score": "점수를 주지 않아", "risk_budget": "위험 예산을 주지 않아"}.get(method, f"모르는 방식({method})이라")
-            fallback = _fb(method, f"{why} 위험 똑같이로 계산했습니다.")
+            fallback = _fb(method, f"{why} 리스크 패리티로 계산했습니다.")
     return alloc, fallback, crisis
 
 
 def _manual_shares(shares: dict[str, float] | None, names: list[str]) -> np.ndarray:
     if not shares:
-        raise _MethodFailure("몫 직접 정하기에는 전략마다 몫(%)이 필요합니다.")
+        raise _MethodFailure("배분 비율 직접 지정에는 전략별 배분 비율(%)이 필요합니다.")
     missing = [nm for nm in names if nm not in shares]
     if missing:
-        raise _MethodFailure(f"몫을 정하지 않은 전략이 있습니다: {', '.join(missing)}")
+        raise _MethodFailure(f"배분 비율을 지정하지 않은 전략이 있습니다: {', '.join(missing)}")
     v = np.array([float(shares[nm]) for nm in names])
     if not np.all(np.isfinite(v)) or (v < 0).any():
-        raise _MethodFailure("몫에 음수나 빈 값이 있습니다 — 0 이상으로 정하십시오.")
+        raise _MethodFailure("배분 비율에 음수나 빈 값이 있습니다 — 0 이상으로 정하십시오.")
     if abs(float(v.sum()) - 100.0) > MANUAL_SUM_TOL:
-        raise _MethodFailure(f"몫의 합이 {float(v.sum()):g}% 입니다 — 100% 가 되게 맞춰 주십시오.")
+        raise _MethodFailure(f"배분 비율의 합이 {float(v.sum()):g}% 입니다 — 100% 가 되게 맞추십시오.")
     return v / 100.0
 
 
@@ -350,7 +350,7 @@ def compare_sleeve_methods(sleeves: list[dict], ret_matrix: dict[str, list[float
                            rebalance_every: dict[str, int] | None = None,
                            rebalance_cost_bps: dict[str, float] | None = None,
                            market_returns: list[float] | None = None) -> dict[str, Any]:
-    """방법 비교표 (BS4, 관측) — 입력이 필요 없는 방법마다 **같은 흐름·같은 공분산**에서 몫·합친 흔들림·분산 효과·실질 개수.
+    """방법 비교표 (BS4, 관측) — 입력이 필요 없는 방법마다 **같은 흐름·같은 공분산**에서 몫·결합 변동성·분산 효과·실질 개수.
 
     ★어느 방법이 낫다는 판정이 아니다★ 과거 흐름 위에서 각 방법이 무엇을 하는지 나란히 보일 뿐이다. 분산 효과는 몫을 정한
     공분산(수축) 기준이라 견고성 절(표본 표준편차)의 값과 조금 다를 수 있다.
@@ -377,8 +377,8 @@ def compare_sleeve_methods(sleeves: list[dict], ret_matrix: dict[str, list[float
                      "effective_n": round(1.0 / float(np.sum(w ** 2)), 3),
                      "fallback": fb})
     return {"available": True, "rows": rows, "n_days": int(S.shape[0]),
-            "note": "같은 과거 흐름 위에서 방법마다 몫을 나란히 본 것입니다 — 어느 방법이 낫다는 뜻이 아닙니다. "
-                    "분산 효과는 몫을 정한 공분산 기준입니다."}
+            "note": "같은 과거 수익률 흐름에서 방법별 배분 비중을 비교한 것입니다 — 어느 방법이 낫다는 뜻이 아닙니다. "
+                    "분산 효과는 배분 비중을 산출한 공분산 기준입니다."}
 
 
 def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | None = None,
@@ -440,7 +440,7 @@ def sleeve_analytics(sleeves: list[dict], ret_matrix: dict[str, list[float]] | N
                 "슬리브는 분산효과가 작아 함께 무너지기 쉬움 — 중복 알파 점검.",
     }
     if flat:
-        out["correlation_reasons"] = {names[j]: "흔들림이 없어 상관을 측정할 수 없습니다(비중이 비었거나 숏만 있어 흐름이 0 입니다)"
+        out["correlation_reasons"] = {names[j]: "변동성이 없어 상관을 측정할 수 없습니다(비중이 비었거나 숏만 있어 흐름이 0 입니다)"
                                       for j in flat}
     return out
 

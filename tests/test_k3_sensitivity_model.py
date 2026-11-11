@@ -1,11 +1,11 @@
 """K3 · 민감도가 고른 방식·제약·위험 회피 λ 로 다시 푼다 (작업 카드 · 사용자 결정 2026-10-18 "계산하고 '안 움직입니다'라고 말하기")
 ==============================================================================
 예전 민감도 노드는 받은 비중을 만든 방식을 무시하고 생각이 있으면 BL, 없으면 평균-분산(max-sharpe)으로 다시 풀고 제약을 뺐다.
-기본 템플릿 '충격 점검'(위험 똑같이 = 리스크 패리티)에서 사용자가 본 민감도는 자기 비중의 것이 아니었다.
+기본 템플릿 '충격 점검'(리스크 패리티)에서 사용자가 본 민감도는 자기 비중의 것이 아니었다.
 
 이제 노드는 `sensitivity_matrix(..., model=, constraints=, risk_aversion=, w_current=, bench_returns=, groups_of=)` 로
 '포트폴리오 최적화' 과 ★같은 길★(`optimize` → 제약이면 `constrained_solve`)로 기준 비중을 풀고, 흔든 기대 수익마다 같은 길로 다시 푼다.
-- 기대 수익을 쓰지 않는 방식(무제약 최소분산·위험 똑같이·HRP·최대분산·최소 CVaR, 생각 없는 BL)은 계산하되 칸이 모두 0 이고
+- 기대 수익을 쓰지 않는 방식(무제약 최소분산·리스크 패리티·HRP·최대분산·최소 CVaR, 생각 없는 BL)은 계산하되 칸이 모두 0 이고
   `mu_reach: "none"` + 서버 문장("기대 수익을 쓰지 않아 … 움직이지 않습니다")을 싣는다 — 화면은 0 칸 히트맵 대신 그 문장을 보인다.
 - 강건 최적화(무제약)는 기대 수익을 수익률에서 스스로 다시 추정해 흔든 값이 들어가지 않는다 — `mu_reach: "own"` + 그 문장.
 - 흔든 기대 수익으로 풀지 못한 줄은 0 으로 메우지 않고 `None`(칸 "—") + 그 수를 센다(조용한 무반응 금지).
@@ -86,7 +86,7 @@ def test_mean_variance_moves():
 
 
 def test_bl_without_views_is_market_weights_and_does_not_move():
-    """생각 없는 BL 은 시가총액 비중 — 기대 수익을 흔들어도 그대로다."""
+    """생각 없는 BL 은 시가총액 비중 — 기대수익률을 변동시켜도 그대로다."""
     out = st.sensitivity_matrix(NAMES, _R(), model="bl")
     assert out["mu_reach"] == "none" and all(x == 0.0 for x in _flat(out["matrix"]))
 
@@ -172,7 +172,7 @@ def test_node_explanation_names_what_was_passed(clean):
     s = _sens("mvo", constraints={"max_weight_pct": 40})["nodes"]["s"]
     texts = [t["text"] for t in s["explain"]["trust"]]
     line = next(t for t in texts if "다시 풀었습니다" in t)
-    assert "수익 대비 위험 최적" in line and "제약" in line
+    assert "평균-분산 최적화" in line and "제약" in line
     assert "생각" not in line                           # 생각을 넘기지 않았으면 넘겼다고 말하지 않는다
     assert not any(t["state"] == "assumed" for t in s["explain"]["trust"])
     assert "같은 수익률·같은 제약을 넣어 다시 풀었습니다" in line

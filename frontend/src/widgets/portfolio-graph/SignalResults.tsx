@@ -152,7 +152,7 @@ function MethodCompare({ mc, names }: { mc: Dict | undefined; names: string[] })
                     ))}
                   </div>
                   <dl className="pg-mc-nums">
-                    <div><dt>흔들림(연)</dt><dd>{pct(r.vol_pct, 1)}</dd></div>
+                    <div><dt>변동성(연)</dt><dd>{pct(r.vol_pct, 1)}</dd></div>
                     <div><dt>분산 효과</dt><dd>{fx(r.div_ratio, 2)}배</dd></div>
                     <div><dt>실질 개수</dt><dd>{fx(r.effective_n, 1)}개</dd></div>
                   </dl>
@@ -172,9 +172,9 @@ export function PortfolioCombineResult({ v }: { v: Dict }) {
   const corr = v.correlation as { labels: string[]; matrix: (number | null)[][] } | null | undefined;
   return (
     <>
-      <h4 className="pg-h4">전략별 몫</h4>
+      <h4 className="pg-h4">전략별 배분 비중</h4>
       <table className="pg-table pg-strat-table">
-        <thead><tr><th>전략</th><th>몫</th><th>위험 분담</th><th>흔들림(연)</th><th>종목</th></tr></thead>
+        <thead><tr><th>전략</th><th>배분 비중</th><th>위험 분담</th><th>변동성(연)</th><th>종목</th></tr></thead>
         <tbody>
           {rows.map((s) => (
             <tr key={String(s.port)} data-port={String(s.port)}>
@@ -196,7 +196,7 @@ export function PortfolioCombineResult({ v }: { v: Dict }) {
             {corr.labels.map((l, i) => (
               <tr key={l}><th scope="row">{l}</th>
                 {corr.matrix[i].map((x, j) => (i === j || num(x) === null
-                  ? <td key={j} className="pg-td-num" title={i === j ? undefined : "흔들림이 없는 전략이 있어 측정할 수 없습니다"}>{i === j ? "" : "—"}</td>
+                  ? <td key={j} className="pg-td-num" title={i === j ? undefined : "변동성이 없는 전략이 있어 측정할 수 없습니다"}>{i === j ? "" : "—"}</td>
                   // 발산 색 — 세기 = |ρ|, 같은 방향 파랑 · 반대 방향 빨강. 글자 값이 늘 함께 있다(색만으로 읽지 않는다).
                   : <td key={j} className={`pg-td-num ${(x as number) < 0 ? "neg" : "pos"}`}
                         style={{ ["--pg-heat" as string]: `${Math.round(Math.abs(x as number) * 32)}%` }}>{fx(x, 2)}</td>))}

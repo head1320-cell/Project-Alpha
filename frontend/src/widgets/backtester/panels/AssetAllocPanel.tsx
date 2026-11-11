@@ -49,9 +49,9 @@ export default function AssetAllocPanel({ s, set }: {
   };
 
   return (
-    <Section title="ETF로 나눠 담기" hint="ETF 바스켓을 주식 전략과 함께 · 정한 주기마다 다시 맞춥니다(자산배분)" tone="neutral"
+    <Section title="ETF 자산배분" hint="ETF 바스켓을 주식 전략과 함께 · 정한 주기마다 다시 맞춥니다(자산배분)" tone="neutral"
       enabled={a.enabled} onToggle={(on) => patch({ enabled: on })}>
-      <p className="bte-note">포트폴리오의 일정 비율을 ETF로 늘 들고 있습니다. 남는 비율은 현금입니다.</p>
+      <p className="bte-note">포트폴리오의 일정 비율을 ETF로 상시 보유합니다. 남는 비율은 현금입니다.</p>
 
       <Field label="나누는 비율">
         <span className="bte-sm">ETF</span>
@@ -113,7 +113,7 @@ export default function AssetAllocPanel({ s, set }: {
       <p className="bte-note bte-note--warn">
         레버리지·인버스 ETF를 실제로 사려면 기본 예탁금과 사전 교육이 필요합니다. 백테스트에는 상관없습니다.
       </p>
-      <p className="bte-note">ETF 몫은 주식 전략과 따로 들고 있습니다. 매수 기준가에 닿지 못한 몫은 다음 주기에 재시도합니다(보수적).</p>
+      <p className="bte-note">ETF 비중은 주식 전략과 별도로 보유합니다. 매수 기준가에 도달하지 못한 비중은 다음 주기에 재시도합니다(보수적).</p>
 
       <WatchGroupModal open={modalOpen} etfOnly title="자산군 그룹 관리"
         onClose={() => { setModalOpen(false); // ★언마운트 뒤에 포커스를 준다★ 같은 틱에 주면 Radix 의 포커스 가드가 아직
