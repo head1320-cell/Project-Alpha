@@ -426,6 +426,9 @@ _FIX = [
     ("'무엇을 볼까' 에 종목 코드를 적습니다.", "'분석 대상' 에 종목 코드를 입력합니다."), ("‘무엇을 볼까’가 포트폴리오일 때", "‘분석 대상’이 포트폴리오일 때"),
     # 전략 상자 머리·접은 카드의 비중 표기를 단언하는 E2E
     ('toHaveText("몫 38.8%")', 'toHaveText("비중 38.8%")'), ('toContainText("몫을 모름")', 'toContainText("배분 비중 미상")'),
+    # "리스크 패리티"는 HRP·위기 이름의 부분 문자열 — 부분 일치로 고르던 E2E 를 정확 일치로
+    ("""'.pg-basic-field[data-field="model"] .pg-choice', { hasText: "리스크 패리티" }""",
+     """'.pg-basic-field[data-field="model"] .pg-choice', { hasText: /^리스크 패리티$/ }"""),
 ]
 
 PAIRS = _DESC + _METHODS + _FIELDS + _GLOBAL + _PLEASE + _RESULTS + _SHARE + _FIX

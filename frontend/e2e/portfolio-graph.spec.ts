@@ -284,7 +284,7 @@ test("복제해서 비교: 같은 입력·같은 설정으로 하나 더 · 나�
   await openCanvas(page);
   await node(page, "optimizer").click();
   await tab(page, "settings");
-  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: "리스크 패리티" }).click();
+  await page.locator('.pg-basic-field[data-field="model"] .pg-choice', { hasText: /^리스크 패리티$/ }).click();
   await page.locator(".pg-dup").click();
   await expect(page.locator(".pg-node")).toHaveCount(8);
   const doc = await exportDoc(page);
