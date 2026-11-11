@@ -339,7 +339,7 @@ class PITStore:
     def get_price_asof(self, stock_code: str, as_of_date: str, current_price: float) -> float:
         """as_of_date 시점 종가.
 
-        ★연습용(mock)에서는 그 날의 mock 종가다★(`ohlcv_loader.mock_close_asof` —
+        ★연습용(mock)에서는 그 날의 mock 종가다(원 단위)★(`ohlcv_loader.mock_price_asof` —
         시세 이력·지금 주가와 같은 걸음). 예전 식은 넘겨받은 지금 주가에 분기 수와
         난수를 곱한 값이라 과거 종가가 아니었고, as_of = 오늘이어도 지금 주가와 달랐다.
 
@@ -348,8 +348,8 @@ class PITStore:
         """
         from src.data.mock_gate import mock_allowed
         if mock_allowed():
-            from src.data.ohlcv_loader import mock_close_asof
-            px = mock_close_asof(stock_code, as_of_date)
+            from src.data.ohlcv_loader import mock_price_asof
+            px = mock_price_asof(stock_code, as_of_date)
             if px is not None:
                 return px
         q_idx = _quarter_index(as_of_date)

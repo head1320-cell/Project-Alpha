@@ -986,15 +986,15 @@ class ValuationScreener:
     def _mock_price(stock_code: str) -> float:
         """현재가 데이터 — 실제 운영 시 KIS API 또는 외부 시세 사용.
 
-        ★연습용(mock)에서는 시세 이력과 같은 걸음의 오늘 종가다★ — 예전에는 날짜와
+        ★연습용(mock)에서는 시세 이력과 같은 걸음의 오늘 종가다(원 단위)★ — 예전에는 날짜와
         무관한 고정 표였고 일봉은 다른 걸음에서 나와, 같은 종목의 지금 주가(71,000)와
         마지막 종가(56,512)가 어긋났다. 운영(`KIS_USE_MOCK≠1`)에서는 예전과 같은
         바탕값(`mock_price_level`)을 낸다 — `_enrich_kis_quotes` 가 실시세로 덮어 쓴다.
         """
         from src.data.mock_gate import mock_allowed
-        from src.data.ohlcv_loader import mock_close_asof, mock_price_level
+        from src.data.ohlcv_loader import mock_price_asof, mock_price_level
         if mock_allowed():
-            px = mock_close_asof(stock_code)
+            px = mock_price_asof(stock_code)
             if px is not None:
                 return px
         return mock_price_level(stock_code)

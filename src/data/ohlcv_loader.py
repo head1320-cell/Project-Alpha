@@ -16,6 +16,7 @@ ingest_to_db(): KIS 일봉을 DB에 적재 (배치 사전 로딩용).
 from __future__ import annotations
 
 import logging
+import math
 import os
 from bisect import bisect_right
 from datetime import datetime, timedelta
@@ -123,9 +124,9 @@ def mock_close_asof(ticker: str, as_of: str | datetime | None = None) -> float |
     """`as_of`(없으면 mock 의 오늘) 이하 마지막 거래일의 mock 종가.
 
     ★mock 가격의 출처는 이 걸음 하나다★ — 지금 주가(`screener._mock_price`)도
-    시점 가격(`PITStore.get_price_asof`)도 여기서 읽고, 일봉(`_mock_ohlcv_df`)도
-    같은 걸음·같은 배율이다. 그래서 "지금 주가 = 시세 이력의 마지막 종가" 이고
-    "as_of 가격 = 그 날의 종가" 다.
+    시점 가격(`PITStore.get_price_asof`)도 여기서 읽고(원 단위로 반올림해서 —
+    `mock_price_asof`), 일봉(`_mock_ohlcv_df`)도 같은 걸음·같은 배율이다. 그래서
+    "지금 주가 = 시세 이력의 마지막 종가" 이고 "as_of 가격 = 그 날의 종가" 다.
 
     기점(`_MOCK_EPOCH`) 이전에는 봉이 없다 → `None`.
     """
@@ -140,6 +141,19 @@ def mock_close_asof(ticker: str, as_of: str | datetime | None = None) -> float |
     if i < 0:
         return None
     return closes[i] * _mock_scale(code)
+
+
+def mock_price_asof(ticker: str, as_of: str | datetime | None = None) -> float | None:
+    """`mock_close_asof` 를 ★원 단위로 반올림★한 값 — "가격"으로 내보내는 쪽이 읽는다.
+
+    걸음의 종가는 소수다(73,922.10…). 그대로 "지금 주가"로 내면 응답에 소수점이
+    실린다 — 예전 고정 표는 늘 정수였고 KRX 가격도 원 단위다. 반은 올린다
+    (화면의 `Math.round` 와 같은 규칙 — 파이썬 `round` 는 반을 짝수로 보낸다).
+    일봉은 반올림하지 않는다(수익률이 바뀐다) — 그래서 지금 주가와 마지막 종가는
+    0.5원까지 다를 수 있고, 화면은 둘 다 원 단위로 적어 같은 글자가 된다.
+    """
+    px = mock_close_asof(ticker, as_of)
+    return None if px is None else float(math.floor(px + 0.5))
 
 
 def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):

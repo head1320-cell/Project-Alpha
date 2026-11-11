@@ -22,6 +22,9 @@
 3. **날짜 주소 가능성은 그대로** — 배율은 "오늘"이 아니라 고정 기준일로 정한다. 오늘에 맞추면 같은 날짜가 날마다 다른
    값이 된다(`tests/test_mock_is_date_addressable.py` 가 지키는 성질 · 프론트에서 걷은 배율을 서버로 옮기는 셈).
 4. **운영은 그대로** — `KIS_USE_MOCK≠1` 이면 두 함수 모두 고치기 전과 같은 값을 낸다(골든). 운영 동작 변경은 이번 범위가 아니다.
+5. **가격은 원 단위다** — 지금 주가·시점 가격은 그 날 종가를 원 단위로 반올림한 값이다(`mock_price_asof`). 걸음의 종가는
+   소수라서 그대로 내면 응답에 "198,671.081원"이 실린다(전체 E2E 가 잡았다 — 홈·스크리너의 "서버 값 그대로" 시험 둘).
+   예전 고정 표는 늘 정수였고 KRX 가격도 원 단위다. ★일봉은 반올림하지 않는다★ — 반올림하면 수익률이 바뀐다.
 
 아래 골든 숫자는 고치기 전 코드에서 잰 것이다(2026-11-11).
 """
@@ -29,6 +32,7 @@ import os
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
+import math  # noqa: E402
 from datetime import datetime, timedelta  # noqa: E402
 
 import pytest  # noqa: E402
@@ -70,6 +74,11 @@ def _df(code: str, end: datetime, days: int = 400):
     return ol.load_ohlcv_unified(code, (end - timedelta(days=days)).strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), "mock")
 
 
+def _won(x: float) -> float:
+    """원 단위 반올림(반은 올린다) — 화면의 `Math.round` 와 같은 규칙. 파이썬 `round` 는 반을 짝수로 보내 다르다."""
+    return float(math.floor(x + 0.5))
+
+
 def _close_on(code: str, day: str) -> float:
     df = ol.load_ohlcv_unified(code, "2025-01-01", "2026-12-31", "mock")
     row = df.loc[df.index == day, "close"]
@@ -83,7 +92,7 @@ def _close_on(code: str, day: str) -> float:
 def test_the_price_now_is_the_last_close_of_the_history(mock_mode, monkeypatch, code, today):
     day = _pin_today(monkeypatch, *today)
     last = float(_df(code, day)["close"].iloc[-1])
-    assert ValuationScreener._mock_price(code) == pytest.approx(last, rel=1e-12)
+    assert ValuationScreener._mock_price(code) == _won(last)
 
 
 def test_the_price_now_moves_with_the_day(mock_mode, monkeypatch):
@@ -92,9 +101,10 @@ def test_the_price_now_moves_with_the_day(mock_mode, monkeypatch):
     a = ValuationScreener._mock_price(TABLE)
     _pin_today(monkeypatch, 2026, 11, 11)
     b = ValuationScreener._mock_price(TABLE)
-    assert a == pytest.approx(71000.0, rel=1e-9), "기준일의 지금 주가는 표 값이다"
+    assert a == 71000.0, "기준일의 지금 주가는 표 값이다"
     assert b != pytest.approx(a, rel=1e-6)
-    assert b / a == pytest.approx(RAW[TABLE]["2026-11-11"][0] / RAW[TABLE]["2026-11-10"][0], rel=1e-12), "하루 사이의 변화 = 걸음의 그날 수익률"
+    want = 71000.0 * RAW[TABLE]["2026-11-11"][0] / RAW[TABLE]["2026-11-10"][0]
+    assert abs(b - want) <= 0.5 + 1e-6, "하루 사이의 변화 = 걸음의 그날 수익률(원 단위 반올림만큼만 다르다)"
 
 
 # ── 2. ★시점 가격 = 그 날의 종가★ ───────────────────────────────────────────────────────────────
@@ -103,23 +113,46 @@ def test_the_price_now_moves_with_the_day(mock_mode, monkeypatch):
 def test_the_as_of_price_is_that_days_close(mock_mode, monkeypatch, code, as_of):
     _pin_today(monkeypatch, 2026, 11, 11)
     store = ps.PITStore.get_default()
-    want = _close_on(code, as_of)
-    assert store.get_price_asof(code, as_of, 71000.0) == pytest.approx(want, rel=1e-12)
+    want = _won(_close_on(code, as_of))
+    assert store.get_price_asof(code, as_of, 71000.0) == want
     # 옛 식은 넘겨받은 "지금 주가"에 난수를 곱했다 — 그 날의 종가는 넘겨받은 값과 무관해야 한다
-    assert store.get_price_asof(code, as_of, 12345.0) == pytest.approx(want, rel=1e-12)
+    assert store.get_price_asof(code, as_of, 12345.0) == want
 
 
 def test_as_of_today_is_the_price_now(mock_mode, monkeypatch):
     """"지금"은 as_of = 오늘과 같은 말이다 — 예전에는 71,000 과 66,629.55 로 달랐다."""
     _pin_today(monkeypatch, 2026, 11, 11)
     now = ValuationScreener._mock_price(TABLE)
-    assert ps.PITStore.get_default().get_price_asof(TABLE, "2026-11-11", now) == pytest.approx(now, rel=1e-12)
+    assert ps.PITStore.get_default().get_price_asof(TABLE, "2026-11-11", now) == now
 
 
 def test_an_as_of_day_without_a_bar_uses_the_last_trading_day(mock_mode, monkeypatch):
     _pin_today(monkeypatch, 2026, 11, 11)
     sunday = ps.PITStore.get_default().get_price_asof(TABLE, "2025-06-29", 71000.0)       # 일요일 → 금요일(06-27) 종가
-    assert sunday == pytest.approx(_close_on(TABLE, "2025-06-27"), rel=1e-12)
+    assert sunday == _won(_close_on(TABLE, "2025-06-27"))
+
+
+# ── 2b. ★가격은 원 단위★ — 종가(소수)를 그대로 내지 않는다 · 일봉은 반올림하지 않는다 ─────────────────
+def test_mock_prices_are_whole_won(mock_mode, monkeypatch):
+    """지금 주가·시점 가격에 소수점이 없다. 올림과 내림이 둘 다 일어나는 날을 넣어 "내림" 구현을 배제한다."""
+    store, seen = ps.PITStore.get_default(), []
+    for code, day in [(OTHER, "2025-06-30"), (OTHER, "2025-06-27"), (TABLE, "2026-11-11"), ("207940", "2025-06-27")]:
+        close = ol.mock_close_asof(code, day)
+        y, m, d = (int(x) for x in day.split("-"))
+        _pin_today(monkeypatch, y, m, d)
+        for px in (ValuationScreener._mock_price(code), store.get_price_asof(code, day, 1.0), ol.mock_price_asof(code, day)):
+            assert px == int(px), f"{code} {day}: {px} 에 소수점이 있다"
+            assert px == _won(close), f"{code} {day}: {px} ≠ 반올림({close})"
+        seen.append(close % 1)
+    assert any(f >= 0.5 for f in seen) and any(f < 0.5 for f in seen), f"올림·내림이 둘 다 있어야 이 검사가 뜻이 있다: {seen}"
+
+
+def test_daily_bars_are_not_rounded(mock_mode):
+    """★짝★ 일봉의 종가는 걸음 그대로(소수)다 — 반올림하면 수익률이 바뀐다."""
+    for code in (TABLE, OTHER):
+        close = _close_on(code, "2025-06-30")
+        assert close != int(close), f"{code}: 일봉 종가 {close} 가 정수다"
+        assert close == ol.mock_close_asof(code, "2025-06-30")
 
 
 # ── 3. ★수준 — 기준일의 종가가 표 값★ · 상수 배율이라 모양은 그대로 ───────────────────────────────
@@ -194,7 +227,7 @@ def test_a_suffixed_ticker_reads_the_same_walk_as_the_loader(mock_mode, monkeypa
     """`load_ohlcv_unified` 는 `.KS`·`.KQ` 를 떼고 읽는다 — 지금 주가도 같은 종목을 읽어야 둘이 같다."""
     day = _pin_today(monkeypatch, 2026, 11, 11)
     last = float(_df("005930.KS", day)["close"].iloc[-1])
-    assert ValuationScreener._mock_price("005930.KS") == pytest.approx(last, rel=1e-12)
+    assert ValuationScreener._mock_price("005930.KS") == _won(last)
     assert ol.mock_close_asof("005930.KS") == ol.mock_close_asof("005930")
 
 
