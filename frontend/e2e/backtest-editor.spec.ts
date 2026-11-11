@@ -80,11 +80,11 @@ test("★업종 목록 실패는 alert★(예전에는 빈 칸) · 정상이면 
 test("늘 켜진 절에는 스위치가 없다(눌러도 아무 일 없는 스위치를 걷었다) · 켜고 끄는 절에는 있다(짝)", async ({ page }) => {
   await open(page);
   await steps(page).nth(3).click();
-  const money = page.locator(".kit-sec", { has: page.locator(".kit-sec-t", { hasText: /^돈과 기간$/ }) });
+  const money = page.locator(".kit-sec", { has: page.locator(".kit-sec-t", { hasText: /^투자금·기간$/ }) });
   await expect(money).toHaveCount(1);
   await expect(money.locator(".kit-sec-head [role='switch']")).toHaveCount(0);
   await steps(page).nth(0).click();
-  const buy = page.locator(".kit-sec", { has: page.locator(".kit-sec-t", { hasText: /^살 조건$/ }) });
+  const buy = page.locator(".kit-sec", { has: page.locator(".kit-sec-t", { hasText: /^매수 조건$/ }) });
   await expect(buy.locator(".kit-sec-head [role='switch']")).toHaveCount(1);
 });
 
