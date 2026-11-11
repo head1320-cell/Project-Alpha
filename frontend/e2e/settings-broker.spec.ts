@@ -84,7 +84,7 @@ async function noSecretsInDom(page: Page) {
 test("BV8: 계좌가 없으면 빈 상태 문장과 연결 폼", async ({ page }) => {
   await setup(page);
   await page.goto("/settings");
-  await expect(sec(page)).toContainText("아직 연결한 증권 계좌 없음");
+  await expect(sec(page)).toContainText("아직 연결한 증권 계좌가 없습니다");
   await expect(page.locator(".set-broker-form")).toBeVisible();
   await expect(page.locator(".set-broker-row")).toHaveCount(0);
 });

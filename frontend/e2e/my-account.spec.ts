@@ -482,7 +482,7 @@ test("BV9: 최근 주문은 서버 행 그대로 · 상태 번역 · 멈춘 곳 
   st.cancelReply = { json: { status: "not_cancellable", current: "FILLED" } };
   await rows.nth(1).locator(".ma-ord-cancel").click();
   await rows.nth(1).locator(".ma-ord-cancel-yes").click();
-  await expect(page.locator(".ma-ord-msg")).toContainText("취소 불가");
+  await expect(page.locator(".ma-ord-msg")).toContainText("취소할 수 없습니다");
   expect(sent.filter((s) => s.method === "DELETE").map((s) => s.path)).toEqual(["/ba_1/orders/CO-2"]);
 });
 

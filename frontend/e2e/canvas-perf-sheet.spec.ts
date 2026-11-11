@@ -93,7 +93,7 @@ test("(m) 질문 띠 — 답하는 것 · 답하지 않는 것은 관문 oos·ec
   await page.keyboard.press("Escape");
   await patchRun(page, (b) => { b.gates = null; });
   await openSheet(page);
-  await expect(sheet(page).locator(".pf-q")).toContainText("관문 판정 없음");
+  await expect(sheet(page).locator(".pf-q")).toContainText("관문 판정이 없습니다");
   await expect(sheet(page).locator(".pf-q-gate")).toHaveCount(0);
 });
 
@@ -159,7 +159,7 @@ test("(p) 리밸런싱 기록 — 행 수 = 서버 rebalances · 날짜·회전�
   await patchRun(page, (b) => { b.nodes.backtest.view!.rebalances = []; b.nodes.backtest.view!.n_rebalances = 0; });
   await openSheet(page);
   await expect(sheet(page).locator("table.pf-rebal-table")).toHaveCount(0);
-  await expect(sheet(page).locator(".pf-rebal-none")).toContainText("리밸런싱 날짜 기록 없음");
+  await expect(sheet(page).locator(".pf-rebal-none")).toContainText("리밸런싱 날짜 기록이 없습니다");
 });
 
 for (const scheme of ["light", "dark"] as const) {

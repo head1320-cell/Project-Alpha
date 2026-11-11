@@ -78,7 +78,7 @@ test("바꿀 후보가 없으면 고르기 칸 대신 이유 · 우클릭 메뉴
   await node(page, "optimizer").click({ button: "right" });
   const item = page.locator('.pg-ctx-item[data-action="swap"]');
   await expect(item).toBeDisabled();
-  await expect(item).toContainText("같은 선을 받는 다른 노드 없음");
+  await expect(item).toContainText("같은 선을 받는 다른 노드가 없습니다");
   await page.keyboard.press("Escape");
 
   // ★짝★ 후보가 있는 노드 — 메뉴 항목이 살아 있고, 누르면 설정 판의 바꾸기 칸에 초점이 간다

@@ -70,7 +70,7 @@ const TAB_NEEDS: Partial<Record<TabId, { main?: CoreKey; also?: CoreKey[] }>> = 
 function CoreFail({ k, retry }: { k: CoreKey; retry: () => void }) {
   return (
     <Notice tone="danger" title={`${CORE_KO[k]} 불러오지 못했습니다`}>
-      서버 연결 실패 또는 계산 실패 받은 데이터로 그릴 수 있는 것만 보여 드립니다.
+      서버 연결 실패 또는 계산 실패. 받은 데이터로 그릴 수 있는 것만 보여 드립니다.
       <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={retry}>재시도</button></div>
     </Notice>
   );

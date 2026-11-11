@@ -195,7 +195,7 @@ test("R5 · 사이에 넣기 — 후보 = 카탈로그에서 센 것 · 고르�
   await btn(page, "insert").click();
   await expect(page.locator(".pg-edge-tb-list [data-kind]")).toHaveCount(0);
   await expect(page.locator(".pg-edge-tb-list")).toContainText("받아");
-  await expect(page.locator(".pg-edge-tb-list")).toContainText("노드 없음");
+  await expect(page.locator(".pg-edge-tb-list")).toContainText("노드가 없습니다");
 });
 
 test("R5 · 꺾는 점 — 그린 선 가운데에 하나 · 한 단계", async ({ page }) => {
@@ -271,7 +271,7 @@ test("R5 · 우클릭 — 같은 넷 · 사이에 넣기…는 후보 + [뒤로]
   const at2 = await onWire(page, EO, 0.5);
   await page.mouse.click(at2.x, at2.y, { button: "right" });
   await expect(menu.locator('[data-action="insert"]')).toBeDisabled();
-  await expect(menu.locator('[data-action="insert"]')).toContainText("노드 없음");
+  await expect(menu.locator('[data-action="insert"]')).toContainText("노드가 없습니다");
   await page.keyboard.press("Escape");
   // 짝 — 빈 곳
   await page.locator(".react-flow__pane").click({ position: { x: 700, y: 640 }, button: "right" });

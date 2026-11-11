@@ -64,7 +64,7 @@ test("설정(BS1): 관리자가 계정을 만들면 임시 비밀번호가 한 �
   await p2.locator(".login-submit").click();
   await p2.waitForURL(/\/settings/);
   await expect(p2.locator(".set-must")).toBeVisible();
-  await expect(p2.locator(".set-must")).toContainText("먼저 바꿔");
+  await expect(p2.locator(".set-must")).toContainText("먼저 변경");
   const tempToken = (await p2.evaluate((k) => localStorage.getItem(k), TOKEN_KEY))!;
   const blocked = await p2.request.get("/api/backend/api/v1/live/audit/summary", { headers: { Authorization: `Bearer ${tempToken}` } });
   expect(blocked.status(), "바꾸기 전에는 보호 라우트가 열리지 않는다").toBe(403);

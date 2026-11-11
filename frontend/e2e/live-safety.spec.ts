@@ -78,8 +78,8 @@ test("ST3b 비상 정지 이력: 서버 행 그대로 · 걸려 있음 · 조치
   await expect(rows.nth(1)).toHaveAttribute("data-open", "false");
   await expect(rows.nth(1)).toContainText("누적 손실 자동 정지");
   await expect(rows.nth(1)).toContainText("admin 님이 풀었습니다");
-  await expect(rows.nth(1), "미상 ≠ 0").toContainText("취소한 미체결 미상");
-  await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("N/A");
+  await expect(rows.nth(1), "미상 ≠ 0").toContainText("취소한 미체결 N/A");
+  await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("미상");
   await expect(rows.nth(2).locator("[data-server]").first(), "모르는 출처는 원문").toHaveText("robot_x");
   await expect(rows.nth(2)).toContainText("조치를 서버가 기록하지 않았습니다");
 });

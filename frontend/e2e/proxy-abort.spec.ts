@@ -153,5 +153,5 @@ test("중계 · 짝: 백엔드가 없으면 502 — 499·504 로 접지 않는�
   expect(res).not.toBe("아직 기다림");
   if (res === "아직 기다림") return;
   expect(res.status).toBe(502);
-  expect(((await res.json()) as { detail: string }).detail).toContain("백엔드에 연결 불가");
+  expect(((await res.json()) as { detail: string }).detail).toContain("백엔드에 연결할 수 없습니다");
 });

@@ -53,4 +53,21 @@ sub("frontend/e2e/canvas-perf-grammar.spec.ts", """  // 영어 약어 라벨은 
 # 표시 낱말이 "연습용" → "합성 데이터"로 바뀌었다. "합성"만 보면 원래 있던 "…합성일 수 있습니다"(가능성 — 표시가 아니다)까지 걸린다.
 sub("tests/test_graph_practice_kind.py", 'and len(node.args) >= 2 and "합성" in _text_of(node.args[1], consts):',
     'and len(node.args) >= 2 and "합성 데이터" in _text_of(node.args[1], consts):')
-print("안 맞은 것:", bad)
+# ── 전체 E2E(1,324건) 뒤에 손으로 맞춘 것 ──
+for f in ("frontend/src/app/macro/page.tsx", "frontend/src/widgets/home/MacroAnswer.tsx"):
+    sub(f, "서버 연결 실패 또는 계산 실패 잠시 뒤", "서버 연결 실패 또는 계산 실패. 잠시 뒤")
+sub("frontend/src/widgets/macro/MacroCockpit.tsx", "서버 연결 실패 또는 계산 실패 받은 데이터로", "서버 연결 실패 또는 계산 실패. 받은 데이터로")
+for f in ("frontend/src/widgets/portfolio-graph/AiQuestion.tsx", "frontend/e2e/canvas-ai-question.spec.ts"):       # 390px 에서 묻기 칸이 넘쳤다
+    p = R / f; s = p.read_text()
+    for a, b in (("이 결과의 산출 근거는 무엇입니까?", "산출 근거는 무엇입니까?"), ("이 결과의 신뢰 수준은 어떻습니까?", "신뢰 수준은 어떻습니까?"),
+                 ("어떤 데이터가 전달됩니까?", "전달 항목은 무엇입니까?"), ("누락되거나 변경된 항목이 있습니까?", "누락·변경 항목이 있습니까?")):
+        s = s.replace(a, b)
+    p.write_text(s)
+sub("frontend/e2e/clients.spec.ts", 'getByText("그 고객 없음")', 'getByText("그 고객이 없습니다")')
+sub("frontend/e2e/live-safety.spec.ts", 'toContainText("취소한 미체결 미상")', 'toContainText("취소한 미체결 N/A")')
+sub("frontend/e2e/macro-cards.spec.ts", 'toContainText("처음을 100으로")', 'toContainText("시작값 100")')
+sub("frontend/e2e/settings.spec.ts", 'toContainText("먼저 바꿔")', 'toContainText("먼저 변경")')
+sub("frontend/e2e/shell-search.spec.ts", "toHaveText(/맞는 종목·화면 없음/)", "toHaveText(/맞는 종목·화면이 없습니다/)")
+sub("frontend/e2e/canvas-workspace.spec.ts", 'await expect(note).toContainText("비중을 내는 노드 없음");', 'await expect(note).toContainText("비중을 내는 노드가 없습니다");')
+sub("frontend/e2e/live-safety.spec.ts", 'await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("N/A");', 'await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("미상");')
+print("안 맞은 것:", bad, "· 나머지 E2E 단언 26건은 efix.py 가 맞췄다(BASE=045fbce)")

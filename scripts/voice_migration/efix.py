@@ -16,6 +16,7 @@ def load(rules: str):
     spec.loader.exec_module(m); m.load_rules(); return m
 
 A, B = load("rules.py"), load("vocab.py")
+BASE = os.environ.get("BASE", "HEAD")      # 옮기기 전 커밋
 MODES = ((), ("ts",), ("ts", "head"), ("ts", "phrases"), ("head",), ("phrases",))
 
 def variants(quoted: str) -> list[str]:
@@ -41,7 +42,7 @@ def main():
         if not (exp and rec and at): skipped += 1; print("손으로:", head); continue
         x, y = exp.group(1), norm(rec.group(1)); path, line = pathlib.Path(at.group(1)), int(at.group(2))
         rel = path.relative_to(ROOT).as_posix()
-        old = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT, capture_output=True, text=True).stdout.split("\n")
+        old = subprocess.run(["git", "show", f"{BASE}:{rel}"], cwd=ROOT, capture_output=True, text=True).stdout.split("\n")
         cur = path.read_text().split("\n")
         if line > len(old) or line > len(cur): skipped += 1; print("줄 없음:", head); continue
         hit = None

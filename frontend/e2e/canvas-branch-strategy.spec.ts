@@ -116,7 +116,7 @@ test("U6 · 고른 노드째 갈래는 틀만 + [전략으로 묶기] → 누르
   doc = await wip(page);
   const br2 = doc.branches!.find((x) => x.id !== br.id)!;
   await page.locator(`.pg-branch[data-branch-id="${br2.id}"] .pg-branch-strategy`).click();
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드 없음");
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없습니다");
   expect(strategiesOf(await wip(page))).toHaveLength(0);
 
   // 짝 — 첫 갈래를 묶은 뒤 그 갈래를 지우면 상자도 사라진다(둘째 갈래로 화면이 옮겨졌으니 맞춰 보기부터 — 머리가 오른쪽 창 밑에 들지 않게)

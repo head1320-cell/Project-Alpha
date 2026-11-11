@@ -806,7 +806,7 @@ test("전략 창 — 과거 성과는 곡선 + 낙폭 물속 · 낙폭 축 글�
   await expect(dlg.locator(".sm-perf .pf-table-years th").last()).toHaveText("달");                       // 점이 달이라 '거래일'이 아니다
   await expect(dlg.locator(".sm-perf .pf-dd-eps tbody tr")).toHaveCount((detail.perf.drawdowns ?? []).length);
   if ((detail.perf.drawdowns ?? []).length) await expect(dlg.locator(".sm-perf .pf-dd-eps")).toHaveClass(/pf-dd-eps--compact/);   // 좁은 창 — 짧은 날짜
-  await expect(dlg.locator(".sm-perf .pf-legend")).toContainText("처음을 100으로");
+  await expect(dlg.locator(".sm-perf .pf-legend")).toContainText("시작값 100");
   await expect(dlg.locator(".sm-perf .pf-read")).toContainText("포트폴리오");
   await expect(dlg.locator(".sm-perf-stats .sm-perf-stat")).toHaveCount(5);                 // 지표 5 는 그대로
   await expect(dlg.locator(".sm-perf .recharts-wrapper")).toHaveCount(0);            // 성과 절에는 차트 라이브러리가 없다(보유 도넛도 이제 직접 SVG)

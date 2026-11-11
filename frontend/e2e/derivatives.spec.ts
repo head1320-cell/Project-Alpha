@@ -124,7 +124,7 @@ test("채권 · 선물 헤지 결과 = 서버 값 — 헤지 방향은 한국어
   await page.getByRole("button", { name: "헤지 계산하기" }).click();
   const red = page.locator('.dv-fig[data-k="reduction"]');
   await expect(red).toContainText("계산하지 않습니다", { timeout: 20_000 });
-  await expect(red).toContainText("줄일 시장 위험 없음");
+  await expect(red).toContainText("줄일 시장 위험이 없습니다");
   await expect(red).not.toContainText("0%");
 });
 

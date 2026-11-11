@@ -139,7 +139,7 @@ test("종목 고르기·내 생각·기대 수익 설정: 자세히 탭에 원�
   await detail("views");
   const views = (body.nodes.views.view!.views as unknown[]) ?? [];
   if (views.length) await expect(page.locator(".pg-view-row")).toHaveCount(views.length);
-  else await expect(page.locator(".pg-result")).toContainText("적은 생각 없음");
+  else await expect(page.locator(".pg-result")).toContainText("적은 생각이 없습니다");
 
   await detail("estimate");
   const settings = body.nodes.estimate.view!.settings as Record<string, unknown>;

@@ -95,7 +95,7 @@ export default function MacroPage() {
       {!loading && !regime && (
         <div className="mc-err tx-page tx-page--wide">
           <Notice tone="danger" title="매크로 분석 조회 실패">
-            국면 계산 서버 연결 실패 또는 계산 실패 잠시 뒤 재시도하십시오.
+            국면 계산 서버 연결 실패 또는 계산 실패. 잠시 뒤 재시도하십시오.
             <div className="mc-act">
               <button type="button" className="tx-btn tx-btn--sub" onClick={() => { void regimeQ.refetch(); }}
                       disabled={regimeQ.isFetching}>

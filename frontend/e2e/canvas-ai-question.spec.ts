@@ -187,17 +187,17 @@ test("자주 묻는 질문 칩은 누르면 바로 묻는다 · 노드와 선은
   await openWith(page, CORE);
   await runAll(page);
   await pick(page, "optimizer");
-  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["이 결과의 산출 근거는 무엇입니까?", "미측정 항목은 무엇입니까?", "이 결과의 신뢰 수준은 어떻습니까?"]);
+  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["산출 근거는 무엇입니까?", "미측정 항목은 무엇입니까?", "신뢰 수준은 어떻습니까?"]);
   await dock(page).locator(".pg-ask-preset").nth(1).click();
   await expect.poll(() => seen.length).toBe(1);
   expect(seen[0].question).toBe("미측정 항목은 무엇입니까?");
   await pickEdge(page, RO);
   await expect(dock(page).locator(".pg-ask-to")).toHaveText("2 수익률 불러오기 → 4 비중 계산 선에게 묻기");
-  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["어떤 데이터가 전달됩니까?", "누락되거나 변경된 항목이 있습니까?"]);
+  await expect(dock(page).locator(".pg-ask-preset")).toHaveText(["전달 항목은 무엇입니까?", "누락·변경 항목이 있습니까?"]);
   await dock(page).locator(".pg-ask-preset").first().click();
   await expect.poll(() => seen.length).toBe(2);
   expect(seen[1].target).toEqual({ kind: "edge", id: RO });
-  expect(seen[1].question).toBe("어떤 데이터가 전달됩니까?");
+  expect(seen[1].question).toBe("전달 항목은 무엇입니까?");
 });
 
 test("답할 수 없으면 서버 고정 문장 · 합성 경고는 서버가 붙였을 때만(짝)", async ({ page }) => {
@@ -321,7 +321,7 @@ test("가로채지 않은 실제 서버: 실제 계산 → 실제 봉인(설명�
   await runAll(page);
   await pickEdge(page, RO);
   const res = page.waitForResponse((r) => r.url().includes("/assist/canvas/ask"));
-  await askText(page, "어떤 데이터가 전달됩니까?");
+  await askText(page, "전달 항목은 무엇입니까?");
   const body = await (await res).json();
   expect(body).toMatchObject({ available: false, source: "unavailable", reason_code: "no_key", dropped: [] });
   await expect(dock(page).locator(".pg-ask-note")).toHaveText("AI 답을 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");

@@ -559,7 +559,7 @@ test("전략 이름을 바꾸면 포트폴리오 노드의 전략 이름도 바�
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드 없음");
+  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없습니다");
 });
 
 test("전략 지도(BM C2 → BN N1): 자동 정리 = 노드와 선만(배경 칸 없음) · 전략마다 한 줄 · 포트폴리오 노드는 오른쪽, 여럿이면 세로로 쌓임", async ({ page }) => {
@@ -710,7 +710,7 @@ test("내 블록: 이 브라우저에 저장할 수 없으면 '없음' 이 아�
     };
   });
   await openCanvas(page);
-  await expect(page.locator(".pg-blocks-note")).toContainText("저장 불가");
+  await expect(page.locator(".pg-blocks-note")).toContainText("저장할 수 없습니다");
   await addStrategy(page, "tpl:stress");
   const dl = page.waitForEvent("download");
   await page.locator(".pg-group--strategy .pg-group-file").last().click();
@@ -1592,10 +1592,10 @@ test("안내 줄(BN N3): [되돌리기] · 되돌릴 수 있는 안내는 8초 �
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
   await page.keyboard.press("Enter");
-  await expect(note).toContainText("비중을 내는 노드 없음");
+  await expect(note).toContainText("비중을 내는 노드가 없습니다");
   await expect(note.locator(".pg-note-undo")).toHaveCount(0);
   await page.waitForTimeout(9_000);
-  await expect(note).toContainText("비중을 내는 노드 없음");
+  await expect(note).toContainText("비중을 내는 노드가 없습니다");
 });
 
 test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 연결하십시오' · 이으면 사라짐(짝) · 이어진 노드엔 없음", async ({ page }) => {
@@ -1637,7 +1637,7 @@ test("찾기·단축키(BN N3): Ctrl+F 로 이름을 찾아 Enter → 그 노드
   const input = page.locator(".pg-find input");
   await expect(input).toBeFocused();
   await input.fill("없는노드이름");
-  await expect(page.locator(".pg-find")).toContainText("맞는 노드 없음");
+  await expect(page.locator(".pg-find")).toContainText("맞는 노드가 없습니다");
   await input.fill(label);
   await expect(page.locator('.pg-find-item[data-node-id="optimizer"]')).toBeVisible();
   await input.press("Enter");

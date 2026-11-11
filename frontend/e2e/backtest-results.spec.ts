@@ -83,7 +83,7 @@ test("합성 표시는 mock 일 때만 · 'GCP'·'실데이터' 글자 없음(�
 
 test("시점 정합 사유는 보이는 글자 — title= 툴팁이 아니다(짝: 판정이 있으면 그 요약이 보인다)", async ({ page }) => {
   await openResults(page);
-  await expect(answer(page)).toContainText("시점 정합을 판정할 자료 없음");
+  await expect(answer(page)).toContainText("시점 정합을 판정할 자료가 없습니다");
   const titled = await page.locator(".terminal-main [title]:not(.perf-label)").count();
   expect(titled, "툴팁으로 숨긴 사유").toBe(0);
   await page.unrouteAll();
@@ -305,7 +305,7 @@ test("비교: 차이만 말한다 — 총수익률 +12.6%p · 최대 낙폭 -3.8
 
 test("비교: 한쪽 값이 없으면 '비교 불가' — 0 으로 두지 않는다(짝)", async ({ page }) => {
   await openCompare(page, (b) => { delete stats(b).total_return_pct; });
-  await expect(answer(page)).toContainText("총수익률은 비교 불가");
+  await expect(answer(page)).toContainText("총수익률은 비교할 수 없습니다");
   await expect(answer(page)).not.toContainText("총수익률 +");
   await expect(answer(page)).toContainText("최대 낙폭 -3.8%p");
 });

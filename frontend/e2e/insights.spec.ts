@@ -410,7 +410,7 @@ test("모형 한눈에 — 줄마다 점 또는 사유 · 현재가 선 1 · 'n�
   await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "EVA 를 재지 못했습니다(시험)", code: "005930", is_mock: true } }));
   await openModels(page);
   const lad = page.locator(".ci-sec[data-sec=value] .ci-ladder");
-  await expect(lad.locator(".ci-lad-row[data-key=eva] .ci-lad-reason")).toContainText("측정 불가", { timeout: 40_000 });
+  await expect(lad.locator(".ci-lad-row[data-key=eva] .ci-lad-reason")).toContainText("재지 못했습니다", { timeout: 40_000 });
   await page.waitForTimeout(4000);
   const rows = await lad.locator(".ci-lad-row").evaluateAll((els) => els.map((e) => ({
     dots: e.querySelectorAll(".ci-lad-dot").length, reason: !!e.querySelector(".ci-lad-reason"), wait: !!e.querySelector(".ci-lad-wait"),
@@ -854,7 +854,7 @@ test("팩터 — 카테고리 이름 한국어(quality·safety·composite 0) · 
   await expect(fa.locator(".ci-fmap-dot").first()).toBeVisible({ timeout: 30_000 });
   await fa.locator("details.ci-fac-more summary").click();
   const t = await fa.innerText();
-  expect(t).not.toMatch(/\b(quality|safety|composite|Score|Multiple|Formula)\b/);
+  expect(t).not.toMatch(/\b(quality|safety|composite|(?<![ZMF]-)Score|Multiple|Formula)\b/);      // Z-Score·M-Score·F-Score 는 용어집 §5 가 허용한다
   expect(await fa.locator("details.ci-fac-more").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
   const avg = fa.locator(".ca-cp-catbar i b").first();
   const pctTxt = await fa.locator(".ca-cp-catbar em").first().innerText();

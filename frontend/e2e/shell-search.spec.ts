@@ -90,7 +90,7 @@ test("★실패와 빈 결과를 섞지 않는다★ 검색 실패 → '연결 �
   mode = "empty";
   await box(page).fill("");
   await box(page).fill("없는이름xyz");
-  await expect(page.locator(".tx-find-pop .tx-find-note")).toHaveText(/맞는 종목·화면 없음/);
+  await expect(page.locator(".tx-find-pop .tx-find-note")).toHaveText(/맞는 종목·화면이 없습니다/);
   await expect(err).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(page.locator(".tx-find-pop")).toHaveCount(0);

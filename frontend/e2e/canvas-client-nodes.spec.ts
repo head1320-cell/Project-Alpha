@@ -95,7 +95,7 @@ test("PB1 · 목표까지 — 목표는 곡선에서 읽고, 구간 안이면 �
   await tab(page, "detail");
   const side = page.locator(".pg-side");
   await expect(side.locator(".pg-goal-target")).toContainText("%");
-  await expect(side.locator('.pg-goal-gap[data-state="unknown"]')).toContainText("N/A");
+  await expect(side.locator('.pg-goal-gap[data-state="unknown"]')).toContainText("미상");
 });
 
 test("PB1 · 고객 · 보유 진단 — 성향·출처·평가일 · 위험 기여", async ({ page }) => {

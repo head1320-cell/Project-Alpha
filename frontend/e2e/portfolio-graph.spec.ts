@@ -207,7 +207,7 @@ test("이야기: 노드 번호 순서의 서버 설명 · 합성 경고 · 카�
   const id = await first.getAttribute("data-node-id");
   await expect(first.locator(".pg-step-title")).toHaveText(body.nodes[id!].explain.title);
   await expect(page.locator('.pg-step[data-node-id="optimizer"] .pg-bar-row')).toHaveCount(3);
-  await expect(page.locator('.pg-step[data-node-id="returns"] .pg-trust')).toContainText("N/A");
+  await expect(page.locator('.pg-step[data-node-id="returns"] .pg-trust')).toContainText("미상");
   await page.locator('.pg-step[data-node-id="risk"] .pg-step-title button').click();
   await expect(node(page, "risk")).toHaveClass(/pg-node--selected/);
   await expect(node(page, "optimizer")).not.toHaveClass(/pg-node--selected/);
@@ -552,7 +552,7 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
 
     await node(page, "m").click();
     await tab(page, "settings");
-    await expect(page.locator('.pg-basic-field[data-field="strategy_ids"]')).toContainText("등록된 전략 없음");
+    await expect(page.locator('.pg-basic-field[data-field="strategy_ids"]')).toContainText("등록된 전략이 없습니다");
 
     await node(page, "a").click();
     const row = page.locator('.pg-basic-field[data-field="run_id"] .pg-pick-row', { hasText: "E2E 되짚기" });
@@ -855,7 +855,7 @@ test("기록함 서랍(BL2): 판단 기록 회고 쓰기·삭제 · 연구 기�
   // ★못 읽은 것과 없는 것은 다른 문장★ — 목록 요청을 실패시키면 '없어요' 가 아니라 '불러오지 못했어요'.
   await page.route("**/research-runs?**", (r) => r.fulfill({ status: 500, body: "x" }));
   await s.getByRole("tab", { name: "연구 기록" }).click();
-  await expect(s.locator(".pg-field-err")).toContainText("조회 실패");
+  await expect(s.locator(".pg-field-err")).toContainText("불러오지 못했습니다");
   await expect(s.locator(".pg-help", { hasText: "연구 기록 없음" })).toHaveCount(0);
 });
 
@@ -1821,7 +1821,7 @@ test("롱숏(BL4): 숏이 있으면 gross·net·롱·숏과 gross 기준 집중�
   await expect(exp).toContainText("2,423");
   await detail(page, "tv");
   const blocked = page.locator(".pg-side .pg-ls-blocked");
-  await expect(blocked).toContainText("실행 불가");
+  await expect(blocked).toContainText("실행할 수 없습니다");
   const items = blocked.locator(".pg-ls-blocked-l li");
   await expect(items).toHaveCount(3);
   await expect(items.nth(0)).toContainText("차입");
@@ -2074,7 +2074,7 @@ test("기록함(BL4): 연구 기록 — 없음 ≠ 저장소 장애 ≠ 네트�
   await stubList((r) => r.fulfill({ json: { available: true, runs: [] } }));
   await openRuns();
   texts.push(await runs.locator('[role="tabpanel"]').innerText());
-  await expect(runs.locator(".pg-help")).toContainText("연구 기록 없음");
+  await expect(runs.locator(".pg-help")).toContainText("연구 기록이 없습니다");
   await page.keyboard.press("Escape");
   await stubList((r) => r.fulfill({ json: { available: false, runs: [], reason: "연구 기록 저장소를 읽을 수 없습니다 — 테이블이 없습니다." } }));
   await page.reload({ waitUntil: "domcontentloaded" });
