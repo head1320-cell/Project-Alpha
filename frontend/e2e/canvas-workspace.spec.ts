@@ -1111,7 +1111,7 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   await run(page);
   await expect(card.locator(".pg-snode-share")).toHaveAttribute("data-share", "61.2");
   await expect(card.locator(".pg-snode-share b")).toHaveText("61.2%");
-  await expect(frameB.locator(".pg-group-share")).toHaveText("몫 38.8%");
+  await expect(frameB.locator(".pg-group-share")).toHaveText("비중 38.8%");
   const donut = node(page, pf.id).locator(".pg-donut");
   await expect(donut.locator(`circle[data-port="${portOf(doc, a)}"]`)).toHaveAttribute("data-share", "61.2");
   await expect(donut.locator(`circle[data-port="${portOf(doc, b)}"]`)).toHaveAttribute("data-share", "38.8");
@@ -1134,7 +1134,7 @@ test("접은 전략 = 노드 카드(BN N1): 몫 = 그 포트의 서버 값(바�
   await patchRun(page, (body) => { for (const r of shareRows(body, pf.id)) if (r.port === portOf(doc, a)) delete r.share_pct; });
   await run(page);
   await expect(card.locator(".pg-snode-share")).toHaveAttribute("data-share", "");
-  await expect(card.locator(".pg-snode-share")).toContainText("몫을 모름");
+  await expect(card.locator(".pg-snode-share")).toContainText("배분 비중 미상");
   await expect(donut.locator(`circle[data-port="${portOf(doc, a)}"]`)).toHaveCount(0);
   await expect(donut.locator(`li[data-port="${portOf(doc, a)}"] b`)).toHaveText("—");
   await expect(frameB.locator(".pg-group-share")).not.toHaveText("비중 —");
