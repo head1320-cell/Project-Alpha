@@ -28,7 +28,9 @@
 """
 from __future__ import annotations
 
+import calendar
 import logging
+from datetime import date
 
 import numpy as np
 
@@ -182,12 +184,51 @@ def _macro_series_map() -> tuple[dict | None, str | None]:
         return None, f"매크로 계열을 수집하지 못했습니다 ({type(e).__name__})"
 
 
+def _period_end(label) -> str | None:
+    """수집기 타임스탬프 → 그 관측 기간의 **마지막 날**(`YYYY-MM-DD`). 모르는 모양이면 `None`.
+
+    ★날짜를 글자로 견주지 않는다★ `as_of` 는 `YYYY-MM-DD` 인데 타임스탬프는 출처마다
+    모양이 다르다(`macro_collector` — 한국은행 월별 `YYYYMM` · 일별 `YYYYMMDD` ·
+    연별 `YYYY` · FRED `YYYY-MM-DD` · 연습용 `YYYYMM`). 예전의 `str(t)[:10] <= as_of`
+    는 다섯째 글자에서 `"0"` 과 `"-"` 가 만나, `YYYYMM` 계열을 as_of 가 든 해의 **앞 해
+    12월**에서 잘랐고(2024-06-30 도 2024-12-31 도 202312) `YYYY` 는 끝나지 않은 해를
+    넣었다. 응답은 그 절단일을 지켰다고 적었다.
+
+    달·해 라벨은 그 기간 전체의 관측이므로 **기간이 끝나야** 안다 — 말일로 바꾼다.
+    온전한 날짜는 그 날 그대로다(FRED 의 월별 계열은 달 첫날로 찍혀 오는데, 날짜만으로는
+    주기를 알 수 없다 — 이 동작은 예전과 같다). 공표 지연은 여기서 다루지 않는다
+    (`pit_macro` 의 빈티지 경로가 맡는다).
+    """
+    s = str(label if label is not None else "").strip()
+    try:
+        if len(s) >= 10 and s[4] == "-" and s[7] == "-":          # YYYY-MM-DD… (FRED · ISO)
+            date(int(s[:4]), int(s[5:7]), int(s[8:10]))
+            return s[:10]
+        if len(s) == 8 and s.isdigit():                            # YYYYMMDD (한국은행 일별)
+            date(int(s[:4]), int(s[4:6]), int(s[6:]))
+            return f"{s[:4]}-{s[4:6]}-{s[6:]}"
+        if len(s) == 4 and s.isdigit():                            # YYYY (한국은행 연별)
+            return f"{s}-12-31"
+        if len(s) == 6 and s.isdigit():                            # YYYYMM (한국은행 월별 · 연습용)
+            y, m = int(s[:4]), int(s[4:])
+        elif len(s) == 7 and s[4] == "-" and s[:4].isdigit() and s[5:].isdigit():   # YYYY-MM
+            y, m = int(s[:4]), int(s[5:])
+        else:
+            return None
+        return f"{y:04d}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
+    except ValueError:                                             # 13월 · 6월 31일 등
+        return None
+
+
 def truncate_series(series, as_of: str | None):
     """매크로 계열을 `as_of` 까지로 자른다. ★자를 수 없으면 원본을 그대로 돌려준다★
 
     계열 객체는 `timestamps`/`values` 를 갖는다(`_series_monthly_change` 와 같은
     가정). 그 모양이 아니면 **조용히 오늘 값을 쓰면서 과거를 주장하지 않도록**
     호출자가 `truncated` 로 판별할 수 있게 원본을 그대로 돌려준다.
+
+    관측 기간의 마지막 날이 `as_of` 이하인 것만 남긴다(`_period_end`). 읽지 못하는
+    타임스탬프가 하나라도 있으면 자르지 않고 `False` 다 — 조용히 넣지도 빼지도 않는다.
     """
     if not as_of:
         return series, True
@@ -200,7 +241,11 @@ def truncate_series(series, as_of: str | None):
         return series, True
     if len(ts) != len(vals):
         return series, False
-    keep = [i for i, t in enumerate(ts) if str(t)[:10] <= as_of]
+    ends = [_period_end(t) for t in ts]
+    if any(e is None for e in ends):
+        return series, False
+    cutoff = str(as_of)[:10]
+    keep = [i for i, e in enumerate(ends) if e <= cutoff]
     if len(keep) == len(ts):
         return series, True          # 이미 as_of 이전 — 자를 것이 없다
     try:

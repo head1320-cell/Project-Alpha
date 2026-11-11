@@ -82,11 +82,15 @@ def test_asset_factor_betas_respects_as_of():
     처음에는 베타 **값**을 비교했고, 자산 경로만 배선 해제하는 프로브로 격리를
     시도했다. 두 번 다 실패했고 이유가 드러났다:
 
-      · 매크로 계열이 자산 창보다 **먼저 끝난다**(현재 데이터에서 2023-12).
-        그래서 교집합을 묶는 것은 매크로 쪽이고, 자산 수익률을 2024-06 으로
-        잘라도 `n_months`·`span`·베타가 **하나도 바뀌지 않는다.**
+      · 회귀는 매크로 변화와 자산 수익률이 **함께 갖는 달**로 돈다. 매크로를 as_of 로
+        자르면 그 교집합의 끝이 as_of 에 묶이므로, 자산 수익률을 따로 자르지 않아도
+        `n_months`·`span`·베타가 **하나도 바뀌지 않는다.**
       · 즉 "자산 경로 배선 해제" 는 이 구성에서 **equivalent mutant** 다.
-        억지로 잡히게 만들지 않고 그렇게 적는다.
+        억지로 잡히게 만들지 않고 그렇게 적는다(2026-11-11 에 다시 넣어 봤다 — 여전히 산다).
+      · ★고쳐 적는다★ 예전에는 여기에 "매크로 계열이 자산 창보다 먼저 끝난다(현재
+        데이터에서 2023-12)" 라고 적었다. 자료 사정이 아니라 **결함**이었다 —
+        `truncate_series` 가 `YYYYMM` 계열을 as_of 가 든 해의 앞 해 12월에서 잘랐다
+        (`tests/test_macro_cut_formats.py`). 이제 매크로 절단은 as_of 의 달까지 닿는다.
 
     자산 경로 자체는 `_monthly_returns` 수준에서 이미 걸려 있다(위 세 테스트).
     배선을 유지하는 이유는 매크로가 자산 창을 넘어서는 실데이터에서 의미가
@@ -129,7 +133,12 @@ def test_macro_series_are_cut_at_as_of():
     assert ok
     assert cut.timestamps, "자른 뒤 아무것도 안 남았다 — 아래 단언이 공허하다"
     assert len(cut.timestamps) < len(sm[name].timestamps)
-    assert all(str(t)[:10] <= AS_OF for t in cut.timestamps)
+    # ★글자로 견주지 않는다★ 예전 단언은 `str(t)[:10] <= as_of` 였다 — 고치려는 결함과 같은 식이라
+    # `YYYYMM` 계열이 as_of 가 든 해의 앞 해 12월에서 잘려도 통과했다(`tests/test_macro_cut_formats.py`).
+    from src.engine.conditional_market import _normalize_month
+    months = [_normalize_month(str(t)[:7]) for t in cut.timestamps]
+    assert all(m is not None and m <= AS_OF[:7] for m in months), months[-3:]
+    assert max(months) == AS_OF[:7], f"절단이 as_of 의 달까지 닿지 않았다: {max(months)} (as_of {AS_OF})"
 
 
 def test_an_empty_series_counts_as_honored():
