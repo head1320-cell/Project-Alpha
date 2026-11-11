@@ -3897,13 +3897,16 @@
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(27, 175, 122)|none|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(74, 58, 167)|none|"
   ],
-  "main:g.recharts-layer.recharts-reference-line": [
+  "main:g.ci-pv-intr.recharts-layer.recharts-reference-line": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:line.recharts-reference-line-line": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(229, 232, 235)|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(25, 31, 40)|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(95, 107, 122)|"
+  ],
+  "main:g.ci-pv-nowline.recharts-layer.recharts-reference-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:g.recharts-layer.recharts-line": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -3916,7 +3919,10 @@
   "main:g.recharts-layer": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:g.recharts-layer.recharts-reference-dot": [
+  "main:g.recharts-layer.recharts-reference-line": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:g.ci-pv-end.recharts-layer.recharts-reference-dot": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:circle.recharts-dot.recharts-reference-dot-dot": [
@@ -3984,9 +3990,6 @@
   "main:td.pg-td-num": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.ci-note.ci-pv-shift": [
-   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
   "main:ul.ci-pv-leg": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
@@ -4011,6 +4014,12 @@
   ],
   "main:i.ci-pv-sw.line": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(49, 130, 246)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.ci-pv-now": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:i.ci-pv-sw.now": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(95, 107, 122)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:i.ci-pv-sw.dash": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -4141,6 +4150,9 @@
   ],
   "main:path.recharts-area-curve.recharts-curve": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(49, 130, 246)|"
+  ],
+  "main:g.recharts-layer.recharts-reference-dot": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:p.ci-note": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -4549,10 +4561,15 @@
   "main:svg.ca-spark": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:polyline.": [
+  "main:polyline.sp-line": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(240, 68, 82)|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(49, 130, 246)|",
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "main:circle.sp-end": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(240, 68, 82)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(49, 130, 246)|none|",
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(78, 89, 104)|none|"
   ],
   "main:span.ca-cp-kpi-v": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
