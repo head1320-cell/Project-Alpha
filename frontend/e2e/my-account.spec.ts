@@ -308,7 +308,7 @@ test("BV9: 모의 체결로 바꾸기는 확인을 거친다 — 취소면 요�
   const { sent } = await setup(page);
   await page.goto("/my-account");
   await page.locator('.ma-mode-b[data-mode="PAPER"]').click();
-  await expect(page.locator(".ma-mode-confirm")).toContainText("가상 체결기로 보냅니다");
+  await expect(page.locator(".ma-mode-confirm")).toContainText("가상 체결기로 전송합니다");
   await page.locator(".ma-mode-no").click();
   expect(sent.filter((s) => s.method === "POST")).toEqual([]);
   await page.locator('.ma-mode-b[data-mode="PAPER"]').click();

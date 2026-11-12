@@ -19,7 +19,7 @@ type Read<T> = { pending: boolean; failed: boolean; value: T | null };
 
 const MODES: { m: "SHADOW" | "PAPER"; act: string; t: string; d: string }[] = [
   { m: "SHADOW", act: "mode-shadow", t: "기록만", d: "전송하지 않습니다" },
-  { m: "PAPER", act: "mode-paper", t: "모의 체결", d: "실제 돈은 안 씁니다" },
+  { m: "PAPER", act: "mode-paper", t: "모의 체결", d: "실제 자금 미사용" },
 ];
 
 export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onRefused, onWritten, onLive, onRetryKill }: {
@@ -57,7 +57,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
     <section className="tx-sec tx-path lv-path" aria-labelledby="lv-path-h">
       <header className="tx-sec-head">
         <div>
-          <h2 className="tx-sec-t" id="lv-path-h">주문이 가는 길</h2>
+          <h2 className="tx-sec-t" id="lv-path-h">주문 전송 경로</h2>
           <p className="tx-sec-sub">운영 계좌의 주문은 서버에서 이 순서로 처리됩니다. 전략 주문과 관리자 수동 주문 모두 동일합니다.</p>
         </div>
       </header>
@@ -79,7 +79,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
           <span className="tx-st-dot" aria-hidden><ShieldCheck className="tx-st-ic" size={14} strokeWidth={2} /></span>
           <div className="tx-st-b">
             <p className="tx-st-name">위험 검사</p>
-            <p className="tx-st-state">주문마다 서버가 따집니다</p>
+            <p className="tx-st-state">주문마다 서버가 점검합니다</p>
             <p className="tx-st-sub">가격·일일 거래 한도·장 운영 시간 등을 점검합니다. 위반 시 주문하지 않습니다.</p>
           </div>
         </li>

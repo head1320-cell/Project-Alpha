@@ -58,7 +58,7 @@ export function killState(kill: Read<OpKill>): string {
 
 /** 모의 체결로 바꿀 때 확인 줄 — 어디로 가는지(연습용 여부)를 서버 게이트로만. */
 export function paperConfirm(practice: boolean | null): string {
-  if (practice === true) return "모의 체결로 바꾸면 운영 계좌 주문을 가상 체결기로 보냅니다. 실제 돈은 쓰지 않습니다.";
-  if (practice === false) return "모의 체결로 바꾸면 운영 계좌 주문을 증권사 모의 서버로 보냅니다. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다.";
-  return "모의 체결로 바꾸면 운영 계좌 주문을 모의 체결로 보냅니다. 실제 돈은 쓰지 않습니다.";
+  if (practice === true) return "모의 체결로 전환하면 운영 계좌 주문을 가상 체결기로 전송합니다. 실제 자금은 사용하지 않습니다.";
+  if (practice === false) return "모의 체결로 전환하면 운영 계좌 주문을 증권사 모의 서버로 전송합니다. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다.";
+  return "모의 체결로 전환하면 운영 계좌 주문을 모의 체결로 전송합니다. 실제 자금은 사용하지 않습니다.";
 }

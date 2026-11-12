@@ -143,7 +143,7 @@ test("BU9b: 모의 체결로는 확인을 거친다(취소 0 · 바꾸기 1) · 
   await expect(act(page, "mode-shadow")).toHaveAttribute("aria-pressed", "true");
   await expect(act(page, "mode-paper"), "짝: 다른 모드는 켜져 있다").toBeEnabled();
   await act(page, "mode-paper").click();
-  await expect(page.locator(".lv-paper-confirm")).toContainText("가상 체결기로 보냅니다");
+  await expect(page.locator(".lv-paper-confirm")).toContainText("가상 체결기로 전송합니다");
   await act(page, "paper-no").click();
   await page.waitForTimeout(500);
   expect(posts, "취소면 아무것도 보내지 않는다").toEqual([]);

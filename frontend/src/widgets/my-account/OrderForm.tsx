@@ -77,7 +77,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
           onSubmit={(e) => { e.preventDefault(); if (filled && !blocked && !loading) setAsking(true); }}>
       <header className="tx-sec-head">
         <div>
-          <h2 className="tx-sec-t" id="ma-order-h">주문 내기</h2>
+          <h2 className="tx-sec-t" id="ma-order-h">주문 제출</h2>
           <p className="tx-sec-sub">전송 전에 주문 내용과 대상 계좌를 다시 확인합니다.</p>
         </div>
       </header>
@@ -181,7 +181,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
         {send.isError ? (
           <p className="ma-err" role="alert">주문 전송 실패. <span data-server>{send.error.message}</span></p>
         ) : null}
-        {send.isSuccess ? <p className="ma-order-result tx-sec-sub" role="status">서버가 답했습니다. 위 ‘주문이 가는 길’에서 어디까지 갔는지 보입니다.</p> : null}
+        {send.isSuccess ? <p className="ma-order-result tx-sec-sub" role="status">서버가 응답했습니다. 위 ‘주문 전송 경로’에서 진행 단계를 확인할 수 있습니다.</p> : null}
       </div>
     </form>
   );

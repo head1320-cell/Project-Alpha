@@ -28,7 +28,7 @@ export function LiveSheet({ open, gate, onClose, onSettled }: {
   const users = g?.current?.allowed_users ?? [];
   return (
     <Sheet open={open} onClose={onClose} title="실계좌로 바꾸기" testId="live" className="lv-sheet"
-           sub="운영 계좌 주문이 실제 자금으로 집행됩니다. 증권사로 바로 주문을 보냅니다.">
+           sub="운영 계좌 주문이 실제 자금으로 집행됩니다. 증권사로 즉시 주문을 전송합니다.">
       <div className={`lv-gate-line${g?.current ? " is-open" : ""}`} role="status">
         {gate.isError ? "실계좌 관문 상태 확인 실패. 서버가 판단합니다."
           : !g ? "실계좌 관문 상태 확인 중"

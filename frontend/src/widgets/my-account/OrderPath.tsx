@@ -59,7 +59,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
     <section className="tx-sec ma-path tx-path" aria-labelledby="ma-path-h" data-stop={trace ? trace.stop : undefined}>
       <header className="tx-sec-head">
         <div>
-          <h2 className="tx-sec-t" id="ma-path-h">주문이 가는 길</h2>
+          <h2 className="tx-sec-t" id="ma-path-h">주문 전송 경로</h2>
           <p className="tx-sec-sub">주문은 서버에서 이 순서로 처리됩니다. 주문을 제출하면 중단 단계가 여기에 표시됩니다.</p>
         </div>
       </header>
@@ -76,7 +76,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
           <span className="ma-st-dot tx-st-dot" aria-hidden><ShieldCheck className="ma-st-ic tx-st-ic" size={14} strokeWidth={2} /></span>
           <div className="ma-st-b tx-st-b">
             <p className="ma-st-name tx-st-name">위험 검사</p>
-            <p className="ma-st-state tx-st-state">주문마다 서버가 따집니다</p>
+            <p className="ma-st-state tx-st-state">주문마다 서버가 점검합니다</p>
             <p className="ma-st-sub tx-st-sub">가격·일일 거래 한도·장 운영 시간 등을 점검합니다. 위반 시 주문하지 않습니다.</p>
           </div>
         </li>
@@ -91,7 +91,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
               </button>
               <button type="button" className="ma-mode-b tx-mode-b" data-mode="PAPER" aria-pressed={cur === "PAPER"}
                       disabled={cur === null || change.isPending || !acc.is_paper} onClick={() => pick("PAPER")}>
-                <span className="ma-mode-t tx-mode-t">모의 체결</span><span className="ma-mode-d tx-mode-d">실제 돈은 안 씁니다</span>
+                <span className="ma-mode-t tx-mode-t">모의 체결</span><span className="ma-mode-d tx-mode-d">실제 자금 미사용</span>
               </button>
               <button type="button" className="ma-mode-b tx-mode-b ma-mode-b--live tx-mode-b--live" data-mode="LIVE" aria-pressed={cur === "LIVE"}
                       aria-expanded={openReady} aria-controls="ma-ready" onClick={() => setOpenReady((o) => !o)}>
@@ -107,7 +107,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
             </p>
             {asking ? (
               <div className="ma-confirm tx-confirm ma-mode-confirm" role="group" aria-label="모의 체결로 바꾸기 확인">
-                <p>모의 체결로 바꾸면 주문을 {practice === true ? "가상 체결기로" : practice === false ? "증권사 모의 서버로" : "모의 체결로"} 보냅니다. 실제 돈은 쓰지 않습니다.</p>
+                <p>모의 체결로 전환하면 주문을 {practice === true ? "가상 체결기로" : practice === false ? "증권사 모의 서버로" : "모의 체결로"} 전송합니다. 실제 자금은 사용하지 않습니다.</p>
                 <div className="ma-confirm-act tx-confirm-act">
                   <button type="button" className="tx-btn tx-btn--main ma-mode-yes" disabled={change.isPending}
                           onClick={() => change.mutate("PAPER")}>바꾸기</button>
