@@ -1,4 +1,4 @@
-"""BU8b · 로그인 화면의 '로그인이 여는 것' 지도는 서버 보호 목록과 같은 말을 한다.
+"""BU8b · 로그인 화면의 '로그인 후 사용 범위' 지도는 서버 보호 목록과 같은 말을 한다.
 
 화면(`frontend/src/entities/session/accessMap.json`)이 "로그인하면 열립니다 · 거래 권한이 있는 계정만" 을 말하는데,
 그 근거는 서버의 단일 레지스트리 `src/api/protected_routes.py::PROTECTED` 다. 화면이 지어내거나 낡지 않게:

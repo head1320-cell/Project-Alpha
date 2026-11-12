@@ -39,7 +39,7 @@ export function QuestionStrip({ view, gates, noGatesText }: { view: PerfView; ga
         </ul>
       </div>
       {gates === null && (
-        <p className="pg-note pf-q-nogates">{noGatesText ?? "관문 판정이 없습니다 — 계산 전이거나, 결과가 낡았거나, 부분 계산이라 관문을 매기지 않았습니다."}</p>
+        <p className="pg-note pf-q-nogates">{noGatesText ?? "관문 판정이 없습니다 — 계산 전이거나, 결과가 낡았거나, 부분 계산이라 관문을 판정하지 않았습니다."}</p>
       )}
     </section>
   );

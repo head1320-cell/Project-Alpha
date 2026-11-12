@@ -69,7 +69,7 @@ const TAB_NEEDS: Partial<Record<TabId, { main?: CoreKey; also?: CoreKey[] }>> = 
 
 function CoreFail({ k, retry }: { k: CoreKey; retry: () => void }) {
   return (
-    <Notice tone="danger" title={`${CORE_KO[k]} 불러오지 못했습니다`}>
+    <Notice tone="danger" title={`${CORE_KO[k]} 조회 실패`}>
       서버 연결 실패 또는 계산 실패. 수신한 데이터로 표시 가능한 항목만 표시합니다.
       <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={retry}>재시도</button></div>
     </Notice>
@@ -193,8 +193,8 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
   const kr = regime.markets?.kr ?? regime;
   const us = regime.markets?.us;
   const sentence = us
-    ? `한국은 ‘${regimeName(kr.regime)}’, 미국은 ‘${regimeName(us.regime)}’ 쪽입니다`
-    : `한국은 ‘${regimeName(kr.regime)}’ 쪽입니다`;
+    ? `한국은 ‘${regimeName(kr.regime)}’, 미국은 ‘${regimeName(us.regime)}’ 국면입니다`
+    : `한국은 ‘${regimeName(kr.regime)}’ 국면입니다`;
   const figures: Figure[] = [
     { label: "한국", value: regimeFig(kr) },
     { label: "미국", value: us ? regimeFig(us) : <Unknown reason="미국 국면 수신 실패" /> },
@@ -224,12 +224,12 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
           action={onOpenInAAS ? (<>
             {/* 현재 국면을 불변 스냅샷으로 고정해 캔버스로 — 휘발성 복사가 아니라 서버 ID 전달 */}
             <button type="button" className="tx-btn tx-btn--main mc-open-aas" onClick={onOpenInAAS} disabled={aasBusy}>
-              {aasBusy ? "스냅샷 저장 중…" : "포트폴리오 설계에 넣기"}
+              {aasBusy ? "스냅샷 저장 중…" : "포트폴리오 설계에 추가"}
             </button>
             <span className="mc-head-note">현재 국면을 스냅샷으로 저장해 포트폴리오 설계의 국면 노드에 입력합니다.</span>
           </>) : undefined} />
         {aasError && (
-          <Notice tone="danger" title="포트폴리오 설계로 넘기지 못했습니다">{aasError}</Notice>
+          <Notice tone="danger" title="포트폴리오 설계로 전달하지 못했습니다">{aasError}</Notice>
         )}
       </header>
 

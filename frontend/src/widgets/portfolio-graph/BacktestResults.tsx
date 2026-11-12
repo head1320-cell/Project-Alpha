@@ -37,7 +37,7 @@ export function BacktestSetupResult({ v }: { v: Dict }) {
         ["종목 · 동시 보유", `${num(c.max_tickers) === null ? "—" : `${String(c.max_tickers)}개`} · ${num(c.max_positions) === null ? "—" : `${String(c.max_positions)}개`}`],
         ["비용", `수수료 ${num(c.commission_rate) === null ? "—" : `${fmt((c.commission_rate as number) * 100)}%`} · 슬리피지 ${num(c.slippage_rate) === null ? "—" : `${fmt((c.slippage_rate as number) * 100)}%`}${c.charge_sell_tax ? " · 매도세" : ""}`],
       ]} />
-      <p className="pg-note">아직 돌리지 않았습니다 — 설정 탭의 ‘백테스트 시작’을 누르면 백그라운드에서 실행됩니다.</p>
+      <p className="pg-note">아직 실행하지 않았습니다 — 설정 탭의 ‘백테스트 시작’을 누르면 백그라운드에서 실행됩니다.</p>
     </>
   );
 }
@@ -71,12 +71,12 @@ export function RunProgress({ runId, onReload }: { runId: string; onReload: () =
   return (
     <div className={`pg-runprog${done ? " pg-runprog--done" : ""}`} data-run={runId} role="status" aria-live="polite">
       <div className="pg-runprog-head">
-        <b>{done ? "백테스트가 끝났습니다" : ended ? `백테스트가 ${STAGE_LABELS[st!.status] ?? st!.status}` : "백테스트가 돌고 있습니다"}</b>
+        <b>{done ? "백테스트가 완료됐습니다" : ended ? `백테스트가 ${STAGE_LABELS[st!.status] ?? st!.status}` : "백테스트가 실행 중입니다"}</b>
         <span className="pg-runprog-pct">{st ? `${pct.toFixed(0)}%` : "—"}</span>
       </div>
       <div className="pg-runprog-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
       <p className="pg-runprog-stage">
-        {err ? `상태 읽기 실패 — ${err}. 잠시 뒤 다시 확인합니다.`
+        {err ? `상태 읽기 실패 — ${err}. 잠시 후 다시 확인합니다.`
           : ended ? (st?.error_message ?? "사유 미상")
             : st ? `${STAGE_LABELS[st.status] ?? st.status}${st.status_message ? ` · ${st.status_message}` : ""}` : "상태 확인 중"}
       </p>
@@ -139,7 +139,7 @@ export function BacktestCompareResult({ v }: { v: Dict }) {
       {view ? (
         <>
           <PerfCompare view={view} height={240} />
-          <p className="pg-note">A {String(cmp?.labels?.a ?? v.a)} · B {String(cmp?.labels?.b ?? v.b)} — 각자 처음을 1로 맞췄습니다.</p>
+          <p className="pg-note">A {String(cmp?.labels?.a ?? v.a)} · B {String(cmp?.labels?.b ?? v.b)} — 각 시작값을 1로 정규화했습니다.</p>
           <h4 className="pg-h4">연도별 차이</h4>
           <CompareYearTable view={view} />
           <div className="pf-cmp-eps">
@@ -148,12 +148,12 @@ export function BacktestCompareResult({ v }: { v: Dict }) {
           </div>
         </>
       ) : (
-        <p className="pg-note pf-cmp-none">{String(v.compare_reason ?? "두 실행의 곡선을 겹쳐 그리지 못했습니다 — 서버가 사유를 주지 않았습니다.")}</p>
+        <p className="pg-note pf-cmp-none">{String(v.compare_reason ?? "두 실행의 곡선을 겹쳐 표시하지 못했습니다 — 서버가 사유를 제공하지 않았습니다.")}</p>
       )}
       {diffs.length > 0 && (
         <div className="pg-warn pg-cmp-warn" role="note">
           같은 조건이 아닙니다 — {diffs.map((d) => `${String(d.label)}(${String(d.a)} / ${String(d.b)})`).join(", ")}.
-          차이가 규칙 때문인지 조건 때문인지 가를 수 없습니다.
+          차이의 원인이 규칙인지 조건인지 구분할 수 없습니다.
         </div>
       )}
       <table className="pg-table pg-cmp">

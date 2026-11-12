@@ -103,7 +103,7 @@ def beta_neutralize(weights: dict[str, float], betas: dict[str, float],
         "dollar_neutral": dollar_neutral,
         "long_only_feasible": long_only_ok,
         "note": ("롱온리로 목표 베타 달성(음수 없음)." if long_only_ok else
-                 "일부 음수 비중 발생 — 진짜 베타중립은 롱숏(공매도)이 필요(정직). "
+                 "일부 음수 비중 발생 — 진짜 베타중립은 롱숏(공매도)이 필요. "
                  "dollar_neutral=true로 롱숏 허용하거나, 롱온리는 저베타 틸트로 근사."),
     }
 

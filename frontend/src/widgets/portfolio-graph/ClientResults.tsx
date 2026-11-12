@@ -35,14 +35,14 @@ function KV({ rows, className }: { rows: [string, ReactNode][]; className?: stri
 export function ClientProfileResult({ v }: { v: Dict }) {
   const risk = typeof v.risk_tolerance === "string" ? RISK[v.risk_tolerance] ?? v.risk_tolerance : "모름";
   const src = typeof v.profile_source === "string" ? SOURCE[v.profile_source] ?? v.profile_source : "모름";
-  const when = typeof v.assessed_at === "string" ? `${v.assessed_at} · ${fmt(v.assessed_age_days)}일 지났습니다` : "모름";
+  const when = typeof v.assessed_at === "string" ? `${v.assessed_at} · ${fmt(v.assessed_age_days)}일 경과했습니다` : "모름";
   return (
     <>
       <KV className="pg-client-kv" rows={[
         ["별칭", typeof v.alias === "string" ? v.alias : "없음"], ["위험 성향", risk], ["성향 출처", src],
         ["평가일", when], ["투자 기간", num(v.horizon_years) === null ? "모름" : `${fmt(v.horizon_years)}년`],
       ]} />
-      <p className="pg-note">성향·기간은 비중을 바꾸지 않습니다 — 최적화기는 이 고객을 모른 채 계산합니다.</p>
+      <p className="pg-note">성향·기간은 비중을 변경하지 않습니다 — 최적화기는 이 고객을 모른 채 계산합니다.</p>
     </>
   );
 }
@@ -99,7 +99,7 @@ export function AccountResult({ v }: { v: Dict }) {
       <Verdicts verdicts={verdicts} />
       {!verdicts.length && <p className="pg-note">{String(r.note ?? "이 계좌 유형에는 이 저장소가 아는 한도 없음")}</p>}
       {((r.ignored_limits as string[]) ?? []).length > 0 && (
-        <p className="pg-note">이 계좌에 없는 한도라 보지 않은 것: {((r.ignored_limits as string[]) ?? []).map((k) => LIMIT[k] ?? k).join(", ")}</p>
+        <p className="pg-note">이 계좌에 해당하지 않아 점검하지 않은 한도: {((r.ignored_limits as string[]) ?? []).map((k) => LIMIT[k] ?? k).join(", ")}</p>
       )}
       <p className="pg-note">{plain(r.optimizer_note)}</p>
     </>

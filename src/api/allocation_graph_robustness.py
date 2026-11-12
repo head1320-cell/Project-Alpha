@@ -55,7 +55,7 @@ def shock_block(names: Sequence[str], S: np.ndarray, shares: Sequence[float] | N
     from src.api.allocation_stress_routes import stress_correlation_report
     n = len(names)
     if any(float(np.var(S[:, j])) <= 1e-16 for j in range(n)):
-        return {"available": False, "reason": "변동성이 없는 흐름이 있어 상관 충격을 넣을 수 없습니다"}
+        return {"available": False, "reason": "변동성이 없는 흐름이 있어 상관 충격을 적용할 수 없습니다"}
     w = np.ones(n) / n if shares is None else np.asarray([float(x) for x in shares], dtype=float)
     df = pd.DataFrame(S, columns=list(names))
     C = np.corrcoef(S.T)

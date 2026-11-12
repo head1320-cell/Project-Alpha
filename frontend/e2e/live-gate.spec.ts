@@ -88,7 +88,7 @@ test("BU9b 관문: 422 는 사유 그대로 + 칸 이름, 시트는 남는다 ·
   await fill(page);
   await page.locator('[name="gate-user"]').fill("*");
   await page.locator(".lvg-user-add").click();
-  await expect(page.locator('[data-sheet="gate-declare"] .lv-hint').last()).toContainText("모두에게 여는 값(예: *, 모두)은 서버가 받지 않습니다");
+  await expect(page.locator('[data-sheet="gate-declare"] .lv-hint').last()).toContainText("전체 허용 값(예: *, 모두)은 서버가 거부합니다");
   await page.locator(".lvg-declare-go").click();
   const alert = page.locator('[data-sheet="gate-declare"] [role="alert"]');
   await expect(alert).toContainText("빠진 항목: allowed_users");

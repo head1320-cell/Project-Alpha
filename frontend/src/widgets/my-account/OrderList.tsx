@@ -29,8 +29,8 @@ function cancelSaid(r: CancelReply): { text: string; raw?: string } {
     const cur = r.current ? STATUS_KO[r.current] ?? r.current : "다른";
     return { text: `이미 ‘${cur}’ 상태라 취소할 수 없습니다.` };
   }
-  if (r.status === "cancel_failed") return { text: "증권사가 취소를 받지 않았습니다.", raw: r.error };
-  return { text: "서버가 알 수 없는 답을 했습니다.", raw: r.status };
+  if (r.status === "cancel_failed") return { text: "증권사가 취소를 접수하지 않았습니다.", raw: r.error };
+  return { text: "서버가 해석할 수 없는 응답을 반환했습니다.", raw: r.status };
 }
 
 export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResult<{ count: number; orders: OrderRow[] }> }) {

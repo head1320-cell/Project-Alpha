@@ -40,7 +40,7 @@ type Band = { id: string; label: string; available?: boolean; lo?: number | null
 function FootballField({ bands, price }: { bands: Band[]; price: number | null }) {
   const ok = bands.filter((b) => b.available && num(b.lo) !== null && num(b.hi) !== null);
   const xs = [...ok.flatMap((b) => [b.lo as number, b.hi as number]), ...(price !== null ? [price] : [])];
-  if (!xs.length) return <p className="pg-note">범위를 낸 방법 없음</p>;
+  if (!xs.length) return <p className="pg-note">범위를 산출한 방법 없음</p>;
   const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.06 || hi * 0.05 || 1;
   const x0 = lo - pad, span = hi + pad - x0;
   const at = (x: number) => `${((x - x0) / span) * 100}%`;

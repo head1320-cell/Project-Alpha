@@ -23,7 +23,7 @@ export type AiStoryState =
 export function storyNote(res: Extract<AssistNarrate, { available: true }>): string | null {
   const parts: string[] = [];
   if (!res.paragraphs.length) parts.push("AI 가 쓴 문단 없음");
-  if (res.rejected.length) parts.push(`${res.rejected.length}문단은 검사에서 빠졌습니다: ${res.rejected[0].reason}`);
+  if (res.rejected.length) parts.push(`${res.rejected.length}문단은 검사에서 제외됐습니다: ${res.rejected[0].reason}`);
   if (res.dropped.length) parts.push(`${res.dropped.length}개 단계의 결과는 확인하지 못해 제외했습니다: ${res.dropped[0].reason}`);
   return parts.length ? parts.join(" · ") : null;
 }
@@ -48,7 +48,7 @@ export function useAiStory(doc: GraphDoc, order: string[], results: Record<strin
     setAi({ state: "loading", key: asked });
     const res = await portfolioGraphApi.assistNarrate(now.doc, now.facts);
     if (live.current.key !== asked) { setAi({ state: "stale" }); return; }
-    if (!res.available) { setAi({ state: "idle", note: `AI 글을 보여 줄 수 없습니다: ${res.reason}` }); return; }
+    if (!res.available) { setAi({ state: "idle", note: `AI 해설을 표시할 수 없습니다: ${res.reason}` }); return; }
     setAi({ state: "ready", key: asked, paragraphs: res.paragraphs, notice: res.notice, note: storyNote(res) });
   }, []);
   return { ai, ask, hasFacts: facts.length > 0 };
@@ -69,18 +69,18 @@ export function AiStory({ session, story, badge, onSelect }: {
     : session.kind === "signed_out" ? <Link href="/login" className="pg-ai-story-login">로그인하면 AI 해설을 받을 수 있습니다</Link>
     : (
       <button type="button" className="pg-ai-story-ask" onClick={() => { void ask(); }} disabled={busy} aria-busy={busy || undefined}>
-        {busy ? "AI 가 풀어 쓰는 중입니다" : again ? "AI 로 다시 풀어 쓰기" : "AI 로 풀어 쓰기"}
+        {busy ? "AI 가 해설을 작성하는 중입니다" : again ? "AI 로 다시 풀어 쓰기" : "AI 로 풀어 쓰기"}
       </button>
     );
   return (
     <section className="pg-ai-story" aria-labelledby="pg-ai-story-h">
       <div className="pg-ai-story-head">
-        <h3 id="pg-ai-story-h" className="pg-ai-story-h">AI 가 풀어 쓴 글</h3>
+        <h3 id="pg-ai-story-h" className="pg-ai-story-h">AI 해설</h3>
         {control}
       </div>
-      <p className="pg-ai-story-cap">서버 설명을 근거로 Claude 가 씁니다. 숫자는 근거 단계에 있는 것만 통과합니다.</p>
+      <p className="pg-ai-story-cap">서버 설명을 근거로 Claude 가 작성합니다. 수치는 근거 단계에 있는 것만 통과합니다.</p>
       {!hasFacts && ai.state !== "ready" && <p className="pg-ai-story-wait">계산한 뒤 AI 해설을 받을 수 있습니다</p>}
-      {ai.state === "stale" && <p className="pg-ai-story-stale" role="status">계산 결과가 바뀌어 AI 글을 지웠습니다</p>}
+      {ai.state === "stale" && <p className="pg-ai-story-stale" role="status">계산 결과가 변경돼 AI 해설을 삭제했습니다</p>}
       {ai.state === "ready" && (
         <>
           {ai.notice && <p className="pg-ai-story-notice" role="note">{ai.notice}</p>}

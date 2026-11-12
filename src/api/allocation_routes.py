@@ -399,7 +399,7 @@ def _group_cap_gaps(caps: dict[str, float], names: list[str], groups_of: dict[st
     """업종 상한 중 ★엔진이 말없이 건너뛴 것★ (CF 3부 P1) — 보고만 한다.
 
     `constrained_solve` 는 `groups_of` 에 있는 업종만 돈다. 그래서 ① 이 종목들 중 그 업종이 없는 상한과 ② 업종을 하나도
-    못 읽었을 때(`sector_groups_for` → `{}`)의 상한 전부는 적용되지 않는다. ③ 업종을 모르는 종목은 어떤 상한에도 들지 않는다.
+    못 읽었을 때(`sector_groups_for` → `{}`)의 상한 전부는 적용되지 않는다. ③ 업종 미상 종목은 어떤 상한에도 들지 않는다.
     엔진(`constrained_opt.py`)은 SHA 가드라 고치지 않고, 같은 사실을 여기서 센다.
     """
     if not caps:
@@ -417,7 +417,7 @@ def _group_cap_gaps(caps: dict[str, float], names: list[str], groups_of: dict[st
     if unknown:
         shown = ", ".join(resolve_name(t) for t in unknown[:5]) + (" 등" if len(unknown) > 5 else "")
         out.append({"kind": "unknown_sector", "names": unknown,
-                    "text": f"업종을 모르는 종목 {len(unknown)}개({shown})는 어떤 업종 상한에도 들지 않았습니다."})
+                    "text": f"업종 미상 종목 {len(unknown)}개({shown})는 어떤 업종 상한에도 들지 않았습니다."})
     return out
 
 

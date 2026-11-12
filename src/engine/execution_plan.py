@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _last_close(code: str) -> float | None:
-    """최근 종가 — ohlcv_loader(DB→KIS→mock). 실패 시 None(정직 결측)."""
+    """최근 종가 — ohlcv_loader(DB→KIS→mock). 실패 시 None(결측)."""
     from datetime import date, timedelta
     try:
         from src.data.ohlcv_loader import load_ohlcv_unified
@@ -154,7 +154,7 @@ def build_plan(current_weights: dict[str, float], target_weights: dict[str, floa
         "notes": [
             "v1 실행 준비실 — 실제 주문·계좌 제어·자동매매 없음.",
             "가격은 최근 종가 추정 · 비용은 사전 추정치 — 실 정산은 브로커 확정값.",
-            *(["일부 종목 시세 미보유 — 주문 산출 제외(정직 결측)."] if missing_price else []),
+            *(["일부 종목 시세 미보유 — 주문 산출 제외(결측)."] if missing_price else []),
         ],
     }
 

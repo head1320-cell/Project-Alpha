@@ -109,7 +109,7 @@ function absentReason(
     return "벤치마크를 지정하지 않아 추적오차를 계산할 수 없습니다.";
   }
   if (tradeCount === 0 && TRADE_QUALITY_KEYS.has(k)) {
-    return "이 기간에 체결이 한 건도 없어 거래 통계가 나오지 않습니다.";
+    return "이 기간에 체결이 한 건도 없어 거래 통계를 산출할 수 없습니다.";
   }
   return null;
 }
@@ -141,7 +141,7 @@ function macroHonesty(ml: ScreenToBacktestResult["macro_lookahead"]): string[] {
   const blocked = names("blocked");
   if (blocked.length > 0) {
     out.push(
-      `매크로 미평가 — ${blocked.join(" · ")} 은(는) 값을 얻지 못해 해당 조건이 ` +
+      `매크로 미평가 — ${blocked.join(" · ")} 은(는) 값을 수신하지 못해 해당 조건이 ` +
       `평가되지 않았습니다(${ml.tokens[blocked[0]].reason}).`,
     );
   }
@@ -154,8 +154,8 @@ function macroHonesty(ml: ScreenToBacktestResult["macro_lookahead"]): string[] {
     } else if (r.flip > 0) {
       out.push(
         `${tok} — 데이터 개정이 이 토큰 조건의 판정을 ${r.bars}봉 중 ${r.flip}봉` +
-        `(${r.flip_pct}%)에서 뒤집었습니다. 매크로 레그 기준이며 최종 신호가 ` +
-        `갈린 비율은 아닙니다.`,
+        `(${r.flip_pct}%)에서 반전시켰습니다. 매크로 레그 기준이며 최종 신호가 ` +
+        `달라진 비율은 아닙니다.`,
       );
     }
   }
@@ -267,8 +267,8 @@ function priceHonesty(pb: ScreenToBacktestResult["price_basis"]): string[] {
     );
   } else if (pb.policy === "pass_labeled" && (pb.basis?.mixed ?? 0) > 0) {
     out.push(
-      `가격 정의 정책 — 혼합 종목을 **그대로 쓰도록** 선택했습니다` +
-      `(price_basis_policy=pass_labeled). 위 점프가 수익률에 그대로 들어갑니다.`,
+      `가격 정의 정책 — 혼합 종목을 **그대로 사용하도록** 선택했습니다` +
+      `(price_basis_policy=pass_labeled). 위 점프가 수익률에 그대로 반영됩니다.`,
     );
   }
   return out;
@@ -293,7 +293,7 @@ function universeHonesty(uv: ScreenToBacktestResult["universe"]): string[] {
   } else if (uv.survivorship === "not_corrected") {
     out.push(
       `유니버스 생존편향 — 오늘 기준 멤버십(${uv.effective})입니다. 그 사이 ` +
-      `상장폐지된 종목이 유니버스에 없어 성과가 위로 치우칩니다.`,
+      `상장폐지된 종목이 유니버스에 없어 성과가 상향 편향됩니다.`,
     );
   } else if (uv.survivorship === "approximated") {
     out.push(
@@ -308,7 +308,7 @@ function universeHonesty(uv: ScreenToBacktestResult["universe"]): string[] {
   } else {
     out.push(
       `유니버스 생존편향 보정 — ${uv.asof_date ?? "기준일"} 당시 거래된 ` +
-      `${uv.tickers_screened}종목(이후 상장폐지 포함)으로 돌았습니다.`,
+      `${uv.tickers_screened}종목(이후 상장폐지 포함)으로 실행됐습니다.`,
     );
   }
   return out;
@@ -415,7 +415,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
 
   // 성과 그림의 수는 서버 `perf` 만(세지 않는다) — `perfViewOfRun` 이 뷰를 옮긴다.
   const view = perfViewOfRun(run);
-  const NO_GATES = "이 화면은 예측 스킬·경제적 가치를 측정하지 않습니다. 캔버스에서 이 실행을 불러오면 관문(표본 밖 · 경제적 가치)이 매겨집니다.";
+  const NO_GATES = "이 화면은 예측 스킬·경제적 가치를 측정하지 않습니다. 캔버스에서 이 실행을 불러오면 관문(표본 밖 · 경제적 가치)이 판정집니다.";
   const roundTrips = bt.round_trips && bt.round_trips.length ? bt.round_trips : bt.trades || [];
 
   // 같은 설정으로 다시 — 실패를 삼키지 않는다(예전 `catch { /* ignore */ }` 는 눌러도 아무 일이 없는 단추였다).
@@ -496,7 +496,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
           </CardHeader>
           <CardContent className="rs-card-b">
             <PerfCurve view={view} height={300} />
-            {!run.perf && <p className="brun-note">낙폭 곡선·기간별 수익·낙폭 구간은 서버가 이 실행에 주지 않았습니다 — 화면이 대신 세지 않습니다.</p>}
+            {!run.perf && <p className="brun-note">낙폭 곡선·기간별 수익·낙폭 구간은 서버가 이 실행에 제공하지 않았습니다 — 화면이 대신 산출하지 않습니다.</p>}
             {bt.benchmark && (
               <p className="brun-benchrow">
                 벤치마크 {num(bt.benchmark.total_return_pct) != null ? signedPct(bt.benchmark.total_return_pct as number) : "N/A"}
@@ -553,7 +553,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
 
       <Card className="brun-card">
         <CardHeader className="rs-card-h">
-          <CardTitle as="h2" className="brun-card-t">기간별<span className="brun-note">해마다 · 달마다 (연환산하지 않습니다)</span></CardTitle>
+          <CardTitle as="h2" className="brun-card-t">기간별<span className="brun-note">연도별 · 월별 (연환산하지 않습니다)</span></CardTitle>
         </CardHeader>
         <CardContent className="rs-card-b rs-periods">
           <YearTable view={view} />
@@ -582,14 +582,14 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
       {/* 데이터와 한계 — 정직 표기: 엔진 미산출 지표는 만들지 않음 */}
       <Card className="brun-card brun-diag">
         <CardHeader className="rs-card-h">
-          <CardTitle as="h2" className="brun-card-t">데이터와 한계<span className="brun-note">이 결과를 읽을 때 알아야 할 것</span></CardTitle>
+          <CardTitle as="h2" className="brun-card-t">데이터와 한계<span className="brun-note">결과 해석 시 유의 사항</span></CardTitle>
         </CardHeader>
         <CardContent className="rs-card-b">
         <ul className="brun-diag-list">
           {res.pit_evidence && res.pit_evidence.status !== "verified" &&
             <li>{pitBadge.label} — {res.pit_evidence.summary}</li>}
           {!res.pit_evidence && <li>시점 정합을 판정할 자료가 이 실행에 없습니다 — 확인됐다는 뜻이 아닙니다.</li>}
-          {isMock && <li>합성 데이터로 돌린 결과입니다 — 절대 수치는 참고만 하고, 적재된 시세로 다시 돌려 보십시오.</li>}
+          {isMock && <li>합성 데이터로 실행한 결과입니다 — 절대 수치는 참고용이며, 적재된 시세로 재실행하십시오.</li>}
           {num(stats.num_trades as number) === 0 && <li>체결된 거래가 없습니다 — 신호·대상·기간을 점검하십시오.</li>}
           {universeLines.map((t, i) => <li key={`uv${i}`}>{t}</li>)}
           {priceLines.map((t, i) => <li key={`pb${i}`}>{t}</li>)}
@@ -687,7 +687,7 @@ function TradesTable({ trades }: { trades: BacktestTrade[] }) {
   return (
     <Card className="brun-card">
       <CardHeader className="rs-card-h">
-        <CardTitle as="h2" className="brun-card-t">거래 기록<span className="brun-note">{trades.length}건 · 줄을 누르면 자세히</span></CardTitle>
+        <CardTitle as="h2" className="brun-card-t">거래 기록<span className="brun-note">{trades.length}건 · 행을 누르면 상세</span></CardTitle>
       </CardHeader>
       <CardContent className="rs-card-b">
       <details className="rs-trades">

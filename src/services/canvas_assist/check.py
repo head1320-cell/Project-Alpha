@@ -85,14 +85,14 @@ def _problem(it: dict, graph: dict, kinds: dict, numbers: set[str], validate, be
         return "unknown_kind", f"카탈로그에 없는 종류 ‘{kind}’입니다"
     word = next((w for w in BANNED if w in reason), None)
     if word:
-        return "banned", f"쓰지 않는 표현 ‘{word}’이 들어 있습니다"
+        return "banned", f"금지 표현 ‘{word}’이 들어 있습니다"
     extra = numbers_of(reason) - numbers
     if extra:
-        return "numbers", f"근거에 없는 숫자 {', '.join(sorted(extra))} 를 썼습니다"
+        return "numbers", f"근거에 없는 수치 {', '.join(sorted(extra))} 를 사용했습니다"
     if not attach and any(isinstance(n, dict) for n in graph["nodes"]):
-        return "unattached", "지금 그래프의 어느 노드와도 잇지 않습니다"
+        return "unattached", "현재 그래프의 어느 노드와도 연결되지 않습니다"
     if any((a["source"] == NEW) == (a["target"] == NEW) for a in attach):
-        return "attach_shape", "잇는 선마다 한쪽 끝만 새 노드(@new)여야 합니다"
+        return "attach_shape", "연결선마다 한쪽 끝만 새 노드(@new)여야 합니다"
     return _connection_problem(kind, attach, graph, validate, before)
 
 
@@ -117,7 +117,7 @@ def check(raw: Any, graph: dict, kinds: dict[str, dict], numbers: set[str],
             continue
         sig = (kind, frozenset(tuple(a[k] for k in _PORT_KEYS) for a in it["attach"]))
         if sig in seen:
-            bad.append(_rej(kind, "duplicate", "앞의 추천과 같습니다"))
+            bad.append(_rej(kind, "duplicate", "앞의 추천과 중복됩니다"))
             continue
         seen.add(sig)
         ok.append({"action": "add", "kind": kind, "label": kinds[kind]["plain_label"],

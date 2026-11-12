@@ -95,8 +95,8 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
             {tickers.map((t) => <StockChip key={t} code={t} name={names[t]} className="pg-goal-chip" />)}
           </div>
           <p id="pg-goal-tickers-help" className="pg-goal-help">
-            {parsed.rejected.length ? `‘${parsed.rejected.join(", ")}’은 종목 코드로 읽지 못해 뺐습니다 — 이름이면 위의 후보에서 선택하십시오. ` : ""}
-            {g.tickers === "one" && parsed.tickers.length > 1 ? "첫 번째 종목만 씁니다. " : ""}
+            {parsed.rejected.length ? `‘${parsed.rejected.join(", ")}’은 종목 코드로 인식하지 못해 제외했습니다 — 이름이면 위의 후보에서 선택하십시오. ` : ""}
+            {g.tickers === "one" && parsed.tickers.length > 1 ? "첫 번째 종목만 사용합니다. " : ""}
           </p>
           {nav(tickersOk)}
         </section>
@@ -112,7 +112,7 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
                       data-days={p.value} onClick={() => setLookback(p.value)}>{p.label}</button>
             ))}
           </div>
-          <p className="pg-goal-help">길수록 여러 국면이 들어가지만, 오래전 시장이 지금과 다를 수 있습니다.</p>
+          <p className="pg-goal-help">길수록 다양한 국면이 포함되지만, 과거 시장 구조가 현재와 다를 수 있습니다.</p>
           {nav()}
         </section>
       )}
@@ -129,7 +129,7 @@ export function GoalStart({ open, onClose, catalog, onStart }: {
           </div>
           <p className="pg-goal-help">
             {risk === null
-              ? "흐름에 들어 있는 계산 방식을 그대로 씁니다."
+              ? "흐름에 포함된 계산 방식을 그대로 사용합니다."
               : "‘평균-분산 효용’ 방식으로 배분합니다 — 위험회피도가 높을수록 변동성이 작은 쪽, 낮을수록 기대수익률 쪽입니다. 세 값은 관례적 수준이며 투자자별 적정값은 가정입니다. 이후 설정에서 직접 지정할 수 있습니다."}
           </p>
           {nav()}

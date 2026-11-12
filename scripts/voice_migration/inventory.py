@@ -2,6 +2,7 @@
 
   python scripts/voice_migration/inventory.py list <영역> [표지…]     표지 낱말이 든 화면 문자열(파일:줄 · 문자열)
   python scripts/voice_migration/inventory.py count                    영역별 개수 · 표지별 개수
+  python scripts/voice_migration/inventory.py dump <영역|경로…> [--sentences]   ★표지 없이 전부★ — 화면 글 조각을 파일별로(같은 조각은 한 번)
   python scripts/voice_migration/inventory.py remnants <규칙 파일>     따옴표 쌍의 키가 따옴표 없이(JSX 글자·정규식·문장 속) 남은 곳
   python scripts/voice_migration/inventory.py asserts <규칙 파일>      pytest·E2E 가 옛 조각을 아직 단언하는 곳
 
@@ -93,6 +94,62 @@ def area_files(area: str) -> list[pathlib.Path]:
     raise SystemExit(f"모르는 영역: {area}")
 
 
+#: `.ts/.tsx` 한 줄에서 화면 글 조각을 가르는 자리 — 따옴표·백틱·JSX 꺾쇠·중괄호. 조각 = 그 사이에서 한글이 든 토막.
+_FRAG = re.compile(r"[^\"'`<>{}]*[가-힣][^\"'`<>{}]*")
+#: 서버에서 화면에 그대로 실리는 칸 — 이 키의 값(문자열·목록 안 문자열)과 `HTTPException`·`NodeFailure` 의 글만 본다.
+SCREEN_KEYS = {"title", "facts", "trust", "reason", "message", "note", "hint", "label", "why", "detail", "text", "help",
+               "summary", "headline", "unmeasured", "caveat", "warning", "plain_label", "description"}
+#: 문장으로 볼 꼬리 — `--sentences` 는 이 꼬리가 든 조각만 남긴다(이름표·단위 같은 명사 토막을 걷어 읽는 양을 줄인다).
+_SENT = re.compile(r"(니다|세요|시오|어요|아요|해요|하면|으면|라면|지만|는데|므로|어서|아서|려면|도록|[가-힣]고 |[가-힣]며 |[가-힣]는 |[가-힣]은 |[가-힣]을 |[가-힣]를 )")
+
+
+def fragments(path: pathlib.Path) -> list[tuple[int, str]]:
+    """파일의 화면 글 조각(줄 번호 · 조각). `.py` 는 `strings()` 그대로, `.ts/.tsx` 는 줄을 가른 토막."""
+    if path.suffix == ".py":
+        return [(ln, " ".join(s.split())) for ln, s in py_strings(path)]
+    out = []
+    for ln, line in ts_strings(path):
+        if line.lstrip().startswith(("import ", "export * ", "//")):
+            continue
+        for m in _FRAG.finditer(line):
+            f = " ".join(m.group(0).split()).strip(" ,;:()[]|&?!=+-*/.")
+            if f and HANGUL.search(f):
+                out.append((ln, f))
+    return out
+
+
+def py_screen_strings(path: pathlib.Path) -> list[tuple[int, str]]:
+    """서버 파일에서 ★화면에 실리는 칸★의 문자열만 — `SCREEN_KEYS` 의 값(키워드 인자·딕셔너리)과 예외 글."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (SyntaxError, UnicodeDecodeError):
+        return []
+    out: list[tuple[int, str]] = []
+
+    def take(node) -> None:
+        for n in ast.walk(node):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and HANGUL.search(n.value):
+                out.append((n.lineno, " ".join(n.value.split())))
+
+    for n in ast.walk(tree):
+        if isinstance(n, ast.keyword) and n.arg in SCREEN_KEYS:
+            take(n.value)
+        elif isinstance(n, ast.Dict):
+            for k, v in zip(n.keys, n.values):
+                if isinstance(k, ast.Constant) and k.value in SCREEN_KEYS:
+                    take(v)
+        elif isinstance(n, ast.Call):
+            fn = n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
+            if fn in ("HTTPException", "NodeFailure", "ValueError"):
+                for a in list(n.args) + [k.value for k in n.keywords]:
+                    take(a)
+    seen, uniq = set(), []
+    for ln, t in sorted(out):
+        if (ln, t) not in seen:
+            seen.add((ln, t)); uniq.append((ln, t))
+    return uniq
+
+
 def hits(area: str, markers: list[str]) -> list[tuple[pathlib.Path, int, str, list[str]]]:
     out = []
     for p in area_files(area):
@@ -168,6 +225,31 @@ def main() -> None:
                         print(f"{p.relative_to(ROOT).as_posix()}:{ln}: [{f}] {' '.join(s.split())[:150]}")
                         break
         print(f"옛 조각 단언 {n}곳 · 규칙의 옛 문장 {len(olds)}개")
+    elif cmd == "dump":
+        only_sent = "--sentences" in args
+        targets = [a for a in args if not a.startswith("--")] or ["all"]
+        paths: list[pathlib.Path] = []
+        for t in targets:
+            paths += area_files(t) if t in ("canvas-server", "canvas-front", "front-other", "server-other", "all") else files(t)
+        seen: set[str] = set()
+        n = 0
+        for p in paths:
+            rel = p.relative_to(ROOT).as_posix()
+            if "/app/dev/" in rel:
+                continue
+            rows = py_screen_strings(p) if p.suffix == ".py" else fragments(p)
+            shown = []
+            for ln, f in rows:
+                if f in seen or (only_sent and not _SENT.search(f)):
+                    continue
+                seen.add(f)
+                shown.append((ln, f))
+            if shown:
+                print(f"\n## {rel}")
+                for ln, f in shown:
+                    print(f"{ln}: {f}")
+                n += len(shown)
+        print(f"\n조각 {n}개 · 파일 {len(paths)}개" + (" · 문장 꼴만" if only_sent else ""))
     else:
         raise SystemExit(__doc__)
 

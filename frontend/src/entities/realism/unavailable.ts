@@ -60,7 +60,7 @@ export function unavailableReason(body: unknown): string | null {
   const detail = (body as Record<string, unknown>).detail;
   if (isUnavailable(detail)) {
     const roles = detail.missing.map((m) => m.role).filter(Boolean).join(" · ");
-    return roles ? `${detail.reason} (없는 것: ${roles})` : detail.reason;
+    return roles ? `${detail.reason} (누락 항목: ${roles})` : detail.reason;
   }
   if (isUnsupported(detail)) {
     const why = detail.unsupported.map((u) => u.reason).filter(Boolean).join(" / ");

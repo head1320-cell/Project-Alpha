@@ -86,15 +86,15 @@ def check(raw: Any, grounding: dict) -> tuple[list[dict], list[dict]]:
         if f not in allowed_ids:
             bad.append(_rej("not_applicable", "현재 사용 가능한 도구가 아닙니다"))
         elif any(x["feature"] == f for x in ok):
-            bad.append(_rej("duplicate", "같은 도구를 두 번 권했습니다"))
+            bad.append(_rej("duplicate", "같은 도구를 중복 추천했습니다"))
         elif len(ok) >= MAX_TIPS:
             bad.append(_rej("limit", f"{MAX_TIPS}개를 넘습니다"))
         elif len(why) > MAX_WHY:
             bad.append(_rej("too_long", f"이유가 {MAX_WHY}자를 넘습니다"))
         elif (word := next((w for w in (*BANNED, *JUDGEMENT) if w in why), None)):
-            bad.append(_rej("banned", f"쓰지 않는 표현 ‘{word}’이 들어 있습니다"))
+            bad.append(_rej("banned", f"금지 표현 ‘{word}’이 들어 있습니다"))
         elif extra := numbers_of(why) - allowed_nums:
-            bad.append(_rej("numbers", f"상태에 없는 숫자 {', '.join(sorted(extra))} 를 썼습니다"))
+            bad.append(_rej("numbers", f"상태에 없는 수치 {', '.join(sorted(extra))} 를 사용했습니다"))
         else:
             ok.append({"feature": f, "label": FEATURES[f]["label"], "why": why})
     return ok, bad

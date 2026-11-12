@@ -2693,7 +2693,7 @@
      "max_bps": null,
      "max_participation": null,
      "mean_bps": null,
-     "reason": "규모 가정(ImpactAssumptions)을 주지 않아 참여율 충격을 적용하지 않았습니다 — 정액 cost_bps 만 물렸습니다. 회전율이 큰 팔이 그만큼 유리하게 평가됩니다.",
+     "reason": "규모 가정(ImpactAssumptions)을 제공하지 않아 참여율 충격을 적용하지 않았습니다 — 정액 cost_bps 만 부과했습니다. 회전율이 큰 팔이 그만큼 유리하게 평가됩니다.",
      "total_cost_pct": null
     },
     "labels": {

@@ -106,7 +106,7 @@ test("혼자 쓰는 도구: 연결점 없이 '선 없이' 줄 · 흐름 노드�
   await group.locator(`.pg-palette-item[data-kind="${solo.type}"]`).click();
   const card = page.locator(`.pg-node[data-kind="${solo.type}"]`);
   await expect(card).toHaveClass(/pg-node--solo/);
-  await expect(card.locator(".pg-node-solo")).toHaveText("선 없이 혼자 계산합니다");
+  await expect(card.locator(".pg-node-solo")).toHaveText("연결 없이 단독으로 계산합니다");
   await expect(card.locator(".react-flow__handle")).toHaveCount(0);
   await expect(node(page, "optimizer").locator(".react-flow__handle")).not.toHaveCount(0);   // ★짝★
   await expect(node(page, "optimizer")).not.toHaveClass(/pg-node--solo/);

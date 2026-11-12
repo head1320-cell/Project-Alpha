@@ -178,16 +178,16 @@ test("AI 길잡이: 상태·적용 도구를 보내고 · 답(2개 중 1 · 넘�
   await page.locator(".pg-view-open").click();
   await page.locator('[data-view="lanes"]').click();
   await expect(bar(page).locator(".pg-guide-chip")).toHaveText("규칙 길잡이");
-  await expect(bar(page).locator(".pg-guide-note")).toHaveText("캔버스가 바뀌어 AI 길잡이를 지웠습니다");
+  await expect(bar(page).locator(".pg-guide-note")).toHaveText("캔버스가 변경돼 AI 길잡이를 삭제했습니다");
 });
 
 test("AI 길잡이를 보여 줄 수 없으면 사유 · 규칙 줄은 그대로", async ({ page }) => {
   await signIn(page);
-  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다" });
+  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "시간당 질의 한도는 30회입니다. 이번 시간 한도를 모두 사용했습니다" });
   await openWith(page, FULL);
   await runAll(page);
   await bar(page).locator(".pg-guide-ai").click();
-  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
+  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 표시할 수 없습니다: 시간당 질의 한도는 30회입니다. 이번 시간 한도를 모두 사용했습니다");
   await expect(bar(page).locator(".pg-guide-chip")).toHaveText("규칙 길잡이");
   await expect(bar(page)).toHaveAttribute("data-tool", "wire_check");
 });
@@ -216,7 +216,7 @@ test("가로채지 않은 실제 서버: 실제 상태 → 서버 검증(422 아
   const r = await res;
   expect(r.status()).toBe(200);
   expect(await r.json()).toMatchObject({ available: false, reason_code: "no_key" });
-  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
+  await expect(bar(page).locator(".pg-guide-note")).toHaveText("AI 길잡이를 표시할 수 없습니다: 서버에 Claude 키가 없습니다");
 });
 
 for (const scheme of ["light", "dark"] as const) {

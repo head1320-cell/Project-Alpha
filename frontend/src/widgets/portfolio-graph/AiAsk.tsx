@@ -26,8 +26,8 @@ export function structureSig(doc: Pick<GraphDoc, "nodes" | "edges">): string {
 
 /** 받은 답을 한 줄로 — 보인 수 · 검사에서 빠진 수와 첫 사유. */
 export function aiNote(shown: number, rejected: AiRejected[]): string {
-  const why = rejected.length ? `${rejected.length}개는 검사에서 빠졌습니다: ${rejected[0].reason}` : "";
-  if (shown > 0) return why ? `AI 추천 ${shown}개를 보였습니다 · ${why}` : `AI 추천 ${shown}개를 보였습니다.`;
+  const why = rejected.length ? `${rejected.length}개는 검사에서 제외됐습니다: ${rejected[0].reason}` : "";
+  if (shown > 0) return why ? `AI 추천 ${shown}개를 표시했습니다 · ${why}` : `AI 추천 ${shown}개를 표시했습니다.`;
   return why ? `AI 추천 ${why}` : "AI 가 낸 추천 없음";
 }
 
@@ -53,7 +53,7 @@ export function useAiAssist(doc: GraphDoc, session: Session, setNote: (n: string
       setAi({ state: "stale", why: live.current.sig !== asked ? "graph" : "goal" });
       return;
     }
-    if (!res.available) { setAi({ state: "idle", note: `AI 답을 보여 줄 수 없습니다: ${res.reason}` }); return; }
+    if (!res.available) { setAi({ state: "idle", note: `AI 응답을 표시할 수 없습니다: ${res.reason}` }); return; }
     setAi({ state: "ready", sig: asked, goal: askedGoal, suggestions: res.suggestions, note: aiNote(res.suggestions.length, res.rejected) });
   }, [setNote]);
   return { ai, ask, suggestions: ai.state === "ready" ? ai.suggestions : [] };
@@ -70,7 +70,7 @@ export function AiAsk({ session, ai, onAsk }: { session: Session; ai: AiState; o
     <span className="pg-ai">
       {note && <span className="pg-ai-note" role="status">{note}</span>}
       {ai.state === "stale" && (
-        <span className="pg-ai-stale" role="status">{ai.why === "goal" ? "목표가 바뀌어" : "그래프가 바뀌어"} AI 추천을 지웠습니다</span>
+        <span className="pg-ai-stale" role="status">{ai.why === "goal" ? "목표가 바뀌어" : "그래프가 바뀌어"} AI 추천을 삭제했습니다</span>
       )}
       <button type="button" className="pg-ai-ask" onClick={onAsk} disabled={busy} aria-busy={busy || undefined}>
         {busy ? "AI 추천 질의 중" : ai.state === "stale" ? "다시 묻기" : "AI 추천 받기"}

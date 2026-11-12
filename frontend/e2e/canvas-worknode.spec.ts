@@ -24,7 +24,7 @@ import type { NodeCatalogEntry } from "../src/entities/portfolio-graph/types";
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const API = "http://localhost:8000/api/v1/allocation/graph/node-types";
-const OVERLAP_NOTE = "예전 크기로 놓인 문서라 노드가 겹칩니다. 위 도구줄의 ‘자동 정리’를 누르면 다시 놓습니다.";
+const OVERLAP_NOTE = "이전 크기로 배치된 문서라 노드가 겹칩니다. 위 도구줄의 ‘자동 정리’를 누르면 재배치합니다.";
 const F = { format: "project-alpha.portfolio-graph", version: 1 } as const;
 type DocNode = { id: string; type: string; params: Record<string, unknown>; position: { x: number; y: number } };
 type DocEdge = { id: string; source: string; source_port: string; target: string; target_port: string };
@@ -189,7 +189,7 @@ test("단계별 보임(CF1): 가까이 = 위젯·결과 자리 · 중간 = 소�
   await zoomTo(page, "near");
   await expect(opt.locator(".pg-cw")).toBeVisible();
   await expect(opt.locator('.pg-cw-f[data-field="model"]')).toBeVisible();
-  await expect(opt.locator(".pg-node-slot-empty")).toHaveText("계산하면 결과가 여기에 보입니다");
+  await expect(opt.locator(".pg-node-slot-empty")).toHaveText("계산하면 결과가 여기에 표시됩니다");
   await expect(portName).toBeVisible();
   await expect(opt.locator(".pg-node-far")).toBeHidden();
 

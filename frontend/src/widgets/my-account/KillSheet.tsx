@@ -38,7 +38,7 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
       return r.value;
     },
     onSuccess: (r) => {
-      onDone(r.status === "no_active_event" ? "이미 풀려 있었습니다." : "비상 정지를 풀었습니다. 새 주문을 다시 받습니다.");
+      onDone(r.status === "no_active_event" ? "이미 해제돼 있었습니다." : "비상 정지를 해제했습니다. 신규 주문 접수를 재개합니다.");
       setNotes("");
     },
   });
@@ -47,7 +47,7 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
     <>
       <Sheet open={open === "kill"} onClose={onClose} title="비상 정지" testId="kill" className="ma-sheet"
              sub="신규 주문과 미체결 주문을 중단합니다. 보유 종목은 매도하지 않습니다.">
-        <div className="ma-chips ma-kill-presets" role="group" aria-label="자주 쓰는 사유">
+        <div className="ma-chips ma-kill-presets" role="group" aria-label="자주 사용하는 사유">
           {PRESETS.map((t) => (
             <button key={t} type="button" className="ma-chip-b ma-kill-preset" aria-pressed={reason === t} onClick={() => setReason(t)}>{t}</button>
           ))}
@@ -66,13 +66,13 @@ export function KillSheet({ accountId, open, onClose, onDone }: {
         </div>
       </Sheet>
       <Sheet open={open === "resolve"} onClose={onClose} title="비상 정지 풀기" testId="resolve" className="ma-sheet"
-             sub="풀면 이 계좌로 새 주문을 다시 받습니다.">
+             sub="해제하면 이 계좌의 신규 주문 접수를 재개합니다.">
         <label className="ma-field">
-          <span className="ma-label">남길 말(없어도 됩니다)</span>
+          <span className="ma-label">메모(선택 사항)</span>
           <textarea className="ma-input ma-textarea" name="ma-kill-notes" rows={2} maxLength={500}
                     value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
-        {resolve.isError ? <p className="ma-err" role="alert">비상 정지를 풀지 못했습니다. <span data-server>{resolve.error.message}</span></p> : null}
+        {resolve.isError ? <p className="ma-err" role="alert">비상 정지를 해제하지 못했습니다. <span data-server>{resolve.error.message}</span></p> : null}
         <div className="ma-confirm-act tx-confirm-act">
           <button type="button" className="tx-btn tx-btn--main ma-kill-resolve" disabled={resolve.isPending}
                   onClick={() => resolve.mutate()}>{resolve.isPending ? "해제 중" : "다시 열기"}</button>

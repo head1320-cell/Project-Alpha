@@ -121,7 +121,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
               {[...items.filter((c) => !isSolo(c)), ...items.filter(isSolo)].map((c, i, arr) => (
                 <Fragment key={c.type}>
                 {isSolo(c) && (i === 0 || !isSolo(arr[i - 1])) && (
-                  <p className="pg-palette-solo">혼자 계산하는 도구 <span>— 선 없이 설정만으로 계산합니다</span></p>
+                  <p className="pg-palette-solo">단독 계산 도구 <span>— 연결 없이 설정만으로 계산합니다</span></p>
                 )}
                 <button type="button" className={`pg-palette-item${isSolo(c) ? " pg-palette-item--solo" : ""}`} data-kind={c.type} draggable
                         title={`${c.label} (${c.type})${legacyOf(c.type).length ? ` · 예전 화면 ${legacyOf(c.type).map((a) => a.aliases[1] ?? a.title).join(", ")}` : ""}`}
@@ -174,7 +174,7 @@ function MyBlocks() {
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     const r = parseBlock(await f.text());
-    if (!r.block) { setProblem(`「${f.name}」을 넣지 않았습니다 — ${r.problem} 캔버스는 그대로입니다.`); return; }
+    if (!r.block) { setProblem(`「${f.name}」을 추가하지 않았습니다 — ${r.problem} 캔버스는 변경되지 않았습니다.`); return; }
     setProblem(null);
     const st = usePortfolioGraph.getState();
     st.act(() => st.insertBlock(r.block!));
@@ -183,7 +183,7 @@ function MyBlocks() {
     <section className="pg-blocks" aria-label="내 블록">
       <h4 className="pg-blocks-h">내 블록 <span className="pg-blocks-where">이 브라우저에만</span></h4>
       {!available && <p className="pg-blocks-note">이 브라우저에 블록을 저장할 수 없습니다 — 상자의 ‘파일로 받기’를 쓰고, 파일로 불러옵니다.</p>}
-      {available && blocks.length === 0 && <p className="pg-blocks-note">아직 없습니다. 상자 머리의 책갈피 버튼으로 전략이나 그룹을 넣어 두십시오.</p>}
+      {available && blocks.length === 0 && <p className="pg-blocks-note">아직 없습니다. 상자 머리의 책갈피 버튼으로 전략이나 그룹을 저장해 두십시오.</p>}
       {blocks.map((b, i) => (
         <div key={`${b.label}-${i}`} className="pg-block" data-block={b.label}>
           <button type="button" className="pg-block-add" onClick={() => insert(i)}

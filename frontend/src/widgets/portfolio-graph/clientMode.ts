@@ -37,7 +37,7 @@ export async function openClientDoc(clientId: string, docId: string | null, fres
       ok: true,
       ctx: { clientId, docId: d.doc_id, alias: d.client_alias, name: d.name, archived: d.client_archived },
       boot: { doc: d.graph, restack: false, isolate: true,
-              note: `‘${d.client_alias}’ 의 ‘${d.name}’ 입니다.${d.client_archived ? " 보관한 고객이라 읽기만 합니다." : ""}` },
+              note: `‘${d.client_alias}’ 의 ‘${d.name}’ 입니다.${d.client_archived ? " 보관 처리된 고객이라 읽기 전용입니다." : ""}` },
     };
   }
   if (fresh === "review") {
@@ -48,7 +48,7 @@ export async function openClientDoc(clientId: string, docId: string | null, fres
       ok: true,
       ctx: { clientId, docId: null, alias: c.alias, name: `정기 점검 ${localDate()}`, archived: c.archived },
       boot: { doc: reviewDocFor(c), isolate: true,
-              note: `‘${c.alias}’ 의 새 정기 점검입니다 — 위 ‘저장’ 으로 고객 문서에 남깁니다.` },
+              note: `‘${c.alias}’ 의 새 정기 점검입니다 — 위 ‘저장’ 으로 고객 문서에 저장합니다.` },
     };
   }
   return { ok: false, note: "고객 문서 열기 실패 — 주소에 열 문서가 없습니다." };

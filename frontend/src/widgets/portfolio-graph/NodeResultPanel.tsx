@@ -104,7 +104,7 @@ function EngineEvidence({ v }: { v: Dict }) {
           {ep.confidence_used === false && (
             <p className="pg-note pg-eng-conf">엔트로피 풀링은 뷰의 신뢰도를 사용하지 않습니다 — 부등식 뷰는 경성 제약이라 대응하는 조절 변수가 없습니다. 뷰의 과도 여부는 유효 시나리오 수로 판단합니다.</p>
           )}
-          {ensDrop && <p className="pg-warn" role="status">유효 시나리오 수가 크게 무너졌습니다 — 뷰가 사전분포보다 강해서 표본 몇 개에 기댄 상태입니다.</p>}
+          {ensDrop && <p className="pg-warn" role="status">유효 시나리오 수가 크게 감소했습니다 — 뷰가 사전분포보다 강해 소수 표본에 의존하는 상태입니다.</p>}
           {ep.note ? <p className="pg-note">{String(ep.note)}</p> : null}
         </>
       )}
@@ -131,7 +131,7 @@ function LongShortLegs({ weights }: { weights: Record<string, number> }) {
 /** 완화 사다리가 건너뛴 제약(`relaxed`) → 쉬운 말. 서버 설명(`_RELAXED_PLAIN`)과 같은 낱말. */
 const RELAXED_TEXT: Record<string, string> = { turnover: "회전율", beta: "시장 민감도", group: "업종 상한" };
 const CONS_STATE = {
-  ok: ["confirmed", "제약 지킴"], approx: ["assumed", "가깝게 맞춤"], infeasible: ["failed", "제약을 못 지킴"],
+  ok: ["confirmed", "제약 지킴"], approx: ["assumed", "가깝게 맞춤"], infeasible: ["failed", "제약 미충족"],
 } as const;
 
 /**
@@ -180,7 +180,7 @@ function Optimizer({ v }: { v: Dict }) {
       ]} />
       {cr && <ConstraintReport cr={cr as unknown as ConstraintsReport} />}
       <EngineEvidence v={v} />
-      {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 가 막혀서 표본 추정으로 계산했습니다 — {String(belief.blocked_reason)}</p>}
+      {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 를 산출하지 못해 표본 추정으로 계산했습니다 — {String(belief.blocked_reason)}</p>}
       {cap.length > 0 && <p className="pg-note">시가총액 미상 종목 {cap.length}개 — 시장 균형 가중은 그 종목에 대해 가정입니다.</p>}
       {((v.skipped_views as unknown[]) ?? []).length > 0 && (
         <p className="pg-warn">건너뛴 뷰: {JSON.stringify(v.skipped_views)}</p>
@@ -228,7 +228,7 @@ function Lookahead({ la }: { la: Dict | undefined }) {
     <div className="pg-la">
       <p className="pg-la-row">
         <span className={`pg-tag pg-tag--${st === "verified" ? "confirmed" : st === "unverified" ? "failed" : "assumed"}`} data-lookahead={st}>{LA_TEXT[st]}</span>
-        {la?.summary ? <span className="pg-note">{String(la.summary)}</span> : !la ? <span className="pg-note">이 결과는 룩어헤드를 어디까지 통제했는지 말하지 않습니다.</span> : null}
+        {la?.summary ? <span className="pg-note">{String(la.summary)}</span> : !la ? <span className="pg-note">이 결과에는 룩어헤드 통제 범위에 대한 정보가 없습니다.</span> : null}
       </p>
       {unmeasured.length > 0 && <ul className="pg-list pg-la-unmeasured">{unmeasured.map((t, i) => <li key={i}>미측정: {t}</li>)}</ul>}
     </div>
@@ -344,7 +344,7 @@ function UniverseResult({ v }: { v: Dict }) {
       )}
       {!weights && <p className="pg-note">현재 비중은 입력하지 않았습니다 — 비중이 필요한 노드에는 종목 목록만 전달됩니다.</p>}
       {(unknown.codes ?? []).length > 0 && (
-        <p className="pg-warn">이름을 찾지 못한 종목: {(unknown.codes ?? []).join(", ")}{unknown.note ? ` — ${unknown.note}` : ""}</p>
+        <p className="pg-warn">종목명 미확인 종목: {(unknown.codes ?? []).join(", ")}{unknown.note ? ` — ${unknown.note}` : ""}</p>
       )}
     </>
   );
@@ -354,7 +354,7 @@ function ViewsResult({ v }: { v: Dict }) {
   type View = { assets?: string[]; weights?: Record<string, number> | null; direction?: number; magnitude_pct?: number | null;
                 confidence?: number | null; label?: string | null };
   const views = (v.views as View[] | undefined) ?? [];
-  if (!views.length) return <p className="pg-note">적은 생각이 없습니다 — 포트폴리오 최적화는 과거 기준으로만 합니다.</p>;
+  if (!views.length) return <p className="pg-note">입력한 투자 뷰가 없습니다 — 포트폴리오 최적화는 과거 데이터 기준으로만 수행합니다.</p>;
   return (
     <ul className="pg-list pg-views-list">
       {views.map((x, i) => (
@@ -371,7 +371,7 @@ function ViewsResult({ v }: { v: Dict }) {
 
 const ESTIMATE_KEYS: Record<string, string> = {
   conditional: "경기 국면 반영", require_verified_macro: "확인된 매크로만", regime_weighting: "국면 가중 방식",
-  regime_mode: "국면 판정 시점", rebalance: "다시 정하는 주기",
+  regime_mode: "국면 판정 시점", rebalance: "리밸런싱 주기",
 };
 
 function EstimateResult({ v }: { v: Dict }) {
@@ -510,7 +510,7 @@ export function NodeResultPanel({ kind, result, stale, extra, params, onReload }
   const prov = result.provenance ?? {};
   return (
     <section className={`pg-result${stale ? " pg-result--stale" : ""}`}>
-      {stale && <p className="pg-warn">설정이 바뀌어서 이 결과는 지금 그래프와 다릅니다 — 재계산하십시오.</p>}
+      {stale && <p className="pg-warn">설정이 변경돼 이 결과는 현재 그래프와 다릅니다 — 재계산하십시오.</p>}
       <div className={`pg-node-status pg-node-status--${result.status}`}>
         <span className="pg-node-status-k">{STATUS_TEXT[result.status]}</span>
         {result.reason && <span className="pg-node-status-why">{result.reason}</span>}

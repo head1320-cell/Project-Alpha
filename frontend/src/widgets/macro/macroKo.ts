@@ -63,7 +63,7 @@ export const STUDIO_OUT_KO: Record<string, string> = {
   k_factors: "요인 수", explained_var: "설명한 분산 비율",
   lambda: "곡률 위치(λ)", tenors: "만기(년)", series_used: "사용 계열", level: "수준", slope: "기울기", curvature: "곡률",
   inverted: "역전 여부", rmse_pp: "적합 오차(%p)", term_premium_proxy: "기간프리미엄 대용(bp)", term_premium_reason: "기간프리미엄 미산출 사유",
-  nodes: "지표", edges: "앞서 움직이는 관계", n_series: "검사한 계열 수",
+  nodes: "지표", edges: "선행 관계", n_series: "검사한 계열 수",
   assets: "자산", n_views: "뷰 수", A: "제약 행렬(A)", b: "제약 한계(b)", human: "제약(사람 말)", feasible: "모순 검사 결과",
 };
 

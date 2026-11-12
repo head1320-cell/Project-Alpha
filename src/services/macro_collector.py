@@ -962,5 +962,5 @@ class MacroCollector:
             "fred_configured": self.fred.is_configured,
             "note": ("mock 모드 — 키 없으면 합성 MOCK 서빙"
                      if allow else
-                     "운영 모드 — 실 BOK/FRED만, 미설정 지표는 unavailable(정직 '—')"),
+                     "운영 모드 — 실 BOK/FRED만, 미설정 지표는 unavailable('—')"),
         }

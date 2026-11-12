@@ -32,7 +32,7 @@ function Scale({ gain, cost, mult, over }: { gain: number; cost: number; mult: n
   // 넘었는지는 서버 판정(decision)이 말한다 — 화면이 부등식을 다시 풀지 않는다.
   return (
     <svg className="pg-scale" viewBox={`0 0 ${W} ${H + 18}`} role="img"
-         aria-label={`효용 개선 ${gain.toFixed(3)}% 가 문턱 ${bar.toFixed(3)}% 를 ${over ? "넘습니다" : "넘지 못합니다"}`}>
+         aria-label={`효용 개선 ${gain.toFixed(3)}% 가 문턱 ${bar.toFixed(3)}% 를 ${over ? "초과합니다" : "초과하지 못합니다"}`}>
       <rect x={pad} y={14} width={W - 2 * pad} height={16} rx={8} className="pg-scale-track" />
       <rect x={pad} y={14} width={Math.max(2, X(gain) - pad)} height={16} rx={8}
             className={over ? "pg-scale-gain pg-scale-gain--over" : "pg-scale-gain"} />
@@ -60,7 +60,7 @@ export function RebalanceResult({ v }: { v: Dict }) {
       </div>
       {d !== "undetermined" && gain !== null && cost !== null
         ? <Scale gain={gain} cost={cost} mult={mult} over={d === "trade"} />
-        : <p className="pg-warn">편익을 몰라 저울을 그리지 않습니다 — {String(b.reason ?? "사유 미상")}</p>}
+        : <p className="pg-warn">편익이 미상이라 비교 차트를 표시하지 않습니다 — {String(b.reason ?? "사유 미상")}</p>}
       <KV rows={[
         ["거래비용", `${krw(c.cost_krw)} (${pc(c.cost_pct, 3)} · ${String(c.cost_bp ?? "—")}bp)`],
         ["회전율 · 주문", `${pc(c.turnover_pct)} · ${String(c.n_orders ?? "—")}건`],
@@ -152,7 +152,7 @@ export function CashResult({ v }: { v: Dict }) {
     <>
       <div className="pg-risk-lead">
         <span className="pg-risk-big">{num(r.annual_cash_return) === null ? "—" : `연 ${((r.annual_cash_return as number) * 100).toFixed(2)}%`}</span>
-        <span className="pg-risk-say">놀고 있는 현금 {pc(num(r.cash_ratio) === null ? null : (r.cash_ratio as number) * 100)} 가 더하는 수익</span>
+        <span className="pg-risk-say">유휴 현금 {pc(num(r.cash_ratio) === null ? null : (r.cash_ratio as number) * 100)} 의 추가 수익</span>
       </div>
       <p className="pg-co-head">
         금리 {pc(num(r.rf_annual) === null ? null : (r.rf_annual as number) * 100, 2)}{" "}

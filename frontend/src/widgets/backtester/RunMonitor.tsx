@@ -121,7 +121,7 @@ export function RunMonitor({ runId }: { runId: string }) {
   // 아직 첫 상태가 없음 — 로딩 중(또는 일시적 오류로 재시도 중, 폴링은 계속됨)
   if (!st) {
     return <div className="tx-page brun-shell rs"><div className="brun-loading">
-      {statusQ.isError ? "실행 상태 조회 중 — 연결이 불안정해 다시 묻고 있습니다" : "실행 상태 조회 중"}
+      {statusQ.isError ? "실행 상태 조회 중 — 연결이 불안정해 재조회하고 있습니다" : "실행 상태 조회 중"}
     </div></div>;
   }
 
@@ -203,7 +203,7 @@ export function RunMonitor({ runId }: { runId: string }) {
                 {reconnecting && (
                   <>
                     <span className="brun-reconnect">
-                      · 상태를 불러오지 못하고 있습니다 — 위 숫자는 마지막으로 받은 값입니다.
+                      · 상태를 불러오지 못하고 있습니다 — 위 수치는 최근 수신값입니다.
                       서버에서는 계속 실행 중일 수 있습니다.
                       {storeCauseText && ` (${storeCauseText})`}
                     </span>
@@ -236,7 +236,7 @@ export function RunMonitor({ runId }: { runId: string }) {
             </div>
             {actErr && (
               <Notice tone="danger" title={actErr.what}>
-                실행 상태는 그대로입니다. 잠시 뒤 다시 누르십시오.
+                실행 상태는 변동 없습니다. 잠시 후 다시 시도하십시오.
                 <details className="scr-err-detail"><summary>상세</summary><code>{actErr.detail}</code></details>
               </Notice>
             )}
@@ -260,7 +260,7 @@ export function RunMonitor({ runId }: { runId: string }) {
       )}
       {failed && actErr && (
         <Notice tone="danger" title={actErr.what}>
-          잠시 뒤 다시 누르십시오.
+          잠시 후 다시 시도하십시오.
           <details className="scr-err-detail"><summary>상세</summary><code>{actErr.detail}</code></details>
         </Notice>
       )}

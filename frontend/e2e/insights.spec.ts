@@ -17,7 +17,7 @@ import { contrastAudit, type AuditResult } from "./helpers";
 
 const API = "**/api/backend/api/v1";
 const SECS = ["value", "models", "numbers", "money", "risk", "peers", "factors", "ai"] as const;
-const TOC = ["가치", "여러 모형", "핵심 숫자", "수익성", "위험", "동종업계", "팩터", "AI"];
+const TOC = ["가치", "모형 비교", "핵심 지표", "수익성", "위험", "동종업계", "팩터", "AI"];
 
 async function open(page: Page, code = "005930") {
   await page.goto(`/insights?code=${code}`, { waitUntil: "domcontentloaded" });
@@ -220,7 +220,7 @@ test("배당 0% 는 '0%'(짝: 값이 없으면 'N/A') — 0 과 미상을 섞지
 });
 
 // ── 이동 ──
-test("?code= 로 연 종목이 h1 · 설계에 넣기 = /allocation?tickers=그 코드 · 동종업계 행을 누르면 그 종목", async ({ page }) => {
+test("?code= 로 연 종목이 h1 · 설계에 추가 = /allocation?tickers=그 코드 · 동종업계 행을 누르면 그 종목", async ({ page }) => {
   await open(page, "000660");
   await expect(page.locator(".ci-head h1")).toContainText("SK하이닉스", { timeout: 40_000 });
   await expect(page.locator(".ci-head a.ci-bridge")).toHaveAttribute("href", "/allocation?tickers=000660");
@@ -333,7 +333,7 @@ test("그림 보존 — 흐름 전체(자세히 펼침)의 그림·막대 수가
 const CO = `${API}/company/*`;
 async function openModels(page: Page, code = "005930") {
   await open(page, code);
-  await page.locator(".ci-toc-item", { hasText: "여러 모형" }).click();
+  await page.locator(".ci-toc-item", { hasText: "모형 비교" }).click();
   await expect(page.locator(".ci-sec[data-sec=models] .ci-mcard").first()).toBeVisible({ timeout: 40_000 });
 }
 async function patchJson(page: Page, pattern: string, fn: (b: Record<string, unknown>) => void) {

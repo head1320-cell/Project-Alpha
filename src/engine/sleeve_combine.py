@@ -274,7 +274,7 @@ def _manual_shares(shares: dict[str, float] | None, names: list[str]) -> np.ndar
     if not np.all(np.isfinite(v)) or (v < 0).any():
         raise _MethodFailure("배분 비율에 음수나 빈 값이 있습니다 — 0 이상으로 정하십시오.")
     if abs(float(v.sum()) - 100.0) > MANUAL_SUM_TOL:
-        raise _MethodFailure(f"배분 비율의 합이 {float(v.sum()):g}% 입니다 — 100% 가 되게 맞추십시오.")
+        raise _MethodFailure(f"배분 비율의 합이 {float(v.sum()):g}% 입니다 — 합계가 100% 가 되도록 조정하십시오.")
     return v / 100.0
 
 

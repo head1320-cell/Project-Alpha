@@ -592,7 +592,7 @@ def status(key: str, *, value: Any = None, as_of: str | None = None) -> dict[str
                 "reason": _NOT_INGESTED_NOTE}
     if value is None:
         return {**base, "value": None, "as_of": None, "available": False,
-                "reason": "실호출에서 값을 받지 못했습니다."}
+                "reason": "실호출에서 값을 수신하지 못했습니다."}
     return {**base, "value": value, "as_of": as_of, "available": True, "reason": None}
 
 

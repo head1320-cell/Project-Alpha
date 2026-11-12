@@ -110,7 +110,7 @@ test("프로필: 401 이면 토큰을 지우고 '로그인이 끝났습니다' �
   await expect(avatar(page)).toHaveAttribute("aria-label", "내 계정 — 로그인 안 됨");
   expect(await tokenNow(page), "끝난 토큰은 지운다").toBeNull();
   await avatar(page).click();
-  await expect(card(page).locator(".pf-note")).toHaveText("로그인이 끝났습니다. 다시 로그인하십시오.");
+  await expect(card(page).locator(".pf-note")).toHaveText("로그인 세션이 만료됐습니다. 다시 로그인하십시오.");
 
   // 짝 — 서버가 답하지 못한 것은 로그아웃이 아니다.
   await page.evaluate((k) => { localStorage.setItem(k, "t-keep"); }, TOKEN_KEY);

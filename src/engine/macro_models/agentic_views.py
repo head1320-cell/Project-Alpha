@@ -57,7 +57,7 @@ def compile_views(assets: list[str], views: list[dict[str, Any]]) -> dict[str, A
     if not assets:
         return {"ok": False, "reason": "자산 목록이 비어 있습니다."}
     if len(views) > _MAX_VIEWS:
-        return {"ok": False, "reason": f"뷰가 너무 많습니다 ({len(views)} > {_MAX_VIEWS})."}
+        return {"ok": False, "reason": f"뷰 개수가 상한을 초과합니다 ({len(views)} > {_MAX_VIEWS})."}
 
     idx = {a: i for i, a in enumerate(assets)}
     rows, rhs, human = [], [], []

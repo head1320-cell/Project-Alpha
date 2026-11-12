@@ -118,7 +118,7 @@ def _edge_lines(rec: dict) -> list[tuple[str, int, str]]:
         out += [("issue", i, str(x.get("text")) + (f" {x['fix']}" if x.get("fix") else "")) for i, x in enumerate(issues)
                 if isinstance(x, dict)]
     elif isinstance(issues, list):
-        out.append(("checked", 0, f"점검한 것: {' · '.join(map(str, rec.get('checks') or []))} — 잃거나 바뀐 것을 찾지 못했습니다."))
+        out.append(("checked", 0, f"점검한 것: {' · '.join(map(str, rec.get('checks') or []))} — 누락·변경 항목이 없습니다."))
     elif rec.get("issues_reason"):
         out.append(("checked", 0, str(rec["issues_reason"])))
     return out
@@ -180,12 +180,12 @@ def _problem(it: Any, by_id: dict[str, dict]) -> tuple[str, str] | None:
         return "shape", "문장의 형식이 맞지 않습니다"
     text, ids = it["text"], it["fact_ids"]
     if not ids:
-        return "no_source", "근거로 댄 사실 줄이 없습니다"
+        return "no_source", "근거로 인용한 사실 줄이 없습니다"
     if any(i not in by_id for i in ids):
-        return "unknown_fact", "근거로 댄 사실 줄이 근거에 없습니다"
+        return "unknown_fact", "근거로 인용한 사실 줄이 근거에 없습니다"
     word = next((w for w in BANNED if w in text), None)
     if word:
-        return "banned", f"쓰지 않는 표현 ‘{word}’이 들어 있습니다"
+        return "banned", f"금지 표현 ‘{word}’이 들어 있습니다"
     if len(text) > MAX_CHARS:
         return "too_long", f"문장이 {MAX_CHARS}자를 넘습니다"
     allowed: set[str] = set()
@@ -193,7 +193,7 @@ def _problem(it: Any, by_id: dict[str, dict]) -> tuple[str, str] | None:
         allowed |= numbers_of(by_id[i]["text"])
     extra = numbers_of(text) - allowed
     if extra:
-        return "numbers", f"댄 사실 줄에 없는 숫자 {', '.join(sorted(extra))} 를 썼습니다"
+        return "numbers", f"인용한 사실 줄에 없는 수치 {', '.join(sorted(extra))} 를 사용했습니다"
     return None
 
 

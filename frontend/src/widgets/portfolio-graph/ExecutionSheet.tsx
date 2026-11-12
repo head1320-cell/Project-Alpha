@@ -73,7 +73,7 @@ function NewPlan({ onSaved }: { onSaved: (id: string) => void }) {
   return (
     <section className="pg-rec-sec" aria-label="새 실행 계획">
       <h3 className="pg-h4">1. 실행 목표 선택</h3>
-      {list.length === 0 && <p className="pg-help">저장된 실행 목표가 없습니다 — 캔버스의 ‘실행 목표 비중’ 노드에서 저장하면 여기에 나옵니다.</p>}
+      {list.length === 0 && <p className="pg-help">저장된 실행 목표가 없습니다 — 캔버스의 ‘실행 목표 비중’ 노드에서 저장하면 여기에 표시됩니다.</p>}
       {tv && (
         <button type="button" className="pg-btn pg-btn--ghost pg-rec-change" onClick={() => { setTv(null); preview.reset(); save.reset(); }}>
           다른 목표 선택
@@ -147,7 +147,7 @@ function PlanFlow({ planId }: { planId: string }) {
   const refresh = () => { qc.invalidateQueries({ queryKey: ["execution", "plan", planId] }); qc.invalidateQueries({ queryKey: ["execution", "plans"] }); };
   const move = useMutation({
     mutationFn: (to: PlanStatus) => executionApi.transition(planId, to),
-    onSuccess: (r, to) => { setMsg(r.ok ? `‘${STATUS_KO[to]}’로 바꿨습니다.` : `변경 실패 — ${r.reason ?? "사유 미상"}`); refresh(); },
+    onSuccess: (r, to) => { setMsg(r.ok ? `‘${STATUS_KO[to]}’로 변경했습니다.` : `변경 실패 — ${r.reason ?? "사유 미상"}`); refresh(); },
   });
   const fills = useMutation({
     mutationFn: () => executionApi.fills(planId, (plan.data?.plan?.orders ?? []).map((o) => ({
@@ -165,7 +165,7 @@ function PlanFlow({ planId }: { planId: string }) {
         <b>{p.name}</b>
       </div>
       {p.plan && p.pretrade && <PlanSummary plan={p.plan} pre={p.pretrade} />}
-      {blocked && <p className="pg-warn" role="status">사전 점검에 막힌 항목이 있어 승인할 수 없습니다 — 위 ‘막힘’ 항목을 풀어야 합니다.</p>}
+      {blocked && <p className="pg-warn" role="status">사전 점검에 막힌 항목이 있어 승인할 수 없습니다 — 위 ‘막힘’ 항목을 해소해야 합니다.</p>}
       <div className="pg-rec-actions">
         {FORWARD[p.status].map((to) => (
           <button key={to} type="button" className={`pg-btn${to === "approved" ? " pg-btn--primary" : ""}`}

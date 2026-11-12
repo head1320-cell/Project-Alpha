@@ -72,7 +72,7 @@ class ScreenerParams(BaseModel):
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
         json_schema_extra={"x-ui": _ui("조건", question="스크리닝 조건", widget="filter",
                                        presets=_presets_filter(),
-                                       help="조건은 서버가 필드 목록으로 검사합니다 — 모르는 필드는 계산하지 않습니다.")})
+                                       help="조건은 서버가 필드 목록으로 검사합니다 — 정의되지 않은 필드가 있으면 계산하지 않습니다.")})
     top_n: int = Field(10, ge=3, le=30, json_schema_extra={"x-ui": _ui(
         "선별 종목 수", question="전달 종목 수", unit="개",
         presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
@@ -83,8 +83,8 @@ class ScreenerParams(BaseModel):
         "standard", json_schema_extra={"x-ui": _ui("유동성 문턱", "advanced", options={
             "off": "없음", "relaxed": "느슨하게", "standard": "보통", "institutional": "기관 수준"})})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
-        "과거 시점", "advanced", help="넣으면 그날 알 수 있던 값으로만 거릅니다(시점 고정 스크리너). 비우면 지금 값입니다. "
-                                    "과거 시점 거르기는 유동성 문턱·정렬 방향을 쓰지 않습니다.")})
+        "과거 시점", "advanced", help="입력하면 해당일에 알 수 있던 값으로만 선별합니다(시점 고정 스크리너). 비우면 현재 값입니다. "
+                                    "과거 시점 선별은 유동성 문턱·정렬 방향을 사용하지 않습니다.")})
 
 
 def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
@@ -189,7 +189,7 @@ def _factor_scores(inputs: dict, p: FactorScoreParams) -> pg.NodeOutput:
     specs = [_ar.FactorSpec(**f.model_dump()) for f in p.factors]
     ranked, meta, cov_w = _ar.factor_scores(rows, specs)
     if len(ranked) < 2:
-        raise pg.NodeFailure("고른 팩터로 점수를 매길 수 있는 종목이 부족합니다(팩터 값 결측) — 팩터나 후보를 변경하십시오.")
+        raise pg.NodeFailure("선택한 팩터로 점수를 산출할 수 있는 종목이 부족합니다(팩터 값 결측) — 팩터나 후보를 변경하십시오.")
     scores = {c: round(s, 3) for c, s in ranked}
     view = {"scores": scores, "labels": _ar._labels([c for c, _ in ranked[:30]]), "factors": meta,
             "coverage": {c: round(cov_w.get(c, 0.0) * 100, 0) for c, _ in ranked[:30]},
@@ -230,10 +230,10 @@ class AlphaParams(BaseModel):
             {"label": "단기 반전", "value": "zscore(reversal_5d)"}],
             help="알파 실험실과 같은 식입니다. 필드: mom_6m · vol_60d · roe · earnings_yield …")})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
-        "기준일", "advanced", help="비우면 오늘입니다. 과거 날짜를 넣으면 그날까지의 값으로 계산합니다.")})
+        "기준일", "advanced", help="비우면 오늘입니다. 과거 날짜를 입력하면 해당일까지의 값으로 계산합니다.")})
     alpha_id: str | None = Field(None, max_length=40, json_schema_extra={"x-ui": _ui(
         "등록된 알파", question="등록 알파 사용", widget="pick", source="alphas",
-        help="고르면 그 알파의 식을 씁니다(위 식 칸보다 먼저입니다). 알파 서랍에서 등록합니다.")})
+        help="선택하면 해당 알파의 식을 사용합니다(위 식 입력란보다 우선합니다). 알파 서랍에서 등록합니다.")})
 
 
 def registry_expr(alpha_id: str) -> tuple[str, dict]:
@@ -306,8 +306,8 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
     observed: dict = {}                        # CF3 — 관측만(공분산을 왜 못 보냈나 · 비중 0 이라 뺀 종목)
     if p.weighting in _RETURN_BASED:
         if r is None:
-            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 방식은 변동성을 씁니다 — ‘수익률 데이터’를 연결하십시오 "
-                                 "(균등 비중으로 몰래 바꾸지 않습니다).")
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 방식은 변동성을 사용합니다 — ‘수익률 데이터’를 연결하십시오 "
+                                 "(균등 비중으로 임의 대체하지 않습니다).")
         missing = [c for c in codes if c not in r["returns"].columns]
         if missing:
             raise pg.NodeFailure(f"수익률에 없는 종목이 있습니다: {', '.join(missing)} — 같은 종목의 수익률을 연결하십시오.")
@@ -315,7 +315,7 @@ def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
         S = _cov(R) * 252.0
         w = _inverse_vol_w(R) if p.weighting == "inverse_vol" else _raw_weights_for_model(p.weighting, R, None, S)
         if w is None or not np.all(np.isfinite(w)):
-            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 계산이 풀리지 않았습니다 — 역변동성으로 몰래 바꾸지 않습니다.")
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 계산의 해를 구하지 못했습니다 — 역변동성으로 임의 대체하지 않습니다.")
         w = np.asarray(w, dtype=float)
         sigma = S
     else:
@@ -394,7 +394,7 @@ def _explain_neutralize(view: dict, prov: dict, params: Any) -> dict:
     if shorts:
         facts.append(f"숏 포지션이 생긴 종목 {len(shorts)}개가 있습니다.")
     return {"title": "노출을 중립화한 비중을 산출했습니다", "facts": facts,
-            "trust": [_t(ASSUMED, "과거 베타·업종 분류로 맞췄습니다 — 앞으로도 그 베타일지는 미상입니다."),
+            "trust": [_t(ASSUMED, "과거 베타·업종 분류 기준으로 중립화했습니다 — 향후 베타가 동일할지는 미상입니다."),
                       _t(UNKNOWN, "중립화한 비중은 최적화 제약이 아니라 사후 변환이라 실행 목표로 사용할 수 없습니다.")],
             "unmeasured": ["중립화 뒤의 기대 수익", "숏 비용"]}
 

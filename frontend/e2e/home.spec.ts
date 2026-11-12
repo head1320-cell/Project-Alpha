@@ -105,7 +105,7 @@ test("★국면 실패는 alert + 재시도★ — 풀고 누르면 문장이 �
   await expect(alert).toHaveCount(0);
 });
 
-test("점수 높은 종목: 서버 순서 그대로 5줄 · 가격은 원 단위 그대로 · 누르면 새로고침 없이 기업 분석이 그 종목을 연다", async ({ page }) => {
+test("상위 점수 종목: 서버 순서 그대로 5줄 · 가격은 원 단위 그대로 · 누르면 새로고침 없이 기업 분석이 그 종목을 연다", async ({ page }) => {
   const run = page.waitForResponse((r) => r.url().includes("/api/v1/screener/run-advanced"));
   await open(page);
   const items = ((await (await run).json()) as { items: Item[] }).items.slice(0, 5);
@@ -126,13 +126,13 @@ test("점수 높은 종목: 서버 순서 그대로 5줄 · 가격은 원 단위
   expect(await page.evaluate(() => (window as unknown as { __home?: number }).__home), "새로고침 없이 옮겨 간다").toBe(1);
 });
 
-test("[이 n종목 설계에 넣기] = 보이는 행의 코드 그대로(순서 포함) → 캔버스가 그 종목으로 연다 (BU2 다리)", async ({ page }) => {
+test("[이 n종목 설계에 추가] = 보이는 행의 코드 그대로(순서 포함) → 캔버스가 그 종목으로 연다 (BU2 다리)", async ({ page }) => {
   const run = page.waitForResponse((r) => r.url().includes("/api/v1/screener/run-advanced"));
   await open(page);
   const items = ((await (await run).json()) as { items: Item[] }).items.slice(0, 5);
   const codes = items.map((i) => i.stock_code);
   const link = page.locator(".home-picks a.home-bridge");
-  await expect(link).toHaveText(`이 ${codes.length}종목 설계에 넣기`);
+  await expect(link).toHaveText(`이 ${codes.length}종목 설계에 추가`);
   await expect(link).toHaveAttribute("href", `/allocation?tickers=${codes.join(",")}`);
   await link.click();
   await expect(page.locator(".pg-file-note")).toContainText(`종목 찾기에서 가져온 ${codes.length}종목으로`, { timeout: 30_000 });
@@ -143,14 +143,14 @@ test("★점수 실패는 alert(빈 문구 아님)★ · 빈 결과는 빈 문�
   await open(page);
   const picks = page.locator(".home-picks");
   await expect(picks.locator("[role='alert']")).toContainText("종목 점수 조회 실패", { timeout: 20_000 });
-  await expect(picks).not.toContainText("점수를 낼 종목이 아직 없습니다");
+  await expect(picks).not.toContainText("점수를 산출할 종목이 아직 없습니다");
   await expect(picks.locator("button", { hasText: "재시도" })).toBeVisible();
 
   await page.unroute("**/api/v1/screener/run-advanced");
   await page.route("**/api/v1/screener/run-advanced", (r) => r.fulfill({ json: { universe: "kospi200", total_evaluated: 0, total_passed: 0,
     elapsed_seconds: 0, cache_hits: 0, cache_misses: 0, failures: 0, timestamp: "", items: [] } }));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(picks).toContainText("점수를 낼 종목이 아직 없습니다", { timeout: 20_000 });
+  await expect(picks).toContainText("점수를 산출할 종목이 아직 없습니다", { timeout: 20_000 });
   await expect(picks.locator("[role='alert']")).toHaveCount(0);
   await expect(picks.locator('a[href="/admin/data"]')).toBeVisible();
 });

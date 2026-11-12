@@ -145,7 +145,7 @@ def selection_bias_note(n_trials: int) -> dict[str, Any]:
     return {
         "n_trials": n,
         "expected_max_z": round(inflation, 2),
-        "note": f"{n}개 후보를 탐색해 최고를 고르면 최고 IC의 t-stat은 약 +{round(inflation, 2)}σ "
+        "note": f"{n}개 후보를 탐색해 최고값을 선택하면 최고 IC의 t-stat은 약 +{round(inflation, 2)}σ "
                 "위로 편향됩니다(다중검정). 단일 검증 임계를 그만큼 상향하고, walk-forward·"
                 "out-of-sample·PBO 등으로 과적합을 별도 확인하십시오 — 이 편향은 자동 보정되지 않습니다.",
     }
@@ -198,17 +198,17 @@ def experimental_catalog() -> list[dict[str, Any]]:
         {"id": "alt_data_events", "label": "대체데이터 이벤트 신호", "connected": False,
          "kind": "not_connected",
          "desc": "대체데이터 피드 미연동 — 후보 생성기 자리표시자. 데이터 계약·PIT 랙 검증 선행 필요.",
-         "governance": "미연동(정직). 연동 시에도 실험 후보로만."},
+         "governance": "미연동. 연동 시에도 실험 후보로만."},
         {"id": "text_disclosure", "label": "텍스트 공시·뉴스 요약 신호", "connected": False,
          "kind": "not_connected",
          "desc": "뉴스·공시 NLP 파이프라인 미연동 — LLM 요약/센티먼트 인프라 선행 필요.",
-         "governance": "미연동(정직)."},
+         "governance": "미연동."},
         {"id": "rl_allocation", "label": "강화학습 동적 배분", "connected": False,
          "kind": "not_connected",
          "desc": "RL 연구 환경(에이전트·시뮬레이터) 미구축 — 연구/에이전트/응용 계층 분리 선행 필요(FinRL 관례).",
-         "governance": "미연동(정직). 운영 통제 우회 불가."},
+         "governance": "미연동. 운영 통제 우회 불가."},
         {"id": "physics_regime", "label": "물리 은유 국면 분류", "connected": False,
          "kind": "not_connected",
          "desc": "실험적 국면 분류 — 기존 매크로 레짐과 중복 우려로 미구축(별도 연구 과제).",
-         "governance": "미연동(정직)."},
+         "governance": "미연동."},
     ]

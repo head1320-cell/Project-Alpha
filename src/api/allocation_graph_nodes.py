@@ -143,7 +143,7 @@ ReturnsParams = _subset("ReturnsParams", AnalyzeRequest, ("lookback_days", "as_o
                          presets=[{"label": "1년", "value": 252}, {"label": "3년", "value": 756},
                                   {"label": "5년", "value": 1260}]),
     "as_of": _ui("기준일", "advanced",
-                 help="비우면 오늘입니다. 과거 날짜로 고정하면 그날까지의 데이터만 씁니다."),
+                 help="비우면 오늘입니다. 과거 날짜로 고정하면 해당일까지의 데이터만 사용합니다."),
 })
 EstimateParams = _subset("EstimateParams", AnalyzeRequest,
                          ("conditional", "require_verified_macro", "regime_weighting",
@@ -195,7 +195,7 @@ BacktestParams = _subset("BacktestParams", BacktestRequest,
                          ("rebalance", "window_days", "cost_bps"), ui={
     "rebalance": _ui("리밸런싱 주기", question="리밸런싱 주기",
                      options={"M": "매월", "Q": "분기마다"}),
-    "window_days": _ui("학습 기간", "advanced", help="비우면 처음부터 모든 과거를 씁니다(확장 창)."),
+    "window_days": _ui("학습 기간", "advanced", help="비우면 시작 시점부터 전체 과거 구간을 사용합니다(확장 창)."),
     "cost_bps": _ui("거래비용", question="거래비용 가정", unit="bp",
                     presets=[{"label": "0.05%", "value": 5}, {"label": "0.1%", "value": 10},
                              {"label": "0.3%", "value": 30}]),

@@ -10,8 +10,8 @@ import { fmtPct, type DdEpisode, type PerfView } from "./perfView";
 export function DrawdownEpisodes({ view, episodes, compact = false }: { view?: PerfView; episodes?: DdEpisode[] | null; compact?: boolean }) {
   const eps = episodes !== undefined ? episodes : (view?.drawdowns ?? null);
   const fmtD = (d: string) => (compact ? d.slice(2, 10).replace(/-/g, ".") : d.slice(0, 10));
-  if (eps === null) return <p className="pg-note">주요 낙폭 구간은 이 결과에 없습니다 — 서버가 낙폭 구간을 주지 않았습니다.</p>;
-  if (!eps.length) return <p className="pg-note">고점 아래로 내려간 적이 없습니다 — 낙폭 구간이 없습니다.</p>;
+  if (eps === null) return <p className="pg-note">주요 낙폭 구간은 이 결과에 없습니다 — 서버가 낙폭 구간을 제공하지 않았습니다.</p>;
+  if (!eps.length) return <p className="pg-note">고점 대비 하락한 적이 없습니다 — 낙폭 구간이 없습니다.</p>;
   return (
     <div className="pf-eps-wrap">
     <table className={`pg-table pf-dd-eps${compact ? " pf-dd-eps--compact" : ""}`}>

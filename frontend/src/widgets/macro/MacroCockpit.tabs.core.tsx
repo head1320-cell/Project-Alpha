@@ -91,7 +91,7 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
           <div className="mc-reco-mini">
             {recommend.low_conviction && (
               <p className="mc-warn mc-warn--line">
-                확신이 낮습니다(신뢰도 {(recommend.confidence * 100).toFixed(0)}%). 현금성 자산을 {recommend.top.cash_overlay_pct.toFixed(0)}%로 늘렸습니다.
+                판정 신뢰도가 낮습니다(신뢰도 {(recommend.confidence * 100).toFixed(0)}%). 현금성 자산을 {recommend.top.cash_overlay_pct.toFixed(0)}%로 확대했습니다.
               </p>
             )}
             <div className="mc-reco-mini-l">
@@ -154,9 +154,9 @@ export function IndicatorsTab({ core, onDrill, cbSent, onRetryCb }: { core: Macr
         value={q} onChange={(e) => setQ(e.target.value)} aria-label="지표 찾기" />
       {/* 글을 자료로: 중앙은행 정책문의 말투(딱딱한 지표가 늦게 나오는 것을 보완) */}
       <div className="mc-card">
-        <div className="mc-card-h">중앙은행 말투(긴축 쪽 · 완화 쪽) <span className="mc-card-sub">정책문에서 긴축·완화 어휘의 빈도를 집계했습니다</span></div>
+        <div className="mc-card-h">중앙은행 통화정책 기조(매파 · 비둘기파) <span className="mc-card-sub">정책문에서 긴축·완화 어휘의 빈도를 집계했습니다</span></div>
         {cbSent === undefined && <Loading>정책문 조회 중</Loading>}
-        {cbSent === null && <LoadFail title="중앙은행 말투 조회 실패" onRetry={onRetryCb} />}
+        {cbSent === null && <LoadFail title="중앙은행 통화정책 기조 조회 실패" onRetry={onRetryCb} />}
         {cbSent && (
           <div className="mc-cbg-grid">
             <CbGauge name="미국 연준(FOMC 성명)" bank={cbSent.banks.fed} />
@@ -172,7 +172,7 @@ export function IndicatorsTab({ core, onDrill, cbSent, onRetryCb }: { core: Macr
       </div>
       {themes.map((t) => (
         <div key={t.key} className="mc-card">
-          <div className="mc-card-h">{t.label} <span className="mc-card-sub">지표 {t.indicators.length}개 · ▲▼는 지난번보다 오르고 내린 폭입니다</span></div>
+          <div className="mc-card-h">{t.label} <span className="mc-card-sub">지표 {t.indicators.length}개 · ▲▼는 전기 대비 증감 폭입니다</span></div>
           {t.indicators.length ? (
             <div className="mc-indgrid">{t.indicators.map((ind) => <IndicatorCard key={ind.id} ind={ind} onClick={() => onDrill(ind.id)} />)}</div>
           ) : <div className="mc-empty-sm">이 그룹에는 지표 없음</div>}
@@ -198,11 +198,11 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
   return (
     <div className="mc-grid">
       <div className="mc-card span2">
-        <div className="mc-card-h">국면 궤적(최근 18개월) <span className="mc-card-sub">성장·물가 축 점수가 지나온 길입니다</span></div>
+        <div className="mc-card-h">국면 궤적(최근 18개월) <span className="mc-card-sub">성장·물가 축 점수의 궤적입니다</span></div>
         {traj === undefined ? <Loading>궤적 조회 중</Loading>
           : traj === null ? <LoadFail title="국면 궤적 조회 실패" onRetry={onRetryTraj} />
           : traj.path?.length ? <RegimeTrajectory path={traj.path} />
-          : <div className="mc-empty-sm">궤적을 그릴 관측 없음</div>}
+          : <div className="mc-empty-sm">궤적을 표시할 관측치 없음</div>}
         {!!traj?.transitions?.length && (
           <div className="mca-transitions">
             {traj.transitions.map((tr, i) => (
@@ -217,7 +217,7 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
       </div>
       {/* 사이클 띠 — 지표 × 18개월, 칸 색 = 그 달의 z(축과 같은 방식) */}
       <div className="mc-card span2">
-        <div className="mc-card-h">사이클 띠(지표별 18개월) <span className="mc-card-sub">칸 색은 그 달의 z입니다(국면 축과 같은 방식으로 바꿨습니다)</span></div>
+        <div className="mc-card-h">사이클 띠(지표별 18개월) <span className="mc-card-sub">칸 색은 그 달의 z입니다(국면 축과 동일 방식으로 변환했습니다)</span></div>
         {strips === undefined && <Loading>띠 계산 중</Loading>}
         {strips === null && <LoadFail title="사이클 띠 조회 실패" onRetry={onRetryStrips} />}
         {strips && <CycleStripGrid data={strips} />}
@@ -225,7 +225,7 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
       </div>
       {/* 축 하위요인 — 축 점수를 지표 기여로 쌓은 달별 그림. 실패해도 카드는 남아서 실패를 말한다(예전엔 조용히 사라졌다). */}
       <div className="mc-card span2">
-        <div className="mc-card-h">성장 축 · 물가 축을 만든 지표(달마다) <span className="mc-card-sub">막대는 지표마다의 기여, 선은 축 점수입니다</span></div>
+        <div className="mc-card-h">성장 축 · 물가 축 구성 지표(월별) <span className="mc-card-sub">막대는 지표별 기여도, 선은 축 점수입니다</span></div>
         {axisHist === undefined && <Loading>축 기록 조회 중</Loading>}
         {axisHist === null && <LoadFail title="축 기록 조회 실패" onRetry={onRetryAxis} />}
         {axisHist && (
@@ -262,7 +262,7 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
         <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 안정", "100 · 불안"]} />
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">스트레스 구성 항목 <span className="mc-card-sub">항목마다 0~100, 높을수록 불안합니다</span></div>
+        <div className="mc-card-h">스트레스 구성 항목 <span className="mc-card-sub">항목별 0~100, 높을수록 불안합니다</span></div>
         <div className="mc-stresscomp">
           {sc.map(([k, v]) => (
             <div key={k} className="mc-sc-row"><span className="mc-sc-k">{STRESS_KO[k] ?? k}</span><div className="mc-sc-bar" aria-hidden><i style={{ width: `${Math.max(2, Math.min(100, v))}%` }} /></div><span className="mc-sc-v">{v.toFixed(0)}</span></div>
@@ -291,9 +291,9 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
         </div>
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">다른 계산에 넘기는 값 <span className="mc-card-sub">가치 평가와 손실 차단 기준이 이 값을 받습니다</span></div>
+        <div className="mc-card-h">다른 계산에 전달하는 값 <span className="mc-card-sub">가치평가와 손절 기준이 이 값을 입력으로 사용합니다</span></div>
         <dl className="mc-dparams">
-          <div className="mc-dparam"><dt>무위험 금리(자기자본비용 계산에 씁니다)</dt><dd>{pctOrUnknown(regime.dynamic_risk_free_rate, "무위험 금리 수신 실패")}</dd></div>
+          <div className="mc-dparam"><dt>무위험 금리(자기자본비용 산출에 사용합니다)</dt><dd>{pctOrUnknown(regime.dynamic_risk_free_rate, "무위험 금리 수신 실패")}</dd></div>
           <div className="mc-dparam"><dt>손실 차단 기준(최대 낙폭)</dt><dd>{pctOrUnknown(regime.dynamic_kill_dd_threshold, "손실 차단 기준 수신 실패")}</dd></div>
         </dl>
       </div>
@@ -310,14 +310,14 @@ export function ValuationTab({ core, aStrips, onRetryAStrips }: { core: MacroCor
   return (
     <div className="mc-grid">
       <div className="mc-card span2">
-        <div className="mc-card-h">자산군 가격 위치(18개월) <span className="mc-card-sub">지난 5년 가격 가운데 어디쯤인지(백분위)입니다</span></div>
+        <div className="mc-card-h">자산군 가격 위치(18개월) <span className="mc-card-sub">최근 5년 가격 분포에서의 위치(백분위)입니다</span></div>
         {aStrips === undefined && <Loading>가격 위치 계산 중</Loading>}
         {aStrips === null && <LoadFail title="자산군 가격 위치 조회 실패" onRetry={onRetryAStrips} />}
         {aStrips && <AssetStripGrid data={aStrips} />}
         {aStrips?.note && <p className="mc-card-note" data-server>{aStrips.note}</p>}
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">자산군 가격 z(지난 5년) <span className="mc-card-sub">0보다 크면 가격이 지난 5년 평균보다 높은 구간, 작으면 낮은 구간입니다</span></div>
+        <div className="mc-card-h">자산군 가격 z(지난 5년) <span className="mc-card-sub">0보다 크면 가격이 최근 5년 평균보다 높은 구간, 작으면 낮은 구간입니다</span></div>
         <ValuationBars assets={v.assets} />
         <LevelLegend lo="가격이 평균보다 낮습니다" hi="높습니다" />
         <p className="mc-card-note">가격만으로 판단한 고평가·저평가 구간입니다(이익 대비 배수가 아닙니다). 높은 구간은 평균 회귀 위험이, 낮은 구간은 분할 매수를 검토할 여지가 있습니다. 자산배분에서 저평가 자산 비중 확대를 검토하는 출발점으로 사용합니다.</p>

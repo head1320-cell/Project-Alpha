@@ -112,7 +112,7 @@ export function VarEsResult({ v }: { v: Dict }) {
       ]} />
       {comps ? (
         <>
-          <h4 className="pg-h4">어느 종목이 손실 위험을 만드나</h4>
+          <h4 className="pg-h4">종목별 손실 위험 기여</h4>
           <Bars rows={comps.map((c) => ({ name: String(c.label ?? c.name), value: num(c.amount), text: krw(c.amount) }))} />
           <p className="pg-note">정규·표본 공분산으로 나눈 값입니다 — 더하면 평균 항을 뺀 정규 VaR 가 됩니다.</p>
         </>
@@ -177,7 +177,7 @@ export function McVarResult({ v }: { v: Dict }) {
       <KV rows={[
         ["꼬리의 평균 손실(ES)", krw(esAmt)],
         ["추정 오차(표준오차)", `±${krw(r.var_std_error)}`],
-        ...(multi ? [["섞어서 줄어든 위험", `${krw(r.diversification_benefit)} (${fx(r.diversification_benefit_pct, 1)}%)`] as [string, ReactNode]] : []),
+        ...(multi ? [["분산 효과로 감소한 위험", `${krw(r.diversification_benefit)} (${fx(r.diversification_benefit_pct, 1)}%)`] as [string, ReactNode]] : []),
       ]} />
       <InputsTable r={r} />
     </>
@@ -226,7 +226,7 @@ export function HoldingVarResult({ v }: { v: Dict }) {
           </tr>
         ))}</tbody>
       </table>
-      <p className="pg-note">하루 값 × √보유일 — 날마다 독립이라는 가정입니다.</p>
+      <p className="pg-note">1일 값 × √보유일 — 일별 독립 가정입니다.</p>
       <InputsTable r={r} />
     </>
   );
@@ -241,7 +241,7 @@ export function FrtbResult({ v }: { v: Dict }) {
     <>
       <Meta v={v} />
       <Lead value={krw(r.imcc_capital_charge)}>규제 공식(IMA)으로 계산한 자본 — 승인 모델이 아닙니다</Lead>
-      {!found && <p className="pg-warn">표본이 짧아 250일 스트레스 구간을 찾지 못했습니다 — 스트레스 ES 자리에 현재 ES 를 그대로 뒀습니다.</p>}
+      {!found && <p className="pg-warn">표본이 짧아 250일 스트레스 구간을 찾지 못했습니다 — 스트레스 ES 를 현재 ES 로 대체했습니다.</p>}
       <table className="pg-table pg-sotp">
         <tbody>
           <tr><td>현재 ES 97.5% (과거 그대로)</td><td className="pg-td-num">{krw(he.es_amount)}</td></tr>
@@ -263,7 +263,7 @@ export function RollingSharpeResult({ v }: { v: Dict }) {
       <Meta v={v} />
       <Lead value={fx(r.current)}>최근 {String(r.window)}일의 샤프 비율</Lead>
       <Lines label="롤링 샤프 비율의 흐름" zero fmt={(x) => fx(x)} series={[{ name: "샤프", values: (r.values as number[]) ?? [], tone: "a" }]} />
-      <KV rows={[["구간 평균", fx(r.mean)], ["가장 낮을 때 · 높을 때", `${fx(r.min)} · ${fx(r.max)}`]]} />
+      <KV rows={[["구간 평균", fx(r.mean)], ["최저 · 최고", `${fx(r.min)} · ${fx(r.max)}`]]} />
       <InputsTable r={r} />
     </>
   );
@@ -349,7 +349,7 @@ export function FuturesHedgeResult({ v }: { v: Dict }) {
         ["β 감소율 (반올림 뒤, 시장 위험만)", r.expected_var_reduction_pct == null ? "계산 안 함" : `${fx(r.expected_var_reduction_pct, 1)}%`],
       ]} />
       {r.reduction_reason ? <p className="pg-note">{String(r.reduction_reason)}</p>
-        : <p className="pg-note">종목 고유의 위험은 선물로 줄지 않습니다.</p>}
+        : <p className="pg-note">종목 고유 위험은 선물로 헤지되지 않습니다.</p>}
       <InputsTable r={r} />
     </>
   );
@@ -372,7 +372,7 @@ export function CvaCalcResult({ v }: { v: Dict }) {
       <KV rows={[
         ["우리 쪽 부도 위험(DVA)", krw(b.dva_amount)],
         ["순값(BCVA)", krw(b.bcva_amount)],
-        ["해마다 드는 순비용 근사", krw((r.bcva_spread as Dict)?.bcva_running_annual)],
+        ["연간 순비용 근사", krw((r.bcva_spread as Dict)?.bcva_running_annual)],
         ["스프레드 충격 뒤 CVA", `${krw(st.stressed_cva)} (+${fx(st.stress_loss_pct, 1)}%)`],
         ["상대방 5년 부도 확률", pc(pd["5y_pd"], 2)],
         ["연 스프레드 환산", `${fx(u.cva_spread_bps, 1)}bp`],
@@ -387,7 +387,7 @@ export function IrcCalcResult({ v }: { v: Dict }) {
   const mig = (r.migration_analysis as Dict[]) ?? [];
   return (
     <>
-      <Lead value={krw(r.irc_total)}>등급 강등·부도로 생길 수 있는 추가 위험 자본(IRC)</Lead>
+      <Lead value={krw(r.irc_total)}>신용등급 하락·부도에 따른 추가 위험 자본(IRC)</Lead>
       <KV rows={[
         ["등급 변화 → 스프레드 위험", krw(r.spread_risk_component)],
         ["부도 위험", krw(r.default_risk_component)],

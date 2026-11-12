@@ -97,16 +97,16 @@ export default function UniversePanel({ s, set, live = true }: {
 
   return (
     <div className="bte-col">
-      <Section title="매매 대상" hint="어떤 종목 안에서 고를지 정합니다" tone="neutral" enabled>
+      <Section title="매매 대상" hint="선별 대상 종목군을 지정합니다" tone="neutral" enabled>
         <div className="bte-uni-count" aria-live="polite">
           <span className="bte-sm">현재 선택 종목</span>
           <b className={counting ? "is-counting" : undefined}>{u.matched.toLocaleString("ko-KR")}</b>
-          <span className="bte-sm">/ 전체 {u.totalUniverse.toLocaleString("ko-KR")}종목{counting ? " · 다시 세는 중입니다" : ""}</span>
+          <span className="bte-sm">/ 전체 {u.totalUniverse.toLocaleString("ko-KR")}종목{counting ? " · 재집계 중입니다" : ""}</span>
         </div>
 
         {/* 유니버스 구성 방식 — 생존편향 보정: 시작일 당시 실제 거래 종목(상장폐지 포함) 기준.
             가장 근본적인 "후보 종목을 어떻게 정할지" 결정이라 아래 모든 세분화 필터보다 먼저. */}
-        <Field label="고르는 방식" width={96}>
+        <Field label="선정 방식" width={96}>
           <Segmented tone="neutral" act="survivorship" value={u.survivorshipMode ?? "off"}
             onChange={(t) => patch({ survivorshipMode: t as BacktestStrategy["universe"]["survivorshipMode"] })}
             options={[
@@ -116,7 +116,7 @@ export default function UniversePanel({ s, set, live = true }: {
             ]} />
           <p className="bte-note">
             {(u.survivorshipMode ?? "off") === "off"
-              ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 씁니다."
+              ? "아래 시총군·업종·ETF·관심그룹 선택을 그대로 적용합니다."
               : "시작일 당시 실제 거래 종목(상장폐지 포함)으로 구성합니다. 아래 시총군·업종·ETF·관심그룹 선택은 적용하지 않습니다."}
           </p>
         </Field>

@@ -112,7 +112,7 @@ def test_no_company_view_at_all_is_an_honest_failure(market, monkeypatch):
     import src.engine.company_views as cv
     monkeypatch.setattr(cv, "prices_for", lambda codes: ({}, {c: "unavailable" for c in codes}))
     rep = _run(_co_graph())
-    assert rep["nodes"]["c"]["status"] == "failed" and "하나도" in rep["nodes"]["c"]["reason"]
+    assert rep["nodes"]["c"]["status"] == "failed" and "기업 전망을 산출하지 못했습니다" in rep["nodes"]["c"]["reason"]
     assert "현재가" in rep["nodes"]["c"]["reason"]
 
 

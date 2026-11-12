@@ -39,7 +39,7 @@ export function HedgeCalc() {
         <div className="dv-grid">
           <NumField id="dv-pv" label="포트폴리오 금액" unit="원" value={raw.pv} onChange={set("pv")} missing={miss("pv")} hint={v.pv != null ? `${wonK(v.pv)}입니다` : undefined} />
           <NumField id="dv-beta" label="현재 베타" value={raw.beta} onChange={set("beta")} missing={miss("beta")} hint="시장 1% 변동 시 포트폴리오 변동률(%)" />
-          <NumField id="dv-tgt" label="목표 베타" value={raw.target} onChange={set("target")} missing={miss("target")} hint="0 이면 시장 위험을 모두 덥니다" />
+          <NumField id="dv-tgt" label="목표 베타" value={raw.target} onChange={set("target")} missing={miss("target")} hint="0 이면 시장 위험을 전부 제거합니다" />
           <NumField id="dv-fut" label="선물 가격" unit="포인트" value={raw.fut} onChange={set("fut")} missing={miss("fut")} />
           <NumField id="dv-mult" label="계약 승수" unit="원" value={raw.mult} onChange={set("mult")} missing={miss("mult")} step="1" hint="1포인트당 금액(코스피200 선물 25만 원)" />
         </div>
@@ -63,7 +63,7 @@ export function HedgeCalc() {
             <Fig k="reduction" label="시장 위험 감소" value={h.expected_var_reduction_pct == null ? "계산하지 않습니다" : `${h.expected_var_reduction_pct}%`}
               why={h.expected_var_reduction_pct == null ? <span data-server>{h.reduction_reason ?? "서버가 사유를 제공하지 않았습니다."}</span> : <span data-server>{h.reduction_basis}</span>} />
             <Fig k="contract_value" label="계약 한 개 금액" value={won(h.contract_value)} why="선물 가격 × 계약 승수입니다." />
-            <Fig k="notional" label="헤지 금액" value={won(h.hedge_notional)} why="거래할 계약 수 × 계약 한 개 금액입니다." />
+            <Fig k="notional" label="헤지 금액" value={won(h.hedge_notional)} why="거래 계약 수 × 계약 1개당 금액입니다." />
           </dl>
         </section>
       ) : null}

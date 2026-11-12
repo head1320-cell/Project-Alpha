@@ -64,7 +64,7 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
       <p className={`pg-model-type pg-model-type--${historical ? "hist" : "hypo"}`}>{String(pack.model_type_label ?? "")}</p>
       {/* ★재현 좌표는 라벨이 아니라 pack_id@hash★ 같은 이름의 팩도 정의가 바뀌면 해시가 바뀐다. */}
       {pack.identity ? <p className="pg-pack-id">{String(pack.family_label ?? "")} · <span className="pg-code">{String(pack.identity)}</span>
-        {historical && pack.severity_applies === false ? " · 실제 시세 재생이라 강도 배율을 쓰지 않습니다" : ""}</p> : null}
+        {historical && pack.severity_applies === false ? " · 실제 시세 재생이라 강도 배율을 사용하지 않습니다" : ""}</p> : null}
       {historical ? (
         <>
           {/* 기간 수익률·낙폭은 성과 숫자다 — 서버가 단 라벨(고정 비중 재생)을 숫자 바로 위에. */}
@@ -97,7 +97,7 @@ export function ScenarioStressResult({ v, prov }: { v: Dict; prov: Dict }) {
             </>
           )}
           {r.note ? <p className="pg-note">{String(r.note)}</p> : null}
-          <p className="pg-note pg-linear">선형 근사입니다 — 종목별 충격 × 비중을 더했습니다. 충격이 커질 때 상관이 바뀌는 효과는 넣지 않았습니다.</p>
+          <p className="pg-note pg-linear">선형 근사입니다 — 종목별 충격 × 비중을 합산했습니다. 충격 확대 시 상관 변화 효과는 반영하지 않았습니다.</p>
         </>
       )}
     </>
@@ -144,7 +144,7 @@ export function SensitivityResult({ v }: { v: Dict }) {
   const short = (n: string) => labels[n] ?? n;
   return (
     <>
-      <p className="pg-note">줄의 종목 기대수익을 올렸을 때 칸의 종목 비중이 몇 %p 바뀌는지입니다.</p>
+      <p className="pg-note">행 종목의 기대수익률을 높였을 때 열 종목 비중의 변화(%p)입니다.</p>
       <div className="pg-heat-wrap">
         <table className="pg-heat">
           <thead><tr><th aria-label="올린 종목" />{names.map((n) => <th key={n} scope="col">{short(n)}</th>)}</tr></thead>

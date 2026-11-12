@@ -145,7 +145,7 @@ def bh_reject(p_values: list[float | None], alpha: float = 0.05) -> dict[str, An
     if m == 0:
         return {"n": 0, "n_rejected": None, "rejected": [None] * len(p_values),
                 "critical": None, "alpha": float(alpha), "n_dropped": n_dropped,
-                "reason": ("p 값을 하나도 내지 못해 보정할 가족이 없습니다 — "
+                "reason": ("p 값을 산출하지 못해 보정할 가족이 없습니다 — "
                            "★'0개 기각' 이 아니라 미상입니다.★")}
 
     order = sorted(usable, key=lambda pair: pair[1])

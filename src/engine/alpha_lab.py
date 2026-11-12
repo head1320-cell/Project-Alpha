@@ -9,7 +9,7 @@
   · PIT 규칙:
       - 가격 파생 피처: as-of 시점까지의 OHLCV만 사용 (구조적으로 look-ahead 불가)
       - 펀더멘털: financials_history 연간 보고서를 "사업연도 Y → Y+1년 4월 1일부터
-        사용 가능" 보수적 공시랙으로 as-of 선택 (분기·정정공시 미반영 — 정직 한계)
+        사용 가능" 보수적 공시랙으로 as-of 선택 (분기·정정공시 미반영 — 한계)
   · 검증 = 월간 리밸런스 Rank IC 시계열 → IC/ICIR/t-stat/HitRate/Decay(1·2·3M),
     분위 포트폴리오(모노토닉), 롱숏 곡선, IS/OOS 반분할, 회전율 프록시, 커버리지.
     거래비용 미반영(정직 라벨) — 비용·용량은 P3~P4에서.
@@ -309,7 +309,7 @@ def lint_alpha(expr: str, existing_exprs: list[str] | None = None) -> dict:
     if fund_used:
         issues.append({"level": "info", "code": "pit_lag",
                        "message": f"펀더멘털 필드 {fund_used}: 연간 보고서 + {FUND_LAG_MONTH}월 공시랙 적용 "
-                                  "(분기·정정공시 미반영 — 정직 한계). 미래참조는 구조적으로 차단됨."})
+                                  "(분기·정정공시 미반영 — 한계). 미래참조는 구조적으로 차단됨."})
     if not any(c in ("rank", "zscore", "winsorize") for c in calls) and len(used) >= 2:
         issues.append({"level": "warn", "code": "scale_mix",
                        "message": "서로 다른 스케일의 필드를 변환 없이 결합 — rank()/zscore() 정규화 권장."})
@@ -384,7 +384,7 @@ def _load_fundamentals(tickers: list[str]) -> dict[str, dict[int, dict]]:
                     out.setdefault(tk, {})[y] = d
         return out
     except Exception as e:
-        logger.debug(f"fundamentals 로드 실패(정직 결측): {e}")
+        logger.debug(f"fundamentals 로드 실패(결측): {e}")
         return {}
 
 
@@ -701,7 +701,7 @@ def validate_alpha(expr: str, tickers: list[str], months: int = 24,
     if need_fund:
         total_fund = sum(fund_cov)
         if total_fund == 0:
-            notes.append("펀더멘털 필드 커버리지 0 — financials_history 미적재 환경(정직 결측). "
+            notes.append("펀더멘털 필드 커버리지 0 — financials_history 미적재 환경(결측). "
                          "실데이터(GCP)에서 재검증 필요.")
         else:
             notes.append(f"펀더멘털: 연간 보고서 + {FUND_LAG_MONTH}월 공시랙 (분기·정정공시 미반영).")

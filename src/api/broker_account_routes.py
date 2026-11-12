@@ -140,7 +140,7 @@ def check_account(account_id: str, p: Principal = Depends(require_login)):
     if failed:
         return _record_check(account_id, p.username, {**out, **failed})
     return _record_check(account_id, p.username, {**out, "state": "ok",
-            "reason": "증권사가 이 키와 계좌로 잔고 조회를 받아 줬습니다."})
+            "reason": "증권사가 이 키와 계좌의 잔고 조회를 수락했습니다."})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -317,7 +317,7 @@ def live_readiness(account_id: str, p: Principal = Depends(require_login)):
         {"key": "connection", "ok": conn[0], "reason": conn[1]},
         {"key": "paper_practice", "ok": practiced > 0,
          "reason": (f"내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 {practiced}건 있습니다." if practiced
-                    else "내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 아직 없습니다. 합성(mock) 주문은 세지 않습니다.")},
+                    else "내 모의투자 계좌에서 증권사 모의 서버가 접수한 주문이 아직 없습니다. 합성(mock) 주문은 집계하지 않습니다.")},
         {"key": "reconciliation", "ok": False,
          "reason": "이 계좌를 증권사 잔고와 맞춰 보는 대조 감시가 아직 없습니다. 그래서 실계좌 전환은 열지 않습니다."},
     ]

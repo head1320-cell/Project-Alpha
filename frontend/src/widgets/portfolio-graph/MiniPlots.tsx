@@ -65,7 +65,7 @@ export function FrontierPlot({ dots, curve, point, rows, initial, label, height 
     const every = room < Math.max(...xt.map((t) => textW(fx(t)))) + 8 ? 2 : 1;
     return { xt, yt, fx, fy, left, bottom, sx, sy, every };
   }, [dots, curve, point, width, height]);
-  if (!geo) return <p className="pg-note">경계를 그릴 점 없음</p>;
+  if (!geo) return <p className="pg-note">경계를 표시할 점 없음</p>;
   const { xt, yt, fx, fy, left, bottom, sx, sy, every } = geo;
   const cur = idx >= 0 ? curve[idx] : null;
   const onPointer = (e: PointerEvent<SVGSVGElement>) => {

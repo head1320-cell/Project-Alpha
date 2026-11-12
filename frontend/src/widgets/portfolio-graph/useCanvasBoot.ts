@@ -36,7 +36,7 @@ export function useCanvasBoot(initialDoc: BootDoc | null | undefined, bootNote: 
           // 다른 화면이 넘긴 흐름(예: 매크로 스냅샷) — 지금 캔버스가 있으면 되돌리기로 돌아갈 수 있다(loadDoc 이 기록한다).
           st.loadDoc(initialDoc.restack === false ? initialDoc.doc : restackDoc(initialDoc.doc, cat.nodes));
           if (initialDoc.isolate) usePortfolioGraph.setState({ past: [], future: [] });
-          setFileNote(initialDoc.note + (!initialDoc.isolate && st.past.length ? " 이전 캔버스는 되돌리기(Ctrl+Z)로 돌아갑니다." : ""));
+          setFileNote(initialDoc.note + (!initialDoc.isolate && st.past.length ? " 이전 캔버스는 되돌리기(Ctrl+Z)로 복원할 수 있습니다." : ""));
         } else {
           const saved = readWip();
           const parsed = saved ? parseFile(saved) : null;

@@ -41,8 +41,8 @@ export function BondCalc() {
           <NumField id="dv-ytm" label="만기수익률(연)" unit="%" value={raw.ytm} onChange={set("ytm")} missing={miss("ytm")} hint="현재 시장 요구수익률" />
           <NumField id="dv-yrs" label="잔존 만기" unit="년" value={raw.years} onChange={set("years")} missing={miss("years")} step="1" hint="1 이상의 정수" />
         </div>
-        <div className="dv-kind"><span className="dv-field-l">이자를 받는 횟수(1년에)</span>
-          <Segmented label="이자를 받는 횟수" value={freq} onChange={setFreq} options={[{ value: "1", label: "1번" }, { value: "2", label: "2번" }, { value: "4", label: "4번" }]} />
+        <div className="dv-kind"><span className="dv-field-l">이자 지급 횟수(1년에)</span>
+          <Segmented label="이자 지급 횟수" value={freq} onChange={setFreq} options={[{ value: "1", label: "1번" }, { value: "2", label: "2번" }, { value: "4", label: "4번" }]} />
         </div>
         {bad && <p className="dv-bad" role="alert">액면가는 0보다 크고, 잔존 만기는 1년 이상의 정수여야 계산할 수 있습니다.</p>}
         <button type="button" className="tx-btn tx-btn--main dv-go" onClick={run} disabled={calc.m.isPending}>
@@ -56,7 +56,7 @@ export function BondCalc() {
           {calc.stale(key) && <StaleNote onRerun={run} />}
           <p className="dv-ans">이 채권의 가격은 <b>{won(b.Price, 2)}</b>입니다(액면 {won(ran.face_value)}).</p>
           <dl className="dv-figs" data-testid="bond-figs">
-            <Fig k="Price" label="가격" value={won(b.Price, 2)} why={b.Price < ran.face_value ? "시장 수익률이 표면금리보다 높아 액면보다 싸게 거래됩니다." : b.Price > ran.face_value ? "시장 수익률이 표면금리보다 낮아 액면보다 비싸게 거래됩니다." : "시장 수익률과 표면금리가 같아 액면과 같습니다."} />
+            <Fig k="Price" label="가격" value={won(b.Price, 2)} why={b.Price < ran.face_value ? "시장 수익률이 표면금리보다 높아 액면가보다 낮게(할인) 거래됩니다." : b.Price > ran.face_value ? "시장 수익률이 표면금리보다 낮아 액면가보다 높게(할증) 거래됩니다." : "시장 수익률과 표면금리가 같아 액면가와 같습니다."} />
             <Fig k="Macaulay_Duration" label="맥컬리 듀레이션" value={`${b.Macaulay_Duration.toFixed(2)}년`} why="이자와 원금을 받는 시점을 금액으로 가중 평균한 값입니다." />
             <Fig k="Modified_Duration" label="수정 듀레이션" value={b.Modified_Duration.toFixed(2)} why={`수익률 1%p 상승 시 가격이 약 ${b.Modified_Duration.toFixed(2)}% 하락합니다.`} />
             <Fig k="Convexity" label="볼록성" value={b.Convexity.toFixed(2)} why="수익률 변동이 클 때 듀레이션 기반 가격 변화 추정을 보정하는 정도입니다." />

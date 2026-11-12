@@ -42,7 +42,7 @@ export function InputsTable({ r }: { r: Dict }) {
             : Math.abs(x as number) < 1.5 ? pc(x, 2) : (x as number).toLocaleString("ko-KR", { maximumFractionDigits: 2 }));
   return (
     <table className="pg-table pg-inputs">
-      <caption>이 값은 무엇으로 만들었나</caption>
+      <caption>산출 근거</caption>
       <tbody>{rows.map((i) => (
         <tr key={String(i.key)}>
           <td className="pg-td-name">{String(i.label)}</td>
@@ -150,9 +150,9 @@ export function EvaResult({ v }: { v: Dict }) {
         ["자본비용(WACC)", pc(((r.latest as Dict) ?? {}).wacc)],
         ["EVA 로 본 주당 가치", num(val.per_share) === null ? `— ${String(val.per_share_reason ?? "")}` : won(val.per_share)],
         ["가치 동인 공식 주당", vd.available ? won(vd.per_share) : `— ${String(vd.reason ?? "")}`],
-        ["성장이 가치를", vd.available ? (vd.growth_creates_value ? "만듭니다" : "깎습니다") : "—"],
+        ["성장이 가치를", vd.available ? (vd.growth_creates_value ? "창출합니다" : "훼손합니다") : "—"],
       ]} />
-      {noCl && <p className="pg-note">유동부채를 몰라 투하자본을 총자산으로 잡은 해가 있습니다 — EVA 를 낮게 보는 쪽입니다.</p>}
+      {noCl && <p className="pg-note">유동부채 미상으로 투하자본을 총자산으로 대체한 연도가 있습니다 — EVA 가 과소 추정되는 방향입니다.</p>}
       <HistoryNote r={r} />
       <InputsTable r={r} />
     </>
@@ -174,7 +174,7 @@ export function MultiplesResult({ v }: { v: Dict }) {
       <KV rows={[["EPS", won(r.eps)], ["PER", num(r.per) === null ? "—" : `${(r.per as number).toFixed(1)}배`],
                  ["PEG", num(r.peg) === null ? `— ${String(r.peg_reason ?? "")}` : (r.peg as number).toFixed(2)]]} />
       <table className="pg-table pg-sens pg-peg">
-        <caption>EPS 성장률(행) × PEG(열)이면 맞는 주가</caption>
+        <caption>EPS 성장률(행) × PEG(열)에 대응하는 주가</caption>
         <thead><tr><th />{(m.peg_axis ?? []).map((p, i) => <th key={i} className="pg-td-num">{typeof p === "number" ? p.toFixed(2) : "—"}</th>)}</tr></thead>
         <tbody>{(m.prices ?? []).map((row, i) => (
           <tr key={i}>
@@ -244,7 +244,7 @@ export function DriverMcResult({ v }: { v: Dict }) {
         ["경로", `${String(r.n_used ?? "—")} / ${String(r.n_requested ?? "—")}`],
       ]} />
       {num(r.negative_share) !== null && (r.negative_share as number) > 0 && (
-        <p className="pg-note">경로의 {pc(r.negative_share, 0)} 는 주당 가치가 0 아래입니다 — 부채가 기업가치보다 큽니다.</p>
+        <p className="pg-note">경로의 {pc(r.negative_share, 0)} 는 주당 가치가 0 미만입니다 — 부채가 기업가치를 초과합니다.</p>
       )}
       <p className="pg-note">{String(r.note ?? "").replace(/\*\*/g, "")}</p>
       <HistoryNote r={r} />
@@ -312,7 +312,7 @@ export function DecisionTreeResult({ v }: { v: Dict }) {
             <td className="pg-td-num">{pc(pth.prob, 0)}</td><td className="pg-td-num">{won(pth.value)}</td></tr>
         ))}</tbody>
       </table>
-      {((r.ignored_values as string[]) ?? []).length > 0 && <p className="pg-note">중간 가지의 값은 쓰지 않았습니다: {((r.ignored_values as string[]) ?? []).join(", ")}</p>}
+      {((r.ignored_values as string[]) ?? []).length > 0 && <p className="pg-note">중간 노드의 값은 사용하지 않았습니다: {((r.ignored_values as string[]) ?? []).join(", ")}</p>}
       <InputsTable r={r} />
     </>
   );
@@ -336,12 +336,12 @@ export function SotpResult({ v }: { v: Dict }) {
             <tr key={i}><td className="pg-td-name">{label}</td>
               <td className={`pg-td-num${kind === "minus" ? " pg-neg" : ""}`}>{val === null ? "—" : `${val >= 0 ? "+" : "−"}${eo(Math.abs(val))}`}</td></tr>
           ))}
-          <tr className="pg-sotp-total"><td className="pg-td-name">남는 지분가치</td><td className="pg-td-num">{eo(r.after_discount)}</td></tr>
+          <tr className="pg-sotp-total"><td className="pg-td-name">잔여 지분가치</td><td className="pg-td-num">{eo(r.after_discount)}</td></tr>
         </tbody>
       </table>
       <KV rows={[["주당", num(r.per_share) === null ? `— ${String(r.per_share_reason ?? "")}` : won(r.per_share)],
                  ["할인 전 주당", won(r.per_share_before_discount)]]} />
-      {((r.excluded as Dict[]) ?? []).map((x, i) => <p key={i} className="pg-warn">{String(x.code)}: 합계에서 뺐습니다 — {String(x.reason ?? "사유 미상")}</p>)}
+      {((r.excluded as Dict[]) ?? []).map((x, i) => <p key={i} className="pg-warn">{String(x.code)}: 합계에서 제외했습니다 — {String(x.reason ?? "사유 미상")}</p>)}
       <HistoryNote r={r} />
       <InputsTable r={r} />
     </>
@@ -362,7 +362,7 @@ export function RealOptionResult({ v }: { v: Dict }) {
         <div className="pg-opt-cell"><span className="pg-opt-k">블랙-숄즈 · 유럽형</span><b className="pg-opt-v">{eo(bs.value)}</b></div>
         <div className="pg-opt-cell"><span className="pg-opt-k">CRR 이항 · 미국형 ({String(bi.steps ?? "—")}단계)</span><b className="pg-opt-v">{eo(bi.value)}</b></div>
       </div>
-      <KV rows={[["지금 바로 하면(정적 NPV)", eo(r.static_npv)], ["선택권이 더하는 값", eo(r.option_premium)],
+      <KV rows={[["즉시 실행 시(정적 NPV)", eo(r.static_npv)], ["선택권의 추가 가치", eo(r.option_premium)],
                  ["조기 행사의 값", eo(ee.premium)], ["주당", num(ps.black_scholes) === null ? "—" : `${won(ps.black_scholes)} (현재가의 ${(num(ps.vs_price_pct) ?? 0).toFixed(1)}%)`]]} />
       {ee.note ? <p className="pg-note">{String(ee.note)}</p> : null}
       <p className="pg-note">{String(r.note ?? "")}</p>

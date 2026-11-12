@@ -56,9 +56,9 @@ class EvaParams(_Priced):
         presets=[{"label": "3년", "value": 3}, {"label": "5년", "value": 5}, {"label": "10년", "value": 10}],
         help="경쟁으로 초과이익이 소멸하는 기간입니다 — 가정입니다.")})
     g: float | None = Field(None, ge=-0.05, le=0.15, json_schema_extra={"x-ui": _ui(
-        "성장률", "advanced", help="가치 동인 공식의 성장률입니다. 비우면 영구성장률을 씁니다.")})
+        "성장률", "advanced", help="가치 동인 공식의 성장률입니다. 비우면 영구성장률을 사용합니다.")})
     ronic: float | None = Field(None, gt=-1, le=1, json_schema_extra={"x-ui": _ui(
-        "신규 투자 수익률", "advanced", help="신규 투자자본의 수익률(RONIC)입니다. 비우면 최근 ROIC 를 씁니다.")})
+        "신규 투자 수익률", "advanced", help="신규 투자자본의 수익률(RONIC)입니다. 비우면 최근 ROIC 를 사용합니다.")})
 
 
 def _eva(inputs: dict, p: EvaParams) -> pg.NodeOutput:
@@ -133,7 +133,7 @@ def _explain_layers(view: dict, prov: dict, params: Any) -> dict:
     if ep.get("reason"):
         trust.append(_t(UNKNOWN, f"수익력가치: {ep['reason']}"))
     return {"title": title, "facts": facts, "trust": trust,
-            "unmeasured": ["자산을 다시 만드는 데 드는 돈(재생산원가) — 장부가로 대신했습니다"]}
+            "unmeasured": ["자산 재생산원가 — 장부가로 대체했습니다"]}
 
 
 # ── 배수 · PEG · 정당 배수 ───────────────────────────────────────────────────
@@ -181,7 +181,7 @@ class DriverMcParams(_Priced):
     sigma_growth: float = Field(0.03, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
         "매출 성장률 표준편차", question="매출 성장률 연간 변동성 가정",
         presets=[{"label": "±1%p", "value": 0.01}, {"label": "±3%p", "value": 0.03}, {"label": "±6%p", "value": 0.06}],
-        help="표준편차입니다. 중심은 지난 재무에서 읽습니다.")})
+        help="표준편차입니다. 중심값은 과거 재무에서 산출합니다.")})
     sigma_margin: float = Field(0.02, ge=0, le=0.5, json_schema_extra={"x-ui": _ui(
         "영업이익률 표준편차", question="영업이익률 변동성 가정",
         presets=[{"label": "±1%p", "value": 0.01}, {"label": "±2%p", "value": 0.02}, {"label": "±4%p", "value": 0.04}])})
@@ -189,7 +189,7 @@ class DriverMcParams(_Priced):
     years: int = Field(5, ge=3, le=15, json_schema_extra={"x-ui": _ui("예측 기간", "advanced", unit="년")})
     n: int = Field(2000, ge=100, le=20000, json_schema_extra={"x-ui": _ui("경로 수", "advanced")})
     seed: int = Field(20260927, json_schema_extra={"x-ui": _ui("난수 시드", "advanced",
-                                                               help="같은 시드면 같은 결과가 나옵니다.")})
+                                                               help="동일 시드에서는 동일 결과가 산출됩니다.")})
 
 
 def _driver_mc(inputs: dict, p: DriverMcParams) -> pg.NodeOutput:
@@ -301,7 +301,7 @@ def _explain_tree(view: dict, prov: dict, params: Any) -> dict:
     trust = [*_base_trust(view, prov), *_inputs_trust(r),
              _t(ASSUMED, "가지·확률·값은 모두 사람이 정했습니다 — 나무는 그 가정을 정직하게 접을 뿐입니다.")]
     if r.get("ignored_values"):
-        trust.append(_t(UNKNOWN, f"중간 가지의 값은 쓰지 않았습니다(아래 가지로 계산): {', '.join(r['ignored_values'])}"))
+        trust.append(_t(UNKNOWN, f"중간 노드의 값은 사용하지 않았습니다(아래 가지로 계산): {', '.join(r['ignored_values'])}"))
     return {"title": f"기대 가치 {_won(r.get('expected_value'))}", "facts": facts, "trust": trust,
             "unmeasured": ["사건의 확률 자체"]}
 
@@ -349,7 +349,7 @@ def _explain_sotp(view: dict, prov: dict, params: Any) -> dict:
     facts += [f"{x.get('name') or x['code']} 지분 {x['stake_pct']:.0f}%: {x['value']:,.0f}억" for x in r.get("subsidiaries") or []]
     trust = [*_base_trust(view, prov), *_history_trust(r), *_inputs_trust(r)]
     for x in r.get("excluded") or []:
-        trust.append(_t(UNKNOWN, f"{x.get('code')}: 합계에서 뺐습니다 — {x.get('reason')}"))
+        trust.append(_t(UNKNOWN, f"{x.get('code')}: 합계에서 제외했습니다 — {x.get('reason')}"))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["부문별 적정 배수(피어 부문 자료 없음)"]}
 
 
@@ -388,7 +388,7 @@ def _explain_real_option(view: dict, prov: dict, params: Any) -> dict:
     npv = r.get("static_npv")
     facts = []
     if isinstance(npv, (int, float)):
-        facts.append(f"지금 바로 하면 {npv:,.0f}억 — 선택권이 더하는 값 {r.get('option_premium', 0):,.0f}억")
+        facts.append(f"지금 바로 하면 {npv:,.0f}억 — 선택권의 추가 가치 {r.get('option_premium', 0):,.0f}억")
     ps = r.get("per_share") or {}
     if isinstance(ps.get("black_scholes"), (int, float)):
         facts.append(f"주당 {_won(ps['black_scholes'])} (현재가의 {ps.get('vs_price_pct', 0):.1f}%)")

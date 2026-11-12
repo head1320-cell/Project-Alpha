@@ -65,7 +65,7 @@ def _regime_adaptive_block(req, out: dict) -> dict:
     """
     if not req.enable_regime_adaptive:
         return {"enabled": False, "basis": "off", "n_days_with_systemic_risk": None,
-                "reason": "enable_regime_adaptive=false — 적응 모드를 쓰지 않았습니다."}
+                "reason": "enable_regime_adaptive=false — 적응 모드를 사용하지 않았습니다."}
     days = out.get("daily_records") or []
     n = sum(1 for r in days if r.get("systemic_risk") is not None)
     stats = out.get("realism_stats") or {}

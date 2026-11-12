@@ -154,7 +154,7 @@ test("R5 · (짝) 계산 뒤 끊으면 하류 수를 말한다", async ({ page }
   await compute(page);
   await pickWire(page, EO);
   await btn(page, "cut").click();
-  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 이전 결과입니다\./);
 });
 
 test("R5 · 사이에 넣기 — 후보 = 카탈로그에서 센 것 · 고르면 두 선 사이 · 한 단계 (짝: 후보 없는 선은 까닭)", async ({ page }) => {
@@ -244,7 +244,7 @@ test("R5 · 묻기 — 오른쪽 창의 묻기 칸으로 · 로그아웃이면 �
   await page.waitForTimeout(400);
   await pickWire(page, UR);
   await btn(page, "ask").click();
-  await expect(page.locator(".pg-ask")).toContainText("계산한 뒤에 물을 수 있습니다");     // 묻기 칸은 계산한 뒤에만 열린다
+  await expect(page.locator(".pg-ask")).toContainText("계산 후 질의할 수 있습니다");     // 묻기 칸은 계산한 뒤에만 열린다
   await compute(page);
   await pickWire(page, UR);
   await btn(page, "ask").click();

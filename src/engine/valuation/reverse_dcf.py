@@ -118,7 +118,7 @@ def _solve(f, target: float, bracket: tuple[float, float], grid: int,
                           f"못합니다 — 시장은 그보다 높은 값을 함의합니다"}
     if ys[0] > target:
         return {"ok": False, "monotonic": True, "direction": "below_bracket",
-                "reason": f"{label}: 브래킷 하단({lo:+.1%})에서도 목표가를 넘습니다 — "
+                "reason": f"{label}: 브래킷 하단({lo:+.1%})에서도 목표가를 초과합니다 — "
                           "시장은 그보다 낮은 값을 함의합니다"}
 
     try:

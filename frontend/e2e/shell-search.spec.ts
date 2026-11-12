@@ -85,12 +85,12 @@ test("★실패와 빈 결과를 섞지 않는다★ 검색 실패 → '연결 �
   await expect(err).toHaveText(/종목 검색 연결 실패/);
   await expect(err).toHaveAttribute("role", "alert");
   await expect(opts(page).filter({ hasText: "설정" })).toHaveCount(1);       // 화면 찾기는 네트워크 없이 된다
-  await expect(page.locator(".tx-find-pop")).not.toContainText("맞는 종목·화면 없음");
+  await expect(page.locator(".tx-find-pop")).not.toContainText("종목·화면이 없습니다");
 
   mode = "empty";
   await box(page).fill("");
   await box(page).fill("없는이름xyz");
-  await expect(page.locator(".tx-find-pop .tx-find-note")).toHaveText(/맞는 종목·화면이 없습니다/);
+  await expect(page.locator(".tx-find-pop .tx-find-note")).toHaveText(/일치하는 종목·화면이 없습니다/);
   await expect(err).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(page.locator(".tx-find-pop")).toHaveCount(0);

@@ -65,7 +65,7 @@ export function GateSection({ gate, onChanged }: { gate: UseQueryResult<GateStat
                 <p className="lvg-now-t">{cur ? "현재 열려 있습니다" : "현재 닫혀 있습니다"}</p>
                 <p className="tx-sec-sub">
                   {cur ? `${cur.declared_by ?? "누군가"} 님이 ${krDateTime(cur.declared_at) ?? "시각 미상"}에 선언했습니다. 아래 사용자만 실계좌로 주문할 수 있습니다.`
-                    : "선언이 없어서 실계좌 주문은 누구에게도 열려 있지 않습니다."}
+                    : "선언이 없어 실계좌 주문은 어느 사용자에게도 허용되지 않습니다."}
                 </p>
               </div>
             </div>

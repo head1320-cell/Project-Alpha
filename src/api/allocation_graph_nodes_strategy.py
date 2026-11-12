@@ -12,7 +12,7 @@
 - 밸류에이션 스코어링(`valuation_scores`): `/valuation/compare` 를 그대로 부른다. 점수는 **−괴리율**
   (싼 만큼 높다). ★적정가를 못 낸 종목(데이터 없음 → 괴리율 0)은 점수에 넣지 않는다★ — 미상 ≠ 0.
 - 결정 사후 검토(`attribution_review`): `/attribution/{run_id}` 와 같은 `_attribution_for`. 저장된 연구
-  실행을 읽기만 한다. 벤치마크 구성종목이 없어 못 재는 분해는 "안 측정했습니다" 로 그대로 둔다.
+  실행을 읽기만 한다. 벤치마크 구성종목이 없어 못 재는 분해는 "측정하지 않았습니다" 로 그대로 둔다.
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ StrategyParams = _subset(
      "lookback_days", "max_weight", "min_weight", "regime_market"),
     ui={
         "strategy_ids": _ui("전략", question="결합 대상 전략", widget="pick", source="strategies",
-                            help="백테스트 실행을 전략으로 등록하면 여기에 나옵니다."),
+                            help="백테스트 실행을 전략으로 등록하면 여기에 표시됩니다."),
         "initial_capital": _ui("시작 금액", "advanced", unit="원"),
         "netting_enabled": _ui("주문 상계", "advanced", help="전략 간 반대 주문을 상계해 거래비용을 줄입니다."),
         "commission_rate": _ui("수수료율", "advanced"),
@@ -172,7 +172,7 @@ def _explain_strategy(view: dict, prov: dict, params: Any) -> dict:
                           "text": f"{float(s['total_return_pct']):+.1f}%"} if s.get("total_return_pct") is not None else None),
             "facts": facts, "trust": trust,
             "unmeasured": ["매크로 틸트 배분(hrp_macro) — 규칙이 정해지지 않아 아직 없습니다",
-                           "표본 밖 성과 — 등록된 전략의 과거 기록을 다시 나눈 결과입니다"]}
+                           "표본 밖 성과 — 등록된 전략의 과거 기록을 재배분한 결과입니다"]}
 
 
 # ── 기업 전망 넣기 ────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ def _company_views(inputs: dict, p: CompanyViewsParams) -> pg.NodeOutput:
     views, reasons = company_views(names, prices, as_of=r["as_of"], convergence_years=p.convergence_years)
     if not views:
         why = "; ".join(f"{c}: {x.get('reason') or x.get('kind')}" for c, x in list(reasons.items())[:3])
-        raise pg.NodeFailure(f"기업 전망을 하나도 만들지 못했습니다 — {why or '사유 미상'}")
+        raise pg.NodeFailure(f"기업 전망을 산출하지 못했습니다 — {why or '사유 미상'}")
     user = list(inputs.get("views") or [])
     any_mock = any(v.get("is_mock") for v in views)
     view = {"views": views, "reasons": reasons, "price_source": price_source, "n_user_views": len(user),
@@ -299,7 +299,7 @@ class AttributionParams(BaseModel):
     model_config = _FORBID
     run_id: str = Field(..., min_length=1, max_length=64, json_schema_extra={"x-ui": _ui(
         "연구 기록", question="검토 대상 결정", widget="pick", source="research_runs",
-        help="‘포트폴리오 최적화’ 결과를 연구 기록으로 남기면 여기에 나옵니다.")})
+        help="‘포트폴리오 최적화’ 결과를 연구 기록으로 남기면 여기에 표시됩니다.")})
     as_of: str | None = Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui(
         "기준일", "advanced", help="비우면 오늘까지의 가격으로 사후 검토합니다.")})
 

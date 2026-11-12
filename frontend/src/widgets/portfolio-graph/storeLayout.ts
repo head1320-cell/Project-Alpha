@@ -368,7 +368,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     if (!ok.length) return "포트폴리오 노드는 대안으로 복제하지 않습니다 — 계산 노드를 선택하십시오.";
     const before = s.branches.length;
     const msg = get().makeBranch("", undefined, ok);
-    return get().branches.length > before && ok.length < s.picked.length ? `${msg} 포트폴리오 노드는 넣지 않았습니다.` : msg;
+    return get().branches.length > before && ok.length < s.picked.length ? `${msg} 포트폴리오 노드는 포함하지 않았습니다.` : msg;
   },
   removeBranch: (id) => {
     const s = get();
@@ -388,7 +388,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     // 결정 5 — 출력을 정할 수 없으면(범위 안 흐름 끝이 둘 이상) 까닭. 끝이 하나면 그것이 출력(`strategyOutput` 과 같은 노드).
     const ends = strategyEnds(copies, s.nodes, s.edges, s.catalog ?? []);
     if (!ends.length) return `‘${b.label}’에 비중 출력 노드가 없습니다 — 전략은 비중을 출력해야 포트폴리오에 결합할 수 있습니다.`;
-    if (ends.length > 1) return `‘${b.label}’에 비중 출력이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나를 지우거나 ‘슬리브 결합’으로 모으십시오.`;
+    if (ends.length > 1) return `‘${b.label}’에 비중 출력이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나를 삭제하거나 ‘슬리브 결합’으로 결합하십시오.`;
     const output = ends[0];
     push();
     // 한 노드는 한 상자 — 복제가 다른 상자에 들어 있으면 거기서 뺀다(`strategyPicked` 와 같다).
@@ -430,7 +430,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const r = readBlocks();
     set({ blocks: r.blocks, blocksAvailable: r.available && ok,
           noteUndo: false, noteTransient: false, note: ok ? `‘${g.label}’을 내 블록에 저장했습니다 — 이 브라우저에만 저장됩니다. 다른 환경에서 쓰려면 파일로 내려받으십시오.`
-                   : `이 브라우저에 블록을 저장할 수 없습니다 — ‘${g.label}’은 파일로 받아 두십시오.` });
+                   : `이 브라우저에 블록을 저장할 수 없습니다 — ‘${g.label}’은 파일로 내려받아 두십시오.` });
     return block;
   },
   removeBlock: (i) => {

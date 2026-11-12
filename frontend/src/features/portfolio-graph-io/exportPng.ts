@@ -139,7 +139,7 @@ export async function exportPng(canvasEl: HTMLElement, lines: string[], fileName
     g.fillText(line, m.pad, shot.height + m.pad + m.line * (i + 0.5));
   }
   const blob = await new Promise<Blob | null>((ok) => out.toBlob(ok, "image/png"));
-  if (!blob) throw new Error("PNG 로 바꾸지 못했습니다");
+  if (!blob) throw new Error("PNG 로 변환하지 못했습니다");
   download(blob, fileName);
   return { fontsMissed };
 }

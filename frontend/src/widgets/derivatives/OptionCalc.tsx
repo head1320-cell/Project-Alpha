@@ -82,7 +82,7 @@ export function OptionCalc() {
 
 function Greek({ k, label, v, why }: { k: string; label: string; v: number | null; why: (x: number) => string }) {
   return v == null
-    ? <Fig k={k} label={label} value="정의되지 않습니다" why="만기·등가격처럼 이 값이 수학적으로 정해지지 않는 자리입니다." />
+    ? <Fig k={k} label={label} value="정의되지 않습니다" why="만기·등가격처럼 이 값이 수학적으로 정의되지 않는 경우입니다." />
     : <Fig k={k} label={label} value={f4(v)} why={why(v)} />;
 }
 

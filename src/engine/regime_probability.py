@@ -289,7 +289,7 @@ def from_smoothed(probs: dict[str, float], *, t_index: int,
         usage=USAGE_DIAGNOSTIC if is_last else USAGE_FORBIDDEN,
         mode=mode,
         note=("마지막 시점이라 filtered 와 동일합니다." if is_last else
-              "전체 표본으로 평활한 과거 확률입니다 — 백테스트에 쓰면 look-ahead 입니다."),
+              "전체 표본으로 평활한 과거 확률입니다 — 백테스트에 사용하면 look-ahead 입니다."),
         detail={"t_index": int(t_index)},
     )
 
@@ -313,6 +313,6 @@ def disagreement_block(*, portfolio: RegimeProbabilities,
         "portfolio": portfolio.to_dict(),
         "diagnostics": [d.to_dict() for d in diagnostics],
         "max_abs_gap": round(max(gaps), 6) if gaps else None,
-        "note": ("배분에는 k단계 예측만 씁니다. 나머지는 같은 분류체계 위의 다른 "
-                 "질문에 대한 답이며, 크게 갈리면 확신을 낮출 근거로 읽으십시오."),
+        "note": ("배분에는 k단계 예측만 사용합니다. 나머지는 같은 분류체계 위의 다른 "
+                 "질문에 대한 답이며, 크게 엇갈리면 신뢰도를 낮출 근거로 해석하십시오."),
     }

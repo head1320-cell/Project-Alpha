@@ -68,7 +68,7 @@ def regime_drivers(series_map: dict, market: str = "kr",
 
     if not g["components"] and not i["components"]:
         return {"available": False,
-                "reason": "성장·물가 축을 만들 지표가 하나도 없어 분해할 것이 없습니다"}
+                "reason": "성장·물가 축을 구성할 지표가 없어 분해할 대상이 없습니다"}
 
     se_g, se_i = g["se"], i["se"]
     probs = quadrant_probs(g["score"], i["score"], se_g, se_i)

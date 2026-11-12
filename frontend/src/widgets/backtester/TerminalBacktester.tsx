@@ -73,7 +73,7 @@ export default function TerminalBacktester() {
   const handleSaveStrategy = () => {
     saveBacktestStrategy(s);
     setSaved(listSavedStrategies());
-    setSaveMsg(`‘${s.name || "내 전략"}’을 저장했습니다 — 새로고침해도 남습니다`);
+    setSaveMsg(`‘${s.name || "내 전략"}’을 저장했습니다 — 새로고침해도 유지됩니다`);
     setTimeout(() => setSaveMsg(null), 4000);
   };
   const handleLoadStrategy = (item: SavedBacktestStrategy) => {
@@ -101,7 +101,7 @@ export default function TerminalBacktester() {
   };
 
   const macroCfg = macroHandoff?.config;
-  const macroMode = macroCfg?.mode === "conditions" ? "조건식(고칠 수 있습니다)"
+  const macroMode = macroCfg?.mode === "conditions" ? "조건식(수정할 수 있습니다)"
     : macroCfg?.mode === "asset_alloc" ? "ETF 자산배분" : "동적 엔진(최적화형)";
 
   return (
@@ -180,7 +180,7 @@ export default function TerminalBacktester() {
             <p className="bte-run-note">실행하면 진행 화면으로 이동합니다. 결과는 해당 화면에서 확인합니다.</p>
             {err && (
               <Notice tone="danger" title="실행 시작 실패">
-                설정은 그대로입니다. 잠시 뒤 다시 실행하십시오.
+                설정은 유지됩니다. 잠시 후 다시 실행하십시오.
                 <details className="scr-err-detail"><summary>상세</summary><code>{err}</code></details>
               </Notice>
             )}

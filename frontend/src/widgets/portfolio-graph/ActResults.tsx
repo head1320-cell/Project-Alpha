@@ -24,7 +24,7 @@ export function OrdersResult({ v }: { v: Dict }) {
   return (
     <>
       <p className="pg-note">주문은 전송하지 않습니다 — 매매 내역을 사전 산출한 목록입니다.</p>
-      <KV rows={[["평가 금액", won(v.portfolio_value)], ["사는 금액", won(s.buy_notional)], ["파는 금액", won(s.sell_notional)],
+      <KV rows={[["평가 금액", won(v.portfolio_value)], ["매수 금액", won(s.buy_notional)], ["매도 금액", won(s.sell_notional)],
                  ["예상 비용", won(s.est_cost)], ["사전 점검", pre.can_approve ? "승인 가능" : "승인 불가"]]} />
       <h4 className="pg-h4">주문</h4>
       <table className="pg-table">
@@ -73,7 +73,7 @@ export function TargetResult({ v }: { v: Dict }) {
           <p className="pg-warn">이 목표는 실행할 수 없습니다 — 연구·백테스트 전용입니다.
             {num(tv.gross_after) !== null ? ` (gross ${pct(tv.gross_after)} · net ${pct(tv.net_after)})` : ""}</p>
           <ul className="pg-list pg-ls-blocked-l">
-            <li>차입 가능 여부가 연동돼 있지 않습니다 — 빌릴 수 있는지 늘 모름입니다.</li>
+            <li>차입 가능 여부가 연동돼 있지 않습니다 — 차입 가능 여부는 항상 미상입니다.</li>
             <li>KIS 주문 유형에 공매도가 없습니다 — 매수·매도 주문은 일반 현금 주문입니다.</li>
             <li>실행기 미보유 종목의 매도를 건너뜁니다 — 숏 진입이 주문으로 전송되지 않습니다.</li>
           </ul>

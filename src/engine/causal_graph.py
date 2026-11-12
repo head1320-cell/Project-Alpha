@@ -82,4 +82,4 @@ def granger_edges(series_map: dict) -> dict:
     edges.sort(key=lambda e: e["p"])
     return {"available": True, "nodes": nodes, "edges": edges[:24],
             "method": f"그레인저 검정 (maxlag {_MAX_LAG}, p<{_P_CUT}) — 예측적 인과",
-            "note": "★그레인저 인과 = '선행 예측력'이며 구조적 인과가 아님 (정직 라벨)"}
+            "note": "★그레인저 인과 = '선행 예측력'이며 구조적 인과가 아님"}

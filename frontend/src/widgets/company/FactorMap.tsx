@@ -73,7 +73,7 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
           {weaknesses.length > 0 && <div><span className="ci-fmap-chips-k">백분위가 낮은 팩터</span><ul>{weaknesses.map(chip)}</ul></div>}
         </div>
       )}
-      <div className="ci-fmap-grid" role="group" aria-label={`팩터 ${dots.length}개의 백분위 위치. 화살표 키로 옮겨 다닙니다`} onKeyDown={onKey}>
+      <div className="ci-fmap-grid" role="group" aria-label={`팩터 ${dots.length}개의 백분위 위치. 화살표 키로 이동합니다`} onKeyDown={onKey}>
         {rows.map(({ g, ds, h }) => (
           <div key={g.id} className="ci-fmap-row" data-group={g.id}>
             <span className="ci-fmap-name" data-server>{g.label}</span>
@@ -86,7 +86,7 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
                         style={{ left: `${d.pct}%`, "--lane": d.lane, background: pctFill(d.pct) } as React.CSSProperties}
                         onFocus={() => setCur(d.idx)} onMouseEnter={() => setCur(d.idx)} onClick={() => setCur(d.idx)} />
               ))}
-              {!ds.length && <span className="ci-fmap-none">이 그룹은 백분위를 아는 팩터 없음</span>}
+              {!ds.length && <span className="ci-fmap-none">이 그룹은 백분위 산출 가능 팩터 없음</span>}
             </span>
           </div>
         ))}
@@ -104,13 +104,13 @@ export function FactorsSection({ c, onRetry }: { c: CompanyData; onRetry: () => 
   const groups = [...c.fundamentals, ...c.priceFactors];
   const nF = (gs: FactorGroup[]) => gs.reduce((s, g) => s + g.factors.length, 0);
   if (c.failed.includes("factors")) return <div className="ca-cp-pad"><RetryFail title="팩터 목록 조회 실패" onRetry={onRetry} /></div>;
-  if (!groups.length) return <div className="ca-cp-pad"><p className="ca-cp-empty">이 종목은 값을 아는 팩터 없음</p></div>;
+  if (!groups.length) return <div className="ca-cp-pad"><p className="ca-cp-empty">이 종목은 값이 있는 팩터 없음</p></div>;
   const b = c.factorBasis;
   const sampleFail = c.failed.includes("factorSample");
   const known = groups.some((g) => g.factors.some((f) => f.pct != null));
   return (
     <div className="ca-cp-pad">
-      {sampleFail ? <RetryFail title="비교할 종목 표본을 불러오지 못해 백분위 측정 불가" onRetry={onRetry}>팩터 값은 아래 목록에 그대로 있습니다. 백분위만 비어 있습니다.</RetryFail>
+      {sampleFail ? <RetryFail title="비교 종목 표본 조회 실패로 백분위 측정 불가" onRetry={onRetry}>팩터 값은 아래 목록에 표시됩니다. 백분위만 비어 있습니다.</RetryFail>
         : b && !known ? <p className="ci-fmap-reason">비교할 종목이 {b.n}개뿐이라 백분위를 측정하지 않았습니다(5개 이상 필요합니다). 팩터 값은 아래 목록에 있습니다.</p>
         : b ? <p className="ci-sec-lede">{b.source === "db" ? `적재된 종목 ${b.n.toLocaleString("ko-KR")}개` : `코스피 200 종목 ${b.n.toLocaleString("ko-KR")}개`} 대비 백분위입니다. 높을수록 해당 팩터에서 우수합니다(낮을수록 우수한 팩터는 역순으로 환산했습니다).</p>
         : null}

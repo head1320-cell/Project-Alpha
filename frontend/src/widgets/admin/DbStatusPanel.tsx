@@ -116,7 +116,7 @@ export default function DbStatusPanel() {
   ] : [];
   if (st) figures.push({ label: "적재 중", value: `${Object.values(running).filter(Boolean).length}개` });
   const chips: Chip[] = [{ label: "수집 가능 여부와 과거 검증 사용 가능 여부는 별도로 판정합니다", tone: "info" }];
-  if (st) chips.push({ label: `${clock(db.dataUpdatedAt)}에 받은 값`, tone: "plain" });
+  if (st) chips.push({ label: `${clock(db.dataUpdatedAt)} 수신`, tone: "plain" });
 
   // ── 적재 확인 창 ──
   const [ask, setAsk] = useState<{ target: string; label: string; ds: Dataset[] } | null>(null);
@@ -151,14 +151,14 @@ export default function DbStatusPanel() {
           <div className="dsx-head-act">
             <span className="t-mode-badge" data-real={realAttr}>{modeText}</span>
             <button type="button" className="tx-btn tx-btn--sub dsx-refresh" onClick={refresh} disabled={db.isFetching}>
-              <RefreshCw size={16} aria-hidden />{db.isFetching ? "수신 중" : "새로 받기"}
+              <RefreshCw size={16} aria-hidden />{db.isFetching ? "수신 중" : "새로 고침"}
             </button>
           </div>
         )} />
       <Answer sentence={sentence} figures={figures} chips={chips} />
 
       {db.isError && st ? (
-        <Notice tone="warn" title={`마지막으로 받은 값입니다(${clock(db.dataUpdatedAt)}). 새 값 수신 실패`}>
+        <Notice tone="warn" title={`최근 수신값입니다(${clock(db.dataUpdatedAt)}). 새 값 수신 실패`}>
           <span data-server>{err(db.error)}</span>
           <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={() => void db.refetch()}>재시도</button></div>
         </Notice>
@@ -186,7 +186,7 @@ export default function DbStatusPanel() {
                     <span className={`t-honesty-st s-${sc.data_status}`}>{STATUS_LABEL[sc.data_status as DataStatus] ?? sc.data_status}</span>
                     <span className={`t-honesty-use u-${sc.research_usage}`}>{USAGE_LABEL[sc.research_usage as ResearchUsage] ?? sc.research_usage}</span>
                   </span>
-                  {USAGE_REASON[sc.research_usage as ResearchUsage] ? null : <span className="dsx-hon-use">이 등급의 뜻을 화면이 미상</span>}
+                  {USAGE_REASON[sc.research_usage as ResearchUsage] ? null : <span className="dsx-hon-use">이 등급의 정의 미상</span>}
                   <span className="t-honesty-why" data-server>{sc.reason}</span>
                 </li>
               ))}
@@ -200,7 +200,7 @@ export default function DbStatusPanel() {
           <>
             {!st.available && (
               <Notice tone="warn" title="서버가 적재 저장소에 연결하지 못했습니다">
-                그래서 표별 적재와 도구 준비 상태는 미상입니다. 키 연결과 적재 등록부는 아래에 그대로 보입니다.
+                그래서 표별 적재와 도구 준비 상태는 미상입니다. 키 연결과 적재 등록부는 아래에 표시됩니다.
               </Notice>
             )}
 
@@ -221,7 +221,7 @@ export default function DbStatusPanel() {
               <h2 id="dsx-tools-h" className="tx-sec-t">도구 준비</h2>
               {toolEntries.length ? (
                 <>
-                  <p className="tx-sec-sub">도구 {toolEntries.length}개 중 {toolsReady}개가 적재된 데이터로 돌 수 있습니다.</p>
+                  <p className="tx-sec-sub">도구 {toolEntries.length}개 중 {toolsReady}개가 적재된 데이터로 실행 가능합니다.</p>
                   <ul className="dsx-toollist">
                     {toolEntries.map(([k, ok]) => (
                       <li key={k} className="dsx-tool" data-ok={ok ? "1" : "0"}>
@@ -297,7 +297,7 @@ export default function DbStatusPanel() {
               ) : datasets.length ? (
                 <div className="dsx-tablewrap">
                   <table className="trisk-table">
-                    <thead><tr><th scope="col">데이터</th><th scope="col">출처</th><th scope="col">저장 위치</th><th scope="col">필요한 키</th><th scope="col">없으면 못 쓰는 도구</th></tr></thead>
+                    <thead><tr><th scope="col">데이터</th><th scope="col">출처</th><th scope="col">저장 위치</th><th scope="col">필요한 키</th><th scope="col">미적재 시 사용 불가 도구</th></tr></thead>
                     <tbody>
                       {datasets.map((d) => (
                         <tr key={d.key} data-ds={d.key}>
@@ -348,7 +348,7 @@ export default function DbStatusPanel() {
 
             {/* ★온디맨드★ 일봉은 수백만 행이라 화면을 여는 것만으로 세지 않는다. */}
             <section className="tx-sec dsx-cov" aria-labelledby="dsx-cov-h">
-              <h2 id="dsx-cov-h" className="tx-sec-t">종목 커버리지 세기</h2>
+              <h2 id="dsx-cov-h" className="tx-sec-t">종목 커버리지 집계</h2>
               <p className="tx-sec-sub">적재 여부와 적재 충분성은 다릅니다. 기간을 충족하는 종목 수를 집계합니다. 고비용 집계이므로 수동으로 실행합니다.</p>
               <div className="dsx-form">
                 <label className="dsx-field"><span>데이터</span>
@@ -362,7 +362,7 @@ export default function DbStatusPanel() {
                   {cov.isPending ? "집계 중" : "커버리지 세기"}
                 </button>
               </div>
-              {cov.isError ? <RetryFail title="커버리지를 세지 못했습니다" onRetry={() => cov.mutate()}><span data-server>{err(cov.error)}</span></RetryFail>
+              {cov.isError ? <RetryFail title="커버리지 집계 실패" onRetry={() => cov.mutate()}><span data-server>{err(cov.error)}</span></RetryFail>
                 : cov.data ? (
                   cov.data.measured ? (
                     <div className="dsx-cov-out">
@@ -398,7 +398,7 @@ export default function DbStatusPanel() {
                 <li className="dsx-ing-row dsx-ing-row--all" data-ds="all">
                   <div className="dsx-ing-main">
                     <span className="dsx-ing-nm">전체 적재</span>
-                    <span className="dsx-ing-sub">위의 {triggerable.length}개를 한꺼번에 시작합니다. 이미 도는 것은 건너뜁니다.</span>
+                    <span className="dsx-ing-sub">위의 {triggerable.length}개를 일괄 시작합니다. 실행 중인 항목은 건너뜁니다.</span>
                   </div>
                   <button type="button" className="tx-btn tx-btn--sub dsx-ing-go" data-act="ingest-all" disabled={anyRunning}
                     onClick={() => setAsk({ target: "all", label: "전체", ds: triggerable })}>
@@ -431,7 +431,7 @@ export default function DbStatusPanel() {
               <button type="button" className="tx-btn tx-btn--sub" data-act="doctor" disabled={doctor.isPending} onClick={() => doctor.mutate()}>
                 {doctor.isPending ? "진단 중" : "연결 진단하기"}
               </button>
-              {doctor.isError ? <RetryFail title="연결 진단을 하지 못했습니다" onRetry={() => doctor.mutate()}><span data-server>{err(doctor.error)}</span></RetryFail>
+              {doctor.isError ? <RetryFail title="연결 진단 실패" onRetry={() => doctor.mutate()}><span data-server>{err(doctor.error)}</span></RetryFail>
                 : doctor.data ? (
                   <ul className="dsx-doclist">
                     {(["dart", "krx", "kis"] as const).map((s) => (

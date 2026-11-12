@@ -81,14 +81,14 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
           {qe.red_flags.length
             ? qe.red_flags.map((f) => (
               <p key={f.rule} className="ci-fd-flag"><span className="ci-fd-flag-k">주의</span><span data-server>{f.msg}</span></p>))
-            : <p className="ci-fd-noflag">세 가지 점검(현금이 이익보다 3년 연속 적음 · 발생액 3년 연속 증가 · 운전자본 비중 3년 연속 증가)에 걸린 것이 없습니다.</p>}
+            : <p className="ci-fd-noflag">세 가지 점검(영업현금흐름이 순이익을 3년 연속 하회 · 발생액 3년 연속 증가 · 운전자본 비중 3년 연속 증가)에 해당하는 항목이 없습니다.</p>}
         </div>
       </section>
 
       <div className="ca-vt-grid">
         <section className="ca-cp-sec">
           <h4 className="ci-fd-h">운전자본</h4>
-          <p className="ci-fd-lede">유동자산에서 유동부채를 뺀 돈입니다. 매출 대비 비중이 늘면 현금이 영업에 묶입니다.</p>
+          <p className="ci-fd-lede">유동자산에서 유동부채를 차감한 순운전자본입니다. 매출 대비 비중이 늘면 영업에 묶이는 현금이 증가합니다.</p>
           <MiniLine years={d.nwc.years} label="운전자본 추이" series={[{ vals: d.nwc.nwc, cls: "ca-fd-ni" }]} />
           <div className="ci-tablewrap">
             <table className="ca-fd-tbl">
@@ -103,11 +103,11 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
 
         <section className="ca-cp-sec">
           <h4 className="ci-fd-h">현금 사용처</h4>
-          <p className="ci-fd-lede">{periodShort(wf.years[li])} 영업현금흐름에서 설비투자·배당·빚 갚기를 뺀 나머지입니다.</p>
+          <p className="ci-fd-lede">{periodShort(wf.years[li])} 영업현금흐름에서 설비투자·배당·부채 상환을 차감한 잔여 현금입니다.</p>
           <WaterfallBars ocf={wf.ocf[li]} capex={wf.capex[li]} dividends={wf.dividends[li]}
             repay={ok(wf.debt_delta[li]) ? Math.max(0, -(wf.debt_delta[li] as number)) : null} residual={wf.residual[li]} />
-          {debtUp && <p className="ci-note">이 해에는 부채가 {eokWon(wf.debt_delta[li])} 늘었습니다. 새로 빌렸고 갚은 돈은 없습니다.</p>}
-          {!ok(wf.debt_delta[li]) && <p className="ci-note">전년 부채를 몰라 빚 갚은 돈 산출 실패</p>}
+          {debtUp && <p className="ci-note">이 해에는 부채가 {eokWon(wf.debt_delta[li])} 증가했습니다. 신규 차입이 있었고 상환액은 없습니다.</p>}
+          {!ok(wf.debt_delta[li]) && <p className="ci-note">전년 부채 미상으로 부채 상환액 산출 실패</p>}
           <p className="ci-note" data-server>{wf.note}</p>
         </section>
       </div>
@@ -115,7 +115,7 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
       {d.roic_wacc ? (
         <section className="ca-cp-sec ci-fd-rw">
           <h4 className="ci-fd-h">ROIC−WACC 스프레드</h4>
-          <p className="ci-fd-lede">투하자본이익률(ROIC)에서 자본을 쓰는 비용(WACC)을 뺀 차이입니다.</p>
+          <p className="ci-fd-lede">투하자본이익률(ROIC)에서 가중평균자본비용(WACC)을 차감한 스프레드입니다.</p>
           <p className="ci-fd-eq">
             <span>ROIC {pctTxt(d.roic_wacc.roic, 2)}</span><span aria-hidden>−</span><span>WACC {pctTxt(d.roic_wacc.wacc, 2)}</span><span aria-hidden>=</span>
             <b className="ci-fd-spread">{ppSigned(d.roic_wacc.spread)}</b>
@@ -152,8 +152,8 @@ function WaterfallBars({ ocf, capex, dividends, repay, residual }: { ocf: N; cap
     { label: "영업현금흐름", v: ocf, kind: "in" },
     { label: "설비투자", v: ok(capex) ? -capex : null, kind: "out" },
     { label: "배당", v: ok(dividends) ? -dividends : null, kind: "out" },
-    { label: "빚 갚기", v: ok(repay) ? -repay : null, kind: "out" },
-    { label: "남은 현금", v: residual, kind: ok(residual) && residual < 0 ? "out" : "in" },
+    { label: "부채 상환", v: ok(repay) ? -repay : null, kind: "out" },
+    { label: "잔여 현금", v: residual, kind: ok(residual) && residual < 0 ? "out" : "in" },
   ];
   const maxAbs = Math.max(...items.map((it) => (ok(it.v) ? Math.abs(it.v) : 0)), 1);
   return (
@@ -164,7 +164,7 @@ function WaterfallBars({ ocf, capex, dividends, repay, residual }: { ocf: N; cap
           <div className="ca-fd-wf-track">
             {ok(it.v) && <div className="ca-fd-wf-bar" data-kind={it.kind} style={{ width: `${(Math.abs(it.v) / maxAbs) * 100}%` }} />}
           </div>
-          <b className="ca-fd-wf-val">{ok(it.v) && it.v > 0 && it.label !== "영업현금흐름" && it.label !== "남은 현금" ? "+" : ""}{eokWon(it.v)}</b>
+          <b className="ca-fd-wf-val">{ok(it.v) && it.v > 0 && it.label !== "영업현금흐름" && it.label !== "잔여 현금" ? "+" : ""}{eokWon(it.v)}</b>
         </div>
       ))}
     </div>

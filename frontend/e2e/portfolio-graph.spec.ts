@@ -829,7 +829,7 @@ test("실행실 서랍(BL2): 서버가 막은 목표는 계획을 만들지 않�
   await expect(s.getByRole("button", { name: "계획 저장" })).toHaveCount(0);
 });
 
-test("기록함 서랍(BL2): 판단 기록 회고 쓰기·삭제 · 연구 기록 대조 · 스냅샷 · 못 읽음 ≠ 없음", async ({ page }) => {
+test("기록함 서랍(BL2): 판단 기록 회고 작성·삭제 · 연구 기록 대조 · 스냅샷 · 못 읽음 ≠ 없음", async ({ page }) => {
   const j = await (await page.request.post(`${API}/allocation/journal`, {
     data: { title: "E2E BL2 판단", record: { decision: "비중을 유지" } } })).json();
   expect(j.saved).toBe(true);
@@ -838,8 +838,8 @@ test("기록함 서랍(BL2): 판단 기록 회고 쓰기·삭제 · 연구 기�
   const s = sheet(page, "records");
   const item = s.locator(`[data-entry="${j.entry_id}"]`);
   await expect(item).toContainText("E2E BL2 판단");
-  await expect(item).toContainText("연구 기록과 이어지지 않았습니다");
-  await item.getByRole("button", { name: "회고 쓰기" }).click();
+  await expect(item).toContainText("연구 기록과 연결되지 않았습니다");
+  await item.getByRole("button", { name: "회고 작성" }).click();
   await item.getByRole("textbox").fill("석 달 뒤 확인");
   await item.locator("select").selectOption("too_early");
   await item.getByRole("button", { name: "회고 저장" }).click();
@@ -1227,7 +1227,7 @@ test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리�
   await page.route("**/allocation/graph/run**", async (route) => {
     const resp = await route.fetch();
     const j = await resp.json();
-    j.nodes.lo = { ...j.nodes.lo, status: "failed", view: null, reason: "아직 끝나지 않았습니다 — 45% · 시뮬레이션. 끝나면 재계산하십시오." };
+    j.nodes.lo = { ...j.nodes.lo, status: "failed", view: null, reason: "아직 완료되지 않았습니다 — 45% · 시뮬레이션. 끝나면 재계산하십시오." };
     await route.fulfill({ response: resp, json: j });
   });
   await page.locator(".pg-run").click();
@@ -1341,7 +1341,7 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   // 스튜디오: 대체 엔진이 낸 수열 · 프런티어는 돌리지 않는다고 적는다
   await pick("st");
   expect(await page.locator(".pg-side .pg-spark-cell").count()).toBeGreaterThan(0);
-  await expect(page.locator(".pg-side .pg-studio-frontier")).toContainText("이 노드는 돌리지 않습니다");
+  await expect(page.locator(".pg-side .pg-studio-frontier")).toContainText("이 노드는 실행하지 않습니다");
 
   for (const dark of [false, true]) {
     if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
@@ -1520,7 +1520,7 @@ test("기업 분석 모델(BL3 W3b-C2): 시나리오·나무·SOTP·실물옵션
   await expect(page.locator(".pg-side .pg-paths tbody tr")).toHaveCount(3);
   await pick("so");
   await expect(page.locator(".pg-side .pg-warn", { hasText: "999999" })).toBeVisible();
-  await expect(page.locator(".pg-side .pg-sotp-total")).toContainText("남는 지분가치");
+  await expect(page.locator(".pg-side .pg-sotp-total")).toContainText("잔여 지분가치");
   await pick("ro");
   await expect(page.locator(".pg-side .pg-opt-cell")).toHaveCount(2);
   await expect(page.locator(".pg-side .pg-inputs .pg-tag", { hasText: "가정" }).first()).toBeVisible();
@@ -1960,7 +1960,7 @@ test("시나리오 팩 신원(BL4): 가정 충격은 '실제로 일어난 적 �
   expect(body.nodes.k2.status, body.nodes.k2.reason).toBe("ok");
   await detail(page, "k2");
   await expect(page.locator(".pg-side .pg-model-type--hist")).toContainText("실제 시세");
-  await expect(page.locator(".pg-side .pg-pack-id")).toContainText("강도 배율을 쓰지 않습니다");
+  await expect(page.locator(".pg-side .pg-pack-id")).toContainText("강도 배율을 사용하지 않습니다");
   await expect(page.locator(".pg-side .pg-linear")).toHaveCount(0);   // 재생은 선형 합이 아니다
 });
 

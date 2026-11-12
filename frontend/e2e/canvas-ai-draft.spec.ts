@@ -158,7 +158,7 @@ test("받아들이기 전엔 문서 그대로(짝) · [받아들이기] → 노�
   expect(nodeOf(d, "returns")!.params).toEqual({ lookback_days: 1260 });
   expect(nodeOf(d, "returns")!.said).toEqual({ lookback_days: "5년" });
   expect(d.edges.map((x) => x.id)).toEqual(expect.arrayContaining(DRAFT.connect.map((c) => c.id)));
-  await expect(page.locator(".pg-note")).toContainText("말씀대로");
+  await expect(page.locator(".pg-note")).toContainText("요청대로");
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);                        // 받아들이면 유령·목록은 걷힌다
   await expect(panel(page).locator(".pg-say-result")).toHaveCount(0);
   await page.locator(".react-flow__pane").click({ position: { x: 700, y: 120 } });
@@ -260,13 +260,13 @@ test("캔버스가 바뀌면 초안을 지우고 말한다 — 짝: 노드를 �
   await page.locator('.pg-tab[data-tab="settings"]').click();
   await page.locator('.pg-side .pg-basic-field[data-field="constraints"] .pg-chip', { hasText: "20%" }).click();
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);
-  await expect(panel(page).locator(".pg-say-note")).toHaveText("캔버스가 바뀌어 초안을 지웠습니다 — 다시 말하십시오");
+  await expect(panel(page).locator(".pg-say-note")).toHaveText("캔버스가 변경돼 초안을 삭제했습니다 — 다시 입력하십시오");
   await expect(panel(page).locator(".pg-say-accept")).toHaveCount(0);
 });
 
 test("이해 못 함·투자 판단은 서버 고정 문장 · 받아들일 것이 없다 / 빈 것·빠진 것은 사유와 함께", async ({ page }) => {
   await signIn(page);
-  const cannot = "어떤 종목이 좋을지는 말하지 않습니다 — 말씀대로 설계만 짓습니다";
+  const cannot = "종목의 우열은 판단하지 않습니다 — 요청하신 내용대로 설계만 구성합니다";
   const empty = { summary: null, add: [], connect: [], set: [], empty: [] };
   await answer(page, async (route, i) => route.fulfill({ json: i === 0
     ? ok({ understood: false, cannot, draft: empty, rejected: [] })
@@ -286,11 +286,11 @@ test("이해 못 함·투자 판단은 서버 고정 문장 · 받아들일 것�
 
 test("못 보이면 사유 — 미리보기·문서는 그대로", async ({ page }) => {
   await signIn(page);
-  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다" });
+  await answer(page, { available: false, source: "unavailable", reason_code: "rate_limited", reason: "시간당 질의 한도는 30회입니다. 이번 시간 한도를 모두 사용했습니다" });
   await openWith(page, CORE);
   await openTab(page);
   await say(page);
-  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
+  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 표시할 수 없습니다: 시간당 질의 한도는 30회입니다. 이번 시간 한도를 모두 사용했습니다");
   await expect(page.locator(".pg-draft-node")).toHaveCount(0);
   expect((await wip(page)).nodes).toHaveLength(4);
 });
@@ -307,7 +307,7 @@ test("가로채지 않은 실제 서버: 실제 문서·말씀 → 서버 형식
   const r = await res;
   expect(r.status()).toBe(200);
   expect(await r.json()).toMatchObject({ available: false, reason_code: "no_key" });
-  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
+  await expect(panel(page).locator(".pg-say-note")).toHaveText("초안을 표시할 수 없습니다: 서버에 Claude 키가 없습니다");
 });
 
 test("Ctrl+K '말로 설계' → 왼쪽 창 '말로' 탭 + 입력에 초점", async ({ page }) => {
@@ -447,7 +447,7 @@ test("U5 · 새 노드를 빼면 그 노드의 잇기·값 줄이 꺼지고 까�
   // 다시 빼고 받기 → 고른 것(수익률 기간)만
   await pickBox(page, KEYS.add).uncheck();
   await panel(page).locator(".pg-say-accept").click();
-  await expect(page.locator(".pg-note")).toContainText("노드 0개 더함 · 선 0개 이음 · 값 1개 넣음");
+  await expect(page.locator(".pg-note")).toContainText("노드 0개 추가 · 선 0개 연결 · 값 1개 입력");
   let d = await wip(page);
   expect(d.nodes).toHaveLength(4);
   expect(d.edges).toHaveLength(4);

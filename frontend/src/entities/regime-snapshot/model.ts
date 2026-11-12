@@ -80,7 +80,7 @@ export const USAGE_REASON: Record<ResearchUsage, string> = {
   backtest_eligible: "빈티지 이력·공표지연이 모델링되어 과거 시뮬레이션에 사용할 수 있습니다.",
   forward_only:
     "개정 이력(빈티지)이 없어 과거 시점의 값을 재구성할 수 없습니다. " +
-    "전방 리서치 맥락으로만 쓰이며 과거 시뮬레이션에서는 차단됩니다.",
+    "전방 리서치 맥락으로만 사용되며 과거 시뮬레이션에서는 차단됩니다.",
   unavailable: "데이터 출처 없음",
 };
 

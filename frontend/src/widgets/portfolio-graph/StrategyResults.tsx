@@ -14,7 +14,7 @@ type Dict = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const pct = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number).toFixed(d)}%`);
 const signed = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number) >= 0 ? "+" : ""}${(v as number).toFixed(d)}%`);
-const NOT_MEASURED = "안 측정했습니다";
+const NOT_MEASURED = "측정하지 않았습니다";
 
 function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="pg-kv">{rows.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>;
@@ -55,7 +55,7 @@ export function StrategyBacktestResult({ v, explain }: { v: Dict; explain?: Node
                  ["다시 나눈 횟수", `${String(s.n_rebalances ?? "—")}번`], ["거래일", `${String(v.n_trading_days ?? "—")}일`]]} />
       <h4 className="pg-h4">마지막 날 전략 비중</h4>
       <Bars rows={last} labels={names} />
-      <h4 className="pg-h4">수익을 나눠 보면</h4>
+      <h4 className="pg-h4">수익 분해</h4>
       <table className="pg-table"><tbody>
         {EFFECT.map(([k, label]) => (
           <tr key={k}><td className="pg-td-name">{label}</td>
@@ -116,7 +116,7 @@ export function CompanyViewsResult({ v }: { v: Dict }) {
         })}</tbody>
       </table>
       {num(v.n_user_views) ? <p className="pg-note">투자 뷰 {String(v.n_user_views)}개와 함께 ‘포트폴리오 최적화’로 전달합니다.</p> : null}
-      <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="전망을 만들지 못한 종목" />
+      <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="전망 산출 실패 종목" />
     </>
   );
 }
@@ -144,9 +144,9 @@ export function ValuationScoresResult({ v }: { v: Dict }) {
           </tr>
         ))}</tbody>
       </table>
-      {unscored.length > 0 && <p className="pg-warn">점수를 내지 못한 종목: {unscored.map((c) => labels[c] ?? c).join(", ")}</p>}
+      {unscored.length > 0 && <p className="pg-warn">점수 산출 실패 종목: {unscored.map((c) => labels[c] ?? c).join(", ")}</p>}
       <p className="pg-note">점수는 −괴리율입니다. 적정가를 산출하지 못한 종목은 0으로 처리하지 않고 아래에 별도로 표시합니다.</p>
-      <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="점수를 매기지 못한 종목" />
+      <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="점수 산출 실패 종목" />
     </>
   );
 }
@@ -177,7 +177,7 @@ export function AttributionResult({ v }: { v: Dict }) {
         <>
           <h4 className="pg-h4">미측정 항목</h4>
           <div className="pg-chips-static">{unmeasured.map((u) => <span key={u} className="pg-tag pg-tag--unknown">{u}</span>)}</div>
-          <p className="pg-note">벤치마크 구성종목 비중과 연결된 실제 체결이 있어야 측정할 수 있습니다 — 비슷한 값으로 채우지 않습니다.</p>
+          <p className="pg-note">벤치마크 구성종목 비중과 연결된 실제 체결이 있어야 측정할 수 있습니다 — 유사값으로 대체하지 않습니다.</p>
         </>
       )}
     </>

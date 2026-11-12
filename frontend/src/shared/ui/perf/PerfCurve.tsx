@@ -13,7 +13,7 @@ import { useMeasuredWidth } from "./useMeasuredWidth";
 
 import { GAP, L_MIN, R_MIN, STRIP_H, TOP, XLAB_H, areaPath, argExt, days, linePath, pickIndexes, textW } from "./perfGeo";
 
-export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭", benchNoneText = "벤치마크 없음 — 이 실행은 비교 지수를 쓰지 않았습니다" }:
+export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭", benchNoneText = "벤치마크 없음 — 이 실행은 비교 지수를 사용하지 않았습니다" }:
   { view: PerfView; height?: number; title?: string;
     /** 벤치마크가 없을 때 범례 글 — 비교 지수라는 개념이 없는 화면(/macro 전략 창)은 null 로 줄을 뺀다. */
     benchNoneText?: string | null }) {
@@ -90,7 +90,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
   }, [view.asOf, view.dates, dateIndex, n]);
 
   if (n < 2) {
-    return <p className="pg-note pf-empty">그릴 곡선이 없습니다 — 서버가 날짜·값을 주지 않았습니다.</p>;
+    return <p className="pg-note pf-empty">표시할 곡선이 없습니다 — 서버가 날짜·값을 제공하지 않았습니다.</p>;
   }
 
   const { x, yEq, yDd, hasDd, stripY, idxs, baseline, learnW, x0, plotW, learnDays, L } = geo;
@@ -225,7 +225,7 @@ export function PerfCurve({ view, height = 230, title = "자산 곡선과 낙폭
       </p>
       {/* 증거 띠 범례 — 글자가 띠의 뜻을 말한다(색·빗금만으로 말하지 않는다) */}
       <p className="pf-strip-legend">
-        {learnW > 0 && <span><i className="pf-skey pf-skey--learn" aria-hidden="true" />처음 {learnDays}일은 배우기만</span>}
+        {learnW > 0 && <span><i className="pf-skey pf-skey--learn" aria-hidden="true" />초기 {learnDays}일은 학습 구간</span>}
         {rebalLegend && <span>{rebalIdx.length > 0 && <i className="pf-skey pf-skey--rebal" aria-hidden="true" />}{rebalLegend}</span>}
         {asOfIdx !== null && asOfIdx >= 0 && view.asOf && <span><i className="pf-skey pf-skey--asof" aria-hidden="true" />기준일 {view.asOf.slice(0, 10)}</span>}
         {view.practice === true && <span className="pf-strip-legend-practice"><i className="pf-skey pf-skey--practice" aria-hidden="true" />합성 데이터</span>}

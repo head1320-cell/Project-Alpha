@@ -56,7 +56,7 @@ def validate_formula(expr: str, allowed_fields: set[str]) -> tuple[bool, str | N
         return False, "수식이 비어있습니다", set()
 
     if len(expr) > 500:
-        return False, "수식이 너무 깁니다 (최대 500자)", set()
+        return False, "수식이 허용 길이를 초과합니다 (최대 500자)", set()
 
     try:
         tree = ast.parse(expr, mode="eval")

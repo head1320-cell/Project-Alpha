@@ -209,7 +209,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
         {onLogicChange && conditions.length > 0 && (
           <div className="cfe-logic">
             <span className="cfe-h">조건끼리 묶기</span>
-            <input value={logicExpr ?? ""} spellCheck={false} aria-label="조건끼리 묶는 식"
+            <input value={logicExpr ?? ""} spellCheck={false} aria-label="조건 결합식"
               className={`bte-input bte-input--mono cfe-full${logicCheck && !logicCheck.ok ? " is-bad" : ""}`}
               onChange={(e) => { onLogicChange(e.target.value); setLogicCheck(null); }}
               placeholder={`예: every(A,3) and (B or C) — 비우면 ${logicDefaultLabel}`} />
@@ -262,7 +262,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           )}
         </div>
         {(op === "cross_above" || op === "cross_below") && (
-          <p className="bte-note">기준선을 {op === "cross_above" ? "위로" : "아래로"} 뚫은 봉만 맞습니다. 골든크로스라면 왼쪽 식은 두 이동평균의 차이, 값은 0입니다.</p>
+          <p className="bte-note">기준선을 {op === "cross_above" ? "위로" : "아래로"} 돌파한 봉만 충족합니다. 골든크로스라면 왼쪽 식은 두 이동평균의 차이, 값은 0입니다.</p>
         )}
 
         {/* 지금 만드는 조건을 한 줄로 */}
@@ -281,7 +281,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           <div className="cfe-nl">
             <p className="cfe-h">말로 조건 만들기</p>
             <div className="cfe-row">
-              <input value={nlQuery} onChange={(e) => setNlQuery(e.target.value)} aria-label="말로 적은 조건"
+              <input value={nlQuery} onChange={(e) => setNlQuery(e.target.value)} aria-label="자연어 조건"
                 onKeyDown={(e) => { if (e.key === "Enter") runNl(); }} className="bte-input cfe-grow"
                 placeholder="예: PER 15 이하이고 ROE 상위 30%" />
               <button type="button" className="cfe-btn" onClick={runNl} disabled={nlBusy || !nlQuery.trim()}>

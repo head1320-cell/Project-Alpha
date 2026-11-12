@@ -165,7 +165,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
         {/* 고른 종목 */}
         <div className="wg-picked" aria-label="선택 종목">
           {selected.size === 0 ? (
-            <span className="wg-picked-empty">아직 고른 종목이 없습니다. 아래에서 분류를 골라 체크합니다.</span>
+            <span className="wg-picked-empty">아직 선택한 종목이 없습니다. 아래에서 분류를 선택해 체크합니다.</span>
           ) : (
             <>
               <span className="wg-picked-n">{selected.size}종목</span>
@@ -199,7 +199,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
               <button type="button" className="wg-opt" aria-pressed={subId === "__etf__"} onClick={() => setSubId("__etf__")}>
                 <span>전체 ETF{catalog?.etf_size ? <span className="wg-n">{catalog.etf_size}</span> : null}</span>
                 <span className="wg-opt-note">
-                  {catalog?.etf_size ? "국내 시장지수·해외·채권 같은 하위 분류는 아직 없습니다" : "ETF 목록을 적재하면 보입니다"}
+                  {catalog?.etf_size ? "국내 시장지수·해외·채권 같은 하위 분류는 아직 없습니다" : "ETF 목록을 적재하면 표시됩니다"}
                 </span>
               </button>
             ) : subOptions.length === 0 ? (

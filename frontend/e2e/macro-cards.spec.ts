@@ -53,7 +53,7 @@ const CB = {
   method: "렉시콘 기반 매파/비둘기 용어 밀도",
   banks: {
     fed: { available: true, source: "https://example.invalid/fed", score: 0.5, label: "매파 (긴축)", hawkish_hits: 6, dovish_hits: 2, terms: ["inflation", "restrictive"] },
-    bok: { available: false, note: "정책문 수집 실패(네트워크/구조 변경) — 점수 미산출(정직)" },
+    bok: { available: false, note: "정책문 수집 실패(네트워크/구조 변경) — 점수 미산출" },
   },
 };
 const fixCb = (page: Page, body: unknown = CB) => page.route("**/api/v1/macro/cb-sentiment", (r) => r.fulfill({ json: body }));
@@ -268,7 +268,7 @@ test("중앙은행 게이지: 바늘 자리는 서버 점수(−1~+1 → 0~100%)
   const fed = grid.locator(".mc-cbg").nth(0), bok = grid.locator(".mc-cbg").nth(1);
   await expect(fed.locator(".mc-cbg-h b")).toHaveText("매파 (긴축)");
   await expect(fed.locator(".mc-cbg-marker")).toHaveAttribute("style", /left:\s*75%/);
-  await expect(fed.locator(".mc-cbg-meta")).toContainText("6번");
+  await expect(fed.locator(".mc-cbg-meta")).toContainText("매파 어휘 6회");
   await expect(bok.locator(".mc-cbg-none")).toContainText("점수 산출 실패");
   await expect(bok.locator(".mc-cbg-none [data-server]")).toHaveText(CB.banks.bok.note);
   await expect(bok.locator(".mc-cbg-marker"), "못 받은 쪽에 바늘을 지어내지 않는다").toHaveCount(0);

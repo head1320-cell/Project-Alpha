@@ -36,7 +36,7 @@ function fromQuery<T>(q: UseQueryResult<T>, key: string, label: string, pick: (d
   if (q.isPending) return { key, label, wait: true };
   if (q.isError || !q.data) return { key, label, reason: "서버 연결 실패로 이 모형을 표시하지 못했습니다" };
   const d = q.data as T & { available?: boolean; reason?: string | null };
-  if (d.available === false) return { key, label, reason: d.reason ?? "서버가 사유 없이 못 했다고 답했습니다" };
+  if (d.available === false) return { key, label, reason: d.reason ?? "서버가 사유 없이 실패를 응답했습니다" };
   return { key, label, ...pick(d) };
 }
 
@@ -55,9 +55,9 @@ export function buildLadderRows(sb: UseQueryResult<ValuationSandbox>, m: Company
     band("ddm", "DDM(배당할인)"),
     band("graham", "그레이엄 넘버"),
     fromQuery(m.dist, "dist", "가치 분포(가정 민감도)", (d) => ({
-      v: d.unified?.p50 ?? null, lo: d.unified?.p10 ?? null, hi: d.unified?.p90 ?? null, basis: "흔든 폭은 정한 값" })),
+      v: d.unified?.p50 ?? null, lo: d.unified?.p10 ?? null, hi: d.unified?.p90 ?? null, basis: "변동 폭은 설정값" })),
     fromQuery(m.driver, "driver", "영업 동인 시뮬레이션", (d) => ({
-      v: d.quantiles?.p50 ?? null, lo: d.quantiles?.p10 ?? null, hi: d.quantiles?.p90 ?? null, basis: "흔든 폭은 정한 값" })),
+      v: d.quantiles?.p50 ?? null, lo: d.quantiles?.p10 ?? null, hi: d.quantiles?.p90 ?? null, basis: "변동 폭은 설정값" })),
     fromQuery(m.layers, "layers", "가치의 층(성장까지)", (d) => {
       const L = Object.fromEntries((d.layers ?? []).map((x) => [x.key, x]));
       const extra = [
@@ -69,11 +69,11 @@ export function buildLadderRows(sb: UseQueryResult<ValuationSandbox>, m: Company
     fromQuery(m.eva, "eva", "EVA(경제적 부가가치)", (d) => (fin(d.valuation?.per_share)
       ? { v: d.valuation!.per_share } : { reason: d.valuation?.per_share_reason ?? "주당 가치 산출 실패" })),
     fromQuery(m.multiples, "jper", "정당 PER", (d) => (fin(d.justified?.per_price)
-      ? { v: d.justified!.per_price } : { reason: d.justified?.reason ?? "정당 PER 을 내지 못했습니다" })),
+      ? { v: d.justified!.per_price } : { reason: d.justified?.reason ?? "정당 PER 산출 실패" })),
     fromQuery(m.multiples, "jpbr", "정당 PBR", (d) => (fin(d.justified?.pbr_price)
-      ? { v: d.justified!.pbr_price } : { reason: d.justified?.reason ?? "정당 PBR 을 내지 못했습니다" })),
+      ? { v: d.justified!.pbr_price } : { reason: d.justified?.reason ?? "정당 PBR 산출 실패" })),
     fromQuery(m.multiples, "peer", "동종업계 PER 중앙값", (d) => (fin(d.peer?.per_price)
-      ? { v: d.peer!.per_price } : { reason: "동종업계 PER 을 받지 못했습니다" })),
+      ? { v: d.peer!.per_price } : { reason: "동종업계 PER 수신 실패" })),
     fromQuery(m.scenarios, "scen", "시나리오 가중", (d) => {
       const vs = (d.rows ?? []).map((r) => r.value).filter(fin);
       return fin(d.weighted) ? { v: d.weighted, lo: vs.length ? Math.min(...vs) : null, hi: vs.length ? Math.max(...vs) : null, basis: "사람이 정한 확률" }
@@ -135,7 +135,7 @@ export function ModelLadder({ rows, price, intrinsic, compact }: { rows: LadRow[
         {!compact && <span className="ci-lad-key"><i className="ci-lad-sw range" aria-hidden />범위(분포는 10~90%, 모형은 약세~강세 가정)</span>}
       </figcaption>
       <p className="ci-lad-sum">
-        {mains.length ? `값을 산출한 모형 ${mains.length}개 중 ${below}개의 적정가가 현재가를 밑돕니다` : "값을 산출한 모형 없음"}
+        {mains.length ? `값을 산출한 모형 ${mains.length}개 중 ${below}개의 적정가가 현재가를 하회합니다` : "값을 산출한 모형 없음"}
         {!compact && " · 축은 로그 눈금입니다"}
       </p>
     </figure>

@@ -82,7 +82,7 @@ function passes(v: number, op: string | undefined, t: number): boolean {
 // 임계값 설정 보조 — 팩터 분포 미니 히스토그램 (통과=파랑, 미통과=선 색, 잉크선=임계값 — 판단을 빨강/초록으로 말하지 않는다)
 function MiniHistogram({ values, op, threshold }: { values: number[]; op?: string; threshold: number }) {
   const finite = values.filter((v) => Number.isFinite(v));
-  if (finite.length < 4) return <span className="bsc-hist-empty">분포를 그릴 표본이 모자랍니다</span>;
+  if (finite.length < 4) return <span className="bsc-hist-empty">분포를 표시할 표본이 부족합니다</span>;
   const min = Math.min(...finite), max = Math.max(...finite), span = (max - min) || 1, BINS = 20;
   const counts = new Array(BINS).fill(0);
   finite.forEach((v) => { let b = Math.floor(((v - min) / span) * BINS); if (b >= BINS) b = BINS - 1; if (b < 0) b = 0; counts[b]++; });
@@ -494,8 +494,8 @@ export default function TerminalScreener() {
     if (gateOn && out > 0) chips.push({ label: `유동성 게이트로 ${num(out)}개 뺐습니다`, tone: "plain" });
   }
   const topCodes = sortedItems.slice(0, TOP_BRIDGE).map((it) => it.stock_code);
-  const answerFigures: Figure[] = diagnostic ? [{ label: "가장 좁히는 조건", value: `${diagnostic.label} · 단독 ${num(diagnostic.count)}개` }] : [];
-  const progressText = prog ? `종목 ${num(prog.done)}/${num(prog.total || uniTotal)}개 계산 중` : "종목을 거르는 중입니다";
+  const answerFigures: Figure[] = diagnostic ? [{ label: "가장 제한적인 조건", value: `${diagnostic.label} · 단독 ${num(diagnostic.count)}개` }] : [];
+  const progressText = prog ? `종목 ${num(prog.done)}/${num(prog.total || uniTotal)}개 계산 중` : "종목을 선별하는 중입니다";
 
   return (
     <div className="tx-page tx-page--wide scr">
@@ -520,7 +520,7 @@ export default function TerminalScreener() {
               return <button key={pr.id} type="button" className={`scr-pill${on ? " scr-pill--on" : ""}`} aria-pressed={on} data-act="mcap-preset" onClick={() => setMcapRange(r)}>{pr.label}</button>;
             })}
             <details className="scr-mcap-custom">
-              <summary>직접 정하기 <span className="scr-mcap-vals">{mcapRange[0] === 0 ? "최소" : fmtMcapKo(sliderToMcap(mcapRange[0]))} ~ {mcapRange[1] === 100 ? "최대" : fmtMcapKo(sliderToMcap(mcapRange[1]))}</span></summary>
+              <summary>직접 입력 <span className="scr-mcap-vals">{mcapRange[0] === 0 ? "최소" : fmtMcapKo(sliderToMcap(mcapRange[0]))} ~ {mcapRange[1] === 100 ? "최대" : fmtMcapKo(sliderToMcap(mcapRange[1]))}</span></summary>
               <div className="bsc-range">
                 <div className="bsc-range-fill" style={{ left: `${mcapRange[0]}%`, right: `${100 - mcapRange[1]}%` }} />
                 <input type="range" min={0} max={100} value={mcapRange[0]} className="bsc-range-input" aria-label="시가총액 최소"
@@ -539,7 +539,7 @@ export default function TerminalScreener() {
           <span className="scr-line-k">조건</span>
           <div className="scr-cond-list">
             {group.conditions.length === 0 ? (
-              <p className="scr-empty">아직 조건이 없습니다. 조건을 더하면 그 조건에 맞는 종목만 남습니다.</p>
+              <p className="scr-empty">아직 조건이 없습니다. 조건을 추가하면 해당 조건을 충족한 종목만 남습니다.</p>
             ) : group.conditions.map((c, i) => {
               const isRank = !!c.rank_mode;
               const name = fieldLabel(c.field);
@@ -580,7 +580,7 @@ export default function TerminalScreener() {
               );
             })}
             <div className="scr-cond-act">
-              <button type="button" className="bsc-add-btn" data-act="add-factor" onClick={() => setModalOpen(true)}>＋ 조건 더하기</button>
+              <button type="button" className="bsc-add-btn" data-act="add-factor" onClick={() => setModalOpen(true)}>＋ 조건 추가</button>
               {group.conditions.length > 0 && <button type="button" className="bsc-rail-clear" data-act="clear" onClick={clearAll}>모두 삭제</button>}
             </div>
           </div>
@@ -593,7 +593,7 @@ export default function TerminalScreener() {
             <div className="bsc-expr">
               <p className="scr-expert-h">조건식</p>
               {group.conditions.length === 0 ? (
-                <p className="scr-note">조건을 더하면 ‘팩터1 and (팩터2 or 팩터3)’처럼 묶을 수 있습니다.</p>
+                <p className="scr-note">조건을 추가하면 ‘팩터1 and (팩터2 or 팩터3)’처럼 결합할 수 있습니다.</p>
               ) : (
                 <>
                   <div className="bsc-expr-row">
@@ -656,7 +656,7 @@ export default function TerminalScreener() {
                 <p className="scr-note">
                   유니버스 {num(uniTotal)}종목 · 스냅샷 저장 {num(results.ingested_count ?? 0)} · 평가 {num(results.evaluated_actual ?? results.total_evaluated)}
                   {" "}· 새로 계산 {num(results.cache_misses)} · 캐시 {num(results.cache_hits)} · {results.elapsed_seconds.toFixed(2)}초
-                  {results.capped ? " · 저장되지 않은 종목이 많아 이번에는 일부만 평가했습니다(데이터 상태에서 전체 적재를 돌리면 풀립니다)." : ""}
+                  {results.capped ? " · 저장되지 않은 종목이 많아 이번에는 일부만 평가했습니다(데이터 상태에서 전체 적재를 실행하면 해소됩니다)." : ""}
                 </p>
               ) : <p className="scr-note">아직 계산한 결과 없음</p>}
             </div>
@@ -669,7 +669,7 @@ export default function TerminalScreener() {
       {/* ── 답 ── */}
       <div className="scr-answer-wrap">
         {runError ? (
-          <Notice tone="danger" title="종목을 거르지 못했습니다">
+          <Notice tone="danger" title="종목 선별 실패">
             스크리너 계산 연결 실패. 조건은 유지되므로 재시도하십시오.
             <details className="scr-err-detail"><summary>상세</summary><code>{runError}</code></details>
             <div className="scr-retry"><button type="button" className="tx-btn tx-btn--sub" onClick={() => setRetry((n) => n + 1)}>재시도</button></div>
@@ -683,10 +683,10 @@ export default function TerminalScreener() {
               figures={answerFigures} chips={chips}
               action={
                 <>
-                  {/* 주 행동은 하나 — 조건이 있으면 백테스트, 없으면(보낼 조건이 없다) 설계에 넣기가 주 행동이다. 순서는 그대로. */}
+                  {/* 주 행동은 하나 — 조건이 있으면 백테스트, 없으면(보낼 조건이 없다) 설계에 추가가 주 행동이다. 순서는 그대로. */}
                   <button type="button" className={`tx-btn ${group.conditions.length ? "tx-btn--main" : "tx-btn--sub"}`} data-act="send-backtest" onClick={sendToBacktester} disabled={!group.conditions.length}>이 조건으로 백테스트</button>
-                  {topCodes.length > 0 && <Link className={`tx-btn ${group.conditions.length ? "tx-btn--sub" : "tx-btn--main"}`} href={`/allocation?tickers=${topCodes.join(",")}`}>상위 {topCodes.length}종목 설계에 넣기</Link>}
-                  {!group.conditions.length && <span className="scr-hint">조건을 하나 이상 더하면 백테스트로 보낼 수 있습니다.</span>}
+                  {topCodes.length > 0 && <Link className={`tx-btn ${group.conditions.length ? "tx-btn--sub" : "tx-btn--main"}`} href={`/allocation?tickers=${topCodes.join(",")}`}>상위 {topCodes.length}종목 설계에 추가</Link>}
+                  {!group.conditions.length && <span className="scr-hint">조건을 하나 이상 추가하면 백테스트로 전달할 수 있습니다.</span>}
                   {loading && <span className="scr-hint" role="status">{progressText}</span>}
                 </>
               } />
@@ -778,7 +778,7 @@ export default function TerminalScreener() {
             <Chips items={cs.data?.mock_allowed ? [{ label: "합성 시세", tone: "practice" }] : []} label="이 값의 근거" />
             <div className="scr-sheet-act">
               <Link className="tx-btn tx-btn--main" href={`/insights?code=${selectedItem.stock_code}`}>기업 분석 열기</Link>
-              <Link className="tx-btn tx-btn--sub" href={`/allocation?tickers=${selectedItem.stock_code}`}>설계에 넣기</Link>
+              <Link className="tx-btn tx-btn--sub" href={`/allocation?tickers=${selectedItem.stock_code}`}>설계에 추가</Link>
             </div>
           </>
         )}

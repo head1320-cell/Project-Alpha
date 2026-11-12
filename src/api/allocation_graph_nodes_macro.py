@@ -89,7 +89,7 @@ def _explain_regime(view: dict, prov: dict, params: Any) -> dict:
     # ㄹ 받침은 '로' — 받침 없는 말과 같다.
     ro = "으로" if ("가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 not in (0, 8)) else "로"
     return {"title": f"현재 경기 국면을 ‘{plain}’{ro} 판정했습니다", "facts": facts, "trust": trust,
-            "unmeasured": ["국면 판정이 앞으로 맞을지", "국면이 바뀌는 시점"]}
+            "unmeasured": ["국면 판정이 앞으로 맞을지", "국면 전환 시점"]}
 
 
 # ── 타이밍 신호 ──────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ class TimingParams(BaseModel):
             "신호", question="판단 신호", help="신호마다 위험-온/오프/판단 불가 셋 중 하나가 나옵니다.")})
     combination: Literal[tuple(_COMBOS)] = Field("all", json_schema_extra={"x-ui": _ui(
         "결합 규칙", question="신호 결합 규칙", widget="cards", options=_COMBOS)})
-    k: int = Field(1, ge=1, le=12, json_schema_extra={"x-ui": _ui("k", "advanced", help="‘k개 이상’일 때만 씁니다.")})
+    k: int = Field(1, ge=1, le=12, json_schema_extra={"x-ui": _ui("k", "advanced", help="‘k개 이상’일 때만 사용합니다.")})
     market: Literal["kr", "us"] = Field("kr", json_schema_extra={"x-ui": _ui(
         "시장", "advanced", options={"kr": "한국", "us": "미국"})})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
@@ -144,7 +144,7 @@ def _refuse_unreadable_factors(p: TimingParams) -> None:
                                  f"{c.get('unavailable_reason') or '데이터 소스를 보유하고 있지 않습니다.'}")
         if c.get("requires_as_of") and not p.as_of:
             raise pg.NodeFailure(f"‘{c['label']}’은(는) 기준일(as_of)이 있어야 그 시점의 값을 읽을 수 있습니다 — "
-                                 "기준일을 넣거나 이 신호를 제외하십시오.")
+                                 "기준일을 입력하거나 이 신호를 제외하십시오.")
 
 
 def _timing_signal(inputs: dict, p: TimingParams) -> pg.NodeOutput:
@@ -225,7 +225,7 @@ def _overlay(inputs: dict, p: OverlayParams) -> pg.NodeOutput:
         if sig is None:
             raise pg.NodeFailure("‘적용 신호’가 타이밍이라 ‘타이밍 신호’를 연결하십시오.")
         if p.follow == "timing_macro" and reg is None:
-            raise pg.NodeFailure("‘타이밍 + 경기 국면’을 고르셨습니다 — ‘경기 국면’을 연결하십시오.")
+            raise pg.NodeFailure("‘타이밍 + 경기 국면’을 선택했습니다 — ‘경기 국면’을 연결하십시오.")
     overlay = overlay_from_snapshot(reg, enabled=True) if reg is not None else None
     if sig is not None:
         states = sig["states"]

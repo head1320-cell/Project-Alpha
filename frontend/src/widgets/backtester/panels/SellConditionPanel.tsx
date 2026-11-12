@@ -47,10 +47,10 @@ export default function SellConditionPanel({ s, set }: {
             <input value={v.fillExpr} spellCheck={false} className="bte-input bte-input--mono bte-input--wide" aria-label="기준가 식"
               onChange={(e) => patch({ fillExpr: e.target.value })}
               placeholder="예: 과거값({종가},{1일})*1.02" />
-            <p className="bte-note">마지막 봉의 값이 기준가입니다. 과거값(…)처럼 전날 기준을 권합니다.</p>
+            <p className="bte-note">마지막 봉의 값이 기준가입니다. 과거값(…)처럼 전일 기준을 권장합니다.</p>
           </Field>
         )}
-        <Field label="파는 가격">
+        <Field label="매도 가격">
           <OffsetInput value={v.fillOffsetPct} onChange={(fillOffsetPct) => patch({ fillOffsetPct })} />
         </Field>
         <SubToggle tone="sell" label="목표가 (익절)" on={v.takeProfit.on} onChange={(on) => patch({ takeProfit: { ...v.takeProfit, on } })}>
@@ -101,7 +101,7 @@ export default function SellConditionPanel({ s, set }: {
           )}
         </SubToggle>
         {v.expiryDateSell && (
-          <Field label="만기에 파는 방법">
+          <Field label="만기 매도 방식">
             <Segmented tone="sell" value={v.expirySellMethod}
               onChange={(m) => patch({ expirySellMethod: m })}
               options={[{ id: "all", label: "일괄" }, { id: "ladder", label: "분할(래더 공유)" }]} />
@@ -111,7 +111,7 @@ export default function SellConditionPanel({ s, set }: {
           </Field>
         )}
         {v.expiryDateSell && (
-          <Field label="만기에 파는 가격">
+          <Field label="만기 매도 가격">
             <GroupedSelect value={v.expiryFillType} onChange={(id) => patch({ expiryFillType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
             <OffsetInput value={v.expiryFillOffsetPct} onChange={(expiryFillOffsetPct) => patch({ expiryFillOffsetPct })} />
             <p className="bte-note">지정가에 도달하지 않으면 종가에 매도합니다 — 만기 청산은 반드시 완료됩니다.</p>

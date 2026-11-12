@@ -39,7 +39,7 @@ const keyOf = (t: AskTarget) => `${t.kind}:${t.id}`;
 export function askNote(res: Extract<AssistAsk, { available: true }>): string | null {
   const parts: string[] = [];
   if (res.answer.answerable && !res.answer.sentences.length) parts.push("AI 가 쓴 문장 없음");
-  if (res.rejected.length) parts.push(`${res.rejected.length}문장은 검사에서 빠졌습니다: ${res.rejected[0].reason}`);
+  if (res.rejected.length) parts.push(`${res.rejected.length}문장은 검사에서 제외됐습니다: ${res.rejected[0].reason}`);
   if (res.dropped.length) parts.push(`${res.dropped.length}개 결과는 확인하지 못해 제외했습니다: ${res.dropped[0].reason}`);
   return parts.length ? parts.join(" · ") : null;
 }
@@ -104,7 +104,7 @@ export function useAiQuestion(doc: GraphDoc, order: string[], report: RunReport 
       if (!cur || cur.basis !== asked) return all;                                   // 묻는 사이에 결과가 바뀌었다 — 버린다(지움은 위 효과가 말한다)
       const turn: Turn = res.available
         ? { q, state: "ready", answer: res.answer, facts: res.facts, notice: res.notice, note: askNote(res) }
-        : { q, state: "failed", note: `AI 답을 보여 줄 수 없습니다: ${res.reason}` };
+        : { q, state: "failed", note: `AI 응답을 표시할 수 없습니다: ${res.reason}` };
       const turns = cur.turns.map((t) => (t.state === "loading" && t.q === q ? turn : t));
       return { ...all, [k]: { ...cur, turns } };
     });
@@ -164,8 +164,8 @@ export function AiQuestion({ q, session, target, badge, onRunTo, onGotoNode, onG
     : <><Num id={target.source!} /> {badge(target.source!).name} → <Num id={target.targetNode!} /> {badge(target.targetNode!).name} 선에게 묻기</>;
   const reach = scope ? [scope.up ? `위쪽 ${scope.up}` : "", scope.down ? `아래 ${scope.down}` : ""].filter(Boolean).join(" · ") : "";
   const scopeText = !scope ? null : target.kind === "node"
-    ? `이 노드${reach ? `와 ${reach}` : ""}의 계산 설명으로 답합니다`
-    : `이 선과 양끝${reach ? ` · ${reach}` : ""}의 계산 설명으로 답합니다`;
+    ? `이 노드${reach ? `와 ${reach}` : ""}의 계산 설명으로 응답합니다`
+    : `이 선과 양끝${reach ? ` · ${reach}` : ""}의 계산 설명으로 응답합니다`;
   const chipText = (f: AskFactRef) => {
     const part = `${f.part}${LISTY.has(f.part) ? ` ${f.index + 1}` : ""}`;
     if (f.target_kind === "node") return { n: `${num(f.target_id) ?? "?"}`, rest: `${badge(f.target_id).name} · ${part}` };
@@ -186,11 +186,11 @@ export function AiQuestion({ q, session, target, badge, onRunTo, onGotoNode, onG
   let composer;
   if (session.kind === "loading") composer = null;
   else if (session.kind === "signed_out") {
-    composer = <Link href="/login" className="pg-ask-login">로그인하면 AI 에게 물을 수 있습니다</Link>;
+    composer = <Link href="/login" className="pg-ask-login">로그인하면 AI 에게 질의할 수 있습니다</Link>;
   } else if (!ready) {
     composer = (
       <div className="pg-ask-waitrow">
-        <p className="pg-ask-wait">계산한 뒤에 물을 수 있습니다</p>
+        <p className="pg-ask-wait">계산 후 질의할 수 있습니다</p>
         <button type="button" className="pg-btn pg-ask-run"
                 onClick={() => onRunTo(target.kind === "node" ? target.id : target.targetNode!)}>여기까지 계산</button>
       </div>
@@ -207,8 +207,8 @@ export function AiQuestion({ q, session, target, badge, onRunTo, onGotoNode, onG
         )}
         <div className="pg-ask-input">
           <textarea ref={area} className="pg-ask-text" rows={1} maxLength={300} value={text} disabled={busy}
-                    aria-label={target.kind === "node" ? `${badge(target.id).name}에게 물을 말` : "이 선에게 물을 말"}
-                    placeholder="계산 결과에 대해 물어보십시오"
+                    aria-label={target.kind === "node" ? `${badge(target.id).name}에게 질의할 내용` : "이 선에 질의할 내용"}
+                    placeholder="계산 결과에 대해 질의하십시오"
                     onChange={(ev) => setText(ev.target.value)}
                     onKeyDown={(ev) => {
                       if (ev.key === "Escape") { ev.stopPropagation(); ev.currentTarget.blur(); return; }
@@ -233,13 +233,13 @@ export function AiQuestion({ q, session, target, badge, onRunTo, onGotoNode, onG
       ) : <h3 className="pg-ask-to">{head}</h3>}
       {!fold && <>
       {scopeText && <p className="pg-ask-scope">{scopeText}</p>}
-      {thread?.stale && !nTurns && <p className="pg-ask-stale" role="status">계산 결과가 바뀌어 답을 지웠습니다</p>}
+      {thread?.stale && !nTurns && <p className="pg-ask-stale" role="status">계산 결과가 변경돼 응답을 삭제했습니다</p>}
       {nTurns > 0 && (
         <ol className="pg-ask-turns" ref={turnsEl}>
           {thread!.turns.map((t, ti) => (
             <li key={ti} className="pg-ask-turn">
               <p className="pg-ask-q">{t.q}</p>
-              {t.state === "loading" && <p className="pg-ask-wait" role="status">AI 가 답을 쓰는 중입니다</p>}
+              {t.state === "loading" && <p className="pg-ask-wait" role="status">AI 가 응답을 작성하는 중입니다</p>}
               {t.state === "ready" && (
                 <>
                   {t.answer.cannot && <p className="pg-ask-cannot">{t.answer.cannot}</p>}

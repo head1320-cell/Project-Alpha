@@ -51,7 +51,7 @@ export function MyAccountView() {
         <><PageHead title={TITLE} lede={LEDE} />
           <section className="tx-sec ma-must" role="alert">
             <p className="ma-strong">비밀번호를 먼저 변경하십시오.</p>
-            <p className="tx-sec-sub">관리자가 준 임시 비밀번호로는 계좌가 열리지 않습니다.</p>
+            <p className="tx-sec-sub">관리자가 발급한 임시 비밀번호로는 계좌를 사용할 수 없습니다.</p>
             <Link href="/settings#password" className="tx-btn tx-btn--main">비밀번호 바꾸러 가기</Link>
           </section></>
       ) : (

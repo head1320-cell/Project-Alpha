@@ -30,7 +30,7 @@ export function useGuide(doc: GraphDoc, state: GuideState, dismissed: ReadonlySe
   const live = useRef({ key, doc, state, applicable, session, ai });
   live.current = { key, doc, state, applicable, session, ai };
   useEffect(() => {
-    if ((ai.state === "ready" || ai.state === "loading") && ai.key !== key) setAi({ state: "idle", note: "캔버스가 바뀌어 AI 길잡이를 지웠습니다" });
+    if ((ai.state === "ready" || ai.state === "loading") && ai.key !== key) setAi({ state: "idle", note: "캔버스가 변경돼 AI 길잡이를 삭제했습니다" });
   }, [key, ai]);
 
   const ask = useCallback(async () => {
@@ -39,10 +39,10 @@ export function useGuide(doc: GraphDoc, state: GuideState, dismissed: ReadonlySe
     const asked = now.key;
     setAi({ state: "loading", key: asked });
     const res = await portfolioGraphApi.assistGuide(now.doc, now.state, now.applicable);
-    if (live.current.key !== asked) { setAi({ state: "idle", note: "캔버스가 바뀌어 AI 길잡이를 지웠습니다" }); return; }
-    if (!res.available) { setAi({ state: "idle", note: `AI 길잡이를 보여 줄 수 없습니다: ${res.reason}` }); return; }
+    if (live.current.key !== asked) { setAi({ state: "idle", note: "캔버스가 변경돼 AI 길잡이를 삭제했습니다" }); return; }
+    if (!res.available) { setAi({ state: "idle", note: `AI 길잡이를 표시할 수 없습니다: ${res.reason}` }); return; }
     const tips = res.tips.filter((t) => live.current.applicable.includes(t.feature as GuideId));
-    const why = res.rejected.length ? `${res.rejected.length}개는 검사에서 빠졌습니다: ${res.rejected[0].reason}` : null;
+    const why = res.rejected.length ? `${res.rejected.length}개는 검사에서 제외됐습니다: ${res.rejected[0].reason}` : null;
     setAi(tips.length ? { state: "ready", key: asked, tips, at: 0, note: why }
                       : { state: "idle", note: why ? `AI 가 선택한 도구가 없습니다 · ${why}` : "AI 가 선택한 도구 없음" });
   }, []);
@@ -86,7 +86,7 @@ export function GuideBar({ g, session, onTry, onLater, extra }: {
       {tip.source === "rule" && session.kind === "signed_out" && <Link href="/login" className="pg-guide-login">로그인하면 AI 길잡이</Link>}
       {tip.source === "rule" && session.kind === "signed_in" && (
         <button type="button" className="pg-guide-ai" onClick={() => { void ask(); }} disabled={busy} aria-busy={busy || undefined}>
-          {busy ? "AI 길잡이를 묻는 중" : "AI 길잡이"}
+          {busy ? "AI 길잡이 질의 중" : "AI 길잡이"}
         </button>
       )}
       {note && <span className="pg-guide-note" role="status">{note}</span>}

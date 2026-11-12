@@ -80,7 +80,7 @@ function KillHistory() {
     <Sec id="kill-events" title="비상 정지 이력" sub="운영 계좌에 발동된 비상 정지와 당시 서버가 실제로 수행한 조치입니다. 최근 20건까지 표시합니다.">
       {r.isError ? <RetryFail title="비상 정지 이력 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !r.data ? <Loading what="비상 정지 이력" />
-        : !r.data.events.length ? <p className="tx-sec-sub lvs-empty">운영 계좌에 비상 정지를 건 적 없음</p>
+        : !r.data.events.length ? <p className="tx-sec-sub lvs-empty">운영 계좌 비상 정지 발동 이력 없음</p>
         : <ol className="lvs-kills">{r.data.events.map((e) => <KillRow key={e.event_id} e={e} />)}</ol>}
     </Sec>
   );
@@ -98,7 +98,7 @@ function KillRow({ e }: { e: KillEvent }) {
           {open ? <> · <strong>현재 발동 중입니다</strong></>
             : <> · {krDateTime(e.resolved_at) ?? "시각 미상"}에 {e.resolved_by ?? "누군가"} 님이 해제했습니다</>}
         </p>
-        <p className="lvs-kill-why">사유 <span data-server>{e.trigger_reason ?? "적혀 있지 않습니다"}</span>
+        <p className="lvs-kill-why">사유 <span data-server>{e.trigger_reason ?? "기록돼 있지 않습니다"}</span>
           {" · "}취소한 미체결 {e.n_orders_cancelled == null ? "N/A" : `${num(e.n_orders_cancelled)}건`}</p>
         {recs.length ? (
           <ul className="lvs-acts" aria-label="이 정지가 한 조치">
@@ -110,7 +110,7 @@ function KillRow({ e }: { e: KillEvent }) {
               </li>
             ))}
           </ul>
-        ) : <p className="tx-sec-sub">이 정지가 한 조치를 서버가 기록하지 않았습니다.</p>}
+        ) : <p className="tx-sec-sub">이 정지의 조치 내역을 서버가 기록하지 않았습니다.</p>}
       </div>
     </li>
   );
@@ -139,7 +139,7 @@ function ReadinessSec() {
             <ul className="lvs-ready">
               {[...d.armed.map((t) => ({ ...t, ok: true })), ...d.inoperable.map((t) => ({ ...t, ok: false }))].map((t) => (
                 <li key={t.trigger} className="lvs-ready-row" data-ok={t.ok ? "true" : "false"} data-trigger={t.trigger}>
-                  <span className="lvs-ready-mark">{t.ok ? "걸 수 있습니다" : "걸 수 없습니다"}</span>
+                  <span className="lvs-ready-mark">{t.ok ? "발동 가능" : "발동 불가"}</span>
                   <span className="lvs-ready-n">{TRIGGER_KO[t.trigger] ? TRIGGER_KO[t.trigger] : <span data-server>{t.trigger}</span>}</span>
                   {t.reason ? <span className="lvs-ready-why" data-server>{t.reason}</span> : null}
                 </li>
@@ -155,11 +155,11 @@ function ReadinessSec() {
           : (
             <>
               <p className="tx-sec-sub">
-                뜻을 아는 코드 {num(codes.data.table.size)}개 · 본 적 있는 코드 {num(codes.data.observed.length)}개 · 그중 뜻을 모르는 코드 {num(codes.data.gaps.length)}개
+                정의된 코드 {num(codes.data.table.size)}개 · 관측된 코드 {num(codes.data.observed.length)}개 · 그중 미정의 코드 {num(codes.data.gaps.length)}개
               </p>
               {codes.data.gate?.reason ? <p className="tx-sec-sub" data-server>{codes.data.gate.reason}</p> : null}
               {codes.data.table.why_empty ? (
-                <details className="lvs-more"><summary>표가 비어 있는 이유</summary><p data-server>{codes.data.table.why_empty}</p></details>
+                <details className="lvs-more"><summary>표가 비어 있는 사유</summary><p data-server>{codes.data.table.why_empty}</p></details>
               ) : null}
             </>
           )}
@@ -176,7 +176,7 @@ function PnlSec() {
     <Sec id="daily-pnl" title="일 손익" sub="운영 계좌의 일별 마감 평가 자산과 수익률입니다. 일자별 실행 모드를 함께 표시합니다.">
       {r.isError ? <RetryFail title="일 손익 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !r.data ? <Loading what="일 손익" />
-        : !r.data.pnl_history.length ? <p className="tx-sec-sub lvs-empty">기록된 날이 아직 없습니다.</p>
+        : !r.data.pnl_history.length ? <p className="tx-sec-sub lvs-empty">기록된 일자가 아직 없습니다.</p>
         : (
           <div className="lvs-tbl-wrap">
             <table className="lvs-tbl">
@@ -214,7 +214,7 @@ function AuditSec() {
       {sum.isError ? <RetryFail title="오늘 요약 조회 실패" onRetry={() => void sum.refetch()}>{sum.error.message}</RetryFail>
         : !s ? <Loading what="오늘 요약" />
         : s.error ? (
-          <RetryFail title="오늘 요약을 서버가 읽지 못했습니다" onRetry={() => void sum.refetch()}><span data-server>{s.error}</span></RetryFail>
+          <RetryFail title="당일 요약을 서버가 조회하지 못했습니다" onRetry={() => void sum.refetch()}><span data-server>{s.error}</span></RetryFail>
         ) : (
           <p className="lvs-audit-sum">
             {s.date} 기록 {num(s.total_events ?? 0)}건
@@ -225,7 +225,7 @@ function AuditSec() {
         : !list.data ? <Loading what="감사 기록" />
         : !list.data.events.length ? (
           // 서버가 읽지 못하면 500 + 사유로 답한다(R1) — 그래서 여기 0건은 진짜 0건이다.
-          <p className="tx-sec-sub lvs-empty">운영 계좌에 남은 감사 기록 없음</p>
+          <p className="tx-sec-sub lvs-empty">운영 계좌 감사 기록 없음</p>
         ) : (
           <ol className="lvs-audit">
             {list.data.events.map((a) => (

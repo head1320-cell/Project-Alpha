@@ -106,7 +106,7 @@ test("PB1 · 고객 · 보유 진단 — 성향·출처·평가일 · 위험 기
   const side = page.locator(".pg-side");
   await expect(side.locator(".pg-client-kv")).toContainText("위험중립형");
   await expect(side.locator(".pg-client-kv")).toContainText("설문");
-  await expect(side.locator(".pg-client-kv")).toContainText("일 지났습니다");
+  await expect(side.locator(".pg-client-kv")).toContainText("일 경과했습니다");
   await node(page, "h").click();
   await tab(page, "detail");
   await expect(side.locator(".pg-hold-risk .pg-table tr")).toHaveCount(3);

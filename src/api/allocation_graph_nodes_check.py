@@ -235,7 +235,7 @@ def _sensitivity(inputs: dict, p) -> pg.NodeOutput:
     r, w = inputs["returns"], inputs["weights"]
     req = w.get("req")
     if req is None:
-        raise pg.NodeFailure("이 비중에는 다시 풀어 볼 규칙(위험 회피·생각)이 없습니다 — ‘포트폴리오 최적화’ 노드의 "
+        raise pg.NodeFailure("이 비중에는 재최적화할 규칙(위험회피도·투자 뷰)이 없습니다 — ‘포트폴리오 최적화’ 노드의 "
                              "비중을 연결하십시오.")
     names, _ = _names_on(w, r["returns"])
     views = [v.model_dump() for v in (req.views or [])]

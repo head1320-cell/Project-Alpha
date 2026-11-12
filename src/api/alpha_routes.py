@@ -103,7 +103,7 @@ _FUND_PROVENANCE = {
     "earnings_yield": "DART 연간 EPS ÷ 실주가 · 공시랙 적용(PIT 근사)",
     "book_yield": "DART 연간 BPS ÷ 실주가 · 공시랙 적용(PIT 근사)",
     "dividend_yield_f": "DART 배당공시(alotMatter) 연간 DPS · 공시랙 적용",
-    "eps_yoy": "DART 연간 EPS 변화율 — 컨센서스 미보유 대용(정직 한계)",
+    "eps_yoy": "DART 연간 EPS 변화율 — 컨센서스 미보유 대용(한계)",
 }
 _CATALOG_NOTE = (
     "필드는 그 날짜까지의 데이터로만 계산되며, 펀더멘털은 연간 보고서에 공시랙을 적용한 "

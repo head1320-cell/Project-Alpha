@@ -71,7 +71,7 @@ def _sources(engine, strategy_ids) -> dict:
             if s is None:
                 out.append({"strategy_id": int(sid), "registered": False,
                             "is_mock_data": None, "is_pit_verified": None,
-                            "reason": f"전략 {sid} 가 레지스트리에 없습니다 — 원천을 모릅니다."})
+                            "reason": f"전략 {sid} 가 레지스트리에 없습니다 — 원천 미상입니다."})
                 continue
             repro = s.get("repro") or {}
             out.append({"strategy_id": s["id"], "registered": True, "name": s["name"],

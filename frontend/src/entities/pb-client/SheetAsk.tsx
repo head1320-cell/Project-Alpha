@@ -45,7 +45,7 @@ export function SheetAsk({ ask, title, sub }: {
         <button type="submit" className="tx-btn tx-btn--main cs-ask-go" disabled={busy || !q.trim()}>{busy ? "묻는 중" : "묻기"}</button>
       </form>
       {err && <p className="cs-ask-err" role="alert">{err}</p>}
-      {reply && !reply.available && <p className="cs-ask-unavailable" role="status">지금은 답할 수 없습니다 — {reply.reason}</p>}
+      {reply && !reply.available && <p className="cs-ask-unavailable" role="status">현재 응답할 수 없습니다 — {reply.reason}</p>}
       {reply?.available && reply.answer && (
         <div className="cs-ask-reply" aria-live="polite">
           <p className="cs-ask-q">{last!.question}</p>

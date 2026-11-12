@@ -100,7 +100,7 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
       <div className="pg-group-head">
         <button type="button" className="pg-group-toggle nodrag" aria-expanded={!data.collapsed}
                 aria-label={data.collapsed ? `${noun} 펼치기` : `${noun} 접기`}
-                title={strategy ? "접으면 노드 한 장이 됩니다 — 계산은 그대로입니다" : undefined} onClick={() => toggle(data.groupId)}>
+                title={strategy ? "접으면 노드 하나로 표시됩니다 — 계산은 동일합니다" : undefined} onClick={() => toggle(data.groupId)}>
           <ChevronDown size={14} aria-hidden="true" className={data.collapsed ? "pg-palette-chev--closed" : undefined} />
         </button>
         <input className="pg-group-label nodrag" value={data.label} aria-label={`${noun} 이름`}

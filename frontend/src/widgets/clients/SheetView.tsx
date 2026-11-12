@@ -56,7 +56,7 @@ function Body({ cid, sid }: { cid: string; sid: string }) {
   }
   const x = q.data!;
   async function remove() {
-    if (!window.confirm("이 한 장을 삭제하시겠습니까? 고객에게 보여 준 적 없는 한 장만 지울 수 있습니다.")) return;
+    if (!window.confirm("이 한 장을 삭제하시겠습니까? 고객에게 공유한 적 없는 한 장만 삭제할 수 있습니다.")) return;
     const r = await deleteSheet(cid, sid);
     if (!r.ok) { setErr(r.error); return; }
     router.replace(back);

@@ -38,7 +38,7 @@ export function FilterEditor({ value, onChange }: { value: unknown; onChange: (v
     <div className="pg-filter">
       {err && <p className="pg-field-err">필드 목록 조회 실패 — {err}</p>}
       {conds.length > 1 && (
-        <div className="pg-chips pg-filter-logic" role="group" aria-label="조건 묶는 방식">
+        <div className="pg-chips pg-filter-logic" role="group" aria-label="조건 결합 방식">
           {[["AND", "모두 만족"], ["OR", "하나라도"]].map(([k, label]) => (
             <button key={k} type="button" className={`pg-chip${(g.logic ?? "AND") === k ? " on" : ""}`}
                     aria-pressed={(g.logic ?? "AND") === k} onClick={() => put({ logic: k })}>{label}</button>

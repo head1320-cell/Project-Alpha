@@ -47,10 +47,10 @@ export function StressCheck() {
   // ── 답: 취약 종목이 가장 많은 충격(세기만) ──
   const worst = oks.reduce<Ok | null>((a, b) => (!a || b.n_casualties > a.n_casualties ? b : a), null);
   const pending = runs.filter((q) => q.isPending).length;
-  const sentence = list.isError ? "충격 목록을 받지 못해 아직 점검하지 못했습니다."
+  const sentence = list.isError ? "충격 목록을 수신하지 못해 아직 점검하지 못했습니다."
     : worst ? <>네 경제 충격 중 ‘<span data-server>{worst.scenario_label}</span>’에서 {worst.n_stocks}종목 중 {worst.n_casualties}종목이 취약했습니다.</>
     : pending || list.isPending ? "네 경제 충격 계산 중"
-    : "충격 결과를 하나도 받지 못했습니다.";
+    : "충격 결과를 수신하지 못했습니다.";
   const chips: Chip[] = [];
   if (cs.data?.mock_allowed) chips.push({ label: "합성 데이터", tone: "practice" });
   chips.push({ label: "코스피 200 · PER 양수 · 종합점수 상위 30종목", tone: "plain" });
@@ -146,8 +146,8 @@ export function StressCheck() {
                               }
                               return (
                                 <td key={s.id} className="rk-cell" data-sc={s.id} data-code={code} data-v={c.shock_pct} data-weak={c.survived ? undefined : ""} tabIndex={0}
-                                    onFocus={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 넘겨 버텼습니다" : "취약합니다"}`)}
-                                    onMouseEnter={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 넘겨 버텼습니다" : "취약합니다"}`)}>
+                                    onFocus={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 충족해 생존했습니다" : "취약합니다"}`)}
+                                    onMouseEnter={() => setRead(`${c.corp_name}, ${s.label}: 점수 ${sgn(c.shock_pct)}% (${c.base_score} → ${c.stressed_score}) · ${c.survived ? "기준을 충족해 생존했습니다" : "취약합니다"}`)}>
                                   <span className="rk-cell-v" data-dir={dir(c.shock_pct)}>{sgn(c.shock_pct)}%</span>
                                   <span className="rk-cell-bar" aria-hidden><i style={{ width: `${(Math.abs(c.shock_pct) / map.maxAbs) * 100}%` }} /></span>
                                   {!c.survived && <span className="rk-cell-weak">취약</span>}
@@ -179,7 +179,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
       {!q || q.isPending ? <p className="rk-wait">계산 중</p>
         : q.isError ? <RetryFail title="이 충격 산출 실패" onRetry={() => q.refetch()} />
         : !r ? <p className="rk-reason">서버가 이 충격의 결과를 제공하지 않았습니다.</p>
-        : !r.available ? <p className="rk-reason">서버가 이 충격을 계산하지 못했다고 답했습니다: <span data-server>{r.error ?? r.reason ?? "사유 수신 실패"}</span></p>
+        : !r.available ? <p className="rk-reason">서버가 이 충격의 계산 실패를 응답했습니다: <span data-server>{r.error ?? r.reason ?? "사유 수신 실패"}</span></p>
         : (
           <>
             <div className="tstat-grid rk-stats">
@@ -230,7 +230,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
             <details className="rk-how">
               <summary>측정 방법</summary>
               <p>부채비율·PER·배당수익률·ROE 와 1년 베타로 충격별 종합점수 변화를 추정합니다. 가격 하락폭은 측정하지 않았습니다.</p>
-              <p>부채·PER·배당·ROE 를 모르는 종목은 서버가 정한 기본값으로 채워 계산하고, 베타를 모르면 베타 효과를 0 으로 둡니다.</p>
+              <p>부채·PER·배당·ROE 가 미상인 종목은 서버 기본값으로 대체해 계산하고, 베타가 미상이면 베타 효과를 0 으로 둡니다.</p>
               {r.note && <p><span className="rk-k">서버 설명</span> <span data-server>{r.note}</span></p>}
             </details>
           </>

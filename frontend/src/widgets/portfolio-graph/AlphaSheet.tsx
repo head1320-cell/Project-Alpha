@@ -46,7 +46,7 @@ function AddAlpha() {
       </div>
       {check.isError && <p className="pg-field-err">점검 실패 — {(check.error as Error).message}</p>}
       {lint && (lint.ok && lint.issues.length === 0
-        ? <p className="pg-save-msg" role="status">식에 문제가 없습니다 · 쓰는 값 {lint.fields.join(", ") || "없음"}</p>
+        ? <p className="pg-save-msg" role="status">식에 문제가 없습니다 · 사용 값 {lint.fields.join(", ") || "없음"}</p>
         : <ul className="pg-checks" role="status">{lint.issues.map((i, k) => (
             <li key={k}><span className={`pg-tag pg-tag--${i.level === "error" ? "failed" : i.level === "warn" ? "assumed" : "unknown"}`}>
               {i.level === "error" ? "막힘" : i.level === "warn" ? "주의" : "참고"}</span><span>{i.message}</span></li>
@@ -87,12 +87,12 @@ function AlphaRow({ a }: { a: AlphaDef }) {
       )}
       {open && next && (
         <div className="pg-rec-row">
-          <input className="pg-field-input" value={note} aria-label="올리는 이유"
-                 placeholder={next === "approved" ? "승인 메모 (꼭 적어야 합니다)" : "올리는 이유 (선택)"} onChange={(e) => setNote(e.target.value)} />
+          <input className="pg-field-input" value={note} aria-label="승격 사유"
+                 placeholder={next === "approved" ? "승인 메모 (필수 입력)" : "승격 사유 (선택)"} onChange={(e) => setNote(e.target.value)} />
           <button type="button" className="pg-btn pg-btn--primary" disabled={move.isPending} onClick={() => move.mutate(next)}>올리기</button>
         </div>
       )}
-      {move.data && !move.data.ok && <p className="pg-warn" role="status">바꾸지 않았습니다 — {move.data.reason ?? "사유 미상"}</p>}
+      {move.data && !move.data.ok && <p className="pg-warn" role="status">변경하지 않았습니다 — {move.data.reason ?? "사유 미상"}</p>}
       {move.isError && <p className="pg-field-err">변경 실패 — {(move.error as Error).message}</p>}
     </li>
   );
@@ -115,7 +115,7 @@ export function AlphaSheetBody() {
       {q.isError && <p className="pg-field-err" role="alert">알파 목록 조회 실패 — {(q.error as Error).message}. 알파가 없는 것과 다릅니다.</p>}
       {q.data && list.length === 0 && <p className="pg-help">{show === "all" ? "등록한 알파가 없습니다 — 위에서 식을 등록합니다." : "이 단계의 알파 없음"}</p>}
       {list.length > 0 && <ul className="pg-rec-list">{list.map((a) => <AlphaRow key={a.alpha_id} a={a} />)}</ul>}
-      <p className="pg-note">검증 단계로 올리려면 캔버스의 ‘알파 검증’ 노드에서 ‘검증 기록 남기기’를 먼저 누릅니다.</p>
+      <p className="pg-note">검증 단계로 승격하려면 캔버스의 ‘알파 검증’ 노드에서 ‘검증 기록 남기기’를 먼저 누릅니다.</p>
     </>
   );
 }

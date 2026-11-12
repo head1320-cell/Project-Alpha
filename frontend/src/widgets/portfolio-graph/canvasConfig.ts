@@ -45,7 +45,7 @@ export const DRAWERS: { key: DrawerKey; label: string; sub: string; Icon: typeof
   { key: "execution", label: "실행실", Icon: ClipboardList, Body: ExecutionSheetBody,
     sub: "저장한 실행 목표로 주문 계획을 생성하고 검토·승인합니다. 주문은 전송하지 않습니다." },
   { key: "records", label: "기록함", Icon: Archive, Body: RecordsSheetBody,
-    sub: "판단 기록·연구 기록·실행 목표·국면 스냅샷을 다시 보고 고칩니다." },
+    sub: "판단 기록·연구 기록·실행 목표·국면 스냅샷을 조회하고 수정합니다." },
   { key: "alphas", label: "알파", Icon: Sigma, Body: AlphaSheetBody,
-    sub: "알파 식을 등록하고 단계를 올리거나 내립니다." },
+    sub: "알파 식을 등록하고 단계를 승격·강등합니다." },
 ];

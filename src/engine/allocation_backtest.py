@@ -661,8 +661,8 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             "applied": False, "convention": None,
             "mean_bps": None, "max_bps": None, "max_participation": None,
             "beyond_model_range": None, "total_cost_pct": None,
-            "reason": ("규모 가정(ImpactAssumptions)을 주지 않아 참여율 충격을 "
-                       "적용하지 않았습니다 — 정액 cost_bps 만 물렸습니다. "
+            "reason": ("규모 가정(ImpactAssumptions)을 제공하지 않아 참여율 충격을 "
+                       "적용하지 않았습니다 — 정액 cost_bps 만 부과했습니다. "
                        "회전율이 큰 팔이 그만큼 유리하게 평가됩니다."),
         }
     else:

@@ -16,7 +16,7 @@ export function useCanvasDrop(rf: RefObject<ReactFlowInstance | null>, setFileNo
                               addAt: (kind: string, pos?: { x: number; y: number }) => string) {
   const applyLoad = useCallback((r: ParseResult, fileName: string) => {
     if (!r.doc) {
-      setFileNote(`「${fileName}」을 불러오지 않았습니다 — ${r.problems.join(" ")} 캔버스는 그대로입니다.`);
+      setFileNote(`「${fileName}」을 불러오지 않았습니다 — ${r.problems.join(" ")} 캔버스는 변경되지 않았습니다.`);
       return;
     }
     usePortfolioGraph.getState().loadDoc(r.doc, r.problems);

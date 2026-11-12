@@ -313,7 +313,7 @@ test("(k) 전략 그룹 — 같은 문법(서버 모양 픽스처) · 낙폭은 
                headline: { label: "전체 수익", value: total, unit: "%", text: `${total >= 0 ? "+" : ""}${total.toFixed(1)}%` },
                facts: ["전략 2개를 ‘같은 비중’ 방식으로 달마다 리밸런싱했습니다."],
                trust: [{ state: "confirmed", text: "기록하지 않고 계산만 했습니다 — 실행 기록은 남지 않습니다." }],
-               unmeasured: ["표본 밖 성과 — 등록된 전략의 과거 기록을 다시 나눈 결과입니다"] },
+               unmeasured: ["표본 밖 성과 — 등록된 전략의 과거 기록을 재배분한 결과입니다"] },
   };
   await importText(page, "pf-strategy.json", JSON.stringify({ ...DOC, nodes: [{ id: "m", type: "strategy_backtest", params: {}, position: { x: 0, y: 0 } }] }));
   await patchRun(page, (b) => { b.ok = true; (b as unknown as { errors: unknown[] }).errors = []; b.nodes.m = { ...b.nodes.m, ...fixture }; });
@@ -331,6 +331,6 @@ test("(k) 전략 그룹 — 같은 문법(서버 모양 픽스처) · 낙폭은 
   // 아래 절 그대로 — 기간·다시 나눈 횟수 · 전략 비중 · 수익 나눠 보기(안 잰 칸 넷은 '안 쟀어요') · 전략 출처 둘
   await expect(side(page).locator(".pg-kv", { hasText: "다시 나눈 횟수" })).toContainText(`${nReb}번`);
   await expect(side(page).locator(".pg-h4", { hasText: "마지막 날 전략 비중" })).toBeVisible();
-  await expect(side(page).locator(".pg-tag--unknown", { hasText: "안 측정했습니다" })).toHaveCount(4);
+  await expect(side(page).locator(".pg-tag--unknown", { hasText: "측정하지 않았습니다" })).toHaveCount(4);
   await expect(side(page).locator(".pg-src li")).toHaveCount(2);
 });

@@ -300,7 +300,7 @@ test("BV9: 실계좌 칸은 준비 목록만 펼치고 요청을 보내지 않�
     await expect(items.nth(i)).toHaveAttribute("data-ok", String(it.ok));
     await expect(items.nth(i)).toContainText(it.reason);
   }
-  await expect(page.locator(".ma-ready")).toContainText("실계좌 전환은 아직 열리지 않습니다");
+  await expect(page.locator(".ma-ready")).toContainText("실계좌 전환은 아직 허용되지 않았습니다");
   expect(sent.filter((s) => s.method === "POST")).toEqual([]);
 });
 
@@ -569,7 +569,7 @@ test("BV9: 자산 구성 막대 = 서버 숫자의 비율 · 모르는 값이 �
   // 짝: 한 종목의 평가액을 모르면 그림 대신 사유 — 0 으로 메워 비율을 지어내지 않는다
   st.balance.ba_1 = okBalance({ cash: 600_000, positions: [pos("005930", 3, 71000, null), pos("000660", 2, 130000, 100_000)] });
   await page.reload();
-  await expect(page.locator(".ma-mix-none")).toContainText("그리지 않았습니다");
+  await expect(page.locator(".ma-mix-none")).toContainText("표시하지 않았습니다");
   await expect(segs).toHaveCount(0);
   st.balance.ba_1 = okBalance({ cash: null });
   await page.reload();
@@ -621,7 +621,7 @@ test("BV9: 주문 금액 어림 = 수량 × 가격 · 예수금 비율 (짝: 예
   await fillOrder(page, { qty: "10", price: "71000" });
   await expect(amount.locator(".ma-amount-v")).toHaveText("710,000원");
   await expect(amount.locator(".ma-amount-r")).toHaveText("예수금의 71.0%");
-  await expect(amount).toContainText("수수료와 세금은 빠졌습니다");
+  await expect(amount).toContainText("수수료와 세금은 제외했습니다");
   await page.locator('input[name="ma-qty"]').fill("2");
   await expect(amount.locator(".ma-amount-v")).toHaveText("142,000원");
   st.balance.ba_1 = okBalance({ cash: null });
@@ -658,7 +658,7 @@ test("BV9: 주문 거르기 — 수는 서버 행을 센 값 · 누르면 그 �
   await expect(page.locator(".ma-ord-none")).toBeVisible();
 });
 
-test("BV9: 자주 쓰는 사유를 누르면 칸이 채워지고, 고쳐 쓴 글이 그대로 간다", async ({ page }) => {
+test("BV9: 자주 사용하는 사유를 누르면 칸이 채워지고, 고쳐 쓴 글이 그대로 간다", async ({ page }) => {
   const { sent } = await setup(page);
   await page.goto("/my-account");
   await page.locator(".ma-kill-open").click();

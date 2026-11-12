@@ -67,7 +67,7 @@ def test_client_unknowns_stay_unknown_with_reasons():
     assert v["risk_tolerance"] is None and v["profile_source"] == "unknown" and v["assessed_at"] is None
     trust = " ".join(t["text"] for t in out["explain"]["trust"])
     assert "모르" in trust                                   # 미상이라고 말한다
-    assert "비중을 바꾸지 않습니다" in trust                     # 관측만
+    assert "비중을 변경하지 않습니다" in trust                     # 관측만
 
 
 def test_client_declared_profile_is_carried_and_aged():

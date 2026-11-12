@@ -34,7 +34,7 @@
 "enabled": false,
 "basis": "off",
 "n_days_with_systemic_risk": null,
-"reason": "enable_regime_adaptive=false — 적응 모드를 쓰지 않았습니다."
+"reason": "enable_regime_adaptive=false — 적응 모드를 사용하지 않았습니다."
 },
 "strategy_names": {
 "1": "A",

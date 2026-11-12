@@ -44,8 +44,8 @@ export function BalanceCard({ q }: { q: UseQueryResult<Balance> }) {
         ) : (
           <>
             <dl className="ma-bal-figs">
-              <div><dt>예수금</dt><dd className="ma-bal-cash">{money(b.cash_krw, "서버가 예수금을 주지 않았습니다")}</dd></div>
-              <div><dt>평가 자산</dt><dd className="ma-bal-total">{money(b.evaluated_total, "서버가 평가 자산을 주지 않았습니다")}</dd></div>
+              <div><dt>예수금</dt><dd className="ma-bal-cash">{money(b.cash_krw, "서버가 예수금을 제공하지 않았습니다")}</dd></div>
+              <div><dt>평가 자산</dt><dd className="ma-bal-total">{money(b.evaluated_total, "서버가 평가 자산을 제공하지 않았습니다")}</dd></div>
             </dl>
             <AssetMix cash={b.cash_krw} positions={positions} label={(t) => names.known(t) ?? t} />
             {positions.length === 0 ? (
@@ -71,7 +71,7 @@ export function BalanceCard({ q }: { q: UseQueryResult<Balance> }) {
                 })}
               </ul>
             )}
-            {names.failed ? <p className="tx-sec-sub">종목 이름을 확인하지 못해 코드로 보입니다.</p> : null}
+            {names.failed ? <p className="tx-sec-sub">종목명을 확인하지 못해 코드로 표시합니다.</p> : null}
           </>
         )}
       </div>
@@ -93,7 +93,7 @@ function AssetMix({ cash, positions, label }: {
   const held = positions.filter((p) => p.eval_amount !== 0);
   const parts = [{ key: "cash", name: "예수금", v: cash }, ...held.map((p) => ({ key: p.ticker, name: label(p.ticker), v: p.eval_amount }))];
   if (parts.some((p) => p.v === null || p.v === undefined || p.v < 0)) {
-    return <p className="tx-sec-sub ma-mix-none">자산 구성은 그리지 않았습니다. 서버가 모르는 값을 줬습니다.</p>;
+    return <p className="tx-sec-sub ma-mix-none">자산 구성은 표시하지 않았습니다. 서버가 미상 값을 반환했습니다.</p>;
   }
   const total = parts.reduce((s, p) => s + (p.v as number), 0);
   if (!(total > 0)) return null;

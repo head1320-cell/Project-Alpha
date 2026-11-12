@@ -60,14 +60,14 @@ export default function ThemeTree({ selected, onChange }: {
   return (
     <div className="bte-col">
       <div className="bte-row">
-        <span className="bte-sub-h">{totalSubSelected > 0 ? `세부 업종 ${totalSubSelected}개 선택` : "고르지 않으면 모든 업종입니다"}</span>
+        <span className="bte-sub-h">{totalSubSelected > 0 ? `세부 업종 ${totalSubSelected}개 선택` : "선택하지 않으면 전 업종입니다"}</span>
         {groups.length > 0 && (
           <button type="button" className="bte-link" onClick={() => emit(allOn ? new Set() : new Set(allIds))}>
             {allOn ? "전체 해제" : "전체 선택"}
           </button>
         )}
       </div>
-      {failed && <p className="bte-note bte-note--bad" role="alert">업종 목록 조회 실패. 지금은 업종으로 거를 수 없습니다 — 새로고침해 재시도하십시오.</p>}
+      {failed && <p className="bte-note bte-note--bad" role="alert">업종 목록 조회 실패. 현재 업종 필터를 사용할 수 없습니다 — 새로고침해 재시도하십시오.</p>}
 
       <div className="bte-tree">
         {groups.map((g) => {

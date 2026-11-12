@@ -81,7 +81,7 @@ test("ST3b 비상 정지 이력: 서버 행 그대로 · 걸려 있음 · 조치
   await expect(rows.nth(1), "미상 ≠ 0").toContainText("취소한 미체결 N/A");
   await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("미상");
   await expect(rows.nth(2).locator("[data-server]").first(), "모르는 출처는 원문").toHaveText("robot_x");
-  await expect(rows.nth(2)).toContainText("조치를 서버가 기록하지 않았습니다");
+  await expect(rows.nth(2)).toContainText("조치 내역을 서버가 기록하지 않았습니다");
 });
 
 test("ST3b 비상 정지 이력: 풀지 않은 정지는 '지금 걸려 있습니다'(짝: 푼 정지는 아님)", async ({ page }) => {
@@ -101,7 +101,7 @@ test("ST3b 비상 정지 이력: 없으면 없다고 · 짝: 있으면 줄", asy
   const st = liveState();
   st.safety.events = { count: 0, events: [] };
   await open(page, { st, url: "/admin/live-trading?tab=safety" });
-  await expect(sec(page, "kill-events")).toContainText("비상 정지를 건 적 없음");
+  await expect(sec(page, "kill-events")).toContainText("비상 정지 발동 이력 없음");
   await expect(sec(page, "kill-events").locator(".lvs-kill")).toHaveCount(0);
 });
 
@@ -112,7 +112,7 @@ test("ST3b 준비 상태: 서버가 센 무장 수 그대로(짝) · 사유 원�
   await expect(s.locator(".lvs-ready-row")).toHaveCount(4);
   await expect(s.locator('.lvs-ready-row[data-trigger="auto_api"] .lvs-ready-why')).toContainText("mock 클라이언트에는 실패 카운터가 없습니다");
   await expect(s.locator('.lvs-ready-row[data-trigger="auto_dd"] .lvs-ready-n')).toHaveText("누적 손실이 한도를 초과하면");
-  await expect(s.locator(".lvs-codes")).toContainText("뜻을 아는 코드 0개 · 본 적 있는 코드 0개 · 그중 뜻을 모르는 코드 0개");
+  await expect(s.locator(".lvs-codes")).toContainText("정의된 코드 0개 · 관측된 코드 0개 · 그중 미정의 코드 0개");
   await expect(s.locator(".lvs-more")).not.toHaveAttribute("open", "");
 
   const p2 = await page.context().newPage();
@@ -157,9 +157,9 @@ test("ST3b 감사 기록: 줄 그대로 · 오늘 요약 · 0건은 없다고 �
   st.safety.audit = { count: 0, events: [] };
   st.safety.auditSummary = { date: "2026-10-09", error: "no such table: live_audit_trail" };
   await open(p2, { st, url: "/admin/live-trading?tab=safety" });
-  await expect(sec(p2, "audit").locator(".lvs-empty")).toHaveText("운영 계좌에 남은 감사 기록 없음");
+  await expect(sec(p2, "audit").locator(".lvs-empty")).toHaveText("운영 계좌 감사 기록 없음");
   await expect(sec(p2, "audit"), "R1 — 이제 0 은 진짜 0 이라 얼버무리지 않는다").not.toContainText("가를 수 없습니다");
-  await expect(sec(p2, "audit").getByRole("alert")).toContainText("오늘 요약을 서버가 읽지 못했습니다");
+  await expect(sec(p2, "audit").getByRole("alert")).toContainText("당일 요약을 서버가 조회하지 못했습니다");
   await expect(sec(p2, "audit").getByRole("alert").locator("[data-server]")).toHaveText("no such table: live_audit_trail");
   await p2.close();
 

@@ -44,7 +44,7 @@ function Row({ l, sid, closed, act }: {
           <button type="button" className="tx-btn tx-btn--sub cs-share-btn cs-share-reopen" disabled={closed} onClick={() => act("reopen", l)}>잠김 풀기</button>
         )}
         {live && l.sheet_id !== sid && (
-          <button type="button" className="tx-btn tx-btn--sub cs-share-btn cs-share-switch" disabled={closed} onClick={() => act("switch", l)}>이 한 장으로 바꾸기</button>
+          <button type="button" className="tx-btn tx-btn--sub cs-share-btn cs-share-switch" disabled={closed} onClick={() => act("switch", l)}>이 한 장으로 교체</button>
         )}
         {l.state !== "revoked" && l.state !== "expired" && (
           <button type="button" className="tx-btn tx-btn--sub cs-share-btn cs-share-revoke" onClick={() => act("revoke", l)}>끄기</button>
@@ -100,19 +100,19 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
   return (
     <section className="cs-share" aria-label="고객 주소">
       <h2 className="cs-h2">고객 주소</h2>
-      <p className="cs-sub">고객이 이 한 장을 보고 묻도록 주소를 만듭니다. 고객은 주소와 PIN 으로 열고, 언제든 끌 수 있습니다.</p>
+      <p className="cs-sub">고객이 이 한 장을 열람하고 질의할 수 있도록 주소를 생성합니다. 고객은 주소와 PIN 으로 접속하며, 주소는 언제든 비활성화할 수 있습니다.</p>
       {q.isLoading && <p className="cs-sub" aria-busy="true">주소 목록 조회 중</p>}
       {q.isError && <p className="cl-err" role="alert">주소 목록 읽기 실패 — {(q.error as Error).message}</p>}
       {gate && closed && (
         <div className="cs-share-blocked" role="note">
-          <p className="cs-share-blocked-why">유통 관문이 닫혀 있어 지금은 고객 주소를 만들 수 없습니다.</p>
+          <p className="cs-share-blocked-why">유통 관문이 닫혀 있어 현재 고객 주소를 생성할 수 없습니다.</p>
           {gate.reason && <p className="cs-share-blocked-reason">{gate.reason}</p>}
           {gate.missing.length > 0 && (
             <p className="cs-share-missing">빠진 인가 기록 — {gate.missing.map((m) => LICENSE_PLAIN[m] ?? m).join(" · ")}</p>
           )}
         </div>
       )}
-      {gate && !closed && archived && <p className="cs-sub">보관한 고객이라 새 주소를 만들 수 없습니다.</p>}
+      {gate && !closed && archived && <p className="cs-sub">보관 처리된 고객이라 새 주소를 생성할 수 없습니다.</p>}
       {gate && (
         <form className="cs-share-form" onSubmit={make}>
           <label className="cs-share-field">
@@ -121,7 +121,7 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))} disabled={closed || archived} />
           </label>
           <label className="cs-share-field">
-            <span className="cs-share-label">열어 둘 기간</span>
+            <span className="cs-share-label">유효 기간</span>
             <select className="cs-share-days" value={days} onChange={(e) => setDays(Number(e.target.value))} disabled={closed || archived}>
               {SHARE_DAYS.map((d) => <option key={d} value={d}>{d}일</option>)}
             </select>
@@ -142,7 +142,7 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
             <input className="cs-share-url" readOnly value={made} aria-label="고객 주소" onFocus={(e) => e.currentTarget.select()} />
             <button type="button" className="tx-btn tx-btn--sub cs-share-copy" onClick={() => void copy()}>{copied ? "복사했습니다" : "복사"}</button>
           </div>
-          <button type="button" className="cs-share-done" onClick={() => setMade(null)}>주소를 옮겼습니다 — 닫기</button>
+          <button type="button" className="cs-share-done" onClick={() => setMade(null)}>주소를 이전했습니다 — 닫기</button>
         </div>
       )}
       {q.data && q.data.links.length > 0 && (

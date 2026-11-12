@@ -33,7 +33,7 @@ export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] 
   const rows: ReadRow[] = data.map((row) => ({ head: String(row.t), cells: pairs.map((p, i) => ({
     key: p.key, label: p.label, text: typeof row[p.key] === "number" ? signed(row[p.key] as number) : "없습니다", color: catColor(i) })) }));
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
-  if (!pairs.length) return <div className="mc-empty-sm">롤링 상관을 그릴 자료 없음</div>;
+  if (!pairs.length) return <div className="mc-empty-sm">롤링 상관을 표시할 자료 없음</div>;
   return (
     <ReadoutFrame id="rolling-corr" label="60일 롤링 상관 추이" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
       <ResponsiveContainer width="100%" height={260}>
@@ -61,7 +61,7 @@ export function AvgCorrChart({ avg }: { avg: MacroCorrelations["avg_corr"] }) {
   const data = useMemo(() => avg.map((p) => ({ t: p.t, corr: p.corr })), [avg]);
   const rows: ReadRow[] = data.map((p) => ({ head: p.t, cells: [{ key: "corr", label: "평균 상관", text: Number(p.corr).toFixed(2) }] }));
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
-  if (!avg.length) return <div className="mc-empty-sm">평균 상관을 그릴 자료 없음</div>;
+  if (!avg.length) return <div className="mc-empty-sm">평균 상관을 표시할 자료 없음</div>;
   const cur = idx >= 0 ? data[idx] : null;
   return (
     <ReadoutFrame id="avg-corr" label="모든 자산 쌍의 평균 상관" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
@@ -85,7 +85,7 @@ export function TimingHistory({ history }: { history: MacroTiming["history"] }) 
   const anim = useChartAnimation();
   const rows: ReadRow[] = history.map((h) => ({ head: h.t, cells: [{ key: "score", label: "위험 선호도", text: Number(h.score).toFixed(0) }] }));
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
-  if (!history.length) return <div className="mc-empty-sm">위험 선호도 추이를 그릴 자료 없음</div>;
+  if (!history.length) return <div className="mc-empty-sm">위험 선호도 추이를 표시할 자료 없음</div>;
   const cur = idx >= 0 ? history[idx] : null;
   return (
     <ReadoutFrame id="timing-history" label="위험 선호도 추이" headLabel="날짜" rows={rows} idx={idx} onKeyDown={onKeyDown}>
@@ -116,7 +116,7 @@ export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
     { key: "q", label: "국면", text: regimeName(p.quadrant) },
   ] }));
   const { idx, setIdx, onKeyDown } = useReadout(rows.length);
-  if (!path.length) return <div className="mc-empty-sm">궤적을 그릴 관측 없음</div>;
+  if (!path.length) return <div className="mc-empty-sm">궤적을 표시할 관측치 없음</div>;
   const last = data[data.length - 1];
   const cur = idx >= 0 && idx < data.length - 1 ? data[idx] : null;      // 지금(마지막) 점은 이미 잉크 점으로 보인다 — 다른 달을 고르면 고리
   // 동적 스케일 — 궤적 전체가 축 안에 들어오도록.

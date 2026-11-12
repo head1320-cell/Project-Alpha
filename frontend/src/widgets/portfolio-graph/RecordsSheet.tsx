@@ -47,13 +47,13 @@ function JournalRow({ e }: { e: JournalEntry }) {
         <b className="pg-rec-name">{e.title}</b>
         {e.decision_quality && <span className="pg-tag pg-tag--unknown">{DQ_KO[e.decision_quality]}</span>}
       </div>
-      <p className="pg-pick-sub">{when(e.created_at)}{e.run_id ? ` · 연구 기록 ${e.run_id}` : " · 연구 기록과 이어지지 않았습니다"}</p>
+      <p className="pg-pick-sub">{when(e.created_at)}{e.run_id ? ` · 연구 기록 ${e.run_id}` : " · 연구 기록과 연결되지 않았습니다"}</p>
       {e.record.decision && <p className="pg-rec-text">{e.record.decision}</p>}
       {!edit && (
         <>
           {e.review ? <p className="pg-rec-text">회고: {e.review}</p> : <p className="pg-help">회고가 아직 없습니다 — 결과 확인 후 실제와 대조해 기록합니다.</p>}
           <div className="pg-rec-actions">
-            <button type="button" className="pg-btn" onClick={() => setEdit(true)}>{e.review ? "회고 고치기" : "회고 쓰기"}</button>
+            <button type="button" className="pg-btn" onClick={() => setEdit(true)}>{e.review ? "회고 수정" : "회고 작성"}</button>
             <button type="button" className="pg-btn" aria-label={`${e.title} 삭제`} disabled={del.isPending}
                     onClick={() => { if (window.confirm(`‘${e.title}’ 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) del.mutate(); }}>삭제</button>
           </div>
@@ -88,7 +88,7 @@ function JournalTab() {
   if (q.isLoading) return <Loading />;
   if (q.isError) return <Failed what="판단 기록" err={q.error} />;
   const list = q.data?.entries ?? [];
-  if (list.length === 0) return <p className="pg-help">판단 기록이 없습니다 — 캔버스의 ‘판단 기록’ 노드에서 저장하면 여기에 모입니다.</p>;
+  if (list.length === 0) return <p className="pg-help">판단 기록이 없습니다 — 캔버스의 ‘판단 기록’ 노드에서 저장하면 여기에 표시됩니다.</p>;
   return <ul className="pg-rec-list">{list.map((e) => <JournalRow key={e.entry_id} e={e} />)}</ul>;
 }
 
@@ -101,9 +101,9 @@ function Verdict({ r }: { r: ReproduceResult }) {
     return <p className="pg-warn pg-rec-verdict" role="status" data-verdict="refused">재현할 수 없습니다 — {r.reason}</p>;
   }
   const tag = r.verdict === "identical" ? "confirmed" : r.verdict === "drifted" ? "assumed" : "unknown";
-  const text = r.verdict === "identical" ? "같은 비중이 다시 나왔습니다"
+  const text = r.verdict === "identical" ? "동일한 비중이 재현됐습니다"
     : r.verdict === "drifted" ? `비중이 달라졌습니다 — 가장 큰 차이 ${r.max_delta_pp == null ? "미상" : r.max_delta_pp.toFixed(2)}%p`
-      : `대조할 것이 없었습니다 — ${r.reason ?? "사유 미상"}`;
+      : `대조할 대상이 없었습니다 — ${r.reason ?? "사유 미상"}`;
   const moved = (r.deltas ?? []).slice().sort((a, b) => Math.abs(b.delta_pp) - Math.abs(a.delta_pp)).slice(0, 3);
   return (
     <div className="pg-rec-verdict" role="status" data-verdict={r.verdict}>
@@ -202,7 +202,7 @@ function SnapshotsTab() {
         : <p className="pg-warn" role="status">저장하지 않았습니다 — {make.data.message ?? "사유 미상"}</p>)}
       {q.isLoading && <Loading />}
       {q.isError && <Failed what="국면 스냅샷" err={q.error} />}
-      {q.data && q.data.length === 0 && <p className="pg-help">스냅샷이 없습니다 — 위 버튼으로 지금 국면을 굳혀 두면 ‘경기 국면’ 노드가 읽습니다.</p>}
+      {q.data && q.data.length === 0 && <p className="pg-help">스냅샷이 없습니다 — 위 버튼으로 현재 국면을 스냅샷으로 저장하면 ‘경기 국면’ 노드가 참조합니다.</p>}
       {q.data && q.data.length > 0 && (
         <ul className="pg-rec-list">{q.data.map((s) => (
           <li key={s.snapshot_id} className="pg-rec-item" data-snapshot={s.snapshot_id}>

@@ -116,7 +116,7 @@ test("칩 메뉴: 네 목표 + 설명 + 목표 없음 · 바꾸면 요청이 바
   await choose(page, "check");
   await expect(chip(page)).toHaveAttribute("aria-label", said("비중의 위험 점검"));
   await expect(aiGhosts(page)).toHaveCount(0);
-  await expect(page.locator(".pg-ai-stale")).toHaveText("목표가 바뀌어 AI 추천을 지웠습니다");
+  await expect(page.locator(".pg-ai-stale")).toHaveText("목표가 바뀌어 AI 추천을 삭제했습니다");
   await expect(ruleGhosts(page)).toHaveCount(rules);                                     // ★짝★ 규칙 추천은 목표와 무관
   expect((await wip(page)).meta?.goal).toBe("check");
   await page.locator(".pg-ai-ask").click();

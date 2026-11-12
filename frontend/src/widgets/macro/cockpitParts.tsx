@@ -168,7 +168,7 @@ export function ZHeatmap({ themes, onPick }: { themes: MacroTheme[]; onPick: (in
       <p className="mc-readout" aria-live="polite">
         {cur
           ? <><b>{cur.name}</b> {fmtNum(cur.latest)} {cur.unit} · z {fmtZ(cur.z_score)}{cur.percentile != null && ` · 지난 5년 중 위치 ${Math.round(cur.percentile)}%`}</>
-          : "칸에 마우스를 올리거나 Tab 으로 옮기면 여기에 값이 나옵니다"}
+          : "칸에 마우스를 올리거나 Tab 으로 이동하면 여기에 값을 표시합니다"}
       </p>
     </div>
   );
@@ -304,11 +304,11 @@ export function CbGauge({ name, bank }: { name: string; bank?: { available: bool
   return (
     <div className="mc-cbg">
       <div className="mc-cbg-h">{name} <b data-server>{bank.label}</b></div>
-      <div className="mc-cbg-track" role="img" aria-label={`${name} 말투 점수 ${signed(s)}`}>
+      <div className="mc-cbg-track" role="img" aria-label={`${name} 기조 점수 ${signed(s)}`}>
         <i className="mc-cbg-marker" style={{ left: `${pos}%` }} />
       </div>
       <div className="mc-cbg-scale"><span>−1 완화</span><span>0</span><span>+1 긴축</span></div>
-      <div className="mc-cbg-meta">긴축 쪽 낱말 {bank.hawkish_hits}번 · 완화 쪽 {bank.dovish_hits}번{bank.terms?.length ? <> · <span data-server>{bank.terms.slice(0, 4).join(", ")}</span></> : null}</div>
+      <div className="mc-cbg-meta">매파 어휘 {bank.hawkish_hits}회 · 비둘기파 어휘 {bank.dovish_hits}회{bank.terms?.length ? <> · <span data-server>{bank.terms.slice(0, 4).join(", ")}</span></> : null}</div>
     </div>
   );
 }
@@ -342,7 +342,7 @@ export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label
           <b className="mc-attr-final">{r.final.toFixed(1)}%</b>
         </div>
       ))}
-      <p className="mc-attr-legend">기본 + 성장 + 물가 + 스트레스 = 최종 비중입니다(규칙의 각 항을 그대로 나눈 값, %p).</p>
+      <p className="mc-attr-legend">기본 + 성장 + 물가 + 스트레스 = 최종 비중입니다(규칙의 각 항을 그대로 분해한 값, %p).</p>
     </div>
   );
 }
@@ -362,7 +362,7 @@ export function AllocBands({ bands }: { bands: Array<{ ticker: string; label: st
           <span className="mc-band-v">{b.p10.toFixed(0)}~{b.p90.toFixed(0)}%</span>
         </div>
       ))}
-      <p className="mc-attr-legend">띠는 400번 중 가운데 80%가 들어간 범위, 진한 표식은 가운데값입니다.</p>
+      <p className="mc-attr-legend">띠는 400회 중 중앙 80% 범위, 진한 표식은 중앙값입니다.</p>
     </div>
   );
 }
@@ -370,7 +370,7 @@ export function AllocBands({ bands }: { bands: Array<{ ticker: string; label: st
 // CausalGraphView — 그레인저(예측적) 인과: 원형 배치 + 방향 화살표. 선 굵기 = 유의확률이 낮을수록 굵게.
 //   BU5b-2: 선 안 SVG <title>(툴팁) 대신 아래 관계 목록이 모든 선을 글로 말한다(부모 카드). 색은 한 계열 강조색.
 export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; label: string }>; edges: Array<{ from: string; to: string; lag: number; p: number }> }) {
-  if (!nodes.length) return <div className="mc-empty-sm">그래프를 그릴 지표가 없습니다(시계열 표본이 부족합니다)</div>;
+  if (!nodes.length) return <div className="mc-empty-sm">그래프를 표시할 지표가 없습니다(시계열 표본이 부족합니다)</div>;
   const R = 112, CX = 210, CY = 160;
   const pos: Record<string, { x: number; y: number }> = {};
   nodes.forEach((n, k) => {
@@ -378,7 +378,7 @@ export function CausalGraphView({ nodes, edges }: { nodes: Array<{ id: string; l
     pos[n.id] = { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) };
   });
   return (
-    <svg viewBox="0 0 420 320" className="mc-causal" role="img" aria-label={`지표 ${nodes.length}개 사이 먼저 움직이는 관계 ${edges.length}개`}>
+    <svg viewBox="0 0 420 320" className="mc-causal" role="img" aria-label={`지표 ${nodes.length}개 사이 선행 관계 ${edges.length}개`}>
       <defs>
         <marker id="mcArrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={5} markerHeight={5} orient="auto">
           <path d="M0,0 L8,4 L0,8 z" fill="var(--tx-blue)" />

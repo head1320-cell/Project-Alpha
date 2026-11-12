@@ -53,7 +53,7 @@ function Picks() {
 
   return (
     <div className="home-picks">
-      <Section title="점수 높은 종목" sub="코스피 200 중 PER 이 양수인 종목을 종합점수 순으로" aside={<Chips items={chips} label="이 목록의 근거" />}>
+      <Section title="상위 점수 종목" sub="코스피 200 중 PER 이 양수인 종목을 종합점수 순으로" aside={<Chips items={chips} label="이 목록의 근거" />}>
         {q.isLoading ? <LoadingState label="종목 점수 조회 중" />
           : q.isError ? (
             <Notice tone="danger" title="종목 점수 조회 실패">
@@ -62,7 +62,7 @@ function Picks() {
             </Notice>
           ) : items.length === 0 ? (
             <div className="home-empty">
-              <p>점수를 낼 종목이 아직 없습니다. 데이터가 적재됐는지 먼저 확인하십시오.</p>
+              <p>점수를 산출할 종목이 아직 없습니다. 데이터가 적재됐는지 먼저 확인하십시오.</p>
               <Link href="/admin/data" className="tx-btn tx-btn--sub">데이터 상태 보기</Link>
             </div>
           ) : (
@@ -77,7 +77,7 @@ function Picks() {
               {/* BU2 다리 — 보이는 그 종목 그대로 캔버스 종목 고르기 노드로(캔버스가 stock_master 로 다시 확인한다) */}
               <div className="home-act">
                 <Link href={`/allocation?tickers=${items.map((it) => it.stock_code).join(",")}`} className="tx-btn tx-btn--sub home-bridge">
-                  이 {items.length}종목 설계에 넣기
+                  이 {items.length}종목 설계에 추가
                 </Link>
               </div>
             </>

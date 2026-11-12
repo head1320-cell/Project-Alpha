@@ -26,7 +26,7 @@ export function Holdings({ result, onRetry }: { result: Result<OpBalance> | null
           result.status === 401 ? <p className="tx-sec-sub">로그인해야 잔고를 조회할 수 있습니다.</p>
             : <RetryFail title="잔고 조회 실패" onRetry={onRetry}>{result.error}</RetryFail>
         ) : positions === null ? (
-          <p className="tx-sec-sub">서버가 보유 종목 목록을 주지 않았습니다.</p>
+          <p className="tx-sec-sub">서버가 보유 종목 목록을 제공하지 않았습니다.</p>
         ) : positions.length === 0 ? (
           <p className="tx-sec-sub">보유 종목 없음</p>
         ) : (

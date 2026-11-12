@@ -16,9 +16,9 @@ import { insertCandidates, josa, type EdgeRecord, type EdgeRelation, type GraphE
 import { descendantsOf } from "./store";
 
 const LINEAGE_TEXT = {
-  practice: "합성 값이 흐릅니다",
+  practice: "합성 값이 전달됩니다",
   forward: "현재 시점 전용입니다 — 과거 검증에 사용할 수 없습니다",
-  overlay: "오늘 판단한 노출 조절이 얹힌 비중입니다",
+  overlay: "당일 판단한 노출 조절이 적용된 비중입니다",
 };
 const LEVEL_TEXT: Record<IssueLevel, string> = { lost: "빠짐", changed: "바뀜", structural: "구조", unused: "쓰지 않음" };
 
@@ -91,7 +91,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
                   </li>
                 ))}
               </ul>
-            ) : <p>점검한 것: {record.checks.join(" · ")} — 잃거나 바뀐 것을 찾지 못했습니다.</p>}
+            ) : <p>점검한 것: {record.checks.join(" · ")} — 누락·변경 항목이 없습니다.</p>}
         </div>
       )}
       <div className="pg-wire-row" data-row="what">
@@ -117,7 +117,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       <div className="pg-wire-row" data-row="trust">
         <h3>신뢰도</h3>
         {!live ? <p className="pg-wire-muted">계산하면 이 값의 출처를 표시합니다.</p>
-          : live.status !== "ok" ? <p className="pg-wire-muted">보내는 노드가 계산되지 않아 값이 흐르지 않았습니다.</p>
+          : live.status !== "ok" ? <p className="pg-wire-muted">보내는 노드가 계산되지 않아 값이 전달되지 않았습니다.</p>
           : chips.length ? (
             <ul className="pg-wire-chips">{chips.map((k) => <li key={k} className={`pg-wire-chip pg-wire-chip--${k}`}>{LINEAGE_TEXT[k]}</li>)}</ul>
           ) : <p>합성이 아닙니다 — 데이터 등급은 ‘{src?.plain_label}’ 노드에서 확인합니다.</p>}
@@ -126,7 +126,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       <div className="pg-wire-row" data-row="cut">
         <h3>연결 해제 시</h3>
         <p>{required ? `‘${dst?.plain_label}’부터 ${stops.length}개 노드가 계산되지 않습니다.`
-          : `이 입력은 없어도 됩니다 — ${josa(`‘${dst?.plain_label ?? ""}’`, ["은", "는"])} 이 값 없이 계산합니다.`}</p>
+          : `이 입력은 선택 사항입니다 — ${josa(`‘${dst?.plain_label ?? ""}’`, ["은", "는"])} 이 값 없이 계산합니다.`}</p>
         {stops.length > 1 && <p className="pg-wire-muted pg-wire-stops">{stops.map(label).join(", ")}</p>}
       </div>
       <div className="pg-wire-actions">

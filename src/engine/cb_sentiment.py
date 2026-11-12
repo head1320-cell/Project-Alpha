@@ -83,7 +83,7 @@ def cb_sentiment(use_cache: bool = True) -> dict:
             out["banks"][bank] = {"available": True, "source": url, **s}
         else:
             out["banks"][bank] = {"available": False,
-                                  "note": "정책문 수집 실패(네트워크/구조 변경) — 점수 미산출(정직)"}
+                                  "note": "정책문 수집 실패(네트워크/구조 변경) — 점수 미산출"}
     out["method"] = "렉시콘 기반(Apel-Grimaldi 사상) 매파/비둘기 용어 밀도 — 결정론·검증 가능"
     _CACHE.update(t=now, v=out)
     return out

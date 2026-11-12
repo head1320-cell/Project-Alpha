@@ -37,7 +37,7 @@ def _current_weights(inputs: dict, p: CurrentWeightsParams) -> pg.NodeOutput:
     outside = [str(k) for k in given if str(k) not in tickers]
     if outside:
         raise pg.NodeFailure(f"‘현재 비중’의 종목 {', '.join(outside)} 이(가) 유니버스 종목 목록에 없습니다 — "
-                             "목록에 넣거나 비중에서 제외하십시오.")
+                             "목록에 추가하거나 비중에서 제외하십시오.")
     raw = np.array([float(given.get(t, 0.0)) for t in tickers], dtype=float)
     gross = float(np.abs(raw).sum())
     if not np.isfinite(raw).all() or gross <= 0:

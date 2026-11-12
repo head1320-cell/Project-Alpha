@@ -107,7 +107,7 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
               )}
             </Section>
             <Section title="투자 논거"><p className="sm-text" data-server>{detail.profile.rationale}</p></Section>
-            <Section title="잘 맞는 국면 · 안 맞는 국면"><p className="sm-text" data-server>{detail.profile.regime_note}</p></Section>
+            <Section title="유리한 국면 · 불리한 국면"><p className="sm-text" data-server>{detail.profile.regime_note}</p></Section>
             <Section title="국면 적합도(0~100)">
               <div className="sm-fits">
                 {detail.regime_fit.map((f) => {
@@ -165,7 +165,7 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
             <Section title="AI 분석">
               <div className="sm-ai">
                 <button type="button" className="sm-ai-btn tx-btn tx-btn--sub" onClick={runAi} disabled={aiLoading}>
-                  {aiLoading ? "AI 분석을 만드는 중입니다" : ai ? "AI 분석 다시 만들기" : "AI 분석 만들기"}
+                  {aiLoading ? "AI 분석을 생성하는 중입니다" : ai ? "AI 분석 다시 만들기" : "AI 분석 만들기"}
                 </button>
                 {ai === undefined && !aiLoading && <span className="sm-ai-hint">현재 국면과 배분을 함께 분석해 이 전략의 적합성을 서술합니다. 관리자가 AI 키를 등록해야 하며, 호출마다 비용이 발생합니다.</span>}
                 {ai === null && !aiLoading && (

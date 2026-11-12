@@ -301,7 +301,7 @@ def company_model_sotp(code: str, req: SotpRequest):
         name = get_stock_name(s.code)
         mc = _mcap(s.code) if name else None
         subs.append({"code": s.code, "name": name, "stake_pct": s.stake_pct, "market_cap": mc,
-                     "reason": None if name else "모르는 종목코드입니다"})
+                     "reason": None if name else "미등록 종목코드입니다"})
     tl = fs.total_liabilities
     net_debt = req.net_debt_eok if req.net_debt_eok is not None else ((tl or 0.0) / 1e8)
     out = pm.sotp([x.model_dump() for x in req.segments], subs, net_debt=net_debt,

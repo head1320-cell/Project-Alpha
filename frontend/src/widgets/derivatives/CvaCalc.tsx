@@ -53,7 +53,7 @@ export function CvaCalc() {
           <NumField id="dv-ntl" label="명목 금액" unit="원" value={raw.notional} onChange={set("notional")} missing={miss("notional")} hint={v.notional != null ? `${wonK(v.notional)}입니다` : undefined} />
           <NumField id="dv-cT" label="만기" unit="년" value={raw.T} onChange={set("T")} missing={miss("T")} />
           <NumField id="dv-cds" label="상대방 CDS 스프레드" unit="bp" value={raw.cds} onChange={set("cds")} missing={miss("cds")} hint="부도 보험료(1bp = 0.01%p)" />
-          <NumField id="dv-rec" label="상대방 회수율" unit="%" value={raw.rec} onChange={set("rec")} missing={miss("rec")} hint="부도가 나도 돌려받는 비율" />
+          <NumField id="dv-rec" label="상대방 회수율" unit="%" value={raw.rec} onChange={set("rec")} missing={miss("rec")} hint="부도 시 회수 비율" />
         </div>
         <details className="dv-more">
           <summary>추가 입력(금리 · 변동성 · 자사 신용 · 충격)</summary>
@@ -75,16 +75,16 @@ export function CvaCalc() {
       {c && ran ? (
         <section className="tx-sec dv-out" aria-live="polite">
           {calc.stale(key) && <StaleNote onRerun={run} />}
-          <p className="dv-ans">상대방이 부도날 위험을 값으로 치면 <b>{wonK(c.unilateral_cva.cva_amount)}</b>입니다(명목의 {c.unilateral_cva.cva_pct_of_notional}%).</p>
+          <p className="dv-ans">거래상대방 부도 위험을 금액으로 환산하면 <b>{wonK(c.unilateral_cva.cva_amount)}</b>입니다(명목의 {c.unilateral_cva.cva_pct_of_notional}%).</p>
           <Chips items={[
             { label: "노출 곡선은 시장 관측값이 아니라 상품 유형별로 가정한 형태입니다", tone: "assumed" },
             { label: "부도 확률은 입력한 CDS 스프레드에서 산출했습니다", tone: "assumed" },
           ]} />
           <dl className="dv-figs" data-testid="cva-figs">
-            <Fig k="cva" label="일방 CVA" value={wonK(c.unilateral_cva.cva_amount)} why="상대방 부도만 셀 때 거래 가치에서 빼야 할 금액입니다." />
-            <Fig k="dva" label="DVA" value={wonK(c.bilateral_cva.dva_amount)} why="우리가 부도날 가능성 때문에 생기는 반대쪽 조정입니다." />
-            <Fig k="bcva" label="양방 CVA(DVA − CVA)" value={wonK(c.bilateral_cva.bcva_amount)} why={<>서버가 DVA − CVA 로 계산합니다. 음수면 거래 가치에서 그만큼 뺍니다. <span data-server>{c.bilateral_cva.interpretation}</span></>} />
-            <Fig k="stressed" label="스트레스 CVA" value={wonK(c.stressed_cva.stressed_cva)} why={`스프레드가 ${ran.spread_shock_bps}bp 넓어지고 노출이 ${c.stressed_cva.shocks_applied.exposure_shock_pct}% 커지면 ${c.stressed_cva.stress_loss_pct}% 늡니다.`} />
+            <Fig k="cva" label="일방 CVA" value={wonK(c.unilateral_cva.cva_amount)} why="거래상대방 부도만 고려할 때 거래 가치에서 차감할 금액입니다." />
+            <Fig k="dva" label="DVA" value={wonK(c.bilateral_cva.dva_amount)} why="자사 부도 가능성에 따른 반대 방향 조정입니다." />
+            <Fig k="bcva" label="양방 CVA(DVA − CVA)" value={wonK(c.bilateral_cva.bcva_amount)} why={<>서버가 DVA − CVA 로 계산합니다. 음수이면 거래 가치에서 해당 금액을 차감합니다. <span data-server>{c.bilateral_cva.interpretation}</span></>} />
+            <Fig k="stressed" label="스트레스 CVA" value={wonK(c.stressed_cva.stressed_cva)} why={`스프레드가 ${ran.spread_shock_bps}bp 확대되고 노출이 ${c.stressed_cva.shocks_applied.exposure_shock_pct}% 커지면 ${c.stressed_cva.stress_loss_pct}% 증가합니다.`} />
             <Fig k="pd5" label={`${ran.maturity_years >= 5 ? "5" : "1"}년 내 부도 확률`} value={`${((ran.maturity_years >= 5 ? c.pd_from_cds["5y_pd"] : c.pd_from_cds["1y_pd"]) * 100).toFixed(2)}%`} why="CDS 스프레드와 회수율에서 역산한 값입니다." />
           </dl>
           <ExposureCurve ee={c.exposure_profile.ee_values} T={ran.maturity_years} epe={c.exposure_profile.epe} peak={c.exposure_profile.peak_ee} pos={ran.position_type} />

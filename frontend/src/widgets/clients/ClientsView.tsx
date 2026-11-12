@@ -21,7 +21,7 @@ import { loginHref } from "@/shared/lib/nextPath";
 import { Notice, PageHead, RetryFail } from "@/shared/ui/tx";
 
 const TITLE = "고객";
-const LEDE = "관리하는 고객과 고객별 설계 문서입니다. 고객 정보는 비중을 바꾸지 않습니다 — 점검하고 기록하는 데 씁니다.";
+const LEDE = "관리하는 고객과 고객별 설계 문서입니다. 고객 정보는 비중을 변경하지 않습니다 — 점검과 기록에만 사용합니다.";
 const NO_PII = "별칭만 입력합니다 — 실명·연락처·주민번호·계좌번호는 입력하지 않습니다. 전화·이메일·긴 숫자 형식은 서버가 거부하며, 실명은 형식으로 식별할 수 없어 PB 가 준수해야 합니다.";
 
 const unwrap = <T,>(fn: () => Promise<Result<T>>) => async (): Promise<T> => {
@@ -43,7 +43,7 @@ export function ClientsView() {
         : session.kind === "signed_out" ? (
           <section className="tx-sec cl-signed-out">
             <p className="cl-strong">로그인하면 내 고객을 조회할 수 있습니다.</p>
-            <p className="tx-sec-sub">고객 자료는 이 서버의 내 계정에만 있습니다 — 다른 PB 는 보지 못합니다.</p>
+            <p className="tx-sec-sub">고객 자료는 이 서버의 내 계정에만 있습니다 — 다른 PB 는 조회할 수 없습니다.</p>
             <Link href={loginHref("/clients")} className="tx-btn tx-btn--main">로그인</Link>
           </section>
         ) : session.mustChange ? (
@@ -63,7 +63,7 @@ function Clients() {
   return (
     <div className="cl-grid">
       <section className="tx-sec cl-listbox" aria-label="고객 목록">
-        <div className="cl-list-tabs" role="group" aria-label="보이는 고객">
+        <div className="cl-list-tabs" role="group" aria-label="표시할 고객">
           {(["active", "archived"] as const).map((t) => (
             <button key={t} type="button" className="cl-list-tab" data-tab={t} aria-pressed={tab === t} onClick={() => setTab(t)}>
               {t === "active" ? "활성 고객" : "보관 고객"}
@@ -73,7 +73,7 @@ function Clients() {
         {list.isLoading ? <p className="tx-sec-sub" aria-busy="true">고객 조회 중</p>
           : list.isError ? <RetryFail title="고객 조회 실패" onRetry={() => void list.refetch()}>{(list.error as Error).message}</RetryFail>
           : (list.data?.clients ?? []).length === 0 ? (
-            <p className="cl-empty">{tab === "active" ? "아직 고객이 없습니다 — 아래에서 별칭으로 더합니다." : "보관한 고객 없음"}</p>
+            <p className="cl-empty">{tab === "active" ? "아직 고객이 없습니다 — 아래에서 별칭으로 추가합니다." : "보관한 고객 없음"}</p>
           ) : (
             <ul className="cl-list">
               {list.data!.clients.map((c) => (
@@ -90,7 +90,7 @@ function Clients() {
       </section>
       <div className="cl-main">
         {want ? <Detail key={want} cid={want} /> : (
-          <section className="tx-sec cl-detail-empty"><p className="tx-sec-sub">고객을 고르면 그 고객의 정보와 설계 문서가 보입니다.</p></section>
+          <section className="tx-sec cl-detail-empty"><p className="tx-sec-sub">고객을 선택하면 해당 고객의 정보와 설계 문서를 표시합니다.</p></section>
         )}
       </div>
       <AddClient />
@@ -201,7 +201,7 @@ function Detail({ cid }: { cid: string }) {
       <dl className="cl-facts">
         <div><dt>위험 성향</dt><dd>{c.risk_tolerance ? RISK_PLAIN[c.risk_tolerance] : "모름"}</dd></div>
         <div><dt>성향 출처</dt><dd>{SOURCE_PLAIN[c.profile_source]}</dd></div>
-        <div><dt>평가일</dt><dd>{c.assessed_at ? `${c.assessed_at} · ${c.assessed_age_days}일 지났습니다` : "모름"}</dd></div>
+        <div><dt>평가일</dt><dd>{c.assessed_at ? `${c.assessed_at} · ${c.assessed_age_days}일 경과했습니다` : "모름"}</dd></div>
         <div><dt>투자 기간</dt><dd>{c.horizon_years === null ? "모름" : `${c.horizon_years}년`}</dd></div>
       </dl>
       <div className="cl-acts">

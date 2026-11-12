@@ -60,7 +60,7 @@ export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
         </div>
       </div>
       <div className="mc-zlegend"><span>음의 상관</span><i className="mc-zleg-grad" aria-hidden /><span>양의 상관</span></div>
-      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 두 자산과 상관이 나옵니다"}</p>
+      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 선택하면 여기에 두 자산과 상관을 표시합니다"}</p>
     </div>
   );
 }

@@ -79,11 +79,11 @@ export function RegisterAsStrategy({ runId, defaultName }: { runId: string; defa
               onChange={(e) => setName(e.target.value)} disabled={phase.k === "busy"} />
             <button type="button" className="tx-btn tx-btn--sub" data-act="reg-go" onClick={submit}
               disabled={phase.k === "busy"} aria-busy={phase.k === "busy"}>
-              {phase.k === "busy" ? "다시 돌려 확인하는 중입니다" : "등록하기"}
+              {phase.k === "busy" ? "재실행해 확인하는 중입니다" : "등록하기"}
             </button>
           </div>
           <p className="rs-reg-note">
-            서버가 이 실행을 다시 돌려 자산곡선이 저장본과 같을 때만 받습니다. 몇십 초 걸릴 수 있습니다.
+            서버가 이 실행을 재실행해 자산곡선이 저장본과 일치할 때만 등록합니다. 수십 초가 소요될 수 있습니다.
           </p>
         </>
       )}
@@ -97,7 +97,7 @@ export function RegisterAsStrategy({ runId, defaultName }: { runId: string; defa
 
       {phase.k === "done" && (
         <p className="rs-reg-ok" role="status">
-          ‘{phase.s.name}’ 전략(#{phase.s.id})으로 등록했습니다. <Link href="/allocation">포트폴리오 설계</Link>의 전략 노드에서 고를 수 있습니다.
+          ‘{phase.s.name}’ 전략(#{phase.s.id})으로 등록했습니다. <Link href="/allocation">포트폴리오 설계</Link>의 전략 노드에서 선택할 수 있습니다.
         </p>
       )}
 

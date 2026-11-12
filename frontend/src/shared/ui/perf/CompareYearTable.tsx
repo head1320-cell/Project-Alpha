@@ -7,7 +7,7 @@ import { fmtSignedPct, fmtSignedPp, type PerfCompareView } from "./perfView";
 
 export function CompareYearTable({ view }: { view: PerfCompareView }) {
   const rows = view.yearly;
-  if (rows === null) return <p className="pg-note">연도별 차이는 이 결과에 없습니다 — 서버가 연도별 수익률을 주지 않았습니다.</p>;
+  if (rows === null) return <p className="pg-note">연도별 차이는 이 결과에 없습니다 — 서버가 연도별 수익률을 제공하지 않았습니다.</p>;
   if (!rows.length) return <p className="pg-note">연도별 수익률 없음</p>;
   return (
     <table className="pg-table pf-year-diff">

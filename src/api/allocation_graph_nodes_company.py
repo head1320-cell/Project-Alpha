@@ -42,7 +42,7 @@ _TODAY = "오늘의 재무·가격으로 낸 값입니다 — 과거 시점의 �
 class _Company(BaseModel):
     model_config = _FORBID
     code: str = Field("005930", pattern=r"^\d{6}$", json_schema_extra={"x-ui": _ui(
-        "종목", question="분석 대상 기업", presets=_CODES, help="6자리 종목코드입니다. 모르는 코드는 계산하지 않습니다.")})
+        "종목", question="분석 대상 기업", presets=_CODES, help="6자리 종목코드입니다. 미등록 코드는 계산하지 않습니다.")})
 
 
 class _Priced(_Company):
@@ -54,7 +54,7 @@ def _company(p: _Company) -> dict:
     from src.data.stock_master import get_stock_name
     name = get_stock_name(p.code)
     if not name:
-        raise pg.NodeFailure(f"모르는 종목코드입니다({p.code}) — 종목 마스터에 없는 코드는 가치를 매기지 않습니다.")
+        raise pg.NodeFailure(f"미등록 종목코드입니다({p.code}) — 종목 마스터에 없는 코드는 가치를 매기지 않습니다.")
     return {"code": p.code, "name": name}
 
 
@@ -66,7 +66,7 @@ def _priced(p: _Priced) -> dict:
     prices, source = cv.prices_for([p.code])
     if p.code not in prices:
         raise pg.NodeFailure(f"{c['name']}의 가격을 구하지 못했습니다(출처: {source.get(p.code) or '없음'}) — "
-                             "설정의 ‘현재가’에 직접 넣으면 계산합니다.")
+                             "설정의 ‘현재가’에 직접 입력하면 계산합니다.")
     return {**c, "price": prices[p.code], "price_source": source.get(p.code) or "미상"}
 
 
@@ -197,7 +197,7 @@ def _explain_financial(view: dict, prov: dict, params: Any) -> dict:
     flags = (r.get("qoe") or {}).get("red_flags") or []
     title = f"{view.get('name')} 이익의 질에 경고 {len(flags)}개" if flags else f"{view.get('name')} 이익의 질·운전자본을 분석했습니다"
     return {"title": title, "facts": [str(f) for f in flags[:4]], "trust": _base_trust(view, prov),
-            "unmeasured": ["공시 정정 전의 값(빈티지) — 지금 표는 정정이 덮은 값입니다"]}
+            "unmeasured": ["공시 정정 전의 값(빈티지) — 현재 표는 정정이 반영된 값입니다"]}
 
 
 def _risk(inputs: dict, p: _Priced) -> pg.NodeOutput:
@@ -263,13 +263,13 @@ class ThesisParams(_Company):
     kill_conditions: _sr.FilterGroupModel = Field(
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
         json_schema_extra={"x-ui": _ui("철회 조건", question="논지 폐기 조건", widget="filter",
-                                       help="조건 하나하나가 논지 철회 기준입니다. 그룹 조건은 쓰지 않습니다.")})
+                                       help="조건 하나하나가 논지 철회 기준입니다. 그룹 조건은 사용하지 않습니다.")})
 
 
 def _thesis(inputs: dict, p: ThesisParams) -> pg.NodeOutput:
     head = _company(p)
     if p.kill_conditions.groups:
-        raise pg.NodeFailure("철회 조건은 한 줄씩 나열하십시오 — 그룹 조건은 논지 점검에서 쓰지 않습니다.")
+        raise pg.NodeFailure("철회 조건은 한 줄씩 나열하십시오 — 그룹 조건은 논지 점검에서 사용하지 않습니다.")
     kills = [c.model_dump(exclude_none=True) for c in p.kill_conditions.conditions]
     out = cr.company_thesis_check(p.code, cr.ThesisCheckRequest(claim=p.claim, kill_conditions=kills))
     if out.get("available") is False:

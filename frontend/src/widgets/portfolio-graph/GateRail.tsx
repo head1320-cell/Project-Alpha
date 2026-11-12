@@ -154,7 +154,7 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
               );
             })}
           </ol>
-          {live.lost && <p className="pg-runline-note" role="status">진행 수신 실패 — 결과는 계산이 끝나면 보입니다.</p>}
+          {live.lost && <p className="pg-runline-note" role="status">진행 수신 실패 — 결과는 계산 완료 후 표시됩니다.</p>}
         </div>
       )}
       {expanded && (

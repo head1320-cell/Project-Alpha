@@ -43,7 +43,7 @@ export function opDestination(mode: OpModeName, practice: boolean | null): strin
   if (mode === "SHADOW") return "전송하지 않습니다";
   if (mode === "PAPER") return practice === true ? "가상 체결기로 전송됩니다" : practice === false ? "증권사 모의 서버로 전송됩니다" : "모의 체결로 처리됩니다";
   if (mode === "LIVE") return "실제 자금으로 주문합니다";
-  return `서버가 '${mode}' 모드라고 답했습니다`;
+  return `서버가 '${mode}' 모드라고 응답했습니다`;
 }
 
 /** 비상 정지 역의 상태 글. */
@@ -52,7 +52,7 @@ export function killState(kill: Read<OpKill>): string {
   if (kill.failed) return "확인 실패";
   const k = kill.value;
   if (k?.is_active && k.active_event) return "사용";
-  if (k?.is_active) return "켜져 있지만 어떤 정지인지 미상";
+  if (k?.is_active) return "발동 중이나 정지 유형 미상";
   return "미사용";
 }
 

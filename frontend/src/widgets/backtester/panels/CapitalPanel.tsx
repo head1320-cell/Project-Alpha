@@ -59,12 +59,12 @@ export default function CapitalPanel({ s, set }: {
             on={s.chargeMarketImpact} onChange={(v) => set((x) => ({ ...x, chargeMarketImpact: v }))} />
           <p className="bte-note">
             {(s.chargeSellTax || s.chargeSpread || s.chargeMarketImpact)
-              ? "켠 비용은 실행 준비실과 같은 요율을 씁니다. 결과의 비용 분해에 하나씩 실립니다."
+              ? "활성화한 비용은 실행 준비실과 동일한 요율을 사용합니다. 결과의 비용 분해에 항목별로 표시됩니다."
               : "끄면 수수료·슬리피지만 반영합니다. 0원이 아니라 미측정이라는 뜻이며, 결과에 그 사실을 표시합니다."}
           </p>
           {s.chargeMarketImpact && (
             <p className="bte-note bte-note--warn">
-              거래대금이 없는 종목·기간은 시장충격을 0이 아니라 ‘N/A’로 남깁니다. 그만큼 비용이 낮게 잡힙니다.
+              거래대금이 없는 종목·기간은 시장충격을 0이 아니라 ‘N/A’로 남깁니다. 그만큼 비용이 과소 계상됩니다.
             </p>
           )}
         </div>
@@ -89,7 +89,7 @@ export default function CapitalPanel({ s, set }: {
             options={[{ id: "0", label: "당일 종가" }, { id: "1", label: "전일 종가 기준" }]} />
           {s.signalLag === 0 && (s.buy.fillType !== "close" || s.sell.fillType !== "close") ? (
             <p className="bte-note bte-note--warn">
-              당일 종가로 만든 신호를 시가·전일가에 체결하면 미래 정보를 쓰게 됩니다(look-ahead). 전일 종가 기준을 권합니다.
+              당일 종가로 만든 신호를 시가·전일가에 체결하면 미래 정보를 사용하게 됩니다(look-ahead). 전일 종가 기준을 권장합니다.
             </p>
           ) : (
             <p className="bte-note">전일 종가로 종목을 선정하고 익일 매매합니다(체결은 당일 가격).</p>

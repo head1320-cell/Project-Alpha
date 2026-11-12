@@ -51,9 +51,9 @@ export default function AssetAllocPanel({ s, set }: {
   return (
     <Section title="ETF 자산배분" hint="ETF 바스켓을 주식 전략과 병행 · 지정 주기마다 리밸런싱합니다(자산배분)" tone="neutral"
       enabled={a.enabled} onToggle={(on) => patch({ enabled: on })}>
-      <p className="bte-note">포트폴리오의 일정 비율을 ETF로 상시 보유합니다. 남는 비율은 현금입니다.</p>
+      <p className="bte-note">포트폴리오의 일정 비율을 ETF로 상시 보유합니다. 잔여 비율은 현금입니다.</p>
 
-      <Field label="나누는 비율">
+      <Field label="배분 비율">
         <span className="bte-sm">ETF</span>
         <QuickStepper value={a.etfPct} onChange={(v) => patch({ etfPct: v })} chips={[5, 10, 30]} unit="%" min={0} max={100} />
         <span className="bte-sm">주식</span>
@@ -63,12 +63,12 @@ export default function AssetAllocPanel({ s, set }: {
         </span>
       </Field>
 
-      <Field label="다시 맞추는 주기">
+      <Field label="리밸런싱 주기">
         <Segmented value={String(a.rebalanceMonths)} onChange={(v) => patch({ rebalanceMonths: Number(v) })}
           options={[{ id: "1", label: "1개월" }, { id: "3", label: "3개월" }, { id: "6", label: "6개월" }, { id: "12", label: "12개월" }]} />
       </Field>
 
-      <Field label="ETF 사는 가격">
+      <Field label="ETF 매수 기준가">
         <GroupedSelect value={a.fillType} onChange={(id) => patch({ fillType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
         <OffsetInput value={a.offsetPct} onChange={(offsetPct) => patch({ offsetPct })} />
       </Field>
@@ -106,12 +106,12 @@ export default function AssetAllocPanel({ s, set }: {
           <button type="button" className="kit-chip" onClick={equalize}>균등 배분</button>
         )}
         <span className={`bte-note${wsum !== 100 ? " bte-note--warn" : ""}`}>
-          비중 합 {wsum}%{wsum !== 100 ? " — 실행할 때 100%로 맞춰 계산합니다" : ""}
+          비중 합 {wsum}%{wsum !== 100 ? " — 실행 시 100%로 정규화해 계산합니다" : ""}
         </span>
       </div>
 
       <p className="bte-note bte-note--warn">
-        레버리지·인버스 ETF를 실제로 사려면 기본 예탁금과 사전 교육이 필요합니다. 백테스트에는 상관없습니다.
+        레버리지·인버스 ETF를 실제로 매수하려면 기본 예탁금과 사전 교육이 필요합니다. 백테스트에는 영향이 없습니다.
       </p>
       <p className="bte-note">ETF 비중은 주식 전략과 별도로 보유합니다. 매수 기준가에 도달하지 못한 비중은 다음 주기에 재시도합니다(보수적).</p>
 

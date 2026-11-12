@@ -101,7 +101,7 @@ export function StoryPanel({ order, nodes, catalog, results, staleIds, selectedI
       )}
       {staleIds.size > 0 && results && (
         <div className="pg-notice pg-notice--stale" role="note">
-          그래프가 바뀌어서 {staleIds.size}개 단계의 설명이 예전 결과입니다. ‘바뀐 곳만 계산’을 누르면 그 단계만 새로 나옵니다.
+          그래프가 변경돼 {staleIds.size}개 단계의 설명이 이전 결과입니다. ‘바뀐 곳만 계산’을 누르면 해당 단계만 갱신됩니다.
         </div>
       )}
       <ol className="pg-steps">

@@ -28,8 +28,8 @@ function MCard<T extends ModelHead>({ id, title, what, q, chips, body }: {
     <article className="ci-mcard" data-model={id} aria-busy={q.isFetching}>
       <header className="ci-mcard-h"><h3>{title}</h3><p>{what}</p></header>
       {q.isPending && !q.isError ? <p className="ci-mcard-wait">계산 중</p>
-        : q.isError ? <RetryFail title={`${title}을(를) 불러오지 못했습니다`} onRetry={() => void q.refetch()} />
-        : d && d.available === false ? <p className="ci-mcard-reason"><span className="ci-mcard-reason-k">이 종목에는 계산하지 못했습니다.</span> <span data-server>{clean(d.reason) || "서버가 사유를 주지 않았습니다"}</span></p>
+        : q.isError ? <RetryFail title={`${title}을(를) 조회하지 못했습니다`} onRetry={() => void q.refetch()} />
+        : d && d.available === false ? <p className="ci-mcard-reason"><span className="ci-mcard-reason-k">이 종목에는 계산하지 못했습니다.</span> <span data-server>{clean(d.reason) || "서버가 사유를 제공하지 않았습니다"}</span></p>
         : d ? <>{body(d)}{ch.length > 0 && <Chips items={ch} label={`${title} 근거`} />}</> : null}
     </article>
   );
@@ -118,8 +118,8 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             <>
               <p className="ci-mcard-ans">
                 {fin(d.implied_growth_pct)
-                  ? <>현재가 {priceWon(price)}은 현금흐름이 해마다 {p1(d.implied_growth_pct)}씩 는다는 가정과 같습니다.{fin(d.current_growth_pct) ? <> 지금까지는 {p1(d.current_growth_pct)}였습니다.</> : null}</>
-                  : <>시장이 가정한 성장률을 풀지 못했습니다.</>}
+                  ? <>현재가 {priceWon(price)}은 현금흐름이 해마다 {p1(d.implied_growth_pct)}씩 증가한다는 가정과 같습니다.{fin(d.current_growth_pct) ? <> 지금까지는 {p1(d.current_growth_pct)}였습니다.</> : null}</>
+                  : <>시장 내재 성장률을 역산하지 못했습니다.</>}
               </p>
               <HBars unit={p1} rows={[
                 { k: "시장이 가정한 성장률", v: d.implied_growth_pct },
@@ -144,20 +144,20 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             return (
               <>
                 <p className="ci-mcard-ans">
-                  {fin(pp) ? <>현재가는 가정을 흔든 적정가 분포의 {Math.round(pp)}번째 백분위입니다.</> : <>현재가의 백분위 산출 실패</>}
+                  {fin(pp) ? <>현재가는 가정을 변동시킨 적정가 분포의 {Math.round(pp)}번째 백분위입니다.</> : <>현재가의 백분위 산출 실패</>}
                   {fin(d.unified?.p50) && <> 가운데 값은 {priceWon(d.unified.p50)}입니다.</>}
                 </p>
                 <div className="ci-q" role="img" aria-label={`적정가 분포 10% ${priceWon(d.unified?.p10 ?? null)}, 중앙 ${priceWon(d.unified?.p50 ?? null)}, 90% ${priceWon(d.unified?.p90 ?? null)}`}>
                   {qs.map(([k, q]) => <QRow key={k} label={k} q={q} lo={lo} hi={hi} price={price} />)}
                 </div>
                 <p className="ci-legend"><i className="ci-sw out" />10~90% <i className="ci-sw in" />25~75% <i className="ci-sw mid" />가운데 <i className="ci-sw price" />현재가</p>
-                {fin(d.model_disagreement?.spread_ratio) && <p className="ci-note">같은 가정에서 모형끼리 {d.model_disagreement!.spread_ratio!.toFixed(2)}배 갈렸습니다.</p>}
+                {fin(d.model_disagreement?.spread_ratio) && <p className="ci-note">동일 가정에서 모형 간 {d.model_disagreement!.spread_ratio!.toFixed(2)}배 차이가 났습니다.</p>}
               </>
             );
           }} />
 
         <MCard id="driver" title="영업 동인 시뮬레이션" what="매출 성장·마진·재투자율을 변동시켜 주당 가치의 분포를 산출합니다." q={m.driver}
-          chips={() => [{ label: "흔든 폭은 정한 값입니다", tone: "assumed" }]}
+          chips={() => [{ label: "변동 폭은 설정값입니다", tone: "assumed" }]}
           body={(d) => (
             <>
               <p className="ci-mcard-ans">
@@ -165,7 +165,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
                 {fin(d.price_percentile) && <> 현재가는 {Math.round(d.price_percentile)}번째 백분위입니다.</>}
               </p>
               {d.histogram && d.histogram.counts.length > 0 && <Histo counts={d.histogram.counts} edges={d.histogram.edges} price={price} q={d.quantiles} />}
-              {fin(d.negative_share) && d.negative_share > 0 && <p className="ci-note">경로의 {pr(d.negative_share)}는 주당 가치가 0 아래였습니다(부채가 기업가치보다 큽니다).</p>}
+              {fin(d.negative_share) && d.negative_share > 0 && <p className="ci-note">경로의 {pr(d.negative_share)}는 주당 가치가 0 미만이었습니다(부채가 기업가치를 초과합니다).</p>}
               <Inputs rows={d.inputs} />
             </>
           )} />
@@ -200,7 +200,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
                 <p className="ci-mcard-ans">
                   {last && fin(last.roic) && fin(last.wacc)
                     ? <>{last.year}년 투하자본이익률(ROIC) {pr(last.roic)}, 자본비용(WACC) {pr(last.wacc)}: ROIC 가 WACC 보다 {last.roic < last.wacc ? "낮습니다" : "높습니다"}.</>
-                    : <>최근 연도의 ROIC·WACC 를 내지 못했습니다.</>}
+                    : <>최근 연도 ROIC·WACC 산출 실패.</>}
                   {fin(d.valuation?.per_share) && <> EVA 기준 주당 가치는 {priceWon(d.valuation!.per_share)}입니다.</>}
                 </p>
                 <div className="ci-eva" role="img" aria-label={`연도별 EVA: ${ys.map((y) => `${y.year} ${jo(y.eva as number)}`).join(", ")}`}>
@@ -214,7 +214,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
                     </div>
                   ))}
                 </div>
-                <p className="ci-note">막대는 0 기준 위(+)·아래(−)입니다. 색으로 좋고 나쁨을 말하지 않습니다.</p>
+                <p className="ci-note">막대는 0 기준 위(+)·아래(−)입니다. 색은 우열을 뜻하지 않습니다.</p>
                 <Inputs rows={d.inputs} />
               </>
             );
@@ -240,8 +240,8 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             return (
               <>
                 <p className="ci-mcard-ans">
-                  {fin(d.per) && fin(j?.per) ? <>실제 PER {d.per.toFixed(2)}배, 이익과 성장으로 정당화되는 PER {j!.per!.toFixed(2)}배입니다.</> : <>정당 PER 을 내지 못했습니다.</>}
-                  {fin(d.peg) ? <> PEG(PER÷성장률)는 {d.peg.toFixed(2)}입니다.</> : d.peg_reason ? <> PEG 는 내지 못했습니다.</> : null}
+                  {fin(d.per) && fin(j?.per) ? <>실제 PER {d.per.toFixed(2)}배, 이익과 성장으로 정당화되는 PER {j!.per!.toFixed(2)}배입니다.</> : <>정당 PER 산출 실패.</>}
+                  {fin(d.peg) ? <> PEG(PER÷성장률)는 {d.peg.toFixed(2)}입니다.</> : d.peg_reason ? <> PEG 산출 실패.</> : null}
                 </p>
                 {strip("PER", [{ k: "실제", v: d.per }, { k: "정당", v: j?.per ?? null }, { k: "업종 중앙", v: d.peer?.per_median ?? null }])}
                 {strip("PBR", [{ k: "실제", v: pbr }, { k: "정당", v: j?.pbr ?? null }])}
@@ -256,8 +256,8 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             );
           }} />
 
-        <MCard id="scenarios" title="시나리오 가중" what="약세·기본·강세마다 가정을 바꾸고 확률로 묶습니다." q={m.scenarios}
-          chips={() => [{ label: "확률과 경우별 가정은 사람이 정한 값입니다", tone: "assumed" }]}
+        <MCard id="scenarios" title="시나리오 가중" what="약세·기본·강세 시나리오별 가정을 적용하고 확률로 가중합니다." q={m.scenarios}
+          chips={() => [{ label: "확률과 시나리오별 가정은 사용자 설정값입니다", tone: "assumed" }]}
           body={(d) => {
             const mx = Math.max(1, ...d.rows.map((r) => (fin(r.value) ? r.value : 0)), price);
             return (
@@ -277,7 +277,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
                     </div>
                   ))}
                 </div>
-                <p className="ci-note">막대가 짙을수록 확률이 큽니다 · 세로선은 현재가입니다.</p>
+                <p className="ci-note">막대가 짙을수록 확률이 높습니다 · 세로선은 현재가입니다.</p>
               </>
             );
           }} />
@@ -313,7 +313,7 @@ export function MacroBlock({ q }: { q: UseQueryResult<import("@/entities/company
               <p className="ci-mcard-ans">
                 {fin(d.base_value) ? <>기준 적정가 {priceWon(d.base_value)}에서 </> : null}
                 {rows.map((r, i) => <React.Fragment key={r.shock}>{i ? ", " : ""}<span data-server>{r.shock}</span> 충격이면 {(r.value_pct as number) >= 0 ? "+" : "−"}{Math.abs(r.value_pct as number).toFixed(1)}%</React.Fragment>)}
-                {rows.length ? " 움직입니다." : "측정 가능한 충격 없음"}
+                {rows.length ? " 변동합니다." : "측정 가능한 충격 없음"}
               </p>
               <div className="ci-tornado">
                 {rows.map((r) => {

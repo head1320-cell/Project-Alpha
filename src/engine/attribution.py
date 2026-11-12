@@ -45,7 +45,7 @@ def _to_frac(weights: dict[str, float]) -> dict[str, float]:
 
 
 def _load_path(code: str, start_iso: str, end_iso: str) -> list[float] | None:
-    """결정일~as-of 종가 경로. ohlcv_loader(DB→KIS→mock). 실패 시 None(정직 결측)."""
+    """결정일~as-of 종가 경로. ohlcv_loader(DB→KIS→mock). 실패 시 None(결측)."""
     try:
         from src.data.ohlcv_loader import load_ohlcv_unified
         df = load_ohlcv_unified(code, start_iso, end_iso)
@@ -345,7 +345,7 @@ def compute_attribution(
             "top_name_share_pct": round(shares[0] * 100, 1) if shares else None,
             "top_name": (top["code"] if top else None),
             "concentrated": hhi > 0.4,
-            "note": "기여도 허핀달 지수(HHI) — 0.4 초과면 소수 종목 과의존(정직 경고).",
+            "note": "기여도 허핀달 지수(HHI) — 0.4 초과면 소수 종목 과의존(경고).",
             "basis": "real",
         }
 

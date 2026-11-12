@@ -155,8 +155,8 @@ test("★폴링 실패 + 옛 값 → '마지막으로 받은 값' 알림 + 재�
   });
   await open(page);
   await expect(page.locator('[data-act="ingest-stocks"]')).toHaveText("적재 중", { timeout: 20_000 });
-  await expect(page.getByText("마지막으로 받은 값입니다")).toHaveCount(0);
-  await expect(page.getByText(/마지막으로 받은 값입니다/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("최근 수신값입니다")).toHaveCount(0);
+  await expect(page.getByText(/최근 수신값입니다/)).toBeVisible({ timeout: 15_000 });
   // 옛 값은 남아 있다(지우지 않는다) — 다만 낡았다고 말한다.
   await expect(page.locator(".dsx-tables .trisk-table")).toBeVisible();
 });

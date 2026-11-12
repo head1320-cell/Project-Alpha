@@ -87,7 +87,7 @@ export function MetricGroups({ view, open = false, grid = false }: {
           </section>
         ))}
       </div>
-      {naCount > 0 && <p className="pg-note">‘산출 불가’는 표본이 모자라거나 나누는 수가 0 이라 서버가 값을 내지 않은 칸입니다 — 0 이 아닙니다.</p>}
+      {naCount > 0 && <p className="pg-note">‘산출 불가’는 표본이 부족하거나 분모가 0 이어서 서버가 값을 산출하지 않은 칸입니다 — 0 이 아닙니다.</p>}
       {convention && <p className="pg-note">위험조정수익의 관례: {convention}</p>}
     </details>
   );

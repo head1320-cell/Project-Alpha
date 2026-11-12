@@ -105,7 +105,7 @@ function Crisis({ c }: { c: Dict }) {
 }
 
 function Shock({ s }: { s: Dict }) {
-  if (!s.available) return <Unknown text="상관 충격을 넣지 못했습니다" reason={s.reason} />;
+  if (!s.available) return <Unknown text="상관 충격을 적용하지 못했습니다" reason={s.reason} />;
   const rows = (s.scenarios as Dict[]) ?? [];
   const max = Math.max(1e-9, ...rows.flatMap((r) => [r.base_vol_pct, r.stressed_vol_pct].filter(num)));
   return (
@@ -115,7 +115,7 @@ function Shock({ s }: { s: Dict }) {
         <div key={String(r.kind)} className="pg-rob-shock" data-kind={String(r.kind)}>
           <p className="pg-rob-shock-h">
             <span className={`pg-tag pg-tag--${r.kind === "assumed" ? "assumed" : "confirmed"}`}>{r.kind === "assumed" ? "가정" : "관측"}</span>
-            {r.kind === "assumed" ? `상관이 ${fx(r.rho, 1)}로 급등하면` : `실제로 본 가장 높은 상관(${fx(r.rho)})일 때`}
+            {r.kind === "assumed" ? `상관이 ${fx(r.rho, 1)}로 급등하면` : `관측된 최고 상관(${fx(r.rho)})일 때`}
           </p>
           {r.available ? (
             <>
@@ -135,7 +135,7 @@ function Shock({ s }: { s: Dict }) {
           ) : <p className="pg-help">{String(r.reason ?? "")}</p>}
         </div>
       ))}
-      <p className="pg-help">상관만 바꾸고 각 전략의 변동성은 그대로 둔 계산입니다 — 실제 위기에는 변동성도 함께 커집니다.</p>
+      <p className="pg-help">상관만 변경하고 각 전략의 변동성은 고정한 계산입니다 — 실제 위기에서는 변동성도 함께 확대됩니다.</p>
     </>
   );
 }
@@ -243,18 +243,18 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
       <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·변동성" compact /></div>
       <ul className="pg-rob-story">{story.map((s) => <li key={s}>{s}</li>)}</ul>
       <p className="pg-help pg-rob-basis">
-        {period ? `${period.start}~${period.end} · ${nDays}거래일을 날짜로 맞춰 측정했습니다. ` : ""}
+        {period ? `${period.start}~${period.end} · ${nDays}거래일을 날짜 기준으로 정렬해 측정했습니다. ` : ""}
         {basis === "records"
-          ? "과거 백테스트 기록끼리입니다 — 실거래 기록이 아니고, 앞으로도 같다는 뜻도 아닙니다."
-          : `현재 비중을 ${period ? "이 기간" : `지난 ${nDays}거래일`} 그대로 보유했다고 가정하고 측정했습니다 — 실제 운용 기록이 아니고, 앞으로도 같다는 뜻도 아닙니다.`}
+          ? "과거 백테스트 기록끼리입니다 — 실거래 기록이 아니고, 향후에도 동일하다는 뜻도 아닙니다."
+          : `현재 비중을 ${period ? "이 기간" : `지난 ${nDays}거래일`} 그대로 보유했다고 가정하고 측정했습니다 — 실제 운용 기록이 아니고, 향후에도 동일하다는 뜻도 아닙니다.`}
         {rob.shares_basis === "equal" ? " 배분 비중은 동일 가중으로 가정했습니다." : ""}
-        {shorts > 0 ? ` 숏 비중 ${shorts}개는 빼고 측정했습니다.` : ""}
+        {shorts > 0 ? ` 숏 비중 ${shorts}개는 제외하고 측정했습니다.` : ""}
       </p>
       {rob.dates_reason ? <p className="pg-help pg-rob-dates-reason">{String(rob.dates_reason)}</p> : null}
       {align?.same === false ? <p className="pg-note pg-rob-align">{String(align.reason)}</p> : null}
       <details className="pg-rob-sec" open>
         <summary>상관 추이 <span>{roll.available ? `${roll.window}거래일 창` : "모름"}</span></summary>
-        {roll.available ? <Trend r={roll} /> : <Unknown text="상관 추이를 보지 못했습니다" reason={roll.reason} />}
+        {roll.available ? <Trend r={roll} /> : <Unknown text="상관 추이를 산출하지 못했습니다" reason={roll.reason} />}
       </details>
       <details className="pg-rob-sec">
         <summary>위기 상관</summary>
@@ -262,7 +262,7 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
       </details>
       <details className="pg-rob-sec">
         <summary>상관 급등 충격</summary>
-        <Shock s={(rob.shock as Dict) ?? { available: false, reason: "충격을 넣지 않았습니다" }} />
+        <Shock s={(rob.shock as Dict) ?? { available: false, reason: "충격을 적용하지 않았습니다" }} />
       </details>
       <details className="pg-rob-sec">
         <summary>최악 구간 겹침</summary>

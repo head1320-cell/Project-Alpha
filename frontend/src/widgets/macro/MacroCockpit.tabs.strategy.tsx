@@ -56,7 +56,7 @@ export function TabFail({ title, onRetry }: { title: string; onRetry?: () => voi
 const mktName = (m: Market) => (m === "kr" ? "국내 ETF" : "미국 ETF");
 
 const FAMILY_LABELS: Record<string, string> = {
-  risk: "위험을 고르게 나누는 전략(공분산 기반)", optim: "최적화 전략", trend: "추세 추종 전략(매니지드 퓨처스)",
+  risk: "위험을 균등 배분하는 전략(공분산 기반)", optim: "최적화 전략", trend: "추세 추종 전략(매니지드 퓨처스)",
   sizing: "성장 최적 비중 전략", momentum: "모멘텀 · 추세 타이밍 전략", benchmark: "비교 기준",
 };
 const FAMILY_ORDER = ["risk", "optim", "trend", "sizing", "momentum", "benchmark"];
@@ -147,7 +147,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
     return (
       <div className="mc-stack">{bar()}
         <div className="mc-empty-sm">
-          추천 데이터가 불완전합니다. 국면·전략 계산에 필요한 값이 부족해 보여 드릴 수 없습니다(데이터 미가용). 데이터를 적재한 뒤 다시 확인하십시오.
+          추천 데이터가 불완전합니다. 국면·전략 계산에 필요한 값이 부족해 표시할 수 없습니다(데이터 미가용). 데이터를 적재한 뒤 다시 확인하십시오.
         </div>
       </div>
     );
@@ -169,7 +169,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
         {ma && (
           <div className="mc-card span2 mc-featured">
             <div className="mc-card-h">국면에서 바로 정한 배분(1순위)
-              <span className="mc-card-sub">성장 {signed(ma.inputs.growth)} · 물가 {signed(ma.inputs.inflation)} · 스트레스 {ma.inputs.stress.toFixed(0)}을 네 계절 비중으로 옮겼습니다</span></div>
+              <span className="mc-card-sub">성장 {signed(ma.inputs.growth)} · 물가 {signed(ma.inputs.inflation)} · 스트레스 {ma.inputs.stress.toFixed(0)}을 네 계절 비중으로 환산했습니다</span></div>
             <div className="mc-reco">
               <div className="mc-reco-l">
                 <HoldingsDonut holdings={ma.holdings} size={150} />
@@ -186,7 +186,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
           </div>
         )}
         <div className="mc-card span2">
-          <div className="mc-card-h">가장 먼저 추천하는 전략 <SignalBadge signal={top.signal} /></div>
+          <div className="mc-card-h">최우선 추천 전략 <SignalBadge signal={top.signal} /></div>
           <div className="mc-reco">
             <div className="mc-reco-l">
               <HoldingsDonut holdings={finalSorted} size={150} />
@@ -194,7 +194,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
             </div>
             <div className="mc-reco-r">
               <div className="mc-reco-nm">{top.name}</div>
-              <div className="mc-reco-comp">종합 점수 <b>{top.composite.toFixed(0)}</b> / 100 · 신뢰도에 맞춰 현금 {top.cash_overlay_pct.toFixed(0)}%를 섞었습니다</div>
+              <div className="mc-reco-comp">종합 점수 <b>{top.composite.toFixed(0)}</b> / 100 · 신뢰도에 맞춰 현금 {top.cash_overlay_pct.toFixed(0)}%를 혼합했습니다</div>
               <div className="mc-reco-holds">
                 {finalSorted.map((h, idx) => (
                   <div key={h.ticker} className="mc-hold-row">
@@ -211,7 +211,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
           </div>
         </div>
         <div className="mc-card span2">
-          <div className="mc-card-h">추천한 까닭 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "AI가 국면과 성과를 읽고 쓴 설명입니다" : "규칙으로 쓴 설명입니다 · AI 설명은 관리자가 키를 넣으면 켜집니다"}</span></div>
+          <div className="mc-card-h">추천한 까닭 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "AI가 국면과 성과를 바탕으로 작성한 해설입니다" : "규칙 기반 해설입니다 · AI 해설은 관리자가 키를 등록하면 활성화됩니다"}</span></div>
           <p className="mc-narr" data-server>{recommend.narrative}</p>
         </div>
         <div className="mc-card span2">
@@ -224,7 +224,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
               ))}
             </div>
           </div>
-          <p className="mc-card-note">12개월 성과는 각 전략의 현재 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치입니다(합성 데이터에서는 합성 시세). 향후 수익률을 보장하지 않습니다.</p>
+          <p className="mc-card-note">12개월 성과는 각 전략의 현재 비중을 지난 12개월 ETF 수익률에 적용한 추정치입니다(합성 데이터에서는 합성 시세). 향후 수익률을 보장하지 않습니다.</p>
           {recommend.data_lag_note && <p className="mc-card-note" data-server>{recommend.data_lag_note}</p>}
         </div>
       </div>

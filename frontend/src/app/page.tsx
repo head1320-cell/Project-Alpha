@@ -99,7 +99,7 @@ export default function Landing() {
         <section className="ld-band ld-band--ink" aria-labelledby="ld-hub-h">
           <div className="ld-wrap">
             <InView className="ld-hg">
-              <h2 id="ld-hub-h" className="ld-h2">모든 도구가 스튜디오로 이어집니다</h2>
+              <h2 id="ld-hub-h" className="ld-h2">모든 도구가 스튜디오로 연결됩니다</h2>
               <p className="ld-sub">다섯 도구는 단독으로도 사용할 수 있고, 스튜디오에서는 노드 하나로 연결됩니다.</p>
             </InView>
             <ToolHub />
@@ -110,7 +110,7 @@ export default function Landing() {
         <section className="ld-band ld-path" aria-labelledby="ld-path-h">
           <div className="ld-wrap">
             <InView className="ld-hg">
-              <h2 id="ld-path-h" className="ld-h2">리서치는 이렇게 흘러갑니다</h2>
+              <h2 id="ld-path-h" className="ld-h2">리서치 진행 순서</h2>
               <p className="ld-sub">앞 단계는 값을 복사하지 않고 기록 번호(ID)만 전달합니다. 따라서 이후에 열어도 당시의 근거를 참조합니다.</p>
             </InView>
             <InView as="ol" className="ld-steps">
@@ -131,7 +131,7 @@ export default function Landing() {
             </InView>
             <p className="ld-note">매크로 판단은 타이밍 규칙을 대체하지 않습니다. 단방향 오버레이로만 적용되어, 끄면 결과가 원래대로 복원됩니다.</p>
             <details className="ld-rec">
-              <summary>단계마다 남는 기록 보기</summary>
+              <summary>단계별 기록 보기</summary>
               <dl className="ld-rec-list">
                 {PATH.map((s) => (
                   <div key={s.t} className="ld-rec-row"><dt>{s.t}</dt><dd><code>{s.rec}</code></dd></div>

@@ -97,7 +97,7 @@ def test_names_match_exactly():
 def test_an_unknown_user_is_blocked(username):
     out = live_gate(_complete(), username)
     assert out["state"] == LIVE_BLOCKED
-    assert "누구" in out["reason"]
+    assert "소유자가 미상" in out["reason"]
 
 
 @pytest.mark.parametrize("users", [("*",), ("alice", "*"), ("all",), ("",), ("  ",), ()])

@@ -20,7 +20,7 @@ export function perfViewOfRun(run: RunFull): PerfView {
     bench: benchRaw && benchRaw.length === dates.length ? benchRaw : null,
     benchLabel: bt?.benchmark?.label ?? null,
     drawdown: perf ? pts(perf.drawdown_pct) : null,
-    rebalances: [], question: "이 조건식이 과거에 어떤 성과를 냈나",
+    rebalances: [], question: "이 조건식의 과거 구간 성과",
     learnFrom: null, asOf: null,
     practice: pl && typeof pl.data_real === "boolean" ? pl.data_real === false : null,
     perfLabel: pl,

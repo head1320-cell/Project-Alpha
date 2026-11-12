@@ -169,7 +169,7 @@ def test_compare_node_carries_robustness_and_the_old_table(market):
     assert r["glance"]["kind"] == "bars" and len(r["glance"]["points"]) == 3
     ex = r["explain"]
     assert any(t["state"] == "assumed" and "실제 운용 기록이 아닙니다" in t["text"] for t in ex["trust"])
-    assert "앞으로도 같을지" in " ".join(ex["unmeasured"])
+    assert "향후에도 유지될지" in " ".join(ex["unmeasured"])
     json.dumps(r, allow_nan=False)
 
 

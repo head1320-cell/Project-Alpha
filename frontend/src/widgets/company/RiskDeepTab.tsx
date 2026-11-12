@@ -47,7 +47,7 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
                 <i className="ci-alt-dot" data-v={alt.z} style={{ left: `${at(alt.z)}%` }} aria-hidden />
               </div>
               <p className="ci-alt-axis"><span>0</span><span>{ALT_MAX} 이상</span></p>
-              {out && <p className="ci-note">점수가 눈금 밖이라 끝에 붙여 그렸습니다.</p>}
+              {out && <p className="ci-note">점수가 축 범위를 벗어나 끝에 표시했습니다.</p>}
               <p className="ci-fd-lede">다섯 요소의 점수 기여분입니다(가중치 × 비율).</p>
               <div className="ci-alt-rows">
                 {alt.components.map((c) => (
@@ -86,7 +86,7 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
             </>
           ) : (
             <>
-              <p className="ci-fd-reason">전년 재무가 없어 Beneish M-Score을 하지 못했습니다.</p>
+              <p className="ci-fd-reason">전년 재무가 없어 Beneish M-Score 산출 실패.</p>
               {d.beneish.note && <details className="ci-fd-raw"><summary>원래 사유 보기</summary><p data-server>{d.beneish.note}</p></details>}
             </>
           )}
@@ -94,7 +94,7 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
       </div>
 
       <section className="ca-cp-sec ci-cov">
-        <h4 className="ci-fd-h">빚을 감당하는 힘</h4>
+        <h4 className="ci-fd-h">부채 상환 능력</h4>
         {d.coverage.years.length ? (
           <>
             <MiniLine years={d.coverage.years} label="이자보상배율과 순부채/EBITDA 추이"
@@ -113,13 +113,13 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
               </table>
             </div>
           </>
-        ) : <p className="ci-fd-reason">연도별 재무가 없어 추이를 그리지 못했습니다.</p>}
+        ) : <p className="ci-fd-reason">연도별 재무가 없어 추이를 표시하지 못했습니다.</p>}
         <p className="ci-note"><span className="ci-fd-k">근사</span><span data-server>{d.coverage.note}</span></p>
       </section>
 
       <section className="ca-cp-sec ci-stress">
         <h4 className="ci-fd-h">금리 상승 시</h4>
-        <p className="ci-fd-lede">할인율을 한꺼번에 올려 재계산한 값입니다(1%p = 100bp).</p>
+        <p className="ci-fd-lede">할인율을 일괄 상향해 재계산한 값입니다(1%p = 100bp).</p>
         <div className="ci-tablewrap">
           <table className="ca-fd-tbl">
             <thead><tr><th scope="col">금리 충격</th><th scope="col" className="n">이자보상배율</th><th scope="col" className="n">현금흐름할인 가치</th><th scope="col" className="n">통합 적정가</th></tr></thead>

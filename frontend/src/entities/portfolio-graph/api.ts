@@ -21,8 +21,8 @@ async function assistCall<T>(path: string, body: unknown): Promise<T | ReturnTyp
   let res: Response;
   try { res = await postJson(`${ASSIST}/${path}`, body); } catch { return assistFailed("network", "서버 연결 실패"); }
   const json = await res.json().catch(() => null);
-  if (res.status === 401) return assistFailed("signed_out", "로그인이 끝났습니다. 다시 로그인하십시오");
-  if (!res.ok) return assistFailed(`http_${res.status}`, extractErrorDetail(json, `서버가 ${res.status} 오류로 답했습니다`));
+  if (res.status === 401) return assistFailed("signed_out", "로그인 세션이 만료됐습니다. 다시 로그인하십시오");
+  if (!res.ok) return assistFailed(`http_${res.status}`, extractErrorDetail(json, `서버가 ${res.status} 오류로 응답했습니다`));
   if (!json || typeof json.available !== "boolean") return assistFailed("bad_body", "서버 답의 형식을 읽을 수 없습니다");
   return json as T;
 }

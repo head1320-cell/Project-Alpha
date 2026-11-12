@@ -55,7 +55,7 @@ export function YieldCurveResult({ v }: { v: Dict }) {
           {sg(r.spread_2y10y_bp, 0, "bp")}</span>],
         ["판정", inv ? "역전 — 단기 금리가 더 높습니다" : "정상 — 장기 금리가 더 높습니다"],
       ]} />
-      {dips.length > 0 && <p className="pg-note"><span className="pg-dot-inv" aria-hidden="true" />칠한 구간은 만기가 길어지는데 금리가 낮아지는 곳입니다.</p>}
+      {dips.length > 0 && <p className="pg-note"><span className="pg-dot-inv" aria-hidden="true" />음영 구간은 만기가 길어질수록 금리가 낮아지는 역전 구간입니다.</p>}
       <p className="pg-note"><span className="pg-tag pg-tag--assumed">경험칙</span> {String(r.interpretation ?? "")}</p>
     </>
   );
@@ -124,7 +124,7 @@ export function ConsensusResult({ v }: { v: Dict }) {
         ))}
       </tbody></table>
       <KV rows={[["답한 방법", `${String(r.n_available ?? 0)}개`], ["갈림 정도", fx(dis.score, 2)]]} />
-      <p className="pg-note">{String(r.note ?? "")} 세 방법을 평균 내지 않습니다.</p>
+      <p className="pg-note">{String(r.note ?? "")} 세 방법을 평균하지 않습니다.</p>
     </>
   );
 }
@@ -153,7 +153,7 @@ export function CoverageResult({ v }: { v: Dict }) {
         <Meter label="목표" value={tgt} max={1} text={tgt === null ? "—" : `${(tgt * 100).toFixed(0)}%`} tone="mute" />
         <Meter label="실측" value={cov} max={1} text={cov === null ? "—" : `${(cov * 100).toFixed(1)}%`} />
       </div>
-      <p className="pg-note">적중률은 목표 근처로 나오게 만들어집니다 — 비교는 아래 집합 크기로 합니다.</p>
+      <p className="pg-note">적중률은 설계상 목표 수준에 수렴합니다 — 비교는 아래 집합 크기로 합니다.</p>
       <div className="pg-bars">
         <Meter label="전이 모형" value={mine} max={mx} text={fx(mine, 2, "개")} />
         <Meter label="기저율" value={base} max={mx} text={fx(base, 2, "개")} tone="mute" />
@@ -251,7 +251,7 @@ export function StudioResult({ v }: { v: Dict }) {
     <>
       <p className="pg-note"><b>{String(s.question ?? "")}</b></p>
       <KV rows={[["돌린 엔진", String(r.engine ?? s.substitute ?? "—")]]} />
-      <p className="pg-note pg-studio-frontier">프런티어 엔진 ‘{String(s.frontier ?? "—")}’ — 이 노드는 돌리지 않습니다. 돌릴 수 있는지는 매크로 화면의 능력 사다리가 판정합니다.</p>
+      <p className="pg-note pg-studio-frontier">프런티어 엔진 ‘{String(s.frontier ?? "—")}’ — 이 노드는 실행하지 않습니다. 실행 가능 여부는 매크로 화면의 능력 사다리가 판정합니다.</p>
       <Outputs o={(r.outputs as Dict) ?? {}} />
       {r.note ? <p className="pg-warn">{plain(r.note)}</p> : null}
     </>

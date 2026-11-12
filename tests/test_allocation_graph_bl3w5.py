@@ -276,7 +276,7 @@ def test_counterfactual_does_not_persist_runs():
 def test_counterfactual_with_every_scenario_failing_is_a_failure_not_a_result():
     """전략이 없으면 시나리오마다 '미존재' 로 실패한다 — 그런 비교를 '완료' 로 보이지 않는다."""
     r = _one("counterfactual", strategy_ids=[987654])["nodes"]["c"]
-    assert r["status"] == "failed" and "하나도" in r["reason"]
+    assert r["status"] == "failed" and "실행된 시나리오가 없습니다" in r["reason"]
 
 
 @pytest.mark.parametrize("weights,cash", [([0.6, -0.2], 0.2), ([0.9, 0.4], 0.0)])

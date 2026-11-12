@@ -33,8 +33,8 @@ function readToken(): string | null {
 
 /** 멈출 실패면 멈춤 화면, 아니면(401) null. */
 function stopFor(status: number, error: string): Phase | null {
-  if (status === 403) return { kind: "stop", title: "지금은 열 수 없습니다", why: CLOSED };
-  if (status === 410) return { kind: "stop", title: "끝난 주소입니다", why: error };
+  if (status === 403) return { kind: "stop", title: "현재 열람할 수 없습니다", why: CLOSED };
+  if (status === 410) return { kind: "stop", title: "만료된 주소입니다", why: error };
   if (status === 423) return { kind: "stop", title: "잠긴 주소입니다", why: error };
   return null;
 }
@@ -62,7 +62,7 @@ export function ShareView() {
       setBusy(false);
       const stop = stopFor(s.status, s.error);
       if (stop) setPhase(stop);
-      else setErr(s.status === 401 ? s.error : "지금은 열지 못했습니다 — 잠시 뒤에 다시 하십시오.");
+      else setErr(s.status === 401 ? s.error : "현재 열람하지 못했습니다 — 잠시 후 다시 시도하십시오.");
       return;
     }
     const got = await readShared(s.value.session);
@@ -99,7 +99,7 @@ export function ShareView() {
         {phase.kind === "no_token" && (
           <section className="sv-card sv-missing">
             <h1 className="sv-h1">주소가 완전하지 않습니다</h1>
-            <p className="sv-sub">담당 PB 가 보낸 주소 전체를 그대로 여십시오 — 주소가 끝까지 포함되어야 열립니다.</p>
+            <p className="sv-sub">담당 PB 가 전달한 주소 전체로 접속하십시오 — 주소가 끝까지 포함되어야 합니다.</p>
           </section>
         )}
         {phase.kind === "pin" && (
@@ -126,13 +126,13 @@ export function ShareView() {
         )}
         {phase.kind === "open" && (
           <>
-            {phase.until && <p className="sv-until">이 주소는 {phase.until.slice(0, 10)}까지 열립니다.</p>}
+            {phase.until && <p className="sv-until">이 주소는 {phase.until.slice(0, 10)}까지 열람할 수 있습니다.</p>}
             <ClientSheet sheet={phase.sheet} audience="client" />
-            <SheetAsk title="이 한 장에 묻기" sub="한 장에 적힌 내용으로만 답합니다. 투자 판단은 담당 PB와 상담하십시오." ask={ask} />
+            <SheetAsk title="이 한 장에 묻기" sub="한 장에 기재된 내용으로만 응답합니다. 투자 판단은 담당 PB와 상담하십시오." ask={ask} />
           </>
         )}
       </main>
-      <footer className="sv-foot">이 화면은 담당 PB 가 보낸 주소와 PIN 으로만 열립니다. 주소와 PIN 을 타인과 공유하지 마십시오.</footer>
+      <footer className="sv-foot">이 화면은 담당 PB 가 전달한 주소와 PIN 으로만 접속할 수 있습니다. 주소와 PIN 을 타인과 공유하지 마십시오.</footer>
     </div>
   );
 }

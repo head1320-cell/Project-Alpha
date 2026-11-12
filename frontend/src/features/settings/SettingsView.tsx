@@ -67,14 +67,14 @@ export function SettingsView() {
               <strong className="set-name">{session.username}</strong>
               <span className="set-role">{ROLE_KO[session.role] ?? session.role}</span>
               <span className="set-sub">
-                {session.mustChange ? "관리자가 준 임시 비밀번호로 들어왔습니다"
-                  : day(session.changedAt) ? `비밀번호를 바꾼 날 ${day(session.changedAt)}` : "비밀번호를 바꾼 적 없음"}
+                {session.mustChange ? "관리자가 발급한 임시 비밀번호로 로그인했습니다"
+                  : day(session.changedAt) ? `비밀번호 변경일 ${day(session.changedAt)}` : "비밀번호 변경 이력 없음"}
               </span>
             </div>
           </section>
           {session.mustChange ? (
             <p className="set-must" role="alert">
-              비밀번호를 먼저 변경하십시오 — 바꾸기 전에는 계좌·주문·감사 화면이 열리지 않습니다.
+              비밀번호를 먼저 변경하십시오 — 변경 전에는 계좌·주문·감사 화면을 사용할 수 없습니다.
             </p>
           ) : null}
           <PasswordForm formRef={pwRef} username={session.username} onChanged={() => void refresh()}
@@ -155,7 +155,7 @@ function PasswordForm({ formRef, username, onChanged, adminWarning }: {
         {error ? <p className="set-error" role="alert">{error}</p> : null}
         {done ? <p className="set-done" role="status">비밀번호를 변경했습니다 — 다른 기기의 로그인 세션은 모두 종료됐습니다.</p> : null}
         <button type="submit" className="set-btn set-btn--primary set-pw-submit" disabled={!ready || busy}>
-          {busy ? "바꾸는 중…" : "비밀번호 바꾸기"}
+          {busy ? "변경 중…" : "비밀번호 바꾸기"}
         </button>
       </form>
     </section>
@@ -180,10 +180,10 @@ function ThemeSection() {
         </div>
         {theme !== "light" ? (
           <p className="set-sub set-theme-note">
-            {DARK_EXCEPTIONS.map((x) => x.label).join("·")}은 밝게만 보입니다. 나머지는 고른 테마를 따릅니다.
+            {DARK_EXCEPTIONS.map((x) => x.label).join("·")}은 라이트 테마만 지원합니다. 나머지는 선택한 테마를 따릅니다.
           </p>
         ) : null}
-        <p className="set-sub">이 브라우저에만 남습니다.</p>
+        <p className="set-sub">이 브라우저에만 저장됩니다.</p>
       </div>
     </section>
   );
@@ -231,7 +231,7 @@ function AdminAccounts({ me }: { me: string }) {
     <section className="set-sec set-admin" aria-labelledby="set-admin-h">
       <h2 className="set-h" id="set-admin-h">계정 관리</h2>
       <p className="set-sub set-sub--lead">
-        계정은 여기서만 만듭니다 — 로그인하면 계좌·주문 화면이 열리기 때문에 누구나 가입하는 길은 두지 않았습니다.
+        계정은 여기서만 생성합니다 — 로그인하면 계좌·주문 화면에 접근할 수 있으므로 공개 가입 절차는 두지 않았습니다.
       </p>
       <form className="set-card set-issue-form" onSubmit={issue} noValidate>
         <label className="set-field">
@@ -249,7 +249,7 @@ function AdminAccounts({ me }: { me: string }) {
             ))}
           </div>
         </div>
-        {role === "admin" ? <p className="set-sub">관리자는 실주문·실행 모드·다른 계정까지 다룰 수 있습니다.</p> : null}
+        {role === "admin" ? <p className="set-sub">관리자는 실주문·실행 모드·다른 계정까지 관리할 수 있습니다.</p> : null}
         {error ? <p className="set-error" role="alert">{error}</p> : null}
         <button type="submit" className="set-btn set-btn--primary set-issue" disabled={!nameOk || busy}>
           {busy ? "만드는 중…" : "계정 만들기"}
@@ -269,12 +269,12 @@ function AdminAccounts({ me }: { me: string }) {
                   <span className="set-chip">{ROLE_KO[a.role] ?? a.role}</span>
                   {a.must_change_password ? <span className="set-chip set-chip--warn">바꿀 차례</span>
                     : day(a.password_changed_at) ? <span className="set-sub">바꾼 날 {day(a.password_changed_at)}</span>
-                    : <span className="set-sub">바꾼 적 없음</span>}
+                    : <span className="set-sub">변경 이력 없음</span>}
                 </span>
               </div>
               {asking === a.username ? (
                 <div className="set-confirm" role="group" aria-label={`${a.username} 비밀번호 초기화 확인`}>
-                  <span className="set-sub">그 사람의 로그인이 모두 끝납니다.</span>
+                  <span className="set-sub">해당 사용자의 로그인 세션이 모두 종료됩니다.</span>
                   <button type="button" className="set-btn set-btn--sm set-btn--danger" onClick={() => void reset(a.username)}>초기화</button>
                   <button type="button" className="set-btn set-btn--sm" onClick={() => setAsking(null)}>취소</button>
                 </div>
@@ -305,11 +305,11 @@ function IssuedCard({ issued, onClose }: { issued: Issued; onClose: () => void }
           {copied === "ok" ? "복사했습니다" : "복사"}
         </button>
       </div>
-      {copied === "fail" ? <p className="set-error">복사 실패 — 글자를 직접 골라 복사하십시오.</p> : null}
+      {copied === "fail" ? <p className="set-error">복사 실패 — 텍스트를 직접 선택해 복사하십시오.</p> : null}
       <p className="set-sub">
         이 창을 닫으면 다시 확인할 수 없습니다. 수령인에게 안전하게 전달하십시오 — 최초 로그인 시 비밀번호를 변경해야 합니다.
       </p>
-      <button type="button" className="set-btn set-issued-close" onClick={onClose}>다 전했습니다 · 닫기</button>
+      <button type="button" className="set-btn set-issued-close" onClick={onClose}>전달 완료 · 닫기</button>
     </div>
   );
 }

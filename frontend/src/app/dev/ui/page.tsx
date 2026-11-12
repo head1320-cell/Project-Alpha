@@ -488,7 +488,7 @@ export default function DevUiPage() {
         <Specimen name="Notice" from="tx">
           <Variant label="practice"><Tx.Notice tone="practice" title="합성 데이터입니다">실제 시장 값이 아니라 합성 값으로 계산했습니다.</Tx.Notice></Variant>
           <Variant label="warn"><Tx.Notice tone="warn" title="가정이 들어 있습니다" /></Variant>
-          <Variant label="danger"><Tx.Notice tone="danger" title="조회 실패">서버 연결 실패. 잠시 뒤 재시도하십시오.</Tx.Notice></Variant>
+          <Variant label="danger"><Tx.Notice tone="danger" title="조회 실패">서버 연결 실패. 잠시 후 재시도하십시오.</Tx.Notice></Variant>
         </Specimen>
         <Specimen name="Unknown" from="tx" note="사유가 필수다(타입). 0 이나 빈칸으로 그리지 않는다.">
           <Tx.Unknown reason="재무 데이터가 아직 적재되지 않았습니다" />

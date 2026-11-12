@@ -115,7 +115,7 @@ function Port({ port, side, index, unknown, label, missing, nodeId, folded, squa
       <span className="pg-port-name">{unknown ? `${port.name}(미상)` : label ?? PORT_PLAIN[port.type] ?? port.name}
         {optional && !unknown && <span className="pg-port-opt"> 선택</span>}
         {count !== undefined && count > 1 && <span className="pg-port-n"> {count}곳</span>}
-        {fit === "needs" && <span className="pg-port-why"> · 보내는 쪽이 필요한 값을 주지 않을 수 있습니다</span>}</span>
+        {fit === "needs" && <span className="pg-port-why"> · 송신 측이 필요한 값을 제공하지 않을 수 있습니다</span>}</span>
     </div>
   );
 }
@@ -270,7 +270,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         )}
         <span className={`pg-node-dot pg-node-dot--${runningHere ? "running" : state}`} aria-hidden="true" />
         <button type="button" className="pg-node-fold nodrag" aria-pressed={folded} aria-label={folded ? "노드 펴기" : "노드 접기"}
-                title={folded ? "펴기 — 소켓·설정·결과를 다시 보입니다" : "접기 — 머리 줄만 남깁니다"}
+                title={folded ? "펴기 — 소켓·설정·결과를 다시 표시합니다" : "접기 — 머리 줄만 남깁니다"}
                 onClick={(e) => { e.stopPropagation(); toggleFold(id); }}>
           {folded ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
         </button>
@@ -286,7 +286,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
       {/* 소켓 줄 자리 — 소켓(핸들·이름)은 아래 .pg-port 가 같은 높이에 그린다(포트 DOM 은 그대로 — E2E 계약). */}
       {rows > 0 && <div className="pg-node-sockets" aria-hidden="true" />}
       <div className={`pg-node-t${cw.fields.length ? "" : " pg-node-t--keep"}`}>{summary ?? entry.plain_label}</div>
-      {solo && <div className="pg-node-solo">선 없이 혼자 계산합니다</div>}
+      {solo && <div className="pg-node-solo">연결 없이 단독으로 계산합니다</div>}
       <NodeWidgets id={id} fields={cw.fields} more={cw.more} params={data.params ?? {}} schema={entry.params_schema ?? null} />
       {headline && headline.value !== null && (
         <div className="pg-node-v" title={headline.label}>
@@ -339,12 +339,12 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
           return <div className="pg-node-terminal"><StrategyDonut slices={slices} /></div>;
         })()}
         {glance && data.kind !== "portfolio_combine" && <div className="pg-node-glance"><Glance glance={glance} extra={slotExtra} /></div>}
-        {stale && result && <div className="pg-node-why pg-node-stale">설정이 바뀌어서 예전 결과입니다.</div>}
+        {stale && result && <div className="pg-node-why pg-node-stale">설정이 변경돼 이전 결과입니다.</div>}
         {live?.previous && <div className="pg-node-why pg-node-stale">이번에 계산하지 않았습니다 — 이전 계산 결과입니다.</div>}
         {errors.length > 0 && (
           <ul className="pg-node-errors">{errors.map((e, i) => <li key={i}>{e.message}</li>)}</ul>
         )}
-        {slotEmpty && <div className="pg-node-slot-empty">계산하면 결과가 여기에 보입니다</div>}
+        {slotEmpty && <div className="pg-node-slot-empty">계산하면 결과가 여기에 표시됩니다</div>}
       </div>
       <div className="pg-node-foot">
         {live?.status === "ok" && chipsOf(ex, live.lineage).length > 0 && (

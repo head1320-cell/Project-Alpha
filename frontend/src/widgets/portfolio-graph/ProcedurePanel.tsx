@@ -51,7 +51,7 @@ export function ProcedurePanel({ procedure, error, gateLabel, gateState, hereSte
       <div className="pg-proc-empty" role="status">
         {error ? (
           <>
-            <p>절차 조회 실패 — 서버에 닿지 않았습니다.</p>
+            <p>절차 조회 실패 — 서버에 연결하지 못했습니다.</p>
             <button type="button" className="pg-proc-retry" onClick={onRetry}>재시도</button>
           </>
         ) : <p>절차 조회 중</p>}
@@ -83,7 +83,7 @@ export function ProcedurePanel({ procedure, error, gateLabel, gateState, hereSte
                 </div>
                 <p className="pg-proc-text">{st.text}</p>
                 {st.feeds_gates.length > 0 && (
-                  <ul className="pg-proc-gates" aria-label="이 단계가 재는 관문">
+                  <ul className="pg-proc-gates" aria-label="이 단계가 측정하는 관문">
                     {st.feeds_gates.map((g) => {
                       const gs = gateState(g);
                       return <li key={g} className="pg-proc-gate" data-gate={g} data-state={gs ?? "idle"}>

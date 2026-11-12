@@ -67,7 +67,7 @@ class SetupParams(BaseModel):
         default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
         json_schema_extra={"x-ui": _ui("조건", question="스크리닝 조건", widget="filter",
                                        presets=_presets_filter(),
-                                       help="조건은 서버가 필드 목록으로 검사합니다 — 모르는 필드는 시작하지 않습니다.")})
+                                       help="조건은 서버가 필드 목록으로 검사합니다 — 정의되지 않은 필드가 있으면 시작하지 않습니다.")})
     strategy_name: Literal[tuple(_STRATEGIES)] = Field("GoldenCross", json_schema_extra={"x-ui": _ui(
         "매매 규칙", question="매매 규칙", widget="cards", options=_STRATEGIES)})
     start_date: str = Field("2023-01-01", pattern=_DATE, json_schema_extra={"x-ui": _ui(
@@ -75,7 +75,7 @@ class SetupParams(BaseModel):
                                                      {"label": "2023년부터", "value": "2023-01-01"}])})
     end_date: str = Field("2024-12-31", pattern=_DATE, json_schema_extra={"x-ui": _ui("종료일", "advanced")})
     max_tickers: int = Field(10, ge=1, le=30, json_schema_extra={"x-ui": _ui(
-        "종목 수", "advanced", unit="개", help="조건을 통과한 상위 종목 중 실행에 쓸 종목 수입니다.")})
+        "종목 수", "advanced", unit="개", help="조건을 통과한 상위 종목 중 실행에 사용할 종목 수입니다.")})
     max_positions: int = Field(5, ge=1, le=30, json_schema_extra={"x-ui": _ui("동시 보유", "advanced", unit="개")})
     initial_capital: float = Field(100_000_000, gt=0, json_schema_extra={"x-ui": _ui("시작 금액", "advanced", unit="원")})
     commission_rate: float = Field(0.0015, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("수수료율", "advanced")})
@@ -145,7 +145,7 @@ class LoadParams(BaseModel):
     model_config = _FORBID
     run_id: str | None = Field(None, max_length=80, json_schema_extra={"x-ui": _ui(
         "백테스트", question="대상 백테스트", widget="pick", source="backtest_runs",
-        help="‘조건식 백테스트 설정’에서 시작한 실행이 여기에 나옵니다.")})
+        help="‘조건식 백테스트 설정’에서 시작한 실행이 여기에 표시됩니다.")})
 
 
 _STAGE_KO = {"draft": "준비", "queued": "대기", "validating": "확인", "loading_data": "데이터 불러오기",
@@ -161,14 +161,14 @@ def _load(inputs: dict, p: LoadParams) -> pg.NodeOutput:
         r = run_full(p.run_id)
     except HTTPException as e:
         if e.status_code == 404:
-            raise pg.NodeFailure(f"백테스트 {p.run_id} 을(를) 찾지 못했습니다 — 지워졌을 수 있습니다.") from e
+            raise pg.NodeFailure(f"백테스트 {p.run_id} 을(를) 찾지 못했습니다 — 삭제됐을 수 있습니다.") from e
         raise pg.NodeFailure(f"실행 저장소를 읽을 수 없습니다 — {e.detail} (실행이 없는 것과 다릅니다)") from e
     st = r.get("status")
     if st in _END_KO:
         raise pg.NodeFailure(f"이 백테스트는 {_END_KO[st]}(실패 사유: {r.get('error_message') or '미상'}).")
     if st != "completed":
         pct = int(r.get("progress_percent") or 0)
-        raise pg.NodeFailure(f"아직 끝나지 않았습니다 — {pct}% · {_STAGE_KO.get(st, st)}. 끝나면 재계산하십시오.")
+        raise pg.NodeFailure(f"아직 완료되지 않았습니다 — {pct}% · {_STAGE_KO.get(st, st)}. 끝나면 재계산하십시오.")
     result = r.get("result") or {}
     bt = result.get("backtest") if isinstance(result.get("backtest"), dict) else result
     view = {"run_id": p.run_id, "strategy_name": r.get("strategy_name"), "statistics": bt.get("statistics") or {},
@@ -223,7 +223,7 @@ def _attribution(inputs: dict, p: Any) -> pg.NodeOutput:
     try:
         out = factor_attribution_for_run(run["run"], run["run_id"], series_map=series)
     except _ProxyResolutionError as e:
-        raise pg.NodeFailure(f"팩터 계열을 고르지 못했습니다 — {e}") from e
+        raise pg.NodeFailure(f"팩터 계열을 선택하지 못했습니다 — {e}") from e
     if not out.get("available"):
         raise pg.NodeFailure(f"귀인 산출 실패 — {out.get('reason') or '사유 미상'}")
     labels = {r["factor"]: FACTOR_KO.get(r["factor"], r["factor"]) for r in out.get("rows") or []}
@@ -308,7 +308,7 @@ def _explain_compare(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, "두 실행의 기존 산출 지표를 비교했습니다 — 새로 계산한 값은 차이(뺄셈)뿐입니다.")]
     if diffs:
         trust.insert(0, _t(UNKNOWN, "같은 조건이 아닙니다 — " + ", ".join(d["label"] for d in diffs)
-                           + "이(가) 달라 차이가 규칙 때문인지 조건 때문인지 가를 수 없습니다."))
+                           + "이(가) 달라 차이의 원인이 규칙인지 조건인지 구분할 수 없습니다."))
     title = ("같은 조건이 아닙니다 — 차이를 규칙 탓으로 읽지 마십시오" if diffs
              else f"두 백테스트를 비교했습니다 (총수익률 차이 {_pct(float(tr['diff']))})" if tr.get("diff") is not None
              else "두 백테스트를 비교했습니다")

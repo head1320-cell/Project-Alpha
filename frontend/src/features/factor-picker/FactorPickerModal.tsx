@@ -132,7 +132,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
     backtestBridgeApi.conditionTokens()
       .then((s) => { _supportCache = s; setSupport(s); setCatalogError(null); })
       .catch(() => setCatalogError(
-        "팩터 목록을 백엔드에서 받지 못해 매크로 그룹은 기본값을 보이는 중입니다 — "
+        "팩터 목록을 백엔드에서 받지 못해 매크로 그룹은 기본값을 표시하는 중입니다 — "
         + "최신 목록이 아닐 수 있습니다."));
   }, [open, support]);
 
@@ -252,7 +252,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       open={open}
       onClose={onClose}
       title="팩터 선택"
-      subtitle="팩터를 고르고 함수를 씌워 조건식 한 항을 만듭니다"
+      subtitle="팩터를 선택하고 함수를 적용해 조건식의 한 항을 구성합니다"
       ariaLabel="팩터 선택"
       searchPlaceholder="조건을 단어로 입력하십시오"
       families={families}
@@ -321,7 +321,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       {/* ── 함수 (옛 STEP2) ── */}
       <div className="fp-plabel">함수</div>
       <div className="fp-fns">
-        <GroupLabel dot>자주 쓰는 함수</GroupLabel>
+        <GroupLabel dot>자주 사용하는 함수</GroupLabel>
         {FACTOR_FUNCTIONS.filter((f) => f.group === "common").map((f) => (
           <FnRow key={f.id} name={f.name} active={f.id === fnId}
             onClick={() => { setFnId(f.id); setParams({}); }} />

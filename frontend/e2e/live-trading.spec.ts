@@ -166,7 +166,7 @@ test("BU9b: 모드 바꾸기 실패는 서버 사유와 함께 (조용히 넘기
   await act(page, "paper-yes").click();
   const alert = page.locator('.live-mode-refused[data-mode="PAPER"]');
   await expect(alert).toBeVisible();
-  await expect(alert).toContainText("모의 체결로 바꾸지 못했습니다");
+  await expect(alert).toContainText("모의 체결로 변경하지 못했습니다");
   await expect(alert).toContainText("실행기 생성 실패");
 });
 
@@ -187,7 +187,7 @@ test("BU9b: 실계좌 시트 — dialog · Esc · 취소면 0 · 관문 닫힘�
   await act(page, "mode-live").click();
   await act(page, "live-yes").click();
   const refused = page.locator('.live-mode-refused[data-mode="LIVE"]');
-  await expect(refused).toContainText("실계좌로 바꾸지 못했습니다");
+  await expect(refused).toContainText("실계좌로 변경하지 못했습니다");
   await expect(refused).toContainText(LIVE_REFUSED);
   expect(posts[0].body).toEqual({ mode: "LIVE", confirm_token: "EXPLICIT_LIVE_CONFIRMED" });
   // 짝 — 받아들이면 거절 문구가 없고 모드가 실계좌로
@@ -237,7 +237,7 @@ test("BU9b: 비상 정지 걸기·풀기 — 취소면 0 · 본문 바이트 그
   expect(posts.length, "풀기도 취소면 0").toBe(before);
   await act(page, "resolve").click();
   await act(page, "resolve-yes").click();
-  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 풀었습니다. 새 주문을 다시 받습니다.");
+  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 해제했습니다. 신규 주문 접수를 재개합니다.");
   expect(posts.at(-1)).toEqual({ path: "POST /api/v1/live/kill-switch/resolve", body: { notes: "Manual resolution from cockpit" } });
   // 짝 — 서버가 이미 풀려 있었다고 답하면 그대로
   st.kill = { is_active: true, active_event: null };
@@ -245,7 +245,7 @@ test("BU9b: 비상 정지 걸기·풀기 — 취소면 0 · 본문 바이트 그
   await act(page, "refresh").click();
   await act(page, "resolve").click();
   await act(page, "resolve-yes").click();
-  await expect(page.locator(".lv-done")).toHaveText("이미 풀려 있었습니다.");
+  await expect(page.locator(".lv-done")).toHaveText("이미 해제돼 있었습니다.");
 });
 
 // ── 길 · 표 ────────────────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ export function BrokerAccounts() {
     <section className="set-sec set-broker" id="broker" aria-labelledby="set-broker-h">
       <h2 className="set-h" id="set-broker-h">내 증권 계좌</h2>
       <p className="set-sub set-sub--lead">
-        한국투자증권 계좌를 연결합니다. 키는 서버에 암호화해 두고, 화면에는 끝 네 자리만 보입니다.
+        한국투자증권 계좌를 연결합니다. 키는 서버에 암호화해 보관하고, 화면에는 끝 네 자리만 표시합니다.
       </p>
 
       <div className="set-card set-broker-list">
@@ -167,7 +167,7 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
         <span className="set-label">이름</span>
         <input className="set-input" name="broker-label" autoComplete="off" maxLength={64}
                value={label} onChange={(e) => setLabel(e.target.value)} />
-        <span className="set-sub">목록에서 알아보는 이름입니다.</span>
+        <span className="set-sub">목록에 표시되는 식별용 이름입니다.</span>
       </label>
       <label className="set-field">
         <span className="set-label">앱 키</span>
@@ -192,7 +192,7 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
           <input className="set-input" name="broker-account-prdt" inputMode="numeric" autoComplete="off" maxLength={2}
                  value={product} onChange={(e) => setProduct(e.target.value.trim())}
                  aria-invalid={!PRODUCT.test(product)} />
-          <span className="set-sub">보통 01입니다.</span>
+          <span className="set-sub">통상 01입니다.</span>
         </label>
       </div>
       <div className="set-row">

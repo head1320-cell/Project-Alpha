@@ -163,7 +163,7 @@ export function GhostLayer({ ghosts, catalog, shape, hot, gateLabel, onApply, on
                  style={{ transform: `translate(${g.at.x + (drag?.key === g.key ? drag.dx : 0)}px, ${g.at.y + (drag?.key === g.key ? drag.dy : 0)}px)`,
                           width: NODE_W, height: cardHeight(g.kind!, catalog),
                           ["--pg-stage" as string]: STAGE_VAR[entry?.stage ?? ""] ?? "var(--pg-st-data)" }}>
-              <div className="pg-ghost-head nodrag nopan" title="끌어서 원하는 자리에 붙입니다" {...headProps(g)}>
+              <div className="pg-ghost-head nodrag nopan" title="끌어서 원하는 위치에 배치합니다" {...headProps(g)}>
                 <Chips g={g} />
                 <span className="pg-ghost-name">{g.label ?? g.kind}</span>
               </div>

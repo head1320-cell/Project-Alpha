@@ -26,7 +26,7 @@ function Step({ s }: { s: SheetStep }) {
           {(ex.facts ?? []).length > 0 && <ul className="cs-facts">{ex.facts!.map((f, i) => <li key={i}>{f}</li>)}</ul>}
         </>
       ) : (
-        <p className="cs-step-failed">{s.status === "blocked" ? "앞 단계 때문에 계산하지 못했습니다" : "산출 실패"} — {s.reason}</p>
+        <p className="cs-step-failed">{s.status === "blocked" ? "선행 단계 실패로 계산하지 못했습니다" : "산출 실패"} — {s.reason}</p>
       )}
     </li>
   );
@@ -58,7 +58,7 @@ export function ClientSheet({ sheet, audience = "pb" }: { sheet: Sheet; audience
       {sheet.practice && <p className="cs-practice" role="note">{sheet.practice_note}</p>}
       <section className="cs-sec cs-weights-sec">
         <h2 className="cs-h2">내 포트폴리오 비중</h2>
-        <p className="cs-sub">{audience === "client" ? "이번 점검에서 정한 비중입니다." : `${sheet.focus.label} 노드가 정한 비중입니다.`}</p>
+        <p className="cs-sub">{audience === "client" ? "이번 점검에서 산출한 비중입니다." : `${sheet.focus.label} 노드가 산출한 비중입니다.`}</p>
         <ol className="cs-weights">
           {sheet.focus.weights.map((w) => (
             <li key={w.code} className="cs-weight" data-code={w.code}>

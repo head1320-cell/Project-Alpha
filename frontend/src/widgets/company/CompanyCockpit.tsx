@@ -42,8 +42,8 @@ export interface LazyLoaders {
 
 const SECS = [
   { id: "value", label: "가치", title: "주가와 가치" },
-  { id: "models", label: "여러 모형", title: "여러 모형으로 본 가치" },
-  { id: "numbers", label: "핵심 숫자", title: "핵심 숫자" },
+  { id: "models", label: "모형 비교", title: "모형별 가치 추정" },
+  { id: "numbers", label: "핵심 지표", title: "핵심 지표" },
   { id: "money", label: "수익성", title: "수익성" },
   { id: "risk", label: "위험", title: "위험" },
   { id: "peers", label: "동종업계", title: "동종업계" },
@@ -55,7 +55,7 @@ type SecId = typeof SECS[number]["id"];
 /** 값 → 글자. ★null = 몰라요(0 과 다르다)★ */
 const show = (v: number | null | undefined, f: (x: number) => string) => (v == null || !Number.isFinite(v) ? UNKNOWN_TEXT : f(v));
 /** 기술 시그널 번역 — 서버 action 을 옮길 뿐 판단을 더하지 않는다. 모르는 값은 서버 글자 그대로. */
-const SIGNAL_KO: Record<string, string> = { buy: "사는 쪽", strong_buy: "강하게 사는 쪽", sell: "파는 쪽", strong_sell: "강하게 파는 쪽", hold: "지켜보는 쪽", neutral: "지켜보는 쪽" };
+const SIGNAL_KO: Record<string, string> = { buy: "매수", strong_buy: "적극 매수", sell: "매도", strong_sell: "적극 매도", hold: "중립", neutral: "중립" };
 const signalKo = (a?: string) => (a ? SIGNAL_KO[a.toLowerCase()] ?? a : UNKNOWN_TEXT);
 
 /** 목차로 간 절을 붙잡는 시간(BU6b) — U9 는 이 시간이 끝날 때까지 화면에 들지 않은 고른 절을 부른다. */
@@ -199,7 +199,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   const hasIntrinsic = c.intrinsic > 0 && Number.isFinite(c.gapPct);
   const sentence = hasIntrinsic
     ? <>내재가치(추정) {priceWon(c.intrinsic)}보다 {Math.round(Math.abs(c.gapPct))}% {c.gapPct < 0 ? "낮게" : "높게"} 거래됩니다</>
-    : <>내재가치 산출 실패. 지금은 판단하지 않습니다.</>;
+    : <>내재가치 산출 실패. 판정을 보류합니다.</>;
   const chips: Chip[] = [];
   // 연습용 = connection-status(mock 게이트) 또는 머리 문장 응답의 is_mock — 어느 하나라도 연습용이면 말한다.
   if (cs.data?.mock_allowed || c.isMock) chips.push({ label: "합성 시세·재무", tone: "practice" });
@@ -229,7 +229,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
           <p className="ci-meta"><span className="ci-code" data-mono>{c.code}</span><span data-server>{c.sector}</span>{c.market && <span data-server>{c.market}</span>}</p>
           <p className="ci-px"><b className="ci-price">{priceWon(c.price)}</b><DayChange c={c} cls="ci-chg" /><VerdictBadge verdict={c.verdict} tone={c.tone} /></p>
         </div>
-        <Link className="tx-btn tx-btn--main ci-bridge" href={`/allocation?tickers=${c.code}`}>설계에 넣기</Link>
+        <Link className="tx-btn tx-btn--main ci-bridge" href={`/allocation?tickers=${c.code}`}>설계에 추가</Link>
       </header>
 
       <Answer sentence={sentence} chips={chips} figures={[
@@ -266,15 +266,15 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
           <PriceValueChart data={c.price1y} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : 0} bands={bands} />
 
           <div className="ci-block">
-            <h3 className="ci-block-h">모형 한눈에</h3>
+            <h3 className="ci-block-h">모형 요약</h3>
             <p className="ci-assume-diff">위 문장의 내재가치는 무위험수익률 3.5%·베타 1.0 고정 가정입니다. 아래 줄들은 실측 기본값
               {sb.data ? <>(무위험 <span data-server>{(sb.data.assumptions.find((a) => a.key === "rf")?.source) ?? "출처 모름"}</span>, 베타 <span data-server>{(sb.data.assumptions.find((a) => a.key === "beta")?.source) ?? "출처 모름"}</span>)</> : null}
-              을 써서 값이 다를 수 있습니다.</p>
+              을 사용해 값이 다를 수 있습니다.</p>
             <ModelLadder rows={ladder} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : null} />
           </div>
 
           {c.failed.includes("valuation")
-            ? <RetryFail title="가치평가 조회 실패" onRetry={onRetry}>서버 연결 실패. 모형별 값은 재시도하면 나옵니다.</RetryFail>
+            ? <RetryFail title="가치평가 조회 실패" onRetry={onRetry}>서버 연결 실패. 모형별 값은 재시도하면 표시됩니다.</RetryFail>
             : c.models.length ? (
               <div className="ci-models">
                 {c.models.map((m) => (
@@ -417,12 +417,12 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {sec("peers", (
         <div className="ca-cp-pad">
           {c.failed.includes("peers") ? <RetryFail title="동종업계 기업 조회 실패" onRetry={onRetry} />
-            : !c.sector ? <p className="ca-cp-empty">업종을 몰라 동종업계 기업을 찾지 못했습니다.</p>
+            : !c.sector ? <p className="ca-cp-empty">업종 정보가 없어 동종업계 기업을 조회하지 못했습니다.</p>
             : (() => {
               const capKnown = c.peers.some((p) => p.mktcap != null);
               return (
                 <>
-                  <p className="ci-sec-lede"><span data-server>{c.sector}</span> 업종의 다른 기업입니다. 괴리가 작은 순이고, 줄을 누르면 그 기업을 엽니다.</p>
+                  <p className="ci-sec-lede"><span data-server>{c.sector}</span> 업종의 다른 기업입니다. 괴리율이 작은 순으로 정렬했으며, 행을 누르면 해당 기업으로 이동합니다.</p>
                   <div className="ci-tablewrap">
                     <table className="ca-cp-peertbl">
                       <thead><tr><th scope="col">종목</th><th scope="col" className="n">현재가</th><th scope="col" className="n">PER</th><th scope="col" className="n">PBR</th><th scope="col" className="n">ROE</th><th scope="col" className="n">내재가치와 괴리</th>{capKnown && <th scope="col" className="n">시가총액</th>}</tr></thead>
@@ -437,8 +437,8 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                       ))}</tbody>
                     </table>
                   </div>
-                  {!capKnown && <p className="ci-note ci-peer-note">동종업계 기업의 시가총액이 아직 적재되지 않아 시가총액 열을 뺐습니다.</p>}
-                  <p className="ci-note">괴리는 서버가 계산한 (현재가 − 내재가치) ÷ 내재가치입니다. 크고 작음을 좋고 나쁨으로 칠하지 않았습니다.</p>
+                  {!capKnown && <p className="ci-note ci-peer-note">동종업계 기업의 시가총액이 아직 적재되지 않아 시가총액 열을 제외했습니다.</p>}
+                  <p className="ci-note">괴리는 서버가 계산한 (현재가 − 내재가치) ÷ 내재가치입니다. 괴리의 크기에 우열 색을 적용하지 않았습니다.</p>
                 </>
               );
             })()}
@@ -469,18 +469,18 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {sec("ai", (
         <div className="ca-cp-pad">
           <div className="ca-cp-ai-head">
-            <p className="ci-sec-lede">가치평가·재무·팩터를 모아 AI 가 설명 글을 씁니다. 누를 때마다 비용이 듭니다.</p>
-            <button type="button" className="tx-btn tx-btn--sub ca-cp-ai-btn" onClick={runNarrative} disabled={narrLoading}>{narrLoading ? "쓰는 중입니다" : narr ? "다시 쓰기" : "AI 설명 받기"}</button>
+            <p className="ci-sec-lede">가치평가·재무·팩터를 종합해 AI 가 해설을 작성합니다. 실행할 때마다 비용이 발생합니다.</p>
+            <button type="button" className="tx-btn tx-btn--sub ca-cp-ai-btn" onClick={runNarrative} disabled={narrLoading}>{narrLoading ? "작성 중입니다" : narr ? "다시 작성" : "AI 해설 받기"}</button>
           </div>
           {narr === null && !narrLoading && <RetryFail title="AI 설명 수신 실패" onRetry={runNarrative} />}
-          {narr?.error && <p className="ci-ai-reason">AI 가 설명을 쓰지 못했다고 답했습니다: <span data-server>{narr.error}</span></p>}
+          {narr?.error && <p className="ci-ai-reason">AI 가 해설을 작성하지 못했다고 응답했습니다: <span data-server>{narr.error}</span></p>}
           {narr && !narr.error && (
             <div className="ca-cp-ai-body">
               <div className="ca-cp-ai-content" data-server>{narr.content}</div>
-              <div className="ca-cp-ai-meta">AI 가 읽고 쓴 양 {narr.tokens.toLocaleString("ko-KR")}토큰, 비용 약 {narr.costKrw.toFixed(1)}원{narr.cached ? "(저장해 둔 글이라 이번엔 비용이 없습니다)" : ""}</div>
+              <div className="ca-cp-ai-meta">AI 사용량(입력·출력) {narr.tokens.toLocaleString("ko-KR")}토큰, 비용 약 {narr.costKrw.toFixed(1)}원{narr.cached ? "(저장된 해설이라 이번에는 비용이 발생하지 않습니다)" : ""}</div>
             </div>
           )}
-          {narrLoading && <p className="ca-cp-empty">AI 가 설명을 쓰는 중입니다. 보통 10~30초 걸립니다.</p>}
+          {narrLoading && <p className="ca-cp-empty">AI 가 해설을 작성하는 중입니다. 통상 10~30초 소요됩니다.</p>}
           {narr === undefined && !narrLoading && <details className="ci-note"><summary>활성화 방법</summary>관리자가 서버 설정에 AI 키를 등록하면 활성화됩니다. 키가 없으면 실행 시 사유를 표시합니다.</details>}
         </div>
       ))}
@@ -489,7 +489,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {/* ── 오른쪽 레일(≥1280 에서만 — 좁으면 미니 머리가 대신한다) ── */}
       <aside className="ci-rail" aria-label="기업 요약">
         <section className="ci-rail-card">
-          <h2 className="ci-rail-h">핵심 숫자</h2>
+          <h2 className="ci-rail-h">핵심 지표</h2>
           <dl className="ci-rail-nums">
             {([["PER", show(c.summary.per, (x) => `${x}배`)], ["PBR", show(c.summary.pbr, (x) => `${x}배`)],
                ["ROE", show(c.summary.roe, (x) => `${x}%`)], ["배당", show(c.summary.divYield, (x) => `${x}%`)]] as [string, string][]).map(([k, v]) => (
@@ -498,7 +498,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
           </dl>
         </section>
         <section className="ci-rail-card">
-          <h2 className="ci-rail-h">모형 한눈에</h2>
+          <h2 className="ci-rail-h">모형 요약</h2>
           <ModelLadder rows={ladder} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : null} compact />
         </section>
         <section className="ci-rail-card">
@@ -514,7 +514,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
             ))}
           </ul>
         </section>
-        <Link className="tx-btn tx-btn--main ci-rail-go" href={`/allocation?tickers=${c.code}`}>설계에 넣기</Link>
+        <Link className="tx-btn tx-btn--main ci-rail-go" href={`/allocation?tickers=${c.code}`}>설계에 추가</Link>
       </aside>
       </div>
     </div>

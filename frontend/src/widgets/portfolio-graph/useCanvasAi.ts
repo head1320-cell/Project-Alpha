@@ -76,9 +76,9 @@ export function useCanvasAi(s: PgState, doc: GraphDoc, order: string[], staleSet
     let ok = false;
     st.act(() => {
       const r = st.applyDraft(dr, draftAt);
-      if (!r) return "캔버스가 바뀌어 초안을 받아들이지 못했습니다 — 다시 말하십시오.";
+      if (!r) return "캔버스가 변경돼 초안을 적용하지 못했습니다 — 다시 입력하십시오.";
       ok = true;
-      return `말씀대로 바꿨습니다 — 노드 ${r.added}개 더함 · 선 ${r.connected}개 이음 · 값 ${r.set}개 넣음. 계산하면 결과가 나옵니다.`;
+      return `요청대로 변경했습니다 — 노드 ${r.added}개 추가 · 선 ${r.connected}개 연결 · 값 ${r.set}개 입력. 계산하면 결과가 표시됩니다.`;
     });
     if (ok) fitIds([...dr.add.map((a) => a.id), ...touched]);
   };

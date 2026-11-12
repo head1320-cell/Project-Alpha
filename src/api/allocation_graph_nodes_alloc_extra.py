@@ -71,7 +71,7 @@ class RebalanceParams(BaseModel):
     holdings: list[HoldingRow] = Field(
         [], max_length=30, json_schema_extra={"x-ui": _ui(
             "현재 보유 비중", question="현재 보유 종목·비중",
-            help="비우면 유니버스 노드의 '현재 비중' 을 씁니다. 둘 다 없으면 판단할 수 없습니다.")})
+            help="비우면 유니버스 노드의 '현재 비중' 을 사용합니다. 둘 다 없으면 판단할 수 없습니다.")})
     portfolio_value: float = Field(1e8, gt=0, le=1e13, json_schema_extra={"x-ui": _ui(
         "평가 금액", unit="원", presets=[{"label": "1천만", "value": 1e7}, {"label": "1억", "value": 1e8}],
         help="거래비용을 금액으로 환산하는 값입니다 — 계좌를 조회하지 않습니다.")})
@@ -358,7 +358,7 @@ def _explain_cash(view: dict, prov: dict, params: Any) -> dict:
 # ── 멀티전략 — 전략 용량 · 반사실 ───────────────────────────────────────────
 
 _STRATEGY_UI = _ui("전략", question="대상 전략", widget="pick", source="strategies",
-                   help="백테스트 실행을 전략으로 등록하면 여기에 나옵니다.")
+                   help="백테스트 실행을 전략으로 등록하면 여기에 표시됩니다.")
 
 
 class CapacityParams(BaseModel):
@@ -396,7 +396,7 @@ def _explain_capacity(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(ASSUMED, "용량 = 거래대금 × 비율 × 기간 × 여유 — 가정 세 개의 곱입니다.")]
     for v in unknown[:5]:
         trust.append(_t(UNKNOWN, f"전략 {v.get('strategy_id')}: {v.get('reason') or v.get('message')} — 제약을 걸지 않았습니다(무한대 아님)."))
-    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["시장 충격을 넣은 순수익 기준 용량"]}
+    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["시장 충격을 반영한 순수익 기준 용량"]}
 
 
 class CounterfactualParams(BaseModel):
@@ -423,7 +423,7 @@ def _counterfactual(inputs: dict, p: CounterfactualParams) -> pg.NodeOutput:
     if scen and not any(x.get("success") for x in scen):
         # ★전부 실패한 비교를 '완료' 로 보이지 않는다★ — 시나리오마다의 사유를 모아 실패시킨다.
         why = "; ".join(sorted({str(x.get("error") or "사유 미상") for x in scen}))
-        raise pg.NodeFailure(f"시나리오가 하나도 돌지 않았습니다 — {why}")
+        raise pg.NodeFailure(f"실행된 시나리오가 없습니다 — {why}")
     return pg.NodeOutput(values={}, view={"result": _finite(res)},
                          provenance={"perf_label": res.get("perf_label")} if res.get("perf_label") else {})
 
@@ -432,7 +432,7 @@ def _explain_counterfactual(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     return {"title": "같은 전략의 결합 규칙별 반사실 결과를 비교했습니다",
             "facts": [str(r.get("summary") or "")] if r.get("summary") else [],
-            "trust": [_t(ASSUMED, "반사실도 시뮬레이션입니다 — 모든 시나리오가 같은 비용 가정을 받습니다."),
+            "trust": [_t(ASSUMED, "반사실도 시뮬레이션입니다 — 모든 시나리오에 동일한 비용 가정을 적용합니다."),
                       _t(UNKNOWN, "원천 실행의 데이터가 합성인지는 전략별 출처 칸을 보십시오.")],
             "unmeasured": ["시나리오 사이 차이의 통계적 유의성"]}
 

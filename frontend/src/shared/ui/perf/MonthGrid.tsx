@@ -11,8 +11,8 @@ const MIX_MIN = 8, MIX_MAX = 45;      // 색 세기(%) — 글자(잉크)가 늘
 
 export function MonthGrid({ view }: { view: PerfView }) {
   const rows = view.periods?.monthly ?? null;
-  if (!rows) return <p className="pg-note">월별 수익률은 이 결과에 없습니다 — 서버가 기간별 수익을 주지 않았습니다.</p>;
-  if (!rows.length) return <p className="pg-note">월별 수익률을 셀 만큼 긴 곡선이 아닙니다.</p>;
+  if (!rows) return <p className="pg-note">월별 수익률은 이 결과에 없습니다 — 서버가 기간별 수익을 제공하지 않았습니다.</p>;
+  if (!rows.length) return <p className="pg-note">월별 수익률을 산출하기에는 곡선이 짧습니다.</p>;
   const years = [...new Set(rows.map((r) => r.year))].sort((a, b) => a - b);
   const byKey = new Map(rows.map((r) => [`${r.year}-${String(r.month).padStart(2, "0")}`, r]));
   const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.return_pct)));

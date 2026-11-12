@@ -91,12 +91,12 @@ def _problem(it: Any, by_id: dict[str, dict]) -> tuple[str, str] | None:
         return "shape", "문단의 형식이 맞지 않습니다"
     text, ids = it["text"], it["node_ids"]
     if not ids:
-        return "no_source", "근거로 댄 노드가 없습니다"
+        return "no_source", "근거로 인용한 노드가 없습니다"
     if any(i not in by_id for i in ids):
-        return "unknown_node", "근거로 댄 노드가 확인된 계산 결과에 없습니다"
+        return "unknown_node", "근거로 인용한 노드가 확인된 계산 결과에 없습니다"
     word = next((w for w in BANNED if w in text), None)
     if word:
-        return "banned", f"쓰지 않는 표현 ‘{word}’이 들어 있습니다"
+        return "banned", f"금지 표현 ‘{word}’이 들어 있습니다"
     if len(text) > MAX_CHARS:
         return "too_long", f"문단이 {MAX_CHARS}자를 넘습니다"
     allowed: set[str] = set()
@@ -104,7 +104,7 @@ def _problem(it: Any, by_id: dict[str, dict]) -> tuple[str, str] | None:
         allowed |= numbers_of({k: v for k, v in by_id[i].items() if k != "id"})
     extra = numbers_of(text) - allowed
     if extra:
-        return "numbers", f"근거 노드에 없는 숫자 {', '.join(sorted(extra))} 를 썼습니다"
+        return "numbers", f"근거 노드에 없는 수치 {', '.join(sorted(extra))} 를 사용했습니다"
     return None
 
 

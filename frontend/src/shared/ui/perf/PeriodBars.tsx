@@ -7,8 +7,8 @@ import { fmtSignedPct, type PerfView } from "./perfView";
 
 export function PeriodBars({ view }: { view: PerfView }) {
   const rows = view.periods?.yearly ?? null;
-  if (!rows) return <p className="pg-note pf-years-none">연도별 수익률은 이 결과에 없습니다 — 서버가 기간별 수익을 주지 않았습니다.</p>;
-  if (!rows.length) return <p className="pg-note pf-years-none">연도별 수익률을 셀 만큼 긴 곡선이 아닙니다.</p>;
+  if (!rows) return <p className="pg-note pf-years-none">연도별 수익률은 이 결과에 없습니다 — 서버가 기간별 수익을 제공하지 않았습니다.</p>;
+  if (!rows.length) return <p className="pg-note pf-years-none">연도별 수익률을 산출하기에는 곡선이 짧습니다.</p>;
   const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.return_pct)));
   return (
     <div className="pf-years">
@@ -28,7 +28,7 @@ export function PeriodBars({ view }: { view: PerfView }) {
           );
         })}
       </ul>
-      {rows.some((r) => r.partial) && <p className="pg-note">‘일부’는 1월부터 12월까지 다 채우지 않은 해입니다 — 그 기간 수익 그대로이고 연환산하지 않았습니다.</p>}
+      {rows.some((r) => r.partial) && <p className="pg-note">‘일부’는 1~12월 전체를 채우지 못한 해입니다 — 해당 기간 수익률 그대로이며 연환산하지 않았습니다.</p>}
     </div>
   );
 }

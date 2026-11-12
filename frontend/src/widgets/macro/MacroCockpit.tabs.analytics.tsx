@@ -44,7 +44,7 @@ export function CorrelationsTab({ corr, market, setMarket, onRetryCorr, causal, 
   const mkt = market === "kr" ? "국내 ETF" : "미국 ETF";
   const edges = causal?.edges ?? [];
   const edgeLine = (e: (typeof edges)[number]) => (
-    <><span data-server>{e.from_label}</span> → <b data-server>{e.to_label}</b> <em>{e.lag}개월 앞섭니다 · 유의확률 {e.p}</em></>
+    <><span data-server>{e.from_label}</span> → <b data-server>{e.to_label}</b> <em>{e.lag}개월 선행합니다 · 유의확률 {e.p}</em></>
   );
   return (
     <div className="mc-stack">
@@ -65,7 +65,7 @@ export function CorrelationsTab({ corr, market, setMarket, onRetryCorr, causal, 
           <div className="mc-card span2">
             <div className="mc-card-h">모든 자산 쌍의 평균 상관 <span className="mc-card-sub">1에 가까울수록 동조화가 강해 분산 효과가 약합니다</span></div>
             <AvgCorrChart avg={corr.avg_corr} />
-            <p className="mc-card-note">점선 0.6은 화면이 그은 참고선입니다(서버가 내린 판정이 아닙니다). 위기 때는 평균 상관이 1 쪽으로 몰리는 일이 잦습니다.</p>
+            <p className="mc-card-note">점선 0.6은 화면이 표시한 참고선입니다(서버 판정이 아닙니다). 위기 국면에서는 평균 상관이 1에 수렴하는 경향이 있습니다.</p>
           </div>
           <div className="mc-card span2">
             <div className="mc-card-h">상관 지도(최근 1년)</div>
@@ -78,7 +78,7 @@ export function CorrelationsTab({ corr, market, setMarket, onRetryCorr, causal, 
         <div className="mc-card span2">
           <div className="mc-card-h">선행 지표(그레인저 인과) <span className="mc-card-sub">한 지표의 과거 값이 다른 지표의 예측에 기여하는지 검정했습니다. 인과관계를 뜻하지는 않습니다.</span></div>
           {causal === undefined && <p className="mc-loading">관계 검정 중</p>}
-          {causal === null && <TabFail title="먼저 움직이는 지표 조회 실패" onRetry={onRetryCausal} />}
+          {causal === null && <TabFail title="선행 지표 조회 실패" onRetry={onRetryCausal} />}
           {causal && <CausalGraphView nodes={causal.nodes} edges={causal.edges} />}
           {causal && (edges.length ? (
             <>
@@ -93,7 +93,7 @@ export function CorrelationsTab({ corr, market, setMarket, onRetryCorr, causal, 
               )}
             </>
           ) : <div className="mc-empty-sm">유의한 관계 없음</div>)}
-          {causal && <p className="mc-card-note">선이 굵을수록 유의확률이 낮습니다(우연일 가능성이 작습니다). 계산 방법: <span data-server>{causal.method}</span>{causal.note && <> · <span data-server>{causal.note}</span></>}</p>}
+          {causal && <p className="mc-card-note">선이 굵을수록 유의확률이 낮습니다(우연일 가능성이 낮습니다). 계산 방법: <span data-server>{causal.method}</span>{causal.note && <> · <span data-server>{causal.note}</span></>}</p>}
         </div>
       </div>
     </div>
@@ -125,7 +125,7 @@ export function TimingTab({ timing, market, setMarket, onRetry }: {
             <ArcGauge value={comp.score} label="/100" sub={comp.label} ends={["0 · 위험 회피", "100 · 위험 선호"]} />
           </div>
           <div className="mc-card">
-            <div className="mc-card-h">신호별 점수 <span className="mc-card-sub">0~100, 가중을 곱해 합친 값이 종합 점수입니다</span></div>
+            <div className="mc-card-h">신호별 점수 <span className="mc-card-sub">0~100, 가중 합산한 값이 종합 점수입니다</span></div>
             <ComponentBars comps={timing.components} />
           </div>
           <div className="mc-card span2">

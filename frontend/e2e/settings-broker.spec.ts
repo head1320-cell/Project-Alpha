@@ -201,7 +201,7 @@ test("BV8: 합성 확인은 '연결됐습니다'로 말하지 않는다", async 
 
 test("BV8: 확인 성공은 서버 사유 · 실패는 사유 + 닫힌 원래 사유", async ({ page }) => {
   await setup(page, { accounts: [acc("ba_1", "실계좌", false)] });
-  let reply = checkReply("ok", "증권사가 이 키와 계좌로 잔고 조회를 받아 줬습니다.");
+  let reply = checkReply("ok", "증권사가 이 키와 계좌의 잔고 조회를 수락했습니다.");
   await page.route("**/api/v1/broker-accounts/ba_1/check", (r) => r.fulfill({ json: reply }));
   await page.goto("/settings");
   await page.locator(".set-broker-check").click();

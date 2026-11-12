@@ -134,6 +134,6 @@ def strategy_health(alphas: list[dict] | None = None,
         "derisk_alphas": [{"alpha_id": it["alpha_id"], "name": it["name"], "status": it["status"]}
                           for it in derisk],
         "note": "상태는 측정 가능한 신호(등록부·검증 IC/ICIR·신선도)에서만 판정. 회전율·캐파·"
-                "차입·백테스트 괴리 등은 데이터 미연동으로 'unmeasured'(정직). de-risk·paused "
+                "차입·백테스트 괴리 등은 데이터 미연동으로 'unmeasured'. de-risk·paused "
                 "알파는 실행계획에서 비중 축소/제외를 권고 — 자동 주문은 없음(지시서).",
     }

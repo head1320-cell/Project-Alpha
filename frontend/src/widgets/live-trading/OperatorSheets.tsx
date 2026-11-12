@@ -73,7 +73,7 @@ export function KillSheets({ open, onClose, onDone, onSettled }: {
       if (!r.ok) throw new Error(r.error);
       return r.value;
     },
-    onSuccess: (r) => onDone(r.status === "no_active_event" ? "이미 풀려 있었습니다." : "비상 정지를 풀었습니다. 새 주문을 다시 받습니다."),
+    onSuccess: (r) => onDone(r.status === "no_active_event" ? "이미 해제돼 있었습니다." : "비상 정지를 해제했습니다. 신규 주문 접수를 재개합니다."),
     onSettled: () => onSettled(),
   });
 
@@ -81,7 +81,7 @@ export function KillSheets({ open, onClose, onDone, onSettled }: {
     <>
       <Sheet open={open === "kill"} onClose={() => { trigger.reset(); onClose(); }} title="비상 정지" testId="kill" className="lv-sheet"
              sub="운영 계좌의 미체결 주문을 취소하고, 운영 계좌와 모든 사용자 계좌의 신규 주문을 중단합니다. 보유 종목은 매도하지 않습니다.">
-        <p className="lv-said">서버 기록에는 이렇게 남습니다 <code>{KILL_BODY.reason}</code> · 청산 방식 그대로 두기</p>
+        <p className="lv-said">서버 기록에는 다음과 같이 남습니다 <code>{KILL_BODY.reason}</code> · 청산 방식 그대로 두기</p>
         {trigger.isError ? <p className="lv-err" role="alert">비상 정지 발동 실패. <span data-server>{trigger.error.message}</span></p> : null}
         <div className="tx-confirm-act">
           <button type="button" className="tx-btn lv-btn-danger" data-act="kill-yes" disabled={trigger.isPending}
@@ -90,9 +90,9 @@ export function KillSheets({ open, onClose, onDone, onSettled }: {
         </div>
       </Sheet>
       <Sheet open={open === "resolve"} onClose={() => { resolve.reset(); onClose(); }} title="비상 정지 풀기" testId="resolve" className="lv-sheet"
-             sub="풀면 운영 계좌와 사용자 계좌가 다시 새 주문을 받습니다. 사용자가 자기 계좌에 건 정지는 그대로입니다.">
-        <p className="lv-said">서버 기록에는 이렇게 남습니다 <code>{RESOLVE_BODY.notes}</code></p>
-        {resolve.isError ? <p className="lv-err" role="alert">비상 정지를 풀지 못했습니다. <span data-server>{resolve.error.message}</span></p> : null}
+             sub="해제하면 운영 계좌와 사용자 계좌의 신규 주문 접수를 재개합니다. 사용자가 본인 계좌에 발동한 정지는 유지됩니다.">
+        <p className="lv-said">서버 기록에는 다음과 같이 남습니다 <code>{RESOLVE_BODY.notes}</code></p>
+        {resolve.isError ? <p className="lv-err" role="alert">비상 정지를 해제하지 못했습니다. <span data-server>{resolve.error.message}</span></p> : null}
         <div className="tx-confirm-act">
           <button type="button" className="tx-btn tx-btn--main" data-act="resolve-yes" disabled={resolve.isPending}
                   onClick={() => resolve.mutate()}>{resolve.isPending ? "해제 중" : "비상 정지 풀기"}</button>

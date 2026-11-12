@@ -51,7 +51,7 @@ export default function BuyConditionPanel({ s, set }: {
               </div>
               <OffsetInput value={s.buy.breakthroughOffsetPct}
                 onChange={(breakthroughOffsetPct) => patchBuy({ breakthroughOffsetPct })} />
-              <p className="bte-note bte-note--warn">당일 시초가처럼 변동이 큰 기준은 불공정 거래 소지가 있으니 조심하십시오.</p>
+              <p className="bte-note bte-note--warn">당일 시초가처럼 변동이 큰 기준은 불공정 거래 소지가 있으니 유의하십시오.</p>
             </div>
           )}
           <Field label="매수 시점">
@@ -64,8 +64,8 @@ export default function BuyConditionPanel({ s, set }: {
       </Section>
 
       <Section title="매수 금액" hint="순서 · 종목당 비중 · 보유 수" tone="buy" enabled>
-        <Field label="사는 순서">
-          <select value={s.buy.primarySort.expr} className="kit-select" aria-label="사는 순서 기준"
+        <Field label="매수 우선순위">
+          <select value={s.buy.primarySort.expr} className="kit-select" aria-label="매수 우선순위 기준"
             onChange={(e) => patchBuy({ primarySort: { ...s.buy.primarySort, expr: e.target.value } })}>
             {SORT_FIELDS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
           </select>
@@ -73,7 +73,7 @@ export default function BuyConditionPanel({ s, set }: {
             onChange={(dir: SortDir) => patchBuy({ primarySort: { ...s.buy.primarySort, dir } })}
             options={[{ id: "DESC", label: "높은순" }, { id: "ASC", label: "낮은순" }]} />
         </Field>
-        <SubToggle tone="buy" label="순서를 식으로 (매일)" hint="위 순서 대신, 매일 식 값으로 사는 순서를 정합니다"
+        <SubToggle tone="buy" label="우선순위 식 (매일)" hint="위 기준 대신, 매일 식 값으로 매수 우선순위를 정합니다"
           on={s.buy.sortExpr.trim() !== ""} onChange={(on) => patchBuy({ sortExpr: on ? "{종합점수}" : "" })}>
           <input value={s.buy.sortExpr} spellCheck={false} className="bte-input bte-input--mono bte-input--wide" aria-label="순서 식"
             onChange={(e) => patchBuy({ sortExpr: e.target.value })}
@@ -113,10 +113,10 @@ export default function BuyConditionPanel({ s, set }: {
             <input value={s.buy.fillExpr} spellCheck={false} className="bte-input bte-input--mono bte-input--wide" aria-label="기준가 식"
               onChange={(e) => patchBuy({ fillExpr: e.target.value })}
               placeholder="예: (과거값({고가},{1일})+과거값({저가},{1일}))/2" />
-            <p className="bte-note">마지막 봉의 값이 기준가입니다. 당일 종가가 들어간 식은 미래 정보를 씁니다 — 과거값(…)을 권합니다.</p>
+            <p className="bte-note">마지막 봉의 값이 기준가입니다. 당일 종가가 포함된 식은 미래 정보를 사용합니다 — 과거값(…)을 권장합니다.</p>
           </Field>
         )}
-        <Field label="사는 가격">
+        <Field label="매수 가격">
           <OffsetInput value={s.buy.fillOffsetPct} onChange={(fillOffsetPct) => patchBuy({ fillOffsetPct })} />
         </Field>
         <SubToggle tone="buy" label="종목당 최대 금액" hint="종목당 투자 한도"
@@ -130,7 +130,7 @@ export default function BuyConditionPanel({ s, set }: {
         </SubToggle>
         <Field label="재매수 대기">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />
-          <p className="bte-note">판 뒤 N일(달력 기준) 동안 같은 종목을 다시 사지 않습니다. 0이면 쓰지 않습니다.</p>
+          <p className="bte-note">매도 후 N일(달력 기준) 동안 동일 종목을 재매수하지 않습니다. 0이면 적용하지 않습니다.</p>
         </Field>
       </Section>
 
@@ -147,7 +147,7 @@ export default function BuyConditionPanel({ s, set }: {
 
       <AssetAllocPanel s={s} set={set} />
 
-      <Section title="시장 필터(약세장 매매 중단)" hint="지수 조건으로 포트폴리오 전체를 막습니다(마켓타이밍)" tone="neutral"
+      <Section title="시장 필터(약세장 매매 중단)" hint="지수 조건으로 포트폴리오 전체를 차단합니다(마켓타이밍)" tone="neutral"
         enabled={s.marketTiming.on} onToggle={(on) => patchMt({ on })}>
         <Field label="기준 지수">
           <Segmented value={s.marketTiming.index} onChange={(index) => patchMt({ index })}

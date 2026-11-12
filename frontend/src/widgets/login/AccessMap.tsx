@@ -57,7 +57,7 @@ export function AccessMap() {
 
   return (
     <section className="lg-map" aria-labelledby="lg-map-h">
-      <h2 id="lg-map-h" className="lg-map-h">로그인이 여는 것</h2>
+      <h2 id="lg-map-h" className="lg-map-h">로그인 후 사용 범위</h2>
       <div className="lg-srv">
         <span className="lg-srv-k">현재 서버</span>
         <Chips items={chips} label="현재 서버 상태" />

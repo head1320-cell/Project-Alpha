@@ -58,7 +58,7 @@ export function FrontierResult({ v }: { v: Dict }) {
         ["연결한 비중", pt ? <><span className="pg-dot-point" aria-hidden="true" />연 {pct(pt.return)} · 변동성 {pct(pt.volatility)}</>
                        : "비중을 연결하면 곡선 위에 표시합니다"],
       ]} />
-      {cloud === null && <p className="pg-warn">무작위 조합 구름은 그리지 못했습니다 — {String(v.cloud_reason ?? "사유 미상")}</p>}
+      {cloud === null && <p className="pg-warn">무작위 조합 산포는 표시하지 못했습니다 — {String(v.cloud_reason ?? "사유 미상")}</p>}
     </>
   );
 }
@@ -123,7 +123,7 @@ export function RegimeExplainResult({ v }: { v: Dict }) {
       ]} />
       {drivers.length > 0 && (
         <>
-          <h4 className="pg-h4">이 국면을 만든 지표 (확률 {pp(prob)} · 기준 {pp(base)})</h4>
+          <h4 className="pg-h4">이 국면 판정에 기여한 지표 (확률 {pp(prob)} · 기준 {pp(base)})</h4>
           <table className="pg-table pg-shapley">
             <tbody>{drivers.map((d, i) => (
               <tr key={i}><td className="pg-td-name">{String(d.label ?? d.feature ?? d.name ?? "—")}</td>
@@ -330,7 +330,7 @@ export function AlphaValidateResult({ v, prov }: { v: Dict; prov: Dict }) {
           ))}</tbody></table>
         </>
       )}
-      <p className="pg-note">과거 표본의 순위 상관입니다 — 거래 비용을 빼지 않았고, 앞으로의 예측력을 말해 주지 않습니다.</p>
+      <p className="pg-note">과거 표본의 순위 상관입니다 — 거래비용을 차감하지 않았고, 향후 예측력을 뜻하지 않습니다.</p>
     </>
   );
 }

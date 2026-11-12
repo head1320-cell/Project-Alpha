@@ -34,7 +34,7 @@ const LEDE = "운영 계좌의 주문 전송 경로를 확인하고, 주문을 �
 /** 탭 — 주소 `?tab=` 와 같이 움직인다(기본 지금). 답 문장과 [비상 정지] 는 탭 위에 늘 보인다(사용자 결정 "탭 셋"). */
 type Tab = "now" | "safety" | "realism";
 const TABS: { value: Tab; label: string }[] = [
-  { value: "now", label: "지금" }, { value: "safety", label: "안전" }, { value: "realism", label: "현실성 점검" },
+  { value: "now", label: "현황" }, { value: "safety", label: "안전" }, { value: "realism", label: "현실성 점검" },
 ];
 export const tabOf = (v: string | null): Tab => (TABS.find((t) => t.value === v)?.value ?? "now");
 export const POLL_MS = 10_000;
@@ -82,7 +82,7 @@ export function LiveTradingView() {
     ...(practice === true ? [{ label: "합성 데이터", tone: "practice" as const, ev: "source" }]
       : cs.isError ? [{ label: "합성 데이터인지 확인하지 못했습니다", tone: "unknown" as const, ev: "source" }] : []),
     ...(r?.mode.ok && r.mode.value.changed_by
-      ? [{ label: `${r.mode.value.changed_by} 님이 ${krDateTime(r.mode.value.last_mode_change) ?? "시각 미상"}에 모드를 바꿨습니다`, tone: "plain" as const }]
+      ? [{ label: `${r.mode.value.changed_by} 님이 ${krDateTime(r.mode.value.last_mode_change) ?? "시각 미상"}에 모드를 변경했습니다`, tone: "plain" as const }]
       : []),
   ];
   const unknownMoney = bal === null;
@@ -106,7 +106,7 @@ export function LiveTradingView() {
     <PageHead title={TITLE} lede={LEDE} actions={
       <div className="lv-head-act">
         <span className="lv-polled" aria-live="polite">
-          {snap.isFetching ? "새로 읽는 중입니다" : snap.dataUpdatedAt ? `10초마다 새로 읽습니다 · 마지막 ${clock(snap.dataUpdatedAt)}` : "10초마다 새로 읽습니다"}
+          {snap.isFetching ? "갱신 중입니다" : snap.dataUpdatedAt ? `10초마다 갱신합니다 · 마지막 ${clock(snap.dataUpdatedAt)}` : "10초마다 갱신합니다"}
         </span>
         <button type="button" className="tx-btn tx-btn--sub lv-refresh" data-act="refresh" onClick={refetch}>
           <RefreshCw size={14} aria-hidden /> 새로 고침

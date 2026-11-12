@@ -223,7 +223,7 @@ class McVarParams(_Valued):
     n_simulations: int = Field(10000, ge=1000, le=50000, json_schema_extra={"x-ui": _ui(
         "경로 수", "advanced", help="많을수록 추정 오차가 감소합니다 — 상한 5만.")})
     use_ewma: bool = Field(True, json_schema_extra={"x-ui": _ui(
-        "최근 변동성 가중(EWMA)", "advanced", help="끄면 전체 표본의 표준편차를 씁니다.")})
+        "최근 변동성 가중(EWMA)", "advanced", help="끄면 전체 표본의 표준편차를 사용합니다.")})
     ewma_lambda: float = Field(0.94, ge=0.8, le=0.999, json_schema_extra={"x-ui": _ui("EWMA 감쇠", "advanced")})
 
 
@@ -416,7 +416,7 @@ def _explain_rolling_sharpe(view: dict, prov: dict, params: Any) -> dict:
     facts = [f"구간 평균 {r.get('mean')} · 가장 낮을 때 {r.get('min')} · 가장 높을 때 {r.get('max')}"]
     trust = [*_base_trust(view),
              _t(ASSUMED, "과거 창마다의 위험조정수익입니다 — 다음 창의 샤프를 예측하지 않습니다.")]
-    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["비용·세금을 뺀 샤프"]}
+    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["비용·세금 차감 후 샤프"]}
 
 
 # ── 동적 상관 ────────────────────────────────────────────────────────────────
@@ -457,7 +457,7 @@ def _explain_dcc(view: dict, prov: dict, params: Any) -> dict:
         if isinstance(st, dict) and isinstance(st.get("mean"), (int, float)):
             facts.append(f"{pair}: 평균 {st['mean']:.2f} · 범위 {st.get('min')} ~ {st.get('max')}")
     trust = [*_base_trust(view), _t(ASSUMED, "상관은 동조 정도입니다 — 인과를 뜻하지 않습니다.")]
-    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["위기 때 상관이 한꺼번에 오르는 정도(표본 밖)"]}
+    return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["위기 시 상관의 동반 급등 정도(표본 밖)"]}
 
 
 # ══ 파생·신용 계산기 (R2) ════════════════════════════════════════════════════
@@ -516,7 +516,7 @@ class BondParams(BaseModel):
     face_value: float = Field(10000.0, gt=0, json_schema_extra={"x-ui": _ui("액면", unit="원")})
     coupon_rate: float = Field(0.035, ge=0, le=0.3, json_schema_extra={"x-ui": _ui("쿠폰 금리", help="연율.")})
     ytm: float = Field(0.04, ge=-0.05, le=0.5, json_schema_extra={"x-ui": _ui(
-        "만기 수익률", question="시장이 요구하는 수익률은?", help="직접 넣는 값입니다 — 시장 금리를 읽지 않습니다.")})
+        "만기 수익률", question="시장이 요구하는 수익률은?", help="직접 입력하는 값입니다 — 시장 금리를 조회하지 않습니다.")})
     years_to_maturity: int = Field(5, ge=1, le=50, json_schema_extra={"x-ui": _ui("남은 만기", unit="년")})
     freq: Literal[1, 2, 4, 12] = Field(2, json_schema_extra={"x-ui": _ui(
         "이자 지급 횟수", "advanced", unit="회/년", presets=[{"label": "연 1회", "value": 1}, {"label": "반기", "value": 2},
@@ -665,7 +665,7 @@ def _explain_cva(view: dict, prov: dict, params: Any) -> dict:
     facts = [f"우리 쪽 부도 위험(DVA)까지 넣은 순값(BCVA) {_eok(b.get('bcva_amount'))}",
              f"상대방 스프레드가 넓어지면 CVA {_eok(st.get('stressed_cva'))} (+{st.get('stress_loss_pct')}%)",
              f"연 스프레드로 환산 {u.get('cva_spread_bps')}bp",
-             f"해마다 드는 순비용 근사(BCVA) {_eok((r.get('bcva_spread') or {}).get('bcva_running_annual'))}"]
+             f"연간 순비용 근사(BCVA) {_eok((r.get('bcva_spread') or {}).get('bcva_running_annual'))}"]
     trust = [_t(ASSUMED, _CALC_TRUST),
              _t(ASSUMED, "노출 곡선은 거래 종류별로 정해진 모양(양식화)입니다 — 금리·환율 경로를 시뮬레이션한 값이 아닙니다."),
              _t(ASSUMED, "연간 순비용은 스프레드 × 평균 노출의 근사입니다 — 기간별 할인·생존확률을 넣은 CVA 와 다른 값입니다.")]

@@ -84,13 +84,13 @@ export function SimpleView({ nodes, edges, groups, catalog, results, staleIds, r
       <header className="pg-simple-top">
         <div>
           <h2 className="pg-simple-h">설정 항목과 결과만 표시합니다</h2>
-          <p className="pg-simple-sub">여기서 바꾼 값은 캔버스의 노드 설정에 그대로 들어갑니다. 바꾸지 않은 칸은 서버 기본값입니다.</p>
+          <p className="pg-simple-sub">여기서 변경한 값은 캔버스의 노드 설정에 그대로 반영됩니다. 변경하지 않은 항목은 서버 기본값입니다.</p>
         </div>
         <button type="button" className="pg-btn pg-btn--primary pg-simple-run" disabled={running || !nodes.length} onClick={onRun}>
           {running ? <><Loader2 size={14} className="spin" /> 계산하는 중</> : "계산하기"}
         </button>
       </header>
-      {stale && <p className="pg-simple-stale">설정이 바뀌었습니다 — 바뀐 곳 {staleIds.size}개는 재계산하면 결과가 새로 나옵니다.</p>}
+      {stale && <p className="pg-simple-stale">설정이 변경됐습니다 — 변경된 항목 {staleIds.size}개는 재계산하면 결과가 갱신됩니다.</p>}
       {sections.map((sec) => {
         const asks = sec.ids.filter(hasQuestions);
         const outs = sec.ids.filter((id) => live?.[id] && (live[id].status !== "ok" || live[id].explain?.headline || live[id].glance));

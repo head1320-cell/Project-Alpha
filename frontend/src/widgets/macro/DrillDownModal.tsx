@@ -36,7 +36,7 @@ export function DrillDownModal({ series, loading, failed, onRetry, onClose }: { 
             {onRetry && <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={onRetry}>재시도</button></div>}
           </Notice>
         )}
-        {!loading && !failed && !series && <div className="mc-modal-load">이 지표는 흐름 자료 없음</div>}
+        {!loading && !failed && !series && <div className="mc-modal-load">이 지표는 시계열 자료 없음</div>}
         {!loading && series && (
           <>
             <div className="mc-modal-h">
@@ -44,7 +44,7 @@ export function DrillDownModal({ series, loading, failed, onRetry, onClose }: { 
               <div className="mc-modal-latest"><b>{fmtNum(series.latest)}</b><em>{series.unit}</em></div>
             </div>
             <DrillSeriesChart data={data} name={series.name} unit={series.unit} mean5y={series.mean_5y} />
-            <p className="mc-modal-note">점선은 지난 5년 평균입니다.</p>
+            <p className="mc-modal-note">점선은 최근 5년 평균입니다.</p>
             <dl className="mc-modal-stats">
               {[["최근 값", `${fmtNum(series.latest)} ${series.unit}`], ["지난 5년 평균", fmtNum(series.mean_5y)], ["지난 5년 표준편차", fmtNum(series.std_5y)],
                 ["z(평균 대비 편차)", fmtZ(series.z_score)], ["최근 5년 백분위", series.percentile != null ? `${Math.round(series.percentile)}%` : "N/A"], ["전년 대비", fmtPct(series.yoy)]].map(([k, v]) => (

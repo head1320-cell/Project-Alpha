@@ -109,7 +109,7 @@ def live_gate(record: LiveAuthorization | None = None, username: str | None = No
     if not (username or "").strip():
         return {
             "state": LIVE_BLOCKED,
-            "reason": "누구의 계좌인지 몰라서 실계좌를 열 수 없습니다.",
+            "reason": "계좌 소유자가 미상이라 실계좌를 허용할 수 없습니다.",
             "missing": [],
             "authorization": record.to_dict(),
         }

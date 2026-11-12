@@ -101,9 +101,9 @@ test("아무것도 고르지 않으면 묻기 칸이 없다 — 짝: 노드를 �
   await expect(dock(page)).toHaveCount(0);
   await pick(page, "optimizer");
   await expect(dock(page).locator(".pg-ask-to")).toHaveText("4 포트폴리오 최적화에게 묻기");                      // ★짝★
-  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 3의 계산 설명으로 답합니다");          // 0 인 쪽은 말하지 않는다
+  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 3의 계산 설명으로 응답합니다");          // 0 인 쪽은 말하지 않는다
   await pick(page, "estimate");
-  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 2 · 아래 1의 계산 설명으로 답합니다");
+  await expect(dock(page).locator(".pg-ask-scope")).toHaveText("이 노드와 위쪽 2 · 아래 1의 계산 설명으로 응답합니다");
   await page.locator(".react-flow__pane").click({ position: { x: 600, y: 600 } });
   await expect(dock(page)).toHaveCount(0);
 });
@@ -112,7 +112,7 @@ test("계산 전에는 안내 + [여기까지 계산] — 누르면 그 노드�
   await signIn(page);
   await openWith(page, CORE);
   await pick(page, "estimate");
-  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산한 뒤에 물을 수 있습니다");
+  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산 후 질의할 수 있습니다");
   await expect(box(page)).toHaveCount(0);
   const res = page.waitForResponse((r) => r.url().includes("/allocation/graph/run"), { timeout: 120_000 });
   await dock(page).locator(".pg-ask-run").click();
@@ -127,7 +127,7 @@ test("로그아웃이면 로그인 링크 · 요청 0", async ({ page }) => {
   await openWith(page, CORE);
   await runAll(page);
   await pick(page, "optimizer");
-  await expect(dock(page).locator(".pg-ask-login")).toHaveText("로그인하면 AI 에게 물을 수 있습니다");
+  await expect(dock(page).locator(".pg-ask-login")).toHaveText("로그인하면 AI 에게 질의할 수 있습니다");
   await expect(dock(page).locator(".pg-ask-login")).toHaveAttribute("href", "/login");
   await expect(box(page)).toHaveCount(0);
   await page.waitForTimeout(400);
@@ -226,9 +226,9 @@ test("못 보이면 서버 사유 · 검사에서 빠진 문장과 확인 못 �
   await signIn(page);
   await answer(page, async (route, i) => {
     await route.fulfill({ json: i === 0
-      ? { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다", dropped: [] }
+      ? { available: false, source: "unavailable", reason_code: "rate_limited", reason: "시간당 질의 한도는 30회입니다. 이번 시간 한도를 모두 사용했습니다", dropped: [] }
       : ok({ answer: { answerable: true, cannot: null, sentences: [SENTS[0]] },
-             rejected: [{ code: "numbers", reason: "댄 사실 줄에 없는 숫자 9 를 썼습니다" }],
+             rejected: [{ code: "numbers", reason: "인용한 사실 줄에 없는 수치 9 를 썼습니다" }],
              dropped: [{ node_id: "estimate", reason: "서명이 일치하지 않습니다(그래프가 변경됐거나 서버가 재시작됐습니다). 재계산하면 다시 물을 수 있습니다" }] }) });
   });
   await openWith(page, CORE);
@@ -236,10 +236,10 @@ test("못 보이면 서버 사유 · 검사에서 빠진 문장과 확인 못 �
   await pick(page, "optimizer");
   await askText(page, "왜요?");
   await expect(dock(page).locator(".pg-ask-turn").first().locator(".pg-ask-note"))
-    .toHaveText("AI 답을 보여 줄 수 없습니다: 한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다");
+    .toHaveText("AI 응답을 표시할 수 없습니다: 시간당 질의 한도는 30회입니다. 이번 시간 한도를 모두 사용했습니다");
   await askText(page, "다시 왜요?");
   const note = dock(page).locator(".pg-ask-turn").nth(1).locator(".pg-ask-note");
-  await expect(note).toContainText("1문장은 검사에서 빠졌습니다: 댄 사실 줄에 없는 숫자 9 를 썼습니다");
+  await expect(note).toContainText("1문장은 검사에서 제외됐습니다: 인용한 사실 줄에 없는 수치 9 를 썼습니다");
   await expect(note).toContainText("1개 결과는 확인하지 못해 제외했습니다: 서명이 일치하지 않습니다");
 });
 
@@ -293,8 +293,8 @@ test("대상마다 문답이 남는다 — 다른 노드에 갔다 오면 그대
   await page.keyboard.press("Delete");
   await pick(page, "optimizer");
   await expect(dock(page).locator(".pg-ask-turn")).toHaveCount(0);
-  await expect(dock(page).locator(".pg-ask-stale")).toHaveText("계산 결과가 바뀌어 답을 지웠습니다");
-  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산한 뒤에 물을 수 있습니다");
+  await expect(dock(page).locator(".pg-ask-stale")).toHaveText("계산 결과가 변경돼 응답을 삭제했습니다");
+  await expect(dock(page).locator(".pg-ask-wait")).toHaveText("계산 후 질의할 수 있습니다");
 });
 
 test("Ctrl+K '고른 것에게 묻기' 는 칸에 초점을 둔다 · Esc 는 초점을 놓는다", async ({ page }) => {
@@ -324,7 +324,7 @@ test("가로채지 않은 실제 서버: 실제 계산 → 실제 봉인(설명�
   await askText(page, "전달 항목은 무엇입니까?");
   const body = await (await res).json();
   expect(body).toMatchObject({ available: false, source: "unavailable", reason_code: "no_key", dropped: [] });
-  await expect(dock(page).locator(".pg-ask-note")).toHaveText("AI 답을 보여 줄 수 없습니다: 서버에 Claude 키가 없습니다");
+  await expect(dock(page).locator(".pg-ask-note")).toHaveText("AI 응답을 표시할 수 없습니다: 서버에 Claude 키가 없습니다");
 });
 
 for (const scheme of ["light", "dark"] as const) {

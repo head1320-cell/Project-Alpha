@@ -511,7 +511,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
         return;
       }
       case "run": void run(); say("계산하고 있습니다"); return;
-      case "layout": st.autoLayout(); fit(); say("흐름 순서대로 다시 놓았습니다"); return;
+      case "layout": st.autoLayout(); fit(); say("흐름 순서대로 재배치했습니다"); return;
       case "branch": {
         const root = order.find(isWeight);
         if (root) st.act(() => `${st.makeBranch(root)} · ${where}`);
@@ -616,9 +616,9 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
       {s.runError && <p className="pg-banner pg-banner--err">계산 요청이 실패했습니다 — {s.runError}</p>}
       {legacy && (
         <div className="pg-banner pg-legacy" role="note">
-          <span>예전 ‘{legacy.title}’ 화면은 이제 이 캔버스에서 합니다. {legacy.nodes.length
-            ? "그 일을 하는 노드를 왼쪽 목록에 찾아 두었습니다."
-            : "요약은 캔버스 전체와 이야기 탭이 그 자리를 대신합니다."}</span>
+          <span>예전 ‘{legacy.title}’ 화면의 기능은 이제 이 캔버스에서 제공합니다. {legacy.nodes.length
+            ? "해당 기능의 노드를 왼쪽 목록에 표시했습니다."
+            : "요약은 캔버스 전체와 이야기 탭이 대체합니다."}</span>
           {legacy.template && (
             <button type="button" className="pg-btn pg-legacy-template" onClick={() => loadTemplate(legacy.template!)}>
               ‘{TEMPLATES.find((t) => t.key === legacy.template)?.name ?? legacy.template}’ 흐름 열기
@@ -764,7 +764,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
               </Panel>
             )}
             {live && (
-              <Panel position="top-left" className="pg-wire-legend" aria-label="선 모양 읽는 법">
+              <Panel position="top-left" className="pg-wire-legend" aria-label="선 모양 범례">
                 {WIRE_LEGEND.map((w) => (
                   <span key={w.key} className={`pg-wire-key pg-wire-key--${w.key}`} title={w.help}>
                     <svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="25" y2="4" /></svg>{w.label}
@@ -775,7 +775,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             {cause && (
               <Panel position="top-center" className="pg-cause-banner" role="status">
                 <span>
-                  {cause.roots.length === 1 && cause.roots[0] === cause.from ? "이 노드가 첫 원인입니다" : "첫 원인"}
+                  {cause.roots.length === 1 && cause.roots[0] === cause.from ? "이 노드가 최초 원인입니다" : "첫 원인"}
                   {" — "}
                   {cause.roots.map((r) => {
                     const n = s.nodes.find((x) => x.id === r);
@@ -871,7 +871,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             <GuideBar g={guide} session={session} onTry={tryTool}
                       onLater={(id) => setDismissed((d) => new Set(d).add(`guide|${id}`))}
                       extra={aiShown ? <AiAsk session={session} ai={ai.ai} onAsk={() => { void ai.ask(); }} /> : null} />
-          ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 바로 불러옵니다"
+          ) : <div className="pg-hint">{dragOver ? "그래프 파일을 놓으면 즉시 불러옵니다"
             : s.picked.length > 1 ? `${s.picked.length}개 선택 · Ctrl+G 그룹 · Ctrl+C 복사 · Delete 삭제`
             : s.selectedId ? "Alt+←→ 앞·뒤 단계로 · Alt+↑↓ 번호 순서로 · Shift+Enter 여기까지 계산"
             : "노드를 끌어 놓고 같은 색 포트끼리 연결하십시오. 선을 빈 곳에 놓으면 연결할 노드를 검색합니다 · 단축키 ?"}

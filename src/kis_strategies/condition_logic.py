@@ -46,7 +46,7 @@ def _tokenize(expr: str) -> list[str]:
         out.append(tok)
         pos = m.end()
         if len(out) > _MAX_TOKENS:
-            raise ValueError("논리 조건식이 너무 깁니다")
+            raise ValueError("논리 조건식이 허용 길이를 초과합니다")
     return out
 
 

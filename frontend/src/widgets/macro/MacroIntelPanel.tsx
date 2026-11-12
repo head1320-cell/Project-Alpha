@@ -98,7 +98,7 @@ function CoverageBlock() {
                       <td>
                         {p.backtest_eligible
                           ? <span className="mx-ok">사용할 수 있습니다</span>
-                          : <span className="mx-fwd">앞으로만 씁니다</span>}
+                          : <span className="mx-fwd">향후 구간에만 사용합니다</span>}
                       </td>
                     </tr>
                   ))}
@@ -210,7 +210,7 @@ function ForecastBlock() {
     queryFn: () => macroIntelApi.forecastCoverage(1, 0.1),
   });
   return (
-    <Block title="국면 예측이 맞은 비율" q={q} loading="예측 적중률 측정 중"
+    <Block title="국면 예측 적중률" q={q} loading="예측 적중률 측정 중"
            fail="예측 적중률 조회 실패">
       {() => {
         if (!q.data) return null;
@@ -225,7 +225,7 @@ function ForecastBlock() {
               </div>
               <div>
                 {/* ★실측을 목표와 나란히★ 같은 자리에 넣으면 이론과 측정이 섞인다. */}
-                <span className="mx-stat-k">실제로 맞은 비율</span>
+                <span className="mx-stat-k">실제 적중률</span>
                 <b className="num mx-stat-v">{(d.coverage * 100).toFixed(1)}%</b>
                 <span className="mx-stat-s num">{d.hits}/{d.n_eval}번</span>
               </div>
@@ -237,11 +237,11 @@ function ForecastBlock() {
               </div>
             </div>
             <div className="mx-cov-bar" role="img"
-                 aria-label={`실제로 맞은 비율 ${(d.coverage * 100).toFixed(1)}%, 목표 ${(d.target * 100).toFixed(0)}%`}>
+                 aria-label={`실제 적중률 ${(d.coverage * 100).toFixed(1)}%, 목표 ${(d.target * 100).toFixed(0)}%`}>
               <i className="mx-cov-fill" style={{ width: `${Math.min(100, d.coverage * 100)}%` }} />
               <i className="mx-cov-target" style={{ left: `${Math.min(100, d.target * 100)}%` }} />
             </div>
-            <p className="mx-cov-cap">막대는 실제로 맞은 비율, 눈금은 목표입니다.</p>
+            <p className="mx-cov-cap">막대는 실제 적중률, 눈금은 목표치입니다.</p>
             <p className="mx-why" data-server>{d.note}</p>
           </>
         );
@@ -272,7 +272,7 @@ function ConsensusBlock() {
             <p className="mx-verdict-s">
               {d.consensus
                 ? <span className="mx-ok">사용 가능한 도구가 모두 동일합니다</span>
-                : <span className="mx-split">도구끼리 갈렸습니다</span>}
+                : <span className="mx-split">도구 간 판정이 엇갈렸습니다</span>}
               <span>불일치 점수 <b className="num">{d.disagreement.score.toFixed(2)}</b></span>
             </p>
             {/* ★평균 옆에 원본이 남는다★ 남지 않으면 결론을 되짚을 수 없다. */}
@@ -287,7 +287,7 @@ function ConsensusBlock() {
                 <li key={tool} className="off">
                   <span className="mx-tool-n">{TOOL_KO[tool] ?? tool} <em data-mono>{tool}</em></span>
                   {/* 사유를 배지가 직접 들고 있다 — 옆에 흘려 놓으면 떼어 낼 수 있다. */}
-                  <EvidenceBadge kind="unavailable" reason={<span data-server>{d.reasons[tool]}</span>}>못 썼습니다</EvidenceBadge>
+                  <EvidenceBadge kind="unavailable" reason={<span data-server>{d.reasons[tool]}</span>}>사용 불가</EvidenceBadge>
                 </li>
               ))}
             </ul>

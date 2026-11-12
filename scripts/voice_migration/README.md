@@ -10,6 +10,7 @@
 | `vocab.py` | 용어 치환 ① — 성과 지표 · 공용 상태 · 단추 · 기업 분석 · 합성 데이터(연습용) |
 | `manual.py` | 변환기로 안 되는 손 고침(문체를 재던 시험의 방향 · AI 말투 지시 · 낱말 조각 단언). 여러 번 돌려도 같다. |
 | `vocab2.py` ~ `vocab6.py` | 용어 치환 ②~⑥ — 글자째 쌍(`ENDINGS = False`). ⑥(`vocab6.py`)은 남은 쉬운 풀이를 전 화면·서버 문장에서 전문 용어로(용어집 §3.9). |
+| `vocab7.py` | 용어 치환 ⑦ — ★전수 검수★. 표지 낱말 없이 남은 쉬운 표현을 `inventory.py dump` 로 화면 문자열을 전부 읽어 문장째 쌍으로(용어집 §3.10). `_FRONT`·`_CANVAS`·`_SERVER`·`_TESTS`(낡은 단언 맞춤). |
 | `efix.py` | E2E 줄 보고서의 Expected/Received 를 읽어, 규칙 사슬(①~⑥)의 변형 가운데 실제 화면 글에 든 것으로 단언을 맞춘다. |
 | `inventory.py` | ★읽기 전용★ 화면 문자열 목록 — 남은 쉬운 표현을 찾고, 치환 뒤 어긋난 곳을 긴 실행(pytest 20분 · E2E 60분) 전에 싸게 찾는다. |
 
@@ -23,6 +24,7 @@ python scripts/voice_migration/inventory.py count                      # 영역�
 python scripts/voice_migration/inventory.py list front-other 볼 수     # 그 영역에서 표지 낱말이 든 화면 문자열(파일:줄)
 python scripts/voice_migration/inventory.py remnants vocab6.py         # 따옴표 쌍의 옛 이름이 JSX 글자·정규식에 남은 곳
 python scripts/voice_migration/inventory.py asserts vocab6.py          # pytest·E2E 가 옛 조각을 아직 단언하는 곳
+python scripts/voice_migration/inventory.py dump front-other --sentences   # 그 영역(또는 경로)의 화면 문자열 전부 — 파일별 · 중복 없이(전수 검수용)
 ```
 
 - 건드리지 않는 파일: `tests/test_frontend_voice.py` · `frontend/e2e/voice-audit.spec.ts`(검사기가 해요체 예문을 품는다) ·
@@ -33,4 +35,5 @@ python scripts/voice_migration/inventory.py asserts vocab6.py          # pytest�
   `.ts/.tsx` 는 주석을 걷은 줄을 본다. ★ast 는 이어 붙인 문자열 리터럴을 한 덩어리로 보인다★ — 쌍의 키는 소스의 리터럴 한 조각에 맞춰 적는다.
 - ★파이썬은 docstring 도 글자로 본다★(변환기는 `#` 주석만 뺀다) — 한다체 docstring 을 건드리지 않으려면 낱말 하나짜리 전역 쌍(`잰 ` → `측정한 `)이 아니라
   합니다체 꼴의 조각(`재지 못했습니다` → `측정하지 못했습니다`)이나 문장째 쌍으로 적는다(⑥c).
+- `dump` 가 서버에서 보는 것은 화면 칸(`title·facts·trust·reason·message·note·hint·label·why·detail`)의 값과 `HTTPException(detail=…)` 뿐이다 — ★상수 표(`REASONS = {…}`)·`return code, "사유"` 꼴은 놓친다★(⑦에서 캔버스 AI 거절 사유가 그렇게 빠졌다가 낡은 단언을 맞추다 나왔다). `/app/dev/` 는 뺀다.
 - `asserts` 는 한글 다섯 글자 이상 조각만 본다 — 도우미 호출(`align(page, "…")`)·치환 변수가 낀 문장은 놓친다. 마지막 판정은 전체 pytest·E2E 다.

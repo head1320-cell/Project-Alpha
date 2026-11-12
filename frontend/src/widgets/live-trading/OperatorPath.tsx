@@ -69,8 +69,8 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
             <p className="tx-st-state">{killState(kill)}</p>
             <p className="tx-st-sub">
               {kill.failed ? <button type="button" className="lv-link" onClick={onRetryKill}>재시도</button>
-                : ev ? <>사유 <span data-server>{ev.trigger_reason ?? "적히지 않았습니다"}</span>{ev.triggered_at ? ` · ${krDateTime(ev.triggered_at) ?? ev.triggered_at}` : ""}</>
-                : k?.is_active ? "정지 기록 읽기 실패. 새 주문은 막혀 있습니다."
+                : ev ? <>사유 <span data-server>{ev.trigger_reason ?? "기록되지 않았습니다"}</span>{ev.triggered_at ? ` · ${krDateTime(ev.triggered_at) ?? ev.triggered_at}` : ""}</>
+                : k?.is_active ? "정지 기록 조회 실패. 신규 주문은 차단됩니다."
                 : "켜면 운영 계좌와 모든 사용자 계좌의 신규 주문을 중단합니다."}
             </p>
           </div>
@@ -120,7 +120,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
             ) : null}
             {refused ? (
               <p className="live-mode-refused lv-err" role="alert" data-mode={refused.mode}>
-                {MODE_TO[refused.mode] ?? `‘${refused.mode}’ 모드로`} 바꾸지 못했습니다. <span data-server>{refused.reason}</span>
+                {MODE_TO[refused.mode] ?? `‘${refused.mode}’ 모드로`} 변경하지 못했습니다. <span data-server>{refused.reason}</span>
               </p>
             ) : null}
           </div>
@@ -129,7 +129,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
           <span className="tx-st-dot" aria-hidden><Send className="tx-st-ic" size={14} strokeWidth={2} /></span>
           <div className="tx-st-b">
             <p className="tx-st-name">전송 대상</p>
-            <p className="tx-st-state">{cur === null ? "모드를 몰라서 정할 수 없습니다" : opDestination(cur, practice)}</p>
+            <p className="tx-st-state">{cur === null ? "모드가 미상이라 설정할 수 없습니다" : opDestination(cur, practice)}</p>
             <p className="tx-st-sub">
               {cur === "PAPER" && practice === false ? "서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다."
                 : cur === "LIVE" ? "실계좌 관문을 통과해야 실제로 주문합니다."

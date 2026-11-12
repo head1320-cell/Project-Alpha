@@ -52,7 +52,7 @@ export function destination(mode: ExecMode, practice: boolean | null): string {
   if (mode === "SHADOW") return "전송하지 않습니다";
   if (mode === "PAPER") return practice === true ? "가상 체결기로 전송됩니다" : practice === false ? "증권사 모의 서버로 전송됩니다" : "모의 체결로 처리됩니다";
   if (mode === "LIVE") return "실제 자금으로 주문합니다";
-  return `서버가 '${mode}' 모드라고 답했습니다`;
+  return `서버가 '${mode}' 모드라고 응답했습니다`;
 }
 
 /** 답 문장 — 서버 값(모드·비상 정지·연습용)만 틀에 끼운다. 이름 뒤 조사가 받침에 따라 바뀌지 않게 "‘이름’에서"·"‘이름’의". */

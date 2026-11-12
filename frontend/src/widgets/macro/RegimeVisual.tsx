@@ -172,7 +172,7 @@ function StressCard({ st }: { st: RegimeState }) {
       </dl>
       {comps.length ? (
         <>
-          <p className="rv-sub">항목별 점수(0~100, 높을수록 불안). 가중치를 매겨 합친 값이 위 숫자입니다</p>
+          <p className="rv-sub">항목별 점수(0~100, 높을수록 불안). 가중 합산한 값이 위 수치입니다</p>
           <ul className="rv-sc">
             {comps.map(([k, v]) => (
               <li key={k} data-key={k}>

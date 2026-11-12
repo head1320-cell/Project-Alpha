@@ -24,10 +24,10 @@ type Item = { value: string | number; label: string; sub?: string; chips: { text
 type State = { kind: "loading" } | { kind: "error"; text: string } | { kind: "ready"; items: Item[] };
 
 const EMPTY: Record<string, string> = {
-  strategies: "등록된 전략이 없습니다 — 백테스트 결과를 전략으로 등록하면 여기에 나옵니다.",
-  research_runs: "연구 기록이 없습니다 — 포트폴리오 최적화 결과를 연구 기록으로 남기면 여기에 나옵니다.",
-  alphas: "등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 나옵니다.",
-  backtest_runs: "백테스트가 없습니다 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 나옵니다(목록을 못 읽어도 비어 보일 수 있습니다).",
+  strategies: "등록된 전략이 없습니다 — 백테스트 결과를 전략으로 등록하면 여기에 표시됩니다.",
+  research_runs: "연구 기록이 없습니다 — 포트폴리오 최적화 결과를 연구 기록으로 남기면 여기에 표시됩니다.",
+  alphas: "등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 표시됩니다.",
+  backtest_runs: "백테스트가 없습니다 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 표시됩니다(목록을 못 읽어도 비어 보일 수 있습니다).",
   scenario_packs: "저장된 시나리오가 없습니다 — 직접 지정한 충격을 사용하거나, 시나리오를 저장하면 여기에 표시됩니다.",
 };
 
@@ -79,7 +79,7 @@ async function load(source: string): Promise<Item[]> {
       chips: [{ text: "가정 충격", tone: "assumed" as const }],
     }));
   }
-  throw new Error(`이 화면이 모르는 목록입니다(${source}) — 전문가 설정에서 직접 입력하십시오.`);
+  throw new Error(`이 화면에 정의되지 않은 목록입니다(${source}) — 전문가 설정에서 직접 입력하십시오.`);
 }
 
 export function PickField({ source, multi, value, onChange }: {

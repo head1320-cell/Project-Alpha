@@ -117,7 +117,7 @@ export function BacktestCompare({ runId }: { runId: string }) {
       </section>
 
       {bId && bQ.isLoading && <div className="brun-loading">실행 B 를 불러오는 중입니다</div>}
-      {bId && bQ.isError && <Notice tone="danger" title="실행 B 를 불러오지 못했습니다">다른 실행을 고르거나 잠시 뒤 다시 선택하십시오.</Notice>}
+      {bId && bQ.isError && <Notice tone="danger" title="실행 B 를 불러오지 못했습니다">다른 실행을 선택하거나 잠시 후 다시 선택하십시오.</Notice>}
       {bId && bQ.data && aComparable && <CompareBody a={a} b={bQ.data} />}
     </div>
   );
@@ -150,7 +150,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
     <>
       {/* ★답 = 서버가 뺀 차이(B − A)만★ 어느 쪽이 낫다고 말하지 않는다. 한쪽 값이 없으면 0 이 아니라 "비교할 수 없어요". */}
       <section className="tx-answer rs-answer" aria-label="한 줄 답">
-        <p className="tx-answer-s">B 는 A 와 이만큼 다릅니다</p>
+        <p className="tx-answer-s">B 는 A 대비 다음과 같이 다릅니다</p>
         {cmpQ.isPending && <p className="rs-diff-wait">차이 측정 중</p>}
         {cmpQ.isError && <Notice tone="danger" title="차이 측정 불가">{(cmpQ.error as Error).message} {retry}</Notice>}
         {rows && (
@@ -178,7 +178,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
       <section className="brun-card rs-card">
         <h2 className="brun-card-t">자산곡선 (시작 = 100)<span className="brun-note">A 는 잉크 · B 는 색 · 아래 띠는 차이(B − A)</span></h2>
         {cmpQ.isPending && <p className="brun-loading">두 곡선 정렬 중</p>}
-        {cmpQ.isError && <Notice tone="danger" title="두 곡선을 맞추지 못했습니다">{(cmpQ.error as Error).message} {retry}</Notice>}
+        {cmpQ.isError && <Notice tone="danger" title="두 곡선을 정렬하지 못했습니다">{(cmpQ.error as Error).message} {retry}</Notice>}
         {view && (
           <>
             <PerfCompare view={view} height={280} />
@@ -193,7 +193,7 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
       </section>
 
       <section className="brun-card rs-card">
-        <h2 className="brun-card-t">지표 차이<span className="brun-note">차이 = B − A · 서버가 뺀 값 · 색은 부호만(오름 빨강 · 내림 파랑)</span></h2>
+        <h2 className="brun-card-t">지표 차이<span className="brun-note">차이 = B − A · 서버 산출값 · 색은 부호만(오름 빨강 · 내림 파랑)</span></h2>
         <div className="brun-tablewrap">
           <table className="brun-table brun-cmp">
             <thead><tr><th>지표</th><th>A</th><th>B</th><th>차이</th></tr></thead>

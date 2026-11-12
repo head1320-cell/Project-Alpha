@@ -136,7 +136,7 @@ test("설정: 지금 비밀번호가 틀리면 서버 사유 그대로 · 분석
   expect(reset.status()).toBe(200);
   await page.reload();
   await expect(page.locator(".set-signed-out")).toBeVisible();
-  await expect(page.locator(".set-signed-out")).toContainText("로그인이 끝났습니다");
+  await expect(page.locator(".set-signed-out")).toContainText("로그인 세션이 만료됐습니다");
 });
 
 test("설정: 로그인 안 됨이면 로그인으로 안내 · 모름(500)이면 토큰을 두고 재시도 · 프로필 카드에 '설정' 줄", async ({ page }) => {

@@ -57,7 +57,7 @@ export default function MacroPage() {
         router.push("/backtest");
       } else {
         // 예전엔 설정을 못 받으면 아무 일도 없었다(누른 단추가 조용히 죽음) — 이동하지 않고 이유를 말한다.
-        setBridgeErr(`‘${p.name}’ 전략의 백테스트 설정을 받지 못해 넘기지 못했습니다. 잠시 뒤 다시 누르십시오.`);
+        setBridgeErr(`‘${p.name}’ 전략의 백테스트 설정을 수신하지 못해 전달하지 못했습니다. 잠시 후 다시 시도하십시오.`);
       }
     } finally {
       setBridging(false);
@@ -90,16 +90,16 @@ export default function MacroPage() {
   return (
     <div className="tpage-fade">
       {loading && <LoadingState label="매크로 분석 조회 중" />}
-      {bridging && <LoadingState label="전략을 백테스트 설정으로 옮기는 중입니다" />}
-      {bridgeErr && <Notice tone="danger" title="백테스트로 넘기지 못했습니다">{bridgeErr}</Notice>}
+      {bridging && <LoadingState label="전략을 백테스트 설정으로 전달하는 중입니다" />}
+      {bridgeErr && <Notice tone="danger" title="백테스트로 전달하지 못했습니다">{bridgeErr}</Notice>}
       {!loading && !regime && (
         <div className="mc-err tx-page tx-page--wide">
           <Notice tone="danger" title="매크로 분석 조회 실패">
-            국면 계산 서버 연결 실패 또는 계산 실패. 잠시 뒤 재시도하십시오.
+            국면 계산 서버 연결 실패 또는 계산 실패. 잠시 후 재시도하십시오.
             <div className="mc-act">
               <button type="button" className="tx-btn tx-btn--sub" onClick={() => { void regimeQ.refetch(); }}
                       disabled={regimeQ.isFetching}>
-                {regimeQ.isFetching ? "다시 묻는 중입니다…" : "재시도"}
+                {regimeQ.isFetching ? "재조회 중입니다…" : "재시도"}
               </button>
             </div>
           </Notice>

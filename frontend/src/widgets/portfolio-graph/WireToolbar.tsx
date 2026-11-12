@@ -90,12 +90,12 @@ export function WireToolbar({ id, at, via, onTool }: { id: string; at: Pt; via: 
                 onClick={() => onTool(id, "cut")}><Scissors size={14} aria-hidden="true" />연결 해제</button>
         <button type="button" className="pg-edge-tb-b" data-action="insert" aria-expanded={open} aria-haspopup="menu" aria-label="선 사이에 노드 넣기"
                 onClick={() => setOpen((v) => !v)}><ListPlus size={14} aria-hidden="true" />사이에 넣기</button>
-        <button type="button" className="pg-edge-tb-b" data-action="waypoint" aria-label="선 가운데에 꺾는 점 넣기 — 끌어서 길을 바꿉니다"
+        <button type="button" className="pg-edge-tb-b" data-action="waypoint" aria-label="선 가운데에 꺾는 점 추가 — 끌어서 경로를 변경합니다"
                 onClick={() => onTool(id, "waypoint")}><Spline size={14} aria-hidden="true" />꺾는 점</button>
         <button type="button" className="pg-edge-tb-b" data-action="ask" aria-label="이 선에 대해 AI 에게 묻기 — 오른쪽 창의 묻기 칸으로"
                 onClick={() => onTool(id, "ask")}><MessageCircleQuestion size={14} aria-hidden="true" />묻기</button>
         {open && (
-          <div className="pg-edge-tb-list" role="menu" aria-label="사이에 넣을 노드">
+          <div className="pg-edge-tb-list" role="menu" aria-label="사이에 삽입할 노드">
             {cands.length ? cands.map((c) => (
               <button key={c.kind} type="button" role="menuitem" className="pg-edge-tb-item" data-kind={c.kind}
                       onClick={() => { setOpen(false); onTool(id, "insert", c); }}>

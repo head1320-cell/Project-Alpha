@@ -70,7 +70,7 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
   return (
     <div className="fb" data-tone={tone}>
       {/* 식 줄 — 눌러서 지운다 */}
-      <div className="fb-line" aria-label="만드는 식">
+      <div className="fb-line" aria-label="구성 중인 식">
         {tokens.length === 0 && (
           <span className="fb-empty">아래에서 팩터와 연산자를 추가해 식을 구성합니다. 예: 종가 − 이동평균(종가, 20)</span>
         )}
@@ -117,8 +117,8 @@ export default function FormulaBuilder({ tone = "neutral", tokens, onChange }: {
         {(["+", "-", "*", "/"] as const).map((v) => (
           <button key={v} type="button" className="fb-ctrl" onClick={() => append({ t: "op", v })} aria-label={`연산자 ${OP_SYM[v]} 더하기`}>{OP_SYM[v]}</button>
         ))}
-        <button type="button" className="fb-ctrl" onClick={() => append({ t: "lp" })} aria-label="여는 괄호 더하기">(</button>
-        <button type="button" className="fb-ctrl" onClick={() => append({ t: "rp" })} aria-label="닫는 괄호 더하기">)</button>
+        <button type="button" className="fb-ctrl" onClick={() => append({ t: "lp" })} aria-label="여는 괄호 추가">(</button>
+        <button type="button" className="fb-ctrl" onClick={() => append({ t: "rp" })} aria-label="닫는 괄호 추가">)</button>
         <button type="button" className="fb-ctrl fb-ctrl--wide" onClick={() => append({ t: "num", v: "0" })}>
           <Hash size={14} aria-hidden /> 상수
         </button>

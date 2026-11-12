@@ -111,12 +111,12 @@ function PresetSlider({ f, value, onChange }: { f: FieldSpec; value: unknown; on
           );
         })}
         <button type="button" className={`pg-chip pg-chip--custom${custom ? " on" : ""}`} aria-pressed={custom}
-                onClick={() => setCustom(true)}>직접 정하기</button>
+                onClick={() => setCustom(true)}>직접 입력</button>
       </div>
       {custom && (
         <div className="pg-custom">
           <input className="pg-slider" type="range" min={min} max={max} step={f.kind === "integer" ? 1 : 0.5}
-                 value={v} aria-label={`${f.ui.label} 직접 정하기`} onChange={(e) => onChange(Number(e.target.value))} />
+                 value={v} aria-label={`${f.ui.label} 직접 입력`} onChange={(e) => onChange(Number(e.target.value))} />
           <div className="pg-slider-ends"><span>{f.ui.ends?.[0] ?? min}</span><span className="pg-slider-v">{v.toFixed(1)}</span><span>{f.ui.ends?.[1] ?? max}</span></div>
         </div>
       )}
@@ -572,7 +572,7 @@ function SwapPick({ node, nodes, edges, catalog, onSwap }: {
   node: PgNode; nodes: PgNode[]; edges: Edge[]; catalog: NodeCatalogEntry[]; onSwap: (kind: string) => void;
 }) {
   const options = swapCandidates(node.id, nodes, edges, catalog);
-  if (!options.length) return <p className="pg-swap pg-swap--none">같은 단계에서 지금 선을 그대로 받을 다른 노드 없음</p>;
+  if (!options.length) return <p className="pg-swap pg-swap--none">같은 단계에서 현재 연결을 그대로 받을 수 있는 다른 노드 없음</p>;
   return (
     <label className="pg-swap">
       <span>다른 방법으로 바꾸기</span>
@@ -592,8 +592,8 @@ function Impact({ node, edges, onImpact }: { node: PgNode; edges: Edge[]; onImpa
     <p className="pg-impact" data-count={ids.length} tabIndex={0}
        onMouseEnter={() => onImpact?.(ids)} onMouseLeave={() => onImpact?.(null)}
        onFocus={() => onImpact?.(ids)} onBlur={() => onImpact?.(null)}>
-      {down.length ? `이 노드를 바꾸면 ${ids.length}개 노드가 재계산됩니다 — 이 노드와 그 뒤 ${down.length}개.`
-        : "이 노드를 바꾸면 이 노드만 재계산됩니다 — 하류에 연결된 노드가 없습니다."}
+      {down.length ? `이 노드를 변경하면 ${ids.length}개 노드가 재계산됩니다 — 이 노드와 그 뒤 ${down.length}개.`
+        : "이 노드를 변경하면 이 노드만 재계산됩니다 — 하류에 연결된 노드가 없습니다."}
     </p>
   );
 }
@@ -669,7 +669,7 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
         <div className="pg-basic">
           {basicRendered.map((x) => x.el)}
           {basic.length === 0 && <p className="pg-help">바꿀 설정 없음</p>}
-          <p className="pg-help">바꾸지 않은 칸은 서버 기본값을 씁니다.</p>
+          <p className="pg-help">변경하지 않은 항목은 서버 기본값을 사용합니다.</p>
         </div>
       )}
       {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} label={entry.save_label}

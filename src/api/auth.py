@@ -213,7 +213,7 @@ def get_current_principal(request: Request) -> Principal:
         acct = account_state(p.username)
     except Exception as e:  # noqa: BLE001
         logger.warning("계정 상태를 읽지 못함: %s", type(e).__name__)
-        raise HTTPException(503, "계정 상태 확인 실패 — 신원 DB 에 닿지 못했습니다.") from None
+        raise HTTPException(503, "계정 상태 확인 실패 — 신원 DB 에 연결하지 못했습니다.") from None
     if acct is None:
         raise _refuse("계정을 찾을 수 없습니다 — 다시 로그인하십시오.")
     if tv != acct["token_version"]:
@@ -225,7 +225,7 @@ def get_current_principal(request: Request) -> Principal:
 def _must_change_gate(request: Request) -> None:
     """관리자가 발급·초기화한 임시 비밀번호로는 보호 라우트가 열리지 않는다 — **403**(누구인지는 안다)."""
     if getattr(request.state, "must_change_password", False):
-        raise HTTPException(403, "비밀번호를 먼저 변경하십시오 — 관리자가 준 임시 비밀번호로는 이 화면을 열 수 없습니다.")
+        raise HTTPException(403, "비밀번호를 먼저 변경하십시오 — 관리자가 발급한 임시 비밀번호로는 이 화면을 사용할 수 없습니다.")
 
 
 def require_admin(request: Request, p: Principal = Depends(get_current_principal)) -> Principal:

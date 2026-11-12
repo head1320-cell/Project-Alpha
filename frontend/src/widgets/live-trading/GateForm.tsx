@@ -16,10 +16,10 @@ export const FIELD_KO: Record<GateField, string> = {
 const HINT: Record<GateField, string> = {
   basis: "실계좌 개방 근거를 입력합니다. 예: 본인 계좌로만 주문하는 개인 운영",
   authority: "근거를 확인한 기관이나 문서입니다. 예: 한국투자증권 오픈API 약관",
-  reference_no: "그 문서나 확인의 번호입니다.",
-  verified_at: "근거를 확인한 날입니다.",
+  reference_no: "해당 문서 또는 확인의 번호입니다.",
+  verified_at: "근거 확인일입니다.",
   scope: "개방 범위를 입력합니다. 예: 운영 계좌 하나, 국내 주식",
-  allowed_users: `이름을 하나씩 더합니다. 모두에게 여는 값(예: ${WILDCARD_EXAMPLES.join(", ")})은 서버가 받지 않습니다.`,
+  allowed_users: `이름을 하나씩 추가합니다. 전체 허용 값(예: ${WILDCARD_EXAMPLES.join(", ")})은 서버가 거부합니다.`,
 };
 type Text = Exclude<GateField, "allowed_users">;
 const EMPTY: Record<Text, string> = { basis: "", authority: "", reference_no: "", verified_at: "", scope: "" };
@@ -99,7 +99,7 @@ export function GateForm({ open, hasCurrent, onClose, onDone }: {
           </button>
           <button type="button" className="tx-btn tx-btn--sub" onClick={() => { declare.reset(); onClose(); }}>닫기</button>
         </div>
-        {!full ? <p className="lv-hint lvg-need">여섯 칸을 모두 채우면 선언할 수 있습니다.</p> : null}
+        {!full ? <p className="lv-hint lvg-need">여섯 항목을 모두 입력하면 선언할 수 있습니다.</p> : null}
       </form>
     </Sheet>
   );

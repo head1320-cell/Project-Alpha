@@ -191,7 +191,7 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
         "text": f"기록 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다"}
     return {"title": f"기록 {len(series)}개의 동반 하락 여부를 분석했습니다", "headline": headline,
             "facts": list(rob.get("story") or []), "trust": trust,
-            "unmeasured": ["앞으로도 같을지(과거 관계입니다)", "경제적 가치", "실거래에서 같을지"]}
+            "unmeasured": ["향후에도 유지될지(과거 관계입니다)", "경제적 가치", "실거래에서 같을지"]}
 
 
 def _glance(view: dict) -> dict | None:

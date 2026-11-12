@@ -183,7 +183,7 @@ test("칩을 누르면 선 판: 관계 문장 · 건너간 것 · 문제 글 = �
   const sens = body.edges[SENS];
   expect(sens.issues).toEqual([]);
   await page.locator(`.react-flow__edge[data-testid="rf__edge-${SENS}"]`).evaluate((el) => (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  await expect(row(page, "issues")).toContainText("잃거나 바뀐 것을 찾지 못했습니다");
+  await expect(row(page, "issues")).toContainText("누락·변경 항목이 없습니다");
   for (const c of sens.checks) await expect(row(page, "issues")).toContainText(c);
   await expect(row(page, "issues").locator("li.pg-wire-issue")).toHaveCount(0);
 

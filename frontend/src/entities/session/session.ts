@@ -40,10 +40,10 @@ export function useSession() {
       const r = await getWithAuth("/api/v1/auth/me");
       if (r.status === 401) {
         clearToken();
-        setSession({ kind: "signed_out", note: "로그인이 끝났습니다. 다시 로그인하십시오." });
+        setSession({ kind: "signed_out", note: "로그인 세션이 만료됐습니다. 다시 로그인하십시오." });
         return;
       }
-      if (!r.ok) { setSession({ kind: "unknown", reason: `서버가 ${r.status} 오류로 답했습니다.` }); return; }
+      if (!r.ok) { setSession({ kind: "unknown", reason: `서버가 ${r.status} 오류로 응답했습니다.` }); return; }
       const body = (await r.json()) as {
         principal?: { username?: unknown; role?: unknown };
         must_change_password?: unknown; password_changed_at?: unknown;

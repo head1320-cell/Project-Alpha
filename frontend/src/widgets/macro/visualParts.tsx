@@ -24,7 +24,7 @@ function stripName(key: string, label: string, transform?: string) {
 // ── 사이클 띠: 지표 × 달 색 띠 ──
 export function CycleStripGrid({ data }: { data: CycleStrips }) {
   const [cur, setCur] = useState<string | null>(null);
-  if (!data.indicators.length) return <div className="mc-empty-sm">띠를 그릴 지표 없음</div>;
+  if (!data.indicators.length) return <div className="mc-empty-sm">띠를 표시할 지표 없음</div>;
   const months = data.months;
   const say = (label: string, i: number, z: number | null) => `${ym(months[i])} · ${label} · z ${z == null ? "N/A" : signed(z)}`;
   return (
@@ -50,7 +50,7 @@ export function CycleStripGrid({ data }: { data: CycleStrips }) {
         <span>{ym(months[0])}</span><span>{ym(months[Math.floor(months.length / 2)])}</span><span>{ym(months.at(-1))}</span>
       </div>
       <LevelLegend lo="평균 하회" hi="평균 상회" />
-      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
+      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 선택하면 여기에 값을 표시합니다"}</p>
     </div>
   );
 }
@@ -67,7 +67,7 @@ export const AxisStackChart = lazyChart(loadVisualCharts, (m) => m.AxisStackChar
 // ── 자산군 가격 위치 띠(지난 5년 중 몇 백분위) ──
 export function AssetStripGrid({ data }: { data: AssetStrips }) {
   const [cur, setCur] = useState<string | null>(null);
-  if (!data.assets.length) return <div className="mc-empty-sm">자산 시세가 아직 없습니다(ETF 시세를 적재하면 보입니다)</div>;
+  if (!data.assets.length) return <div className="mc-empty-sm">자산 시세가 아직 없습니다(ETF 시세를 적재하면 표시됩니다)</div>;
   const say = (label: string, i: number, n: number, p: number | null) => `${label} · ${n - i}달 전${i === n - 1 ? "(지금)" : ""} · ${p == null ? "N/A" : `지난 5년 중 ${p}%`}`;
   return (
     <div className="mv-strips">
@@ -87,8 +87,8 @@ export function AssetStripGrid({ data }: { data: AssetStrips }) {
           </div>
         );
       })}
-      <LevelLegend lo="지난 5년 중 가격이 낮은 편" hi="높은 편" />
-      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
+      <LevelLegend lo="최근 5년 중 가격이 낮은 구간" hi="높은 구간" />
+      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 선택하면 여기에 값을 표시합니다"}</p>
     </div>
   );
 }

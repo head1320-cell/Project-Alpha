@@ -58,7 +58,7 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
         <b className="pg-branch-name">{data.label}</b>
         <span className="pg-branch-of">‘{data.rootName}’에서 갈라짐</span>
         <button type="button" className="pg-branch-promote nodrag" disabled={data.diffs.length === 0}
-                title="이 대안의 바꾼 설정을 원본에 옮기고 대안을 지웁니다 (되돌리기 가능)"
+                title="이 대안의 변경 설정을 원본에 반영하고 대안을 삭제합니다 (되돌리기 가능)"
                 onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.promoteBranch(data.branchId)); }}>
           <ArrowUpToLine size={13} aria-hidden="true" /><span className="pg-branch-btn-t">이 대안을 원본으로</span>
         </button>
@@ -69,7 +69,7 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
           </button>
         )}
         <button type="button" className="pg-group-x pg-branch-x nodrag" aria-label={`${data.label} 삭제`}
-                title="대안과 복제한 노드를 지웁니다" onClick={() => remove(data.branchId)}>
+                title="대안과 복제한 노드를 삭제합니다" onClick={() => remove(data.branchId)}>
           <Trash2 size={14} aria-hidden="true" />
         </button>
       </div>
@@ -150,10 +150,10 @@ function DsrRows({ name, labels, curves }: { name: string; labels: string[]; cur
   return (
     <>
       {row("psr0", `보정 · ${name} · 샤프가 0보다 클 확률`)}
-      {row("dsr", `보정 · ${name} · ${ev.n}번 비교한 운을 감안한 확률`)}
+      {row("dsr", `보정 · ${name} · ${ev.n}회 비교의 우연을 보정한 확률`)}
       {row("dsr_eff", ev.n_eff !== null
-        ? `보정 · ${name} · 서로 닮은 만큼 뺀 약 ${ev.n_eff.toFixed(1)}번으로 감안한 확률(추정)`
-        : `보정 · ${name} · 서로 닮은 만큼 뺀 수로 감안한 확률(추정)`)}
+        ? `보정 · ${name} · 상관을 감안한 유효 비교 약 ${ev.n_eff.toFixed(1)}회로 보정한 확률(추정)`
+        : `보정 · ${name} · 상관을 감안한 유효 비교 횟수로 보정한 확률(추정)`)}
     </>
   );
 }
@@ -214,12 +214,12 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
             </p>
             {btests.length > 0 && (
               <p className="pg-branch-n" data-n={bs.length + 1}>
-                원본과 대안 {bs.length}개, 모두 {bs.length + 1}번 비교했습니다 — 아래 ‘운을 감안한 확률’은 이 수로 보정한 값입니다.
+                원본과 대안 {bs.length}개, 모두 {bs.length + 1}번 비교했습니다 — 아래 ‘우연을 보정한 확률’은 이 횟수로 보정한 값입니다.
                 {evNote && <> {evNote}</>}
               </p>
             )}
             {btests.length === 0 && (
-              <p className="pg-help pg-branch-dsr-none">과거 성과 노드가 대안에 들어 있어야 여러 번 비교한 운을 감안해 보정할 수 있습니다.</p>
+              <p className="pg-help pg-branch-dsr-none">과거 성과 노드가 대안에 들어 있어야 다중 비교의 우연을 보정할 수 있습니다.</p>
             )}
             {rows.length === 0 && btests.length === 0 ? (
               <p className="pg-help">아직 원본과 다른 값이 없습니다 — 대안의 설정을 바꾸고 계산하십시오.</p>

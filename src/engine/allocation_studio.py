@@ -447,7 +447,7 @@ def optimize(model: str, names: list[str], R: np.ndarray,
                     # 사후는 됐지만 비중은 시장 비중 그대로다(CF3 기록 · K1 라벨 — 아래 `views_applied`).
                     view_solve_failed = True
                     fallbacks.append({"stage": "view_applied", "used": "market", "model": model,
-                                      "reason": "생각을 넣은 기대 수익으로 비중을 풀지 못해 시장 비중을 그대로 썼습니다.",
+                                      "reason": "투자 뷰를 반영한 기대수익률로 비중을 산출하지 못해 시장 비중을 그대로 사용했습니다.",
                                       "affects_weights": model == "bl"})
             except Exception as e:  # 특이 공분산 등 — prior 폴백(정직 보고)
                 logger.warning(f"BL posterior 실패, prior 폴백: {e}")

@@ -51,7 +51,7 @@ export default function ValuationTab({ code, base }: { code: string; price: numb
   return (
     <div className="ca-vt" aria-busy={busy} style={{ opacity: busy ? 0.6 : 1, transition: "opacity .15s" }}>
       <FootballField ff={data.football_field} />
-      {failed && <RetryFail title="바꾼 가정으로 재계산하지 못했습니다" onRetry={() => load(ov)} />}
+      {failed && <RetryFail title="변경한 가정으로 재계산하지 못했습니다" onRetry={() => load(ov)} />}
       <div className="ca-vt-grid">
         <AssumptionPanel data={data} ov={ov} onSlide={onSlide}
           onReset={() => { setOv({}); setData(base); setFailed(false); }} />
@@ -94,7 +94,7 @@ function RiskReturnScatter({ scatter, sector }: {
   return (
     <section className="ca-cp-sec ca-rr" style={{ position: "relative" }}>
       <h4>동종업계 안 위치</h4>
-      <p className="ca-cp-sub"><span data-server>{sector ?? ""}</span> 업종. 가로 = 품질(업종 안 백분위), 세로 = 상승 여력. 점을 누르면 ROE 를 셋으로 나눠 보입니다.</p>
+      <p className="ca-cp-sub"><span data-server>{sector ?? ""}</span> 업종. 가로 = 품질(업종 안 백분위), 세로 = 상승 여력. 점을 누르면 ROE 를 세 요소로 분해해 표시합니다.</p>
       <svg viewBox="0 0 100 100" className="ca-rr-svg" role="img" aria-label={`업종 ${scatter.length}개 기업의 품질과 상승 여력`}>
         <line x1={50} x2={50} y1={8} y2={92} className="ca-rr-axis" />
         <line x1={8} x2={92} y1={Y(0)} y2={Y(0)} className="ca-rr-axis" />
@@ -111,7 +111,7 @@ function RiskReturnScatter({ scatter, sector }: {
           </g>
         ))}
       </svg>
-      <p className="ca-heat-read" aria-live="polite">{cur ?? "점에 마우스를 올리거나 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
+      <p className="ca-heat-read" aria-live="polite">{cur ?? "점에 마우스를 올리거나 Tab 으로 선택하면 여기에 값을 표시합니다"}</p>
       {popup && (
         <div className="ca-rr-popup" role="dialog" aria-label={`${popup.name} 듀폰 분해`}>
           <b>{popup.name}</b>
@@ -127,7 +127,7 @@ function FootballField({ ff }: { ff: ValuationSandbox["football_field"] }) {
   const P = ff.current_price;
   const all = ff.bands.filter((b) => b.available !== false && b.lo != null && b.hi != null);
   const unavailable = ff.bands.filter((b) => b.available === false);
-  if (!all.length) return <p className="ca-cp-note">모형별 밸류에이션 밴드를 낼 수 없습니다(재무 자료가 부족합니다).</p>;
+  if (!all.length) return <p className="ca-cp-note">모형별 밸류에이션 밴드를 산출할 수 없습니다(재무 자료가 부족합니다).</p>;
 
   // 로버스트 축: 현재가와 극단 괴리(4배↑/0.15배↓) 밴드는 축 계산에서 제외하고 그림 밖 목록에 적는다
   // — 그레이엄 넘버 같은 아웃라이어 1개가 차트를 뭉개는 것 방지(겹친 그림과 같은 규칙).
@@ -143,7 +143,7 @@ function FootballField({ ff }: { ff: ValuationSandbox["football_field"] }) {
   return (
     <section className="ca-cp-sec">
       <h4>모형별 밸류에이션 밴드(풋볼필드)</h4>
-      <p className="ca-cp-sub">세로 점선이 현재가입니다. 막대 안의 금은 가운데 값입니다.</p>
+      <p className="ca-cp-sub">세로 점선이 현재가입니다. 막대 안의 선은 중앙값입니다.</p>
       <div className="ca-ff2">
         {/* 현재가 기준선 (전 행 관통) */}
         <div className="ca-ff2-price" style={{ left: `calc(168px + (100% - 258px) * ${X(P) / 100})` }}>
@@ -246,7 +246,7 @@ function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
           <button type="button" aria-pressed={mode === "3d"} className={mode === "3d" ? "on" : ""} onClick={() => setMode("3d")}>입체</button>
         </span>
       </h4>
-      <p className="ca-cp-sub">행 = 자기자본비용(Ke), 열 = 영구성장률(g). 칸 색은 현재가보다 높으면 주황 쪽, 낮으면 청록 쪽입니다.</p>
+      <p className="ca-cp-sub">행 = 자기자본비용(Ke), 열 = 영구성장률(g). 칸 색은 현재가보다 높으면 주황 계열, 낮으면 청록 계열입니다.</p>
       {mode === "2d" ? (
         <>
           <div style={{ overflowX: "auto" }}>
@@ -267,7 +267,7 @@ function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
               </tbody>
             </table>
           </div>
-          <p className="ca-heat-read" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 Tab 으로 고르면 여기에 값이 나옵니다"}</p>
+          <p className="ca-heat-read" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 Tab 으로 선택하면 여기에 값을 표시합니다"}</p>
           <p className="ca-cp-sub">“발산” 칸은 영구성장률이 할인율에 너무 가까워 잔존가치(TV)를 계산할 수 없는 조합입니다.</p>
         </>
       ) : (
@@ -323,7 +323,7 @@ function CompsTable({ comps, selfCode }: { comps: ValuationSandbox["comps"]; sel
   return (
     <section className="ca-cp-sec">
       <h4>업종 안 상대가치 비교</h4>
-      <p className="ca-cp-sub"><span data-server>{comps.sector ?? ""}</span> 업종 {comps.rows.length - 1}개 기업과 같은 기준으로 놓았습니다.</p>
+      <p className="ca-cp-sub"><span data-server>{comps.sector ?? ""}</span> 업종 {comps.rows.length - 1}개 기업과 동일 기준으로 비교했습니다.</p>
       <div style={{ overflowX: "auto" }}>
         <table className="ca-comps">
           <thead><tr><th scope="col">기업</th>{cols.map((c) => <th key={c.k} scope="col">{c.label}</th>)}</tr></thead>
@@ -333,15 +333,15 @@ function CompsTable({ comps, selfCode }: { comps: ValuationSandbox["comps"]; sel
                 <td>{r.name}{r.code === selfCode && <span className="ca-cp-self">현재 조회 기업</span>}</td>{cols.map((c) => <td key={c.k}>{num(r[c.k])}</td>)}
               </tr>
             ))}
-            <tr className="median"><td>업종 중간값</td>
+            <tr className="median"><td>업종 중앙값</td>
               {cols.map((c) => <td key={c.k}>{num(comps.median_row[c.k])}</td>)}</tr>
           </tbody>
         </table>
       </div>
       <dl className="ca-comps-implied">
-        <div><dt>업종 중간 PER 로 다시 보면</dt><dd>{fmtW(comps.implied.per_based)}</dd></div>
-        <div><dt>업종 중간 PBR 로</dt><dd>{fmtW(comps.implied.pbr_based)}</dd></div>
-        <div><dt>업종 중간 EV/EBITDA 로</dt><dd>{fmtW(comps.implied.ev_ebitda_based)}</dd></div>
+        <div><dt>업종 중앙값 PER 기준 환산</dt><dd>{fmtW(comps.implied.per_based)}</dd></div>
+        <div><dt>업종 중앙값 PBR 기준</dt><dd>{fmtW(comps.implied.pbr_based)}</dd></div>
+        <div><dt>업종 중앙값 EV/EBITDA 기준</dt><dd>{fmtW(comps.implied.ev_ebitda_based)}</dd></div>
       </dl>
     </section>
   );

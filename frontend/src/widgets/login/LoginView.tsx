@@ -30,11 +30,11 @@ import { AccessMap } from "./AccessMap";
 type Fail = { say: string; raw: string | null };
 
 function failOf(status: number | null, body: unknown): Fail {
-  if (status === null) return { say: "서버 연결 실패. 잠시 뒤 다시 하십시오.", raw: null };
+  if (status === null) return { say: "서버 연결 실패. 잠시 후 다시 시도하십시오.", raw: null };
   const raw = extractErrorDetail(body, "") || null;
-  if (status === 401) return { say: "아이디 또는 비밀번호가 맞지 않습니다.", raw };
+  if (status === 401) return { say: "아이디 또는 비밀번호가 일치하지 않습니다.", raw };
   if (status === 422) return { say: "아이디와 비밀번호를 다시 확인하십시오.", raw };
-  if (status === 502 || status === 504) return { say: "서버 연결 실패. 잠시 뒤 다시 하십시오.", raw };
+  if (status === 502 || status === 504) return { say: "서버 연결 실패. 잠시 후 다시 시도하십시오.", raw };
   return { say: `로그인 실패(HTTP ${status}).`, raw };
 }
 
@@ -128,7 +128,7 @@ export function LoginView() {
           </button>
 
           <p className="lg-foot">
-            로그인하지 않아도 연구 화면은 그대로 씁니다. <Link href="/dashboard" className="lg-home">홈으로</Link>
+            로그인하지 않아도 연구 화면은 사용할 수 있습니다. <Link href="/dashboard" className="lg-home">홈으로</Link>
           </p>
         </form>
         <AccessMap />

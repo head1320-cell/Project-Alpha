@@ -14,7 +14,7 @@ import { draftKey, draftSig, pickDraft, portfolioGraphApi, type AssistDraft, typ
 import type { Session } from "@/entities/session";
 import { STAGE_VAR } from "./GraphNode";
 
-const STALE = "캔버스가 바뀌어 초안을 지웠습니다 — 다시 말하십시오";
+const STALE = "캔버스가 변경돼 초안을 삭제했습니다 — 다시 입력하십시오";
 const MAX = 300;
 /** 예시(규칙 글 — AI 글이 아니다). 누르면 칸에 채우기만 한다. */
 const EXAMPLES = ["삼성전자, SK하이닉스, NAVER로 3년 기준 비중을 짜 줘", "정책 백테스트를 붙이고 거래비용은 0.3%로 해 줘",
@@ -48,7 +48,7 @@ export function useDraft(doc: GraphDoc, session: Session) {
     setSt({ state: "loading", sig: asked, sentence: words });
     const res = await portfolioGraphApi.assistDraft(now.doc, words);
     if (live.current.sig !== asked) { setSt({ state: "idle", note: STALE }); return; }
-    if (!res.available) { setSt({ state: "idle", note: `초안을 보여 줄 수 없습니다: ${res.reason}` }); return; }
+    if (!res.available) { setSt({ state: "idle", note: `초안을 표시할 수 없습니다: ${res.reason}` }); return; }
     setOff(new Set());
     setSt({ state: "ready", sig: asked, sentence: words, res });
   }, []);
@@ -113,7 +113,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
     composer = (
       <>
         {!text && st.state === "idle" && (
-          <div className="pg-say-examples" aria-label="이렇게 말해 보십시오">
+          <div className="pg-say-examples" aria-label="입력 예시">
             {EXAMPLES.map((x) => <button key={x} type="button" className="pg-say-ex" onClick={() => setText(x)}>{x}</button>)}
           </div>
         )}
@@ -171,7 +171,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
               </Sec>
             )}
             {dr.set.length > 0 && (
-              <Sec k="set" title="넣을 값" n={dr.set.length}>
+              <Sec k="set" title="입력할 값" n={dr.set.length}>
                 {dr.set.map((x) => (
                   <li key={`${x.node}.${x.field}`} className="pg-say-item">
                     {pick(draftKey.set(x), <>
@@ -183,7 +183,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
               </Sec>
             )}
             {dr.empty.length > 0 && (
-              <Sec k="empty" title="비어 있는 것" n={dr.empty.length}>
+              <Sec k="empty" title="미입력 항목" n={dr.empty.length}>
                 {dr.empty.map((x, i) => <li key={i} className="pg-say-item">{x.why}</li>)}
               </Sec>
             )}

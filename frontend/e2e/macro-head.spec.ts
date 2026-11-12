@@ -138,11 +138,11 @@ test("스튜디오 줄은 한국어 — 개수·현재 표시는 그대로", asy
   await expect(page.locator(".ms-nav-item[aria-current=page]")).toHaveCount(1);
 });
 
-test("매크로 분석 주 단추는 하나 — [포트폴리오 설계에 넣기]", async ({ page }) => {
+test("매크로 분석 주 단추는 하나 — [포트폴리오 설계에 추가]", async ({ page }) => {
   await open(page);
   const mains = page.locator(".mc .tx-btn--main");
   await expect(mains).toHaveCount(1);
-  await expect(mains).toContainText("포트폴리오 설계에 넣기");
+  await expect(mains).toContainText("포트폴리오 설계에 추가");
 });
 
 for (const t of ["light", "dark"] as const) {

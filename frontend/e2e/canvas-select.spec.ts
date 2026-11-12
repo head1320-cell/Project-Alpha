@@ -176,7 +176,7 @@ test("R2 · 계산한 뒤 지우면 토스트가 결과·하류를 센다 — [�
   const before = graphOf(await wip(page));
   await node(page, "estimate").click({ position: HEAD });
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/노드 1개를 삭제했습니다 — 그중 1개는 계산 결과가 있었습니다 · 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/노드 1개를 삭제했습니다 — 그중 1개는 계산 결과가 있었습니다 · 하류 노드 1개는 이제 이전 결과입니다\./);
   await expect(page.locator(".pg-node--stale")).toHaveCount(1);
   await expect(node(page, "optimizer")).toHaveClass(/pg-node--stale/);
   await page.locator(".pg-note-undo").click();
@@ -186,7 +186,7 @@ test("R2 · 계산한 뒤 지우면 토스트가 결과·하류를 센다 — [�
   // 선만 끊어도 하류를 센다
   await page.locator('.react-flow__edge[data-id="estimate.belief->optimizer.belief"]').click({ force: true });
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 이전 결과입니다\./);
 });
 
 test("R2 · (짝) 이미 예전 결과인 노드는 결과로도 하류로도 세지 않는다", async ({ page }) => {
@@ -197,7 +197,7 @@ test("R2 · (짝) 이미 예전 결과인 노드는 결과로도 하류로도 �
   await page.locator('.react-flow__edge[data-id="returns.returns->optimizer.returns"]').dispatchEvent("click");
   await expect(page.locator('.react-flow__edge[data-id="returns.returns->optimizer.returns"]')).toHaveClass(/selected/);
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 이전 결과입니다\./);
   await expect(node(page, "optimizer")).toHaveClass(/pg-node--stale/);
   await node(page, "optimizer").click({ position: HEAD });                     // 결과는 있지만 예전 결과 — '결과' 로 세지 않는다
   await page.keyboard.press("Delete");

@@ -51,7 +51,7 @@ test("★틀린 자격 증명(실제 서버 401) → 사람 말 · 원문은 닫
   const body = (await (await res).json()) as { detail: string };
   expect((await res).status()).toBe(401);
   await expect(err(page)).toHaveAttribute("role", "alert");
-  await expect(err(page).locator(".lg-error-say")).toHaveText("아이디 또는 비밀번호가 맞지 않습니다.");
+  await expect(err(page).locator(".lg-error-say")).toHaveText("아이디 또는 비밀번호가 일치하지 않습니다.");
   const raw = err(page).locator("details.lg-raw");
   expect(await raw.evaluate((d) => (d as HTMLDetailsElement).open), "원문 칸은 닫혀 있다").toBe(false);
   expect(await err(page).innerText(), "닫힌 원문은 보이는 글이 아니다").not.toContain(body.detail);
@@ -66,7 +66,7 @@ test("★502(내부 주소가 든 원문) → '서버 연결 실패' · 내부 �
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await fill(page);
   await page.locator(".login-submit").click();
-  await expect(err(page).locator(".lg-error-say")).toHaveText("서버 연결 실패. 잠시 뒤 다시 하십시오.");
+  await expect(err(page).locator(".lg-error-say")).toHaveText("서버 연결 실패. 잠시 후 다시 시도하십시오.");
   const visible = await err(page).innerText();
   expect(visible).not.toContain("internal-backend");
   expect(visible).not.toContain("백엔드");
@@ -76,7 +76,7 @@ test("★502(내부 주소가 든 원문) → '서버 연결 실패' · 내부 �
   await page.unroute(LOGIN);
   await page.route(LOGIN, (r) => r.abort("connectionrefused"));
   await page.locator(".login-submit").click();
-  await expect(err(page).locator(".lg-error-say")).toHaveText("서버 연결 실패. 잠시 뒤 다시 하십시오.");
+  await expect(err(page).locator(".lg-error-say")).toHaveText("서버 연결 실패. 잠시 후 다시 시도하십시오.");
   await expect(err(page).locator("details.lg-raw")).toHaveCount(0);
 });
 
@@ -174,7 +174,7 @@ type MapItem = { label: string; href?: string; routes?: string[] };
 type AccessMap = Record<"open" | "login" | "admin", { title: string; why?: string; items: MapItem[] }>;
 const ACCESS = JSON.parse(readFileSync(path.join(__dirname, "../src/entities/session/accessMap.json"), "utf8")) as AccessMap;
 
-test("★로그인이 여는 것 지도: 층 셋이 지도 파일 그대로 · 열린 층은 그 화면으로 가는 링크 · 관리자 층은 이유를 말한다★", async ({ page }) => {
+test("★로그인 후 사용 범위 지도: 층 셋이 지도 파일 그대로 · 열린 층은 그 화면으로 가는 링크 · 관리자 층은 이유를 말한다★", async ({ page }) => {
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   const map = page.locator(".lg-map");
   await expect(map).toBeVisible();

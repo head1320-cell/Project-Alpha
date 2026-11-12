@@ -857,7 +857,7 @@ def run_for_sheet(graph: Any, node_id: str, preview: Mapping[str, str | None], r
                 "message": f"이 노드가 계산되지 않아 한 장을 만들 수 없습니다 — {res.get('reason')}"}
     if {nid: r.get("view_hash") for nid, r in report["nodes"].items()} != dict(preview):
         return {"ok": False, "code": "stale",
-                "message": "보신 계산과 지금 계산이 다릅니다. 재계산한 뒤 한 장을 생성하십시오."}
+                "message": "확인한 계산과 현재 계산이 다릅니다. 재계산 후 한 장을 생성하십시오."}
     return {"ok": True, "report": report, "values": values}
 
 
@@ -878,7 +878,7 @@ def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry) -
                 "message": f"이 노드가 계산되지 않아 저장할 수 없습니다 — {res.get('reason')}"}
     if res["view_hash"] != preview_hash:
         return {"ok": False, "code": "stale",
-                "message": "보신 미리보기와 지금 계산이 다릅니다. 재계산한 뒤 저장하십시오."}
+                "message": "확인한 미리보기와 현재 계산이 다릅니다. 재계산 후 저장하십시오."}
     try:
         out = spec.save(values[node_id], res["view"] or {}, params.get(node_id))
     except NodeFailure as e:

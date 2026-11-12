@@ -71,7 +71,7 @@ def macro_series_map() -> tuple[dict, dict]:
     snap = MacroCollector().collect_all(use_cache=False, store_only=True)
     series = snap.series or {}
     if not any(getattr(s, "values", None) for s in series.values()):
-        raise pg.NodeFailure("저장된 매크로 관측으로 만든 지표가 하나도 없습니다 — 매크로 화면에서 먼저 수집하십시오.")
+        raise pg.NodeFailure("저장된 매크로 관측으로 산출한 지표가 없습니다 — 매크로 화면에서 먼저 수집하십시오.")
     return series, {"pit": "forward_only", "practice": False, "sources": ["macro_observation_store"]}
 
 
@@ -100,7 +100,7 @@ def _frontier(inputs: dict, p: FrontierParams) -> pg.NodeOutput:
         raise pg.NodeFailure(f"프런티어를 풀지 못했습니다 — {e}") from e
     curve = ef.round(4).to_dict("records") if ef is not None and not ef.empty else []
     if not curve:
-        raise pg.NodeFailure("프런티어의 점을 하나도 풀지 못했습니다 — 종목이 너무 적거나 수익률이 비슷합니다.")
+        raise pg.NodeFailure("프런티어의 점을 산출하지 못했습니다 — 종목 수가 부족하거나 수익률이 유사합니다.")
     cloud, cloud_reason = None, None
     try:
         from src.models.portfolio_optimizer import efficient_frontier as mc_frontier
@@ -140,12 +140,12 @@ def _explain_frontier(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, "불러온 기간의 평균 수익률과 공분산으로 그렸습니다."),
              _t(ASSUMED, "과거 평균이 앞으로도 같다고 가정한 곡선입니다 — 예측이 아닙니다.")]
     if view.get("cloud") is None:
-        trust.append(_t(UNKNOWN, f"무작위 조합 구름은 그리지 못했습니다 — {view.get('cloud_reason') or '사유 미상'}."))
+        trust.append(_t(UNKNOWN, f"무작위 조합 산포는 표시하지 못했습니다 — {view.get('cloud_reason') or '사유 미상'}."))
     return {"title": "효율적 프런티어를 산출했습니다",
             "headline": ({"label": "최적점의 변동성", "value": best["volatility"], "unit": "%",
                           "text": _pct(float(best["volatility"]))} if best else None),
             "facts": facts, "trust": trust,
-            "unmeasured": ["추정 오차(기대수익률이 조금만 달라져도 곡선이 크게 변합니다)", "거래 비용", "향후 수익률"]}
+            "unmeasured": ["추정 오차(기대수익률의 작은 변화에도 곡선이 크게 변합니다)", "거래 비용", "향후 수익률"]}
 
 
 # ── 국면 앙상블 · 국면 설명 ───────────────────────────────────────────────────
@@ -184,7 +184,7 @@ def _explain_ensemble(view: dict, prov: dict, params: Any) -> dict:
     agree = (r.get("agreement") or {}).get("unanimous")
     title = ("세 방법이 같은 국면을 가리킵니다" if agree else
              "방법마다 다른 국면을 가리킵니다" if picks else "국면을 판정할 수 있는 방법이 없었습니다")
-    return {"title": title, "facts": facts + ["세 방법을 평균 내지 않습니다 — 갈리는 것 자체가 정보입니다."],
+    return {"title": title, "facts": facts + ["세 방법을 평균하지 않습니다 — 불일치 자체가 정보입니다."],
             "trust": trust, "unmeasured": ["국면 판정의 향후 수익률 예측력"]}
 
 
@@ -303,7 +303,7 @@ def _custom_scenario(inputs: dict, p: Any) -> pg.NodeOutput:
         factors = {fid: float(getattr(p, fid)) for fid in FACTORS if float(getattr(p, fid)) != 0.0}
         if not factors:
             raise pg.NodeFailure("팩터 충격을 하나 이상 지정하십시오 — 시장 충격만으로는 시나리오를 구성하지 않습니다"
-                                 "(0 인 팩터를 지어 넣지 않습니다).")
+                                 "(값이 0 인 팩터를 임의로 추가하지 않습니다).")
         req = ScenarioRunRequest(holdings=pct, pack=InlinePack(label=p.label, market=p.market_shock, factors=factors))
     try:
         out = scenario_run(req)
@@ -424,8 +424,8 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
         "text": f"그룹 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다"}
     return {"title": f"그룹 {view.get('n')}개의 동반 하락 여부를 분석했습니다", "headline": headline,
             "facts": list(rob.get("story") or []), "trust": trust,
-            "unmeasured": ["앞으로도 같을지(과거 관계입니다)", "경제적 가치"]
-            + ([] if rob.get("axis") == "date" else ["날짜로 맞춘 비교(시세의 끝을 맞췄습니다)"])}
+            "unmeasured": ["향후에도 유지될지(과거 관계입니다)", "경제적 가치"]
+            + ([] if rob.get("axis") == "date" else ["날짜 정렬 비교(시세 종료일을 일치시켰습니다)"])}
 
 
 def _glance_sleeves(view: dict) -> dict | None:
@@ -439,10 +439,10 @@ def _glance_sleeves(view: dict) -> dict | None:
 class AlphaValidateParams(BaseModel):
     model_config = _FORBID
     expr: str = Field("zscore(mom_6m) - zscore(vol_60d)", min_length=1, max_length=1000, json_schema_extra={
-        "x-ui": _ui("알파 식", question="검증 대상 알파 식", help="등록된 알파를 고르면 그 식을 씁니다.")})
+        "x-ui": _ui("알파 식", question="검증 대상 알파 식", help="등록된 알파를 선택하면 해당 식을 사용합니다.")})
     alpha_id: str | None = Field(None, max_length=40, json_schema_extra={"x-ui": _ui(
         "등록된 알파", question="등록 알파 검증", widget="pick", source="alphas",
-        help="고르면 그 알파의 식을 쓰고, 검증 기록을 그 알파에 붙일 수 있습니다.")})
+        help="선택하면 해당 알파의 식을 사용하고, 검증 기록을 해당 알파에 연결할 수 있습니다.")})
     universe: Literal[tuple(_UNIVERSES)] = Field("kospi50", json_schema_extra={"x-ui": _ui(
         "종목 범위", "advanced", widget="cards", options=_UNIVERSES)})
     months: int = Field(24, ge=6, le=60, json_schema_extra={"x-ui": _ui(
@@ -508,7 +508,7 @@ def _explain_validate(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(UNKNOWN, "개발 모드라 가격·재무 값이 합성일 수 있습니다 — 예측력을 말해 주지 않습니다."))
     return {"title": "알파 식의 과거 순위 상관을 측정했습니다",
             "headline": ({"label": "평균 IC", "value": mean, "text": f"{float(mean):+.3f}"} if mean is not None else None),
-            "facts": facts, "trust": trust, "unmeasured": ["표본 밖 예측력", "거래 비용을 뺀 성과"]}
+            "facts": facts, "trust": trust, "unmeasured": ["표본 밖 예측력", "거래비용 차감 후 성과"]}
 
 
 _WEIGHTINGS = {"equal": "동일 가중", "factor_tilt": "점수 비례 틸트", "inverse_vol": "역변동성 가중",

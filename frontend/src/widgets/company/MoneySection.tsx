@@ -30,9 +30,9 @@ function rowsOf(c: CompanyData, mode: "annual" | "quarter"): Row[] {
 /** 답 한 문장 — 매출을 아는 첫 기간과 마지막 기간(서버 값). 둘이 없으면 흐름을 말하지 않는다. */
 function answer(rows: Row[]): string {
   const known = rows.filter((r) => ok(r.revenue));
-  if (known.length < 2) return "매출을 두 기간 이상 받지 못해 흐름을 말할 수 없습니다.";
+  if (known.length < 2) return "매출 자료가 두 기간 미만이라 추이를 산출할 수 없습니다.";
   const a = known[0], b = known[known.length - 1];
-  const verb = (b.revenue as number) > (a.revenue as number) ? "늘었습니다" : (b.revenue as number) < (a.revenue as number) ? "줄었습니다" : "같았습니다";
+  const verb = (b.revenue as number) > (a.revenue as number) ? "증가했습니다" : (b.revenue as number) < (a.revenue as number) ? "감소했습니다" : "동일했습니다";
   const m = ok(b.opMargin) ? ` ${periodKo(b.k)} 영업이익률은 ${pctTxt(b.opMargin)}입니다.` : "";
   return `매출은 ${periodKo(a.k)} ${eokWon(a.revenue)}에서 ${periodKo(b.k)} ${eokWon(b.revenue)}으로 ${verb}.${m}`;
 }
@@ -94,7 +94,7 @@ export function MoneySection({ c, onRetry, seen }: { c: CompanyData; onRetry: ()
           <div className="ca-cp-fintabs" role="group" aria-label="기간 단위">
             <button type="button" aria-pressed={!q} className={!q ? "on" : ""} onClick={() => setMode("annual")}>연도</button>
             <button type="button" aria-pressed={q} className={q ? "on" : ""} disabled={!c.quarters.length} onClick={() => c.quarters.length && setMode("quarter")}>분기</button>
-            {!c.quarters.length && !c.failed.includes("quarters") && <span className="ci-note">분기 자료가 없습니다(전자공시 분기보고서가 적재되면 켜집니다)</span>}
+            {!c.quarters.length && !c.failed.includes("quarters") && <span className="ci-note">분기 자료가 없습니다(전자공시 분기보고서가 적재되면 표시됩니다)</span>}
           </div>
           {c.failed.includes("quarters") && <RetryFail title="분기 재무 조회 실패" onRetry={onRetry} />}
           <StoryChart rows={rows} />

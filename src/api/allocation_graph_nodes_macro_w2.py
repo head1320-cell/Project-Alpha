@@ -47,7 +47,7 @@ def _yield_curve(inputs: dict, p: Any) -> pg.NodeOutput:
     series, tags = macro_series_map()
     out = yield_curve_view(series)
     if not out.get("points"):
-        raise pg.NodeFailure(f"곡선을 그릴 미국 국채 금리가 없습니다 — {_STORE_GUIDE}.")
+        raise pg.NodeFailure(f"곡선을 표시할 미국 국채 금리가 없습니다 — {_STORE_GUIDE}.")
     return _out({"result": out}, tags)
 
 
@@ -90,7 +90,7 @@ def _dashboard(inputs: dict, p: DashboardParams) -> pg.NodeOutput:
     if p.theme:
         themes = [t for t in themes if t["key"] == p.theme]
     if not any(t["indicators"] for t in themes):
-        raise pg.NodeFailure(f"이 테마에 보여 줄 지표가 없습니다 — {_STORE_GUIDE}.")
+        raise pg.NodeFailure(f"이 테마에 표시할 지표가 없습니다 — {_STORE_GUIDE}.")
     return _out({"themes": themes, "theme": p.theme}, tags)
 
 
@@ -120,7 +120,7 @@ def _consensus(inputs: dict, p: EnsembleParams) -> pg.NodeOutput:
     out = regime_consensus_view(series, market=p.market, months=p.months)
     if not out.get("n_available"):
         why = "; ".join(f"{_TOOLS.get(k, k)}: {v}" for k, v in (out.get("reasons") or {}).items()) or "사유 미상"
-        raise pg.NodeFailure(f"국면을 판정한 방법이 하나도 없습니다 — {why}")
+        raise pg.NodeFailure(f"국면을 판정한 방법이 없습니다 — {why}")
     return _out({"result": out}, tags)
 
 
@@ -137,7 +137,7 @@ def _explain_consensus(view: dict, prov: dict, params: Any) -> dict:
         title = f"다수는 ‘{v}’지만 갈립니다"
     facts = [f"{_TOOLS.get(k, k)}: {x}" for k, x in (r.get("per_tool") or {}).items()]
     trust = [_t(UNKNOWN, f"{_TOOLS.get(k, k)}는 판정하지 못했습니다 — {x}") for k, x in (r.get("reasons") or {}).items()]
-    trust += [_t(CONFIRMED, "세 방법을 평균 내지 않습니다 — 갈리는 것 자체가 정보입니다."), *_macro_trust(prov)]
+    trust += [_t(CONFIRMED, "세 방법을 평균하지 않습니다 — 불일치 자체가 정보입니다."), *_macro_trust(prov)]
     return {"title": title, "facts": facts, "trust": trust,
             "unmeasured": ["합의된 국면이 실제로 맞는지(예측력)"]}
 
@@ -201,7 +201,7 @@ class LongRunParams(BaseModel):
         help="저장된 관측이 더 짧으면 가용 구간만 사용합니다. 60개월 미만이면 판정하지 않습니다.")})
     vars: str | None = Field(None, max_length=400, json_schema_extra={"x-ui": _ui(
         "계열(쉼표로 구분)", "advanced",
-        help="비우면 미리 정해 둔 코어 셋을 씁니다. 최대 7개 — 데이터를 보고 고르면 검정이 검정이 아니게 됩니다.")})
+        help="비우면 사전 정의한 코어 셋을 사용합니다. 최대 7개 — 데이터를 본 뒤 선택하면 검정의 유효성이 훼손됩니다.")})
 
 
 def _long_run(inputs: dict, p: LongRunParams) -> pg.NodeOutput:
@@ -236,7 +236,7 @@ def _explain_long_run(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(UNKNOWN, r["missing_note"]))
     trust += _macro_trust(prov)
     return {"title": title, "facts": [f for f in facts if f], "trust": trust,
-            "unmeasured": ["찾은 관계가 앞으로도 유지되는지(표본외)"]}
+            "unmeasured": ["식별된 관계의 향후 유지 여부(표본외)"]}
 
 
 # ── 스튜디오 모델 ─────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ class StudioParams(BaseModel):
         "기간", "advanced", unit="개월", presets=[{"label": "5년", "value": 60}, {"label": "10년", "value": 120}])})
     target: Literal["KOSPI", "VIXCLS", "USD_KRW"] = Field("KOSPI", json_schema_extra={"x-ui": _ui(
         "꼬리 위험 대상", "advanced", options={"KOSPI": "코스피", "VIXCLS": "VIX", "USD_KRW": "원/달러"},
-        help="꼬리 위험 모델에서만 씁니다.")})
+        help="꼬리 위험 모델에서만 사용합니다.")})
 
 
 def _studio(inputs: dict, p: StudioParams) -> pg.NodeOutput:
@@ -280,7 +280,7 @@ def _explain_studio(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(ASSUMED, str(r["note"]).replace("★", "")))
     trust += _macro_trust(prov)
     return {"title": f"{s.get('label')}: {s.get('question')}", "facts": [], "trust": trust,
-            "unmeasured": ["모델이 찾은 구조가 앞으로도 유지되는지(표본외)"]}
+            "unmeasured": ["모델이 식별한 구조의 향후 유지 여부(표본외)"]}
 
 
 # ── 등록 ─────────────────────────────────────────────────────────────────────

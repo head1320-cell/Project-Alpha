@@ -68,7 +68,7 @@ export function PerfCompare({ view, height = 260, focus = "both", title = "두 �
   }, [view.unit, view.base, va, vb, vd, width, height, n]);
 
   if (n < 2) {
-    return <p className="pg-note pf-empty">겹쳐 그릴 곡선이 없습니다 — 서버가 맞춘 날짜·값을 주지 않았습니다.</p>;
+    return <p className="pg-note pf-empty">겹쳐 표시할 곡선이 없습니다 — 서버가 맞춘 날짜·값을 제공하지 않았습니다.</p>;
   }
 
   const { x, yEq, yDf, L, plotW, idxs, stripY, lastA, lastB, base } = geo;

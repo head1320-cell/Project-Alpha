@@ -80,7 +80,7 @@ def _axis_probs(series_map: dict, market: str) -> dict:
     i = compute_axis_detail(series_map, i_def)
     if not g["components"] and not i["components"]:
         return {"available": False,
-                "reason": "성장·물가 축을 만들 지표가 하나도 없습니다"}
+                "reason": "성장·물가 축을 구성할 지표가 없습니다"}
     probs = quadrant_probs(g["score"], i["score"], g["se"], i["se"])
     return {
         "available": True, "method": "axis",
@@ -252,7 +252,7 @@ def regime_ensemble(series_map: dict, market: str = "kr", months: int = 60) -> d
                      else "방법마다 다른 국면을 가리킵니다 — 전환 초입일 수 있습니다"
                      if picks else "사용 가능한 도구가 없습니다"),
         },
-        "note": "세 방법을 평균내지 않습니다. 불일치 자체가 정보이며, 하나로 합치면 어느 모형이 무엇을 말했는지 사라집니다.",
+        "note": "세 방법을 평균하지 않습니다. 불일치 자체가 정보이며, 하나로 결합하면 모형별 판정이 드러나지 않습니다.",
         # ★어휘를 두 벌 만들지 않는다★ `regime_probability` 의 상수를 그대로 쓴다.
         "usage": USAGE_DIAGNOSTIC,
         "usage_note": USAGE_NOTE,

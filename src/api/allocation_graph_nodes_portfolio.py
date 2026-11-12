@@ -79,7 +79,7 @@ class PortfolioCombineParams(BaseModel):
     cost_bps: float = Field(0, ge=0, le=200, json_schema_extra={"x-ui": _ui(
         "리밸런싱 비용", question="리밸런싱 거래비용 가정", unit="bp",
         presets=[{"label": "넣지 않기", "value": 0}, {"label": "0.1%", "value": 10}, {"label": "0.3%", "value": 30}],
-        help="리밸런싱 회전율(매수·매도 합) × 이 비용을 차감합니다. 슬리피지·시장 충격은 넣지 않습니다.")})
+        help="리밸런싱 회전율(매수·매도 합) × 이 비용을 차감합니다. 슬리피지·시장 충격은 반영하지 않습니다.")})
 
     @field_validator("rebalance")
     @classmethod
@@ -126,7 +126,7 @@ def _numbers_for(p: PortfolioCombineParams, ports: list[str], names: list[str]) 
     vals = {nm: float(given[port]) for port, nm in zip(ports, names)}
     total = sum(vals.values())
     if field in SUM_100 and abs(total - 100.0) > 0.01:
-        raise pg.NodeFailure(f"{plain}의 합이 {total:g}% 입니다 — 100% 가 되게 맞추십시오.")
+        raise pg.NodeFailure(f"{plain}의 합이 {total:g}% 입니다 — 합계가 100% 가 되도록 조정하십시오.")
     if field == "scores" and total <= 0:
         raise pg.NodeFailure("점수가 모두 0 입니다 — 한 전략 이상에 0 보다 큰 점수를 부여하십시오.")
     return {"budgets": {"risk_budget": vals}, "scores": {"scores": vals}, "shares": {"shares": vals}}[field]

@@ -66,7 +66,7 @@ test("★스트림 실패는 alert + 재시도 — 옛 결과 표를 남기지 �
   await page.route("**/api/v1/screener/run-advanced-stream", (r) => r.fulfill({ status: 500, body: "x" }));
   await page.locator('[data-act="universe"]').selectOption("kosdaq150");           // 새 실행이 실패한다
   const alert = page.locator(".scr-answer-wrap [role='alert']");
-  await expect(alert).toContainText("종목을 거르지 못했습니다", { timeout: 30_000 });
+  await expect(alert).toContainText("종목 선별 실패", { timeout: 30_000 });
   await expect(rows(page), "실패했는데 옛 결과가 남아 있다").toHaveCount(0);
   await expect(answer(page)).toHaveCount(0);
 
@@ -129,12 +129,12 @@ const wipTickers = (page: Page) => page.evaluate(() => {
   return d.nodes?.find((n) => n.type === "universe")?.params?.tickers ?? null;
 });
 
-test("설계에 넣기: 표 위 10개 코드 그대로 캔버스 유니버스 노드로", async ({ page }) => {
+test("설계에 추가: 표 위 10개 코드 그대로 캔버스 유니버스 노드로", async ({ page }) => {
   await open(page);
   await settled(page);
   const codes = (await rows(page).evaluateAll((trs) => trs.slice(0, 10).map((tr) => tr.getAttribute("data-code"))));
   expect(codes.every((c) => /^\d{6}$/.test(c ?? ""))).toBe(true);
-  await page.locator(".scr-answer a", { hasText: "상위 10종목 설계에 넣기" }).click();
+  await page.locator(".scr-answer a", { hasText: "상위 10종목 설계에 추가" }).click();
   await expect(page).toHaveURL(new RegExp(`/allocation\\?tickers=${codes.join(",")}$`));
   await expect(page.locator(".pg-file-note")).toContainText(`종목 찾기에서 가져온 ${codes.length}종목으로`, { timeout: 30_000 });
   await expect.poll(() => wipTickers(page)).toEqual(codes);

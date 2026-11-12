@@ -65,7 +65,7 @@ export function ProfileMenu() {
             <div className="pf-who-t">
               {signedIn ? (
                 <><strong className="pf-name">{session.username}</strong>{role ? <span className="pf-role">{role}</span> : null}
-                  {session.mustChange ? <span className="pf-sub pf-must">비밀번호를 바꿀 차례입니다</span> : null}</>
+                  {session.mustChange ? <span className="pf-sub pf-must">비밀번호 변경이 필요합니다</span> : null}</>
               ) : session.kind === "unknown" ? (
                 <><strong className="pf-name">계정 정보 확인 실패</strong><span className="pf-sub">{session.reason}</span></>
               ) : session.kind === "loading" ? (

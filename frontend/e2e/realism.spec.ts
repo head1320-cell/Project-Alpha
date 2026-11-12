@@ -115,7 +115,7 @@ test("ST3c: 현실 조건이 한 일 · 적응 모드 근거는 서버 글 · �
   await page.locator(".rl-calc").click();
   const did = sec(page, "did");
   await expect(did.locator('[data-k="impact"] .rl-card-d')).toContainText("10.8bp");
-  await expect(did.locator('[data-k="buying"] .rl-card-v')).toHaveText("0번 줄였습니다");
+  await expect(did.locator('[data-k="buying"] .rl-card-v')).toHaveText("0회 축소했습니다");
   await expect(did.locator('[data-k="adaptive"] [data-server]')).toContainText("상관붕괴 진단만으로");
   await expect(did.locator(".rl-modes-l li")).toHaveCount(3);
   await expect(sec(page, "capacity").locator(".rl-cap")).toHaveCount(2);

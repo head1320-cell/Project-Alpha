@@ -153,12 +153,12 @@ export function studioAnswer(id: string, o: Outs): string | null {
     const e = Array.isArray(o.edges) ? o.edges.length : null;
     if (e == null || !isNum(o.n_series)) return null;
     return e > 0
-      ? `계열 ${o.n_series}개 사이에서 앞서 움직이는 관계 ${e}개를 찾았습니다`
-      : `계열 ${o.n_series}개 사이에서 앞서 움직이는 관계를 찾지 못했습니다`;
+      ? `계열 ${o.n_series}개 사이에서 선행 관계 ${e}개를 찾았습니다`
+      : `계열 ${o.n_series}개 사이에서 선행 관계를 찾지 못했습니다`;
   }
   if (id === "agentic-mcp") {
     if (!isNum(o.n_views)) return null;
-    return `뷰 ${o.n_views}개를 제약으로 바꿨습니다${o.feasible === null ? "(모순 검사는 하지 않았습니다)" : ""}`;
+    return `뷰 ${o.n_views}개를 제약으로 변환했습니다${o.feasible === null ? "(모순 검사는 수행하지 않았습니다)" : ""}`;
   }
   return null;
 }
@@ -181,7 +181,7 @@ function FactorViz({ o }: { o: Outs }) {
         <figure className="ms-viz-fig ms-viz-factor">
           <figcaption>요인이 지나온 길</figcaption>
           <FactorLines rows={rows} k={k} />
-          <p className="ms-viz-note">가로축은 관측 순서입니다(서버가 날짜를 주지 않았습니다).</p>
+          <p className="ms-viz-note">가로축은 관측 순서입니다(서버가 날짜를 제공하지 않았습니다).</p>
         </figure>
       )}
       {load.length > 0 && (
@@ -237,18 +237,18 @@ function CurveViz({ o }: { o: Outs }) {
 type Edge = { from: string; to: string; lag: number; p: number };
 function CausalViz({ o }: { o: Outs }) {
   const edges = (Array.isArray(o.edges) ? o.edges : []) as Edge[];
-  if (!edges.length) return <p className="ms-viz-empty">그릴 관계가 없습니다. 유의한 앞섬 관계가 하나도 나오지 않았습니다.</p>;
+  if (!edges.length) return <p className="ms-viz-empty">표시할 관계가 없습니다. 유의한 선행 관계가 확인되지 않았습니다.</p>;
   const given = (Array.isArray(o.nodes) ? o.nodes : []) as { id: string; label?: string }[];
   const ids = given.length ? given.map((n) => n.id) : Array.from(new Set(edges.flatMap((e) => [e.from, e.to])));
   const nodes = ids.map((id) => ({ id, label: IND_KR[id] ?? id }));
   return (
     <div className="ms-viz">
       <figure className="ms-viz-fig ms-viz-causal">
-        <figcaption>먼저 움직이는 지표 → 따라 움직이는 지표</figcaption>
+        <figcaption>선행 지표 → 후행 지표</figcaption>
         <CausalGraphView nodes={nodes} edges={edges} />
         <ul className="ms-edges">
           {edges.map((e, i) => (
-            <li key={i}>{IND_KR[e.from] ?? e.from} → {IND_KR[e.to] ?? e.to}, {e.lag}개월 앞섭니다, 유의확률 {e.p.toFixed(2)}</li>
+            <li key={i}>{IND_KR[e.from] ?? e.from} → {IND_KR[e.to] ?? e.to}, {e.lag}개월 선행합니다, 유의확률 {e.p.toFixed(2)}</li>
           ))}
         </ul>
       </figure>
@@ -343,7 +343,7 @@ export function StudioHead({ id, d, answer }: { id: string; d: StudioDescriptor 
       {d && <p className="ms-q" data-server>{d.question}</p>}
       {d && d.inputs.length > 0 && (
         <div className="ms-inputs">
-          <span className="ms-inputs-l">쓰는 지표</span>
+          <span className="ms-inputs-l">사용 지표</span>
           <ul className="ms-in-list">
             {d.inputs.map((k) => <li key={k} className="ms-in-chip">{keyName(k)}</li>)}
           </ul>

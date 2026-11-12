@@ -235,7 +235,7 @@ def multiples_matrix(fs, *, price: float, params: ValuationParams, eps_growth_pc
         just.update(pbr=pbr, per=jper, payout=payout,
                     pbr_price=(pbr * bps) if (pbr is not None and pbr > 0 and bps) else None,
                     per_price=(jper * eps) if jper is not None else None,
-                    reason=None if roe is not None else "ROE 를 몰라 정당 PBR 을 낼 수 없습니다")
+                    reason=None if roe is not None else "ROE 가 미상이라 정당 PBR 을 산출할 수 없습니다")
         if pbr is not None and pbr <= 0:
             just["pbr_note"] = "ROE 가 성장률보다 낮아 정당 PBR 이 0 이하입니다 — 자본이 가치를 만들지 못한다는 뜻"
     return {"available": True, "reason": None, "eps": eps, "per": per, "peg": peg, "peg_reason": peg_reason,

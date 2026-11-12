@@ -28,7 +28,7 @@ export function MacroAnswer({ className, action }: { className: string; action?:
     return (
       <div className={className}>
         <Notice tone="danger" title="매크로 분석 조회 실패">
-          서버 연결 실패 또는 계산 실패. 잠시 뒤 재시도하십시오.
+          서버 연결 실패 또는 계산 실패. 잠시 후 재시도하십시오.
           <div className="home-act">
             <button type="button" className="tx-btn tx-btn--sub home-retry" onClick={() => { void q.refetch(); }}>재시도</button>
           </div>

@@ -72,7 +72,7 @@ export function RealismTab() {
       ) : o?.kind === "no-strategies" ? (
         <section className="tx-sec rl-none">
           <p className="lv-strong">등록한 전략 없음</p>
-          <p className="tx-sec-sub">백테스트 결과 화면의 [전략으로 등록]으로 실행을 전략으로 올리면 여기서 계산할 수 있습니다.</p>
+          <p className="tx-sec-sub">백테스트 결과 화면의 [전략으로 등록]으로 실행을 전략으로 등록하면 여기서 계산할 수 있습니다.</p>
           <Link href="/backtest" className="tx-btn tx-btn--sub">백테스트로 가기</Link>
         </section>
       ) : o?.kind === "ran" ? (
@@ -88,7 +88,7 @@ function Result({ ideal, real, names }: { ideal: Side; real: Side; names: Record
       <div className="rl-fails">
         {!ideal.ok ? <Notice tone="danger" title="이상 쪽(현실 조건 없이) 산출 실패"><span data-server>{ideal.reason}</span></Notice> : null}
         {!real.ok ? <Notice tone="danger" title="현실 쪽(현실 조건 반영) 산출 실패"><span data-server>{real.reason}</span></Notice> : null}
-        <p className="tx-sec-sub rl-fails-why">한쪽만 있으면 견줄 수 없어서 그림을 그리지 않았습니다.</p>
+        <p className="tx-sec-sub rl-fails-why">한쪽만 있으면 비교할 수 없어 차트를 표시하지 않았습니다.</p>
       </div>
     );
   }
@@ -99,7 +99,7 @@ function Compared({ i, r, names }: { i: RealismRun; r: RealismRun; names: Record
   const ti = i.summary.total_return_pct; const tr = r.summary.total_return_pct;
   const gap = ti != null && tr != null ? tr - ti : null;
   const sentence = ti == null || tr == null
-    ? "총수익률 하나를 서버가 주지 않아 견줄 수 없습니다."
+    ? "총수익률 하나를 서버가 제공하지 않아 비교할 수 없습니다."
     : `현실 조건을 반영한 총수익률은 ${pct(tr)}로, 이상적 조건 ${pct(ti)}보다 ${Math.abs(gap ?? 0).toFixed(2)}%p ${gap === 0 ? "같습니다" : (gap ?? 0) > 0 ? "높습니다" : "낮습니다"}.`;
   return (
     <>
@@ -150,7 +150,7 @@ function GapChart({ i, r }: { i: RealismRun; r: RealismRun }) {
     <section className="tx-sec rl-sec" data-sec="gap" aria-labelledby="rl-gap-h">
       <header className="tx-sec-head"><div>
         <h2 className="tx-sec-t" id="rl-gap-h">이상과 현실 사이</h2>
-        <p className="tx-sec-sub">두 자산 곡선을 같은 날짜끼리 맞췄습니다(각자 처음을 1로). 아래 띠가 현실 조건이 만든 차이입니다.</p>
+        <p className="tx-sec-sub">두 자산 곡선을 동일 날짜 기준으로 정렬했습니다(각 시작값 = 1). 아래 띠가 현실 조건에 따른 차이입니다.</p>
       </div>
       <div className="tx-sec-aside">
         <Segmented label="강조할 곡선" value={focus} onChange={setFocus}
@@ -160,7 +160,7 @@ function GapChart({ i, r }: { i: RealismRun; r: RealismRun }) {
         <div className="rl-chart" data-days={view ? String(view.x.length) : ""}>
           {cmpQ.isPending ? <p className="tx-sec-sub rl-aligning">두 곡선 정렬 중</p> : null}
           {cmpQ.isError ? (
-            <Notice tone="danger" title="두 곡선을 맞추지 못했습니다"><span data-server>{(cmpQ.error as Error).message}</span>
+            <Notice tone="danger" title="두 곡선을 정렬하지 못했습니다"><span data-server>{(cmpQ.error as Error).message}</span>
               <button type="button" className="tx-btn tx-btn--sub" onClick={() => void cmpQ.refetch()}>재시도</button></Notice>
           ) : null}
           {view ? <PerfCompare view={view} height={260} focus={FOCUS_OF[focus]} title="이상과 현실 자산 곡선" /> : null}
@@ -185,7 +185,7 @@ function Waterfall({ i, r }: { i: RealismRun; r: RealismRun }) {
         <p className="tx-sec-sub">서버가 별도 집계한 두 금액(시장 충격 비용 · 현금 이자)만 표시했습니다. 나머지는 매수 여력·적응 모드·복리 효과가 혼재된 부분이라 서버가 분해하지 않았습니다.</p>
       </div></header>
       <div className="tx-sec-body">
-        {!steps ? <p className="tx-sec-sub">끝 자산이나 두 금액 중 하나를 서버가 주지 않아 나눌 수 없습니다.</p> : <Bars steps={steps} />}
+        {!steps ? <p className="tx-sec-sub">최종 자산 또는 두 금액 중 하나를 서버가 제공하지 않아 분해할 수 없습니다.</p> : <Bars steps={steps} />}
       </div>
     </section>
   );
@@ -239,10 +239,10 @@ function WhatItDid({ r }: { r: RealismRun }) {
             <p className="rl-card-d">리밸런싱 한 번에 평균 {known(s.avg_market_impact_bps_per_rebalance, (v) => `${v.toFixed(1)}bp`)}. 큰 주문의 가격 충격분입니다.</p></li>
           <li className="rl-card" data-k="cash"><p className="rl-card-t">현금 이자</p>
             <p className="rl-card-v">{known(s.total_cash_yield, (v) => eokWon(v))}</p>
-            <p className="rl-card-d">놀린 현금에 붙은 이자, 연 {known(s.cash_yield_annualized_pct, (v) => `${v.toFixed(2)}%`)}.</p></li>
+            <p className="rl-card-d">유휴 현금의 이자 수익, 연 {known(s.cash_yield_annualized_pct, (v) => `${v.toFixed(2)}%`)}.</p></li>
           <li className="rl-card" data-k="buying"><p className="rl-card-t">매수 여력</p>
-            <p className="rl-card-v">{known(s.total_buying_power_truncations, (v) => `${num(v)}번 줄였습니다`)}</p>
-            <p className="rl-card-d">리밸런싱 {known(r.summary.n_rebalances, (v) => `${num(v)}번`)} 중 현금이 모자라 사는 양을 줄인 횟수입니다.</p></li>
+            <p className="rl-card-v">{known(s.total_buying_power_truncations, (v) => `${num(v)}회 축소했습니다`)}</p>
+            <p className="rl-card-d">리밸런싱 {known(r.summary.n_rebalances, (v) => `${num(v)}번`)} 중 현금 부족으로 매수 수량을 축소한 횟수입니다.</p></li>
           <li className="rl-card" data-k="adaptive"><p className="rl-card-t">적응 모드</p>
             <p className="rl-card-v">{dist ? `보통 ${dist.normal ?? 0}%` : "N/A"}</p>
             <p className="rl-card-d">{r.regime_adaptive?.reason ? <span data-server>{r.regime_adaptive.reason}</span> : "적응 모드 근거를 서버가 주지 않았습니다."}</p></li>
@@ -270,7 +270,7 @@ function Capacity({ names }: { names: Record<string, string> }) {
     <section className="tx-sec rl-sec" data-sec="capacity" aria-labelledby="rl-cap-h">
       <header className="tx-sec-head"><div>
         <h2 className="tx-sec-t" id="rl-cap-h">유동성·운용 가능 규모</h2>
-        <p className="tx-sec-sub">전략마다 시장이 받아 줄 수 있는 돈의 크기입니다. 서버가 전략별 운용 가능 규모을 주지 않았습니다. 이번 계산은 용량 제약을 켜지 않았습니다.</p>
+        <p className="tx-sec-sub">전략별로 시장이 수용 가능한 운용 규모입니다. 서버가 전략별 운용 가능 규모을 제공하지 않았습니다. 이번 계산은 용량 제약을 켜지 않았습니다.</p>
       </div></header>
       <div className="tx-sec-body">
         <ul className="rl-caps">

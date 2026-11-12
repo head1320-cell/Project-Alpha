@@ -185,7 +185,7 @@ test("포트폴리오 노드는 대안에 넣지 않고 그렇다고 말한다 �
   await pick(page, ["pf", "optimizer"]);
   await bar(page).locator(".pg-selbar-branch").click();
   await expect(page.locator(".pg-note")).toContainText("노드 1개");
-  await expect(page.locator(".pg-note")).toContainText("포트폴리오 노드는 넣지 않았습니다");
+  await expect(page.locator(".pg-note")).toContainText("포트폴리오 노드는 포함하지 않았습니다");
   const b = (await wip(page)).branches![0];
   expect(Object.values(b.map)).toEqual(["optimizer"]);
 });

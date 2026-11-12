@@ -58,7 +58,7 @@ export function CommandPalette({ open, onClose, catalog, commands, onAddNode }: 
                }} />
       </label>
       <ul id="pg-cmd-list" className="pg-cmd-list" role="listbox">
-        {items.length === 0 && <li className="pg-cmd-empty">‘{q}’에 맞는 것이 없습니다.</li>}
+        {items.length === 0 && <li className="pg-cmd-empty">‘{q}’과 일치하는 항목이 없습니다.</li>}
         {items.map((it, i) => (
           <li key={it.id} id={`pg-cmd-${i}`} role="option" aria-selected={i === at}
               className={`pg-cmd-item${i === at ? " on" : ""}`} data-cmd={it.id}

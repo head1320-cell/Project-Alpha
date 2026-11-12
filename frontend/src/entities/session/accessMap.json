@@ -1,5 +1,5 @@
 {
-  "_comment": "BU8b 로그인 화면의 '로그인이 여는 것' 지도. 서버 보호 목록(src/api/protected_routes.py PROTECTED)과 같은 내용이어야 한다 — tests/test_login_access_map.py 가 양방향으로 대조한다(서버가 새로 잠그면 여기에도 적어야 통과). 열린 층의 api_prefixes 로 시작하는 보호 경로는 없어야 한다.",
+  "_comment": "BU8b 로그인 화면의 '로그인 후 사용 범위' 지도. 서버 보호 목록(src/api/protected_routes.py PROTECTED)과 같은 내용이어야 한다 — tests/test_login_access_map.py 가 양방향으로 대조한다(서버가 새로 잠그면 여기에도 적어야 통과). 열린 층의 api_prefixes 로 시작하는 보호 경로는 없어야 한다.",
   "open": {
     "title": "로그인 없이 열려 있습니다",
     "items": [

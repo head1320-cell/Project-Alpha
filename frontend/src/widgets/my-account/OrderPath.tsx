@@ -49,10 +49,10 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
 
   const k = kill.data;
   const killState = kill.isPending ? "확인 중" : kill.isError ? "확인 실패"
-    : k?.active && k.event ? "사용" : k?.active ? "주문이 막혀 있습니다" : "미사용";
+    : k?.active && k.event ? "사용" : k?.active ? "주문이 차단돼 있습니다" : "미사용";
   const killSub = kill.isError ? <button type="button" className="ma-link" onClick={() => void kill.refetch()}>재시도</button>
-    : k?.active && k.event ? <>사유 <span data-server>{k.event.trigger_reason ?? "적히지 않았습니다"}</span></>
-    : k?.active ? "이 계좌가 건 정지가 아닙니다. 운영자 정지이거나 상태 읽기 실패"
+    : k?.active && k.event ? <>사유 <span data-server>{k.event.trigger_reason ?? "기록되지 않았습니다"}</span></>
+    : k?.active ? "이 계좌에서 발동한 정지가 아닙니다. 운영자 정지이거나 상태 조회 실패"
     : "켜면 신규 주문과 미체결 주문을 중단합니다.";
 
   return (
@@ -100,7 +100,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
               </button>
             </div>
             {!acc.is_paper ? (
-              <p className="ma-st-sub tx-st-sub ma-mode-why">모의 체결은 모의투자 계좌에서만 씁니다. 이 계좌는 실계좌로 연결돼 있습니다.</p>
+              <p className="ma-st-sub tx-st-sub ma-mode-why">모의 체결은 모의투자 계좌에서만 사용합니다. 이 계좌는 실계좌로 연결돼 있습니다.</p>
             ) : null}
             <p className="ma-st-sub tx-st-sub">
               {mode.data?.changed_by ? `${mode.data.changed_by} 님이 변경했습니다. ` : ""}서버를 재시작하면 기록만 모드로 복귀합니다.
@@ -124,7 +124,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
           <span className="ma-st-dot tx-st-dot" aria-hidden><Send className="ma-st-ic tx-st-ic" size={14} strokeWidth={2} /></span>
           <div className="ma-st-b tx-st-b">
             <p className="ma-st-name tx-st-name">전송 대상</p>
-            <p className="ma-st-state tx-st-state">{cur === null ? "모드를 몰라서 정할 수 없습니다" : destination(cur, practice)}</p>
+            <p className="ma-st-state tx-st-state">{cur === null ? "모드가 미상이라 설정할 수 없습니다" : destination(cur, practice)}</p>
             <p className="ma-st-sub tx-st-sub">{conn ? <>연결 확인: <span data-server>{conn.reason}</span></> : "연결 확인 기록 조회 중"}</p>
           </div>
         </li>
@@ -149,7 +149,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
               ))}
             </ul>
           )}
-          <p className="tx-sec-sub">실계좌 전환은 아직 열리지 않습니다. 이 화면에는 실계좌로 바꾸는 단추가 없습니다.</p>
+          <p className="tx-sec-sub">실계좌 전환은 아직 허용되지 않았습니다. 이 화면에는 실계좌 전환 단추가 없습니다.</p>
         </div>
       ) : null}
     </section>

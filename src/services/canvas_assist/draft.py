@@ -32,8 +32,8 @@ MAX_QUOTE = 120
 MAX_NAMES = 30
 HOWS = ("preset", "option", "number", "tickers")
 WHY_NOT = ("none", "off_topic", "judgement")
-CANNOT = {"off_topic": "포트폴리오 설계에 대해 말하십시오",
-          "judgement": "어떤 종목이 좋을지는 말하지 않습니다 — 말씀대로 설계만 짓습니다"}
+CANNOT = {"off_topic": "포트폴리오 설계에 관한 내용을 입력하십시오",
+          "judgement": "종목의 우열은 판단하지 않습니다 — 요청하신 내용대로 설계만 구성합니다"}
 
 TOP_KEYS = frozenset({"understood", "why_not", "summary", "add", "connect", "set"})
 ADD_KEYS = frozenset({"ref", "kind"})
@@ -358,7 +358,7 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
         if len(s) > MAX_SUMMARY:
             bad.append(_rej("summary", "too_long", f"요약이 {MAX_SUMMARY}자를 넘습니다"))
         elif word:
-            bad.append(_rej("summary", "banned", f"요약에 쓰지 않는 표현이 있습니다 — ‘{word}’"))
+            bad.append(_rej("summary", "banned", f"요약에 금지 표현이 있습니다 — ‘{word}’"))
         elif extra:
             bad.append(_rej("summary", "numbers", f"요약에 말씀에 없는 숫자가 있습니다 — {', '.join(sorted(extra))}"))
         else:

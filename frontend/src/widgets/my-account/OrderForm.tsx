@@ -45,9 +45,9 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
   const quantity = /^\d+$/.test(qty) ? Number(qty) : NaN;
   const priceN = Number(price.replace(/,/g, ""));
   const filled = name !== null && side !== null && quantity > 0 && Number.isFinite(priceN) && priceN > 0;
-  const blocked = mode === null ? "실행 모드를 확인하지 못해 주문을 받지 않습니다."
-    : killActive === null ? "비상 정지 상태를 확인하지 못해 주문을 받지 않습니다."
-    : killActive ? "비상 정지 중이라 주문을 받지 않습니다." : null;
+  const blocked = mode === null ? "실행 모드를 확인하지 못해 주문을 접수하지 않습니다."
+    : killActive === null ? "비상 정지 상태를 확인하지 못해 주문을 접수하지 않습니다."
+    : killActive ? "비상 정지 중이라 주문을 접수하지 않습니다." : null;
   const loading = mode === undefined || killActive === undefined;
 
   const send = useMutation({
@@ -162,7 +162,7 @@ export function OrderForm({ accountId, mode, killActive, practice, onTrace, hold
             <span className="ma-amount-k">주문 금액 어림</span>
             <strong className="ma-amount-v">{priceWon(quantity * priceN)}</strong>
             {cash !== null && cash > 0 ? <span className="ma-amount-r">예수금의 {pct((quantity * priceN) / cash)}</span> : null}
-            <span className="ma-hint">수수료와 세금은 빠졌습니다.</span>
+            <span className="ma-hint">수수료와 세금은 제외했습니다.</span>
           </p>
         ) : null}
         {blocked ? <p className="ma-order-why">{blocked}</p> : null}
