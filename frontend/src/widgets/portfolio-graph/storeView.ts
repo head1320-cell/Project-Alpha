@@ -4,7 +4,7 @@
 import type { PgState } from "./store";
 import type { SliceCtx } from "./storeShared";
 
-type ViewSlice = Pick<PgState, "setFocusGroup" | "toggleFilter" | "setSimple" | "setGrowing" | "setMinimap" | "setLanes" | "setWireShape" | "setShowGhosts" | "setTab" | "setExpert" | "setOpenGate">;
+type ViewSlice = Pick<PgState, "setFocusGroup" | "toggleFilter" | "setSimple" | "setGrowing" | "setMinimap" | "setLanes" | "setWireShape" | "setShowGhosts" | "setCardResults" | "setTab" | "setExpert" | "setOpenGate">;
 
 export const viewSlice = ({ set }: SliceCtx): ViewSlice => ({
   setFocusGroup: (focusGroup) => set((s) => ({
@@ -18,6 +18,7 @@ export const viewSlice = ({ set }: SliceCtx): ViewSlice => ({
   setLanes: (showLanes) => set({ showLanes }),
   setWireShape: (wireShape) => set({ wireShape }),
   setShowGhosts: (showGhosts) => set({ showGhosts }),
+  setCardResults: (showCardResults) => set({ showCardResults }),
   setTab: (tab) => set({ tab }),
   setExpert: (expert) => set({ expert }),
   setOpenGate: (openGate) => set({ openGate }),

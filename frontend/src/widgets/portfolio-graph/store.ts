@@ -102,6 +102,8 @@ export interface PgState {
   wireShape: WireShape;
   /** 추천 유령(CF6) 켬/끔 — 보기 설정. */
   showGhosts: boolean;
+  /** 보통·먼 확대에서도 카드에 결과(작은 그림·사실 줄·요약·증거 칩)를 보인다 — 보기 설정(문서가 아니다). */
+  showCardResults: boolean;
   /** 오른쪽 패널 탭 · 전문가 설정 · 펼친 관문 (BJ3). */
   tab: "story" | "settings" | "detail" | "branches" | "wire";
   /** 오른쪽 판 "선" 탭이 보이는 선(BT4). */
@@ -204,6 +206,7 @@ export interface PgState {
   setLanes: (v: boolean) => void;
   setWireShape: (v: WireShape) => void;
   setShowGhosts: (v: boolean) => void;
+  setCardResults: (v: boolean) => void;
   setTab: (t: PgState["tab"]) => void;
   setExpert: (v: boolean) => void;
   setOpenGate: (k: string | null) => void;
@@ -323,6 +326,7 @@ export const usePortfolioGraph = create<PgState>((rawSet, get) => {
     showLanes: false,
     wireShape: "curve",
     showGhosts: true,
+    showCardResults: true,
     tab: "story",
     selectedEdge: null,
     expert: false,

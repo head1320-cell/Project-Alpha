@@ -9,6 +9,7 @@
  */
 export const PG_Z_USERS = [
   ".pg-node-far-name", ".pg-node-far-v",                          // 먼 보기 카드 이름·숫자
+  ".pg-node-far-sum", ".pg-far-chip",                              // 먼 보기 설정 요약·증거 칩(2026-11-12)
   ".pg-ghost-name",                                               // 먼 보기 유령 이름
   ".pg-lane-head",                                                // 단계 띠 머리
   ".pg-waypoint",                                                 // 꺾는 점(화면 크기 고정)

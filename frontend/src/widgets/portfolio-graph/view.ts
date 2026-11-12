@@ -11,8 +11,10 @@ export interface View {
   wire: WireShape;
   minimap: boolean;
   ghosts: boolean;
+  /** 보통·먼 확대에서도 카드에 결과를 보인다 — 작은 그림 · 사실 줄 · (먼 보기) 설정 요약·증거 칩(2026-11-12 — 기본 켬). 끄면 예전처럼 가까이에서만. */
+  cardResults: boolean;
 }
-export const DEFAULT_VIEW: View = { lanes: false, wire: "curve", minimap: false, ghosts: true };
+export const DEFAULT_VIEW: View = { lanes: false, wire: "curve", minimap: false, ghosts: true, cardResults: true };
 
 export function readView(): View {
   try {
@@ -24,6 +26,7 @@ export function readView(): View {
       wire: isWireShape(v.wire) ? v.wire : DEFAULT_VIEW.wire,
       minimap: typeof v.minimap === "boolean" ? v.minimap : DEFAULT_VIEW.minimap,
       ghosts: typeof v.ghosts === "boolean" ? v.ghosts : DEFAULT_VIEW.ghosts,
+      cardResults: typeof v.cardResults === "boolean" ? v.cardResults : DEFAULT_VIEW.cardResults,
     };
   } catch {
     return DEFAULT_VIEW;

@@ -107,7 +107,7 @@ test("(f) 짝: perf 가 없으면 낙폭·기간별·낙폭 구간은 '미제공
   await expect(curveCard(page).locator(".pf-legend")).toContainText("낙폭 곡선 없음");
   await expect(page.locator("td.pf-month[data-month]")).toHaveCount(0);
   await expect(page.locator(".pf-dd-ep")).toHaveCount(0);
-  await expect(page.locator(".terminal-main")).toContainText("주지 않았습니다");
+  await expect(page.locator(".terminal-main")).toContainText("제공하지 않았습니다");
 });
 
 test("(g) 질문 띠 — 답하는 것(전달) · 답하지 않는 것은 이 화면이 재지 않는다고 말한다(관문 칩 0)", async ({ page }) => {

@@ -15,7 +15,7 @@ import type { PgState } from "./store";
 import type { WireShape } from "./wirePath";
 
 export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, strategySources, addStrategy, toggleMinimap, toggleLanes,
-                                fitToLanes, setWire, toggleGhosts, setCmdOpen, nErrors, runStale, applyLoad, drawer, setDrawer, topExtra, run }: {
+                                fitToLanes, setWire, toggleGhosts, toggleCardResults, setCmdOpen, nErrors, runStale, applyLoad, drawer, setDrawer, topExtra, run }: {
   s: PgState;
   fit: () => void;
   setGoalOpen: (v: boolean) => void;
@@ -28,6 +28,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
   fitToLanes: () => void;
   setWire: (w: WireShape) => void;
   toggleGhosts: () => void;
+  toggleCardResults: () => void;
   setCmdOpen: (v: boolean) => void;
   nErrors: number;
   runStale: () => Promise<void>;
@@ -76,7 +77,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
         <button type="button" className={`pg-icon-tool${s.showMinimap ? " on" : ""}`} aria-pressed={s.showMinimap}
                 aria-label="미니맵" title="미니맵" onClick={toggleMinimap}><MapIcon size={16} /></button>
         <ViewMenu lanes={s.showLanes} onLanes={toggleLanes} onFitLanes={fitToLanes} wire={s.wireShape} onWire={setWire}
-                  ghosts={s.showGhosts} onGhosts={toggleGhosts} />
+                  ghosts={s.showGhosts} onGhosts={toggleGhosts} results={s.showCardResults} onResults={toggleCardResults} />
         <button type="button" className="pg-icon-tool pg-cmd-open" aria-label="명령 찾기 (Ctrl+K)" title="명령 찾기 (Ctrl+K)"
                 onClick={() => setCmdOpen(true)}><Command size={16} /></button>
       </div>

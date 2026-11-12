@@ -134,9 +134,9 @@ export function ZoomPct({ onReset }: { onReset: (zoom: number) => void }) {
 }
 
 /** '보기' 메뉴(CF4b·CF4c) — 도구줄 단추 하나. 단계 레인 켬/끔 · 켜졌을 때 '레인에 맞추기' · 선 모양(곡선·직각·직선). 명령 찾기(Ctrl+K)에도 같은 항목이 있다. */
-export function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire, ghosts, onGhosts }:
+export function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire, ghosts, onGhosts, results, onResults }:
   { lanes: boolean; onLanes: () => void; onFitLanes: () => void; wire: WireShape; onWire: (w: WireShape) => void;
-    ghosts: boolean; onGhosts: () => void }) {
+    ghosts: boolean; onGhosts: () => void; results: boolean; onResults: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useDismiss(open, useCallback(() => setOpen(false), []), ref);
@@ -159,6 +159,11 @@ export function ViewMenu({ lanes, onLanes, onFitLanes, wire, onWire, ghosts, onG
           <button type="button" role="menuitemcheckbox" aria-checked={ghosts} data-view="ghosts"
                   onClick={() => { setOpen(false); onGhosts(); }}>
             <span className="pg-view-check" aria-hidden="true">{ghosts && <Check size={14} />}</span>추천 보기
+          </button>
+          {/* 2026-11-12 — 보통·먼 확대에서도 카드에 결과(작은 그림·사실 줄 · 먼 보기는 요약·칩도)를 보인다(기본 켬). 끄면 예전처럼 가까이에서만. '그림 고정'은 그대로. */}
+          <button type="button" role="menuitemcheckbox" aria-checked={results} data-view="card-results"
+                  onClick={() => { setOpen(false); onResults(); }}>
+            <span className="pg-view-check" aria-hidden="true">{results && <Check size={14} />}</span>카드에 결과 표시
           </button>
           <div className="pg-view-sep" role="separator" />
           <div role="group" aria-label="선 모양" className="pg-view-group">

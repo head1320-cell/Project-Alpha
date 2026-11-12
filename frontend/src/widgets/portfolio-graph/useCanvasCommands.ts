@@ -114,6 +114,12 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     usePortfolioGraph.getState().setShowGhosts(v);
     saveView({ ...readView(), ghosts: v });
   };
+  // 카드 결과(2026-11-12) — 보통·먼 확대에서도 결과를 보일지. 켬/끔은 이 브라우저에 남긴다(문서가 아니다).
+  const toggleCardResults = () => {
+    const v = !usePortfolioGraph.getState().showCardResults;
+    usePortfolioGraph.getState().setCardResults(v);
+    saveView({ ...readView(), cardResults: v });
+  };
 
   const multiPicked = s.picked.length > 1;
   const commands = useMemo<PaletteCommand[]>(() => [
@@ -160,6 +166,8 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     ...(s.showLanes ? [{ id: "fit-lanes", group: "보기", label: "레인에 맞추기", hint: "노드를 각 단계 띠 안으로 이동합니다", run: fitToLanes }] : []),
     { id: "ghosts", group: "보기", label: s.showGhosts ? "추천 유령 끄기" : "추천 유령 보기",
       hint: "서버 규칙이 제안한 다음 노드를 추가할 위치에 반투명하게 표시합니다", run: toggleGhosts },
+    { id: "card-results", group: "보기", label: s.showCardResults ? "카드 결과 숨기기" : "카드에 결과 표시",
+      hint: "보통·먼 확대에서도 노드 카드에 작은 그림 · 사실 줄 · 증거 칩을 표시합니다", run: toggleCardResults },
     ...(s.selectedId || s.selectedEdge ? [{ id: "ask-here", group: "AI", label: s.selectedId ? "선택한 노드에게 묻기" : "선택한 선에게 묻기",
       hint: "오른쪽 창 아래 칸에서 계산 결과에 대해 Claude 에게 질의합니다(로그인 · 계산 후)",
       run: () => { updatePanels((p) => (p.right ? p : toggle(p, "right"))); window.setTimeout(() => askFocus.current(), 60); } }] : []),
@@ -189,6 +197,6 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.selectedEdge, multiPicked, s.picked.length, s.showMinimap, s.showLanes, s.showGhosts, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus, s.nodes.length]);
-  return { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, commands };
+  ], [s.selectedId, s.selectedEdge, multiPicked, s.picked.length, s.showMinimap, s.showLanes, s.showGhosts, s.showCardResults, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus, s.nodes.length]);
+  return { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, toggleCardResults, commands };
 }

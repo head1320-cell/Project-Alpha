@@ -809,6 +809,9 @@ _TESTS = [
     ('assert "비중을 바꾸지 않습니다" in trust', 'assert "비중을 변경하지 않습니다" in trust'),
     ('const TOC = ["가치", "여러 모형", "핵심 숫자",', 'const TOC = ["가치", "모형 비교", "핵심 지표",'),
     ('hasText: "여러 모형"', 'hasText: "모형 비교"'),
+    ('toContainText("주지 않았습니다")', 'toContainText("제공하지 않았습니다")'),
+    ('toContainText("파일로 받아 두십시오")', 'toContainText("파일로 내려받아 두십시오")'),
+    ('toContainText("첫 원인")', 'toContainText("최초 원인")'),
 ]
 
 PAIRS = _FRONT + _CANVAS + _SERVER + _TESTS

@@ -130,14 +130,16 @@ test("확대 3단계(BM C1): 멀리는 이름·숫자 하나, 보통은 카드, 
   await zoomTo(page, "mid");
   await expect(opt.locator(".pg-node-t")).toBeVisible();
   await expect(opt.locator(".pg-node-far")).toBeHidden();
-  await expect(opt.locator(".pg-node-glance")).toBeHidden();
+  // 2026-11-12 — 보통 확대에서도 작은 그림(보기 설정 '카드에 결과 표시' · 기본 켬). 끄면 숨는 짝은 canvas-card-body.spec.ts 가 건다.
+  await expect(opt.locator(".pg-node-glance")).toBeVisible();
   await expect(opt.locator(".pg-node-time")).toBeHidden();
   await expect(page.locator(".pg-wire-brief").first()).toBeVisible();
 
   await zoomTo(page, "far");
   await expect(opt.locator(".pg-node-far")).toBeVisible();
   await expect(opt.locator(".pg-node-t")).toBeHidden();
-  await expect(opt.locator(".pg-node-glance")).toBeHidden();
+  // 2026-11-12 — 먼 보기에서도 작은 그림(같은 보기 설정).
+  await expect(opt.locator(".pg-node-glance")).toBeVisible();
   await expect(page.locator(".pg-wire-brief").first()).toBeHidden();
   // 멀리서도 글자는 화면에서 11px 아래로 줄지 않는다(확대 0.3 까지).
   const px = await opt.locator(".pg-node-far-name").evaluate((el) => {
@@ -285,9 +287,12 @@ test("선 그림은 값을 모르는 구간을 끊는다 · 양 끝 값은 글�
   await expect(g.locator(".pg-gl-note")).toHaveText("끊긴 구간은 값 미상");
 });
 
-test("그림 고정(BM C1): 보통 확대에서도 고정한 노드만 그림이 보이고, 풀면 사라진다", async ({ page }) => {
+test("그림 고정(BM C1): '카드에 결과 표시'를 끈 보통 확대에서도 고정한 노드만 그림이 보이고, 풀면 사라진다", async ({ page }) => {
   await openCanvas(page);
   await run(page);
+  // 2026-11-12 — 기본은 보통 확대에서도 그림이 보인다. 고정은 그 설정을 끈 사람을 위한 것이라 끄고 본다.
+  await page.locator(".pg-view-open").click();
+  await page.locator('.pg-view-menu [data-view="card-results"]').click();
   await zoomTo(page, "mid");
   await node(page, "optimizer").click();
   await expect(node(page, "optimizer").locator(".pg-node-glance")).toBeHidden();
@@ -377,7 +382,7 @@ test("원인 따라가기(BM C1): 막힌 노드에서 첫 원인까지 밝히고
   await zoomTo(page, "mid");                                     // 멀리에서는 카드 안 단추가 숨는다(CF1 — 맞춰 보기가 멀리로 열릴 수 있다)
   await reveal(page, "risk");                                    // 가운데 기준 확대는 가장자리 노드를 판 밑·화면 밖으로 민다
   await node(page, "risk").locator(".pg-cause-btn").click();
-  await expect(page.locator(".pg-cause-banner")).toContainText("첫 원인");
+  await expect(page.locator(".pg-cause-banner")).toContainText("최초 원인");
   await expect(rfNode(page, "returns")).toHaveClass(/pg-cause-root/);
   for (const id of ["risk", "optimizer", "returns"]) await expect(rfNode(page, id), id).toHaveClass(/pg-on-cause/);
   // 완료된 상류(universe)와 관계없는 가지(views)는 원인이 아니다.
@@ -716,7 +721,7 @@ test("내 블록: 이 브라우저에 저장할 수 없으면 '없음' 이 아�
   await page.locator(".pg-group--strategy .pg-group-file").last().click();
   await dl;
   expect(await lastDownloadName(page)).toMatch(/\.pgblock\.json$/);
-  await expect(page.locator(".pg-note")).toContainText("파일로 받아 두십시오");
+  await expect(page.locator(".pg-note")).toContainText("파일로 내려받아 두십시오");
 });
 
 test("옛 문서(전략 칸 없는 그룹)는 그대로 읽히고 · 전략 문서는 내보내기 → 불러오기 왕복에서 전략 칸이 그대로(BM C2)", async ({ page }) => {
@@ -1052,7 +1057,7 @@ test("간단히 보기(BM C4): 노드 대신 정할 것 → 결과 · 결과 = �
   await expect(blocked).toBeVisible();
   await blocked.locator(".pg-cause-btn").click();
   await expect(page.locator(".pg-simple")).toHaveCount(0);
-  await expect(page.locator(".pg-cause-banner")).toContainText("첫 원인");
+  await expect(page.locator(".pg-cause-banner")).toContainText("최초 원인");
 });
 
 for (const scheme of ["light", "dark"] as const) {

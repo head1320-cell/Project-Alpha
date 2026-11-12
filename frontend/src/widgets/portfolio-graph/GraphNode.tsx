@@ -53,19 +53,23 @@ export type CanvasNodeData = PgNodeData & {
   onSocket?: (id: string, port: string, type: string, side: "in" | "out") => void;
 };
 
-function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: string; text: string }[] {
-  const out: { cls: string; text: string }[] = [];
+/** 카드 결과 자리에 놓는 사실 줄 수 — 줄마다 두 줄까지(넘으면 말줄임 · 전부는 오른쪽 창의 설명 탭). 결과 자리 156 안에 든다. */
+const CARD_FACTS = 3;
+
+/** 근거 칩 — `short` 는 먼 보기용 짧은 이름(같은 사실 · 같은 순서 · 글자만 줄임 — 2026-11-12). */
+function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: string; text: string; short: string }[] {
+  const out: { cls: string; text: string; short: string }[] = [];
   // 계보(BK0) — 서버가 하류로 나른 사실. 과거 검증에 쓸 수 없는 값임을 노드에서 바로 말한다.
-  if (lin?.pit === "forward_only") out.push({ cls: "assume", text: "현재 시점 전용" });
-  if (lin?.overlay) out.push({ cls: "assume", text: "노출 조절됨" });
+  if (lin?.pit === "forward_only") out.push({ cls: "assume", text: "현재 시점 전용", short: "현재 시점" });
+  if (lin?.overlay) out.push({ cls: "assume", text: "노출 조절됨", short: "노출 조절" });
   const trust = ex?.trust ?? [];
-  if (trust.some((t) => t.kind === "practice")) out.push({ cls: "unknown", text: "합성 데이터" });
-  else if (trust.some((t) => t.state === "unknown")) out.push({ cls: "unknown", text: "모르는 것 있음" });
+  if (trust.some((t) => t.kind === "practice")) out.push({ cls: "unknown", text: "합성 데이터", short: "합성" });
+  else if (trust.some((t) => t.state === "unknown")) out.push({ cls: "unknown", text: "모르는 것 있음", short: "미상" });
   // 고른 방식이 답을 내지 못해 다른 비중을 썼다(CF3) — 가정 하나로 세면 묻히므로 따로 말한다.
-  if (trust.some((t) => t.kind === "fallback")) out.push({ cls: "fallback", text: "선택 방식 대체" });
+  if (trust.some((t) => t.kind === "fallback")) out.push({ cls: "fallback", text: "선택 방식 대체", short: "대체" });
   const nAssumed = trust.filter((t) => t.state === "assumed" && t.kind !== "fallback").length;
-  if (nAssumed) out.push({ cls: "assume", text: nAssumed === 1 ? "가정 있음" : `가정 ${nAssumed}개` });
-  if (trust.some((t) => t.state === "failed")) out.push({ cls: "fail", text: "지키지 못한 조건" });
+  if (nAssumed) out.push({ cls: "assume", text: nAssumed === 1 ? "가정 있음" : `가정 ${nAssumed}개`, short: `가정 ${nAssumed}` });
+  if (trust.some((t) => t.state === "failed")) out.push({ cls: "fail", text: "지키지 못한 조건", short: "조건 위반" });
   return out;
 }
 
@@ -206,6 +210,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   // 제목 줄 경고(Blender) — 서버 trust 의 '지키지 못함'·'모름' 수. 설정 오류는 따로 빨갛게 적힌다.
   const warns = live?.status === "ok" ? (ex?.trust ?? []).filter((t) => t.state === "failed" || t.state === "unknown") : [];
   const glance = live?.status === "ok" ? live.glance ?? null : null;
+  const chips = live?.status === "ok" ? chipsOf(ex, live.lineage) : [];
+  // 그림 없는 종류의 결과 자리(2026-11-12) — 서버 사실 줄 앞 몇 줄 그대로(새 수치 0). 그림·도넛이 있으면 그것만.
+  const facts = live?.status === "ok" && !glance && data.kind !== "portfolio_combine" ? (ex?.facts ?? []).slice(0, CARD_FACTS) : [];
   const elapsed = typeof live?.elapsed_ms === "number" ? live.elapsed_ms : null;
   // 작업 노드(CF1) — 카드 위젯 칸(서버 x-ui 기본 칸 중 카드에 맞는 것)과 상자 높이(모든 확대에서 같다).
   const cw = cardFieldsOf(entry?.params_schema ?? null, data.params ?? {});
@@ -237,7 +244,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   return (
     <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}${solo ? " pg-node--solo" : ""}${folded ? " pg-node--folded" : ""}`}
          data-node-id={id} data-kind={data.kind}
-         style={{ minHeight: folded ? undefined : boxH, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
+         style={{ minHeight: folded ? undefined : boxH, ["--pg-box-h" as string]: `${boxH}px`, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
                   ["--pg-i" as string]: data.num ?? 0, ["--pg-rows" as string]: rows }}>
       {/* R8b — 보일 때만 단다. React Flow 의 NodeToolbar 는 안 보여도 스토어를 구독해(화면 이동마다 · 노드 목록을 거름) 카드 200장이면
           200개가 걸음마다 다시 그려졌다(재서 찾음). 보일 때의 모양은 그대로(isVisible 도 그대로). */}
@@ -277,11 +284,15 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
       </div>
       <div className="pg-node-far" aria-hidden="true">
         <span className="pg-node-far-name">{entry.plain_label}</span>
+        {summary && <span className="pg-node-far-sum">{summary}</span>}
         <span className={`pg-node-far-v pg-node-far-v--${state}`}>
           {headline && headline.value !== null
             ? <>{Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit}</small></>
             : st.text}
         </span>
+        {chips.length > 0 && (
+          <span className="pg-node-far-ev">{chips.map((c) => <span key={c.text} className={`pg-far-chip pg-far-chip--${c.cls}`} data-full={c.text}>{c.short}</span>)}</span>
+        )}
       </div>
       {/* 소켓 줄 자리 — 소켓(핸들·이름)은 아래 .pg-port 가 같은 높이에 그린다(포트 DOM 은 그대로 — E2E 계약). */}
       {rows > 0 && <div className="pg-node-sockets" aria-hidden="true" />}
@@ -339,6 +350,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
           return <div className="pg-node-terminal"><StrategyDonut slices={slices} /></div>;
         })()}
         {glance && data.kind !== "portfolio_combine" && <div className="pg-node-glance"><Glance glance={glance} extra={slotExtra} /></div>}
+        {facts.length > 0 && <ul className="pg-node-facts">{facts.map((f, i) => <li key={i}>{f}</li>)}</ul>}
         {stale && result && <div className="pg-node-why pg-node-stale">설정이 변경돼 이전 결과입니다.</div>}
         {live?.previous && <div className="pg-node-why pg-node-stale">이번에 계산하지 않았습니다 — 이전 계산 결과입니다.</div>}
         {errors.length > 0 && (
@@ -347,8 +359,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         {slotEmpty && <div className="pg-node-slot-empty">계산하면 결과가 여기에 표시됩니다</div>}
       </div>
       <div className="pg-node-foot">
-        {live?.status === "ok" && chipsOf(ex, live.lineage).length > 0 && (
-          <div className="pg-node-ev">{chipsOf(ex, live.lineage).map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.cls}`}>{c.text}</span>)}</div>
+        {chips.length > 0 && (
+          <div className="pg-node-ev">{chips.map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.cls}`}>{c.text}</span>)}</div>
         )}
         {elapsed !== null && (
           <div className="pg-node-time" title="이 노드의 계산 시간(서버)">계산 {fmtElapsed(elapsed)}</div>

@@ -34,6 +34,8 @@ if (PERF) test.use({ trace: "off" });
 const VISIBLE_ONLY = process.env.CANVAS_PERF_VISIBLE_ONLY === "1";
 /** 미니맵을 켜고 잰다(R8b — 켠 사람만의 길). 기본은 끔(보기 기본값 그대로). */
 const MINIMAP = process.env.CANVAS_PERF_MINIMAP === "1";
+/** 먼 보기 결과 끔(2026-11-12 탐침) — 같은 빌드에서 '멀리서도 결과 표시' 켬/끔을 견준다(기본은 켬 = 제품 기본). */
+const RESULTS_OFF = process.env.CANVAS_PERF_RESULTS_OFF === "1";
 
 type Doc = { format: string; version: number; meta: { name: string }; nodes: object[]; edges: { id: string; source: string; target: string }[] };
 /** 사슬 k개(종목 → 수익률 → 기대 수익 추정 → 비중 계산 · 선 4)를 가로 5사슬 격자로 — 서버 값 0(계산 전). */
@@ -156,16 +158,16 @@ async function open(page: Page, doc: Doc, trackBoot = false, minimap = MINIMAP) 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(instrument, PROFILE);
   if (trackBoot) await page.addInitScript(() => { (window as never as { __rr: { track: boolean } }).__rr.track = true; });
-  await page.addInitScript(([d, minimap]) => {
+  await page.addInitScript(([d, minimap, resultsOff]) => {
     try {
       if (sessionStorage.getItem("r8_seeded")) return;
       sessionStorage.setItem("r8_seeded", "1");
       for (const k of ["alpha_pg_panels", "alpha_pg_view", "alpha_pg_left_tab"]) localStorage.removeItem(k);
-      if (minimap) localStorage.setItem("alpha_pg_view", JSON.stringify({ minimap: true }));
+      if (minimap || resultsOff) localStorage.setItem("alpha_pg_view", JSON.stringify({ ...(minimap ? { minimap: true } : {}), ...(resultsOff ? { cardResults: false } : {}) }));
       localStorage.setItem("alpha_pg_welcomed", "1");
       sessionStorage.setItem("alpha_pg_wip", JSON.stringify(d));
     } catch { /* */ }
-  }, [doc, minimap] as const);
+  }, [doc, minimap, RESULTS_OFF] as const);
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });
   if (VISIBLE_ONLY) {
     await expect(page.locator(".pg-node").first()).toBeVisible({ timeout: 60_000 });

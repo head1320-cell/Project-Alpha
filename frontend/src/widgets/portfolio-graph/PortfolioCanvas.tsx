@@ -361,7 +361,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
   const { run, paletteNext, runTo, swapTo, runStale, startGoal } = useRunActions(s, stages, rf, canvasEl, setQuick, setGoalOpen, fit,
     { needRef, socketRef, runToRef, runStrategyRef, branchStrategyRef, previewRef });
 
-  const { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, commands } = useCanvasCommands(s, {
+  const { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, toggleCardResults, commands } = useCanvasCommands(s, {
     run, runTo, updatePanels, fit, setCmdOpen, setFindOpen, setKeysOpen, setGoalOpen, setDrawer, focusRef, askFocus,
     leftShown, rightShown, panels, cmdOpen, openSay, ai, strategySources, addStrategy, loadTemplate, pickEdge });
 
@@ -606,7 +606,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
          data-simple={s.simple || undefined} data-tight={tight || undefined} style={{ "--pg-right-w": `${panels.rightW}px` } as CSSProperties}>
       <CanvasToolbar s={s} fit={fit} setGoalOpen={setGoalOpen} stratOpen={stratOpen} setStratOpen={setStratOpen}
                      strategySources={strategySources} addStrategy={addStrategy} toggleMinimap={toggleMinimap} toggleLanes={toggleLanes}
-                     fitToLanes={fitToLanes} setWire={setWire} toggleGhosts={toggleGhosts} setCmdOpen={setCmdOpen} nErrors={nErrors}
+                     fitToLanes={fitToLanes} setWire={setWire} toggleGhosts={toggleGhosts} toggleCardResults={toggleCardResults} setCmdOpen={setCmdOpen} nErrors={nErrors}
                      runStale={runStale} applyLoad={applyLoad} drawer={drawer} setDrawer={setDrawer} topExtra={topExtra} run={run} />
 
 
@@ -672,7 +672,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
           <button type="button" className="pg-palette-fab" aria-label="노드 목록 열기 ([)" title="노드 추가 — 목록 열기 ([)"
                   onClick={() => updatePanels((p) => toggle(p, "left"))}><Plus size={20} aria-hidden="true" /></button>
         )}
-        <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}${s.growing ? " pg-growing" : ""}`}
+        <div ref={canvasEl} className={`pg-canvas${dragOver ? " pg-canvas--drop" : ""}${s.growing ? " pg-growing" : ""}`} data-card-results={s.showCardResults ? "1" : "0"}
              style={{ "--pg-node-w": NODE_W, "--pg-brief-w": `${BRIEF_MAX_W}px` } as React.CSSProperties}
              onPointerDownCapture={stopViewMotion}
              onDragOver={onDragOverCanvas}

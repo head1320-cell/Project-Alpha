@@ -34,6 +34,7 @@ export function useCanvasView(rf: RefObject<ReactFlowInstance | null>, canvasEl:
     g.setLanes(v.lanes);
     g.setWireShape(v.wire);
     g.setMinimap(v.minimap);                          // CF5b — 사람이 켠 것만(기본 끔)
+    g.setCardResults(v.cardResults);                    // 2026-11-12 — 기본 켬
     g.setShowGhosts(v.ghosts);                        // CF6 — 기본 켬
   }, []);
   const updatePanels = useCallback((f: (p: Panels) => Panels) => {
