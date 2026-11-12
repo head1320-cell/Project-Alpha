@@ -1296,6 +1296,14 @@ _TESTS = [
     ('and "움직이지 않습니다" in out["still"]', 'and "변하지 않습니다" in out["still"]'),
     ('.pg-shapley-sum")).toContainText("어긋납니다")', '.pg-shapley-sum")).toContainText("차이가 납니다")'),
     ('and "똑같이" in out["fallback"]["reason"]', 'and "균등" in out["fallback"]["reason"]'),
+    ('assert "잴 수 있게" in nxt["text"]', 'assert "측정할 수 있게" in nxt["text"]'),
+    ('and "부풀" in c["note"]', 'and "과대 추정" in c["note"]'),
+    ('and "보여 준" in r.text', 'and "공유한" in r.text'),
+    ('assert "스스로" in out["still"]', 'assert "자체적으로" in out["still"]'),
+    ('assert "내가 고른 값" in utrust', 'assert "사용자가 선택한 값" in utrust'),
+    ('any("쓰이지 않습니다" in t["text"] for t in o["explain"]["trust"])', 'any("사용되지 않습니다" in t["text"] for t in o["explain"]["trust"])'),
+    ('any("쓰이지 않습니다" in t["text"] for t in b["explain"]["trust"])', 'any("사용되지 않습니다" in t["text"] for t in b["explain"]["trust"])'),
+    ('t.text.includes("내가 고른 값")', 't.text.includes("사용자가 선택한 값")'),
 ]
 
 PAIRS = _CANVAS_SRV + _CANVAS_UI + _SCREENS + _SERVER + _TESTS

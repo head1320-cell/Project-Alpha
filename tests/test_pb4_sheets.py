@@ -288,7 +288,7 @@ def test_delete_only_while_never_shown_to_the_client(client):
     from src.services import pb_clients as pbc
     pbc.mark_shared(s2)                                                       # PB6 가 고객 주소를 만들 때 적는다
     r = client.delete(f"{BASE}/{cid}/snapshots/{s2}", headers=h)
-    assert r.status_code == 409 and "보여 준" in r.text
+    assert r.status_code == 409 and "공유한" in r.text
     assert client.get(f"{BASE}/{cid}/snapshots/{s2}", headers=h).json()["shared"] is True
 
 

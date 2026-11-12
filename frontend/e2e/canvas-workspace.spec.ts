@@ -1834,7 +1834,7 @@ test("위험 성향(BO O1): 칩 밖의 값이면 처음부터 직접 정하기 �
   expect(JSON.stringify(wa)).not.toBe(JSON.stringify(wb));
   const ex = (b.nodes.optimizer as unknown as { explain: { facts: string[]; trust: { text: string }[] } }).explain;
   expect(ex.facts.some((f) => f.includes(`λ ${hi.value}`))).toBe(true);
-  expect(ex.trust.some((t) => t.text.includes("내가 고른 값"))).toBe(true);
+  expect(ex.trust.some((t) => t.text.includes("사용자가 선택한 값"))).toBe(true);
 
   // 문서에 칩 밖의 값이 오면 → 직접 정하기가 켜진 채로 보인다
   await field.locator(".pg-chip--custom").click();

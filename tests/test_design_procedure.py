@@ -144,7 +144,7 @@ def test_rule4_after_the_optimizer_suggests_the_backtest_that_unlocks_cost_and_o
     nxt = _proc(CORE, CORE_E)["next"]
     assert nxt["kind"] == "backtest" and nxt["unlocks"] == ["cost", "oos"]
     assert {(a["source"], a["target_port"]) for a in nxt["attach"]} == {("o", "weights"), ("r", "returns")}
-    assert "잴 수 있게" in nxt["text"]
+    assert "측정할 수 있게" in nxt["text"]
 
 
 def test_rule4_is_silent_when_there_is_no_optimizer_to_replay():

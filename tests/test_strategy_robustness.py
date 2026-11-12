@@ -97,7 +97,7 @@ def test_crisis_tail_coupling_exceeds_expectation():
 def test_crisis_without_market_is_labelled():
     S = _pair(0.3, 500, seed=2)
     c = sr.crisis_correlation(["A", "B"], S, market=None)
-    assert c["basis"] == "strategy_mean" and "부풀" in c["note"]
+    assert c["basis"] == "strategy_mean" and "과대 추정" in c["note"]
     c2 = sr.crisis_correlation(["A", "B"], S, market=S[:, 0] * 0.5 + S[:, 1] * 0.5)
     assert c2["basis"] == "market" and "부풀" not in (c2.get("note") or "")
 

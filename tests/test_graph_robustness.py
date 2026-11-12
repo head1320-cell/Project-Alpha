@@ -83,7 +83,7 @@ def test_market_missing_is_labelled_pair(market, monkeypatch):
     from src.api import robustness_inputs as ri
     monkeypatch.setattr(ri, "market_on_dates", lambda t, dates: (None, "시장 대용 시세가 없습니다(테스트)"))
     c = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]["crisis"]
-    assert c["basis"] == "strategy_mean" and "부풀" in c["note"] and c["market_reason"] == "시장 대용 시세가 없습니다(테스트)"
+    assert c["basis"] == "strategy_mean" and "과대 추정" in c["note"] and c["market_reason"] == "시장 대용 시세가 없습니다(테스트)"
     monkeypatch.setattr(ri, "market_on_dates",
                         lambda t, dates: (np.random.default_rng(1).normal(0, .01, len(dates)), None))
     c2 = _run(_graph(2))["nodes"]["p"]["view"]["robustness"]["crisis"]

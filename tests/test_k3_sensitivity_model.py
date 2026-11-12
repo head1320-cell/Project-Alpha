@@ -94,7 +94,7 @@ def test_bl_without_views_is_market_weights_and_does_not_move():
 def test_robust_re_estimates_its_own_mu():
     out = st.sensitivity_matrix(NAMES, _R(), model="robust")
     assert out["mu_reach"] == "own"
-    assert "스스로" in out["still"]
+    assert "자체적으로" in out["still"]
 
 
 def test_lambda_reaches_the_utility():
