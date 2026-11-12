@@ -148,7 +148,7 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
     # ★홀드아웃으로 적중률을 실측한다★ 보정에 쓴 표본으로 적중률을 세면 그건 측정이
     # 아니라 자기 확인이다. 앞 70% 보정 · 뒤 30% 검사로 가른다.
     cov: dict[str, Any] = {"available": False,
-                           "reason": "적중률을 잴 홀드아웃 표본이 없습니다."}
+                           "reason": "적중률을 측정할 홀드아웃 표본이 없습니다."}
     k = int(pairs_n * 0.7)
     if k >= need and pairs_n - k >= 1:
         q = conformal_quantile(np.abs(cal_a[:k] - cal_p[:k]), alpha)
@@ -675,7 +675,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
                 "√법칙은 이 영역에서 검량되지 않았으므로 이 규모의 충격 추정은 "
                 "★모델 적용 범위 밖★ 입니다.")
         if not imp_bps_hist:
-            notes.append("리밸런싱이 없어 충격을 잰 적이 없습니다.")
+            notes.append("리밸런싱이 없어 시장 충격을 측정한 적이 없습니다.")
         impact_block = {
             "applied": True,
             "convention": impact.as_convention(),
@@ -697,7 +697,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
         gross_hist = [rb_.get("gross_pct") for rb_ in rebalances if rb_.get("gross_pct")]
         short_notes.append(
             "숏 비용 미반영 — 차입수수료·숏 배당지급·증거금 이자가 이 곡선에 없습니다. "
-            "롱온리와의 비교는 그만큼 롱숏에 유리하게 기울어 있습니다.")
+            "롱온리와의 비교는 그만큼 롱숏에 유리하게 편향돼 있습니다.")
         short_notes.append(
             "실행 불가 — 이 목표는 연구·백테스트 전용입니다(차입 가능여부 미연동 · "
             "KIS 주문 유형에 공매도 없음).")

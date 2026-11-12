@@ -77,7 +77,7 @@ DECISION_REQUIRED_AXES = ("price", "as_of")
 #: 선언되지 않았다" 는 미상이다 — 둘은 다른 사실이다.
 OPTIONAL_AXES = ("target", "macro")
 
-_NO_MEASUREMENT = "측정값이 없습니다 — 이 결정에서 재지 못했습니다."
+_NO_MEASUREMENT = "측정값이 없습니다 — 이 결정에서 측정하지 못했습니다."
 
 
 def _axis(state: str, reason: str | None, **detail: Any) -> dict[str, Any]:

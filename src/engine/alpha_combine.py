@@ -163,8 +163,8 @@ def combine_alphas(specs: list[dict[str, Any]], tickers: list[str],
             "사실상 같은 베팅이라 분산 효과가 거의 없습니다.")
     if n_eff is not None and len(scored) >= 2 and n_eff < len(scored) * 0.7:
         warnings.append(
-            f"알파 {len(scored)}개를 넣었지만 유효 알파 수는 {n_eff} 입니다 — "
-            "겹치는 만큼 실제 분산은 그보다 적습니다.")
+            f"알파 {len(scored)}개를 입력했지만 유효 알파 수는 {n_eff} 입니다 — "
+            "중복되는 만큼 실제 분산 효과는 그보다 작습니다.")
     if excluded:
         warnings.append(
             f"{len(excluded)}개 알파가 산출 불가로 제외됐습니다 — "

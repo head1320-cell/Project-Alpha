@@ -83,7 +83,7 @@ UNMEASURED_AXES: dict[str, str] = {
         "이 경로는 수익률을 `load_returns` 로 바로 받고 R2 의 "
         "`price_quality.basis_rollup`(원주가/수정주가 혼합 판정)을 통과하지 "
         "않습니다. ★수정주가는 기업행위로 **소급 개정**되므로 과거 시점에 알 수 "
-        "없던 값일 수 있습니다 — 그 폭을 재지 않았습니다.★"),
+        "없던 값일 수 있습니다 — 그 폭을 측정하지 않았습니다.★"),
 }
 
 _WINDOW_REASON = (

@@ -282,7 +282,7 @@ test("선 그림은 값을 모르는 구간을 끊는다 · 양 끝 값은 글�
   const g = node(page, "optimizer").locator(".pg-glance");
   await expect(g.locator("polyline")).toHaveCount(2);
   await expect(g.locator(".pg-gl-ends span")).toHaveText(["1.00", "1.30"]);
-  await expect(g.locator(".pg-gl-note")).toHaveText("끊긴 곳은 값 미상");
+  await expect(g.locator(".pg-gl-note")).toHaveText("끊긴 구간은 값 미상");
 });
 
 test("그림 고정(BM C1): 보통 확대에서도 고정한 노드만 그림이 보이고, 풀면 사라진다", async ({ page }) => {

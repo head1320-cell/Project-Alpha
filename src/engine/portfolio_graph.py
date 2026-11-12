@@ -682,7 +682,7 @@ def _handoffs(graph: Any, registry: Registry, report: dict, values: dict, params
 def _run_facts(registry: Registry, ptype: str, value: Any, where: str) -> tuple[list | None, str | None]:
     fn = registry.port_facts.get(ptype)
     if fn is None:
-        return None, "이 값은 아직 잴 항목이 없습니다."
+        return None, "이 값은 아직 측정할 항목이 없습니다."
     try:
         facts = fn(value)
     except Exception:                                 # noqa: BLE001

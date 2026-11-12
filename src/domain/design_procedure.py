@@ -7,7 +7,7 @@
 
 - `steps` — 여섯 단계(데이터 · 신호 · 생각 · 비중 · 확인 · 실행)가 채워졌는지. 필수·권장·선택을 가른다.
 - `next` — 다음에 붙일 것 **하나**. 빠진 **단계**만 제안하고 설정값은 추천하지 않는다(BM 기각: 자동 스윕·
-  "가장 좋은" 고르기). 문장은 "잴 수 있게 됩니다"까지만 쓴다 — 붙인다고 관문을 통과하는 것이 아니다.
+  "가장 좋은" 고르기). 문장은 "측정할 수 있게 됩니다"까지만 쓴다 — 붙인다고 관문을 통과하는 것이 아니다.
 - `by_gate` — 관문마다 그것을 잴 수 있게 하는 한 걸음(없으면 `None` + 사유).
 - `unmet_needs` — 타입은 맞지만 받는 쪽이 요구하는 값(`needs`)을 보내는 쪽이 **확실히** 주지 않는 선.
   계산할 때 실패할 것을 편집하는 순간 말한다. 확실하지 않으면(조건부) 말하지 않는다.
@@ -248,10 +248,10 @@ def _add_returns(by_id, kinds) -> dict | None:
         if "universe" not in kinds:
             return None
         return _suggest("add", "universe",
-                        f"먼저 {_obj(_label(kinds, 'universe'))} 붙여 무엇을 볼지 정합니다. 그다음 수익률을 불러오면 "
-                        "데이터·시점 관문을 잴 수 있게 됩니다.", [], [], kinds)
+                        f"먼저 {_obj(_label(kinds, 'universe'))} 추가해 분석 대상을 정합니다. 이후 수익률을 조회하면 "
+                        "데이터·시점 관문을 측정할 수 있게 됩니다.", [], [], kinds)
     return _suggest("add", "returns",
-                    f"{_obj(_label(kinds, 'returns'))} 붙이면 데이터·시점 관문을 잴 수 있게 됩니다.",
+                    f"{_obj(_label(kinds, 'returns'))} 추가하면 데이터·시점 관문을 측정할 수 있게 됩니다.",
                     [{"source": uni, "source_port": _out_port(kinds, "universe", "Universe"),
                       "target": NEW, "target_port": _in_port(kinds, "returns", "Universe")}],
                     ["data", "pit"], kinds)
@@ -264,7 +264,7 @@ def _add_optimizer(by_id, kinds) -> dict | None:
     attach = ([{"source": ret, "source_port": _out_port(kinds, "returns", "Returns"),
                 "target": NEW, "target_port": _in_port(kinds, "optimizer", "Returns")}] if ret else [])
     return _suggest("add", "optimizer",
-                    f"비중을 정하는 단계가 없습니다 — {_obj(_label(kinds, 'optimizer'))} 붙이면 비중 관문을 잴 수 "
+                    f"비중을 정하는 단계가 없습니다 — {_obj(_label(kinds, 'optimizer'))} 추가하면 비중 관문을 측정할 수 "
                     "있게 됩니다.", attach, ["build"], kinds)
 
 
@@ -280,7 +280,7 @@ def _add_backtest(by_id, incoming, kinds) -> dict | None:
                        "target": NEW, "target_port": _in_port(kinds, "backtest", "Returns")})
     return _suggest("add", "backtest",
                     f"거래비용과 표본외 구간을 아직 측정하지 않았습니다 — ‘{_label(kinds, 'optimizer')}’ 뒤에 "
-                    f"{_obj(_label(kinds, 'backtest'))} 붙이면 잴 수 있게 됩니다.", attach, ["cost", "oos"], kinds)
+                    f"{_obj(_label(kinds, 'backtest'))} 추가하면 측정할 수 있게 됩니다.", attach, ["cost", "oos"], kinds)
 
 
 def _add_risk(by_id, incoming, kinds) -> dict | None:
@@ -292,8 +292,8 @@ def _add_risk(by_id, incoming, kinds) -> dict | None:
         out = _out_port(kinds, str(node["type"]), "Weights")
         if out and all(supply(k, nid, out, by_id, incoming, kinds) != NO for k in need):
             return _suggest("add", "risk",
-                            f"확인하는 단계가 없습니다 — {_subj(_label(kinds, str(node['type'])))} 낸 비중에 "
-                            f"{_obj(_label(kinds, 'risk'))} 붙여 어느 종목이 변동성을 만드는지 봅니다.",
+                            f"확인하는 단계가 없습니다 — {_subj(_label(kinds, str(node['type'])))} 산출한 비중에 "
+                            f"{_obj(_label(kinds, 'risk'))} 추가해 종목별 변동성 기여를 분석합니다.",
                             [{"source": nid, "source_port": out, "target": NEW, "target_port": port}], [], kinds)
     return None
 

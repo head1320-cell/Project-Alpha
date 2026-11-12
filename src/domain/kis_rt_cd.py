@@ -92,7 +92,7 @@ _BELOW_FLOOR = (
 
 _BAD_FAULT = (
     "이 코드의 책임 소재가 어휘 밖의 값입니다 — 어휘 밖의 값은 사실이 "
-    "아닙니다. 쓸 수 있는 값: provider · self · unknown.")
+    "아닙니다. 허용 값: provider · self · unknown.")
 
 _NOTE = (
     "이 판정은 ★표에 무엇이 적혀 있는가★만 말합니다. 표가 비어 있으면 모든 "

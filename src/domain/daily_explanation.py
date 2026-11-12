@@ -91,7 +91,7 @@ DRIVER_LABELS = {
 UNMEASURABLE_DRIVERS = {
     DRIVER_DIVIDEND: (
         "일별 배당락·지급일 데이터가 없습니다 — 연간 DPS 공시만 있어 그날 들어온 "
-        "배당을 잴 수 없습니다. 연간 값을 일할 계산하면 그것은 관측이 아니라 추정입니다."),
+        "배당을 측정할 수 없습니다. 연간 값을 일할 계산하면 그것은 관측이 아니라 추정입니다."),
     DRIVER_FX: (
         "해외 직접보유 데이터가 없습니다 — 이 저장소가 다루는 해외 노출은 원화 상장 "
         "ETF 라 환효과가 이미 가격 안에 들어 있고, 따로 떼어 낼 근거가 없습니다."),
@@ -259,14 +259,14 @@ def summarize_ko(exp: DailyExplanation) -> str:
         bits = ", ".join(f"{DRIVER_LABELS.get(k, k)} {_pct(v)}" for k, v in ranked)
         parts.append(f"기여가 큰 순서로 {bits} 입니다.")
     else:
-        parts.append("기여를 잰 축이 하나도 없습니다.")
+        parts.append("기여를 측정한 축이 하나도 없습니다.")
 
     # ③ 미측정 축 — ★이름을 부른다★
     if exp.missing_drivers:
         labels = [DRIVER_LABELS.get(k, k) for k in sorted(exp.missing_drivers)]
         names = ", ".join(labels)
         # ★조사는 **마지막** 낱말의 받침을 따른다★
-        parts.append(f"{names}{_josa(labels[-1], '은', '는')} 재지 못했습니다.")
+        parts.append(f"{names}{_josa(labels[-1], '은', '는')} 측정하지 못했습니다.")
 
     # ③′ 없는 축 — ★미상과 다르다★ (BH2)
     if exp.not_modeled:

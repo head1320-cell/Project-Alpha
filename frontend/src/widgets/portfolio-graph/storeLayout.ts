@@ -278,7 +278,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       else if (m.from) outOf.set(m.from, (outOf.get(m.from) ?? 0) + 1);
     }
     const said = [...[...into].map(([g, k]) => `‘${labelOf(g)}’ 상자에 노드 ${k}개를 추가했습니다`),
-                  ...[...outOf].map(([g, k]) => `‘${labelOf(g)}’ 상자에서 노드 ${k}개를 뺐습니다`)];
+                  ...[...outOf].map(([g, k]) => `‘${labelOf(g)}’ 상자에서 노드 ${k}개를 제외했습니다`)];
     const text = [said.length ? `${said.join(" · ")}.` : "", ...[...new Set(plan.blocked.map((b) => b.why))]].filter(Boolean).join(" ");
     return text || null;
   },

@@ -6,7 +6,7 @@
 이제 노드는 `sensitivity_matrix(..., model=, constraints=, risk_aversion=, w_current=, bench_returns=, groups_of=)` 로
 '포트폴리오 최적화' 과 ★같은 길★(`optimize` → 제약이면 `constrained_solve`)로 기준 비중을 풀고, 흔든 기대 수익마다 같은 길로 다시 푼다.
 - 기대 수익을 쓰지 않는 방식(무제약 최소분산·리스크 패리티·HRP·최대분산·최소 CVaR, 생각 없는 BL)은 계산하되 칸이 모두 0 이고
-  `mu_reach: "none"` + 서버 문장("기대 수익을 쓰지 않아 … 움직이지 않습니다")을 싣는다 — 화면은 0 칸 히트맵 대신 그 문장을 보인다.
+  `mu_reach: "none"` + 서버 문장("기대수익률을 사용하지 않아 … 움직이지 않습니다")을 싣는다 — 화면은 0 칸 히트맵 대신 그 문장을 보인다.
 - 강건 최적화(무제약)는 기대 수익을 수익률에서 스스로 다시 추정해 흔든 값이 들어가지 않는다 — `mu_reach: "own"` + 그 문장.
 - 흔든 기대 수익으로 풀지 못한 줄은 0 으로 메우지 않고 `None`(칸 "—") + 그 수를 센다(조용한 무반응 금지).
 ★`model` 을 주지 않으면 예전과 한 자리도 같다★ — `/sensitivity` 라우트는 그대로(`tests/golden/k3_sensitivity_legacy.json`, 바꾸기 전에 얼림).
@@ -73,7 +73,7 @@ def test_mu_free_models_compute_zeros_and_say_so(model):
     out = st.sensitivity_matrix(NAMES, _R(), model=model)
     assert out["mu_reach"] == "none"
     assert all(x == 0.0 for x in _flat(out["matrix"]))
-    assert "기대 수익을 쓰지 않아" in out["still"] and "움직이지 않습니다" in out["still"]
+    assert "기대수익률을 사용하지 않아" in out["still"] and "변하지 않습니다" in out["still"]
     np.testing.assert_allclose(out["base_weights"],
                                np.round(st.optimize(model, NAMES, _R())["weights"] * 100, 2))
 
@@ -164,7 +164,7 @@ def test_node_mu_free_explanation_says_it_does_not_move(clean):
     s = _sens("risk_parity")["nodes"]["s"]
     ex = s["explain"]
     assert "영향을 받지 않습니다" in ex["title"]
-    assert any("기대 수익을 쓰지 않아" in f for f in ex["facts"])
+    assert any("기대수익률을 사용하지 않아" in f for f in ex["facts"])
     assert ex.get("headline") is None                  # 0 을 '가장 큰 변화' 로 세우지 않는다
 
 

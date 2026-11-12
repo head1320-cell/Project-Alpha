@@ -163,7 +163,7 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
             <div className="pg-rail-head">
               <strong>결과 신뢰 수준</strong>
               <span className="pg-rail-summary">
-                {report ? `${stale ? "예전 결과 기준입니다 — 그 뒤 바뀐 곳이 있습니다. 바뀐 곳을 재계산하면 새로 판정합니다. " : ""}${report.summary.text} ${report.summary.note}`
+                {report ? `${stale ? "이전 결과 기준입니다 — 이후 변경된 항목이 있습니다. 변경분을 재계산하면 다시 판정합니다. " : ""}${report.summary.text} ${report.summary.note}`
                         : note ?? "계산하면 8개 관문 중 확인된 범위를 표시합니다."}
               </span>
             </div>

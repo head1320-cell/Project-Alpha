@@ -43,5 +43,5 @@ def declare_gate(req: DeclareRequest, p: Principal = Depends(require_admin)):
 @router.delete("")
 def revoke_gate(p: Principal = Depends(require_admin)):
     if not distribution_gate_store.revoke(p.username):
-        raise HTTPException(404, "지금 열려 있는 유통 관문이 없습니다.")
+        raise HTTPException(404, "현재 열려 있는 유통 관문이 없습니다.")
     return {"revoked": True, "revoked_by": p.username, "gate": distribution_gate_store.gate()}

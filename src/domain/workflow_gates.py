@@ -136,7 +136,7 @@ def _cost(rs: list[dict]) -> list[dict]:
             continue
         bps = ((r.get("view") or {}).get("config") or {}).get("cost_bps")
         if bps is None:
-            out.append(_r(UNKNOWN, "거래비용을 얼마로 봤는지 기록되지 않았습니다."))
+            out.append(_r(UNKNOWN, "적용한 거래비용 가정이 기록되지 않았습니다."))
         else:
             out.append(_r(ASSUMED, f"거래비용을 한 번에 {_pct_bp(float(bps))}로 가정했습니다 — "
                                    "실제 체결 비용은 측정하지 않았습니다."))
@@ -216,9 +216,9 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
         names = sorted({hist[str(n["type"])] for n in present})
         who = " · ".join(f"‘{x}’" for x in names) + _subj_particle(names[-1])
         rules["cost"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과의 거래비용을 읽지 않습니다 — "
-                                     "‘정책 백테스트’를 이으면 측정할 수 있습니다.")]
+                                     "‘정책 백테스트’를 연결하면 측정할 수 있습니다.")]
         rules["oos"] = [_r(UNKNOWN, f"{who} 있지만 이 관문은 아직 그 결과로 표본외 구간을 판정하지 "
-                                    "않습니다 — ‘정책 백테스트’를 이으면 측정할 수 있습니다.")]
+                                    "않습니다 — ‘정책 백테스트’를 연결하면 측정할 수 있습니다.")]
         feeders["cost"] = feeders["oos"] = [str(n["id"]) for n in present]
     gates = []
     for key, label in GATES:
@@ -229,4 +229,4 @@ def evaluate(nodes: list[dict], results: dict[str, dict], stage_of: dict[str, st
     text = (f"{len(gates)}개 관문 중 {n_ok}개만 확인했습니다." if n_ok < len(gates)
             else f"{len(gates)}개 관문을 모두 확인했습니다.")
     return {"gates": gates, "summary": {"confirmed": n_ok, "total": len(gates), "text": text,
-                                        "note": "끊긴 곳은 아직 재지 않은 곳입니다."}}
+                                        "note": "끊긴 지점은 아직 측정하지 않은 지점입니다."}}

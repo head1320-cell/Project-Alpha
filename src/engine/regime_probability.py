@@ -150,12 +150,12 @@ def require_portfolio_source(prob: RegimeProbabilities) -> RegimeProbabilities:
                          "RegimeProbabilities 만 받습니다.")
     if prob.source not in _PORTFOLIO_SOURCES:
         raise ValueError(
-            f"'{prob.source}' 는 배분에 쓸 수 없습니다 — 배분은 보유기간의 국면을 "
+            f"'{prob.source}' 는 배분에 사용할 수 없습니다 — 배분은 보유기간의 국면을 "
             f"묻는데 이 출처는 현재(또는 과거) 국면을 답합니다. "
             f"`k_step_forecast` 산출물만 허용됩니다.")
     if prob.usage != USAGE_PORTFOLIO:
         raise ValueError(
-            f"'{prob.source}' 의 usage 가 '{prob.usage}' 입니다 — 배분에 쓸 수 없습니다.")
+            f"'{prob.source}' 의 usage 가 '{prob.usage}' 입니다 — 배분에 사용할 수 없습니다.")
     return prob
 
 
@@ -233,7 +233,7 @@ def from_posterior_mean_path(rows: list[dict], current: str, h_hold: int,
             probs={r: float(v) for r, v in zip(regimes, probs, strict=True)},
             usage=USAGE_PORTFOLIO, mode=mode,
             note=("사후평균 전이행렬을 j회 거듭제곱한 경로입니다 — 전이행렬과 정합되어 "
-                  "결합분포 계산에 쓸 수 있습니다. 파라미터 불확실성은 여기에 "
+                  "결합분포 계산에 사용할 수 있습니다. 파라미터 불확실성은 여기에 "
                   "전파되지 않으며 `k_step_forecast` 의 신용구간이 따로 보고합니다."),
             detail={"from": current},
         ))

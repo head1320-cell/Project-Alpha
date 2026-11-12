@@ -132,7 +132,7 @@ export function RegimeExplainResult({ v }: { v: Dict }) {
           </table>
           {base !== null && prob !== null && sumPhi !== null && (
             <p className="pg-note pg-shapley-sum">기준 {pp(base)} + 기여 합 {sgn(sumPhi * 100, 1)}%p = {pp(base + sumPhi)}
-              {resid !== null && Math.abs(resid) > 1e-6 ? ` · 모델 확률 ${pp(prob)} 과 ${sgn(resid * 100, 2)}%p 어긋납니다` : ` · 모델 확률 ${pp(prob)} 과 맞습니다`}</p>
+              {resid !== null && Math.abs(resid) > 1e-6 ? ` · 모델 확률 ${pp(prob)} 과 ${sgn(resid * 100, 2)}%p 차이가 납니다` : ` · 모델 확률 ${pp(prob)} 과 일치합니다`}</p>
           )}
         </>
       )}

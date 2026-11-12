@@ -18,7 +18,7 @@ from src.services.canvas_assist.ground import numbers_of
 MAX_PARAGRAPHS = 5
 MAX_CHARS = 600
 NOTICE = "합성 데이터 결과입니다. 실제 시세가 아니라 합성 데이터로 계산했습니다. 투자 판단에 쓰기 전에 실데이터로 재계산하십시오."
-_STALE = "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 풀어 쓸 수 있습니다"
+_STALE = "서명이 일치하지 않습니다(그래프가 변경됐거나 서버가 재시작됐습니다). 재계산하면 다시 서술할 수 있습니다"
 _MISSING = "그래프에 없는 노드입니다"
 
 

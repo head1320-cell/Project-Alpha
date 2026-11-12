@@ -132,7 +132,7 @@ export function BacktestCompareResult({ v }: { v: Dict }) {
   const diffs = (v.differences as Dict[]) ?? [];
   const cmp = (v.compare as CompareBlock | null | undefined) ?? null;
   const view = cmp ? compareViewOf({ curves: cmp.curves, yearly: cmp.yearly, rows: null },
-    { unit: "x", labelA: "A", labelB: "B", question: "두 백테스트를 같은 자리에 놓으면 어떻게 다른가",
+    { unit: "x", labelA: "A", labelB: "B", question: "동일 조건에서 두 백테스트의 성과 차이",
       drawdownsA: cmp.drawdowns?.a ?? null, drawdownsB: cmp.drawdowns?.b ?? null, practice: cmp.practice ?? null }) : null;
   return (
     <>

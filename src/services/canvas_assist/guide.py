@@ -22,29 +22,29 @@ MAX_WHY = 70
 JUDGEMENT = ("사십시오", "파십시오", "좋은 전략", "나쁜 전략", "수익을 낼", "수익이 날", "돈이 될", "추천 종목")
 
 FEATURES: dict[str, dict[str, str]] = {
-    "cause": {"label": "원인 따라가기", "does": "실패하거나 막힌 노드에서 위로 거슬러 올라가 처음 막힌 곳을 보여 줍니다.",
+    "cause": {"label": "원인 따라가기", "does": "실패·차단된 노드에서 상류로 추적해 최초 차단 지점을 표시합니다.",
               "when": "계산했는데 실패하거나 막힌 노드가 있을 때"},
-    "wire_check": {"label": "전달 점검 보기", "does": "선을 따라 넘어가며 빠지거나 바뀐 값을 보여 줍니다.",
+    "wire_check": {"label": "전달 점검 보기", "does": "연결선을 따라 누락·변경된 값을 표시합니다.",
                    "when": "누락·변경이 있는 선이 있을 때"},
-    "run": {"label": "계산하기", "does": "그래프 전체를 계산해 노드마다 결과와 설명을 냅니다.",
+    "run": {"label": "계산하기", "does": "그래프 전체를 계산해 노드별 결과와 설명을 산출합니다.",
             "when": "절차를 다 채웠는데 아직 계산하지 않았을 때"},
-    "layout": {"label": "자동 정리", "does": "흐름 순서대로 왼쪽에서 오른쪽으로 카드를 놓습니다.",
+    "layout": {"label": "자동 정리", "does": "흐름 순서대로 왼쪽에서 오른쪽으로 카드를 배치합니다.",
                "when": "카드가 겹쳐 있을 때"},
-    "branch": {"label": "대안 만들기", "does": "노드와 그 아래를 복제해 설정만 바꿔 두 설계를 나란히 비교합니다.",
+    "branch": {"label": "대안 만들기", "does": "노드와 하류를 복제해 설정만 변경한 두 설계를 비교합니다.",
                "when": "계산했고 아직 대안이 없을 때"},
-    "strategy_add": {"label": "전략 더하기", "does": "비중을 내는 다른 방식의 흐름을 하나 더 붙입니다.",
+    "strategy_add": {"label": "전략 더하기", "does": "다른 비중 산출 방식의 흐름을 하나 추가합니다.",
                      "when": "비중을 내는 노드가 하나뿐일 때"},
-    "compare": {"label": "견고성 비교", "does": "비중 노드 여럿이 평소·위기 때 같이 움직이는지, 낙폭 구간의 중첩을 비교합니다.",
+    "compare": {"label": "견고성 비교", "does": "복수 비중 노드의 평시·위기 시 상관과 낙폭 구간 중첩을 비교합니다.",
                 "when": "비중을 내는 노드가 둘 이상인데 견고성 비교 노드가 없을 때"},
     "story_ai": {"label": "AI 로 풀어 쓰기", "does": "계산 결과의 서버 설명을 읽는 순서대로 Claude 가 풀어 씁니다.",
                  "when": "계산했고 결과가 낡지 않았을 때"},
     "ask_ai": {"label": "노드에게 묻기", "does": "선택한 노드나 선의 계산 결과에 대해 Claude 에게 묻습니다.",
                "when": "계산했을 때"},
-    "records": {"label": "기록함", "does": "저장한 계산 기록과 일별 손익을 모아 봅니다.",
+    "records": {"label": "기록함", "does": "저장한 계산 기록과 일별 손익을 통합 조회합니다.",
                 "when": "정책 백테스트를 계산했을 때"},
-    "lanes": {"label": "단계 레인", "does": "흐름 단계를 세로 띠로 깔아 노드가 어느 단계인지 보여 줍니다.",
+    "lanes": {"label": "단계 레인", "does": "흐름 단계를 세로 띠로 표시해 노드의 소속 단계를 나타냅니다.",
               "when": "노드가 많고 레인이 꺼져 있을 때"},
-    "minimap": {"label": "미니맵", "does": "캔버스 전체를 작은 지도로 보여 줍니다.",
+    "minimap": {"label": "미니맵", "does": "캔버스 전체를 미니맵으로 표시합니다.",
                 "when": "노드가 많고 미니맵이 꺼져 있을 때"},
 }
 GATE_NAMES = dict(GATES)
@@ -84,7 +84,7 @@ def check(raw: Any, grounding: dict) -> tuple[list[dict], list[dict]]:
             continue
         f, why = it["feature"], it["why"].strip()
         if f not in allowed_ids:
-            bad.append(_rej("not_applicable", "지금 쓸 수 있는 도구가 아닙니다"))
+            bad.append(_rej("not_applicable", "현재 사용 가능한 도구가 아닙니다"))
         elif any(x["feature"] == f for x in ok):
             bad.append(_rej("duplicate", "같은 도구를 두 번 권했습니다"))
         elif len(ok) >= MAX_TIPS:

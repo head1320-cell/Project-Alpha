@@ -75,7 +75,7 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
       </div>
       <div className="pg-branch-diffs">
         {data.diffs.length === 0
-          ? <span className="pg-branch-same">아직 원본과 같습니다 — 설정을 바꿔 보십시오</span>
+          ? <span className="pg-branch-same">아직 원본과 동일합니다 — 설정을 변경하십시오</span>
           : data.diffs.slice(0, 3).map((d) => <span key={d} className="pg-branch-chip">{d}</span>)}
         {data.diffs.length > 3 && <span className="pg-branch-chip">외 {data.diffs.length - 3}개</span>}
       </div>

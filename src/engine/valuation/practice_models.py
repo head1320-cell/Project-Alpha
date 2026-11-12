@@ -117,7 +117,7 @@ def eva_analysis(history: list, latest, params: ValuationParams, *, fade_years: 
     if g is None and ronic is None:
         vd = _off("성장률·RONIC 을 정하지 않았습니다")
     elif nopat <= 0:
-        vd = _off("영업이익이 적자라 가치 동인 공식을 쓸 수 없습니다(성장이 적자를 키운다)")
+        vd = _off("영업이익이 적자라 가치 동인 공식을 사용할 수 없습니다(성장이 적자를 확대합니다)")
     elif ronic is None or ronic <= 0:
         vd = _off("새 투자의 수익률(RONIC)이 0 이하라 공식이 성립하지 않습니다")
     elif g is None or g >= wacc - 1e-6:
@@ -314,7 +314,7 @@ def driver_monte_carlo(history: list, latest, params: ValuationParams, *, sigma_
     det = float(_path_values(rev0, np.array([cg]), np.array([cm]), np.array([cr]), years=years,
                              tax=params.tax_rate, wacc=wacc, gt=gt, debt=debt, shares=shares)[0])
     if vals.size == 0:
-        return _off("쓸 수 있는 경로가 하나도 없었습니다", inputs=inputs)
+        return _off("사용 가능한 경로가 하나도 없었습니다", inputs=inputs)
     q = {f"p{k}": float(np.percentile(vals, k)) for k in _Q}
     counts, edges = np.histogram(vals, bins=20)
     return {"available": True, "reason": None, "centers": {"growth": cg, "margin": cm, "reinvest": cr},

@@ -320,7 +320,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         )}
         {live && live.status !== "ok" && (
           <button type="button" className="pg-cause-btn nodrag" onClick={(e) => { e.stopPropagation(); showCause(id); }}
-                  title="계산하지 못한 앞 단계를 따라 첫 원인까지 밝힙니다">
+                  title="계산에 실패한 상류 단계를 추적해 최초 원인을 표시합니다">
             <Route size={12} aria-hidden="true" /> 원인 따라가기
           </button>
         )}

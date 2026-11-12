@@ -71,13 +71,13 @@ test("ST3b 비상 정지 이력: 서버 행 그대로 · 걸려 있음 · 조치
   const rows = sec(page, "kill-events").locator(".lvs-kill");
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toHaveAttribute("data-open", "false");
-  await expect(rows.nth(0)).toContainText("10월 9일 12:05 · 관리자가 손으로 · 10월 9일 12:30에 admin 님이 풀었습니다");
+  await expect(rows.nth(0)).toContainText("10월 9일 12:05 · 관리자 수동 · 10월 9일 12:30에 admin 님이 해제했습니다");
   await expect(rows.nth(0)).toContainText("취소한 미체결 1건");
   await expect(rows.nth(0).locator('.lvs-act[data-state="skipped"] .lvs-act-s')).toHaveText("하지 않았습니다");
   await expect(rows.nth(0).locator('.lvs-act[data-state="skipped"] .lvs-act-why')).toContainText("팔지 않았습니다");
   await expect(rows.nth(1)).toHaveAttribute("data-open", "false");
   await expect(rows.nth(1)).toContainText("누적 손실 자동 정지");
-  await expect(rows.nth(1)).toContainText("admin 님이 풀었습니다");
+  await expect(rows.nth(1)).toContainText("admin 님이 해제했습니다");
   await expect(rows.nth(1), "미상 ≠ 0").toContainText("취소한 미체결 N/A");
   await expect(rows.nth(1).locator(".lvs-act-s")).toHaveText("미상");
   await expect(rows.nth(2).locator("[data-server]").first(), "모르는 출처는 원문").toHaveText("robot_x");

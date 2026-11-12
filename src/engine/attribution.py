@@ -131,7 +131,7 @@ def timing_effect(
                           "않은 것과 기록이 없는 것은 다른 사실이라 0 으로 적지 않습니다."}
     if not port_daily:
         return {"value": None, "basis": "unavailable",
-                "reason": "결정일 이후 일별 수익이 없어 타이밍 효과를 잴 수 없습니다."}
+                "reason": "결정일 이후 일별 수익이 없어 타이밍 효과를 측정할 수 없습니다."}
 
     try:
         from src.data.timing_rules import get_rule_set, get_rule_set_version

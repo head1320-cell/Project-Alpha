@@ -212,7 +212,7 @@ def advance_pointer(case_id: str | None, kind: str,
         moved = update_case(case_id, **{field: artifact_id})
     except Exception as e:  # noqa: BLE001 — 저장소 장애를 성공으로 답하지 않는다
         logger.warning(f"case 포인터 전진 실패({case_id}/{kind}): {e}")
-        return {"ok": False, "reason": "연구 케이스 저장소를 쓸 수 없습니다."}
+        return {"ok": False, "reason": "연구 케이스 저장소를 사용할 수 없습니다."}
     if not moved:
         return {"ok": False, "reason": f"연구 케이스를 찾을 수 없습니다: {case_id}"}
     return {"ok": True, "reason": None}

@@ -53,7 +53,7 @@ def rolling_correlation(names: Sequence[str], S: np.ndarray, window: int = 60) -
     T, n = S.shape
     if T < window + 10:
         return {"available": False, "window": window,
-                "reason": f"흐름이 {T}거래일이라 {window}일 창으로 추이를 볼 수 없습니다(적어도 {window + 10}일)"}
+                "reason": f"흐름이 {T}거래일이라 {window}일 창으로 추이를 산출할 수 없습니다(최소 {window + 10}일)"}
     m = T - window + 1
     c = np.vstack([np.zeros((1, n)), np.cumsum(S, axis=0)])
     c2 = np.vstack([np.zeros((1, n)), np.cumsum(S * S, axis=0)])
@@ -110,8 +110,8 @@ def crisis_correlation(names: Sequence[str], S: np.ndarray, market: np.ndarray |
         ref, basis = np.asarray(market, dtype=float), "market"
     else:
         ref, basis = S.mean(axis=1), "strategy_mean"
-        note = ("시장 자료가 없어 전략 평균이 가장 나빴던 날을 위기일로 골랐습니다 — 전략 스스로 고른 날이라 "
-                "위기일 상관이 부풀 수 있습니다.")
+        note = ("시장 자료가 없어 전략 평균 수익률이 가장 낮았던 날을 위기일로 선정했습니다 — 전략 자체 기준으로 선정한 날이라 "
+                "위기일 상관이 과대 추정될 수 있습니다.")
     crisis = ref <= np.quantile(ref, q)
     m = int(crisis.sum())
     zq = float(norm.ppf(q))
@@ -186,7 +186,7 @@ def drawdown_overlap(names: Sequence[str], S: np.ndarray, shares: Sequence[float
     out: dict[str, Any] = {"available": True, "strategies": rows, "pairs": pairs, "shares_basis": basis}
     if T < worst_window:
         out["worst_window"] = None
-        out["worst_window_reason"] = f"흐름이 {T}거래일이라 {worst_window}일 최악 구간을 볼 수 없습니다"
+        out["worst_window_reason"] = f"흐름이 {T}거래일이라 {worst_window}일 최악 구간을 산출할 수 없습니다"
         return out
     P = S @ w
     lp = np.log1p(np.clip(P, -0.999999, None))
@@ -213,7 +213,7 @@ def correlation_stability(names: Sequence[str], S: np.ndarray) -> dict[str, Any]
         r1, r2 = _corr(S[:h, i], S[:h, j]), _corr(S[h:, i], S[h:, j])
         if r1 is None or r2 is None or h < 10:
             pairs.append({"a": names[i], "b": names[j], "first": _r(r1), "second": _r(r2), "changed": None,
-                          "reason": _FLAT_REASON if h >= 10 else "흐름이 짧아 절반씩 나눠 볼 수 없습니다"})
+                          "reason": _FLAT_REASON if h >= 10 else "흐름이 짧아 전·후반으로 분할해 분석할 수 없습니다"})
             continue
         f = lambda r: math.atanh(min(max(r, -0.999999), 0.999999))  # noqa: E731
         z = (f(r1) - f(r2)) / math.sqrt(1.0 / max(h - 3, 1) + 1.0 / max(T - h - 3, 1))
@@ -230,7 +230,7 @@ def effective_count(names: Sequence[str], S: np.ndarray) -> dict[str, Any]:
     flat = [names[j] for j in range(n) if np.var(S[:, j]) <= _FLAT_VAR]
     if flat:
         return {"available": False, "value": None, "n": n,
-                "reason": f"변동성이 없는 흐름({', '.join(flat)})이 있어 서로 얼마나 닮았는지 측정할 수 없습니다"}
+                "reason": f"변동성이 없는 흐름({', '.join(flat)})이 있어 상호 유사도를 측정할 수 없습니다"}
     C = np.corrcoef(S.T)
     if not np.all(np.isfinite(C)):
         return {"available": False, "value": None, "n": n, "reason": "상관 산출 실패"}
@@ -278,9 +278,9 @@ def robustness_report(names: Sequence[str], S: np.ndarray, shares: Sequence[floa
     names = list(names)
     S = np.asarray(S, dtype=float)
     if S.ndim != 2 or S.shape[1] < 2 or len(names) != S.shape[1]:
-        return {"available": False, "reason": "견고성은 흐름이 둘 이상 있어야 볼 수 있습니다"}
+        return {"available": False, "reason": "견고성은 수익률 흐름이 둘 이상 있어야 분석할 수 있습니다"}
     if S.shape[0] < 30:
-        return {"available": False, "reason": f"흐름이 {S.shape[0]}거래일뿐이라 견고성을 볼 수 없습니다(적어도 30일)"}
+        return {"available": False, "reason": f"흐름이 {S.shape[0]}거래일뿐이라 견고성을 분석할 수 없습니다(최소 30일)"}
     if dates is not None and len(dates) != S.shape[0]:
         return {"available": False,
                 "reason": f"날짜 수({len(dates)})가 흐름 길이({S.shape[0]})와 달라 어느 날의 값인지 말할 수 없습니다"}

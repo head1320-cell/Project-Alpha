@@ -77,11 +77,11 @@ test("BU9b: 로그아웃이면 로그인 링크가 이 화면으로 돌아온다
 
 test("BU9b: 답 문장은 서버 모드·합성 값을 따른다 (기록만 / 모의+합성 / 모의+실 / 모의+모름 / 실계좌)", async ({ page }) => {
   const cases: [Partial<LiveState>, boolean | "fail", RegExp][] = [
-    [{ mode: "SHADOW" }, true, /기록만 됩니다\. 증권사로 전송하지 않습니다/],
+    [{ mode: "SHADOW" }, true, /기록만 남깁니다\. 증권사로 전송하지 않습니다/],
     [{ mode: "PAPER" }, true, /가상 체결기로 전송됩니다/],
     [{ mode: "PAPER" }, false, /모의 체결로 처리됩니다\. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다/],
-    [{ mode: "PAPER" }, "fail", /지금 모의 체결로 처리됩니다\.$/],
-    [{ mode: "LIVE" }, true, /실제 돈으로 나갑니다/],
+    [{ mode: "PAPER" }, "fail", /현재 모의 체결로 처리됩니다\.$/],
+    [{ mode: "LIVE" }, true, /실제 자금으로 집행됩니다/],
   ];
   for (const [o, mock, want] of cases) {
     const p = await page.context().newPage();

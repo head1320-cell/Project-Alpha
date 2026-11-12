@@ -278,7 +278,7 @@ class CounterfactualAnalyzer:
         if base_method == "inverse_vol":
             structural["hrp_vs_inverse_vol"] = (
                 "기준 구성이 이미 inverse_vol 이라 비교 대상과 같은 계산입니다 — 차이가 "
-                "구조적으로 0 이며 HRP 의 가치를 재지 않습니다.")
+                "구조적으로 0 이며 HRP 의 가치를 측정하지 않습니다.")
 
         for key, scenario_key, description in comparisons:
             sc = by_name.get(scenario_key)

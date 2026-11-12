@@ -897,7 +897,7 @@ class BacktestEngine:
                 from src.kis_strategies.factor_expr import collect_cross, parse_expr
                 ast = parse_expr(txt)
                 if collect_cross(ast):
-                    raise ValueError("체결가 수식에는 순위/비율(횡단면)을 쓸 수 없습니다")
+                    raise ValueError("체결가 수식에는 순위/비율(횡단면)을 사용할 수 없습니다")
                 self._fill_asts[side] = ast
 
         # 종목별 OHLCV 전체 로드 (DB에서 한 번만 읽음)

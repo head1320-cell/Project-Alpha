@@ -133,7 +133,7 @@ export function GoalResult({ v }: { v: Dict }) {
         </p>
       )}
       <p className="pg-note">
-        {num(contrib.months) === null ? `적립만으로 좁히는 데 걸리는 개월: 내지 않음${contrib.reason ? ` — ${plain(contrib.reason)}` : ""}`
+        {num(contrib.months) === null ? `적립만으로 격차를 해소하는 데 필요한 개월 수: 미산출${contrib.reason ? ` — ${plain(contrib.reason)}` : ""}`
           : `적립 계획대로라면 격차를 좁히는 데 ${fmt(contrib.months)}개월(계획이지 실적이 아닙니다)`}
       </p>
       <Verdicts verdicts={(((r.limits as Dict) ?? {}).verdicts as Dict[]) ?? []} />

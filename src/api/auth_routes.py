@@ -159,14 +159,14 @@ def change_password(req: PasswordChange, p: Principal = Depends(require_login_to
     fails = _recent_failures(p.username, now)
     if len(fails) >= _FAIL_LIMIT:
         wait = max(1, int((_FAIL_WINDOW_S - (now - fails[0])) // 60) + 1)
-        raise HTTPException(429, f"지금 비밀번호를 {_FAIL_LIMIT}번 틀려 잠시 막았습니다 — 약 {wait}분 뒤에 다시 하십시오.")
+        raise HTTPException(429, f"현재 비밀번호를 {_FAIL_LIMIT}회 잘못 입력해 일시 차단했습니다 — 약 {wait}분 후 다시 시도하십시오.")
     if not verify_user(p.username, req.current_password):
         fails.append(now)
         logger.info("비밀번호 바꾸기 거절(지금 비밀번호 틀림): username=%r", p.username)
-        raise HTTPException(400, "지금 비밀번호가 맞지 않습니다.")
+        raise HTTPException(400, "현재 비밀번호가 일치하지 않습니다.")
     problems = password_problems(req.new_password, current=req.current_password, username=p.username)
     if problems:
-        raise HTTPException(400, "새 비밀번호를 쓸 수 없습니다 — " + " ".join(problems))
+        raise HTTPException(400, "새 비밀번호를 사용할 수 없습니다 — " + " ".join(problems))
     if set_password(p.username, req.new_password, must_change=False) is None:
         raise HTTPException(401, "계정을 찾을 수 없습니다 — 다시 로그인하십시오.")
     _FAILURES.pop(p.username, None)

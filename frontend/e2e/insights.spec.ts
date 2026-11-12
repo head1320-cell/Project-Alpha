@@ -366,7 +366,7 @@ test("여러 모형 — 시나리오 가중: '현재가보다 높을 확률' = �
   await expect(c.locator(".tx-chip[data-tone=assumed]").first()).toBeVisible();
 });
 test("★못 낸 모형은 사유 — 숫자를 지어내지 않고 alert 도 아니다★ (EVA available:false)", async ({ page }) => {
-  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "재무 연도가 둘보다 적어 EVA 를 재지 못했습니다", code: "005930", is_mock: true } }));
+  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "재무 연도가 둘보다 적어 EVA 를 측정하지 못했습니다", code: "005930", is_mock: true } }));
   await openModels(page);
   const c = card(page, "eva");
   await expect(c.locator(".ci-mcard-reason")).toContainText("재무 연도가 둘보다 적어", { timeout: 40_000 });
@@ -407,10 +407,10 @@ test("캔버스 다리 ?company= — 기업 하나 깊게 흐름이 그 코드�
 });
 
 test("모형 한눈에 — 줄마다 점 또는 사유 · 현재가 선 1 · 'n개 중 m개' = 세어 본 값 · 못 낸 모형도 줄이 남는다", async ({ page }) => {
-  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "EVA 를 재지 못했습니다(시험)", code: "005930", is_mock: true } }));
+  await page.route(`${CO}/models/eva`, (r) => r.fulfill({ json: { available: false, reason: "EVA 를 측정하지 못했습니다(시험)", code: "005930", is_mock: true } }));
   await openModels(page);
   const lad = page.locator(".ci-sec[data-sec=value] .ci-ladder");
-  await expect(lad.locator(".ci-lad-row[data-key=eva] .ci-lad-reason")).toContainText("재지 못했습니다", { timeout: 40_000 });
+  await expect(lad.locator(".ci-lad-row[data-key=eva] .ci-lad-reason")).toContainText("측정하지 못했습니다", { timeout: 40_000 });
   await page.waitForTimeout(4000);
   const rows = await lad.locator(".ci-lad-row").evaluateAll((els) => els.map((e) => ({
     dots: e.querySelectorAll(".ci-lad-dot").length, reason: !!e.querySelector(".ci-lad-reason"), wait: !!e.querySelector(".ci-lad-wait"),

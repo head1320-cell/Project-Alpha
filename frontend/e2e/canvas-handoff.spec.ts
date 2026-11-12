@@ -259,7 +259,7 @@ async function sensDetail(page: Page) {
   await page.locator('.pg-tab[data-tab="detail"]').click();
 }
 
-test("민감도(K3): 리스크 패리티는 기대 수익을 쓰지 않아 0 칸 히트맵 대신 서버 문장 · 짝: 평균-분산 최적화는 히트맵", async ({ page }) => {
+test("민감도(K3): 리스크 패리티는 기대수익률을 사용하지 않아 0 칸 히트맵 대신 서버 문장 · 짝: 평균-분산 최적화는 히트맵", async ({ page }) => {
   await openWith(page, STRESS);
   await patchRun(page);
   const body = await run(page);

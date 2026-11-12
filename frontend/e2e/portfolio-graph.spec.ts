@@ -2056,7 +2056,7 @@ test("국면 설명(BL4): 관측 창을 적고 · 전환 확률은 90% 신용구
   await run(page);
   await detail(page, "rx");
   await expect(page.locator(".pg-side .pg-regime-sparse")).toContainText("관측이 적습니다");
-  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("어긋납니다");
+  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("차이가 납니다");
 });
 
 test("기록함(BL4): 연구 기록 — 없음 ≠ 저장소 장애 ≠ 네트워크 · 재현 다섯 상태의 문장이 모두 다르다 · 재현은 기록하지 않는다", async ({ page }) => {

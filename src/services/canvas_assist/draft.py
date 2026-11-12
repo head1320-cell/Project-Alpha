@@ -49,7 +49,7 @@ MAGNITUDE = ("백", "천", "만", "억", "조")
 _NOT_SPOKEN = frozenset({"per_port", "per_port_number", "pick", "filter", "text", "string_list"})
 _PLAIN = {"type_mismatch": "포트 타입이 다릅니다", "multiple_inputs": "받는 자리에 이미 선이 있습니다",
           "unknown_port": "카탈로그에 없는 포트입니다", "dangling_edge": "그래프에 없는 노드를 가리킵니다",
-          "cycle": "이으면 순환이 생깁니다", "needs_unmet": "이대로 계산하면 실패할 선입니다"}
+          "cycle": "연결하면 순환이 발생합니다", "needs_unmet": "이대로 계산하면 실패할 선입니다"}
 
 
 class _Reject(Exception):
@@ -232,7 +232,7 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
         if name in refs:
             return refs[name]
         if name in failed:
-            raise _Reject("depends", f"앞의 더하기(‘{failed[name]}’)가 빠져서 함께 뺐습니다")
+            raise _Reject("depends", f"앞의 더하기(‘{failed[name]}’)가 제외되어 함께 제외했습니다")
         if name in existing:
             return existing[name]
         raise _Reject("no_node", f"그래프에 없는 노드입니다 — ‘{name}’")
@@ -319,7 +319,7 @@ def check(raw: Any, g: dict, graph: dict, kinds: dict[str, dict], validate: Call
                 flabel = ((schema["properties"][field].get("x-ui") or {}).get("label") or field)
                 raise _Reject("not_speakable", f"‘{label(node)}’의 ‘{flabel}’ 칸은 말로 넣을 수 없습니다 — 설정 탭에서 입력하십시오")
             if (node["id"], field) in done:
-                raise _Reject("duplicate", f"‘{sp['label']}’ 칸은 앞에서 이미 넣었습니다")
+                raise _Reject("duplicate", f"‘{sp['label']}’ 필드는 앞에서 이미 입력했습니다")
             if how not in sp["read"]:
                 raise _Reject("how", f"‘{sp['label']}’ 칸은 그렇게 읽을 수 없습니다")
             quote = norm(it["quote"])

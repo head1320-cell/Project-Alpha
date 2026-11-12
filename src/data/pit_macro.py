@@ -89,7 +89,7 @@ def assert_backtest_eligible(usage_by_factor: dict[str, ResearchUsage]) -> None:
                  if v is not ResearchUsage.BACKTEST_ELIGIBLE)
     if bad:
         raise ForwardOnlyError(
-            "과거 시뮬레이션에 쓸 수 없는 팩터가 포함되어 있습니다: "
+            "과거 시뮬레이션에 사용할 수 없는 팩터가 포함되어 있습니다: "
             + ", ".join(f"{k}({usage_by_factor[k].value})" for k in bad)
             + ". 빈티지 이력·구간 길이·공표지연 중 하나가 충족되지 않았습니다."
         )

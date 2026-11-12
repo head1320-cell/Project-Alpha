@@ -152,14 +152,14 @@ test("검사에서 빠진 문단 · 확인하지 못한 결과는 수와 사유�
   await signIn(page);
   await answer(page, ok([PARAS[1]], {
     rejected: [{ code: "numbers", reason: "근거 노드에 없는 숫자 9 를 썼습니다" }],
-    dropped: [{ node_id: "universe", reason: "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 풀어 쓸 수 있습니다" }] }));
+    dropped: [{ node_id: "universe", reason: "서명이 일치하지 않습니다(그래프가 변경됐거나 서버가 재시작됐습니다). 재계산하면 다시 서술할 수 있습니다" }] }));
   await openWith(page, CORE);
   await runAll(page);
   await ask(page).click();
   await expect(card(page).locator(".pg-ai-para")).toHaveCount(1);
   const note = card(page).locator(".pg-ai-story-note");
   await expect(note).toContainText("1문단은 검사에서 빠졌습니다: 근거 노드에 없는 숫자 9 를 썼습니다");
-  await expect(note).toContainText("1개 단계의 결과는 확인하지 못해 뺐습니다: 서명이 맞지 않습니다");
+  await expect(note).toContainText("1개 단계의 결과는 확인하지 못해 제외했습니다: 서명이 일치하지 않습니다");
 });
 
 test("계산 결과가 바뀌면 AI 글을 지우고 말한다 — 짝: 노드를 옮기기만 하면 남는다 · 다시 물으면 낡지 않은 결과만 보낸다", async ({ page }) => {

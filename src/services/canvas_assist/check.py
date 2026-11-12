@@ -25,7 +25,7 @@ _PLAIN = {
     "multiple_inputs": "받는 자리에 이미 선이 있습니다",
     "unknown_port": "카탈로그에 없는 포트입니다",
     "dangling_edge": "그래프에 없는 노드를 가리킵니다",
-    "cycle": "이으면 순환이 생깁니다",
+    "cycle": "연결하면 순환이 발생합니다",
     "needs_unmet": "이대로 계산하면 실패할 선입니다",
 }
 

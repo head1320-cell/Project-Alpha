@@ -24,7 +24,7 @@ export function storyNote(res: Extract<AssistNarrate, { available: true }>): str
   const parts: string[] = [];
   if (!res.paragraphs.length) parts.push("AI 가 쓴 문단 없음");
   if (res.rejected.length) parts.push(`${res.rejected.length}문단은 검사에서 빠졌습니다: ${res.rejected[0].reason}`);
-  if (res.dropped.length) parts.push(`${res.dropped.length}개 단계의 결과는 확인하지 못해 뺐습니다: ${res.dropped[0].reason}`);
+  if (res.dropped.length) parts.push(`${res.dropped.length}개 단계의 결과는 확인하지 못해 제외했습니다: ${res.dropped[0].reason}`);
   return parts.length ? parts.join(" · ") : null;
 }
 

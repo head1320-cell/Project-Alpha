@@ -172,9 +172,9 @@ def account_balance(account_id: str, p: Principal = Depends(require_login)):
 # 모든 경로가 ★소유 확인을 먼저★ 한다(남의 계좌 자격으로 클라이언트를 만들지 않는다). 누가 했는지는 토큰에서.
 # LIVE 는 여기서 열지 않는다 — 실계좌 관문(BV1 `live_gate`)을 거치는 BV7 에서.
 
-_LIVE_CLOSED = "실제 돈으로 주문하는 모드는 아직 열리지 않았습니다. 운영자가 실계좌 관문을 연 뒤에 쓸 수 있습니다."
-_PAPER_ON_REAL = ("이 계좌는 실계좌로 연결돼 있습니다. 가상으로 체결하는 모드(PAPER)는 모의투자 계좌에서만 씁니다. "
-                  "모의투자 계좌를 따로 연결하십시오.")
+_LIVE_CLOSED = "실제 자금으로 주문하는 모드는 아직 개방되지 않았습니다. 운영자가 실계좌 관문을 개방한 뒤 사용할 수 있습니다."
+_PAPER_ON_REAL = ("이 계좌는 실계좌로 연결돼 있습니다. 가상 체결 모드(PAPER)는 모의투자 계좌에서만 사용합니다. "
+                  "모의투자 계좌를 별도로 연결하십시오.")
 
 
 class AccountModeRequest(BaseModel):

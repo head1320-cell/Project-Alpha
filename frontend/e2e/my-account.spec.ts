@@ -256,7 +256,7 @@ test("BV9: 비상 정지 — 내가 건 정지와 그 밖의 정지를 가른다
 
   st.kill.ba_1 = { active: true, event: null };
   await page.reload();
-  await expect(sentence(page)).toContainText("이 계좌가 건 정지가 아닙니다");
+  await expect(sentence(page)).toContainText("이 계좌에서 발동한 정지가 아닙니다");
   await expect(page.locator(".ma-kill-resolve-open")).toHaveCount(0);
   await expect(page.locator(".ma-kill-open")).toHaveCount(0);
 });
@@ -269,7 +269,7 @@ test("BV9: 모드를 못 읽으면 그렇게 말하고 주문을 막는다", asy
   await expect(page.locator(".ma-order-check")).toBeDisabled();
   delete st.fail.mode;
   await root(page).getByRole("alert").filter({ hasText: "실행 모드" }).getByRole("button", { name: "재시도" }).click();
-  await expect(sentence(page)).toContainText("기록만 됩니다");
+  await expect(sentence(page)).toContainText("기록만 남깁니다");
   await expect(page.locator(".ma-order-check")).toBeEnabled();
 });
 
@@ -513,7 +513,7 @@ test("BV9: 내가 건 정지는 다시 열 수 있다", async ({ page }) => {
   await page.goto("/my-account");
   await page.locator(".ma-kill-resolve-open").click();
   await page.locator('[data-sheet="resolve"] .ma-kill-resolve').click();
-  await expect(sentence(page)).toContainText("기록만 됩니다");
+  await expect(sentence(page)).toContainText("기록만 남깁니다");
   expect(sent.filter((s) => s.method === "POST").map((s) => s.path)).toEqual(["/ba_1/kill-switch/resolve"]);
 });
 

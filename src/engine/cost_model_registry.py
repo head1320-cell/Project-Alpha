@@ -274,7 +274,7 @@ def site_axis(site: CostSite) -> dict[str, Any]:
               "missing": missing, "unmeasurable": foggy}
     if foggy:
         return {"state": AXIS_UNKNOWN,
-                "reason": (f"못 잰 성분이 있습니다({' · '.join(foggy)}) — "
+                "reason": (f"측정하지 못한 성분이 있습니다({' · '.join(foggy)}) — "
                            f"★0 원이 '비용이 없다' 로 읽히면 안 됩니다.★"), **common}
     if missing:
         return {"state": AXIS_DEGRADED,

@@ -78,7 +78,7 @@ function SectorCard({ value, check, hasNames, onChange }: {
       {!hasNames ? <p className="pg-help pg-cons-sectors-wait">종목을 먼저 지정하면 업종을 선택할 수 있습니다.</p>
         : !data ? <p className="pg-help pg-cons-sectors-wait">이 종목들의 업종을 확인하는 중…</p>
         : !data.sectors_readable ? (
-          <p className="pg-cons-sectors-none" role="note">이 종목들의 업종 읽기 실패 — 업종 상한을 걸어도 적용되지 않습니다.</p>
+          <p className="pg-cons-sectors-none" role="note">이 종목들의 업종 조회 실패 — 업종 상한을 설정해도 적용되지 않습니다.</p>
         ) : free.length > 0 && (
           <div className="pg-chips">
             {free.map((g) => (
@@ -139,7 +139,7 @@ export function ConstraintsEditor({ f, value, root, names, model, onChange }: {
       )}
       {check.state === "error" && <p className="pg-cons-check pg-cons-check--bad" role="alert">확인 실패 — {check.message}</p>}
       {data?.checked && data.ok === false && (
-        <p className="pg-cons-check pg-cons-check--bad" role="alert">이 조합은 풀 수 없습니다 — {data.reason}</p>
+        <p className="pg-cons-check pg-cons-check--bad" role="alert">이 조합은 해가 없습니다(실현 불가능) — {data.reason}</p>
       )}
       {capWarn.map((u, i) => <p key={i} className="pg-cons-check pg-cons-check--warn">{u.text}</p>)}
       {allowsShort(cur) && (

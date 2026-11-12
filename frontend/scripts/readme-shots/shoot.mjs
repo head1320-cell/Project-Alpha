@@ -309,7 +309,9 @@ async function main() {
 
   const exe = process.env.PW_CHROMIUM_PATH || (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
   const browser = await chromium.launch(exe ? { executablePath: exe } : {});
-  const ctx = await browser.newContext({
+  // ★장면마다 새 문맥★ — 문맥 하나를 같이 쓰면 앞 장면이 남긴 localStorage(왼쪽 판 접힘·판 자리 등)가 다음 장면에 이어져
+  // `canvas` 뒤의 `canvas-wire` 가 접힌 판에서 시작해 실패했다(2026-11-12 관측). 씨앗은 같고, 장면이 주고받는 것은 서버 쪽 `state` 뿐이다.
+  const freshContext = () => browser.newContext({
     viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: "ko-KR", reducedMotion: "reduce",
     storageState: { cookies: [], origins: [{ origin: BASE, localStorage: [
       { name: "alpha_theme", value: "light" }, { name: "alpha_pg_welcomed", value: "1" }, { name: "project-alpha.auth-token", value: token },
@@ -320,6 +322,7 @@ async function main() {
   try {
     for (const s of scenes) {
       if (s.ai && aiFailed) { console.log(`  · ${s.name} 건너뜀 — ${aiFailed}`); continue; }
+      const ctx = await freshContext();
       const page = await ctx.newPage();
       try {
         await s.run(page, state);
@@ -327,7 +330,7 @@ async function main() {
       } catch (e) {
         if (e instanceof AiUnavailable) { aiFailed = e.message; console.log(`  ✗ ${s.name} — ${e.message}`); }
         else throw new Error(`${s.name}: ${e.message}`);
-      } finally { await page.close(); }
+      } finally { await ctx.close(); }
     }
   } finally { await browser.close(); }
   console.log(`\n쓴 그림 ${written.length}장 · 합계 ${written.reduce((a, w) => a + w.kb, 0)} KB → ${path.relative(ROOT, OUT)}`);

@@ -39,7 +39,7 @@ test("BU9b 관문: 닫힘 · 지난 선언 최신 먼저 · 거둔 사람과 때
   await expect(page.locator(".lvg-now")).toContainText("현재 닫혀 있습니다");
   await expect(page.locator(".lvg-revoke-open"), "닫혀 있으면 거둘 것이 없다").toHaveCount(0);
   await expect(page.locator(".lvg-h")).toHaveCount(1);
-  await expect(page.locator(".lvg-h").first()).toContainText("10월 9일 21:00에 admin 님이 거둠");
+  await expect(page.locator(".lvg-h").first()).toContainText("10월 9일 21:00에 admin 님이 철회");
 });
 
 test("BU9b 관문: 열림 — 근거·허용 사용자를 서버 값 그대로 (짝: 선언 시각은 한국 시간)", async ({ page }) => {
@@ -96,7 +96,7 @@ test("BU9b 관문: 422 는 사유 그대로 + 칸 이름, 시트는 남는다 ·
   await expect(page.locator('[data-sheet="gate-declare"]')).toBeVisible();
   gate.declareReply = { status: 201, json: { current: GATE_OPEN, live_dropped_to_shadow: true } };
   await page.locator(".lvg-declare-go").click();
-  await expect(page.locator(".lvg-said")).toContainText("실계좌로 돌던 운영 계좌를 기록만으로 돌려놨습니다");
+  await expect(page.locator(".lvg-said")).toContainText("실계좌로 운용하던 운영 계좌를 기록만 모드로 전환했습니다");
 });
 
 test("BU9b 관문: 거두기는 확인 — 취소 0 · 확인 DELETE 1 · 404 사유", async ({ page }) => {

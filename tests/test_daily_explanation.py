@@ -189,7 +189,7 @@ def test_a_holding_explanation_names_both_unmeasurable_drivers():
         drivers={DRIVER_PRICE: 0.44, DRIVER_REBALANCE: None,
                  DRIVER_FEE: None, DRIVER_DIVIDEND: None, DRIVER_FX: None},
         missing_drivers={DRIVER_REBALANCE: "그날의 매매를 받지 못했습니다",
-                         DRIVER_FEE: "매매를 몰라 비용을 잴 수 없습니다",
+                         DRIVER_FEE: "매매를 몰라 비용을 측정할 수 없습니다",
                          **UNMEASURABLE_DRIVERS},
         price_basis={"basis": "uniform_raw", "reason": None}))
     assert DRIVER_LABELS[DRIVER_DIVIDEND] in text
@@ -282,7 +282,7 @@ def test_the_missing_clause_uses_the_last_label_for_its_particle():
     text = summarize_ko(_exp(
         drivers={k: None for k in STRATEGY_DRIVERS},
         missing_drivers={"macro_effect": "미관측"}))
-    assert "매크로 오버레이는 재지 못했습니다" in text, text
+    assert "매크로 오버레이는 측정하지 못했습니다" in text, text
 
 
 def test_no_markdown_leaks_into_the_plain_sentence():

@@ -621,7 +621,7 @@ def statement_as_of(ticker: str, as_of: str, *, engine=None):
     if rows is None:
         return None, reason
     if not rows:
-        return None, (f"{as_of} 시점에 쓸 수 있는 재무 **빈티지**가 없습니다 — "
+        return None, (f"{as_of} 시점에 사용 가능한 재무 **빈티지**가 없습니다 — "
                       "그 시점엔 아직 공시 전이거나 빈티지가 적재되지 않았습니다"
                       "(`dart_history --vintages`).")
     annual = [r for r in rows if str(r.get("reprt")) == REPRT_ANNUAL]

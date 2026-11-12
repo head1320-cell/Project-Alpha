@@ -304,7 +304,7 @@ def resolve_proxies(series_map: dict | None = None,
                                 "transform_note": note}
             break
         else:
-            unresolved[factor] = (f"쓸 수 있는 대리계열이 없습니다 — 시도: "
+            unresolved[factor] = (f"사용 가능한 대리계열이 없습니다 — 시도: "
                                   f"{', '.join(tried)}")
     return {"available": bool(resolved), "resolved": resolved,
             "unresolved": unresolved,
@@ -359,7 +359,7 @@ def asset_factor_betas(codes: list[str], *, series_map: dict | None = None,
             if len(shared) < min_months:
                 betas[factor] = {"available": False, "n_obs": len(shared),
                                  "reason": (f"겹치는 달이 {len(shared)}개뿐이라 "
-                                            f"기울기를 내지 않았습니다 "
+                                            f"기울기를 산출하지 않았습니다 "
                                             f"(최소 {min_months}개)")}
                 continue
             fit = _ols_beta([macro[m] for m in shared], [stock[m] for m in shared])
@@ -387,8 +387,8 @@ def asset_factor_betas(codes: list[str], *, series_map: dict | None = None,
                                       if n_factors else None)},
         "multiple_testing": {
             "n_tested": n_factors,
-            "note": (f"팩터 {n_factors}개를 동시에 봤습니다 — 개별 t값을 그 사실과 "
-                     "함께 읽으십시오. 유의한 것만 골라 내면 데이터 마이닝입니다."),
+            "note": (f"팩터 {n_factors}개를 동시에 검정했습니다 — 개별 t값을 그 사실과 "
+                     "함께 해석하십시오. 유의한 것만 선별하면 데이터 마이닝입니다."),
             # ★경고는 보정이 아니다★ (AJ3) — 위 문장은 이 자리가 처음부터 적고
             # 있었지만 보정은 하지 않았다. 가족은 **자산 × 팩터** 전부다:
             # `n_tested` 는 자산 하나가 본 팩터 수이고, 자산 K개를 넣으면 검정은

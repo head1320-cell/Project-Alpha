@@ -226,7 +226,7 @@ def _allocate(method: str, S: np.ndarray, cov: np.ndarray, vols: np.ndarray, nam
             alloc = sc_ / sc_.sum()
         else:
             alloc = np.ones(n) / n
-            fallback = _fb(method, "점수가 모두 0 이라 똑같이 나눴습니다.")
+            fallback = _fb(method, "점수가 모두 0 이라 균등 배분했습니다.")
     elif method == "min_var":
         alloc = None
         try:

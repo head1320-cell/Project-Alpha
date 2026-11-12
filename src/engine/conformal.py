@@ -114,7 +114,7 @@ def measure_coverage(actual: np.ndarray, lower: np.ndarray,
     if not (y.size == lo.size == hi.size):
         return {"available": False, "reason": "실측/하한/상한 길이가 다릅니다."}
     if y.size == 0:
-        return {"available": False, "reason": "잴 표본이 없습니다."}
+        return {"available": False, "reason": "측정할 표본이 없습니다."}
     inside = (y >= lo) & (y <= hi)
     return {
         "available": True,

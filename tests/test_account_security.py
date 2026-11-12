@@ -117,14 +117,14 @@ def test_a_wrong_current_password_is_refused_with_a_reason(client):
     t = _tok(client)
     r = _change(client, t, "not-my-password", "new-secret-9876")
     assert r.status_code == 400
-    assert "지금 비밀번호" in r.json()["detail"]
+    assert "현재 비밀번호" in r.json()["detail"]
     # 아무것도 바뀌지 않았다.
     assert _login(client, "alice", "alice-pw-0001").status_code == 200
 
 
 @pytest.mark.parametrize(("new", "needle"), [
     ("short7!", "8자"),
-    ("alice-pw-0001", "지금 비밀번호와"),
+    ("alice-pw-0001", "현재 비밀번호와"),
     ("alice", "8자"),
     ("frm123!frm", None),
     ("changeme", "알려진"),

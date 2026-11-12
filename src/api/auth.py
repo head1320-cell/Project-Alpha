@@ -217,7 +217,7 @@ def get_current_principal(request: Request) -> Principal:
     if acct is None:
         raise _refuse("계정을 찾을 수 없습니다 — 다시 로그인하십시오.")
     if tv != acct["token_version"]:
-        raise _refuse("비밀번호가 바뀌어 이 토큰은 더 쓸 수 없습니다 — 다시 로그인하십시오.")
+        raise _refuse("비밀번호가 변경되어 이 토큰은 더 이상 사용할 수 없습니다 — 다시 로그인하십시오.")
     request.state.must_change_password = acct["must_change_password"]
     return p
 
@@ -257,5 +257,5 @@ def require_self_or_admin(username: str, request: Request,
     _must_change_gate(request)
     if not can_read_user(p, username):
         raise HTTPException(
-            403, f"권한 부족 — {username!r} 의 자료는 본인 또는 admin 만 볼 수 있습니다.")
+            403, f"권한 부족 — {username!r} 의 자료는 본인 또는 admin 만 조회할 수 있습니다.")
     return p

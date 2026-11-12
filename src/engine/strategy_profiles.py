@@ -75,7 +75,7 @@ PROFILES: dict[str, dict] = {
         "references": [_ref("Wesley Gray & Jack Vogel", "2015", "DIY Financial Advisor — Robust Asset Allocation", "Wiley")],
     },
     "gtaa": {
-        "concept": "5개 자산군을 10개월 이동평균 위/아래로 켜고 끄는 Faber의 글로벌 택티컬 자산배분.",
+        "concept": "5개 자산군을 10개월 이동평균 상회/하회에 따라 편입·제외하는 Faber의 글로벌 택티컬 자산배분.",
         "mechanism": ["미국주식(SPY)·선진국(EFA)·중기채(IEF)·실물(PDBC)·부동산(VNQ) 각 20%.",
                       "각 자산이 10개월 이동평균 위면 보유, 아래면 해당 비중은 현금(BIL)."],
         "rationale": "10개월(≈200일) 이동평균은 장기 추세의 단순·강건한 대용치 — 큰 하락장 회피에 효과적.",
@@ -102,7 +102,7 @@ PROFILES: dict[str, dict] = {
         "references": [_ref("Wouter Keller & Jan Keuning", "2017", "Breadth Momentum and Vigilant Asset Allocation (VAA)", "SSRN")],
     },
     "faa": {
-        "concept": "모멘텀·변동성·상관을 함께 본 일반화 모멘텀으로 상위 자산을 고르는 유연한 자산배분.",
+        "concept": "모멘텀·변동성·상관을 결합한 일반화 모멘텀으로 상위 자산을 선정하는 유연한 자산배분.",
         "mechanism": ["8자산(VTI·EFA·EEM·IEF·TLT·GLD·PDBC·VNQ)의 4개월 모멘텀 상위 3종 선택.",
                       "선택분 중 모멘텀이 양(+)인 것만 동일가중, 없으면 현금."],
         "rationale": "수익(모멘텀)뿐 아니라 위험(변동성)·분산(상관)을 결합해 더 안정적인 상위 선택.",
@@ -185,7 +185,7 @@ PROFILES: dict[str, dict] = {
     "max_sharpe": {
         "concept": "기대수익/위험 비율(샤프)을 최대화하는 탄젠시 포트폴리오 — Markowitz 평균-분산의 정점.",
         "mechanism": ["트레일링 평균수익 μ와 수축 공분산 Σ로 (wᵀμ)/√(wᵀΣw) 최대화(long-only).",
-                      "수축추정으로 코너 솔루션 쏠림을 완화."],
+                      "수축추정으로 코너 솔루션 편중을 완화."],
         "rationale": "이론적으로 위험대비 최적 — 단, 기대수익 추정오차에 민감해 수축·제약으로 보정 필수.",
         "regime_note": "추세·수익 추정이 안정적인 국면에 유리. 추정오차가 큰 전환기엔 불안정.",
         "params": {"목적": "샤프 최대(탄젠시)", "추정": "Ledoit-Wolf + 트레일링 μ", "리밸런스": "월간"},

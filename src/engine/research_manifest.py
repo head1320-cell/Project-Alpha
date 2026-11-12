@@ -144,7 +144,7 @@ def _manifest_identity(m: dict) -> BuildIdentity:
         tree=tree if tree in TREES else TREE_UNKNOWN,
         reason=(None if tree in TREES else
                 "이 메니페스트는 작업 트리 상태를 기록하지 않았습니다 — "
-                "깨끗했다는 뜻이 아니라 잰 적이 없다는 뜻입니다."))
+                "깨끗했다는 뜻이 아니라 측정한 적이 없다는 뜻입니다."))
 
 
 def verification_label(manifest: dict | None, *, universe=None, months=None,

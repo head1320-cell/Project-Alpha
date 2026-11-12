@@ -74,7 +74,7 @@ def moments(r: np.ndarray) -> dict[str, Any]:
     T = int(r.size)
     if T < MIN_OBS:
         return {"t": T, "sr": None, "skew": None, "kurt": None,
-                "reason": f"수익이 {T}개뿐입니다 — {MIN_OBS}개 이상이어야 분포 모양을 믿을 만하게 측정합니다"}
+                "reason": f"수익이 {T}개뿐입니다 — {MIN_OBS}개 이상이어야 분포 형태를 신뢰할 수 있게 측정합니다"}
     sd = float(r.std(ddof=1))
     if not math.isfinite(sd) or sd <= FLAT_SD:
         return {"t": T, "sr": None, "skew": None, "kurt": None, "reason": "수익률 변동이 없어(표준편차 0) 샤프를 정의할 수 없습니다"}
@@ -109,7 +109,7 @@ def participation_ratio(C: np.ndarray) -> float:
 def _n_eff(series: list[dict], rows: list[dict]) -> tuple[float | None, str | None]:
     bad = [r["label"] for r in rows if r["sr"] is None]
     if bad:
-        return None, f"샤프를 못 잰 대상({', '.join(map(str, bad))})이 있어 서로 얼마나 닮았는지 측정할 수 없습니다"
+        return None, f"샤프를 측정하지 못한 대상({', '.join(map(str, bad))})이 있어 상호 유사도를 측정할 수 없습니다"
     arrs = [np.asarray(s["returns"], dtype=float) for s in series]
     t = min(a.size for a in arrs)
     M = np.vstack([a[-t:] for a in arrs])                     # 끝을 맞춘다(같은 날까지의 흐름)
@@ -144,7 +144,7 @@ def compare(series: list[dict]) -> dict[str, Any]:
         out["reason"] = "비교할 대상이 둘 이상이어야 보정할 수 있습니다"
         return out
     if len(srs) < 2:
-        out["reason"] = "샤프를 잰 대상이 둘 미만이라 시도 사이의 흩어짐을 측정할 수 없습니다"
+        out["reason"] = "샤프를 측정한 대상이 둘 미만이라 시도 간 산포를 측정할 수 없습니다"
         return out
     var = float(np.var(srs, ddof=1))
     if var <= 0:

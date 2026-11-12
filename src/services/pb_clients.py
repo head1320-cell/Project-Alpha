@@ -308,7 +308,7 @@ def delete_sheet(owner: str, client_id: str, sheet_id: str) -> dict:
         if c.archived_at is not None:
             raise ClientArchived("보관한 고객입니다 — 다시 꺼낸 뒤 수정하십시오.")
         if x.shared_at is not None:
-            raise SheetShared("고객에게 보여 준 한 장이라 지울 수 없습니다 — 무엇을 보여 줬는지가 남아야 합니다.")
+            raise SheetShared("고객에게 공유한 한 장이라 삭제할 수 없습니다 — 공유 내역이 기록으로 남아야 합니다.")
         s.delete(x)
     return {"deleted": sheet_id}
 

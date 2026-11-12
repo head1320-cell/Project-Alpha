@@ -46,7 +46,7 @@ def co(monkeypatch):
                "confidence": 30.0, "source": cv.SOURCE, "label": f"{c} 밸류에이션 갭",
                "is_mock": True, "confidence_saturated": False, "research_usage": cv._usage()}
               for i, c in enumerate(codes[:2])]
-        return vs, {c: {"kind": cv.KIND_NO_PRICE, "reason": "현재가가 없어 갭을 잴 수 없습니다"} for c in codes[2:]}
+        return vs, {c: {"kind": cv.KIND_NO_PRICE, "reason": "현재가가 없어 갭을 측정할 수 없습니다"} for c in codes[2:]}
     monkeypatch.setattr(cv, "company_views", fake_views)
     monkeypatch.setattr(cv, "prices_for", lambda codes: ({c: 50_000.0 for c in codes}, {c: "caller" for c in codes}))
     return calls

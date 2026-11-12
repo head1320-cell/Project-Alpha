@@ -24,7 +24,7 @@ export interface Goal {
 
 export const GOALS: Goal[] = [
   { key: "build", title: "새 포트폴리오 만들기", sub: "종목을 선택하면 비중을 산출하고 위험과 과거 성과를 함께 분석합니다.", tickers: "many", period: true, risk: true },
-  { key: "check", title: "비중의 위험 점검", sub: "지정 비중의 1일 손실 위험(VaR)과 위기 충격 시 손실을 점검합니다.", tickers: "many", period: true, risk: false },
+  { key: "check", title: "비중의 위험 점검", sub: "지정 비중의 일간 손실 위험(VaR)과 위기 충격 시 손실을 점검합니다.", tickers: "many", period: true, risk: false },
   { key: "timing", title: "타이밍 규칙 시험", sub: "타이밍 신호로 노출을 축소했을 때의 목표 비중과 주문 목록을 산출합니다. 주문은 전송하지 않습니다.", tickers: "many", period: true, risk: true },
   { key: "company", title: "단일 기업 심층 분석", sub: "한 기업의 적정가를 복수 모형으로 산출하고 가치 분포를 분석합니다.", tickers: "one", period: false, risk: false },
 ];

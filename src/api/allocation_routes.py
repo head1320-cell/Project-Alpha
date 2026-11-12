@@ -385,7 +385,7 @@ def _ep_unavailable_reason(probes: dict) -> str | None:
     """엔트로피 풀링 요건 프로브 → 못 쓰면 사유(`/analyze` 와 그래프 옵티마이저 노드 공용)."""
     ep_probe = probes.get("entropy_pooling", {})
     if not ep_probe.get("ok"):
-        return ("엔트로피 풀링 엔진을 쓸 수 없습니다 — "
+        return ("엔트로피 풀링 엔진을 사용할 수 없습니다 — "
                 f"{ep_probe.get('reason') or '요건 미가용'}")
     return None
 
@@ -761,7 +761,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                     mes_block["capability_level"] != live["level"]:
                 mes_block["capability_diverged"] = (
                     f"이 증거가 고정될 때는 {mes_block['capability_level']} 였고 "
-                    f"지금은 {live['level']} 입니다 — 같은 증거라도 지금 쓸 수 있는 "
+                    f"현재는 {live['level']} 입니다 — 같은 증거라도 현재 사용 가능한 "
                     "도구가 달라졌습니다.")
 
     scenario_pack_hash: str | None = None
@@ -1706,7 +1706,7 @@ def list_exposures():
             "available": True, "exposures": rows,
             "score_weights": dict(WEIGHTS),
             "unavailable_criteria": dict(UNAVAILABLE_CRITERIA),
-            "note": ("KR 상장을 기본 구현으로 삼고 해외는 대안으로 함께 냅니다 — "
+            "note": ("KR 상장을 기본 구현으로 삼고 해외는 대안으로 함께 제시합니다 — "
                      "환노출과 과세 체계가 다르기 때문입니다"),
         })
     except Exception:

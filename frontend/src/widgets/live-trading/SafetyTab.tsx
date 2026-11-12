@@ -26,7 +26,7 @@ const q = <T,>(f: () => Promise<Result<T>>) => async () => {
 const opts = { staleTime: 0, retry: false, refetchOnWindowFocus: false } as const;
 
 export const SOURCE_KO: Record<string, string> = {
-  manual: "관리자가 손으로", manual_admin: "관리자가 손으로",
+  manual: "관리자 수동", manual_admin: "관리자 수동",
   auto_dd: "누적 손실 자동 정지", auto_cb: "일일 손실 자동 정지", auto_risk: "시장 위험 자동 정지", auto_api: "증권사 연결 실패 자동 정지",
 };
 export const ACTION_STATE_KO: Record<string, string> = { done: "했습니다", skipped: "하지 않았습니다", failed: "실패했습니다", unknown: "미상" };

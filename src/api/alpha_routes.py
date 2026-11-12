@@ -252,7 +252,7 @@ def alpha_portfolio(req: AlphaPortfolioRequest):
         if blocked:
             return {"available": False, "blocked": blocked,
                     "reason": "실전 사용이 허용되지 않은 알파가 포함돼 있습니다 — "
-                              "포트폴리오를 만들지 않았습니다."}
+                              "포트폴리오를 구성하지 않았습니다."}
 
         tickers = _resolve_universe_capped(
             ValidateRequest(expr="rank(mom_1m)", tickers=req.tickers, universe=req.universe))

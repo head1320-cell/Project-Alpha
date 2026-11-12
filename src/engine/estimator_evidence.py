@@ -63,7 +63,7 @@ ESTIMATOR_REQUIRED_AXES = ("covariance",)
 #: 없음이고, `None` 을 명시하면 "물었는데 못 쟀다" 는 미상이다 — 다른 사실이다.
 OPTIONAL_AXES = ("regime_path", "proxies")
 
-_NO_MEASUREMENT = "측정값이 없습니다 — 이 실행에서 재지 못했습니다."
+_NO_MEASUREMENT = "측정값이 없습니다 — 이 실행에서 측정하지 못했습니다."
 
 _NOTE = ("이 판정은 **추정이 어느 창·어느 빈티지 위에 섰나**만 말합니다. "
          "데이터의 시점 정합(공표일·빈티지)은 별개 축이고 `pit_evidence` 가 답합니다. "

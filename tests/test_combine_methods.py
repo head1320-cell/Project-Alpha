@@ -50,7 +50,7 @@ def test_score_with_scores_does_not_fall_back_pair():
 
 def test_all_zero_scores_say_they_split_equally():
     out = _run(method="score", scores={"가": 0.0, "나": 0.0, "다": 0.0})
-    assert out["fallback"]["used"] is True and "똑같이" in out["fallback"]["reason"]
+    assert out["fallback"]["used"] is True and "균등" in out["fallback"]["reason"]
     assert out["sleeve_allocation"] == _run(method="equal")["sleeve_allocation"]
 
 

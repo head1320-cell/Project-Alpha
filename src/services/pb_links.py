@@ -48,7 +48,7 @@ SESSION_PURPOSE = "pb-share-session"
 
 DENIED = "주소나 PIN 이 맞지 않습니다."
 GONE = "이 주소는 더 이상 열 수 없습니다 — 담당 PB 에게 새 주소를 요청하십시오."
-LOCKED = "PIN 을 여러 번 틀려 잠겼습니다 — 담당 PB 에게 다시 열어 달라고 하십시오."
+LOCKED = "PIN 오류 횟수 초과로 잠겼습니다 — 담당 PB 에게 잠금 해제를 요청하십시오."
 ASK_LIMITED = f"이 주소로는 한 시간에 {ASK_PER_HOUR}번까지 물을 수 있습니다 — 잠시 뒤에 다시 문의하십시오."
 
 _ask_limiter = HourlyLimiter()

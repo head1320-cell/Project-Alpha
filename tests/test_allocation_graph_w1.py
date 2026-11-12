@@ -202,7 +202,7 @@ def test_sensitivity_of_a_mu_free_model_says_it_does_not_move(market):
     assert m["status"] == "ok", m["reason"]
     assert m["view"]["basis"] == "hrp" and m["view"]["result"]["mu_reach"] == "none"
     assert all(x == 0.0 for row in m["view"]["result"]["matrix"] for x in row)
-    assert any("움직이지 않습니다" in f for f in m["explain"]["facts"])
+    assert any("변하지 않습니다" in f for f in m["explain"]["facts"])
     assert not any(t["state"] == "assumed" for t in m["explain"]["trust"])
 
 

@@ -16,7 +16,7 @@ def load(rules: str):
     spec.loader.exec_module(m); m.load_rules(); return m
 
 A, B, C, D = load("rules.py"), load("vocab.py"), load("vocab2.py"), load("vocab3.py")
-E, F = load("vocab4.py"), load("vocab5.py")
+E, F, G = load("vocab4.py"), load("vocab5.py"), load("vocab6.py")
 BASE = os.environ.get("BASE", "HEAD")      # 옮기기 전 커밋
 MODES = ((), ("ts",), ("ts", "head"), ("ts", "phrases"), ("head",), ("phrases",))
 
@@ -24,7 +24,7 @@ def variants(quoted: str) -> list[str]:
     out = []
     for skip in MODES:
         t = A.conv_text(A.conv_text(quoted, ts=True, skip=skip), ts=True, skip=skip)
-        for V in (B, C, D, E, F):                       # 용어 패스는 전 영역에 같은 규칙 — 변형이 없다
+        for V in (B, C, D, E, F, G):                       # 용어 패스는 전 영역에 같은 규칙 — 변형이 없다
             t = V.conv_text(V.conv_text(t, ts=True), ts=True)
         if t not in out: out.append(t)
     return out

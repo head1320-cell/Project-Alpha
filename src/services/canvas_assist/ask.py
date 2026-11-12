@@ -26,10 +26,10 @@ MAX_CHARS = 240
 WHY_NOT = ("none", "not_in_facts", "judgement", "off_topic")
 CANNOT = {
     "not_in_facts": "이 노드·선의 계산 결과로는 답할 수 없습니다.",
-    "judgement": "투자 판단은 말하지 않습니다 — 계산이 무엇을 냈는지만 답합니다.",
+    "judgement": "투자 판단은 제시하지 않습니다 — 계산 결과만 답합니다.",
     "off_topic": "이 노드·선의 계산에 대해 문의하십시오.",
 }
-_STALE = "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 물을 수 있습니다"
+_STALE = "서명이 일치하지 않습니다(그래프가 변경됐거나 서버가 재시작됐습니다). 재계산하면 다시 물을 수 있습니다"
 _MISSING = "그래프에 없는 선입니다"
 _PART = {"title": "제목", "headline": "핵심 값", "fact": "사실", "trust": "믿음", "unmeasured": "미측정 항목",
          "relation": "관계", "carried": "전달된 것", "issue": "누락·변경된 것", "checked": "점검"}

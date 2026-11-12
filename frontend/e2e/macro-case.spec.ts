@@ -107,7 +107,7 @@ test("케이스 저장 실패를 성공으로 위장하지 않는다", async ({ 
     if (route.request().method() === "POST") {
       await route.fulfill({ status: 200, contentType: "application/json",
         body: JSON.stringify({ created: false, case_id: null,
-          message: "연구 케이스 저장소를 쓸 수 없습니다 — 케이스가 저장되지 않았습니다." }) });
+          message: "연구 케이스 저장소를 사용할 수 없습니다 — 케이스가 저장되지 않았습니다." }) });
     } else {
       await route.fallback();
     }

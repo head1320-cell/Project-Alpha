@@ -69,7 +69,7 @@ ASSET_CLASS_TIERS = {
 #:
 #: `threshold_basis` 가 `nominal_krw` 인 이유: 시총 임계값이 **명목 원화**라
 #: 과거에 소급하면 같은 종목이 다른 티어로 밀린다(물가·지수 수준이 다르다).
-_UNMEASURED = ("이 저장소에 이 α 를 잰 기록이 없습니다 — Almgren-Chriss √법칙의 "
+_UNMEASURED = ("이 저장소에 이 α 를 측정한 기록이 없습니다 — Almgren-Chriss √법칙의 "
                "관례적 크기 순서를 따른 값이고, 대형→소형으로 커지는 **순서**는 "
                "유동성 논리와 맞지만 각 수준은 측정치가 아닙니다.")
 TIER_PROVENANCE: dict[str, dict] = {

@@ -139,7 +139,7 @@ test("R4 · 끌어 넣기 — 끄는 동안 상자가 빛나고 · 놓으면 멤
   await page.mouse.up();
   await expect(box(page, "g1")).not.toHaveClass(/pg-group--drop/);
   await expect.poll(() => membersOf(page, "g1")).toEqual(["universe", "returns", "estimate"]);
-  await expect(page.locator(".pg-note")).toContainText("넣었습니다");
+  await expect(page.locator(".pg-note")).toContainText("추가했습니다");
   await page.keyboard.press("Control+z");
   await expect.poll(async () => ({ g: (await wip(page)).groups, x: await xOf(page, "estimate") }))
     .toEqual({ g: before.groups, x: before.nodes.find((x) => x.id === "estimate")!.position.x });

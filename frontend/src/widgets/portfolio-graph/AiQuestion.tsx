@@ -40,7 +40,7 @@ export function askNote(res: Extract<AssistAsk, { available: true }>): string | 
   const parts: string[] = [];
   if (res.answer.answerable && !res.answer.sentences.length) parts.push("AI 가 쓴 문장 없음");
   if (res.rejected.length) parts.push(`${res.rejected.length}문장은 검사에서 빠졌습니다: ${res.rejected[0].reason}`);
-  if (res.dropped.length) parts.push(`${res.dropped.length}개 결과는 확인하지 못해 뺐습니다: ${res.dropped[0].reason}`);
+  if (res.dropped.length) parts.push(`${res.dropped.length}개 결과는 확인하지 못해 제외했습니다: ${res.dropped[0].reason}`);
   return parts.length ? parts.join(" · ") : null;
 }
 

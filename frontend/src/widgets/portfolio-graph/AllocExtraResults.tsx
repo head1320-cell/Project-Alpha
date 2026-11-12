@@ -106,7 +106,7 @@ export function ImplementResult({ v }: { v: Dict }) {
           </tr>
         ))}</tbody>
       </table>
-      <KV rows={[["놓은 비중", pc(r.placed_pct, 0)], ["놓지 못한 비중", pc(r.unplaced_pct, 0)]]} />
+      <KV rows={[["배치 비중", pc(r.placed_pct, 0)], ["미배치 비중", pc(r.unplaced_pct, 0)]]} />
       {Object.entries((r.unresolved as Record<string, string>) ?? {}).map(([k, why]) => <p key={k} className="pg-warn">{why}</p>)}
       <p className="pg-note">{String(r.note ?? "")}</p>
     </>

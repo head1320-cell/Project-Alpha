@@ -204,7 +204,7 @@ test("답할 수 없으면 서버 고정 문장 · 합성 경고는 서버가 �
   await signIn(page);
   await answer(page, async (route, i) => {
     await route.fulfill({ json: i === 0
-      ? ok({ answer: { answerable: false, cannot: "투자 판단은 말하지 않습니다 — 계산이 무엇을 냈는지만 답합니다.", sentences: [] }, facts: {} })
+      ? ok({ answer: { answerable: false, cannot: "투자 판단은 제시하지 않습니다 — 계산 결과만 답합니다.", sentences: [] }, facts: {} })
       : ok({ notice: null }) });
   });
   await openWith(page, CORE);
@@ -212,7 +212,7 @@ test("답할 수 없으면 서버 고정 문장 · 합성 경고는 서버가 �
   await pick(page, "optimizer");
   await askText(page, "사도 됩니다?");
   const first = dock(page).locator(".pg-ask-turn").first();
-  await expect(first.locator(".pg-ask-cannot")).toHaveText("투자 판단은 말하지 않습니다 — 계산이 무엇을 냈는지만 답합니다.");
+  await expect(first.locator(".pg-ask-cannot")).toHaveText("투자 판단은 제시하지 않습니다 — 계산 결과만 답합니다.");
   await expect(first.locator(".pg-ask-sent")).toHaveCount(0);
   await expect(first.locator(".pg-ask-notice")).toHaveText(NOTICE);
   await askText(page, "그럼 무엇을 냈나요?");
@@ -229,7 +229,7 @@ test("못 보이면 서버 사유 · 검사에서 빠진 문장과 확인 못 �
       ? { available: false, source: "unavailable", reason_code: "rate_limited", reason: "한 시간에 30번까지 물을 수 있습니다. 이번 시간에는 다 썼습니다", dropped: [] }
       : ok({ answer: { answerable: true, cannot: null, sentences: [SENTS[0]] },
              rejected: [{ code: "numbers", reason: "댄 사실 줄에 없는 숫자 9 를 썼습니다" }],
-             dropped: [{ node_id: "estimate", reason: "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 물을 수 있습니다" }] }) });
+             dropped: [{ node_id: "estimate", reason: "서명이 일치하지 않습니다(그래프가 변경됐거나 서버가 재시작됐습니다). 재계산하면 다시 물을 수 있습니다" }] }) });
   });
   await openWith(page, CORE);
   await runAll(page);
@@ -240,7 +240,7 @@ test("못 보이면 서버 사유 · 검사에서 빠진 문장과 확인 못 �
   await askText(page, "다시 왜요?");
   const note = dock(page).locator(".pg-ask-turn").nth(1).locator(".pg-ask-note");
   await expect(note).toContainText("1문장은 검사에서 빠졌습니다: 댄 사실 줄에 없는 숫자 9 를 썼습니다");
-  await expect(note).toContainText("1개 결과는 확인하지 못해 뺐습니다: 서명이 맞지 않습니다");
+  await expect(note).toContainText("1개 결과는 확인하지 못해 제외했습니다: 서명이 일치하지 않습니다");
 });
 
 test("이어 묻기는 직전 문답 하나만 보낸다 · Enter 는 보내고 Shift+Enter 는 줄을 바꾼다", async ({ page }) => {

@@ -59,10 +59,10 @@ test("Macro → 캔버스: 현재 시점 전용 한계를 숨기지 않는다", 
 
 test("Macro → 캔버스: 스냅샷 저장이 실패하면 이동하지 않고 사유를 보인다(성공으로 위장하지 않는다)", async ({ page }) => {
   await page.route("**/regime-snapshots/from-current**", (r) => r.fulfill({
-    json: { recorded: false, snapshot_id: null, message: "E2E: 스냅샷 저장소를 쓸 수 없습니다." } }));
+    json: { recorded: false, snapshot_id: null, message: "E2E: 스냅샷 저장소를 사용할 수 없습니다." } }));
   await page.goto("/macro", { waitUntil: "domcontentloaded" });
   await page.locator(".mc-open-aas").click();
-  await expect(page.getByText("E2E: 스냅샷 저장소를 쓸 수 없습니다.")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("E2E: 스냅샷 저장소를 사용할 수 없습니다.")).toBeVisible({ timeout: 20_000 });
   await expect(page).toHaveURL(/\/macro$/);
 });
 

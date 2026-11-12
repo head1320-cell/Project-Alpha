@@ -164,7 +164,7 @@ test("다음 한 걸음: 서버 문장 그대로 · [붙이기] 뒤 다음 규�
   await openWith(page, BUILD_ONLY, "add");
   const next = page.locator(".pg-next");
   await expect(next).toContainText("‘정책 백테스트’");
-  await expect(next).toContainText("잴 수 있게 됩니다");
+  await expect(next).toContainText("측정할 수 있게 됩니다");
   const before = await edges(page).count();
   await next.locator(".pg-next-go").click();
   await expect(nodeOf(page, "backtest")).toHaveCount(1);
