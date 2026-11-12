@@ -133,10 +133,16 @@ test("누르면 묻는 중 → 'AI 추천' 유령과 이유 · 요청 본문은 
   expect(seen).toHaveLength(1);
   expect(seen[0].nodes.map((x) => x.id).sort()).toEqual(["optimizer", "returns", "universe"]);
   expect(seen[0].edges).toHaveLength(2);
-  const cards = await Promise.all((await page.locator(".react-flow__node").all()).map((x) => x.boundingBox()));
-  const gb = (await g.boundingBox())!;
-  for (const c of cards) expect(overlaps(gb, c!), "AI 유령이 카드와 겹친다").toBe(false);
-  for (const r of await page.locator('.pg-ghost[data-source="rule"]').all()) expect(overlaps(gb, (await r.boundingBox())!), "AI 유령이 규칙 유령과 겹친다").toBe(false);
+  // ★한 프레임에서 잰다★ — AI 유령이 뜨면 화면이 그쪽으로 옮겨 가는 중이다(이동·확대 애니메이션). 카드와 유령을 따로 읽으면 서로 다른
+  // 순간의 자리를 견줘 '겹친다'가 된다(2026-11-12 · 20번 중 4~5번 실패 · 프레임 기록으로 확인: 같은 프레임에서는 겹친 적이 없다).
+  const boxes = await page.evaluate(() => {
+    const box = (el: Element) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    const all = (sel: string) => Array.from(document.querySelectorAll(sel)).map(box);
+    return { ai: all('.pg-ghost[data-source="claude"]'), cards: all(".react-flow__node"), rules: all('.pg-ghost[data-source="rule"]') };
+  });
+  expect([boxes.ai.length, boxes.cards.length, boxes.rules.length], "견줄 것이 있다(공허하지 않게)").toEqual([1, 3, 2]);
+  for (const c of boxes.cards) expect(overlaps(boxes.ai[0], c), "AI 유령이 카드와 겹친다").toBe(false);
+  for (const r of boxes.rules) expect(overlaps(boxes.ai[0], r), "AI 유령이 규칙 유령과 겹친다").toBe(false);
   expect((await wip(page)).nodes).toHaveLength(3);                                    // 문서가 아니다
 });
 
