@@ -34,7 +34,7 @@ export function HedgeCalc() {
   return (
     <div className="dv-calc" data-calc="hedge">
       <section className="tx-sec dv-form">
-        <h2 className="tx-sec-t">선물 헤지 값 넣기</h2>
+        <h2 className="tx-sec-t">선물 헤지 입력값</h2>
         <p className="tx-sec-sub">포트폴리오의 시장 민감도(베타)를 목표에 맞추는 데 필요한 지수 선물 매매 계약 수를 계산합니다.</p>
         <div className="dv-grid">
           <NumField id="dv-pv" label="포트폴리오 금액" unit="원" value={raw.pv} onChange={set("pv")} missing={miss("pv")} hint={v.pv != null ? `${wonK(v.pv)}입니다` : undefined} />

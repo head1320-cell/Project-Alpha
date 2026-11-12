@@ -33,18 +33,18 @@ export function BondCalc() {
   return (
     <div className="dv-calc" data-calc="bond">
       <section className="tx-sec dv-form">
-        <h2 className="tx-sec-t">채권 값 넣기</h2>
-        <p className="tx-sec-sub">고정금리 채권의 가격과 금리 민감도를 계산합니다. 넣은 값이 모두 가정입니다.</p>
+        <h2 className="tx-sec-t">채권 입력값</h2>
+        <p className="tx-sec-sub">고정금리 채권의 가격과 금리 민감도를 계산합니다. 입력값은 모두 가정입니다.</p>
         <div className="dv-grid">
           <NumField id="dv-face" label="액면가" unit="원" value={raw.face} onChange={set("face")} missing={miss("face")} />
           <NumField id="dv-cpn" label="표면금리(연)" unit="%" value={raw.coupon} onChange={set("coupon")} missing={miss("coupon")} hint="채권이 약속한 이자율" />
           <NumField id="dv-ytm" label="만기수익률(연)" unit="%" value={raw.ytm} onChange={set("ytm")} missing={miss("ytm")} hint="현재 시장 요구수익률" />
-          <NumField id="dv-yrs" label="남은 만기" unit="년" value={raw.years} onChange={set("years")} missing={miss("years")} step="1" hint="1 이상의 정수" />
+          <NumField id="dv-yrs" label="잔존 만기" unit="년" value={raw.years} onChange={set("years")} missing={miss("years")} step="1" hint="1 이상의 정수" />
         </div>
         <div className="dv-kind"><span className="dv-field-l">이자를 받는 횟수(1년에)</span>
           <Segmented label="이자를 받는 횟수" value={freq} onChange={setFreq} options={[{ value: "1", label: "1번" }, { value: "2", label: "2번" }, { value: "4", label: "4번" }]} />
         </div>
-        {bad && <p className="dv-bad" role="alert">액면가는 0보다 크고, 남은 만기는 1년 이상의 정수여야 계산할 수 있습니다.</p>}
+        {bad && <p className="dv-bad" role="alert">액면가는 0보다 크고, 잔존 만기는 1년 이상의 정수여야 계산할 수 있습니다.</p>}
         <button type="button" className="tx-btn tx-btn--main dv-go" onClick={run} disabled={calc.m.isPending}>
           {calc.m.isPending ? "계산 중" : "채권 계산하기"}
         </button>

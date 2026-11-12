@@ -44,8 +44,8 @@ export function CvaCalc() {
   return (
     <div className="dv-calc" data-calc="cva">
       <section className="tx-sec dv-form">
-        <h2 className="tx-sec-t">신용 위험 값 넣기</h2>
-        <p className="tx-sec-sub">거래 상대방이 부도날 위험을 돈으로 치면 얼마인지(신용가치조정, CVA) 계산합니다. 넣은 값이 모두 가정입니다.</p>
+        <h2 className="tx-sec-t">신용 위험 입력값</h2>
+        <p className="tx-sec-sub">거래상대방 부도 위험의 금액 환산치(신용가치조정, CVA)를 계산합니다. 입력값은 모두 가정입니다.</p>
         <div className="dv-kind"><span className="dv-field-l">상품 종류</span>
           <Segmented label="상품 종류" value={pos} onChange={setPos} options={(Object.keys(POS_KO) as Pos[]).map((p) => ({ value: p, label: POS_KO[p] }))} />
         </div>
@@ -78,7 +78,7 @@ export function CvaCalc() {
           <p className="dv-ans">상대방이 부도날 위험을 값으로 치면 <b>{wonK(c.unilateral_cva.cva_amount)}</b>입니다(명목의 {c.unilateral_cva.cva_pct_of_notional}%).</p>
           <Chips items={[
             { label: "노출 곡선은 시장 관측값이 아니라 상품 유형별로 가정한 형태입니다", tone: "assumed" },
-            { label: "부도 확률은 넣은 CDS 스프레드에서 나왔습니다", tone: "assumed" },
+            { label: "부도 확률은 입력한 CDS 스프레드에서 산출했습니다", tone: "assumed" },
           ]} />
           <dl className="dv-figs" data-testid="cva-figs">
             <Fig k="cva" label="일방 CVA" value={wonK(c.unilateral_cva.cva_amount)} why="상대방 부도만 셀 때 거래 가치에서 빼야 할 금액입니다." />

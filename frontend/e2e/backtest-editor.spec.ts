@@ -58,11 +58,11 @@ test("'지금' 줄은 설정을 되읽는다 — 투자 금액을 바꾸면 ④ 
 
 test("★아직 세지 않은 대상 수는 0이 아니라 '셉니다'★ — ③을 열면 서버가 센 수로 바뀐다(짝)", async ({ page }) => {
   await open(page);
-  await expect(nowLine(page, 2)).toContainText("③을 열면 셉니다");
+  await expect(nowLine(page, 2)).toContainText("③을 열면 집계합니다");
   await expect(nowLine(page, 2)).not.toContainText("0 종목");
   await steps(page).nth(2).click();
   await expect(nowLine(page, 2)).toContainText(/[1-9][\d,]* 종목/, { timeout: 15_000 });
-  await expect(nowLine(page, 2)).not.toContainText("③을 열면 셉니다");
+  await expect(nowLine(page, 2)).not.toContainText("③을 열면 집계합니다");
 });
 
 test("★업종 목록 실패는 alert★(예전에는 빈 칸) · 정상이면 alert 없음(짝)", async ({ page }) => {

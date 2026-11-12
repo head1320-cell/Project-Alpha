@@ -119,7 +119,7 @@ export default function BuyConditionPanel({ s, set }: {
         <Field label="사는 가격">
           <OffsetInput value={s.buy.fillOffsetPct} onChange={(fillOffsetPct) => patchBuy({ fillOffsetPct })} />
         </Field>
-        <SubToggle tone="buy" label="종목당 최대 금액" hint="한 종목에 넣을 수 있는 한도"
+        <SubToggle tone="buy" label="종목당 최대 금액" hint="종목당 투자 한도"
           on={s.buy.maxBuyAmount > 0} onChange={(on) => patchBuy({ maxBuyAmount: on ? 1000 : 0 })}>
           <QuickStepper value={s.buy.maxBuyAmount} onChange={(v) => patchBuy({ maxBuyAmount: v })}
             chips={[1000, 3000, 5000]} unit="만원" min={100} />

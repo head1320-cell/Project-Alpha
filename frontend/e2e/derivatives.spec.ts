@@ -33,7 +33,7 @@ const tab = (page: Page, name: string) => page.getByRole("tab", { name });
 
 test("탭 다섯 + 주소 동기 — 누르면 `?tab=` 이 바뀌고, 새로고침해도 그 탭 · 옛 주소(xva·mc)도 받는다", async ({ page }) => {
   await open(page);
-  await expect(page.getByRole("tab")).toHaveText(["옵션", "채권", "선물 헤지", "신용 위험(CVA)", "아직 계산하지 않는 모형"]);
+  await expect(page.getByRole("tab")).toHaveText(["옵션", "채권", "선물 헤지", "신용 위험(CVA)", "미지원 모형"]);
   await expect(tab(page, "옵션")).toHaveAttribute("aria-selected", "true");
   await tab(page, "채권").click();
   await expect(page).toHaveURL(/\/derivatives\?tab=bond$/);
@@ -42,7 +42,7 @@ test("탭 다섯 + 주소 동기 — 누르면 `?tab=` 이 바뀌고, 새로고�
   await open(page, "?tab=xva");
   await expect(tab(page, "신용 위험(CVA)")).toHaveAttribute("aria-selected", "true");
   await open(page, "?tab=mc");
-  await expect(tab(page, "아직 계산하지 않는 모형")).toHaveAttribute("aria-selected", "true");
+  await expect(tab(page, "미지원 모형")).toHaveAttribute("aria-selected", "true");
 });
 
 test("옵션 결과 = 서버 값(고치면 따라간다) · σ·r 은 %로 넣고 서버엔 소수로 · 그릭스 풀이는 서버 숫자", async ({ page }) => {
@@ -142,7 +142,7 @@ test("신용 위험 — 답 = 서버 CVA · ★노출 곡선 점 수 = 서버 ee
   await expect(page.locator(".dv-out .tx-chip", { hasText: "상품 유형별로 가정한 형태" })).toBeVisible();
 });
 
-test("★아직 계산하지 않는 모형 — 설명만, 결과처럼 보이는 상수 카드 0★(옛 '10,000 / ON / ON')", async ({ page }) => {
+test("★미지원 모형 — 설명만, 결과처럼 보이는 상수 카드 0★(옛 '10,000 / ON / ON')", async ({ page }) => {
   await open(page, "?tab=models");
   await expect(page.locator(".dv-model")).toHaveCount(3);
   const text = await page.locator(".dv").innerText();

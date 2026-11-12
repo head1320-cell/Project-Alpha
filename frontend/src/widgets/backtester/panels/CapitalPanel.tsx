@@ -50,10 +50,10 @@ export default function CapitalPanel({ s, set }: {
         {/* ── 누락 비용 옵트인 셋 (AK) ★전부 기본 꺼짐★ — 켜면 백엔드가 `market_rules` 의 같은 요율을 쓴다.
             기본을 켜지 않는 이유는 켜는 순간 저장된 실행들의 뜻이 바뀌기 때문이다. */}
         <div className="bte-col">
-          <p className="bte-sub-h">추가 비용 — 기본은 꺼져 있습니다</p>
+          <p className="bte-sub-h">추가 비용 — 기본값은 꺼짐</p>
           <SubToggle tone="sell" act="sell-tax" label="증권거래세" hint="매도 시 1회 0.18% · 수수료보다 큽니다"
             on={s.chargeSellTax} onChange={(v) => set((x) => ({ ...x, chargeSellTax: v }))} />
-          <SubToggle tone="sell" label="호가 스프레드" hint="한 번 거래에 0.025% (스프레드의 절반)"
+          <SubToggle tone="sell" label="호가 스프레드" hint="거래 1회당 0.025% (스프레드의 절반)"
             on={s.chargeSpread} onChange={(v) => set((x) => ({ ...x, chargeSpread: v }))} />
           <SubToggle tone="sell" label="시장충격" hint="주문 금액 ÷ 거래대금에 비례 · 거래대금이 없으면 미상"
             on={s.chargeMarketImpact} onChange={(v) => set((x) => ({ ...x, chargeMarketImpact: v }))} />

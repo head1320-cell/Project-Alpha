@@ -283,13 +283,13 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
           }} />
 
         <article className="ci-mcard ci-mneed" data-model="need">
-          <header className="ci-mcard-h"><h3>가정을 넣어야 하는 모형</h3><p>회사마다 다른 값을 사람이 넣어야 의미가 있어서 여기서는 계산하지 않습니다.</p></header>
+          <header className="ci-mcard-h"><h3>가정 입력이 필요한 모형</h3><p>기업별로 다른 값을 직접 입력해야 의미가 있으므로 여기서는 계산하지 않습니다.</p></header>
           <ul>
             <li><b>합산가치(SOTP)</b> 사업 부문의 이익과 배수, 상장 자회사 지분</li>
             <li><b>의사결정 나무</b> 분기 사건별 확률과 해당 주당 가치</li>
             <li><b>실물옵션</b> 사업의 현재 가치, 투자 금액, 기간, 변동성</li>
           </ul>
-          <Link className="tx-btn tx-btn--sub ci-mneed-go" href={`/allocation?company=${code}`}>캔버스에서 넣기</Link>
+          <Link className="tx-btn tx-btn--sub ci-mneed-go" href={`/allocation?company=${code}`}>캔버스에서 입력</Link>
         </article>
       </div>
     </>

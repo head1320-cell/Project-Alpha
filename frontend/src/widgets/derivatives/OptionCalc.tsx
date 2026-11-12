@@ -39,8 +39,8 @@ export function OptionCalc() {
   return (
     <div className="dv-calc" data-calc="option">
       <section className="tx-sec dv-form">
-        <h2 className="tx-sec-t">옵션 값 넣기</h2>
-        <p className="tx-sec-sub">블랙-숄즈 식(유럽형, 만기에만 행사)으로 계산합니다. 넣은 값이 모두 가정입니다.</p>
+        <h2 className="tx-sec-t">옵션 입력값</h2>
+        <p className="tx-sec-sub">블랙-숄즈 모형(유럽형, 만기 행사)으로 계산합니다. 입력값은 모두 가정입니다.</p>
         <div className="dv-kind"><span className="dv-field-l">옵션 종류</span>
           <Segmented label="옵션 종류" value={kind} onChange={setKind} options={[{ value: "call", label: KO.call }, { value: "put", label: KO.put }]} />
         </div>
@@ -49,7 +49,7 @@ export function OptionCalc() {
           <NumField id="dv-K" label="행사가" unit="원" value={raw.K} onChange={set("K")} missing={miss("K")} />
           <NumField id="dv-sig" label="연환산 변동성" unit="%" value={raw.sigma} onChange={set("sigma")} missing={miss("sigma")} hint="연율 가격 변동성" />
           <NumField id="dv-r" label="무위험 금리(연)" unit="%" value={raw.r} onChange={set("r")} missing={miss("r")} />
-          <NumField id="dv-T" label="남은 만기" unit="년" value={raw.T} onChange={set("T")} missing={miss("T")} hint="3개월이면 0.25" />
+          <NumField id="dv-T" label="잔존 만기" unit="년" value={raw.T} onChange={set("T")} missing={miss("T")} hint="3개월이면 0.25" />
         </div>
         {bad && <p className="dv-bad" role="alert">가격·행사가·변동성은 0보다 커야 하고, 만기는 0 이상이어야 계산할 수 있습니다.</p>}
         <button type="button" className="tx-btn tx-btn--main dv-go" onClick={run} disabled={calc.m.isPending}>

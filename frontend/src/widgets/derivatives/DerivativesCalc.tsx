@@ -19,7 +19,7 @@ import { loadCharts } from "./parts";
 type Tab = "option" | "bond" | "hedge" | "cva" | "models";
 const TABS: { value: Tab; label: string }[] = [
   { value: "option", label: "옵션" }, { value: "bond", label: "채권" }, { value: "hedge", label: "선물 헤지" },
-  { value: "cva", label: "신용 위험(CVA)" }, { value: "models", label: "아직 계산하지 않는 모형" },
+  { value: "cva", label: "신용 위험(CVA)" }, { value: "models", label: "미지원 모형" },
 ];
 const OLD: Record<string, Tab> = { "vol-surface": "models", xva: "cva", rates: "models", mc: "models" };
 export function tabOf(q: string | null): Tab {
@@ -37,10 +37,10 @@ export function DerivativesCalc() {
 
   return (
     <div className="dv tx-page">
-      <PageHead title="파생상품 계산기" lede="옵션·채권·선물 헤지·신용 위험을 넣은 값으로 계산합니다. 시장 데이터를 불러오지 않습니다." />
+      <PageHead title="파생상품 계산기" lede="옵션·채권·선물 헤지·신용 위험을 입력값으로 계산합니다. 시장 데이터는 조회하지 않습니다." />
       <Chips label="이 계산기의 전제" items={[
-        { label: "모든 칸은 넣은 값(가정)입니다", tone: "assumed" },
-        { label: "계산은 서버가 하고 화면은 풀이만 합니다", tone: "info" },
+        { label: "모든 입력값은 가정입니다", tone: "assumed" },
+        { label: "계산은 서버가 수행하고 화면은 해설만 표시합니다", tone: "info" },
       ]} />
       <Tabs label="계산기 선택" tabs={TABS} value={tab} onChange={pick}>
         {tab === "option" ? <OptionCalc /> : tab === "bond" ? <BondCalc /> : tab === "hedge" ? <HedgeCalc /> : tab === "cva" ? <CvaCalc /> : <ModelsInfo />}
@@ -62,7 +62,7 @@ function ModelsInfo() {
   return (
     <div className="dv-calc" data-calc="models">
       <section className="tx-sec">
-        <h2 className="tx-sec-t">아직 계산하지 않는 모형</h2>
+        <h2 className="tx-sec-t">미지원 모형</h2>
         <p className="tx-sec-sub">설명만 있습니다. 이 화면은 아래 모형으로 계산하지 않고, 결과처럼 보이는 숫자도 두지 않습니다.</p>
         <ul className="dv-models">
           {MODELS.map((m) => (

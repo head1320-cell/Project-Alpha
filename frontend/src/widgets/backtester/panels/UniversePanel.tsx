@@ -137,7 +137,7 @@ export default function UniversePanel({ s, set, live = true }: {
         {([["ETF", "etf"], ["관리종목", "managed"], ["감리종목", "supervised"]] as const).map(([label, key]) => (
           <Field key={key} label={label} width={96}>
             <Segmented tone="neutral" value={u[key] ? "in" : "out"} onChange={(t) => patch({ [key]: t === "in" } as Partial<BacktestStrategy["universe"]>)}
-              options={[{ id: "out", label: "빼기" }, { id: "in", label: "넣기" }]} />
+              options={[{ id: "out", label: "제외" }, { id: "in", label: "포함" }]} />
           </Field>
         ))}
       </Section>

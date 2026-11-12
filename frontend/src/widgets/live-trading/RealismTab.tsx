@@ -53,7 +53,7 @@ export function RealismTab() {
           <h2 className="tx-sec-t" id="rl-h">현실성 점검</h2>
           <p className="tx-sec-sub">
             등록한 전략 전부를 {RECIPE.start_date} ~ {RECIPE.end_date}, 초기 자본 {eokWon(RECIPE.initial_capital)}, 계층적 리스크 패리티(HRP)·매월
-            리밸런싱으로 두 번 계산합니다. 한 번은 현실 조건 없이(이상), 한 번은 시장 충격·현금 이자·매수 여력·적응 모드를 넣어서(현실).
+            리밸런싱으로 두 번 계산합니다. 한 번은 현실 조건 없이(이상), 한 번은 시장 충격·현금 이자·매수 여력·적응 모드를 반영해서(현실).
           </p>
         </div>
         <div className="tx-sec-aside">
@@ -63,7 +63,7 @@ export function RealismTab() {
           </button>
         </div></header>
         {!o && !calc.isError && !calc.isPending ? (
-          <div className="tx-sec-body"><p className="tx-sec-sub rl-empty">아직 계산하지 않았습니다. 누르기 전에는 서버에 아무것도 묻지 않습니다.</p></div>
+          <div className="tx-sec-body"><p className="tx-sec-sub rl-empty">아직 계산하지 않았습니다. 실행 전에는 서버에 요청하지 않습니다.</p></div>
         ) : null}
       </section>
 
@@ -87,7 +87,7 @@ function Result({ ideal, real, names }: { ideal: Side; real: Side; names: Record
     return (
       <div className="rl-fails">
         {!ideal.ok ? <Notice tone="danger" title="이상 쪽(현실 조건 없이) 산출 실패"><span data-server>{ideal.reason}</span></Notice> : null}
-        {!real.ok ? <Notice tone="danger" title="현실 쪽(현실 조건을 넣고) 산출 실패"><span data-server>{real.reason}</span></Notice> : null}
+        {!real.ok ? <Notice tone="danger" title="현실 쪽(현실 조건 반영) 산출 실패"><span data-server>{real.reason}</span></Notice> : null}
         <p className="tx-sec-sub rl-fails-why">한쪽만 있으면 견줄 수 없어서 그림을 그리지 않았습니다.</p>
       </div>
     );
@@ -100,7 +100,7 @@ function Compared({ i, r, names }: { i: RealismRun; r: RealismRun; names: Record
   const gap = ti != null && tr != null ? tr - ti : null;
   const sentence = ti == null || tr == null
     ? "총수익률 하나를 서버가 주지 않아 견줄 수 없습니다."
-    : `현실 조건을 넣은 총수익률은 ${pct(tr)}로, 이상적 조건 ${pct(ti)}보다 ${Math.abs(gap ?? 0).toFixed(2)}%p ${gap === 0 ? "같습니다" : (gap ?? 0) > 0 ? "높습니다" : "낮습니다"}.`;
+    : `현실 조건을 반영한 총수익률은 ${pct(tr)}로, 이상적 조건 ${pct(ti)}보다 ${Math.abs(gap ?? 0).toFixed(2)}%p ${gap === 0 ? "같습니다" : (gap ?? 0) > 0 ? "높습니다" : "낮습니다"}.`;
   return (
     <>
       <section className="tx-sec rl-answer" data-sec="answer">

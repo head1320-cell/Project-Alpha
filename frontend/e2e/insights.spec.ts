@@ -385,7 +385,7 @@ test("★모형 요청 실패(500)는 그 카드 alert + 재시도 → 풀면 �
   await expect(c.locator(".ci-mcard-ans, .ci-mcard-reason").first()).toBeVisible({ timeout: 40_000 });
   expect(await c.locator("[role=alert]").count()).toBe(0);
 });
-test("★가정형 셋은 여기서 돌리지 않는다★ — 라우트 요청 0 · [캔버스에서 넣기] = /allocation?company=그 코드", async ({ page }) => {
+test("★가정형 셋은 여기서 돌리지 않는다★ — 라우트 요청 0 · [캔버스에서 입력] = /allocation?company=그 코드", async ({ page }) => {
   const hits: string[] = [];
   page.on("request", (r) => { if (/\/models\/(sotp|decision-tree|real-option)/.test(r.url())) hits.push(r.url()); });
   await openModels(page);

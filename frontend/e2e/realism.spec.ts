@@ -58,13 +58,13 @@ test("ST3c: 답 = 서버 총수익률 둘(짝) · 차이 %p", async ({ page }) =
   await open(page);
   await page.locator(".rl-calc").click();
   await expect(sec(page, "answer").locator(".rl-ans-s"))
-    .toHaveText("현실 조건을 넣은 총수익률은 −6.72%로, 이상적 조건 −11.82%보다 5.10%p 높습니다.");
+    .toHaveText("현실 조건을 반영한 총수익률은 −6.72%로, 이상적 조건 −11.82%보다 5.10%p 높습니다.");
   const p2 = await page.context().newPage();
   const real = JSON.parse(JSON.stringify(REALISM.real)) as R;
   real.summary.total_return_pct = -15;
   await open(p2, realismState({ realityReply: { ...real, config: {} } }));
   await p2.locator(".rl-calc").click();
-  await expect(sec(p2, "answer").locator(".rl-ans-s")).toHaveText("현실 조건을 넣은 총수익률은 −15.00%로, 이상적 조건 −11.82%보다 3.18%p 낮습니다.");
+  await expect(sec(p2, "answer").locator(".rl-ans-s")).toHaveText("현실 조건을 반영한 총수익률은 −15.00%로, 이상적 조건 −11.82%보다 3.18%p 낮습니다.");
   await p2.close();
 });
 

@@ -190,7 +190,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
           </div>
         )}
         {conditions.length === 0 && (
-          <p className="cfe-empty">아직 조건이 없습니다. 오른쪽에서 식을 만들어 더합니다.</p>
+          <p className="cfe-empty">아직 조건이 없습니다. 오른쪽에서 식을 구성해 추가합니다.</p>
         )}
         {conditions.map((c, i) => (
           <div key={c.id} className="cfe-cond">

@@ -44,7 +44,7 @@ export function MyAccountView() {
         <><PageHead title={TITLE} lede={LEDE} />
           <section className="tx-sec ma-signed-out">
             <p className="ma-strong">로그인하면 내 계좌를 조회할 수 있습니다.</p>
-            <p className="tx-sec-sub">계정은 관리자에게 받습니다. 증권 계좌는 로그인한 뒤 설정에서 연결합니다.</p>
+            <p className="tx-sec-sub">계정은 관리자가 발급합니다. 증권 계좌는 로그인 후 설정에서 연결합니다.</p>
             <Link href={loginHref("/my-account")} className="tx-btn tx-btn--main">로그인</Link>
           </section></>
       ) : session.mustChange ? (
