@@ -43,7 +43,7 @@ export function MonthGrid({ view }: { view: PerfView }) {
       </table>
       <p className="pg-note pf-months-note">
         빨강은 상승 월, 파랑은 하락 월이며 진할수록 변동 폭이 큽니다. 빈 칸은 데이터가 없는 월입니다(0 이 아닙니다).
-        {anyPartial ? " 점선 테두리는 곡선이 시작하거나 끝나는 달입니다 — 달 전체가 아닐 수 있어서 그 기간 수익을 그대로 적었습니다." : ""}
+        {anyPartial ? " 점선 테두리는 곡선이 시작하거나 끝나는 달입니다 — 달 전체가 아닐 수 있어 해당 기간 수익률을 그대로 표시했습니다." : ""}
       </p>
     </div>
   );

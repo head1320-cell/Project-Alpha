@@ -93,8 +93,8 @@ test("ST3b 비상 정지 이력: 풀지 않은 정지는 '지금 걸려 있습�
   await open(page, { st, url: "/admin/live-trading?tab=safety" });
   const rows = sec(page, "kill-events").locator(".lvs-kill");
   await expect(rows.nth(0)).toHaveAttribute("data-open", "true");
-  await expect(rows.nth(0)).toContainText("지금 걸려 있습니다");
-  await expect(rows.nth(1)).not.toContainText("지금 걸려 있습니다");
+  await expect(rows.nth(0)).toContainText("현재 발동 중입니다");
+  await expect(rows.nth(1)).not.toContainText("현재 발동 중입니다");
 });
 
 test("ST3b 비상 정지 이력: 없으면 없다고 · 짝: 있으면 줄", async ({ page }) => {
@@ -108,10 +108,10 @@ test("ST3b 비상 정지 이력: 없으면 없다고 · 짝: 있으면 줄", asy
 test("ST3b 준비 상태: 서버가 센 무장 수 그대로(짝) · 사유 원문 · 코드 표 수", async ({ page }) => {
   await open(page, { url: "/admin/live-trading?tab=safety" });
   const s = sec(page, "readiness");
-  await expect(s.locator(".lvs-ready-ans")).toHaveText("조건 4개 중 0개가 지금 걸 수 있습니다.");
+  await expect(s.locator(".lvs-ready-ans")).toHaveText("조건 4개 중 0개가 현재 발동 가능합니다.");
   await expect(s.locator(".lvs-ready-row")).toHaveCount(4);
   await expect(s.locator('.lvs-ready-row[data-trigger="auto_api"] .lvs-ready-why')).toContainText("mock 클라이언트에는 실패 카운터가 없습니다");
-  await expect(s.locator('.lvs-ready-row[data-trigger="auto_dd"] .lvs-ready-n')).toHaveText("누적 손실이 한도를 넘으면");
+  await expect(s.locator('.lvs-ready-row[data-trigger="auto_dd"] .lvs-ready-n')).toHaveText("누적 손실이 한도를 초과하면");
   await expect(s.locator(".lvs-codes")).toContainText("뜻을 아는 코드 0개 · 본 적 있는 코드 0개 · 그중 뜻을 모르는 코드 0개");
   await expect(s.locator(".lvs-more")).not.toHaveAttribute("open", "");
 
@@ -120,7 +120,7 @@ test("ST3b 준비 상태: 서버가 센 무장 수 그대로(짝) · 사유 원�
   st.safety.readiness = { ...(SAFETY.readiness as object), armed: [{ trigger: "auto_dd", reason: null }],
     inoperable: (SAFETY.readiness as { inoperable: unknown[] }).inoperable.slice(1) };
   await open(p2, { st, url: "/admin/live-trading?tab=safety" });
-  await expect(sec(p2, "readiness").locator(".lvs-ready-ans"), "짝: 응답을 바꾸면 문장도").toHaveText("조건 4개 중 1개가 지금 걸 수 있습니다.");
+  await expect(sec(p2, "readiness").locator(".lvs-ready-ans"), "짝: 응답을 바꾸면 문장도").toHaveText("조건 4개 중 1개가 현재 발동 가능합니다.");
   await expect(sec(p2, "readiness").locator('.lvs-ready-row[data-trigger="auto_dd"]')).toHaveAttribute("data-ok", "true");
   await p2.close();
 });

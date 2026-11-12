@@ -11,7 +11,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ClientSheet, SheetAsk, askShared, openShare, readShared, type Sheet } from "@/entities/pb-client";
 
 const KEY = "pa.share.t";
-const CLOSED = "담당 PB 에게 문의하십시오 — 다시 열리면 같은 주소와 PIN 으로 볼 수 있습니다.";
+const CLOSED = "담당 PB 에게 문의하십시오 — 재개되면 동일한 주소와 PIN 으로 열람할 수 있습니다.";
 const EXPIRED = "시간이 지나 다시 PIN 을 입력하십시오.";
 
 type Phase =
@@ -99,13 +99,13 @@ export function ShareView() {
         {phase.kind === "no_token" && (
           <section className="sv-card sv-missing">
             <h1 className="sv-h1">주소가 완전하지 않습니다</h1>
-            <p className="sv-sub">담당 PB 가 보낸 주소를 그대로 여십시오 — 주소 끝까지 함께 있어야 열립니다.</p>
+            <p className="sv-sub">담당 PB 가 보낸 주소 전체를 그대로 여십시오 — 주소가 끝까지 포함되어야 열립니다.</p>
           </section>
         )}
         {phase.kind === "pin" && (
           <section className="sv-card sv-pin-card">
             <h1 className="sv-h1">PIN 을 입력하십시오</h1>
-            <p className="sv-sub">담당 PB 에게 따로 받은 숫자 6자리입니다.</p>
+            <p className="sv-sub">담당 PB 에게 별도로 전달받은 숫자 6자리입니다.</p>
             <form className="sv-pin-form" onSubmit={(e) => void open(e)}>
               <input className="sv-pin" value={pin} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
                      aria-label="PIN 6자리" placeholder="숫자 6자리"
@@ -132,7 +132,7 @@ export function ShareView() {
           </>
         )}
       </main>
-      <footer className="sv-foot">이 화면은 담당 PB 가 보낸 주소와 PIN 으로만 열립니다. 주소와 PIN 을 다른 사람과 나누지 마십시오.</footer>
+      <footer className="sv-foot">이 화면은 담당 PB 가 보낸 주소와 PIN 으로만 열립니다. 주소와 PIN 을 타인과 공유하지 마십시오.</footer>
     </div>
   );
 }

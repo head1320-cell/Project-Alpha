@@ -47,7 +47,7 @@ test("답 = 서버 등급 세기 — 과거 검증에 쓸 수 있는 원천 수(
   await page.route(`${API}/source-honesty`, (r) => r.fulfill({ json: { mock_mode: false, sources: [
     src("a", "backtest_eligible"), src("b", "backtest_eligible"), src("c", "forward_only"), src("d", "unavailable", "unavailable"), src("e", "forward_only")] } }));
   await open(page);
-  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 5개 중 2개를 과거 검증에 쓸 수 있습니다.", { timeout: 20_000 });
+  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 5개 중 2개를 과거 검증에 사용할 수 있습니다.", { timeout: 20_000 });
   const figs = page.locator(".tx-answer .tx-fig");
   await expect(figs.filter({ hasText: "과거 검증 가능" }).locator("dd")).toHaveText("2개");
   await expect(figs.filter({ hasText: "전방 전용" }).locator("dd")).toHaveText("2개");
@@ -57,7 +57,7 @@ test("답 = 서버 등급 세기 — 과거 검증에 쓸 수 있는 원천 수(
 test("짝 — 과거 검증 원천이 0 이면 '아직 없습니다'(0개라고 숫자를 지어 넣지 않는 문장) · 등급 500 이면 'N/A' 문장", async ({ page }) => {
   await page.route(`${API}/source-honesty`, (r) => r.fulfill({ json: { mock_mode: true, sources: [src("a", "forward_only"), src("b", "unavailable")] } }));
   await open(page);
-  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 2개 중 과거 검증에 쓸 수 있는 원천은 아직 없습니다.", { timeout: 20_000 });
+  await expect(page.locator(".tx-answer-s")).toHaveText("데이터 원천 2개 중 과거 검증에 사용 가능한 원천은 아직 없습니다.", { timeout: 20_000 });
   await page.unroute(`${API}/source-honesty`);
   await page.route(`${API}/source-honesty`, (r) => r.fulfill(fail500));
   await open(page);

@@ -192,7 +192,7 @@ test("간격: 셋이면 가로·세로 간격이 똑같고 양 끝은 그대로 
   await page.locator(".pg-align-open").click();
   await expect(page.locator(".pg-align-menu [role=menuitem]")).toHaveCount(8);
   await page.keyboard.press("Escape");
-  await align(page, "가로 간격 똑같이");
+  await align(page, "가로 간격 균등");
   await page.waitForTimeout(200);
   let r = (await boxes(page, ids)).sort((p, q) => p.x - q.x);
   expect(r[0].id).toBe("a");
@@ -203,7 +203,7 @@ test("간격: 셋이면 가로·세로 간격이 똑같고 양 끝은 그대로 
   await page.keyboard.press("Control+z");
 
   await pick(page, ids);
-  await align(page, "세로 간격 똑같이");
+  await align(page, "세로 간격 균등");
   await page.waitForTimeout(200);
   r = (await boxes(page, ids)).sort((p, q) => p.y - q.y);
   const gy = [r[1].y - (r[0].y + r[0].height), r[2].y - (r[1].y + r[1].height)];

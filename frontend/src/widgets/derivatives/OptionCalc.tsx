@@ -12,7 +12,7 @@ export type Kind = "call" | "put";
 type Greeks = { Type?: string; Price: number; Delta: number | null; Gamma: number | null; Theta: number | null; Vega: number | null; Rho: number | null; at_expiry?: boolean };
 type Body = { S: number; K: number; sigma: number; r: number; T: number; option_type: Kind };
 
-const KO: Record<Kind, string> = { call: "콜(살 권리)", put: "풋(팔 권리)" };
+const KO: Record<Kind, string> = { call: "콜(매수권)", put: "풋(매도권)" };
 export const f4 = (v: number) => `${v < 0 ? "−" : ""}${Math.abs(v).toFixed(4)}`;
 
 export function OptionCalc() {
@@ -66,12 +66,12 @@ export function OptionCalc() {
             <p className="dv-note" data-testid="option-expiry">만기입니다. 시간 가치는 없고 내재가치만 남습니다. 등가격이면 델타는 정의되지 않습니다.</p>
           )}
           <dl className="dv-figs" data-testid="option-greeks">
-            <Fig k="Price" label="이론가" value={`${f4(g.Price)}원`} why="지금 넣은 값으로 계산한 옵션 한 개의 공정 가격입니다." />
-            <Greek k="Delta" label="델타" v={g.Delta} why={(x) => `기초자산이 1원 오르면 옵션 가격이 약 ${sgn(x, 4)}원 움직입니다.`} />
-            <Greek k="Gamma" label="감마" v={g.Gamma} why={(x) => `기초자산이 1원 오르면 델타가 약 ${sgn(x, 4)}만큼 바뀝니다.`} />
-            <Greek k="Theta" label="세타(하루)" v={g.Theta} why={(x) => `하루가 지나면 옵션 가격이 약 ${sgn(x, 4)}원 바뀝니다.`} />
-            <Greek k="Vega" label="베가(변동성 1%p)" v={g.Vega} why={(x) => `변동성이 1%p 오르면 옵션 가격이 약 ${sgn(x, 4)}원 바뀝니다.`} />
-            <Greek k="Rho" label="로(금리 1%p)" v={g.Rho} why={(x) => `금리가 1%p 오르면 옵션 가격이 약 ${sgn(x, 4)}원 바뀝니다.`} />
+            <Fig k="Price" label="이론가" value={`${f4(g.Price)}원`} why="현재 입력값으로 계산한 옵션 1계약의 이론 가격입니다." />
+            <Greek k="Delta" label="델타" v={g.Delta} why={(x) => `기초자산 1원 상승 시 옵션 가격이 약 ${sgn(x, 4)}원 변동합니다.`} />
+            <Greek k="Gamma" label="감마" v={g.Gamma} why={(x) => `기초자산 1원 상승 시 델타가 약 ${sgn(x, 4)}만큼 변동합니다.`} />
+            <Greek k="Theta" label="세타(1일)" v={g.Theta} why={(x) => `1일 경과 시 옵션 가격이 약 ${sgn(x, 4)}원 변동합니다.`} />
+            <Greek k="Vega" label="베가(변동성 1%p)" v={g.Vega} why={(x) => `변동성 1%p 상승 시 옵션 가격이 약 ${sgn(x, 4)}원 변동합니다.`} />
+            <Greek k="Rho" label="로(금리 1%p)" v={g.Rho} why={(x) => `금리 1%p 상승 시 옵션 가격이 약 ${sgn(x, 4)}원 변동합니다.`} />
           </dl>
           <Payoff kind={ran.option_type} K={ran.K} S={ran.S} price={g.Price} />
         </section>

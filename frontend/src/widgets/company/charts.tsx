@@ -131,7 +131,7 @@ export function PriceValueChart({ data, price, intrinsic, bands, height = 260 }:
       </p>
       {out.length > 0 && (
         <ul className="ci-pv-out" aria-label="그림 범위 밖 가치">
-          {out.map((b) => <li key={b.id}><span data-server>{b.label}</span> {won(b.lo)}~{won(b.hi)}: 현재가와 너무 멀어 그림 밖에 적었습니다(원천 자료를 확인하십시오)</li>)}
+          {out.map((b) => <li key={b.id}><span data-server>{b.label}</span> {won(b.lo)}~{won(b.hi)}: 현재가와 괴리가 커 차트 밖에 표시했습니다(원천 자료를 확인하십시오)</li>)}
         </ul>
       )}
     </div>

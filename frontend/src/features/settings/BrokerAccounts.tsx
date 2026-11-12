@@ -88,7 +88,7 @@ export function BrokerAccounts() {
               </div>
               {asking === a.account_id ? (
                 <div className="set-confirm set-broker-confirm" role="group" aria-label={`${a.label} 연결 끊기 확인`}>
-                  <span className="set-sub">연결을 끊습니다. 이 계좌로 낸 주문 기록은 남습니다.</span>
+                  <span className="set-sub">연결을 해제합니다. 이 계좌의 주문 기록은 보존됩니다.</span>
                   <button type="button" className="set-btn set-btn--sm set-btn--danger set-broker-delete-yes"
                           onClick={() => void remove(a.account_id)}>삭제</button>
                   <button type="button" className="set-btn set-btn--sm set-broker-cancel" onClick={() => setAsking(null)}>취소</button>
@@ -206,7 +206,7 @@ function ConnectForm({ onConnected }: { onConnected: () => void }) {
       </div>
       {kind === "real" ? (
         <p className="set-warn set-broker-real-note">
-          실계좌로 주문하려면 운영자가 실계좌 관문을 열어야 합니다. 연결만으로는 주문이 나가지 않습니다.
+          실계좌로 주문하려면 운영자가 실계좌 관문을 열어야 합니다. 연결만으로는 주문이 전송되지 않습니다.
         </p>
       ) : null}
       {error ? (

@@ -70,7 +70,7 @@ export function ClientSheet({ sheet, audience = "pb" }: { sheet: Sheet; audience
         </ol>
       </section>
       <Steps title="고객·계좌·목표" steps={client} />
-      <Steps title="어떻게 만들었나" steps={build} />
+      <Steps title="산출 과정" steps={build} />
       <Steps title="이번 점검의 결정" steps={decide} />
       {trust.length > 0 && (
         <section className="cs-sec">

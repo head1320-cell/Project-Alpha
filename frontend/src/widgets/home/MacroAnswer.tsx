@@ -39,7 +39,7 @@ export function MacroAnswer({ className, action }: { className: string; action?:
 
   const stress = Math.round(st.stress_score);
   const mode = MODE_KO[st.recommended_mode];
-  const sentence = mode ? `지금 경제 흐름은 ‘${mode}’ 단계입니다` : `지금 시장 스트레스는 ${stress}/100입니다`;
+  const sentence = mode ? `현재 경기 흐름은 ‘${mode}’ 단계입니다` : `현재 시장 스트레스는 ${stress}/100입니다`;
   const us = st.markets?.us;
   const figures: Figure[] = [
     { label: "시장 스트레스", value: `${stress}/100` },

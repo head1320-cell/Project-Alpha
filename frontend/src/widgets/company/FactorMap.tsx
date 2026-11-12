@@ -94,7 +94,7 @@ export function FactorDotMap({ groups, strengths, weaknesses }: { groups: Factor
       </div>
       <p className="ci-fmap-read" aria-live="polite">
         {active ? <><b>{active.label}</b> <span>{factorValue(active)}</span> <span className="ci-fmap-read-p">백분위 {active.pct}</span> <span className="ci-fmap-read-g">{active.group}</span></>
-          : "점에 올리거나 초점을 두면 그 팩터의 값과 백분위를 여기에 보여 줍니다."}
+          : "점에 포인터를 올리거나 초점을 두면 해당 팩터의 값과 백분위를 여기에 표시합니다."}
       </p>
     </div>
   );
@@ -112,7 +112,7 @@ export function FactorsSection({ c, onRetry }: { c: CompanyData; onRetry: () => 
     <div className="ca-cp-pad">
       {sampleFail ? <RetryFail title="비교할 종목 표본을 불러오지 못해 백분위 측정 불가" onRetry={onRetry}>팩터 값은 아래 목록에 그대로 있습니다. 백분위만 비어 있습니다.</RetryFail>
         : b && !known ? <p className="ci-fmap-reason">비교할 종목이 {b.n}개뿐이라 백분위를 측정하지 않았습니다(5개 이상 필요합니다). 팩터 값은 아래 목록에 있습니다.</p>
-        : b ? <p className="ci-sec-lede">{b.source === "db" ? `적재된 종목 ${b.n.toLocaleString("ko-KR")}개` : `코스피 200 종목 ${b.n.toLocaleString("ko-KR")}개`}와 견준 백분위입니다. 높을수록 그 팩터에서 좋은 쪽입니다(낮을수록 좋은 팩터는 뒤집어 셌습니다).</p>
+        : b ? <p className="ci-sec-lede">{b.source === "db" ? `적재된 종목 ${b.n.toLocaleString("ko-KR")}개` : `코스피 200 종목 ${b.n.toLocaleString("ko-KR")}개`} 대비 백분위입니다. 높을수록 해당 팩터에서 우수합니다(낮을수록 우수한 팩터는 역순으로 환산했습니다).</p>
         : null}
       {known && <FactorDotMap groups={groups} strengths={c.strengths} weaknesses={c.weaknesses} />}
       <div className="ca-cp-factop">

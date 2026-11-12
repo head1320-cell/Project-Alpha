@@ -147,7 +147,7 @@ export function studioAnswer(id: string, o: Outs): string | null {
     const l = o.latest as Record<string, unknown> | undefined;
     if (!l || !isNum(l.level) || !isNum(l.slope)) return null;
     const inv = o.inverted === true ? ", 역전됐습니다" : o.inverted === false ? ", 역전되지 않았습니다" : "";
-    return `지금 곡선은 수준 ${l.level.toFixed(2)}%, 기울기 ${signed(l.slope)}%p${inv}`;
+    return `현재 곡선은 수준 ${l.level.toFixed(2)}%, 기울기 ${signed(l.slope)}%p${inv}`;
   }
   if (id === "causal-deepm") {
     const e = Array.isArray(o.edges) ? o.edges.length : null;
@@ -186,7 +186,7 @@ function FactorViz({ o }: { o: Outs }) {
       )}
       {load.length > 0 && (
         <figure className="ms-viz-fig ms-viz-load">
-          <figcaption>계열마다 요인{k > 1 ? " 1" : ""}과 함께 움직이는 정도(적재)</figcaption>
+          <figcaption>계열별 요인{k > 1 ? " 1" : ""} 적재(요인에 대한 민감도)</figcaption>
           <ul className="ms-load">
             {load.map(([key, v]) => (
               <li key={key} className="ms-load-row">
@@ -227,7 +227,7 @@ function CurveViz({ o }: { o: Outs }) {
         <figure className="ms-viz-fig ms-viz-tp">
           <figcaption>기간프리미엄 대용(bp)</figcaption>
           <TpLine rows={tpRows} />
-          <p className="ms-viz-note">가로축은 관측 순서입니다. 무차익 조건 없이 잰 대용값이라 위험가격이 아닙니다.</p>
+          <p className="ms-viz-note">가로축은 관측 순서입니다. 무차익 조건 없이 추정한 대용치이므로 위험가격이 아닙니다.</p>
         </figure>
       )}
     </div>
@@ -284,7 +284,7 @@ export function StudioOutcome({ res, id }: { res: StudioResult; id: string }) {
   if (!res.available) {
     return (
       <UnavailableState
-        label={`${res.engine ?? "지금 쓰는 계산"}: 이번에는 계산할 수 없습니다`}
+        label={`${res.engine ?? "현재 사용 계산"}: 이번에는 계산할 수 없습니다`}
         reason={<span data-server><ServerText text={res.reason} /></span>}
       />
     );
@@ -300,7 +300,7 @@ export function StudioOutcome({ res, id }: { res: StudioResult; id: string }) {
         <p className="ms-out-na">이 엔진은 이번 실행에서 산출값을 내지 않았습니다.</p>
       ) : (
         <div className="ms-out-wrap">
-          <p className="ms-out-cap">서버가 낸 값 모두</p>
+          <p className="ms-out-cap">서버 산출값 전체</p>
           <table className="ms-out">
             <tbody>
               {rows.map(([k, v]) => (
@@ -329,7 +329,7 @@ export function FrontierCard({ d }: { d: StudioDescriptor }) {
           {f.note ?? "요건은 충족됐지만 이 엔진의 구현은 아직 없습니다. 계약만 있습니다."}
         </p>
       ) : (
-        <UnavailableState label="이 엔진은 지금 쓸 수 없습니다" reason={<ReasonWhy raw={f.reason} rawClass="ms-raw" />} />
+        <UnavailableState label="이 엔진은 현재 사용할 수 없습니다" reason={<ReasonWhy raw={f.reason} rawClass="ms-raw" />} />
       )}
     </section>
   );
@@ -379,7 +379,7 @@ export function StudioPanel({ id, months = 60 }: { id: string; months?: number }
       {d && <FrontierCard d={d} />}
 
       <section className="ms-card ms-card-sub">
-        <h2 className="ms-card-t">지금 쓰는 계산{d ? <>: <span data-server>{d.substitute.name}</span></> : ""}</h2>
+        <h2 className="ms-card-t">현재 사용 계산{d ? <>: <span data-server>{d.substitute.name}</span></> : ""}</h2>
         {d && <p className="ms-card-s" data-server><ServerText text={d.substitute.summary} /></p>}
         {runQ.isLoading && <LoadingState label="계산 중" />}
         {runQ.isError && <StudioFail title="계산 결과 수신 실패" onRetry={() => void runQ.refetch()} />}

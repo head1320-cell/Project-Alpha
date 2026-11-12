@@ -238,7 +238,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
               className={`bte-input bte-input--mono cfe-full${exprCheck && !exprCheck.ok ? " is-bad" : ""}`}
               onChange={(e) => { setDirectExpr(e.target.value); setExprCheck(null); }}
               placeholder="예: ({분기영업현금흐름}-{분기순이익}) 또는 {종가}/과거값('최고값({고가},{40일})',{1일})" />
-            <p className="bte-note">사칙연산(+ − × ÷) · 괄호 · {"{팩터}"} · 함수를 섞어 씁니다. 기간은 {"{20일}"}처럼, 비교할 값은 아래에 적습니다.</p>
+            <p className="bte-note">사칙연산(+ − × ÷) · 괄호 · {"{팩터}"} · 함수를 조합합니다. 기간은 {"{20일}"} 형식으로, 비교값은 아래에 입력합니다.</p>
           </div>
         )}
 
@@ -269,7 +269,7 @@ export default function ConditionFormulaEditor({ tone = "neutral", conditions, o
         <p className="cfe-preview">
           {lhsExpr && rhs !== ""
             ? <>이 조건 <b>{lhsLabel} {opSym(op)} {rhs}{op === "between" ? ` ~ ${rhs2 || "?"}` : ""}</b></>
-            : "팩터로 식을 만들고 값을 넣으면 조건이 완성됩니다."}
+            : "팩터로 식을 구성하고 값을 입력하면 조건이 완성됩니다."}
         </p>
 
         <button type="button" className="cfe-save" onClick={save} disabled={!canSave} data-act="cond-save">

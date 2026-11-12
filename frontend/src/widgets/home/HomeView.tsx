@@ -21,12 +21,12 @@ import { MacroAnswer } from "./MacroAnswer";
 
 /** 하는 일 순서 — 포트폴리오 설계가 제품의 중심(BK·BL)이라 맨 위. 설명은 하는 일 한 줄(수를 세지 않는다 — 세면 낡는다). */
 const TODO = [
-  { label: "포트폴리오 설계", href: "/allocation", sub: "종목·비중·점검을 한 화면에서 이어 설계합니다" },
-  { label: "종목 찾기", href: "/screener", sub: "조건을 걸어 종목을 고릅니다" },
+  { label: "포트폴리오 설계", href: "/allocation", sub: "종목·비중·점검을 한 화면에서 연결해 설계합니다" },
+  { label: "종목 찾기", href: "/screener", sub: "조건식으로 종목을 선별합니다" },
   { label: "백테스트", href: "/backtest", sub: "전략을 과거 데이터로 시뮬레이션합니다" },
-  { label: "매크로 분석", href: "/macro", sub: "경기와 물가가 어느 쪽으로 가는지 봅니다" },
-  { label: "기업 분석", href: "/insights", sub: "한 종목의 가치와 재무를 자세히 봅니다" },
-  { label: "위험 점검", href: "/risk-tools", sub: "충격이 오면 얼마나 잃을지 재 봅니다" },
+  { label: "매크로 분석", href: "/macro", sub: "경기·물가 국면의 방향을 분석합니다" },
+  { label: "기업 분석", href: "/insights", sub: "개별 종목의 가치와 재무를 심층 분석합니다" },
+  { label: "위험 점검", href: "/risk-tools", sub: "충격 시나리오별 종목 점수 변동을 점검합니다" },
 ];
 
 /** 홈 점수 표의 요청 — 바꾸면 화면 설명(아래 절 sub)도 같이 바꾼다. */
@@ -110,7 +110,7 @@ function DataRow() {
 export function HomeView() {
   return (
     <div className="tx-page home">
-      <PageHead title="홈" lede="시장 흐름을 보고, 오늘 할 일을 고릅니다." />
+      <PageHead title="홈" lede="시장 동향을 확인하고 오늘의 작업을 선택합니다." />
       <MacroAnswer className="home-macro" action={<Link href="/macro" className="tx-btn tx-btn--main">매크로 분석 보기</Link>} />
       <div className="home-grid">
         <div className="home-todo">

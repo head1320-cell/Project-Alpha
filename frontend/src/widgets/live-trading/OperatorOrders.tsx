@@ -15,7 +15,7 @@ type Filter = "all" | "sent" | "stopped" | "shadow";
 const FILTERS: { key: Filter; label: string; has: (status: string) => boolean }[] = [
   { key: "all", label: "전체", has: () => true },
   { key: "sent", label: "보냄", has: (st) => ["SUBMITTED", "PARTIAL_FILL", "FILLED", "CANCELLED"].includes(st) },
-  { key: "stopped", label: "멈춤", has: (st) => st === "REJECTED" || st === "FAILED" },
+  { key: "stopped", label: "중단", has: (st) => st === "REJECTED" || st === "FAILED" },
   { key: "shadow", label: "기록만", has: (st) => st === "SHADOW_LOGGED" },
 ];
 
@@ -28,14 +28,14 @@ export function OperatorOrders({ result, onRetry }: { result: Result<OpOrders> |
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="lv-orders-h">최근 주문</h2>
-          <p className="tx-sec-sub">운영 계좌로 나간 주문을 최근 20건까지 보입니다. 모든 모드가 섞여 있고, 줄마다 어디서 멈췄는지 보입니다.</p>
+          <p className="tx-sec-sub">운영 계좌에서 전송한 주문을 최근 20건까지 표시합니다. 모든 모드가 포함되며, 행마다 중단 단계를 표시합니다.</p>
         </div>
       </header>
       <div className="tx-sec-body">
         {!result ? (
           <p className="tx-sec-sub" aria-busy="true">주문 목록 조회 중</p>
         ) : !result.ok ? (
-          result.status === 401 ? <p className="tx-sec-sub">로그인해야 주문 목록을 볼 수 있습니다.</p>
+          result.status === 401 ? <p className="tx-sec-sub">로그인해야 주문 목록을 조회할 수 있습니다.</p>
             : <RetryFail title="주문 목록 조회 실패" onRetry={onRetry}>{result.error}</RetryFail>
         ) : all.length === 0 ? (
           <p className="tx-sec-sub">아직 나간 주문 없음</p>
@@ -49,7 +49,7 @@ export function OperatorOrders({ result, onRetry }: { result: Result<OpOrders> |
                 </button>
               ))}
             </div>
-            {rows.length === 0 ? <p className="tx-sec-sub lv-ord-none">이 무리에 든 주문 없음</p> : (
+            {rows.length === 0 ? <p className="tx-sec-sub lv-ord-none">이 그룹에 해당하는 주문 없음</p> : (
               <ul className="lv-ord-l">
                 {rows.map((o) => {
                   const stop = stopOf(o.status, o.reason_code);
@@ -62,16 +62,16 @@ export function OperatorOrders({ result, onRetry }: { result: Result<OpOrders> |
                       <span className="lv-ord-what">
                         <strong data-mono>{o.ticker}</strong>
                         <span className="lv-ord-side">
-                          {o.side === "BUY" ? "사기" : o.side === "SELL" ? "팔기" : <span data-server>{o.side}</span>}
+                          {o.side === "BUY" ? "매수" : o.side === "SELL" ? "매도" : <span data-server>{o.side}</span>}
                         </span>
                         <span>{filled}</span>
                         {o.price !== undefined ? <span>{priceWon(o.price)}</span> : null}
-                        {typeof o.strategy_id === "number" ? <span className="lv-ord-strat">{o.strategy_id === 0 ? "직접 낸 주문" : `전략 ${o.strategy_id}`}</span> : null}
+                        {typeof o.strategy_id === "number" ? <span className="lv-ord-strat">{o.strategy_id === 0 ? "수동 주문" : `전략 ${o.strategy_id}`}</span> : null}
                       </span>
                       <span className="lv-ord-state">
                         <span className="lv-ord-status">{status ?? <span data-server>{o.status}</span>}</span>
                         <span className="tx-chip lv-ord-stop" data-tone="plain" data-stop={stop}>
-                          {stop === "unknown" ? "멈춘 곳 미상" : stop === "broker" ? "끝까지 갔습니다" : `${STOPS.find((s) => s.key === stop)?.label}에서 멈춤`}
+                          {stop === "unknown" ? "중단 단계 미상" : stop === "broker" ? "전 단계를 통과했습니다" : `${STOPS.find((s) => s.key === stop)?.label}에서 중단`}
                         </span>
                         {o.execution_mode ? <span className="lv-ord-mode">{MODE_KO[o.execution_mode] ?? <span data-server>{o.execution_mode}</span>}</span> : null}
                       </span>

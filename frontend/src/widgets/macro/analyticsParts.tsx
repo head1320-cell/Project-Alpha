@@ -31,7 +31,7 @@ export const inkLegend = (v: string) => <span style={{ color: "var(--tx-ink)" }}
 export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
   const [cur, setCur] = useState<string | null>(null);
   const n = m.tickers.length;
-  if (!n) return <div className="mc-empty-sm">상관을 잴 자산 없음</div>;
+  if (!n) return <div className="mc-empty-sm">상관을 측정할 자산 없음</div>;
   const name = (i: number) => `${m.labels[i] ?? m.tickers[i]}(${m.tickers[i]})`;
   const say = (i: number, j: number) => `${name(i)} · ${name(j)} · ${signed(m.values[i][j])}`;
   /** 줄에 초점 → 그 자산과 가장 같이·가장 반대로 움직인 자산(자기 자신 제외). */
@@ -39,7 +39,7 @@ export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
     const others = m.values[i].map((v, j) => [v, j] as const).filter(([, j]) => j !== i);
     if (!others.length) return name(i);
     const hi = others.reduce((a, b) => (b[0] > a[0] ? b : a)), lo = others.reduce((a, b) => (b[0] < a[0] ? b : a));
-    return `${name(i)} · 가장 같이 움직인 ${name(hi[1])} ${signed(hi[0])} · 가장 반대로 움직인 ${name(lo[1])} ${signed(lo[0])}`;
+    return `${name(i)} · 최대 양의 상관 ${name(hi[1])} ${signed(hi[0])} · 최대 음의 상관 ${name(lo[1])} ${signed(lo[0])}`;
   };
   return (
     <div className="mc-matrix-wrap">
@@ -59,7 +59,7 @@ export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
           ))}
         </div>
       </div>
-      <div className="mc-zlegend"><span>반대로 움직입니다</span><i className="mc-zleg-grad" aria-hidden /><span>같이 움직입니다</span></div>
+      <div className="mc-zlegend"><span>음의 상관</span><i className="mc-zleg-grad" aria-hidden /><span>양의 상관</span></div>
       <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 고르면 여기에 두 자산과 상관이 나옵니다"}</p>
     </div>
   );

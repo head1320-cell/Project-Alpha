@@ -11,14 +11,14 @@ import { GATE_FIELDS, WILDCARD_EXAMPLES, declareLiveGate, type GateField } from 
 import { Sheet } from "@/shared/ui/tx";
 
 export const FIELD_KO: Record<GateField, string> = {
-  basis: "근거", authority: "확인한 곳", reference_no: "확인 번호", verified_at: "확인한 날", scope: "범위", allowed_users: "허용할 사용자",
+  basis: "근거", authority: "확인 기관", reference_no: "확인 번호", verified_at: "확인일", scope: "범위", allowed_users: "허용할 사용자",
 };
 const HINT: Record<GateField, string> = {
-  basis: "왜 실계좌를 여는지 적습니다. 예: 본인 계좌로만 주문하는 개인 운영",
+  basis: "실계좌 개방 근거를 입력합니다. 예: 본인 계좌로만 주문하는 개인 운영",
   authority: "근거를 확인한 기관이나 문서입니다. 예: 한국투자증권 오픈API 약관",
   reference_no: "그 문서나 확인의 번호입니다.",
   verified_at: "근거를 확인한 날입니다.",
-  scope: "어디까지 여는지 적습니다. 예: 운영 계좌 하나, 국내 주식",
+  scope: "개방 범위를 입력합니다. 예: 운영 계좌 하나, 국내 주식",
   allowed_users: `이름을 하나씩 더합니다. 모두에게 여는 값(예: ${WILDCARD_EXAMPLES.join(", ")})은 서버가 받지 않습니다.`,
 };
 type Text = Exclude<GateField, "allowed_users">;
@@ -55,8 +55,8 @@ export function GateForm({ open, hasCurrent, onClose, onDone }: {
 
   return (
     <Sheet open={open} onClose={() => { declare.reset(); onClose(); }} title="실계좌 관문 선언하기" testId="gate-declare" className="lv-sheet lvg-sheet"
-           sub={hasCurrent ? "새로 선언하면 지금 선언은 거둔 것으로 남습니다. 실계좌로 돌던 운영 계좌는 기록만으로 돌아갑니다."
-             : "선언하면 허용한 사용자만 실계좌로 주문할 수 있습니다. 무엇을 근거로 여는지 기록에 남습니다."}>
+           sub={hasCurrent ? "새로 선언하면 현재 선언은 철회된 것으로 기록됩니다. 실계좌로 운용하던 운영 계좌는 기록만 모드로 복귀합니다."
+             : "선언하면 허용한 사용자만 실계좌로 주문할 수 있습니다. 개방 근거는 기록에 남습니다."}>
       <form className="lvg-form" onSubmit={(e) => { e.preventDefault(); if (full) declare.mutate(); }}>
         {(Object.keys(EMPTY) as Text[]).map((k) => (
           <label key={k} className="lv-field" data-k={k}>

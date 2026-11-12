@@ -267,7 +267,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
       applyDisabled={applyDisabled}
       error={catalogError != null}
       errorText={catalogError ?? undefined}
-      note="쓸 수 있는지는 서버의 조건 토큰 목록이 정합니다 — 미가용 팩터는 계산에서 빠지므로 넣을 수 없습니다."
+      note="사용 가능 여부는 서버의 조건 토큰 목록이 결정합니다 — 미가용 팩터는 계산에서 제외되므로 추가할 수 없습니다."
       // 매수·매도 문맥 색 — 셸이 `data-tone` 으로 얹고 CSS 가 `--tx-*` 에서 고른다(BU3c).
       tone={tone}
     >
@@ -288,7 +288,7 @@ export default function FactorPickerModal({ open, tone = "neutral", initial, all
           {selInfo && !selInfo.ok && (support?.substitutes?.[factor.name]?.length ?? 0) > 0 && (
             <div className="fp-subs">
               <div className="fp-plabel">
-                대신 쓸 수 있는 팩터 — 누르면 골라집니다
+                대체 가능한 팩터 — 누르면 선택됩니다
               </div>
               <div className="fp-chips">
                 {support!.substitutes![factor.name].map((n) => {

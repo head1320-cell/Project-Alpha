@@ -61,12 +61,12 @@ export function ViewsStudio() {
       {d && <FrontierCard d={d} />}
 
       <section className="ms-card ms-card-sub">
-        <h2 className="ms-card-t">지금 쓰는 계산{d ? <>: <span data-server>{d.substitute.name}</span></> : ""}</h2>
+        <h2 className="ms-card-t">현재 사용 계산{d ? <>: <span data-server>{d.substitute.name}</span></> : ""}</h2>
         {d && <p className="ms-card-s" data-server><ServerText text={d.substitute.summary} /></p>}
 
         <form className="ms-views" onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
           <label className="ms-vf">
-            자산 코드(쉼표로 나눕니다)
+            자산 코드(쉼표로 구분)
             <input className="ms-vi ms-vi-w" data-mono value={assetsText}
                    onChange={(e) => setAssetsText(e.target.value)} />
           </label>
@@ -115,7 +115,7 @@ export function ViewsStudio() {
           // 빈 자리를 남기면 "검사했고 문제없음" 으로 읽힌다.
           <UnavailableState
             label="실현가능성: 검사하지 않았습니다"
-            reason="시나리오를 주지 않았습니다. 모순이 없다는 뜻이 아니라, 확인하지 않았다는 뜻입니다." />
+            reason="시나리오가 입력되지 않았습니다. 모순이 없다는 뜻이 아니라 미확인이라는 뜻입니다." />
         )}
       </section>
     </div>

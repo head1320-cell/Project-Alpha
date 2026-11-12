@@ -70,7 +70,7 @@ const TAB_NEEDS: Partial<Record<TabId, { main?: CoreKey; also?: CoreKey[] }>> = 
 function CoreFail({ k, retry }: { k: CoreKey; retry: () => void }) {
   return (
     <Notice tone="danger" title={`${CORE_KO[k]} 불러오지 못했습니다`}>
-      서버 연결 실패 또는 계산 실패. 받은 데이터로 그릴 수 있는 것만 보여 드립니다.
+      서버 연결 실패 또는 계산 실패. 수신한 데이터로 표시 가능한 항목만 표시합니다.
       <div className="mc-act"><button type="button" className="tx-btn tx-btn--sub" onClick={retry}>재시도</button></div>
     </Notice>
   );
@@ -226,7 +226,7 @@ export default function MacroCockpit({ core, coreFail = {}, onTransplant, onOpen
             <button type="button" className="tx-btn tx-btn--main mc-open-aas" onClick={onOpenInAAS} disabled={aasBusy}>
               {aasBusy ? "스냅샷 저장 중…" : "포트폴리오 설계에 넣기"}
             </button>
-            <span className="mc-head-note">지금 국면을 스냅샷으로 저장해 포트폴리오 설계의 국면 노드에 넣습니다.</span>
+            <span className="mc-head-note">현재 국면을 스냅샷으로 저장해 포트폴리오 설계의 국면 노드에 입력합니다.</span>
           </>) : undefined} />
         {aasError && (
           <Notice tone="danger" title="포트폴리오 설계로 넘기지 못했습니다">{aasError}</Notice>

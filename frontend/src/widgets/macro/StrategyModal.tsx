@@ -31,7 +31,7 @@ function strategyPerfView(d: StrategyDetail): PerfView {
     unit: "base100", dates: dated ? (d.perf.dates as string[]) : d.perf.curve.map((p) => String(p.t)),
     equity: d.perf.curve.map((p) => (Number.isFinite(p.v) ? p.v : null)),
     bench: null, benchLabel: null, drawdown: Array.isArray(dd) ? dd.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null)) : null,
-    note: d.perf.dates_note ?? null, rebalances: [], question: "이 전략의 비중을 달마다 다시 정해 왔다면 어땠나",
+    note: d.perf.dates_note ?? null, rebalances: [], question: "이 전략을 매월 리밸런싱했을 때의 과거 성과",
     learnFrom: null, asOf: null, practice: pl && typeof pl.data_real === "boolean" ? pl.data_real === false : null, perfLabel: pl,
     periods: dated ? (d.perf.periods ?? null) : null, drawdowns: dated ? (d.perf.drawdowns ?? null) : null,
     figures: [], summary: {}, metrics: null,
@@ -123,7 +123,7 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
               </div>
             </Section>
             <div className="sm-grid2">
-              <Section title="지금 담고 있는 것">
+              <Section title="현재 편입 자산">
                 <div className="sm-hold-wrap">
                   <HoldingsDonut holdings={holds} size={130} />
                   <div className="sm-holds">
@@ -167,9 +167,9 @@ export default function StrategyModal({ detail, loading, failed, onRetry, curren
                 <button type="button" className="sm-ai-btn tx-btn tx-btn--sub" onClick={runAi} disabled={aiLoading}>
                   {aiLoading ? "AI 분석을 만드는 중입니다" : ai ? "AI 분석 다시 만들기" : "AI 분석 만들기"}
                 </button>
-                {ai === undefined && !aiLoading && <span className="sm-ai-hint">지금 국면과 배분을 함께 읽고 이 전략이 맞는지 써 드립니다. 관리자가 AI 키를 넣어야 하고, 부를 때마다 비용이 듭니다.</span>}
+                {ai === undefined && !aiLoading && <span className="sm-ai-hint">현재 국면과 배분을 함께 분석해 이 전략의 적합성을 서술합니다. 관리자가 AI 키를 등록해야 하며, 호출마다 비용이 발생합니다.</span>}
                 {ai === null && !aiLoading && (
-                  <Notice tone="danger" title="AI 분석 수신 실패">서버에 닿지 못했거나 만들기에 실패했습니다. 단추를 다시 누르십시오.</Notice>
+                  <Notice tone="danger" title="AI 분석 수신 실패">서버 연결 또는 생성에 실패했습니다. 버튼을 다시 누르십시오.</Notice>
                 )}
                 {ai?.error && <div className="sm-ai-err" data-server>{ai.error}</div>}
                 {ai && !ai.error && ai.content && (

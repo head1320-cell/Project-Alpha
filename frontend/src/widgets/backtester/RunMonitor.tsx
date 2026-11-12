@@ -207,12 +207,12 @@ export function RunMonitor({ runId }: { runId: string }) {
                       서버에서는 계속 실행 중일 수 있습니다.
                       {storeCauseText && ` (${storeCauseText})`}
                     </span>
-                    <button type="button" className="brun-recheck" onClick={recheck}>지금 다시 확인</button>
+                    <button type="button" className="brun-recheck" onClick={recheck}>즉시 재확인</button>
                   </>
                 )}
               </div>
             </div>
-            <p className="rs-why">끝나면 결과 화면으로 저절로 옮겨 갑니다. 이 창을 닫아도 실행은 계속됩니다.</p>
+            <p className="rs-why">완료되면 결과 화면으로 자동 이동합니다. 이 창을 닫아도 실행은 계속됩니다.</p>
           </section>
 
           <section className="brun-card rs-card">
@@ -253,7 +253,7 @@ export function RunMonitor({ runId }: { runId: string }) {
                   {Object.keys(cfg).length === 0 && <tr><td colSpan={2} className="brun-note">설정 조회 중</td></tr>}
                 </tbody>
               </table>
-              <p className="brun-note">가격·비용은 실행 전에 정한 추정입니다. 결과는 끝난 뒤 고정 주소에서 다시 볼 수 있습니다.</p>
+              <p className="brun-note">가격·비용은 실행 전에 설정한 추정치입니다. 결과는 완료 후 고정 주소에서 다시 조회할 수 있습니다.</p>
             </details>
           </section>
         </>

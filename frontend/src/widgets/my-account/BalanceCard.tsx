@@ -62,7 +62,7 @@ export function BalanceCard({ q }: { q: UseQueryResult<Balance> }) {
                         {name ? <span className="ma-code" data-mono>{p.ticker}</span> : null}
                       </span>
                       <span className="ma-pos-q">{p.quantity === null ? "수량 미상" : `${num(p.quantity)}주`}</span>
-                      <span className="ma-pos-p">평균 {priceWon(p.avg_price)} · 지금 {priceWon(p.current_price)}</span>
+                      <span className="ma-pos-p">평균 {priceWon(p.avg_price)} · 현재가 {priceWon(p.current_price)}</span>
                       <span className="tx-delta ma-pos-pnl" data-dir={direction(pnl)}>
                         {pnl === null ? "손익 미상" : signedPct(pnl)}
                       </span>

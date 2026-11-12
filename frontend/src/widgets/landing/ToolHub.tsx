@@ -16,11 +16,11 @@ import { Building2, ChevronRight, Globe2, LineChart, ListFilter, ShieldAlert, Wo
 
 type Tool = { t: string; href: string; d: string; node: string; Icon: LucideIcon; side: "l" | "r" };
 const TOOLS: Tool[] = [
-  { t: "종목 찾기", href: "/screener", d: "조건을 걸어 종목을 고릅니다", node: "스크리닝", Icon: ListFilter, side: "l" },
+  { t: "종목 찾기", href: "/screener", d: "조건식으로 종목을 선별합니다", node: "스크리닝", Icon: ListFilter, side: "l" },
   { t: "백테스트", href: "/backtest", d: "매매 규칙을 과거 데이터로 시뮬레이션합니다", node: "조건식 백테스트", Icon: LineChart, side: "l" },
-  { t: "매크로 분석", href: "/macro", d: "경기와 물가가 어느 쪽으로 가는지 봅니다", node: "경기 국면", Icon: Globe2, side: "r" },
-  { t: "기업 분석", href: "/insights", d: "한 종목의 가치와 재무를 자세히 봅니다", node: "기업 가치평가", Icon: Building2, side: "r" },
-  { t: "위험 점검", href: "/risk-tools", d: "충격이 오면 어디가 먼저 무너지는지 봅니다", node: "시나리오 스트레스", Icon: ShieldAlert, side: "r" },
+  { t: "매크로 분석", href: "/macro", d: "경기·물가 국면의 방향을 분석합니다", node: "경기 국면", Icon: Globe2, side: "r" },
+  { t: "기업 분석", href: "/insights", d: "개별 종목의 가치와 재무를 심층 분석합니다", node: "기업 가치평가", Icon: Building2, side: "r" },
+  { t: "위험 점검", href: "/risk-tools", d: "충격 시나리오별 종목 점수 변동을 점검합니다", node: "시나리오 스트레스", Icon: ShieldAlert, side: "r" },
 ];
 
 const useIsoLayout = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -110,7 +110,7 @@ export function ToolHub() {
       <Link href="/allocation" className="ld-mod ld-hub-core" ref={hub}>
         <span className="ld-hub-core-i" aria-hidden><Workflow size={28} strokeWidth={1.8} /></span>
         <span className="ld-mod-t">포트폴리오 설계</span>
-        <span className="ld-mod-d">다섯 도구의 결과가 노드로 들어와 하나의 설계가 됩니다. 결정한 이유까지 함께 남깁니다.</span>
+        <span className="ld-mod-d">다섯 도구의 결과가 노드로 연결되어 하나의 설계를 구성합니다. 결정 근거도 함께 기록합니다.</span>
         <ChevronRight className="ld-mod-go ld-hub-core-go" size={20} aria-hidden />
       </Link>
       <div className="ld-hub-col" data-col="r">

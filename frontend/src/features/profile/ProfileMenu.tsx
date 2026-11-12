@@ -87,7 +87,7 @@ export function ProfileMenu() {
             </div>
             {!ready && theme !== "light" ? (
               <p className="pf-sub pf-theme-note">
-                이 화면은 아직 밝게만 볼 수 있습니다. 다른 화면은 고른 테마를 따릅니다.
+                이 화면은 현재 라이트 테마만 지원합니다. 다른 화면은 선택한 테마를 따릅니다.
               </p>
             ) : null}
           </div>

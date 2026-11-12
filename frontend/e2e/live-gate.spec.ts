@@ -36,7 +36,7 @@ async function fill(page: Page, o: Partial<Record<"basis" | "authority" | "refer
 test("BU9b 관문: 닫힘 · 지난 선언 최신 먼저 · 거둔 사람과 때", async ({ page }) => {
   await open(page, { current: null, history: [OLD] });
   await expect(page.locator(".lvg-now")).toHaveAttribute("data-open", "false");
-  await expect(page.locator(".lvg-now")).toContainText("지금 닫혀 있습니다");
+  await expect(page.locator(".lvg-now")).toContainText("현재 닫혀 있습니다");
   await expect(page.locator(".lvg-revoke-open"), "닫혀 있으면 거둘 것이 없다").toHaveCount(0);
   await expect(page.locator(".lvg-h")).toHaveCount(1);
   await expect(page.locator(".lvg-h").first()).toContainText("10월 9일 21:00에 admin 님이 거둠");
@@ -49,7 +49,7 @@ test("BU9b 관문: 열림 — 근거·허용 사용자를 서버 값 그대로 (
   await expect(page.locator('.lvg-now + .lvg-facts [data-k="basis"] dd')).toHaveText(GATE_OPEN.basis);
   await expect(page.locator('.lvg-now + .lvg-facts [data-k="allowed_users"] li')).toHaveText(["admin"]);
   const t = await page.locator(".lvg-h-t").allTextContents();
-  expect(t[0], "최신 선언이 먼저").toContain("지금 열려 있습니다");
+  expect(t[0], "최신 선언이 먼저").toContain("현재 열려 있습니다");
   expect(t[1]).toContain("거둠");
 });
 
@@ -108,7 +108,7 @@ test("BU9b 관문: 거두기는 확인 — 취소 0 · 확인 DELETE 1 · 404 �
   expect(calls.filter((c) => c.m === "DELETE")).toHaveLength(0);
   await page.locator(".lvg-revoke-open").click();
   await page.locator(".lvg-revoke-yes").click();
-  await expect(page.locator(".lvg-said")).toContainText("관문을 거뒀습니다");
+  await expect(page.locator(".lvg-said")).toContainText("관문을 철회했습니다");
   expect(calls.filter((c) => c.m === "DELETE")).toHaveLength(1);
   await expect(page.locator(".lvg-now")).toHaveAttribute("data-open", "false");
   // 404 — 그사이 다른 관리자가 거뒀다면 서버 사유 그대로

@@ -38,7 +38,7 @@ export function BondCalc() {
         <div className="dv-grid">
           <NumField id="dv-face" label="액면가" unit="원" value={raw.face} onChange={set("face")} missing={miss("face")} />
           <NumField id="dv-cpn" label="표면금리(연)" unit="%" value={raw.coupon} onChange={set("coupon")} missing={miss("coupon")} hint="채권이 약속한 이자율" />
-          <NumField id="dv-ytm" label="만기수익률(연)" unit="%" value={raw.ytm} onChange={set("ytm")} missing={miss("ytm")} hint="지금 시장이 요구하는 수익률" />
+          <NumField id="dv-ytm" label="만기수익률(연)" unit="%" value={raw.ytm} onChange={set("ytm")} missing={miss("ytm")} hint="현재 시장 요구수익률" />
           <NumField id="dv-yrs" label="남은 만기" unit="년" value={raw.years} onChange={set("years")} missing={miss("years")} step="1" hint="1 이상의 정수" />
         </div>
         <div className="dv-kind"><span className="dv-field-l">이자를 받는 횟수(1년에)</span>
@@ -58,9 +58,9 @@ export function BondCalc() {
           <dl className="dv-figs" data-testid="bond-figs">
             <Fig k="Price" label="가격" value={won(b.Price, 2)} why={b.Price < ran.face_value ? "시장 수익률이 표면금리보다 높아 액면보다 싸게 거래됩니다." : b.Price > ran.face_value ? "시장 수익률이 표면금리보다 낮아 액면보다 비싸게 거래됩니다." : "시장 수익률과 표면금리가 같아 액면과 같습니다."} />
             <Fig k="Macaulay_Duration" label="맥컬리 듀레이션" value={`${b.Macaulay_Duration.toFixed(2)}년`} why="이자와 원금을 받는 시점을 금액으로 가중 평균한 값입니다." />
-            <Fig k="Modified_Duration" label="수정 듀레이션" value={b.Modified_Duration.toFixed(2)} why={`수익률이 1%p 오르면 가격이 약 ${b.Modified_Duration.toFixed(2)}% 내립니다.`} />
-            <Fig k="Convexity" label="볼록성" value={b.Convexity.toFixed(2)} why="수익률이 크게 움직일 때 듀레이션만으로 잰 가격 변화를 바로잡는 정도입니다." />
-            <Fig k="DV01" label="DV01" value={won(b.DV01, 4)} why={`수익률이 0.01%p 오르면 가격이 약 ${won(b.DV01, 4)} 내립니다.`} />
+            <Fig k="Modified_Duration" label="수정 듀레이션" value={b.Modified_Duration.toFixed(2)} why={`수익률 1%p 상승 시 가격이 약 ${b.Modified_Duration.toFixed(2)}% 하락합니다.`} />
+            <Fig k="Convexity" label="볼록성" value={b.Convexity.toFixed(2)} why="수익률 변동이 클 때 듀레이션 기반 가격 변화 추정을 보정하는 정도입니다." />
+            <Fig k="DV01" label="DV01" value={won(b.DV01, 4)} why={`수익률 0.01%p(1bp) 상승 시 가격이 약 ${won(b.DV01, 4)} 하락합니다.`} />
           </dl>
         </section>
       ) : null}

@@ -69,7 +69,7 @@ function CoverageBlock() {
           <>
             {ladder && (
               <div className="mx-ladder">
-                <p>지금 분석 단계는 <b>레벨 {ladder.level}</b>입니다. 레벨은 L0 이 가장 높습니다.</p>
+                <p>현재 분석 단계는 <b>레벨 {ladder.level}</b>입니다. 레벨은 L0 이 가장 높습니다.</p>
                 {ladder.note && <p className="mx-why" data-server>{ladder.note}</p>}
                 {ladder.blocked_level && ladder.blocked_reason && (
                   <div className="mx-ladder-why">
@@ -97,7 +97,7 @@ function CoverageBlock() {
                       <td className="num">{p.verified}</td>
                       <td>
                         {p.backtest_eligible
-                          ? <span className="mx-ok">쓸 수 있습니다</span>
+                          ? <span className="mx-ok">사용할 수 있습니다</span>
                           : <span className="mx-fwd">앞으로만 씁니다</span>}
                       </td>
                     </tr>
@@ -271,7 +271,7 @@ function ConsensusBlock() {
             </p>
             <p className="mx-verdict-s">
               {d.consensus
-                ? <span className="mx-ok">쓸 수 있는 도구가 모두 같습니다</span>
+                ? <span className="mx-ok">사용 가능한 도구가 모두 동일합니다</span>
                 : <span className="mx-split">도구끼리 갈렸습니다</span>}
               <span>불일치 점수 <b className="num">{d.disagreement.score.toFixed(2)}</b></span>
             </p>

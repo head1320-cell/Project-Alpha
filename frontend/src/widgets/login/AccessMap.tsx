@@ -31,7 +31,7 @@ const TIERS: { key: TierKey; Icon: LucideIcon }[] = [
 const MODE_SAY: Record<string, string> = {
   SHADOW: "주문 없이 신호만 기록합니다",
   PAPER: "가상으로 체결합니다",
-  LIVE: "실제 돈으로 주문합니다",
+  LIVE: "실제 자금으로 주문합니다",
 };
 
 async function liveMode(): Promise<string | null> {
@@ -59,8 +59,8 @@ export function AccessMap() {
     <section className="lg-map" aria-labelledby="lg-map-h">
       <h2 id="lg-map-h" className="lg-map-h">로그인이 여는 것</h2>
       <div className="lg-srv">
-        <span className="lg-srv-k">지금 이 서버</span>
-        <Chips items={chips} label="지금 이 서버의 상태" />
+        <span className="lg-srv-k">현재 서버</span>
+        <Chips items={chips} label="현재 서버 상태" />
       </div>
       <ol className="lg-tiers">
         {TIERS.map(({ key, Icon }, i) => {

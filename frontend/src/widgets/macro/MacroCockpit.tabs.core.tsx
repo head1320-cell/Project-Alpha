@@ -71,7 +71,7 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
         {regime.description && <p className="mc-card-note" data-server>{regime.description}</p>}
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">한국 · 미국 비교 <span className="mc-card-sub">같은 방식으로 바꾼 z(지난 평균에서 떨어진 정도)를 나란히 놓았습니다</span></div>
+        <div className="mc-card-h">한국 · 미국 비교 <span className="mc-card-sub">동일 방식으로 변환한 z(과거 평균 대비 편차)를 비교했습니다</span></div>
         {krus === undefined && <Loading>한국·미국 비교 계산 중</Loading>}
         {krus === null && <LoadFail title="한국·미국 비교 조회 실패" onRetry={onRetryKrus} />}
         {krus && <KrUsCompareTable data={krus} />}
@@ -86,7 +86,7 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
         <ArcGauge value={regime.stress_score} label="/100" sub={`권장 단계 ‘${mode}’`} ends={["0 · 안정", "100 · 불안"]} />
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">추천 자산배분 <span className="mc-card-sub">{regimeName(quad)} 국면 기준 · 규칙·성과·AI 점수를 합쳤습니다</span></div>
+        <div className="mc-card-h">추천 자산배분 <span className="mc-card-sub">{regimeName(quad)} 국면 기준 · 규칙·성과·AI 점수를 결합했습니다</span></div>
         {recommend?.top && Array.isArray(recommend.top.holdings_final) ? (
           <div className="mc-reco-mini">
             {recommend.low_conviction && (
@@ -119,7 +119,7 @@ export function OverviewTab({ core, regime, quad, recommend, onTransplant, onDri
         {yc?.points?.length ? <YieldCurveChart points={yc.points} /> : <div className="mc-empty-sm">곡선 자료 없음</div>}
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">평균에서 가장 먼 지표 <span className="mc-card-sub">z 크기 순 6개 · 누르면 36개월 흐름을 봅니다</span></div>
+        <div className="mc-card-h">평균에서 가장 먼 지표 <span className="mc-card-sub">z 절대값 상위 6개 · 누르면 36개월 추이를 표시합니다</span></div>
         <div className="mc-ext">
           {extreme.map((ind) => (
             <button type="button" key={ind.id} className="mc-ext-row" onClick={() => onDrill(ind.id)}>
@@ -154,7 +154,7 @@ export function IndicatorsTab({ core, onDrill, cbSent, onRetryCb }: { core: Macr
         value={q} onChange={(e) => setQ(e.target.value)} aria-label="지표 찾기" />
       {/* 글을 자료로: 중앙은행 정책문의 말투(딱딱한 지표가 늦게 나오는 것을 보완) */}
       <div className="mc-card">
-        <div className="mc-card-h">중앙은행 말투(긴축 쪽 · 완화 쪽) <span className="mc-card-sub">정책문에서 긴축 쪽 낱말과 완화 쪽 낱말이 얼마나 나오는지 셌습니다</span></div>
+        <div className="mc-card-h">중앙은행 말투(긴축 쪽 · 완화 쪽) <span className="mc-card-sub">정책문에서 긴축·완화 어휘의 빈도를 집계했습니다</span></div>
         {cbSent === undefined && <Loading>정책문 조회 중</Loading>}
         {cbSent === null && <LoadFail title="중앙은행 말투 조회 실패" onRetry={onRetryCb} />}
         {cbSent && (
@@ -166,7 +166,7 @@ export function IndicatorsTab({ core, onDrill, cbSent, onRetryCb }: { core: Macr
         {cbSent?.method && <p className="mc-card-note">계산 방법: <span data-server>{cbSent.method}</span></p>}
       </div>
       <div className="mc-card">
-        <div className="mc-card-h">지표 지도(지표 {n}개) <span className="mc-card-sub">z는 지난 5년 평균에서 표준편차 몇 개만큼 떨어졌는지입니다. 칸을 누르면 36개월 흐름을 봅니다.</span></div>
+        <div className="mc-card-h">지표 지도(지표 {n}개) <span className="mc-card-sub">z는 최근 5년 평균 대비 표준편차 단위 편차입니다. 칸을 누르면 36개월 추이를 표시합니다.</span></div>
         <ZHeatmap themes={themes} onPick={(ind) => onDrill(ind.id)} />
         <LevelLegend lo="평균 하회" hi="평균 상회" />
       </div>
@@ -212,7 +212,7 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
         )}
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">지금 국면 좌표(성장 × 물가)</div>
+        <div className="mc-card-h">현재 국면 좌표(성장 × 물가)</div>
         <RegimeScatter g={regime.growth_axis} i={regime.inflation_axis} />
       </div>
       {/* 사이클 띠 — 지표 × 18개월, 칸 색 = 그 달의 z(축과 같은 방식) */}
@@ -244,12 +244,12 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
             <AxisBreakdown title="성장 축" detail={regime.axis_detail.growth} />
             <AxisBreakdown title="물가 축" detail={regime.axis_detail.inflation} />
           </div>
-          <p className="mc-card-note">지표 지도의 z는 원래 수준으로 잰 값입니다(지수형 지표는 늘 오르니 구조적으로 +가 나옵니다). 국면 축은 전년 대비로 바꾼 z를 씁니다. 두 숫자가 다른 건 모순이 아니라 바꾸는 방식이 달라서입니다. 이 표가 축에 실제로 들어간 값입니다.</p>
+          <p className="mc-card-note">지표 지도의 z는 원수준(level) 기준 값입니다(지수형 지표는 추세적으로 상승해 구조적으로 +가 나옵니다). 국면 축은 전년 대비 변환 z를 사용합니다. 두 수치의 차이는 모순이 아니라 변환 방식의 차이입니다. 이 표가 축에 실제로 반영된 값입니다.</p>
         </div>
       )}
       {regime.regime_probs && (
         <div className="mc-card">
-          <div className="mc-card-h">국면 확률 <span className="mc-card-sub">축 점수의 불확실성(±표준오차)으로 셌습니다 · 합은 100%</span></div>
+          <div className="mc-card-h">국면 확률 <span className="mc-card-sub">축 점수의 불확실성(±표준오차)으로 산출했습니다 · 합은 100%</span></div>
           <ProbBars probs={regime.regime_probs} />
         </div>
       )}
@@ -275,7 +275,7 @@ export function RegimeTab({ regime, traj, onRetryTraj, strips, onRetryStrips, ax
         {regime.yield_curve?.points?.length ? <YieldCurveChart points={regime.yield_curve.points} /> : <div className="mc-empty-sm">곡선 자료 없음</div>}
       </div>
       <div className="mc-card span2">
-        <div className="mc-card-h">자산군 비중 방향 <span className="mc-card-sub">지금 국면이면 규칙이 어느 쪽으로 기울이는지입니다</span></div>
+        <div className="mc-card-h">자산군 비중 방향 <span className="mc-card-sub">현재 국면에서 규칙이 정하는 비중 조정 방향입니다</span></div>
         <div className="mc-tilts">
           {tilts.map(([asset, sym]) => {
             const m = TILT_STEP[String(sym)] ?? { v: 0, lbl: String(sym) };
@@ -320,7 +320,7 @@ export function ValuationTab({ core, aStrips, onRetryAStrips }: { core: MacroCor
         <div className="mc-card-h">자산군 가격 z(지난 5년) <span className="mc-card-sub">0보다 크면 가격이 지난 5년 평균보다 높은 구간, 작으면 낮은 구간입니다</span></div>
         <ValuationBars assets={v.assets} />
         <LevelLegend lo="가격이 평균보다 낮습니다" hi="높습니다" />
-        <p className="mc-card-note">가격으로만 본 고평가·저평가 구간입니다(이익 대비 배수가 아닙니다). 높은 구간은 되돌아올 위험이, 낮은 구간은 나눠 사기를 생각해 볼 여지가 있습니다. 자산배분에서 낮은 자산 비중을 늘리는 출발점으로 씁니다.</p>
+        <p className="mc-card-note">가격만으로 판단한 고평가·저평가 구간입니다(이익 대비 배수가 아닙니다). 높은 구간은 평균 회귀 위험이, 낮은 구간은 분할 매수를 검토할 여지가 있습니다. 자산배분에서 저평가 자산 비중 확대를 검토하는 출발점으로 사용합니다.</p>
       </div>
       <div className="mc-card span2">
         <div className="mc-card-h">한국 시장 가치</div>
@@ -330,7 +330,7 @@ export function ValuationTab({ core, aStrips, onRetryAStrips }: { core: MacroCor
             <div className="mc-krval-item"><dt>시장 PBR 중앙값</dt><dd>{fmtNum(v.kr_market.pbr_median)}배</dd></div>
             <div className="mc-krval-item"><dt>표본 종목 수</dt><dd>{v.kr_market.n.toLocaleString()}개</dd></div>
           </dl>
-        ) : <div className="mc-empty-sm">종목 스냅샷을 적재하면 한국 시장 PER·PBR을 보여 드립니다</div>}
+        ) : <div className="mc-empty-sm">종목 스냅샷을 적재하면 한국 시장 PER·PBR을 표시합니다</div>}
       </div>
     </div>
   );

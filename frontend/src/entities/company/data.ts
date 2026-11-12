@@ -320,7 +320,7 @@ export async function loadRisk(code: string): Promise<RiskInfo> {
     const g = v as Record<string, unknown>;
     return { varPct: fin(g.var_pct), esAmount: fin(g.es_amount), vol: fin(g.volatility) ?? fin(g.annual_vol), sharpe: null, mdd: null };
   }
-  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: `이 종목의 일별 시세가 ${closes.length}일뿐이라 시세로 잰 위험 산출 실패(30일 이상 필요합니다).` };
+  return { varPct: null, esAmount: null, vol: null, sharpe: null, mdd: null, note: `이 종목의 일별 시세가 ${closes.length}일뿐이라 시세 기반 위험 산출 실패(30일 이상 필요합니다).` };
 }
 
 export async function loadNarrative(item: object, valuationDetail: object): Promise<NarrativeInfo> {

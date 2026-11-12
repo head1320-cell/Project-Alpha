@@ -123,7 +123,7 @@ function RegimeCard({ market, label, st }: { market: "kr" | "us"; label: string;
               </li>
             ))}
           </ul>
-        ) : <p className="rv-none">국면별 확률 수신 실패. 판정 이름만 보여 드립니다.</p>}
+        ) : <p className="rv-none">국면별 확률 수신 실패. 판정 결과만 표시합니다.</p>}
       </div>
       <div className="rv-axes">
         <Axis id="growth" label="성장" lo="약합니다" hi="강합니다" v={st.growth_axis} />

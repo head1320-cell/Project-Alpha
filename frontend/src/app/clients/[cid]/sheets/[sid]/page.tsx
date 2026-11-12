@@ -2,7 +2,7 @@ import { SheetView } from "@/widgets/clients/SheetView";
 
 export const metadata = {
   title: "고객 한 장",
-  description: "서버가 재계산한 고객 포트폴리오 한 장을 보고, 인쇄하고, 고객 AI 를 미리 물어봅니다",
+  description: "서버가 재계산한 고객 포트폴리오 한 장을 조회·인쇄하고 고객 AI 응답을 사전 확인합니다",
 };
 
 /** /clients/<cid>/sheets/<sid> (CF 3부 PB4) — 화면은 `widgets/clients/SheetView`. */

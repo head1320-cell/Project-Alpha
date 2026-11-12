@@ -227,20 +227,20 @@ test("BV9: 주소의 계좌가 내 목록에 없으면 그렇다고 말하고 �
 test("BV9: 답 문장은 모드·합성 여부를 따른다 (짝 넷)", async ({ page }) => {
   const { st } = await setup(page);
   await page.goto("/my-account");
-  await expect(sentence(page)).toHaveText("‘내 모의 계좌’에서 내는 주문은 지금 기록만 됩니다. 증권사로 보내지 않습니다.");
+  await expect(sentence(page)).toHaveText("‘내 모의 계좌’에서 제출하는 주문은 현재 기록만 남깁니다. 증권사로 전송하지 않습니다.");
 
   st.mode.ba_1 = "PAPER";
   await page.reload();
-  await expect(sentence(page)).toContainText("가상 체결기로 갑니다");
+  await expect(sentence(page)).toContainText("가상 체결기로 전송됩니다");
 
   st.mockAllowed = false;
   await page.reload();
-  await expect(sentence(page)).toContainText("증권사 모의 서버로 갑니다");
+  await expect(sentence(page)).toContainText("증권사 모의 서버로 전송됩니다");
   await expect(sentence(page)).not.toContainText("합성");
 
   st.mockAllowed = "fail";
   await page.reload();
-  await expect(sentence(page)).toContainText("모의 체결로 갑니다");
+  await expect(sentence(page)).toContainText("모의 체결로 처리됩니다");
   await expect(sentence(page)).not.toContainText("가상 체결기");
   await expect(sentence(page)).not.toContainText("증권사 모의 서버");
 });
@@ -249,7 +249,7 @@ test("BV9: 비상 정지 — 내가 건 정지와 그 밖의 정지를 가른다
   const { st } = await setup(page);
   st.kill.ba_1 = { active: true, event: { event_id: "K-1", trigger_reason: "잠깐 멈춤", triggered_at: "2026-10-09T12:05:00" } };
   await page.goto("/my-account");
-  await expect(sentence(page)).toContainText("비상 정지 중이라 주문이 나가지 않습니다");
+  await expect(sentence(page)).toContainText("비상 정지 중이라 주문이 전송되지 않습니다");
   await expect(page.locator(".ma-kill-resolve-open")).toBeVisible();
   await expect(station(page, "kill")).toContainText("잠깐 멈춤");
   await expect(station(page, "kill")).toHaveAttribute("data-blocked", "true");
@@ -283,7 +283,7 @@ test("BV9: 길은 서버 순서대로 네 역이고 지금 상태를 말한다",
   expect(keys).toEqual(["kill", "risk", "mode", "broker"]);
   await expect(station(page, "kill")).toContainText("미사용");
   await expect(station(page, "kill")).not.toHaveAttribute("data-blocked", /.*/);   // 짝: 꺼져 있으면 막힘 표시 없음
-  await expect(station(page, "broker")).toContainText("보내지 않습니다");
+  await expect(station(page, "broker")).toContainText("전송하지 않습니다");
   await expect(page.locator('.ma-mode-b[data-mode="SHADOW"]')).toHaveAttribute("aria-pressed", "true");
   await expect(station(page, "broker")).toContainText("잔고 조회를 받아 줬습니다"); // 마지막 연결 확인 = 서버 준비 목록의 connection
 });
@@ -313,7 +313,7 @@ test("BV9: 모의 체결로 바꾸기는 확인을 거친다 — 취소면 요�
   expect(sent.filter((s) => s.method === "POST")).toEqual([]);
   await page.locator('.ma-mode-b[data-mode="PAPER"]').click();
   await page.locator(".ma-mode-yes").click();
-  await expect(sentence(page)).toContainText("가상 체결기로 갑니다");
+  await expect(sentence(page)).toContainText("가상 체결기로 전송됩니다");
   expect(sent.filter((s) => s.method === "POST")).toEqual([{ method: "POST", path: "/ba_1/mode", body: { mode: "PAPER" } }]);
 });
 
@@ -444,7 +444,7 @@ test("BV9: 주문 요청이 실패하면 alert — 결과처럼 그리지 않는
   await fillOrder(page);
   await page.locator(".ma-order-check").click();
   await page.locator(".ma-order-send").click();
-  await expect(page.locator("form.ma-order").getByRole("alert")).toContainText("주문을 보내지 못했습니다");
+  await expect(page.locator("form.ma-order").getByRole("alert")).toContainText("주문 전송 실패");
   await expect(page.locator(".ma-path")).not.toHaveAttribute("data-stop", /.+/);
 });
 
@@ -471,7 +471,7 @@ test("BV9: 최근 주문은 서버 행 그대로 · 상태 번역 · 멈춘 곳 
   const rows = page.locator(".ma-ord");
   await expect(rows).toHaveCount(4);
   await expect(rows.nth(0).locator(".ma-ord-status")).toHaveText("기록만");
-  await expect(rows.nth(1).locator(".ma-ord-status")).toHaveText("보냈습니다");
+  await expect(rows.nth(1).locator(".ma-ord-status")).toHaveText("전송 완료");
   await expect(rows.nth(2).locator(".ma-ord-status")).toHaveText("주문하지 않았습니다");
   await expect(rows.nth(2).locator(".ma-ord-stop")).toHaveAttribute("data-stop", "risk");
   await expect(rows.nth(3).locator(".ma-ord-status")).toContainText("WEIRD_STATE");
@@ -493,7 +493,7 @@ test("BV9: 비상 정지는 사유 4자 이상 · 보유는 그대로(hold)만 �
   await page.goto("/my-account");
   await page.locator(".ma-kill-open").click();
   const sheet = page.locator('[data-sheet="kill"]');
-  await expect(sheet).toContainText("보유 종목은 팔지 않습니다");
+  await expect(sheet).toContainText("보유 종목은 매도하지 않습니다");
   await expect(sheet).not.toContainText("즉시");
   await expect(sheet).not.toContainText("분할");
   await sheet.locator('textarea[name="ma-kill-reason"]').fill("멈춰");
@@ -584,7 +584,7 @@ test("BV9: 보유에서 고르면 코드와 지금 값이 채워지고 사기/�
   await f.locator('.ma-hold[data-ticker="000660"]').click();
   await expect(f.locator('input[name="ma-ticker"]')).toHaveValue("000660");
   await expect(f.locator('input[name="ma-price"]')).toHaveValue("130000");
-  await expect(f.locator(".ma-price-from")).toContainText("잔고의 지금 값");
+  await expect(f.locator(".ma-price-from")).toContainText("잔고의 현재가");
   await expect(f.locator('.ma-hold[data-ticker="000660"]')).toHaveAttribute("aria-pressed", "true");
   await expect(f.locator('.ma-hold[data-ticker="005930"]')).toHaveAttribute("aria-pressed", "false");
   await expect(f.locator('.ma-side [aria-pressed="true"]')).toHaveCount(0);  // 돈이 걸린 선택은 대신 고르지 않는다

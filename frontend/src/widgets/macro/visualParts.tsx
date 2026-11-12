@@ -34,7 +34,7 @@ export function CycleStripGrid({ data }: { data: CycleStrips }) {
         const last = row.cells.length - 1;
         return (
           <div key={row.key} className="mv-strip-row" tabIndex={0} role="group"
-               aria-label={`${nameTxt}: ${ym(months[0])} z ${signed(row.cells[0])}, 지금 z ${signed(row.cells[last])}`}
+               aria-label={`${nameTxt}: ${ym(months[0])} z ${signed(row.cells[0])}, 현재 z ${signed(row.cells[last])}`}
                onFocus={() => setCur(say(nameTxt, last, row.cells[last]))}>
             <span className="mv-strip-lbl">{stripName(row.key, row.label, row.transform)}</span>
             <div className="mv-strip-cells">
@@ -75,7 +75,7 @@ export function AssetStripGrid({ data }: { data: AssetStrips }) {
         const n = a.cells.length;
         return (
           <div key={a.ticker} className="mv-strip-row" tabIndex={0} role="group"
-               aria-label={`${a.label}: 지금 지난 5년 중 ${a.now == null ? "N/A" : `${a.now}%`}`}
+               aria-label={`${a.label}: 현재 최근 5년 백분위 ${a.now == null ? "N/A" : `${a.now}%`}`}
                onFocus={() => setCur(say(a.label, n - 1, n, a.cells[n - 1]))}>
             <span className="mv-strip-lbl">{a.label} <em data-mono>{a.ticker}</em></span>
             <div className="mv-strip-cells">

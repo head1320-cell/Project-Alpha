@@ -43,13 +43,13 @@ const last = <T,>(a: T[]): T | undefined => a[a.length - 1];
 
 export default function FinancialsDeepTab({ code }: { code: string }) {
   const q = useQuery({ queryKey: ["company", "financial-deep", code], queryFn: () => companyApi.financialDeep(code), retry: false, staleTime: 5 * 60_000 });
-  if (q.isPending) return <div className="ci-fd"><p className="ci-fd-wait">재무를 더 깊이 계산하는 중입니다</p></div>;
+  if (q.isPending) return <div className="ci-fd"><p className="ci-fd-wait">재무 심층 분석 계산 중</p></div>;
   if (q.isError) return <div className="ci-fd"><RetryFail title="재무 심화 조회 실패" onRetry={() => q.refetch()} /></div>;
   const d = q.data;
   if (!d.available) {
     return (
       <div className="ci-fd">
-        <p className="ci-fd-reason">재무 시계열이 아직 적재되지 않아 이익의 질·운전자본·자본 배치 산출 실패. 연도별 숫자는 위 표에서 볼 수 있습니다.</p>
+        <p className="ci-fd-reason">재무 시계열이 아직 적재되지 않아 이익의 질·운전자본·자본 배치 산출 실패. 연도별 수치는 위 표에서 확인할 수 있습니다.</p>
         {d.note && <details className="ci-fd-raw"><summary>원래 사유 보기</summary><p data-server>{d.note}</p></details>}
       </div>
     );
@@ -59,11 +59,11 @@ export default function FinancialsDeepTab({ code }: { code: string }) {
   const debtUp = ok(wf.debt_delta[li]) && (wf.debt_delta[li] as number) > 0;
   return (
     <div className="ci-fd">
-      <h3 className="ci-block-h">재무를 더 깊이</h3>
+      <h3 className="ci-block-h">재무 심층 분석</h3>
 
       <section className="ca-cp-sec ci-fd-qoe">
         <h4 className="ci-fd-h">이익의 질</h4>
-        <p className="ci-fd-lede">장부상 순이익이 실제 들어온 현금(영업현금흐름)으로 뒷받침되는지 봅니다.</p>
+        <p className="ci-fd-lede">회계상 순이익이 실제 유입 현금(영업현금흐름)으로 뒷받침되는지 점검합니다.</p>
         <MiniLine years={qe.years} label={`순이익과 영업현금흐름 ${qe.years.length}년 추이`}
           series={[{ vals: qe.ni, cls: "ca-fd-ni" }, { vals: qe.ocf, cls: "ca-fd-ocf", dash: true }]} />
         <p className="ci-fd-keys">

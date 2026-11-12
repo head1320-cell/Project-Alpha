@@ -715,7 +715,7 @@ test("위험 심화 — Beneish M-Score 8줄(근거 칩) · 금리 충격 표는
   await expect(rd.locator(".ci-cov .ci-fd-key")).toContainText(["이자보상배율", "순부채/EBITDA"]);
   expect(t).not.toMatch(/\((검정|파랑)\)/);
 });
-test("★위험 심화 500 → alert + 재시도 → 회복★ · 시세 500 이면 '시세로 잰 위험'도 alert(계산할 수 없다는 사유가 아니다)", async ({ page }) => {
+test("★위험 심화 500 → alert + 재시도 → 회복★ · 시세 500 이면 '시세 기반 위험'도 alert(계산할 수 없다는 사유가 아니다)", async ({ page }) => {
   await page.route(`${CO}/risk-deep*`, (r) => r.fulfill(fail500));
   await open(page);
   await goSec(page, "risk", "위험");

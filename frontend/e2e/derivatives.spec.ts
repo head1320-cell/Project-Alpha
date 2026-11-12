@@ -50,7 +50,7 @@ test("옵션 결과 = 서버 값(고치면 따라간다) · σ·r 은 %로 넣�
   await open(page);
   await page.getByRole("button", { name: "가격 계산하기" }).click();
   await expect(page.locator(".dv-ans")).toContainText("12.3456원", { timeout: 20_000 });
-  await expect(page.getByTestId("option-greeks")).toContainText("기초자산이 1원 오르면 옵션 가격이 약 +0.5000원 움직입니다.");
+  await expect(page.getByTestId("option-greeks")).toContainText("기초자산 1원 상승 시 옵션 가격이 약 +0.5000원 변동합니다.");
   expect(bodies).toEqual([{ S: 100, K: 100, sigma: 0.25, r: 0.035, T: 0.25, option_type: "call" }]);
 });
 
@@ -104,7 +104,7 @@ test("만기 손익 그림 — 손익분기 = 행사가 + 이론가(콜) · 행�
   await expect(pay).toHaveAttribute("data-breakeven", "107.5000", { timeout: 20_000 });
   await expect(pay.locator(".dv-be")).toHaveText("107.5000원");
   await expect(pay.locator(".recharts-surface")).toHaveCount(1);
-  await page.getByRole("radio", { name: "풋(팔 권리)" }).click();
+  await page.getByRole("radio", { name: "풋(매도권)" }).click();
   await page.getByRole("button", { name: "가격 계산하기" }).click();
   await expect(pay).toHaveAttribute("data-breakeven", "92.5000", { timeout: 20_000 });
 });
@@ -114,13 +114,13 @@ test("채권 · 선물 헤지 결과 = 서버 값 — 헤지 방향은 한국어
   await open(page, "?tab=bond");
   await page.getByRole("button", { name: "채권 계산하기" }).click();
   await expect(page.locator(".dv-ans")).toContainText("9,999.50원", { timeout: 20_000 });
-  await expect(page.getByTestId("bond-figs")).toContainText("수익률이 0.01%p 오르면 가격이 약 1.2345원 내립니다.");
+  await expect(page.getByTestId("bond-figs")).toContainText("수익률 0.01%p(1bp) 상승 시 가격이 약 1.2345원 하락합니다.");
 
   await open(page, "?tab=hedge");
   await page.getByRole("button", { name: "헤지 계산하기" }).click();
   await expect(page.locator(".dv-ans")).toContainText("계약을 매도", { timeout: 20_000 });
   await expect(page.locator(".dv-out")).not.toContainText("Short");
-  await page.getByLabel("지금 베타").fill("0");
+  await page.getByLabel("현재 베타").fill("0");
   await page.getByRole("button", { name: "헤지 계산하기" }).click();
   const red = page.locator('.dv-fig[data-k="reduction"]');
   await expect(red).toContainText("계산하지 않습니다", { timeout: 20_000 });

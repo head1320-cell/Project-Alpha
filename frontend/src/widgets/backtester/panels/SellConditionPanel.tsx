@@ -16,7 +16,7 @@ function IntradayOnly({ children }: { children: React.ReactNode }) {
   return (
     <div className="bte-col">
       <div className="bte-off" aria-disabled>{children}</div>
-      <p className="bte-note">④ 돈·기간·비용에서 ‘분봉 정밀 체결’을 켜고 분봉을 적재하면 쓸 수 있습니다.</p>
+      <p className="bte-note">④ 투자금·기간·비용에서 ‘분봉 정밀 체결’을 켜고 분봉을 적재하면 사용할 수 있습니다.</p>
     </div>
   );
 }
@@ -30,7 +30,7 @@ export default function SellConditionPanel({ s, set }: {
   return (
     <div className="bte-col">
 
-      <Section act="sell-exits" title="목표가와 손절가" hint="이만큼 오르면·내리면 팝니다" tone="sell"
+      <Section act="sell-exits" title="목표가와 손절가" hint="목표 수익률·손절률 도달 시 매도합니다" tone="sell"
         enabled={v.takeProfit.on || v.stopLoss.on || v.trailing.on}
         onToggle={(on) => patch({ takeProfit: { ...v.takeProfit, on }, stopLoss: { ...v.stopLoss, on }, trailing: { ...v.trailing, on: on && v.trailing.on } })}>
         <Field label="주문 방법">
@@ -55,26 +55,26 @@ export default function SellConditionPanel({ s, set }: {
         </Field>
         <SubToggle tone="sell" label="목표가 (익절)" on={v.takeProfit.on} onChange={(on) => patch({ takeProfit: { ...v.takeProfit, on } })}>
           <QuickStepper value={v.takeProfit.pct} onChange={(pct) => patch({ takeProfit: { ...v.takeProfit, pct } })} chips={[5, 10, 20]} unit="%" min={0} />
-          <span className="bte-sm">오르면 팝니다</span>
+          <span className="bte-sm">상승 시 매도</span>
         </SubToggle>
         <SubToggle tone="sell" act="stop-loss" label="손절가" on={v.stopLoss.on} onChange={(on) => patch({ stopLoss: { ...v.stopLoss, on } })}>
           <QuickStepper value={v.stopLoss.pct} onChange={(pct) => patch({ stopLoss: { ...v.stopLoss, pct } })} chips={[5, 10]} unit="%" min={0} act="stop-loss-pct" />
-          <span className="bte-sm">내리면 팝니다</span>
+          <span className="bte-sm">하락 시 매도</span>
         </SubToggle>
-        <SubToggle tone="sell" label="고점에서 밀리면 팔기" hint="트레일링 스탑" on={v.trailing.on} onChange={(on) => patch({ trailing: { ...v.trailing, on } })}>
+        <SubToggle tone="sell" label="트레일링 스탑" hint="고점 대비 하락 시 매도" on={v.trailing.on} onChange={(on) => patch({ trailing: { ...v.trailing, on } })}>
           <span className="bte-sm">고점보다</span>
           <QuickStepper value={v.trailing.pct} onChange={(pct) => patch({ trailing: { ...v.trailing, pct } })} chips={[1, 3, 5]} unit="%" min={0} />
-          <span className="bte-sm">내리면 팝니다</span>
+          <span className="bte-sm">하락 시 매도</span>
         </SubToggle>
         <div className="bte-col">
           <p className="bte-sub-h">고급</p>
-          <SubToggle tone="sell" label="나눠 팔기 (래더)" hint="가격이 움직일 때마다 비중을 나눠 팝니다 — 신호 매도에 적용"
+          <SubToggle tone="sell" label="분할 매도 (래더)" hint="가격 변동 구간마다 비중을 분할 매도합니다 — 신호 매도에 적용"
             on={v.splitTakeProfit}
             onChange={(on) => patch({ splitTakeProfit: on, ladder: on && v.ladder.length === 0 ? [{ movePct: 0, weightPct: 50 }, { movePct: 2, weightPct: 50 }] : v.ladder })} />
           {v.splitTakeProfit && (
             <LadderEditor side="sell" steps={v.ladder} onChange={(ladder) => patch({ ladder })} />
           )}
-          <p className="bte-note">TWAP·VWAP 체결은 위 ‘체결가 유형’에서 고릅니다.</p>
+          <p className="bte-note">TWAP·VWAP 체결은 위 ‘체결가 유형’에서 선택합니다.</p>
         </div>
       </Section>
 
@@ -85,14 +85,14 @@ export default function SellConditionPanel({ s, set }: {
             onChange={(m) => patch({ dayTrade: m === "day" })}
             options={[{ id: "day", label: "당일 매매" }, { id: "period", label: "기간 정하기" }]} />
           {v.dayTrade && (
-            <p className="bte-note">그날 산 것을 같은 날 종가에 모두 팝니다. 사는 체결가를 시가로 두면 시가에 사서 종가에 팝니다.</p>
+            <p className="bte-note">당일 매수분을 당일 종가에 전량 매도합니다. 매수 체결가를 시가로 설정하면 시가 매수·종가 매도가 됩니다.</p>
           )}
         </Field>
         {!v.dayTrade && (<>
         <Field label="최소 보유일">
           <QuickStepper value={v.holdPeriod.min} onChange={(min) => patch({ holdPeriod: { ...v.holdPeriod, min } })} chips={[1, 5, 10]} unit="일" min={0} />
         </Field>
-        <SubToggle tone="sell" label="최대 보유일에 팔기" hint="이 날이 되면 팝니다" on={v.expiryDateSell} onChange={(on) => patch({ expiryDateSell: on, holdPeriod: { ...v.holdPeriod, max: on ? (v.holdPeriod.max ?? 20) : undefined } })}>
+        <SubToggle tone="sell" label="최대 보유일 매도" hint="보유일이 상한에 도달하면 매도합니다" on={v.expiryDateSell} onChange={(on) => patch({ expiryDateSell: on, holdPeriod: { ...v.holdPeriod, max: on ? (v.holdPeriod.max ?? 20) : undefined } })}>
           {v.expiryDateSell && (
             <>
               <span className="bte-sm">최대</span>
@@ -104,9 +104,9 @@ export default function SellConditionPanel({ s, set }: {
           <Field label="만기에 파는 방법">
             <Segmented tone="sell" value={v.expirySellMethod}
               onChange={(m) => patch({ expirySellMethod: m })}
-              options={[{ id: "all", label: "한 번에" }, { id: "ladder", label: "나눠서(래더 공유)" }]} />
+              options={[{ id: "all", label: "일괄" }, { id: "ladder", label: "분할(래더 공유)" }]} />
             {v.expirySellMethod === "ladder" && (
-              <p className="bte-note">위 ‘나눠 팔기’ 래더를 씁니다. 남은 물량은 종가에 모두 팝니다(만기는 반드시 끝납니다).</p>
+              <p className="bte-note">위 ‘분할 매도’ 래더를 사용합니다. 잔여 물량은 종가에 전량 매도합니다(만기 청산은 반드시 완료됩니다).</p>
             )}
           </Field>
         )}
@@ -114,13 +114,13 @@ export default function SellConditionPanel({ s, set }: {
           <Field label="만기에 파는 가격">
             <GroupedSelect value={v.expiryFillType} onChange={(id) => patch({ expiryFillType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
             <OffsetInput value={v.expiryFillOffsetPct} onChange={(expiryFillOffsetPct) => patch({ expiryFillOffsetPct })} />
-            <p className="bte-note">지정가에 닿지 않으면 종가에 팝니다 — 만기 정리는 반드시 끝납니다.</p>
+            <p className="bte-note">지정가에 도달하지 않으면 종가에 매도합니다 — 만기 청산은 반드시 완료됩니다.</p>
           </Field>
         )}
         </>)}
       </Section>
 
-      <Section title="조건부 매도" hint="팩터·논리식이 맞으면 팝니다" tone="sell" enabled>
+      <Section title="조건부 매도" hint="팩터·논리식 충족 시 매도합니다" tone="sell" enabled>
         <ConditionFormulaEditor tone="sell" conditions={v.conditions} onChange={(c: Condition[]) => patch({ conditions: c })}
           logicExpr={v.logicExpr} onLogicChange={(logicExpr) => patch({ logicExpr })} logicDefaultLabel="하나라도 (OR)" sideKey="sell" />
       </Section>

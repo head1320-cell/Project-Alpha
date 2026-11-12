@@ -29,7 +29,7 @@ export function GateSection({ gate, onChanged }: { gate: UseQueryResult<GateStat
       return r.value;
     },
     onSuccess: (r) => settle(r.live_dropped_to_shadow
-      ? "관문을 거뒀습니다. 실계좌로 돌던 운영 계좌를 기록만으로 돌려놨습니다." : "관문을 거뒀습니다. 실계좌 주문이 다시 닫혔습니다."),
+      ? "관문을 철회했습니다. 실계좌로 운용하던 운영 계좌를 기록만 모드로 전환했습니다." : "관문을 철회했습니다. 실계좌 주문이 다시 차단됐습니다."),
   });
   const g = gate.data;
   const cur = g?.current ?? null;
@@ -44,7 +44,7 @@ export function GateSection({ gate, onChanged }: { gate: UseQueryResult<GateStat
         {g ? (
           <div className="tx-sec-aside lvg-act">
             {cur ? (
-              <button type="button" className="tx-btn tx-btn--sub lvg-revoke-open" onClick={() => { setSaid(null); revoke.reset(); setSheet("revoke"); }}>거두기</button>
+              <button type="button" className="tx-btn tx-btn--sub lvg-revoke-open" onClick={() => { setSaid(null); revoke.reset(); setSheet("revoke"); }}>철회</button>
             ) : null}
             <button type="button" className={`tx-btn ${cur ? "tx-btn--sub" : "tx-btn--main"} lvg-declare-open`}
                     onClick={() => { setSaid(null); setSheet("declare"); }}>{cur ? "새로 선언하기" : "선언하기"}</button>
@@ -62,9 +62,9 @@ export function GateSection({ gate, onChanged }: { gate: UseQueryResult<GateStat
             <div className="lvg-now" data-open={cur ? "true" : "false"}>
               {cur ? <LockOpen size={18} aria-hidden /> : <Lock size={18} aria-hidden />}
               <div>
-                <p className="lvg-now-t">{cur ? "지금 열려 있습니다" : "지금 닫혀 있습니다"}</p>
+                <p className="lvg-now-t">{cur ? "현재 열려 있습니다" : "현재 닫혀 있습니다"}</p>
                 <p className="tx-sec-sub">
-                  {cur ? `${cur.declared_by ?? "누군가"} 님이 ${krDateTime(cur.declared_at) ?? "언제인지 모르는 때"}에 선언했습니다. 아래 사용자만 실계좌로 주문할 수 있습니다.`
+                  {cur ? `${cur.declared_by ?? "누군가"} 님이 ${krDateTime(cur.declared_at) ?? "시각 미상"}에 선언했습니다. 아래 사용자만 실계좌로 주문할 수 있습니다.`
                     : "선언이 없어서 실계좌 주문은 누구에게도 열려 있지 않습니다."}
                 </p>
               </div>
@@ -77,12 +77,12 @@ export function GateSection({ gate, onChanged }: { gate: UseQueryResult<GateStat
 
       <GateForm open={sheet === "declare"} hasCurrent={!!cur} onClose={() => setSheet(null)}
                 onDone={(dropped) => settle(dropped ? "선언했습니다. 실계좌로 돌던 운영 계좌를 기록만으로 돌려놨습니다." : "선언했습니다.")} />
-      <Sheet open={sheet === "revoke"} onClose={() => setSheet(null)} title="실계좌 관문 거두기" testId="gate-revoke" className="lv-sheet"
-             sub="거두면 실계좌 주문이 다시 닫힙니다. 실계좌로 돌던 운영 계좌는 기록만으로 돌아갑니다. 선언 기록은 지우지 않습니다.">
-        {revoke.isError ? <p className="lv-err" role="alert">관문을 거두지 못했습니다. <span data-server>{revoke.error.message}</span></p> : null}
+      <Sheet open={sheet === "revoke"} onClose={() => setSheet(null)} title="실계좌 관문 철회" testId="gate-revoke" className="lv-sheet"
+             sub="철회하면 실계좌 주문이 다시 차단됩니다. 실계좌로 운용하던 운영 계좌는 기록만 모드로 복귀합니다. 선언 기록은 삭제하지 않습니다.">
+        {revoke.isError ? <p className="lv-err" role="alert">관문 철회 실패. <span data-server>{revoke.error.message}</span></p> : null}
         <div className="tx-confirm-act">
           <button type="button" className="tx-btn lv-btn-danger lvg-revoke-yes" disabled={revoke.isPending}
-                  onClick={() => revoke.mutate()}>{revoke.isPending ? "거두는 중입니다" : "거두기"}</button>
+                  onClick={() => revoke.mutate()}>{revoke.isPending ? "철회 중" : "철회"}</button>
           <button type="button" className="tx-btn tx-btn--sub lvg-revoke-no" onClick={() => setSheet(null)}>취소</button>
         </div>
       </Sheet>
@@ -116,7 +116,7 @@ function GateHistory({ items }: { items: GateRecord[] }) {
             <div className="lvg-h-b">
               <p className="lvg-h-t">
                 {krDateTime(h.declared_at) ?? "시각 미상"} · {h.declared_by ?? "누군가"} 님이 선언
-                {h.revoked_at ? <> · {krDateTime(h.revoked_at) ?? "언제인지 모르는 때"}에 {h.revoked_by ?? "누군가"} 님이 거둠</> : <> · <strong>지금 열려 있습니다</strong></>}
+                {h.revoked_at ? <> · {krDateTime(h.revoked_at) ?? "시각 미상"}에 {h.revoked_by ?? "누군가"} 님이 철회</> : <> · <strong>현재 열려 있습니다</strong></>}
               </p>
               <details className="lvg-h-more">
                 <summary>상세</summary>

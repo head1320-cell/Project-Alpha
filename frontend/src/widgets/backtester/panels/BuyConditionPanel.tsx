@@ -27,17 +27,17 @@ export default function BuyConditionPanel({ s, set }: {
         enabled={s.buy.enabled} onToggle={(v) => patchBuy({ enabled: v })}>
         <ConditionFormulaEditor tone="buy" conditions={s.buy.conditions} onChange={(c: Condition[]) => patchBuy({ conditions: c })}
           logicExpr={s.buy.logicExpr} onLogicChange={(v) => patchBuy({ logicExpr: v })} logicDefaultLabel="모두 AND" sideKey="buy" />
-        <SubToggle tone="buy" act="buy-fundamentals" label="재무 조건도 평가" hint="지금 스냅샷 기준이라 과거 시점에는 미래 정보가 섞일 수 있습니다"
+        <SubToggle tone="buy" act="buy-fundamentals" label="재무 조건도 평가" hint="현재 스냅샷 기준이므로 과거 시점에 미래 정보가 포함될 수 있습니다(룩어헤드)"
           on={s.buy.allowFundamentals} onChange={(v) => patchBuy({ allowFundamentals: v })} />
         <div className="bte-col">
           <p className="bte-sub-h">고급 체결</p>
-          <SubToggle tone="buy" label="나눠 사기 (래더)" hint="가격이 움직일 때마다 비중을 나눠 체결합니다"
+          <SubToggle tone="buy" label="분할 매수 (래더)" hint="가격 변동 구간마다 비중을 분할 체결합니다"
             on={s.buy.splitBuy}
             onChange={(v) => patchBuy({ splitBuy: v, ladder: v && s.buy.ladder.length === 0 ? [{ movePct: 0, weightPct: 50 }, { movePct: -2, weightPct: 50 }] : s.buy.ladder })} />
           {s.buy.splitBuy && (
             <LadderEditor side="buy" steps={s.buy.ladder} onChange={(ladder) => patchBuy({ ladder })} />
           )}
-          <SubToggle tone="buy" label="돌파할 때만 사기" hint="기준가를 넘었을 때만 들어갑니다" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
+          <SubToggle tone="buy" label="돌파 매수" hint="기준가를 상향 돌파했을 때만 진입합니다" on={s.buy.breakthrough} onChange={(v) => patchBuy({ breakthrough: v })} />
           {s.buy.breakthrough && (
             <div className="bte-col">
               <div className="bte-row">
@@ -57,9 +57,9 @@ export default function BuyConditionPanel({ s, set }: {
           <Field label="매수 시점">
             <Segmented tone="buy" value={s.buy.buyTiming} onChange={(t) => patchBuy({ buyTiming: t })}
               options={[{ id: "pre_open", label: "장 시작 전" }, { id: "intraday", label: "장중 주문" }]} />
-            <p className="bte-note">장중 주문은 지정가로 살 때 시가 갭으로 체결되는 경우를 뺍니다(보수적).</p>
+            <p className="bte-note">장중 주문은 지정가 매수 시 시가 갭으로 체결되는 경우를 제외합니다(보수적).</p>
           </Field>
-          <p className="bte-note">TWAP·VWAP 체결은 아래 ‘체결가 유형’에서 고릅니다.</p>
+          <p className="bte-note">TWAP·VWAP 체결은 아래 ‘체결가 유형’에서 선택합니다.</p>
         </div>
       </Section>
 
@@ -96,14 +96,14 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="비중 방식">
           <Segmented tone="buy" value={s.buy.weightMode} onChange={(v) => patchBuy({ weightMode: v })}
-            options={[{ id: "equal", label: "똑같이" }, { id: "atr", label: "변동성(ATR)에 맞춰" }]} />
+            options={[{ id: "equal", label: "균등" }, { id: "atr", label: "변동성(ATR) 기준" }]} />
         </Field>
         <Field label="종목당 비중">
           <QuickStepper value={s.buy.weightPct} onChange={(v) => patchBuy({ weightPct: v })} chips={[1, 5, 10]} unit="%" min={0} max={100} />
         </Field>
         <Field label="최대 보유 수">
           <QuickStepper value={s.buy.maxStocks} onChange={(v) => patchBuy({ maxStocks: v })} chips={[5, 10, 20]} unit="종목" min={1} max={30} act="max-stocks" />
-          <p className="bte-note">동시 보유 가능 종목 수입니다. 후보를 몇 종목까지 볼지는 ③ ‘평가 종목 상한’에서 따로 정합니다.</p>
+          <p className="bte-note">동시 보유 가능 종목 수입니다. 평가 후보 종목 수는 ③ ‘평가 종목 상한’에서 별도로 설정합니다.</p>
         </Field>
         <Field label="체결가 유형">
           <GroupedSelect value={s.buy.fillType} onChange={(id) => patchBuy({ fillType: id })} groups={FILL_PRICE_GROUPS} />
@@ -124,11 +124,11 @@ export default function BuyConditionPanel({ s, set }: {
           <QuickStepper value={s.buy.maxBuyAmount} onChange={(v) => patchBuy({ maxBuyAmount: v })}
             chips={[1000, 3000, 5000]} unit="만원" min={100} />
         </SubToggle>
-        <SubToggle tone="buy" label="하루 최대 새 종목 수" hint="하루에 새로 들어가는 종목 수 제한"
+        <SubToggle tone="buy" label="일일 신규 편입 상한" hint="하루에 신규 편입하는 종목 수 제한"
           on={s.buy.maxBuyPerDay > 0} onChange={(on) => patchBuy({ maxBuyPerDay: on ? 1 : 0 })}>
           <QuickStepper value={s.buy.maxBuyPerDay} onChange={(v) => patchBuy({ maxBuyPerDay: v })} chips={[1, 3, 5]} unit="종목" min={1} />
         </SubToggle>
-        <Field label="다시 사기까지">
+        <Field label="재매수 대기">
           <QuickStepper value={s.buy.reBuyBlockDays} onChange={(v) => patchBuy({ reBuyBlockDays: v })} chips={[5, 10]} unit="일" min={0} />
           <p className="bte-note">판 뒤 N일(달력 기준) 동안 같은 종목을 다시 사지 않습니다. 0이면 쓰지 않습니다.</p>
         </Field>
@@ -140,7 +140,7 @@ export default function BuyConditionPanel({ s, set }: {
           <Field label="현금 비중">
             <QuickStepper value={s.cashReservePct} onChange={(v) => set((x) => ({ ...x, cashReservePct: v }))}
               chips={[10, 20, 30]} unit="%" min={0} max={90} />
-            <p className="bte-note">평가자산의 N%를 늘 현금으로 두고 살 돈에서 뺍니다. ETF 자산배분을 켜면 그쪽으로 합쳐집니다.</p>
+            <p className="bte-note">평가자산의 N%를 상시 현금으로 보유하고 매수 가능 금액에서 차감합니다. ETF 자산배분을 켜면 해당 설정으로 통합됩니다.</p>
           </Field>
         </Section>
       )}
@@ -155,12 +155,12 @@ export default function BuyConditionPanel({ s, set }: {
         </Field>
         <Field label="조건이 깨지면">
           <Segmented value={s.marketTiming.mode} onChange={(mode) => patchMt({ mode })}
-            options={[{ id: "block_buy", label: "새로 사지 않기" }, { id: "exit_all", label: "모두 팔기" }]} />
+            options={[{ id: "block_buy", label: "신규 매수 중단" }, { id: "exit_all", label: "전량 매도" }]} />
         </Field>
         <ConditionFormulaEditor tone="neutral" conditions={s.marketTiming.conditions}
           onChange={(c: Condition[]) => patchMt({ conditions: c })} />
         <p className="bte-note">
-          지수 봉으로 평가합니다(모두 맞으면 켬). 평균모멘텀스코어·변화율_기간 같은 가격 함수를 권합니다. 평가할 수 없는 조건은 빼고 봅니다.
+          지수 봉으로 평가합니다(모두 충족 시 켬). 평균모멘텀스코어·변화율_기간 같은 가격 함수를 권장합니다. 평가할 수 없는 조건은 제외하고 판정합니다.
         </p>
       </Section>
 

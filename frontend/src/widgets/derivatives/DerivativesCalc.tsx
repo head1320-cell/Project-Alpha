@@ -42,7 +42,7 @@ export function DerivativesCalc() {
         { label: "모든 칸은 넣은 값(가정)입니다", tone: "assumed" },
         { label: "계산은 서버가 하고 화면은 풀이만 합니다", tone: "info" },
       ]} />
-      <Tabs label="계산기 고르기" tabs={TABS} value={tab} onChange={pick}>
+      <Tabs label="계산기 선택" tabs={TABS} value={tab} onChange={pick}>
         {tab === "option" ? <OptionCalc /> : tab === "bond" ? <BondCalc /> : tab === "hedge" ? <HedgeCalc /> : tab === "cva" ? <CvaCalc /> : <ModelsInfo />}
       </Tabs>
     </div>
@@ -54,7 +54,7 @@ const MODELS: { id: string; name: string; what: string; need: string; formula: s
     need: "옵션 시장 호가가 필요합니다. 이 저장소에는 아직 옵션 호가를 적재하지 않습니다.", formula: "σ_imp(K, T)" },
   { id: "rates", name: "금리 모형", what: "Hull-White 1요인 모형으로 단기 금리의 움직임을 그리고, 채권·스왑 가격을 시장 곡선에 맞춥니다.",
     need: "수익률 곡선과 스왑션 변동성 데이터, 그리고 맞추기(캘리브레이션) 계산기가 필요합니다. 서버에 이 계산 경로가 없습니다.", formula: "dr = (θ(t) − a·r) dt + σ dW" },
-  { id: "mc", name: "몬테카를로", what: "가격 경로를 많이 만들어 경로에 따라 값이 달라지는 상품(아시안·배리어 옵션 등)을 평가합니다.",
+  { id: "mc", name: "몬테카를로", what: "가격 경로를 다수 생성해 경로 의존형 상품(아시안·배리어 옵션 등)을 평가합니다.",
     need: "이 화면에서 부를 서버 계산 경로가 없습니다. 옛 화면의 경로 수·기법 카드는 계산 결과가 아니어서 지웠습니다.", formula: "dS = μ S dt + σ S dW" },
 ];
 

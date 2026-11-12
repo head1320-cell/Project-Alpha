@@ -53,14 +53,14 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
   const killSub = kill.isError ? <button type="button" className="ma-link" onClick={() => void kill.refetch()}>재시도</button>
     : k?.active && k.event ? <>사유 <span data-server>{k.event.trigger_reason ?? "적히지 않았습니다"}</span></>
     : k?.active ? "이 계좌가 건 정지가 아닙니다. 운영자 정지이거나 상태 읽기 실패"
-    : "켜면 새 주문과 미체결 주문을 멈춥니다.";
+    : "켜면 신규 주문과 미체결 주문을 중단합니다.";
 
   return (
     <section className="tx-sec ma-path tx-path" aria-labelledby="ma-path-h" data-stop={trace ? trace.stop : undefined}>
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="ma-path-h">주문이 가는 길</h2>
-          <p className="tx-sec-sub">주문은 서버에서 이 순서로 지나갑니다. 주문을 내면 어디서 멈췄는지 여기 표시됩니다.</p>
+          <p className="tx-sec-sub">주문은 서버에서 이 순서로 처리됩니다. 주문을 제출하면 중단 단계가 여기에 표시됩니다.</p>
         </div>
       </header>
       <ol className="ma-path-l tx-path-l" key={trace?.reply.client_order_id ?? "idle"}>
@@ -77,7 +77,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
           <div className="ma-st-b tx-st-b">
             <p className="ma-st-name tx-st-name">위험 검사</p>
             <p className="ma-st-state tx-st-state">주문마다 서버가 따집니다</p>
-            <p className="ma-st-sub tx-st-sub">가격, 하루 거래 한도, 장 시간 같은 것을 봅니다. 걸리면 주문하지 않습니다.</p>
+            <p className="ma-st-sub tx-st-sub">가격·일일 거래 한도·장 운영 시간 등을 점검합니다. 위반 시 주문하지 않습니다.</p>
           </div>
         </li>
         <li className="ma-st tx-st ma-st--mode" data-st="mode" data-hit={hit(2)}>
@@ -87,7 +87,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
             <div className="ma-mode tx-modes" role="group" aria-label="실행 모드">
               <button type="button" className="ma-mode-b tx-mode-b" data-mode="SHADOW" aria-pressed={cur === "SHADOW"}
                       disabled={cur === null || change.isPending} onClick={() => pick("SHADOW")}>
-                <span className="ma-mode-t tx-mode-t">기록만</span><span className="ma-mode-d tx-mode-d">보내지 않습니다</span>
+                <span className="ma-mode-t tx-mode-t">기록만</span><span className="ma-mode-d tx-mode-d">전송하지 않습니다</span>
               </button>
               <button type="button" className="ma-mode-b tx-mode-b" data-mode="PAPER" aria-pressed={cur === "PAPER"}
                       disabled={cur === null || change.isPending || !acc.is_paper} onClick={() => pick("PAPER")}>
@@ -103,7 +103,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
               <p className="ma-st-sub tx-st-sub ma-mode-why">모의 체결은 모의투자 계좌에서만 씁니다. 이 계좌는 실계좌로 연결돼 있습니다.</p>
             ) : null}
             <p className="ma-st-sub tx-st-sub">
-              {mode.data?.changed_by ? `${mode.data.changed_by} 님이 바꿨습니다. ` : ""}서버를 다시 켜면 기록만으로 돌아갑니다.
+              {mode.data?.changed_by ? `${mode.data.changed_by} 님이 변경했습니다. ` : ""}서버를 재시작하면 기록만 모드로 복귀합니다.
             </p>
             {asking ? (
               <div className="ma-confirm tx-confirm ma-mode-confirm" role="group" aria-label="모의 체결로 바꾸기 확인">
@@ -123,7 +123,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
         <li className="ma-st tx-st" data-st="broker" data-hit={hit(3)}>
           <span className="ma-st-dot tx-st-dot" aria-hidden><Send className="ma-st-ic tx-st-ic" size={14} strokeWidth={2} /></span>
           <div className="ma-st-b tx-st-b">
-            <p className="ma-st-name tx-st-name">보내는 곳</p>
+            <p className="ma-st-name tx-st-name">전송 대상</p>
             <p className="ma-st-state tx-st-state">{cur === null ? "모드를 몰라서 정할 수 없습니다" : destination(cur, practice)}</p>
             <p className="ma-st-sub tx-st-sub">{conn ? <>연결 확인: <span data-server>{conn.reason}</span></> : "연결 확인 기록 조회 중"}</p>
           </div>
@@ -163,13 +163,13 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
 function StopWhy({ trace, practice }: { trace: Trace; practice: boolean | null }) {
   const r = trace.reply;
   const where = practice === true ? "가상 체결기" : practice === false ? "증권사 모의 서버" : null;
-  const head = trace.stop === "unknown" ? "어디서 멈췄는지 미상"
+  const head = trace.stop === "unknown" ? "중단 단계 미상"
     : trace.stop === "broker"
-      ? (r.status === "FAILED" ? "보내다 실패했습니다" : where ? `${where}까지 갔습니다` : "끝까지 갔습니다")
-      : `${STOPS.find((s) => s.key === trace.stop)?.label}에서 멈췄습니다`;
+      ? (r.status === "FAILED" ? "전송 중 실패했습니다" : where ? `${where}까지 전송했습니다` : "전 단계를 통과했습니다")
+      : `${STOPS.find((s) => s.key === trace.stop)?.label}에서 중단됐습니다`;
   const visible = r.status === "REJECTED" ? r.message : r.status === "FAILED" ? r.error : null;
   const tucked = visible ? null : r.message;
-  const said = r.status === "SHADOW_LOGGED" ? "기록만 하고 보내지 않았습니다."
+  const said = r.status === "SHADOW_LOGGED" ? "기록만 남기고 전송하지 않았습니다."
     : r.status === "SUBMITTED" ? "주문을 받았습니다."
     : STATUS_KO[r.status] ? `${STATUS_KO[r.status]}.` : null;
   return (

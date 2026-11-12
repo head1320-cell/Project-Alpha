@@ -86,7 +86,7 @@ test("설정(BS1): 관리자가 계정을 만들면 임시 비밀번호가 한 �
   await expect(form.locator('.set-rule[data-ok="false"]')).toHaveCount(0);
   await expect(submit).toBeEnabled();
   await submit.click();
-  await expect(p2.locator(".set-done")).toContainText("비밀번호를 바꿨습니다");
+  await expect(p2.locator(".set-done")).toContainText("비밀번호를 변경했습니다");
   await expect(p2.locator(".set-must")).toHaveCount(0);
 
   const newToken = (await p2.evaluate((k) => localStorage.getItem(k), TOKEN_KEY))!;

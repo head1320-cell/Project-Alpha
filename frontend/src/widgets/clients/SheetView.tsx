@@ -32,7 +32,7 @@ export function SheetView({ cid, sid }: { cid: string; sid: string }) {
         : session.kind === "unknown" ? <RetryFail title="계정 정보 확인 실패" onRetry={() => void retry()}>{session.reason}</RetryFail>
         : session.kind === "signed_out" ? (
           <section className="tx-sec cl-signed-out">
-            <p className="cl-strong">로그인하면 이 한 장을 볼 수 있습니다.</p>
+            <p className="cl-strong">로그인하면 이 한 장을 조회할 수 있습니다.</p>
             <Link href={loginHref(here)} className="tx-btn tx-btn--main">로그인</Link>
           </section>
         ) : <Body cid={cid} sid={sid} />}
@@ -71,12 +71,12 @@ function Body({ cid, sid }: { cid: string; sid: string }) {
             <button type="button" className="tx-btn tx-btn--sub cs-delete" onClick={() => void remove()}>삭제</button>
           )}
         </div>
-        {x.shared && <p className="cs-tools-note">고객에게 보여 준 한 장이라 지울 수 없습니다 — 무엇을 보여 줬는지가 남습니다.</p>}
+        {x.shared && <p className="cs-tools-note">고객에게 공유한 한 장이라 삭제할 수 없습니다 — 공유 내역이 기록으로 남습니다.</p>}
         {err && <p className="cl-err" role="alert">{err}</p>}
       </div>
       <ClientSheet sheet={x.sheet} />
       <SharePanel cid={cid} sid={sid} archived={x.client_archived} />
-      <SheetAsk title="고객 AI 미리 묻기" sub="고객이 이 한 장에 물으면 어떻게 답하는지 미리 봅니다. 근거는 이 한 장에 적힌 줄뿐이고, 투자 판단은 답하지 않습니다."
+      <SheetAsk title="고객 AI 미리 묻기" sub="고객이 이 한 장에 질의했을 때의 응답을 사전 확인합니다. 근거는 이 한 장에 기재된 내용뿐이며, 투자 판단은 답하지 않습니다."
                 ask={(question, prev) => askSheet(cid, sid, question, prev)} />
     </>
   );

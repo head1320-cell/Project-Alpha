@@ -84,7 +84,7 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
   }
 
   async function act(what: "revoke" | "reopen" | "switch", l: ShareLink) {
-    if (what === "revoke" && !window.confirm("이 주소를 비활성화하시겠습니까? 고객이 바로 볼 수 없게 됩니다.")) return;
+    if (what === "revoke" && !window.confirm("이 주소를 비활성화하시겠습니까? 고객이 즉시 열람할 수 없게 됩니다.")) return;
     setErr(null);
     const r = what === "revoke" ? await revokeLink(cid, l.link_id)
       : what === "reopen" ? await reopenLink(cid, l.link_id) : await switchLinkSheet(cid, l.link_id, sid);
@@ -132,12 +132,12 @@ export function SharePanel({ cid, sid, archived }: { cid: string; sid: string; a
         </form>
       )}
       {gate && !closed && !archived && (
-        <p className="cs-share-hint">PIN 은 주소와 다른 경로(전화·대면)로 안내하십시오. 같은 숫자·차례대로·되풀이는 쓸 수 없고, 5번 틀리면 잠깁니다.</p>
+        <p className="cs-share-hint">PIN 은 주소와 다른 경로(전화·대면)로 안내하십시오. 동일 숫자·연속 숫자·반복 패턴은 사용할 수 없으며, 5회 오류 시 잠깁니다.</p>
       )}
       {err && <p className="cl-err cs-share-err" role="alert">{err}</p>}
       {made && (
         <div className="cs-share-once" role="status">
-          <p className="cs-share-once-t">주소를 만들었습니다 — 이 주소는 지금 한 번만 보입니다.</p>
+          <p className="cs-share-once-t">주소를 생성했습니다 — 이 주소는 지금 한 번만 표시됩니다.</p>
           <div className="cs-share-url-row">
             <input className="cs-share-url" readOnly value={made} aria-label="고객 주소" onFocus={(e) => e.currentTarget.select()} />
             <button type="button" className="tx-btn tx-btn--sub cs-share-copy" onClick={() => void copy()}>{copied ? "복사했습니다" : "복사"}</button>

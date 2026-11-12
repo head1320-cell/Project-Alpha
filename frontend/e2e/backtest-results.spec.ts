@@ -133,7 +133,7 @@ test("★산출 불가는 접지 않는다★ — 핵심 지표 바로 아래에
   // 체결 0건이면 픽스처에 없는 거래 지표 여섯 + 지운 둘 = 8 개가 사유와 함께 뜬다(absentReason 규칙 그대로).
   const na = page.locator(".rs-key .rs-na .brun-kpi-na");
   await expect(na).toHaveCount(8);
-  await expect(page.locator(".rs-na")).toContainText("이긴 거래 비율");
+  await expect(page.locator(".rs-na")).toContainText("승률");
   await expect(na.first()).toBeVisible();                       // 펼치지 않아도 보인다
   await expect(na.first()).toContainText("체결이 한 건도 없어");
   await expect(page.locator("details.rs-all .brun-kpi-na")).toHaveCount(0);

@@ -24,15 +24,15 @@ const at = (z: number) => Math.max(0, Math.min(100, (z / ALT_MAX) * 100));
 
 export default function RiskDeepTab({ code, price }: { code: string; price: number }) {
   const q = useQuery({ queryKey: ["company", "risk-deep", code, price], queryFn: () => companyApi.riskDeep(code, price), retry: false, staleTime: 5 * 60_000 });
-  if (q.isPending) return <div className="ci-rd"><p className="ci-fd-wait">재무로 잰 위험 계산 중</p></div>;
-  if (q.isError) return <div className="ci-rd"><RetryFail title="재무로 잰 위험 조회 실패" onRetry={() => q.refetch()} /></div>;
+  if (q.isPending) return <div className="ci-rd"><p className="ci-fd-wait">재무 기반 위험 계산 중</p></div>;
+  if (q.isError) return <div className="ci-rd"><RetryFail title="재무 기반 위험 조회 실패" onRetry={() => q.refetch()} /></div>;
   const d = q.data;
   const alt = d.altman;
   const maxC = Math.max(...alt.components.map((c) => Math.abs(c.contribution)), 0.01);
   const out = ok(alt.z) && (alt.z > ALT_MAX || alt.z < 0);
   return (
     <div className="ci-rd">
-      <h3 className="ci-block-h">재무로 잰 위험</h3>
+      <h3 className="ci-block-h">재무 기반 위험</h3>
       <div className="ca-vt-grid">
         <section className="ca-cp-sec ci-alt">
           <h4 className="ci-fd-h">Altman Z-Score(알트만 Z)</h4>
@@ -100,8 +100,8 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
             <MiniLine years={d.coverage.years} label="이자보상배율과 순부채/EBITDA 추이"
               series={[{ vals: d.coverage.interest_coverage, cls: "ca-fd-ni" }, { vals: d.coverage.net_debt_to_ebitda, cls: "ca-fd-ocf", dash: true }]} />
             <p className="ci-fd-keys">
-              <span className="ci-fd-key"><i className="sw ni" aria-hidden />이자보상배율(실선 · 영업이익이 이자의 몇 배인지)</span>
-              <span className="ci-fd-key"><i className="sw ocf" aria-hidden />순부채/EBITDA(점선 · 빚을 몇 년 이익으로 갚는지)</span>
+              <span className="ci-fd-key"><i className="sw ni" aria-hidden />이자보상배율(실선 · 영업이익 ÷ 이자비용)</span>
+              <span className="ci-fd-key"><i className="sw ocf" aria-hidden />순부채/EBITDA(점선 · 순부채 상환에 필요한 EBITDA 연수)</span>
             </p>
             <div className="ci-tablewrap">
               <table className="ca-fd-tbl">
@@ -118,7 +118,7 @@ export default function RiskDeepTab({ code, price }: { code: string; price: numb
       </section>
 
       <section className="ca-cp-sec ci-stress">
-        <h4 className="ci-fd-h">금리가 오르면</h4>
+        <h4 className="ci-fd-h">금리 상승 시</h4>
         <p className="ci-fd-lede">할인율을 한꺼번에 올려 재계산한 값입니다(1%p = 100bp).</p>
         <div className="ci-tablewrap">
           <table className="ca-fd-tbl">

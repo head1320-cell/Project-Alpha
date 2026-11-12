@@ -22,7 +22,7 @@ import { Notice, PageHead, RetryFail } from "@/shared/ui/tx";
 
 const TITLE = "고객";
 const LEDE = "관리하는 고객과 고객별 설계 문서입니다. 고객 정보는 비중을 바꾸지 않습니다 — 점검하고 기록하는 데 씁니다.";
-const NO_PII = "별칭만 적습니다 — 실명·연락처·주민번호·계좌번호는 적지 않습니다. 전화·이메일·긴 숫자 모양은 서버가 받지 않고, 실명은 모양으로 알 수 없어 PB 가 지킵니다.";
+const NO_PII = "별칭만 입력합니다 — 실명·연락처·주민번호·계좌번호는 입력하지 않습니다. 전화·이메일·긴 숫자 형식은 서버가 거부하며, 실명은 형식으로 식별할 수 없어 PB 가 준수해야 합니다.";
 
 const unwrap = <T,>(fn: () => Promise<Result<T>>) => async (): Promise<T> => {
   const r = await fn();
@@ -42,7 +42,7 @@ export function ClientsView() {
         : session.kind === "unknown" ? <RetryFail title="계정 정보 확인 실패" onRetry={() => void retry()}>{session.reason}</RetryFail>
         : session.kind === "signed_out" ? (
           <section className="tx-sec cl-signed-out">
-            <p className="cl-strong">로그인하면 내 고객을 볼 수 있습니다.</p>
+            <p className="cl-strong">로그인하면 내 고객을 조회할 수 있습니다.</p>
             <p className="tx-sec-sub">고객 자료는 이 서버의 내 계정에만 있습니다 — 다른 PB 는 보지 못합니다.</p>
             <Link href={loginHref("/clients")} className="tx-btn tx-btn--main">로그인</Link>
           </section>
@@ -66,7 +66,7 @@ function Clients() {
         <div className="cl-list-tabs" role="group" aria-label="보이는 고객">
           {(["active", "archived"] as const).map((t) => (
             <button key={t} type="button" className="cl-list-tab" data-tab={t} aria-pressed={tab === t} onClick={() => setTab(t)}>
-              {t === "active" ? "지금 고객" : "보관한 고객"}
+              {t === "active" ? "활성 고객" : "보관 고객"}
             </button>
           ))}
         </div>
@@ -151,7 +151,7 @@ function AddClient() {
   return (
     <section className="tx-sec cl-add" aria-label="고객 더하기">
       <h2 className="tx-sec-t">고객 더하기</h2>
-      <Notice tone="warn" title="실명·연락처는 적지 않습니다">{NO_PII}</Notice>
+      <Notice tone="warn" title="실명·연락처는 입력하지 않습니다">{NO_PII}</Notice>
       <FactsForm key={n} init={{}} submitLabel="더하기" className="cl-add" err={err} onSubmit={async (f) => {
         const r = await createClient(f);
         if (!r.ok) { setErr(r.error); return; }

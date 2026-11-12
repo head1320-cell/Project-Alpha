@@ -22,27 +22,27 @@ type Read<T> = { pending: boolean; failed: boolean; value: T | null };
 export function opSentence(mode: Read<OpModeName>, kill: Read<OpKill>, practice: boolean | null): string {
   if (mode.pending || kill.pending) return "운영 계좌 상태 확인 중";
   const k = kill.value;
-  if (k?.is_active && k.active_event) return "운영 계좌는 지금 비상 정지 중입니다. 운영 계좌와 모든 사용자 계좌의 새 주문이 나가지 않습니다.";
-  if (k?.is_active) return "비상 정지가 켜져 있다고 서버가 답했지만 어떤 정지인지 읽지 못했습니다. 새 주문은 막혀 있습니다.";
-  if (kill.failed) return "운영 계좌의 비상 정지 상태 확인 실패. 주문이 나가는지 단정할 수 없습니다.";
+  if (k?.is_active && k.active_event) return "운영 계좌는 현재 비상 정지 중입니다. 운영 계좌와 모든 사용자 계좌의 신규 주문이 전송되지 않습니다.";
+  if (k?.is_active) return "서버가 비상 정지 발동 상태라고 응답했으나 정지 유형을 조회하지 못했습니다. 신규 주문은 차단됩니다.";
+  if (kill.failed) return "운영 계좌의 비상 정지 상태 확인 실패. 주문 전송 여부를 단정할 수 없습니다.";
   const m = mode.value;
   if (mode.failed || m === null) return "운영 계좌의 실행 모드 확인 실패";
-  const at = "운영 계좌에서 내는 주문은 지금";
-  if (m === "SHADOW") return `${at} 기록만 됩니다. 증권사로 보내지 않습니다.`;
+  const at = "운영 계좌에서 제출하는 주문은 현재";
+  if (m === "SHADOW") return `${at} 기록만 남깁니다. 증권사로 전송하지 않습니다.`;
   if (m === "PAPER") {
-    if (practice === true) return `${at} 가상 체결기로 갑니다. 증권사에는 닿지 않습니다.`;
-    if (practice === false) return `${at} 모의 체결로 갑니다. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다.`;
-    return `${at} 모의 체결로 갑니다.`;
+    if (practice === true) return `${at} 가상 체결기로 전송됩니다. 증권사에는 전송되지 않습니다.`;
+    if (practice === false) return `${at} 모의 체결로 처리됩니다. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다.`;
+    return `${at} 모의 체결로 처리됩니다.`;
   }
-  if (m === "LIVE") return `${at} 실제 돈으로 나갑니다.`;
+  if (m === "LIVE") return `${at} 실제 자금으로 집행됩니다.`;
   return `운영 계좌의 실행 모드는 서버 값 '${m}'입니다.`;
 }
 
 /** 보내는 곳 역 — 모드 + 연습용 여부. 모르면 단정하지 않는다. */
 export function opDestination(mode: OpModeName, practice: boolean | null): string {
-  if (mode === "SHADOW") return "보내지 않습니다";
-  if (mode === "PAPER") return practice === true ? "가상 체결기로 갑니다" : practice === false ? "증권사 모의 서버로 갑니다" : "모의 체결로 갑니다";
-  if (mode === "LIVE") return "실제 돈으로 주문합니다";
+  if (mode === "SHADOW") return "전송하지 않습니다";
+  if (mode === "PAPER") return practice === true ? "가상 체결기로 전송됩니다" : practice === false ? "증권사 모의 서버로 전송됩니다" : "모의 체결로 처리됩니다";
+  if (mode === "LIVE") return "실제 자금으로 주문합니다";
   return `서버가 '${mode}' 모드라고 답했습니다`;
 }
 

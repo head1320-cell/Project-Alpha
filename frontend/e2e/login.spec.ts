@@ -37,7 +37,7 @@ test("셸 없이 혼자 선다 — 머리 줄·왼쪽 메뉴 0 · 짝: 홈에는
   await expect(page.locator(".lg h1")).toHaveText("로그인");
   await expect(page.locator(".terminal-sidebar, .terminal-header")).toHaveCount(0);
   await expect(page.locator(".lg-brand")).toHaveAttribute("href", "/");
-  await expect(page.locator(".lg-note")).toHaveText("계정은 관리자에게 받습니다. 따로 가입하는 곳은 없습니다.");
+  await expect(page.locator(".lg-note")).toHaveText("계정은 관리자가 발급합니다. 별도 가입 절차는 없습니다.");
   await expect(page.locator(".lg")).not.toContainText("—");
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".terminal-sidebar")).toHaveCount(1);
@@ -205,7 +205,7 @@ test("★지금 이 서버 칩: 데이터 출처는 connection-status 로만 · 
   await page.route("**/api/v1/live/mode", (r) => r.fulfill({ json: { mode: "LIVE" } }));
   await page.route("**/api/v1/macro/connection-status", (r) => r.fulfill({ json: { mock_allowed: false, real_mode: true, bok_configured: true, fred_configured: true } }));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(chip("mode")).toHaveText("실행 모드: 실제 돈으로 주문합니다", { timeout: 20_000 });
+  await expect(chip("mode")).toHaveText("실행 모드: 실제 자금으로 주문합니다", { timeout: 20_000 });
   await expect(chip("data")).toHaveText("한국은행 실데이터");
   await expect(chip("data")).toHaveAttribute("data-tone", "ok");
 

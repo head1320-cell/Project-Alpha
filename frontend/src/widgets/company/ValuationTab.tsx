@@ -187,7 +187,7 @@ function FootballField({ ff }: { ff: ValuationSandbox["football_field"] }) {
         <ul className="ca-ff-legend">
           {outliers.map((b) => (
             <li key={b.id} className="ca-ff-leg ca-ff-na">
-              <span data-server>{b.label}</span> {fmtW(b.lo)}{b.lo !== b.hi ? `~${fmtW(b.hi)}` : ""}: 현재가와 너무 멀어 그림 밖에 적었습니다(원천 자료를 확인하십시오)
+              <span data-server>{b.label}</span> {fmtW(b.lo)}{b.lo !== b.hi ? `~${fmtW(b.hi)}` : ""}: 현재가와 괴리가 커 차트 밖에 표시했습니다(원천 자료를 확인하십시오)
             </li>
           ))}
           {unavailable.map((b) => (
@@ -207,7 +207,7 @@ function AssumptionPanel({ data, ov, onSlide, onReset }: {
   const ke = byKey["ke"]?.value as number | undefined;
   return (
     <section className="ca-cp-sec">
-      <h4>가정 바꿔 보기 <button type="button" className="ca-vt-reset" onClick={onReset}>처음 값으로</button></h4>
+      <h4>가정 변경 <button type="button" className="ca-vt-reset" onClick={onReset}>초기값으로</button></h4>
       {SLIDERS.map((s) => {
         const a = byKey[s.key];
         const cur = ov[s.key] ?? (a?.value as number) ?? s.min;
@@ -273,7 +273,7 @@ function SensitivityHeatmap({ s }: { s: ValuationSandbox["sensitivity"] }) {
       ) : (
         <>
           <SurfaceIso s={s} />
-          <p className="ca-cp-sub">높이 = 적정가. 두 가정이 함께 나빠질 때 가치가 절벽처럼 꺾이는 곳(잔존가치 발산 부근)이 보입니다.</p>
+          <p className="ca-cp-sub">높이 = 적정가. 두 가정이 동시에 악화될 때 가치가 급락하는 구간(잔존가치 발산 부근)이 나타납니다.</p>
         </>
       )}
     </section>
@@ -330,7 +330,7 @@ function CompsTable({ comps, selfCode }: { comps: ValuationSandbox["comps"]; sel
           <tbody>
             {comps.rows.map((r) => (
               <tr key={r.code} className={r.code === selfCode ? "self" : ""}>
-                <td>{r.name}{r.code === selfCode && <span className="ca-cp-self">지금 보는 기업</span>}</td>{cols.map((c) => <td key={c.k}>{num(r[c.k])}</td>)}
+                <td>{r.name}{r.code === selfCode && <span className="ca-cp-self">현재 조회 기업</span>}</td>{cols.map((c) => <td key={c.k}>{num(r[c.k])}</td>)}
               </tr>
             ))}
             <tr className="median"><td>업종 중간값</td>

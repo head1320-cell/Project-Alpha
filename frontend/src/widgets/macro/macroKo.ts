@@ -59,10 +59,10 @@ export function signed(v: number | null | undefined, d = 2): string {
 
 /** 스튜디오 산출 키 → 한국어. 모르는 키는 서버 이름 그대로(`data-mono`). */
 export const STUDIO_OUT_KO: Record<string, string> = {
-  series: "쓴 계열", factors: "요인 값", loadings: "적재(요인과 함께 움직이는 정도)", latest: "지금 값",
+  series: "사용 계열", factors: "요인 값", loadings: "적재(요인 민감도)", latest: "최근값",
   k_factors: "요인 수", explained_var: "설명한 분산 비율",
-  lambda: "곡률 위치(λ)", tenors: "만기(년)", series_used: "쓴 계열", level: "수준", slope: "기울기", curvature: "곡률",
-  inverted: "역전 여부", rmse_pp: "적합 오차(%p)", term_premium_proxy: "기간프리미엄 대용(bp)", term_premium_reason: "기간프리미엄을 못 잰 이유",
+  lambda: "곡률 위치(λ)", tenors: "만기(년)", series_used: "사용 계열", level: "수준", slope: "기울기", curvature: "곡률",
+  inverted: "역전 여부", rmse_pp: "적합 오차(%p)", term_premium_proxy: "기간프리미엄 대용(bp)", term_premium_reason: "기간프리미엄 미산출 사유",
   nodes: "지표", edges: "앞서 움직이는 관계", n_series: "검사한 계열 수",
   assets: "자산", n_views: "뷰 수", A: "제약 행렬(A)", b: "제약 한계(b)", human: "제약(사람 말)", feasible: "모순 검사 결과",
 };
@@ -91,7 +91,7 @@ export function splitReason(raw: string | null | undefined): { code: string | nu
 export function reasonKo(p: { code: string | null; text: string }): string | null {
   if (!p.code || !MISSING_KO[p.code]) return null;
   const n = /관측 (\d+)개, 최소 (\d+)개/.exec(p.text);
-  return n ? `${MISSING_KO[p.code]}(지금 관측 ${n[1]}개, 최소 ${n[2]}개)` : MISSING_KO[p.code];
+  return n ? `${MISSING_KO[p.code]}(현재 관측 ${n[1]}개, 최소 ${n[2]}개)` : MISSING_KO[p.code];
 }
 
 /** 국면 도구 이름 — 서버 `per_tool` 키. */

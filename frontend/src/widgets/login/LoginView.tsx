@@ -91,7 +91,7 @@ export function LoginView() {
       <main className="lg-main">
         <form className="lg-form" onSubmit={submit} aria-busy={busy}>
           <h1 className="lg-h1">로그인</h1>
-          <p className="lg-note">계정은 관리자에게 받습니다. 따로 가입하는 곳은 없습니다.</p>
+          <p className="lg-note">계정은 관리자가 발급합니다. 별도 가입 절차는 없습니다.</p>
 
           {session.kind === "signed_in" ? (
             <p className="lg-already" role="status">

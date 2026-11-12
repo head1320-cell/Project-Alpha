@@ -19,7 +19,7 @@ type Filter = "all" | "sent" | "stopped" | "shadow";
 const FILTERS: { key: Filter; label: string; has: (status: string) => boolean }[] = [
   { key: "all", label: "전체", has: () => true },
   { key: "sent", label: "보냄", has: (st) => ["SUBMITTED", "PARTIAL_FILL", "FILLED", "CANCELLED"].includes(st) },
-  { key: "stopped", label: "멈춤", has: (st) => st === "REJECTED" || st === "FAILED" },
+  { key: "stopped", label: "중단", has: (st) => st === "REJECTED" || st === "FAILED" },
   { key: "shadow", label: "기록만", has: (st) => st === "SHADOW_LOGGED" },
 ];
 
@@ -56,7 +56,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="ma-orders-h">최근 주문</h2>
-          <p className="tx-sec-sub">이 계좌로 낸 주문입니다. 줄마다 어디서 멈췄는지 보입니다.</p>
+          <p className="tx-sec-sub">이 계좌에서 제출한 주문입니다. 행마다 중단 단계를 표시합니다.</p>
         </div>
         <div className="tx-sec-aside">
           <button type="button" className="tx-btn tx-btn--sub ma-sm" onClick={() => void q.refetch()} disabled={q.isFetching}>새로 고침</button>
@@ -73,7 +73,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
         ) : !q.data ? (
           <p className="tx-sec-sub" aria-busy="true">주문 목록 조회 중</p>
         ) : all.length === 0 ? (
-          <p className="tx-sec-sub">아직 낸 주문 없음</p>
+          <p className="tx-sec-sub">제출한 주문 없음</p>
         ) : (
           <>
           <div className="ma-chips ma-ord-filter" role="group" aria-label="주문 거르기">
@@ -84,7 +84,7 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
               </button>
             ))}
           </div>
-          {rows.length === 0 ? <p className="tx-sec-sub ma-ord-none">이 무리에 든 주문 없음</p> : (
+          {rows.length === 0 ? <p className="tx-sec-sub ma-ord-none">이 그룹에 해당하는 주문 없음</p> : (
           <ul className="ma-ord-l">
             {rows.map((o) => {
               const stop = stopOf(o.status, o.reason_code);
@@ -96,14 +96,14 @@ export function OrderList({ accountId, q }: { accountId: string; q: UseQueryResu
                   <span className="ma-ord-what">
                     <strong>{name ?? o.ticker}</strong>
                     {name ? <span className="ma-code" data-mono>{o.ticker}</span> : null}
-                    <span className="ma-ord-side">{o.side === "BUY" ? "사기" : o.side === "SELL" ? "팔기" : <span data-server>{o.side}</span>}</span>
+                    <span className="ma-ord-side">{o.side === "BUY" ? "매수" : o.side === "SELL" ? "매도" : <span data-server>{o.side}</span>}</span>
                     <span>{o.quantity === null ? "수량 미상" : `${num(o.quantity)}주`}</span>
                     <span>{priceWon(o.price)}</span>
                   </span>
                   <span className="ma-ord-state">
                     <span className="ma-ord-status">{status ?? <span data-server>{o.status}</span>}</span>
                     <span className="tx-chip ma-ord-stop" data-tone="plain" data-stop={stop}>
-                      {stop === "unknown" ? "멈춘 곳 미상" : stop === "broker" ? "끝까지 갔습니다" : `${STOPS.find((s) => s.key === stop)?.label}에서 멈춤`}
+                      {stop === "unknown" ? "중단 단계 미상" : stop === "broker" ? "전 단계를 통과했습니다" : `${STOPS.find((s) => s.key === stop)?.label}에서 중단`}
                     </span>
                     {o.execution_mode ? <span className="ma-ord-mode">{MODE_KO[o.execution_mode] ?? <span data-server>{o.execution_mode}</span>}</span> : null}
                   </span>

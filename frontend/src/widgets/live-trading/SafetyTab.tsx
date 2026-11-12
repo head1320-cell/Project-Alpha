@@ -27,7 +27,7 @@ const opts = { staleTime: 0, retry: false, refetchOnWindowFocus: false } as cons
 
 export const SOURCE_KO: Record<string, string> = {
   manual: "관리자가 손으로", manual_admin: "관리자가 손으로",
-  auto_dd: "누적 손실 자동 정지", auto_cb: "하루 손실 자동 정지", auto_risk: "시장 위험 자동 정지", auto_api: "증권사 연결 실패 자동 정지",
+  auto_dd: "누적 손실 자동 정지", auto_cb: "일일 손실 자동 정지", auto_risk: "시장 위험 자동 정지", auto_api: "증권사 연결 실패 자동 정지",
 };
 export const ACTION_STATE_KO: Record<string, string> = { done: "했습니다", skipped: "하지 않았습니다", failed: "실패했습니다", unknown: "미상" };
 const MODE_KO: Record<string, string> = { SHADOW: "기록만", PAPER: "모의 체결", LIVE: "실계좌" };
@@ -52,7 +52,7 @@ export function SafetyTab({ isAdmin, signedIn, gate, onChanged }: {
           <AuditSec />
         </>
       ) : (
-        <p className="tx-sec-sub lvs-login">로그인하면 비상 정지 이력과 감사 기록을 볼 수 있습니다.</p>
+        <p className="tx-sec-sub lvs-login">로그인하면 비상 정지 이력과 감사 기록을 조회할 수 있습니다.</p>
       )}
     </div>
   );
@@ -77,7 +77,7 @@ const Loading = ({ what }: { what: string }) => <p className="tx-sec-sub" aria-b
 function KillHistory() {
   const r = useQuery({ queryKey: ["live", "safety", "kill-events"], queryFn: q(readKillEvents), ...opts });
   return (
-    <Sec id="kill-events" title="비상 정지 이력" sub="운영 계좌에 걸었던 비상 정지와, 그때 서버가 실제로 한 조치입니다. 최근 20건까지 보입니다.">
+    <Sec id="kill-events" title="비상 정지 이력" sub="운영 계좌에 발동된 비상 정지와 당시 서버가 실제로 수행한 조치입니다. 최근 20건까지 표시합니다.">
       {r.isError ? <RetryFail title="비상 정지 이력 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !r.data ? <Loading what="비상 정지 이력" />
         : !r.data.events.length ? <p className="tx-sec-sub lvs-empty">운영 계좌에 비상 정지를 건 적 없음</p>
@@ -95,8 +95,8 @@ function KillRow({ e }: { e: KillEvent }) {
       <div className="lvs-kill-b">
         <p className="lvs-kill-t">
           {krDateTime(e.triggered_at) ?? "시각 미상"} · {ko(SOURCE_KO, e.trigger_source)}
-          {open ? <> · <strong>지금 걸려 있습니다</strong></>
-            : <> · {krDateTime(e.resolved_at) ?? "언제인지 모르는 때"}에 {e.resolved_by ?? "누군가"} 님이 풀었습니다</>}
+          {open ? <> · <strong>현재 발동 중입니다</strong></>
+            : <> · {krDateTime(e.resolved_at) ?? "시각 미상"}에 {e.resolved_by ?? "누군가"} 님이 해제했습니다</>}
         </p>
         <p className="lvs-kill-why">사유 <span data-server>{e.trigger_reason ?? "적혀 있지 않습니다"}</span>
           {" · "}취소한 미체결 {e.n_orders_cancelled == null ? "N/A" : `${num(e.n_orders_cancelled)}건`}</p>
@@ -119,7 +119,7 @@ function KillRow({ e }: { e: KillEvent }) {
 // ── 자동 비상 정지 준비 상태 ────────────────────────────────────────────────
 
 const TRIGGER_KO: Record<string, string> = {
-  auto_dd: "누적 손실이 한도를 넘으면", auto_cb: "하루 손실이 한도를 넘으면", auto_risk: "시장 위험 점수가 높으면", auto_api: "증권사 연결이 계속 실패하면",
+  auto_dd: "누적 손실이 한도를 초과하면", auto_cb: "일일 손실이 한도를 초과하면", auto_risk: "시장 위험 점수가 높으면", auto_api: "증권사 연결이 연속 실패하면",
 };
 
 function ReadinessSec() {
@@ -127,13 +127,13 @@ function ReadinessSec() {
   const codes = useQuery({ queryKey: ["live", "safety", "kis-codes"], queryFn: q(readKisCodes), ...opts });
   const d = r.data;
   return (
-    <Sec id="readiness" title="자동 비상 정지 준비 상태" sub="서버가 스스로 비상 정지를 걸 수 있는 조건 넷입니다. 잴 재료가 없는 조건은 한도를 넘어도 걸리지 않습니다.">
+    <Sec id="readiness" title="자동 비상 정지 준비 상태" sub="서버가 자동으로 비상 정지를 발동할 수 있는 조건 네 가지입니다. 측정 데이터가 없는 조건은 한도를 초과해도 발동하지 않습니다.">
       {r.isError ? <RetryFail title="자동 비상 정지 준비 상태 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !d ? <Loading what="준비 상태" />
         : (
           <>
             <p className="lvs-ready-ans">
-              조건 {num(d.armed.length + d.inoperable.length)}개 중 <strong>{num(d.armed.length)}개</strong>가 지금 걸 수 있습니다.
+              조건 {num(d.armed.length + d.inoperable.length)}개 중 <strong>{num(d.armed.length)}개</strong>가 현재 발동 가능합니다.
             </p>
             {d.account_state_reason ? <p className="lv-err" data-server>{d.account_state_reason}</p> : null}
             <ul className="lvs-ready">
@@ -173,14 +173,14 @@ function ReadinessSec() {
 function PnlSec() {
   const r = useQuery({ queryKey: ["live", "safety", "daily-pnl"], queryFn: q(readDailyPnl), ...opts });
   return (
-    <Sec id="daily-pnl" title="일 손익" sub="운영 계좌의 하루 끝 평가 자산과 수익률입니다. 날마다 그날의 실행 모드가 함께 적힙니다.">
+    <Sec id="daily-pnl" title="일 손익" sub="운영 계좌의 일별 마감 평가 자산과 수익률입니다. 일자별 실행 모드를 함께 표시합니다.">
       {r.isError ? <RetryFail title="일 손익 조회 실패" onRetry={() => void r.refetch()}>{r.error.message}</RetryFail>
         : !r.data ? <Loading what="일 손익" />
         : !r.data.pnl_history.length ? <p className="tx-sec-sub lvs-empty">기록된 날이 아직 없습니다.</p>
         : (
           <div className="lvs-tbl-wrap">
             <table className="lvs-tbl">
-              <thead><tr><th scope="col">날짜</th><th scope="col">모드</th><th scope="col">끝 평가 자산</th><th scope="col">하루 수익률</th><th scope="col">주문</th></tr></thead>
+              <thead><tr><th scope="col">날짜</th><th scope="col">모드</th><th scope="col">마감 평가 자산</th><th scope="col">일간 수익률</th><th scope="col">주문</th></tr></thead>
               <tbody>{r.data.pnl_history.map((p) => <PnlTr key={p.trade_date} p={p} />)}</tbody>
             </table>
           </div>
@@ -210,7 +210,7 @@ function AuditSec() {
   const sum = useQuery({ queryKey: ["live", "safety", "audit-summary"], queryFn: q(readAuditSummary), ...opts });
   const s = sum.data;
   return (
-    <Sec id="audit" title="최근 감사 기록" sub="운영 계좌에서 서버가 남긴 기록입니다. 누가 무엇을 했는지 지우지 않고 쌓습니다.">
+    <Sec id="audit" title="최근 감사 기록" sub="운영 계좌에서 서버가 기록한 감사 로그입니다. 행위자와 행위를 삭제 없이 누적 기록합니다.">
       {sum.isError ? <RetryFail title="오늘 요약 조회 실패" onRetry={() => void sum.refetch()}>{sum.error.message}</RetryFail>
         : !s ? <Loading what="오늘 요약" />
         : s.error ? (

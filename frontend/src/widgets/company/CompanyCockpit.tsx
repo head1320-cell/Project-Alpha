@@ -239,7 +239,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       ]} />
 
       <div className="ci-stick">
-        <div className="ci-mini" hidden={!mini} aria-label="지금 보는 기업">
+        <div className="ci-mini" hidden={!mini} aria-label="현재 조회 기업">
           <b className="ci-mini-name">{c.name}</b>
           <span className="ci-mini-price">{priceWon(c.price)}</span>
           <DayChange c={c} cls="ci-mini-chg" />
@@ -259,9 +259,9 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {/* ── 주가와 가치 ── */}
       {sec("value", (
         <>
-          <p className="ci-sec-lede">1년 주가 선(날마다의 종가) 오른쪽에 모형별 밸류에이션 밴드를 막대로 세웠습니다. 가는 실선은 현재가입니다. 종가와 받아 오는 곳과 때가 달라 선 끝과 높이가 다를 수 있습니다. 점선은 내재가치(추정)입니다.</p>
+          <p className="ci-sec-lede">1년 주가 선(일별 종가) 오른쪽에 모형별 밸류에이션 밴드를 막대로 표시했습니다. 가는 실선은 현재가입니다. 종가와 출처·기준 시각이 달라 선 끝과 높이가 다를 수 있습니다. 점선은 내재가치(추정)입니다.</p>
           {c.failed.includes("prices") && <RetryFail title="시세 조회 실패" onRetry={onRetry} />}
-          {!c.price1y.length && !c.failed.includes("prices") && <p className="ci-pv-noprice">시세가 아직 적재되지 않았습니다. 주가 선 없이 밸류에이션 밴드만 보여 드립니다.</p>}
+          {!c.price1y.length && !c.failed.includes("prices") && <p className="ci-pv-noprice">시세가 아직 적재되지 않았습니다. 주가 선 없이 밸류에이션 밴드만 표시합니다.</p>}
           {sb.isError && <RetryFail title="밸류에이션 밴드 조회 실패" onRetry={() => void sb.refetch()} />}
           <PriceValueChart data={c.price1y} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : 0} bands={bands} />
 
@@ -294,13 +294,13 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
 
           {c.scenarios.length >= 2 && (
             <div className="ci-block">
-              <h3 className="ci-block-h">가정을 바꿔 재계산하면</h3>
+              <h3 className="ci-block-h">가정 변경 시 재계산 결과</h3>
               <ScenarioCards scenarios={c.scenarios} price={c.price} />
             </div>
           )}
 
           <details className="ci-more">
-            <summary>가치를 더 상세 보기(1년 주가·가치 밴드·모형별 범위·가정 바꿔 보기·민감도·업종 안 위치·상대가치)</summary>
+            <summary>가치 상세(1년 주가·가치 밴드·모형별 범위·가정 변경·민감도·업종 내 위치·상대가치)</summary>
             {c.price1y.length > 0 && (
               <div className="ci-block">
                 <h3 className="ci-block-h">1년 주가</h3>
@@ -393,14 +393,14 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
           <MacroBlock q={models.macro} />
           {riskSeen && <RiskDeepTab code={c.code} price={c.price} />}
           <div className="ci-mrisk">
-          <h3 className="ci-block-h">시세로 잰 위험</h3>
+          <h3 className="ci-block-h">시세 기반 위험</h3>
           {risk === undefined ? <p className="ca-cp-empty">위험 지표 계산 중</p>
             : risk === null ? <RetryFail title="위험 지표 조회 실패" onRetry={() => { setRisk(undefined); setRiskTry((n) => n + 1); }} />
             : risk.note ? <p className="ca-cp-empty">{risk.note}</p>
             : (
               <div className="ca-cp-riskgrid">
                 {([
-                  ["하루 최대 손실 추정(VaR 99%)", risk.varPct != null ? `−${Math.abs(risk.varPct).toFixed(2)}%` : UNKNOWN_TEXT],
+                  ["1일 최대 손실 추정(VaR 99%)", risk.varPct != null ? `−${Math.abs(risk.varPct).toFixed(2)}%` : UNKNOWN_TEXT],
                   ["그보다 나쁜 날 평균 손실(ES, 1억원 기준)", risk.esAmount != null ? `−${won(Math.abs(risk.esAmount))}` : UNKNOWN_TEXT],
                   ["1년 변동성", risk.vol != null ? `${risk.vol.toFixed(1)}%` : UNKNOWN_TEXT],
                   ["샤프 지수(무위험 0)", risk.sharpe != null ? risk.sharpe.toFixed(2) : UNKNOWN_TEXT],
@@ -430,7 +430,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                         <tr key={p.code} data-code={p.code} className={p.self ? "self" : ""} tabIndex={p.self ? undefined : 0}
                             onClick={() => !p.self && onPick?.(p.code)}
                             onKeyDown={(e) => { if (!p.self && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onPick?.(p.code); } }}>
-                          <td>{p.name}{p.self && <span className="ca-cp-self">지금 보는 기업</span>}</td>
+                          <td>{p.name}{p.self && <span className="ca-cp-self">현재 조회 기업</span>}</td>
                           <td className="n">{priceWon(p.price)}</td><td className="n">{bae(p.per)}</td><td className="n">{bae(p.pbr)}</td><td className="n">{pctTxt(p.roe)}</td>
                           <td className="n gap">{pctSigned(p.gap)}</td>{capKnown && <td className="n">{eokWon(p.mktcap)}</td>}
                         </tr>
@@ -481,7 +481,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
             </div>
           )}
           {narrLoading && <p className="ca-cp-empty">AI 가 설명을 쓰는 중입니다. 보통 10~30초 걸립니다.</p>}
-          {narr === undefined && !narrLoading && <details className="ci-note"><summary>켜는 방법</summary>관리자가 서버 설정에 AI 키를 넣어 두면 켜집니다. 키가 없으면 누른 뒤 사유를 보여 드립니다.</details>}
+          {narr === undefined && !narrLoading && <details className="ci-note"><summary>활성화 방법</summary>관리자가 서버 설정에 AI 키를 등록하면 활성화됩니다. 키가 없으면 실행 시 사유를 표시합니다.</details>}
         </div>
       ))}
       </div>

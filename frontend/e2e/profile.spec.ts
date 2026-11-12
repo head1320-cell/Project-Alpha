@@ -168,7 +168,7 @@ test("화면 테마: 다크를 고르면 설계 화면·모듈은 어둡게(새�
   await expect(avatar(page)).toBeVisible();
   expect(await isDark(page), "다크가 없는 화면은 밝게").toBe(false);
   await avatar(page).click();
-  await expect(card(page).locator(".pf-theme-note")).toContainText("밝게만");
+  await expect(card(page).locator(".pf-theme-note")).toContainText("라이트 테마만");
   await card(page).locator('.pf-seg-b[data-theme="light"]').click();
   await expect(card(page).locator(".pf-theme-note"), "라이트면 안내할 것이 없다").toHaveCount(0);
   await page.goto("/allocation", { waitUntil: "domcontentloaded" });

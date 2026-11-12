@@ -37,7 +37,7 @@ import type { AssetStrips, AxisHistory, CycleStrips, KrUsCompare } from "@/entit
 
 export function MarketToggle({ market, setMarket }: { market: Market; setMarket: (m: Market) => void }) {
   return (
-    <div className="mc-mkt" role="group" aria-label="시장 고르기">
+    <div className="mc-mkt" role="group" aria-label="시장 선택">
       <button type="button" className={market === "kr" ? "on" : ""} aria-pressed={market === "kr"} onClick={() => setMarket("kr")}>국내 ETF</button>
       <button type="button" className={market === "us" ? "on" : ""} aria-pressed={market === "us"} onClick={() => setMarket("us")}>미국 ETF</button>
     </div>
@@ -79,7 +79,7 @@ export function StrategiesTab({ strategies, market, setMarket, loading, failed, 
   return (
     <div className="mc-stack">
       <div className="mc-strat-bar">
-        <div className="mc-strat-title">전술적 자산배분 전략{total ? ` ${total}개` : ""} <span className="mc-card-sub">모멘텀·위험·최적화 규칙으로 지금 시점의 비중과 신호를 냈습니다. 카드를 누르면 자세히 봅니다.</span></div>
+        <div className="mc-strat-title">전술적 자산배분 전략{total ? ` ${total}개` : ""} <span className="mc-card-sub">모멘텀·위험·최적화 규칙으로 현재 시점의 비중과 신호를 산출했습니다. 카드를 누르면 상세를 표시합니다.</span></div>
         <MarketToggle market={market} setMarket={setMarket} />
       </div>
       {loading && <p className="mc-loading">{mktName(market)} 포트폴리오 최적화 중</p>}
@@ -161,7 +161,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
       {bar(<span className="mc-card-sub"><span data-server>{recommend.regime.quadrant_kr}</span> · 스트레스 {recommend.regime.stress.toFixed(0)} · 신뢰도 {confPct}%</span>)}
       {recommend.low_conviction && (
         <p className="mc-warn mc-warn--line">
-          확신이 낮은 국면입니다(신뢰도 {confPct}%). 방향을 잘못 짚을 위험을 줄이려고 현금성 자산을 {top.cash_overlay_pct.toFixed(0)}% 넣었습니다.
+          신뢰도가 낮은 국면입니다(신뢰도 {confPct}%). 방향성 판단 오류 위험을 줄이기 위해 현금성 자산을 {top.cash_overlay_pct.toFixed(0)}% 편입했습니다.
         </p>
       )}
       <div className="mc-grid">

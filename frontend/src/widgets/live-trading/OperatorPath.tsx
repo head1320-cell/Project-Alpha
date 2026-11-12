@@ -18,7 +18,7 @@ import { MODE_IS, MODE_TO, killState, opDestination, paperConfirm } from "./sent
 type Read<T> = { pending: boolean; failed: boolean; value: T | null };
 
 const MODES: { m: "SHADOW" | "PAPER"; act: string; t: string; d: string }[] = [
-  { m: "SHADOW", act: "mode-shadow", t: "기록만", d: "보내지 않습니다" },
+  { m: "SHADOW", act: "mode-shadow", t: "기록만", d: "전송하지 않습니다" },
   { m: "PAPER", act: "mode-paper", t: "모의 체결", d: "실제 돈은 안 씁니다" },
 ];
 
@@ -58,7 +58,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
       <header className="tx-sec-head">
         <div>
           <h2 className="tx-sec-t" id="lv-path-h">주문이 가는 길</h2>
-          <p className="tx-sec-sub">운영 계좌의 주문은 서버에서 이 순서로 지나갑니다. 전략이 낸 주문도, 관리자가 직접 낸 주문도 같습니다.</p>
+          <p className="tx-sec-sub">운영 계좌의 주문은 서버에서 이 순서로 처리됩니다. 전략 주문과 관리자 수동 주문 모두 동일합니다.</p>
         </div>
       </header>
       <ol className="tx-path-l">
@@ -71,7 +71,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
               {kill.failed ? <button type="button" className="lv-link" onClick={onRetryKill}>재시도</button>
                 : ev ? <>사유 <span data-server>{ev.trigger_reason ?? "적히지 않았습니다"}</span>{ev.triggered_at ? ` · ${krDateTime(ev.triggered_at) ?? ev.triggered_at}` : ""}</>
                 : k?.is_active ? "정지 기록 읽기 실패. 새 주문은 막혀 있습니다."
-                : "켜면 운영 계좌와 모든 사용자 계좌의 새 주문을 멈춥니다."}
+                : "켜면 운영 계좌와 모든 사용자 계좌의 신규 주문을 중단합니다."}
             </p>
           </div>
         </li>
@@ -80,7 +80,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
           <div className="tx-st-b">
             <p className="tx-st-name">위험 검사</p>
             <p className="tx-st-state">주문마다 서버가 따집니다</p>
-            <p className="tx-st-sub">가격, 하루 거래 한도, 장 시간 같은 것을 봅니다. 걸리면 주문하지 않습니다.</p>
+            <p className="tx-st-sub">가격·일일 거래 한도·장 운영 시간 등을 점검합니다. 위반 시 주문하지 않습니다.</p>
           </div>
         </li>
         <li className="tx-st" data-st="mode">
@@ -93,21 +93,21 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
                   <button key={x.m} type="button" className="tx-mode-b" data-mode={x.m} data-act={x.act}
                           aria-pressed={cur === x.m} data-locked={cur === x.m ? "true" : undefined}
                           disabled={cur === null || cur === x.m || change.isPending} onClick={() => pick(x.m)}>
-                    <span className="tx-mode-t">{x.t}</span><span className="tx-mode-d">{cur === x.m ? "지금 이 모드입니다" : x.d}</span>
+                    <span className="tx-mode-t">{x.t}</span><span className="tx-mode-d">{cur === x.m ? "현재 모드입니다" : x.d}</span>
                   </button>
                 ))}
                 <button type="button" className="tx-mode-b tx-mode-b--live" data-mode="LIVE" data-act="mode-live"
                         aria-pressed={cur === "LIVE"} data-locked={cur === "LIVE" ? "true" : undefined}
                         disabled={cur === null || cur === "LIVE" || change.isPending} onClick={() => { setAsking(false); onLive(); }}>
                   <span className="tx-mode-t"><Lock size={14} aria-hidden /> 실계좌</span>
-                  <span className="tx-mode-d">{cur === "LIVE" ? "지금 이 모드입니다" : gateWord}</span>
+                  <span className="tx-mode-d">{cur === "LIVE" ? "현재 모드입니다" : gateWord}</span>
                 </button>
               </div>
             ) : (
               <p className="tx-st-state">{mode.pending ? "확인 중" : cur === null ? "확인 실패"
                 : MODE_IS[cur] ?? <span data-server>{cur}</span>}</p>
             )}
-            <p className="tx-st-sub">서버를 다시 켜면 기록만으로 돌아갑니다.</p>
+            <p className="tx-st-sub">서버를 재시작하면 기록만 모드로 복귀합니다.</p>
             {asking ? (
               <div className="tx-confirm lv-paper-confirm" role="group" aria-label="모의 체결로 바꾸기 확인">
                 <p>{paperConfirm(practice)}</p>
@@ -128,7 +128,7 @@ export function OperatorPath({ mode, kill, practice, isAdmin, gate, refused, onR
         <li className="tx-st" data-st="broker">
           <span className="tx-st-dot" aria-hidden><Send className="tx-st-ic" size={14} strokeWidth={2} /></span>
           <div className="tx-st-b">
-            <p className="tx-st-name">보내는 곳</p>
+            <p className="tx-st-name">전송 대상</p>
             <p className="tx-st-state">{cur === null ? "모드를 몰라서 정할 수 없습니다" : opDestination(cur, practice)}</p>
             <p className="tx-st-sub">
               {cur === "PAPER" && practice === false ? "서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다."

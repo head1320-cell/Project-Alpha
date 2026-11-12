@@ -499,12 +499,12 @@ export default function TerminalScreener() {
 
   return (
     <div className="tx-page tx-page--wide scr">
-      <PageHead title="종목 찾기" lede="조건을 걸어 종목을 고릅니다." />
+      <PageHead title="종목 찾기" lede="조건식으로 종목을 선별합니다." />
 
       {/* ── 조건 ── */}
       <section className="tx-sec bsc-workspace scr-conds" aria-label="조건">
         <div className="scr-line">
-          <label className="scr-line-k" htmlFor="scr-universe">어디서</label>
+          <label className="scr-line-k" htmlFor="scr-universe">유니버스</label>
           <select id="scr-universe" className="scr-select" data-act="universe" value={universe} onChange={(e) => setUniverse(e.target.value)}>
             {UNIVERSES.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
           </select>
@@ -532,7 +532,7 @@ export default function TerminalScreener() {
           </div>
         </div>
         {mcapActive && results && !showMcap && (
-          <p className="scr-note">지금 결과에는 시가총액 값이 없습니다 — 시가총액 조건은 그 값이 있는 데이터에서만 걸러집니다.</p>
+          <p className="scr-note">현재 결과에는 시가총액 값이 없습니다 — 시가총액 조건은 해당 값이 있는 데이터에만 적용됩니다.</p>
         )}
 
         <div className="scr-line scr-line--top">
@@ -572,7 +572,7 @@ export default function TerminalScreener() {
                   </div>
                   {focusedChip === i && !isRank && (
                     <div className="bsc-hist-panel">
-                      <span className="bsc-hist-label">{name} 분포 — 어디서 자를지 정합니다</span>
+                      <span className="bsc-hist-label">{name} 분포 — 임계값을 설정합니다</span>
                       <div className="bsc-hist-wrap"><MiniHistogram values={sampleVals(c.field)} op={c.op} threshold={Number(c.value) || 0} /></div>
                     </div>
                   )}
@@ -613,7 +613,7 @@ export default function TerminalScreener() {
                   </div>
                   {exprError
                     ? <p className="bsc-expr-msg err" role="alert">{exprError}</p>
-                    : <p className="bsc-expr-msg ok">지금 거르는 식: <b>{committed ? exprText.trim() : "전체 종목(식 없음)"}</b></p>}
+                    : <p className="bsc-expr-msg ok">현재 적용 식: <b>{committed ? exprText.trim() : "전체 종목(식 없음)"}</b></p>}
                 </>
               )}
             </div>
@@ -622,14 +622,14 @@ export default function TerminalScreener() {
               <input type="checkbox" role="switch" className="scr-switch" data-act="gate" checked={gateOn} onChange={(e) => setGateOn(e.target.checked)} />
               <span>
                 <b>유동성 게이트</b>
-                <span className="scr-gate-d">시가총액 300억 이상 · 하루 거래대금 3억 이상 · 호가 차이 1% 이하인 종목만 남깁니다. 기본은 꺼져 있습니다.</span>
+                <span className="scr-gate-d">시가총액 300억 이상 · 일 거래대금 3억 이상 · 호가 스프레드 1% 이하인 종목만 포함합니다. 기본값은 꺼짐입니다.</span>
               </span>
             </label>
 
             <div className="bsc-preset">
               <div className="bsc-preset-head">
                 <p className="scr-expert-h">저장한 조건</p>
-                <button type="button" className="bsc-preset-save" disabled={!group.conditions.length} onClick={() => setShowSave((v) => !v)}>지금 조건 저장</button>
+                <button type="button" className="bsc-preset-save" disabled={!group.conditions.length} onClick={() => setShowSave((v) => !v)}>현재 조건 저장</button>
               </div>
               {showSave && (
                 <div className="bsc-preset-dialog">
@@ -670,7 +670,7 @@ export default function TerminalScreener() {
       <div className="scr-answer-wrap">
         {runError ? (
           <Notice tone="danger" title="종목을 거르지 못했습니다">
-            스크리너 계산 연결 실패. 조건은 그대로 두었으니 재시도하십시오.
+            스크리너 계산 연결 실패. 조건은 유지되므로 재시도하십시오.
             <details className="scr-err-detail"><summary>상세</summary><code>{runError}</code></details>
             <div className="scr-retry"><button type="button" className="tx-btn tx-btn--sub" onClick={() => setRetry((n) => n + 1)}>재시도</button></div>
           </Notice>
@@ -700,7 +700,7 @@ export default function TerminalScreener() {
           <header className="tx-sec-head">
             <div>
               <h2 className="tx-sec-t">결과</h2>
-              <p className="tx-sec-sub">종목을 누르면 자세히 볼 수 있습니다.</p>
+              <p className="tx-sec-sub">종목을 누르면 상세 정보를 표시합니다.</p>
             </div>
             <div className="scr-tools">
               <button type="button" className="tx-btn tx-btn--sub scr-tool" aria-expanded={showColPicker} onClick={() => setShowColPicker((v) => !v)}>표시 열{displayCols.length ? ` ${displayCols.length}개` : ""}</button>
@@ -711,7 +711,7 @@ export default function TerminalScreener() {
           {showColPicker && (
             <div className="bsc-colpicker">
               <div className="bsc-colpicker-head">
-                <span>표에 더 볼 열(조건과 따로 — 보기만 합니다)</span>
+                <span>표시 열 추가(조건과 무관 — 표시 전용)</span>
                 <input className="bsc-colpicker-search" aria-label="열 찾기" placeholder="열 찾기" value={colSearch} onChange={(e) => setColSearch(e.target.value)} />
               </div>
               <div className="bsc-colpicker-list">

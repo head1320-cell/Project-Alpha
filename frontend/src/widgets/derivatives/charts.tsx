@@ -21,7 +21,7 @@ export function Payoff({ kind, K, S, price }: { kind: Kind; K: number; S: number
   return (
     <div className="dv-chart" data-testid="payoff" data-breakeven={be.toFixed(4)}>
       <h3 className="dv-h3">만기 손익 구조</h3>
-      <p className="dv-note">옵션 1계약을 현재 이론가에 매수해 만기까지 보유한 경우입니다. 손익분기는 <b className="dv-be">{f4(be)}원</b>(행사가 {kind === "call" ? "+" : "−"} 이론가)이고, 가장 크게 잃는 금액은 이론가 {f4(price)}원입니다.</p>
+      <p className="dv-note">옵션 1계약을 현재 이론가에 매수해 만기까지 보유한 경우입니다. 손익분기는 <b className="dv-be">{f4(be)}원</b>(행사가 {kind === "call" ? "+" : "−"} 이론가)이고, 최대 손실은 이론가 {f4(price)}원입니다.</p>
       <div className="dv-chart-box" role="img" aria-label={`만기 손익 그림. 손익분기 ${f4(be)}원, 최대 손실 ${f4(price)}원`}>
         <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
@@ -36,7 +36,7 @@ export function Payoff({ kind, K, S, price }: { kind: Kind; K: number; S: number
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <p className="dv-keys"><span><i className="dv-key-be" aria-hidden />손익분기 {f4(be)}원</span><span><i className="dv-key-s" aria-hidden />지금 기초자산 {S}원</span></p>
+      <p className="dv-keys"><span><i className="dv-key-be" aria-hidden />손익분기 {f4(be)}원</span><span><i className="dv-key-s" aria-hidden />현재 기초자산 {S}원</span></p>
     </div>
   );
 }
@@ -50,7 +50,7 @@ export function ExposureCurve({ ee, T, epe, peak, pos }: { ee: number[]; T: numb
   return (
     <div className="dv-chart" data-testid="cva-curve" data-points={ee.length}>
       <h3 className="dv-h3">기대 노출(EE) 추이</h3>
-      <p className="dv-note">상대방이 그 시점에 부도나면 잃을 수 있는 금액의 기대값입니다. {POS_KO[pos]} 모양으로 {ee.length}개 시점을 계산했습니다. 가장 클 때 {wonK(peak)}, 평균 {wonK(epe)}입니다.</p>
+      <p className="dv-note">거래상대방이 해당 시점에 부도 시 발생할 수 있는 손실의 기대값입니다. {POS_KO[pos]} 형태로 {ee.length}개 시점을 계산했습니다. 최대 {wonK(peak)}, 평균 {wonK(epe)}입니다.</p>
       <div className="dv-chart-box">
         <ReadoutFrame id="cva-exposure" label={`기대 노출 곡선 ${ee.length}개 점. 가장 클 때 ${wonK(peak)}, 평균 ${wonK(epe)}`} headLabel="시점" rows={rows} idx={idx} onKeyDown={onKeyDown}>
           <ResponsiveContainer width="100%" height={240}>

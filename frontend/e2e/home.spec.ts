@@ -41,16 +41,16 @@ test("답 문장 = 서버 recommended_mode 의 번역 — 응답을 DEFENSIVE �
   const seen = page.waitForResponse((r) => r.url().endsWith("/api/v1/macro/regime"));
   await open(page);
   const body = (await (await seen).json()) as Regime;
-  await expect(answer(page)).toHaveText(`지금 경제 흐름은 ‘${MODE[body.recommended_mode]}’ 단계입니다`);
+  await expect(answer(page)).toHaveText(`현재 경기 흐름은 ‘${MODE[body.recommended_mode]}’ 단계입니다`);
 
   await patchRegime(page, (b) => { b.recommended_mode = "DEFENSIVE"; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 경제 흐름은 ‘방어’ 단계입니다");
+  await expect(answer(page)).toHaveText("현재 경기 흐름은 ‘방어’ 단계입니다");
 
   await page.unroute("**/api/v1/macro/regime");
   await patchRegime(page, (b) => { b.recommended_mode = "SOMETHING_NEW"; b.stress_score = 37.6; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 시장 스트레스는 38/100입니다");     // 판단을 지어내지 않는다
+  await expect(answer(page)).toHaveText("현재 시장 스트레스는 38/100입니다");     // 판단을 지어내지 않는다
 });
 
 test("숫자는 응답 그대로 — 확률이 없으면 '확률 미상'(0% 아님) · 미국 국면이 없으면 줄은 남고 'N/A'(짝)", async ({ page }) => {

@@ -87,8 +87,8 @@ export function StressCheck() {
           <>
             <section className="tx-sec rk-sum" aria-labelledby="rk-sum-h">
               <h2 id="rk-sum-h" className="tx-sec-t">네 충격 한눈에</h2>
-              <p className="tx-sec-sub">막대는 30종목 중 기준을 넘겨 버틴 종목의 비율입니다. 줄을 누르면 아래에서 자세히 봅니다.</p>
-              <div className="rk-sum-list" role="group" aria-label="충격 고르기">
+              <p className="tx-sec-sub">막대는 30종목 중 기준을 충족한 생존 종목의 비율입니다. 행을 누르면 아래에 상세를 표시합니다.</p>
+              <div className="rk-sum-list" role="group" aria-label="충격 선택">
                 {scenarios.map((s) => {
                   const q = byId[s.id]?.q;
                   if (q?.isError) {
@@ -105,12 +105,12 @@ export function StressCheck() {
                     <button key={s.id} type="button" className="rk-sum-row" data-sc={s.id} aria-pressed={on} onClick={() => setPicked(s.id)}>
                       <span className="rk-sum-name" data-server>{s.label}</span>
                       {!q || q.isPending ? <span className="rk-sum-wait">계산 중</span>
-                        : !r ? <span className="rk-sum-reason">서버가 이 충격의 결과를 보내지 않았습니다</span>
+                        : !r ? <span className="rk-sum-reason">서버가 이 충격의 결과를 제공하지 않았습니다</span>
                         : !r.available ? <span className="rk-sum-reason">못 했습니다: <span data-server>{r.error ?? r.reason ?? "사유 수신 실패"}</span></span>
                         : (
                           <>
                             <span className="rk-sum-bar" aria-hidden><i style={{ width: `${(r.n_survivors / Math.max(1, r.n_stocks)) * 100}%` }} /></span>
-                            <span className="rk-sum-n">버틴 종목 {r.n_survivors}/{r.n_stocks}</span>
+                            <span className="rk-sum-n">생존 종목 {r.n_survivors}/{r.n_stocks}</span>
                             <span className="rk-sum-avg">평균 점수 <b className="rk-dir" data-dir={dir(r.avg_shock_pct)}>{sgn(r.avg_shock_pct)}%</b></span>
                           </>
                         )}
@@ -122,7 +122,7 @@ export function StressCheck() {
 
             <section className="tx-sec rk-mapsec" aria-labelledby="rk-map-h">
               <h2 id="rk-map-h" className="tx-sec-t">종목마다 충격별 점수 변화</h2>
-              <p className="tx-sec-sub">서버는 충격마다 취약한 10종목, 버틴 5종목, 충격이 가장 작은 5종목만 보냅니다. 그 밖의 칸은 ‘목록 밖’으로 비워 둡니다.</p>
+              <p className="tx-sec-sub">서버는 충격별로 취약 10종목, 생존 5종목, 충격이 가장 작은 5종목만 제공합니다. 그 외 칸은 ‘목록 밖’으로 비워 둡니다.</p>
               {map.codes.length ? (
                 <>
                   <div className="rk-mapwrap">
@@ -159,7 +159,7 @@ export function StressCheck() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="rk-map-read" aria-live="polite">{read ?? "칸에 초점을 두거나 올리면 그 종목의 점수 변화를 여기에 보여 줍니다."}</p>
+                  <p className="rk-map-read" aria-live="polite">{read ?? "칸에 초점을 두거나 포인터를 올리면 해당 종목의 점수 변화를 여기에 표시합니다."}</p>
                 </>
               ) : <p className="rk-wait">{pending ? "충격 결과 대기 중" : "칸 지도에 그릴 결과 없음"}</p>}
             </section>
@@ -178,23 +178,23 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
       <h2 id="rk-detail-h" className="tx-sec-t rk-detail-h"><span data-server>{label}</span> 자세히</h2>
       {!q || q.isPending ? <p className="rk-wait">계산 중</p>
         : q.isError ? <RetryFail title="이 충격 산출 실패" onRetry={() => q.refetch()} />
-        : !r ? <p className="rk-reason">서버가 이 충격의 결과를 보내지 않았습니다.</p>
+        : !r ? <p className="rk-reason">서버가 이 충격의 결과를 제공하지 않았습니다.</p>
         : !r.available ? <p className="rk-reason">서버가 이 충격을 계산하지 못했다고 답했습니다: <span data-server>{r.error ?? r.reason ?? "사유 수신 실패"}</span></p>
         : (
           <>
             <div className="tstat-grid rk-stats">
               <div className="tstat">
-                <span className="tstat-key">버틴 종목</span>
+                <span className="tstat-key">생존 종목</span>
                 <span className="tstat-val">{r.n_survivors}/{r.n_stocks}</span>
                 <span className="rk-stat-bar" aria-hidden><i style={{ width: `${(r.n_survivors / Math.max(1, r.n_stocks)) * 100}%` }} /></span>
               </div>
               <div className="tstat"><span className="tstat-key">취약 종목</span><span className="tstat-val">{r.n_casualties}종목</span></div>
-              <div className="tstat"><span className="tstat-key">버틴 비율</span><span className="tstat-val">{r.survival_rate}%</span></div>
+              <div className="tstat"><span className="tstat-key">생존율</span><span className="tstat-val">{r.survival_rate}%</span></div>
               <div className="tstat"><span className="tstat-key">평균 점수 변화</span><span className="tstat-val rk-dir" data-dir={dir(r.avg_shock_pct)}>{sgn(r.avg_shock_pct)}%</span></div>
             </div>
-            <p className="rk-rule">종합점수가 {STRESS_WEAK_PCT}% 넘게 떨어지면 ‘취약’으로 셌습니다(서버 기준).</p>
+            <p className="rk-rule">종합점수가 {STRESS_WEAK_PCT}% 초과 하락하면 ‘취약’으로 분류했습니다(서버 기준).</p>
 
-            <h3 className="rk-h3">취약 종목(점수가 많이 떨어진 순)</h3>
+            <h3 className="rk-h3">취약 종목(점수 하락폭 순)</h3>
             {r.casualties.length ? (
               <div className="rk-tablewrap">
                 <table className="trisk-table rk-table">
@@ -212,7 +212,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
                   </tbody>
                 </table>
               </div>
-            ) : <p className="rk-reason">이 충격에서 기준을 넘겨 떨어진 종목은 없습니다.</p>}
+            ) : <p className="rk-reason">이 충격에서 기준을 초과해 하락한 종목은 없습니다.</p>}
 
             <div className="rk-lists">
               <div>
@@ -221,7 +221,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
                   <li key={c.stock_code}><button type="button" className="rk-chip" onClick={() => onPick(c.stock_code)}>{c.corp_name} <b className="rk-dir" data-dir={dir(c.shock_pct)}>{sgn(c.shock_pct)}%</b></button></li>))}</ul>
               </div>
               <div>
-                <h3 className="rk-h3">기준을 겨우 넘긴 종목</h3>
+                <h3 className="rk-h3">기준을 근소하게 충족한 종목</h3>
                 <ul className="rk-chiplist">{r.survivors.map((c) => (
                   <li key={c.stock_code}><button type="button" className="rk-chip" onClick={() => onPick(c.stock_code)}>{c.corp_name} <b className="rk-dir" data-dir={dir(c.shock_pct)}>{sgn(c.shock_pct)}%</b></button></li>))}</ul>
               </div>
@@ -229,7 +229,7 @@ function Detail({ id, label, q, onPick }: { id: string; label: string; q: UseQue
 
             <details className="rk-how">
               <summary>측정 방법</summary>
-              <p>부채비율·PER·배당수익률·ROE 와 1년 베타로 충격마다 종합점수가 얼마나 바뀌는지 추정합니다. 가격이 얼마나 떨어지는지는 측정하지 않았습니다.</p>
+              <p>부채비율·PER·배당수익률·ROE 와 1년 베타로 충격별 종합점수 변화를 추정합니다. 가격 하락폭은 측정하지 않았습니다.</p>
               <p>부채·PER·배당·ROE 를 모르는 종목은 서버가 정한 기본값으로 채워 계산하고, 베타를 모르면 베타 효과를 0 으로 둡니다.</p>
               {r.note && <p><span className="rk-k">서버 설명</span> <span data-server>{r.note}</span></p>}
             </details>

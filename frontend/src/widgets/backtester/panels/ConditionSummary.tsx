@@ -25,8 +25,8 @@ export function stepGroups(s: BacktestStrategy, step: StepId) {
 
 export default function ConditionSummary({ s, step }: { s: BacktestStrategy; step: StepId }) {
   return (
-    <section className="tbt-summary bte-sum" aria-label="지금 설정">
-      <h2 className="bte-sum-h">지금 설정</h2>
+    <section className="tbt-summary bte-sum" aria-label="현재 설정">
+      <h2 className="bte-sum-h">현재 설정</h2>
       <p className="bte-sum-sub">{STEP_NAME[step]}</p>
       {stepGroups(s, step).map((g) => (
         <div key={g.label} className="bte-sum-g">

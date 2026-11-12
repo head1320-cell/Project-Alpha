@@ -29,7 +29,7 @@ import { OrderPath, type Trace } from "./OrderPath";
 import { unwrap } from "./parts";
 
 const TITLE = "내 계좌";
-const LEDE = "한국투자증권 계좌로 주문을 연습하고, 실계좌로 가기 전에 무엇이 남았는지 봅니다.";
+const LEDE = "한국투자증권 계좌로 주문을 연습하고, 실계좌 전환 전 남은 요건을 확인합니다.";
 
 export function MyAccountView() {
   const { session, retry } = useSession();
@@ -43,7 +43,7 @@ export function MyAccountView() {
       ) : session.kind === "signed_out" ? (
         <><PageHead title={TITLE} lede={LEDE} />
           <section className="tx-sec ma-signed-out">
-            <p className="ma-strong">로그인하면 내 계좌를 볼 수 있습니다.</p>
+            <p className="ma-strong">로그인하면 내 계좌를 조회할 수 있습니다.</p>
             <p className="tx-sec-sub">계정은 관리자에게 받습니다. 증권 계좌는 로그인한 뒤 설정에서 연결합니다.</p>
             <Link href={loginHref("/my-account")} className="tx-btn tx-btn--main">로그인</Link>
           </section></>
@@ -94,7 +94,7 @@ function Accounts() {
       ) : (
         <>
           {want !== null && !found ? (
-            <div className="ma-fallback"><Notice tone="warn" title="주소의 계좌를 찾지 못해 첫 계좌를 보여 드립니다." /></div>
+            <div className="ma-fallback"><Notice tone="warn" title="주소의 계좌를 찾지 못해 첫 계좌를 표시합니다." /></div>
           ) : null}
           <AccountView key={cur.account_id} acc={cur} />
         </>

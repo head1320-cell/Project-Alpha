@@ -456,7 +456,7 @@ export default function DevUiPage() {
         <p className="devui-group-note">
           ADR-003. 답 문장은 서버 값으로만 만든다 — 아래 문장은 모양을 보이는 표본이다. 클래스 <code>.tx-*</code> 가 계약.
         </p>
-        <Specimen name="PageHead" from="tx"><Tx.PageHead title="매크로 분석" lede="지금 경제가 어느 쪽으로 가는지 보여 드립니다." /></Specimen>
+        <Specimen name="PageHead" from="tx"><Tx.PageHead title="매크로 분석" lede="경기·물가 국면의 방향을 분석합니다." /></Specimen>
         <Specimen name="Answer" from="tx" note="문장 + 숫자 1~3 + 근거 칩 + 다음 행동 하나.">
           <Tx.Answer sentence="(표본) 서버가 준 값을 끼운 한 문장이 여기에 옵니다."
             figures={[{ label: "스트레스", value: "52/100" }, { label: "확률", value: pct(0.54, 0) }]}
@@ -469,7 +469,7 @@ export default function DevUiPage() {
         </Specimen>
         <Specimen name="Section" from="tx">
           <Tx.Section title="작업 선택" sub="한 절은 한 가지 일만 합니다.">
-            <Tx.ListRow title="종목 찾기" sub="조건으로 종목을 고릅니다" href="/screener" />
+            <Tx.ListRow title="종목 찾기" sub="조건식으로 종목을 선별합니다" href="/screener" />
           </Tx.Section>
         </Specimen>
         <Specimen name="ListRow" from="tx" note="href → 링크 · onClick → 단추 · 둘 다 없으면 누를 수 없는 줄(화살표 없음).">

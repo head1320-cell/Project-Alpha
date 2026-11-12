@@ -110,9 +110,9 @@ function HBars({ rows, unit }: { rows: { k: string; v: number | null; note?: str
 export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price: number; pbr: number | null; code: string }) {
   return (
     <>
-      <p className="ci-sec-lede">백엔드의 가치 모형 여덟 가지로 같은 종목을 다른 각도에서 측정했습니다. 모형마다 쓴 값과 출처를 함께 적었습니다.</p>
+      <p className="ci-sec-lede">서버의 가치 모형 여덟 가지로 같은 종목을 서로 다른 관점에서 평가했습니다. 모형마다 사용한 입력값과 출처를 함께 표시했습니다.</p>
       <div className="ci-mgrid">
-        <MCard id="rdcf" title="역DCF" what="현재가가 미래에 대해 무엇을 가정하는지 거꾸로 풉니다." q={m.rdcf}
+        <MCard id="rdcf" title="역DCF" what="현재가에 내재된 미래 가정을 역산합니다." q={m.rdcf}
           chips={() => [{ label: "성장률이 일정하다고 가정했습니다", tone: "assumed" }]}
           body={(d) => (
             <>
@@ -133,9 +133,9 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             </>
           )} />
 
-        <MCard id="dist" title="가치 분포" what="할인율·성장률 가정을 변동시켜 적정가가 어디쯤 모이는지 봅니다." q={m.dist}
+        <MCard id="dist" title="가치 분포" what="할인율·성장률 가정을 변동시켜 적정가의 분포를 산출합니다." q={m.dist}
           chips={(d) => (Object.values(d.widths ?? {}).some((w) => typeof w === "object" && w.measured === false)
-            ? [{ label: "흔든 폭은 잰 값이 아니라 정한 값입니다", tone: "assumed" }] : [])}
+            ? [{ label: "변동 폭은 측정값이 아니라 설정값입니다", tone: "assumed" }] : [])}
           body={(d) => {
             const qs: [string, Quant][] = [["합친 분포", d.unified], ...Object.entries(d.by_model ?? {})];
             const xs = qs.flatMap(([, q]) => [q.p10, q.p90]).filter(fin).concat(price);
@@ -156,7 +156,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             );
           }} />
 
-        <MCard id="driver" title="영업 동인 시뮬레이션" what="매출 성장·마진·재투자율을 변동시켜 주당 가치가 어떻게 퍼지는지 봅니다." q={m.driver}
+        <MCard id="driver" title="영업 동인 시뮬레이션" what="매출 성장·마진·재투자율을 변동시켜 주당 가치의 분포를 산출합니다." q={m.driver}
           chips={() => [{ label: "흔든 폭은 정한 값입니다", tone: "assumed" }]}
           body={(d) => (
             <>
@@ -170,7 +170,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             </>
           )} />
 
-        <MCard id="layers" title="가치의 층" what="자산 → 지금 이익을 유지하는 힘 → 성장까지, 가치를 층으로 나눕니다." q={m.layers}
+        <MCard id="layers" title="가치의 층" what="자산 → 현재 이익 창출력 → 성장까지, 가치를 층으로 분해합니다." q={m.layers}
           body={(d) => {
             const L = Object.fromEntries((d.layers ?? []).map((x) => [x.key, x]));
             return (
@@ -190,7 +190,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             );
           }} />
 
-        <MCard id="eva" title="EVA(경제적 부가가치)" what="번 돈이 자본비용을 넘었는지 해마다 봅니다." q={m.eva}
+        <MCard id="eva" title="EVA(경제적 부가가치)" what="창출 이익이 자본비용을 초과했는지 연도별로 산출합니다." q={m.eva}
           body={(d) => {
             const ys = (d.years ?? []).filter((y) => y.available && fin(y.eva));
             const mx = Math.max(1, ...ys.map((y) => Math.abs(y.eva as number)));
@@ -201,7 +201,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
                   {last && fin(last.roic) && fin(last.wacc)
                     ? <>{last.year}년 투하자본이익률(ROIC) {pr(last.roic)}, 자본비용(WACC) {pr(last.wacc)}: ROIC 가 WACC 보다 {last.roic < last.wacc ? "낮습니다" : "높습니다"}.</>
                     : <>최근 연도의 ROIC·WACC 를 내지 못했습니다.</>}
-                  {fin(d.valuation?.per_share) && <> EVA 로 잰 주당 가치는 {priceWon(d.valuation!.per_share)}입니다.</>}
+                  {fin(d.valuation?.per_share) && <> EVA 기준 주당 가치는 {priceWon(d.valuation!.per_share)}입니다.</>}
                 </p>
                 <div className="ci-eva" role="img" aria-label={`연도별 EVA: ${ys.map((y) => `${y.year} ${jo(y.eva as number)}`).join(", ")}`}>
                   {ys.map((y) => (
@@ -220,7 +220,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             );
           }} />
 
-        <MCard id="multiples" title="배수로 보기" what="실제 PER·PBR 을 이익·성장으로 정당화되는 배수, 동종업계과 나란히 놓습니다." q={m.multiples}
+        <MCard id="multiples" title="배수로 보기" what="실제 PER·PBR 을 이익·성장으로 정당화되는 배수 및 동종업계와 비교합니다." q={m.multiples}
           body={(d) => {
             const j = d.justified;
             const strip = (label: string, pts: { k: string; v: number | null }[]) => {
@@ -263,7 +263,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
             return (
               <>
                 <p className="ci-mcard-ans">
-                  {fin(d.weighted) ? <>확률로 묶은 적정가는 {priceWon(d.weighted)}입니다.</> : <>확률로 묶은 값 산출 실패</>}
+                  {fin(d.weighted) ? <>확률 가중 적정가는 {priceWon(d.weighted)}입니다.</> : <>확률 가중 가치 산출 실패</>}
                   {fin(d.prob_above_price) && <> 현재가보다 높을 확률은 {Math.round(d.prob_above_price * 100)}%입니다.</>}
                 </p>
                 <div className="ci-scen">
@@ -286,7 +286,7 @@ export function ModelsSection({ m, price, pbr, code }: { m: CompanyModels; price
           <header className="ci-mcard-h"><h3>가정을 넣어야 하는 모형</h3><p>회사마다 다른 값을 사람이 넣어야 의미가 있어서 여기서는 계산하지 않습니다.</p></header>
           <ul>
             <li><b>합산가치(SOTP)</b> 사업 부문의 이익과 배수, 상장 자회사 지분</li>
-            <li><b>의사결정 나무</b> 갈리는 사건마다 확률과 그때의 주당 가치</li>
+            <li><b>의사결정 나무</b> 분기 사건별 확률과 해당 주당 가치</li>
             <li><b>실물옵션</b> 사업의 현재 가치, 투자 금액, 기간, 변동성</li>
           </ul>
           <Link className="tx-btn tx-btn--sub ci-mneed-go" href={`/allocation?company=${code}`}>캔버스에서 넣기</Link>
@@ -313,7 +313,7 @@ export function MacroBlock({ q }: { q: UseQueryResult<import("@/entities/company
               <p className="ci-mcard-ans">
                 {fin(d.base_value) ? <>기준 적정가 {priceWon(d.base_value)}에서 </> : null}
                 {rows.map((r, i) => <React.Fragment key={r.shock}>{i ? ", " : ""}<span data-server>{r.shock}</span> 충격이면 {(r.value_pct as number) >= 0 ? "+" : "−"}{Math.abs(r.value_pct as number).toFixed(1)}%</React.Fragment>)}
-                {rows.length ? " 움직입니다." : "잴 수 있는 충격 없음"}
+                {rows.length ? " 움직입니다." : "측정 가능한 충격 없음"}
               </p>
               <div className="ci-tornado">
                 {rows.map((r) => {

@@ -98,17 +98,17 @@ export function BacktestCompare({ runId }: { runId: string }) {
           mock 일 수 있고 그때 Δ 는 전략 차이가 아니다(Z3). */}
       <div className="rs-labels"><PerfLabel value={a.perf_label} scope="A" /></div>
 
-      {!aComparable && <Notice tone="warn" title="실행 A 가 끝나지 않아 비교할 수 없습니다">지금 상태: {a.status}</Notice>}
+      {!aComparable && <Notice tone="warn" title="실행 A 가 끝나지 않아 비교할 수 없습니다">현재 상태: {a.status}</Notice>}
 
       <section className="brun-card rs-card">
         <h2 className="brun-card-t">견줄 실행 B<span className="brun-note">끝난 다른 실행만</span></h2>
         {listQ.isError ? (
-          <Notice tone="danger" title="실행 목록 조회 실패">서버에 닿지 않았습니다. 잠시 뒤 새로 수정하십시오.</Notice>
+          <Notice tone="danger" title="실행 목록 조회 실패">서버 연결 실패. 잠시 후 새로 고침하십시오.</Notice>
         ) : candidates.length === 0 ? (
-          <p className="rs-empty">견줄 수 있는 끝난 실행이 아직 없습니다 — 편집기에서 하나 더 실행하십시오.</p>
+          <p className="rs-empty">비교 가능한 완료 실행이 아직 없습니다 — 편집기에서 추가로 실행하십시오.</p>
         ) : (
           <select className="brun-select" value={bId} onChange={(e) => setBId(e.target.value)} aria-label="견줄 실행 B">
-            <option value="">실행 B 고르기</option>
+            <option value="">실행 B 선택</option>
             {candidates.map((r) => (
               <option key={r.run_id} value={r.run_id}>{r.strategy_name} · {r.run_id}</option>
             ))}
@@ -136,13 +136,13 @@ function CompareBody({ a, b }: { a: RunFull; b: RunFull }) {
     enabled: bComparable, staleTime: 0, retry: 1,
   });
 
-  if (!bComparable) return <Notice tone="warn" title="실행 B 가 끝나지 않아 비교할 수 없습니다">지금 상태: {b.status}</Notice>;
+  if (!bComparable) return <Notice tone="warn" title="실행 B 가 끝나지 않아 비교할 수 없습니다">현재 상태: {b.status}</Notice>;
   const rows: MetricDiffRow[] | null = cmpQ.data?.rows ?? null;
   const rowOf = (k: keyof BacktestStatistics): MetricDiffRow | null => rows?.find((r) => r.key === k) ?? null;
   const specOf = (k: string): Row => CMP_METRICS.find((r) => r.k === k) ?? { k: k as keyof BacktestStatistics, label: k };
   const view = cmpQ.data
     ? compareViewOf(cmpQ.data, { unit: "base100", labelA: "A", labelB: "B", perfLabelA: a.perf_label ?? null, perfLabelB: b.perf_label ?? null,
-                                 question: "두 조건식이 같은 자리에서 어떻게 다른가", drawdownsA: a.perf?.drawdowns ?? null, drawdownsB: b.perf?.drawdowns ?? null })
+                                 question: "동일 조건에서 두 조건식의 성과 차이", drawdownsA: a.perf?.drawdowns ?? null, drawdownsB: b.perf?.drawdowns ?? null })
     : null;
   const retry = <button type="button" className="tx-btn tx-btn--sub" onClick={() => void cmpQ.refetch()}>재시도</button>;
 

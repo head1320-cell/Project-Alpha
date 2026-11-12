@@ -77,10 +77,10 @@ test("BU9b: 로그아웃이면 로그인 링크가 이 화면으로 돌아온다
 
 test("BU9b: 답 문장은 서버 모드·합성 값을 따른다 (기록만 / 모의+합성 / 모의+실 / 모의+모름 / 실계좌)", async ({ page }) => {
   const cases: [Partial<LiveState>, boolean | "fail", RegExp][] = [
-    [{ mode: "SHADOW" }, true, /기록만 됩니다\. 증권사로 보내지 않습니다/],
-    [{ mode: "PAPER" }, true, /가상 체결기로 갑니다/],
-    [{ mode: "PAPER" }, false, /모의 체결로 갑니다\. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다/],
-    [{ mode: "PAPER" }, "fail", /지금 모의 체결로 갑니다\.$/],
+    [{ mode: "SHADOW" }, true, /기록만 됩니다\. 증권사로 전송하지 않습니다/],
+    [{ mode: "PAPER" }, true, /가상 체결기로 전송됩니다/],
+    [{ mode: "PAPER" }, false, /모의 체결로 처리됩니다\. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다/],
+    [{ mode: "PAPER" }, "fail", /지금 모의 체결로 처리됩니다\.$/],
     [{ mode: "LIVE" }, true, /실제 돈으로 나갑니다/],
   ];
   for (const [o, mock, want] of cases) {
@@ -95,7 +95,7 @@ test("BU9b: 답 문장은 서버 모드·합성 값을 따른다 (기록만 / �
 test("BU9b: 비상 정지 — 이벤트가 있으면 '모든 사용자 계좌' 까지, 없으면 '어떤 정지인지 읽지 못했습니다' (짝)", async ({ page }) => {
   const ev = { event_id: "K-1", trigger_reason: "Manual emergency stop from cockpit", triggered_at: "2026-10-09T12:05:00+00:00" };
   await open(page, { st: liveState({ kill: { is_active: true, active_event: ev } }) });
-  await expect(sentence(page)).toContainText("모든 사용자 계좌의 새 주문이 나가지 않습니다");
+  await expect(sentence(page)).toContainText("모든 사용자 계좌의 신규 주문이 전송되지 않습니다");
   await expect(page.locator('.tx-st[data-st="kill"]')).toHaveAttribute("data-blocked", "true");
   await expect(page.locator('.tx-st[data-st="kill"]')).toContainText("10월 9일 21:05");   // UTC → 한국 시간
   await expect(act(page, "resolve")).toBeVisible();
@@ -216,7 +216,7 @@ test("BU9b: 관문이 열려 있으면 실계좌 시트가 허용한 사용자�
 test("BU9b: 비상 정지 걸기·풀기 — 취소면 0 · 본문 바이트 그대로 · 결과와 실패를 말한다", async ({ page }) => {
   const { st, posts } = await open(page);
   await act(page, "kill-open").click();
-  await expect(page.locator('[data-sheet="kill"]')).toContainText("모든 사용자 계좌의 새 주문을 멈춥니다");
+  await expect(page.locator('[data-sheet="kill"]')).toContainText("모든 사용자 계좌의 신규 주문을 중단합니다");
   await act(page, "kill-no").click();
   await page.waitForTimeout(400);
   expect(posts).toEqual([]);
@@ -227,7 +227,7 @@ test("BU9b: 비상 정지 걸기·풀기 — 취소면 0 · 본문 바이트 그
   await expect(page.locator('[data-sheet="kill"]'), "실패하면 시트를 닫지 않는다").toBeVisible();
   st.triggerReply = null;
   await act(page, "kill-yes").click();
-  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 걸었습니다. 운영 계좌의 미체결 1건을 취소했습니다.");
+  await expect(page.locator(".lv-done")).toHaveText("비상 정지를 발동했습니다. 운영 계좌의 미체결 1건을 취소했습니다.");
   expect(posts.at(-1)).toEqual({ path: "POST /api/v1/live/kill-switch/trigger", body: { reason: "Manual emergency stop from cockpit", liquidation_mode: "hold" } });
   await expect(act(page, "resolve")).toBeVisible();
   const before = posts.length;

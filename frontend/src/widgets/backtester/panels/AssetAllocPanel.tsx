@@ -49,7 +49,7 @@ export default function AssetAllocPanel({ s, set }: {
   };
 
   return (
-    <Section title="ETF 자산배분" hint="ETF 바스켓을 주식 전략과 함께 · 정한 주기마다 다시 맞춥니다(자산배분)" tone="neutral"
+    <Section title="ETF 자산배분" hint="ETF 바스켓을 주식 전략과 병행 · 지정 주기마다 리밸런싱합니다(자산배분)" tone="neutral"
       enabled={a.enabled} onToggle={(on) => patch({ enabled: on })}>
       <p className="bte-note">포트폴리오의 일정 비율을 ETF로 상시 보유합니다. 남는 비율은 현금입니다.</p>
 
@@ -85,7 +85,7 @@ export default function AssetAllocPanel({ s, set }: {
           <span role="columnheader">종목코드</span><span role="columnheader">종목명</span><span role="columnheader" className="num">비중</span><span />
         </div>
         {a.basket.length === 0 ? (
-          <p className="bte-note bte-basket-empty">담은 ETF가 없습니다. 자산군을 고르거나 ‘자산군 추가’로 ETF를 담습니다.</p>
+          <p className="bte-note bte-basket-empty">편입한 ETF가 없습니다. 자산군을 선택하거나 ‘자산군 추가’로 ETF를 편입합니다.</p>
         ) : a.basket.map((l, i) => (
           <div key={l.ticker} className="bte-basket-row" role="row">
             <span className="scr-code" role="cell">{l.ticker}</span>
@@ -103,7 +103,7 @@ export default function AssetAllocPanel({ s, set }: {
           <Plus size={16} aria-hidden /> 자산군 추가
         </button>
         {a.basket.length > 0 && (
-          <button type="button" className="kit-chip" onClick={equalize}>똑같이 나누기</button>
+          <button type="button" className="kit-chip" onClick={equalize}>균등 배분</button>
         )}
         <span className={`bte-note${wsum !== 100 ? " bte-note--warn" : ""}`}>
           비중 합 {wsum}%{wsum !== 100 ? " — 실행할 때 100%로 맞춰 계산합니다" : ""}

@@ -22,13 +22,13 @@ import { EvidencePointer, HeroCanvas, HeroFx, InView, StudioTour, ToolHub } from
  * `rec` 은 그 단계가 다음 단계로 넘기는 **신원**이다(값이 아니다). 저장소 용어라 닫힌 자세히 안에만 보인다.
  */
 const PATH: { t: string; d: string; href?: string; rec: string }[] = [
-  { t: "지금 국면 보기", d: "경기와 물가가 어느 쪽으로 가는지 판정합니다", href: "/macro", rec: "판정한 시각" },
-  { t: "판정 고정하기", d: "그때 본 판정을 기록으로 남깁니다", rec: "snapshot_id" },
-  { t: "설계에서 불러오기", d: "값을 베끼지 않고 남긴 기록을 가리킵니다", href: "/allocation?from=macro", rec: "값 대신 snapshot_id 를 가리킵니다" },
-  { t: "타이밍 규칙", d: "언제 비중을 늘리고 줄일지 정합니다", href: "/allocation?from=timing", rec: "name@version" },
-  { t: "충격 견뎌 보기", d: "정해 둔 충격 시나리오에 넣어 봅니다", href: "/allocation?from=stress", rec: "pack_id@해시" },
+  { t: "현재 국면 판정", d: "경기·물가 국면의 방향을 판정합니다", href: "/macro", rec: "판정한 시각" },
+  { t: "판정 스냅샷 저장", d: "당시의 판정을 기록으로 저장합니다", rec: "snapshot_id" },
+  { t: "설계에서 참조", d: "값을 복사하지 않고 저장한 기록을 참조합니다", href: "/allocation?from=macro", rec: "값 대신 snapshot_id 를 참조합니다" },
+  { t: "타이밍 규칙", d: "비중 확대·축소 시점을 규칙으로 정합니다", href: "/allocation?from=timing", rec: "name@version" },
+  { t: "스트레스 테스트", d: "사전 정의한 충격 시나리오를 적용합니다", href: "/allocation?from=stress", rec: "pack_id@해시" },
   { t: "포트폴리오 최적화·백테스트", d: "비중을 산출하고 과거 데이터로 시뮬레이션합니다", href: "/allocation?from=optimize", rec: "run_id" },
-  { t: "결정 기록하기", d: "왜 그렇게 정했는지 남기고 나중에 되짚습니다", href: "/allocation?from=journal", rec: "결정 → run_id → snapshot_id 사슬" },
+  { t: "결정 기록", d: "결정 근거를 기록하고 사후 검토합니다", href: "/allocation?from=journal", rec: "결정 → run_id → snapshot_id 사슬" },
 ];
 
 function Brand() {
@@ -64,7 +64,7 @@ export default function Landing() {
                   <span className="ld-line"><span style={{ ["--i" as string]: 2 }}>포트폴리오</span> <span style={{ ["--i" as string]: 3 }}>설계</span></span>
                 </h1>
                 <p className="ld-lede ld-rise" style={{ ["--i" as string]: 3 }}>
-                  유니버스부터 위험 점검까지 노드를 선으로 이어 하나의 설계로 만듭니다. 숫자마다 어디서 왔고 무엇을 재지 않았는지 함께 붙습니다.
+                  유니버스부터 위험 점검까지 노드를 연결해 하나의 설계로 구성합니다. 수치마다 출처와 미측정 항목을 함께 표시합니다.
                 </p>
                 <div className="ld-hero-cta ld-rise" style={{ ["--i" as string]: 4 }}>
                   <Link href="/allocation" className="tx-btn tx-btn--main ld-btn">포트폴리오 설계 시작</Link>
@@ -74,9 +74,9 @@ export default function Landing() {
               </div>
               <div className="ld-live-wrap">
                 <div className="ld-live ld-rise" style={{ ["--i" as string]: 5 }}>
-                  <p className="ld-live-k"><span className="ld-live-dot" aria-hidden />지금 서버가 내는 답</p>
+                  <p className="ld-live-k"><span className="ld-live-dot" aria-hidden />서버 실시간 응답</p>
                   <MacroAnswer className="ld-live-a" action={<Link href="/macro" className="tx-btn tx-btn--sub">매크로 분석 보기</Link>} />
-                  <p className="ld-live-note">홈·매크로 분석과 같은 계산입니다. 이 화면을 열 때마다 서버에 다시 물어봅니다.</p>
+                  <p className="ld-live-note">홈·매크로 분석과 동일한 계산입니다. 화면을 열 때마다 서버에서 다시 조회합니다.</p>
                 </div>
               </div>
             </div>
@@ -89,7 +89,7 @@ export default function Landing() {
           <div className="ld-wrap">
             <InView className="ld-hg">
               <h2 id="ld-studio-h" className="ld-h2">포트폴리오 설계 스튜디오</h2>
-              <p className="ld-sub">종목부터 점검까지 노드로 이어 하나의 설계를 만듭니다. 네 단계를 실제 화면으로 안내합니다.</p>
+              <p className="ld-sub">종목부터 점검까지 노드를 연결해 하나의 설계를 구성합니다. 네 단계를 실제 화면으로 안내합니다.</p>
             </InView>
             <StudioTour />
           </div>
@@ -100,7 +100,7 @@ export default function Landing() {
           <div className="ld-wrap">
             <InView className="ld-hg">
               <h2 id="ld-hub-h" className="ld-h2">모든 도구가 스튜디오로 이어집니다</h2>
-              <p className="ld-sub">다섯 도구는 따로 써도 되고, 스튜디오에서는 노드 하나로 들어갑니다.</p>
+              <p className="ld-sub">다섯 도구는 단독으로도 사용할 수 있고, 스튜디오에서는 노드 하나로 연결됩니다.</p>
             </InView>
             <ToolHub />
           </div>
@@ -111,7 +111,7 @@ export default function Landing() {
           <div className="ld-wrap">
             <InView className="ld-hg">
               <h2 id="ld-path-h" className="ld-h2">리서치는 이렇게 흘러갑니다</h2>
-              <p className="ld-sub">앞 단계는 값을 베껴 넘기지 않고 기록 번호만 넘깁니다. 그래서 나중에 열어도 그때 본 근거를 가리킵니다.</p>
+              <p className="ld-sub">앞 단계는 값을 복사하지 않고 기록 번호(ID)만 전달합니다. 따라서 이후에 열어도 당시의 근거를 참조합니다.</p>
             </InView>
             <InView as="ol" className="ld-steps">
               {PATH.map((s, i) => {
@@ -129,7 +129,7 @@ export default function Landing() {
                 );
               })}
             </InView>
-            <p className="ld-note">경제 판단이 타이밍 규칙을 덮어쓰지 않습니다. 한 방향으로만 얹혀서, 끄면 결과가 원래대로 돌아옵니다.</p>
+            <p className="ld-note">매크로 판단은 타이밍 규칙을 대체하지 않습니다. 단방향 오버레이로만 적용되어, 끄면 결과가 원래대로 복원됩니다.</p>
             <details className="ld-rec">
               <summary>단계마다 남는 기록 보기</summary>
               <dl className="ld-rec-list">
@@ -142,7 +142,7 @@ export default function Landing() {
             <InView className="ld-end">
               <div className="ld-end-copy">
                 <h3 className="ld-end-t">종목 하나부터 설계를 시작하십시오</h3>
-                <p className="ld-end-d">노드 하나를 놓으면 절차 탭이 다음에 붙일 것을 알려 줍니다. 숫자마다 근거가 함께 남습니다.</p>
+                <p className="ld-end-d">노드를 배치하면 절차 탭이 다음 단계 노드를 제안합니다. 수치마다 근거가 함께 기록됩니다.</p>
                 <Link href="/allocation" className="tx-btn tx-btn--main ld-btn">포트폴리오 설계 시작</Link>
               </div>
               <svg className="ld-end-art" viewBox="0 0 260 140" aria-hidden>

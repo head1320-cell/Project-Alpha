@@ -64,7 +64,7 @@ export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: 
     <div className="mc-clock-wrap">
       <span className="mc-clock-q tl" data-regime="Stagflation"><i style={{ background: Q_FILL.Stagflation }} aria-hidden />{regimeName("Stagflation")}</span>
       <span className="mc-clock-q tr" data-regime="Reflation"><i style={{ background: Q_FILL.Reflation }} aria-hidden />{regimeName("Reflation")}</span>
-      <svg width={size} height={size} className="mc-clock" role="img" aria-label={`경기순환 시계: 바늘 방향이 지금 국면, 강도 ${(mag * 100).toFixed(0)}%`}>
+      <svg width={size} height={size} className="mc-clock" role="img" aria-label={`경기순환 시계: 바늘 방향이 현재 국면, 강도 ${(mag * 100).toFixed(0)}%`}>
         {sectors.map((s) => <path key={s.q} d={arc(s.a0, s.a1)} fill={Q_FILL[s.q]} fillOpacity={0.22} stroke="var(--tx-surface)" strokeWidth={2} data-regime={s.q} />)}
         <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--tx-line)" strokeWidth={1} />
         <line x1={cx} y1={cy} x2={nx.toFixed(1)} y2={ny.toFixed(1)} stroke="var(--tx-ink)" strokeWidth={2.5} strokeLinecap="round" />
@@ -73,7 +73,7 @@ export function CycleClock({ g, i, size = 200 }: { g: number; i: number; size?: 
       </svg>
       <span className="mc-clock-q bl" data-regime="Disinflation"><i style={{ background: Q_FILL.Disinflation }} aria-hidden />{regimeName("Disinflation")}</span>
       <span className="mc-clock-q br" data-regime="Goldilocks"><i style={{ background: Q_FILL.Goldilocks }} aria-hidden />{regimeName("Goldilocks")}</span>
-      <p className="mc-clock-s">바늘이 가리키는 쪽이 지금 국면 · 강도 {(mag * 100).toFixed(0)}%</p>
+      <p className="mc-clock-s">바늘 방향이 현재 국면 · 강도 {(mag * 100).toFixed(0)}%</p>
     </div>
   );
 }
@@ -156,7 +156,7 @@ export function ZHeatmap({ themes, onPick }: { themes: MacroTheme[]; onPick: (in
             {t.indicators.map((ind) => (
               <button key={ind.id} type="button" className="mc-heat-cell" style={{ background: zFill(ind.z_score) }}
                       onClick={() => onPick(ind)} onFocus={() => setCur(ind)} onMouseEnter={() => setCur(ind)}
-                      aria-label={`${ind.name}, z ${fmtZ(ind.z_score)}, 눌러서 36개월 흐름 보기`}>
+                      aria-label={`${ind.name}, z ${fmtZ(ind.z_score)}, 누르면 36개월 추이 표시`}>
                 <span className="mc-heat-nm">{ind.name}</span>
                 <span className="mc-heat-z">{fmtZ(ind.z_score)}</span>
               </button>
@@ -321,7 +321,7 @@ export function AllocAttribution({ rows }: { rows: Array<{ ticker: string; label
   return (
     <div className="mc-attr">
       <ul className="mc-legend">
-        <li><i className="mc-legend-base" aria-hidden />기본(어느 국면에서나 같은 중립 비중)</li>
+        <li><i className="mc-legend-base" aria-hidden />기본(국면과 무관한 중립 비중)</li>
         {ATTR_TERMS.map(([k, lbl, color]) => <li key={k}><i style={{ background: color }} aria-hidden />{lbl}</li>)}
       </ul>
       {rows.map((r) => (

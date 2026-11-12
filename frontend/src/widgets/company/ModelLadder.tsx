@@ -34,7 +34,7 @@ const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinit
 /** 질의 하나 → 줄 하나(또는 여럿). 불러오는 중·실패·못 함·값을 가른다. */
 function fromQuery<T>(q: UseQueryResult<T>, key: string, label: string, pick: (d: T) => Omit<LadRow, "key" | "label">): LadRow {
   if (q.isPending) return { key, label, wait: true };
-  if (q.isError || !q.data) return { key, label, reason: "서버에 닿지 못해 이 모형을 그리지 못했습니다" };
+  if (q.isError || !q.data) return { key, label, reason: "서버 연결 실패로 이 모형을 표시하지 못했습니다" };
   const d = q.data as T & { available?: boolean; reason?: string | null };
   if (d.available === false) return { key, label, reason: d.reason ?? "서버가 사유 없이 못 했다고 답했습니다" };
   return { key, label, ...pick(d) };
@@ -64,7 +64,7 @@ export function buildLadderRows(sb: UseQueryResult<ValuationSandbox>, m: Company
         fin(L.asset?.per_share) ? { label: "자산", v: L.asset.per_share as number } : null,
         fin(L.epv?.per_share) ? { label: "수익력", v: L.epv.per_share as number } : null,
       ].filter((x): x is { label: string; v: number } => x !== null);
-      return fin(d.full_per_share) ? { v: d.full_per_share, extra } : { reason: d.weighted_reason ?? "성장까지 잰 값 산출 실패", extra };
+      return fin(d.full_per_share) ? { v: d.full_per_share, extra } : { reason: d.weighted_reason ?? "성장 반영 가치 산출 실패", extra };
     }),
     fromQuery(m.eva, "eva", "EVA(경제적 부가가치)", (d) => (fin(d.valuation?.per_share)
       ? { v: d.valuation!.per_share } : { reason: d.valuation?.per_share_reason ?? "주당 가치 산출 실패" })),
@@ -77,7 +77,7 @@ export function buildLadderRows(sb: UseQueryResult<ValuationSandbox>, m: Company
     fromQuery(m.scenarios, "scen", "시나리오 가중", (d) => {
       const vs = (d.rows ?? []).map((r) => r.value).filter(fin);
       return fin(d.weighted) ? { v: d.weighted, lo: vs.length ? Math.min(...vs) : null, hi: vs.length ? Math.max(...vs) : null, basis: "사람이 정한 확률" }
-        : { reason: "확률로 묶은 값 산출 실패" };
+        : { reason: "확률 가중 가치 산출 실패" };
     }),
   ];
   return rows;
@@ -135,7 +135,7 @@ export function ModelLadder({ rows, price, intrinsic, compact }: { rows: LadRow[
         {!compact && <span className="ci-lad-key"><i className="ci-lad-sw range" aria-hidden />범위(분포는 10~90%, 모형은 약세~강세 가정)</span>}
       </figcaption>
       <p className="ci-lad-sum">
-        {mains.length ? `값을 낸 모형 ${mains.length}개 중 ${below}개가 현재가보다 낮게 봤습니다` : "아직 값을 낸 모형 없음"}
+        {mains.length ? `값을 산출한 모형 ${mains.length}개 중 ${below}개의 적정가가 현재가를 밑돕니다` : "값을 산출한 모형 없음"}
         {!compact && " · 축은 로그 눈금입니다"}
       </p>
     </figure>

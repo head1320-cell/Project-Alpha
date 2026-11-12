@@ -50,13 +50,13 @@ export function SettingsView() {
       ) : session.kind === "unknown" ? (
         <section className="set-card set-unknown" role="alert">
           <p className="set-strong">계정 정보 확인 실패</p>
-          <p className="set-sub">{session.reason} 로그인은 그대로 두었습니다.</p>
+          <p className="set-sub">{session.reason} 로그인은 유지했습니다.</p>
           <button type="button" className="set-btn set-retry" onClick={() => void retry()}>재시도</button>
         </section>
       ) : session.kind === "signed_out" ? (
         <section className="set-card set-signed-out">
-          <p className="set-strong">{session.note ?? "로그인하면 계정과 비밀번호를 볼 수 있습니다."}</p>
-          <p className="set-sub">계정은 관리자에게 받습니다. 따로 가입하는 곳은 없습니다.</p>
+          <p className="set-strong">{session.note ?? "로그인하면 계정과 비밀번호를 확인할 수 있습니다."}</p>
+          <p className="set-sub">계정은 관리자가 발급합니다. 별도 가입 절차는 없습니다.</p>
           <Link href={loginHref("/settings")} className="set-btn set-btn--primary">로그인</Link>
         </section>
       ) : (
@@ -130,7 +130,7 @@ function PasswordForm({ formRef, username, onChanged, adminWarning }: {
         {adminWarning ? <p className="set-warn">{adminWarning}</p> : null}
         <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
         <label className="set-field">
-          <span className="set-label">지금 비밀번호</span>
+          <span className="set-label">현재 비밀번호</span>
           <input className="set-input" name="current-password" type="password" autoComplete="current-password"
                  value={current} onChange={(e) => setCurrent(e.target.value)} />
         </label>
@@ -153,7 +153,7 @@ function PasswordForm({ formRef, username, onChanged, adminWarning }: {
           ))}
         </ul>
         {error ? <p className="set-error" role="alert">{error}</p> : null}
-        {done ? <p className="set-done" role="status">비밀번호를 바꿨습니다 — 다른 곳에 남아 있던 로그인은 모두 끝났습니다.</p> : null}
+        {done ? <p className="set-done" role="status">비밀번호를 변경했습니다 — 다른 기기의 로그인 세션은 모두 종료됐습니다.</p> : null}
         <button type="submit" className="set-btn set-btn--primary set-pw-submit" disabled={!ready || busy}>
           {busy ? "바꾸는 중…" : "비밀번호 바꾸기"}
         </button>
@@ -238,7 +238,7 @@ function AdminAccounts({ me }: { me: string }) {
           <span className="set-label">새 계정 아이디</span>
           <input className="set-input" name="new-username" autoComplete="off" spellCheck={false}
                  value={name} onChange={(e) => setName(e.target.value.trim())} aria-invalid={name.length > 0 && !nameOk} />
-          {name.length > 0 && !nameOk ? <span className="set-hint">영문·숫자·. _ - 만, 64자까지 쓸 수 있습니다.</span> : null}
+          {name.length > 0 && !nameOk ? <span className="set-hint">영문·숫자·. _ - 만, 64자까지 사용할 수 있습니다.</span> : null}
         </label>
         <div className="set-row">
           <span className="set-label set-label--row" id="set-role-l">역할</span>
@@ -307,7 +307,7 @@ function IssuedCard({ issued, onClose }: { issued: Issued; onClose: () => void }
       </div>
       {copied === "fail" ? <p className="set-error">복사 실패 — 글자를 직접 골라 복사하십시오.</p> : null}
       <p className="set-sub">
-        이 창을 닫으면 다시 볼 수 없습니다. 받을 사람에게 안전하게 전하십시오 — 처음 로그인하면 비밀번호를 바꾸게 됩니다.
+        이 창을 닫으면 다시 확인할 수 없습니다. 수령인에게 안전하게 전달하십시오 — 최초 로그인 시 비밀번호를 변경해야 합니다.
       </p>
       <button type="button" className="set-btn set-issued-close" onClick={onClose}>다 전했습니다 · 닫기</button>
     </div>

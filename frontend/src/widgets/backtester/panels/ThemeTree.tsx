@@ -63,7 +63,7 @@ export default function ThemeTree({ selected, onChange }: {
         <span className="bte-sub-h">{totalSubSelected > 0 ? `세부 업종 ${totalSubSelected}개 선택` : "고르지 않으면 모든 업종입니다"}</span>
         {groups.length > 0 && (
           <button type="button" className="bte-link" onClick={() => emit(allOn ? new Set() : new Set(allIds))}>
-            {allOn ? "모두 빼기" : "모두 고르기"}
+            {allOn ? "전체 해제" : "전체 선택"}
           </button>
         )}
       </div>
@@ -108,7 +108,7 @@ export default function ThemeTree({ selected, onChange }: {
       </div>
 
       {note && (
-        <p className="bte-note">{note}{seeded ? ` (지금 세부 업종 ${seeded.subs}/88개 · ${seeded.stocks}종목을 담았습니다)` : ""}</p>
+        <p className="bte-note">{note}{seeded ? ` (현재 세부 업종 ${seeded.subs}/88개 · ${seeded.stocks}종목 포함)` : ""}</p>
       )}
     </div>
   );

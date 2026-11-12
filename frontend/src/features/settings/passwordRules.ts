@@ -17,7 +17,7 @@ export function passwordRules(next: string, opts: { current: string; username: s
   return [
     { id: "length", text: `${MIN_LENGTH}자 이상`, ok: next.length >= MIN_LENGTH },
     { id: "bytes", text: `${MAX_BYTES}바이트 이하`, ok: next.length > 0 && bytes(next) <= MAX_BYTES },
-    { id: "differs", text: "지금 비밀번호와 다름", ok: next.length > 0 && next !== opts.current },
+    { id: "differs", text: "현재 비밀번호와 다름", ok: next.length > 0 && next !== opts.current },
     { id: "username", text: "아이디와 다름", ok: next.length > 0 && low !== opts.username.trim().toLowerCase() },
     { id: "known", text: "알려진 기본 비밀번호 아님", ok: next.length > 0 && !KNOWN_DEFAULTS.includes(low) },
     { id: "confirm", text: "확인 칸과 같음", ok: next.length > 0 && next === opts.confirm },

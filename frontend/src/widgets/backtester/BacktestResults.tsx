@@ -33,49 +33,49 @@ interface MetricDef { k: Stat; label: string; tip: string; suffix?: string; digi
 // 엔진이 실제 산출하는 지표만 묶음으로 배치. 결측 처리 규칙은 absentReason() 참고.
 const METRIC_GROUPS: { title: string; metrics: MetricDef[] }[] = [
   { title: "수익", metrics: [
-    { k: "total_return_pct", label: "총수익률", tip: "기간 전체에서 불어난 비율", suffix: "%", signed: true },
-    { k: "cagr", label: "연평균 수익률", tip: "해마다 복리로 몇 % 불었는지(CAGR)", suffix: "%", signed: true },
-    { k: "best_period_pct", label: "가장 좋았던 구간", tip: "한 구간에서 가장 크게 오른 비율", suffix: "%", signed: true },
-    { k: "worst_period_pct", label: "가장 나빴던 구간", tip: "한 구간에서 가장 크게 내린 비율", suffix: "%", signed: true },
+    { k: "total_return_pct", label: "총수익률", tip: "전체 기간 누적 수익률", suffix: "%", signed: true },
+    { k: "cagr", label: "연평균 수익률", tip: "연복리 수익률(CAGR)", suffix: "%", signed: true },
+    { k: "best_period_pct", label: "최고 구간 수익률", tip: "단일 구간 최대 상승률", suffix: "%", signed: true },
+    { k: "worst_period_pct", label: "최저 구간 수익률", tip: "단일 구간 최대 하락률", suffix: "%", signed: true },
   ] },
   { title: "위험", metrics: [
-    { k: "max_drawdown_pct", label: "최대 낙폭", tip: "고점에서 가장 깊이 내려간 비율(MDD)", suffix: "%" },
-    { k: "avg_drawdown_pct", label: "평균 낙폭", tip: "내려간 구간들의 평균 깊이", suffix: "%" },
-    { k: "max_drawdown_days", label: "가장 긴 회복 기간", tip: "고점을 되찾기까지 가장 오래 걸린 날 수", suffix: "일", digits: 0 },
-    { k: "volatility_pct", label: "연환산 변동성", tip: "수익률이 한 해에 얼마나 출렁이는지(연율 표준편차)", suffix: "%" },
-    { k: "downside_deviation_pct", label: "하방 변동성", tip: "손실 쪽 출렁임만 잰 값(Sortino 분모)", suffix: "%" },
-    { k: "ulcer_index", label: "얼서 지수", tip: "낙폭의 깊이와 길이를 함께 잰 값 — 낮을수록 덜 아팠습니다", digits: 2 },
-    { k: "var_pct", label: "95% VaR", tip: "95% 신뢰수준에서 이보다 크게 잃지 않는다는 추정", suffix: "%" },
-    { k: "cvar_pct", label: "95% CVaR", tip: "VaR 를 넘는 날들의 평균 손실(꼬리)", suffix: "%" },
+    { k: "max_drawdown_pct", label: "최대 낙폭", tip: "고점 대비 최대 하락률(MDD)", suffix: "%" },
+    { k: "avg_drawdown_pct", label: "평균 낙폭", tip: "낙폭 구간의 평균 하락률", suffix: "%" },
+    { k: "max_drawdown_days", label: "최장 회복 기간", tip: "전고점 회복까지 걸린 최장 일수", suffix: "일", digits: 0 },
+    { k: "volatility_pct", label: "연환산 변동성", tip: "수익률의 연율화 표준편차", suffix: "%" },
+    { k: "downside_deviation_pct", label: "하방 변동성", tip: "하방 수익률만으로 측정한 변동성(Sortino 분모)", suffix: "%" },
+    { k: "ulcer_index", label: "얼서 지수", tip: "낙폭의 깊이와 지속 기간을 함께 반영한 지표 — 낮을수록 낙폭 부담이 작았습니다", digits: 2 },
+    { k: "var_pct", label: "95% VaR", tip: "95% 신뢰수준에서 손실이 이 값을 넘지 않는다는 추정", suffix: "%" },
+    { k: "cvar_pct", label: "95% CVaR", tip: "VaR 초과 구간의 평균 손실(꼬리 위험)", suffix: "%" },
   ] },
   { title: "위험조정수익", metrics: [
-    { k: "sharpe_ratio", label: "샤프 지수", tip: "출렁임 1 만큼에 얻은 초과수익", digits: 2 },
-    { k: "sortino_ratio", label: "소르티노 지수", tip: "손실 쪽 출렁임 1 만큼에 얻은 초과수익", digits: 2 },
+    { k: "sharpe_ratio", label: "샤프 지수", tip: "변동성 1단위당 초과수익", digits: 2 },
+    { k: "sortino_ratio", label: "소르티노 지수", tip: "하방 변동성 1단위당 초과수익", digits: 2 },
     { k: "calmar_ratio", label: "칼마 비율", tip: "연평균 수익률 ÷ 최대 낙폭", digits: 2 },
-    { k: "omega", label: "오메가", tip: "이익 쪽 확률 가중 합 ÷ 손실 쪽(1 보다 크면 이익 쪽이 큽니다)", digits: 2 },
-    { k: "gain_to_pain", label: "이익 대 손실", tip: "벌어들인 것의 합 ÷ 잃은 것의 합", digits: 2 },
+    { k: "omega", label: "오메가", tip: "이익 구간 확률 가중 합 ÷ 손실 구간 확률 가중 합(1 초과 시 이익 우위)", digits: 2 },
+    { k: "gain_to_pain", label: "Gain-to-Pain 비율", tip: "수익 합계 ÷ 손실 합계", digits: 2 },
     { k: "tail_ratio", label: "꼬리 비율", tip: "상위 5% 수익 ÷ 하위 5% 손실 크기", digits: 2 },
     { k: "recovery_factor", label: "회복계수", tip: "총수익률 ÷ 최대 낙폭", digits: 2 },
-    { k: "information_ratio", label: "정보 비율", tip: "벤치마크를 넘은 수익 ÷ 그 차이의 출렁임(IR)", digits: 2 },
+    { k: "information_ratio", label: "정보 비율", tip: "벤치마크 대비 초과수익 ÷ 추적오차(IR)", digits: 2 },
   ] },
   { title: "분포", metrics: [
-    { k: "skew", label: "왜도", tip: "수익률 분포가 어느 쪽으로 기울었는지(양수 = 큰 이익 쪽 꼬리)", digits: 2 },
-    { k: "kurtosis", label: "첨도", tip: "꼬리가 얼마나 두꺼운지 — 높을수록 극단값이 잦습니다", digits: 2 },
+    { k: "skew", label: "왜도", tip: "수익률 분포의 비대칭도(양수 = 우측 꼬리)", digits: 2 },
+    { k: "kurtosis", label: "첨도", tip: "분포 꼬리의 두께 — 높을수록 극단값 빈도가 높습니다", digits: 2 },
   ] },
   { title: "거래", metrics: [
-    { k: "num_trades", label: "거래 수", tip: "사고 판 한 쌍을 한 번으로 센 수", digits: 0 },
-    { k: "win_rate", label: "이긴 거래 비율", tip: "이익으로 끝난 거래의 비율", suffix: "%" },
+    { k: "num_trades", label: "거래 수", tip: "매수·매도 한 쌍을 1회로 집계한 수", digits: 0 },
+    { k: "win_rate", label: "승률", tip: "이익 실현 거래의 비율", suffix: "%" },
     { k: "profit_factor", label: "손익비", tip: "총이익 ÷ 총손실", digits: 2 },
     { k: "payoff_ratio", label: "평균 손익 배율", tip: "평균 이익 ÷ 평균 손실", digits: 2 },
-    { k: "avg_trade_return", label: "거래당 평균 수익", tip: "한 번 거래의 평균 수익률", suffix: "%", signed: true },
-    { k: "expectancy", label: "거래당 기댓값", tip: "한 번 거래에서 기대되는 손익(원)", digits: 0, signed: true },
+    { k: "avg_trade_return", label: "거래당 평균 수익", tip: "거래 1회당 평균 수익률", suffix: "%", signed: true },
+    { k: "expectancy", label: "거래당 기댓값", tip: "거래 1회당 기대 손익(원)", digits: 0, signed: true },
     { k: "avg_win", label: "평균 이익", tip: "이익 거래의 평균 손익(원)", digits: 0 },
     { k: "avg_loss", label: "평균 손실", tip: "손실 거래의 평균 손익(원)", digits: 0 },
-    { k: "kelly_pct", label: "켈리 비율", tip: "켈리 공식이 말하는 한 번 거래의 비중", suffix: "%" },
+    { k: "kelly_pct", label: "켈리 비율", tip: "켈리 공식에 따른 거래 1회당 투자 비중", suffix: "%" },
   ] },
   { title: "비용", metrics: [
-    { k: "total_commission", label: "수수료 합계", tip: "낸 수수료를 모두 더한 값(원)", digits: 0 },
-    { k: "total_slippage", label: "슬리피지 합계", tip: "체결가 차이로 잃은 값을 모두 더한 값(원)", digits: 0 },
+    { k: "total_commission", label: "수수료 합계", tip: "납부 수수료 합계(원)", digits: 0 },
+    { k: "total_slippage", label: "슬리피지 합계", tip: "체결가 괴리에 따른 손실 합계(원)", digits: 0 },
   ] },
 ];
 /** 펼쳐 두는 핵심 지표 6 — 수익·위험·위험 대비·거래 각 축에서 하나 이상. 나머지는 "지표 모두 보기" 안. */
@@ -135,7 +135,7 @@ function macroHonesty(ml: ScreenToBacktestResult["macro_lookahead"]): string[] {
   if (live.length > 0) {
     out.push(
       `매크로 룩어헤드 — ${live.join(" · ")} 은(는) 빈티지가 없어 현재 개정본으로 ` +
-      `평가됐습니다. 이 토큰이 쓰인 조건은 그 시점에 알 수 없던 값을 봅니다.`,
+      `평가됐습니다. 이 토큰을 사용한 조건은 해당 시점에 알 수 없던 값을 참조합니다.`,
     );
   }
   const blocked = names("blocked");
@@ -364,7 +364,7 @@ export function BacktestResults({ runId }: { runId: string }) {
             </Notice>
           ) : (
             <Notice tone="danger" title="결과 조회 실패">
-              서버에 닿지 않았습니다. 실행 결과는 그대로 남아 있으니 재시도하십시오.
+              서버 연결 실패. 실행 결과는 보존되어 있으므로 재시도하십시오.
             </Notice>
           )}
           <div className="brun-err-actions rs-acts">
@@ -382,7 +382,7 @@ export function BacktestResults({ runId }: { runId: string }) {
       <div className="tx-page brun-shell rs">
         <div className="brun-err rs-state">
           <Notice tone="warn" title="이 실행은 아직 결과 없음">
-            지금 단계: {STAGE_LABELS[run.status] ?? run.status}. 끝나면 이 주소에서 결과를 볼 수 있습니다.
+            현재 단계: {STAGE_LABELS[run.status] ?? run.status}. 완료되면 이 주소에서 결과를 조회할 수 있습니다.
           </Notice>
           <div className="brun-err-actions rs-acts">
             <button type="button" className="tx-btn tx-btn--main" onClick={() => router.push(`/backtest/runs/${runId}/loading`)}>진행 상황 보기</button>
@@ -480,7 +480,7 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
         </div>
         {retryErr && (
           <Notice tone="danger" title="다시 실행하지 못했습니다">
-            지금 결과는 그대로입니다. 잠시 뒤 다시 누르십시오.
+            현재 결과는 유지됩니다. 잠시 후 다시 시도하십시오.
             <details className="scr-err-detail"><summary>상세</summary><code>{retryErr}</code></details>
           </Notice>
         )}
@@ -630,7 +630,7 @@ function AttributionBars({ rows }: { rows: SymbolPerf[] }) {
   return (
     <Card className="brun-card">
       <CardHeader className="rs-card-h">
-        <CardTitle as="h2" className="brun-card-t">기여도<span className="brun-note">수익을 가장 많이 더하고 뺀 종목</span></CardTitle>
+        <CardTitle as="h2" className="brun-card-t">기여도<span className="brun-note">수익 기여 상·하위 종목</span></CardTitle>
       </CardHeader>
       <CardContent className="rs-card-b">
         <table className="brun-attr-table">

@@ -47,7 +47,7 @@ export function DrillDownModal({ series, loading, failed, onRetry, onClose }: { 
             <p className="mc-modal-note">점선은 지난 5년 평균입니다.</p>
             <dl className="mc-modal-stats">
               {[["최근 값", `${fmtNum(series.latest)} ${series.unit}`], ["지난 5년 평균", fmtNum(series.mean_5y)], ["지난 5년 표준편차", fmtNum(series.std_5y)],
-                ["z(평균에서 떨어진 정도)", fmtZ(series.z_score)], ["지난 5년 중 위치", series.percentile != null ? `${Math.round(series.percentile)}%` : "N/A"], ["전년 대비", fmtPct(series.yoy)]].map(([k, v]) => (
+                ["z(평균 대비 편차)", fmtZ(series.z_score)], ["최근 5년 백분위", series.percentile != null ? `${Math.round(series.percentile)}%` : "N/A"], ["전년 대비", fmtPct(series.yoy)]].map(([k, v]) => (
                 <div key={k} className="mc-modal-stat"><dt>{k}</dt><dd>{v}</dd></div>
               ))}
             </dl>

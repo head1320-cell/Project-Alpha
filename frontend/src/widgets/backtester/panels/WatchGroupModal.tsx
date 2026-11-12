@@ -154,7 +154,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
             aria-label="종목 찾기" className="wg-input wg-input--search" />
         </div>
         {searchFailed && (
-          <p className="wg-err" role="alert">종목을 찾지 못했습니다 — 서버에 닿지 않았습니다. 잠시 뒤 다시 입력하십시오.</p>
+          <p className="wg-err" role="alert">종목 검색 실패 — 서버 연결 실패. 잠시 후 다시 입력하십시오.</p>
         )}
         {searchHits.length > 0 && (
           <div className="wg-list wg-list--hits">
@@ -181,7 +181,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
         </div>
 
         {catalogFailed && (
-          <p className="wg-err" role="alert">분류 목록 조회 실패 — 서버에 닿지 않았습니다. 창을 닫았다 다시 여십시오. 종목 찾기는 따로 됩니다.</p>
+          <p className="wg-err" role="alert">분류 목록 조회 실패 — 서버 연결 실패. 창을 닫았다가 다시 여십시오. 종목 검색은 별도로 동작합니다.</p>
         )}
 
         {/* 카스케이드: 분류 → 하위 → 종목 */}
@@ -214,9 +214,9 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
             {loading ? (
               <p className="wg-empty">종목 조회 중</p>
             ) : itemsFailed ? (
-              <p className="wg-err" role="alert">종목 목록 조회 실패 — 서버에 닿지 않았습니다. 분류를 다시 누르십시오.</p>
+              <p className="wg-err" role="alert">종목 목록 조회 실패 — 서버 연결 실패. 분류를 다시 누르십시오.</p>
             ) : items.length === 0 ? (
-              <p className="wg-empty">{cls === "etf" || subId ? "이 분류에 담긴 종목 없음" : "왼쪽에서 분류를 고릅니다"}</p>
+              <p className="wg-empty">{cls === "etf" || subId ? "이 분류에 속한 종목 없음" : "왼쪽에서 분류를 선택합니다"}</p>
             ) : items.map((it) => <Row key={it.code} it={it} />)}
           </div>
         </div>

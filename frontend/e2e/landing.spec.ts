@@ -65,17 +65,17 @@ test("히어로: 답 문장 = 서버 국면의 번역 — 응답을 DEFENSIVE �
   const seen = page.waitForResponse((r) => r.url().endsWith("/api/v1/macro/regime"));
   await open(page);
   const body = (await (await seen).json()) as Regime;
-  await expect(answer(page)).toHaveText(`지금 경제 흐름은 ‘${MODE[body.recommended_mode]}’ 단계입니다`, { timeout: 20_000 });
-  await expect(live(page)).toContainText("지금 서버가 내는 답");
+  await expect(answer(page)).toHaveText(`현재 경기 흐름은 ‘${MODE[body.recommended_mode]}’ 단계입니다`, { timeout: 20_000 });
+  await expect(live(page)).toContainText("서버 실시간 응답");
 
   await patchRegime(page, (b) => { b.recommended_mode = "DEFENSIVE"; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 경제 흐름은 ‘방어’ 단계입니다", { timeout: 20_000 });
+  await expect(answer(page)).toHaveText("현재 경기 흐름은 ‘방어’ 단계입니다", { timeout: 20_000 });
 
   await page.unroute("**/api/v1/macro/regime");
   await patchRegime(page, (b) => { b.recommended_mode = "SOMETHING_NEW"; b.stress_score = 41.4; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("지금 시장 스트레스는 41/100입니다", { timeout: 20_000 });
+  await expect(answer(page)).toHaveText("현재 시장 스트레스는 41/100입니다", { timeout: 20_000 });
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
 });
 

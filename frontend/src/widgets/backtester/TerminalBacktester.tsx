@@ -110,14 +110,14 @@ export default function TerminalBacktester() {
 
       {handoff && (
         <div className="bte-handoff tscreener-handoff">
-          <Notice tone="warn" title={`종목 찾기에서 넘어온 조건 ${handoff.conditionSummary.length}개로 종목을 고릅니다`}>
-            {handoff.resultCount > 0 ? `넘어올 때 ${handoff.resultCount.toLocaleString("ko-KR")}종목이 맞았습니다.` : null}
-            <ul className="tx-chips" aria-label="넘어온 조건">
+          <Notice tone="warn" title={`종목 찾기에서 전달된 조건 ${handoff.conditionSummary.length}개로 종목을 선별합니다`}>
+            {handoff.resultCount > 0 ? `전달 시점에 ${handoff.resultCount.toLocaleString("ko-KR")}종목이 조건을 충족했습니다.` : null}
+            <ul className="tx-chips" aria-label="전달된 조건">
               {handoff.conditionSummary.map((c, i) => <li key={i} className="tx-chip" data-tone="plain">{c}</li>)}
             </ul>
             <div className="scr-retry">
               <button type="button" className="tx-btn tx-btn--sub tscreener-handoff-clear"
-                onClick={() => { clearScreenerHandoff(); setHandoff(null); }}>넘어온 조건 삭제</button>
+                onClick={() => { clearScreenerHandoff(); setHandoff(null); }}>전달된 조건 삭제</button>
             </div>
           </Notice>
         </div>
@@ -125,9 +125,9 @@ export default function TerminalBacktester() {
 
       {macroCfg && (
         <div className="bte-handoff tscreener-handoff">
-          <Notice tone="warn" title={`매크로 분석에서 넘어온 전략 ‘${macroCfg.name}’ · ${macroMode}`}>
+          <Notice tone="warn" title={`매크로 분석에서 전달된 전략 ‘${macroCfg.name}’ · ${macroMode}`}>
             {`${macroCfg.universe_codes?.length ?? macroCfg.basket?.length ?? 0}종목으로 실행합니다.`}
-            <ul className="tx-chips" aria-label="넘어온 설정">
+            <ul className="tx-chips" aria-label="전달된 설정">
               {macroCfg.mode === "conditions" && (macroCfg.buy_conditions || []).map((c, i) => (
                 <li key={i} className="tx-chip" data-tone="plain">{c.expr} ≥ {c.rhs ?? 0}</li>))}
               {macroCfg.mode === "asset_alloc" && (macroCfg.basket || []).map((b, i) => (
@@ -136,7 +136,7 @@ export default function TerminalBacktester() {
             </ul>
             <div className="scr-retry">
               <button type="button" className="tx-btn tx-btn--sub tscreener-handoff-clear"
-                onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>넘어온 전략 삭제</button>
+                onClick={() => { clearMacroHandoff(); setMacroHandoffState(null); }}>전달된 전략 삭제</button>
             </div>
           </Notice>
         </div>
@@ -177,7 +177,7 @@ export default function TerminalBacktester() {
             <button type="button" onClick={run} disabled={loading} data-act="run" className="tbt-run tx-btn tx-btn--main">
               {loading ? "실행 시작 중" : "백테스트 실행"}
             </button>
-            <p className="bte-run-note">실행하면 진행 화면으로 옮겨 갑니다. 결과는 그 화면에서 볼 수 있습니다.</p>
+            <p className="bte-run-note">실행하면 진행 화면으로 이동합니다. 결과는 해당 화면에서 확인합니다.</p>
             {err && (
               <Notice tone="danger" title="실행 시작 실패">
                 설정은 그대로입니다. 잠시 뒤 다시 실행하십시오.

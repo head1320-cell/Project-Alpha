@@ -113,7 +113,7 @@ function Compared({ i, r, names }: { i: RealismRun; r: RealismRun; names: Record
         </dl>
         <div className="rl-label"><PerfLabel value={r.perf_label ?? null} /></div>
         {gap != null && gap > 0 ? (
-          <p className="tx-sec-sub rl-note">현실 쪽이 더 높게 나올 수도 있습니다. 적응 모드는 비중 자체를 바꿔서 이상과 다른 배분으로 실행됩니다. 그 차이는 아래 폭포의 나머지에 들어 있습니다.</p>
+          <p className="tx-sec-sub rl-note">현실 조건의 성과가 더 높게 나올 수도 있습니다. 적응 모드는 비중 자체를 조정해 이상 조건과 다른 배분으로 실행합니다. 그 차이는 아래 폭포 차트의 잔여 항목에 포함됩니다.</p>
         ) : null}
       </section>
       <GapChart i={i} r={r} />
@@ -142,7 +142,7 @@ function GapChart({ i, r }: { i: RealismRun; r: RealismRun }) {
   });
   const view = cmpQ.data
     ? compareViewOf(cmpQ.data, { unit: "x", labelA: "이상", labelB: "현실", perfLabelA: i.perf_label ?? null, perfLabelB: r.perf_label ?? null,
-                                 question: "현실 조건이 같은 전략의 성과를 얼마나 바꾸나" })
+                                 question: "현실 조건 반영 시 동일 전략의 성과 변화" })
     : null;
   const missingReal = cmpQ.data?.curves.missing_b ?? 0;
   const missingIdeal = cmpQ.data?.curves.missing_a ?? 0;
@@ -181,8 +181,8 @@ function Waterfall({ i, r }: { i: RealismRun; r: RealismRun }) {
   return (
     <section className="tx-sec rl-sec" data-sec="waterfall" aria-labelledby="rl-wf-h">
       <header className="tx-sec-head"><div>
-        <h2 className="tx-sec-t" id="rl-wf-h">어디서 달라졌나</h2>
-        <p className="tx-sec-sub">서버가 따로 센 두 금액(시장 충격 비용 · 현금 이자)만 세웠습니다. 나머지는 매수 여력·적응 모드·복리가 섞인 부분이라 서버가 나누지 않았습니다.</p>
+        <h2 className="tx-sec-t" id="rl-wf-h">성과 차이의 원천</h2>
+        <p className="tx-sec-sub">서버가 별도 집계한 두 금액(시장 충격 비용 · 현금 이자)만 표시했습니다. 나머지는 매수 여력·적응 모드·복리 효과가 혼재된 부분이라 서버가 분해하지 않았습니다.</p>
       </div></header>
       <div className="tx-sec-body">
         {!steps ? <p className="tx-sec-sub">끝 자산이나 두 금액 중 하나를 서버가 주지 않아 나눌 수 없습니다.</p> : <Bars steps={steps} />}
@@ -230,7 +230,7 @@ function WhatItDid({ r }: { r: RealismRun }) {
     <section className="tx-sec rl-sec" data-sec="did" aria-labelledby="rl-did-h">
       <header className="tx-sec-head"><div>
         <h2 className="tx-sec-t" id="rl-did-h">현실 조건이 한 일</h2>
-        <p className="tx-sec-sub">현실 쪽 계산에서 조건마다 서버가 센 값입니다.</p>
+        <p className="tx-sec-sub">현실 조건 계산에서 조건별로 서버가 집계한 값입니다.</p>
       </div></header>
       <div className="tx-sec-body">
         <ul className="rl-cards">
