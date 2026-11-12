@@ -45,6 +45,18 @@ async function goTab(page: Page, t: Tab, { settle = true } = {}) {
   await Promise.all(waits);
   if (settle) await page.waitForTimeout(900);
 }
+// 중앙은행 말투 게이지는 서버가 ★외부 정책문★을 받아야 그려진다(mock 모드에서도 실제 수집). 네트워크가 열린 CI 에서만 그려져
+// 같은 시험이 두 곳에서 다른 화면을 봤다(2026-11-12 · 'AA dark — indicators' 가 CI 에서만 실패). 그래서 응답을 고정한다 —
+// 연준은 수집됨, 한국은행은 수집 실패: 두 갈래가 한 화면에 있다. 값은 시험 고정값이지 관측이 아니다.
+const CB = {
+  as_of: "2026-11-12 09:00",
+  method: "렉시콘 기반 매파/비둘기 용어 밀도",
+  banks: {
+    fed: { available: true, source: "https://example.invalid/fed", score: 0.5, label: "매파 (긴축)", hawkish_hits: 6, dovish_hits: 2, terms: ["inflation", "restrictive"] },
+    bok: { available: false, note: "정책문 수집 실패(네트워크/구조 변경) — 점수 미산출(정직)" },
+  },
+};
+const fixCb = (page: Page, body: unknown = CB) => page.route("**/api/v1/macro/cb-sentiment", (r) => r.fulfill({ json: body }));
 async function patch(page: Page, path: string, edit: (b: Record<string, unknown>) => void) {
   await page.route(`**/api/v1/macro/${path}`, async (route: Route) => {
     const res = await route.fetch();
@@ -247,6 +259,28 @@ test("히트맵 칸에 초점 → 아래 읽기 줄이 그 칸의 지표·값을
   expect(await line.innerText()).not.toBe(t0);
 });
 
+// ── 중앙은행 말투 게이지 — 바늘 자리 = 서버 점수 · 못 받은 쪽은 사유 ─────────
+test("중앙은행 게이지: 바늘 자리는 서버 점수(−1~+1 → 0~100%) · 수집 실패는 사유(짝) · 점수를 바꾸면 자리가 바뀐다", async ({ page }) => {
+  await fixCb(page);
+  await open(page);
+  await goTab(page, "indicators");
+  const grid = panel(page, "indicators").locator(".mc-cbg-grid");
+  const fed = grid.locator(".mc-cbg").nth(0), bok = grid.locator(".mc-cbg").nth(1);
+  await expect(fed.locator(".mc-cbg-h b")).toHaveText("매파 (긴축)");
+  await expect(fed.locator(".mc-cbg-marker")).toHaveAttribute("style", /left:\s*75%/);
+  await expect(fed.locator(".mc-cbg-meta")).toContainText("6번");
+  await expect(bok.locator(".mc-cbg-none")).toContainText("점수 산출 실패");
+  await expect(bok.locator(".mc-cbg-none [data-server]")).toHaveText(CB.banks.bok.note);
+  await expect(bok.locator(".mc-cbg-marker"), "못 받은 쪽에 바늘을 지어내지 않는다").toHaveCount(0);
+
+  const p2 = await page.context().newPage();
+  await fixCb(p2, { ...CB, banks: { ...CB.banks, fed: { ...CB.banks.fed, score: -1, label: "비둘기 (완화)" } } });
+  await open(p2);
+  await goTab(p2, "indicators");
+  await expect(panel(p2, "indicators").locator(".mc-cbg-marker")).toHaveAttribute("style", /left:\s*0%/);
+  await p2.close();
+});
+
 // ── 실패는 실패로 (지연 로더 넷 + 드릴다운) ─────────────────────────────────
 const LOADERS: Array<{ tab: Tab; path: string; ok: string }> = [
   { tab: "indicators", path: "cb-sentiment", ok: ".mc-cbg-grid" },
@@ -301,12 +335,23 @@ for (const mode of ["light", "dark"] as const) {
   for (const t of TABS) {
     test(`AA ${mode} — ${t}`, async ({ page }) => {
       await page.addInitScript((v) => { try { localStorage.setItem("alpha_theme", v); } catch { /* */ } }, mode);
+      if (t === "indicators") await fixCb(page);
       await open(page);
       await goTab(page, t);
+      if (t === "indicators") await expect(panel(page, t).locator(".mc-cbg-marker")).toHaveCount(1);   // 게이지가 그려진 채로 잰다(공허하지 않게)
       const r = await page.evaluate<AuditResult>(contrastAudit(`#mc-panel-${t}`));
       expect(r.checked).toBeGreaterThan(10);
       expect(r.low, `${mode} ${t}: ${JSON.stringify(r.low.slice(0, 8))}`).toEqual([]);
-      if (mode === "dark") expect(r.bright, `${t} 밝은 판`).toEqual([]);
+      if (mode === "dark") {
+        // 게이지 바늘은 판이 아니라 표식이다 — 폭 4px 의 잉크색 막대라 다크에서 밝은 것이 맞다(화면으로 확인 2026-11-12).
+        // 예외는 이 요소 하나에만, 그리고 ★가는 표식일 때만★ — 폭이 6px 을 넘으면 표식이 아니라 밝은 판이다.
+        const needle = (b: string) => b.startsWith("I.mc-cbg-marker ");
+        if (r.bright.some(needle)) {
+          const w = await panel(page, t).locator(".mc-cbg-marker").evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().width)));
+          expect(w, "게이지 바늘 폭 — 넓으면 예외가 아니다").toBeLessThanOrEqual(6);
+        }
+        expect(r.bright.filter((b) => !needle(b)), `${t} 밝은 판`).toEqual([]);
+      }
     });
   }
 }

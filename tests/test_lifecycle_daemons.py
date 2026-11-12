@@ -144,7 +144,10 @@ def test_no_periodic_loop_is_started_with_a_bare_thread():
 
 # ── ★기동이 증권사 마스터를 내려받지 않는다(스위치가 꺼졌을 때)★ ─────────────
 
-def _startup_collects_master(monkeypatch, switch: str) -> list[str]:
+_UNSET = object()
+
+
+def _startup_collects_master(monkeypatch, switch: str, master=_UNSET) -> list[str]:
     import asyncio
 
     import src.data.stock_master as sm
@@ -154,6 +157,10 @@ def _startup_collects_master(monkeypatch, switch: str) -> list[str]:
         seen.append("collect")
 
     monkeypatch.setenv("LIFECYCLE_DAEMONS", switch)
+    if master is _UNSET or master is None:
+        monkeypatch.delenv("LIFECYCLE_MASTER_COLLECT", raising=False)
+    else:
+        monkeypatch.setenv("LIFECYCLE_MASTER_COLLECT", master)
     monkeypatch.setattr(lifecycle, "_start_daemon_once", lambda name, target: "started")
     monkeypatch.setattr(lifecycle, "_collect_master_bg", _fake_collect)
     monkeypatch.setattr(sm, "load_master_flags", lambda: {})
@@ -175,3 +182,22 @@ def test_daemons_off_means_no_master_download(monkeypatch):
 def test_daemons_on_still_downloads_a_missing_master(monkeypatch):
     """★짝★ — 운영(스위치 켜짐)에서는 마스터가 없으면 그대로 수집한다."""
     assert _startup_collects_master(monkeypatch, "1") == ["collect"]
+
+
+# ── ★데몬은 켠 채 마스터 수집만 끈다(E2E 서버)★ ─────────────────────────────
+
+def test_master_switch_off_means_no_master_download_with_daemons_on(monkeypatch, caplog):
+    """2026-11-12 CI — E2E 서버(`KIS_USE_MOCK=1`)도 기동 때 마스터를 실제로 내려받는다. 네트워크가
+    열린 CI 에서는 성공해 업종·지수 구성이 '있는' 서버가 되고, 막힌 곳에서는 '없는' 서버가 된다 —
+    같은 E2E 가 두 곳에서 다른 화면을 봤다(CI 전용 실패 6건). 데몬은 그대로 두고 이것만 끈다."""
+    import logging
+    with caplog.at_level(logging.WARNING):
+        assert _startup_collects_master(monkeypatch, "1", master="0") == []
+    # ★끄면 로그로 말한다★ — 조용히 사라지면 침묵 폴백이다.
+    assert any("LIFECYCLE_MASTER_COLLECT=0" in r.getMessage() for r in caplog.records)
+
+
+def test_master_switch_is_exactly_zero(monkeypatch):
+    """★짝★ — 정확히 "0" 일 때만 끈다. 미설정·그 밖의 값은 지금과 같이 수집한다(mock 게이트 규율)."""
+    for v in (None, "1", "", "false", "off", "00", " 0"):
+        assert _startup_collects_master(monkeypatch, "1", master=v) == ["collect"], repr(v)

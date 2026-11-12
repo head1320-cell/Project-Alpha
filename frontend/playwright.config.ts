@@ -31,8 +31,10 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
+      // LIFECYCLE_MASTER_COLLECT=0 — 기동 때 KIS 마스터를 내려받지 않는다. 그 다운로드는 mock 모드에서도 실제 외부 호출이라
+      // 네트워크가 열린 CI 에서만 성공해, 같은 E2E 가 "업종·지수 구성을 아는 서버"와 "모르는 서버"를 따로 봤다(2026-11-12 · CI 전용 실패 6건).
       command:
-        "cd .. && KIS_USE_MOCK=1 DATABASE_URL=sqlite:////tmp/e2e_pw.db python3 -m uvicorn main_api:app --port 8000 --log-level warning",
+        "cd .. && KIS_USE_MOCK=1 LIFECYCLE_MASTER_COLLECT=0 DATABASE_URL=sqlite:////tmp/e2e_pw.db python3 -m uvicorn main_api:app --port 8000 --log-level warning",
       url: "http://localhost:8000/api/v1/macro/health",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

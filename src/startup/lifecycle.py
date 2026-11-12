@@ -41,6 +41,17 @@ def daemons_disabled() -> bool:
     return os.getenv(DAEMONS_ENV) == "0"
 
 
+#: 이 스위치가 **정확히** `"0"` 이면 기동 때 KIS 마스터를 내려받지 않는다 — 데몬은 그대로 돈다.
+#: E2E 서버가 쓴다(2026-11-12): 마스터 다운로드는 `KIS_USE_MOCK=1` 에서도 실제 외부 호출이라,
+#: 네트워크가 열린 CI 와 막힌 곳에서 같은 서버가 다른 상태(업종·지수 구성 있음/없음)가 됐다.
+MASTER_ENV = "LIFECYCLE_MASTER_COLLECT"
+
+
+def master_collect_disabled() -> bool:
+    """`LIFECYCLE_MASTER_COLLECT` 가 정확히 `"0"` 인가. 그 밖의 값·미설정은 켜짐."""
+    return os.getenv(MASTER_ENV) == "0"
+
+
 def _start_daemon_once(name: str, target) -> str:
     """주기 데몬을 **이름당 하나만** 띄운다. `started`·`already_running`·`disabled`.
 
@@ -455,6 +466,11 @@ async def run_startup() -> None:
             import logging
             logging.getLogger(__name__).warning(
                 f"KIS 마스터 자동 수집을 하지 않았습니다 — {DAEMONS_ENV}=0 (명시적으로 꺼짐).")
+        elif master_collect_disabled():
+            import logging
+            logging.getLogger(__name__).warning(
+                f"KIS 마스터 자동 수집을 하지 않았습니다 — {MASTER_ENV}=0 (명시적으로 꺼짐). "
+                "업종·지수 구성은 적재된 것이 있을 때만 읽습니다.")
         elif not load_master_flags():
             from src.database import get_engine
             asyncio.create_task(_collect_master_bg(get_engine()))
