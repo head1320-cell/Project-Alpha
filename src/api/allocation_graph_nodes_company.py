@@ -36,7 +36,7 @@ from src.engine import portfolio_graph as pg
 
 _CODES = [{"label": "삼성전자", "value": "005930"}, {"label": "SK하이닉스", "value": "000660"},
           {"label": "NAVER", "value": "035420"}]
-_TODAY = "오늘의 재무·가격으로 낸 값입니다 — 과거 시점의 판단이 아니라서 과거 검증에는 쓰지 않습니다."
+_TODAY = "오늘의 재무·가격으로 낸 값입니다 — 과거 시점의 판단이 아니라서 과거 검증에는 사용하지 않습니다."
 
 
 class _Company(BaseModel):
@@ -47,7 +47,7 @@ class _Company(BaseModel):
 
 class _Priced(_Company):
     price: float | None = Field(None, gt=0, json_schema_extra={"x-ui": _ui(
-        "현재가", "advanced", unit="원", help="비우면 적재된 시세의 마지막 종가를 씁니다(출처를 함께 적습니다).")})
+        "현재가", "advanced", unit="원", help="비우면 적재된 시세의 최종 종가를 사용합니다(출처를 함께 표시합니다).")})
 
 
 def _company(p: _Company) -> dict:
@@ -98,7 +98,7 @@ def _base_trust(view: dict, prov: dict) -> list[dict]:
 
 class SandboxParams(_Priced):
     rf: float | None = Field(None, ge=0, le=0.15, json_schema_extra={"x-ui": _ui(
-        "무위험수익률", "advanced", help="비우면 국고채 10년(출처는 결과의 가정 표에 적습니다).")})
+        "무위험수익률", "advanced", help="비우면 국고채 10년(출처는 결과의 가정 표에 표시합니다).")})
     beta: float | None = Field(None, ge=0.1, le=3.0, json_schema_extra={"x-ui": _ui("베타", "advanced")})
     erp: float | None = Field(None, ge=0, le=0.15, json_schema_extra={"x-ui": _ui("시장위험프리미엄", "advanced")})
     g: float | None = Field(None, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("영구성장률", "advanced")})
@@ -119,10 +119,10 @@ def _explain_sandbox(view: dict, prov: dict, params: Any) -> dict:
              if isinstance(v, (int, float)) and v > 0 and isinstance(gap, (int, float))
              # 적정가가 없으면(0) 괴리율도 0 으로 온다 — '차이 없음' 이 아니라 '정의 불가' 라서 차이를 말하지 않는다
              else f"{view.get('name')}의 적정가를 정하지 못했습니다" if isinstance(v, (int, float)) and v <= 0
-             else f"{view.get('name')} 가치를 매겼습니다")
+             else f"{view.get('name')} 가치를 평가했습니다")
     facts = [f"{m['model']}: {m['value']:,.0f}원" for m in models if isinstance(m.get("value"), (int, float))]
     trust = [*_base_trust(view, prov),
-             _t(ASSUMED, "적정가는 할인율·성장률 가정의 결과입니다 — 가정 표와 민감도 격자를 함께 보십시오.")]
+             _t(ASSUMED, "적정가는 할인율·성장률 가정의 결과입니다 — 가정 표와 민감도 격자를 함께 확인하십시오.")]
     if len({round(m["value"], -3) for m in models if isinstance(m.get("value"), (int, float))}) > 1:
         trust.append(_t(ASSUMED, "모델마다 값이 다릅니다 — 하나로 합친 값은 평균이지 합의가 아닙니다."))
     return {"title": title, "facts": facts, "trust": trust,
@@ -179,7 +179,7 @@ def _explain_distribution(view: dict, prov: dict, params: Any) -> dict:
     widths = r.get("widths") or {}
     trust = [*_base_trust(view, prov)]
     if widths and not any(w.get("measured") for w in widths.values()):
-        trust.append(_t(ASSUMED, "가정마다 흔들 폭은 잰 값이 아니라 정한 값입니다 — 분포의 폭도 가정입니다."))
+        trust.append(_t(ASSUMED, "가정별 변동 폭은 측정값이 아니라 지정값입니다 — 분포의 폭도 가정입니다."))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["폭 자체의 근거(측정된 불확실성)"]}
 
 
@@ -188,14 +188,14 @@ def _explain_distribution(view: dict, prov: dict, params: Any) -> dict:
 def _financial(inputs: dict, p: _Company) -> pg.NodeOutput:
     head = _company(p)
     out = cr.company_financial_deep(p.code)
-    _unavailable(out, "재무 심층을 볼 수 없습니다")
+    _unavailable(out, "재무 심층 조회 불가")
     return _out(head, out)
 
 
 def _explain_financial(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     flags = (r.get("qoe") or {}).get("red_flags") or []
-    title = f"{view.get('name')} 이익의 질에 경고 {len(flags)}개" if flags else f"{view.get('name')} 이익의 질·운전자본을 봤습니다"
+    title = f"{view.get('name')} 이익의 질에 경고 {len(flags)}개" if flags else f"{view.get('name')} 이익의 질·운전자본을 분석했습니다"
     return {"title": title, "facts": [str(f) for f in flags[:4]], "trust": _base_trust(view, prov),
             "unmeasured": ["공시 정정 전의 값(빈티지) — 지금 표는 정정이 덮은 값입니다"]}
 
@@ -208,7 +208,7 @@ def _risk(inputs: dict, p: _Priced) -> pg.NodeOutput:
 def _explain_risk(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     a = r.get("altman") or {}
-    title = (f"Altman Z {a['z']:.2f} — {a.get('zone')}" if isinstance(a.get("z"), (int, float)) else "재무 위험을 봤습니다")
+    title = (f"Altman Z {a['z']:.2f} — {a.get('zone')}" if isinstance(a.get("z"), (int, float)) else "재무 위험을 분석했습니다")
     trust = [*_base_trust(view, prov)]
     b = r.get("beneish") or {}
     if b.get("available") is False:
@@ -244,14 +244,14 @@ def _explain_macro_sens(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     rows = [x for x in r.get("rows") or [] if x.get("available")]
     up = next((x for x in rows if str(x.get("shock", "")).startswith("+")), None)
-    title = (f"10년 금리가 1%p 오르면 적정가가 {up['value_pct']:+.1f}% 움직입니다"
-             if up and isinstance(up.get("value_pct"), (int, float)) else "매크로 충격에 대한 민감도를 봤습니다")
+    title = (f"10년 금리 1%p 상승 시 적정가가 {up['value_pct']:+.1f}% 변동합니다"
+             if up and isinstance(up.get("value_pct"), (int, float)) else "매크로 충격에 대한 민감도를 산출했습니다")
     facts = [f"{x['shock']}: {x['value_pct']:+.1f}%" for x in rows if isinstance(x.get("value_pct"), (int, float))]
     trust = [*_base_trust(view, prov),
              _t(CONFIRMED, "금리 블록은 할인율 공식을 그대로 따라간 값입니다(표본이 아니라 항등식)."),
              *[_t(UNKNOWN, f"{x.get('shock')} → {x.get('target')}: {x.get('reason')}") for x in r.get("unavailable") or []][:3]]
     if "statistical" in r:
-        trust.append(_t(ASSUMED, "통계 분석은 과거에 같이 움직인 정도입니다 — 원인이라는 뜻은 아닙니다."))
+        trust.append(_t(ASSUMED, "통계 분석은 과거의 동조 정도(상관)입니다 — 인과를 뜻하지 않습니다."))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["실제 이익(EPS)에 미치는 영향 — 채널이 없습니다"]}
 
 
@@ -289,7 +289,7 @@ def _explain_thesis(view: dict, prov: dict, params: Any) -> dict:
     if counts.get("screen_only_backtest_lookahead"):
         trust.append(_t(ASSUMED, "일부 조건은 스냅샷 값이라 과거 검증에 쓰면 미래 정보가 섞입니다."))
     return {"title": f"철회 조건 {sum(counts.values())}개를 점검했습니다", "facts": facts, "trust": trust,
-            "unmeasured": ["논지가 맞는지 — 이 점검은 반증할 수 있는지만 봅니다"]}
+            "unmeasured": ["논지의 적중 여부 — 이 점검은 반증 가능성만 판별합니다"]}
 
 
 # ── 등록 ─────────────────────────────────────────────────────────────────────

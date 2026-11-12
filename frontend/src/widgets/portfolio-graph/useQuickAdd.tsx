@@ -45,7 +45,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
         let id = "";
         st.act(() => {
           id = st.addLinked(kind, { x: src.position.x + COL, y: src.position.y }, { node: src.id, handle: pair[0].name, side: "source", port: pair[1].name });
-          return `‘${srcEntry.plain_label}’ 뒤에 이었습니다.`;
+          return `‘${srcEntry.plain_label}’ 뒤에 연결했습니다.`;
         });
         st.setTab("settings");
         return id;
@@ -98,12 +98,12 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
       // 입력에 이미 선이 있으면(입력 하나에 선 하나) 잇지 않고 놓기만 하고 말한다.
       const taken = q.from.side === "target" && st.edges.some((e) => e.target === q.from!.node && e.targetHandle === q.from!.handle);
       if (!taken) {
-        st.act(() => { st.addLinked(kind, at, { ...q.from!, port }); return "노드를 놓고 이었습니다."; });
+        st.act(() => { st.addLinked(kind, at, { ...q.from!, port }); return "노드를 추가하고 연결했습니다."; });
         st.setTab("settings");
         return;
       }
       st.addNode(kind, at);
-      st.setNote("노드를 놓았습니다 — 그 입력에는 이미 선이 있어 잇지 않았습니다.");
+      st.setNote("노드를 추가했습니다 — 해당 입력에는 이미 선이 있어 연결하지 않았습니다.");
       return;
     }
     addAt(kind, at);
@@ -140,7 +140,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
         ];
       }
       return [
-        { key: "cut", label: "선 끊기", icon: <Scissors size={14} aria-hidden="true" />, danger: true, run: () => tool("cut") },
+        { key: "cut", label: "선 연결 해제", icon: <Scissors size={14} aria-hidden="true" />, danger: true, run: () => tool("cut") },
         { key: "insert", label: cands.length ? "사이에 넣기…" : `사이에 넣기 — ${insertNone(plain)}`, icon: <ListPlus size={14} aria-hidden="true" />,
           disabled: !cands.length, run: () => setCtx({ ...ctx, mode: "insert" }) },
         { key: "waypoint", label: "꺾는 점 넣기", icon: <Spline size={14} aria-hidden="true" />, run: () => tool("waypoint") },
@@ -180,7 +180,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
                   } }];
       })(),
       ...(st.picked.length > 1 && st.picked.includes(id)
-        ? [{ key: "compare", label: "고른 노드 견고성 비교", icon: <Scale size={14} aria-hidden="true" />,
+        ? [{ key: "compare", label: "선택한 노드 견고성 비교", icon: <Scale size={14} aria-hidden="true" />,
              run: () => { const x = usePortfolioGraph.getState(); x.act(() => x.comparePicked()); } }] : []),
       { key: "pin", label: pinned ? "그림 고정 풀기" : "그림 고정", icon: pinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />,
         run: () => usePortfolioGraph.getState().togglePin(id) },
@@ -188,7 +188,7 @@ export function useQuickAdd(s: PgState, rf: RefObject<ReactFlowInstance | null>,
                                       run: () => usePortfolioGraph.getState().showCause(id) }] : []),
       // 여럿 고른 것 안의 노드면 그 여럿을 한 번에(R2) — 되돌리기 한 번.
       ...(st.picked.length > 1 && st.picked.includes(id)
-        ? [{ key: "remove-picked", label: `고른 노드 ${st.picked.length}개 삭제`, icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
+        ? [{ key: "remove-picked", label: `선택한 노드 ${st.picked.length}개 삭제`, icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
              run: () => { const x = usePortfolioGraph.getState(); x.act(() => deleteNote(x.deleteElements(x.picked, []))); } }] : []),
       { key: "remove", label: st.picked.length > 1 && st.picked.includes(id) ? "이 노드만 삭제" : "삭제", icon: <Trash2 size={14} aria-hidden="true" />, danger: true,
         run: () => { const x = usePortfolioGraph.getState(); x.act(() => deleteNote(x.deleteElements([id], []))); } },

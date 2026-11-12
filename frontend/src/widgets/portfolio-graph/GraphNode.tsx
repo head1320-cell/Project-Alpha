@@ -56,13 +56,13 @@ export type CanvasNodeData = PgNodeData & {
 function chipsOf(ex: NodeExplain | null | undefined, lin?: NodeLineage): { cls: string; text: string }[] {
   const out: { cls: string; text: string }[] = [];
   // 계보(BK0) — 서버가 하류로 나른 사실. 과거 검증에 쓸 수 없는 값임을 노드에서 바로 말한다.
-  if (lin?.pit === "forward_only") out.push({ cls: "assume", text: "지금 시점 전용" });
+  if (lin?.pit === "forward_only") out.push({ cls: "assume", text: "현재 시점 전용" });
   if (lin?.overlay) out.push({ cls: "assume", text: "노출 조절됨" });
   const trust = ex?.trust ?? [];
   if (trust.some((t) => t.kind === "practice")) out.push({ cls: "unknown", text: "합성 데이터" });
   else if (trust.some((t) => t.state === "unknown")) out.push({ cls: "unknown", text: "모르는 것 있음" });
   // 고른 방식이 답을 내지 못해 다른 비중을 썼다(CF3) — 가정 하나로 세면 묻히므로 따로 말한다.
-  if (trust.some((t) => t.kind === "fallback")) out.push({ cls: "fallback", text: "고른 방식 대신함" });
+  if (trust.some((t) => t.kind === "fallback")) out.push({ cls: "fallback", text: "선택 방식 대체" });
   const nAssumed = trust.filter((t) => t.state === "assumed" && t.kind !== "fallback").length;
   if (nAssumed) out.push({ cls: "assume", text: nAssumed === 1 ? "가정 있음" : `가정 ${nAssumed}개` });
   if (trust.some((t) => t.state === "failed")) out.push({ cls: "fail", text: "지키지 못한 조건" });
@@ -185,7 +185,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   }) : inputs;
   const inLabel = (name: string): string | undefined => {
     if (!combine) return undefined;
-    if (!linkedPorts.has(name)) return "전략 더 잇기";
+    if (!linkedPorts.has(name)) return "전략 추가 연결";
     const l = portLabels[name];
     return typeof l === "string" && l.trim() ? l : linkedPorts.get(name) || undefined;
   };
@@ -252,7 +252,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         </button>
         <button type="button" className="pg-branch-make pg-tb-icon" aria-label="대안 만들기"
                 onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.makeBranch(id)); }}
-                title="대안 만들기 — 이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 나란히 봅니다">
+                title="대안 만들기 — 이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 비교합니다">
           <GitBranch size={14} aria-hidden="true" />
         </button>
         <button type="button" className="pg-pin pg-tb-icon" aria-pressed={pinned} onClick={() => togglePin(id)}
@@ -311,7 +311,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
             <span className="pg-node-fix-text">{fix.text}</span>
             <button type="button" className="pg-node-fix-btn nodrag" data-action={fix.action}
                     onClick={(e) => { e.stopPropagation(); data.onFix?.(fix); }}>
-              {fix.action === "add" && fix.label ? `‘${fix.label}’ 붙이기` : "이어 주기"}
+              {fix.action === "add" && fix.label ? `‘${fix.label}’ 추가` : "연결"}
             </button>
           </div>
         )}

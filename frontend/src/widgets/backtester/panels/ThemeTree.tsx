@@ -60,7 +60,7 @@ export default function ThemeTree({ selected, onChange }: {
   return (
     <div className="bte-col">
       <div className="bte-row">
-        <span className="bte-sub-h">{totalSubSelected > 0 ? `세부 업종 ${totalSubSelected}개 골랐습니다` : "고르지 않으면 모든 업종입니다"}</span>
+        <span className="bte-sub-h">{totalSubSelected > 0 ? `세부 업종 ${totalSubSelected}개 선택` : "고르지 않으면 모든 업종입니다"}</span>
         {groups.length > 0 && (
           <button type="button" className="bte-link" onClick={() => emit(allOn ? new Set() : new Set(allIds))}>
             {allOn ? "모두 빼기" : "모두 고르기"}

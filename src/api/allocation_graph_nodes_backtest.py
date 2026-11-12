@@ -81,7 +81,7 @@ class SetupParams(BaseModel):
     commission_rate: float = Field(0.0015, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("수수료율", "advanced")})
     slippage_rate: float = Field(0.0005, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("슬리피지율", "advanced")})
     charge_sell_tax: bool = Field(False, json_schema_extra={"x-ui": _ui(
-        "매도세 부과", "advanced", help="켜면 실행 준비실과 같은 증권거래세율을 매깁니다(기본 꺼짐).")})
+        "매도세 부과", "advanced", help="켜면 실행 준비실과 같은 증권거래세율을 부과합니다(기본 미사용).")})
     stop_loss_pct: float | None = Field(None, gt=0, le=90, json_schema_extra={"x-ui": _ui("손절 %", "advanced")})
     take_profit_pct: float | None = Field(None, gt=0, le=500, json_schema_extra={"x-ui": _ui("익절 %", "advanced")})
 
@@ -123,20 +123,20 @@ def _start_backtest(values: dict, view: dict, params: SetupParams) -> dict:
         raise pg.NodeFailure(str(e.detail)) from e
     rid = out.get("run_id")
     if not rid:
-        raise pg.NodeFailure("DB 를 쓸 수 없어 백테스트 시작 실패")
+        raise pg.NodeFailure("DB 를 사용할 수 없어 백테스트 시작 실패")
     return {"saved_id": rid,
-            "text": f"백테스트를 시작했습니다 · {rid} — 끝나면 ‘백테스트 결과 불러오기’로 봅니다"}
+            "text": f"백테스트를 시작했습니다 · {rid} — 완료되면 ‘백테스트 결과 조회’에서 확인합니다"}
 
 
 def _explain_setup(view: dict, prov: dict, params: Any) -> dict:
     c = view.get("config") or {}
-    return {"title": f"{view.get('universe_label')}에서 ‘{view.get('strategy_label')}’로 돌려 볼 준비가 됐습니다",
+    return {"title": f"{view.get('universe_label')}에서 ‘{view.get('strategy_label')}’ 백테스트 실행 준비를 마쳤습니다",
             "facts": [f"기간 {c.get('start_date')} ~ {c.get('end_date')} · 상위 {c.get('max_tickers')}종목 · 조건 {view.get('n_conditions')}개",
                       f"비용: 수수료 {float(c.get('commission_rate', 0)) * 100:.2f}% · 슬리피지 {float(c.get('slippage_rate', 0)) * 100:.2f}%"
                       + (" · 매도세" if c.get("charge_sell_tax") else " · 매도세 안 매김")],
             "trust": [_t(CONFIRMED, "서버의 백테스트 요청 규칙과 조건 필드 목록으로 확인했습니다."),
                       _t(ASSUMED, "수 분 걸릴 수 있습니다 — 계산하지 않고, ‘백테스트 시작’을 누르면 백그라운드에서 실행됩니다.")],
-            "unmeasured": ["아직 돌리지 않았습니다 — 결과는 ‘백테스트 결과 불러오기’에서 봅니다"]}
+            "unmeasured": ["아직 실행하지 않았습니다 — 결과는 ‘백테스트 결과 조회’에서 확인합니다"]}
 
 
 # ── 결과 불러오기 ────────────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ def _explain_load(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_practice("합성 데이터로 돈 실행이거나 데이터 출처 확인 실패 — 실제 성과가 아닙니다."))
     if view.get("is_pit_verified") is not True:
         trust.append(_t(UNKNOWN, "시점 정합 확인 실패 — 그때 알 수 없던 값이 섞였을 수 있습니다."))
-    return {"title": f"백테스트 {view.get('run_id')}의 결과를 불러왔습니다",
+    return {"title": f"백테스트 {view.get('run_id')}의 결과를 조회했습니다",
             "headline": ({"label": "총수익률", "value": tr, "unit": "%", "text": _signed_pct(float(tr))} if tr is not None else None),
             "facts": [f"{lab} {s.get(k)}{u}" for k, lab, u in _STAT_KO[1:4] if s.get(k) is not None]
                      + ([drawdown_fact(view)] if drawdown_fact(view) else []),
@@ -234,14 +234,14 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     rows = r.get("rows") or []
     top = max(rows, key=lambda x: abs(float(x.get("contribution_pct") or 0))) if rows else None
-    trust = [_t(CONFIRMED, f"실행의 월별 수익률 {r.get('months_from_run')}개월을 매크로 팩터로 나눴습니다(결합 회귀).")]
+    trust = [_t(CONFIRMED, f"실행의 월별 수익률 {r.get('months_from_run')}개월을 매크로 팩터로 분해했습니다(결합 회귀).")]
     if any(x.get("collinear") for x in rows):
-        trust.append(_t(UNKNOWN, "서로 비슷하게 움직이는 팩터가 있어 개별 기여는 서로 상쇄될 수 있습니다 — 따로 읽지 마십시오."))
+        trust.append(_t(UNKNOWN, "상관이 높은 팩터가 있어 개별 기여는 서로 상쇄될 수 있습니다 — 개별로 해석하지 마십시오."))
     trust += ([_practice("개발 모드라 매크로 지표가 합성(합성)입니다.")] if prov.get("practice") else [])
-    return {"title": "무엇이 이 수익을 만들었는지 나눠 봤습니다",
+    return {"title": "수익을 매크로 팩터별 기여로 분해했습니다",
             "facts": ([f"최대 기여 팩터: {FACTOR_KO.get(top.get('factor'), top.get('factor'))} {_signed_pct(float(top.get('contribution_pct') or 0))}"] if top else [])
                      + ([f"설명력(R²) {r['diagnostics']['r_squared']:.2f}"] if (r.get("diagnostics") or {}).get("r_squared") is not None else []),
-            "trust": trust, "unmeasured": ["인과(회귀는 같이 움직였다는 것만 말합니다)"]}
+            "trust": trust, "unmeasured": ["인과(회귀는 동조 관계만 나타냅니다)"]}
 
 
 # ── 두 실행 비교 ─────────────────────────────────────────────────────────────
@@ -305,13 +305,13 @@ def _compare(inputs: dict, p: Any) -> pg.NodeOutput:
 def _explain_compare(view: dict, prov: dict, params: Any) -> dict:
     diffs = view.get("differences") or []
     tr = next((r for r in view.get("rows") or [] if r["key"] == "total_return_pct"), {})
-    trust = [_t(CONFIRMED, "두 실행이 이미 계산한 지표를 나란히 놨습니다 — 새로 계산한 수는 차이(뺄셈)뿐입니다.")]
+    trust = [_t(CONFIRMED, "두 실행의 기존 산출 지표를 비교했습니다 — 새로 계산한 값은 차이(뺄셈)뿐입니다.")]
     if diffs:
         trust.insert(0, _t(UNKNOWN, "같은 조건이 아닙니다 — " + ", ".join(d["label"] for d in diffs)
                            + "이(가) 달라 차이가 규칙 때문인지 조건 때문인지 가를 수 없습니다."))
     title = ("같은 조건이 아닙니다 — 차이를 규칙 탓으로 읽지 마십시오" if diffs
-             else f"두 백테스트를 나란히 놨습니다 (총수익률 차이 {_pct(float(tr['diff']))})" if tr.get("diff") is not None
-             else "두 백테스트를 나란히 놨습니다")
+             else f"두 백테스트를 비교했습니다 (총수익률 차이 {_pct(float(tr['diff']))})" if tr.get("diff") is not None
+             else "두 백테스트를 비교했습니다")
     return {"title": title, "trust": trust,
             "unmeasured": ["차이가 우연인지(통계적 유의성)", "표본 밖에서도 같은 차이가 나는지"]}
 

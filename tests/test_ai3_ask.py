@@ -179,12 +179,12 @@ def _srec(eid, rec, doc=DOC, key=KEY):
     return {"edge_id": eid, "record": rec, "sig": fs.seal(key, eid, fs.EDGE_TYPE, fs.deep_sigs(doc)[e["target"]], rec)}
 
 
-EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 리스크 패리티", "종목 2개"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}],
+EX_O = {"title": "비중 산출 결과입니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
+        "facts": ["계산 방식: 리스크 패리티", "종목 2개"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화가 정상 완료됐습니다."}],
         "unmeasured": ["거래비용"]}
 EX_ES = {"title": "기대 수익을 잡았습니다", "facts": ["과거 평균 7.2%"], "trust": [{"state": "assumed", "text": "과거 평균이 이어진다는 가정입니다."}]}
 EX_BT = {"title": "과거로 돌려 봤습니다", "facts": ["누적 수익 31.4%"], "trust": []}
-EX_U2 = {"title": "종목 1개를 골랐습니다", "facts": ["NAVER 99"], "trust": []}
+EX_U2 = {"title": "종목 1개를 선정했습니다", "facts": ["NAVER 99"], "trust": []}
 PRACTICE = {"state": "unknown", "text": "합성 데이터입니다.", "kind": "practice"}
 REC_RO = {"source": "r", "target": "o", "facts": [{"key": "n_obs", "label": "기간", "text": "756일", "value": 756}],
           "facts_reason": None, "checks": ["빈 날"], "issues": [{"level": "lost", "code": "gap", "text": "빈 날 4일을 뺐습니다", "fix": None}],
@@ -205,7 +205,7 @@ def test_lines_get_server_ids_and_cover_explain_parts_relations_and_records_in_s
     ids = [x["id"] for x in g["lines"]]
     assert ids == [f"f{i}" for i in range(1, len(ids) + 1)] and set(refs) == set(ids)
     texts = " | ".join(x["text"] for x in g["lines"])
-    for must in ("비중을 이렇게 나눴습니다", "삼성전자 50.5%", "계산 방식: 리스크 패리티", "포트폴리오 최적화는 문제없이 끝났습니다.", "거래비용",
+    for must in ("비중 산출 결과입니다", "삼성전자 50.5%", "계산 방식: 리스크 패리티", "포트폴리오 최적화가 정상 완료됐습니다.", "거래비용",
                  "과거 평균 7.2%", "누적 수익 31.4%", "756일", "빈 날 4일을 뺐습니다"):
         assert must in texts, must
     assert "NAVER 99" not in texts                                                     # 범위 밖 갈래
@@ -260,7 +260,7 @@ def test_numbers_must_come_from_the_sentences_own_lines_and_the_pair_passes():
     assert answer["sentences"] == [] and bad[0]["code"] == "numbers" and "50.5" in bad[0]["reason"]
     answer, bad = ak.check(_ans(("과거 평균은 7.2% 입니다.", [_id(refs, "es", "사실")])), g)          # ★짝★
     assert bad == [] and len(answer["sentences"]) == 1
-    answer, bad = ak.check(_ans(("기간은 756일입니다.", [_id(refs, EID["r>o"], "건너간 것")])), g)  # 선의 줄
+    answer, bad = ak.check(_ans(("기간은 756일입니다.", [_id(refs, EID["r>o"], "전달된 것")])), g)  # 선의 줄
     assert bad == []
 
 
@@ -291,9 +291,9 @@ def test_shape_limit_and_malformed_answers_are_reported():
 @pytest.mark.parametrize("why", ["not_in_facts", "judgement", "off_topic"])
 def test_cannot_answer_uses_the_servers_fixed_sentence(why):
     g, refs = _ground()
-    answer, bad = ak.check(_ans(("이 결과에는 거래비용이 없습니다.", [_id(refs, "o", "재지 않은 것")]), answerable=False, why_not=why), g)
+    answer, bad = ak.check(_ans(("이 결과에는 거래비용이 없습니다.", [_id(refs, "o", "미측정 항목")]), answerable=False, why_not=why), g)
     assert answer["answerable"] is False and answer["cannot"] == ak.CANNOT[why] and bad == []
-    assert answer["sentences"] == [{"text": "이 결과에는 거래비용이 없습니다.", "fact_ids": [_id(refs, "o", "재지 않은 것")]}]
+    assert answer["sentences"] == [{"text": "이 결과에는 거래비용이 없습니다.", "fact_ids": [_id(refs, "o", "미측정 항목")]}]
     ok, _ = ak.check(_ans(("비중을 나눴습니다.", [_id(refs, "o", "제목")])), g)
     assert ok["cannot"] is None                                                       # ★짝★
     assert set(ak.CANNOT) == {"not_in_facts", "judgement", "off_topic"} and "투자 판단" in ak.CANNOT["judgement"]
@@ -338,7 +338,7 @@ def test_an_answer_carries_sentences_cited_lines_and_the_server_notice(report):
 
 
 def test_no_practice_no_notice():
-    res = _ask(_client(FakeSDK(_msg(_ans(("비중을 이렇게 나눴습니다.", ["f1"]))))), facts=[_sealed("o", EX_O)], records=[])
+    res = _ask(_client(FakeSDK(_msg(_ans(("비중 산출 결과입니다.", ["f1"]))))), facts=[_sealed("o", EX_O)], records=[])
     assert res["available"] and res["notice"] is None
     res2 = _ask(_client(FakeSDK(_msg(_ans()))), facts=[_sealed("o", {**EX_O, "trust": [PRACTICE]})], records=[])
     assert res2["notice"] == nr.NOTICE                                                    # ★짝★

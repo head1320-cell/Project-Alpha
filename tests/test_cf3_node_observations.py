@@ -44,7 +44,7 @@ def test_no_fallback_keeps_the_old_view_and_sentence(market):
     """짝 — 대체가 없으면 view 에 키가 없고 설명은 예전 그대로."""
     o = _run(_chain("mvo"))["o"]
     assert "fallbacks" not in o["view"]
-    assert "포트폴리오 최적화는 문제없이 끝났습니다." in _texts(o["explain"])
+    assert "포트폴리오 최적화가 정상 완료됐습니다." in _texts(o["explain"])
     assert not any(t.get("kind") == "fallback" for t in o["explain"]["trust"])
 
 

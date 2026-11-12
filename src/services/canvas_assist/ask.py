@@ -31,8 +31,8 @@ CANNOT = {
 }
 _STALE = "서명이 맞지 않습니다(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 물을 수 있습니다"
 _MISSING = "그래프에 없는 선입니다"
-_PART = {"title": "제목", "headline": "핵심 값", "fact": "사실", "trust": "믿음", "unmeasured": "재지 않은 것",
-         "relation": "관계", "carried": "건너간 것", "issue": "빠지거나 바뀐 것", "checked": "점검"}
+_PART = {"title": "제목", "headline": "핵심 값", "fact": "사실", "trust": "믿음", "unmeasured": "미측정 항목",
+         "relation": "관계", "carried": "전달된 것", "issue": "누락·변경된 것", "checked": "점검"}
 
 
 def _edges(graph: dict) -> dict[str, dict]:

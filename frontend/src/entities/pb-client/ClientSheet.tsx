@@ -84,7 +84,7 @@ export function ClientSheet({ sheet, audience = "pb" }: { sheet: Sheet; audience
       )}
       {unmeasured.length > 0 && (
         <section className="cs-sec">
-          <h2 className="cs-h2">재지 않은 것</h2>
+          <h2 className="cs-h2">미측정 항목</h2>
           <ul className="cs-unmeasured">{unmeasured.map(({ where, u }, i) => <li key={i}>{u}<span className="cs-where">{where}</span></li>)}</ul>
         </section>
       )}

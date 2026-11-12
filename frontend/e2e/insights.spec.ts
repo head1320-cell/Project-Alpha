@@ -398,7 +398,7 @@ test("★가정형 셋은 여기서 돌리지 않는다★ — 라우트 요청 
 test("캔버스 다리 ?company= — 기업 하나 깊게 흐름이 그 코드로 열린다(짝: 모르는 코드는 싣지 않는다)", async ({ page }) => {
   await page.goto("/allocation?company=005930", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".pg-node[data-kind=company_valuation]")).toHaveCount(1, { timeout: 40_000 });
-  await expect(page.locator(".pg-file-note")).toContainText("기업 하나 깊게");
+  await expect(page.locator(".pg-file-note")).toContainText("단일 기업 심층 분석");
   // 짝 — 캔버스는 작업 중 문서를 이 탭(sessionStorage)에 저장해 둔다. 비우고 모르는 코드로 열면 그 흐름이 실리지 않고 메모가 말한다.
   await page.evaluate(() => { try { sessionStorage.clear(); localStorage.clear(); } catch { /* noop */ } });
   await page.goto("/allocation?company=999999", { waitUntil: "domcontentloaded" });

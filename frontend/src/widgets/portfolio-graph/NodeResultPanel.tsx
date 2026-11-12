@@ -97,12 +97,12 @@ function EngineEvidence({ v }: { v: Dict }) {
         <b className="pg-eng-v" data-engine={eng ?? "unknown"}>{eng ? (ENGINE_LABEL[eng] ?? eng) : "미상"}</b>
         {ep && <span className={`pg-tag pg-tag--${ep.feasible ? "confirmed" : "failed"}`}>{ep.feasible ? "뷰 실현 가능" : "뷰 실현 불가"}</span>}
       </p>
-      {COV_ONLY.has(String(v.model)) && <p className="pg-note">이 방식은 비중을 정할 때 μ 를 쓰지 않습니다 — 공분산만으로 나눕니다.</p>}
+      {COV_ONLY.has(String(v.model)) && <p className="pg-note">이 방식은 비중 산출에 μ 를 사용하지 않습니다 — 공분산만으로 배분합니다.</p>}
       {ep && (
         <>
           <p className="pg-note">반영한 뷰 {String(ep.n_views ?? "—")}개 · 유효 시나리오 {ensPrior === null ? "—" : Math.round(ensPrior)} → {ens === null ? "—" : Math.round(ens)}</p>
           {ep.confidence_used === false && (
-            <p className="pg-note pg-eng-conf">엔트로피 풀링은 뷰의 신뢰도를 쓰지 않습니다 — 부등식 뷰는 경성 제약이라 대응하는 손잡이가 없습니다. 뷰가 과한지는 유효 시나리오 수로 봅니다.</p>
+            <p className="pg-note pg-eng-conf">엔트로피 풀링은 뷰의 신뢰도를 사용하지 않습니다 — 부등식 뷰는 경성 제약이라 대응하는 조절 변수가 없습니다. 뷰의 과도 여부는 유효 시나리오 수로 판단합니다.</p>
           )}
           {ensDrop && <p className="pg-warn" role="status">유효 시나리오 수가 크게 무너졌습니다 — 뷰가 사전분포보다 강해서 표본 몇 개에 기댄 상태입니다.</p>}
           {ep.note ? <p className="pg-note">{String(ep.note)}</p> : null}
@@ -230,7 +230,7 @@ function Lookahead({ la }: { la: Dict | undefined }) {
         <span className={`pg-tag pg-tag--${st === "verified" ? "confirmed" : st === "unverified" ? "failed" : "assumed"}`} data-lookahead={st}>{LA_TEXT[st]}</span>
         {la?.summary ? <span className="pg-note">{String(la.summary)}</span> : !la ? <span className="pg-note">이 결과는 룩어헤드를 어디까지 통제했는지 말하지 않습니다.</span> : null}
       </p>
-      {unmeasured.length > 0 && <ul className="pg-list pg-la-unmeasured">{unmeasured.map((t, i) => <li key={i}>안 잰 것: {t}</li>)}</ul>}
+      {unmeasured.length > 0 && <ul className="pg-list pg-la-unmeasured">{unmeasured.map((t, i) => <li key={i}>미측정: {t}</li>)}</ul>}
     </div>
   );
 }
@@ -251,7 +251,7 @@ function Conformal({ cf }: { cf: Dict | null | undefined }) {
             ["점추정", p3(np.point)], ["보정 쌍", String(cf.n_pairs ?? "—")],
             ["실측 적중률", mc?.available && num(mc.coverage) !== null && num(mc.hits) !== null && num(mc.n) !== null
               ? `${((mc.coverage as number) * 100).toFixed(1)}% (${String(mc.hits)}/${String(mc.n)})`
-              : <span className="pg-bt-cf-na">{String(mc?.reason ?? "적중률을 잴 표본 없음")}</span>],
+              : <span className="pg-bt-cf-na">{String(mc?.reason ?? "적중률 측정 표본 없음")}</span>],
           ]} />
         </>
       ) : <p className="pg-warn pg-bt-cf-na">{String(cf.reason ?? "구간 계산 불가")}</p>}
@@ -318,7 +318,7 @@ function Current({ v }: { v: Dict }) {
       <p className="pg-note pg-current-basis">{String(v.basis ?? "")}</p>
       <LongShortLegs weights={(v.weights as Record<string, number>) ?? {}} />
       <WeightBars weights={(v.weights as Record<string, number>) ?? {}} labels={labels} />
-      {zero.length > 0 && <p className="pg-note">비중을 적지 않은 종목은 0% 입니다: {zero.map((z) => labels[z] ?? z).join(", ")}</p>}
+      {zero.length > 0 && <p className="pg-note">비중을 입력하지 않은 종목은 0% 입니다: {zero.map((z) => labels[z] ?? z).join(", ")}</p>}
     </>
   );
 }
@@ -342,7 +342,7 @@ function UniverseResult({ v }: { v: Dict }) {
           </tbody>
         </table>
       )}
-      {!weights && <p className="pg-note">현재 비중은 적지 않았습니다 — 비중이 필요한 노드는 이 목록만 받습니다.</p>}
+      {!weights && <p className="pg-note">현재 비중은 입력하지 않았습니다 — 비중이 필요한 노드에는 종목 목록만 전달됩니다.</p>}
       {(unknown.codes ?? []).length > 0 && (
         <p className="pg-warn">이름을 찾지 못한 종목: {(unknown.codes ?? []).join(", ")}{unknown.note ? ` — ${unknown.note}` : ""}</p>
       )}
@@ -360,7 +360,7 @@ function ViewsResult({ v }: { v: Dict }) {
       {views.map((x, i) => (
         <li key={i} className="pg-view-row">
           <b>{x.label ?? (x.assets ?? []).join(" · ")}</b>
-          {" "}{x.direction == null ? "방향 모름" : x.direction > 0 ? "오를 것" : x.direction < 0 ? "내릴 것" : "그대로"}
+          {" "}{x.direction == null ? "방향 미상" : x.direction > 0 ? "상승" : x.direction < 0 ? "하락" : "중립"}
           {typeof x.magnitude_pct === "number" ? ` ${x.magnitude_pct > 0 ? "+" : ""}${x.magnitude_pct.toFixed(1)}%` : ""}
           {typeof x.confidence === "number" ? ` · 확신 ${Math.round(x.confidence * 100)}%` : " · 확신 모름"}
         </li>

@@ -163,7 +163,7 @@ export default function WatchGroupModal({ open, initialName, initialTickers, onC
         )}
 
         {/* 고른 종목 */}
-        <div className="wg-picked" aria-label="고른 종목">
+        <div className="wg-picked" aria-label="선택 종목">
           {selected.size === 0 ? (
             <span className="wg-picked-empty">아직 고른 종목이 없습니다. 아래에서 분류를 골라 체크합니다.</span>
           ) : (

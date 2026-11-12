@@ -28,7 +28,7 @@ const EMPTY: Record<string, string> = {
   research_runs: "연구 기록이 없습니다 — 포트폴리오 최적화 결과를 연구 기록으로 남기면 여기에 나옵니다.",
   alphas: "등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 나옵니다.",
   backtest_runs: "백테스트가 없습니다 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 나옵니다(목록을 못 읽어도 비어 보일 수 있습니다).",
-  scenario_packs: "저장된 시나리오가 없습니다 — 직접 정한 충격을 쓰거나, 시나리오를 저장하면 여기에 나옵니다.",
+  scenario_packs: "저장된 시나리오가 없습니다 — 직접 지정한 충격을 사용하거나, 시나리오를 저장하면 여기에 표시됩니다.",
 };
 
 const ALPHA_KO: Record<string, string> = { draft: "초안", experimental: "실험", validated: "검증 단계", approved: "승인", retired: "폐기" };
@@ -115,7 +115,7 @@ export function PickField({ source, multi, value, onChange }: {
   const orphans = picked.filter((v) => !known.has(v));
   return (
     <div className="pg-pick" role={multi ? "group" : "radiogroup"}>
-      {state.items.length === 0 && <p className="pg-help">{EMPTY[source] ?? "고를 것 없음"}</p>}
+      {state.items.length === 0 && <p className="pg-help">{EMPTY[source] ?? "선택 항목 없음"}</p>}
       {state.items.map((it) => {
         const on = picked.includes(it.value);
         return (
@@ -128,7 +128,7 @@ export function PickField({ source, multi, value, onChange }: {
         );
       })}
       {orphans.length > 0 && (
-        <p className="pg-warn">목록에 없는 값을 골라 두었습니다: {orphans.join(", ")} — 지워졌거나 비활성일 수 있습니다.</p>
+        <p className="pg-warn">목록에 없는 값이 선택돼 있습니다: {orphans.join(", ")} — 삭제됐거나 비활성일 수 있습니다.</p>
       )}
     </div>
   );

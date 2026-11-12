@@ -11,16 +11,16 @@ import type { GraphError, NodeStatus } from "./types";
 
 const DIRECTION: Record<string, string> = { up: "위로", down: "아래로", left: "왼쪽으로", right: "오른쪽으로" };
 
-const NODE_DESC = "Enter 나 Space 로 노드를 고른 뒤 화살표로 한 칸씩 옮깁니다(Shift 와 함께면 네 칸). "
-  + "Delete 로 지우면 토스트의 되돌리기나 Ctrl+Z 로 돌립니다. Esc 로 고르기를 풉니다.";
+const NODE_DESC = "Enter 나 Space 로 노드를 선택한 뒤 화살표로 한 칸씩 이동합니다(Shift 와 함께면 네 칸). "
+  + "Delete 로 삭제하면 토스트의 되돌리기나 Ctrl+Z 로 복원합니다. Esc 로 선택을 해제합니다.";
 
 export const ARIA_KO: AriaLabelConfig = {
   // 열쇠 이름이 거꾸로다 — 키보드가 켜져 있으면 `keyboardDisabled` 문장이 쓰인다(React Flow 12.12 소스). 둘 다 같은 말로 둔다.
   "node.a11yDescription.default": NODE_DESC,
   "node.a11yDescription.keyboardDisabled": NODE_DESC,
-  "node.a11yDescription.ariaLiveMessage": ({ direction }) => `고른 노드를 ${DIRECTION[direction] ?? "옆으로"} 옮겼습니다.`,
-  "edge.a11yDescription.default": "Enter 나 Space 로 선을 고르면 도구줄과 오른쪽 창 ‘선’ 탭이 열립니다. "
-    + "Delete 로 끊으면 토스트의 되돌리기나 Ctrl+Z 로 돌립니다. Esc 로 고르기를 풉니다.",
+  "node.a11yDescription.ariaLiveMessage": ({ direction }) => `선택한 노드를 ${DIRECTION[direction] ?? "옆으로"} 이동했습니다.`,
+  "edge.a11yDescription.default": "Enter 나 Space 로 선을 선택하면 도구줄과 오른쪽 창 ‘선’ 탭이 열립니다. "
+    + "Delete 로 연결을 해제하면 토스트의 되돌리기나 Ctrl+Z 로 복원합니다. Esc 로 선택을 해제합니다.",
   "controls.ariaLabel": "확대·축소 단추",
   "controls.zoomIn.ariaLabel": "확대",
   "controls.zoomOut.ariaLabel": "축소",

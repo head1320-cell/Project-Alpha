@@ -33,7 +33,7 @@ async function branchAndFit(page: Page, w: number, h: number) {
   await page.locator('.react-flow__node[data-id="estimate"] .pg-node').click({ position: { x: 30, y: 14 } });
   await page.locator('.react-flow__node[data-id="optimizer"] .pg-node').click({ position: { x: 30, y: 14 }, modifiers: ["Control"] });
   await page.keyboard.press("Control+k");
-  await page.getByLabel("명령 찾기").last().fill("고른 노드째 대안");
+  await page.getByLabel("명령 찾기").last().fill("선택한 노드째 대안");
   await page.keyboard.press("Enter");
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   await page.locator(".react-flow__controls-fitview").click();

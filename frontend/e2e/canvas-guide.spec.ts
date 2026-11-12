@@ -87,19 +87,19 @@ test("계산 뒤 우선순위: 전달 점검 보기 → [다음에] → 대안 �
   await openWith(page, FULL);
   await runAll(page);
   await expect(bar(page)).toHaveAttribute("data-tool", "wire_check");
-  await expect(why(page)).toHaveText("빠지거나 바뀐 것이 있는 선이 1개입니다 — 무엇이 빠졌는지 볼 수 있습니다");
+  await expect(why(page)).toHaveText("누락·변경이 있는 선이 1개입니다 — 누락 항목을 확인할 수 있습니다");
   await bar(page).locator(".pg-guide-go").click();
   await page.mouse.move(700, 300);                                                              // 안내 위에 머물면 닫히지 않는다(설계) — 사람처럼 옮긴다
   await expect(page.locator('.pg-tab[data-tab="wire"]')).toHaveAttribute("aria-selected", "true");      // 그 선을 골라 '선' 탭
   await expect(page.locator(".pg-wire-issue")).toHaveCount(1);
-  await expect(page.locator(".pg-note")).toContainText("다음엔 선을 눌러 오른쪽 창 ‘선’ 탭에서 봅니다");
+  await expect(page.locator(".pg-note")).toContainText("이후에는 선을 눌러 오른쪽 창 ‘선’ 탭에서 확인합니다");
   // '다음엔 어디서' 는 알림일 뿐 — 스스로 닫힌다(토스트는 아래 바를 가린다: 닫히지 않으면 길잡이가 사라진 채 남았다)
   await expect(page.locator(".pg-note")).toHaveCount(0, { timeout: 12_000 });
   await page.locator(".react-flow__pane").click({ position: { x: 700, y: 650 } });
   await expect(bar(page)).toHaveAttribute("data-tool", "wire_check");
   await bar(page).locator(".pg-guide-later").click();
   await expect(bar(page)).toHaveAttribute("data-tool", "branch");
-  await expect(why(page)).toHaveText("설정을 바꾼 설계를 나란히 비교할 수 있습니다");
+  await expect(why(page)).toHaveText("설정을 바꾼 설계를 비교할 수 있습니다");
   await bar(page).locator(".pg-guide-later").click();
   await expect(bar(page)).toHaveAttribute("data-tool", "strategy_add");
   await bar(page).locator(".pg-guide-go").click();
@@ -114,7 +114,7 @@ test("대안 만들기 [해 보기] → 대안이 생기고 되돌리기 한 번
   const before = await page.locator(".pg-node").count();
   await bar(page).locator(".pg-guide-go").click();
   await expect.poll(() => page.locator(".pg-node").count()).toBeGreaterThan(before);
-  await expect(page.locator(".pg-note")).toContainText("다음엔 노드를 고르고 Ctrl+K ‘대안’으로도 됩니다");
+  await expect(page.locator(".pg-note")).toContainText("이후에는 노드를 선택하고 Ctrl+K ‘대안’으로도 실행할 수 있습니다");
   await page.keyboard.press("Control+z");
   await expect.poll(() => page.locator(".pg-node").count()).toBe(before);
 });
@@ -159,7 +159,7 @@ test("AI 길잡이: 상태·적용 도구를 보내고 · 답(2개 중 1 · 넘�
   await signIn(page);
   const seen = await answer(page, ok([
     { feature: "branch", label: "대안 만들기", why: "계산을 마쳤고 대안이 없습니다. 설정을 바꾼 설계를 나란히 볼 수 있습니다." },
-    { feature: "records", label: "기록함", why: "과거로 돌려 본 기록을 모아 볼 수 있습니다." }]));
+    { feature: "records", label: "기록함", why: "백테스트 기록을 모아 확인할 수 있습니다." }]));
   await openWith(page, FULL);
   await runAll(page);
   await bar(page).locator(".pg-guide-ai").click();

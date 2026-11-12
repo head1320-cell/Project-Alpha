@@ -111,7 +111,7 @@ def merge_lineage(*parts: Mapping[str, Any] | None) -> dict:
     """계보 합치기(순수). `pit` 은 가장 약한 값, `practice`·`overlay` 는 OR, `sources` 는 합집합.
 
     - `practice` — mock 게이트를 지나 **합성값**을 썼다(합성).
-    - `pit` — `pit`(시점 고정) · `unknown`(모름) · `forward_only`(지금 시점 전용 — 과거에 쓰면 룩어헤드).
+    - `pit` — `pit`(시점 고정) · `unknown`(모름) · `forward_only`(현재 시점 전용 — 과거에 쓰면 룩어헤드).
     - `overlay` — 오늘 계산한 노출 조절을 얹은 비중(과거 전체에 쓰면 룩어헤드).
     """
     pit: str | None = None

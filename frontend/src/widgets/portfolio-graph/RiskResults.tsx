@@ -99,7 +99,7 @@ export function VarEsResult({ v }: { v: Dict }) {
     <>
       <Meta v={v} />
       <Lead value={krw(h.var_amount)}>하루 동안 {pc(cl, 0)} 확률로 손실이 이 금액을 넘지 않았습니다 — 과거 그대로</Lead>
-      <h4 className="pg-h4">세 방법을 나란히 (합치지 않습니다)</h4>
+      <h4 className="pg-h4">세 방법 비교 (결합하지 않습니다)</h4>
       <Bars rows={[
         { name: "과거 그대로", value: num(h.var_amount), text: krw(h.var_amount) },
         { name: "정규분포", value: num(n.var_amount), text: krw(n.var_amount) },
@@ -173,7 +173,7 @@ export function McVarResult({ v }: { v: Dict }) {
       <Meta v={v} />
       <Lead value={krw(varAmt)}>{hp}일 동안 {pc(cl, 0)} 확률로 손실이 이 금액을 넘지 않았습니다 — 모의 경로 {fx(r.n_simulations, 0)}개</Lead>
       {r.histogram ? <LossTail h={r.histogram as Dict} varAmt={varAmt} esAmt={esAmt} /> : null}
-      {r.histogram ? <p className="pg-ff-legend">진한 막대 = VaR 보다 더 잃은 경로(손실 꼬리) · 점선 = 꼬리의 평균(ES)</p> : null}
+      {r.histogram ? <p className="pg-ff-legend">진한 막대 = VaR 초과 손실 경로(손실 꼬리) · 점선 = 꼬리 평균(ES)</p> : null}
       <KV rows={[
         ["꼬리의 평균 손실(ES)", krw(esAmt)],
         ["추정 오차(표준오차)", `±${krw(r.var_std_error)}`],
@@ -203,7 +203,7 @@ export function VolModelsResult({ v }: { v: Dict }) {
         ["충격이 반으로 줄기까지", num(g.half_life_days) === null ? "—" : `${fx(g.half_life_days, 1)}일`],
         ["표본 안 적합(AIC · BIC)", `${String(ms.aic_winner ?? "—")} · ${String(ms.bic_winner ?? "—")}`],
       ]} />
-      <p className="pg-note">AIC·BIC 는 이 표본에 얼마나 맞는지입니다 — 앞날을 더 잘 맞힌다는 뜻이 아닙니다.</p>
+      <p className="pg-note">AIC·BIC 는 이 표본에 대한 적합도(표본내)입니다 — 향후 예측력이 높다는 뜻이 아닙니다.</p>
       <InputsTable r={r} />
     </>
   );
@@ -294,7 +294,7 @@ export function DccResult({ v }: { v: Dict }) {
           );
         })}</tbody>
       </table>
-      <p className="pg-note">상관은 함께 움직인 정도입니다 — 한쪽이 다른 쪽을 움직인다는 뜻이 아닙니다.</p>
+      <p className="pg-note">상관은 동조 정도입니다 — 인과를 뜻하지 않습니다.</p>
       <InputsTable r={r} />
     </>
   );

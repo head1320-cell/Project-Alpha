@@ -146,7 +146,7 @@ export function parseFile(text: string): ParseResult {
       continue;
     }
     const wp = waypointsOf(e.waypoints);
-    if (wp.bad) problems.push(`링크 #${i + 1} 의 경유점이 숫자 자리가 아니라 버렸습니다 — 선은 그대로 잇습니다.`);
+    if (wp.bad) problems.push(`링크 #${i + 1} 의 경유점이 숫자가 아니라 무시했습니다 — 선은 그대로 연결합니다.`);
     edges.push({
       id: typeof e.id === "string" && e.id ? e.id
         : `${e.source}.${e.source_port}->${e.target}.${e.target_port}`,

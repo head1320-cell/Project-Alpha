@@ -49,7 +49,7 @@ REASONS = {
     "circuit_open": "Claude 호출이 연달아 실패해 잠시 멈췄습니다. 1분쯤 뒤에 다시 물어보십시오",
     "config": "서버 설정 CANVAS_ASSIST_HOURLY_LIMIT 값이 0 이상의 정수가 아닙니다",
     "bad_graph": "그래프 문서를 읽을 수 없습니다(형식·버전·순환을 먼저 수정하십시오)",
-    "no_facts": "지금 그래프의 계산 결과가 없습니다. 계산한 뒤에 풀어 쓸 수 있습니다",
+    "no_facts": "지금 그래프의 계산 결과가 없습니다. 계산한 뒤 AI 해설을 받을 수 있습니다",
     "stale_facts": "보낸 계산 결과 확인 실패(그래프가 바뀌었거나 서버가 다시 시작했습니다). 재계산하면 풀어 쓸 수 있습니다",
     "no_target": "그래프에 없는 노드·선입니다",
     "no_facts_target": "이 노드·선의 지금 계산 결과가 없습니다. 계산한 뒤에 물을 수 있습니다",
@@ -189,7 +189,7 @@ def narrate(graph: Any, facts: list[dict], username: str, *, catalog: Callable[[
 def ask(graph: Any, target: dict, question: str, previous: dict | None, facts: list[dict], records: list[dict],
         username: str, *, catalog: Callable[[], dict], relate: Callable[[Any], dict], key: bytes,
         client: ClaudeClient | None = None) -> dict:
-    """AI3 — 고른 노드·선의 범위(조상 전부 + 그것 + 바로 아래) 안에서 ★봉인이 지금 문서로 확인되는 설명·기록만★ 근거로 답한다.
+    """AI3 — 선택한 노드·선의 범위(조상 전부 + 그것 + 바로 아래) 안에서 ★봉인이 지금 문서로 확인되는 설명·기록만★ 근거로 답한다.
     대상 자신의 확인된 결과가 없으면 부르지 않는다. 범위 밖에서 깨진 것은 말하지 않는다(쓰지 않으니까)."""
     if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list) or not isinstance(graph.get("edges"), list):
         return _unavailable("bad_graph", {"dropped": []})

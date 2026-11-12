@@ -139,7 +139,7 @@ def test_clean_constraint_report_is_confirmed():
     """짝 — 상태 ok · 빠진 것 없음 · 투영 아님 이면 지금처럼 확인."""
     t = _trust({"status": "ok", "violations": [], "binding": [], "relaxed": [], "notes": [], "projected": False,
                 "unapplied": []})
-    assert "정한 제약 안에서 계산했습니다." in _texts(t, ex.CONFIRMED)
+    assert "지정한 제약 범위에서 산출했습니다." in _texts(t, ex.CONFIRMED)
 
 
 def test_approx_is_not_called_confirmed():
@@ -147,7 +147,7 @@ def test_approx_is_not_called_confirmed():
                 "binding": [], "relaxed": ["turnover"], "notes": [], "projected": False, "unapplied": []})
     assert not any("제약 안에서" in x for x in _texts(t, ex.CONFIRMED))
     assumed = " ".join(_texts(t, ex.ASSUMED))
-    assert "회전율" in assumed and "느슨" in assumed and "어긋난 제약 1개" in assumed
+    assert "회전율" in assumed and "완화" in assumed and "위반된 제약 1개" in assumed
 
 
 def test_projected_is_not_called_confirmed():
@@ -155,14 +155,14 @@ def test_projected_is_not_called_confirmed():
     t = _trust({"status": "ok", "violations": [], "binding": [], "relaxed": [], "notes": [], "projected": True,
                 "unapplied": []})
     assert not any("제약 안에서" in x for x in _texts(t, ex.CONFIRMED))
-    assert any("깎아 맞췄" in x and "회전율" in x for x in _texts(t, ex.ASSUMED))
+    assert any("사후 조정" in x and "회전율" in x for x in _texts(t, ex.ASSUMED))
 
 
 def test_unapplied_caps_become_unknown_lines():
     t = _trust({"status": "ok", "violations": [], "binding": [], "relaxed": [], "notes": [], "projected": False,
                 "unapplied": [{"kind": "group_cap", "group": "바이오", "cap_pct": 20.0,
                                "text": "업종 상한 ‘바이오’ 20%는 적용되지 않았습니다 — 이 종목들 중 그 업종이 없습니다."}]})
-    assert "적용된 제약 안에서 계산했습니다." in _texts(t, ex.CONFIRMED)
+    assert "적용된 제약 범위에서 산출했습니다." in _texts(t, ex.CONFIRMED)
     assert any("바이오" in x for x in _texts(t, ex.UNKNOWN))
 
 
@@ -177,10 +177,10 @@ def test_infeasible_stays_failed():
 @pytest.mark.parametrize("conditional", [False, True])
 def test_estimate_says_it_does_not_use_its_returns_input(conditional):
     out = ex.explain_estimate({"settings": {"conditional": conditional}}, {}, None)
-    assert any("이어진 수익률" in f and "쓰지 않습니다" in f for f in out["facts"])
+    assert any("연결된 수익률" in f and "사용하지 않습니다" in f for f in out["facts"])
 
 
 def test_optimizer_explain_does_not_carry_the_estimate_line():
     """짝 — 그 문장은 추정 노드의 것이다(옵티마이저는 수익률을 실제로 쓴다)."""
     out = ex.explain_optimizer({"weights": {"A": 100.0}, "model": "mvo"}, {}, None)
-    assert not any("이어진 수익률" in f for f in out["facts"])
+    assert not any("연결된 수익률" in f for f in out["facts"])

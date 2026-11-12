@@ -32,7 +32,7 @@ def _current_weights(inputs: dict, p: CurrentWeightsParams) -> pg.NodeOutput:
     tickers = [str(t) for t in u.get("tickers") or []]
     given = u.get("weights")
     if not given:
-        raise pg.NodeFailure("유니버스 노드에 ‘현재 비중’을 적지 않았습니다 — 균등 비중으로 바꿔 계산하지 않습니다. "
+        raise pg.NodeFailure("유니버스 노드에 ‘현재 비중’을 입력하지 않았습니다 — 균등 비중으로 대체해 계산하지 않습니다. "
                              "유니버스 노드 설정의 ‘현재 비중’(전문가)에 보유 비중을 입력하십시오.")
     outside = [str(k) for k in given if str(k) not in tickers]
     if outside:
@@ -56,12 +56,12 @@ def _explain_current(view: dict, prov: dict, params: Any) -> dict:
     facts = [f"{len(w)}종목 — 유니버스 노드의 ‘현재 비중’을 그대로 썼습니다(합 100% 로 맞춤)."]
     zero = view.get("zero_filled") or []
     if zero:
-        facts.append(f"비중을 적지 않은 {len(zero)}종목은 0% 입니다.")
+        facts.append(f"비중을 입력하지 않은 {len(zero)}종목은 0% 입니다.")
     trust = [_t(CONFIRMED, "사용자가 적은 비중입니다 — 계산으로 만든 값이 아닙니다."),
              _t(ASSUMED, "적은 비중이 지금 계좌와 같은지는 확인하지 않았습니다(계좌를 읽지 않습니다)."),
-             _t(UNKNOWN, "공분산을 함께 내지 않습니다 — 위험 분해에 이으면 사유와 함께 멈춥니다.")]
+             _t(UNKNOWN, "공분산을 함께 출력하지 않습니다 — 위험 분해에 연결하면 사유와 함께 중단됩니다.")]
     return {"title": "현재 보유 비중입니다", "facts": facts, "trust": trust,
-            "unmeasured": ["현재 비중의 기대 수익·위험(공분산) — 목표와 나란히 보려면 충격 노드에 잇습니다"]}
+            "unmeasured": ["현재 비중의 기대수익률·위험(공분산) — 목표와 비교하려면 충격 노드에 연결합니다"]}
 
 
 def register(registry: pg.Registry) -> None:

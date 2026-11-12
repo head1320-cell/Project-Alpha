@@ -73,7 +73,7 @@ def test_an_empty_period_means_the_whole_common_record(client, db):
     ref = _route({**_RUN, "strategy_ids": ids, "start_date": first, "end_date": last,
                                           "save": False})
     assert m["view"]["summary"] == ref["summary"]
-    assert "함께 기록된 전체" in " ".join(m["explain"]["facts"])
+    assert "공통 기록 전체" in " ".join(m["explain"]["facts"])
 
 
 def test_mock_sources_make_a_practice_result(client):

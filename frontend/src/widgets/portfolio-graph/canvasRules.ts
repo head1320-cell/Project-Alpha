@@ -15,7 +15,7 @@ import { usePortfolioGraph, type DeleteResult } from "./store";
  */
 export function deleteNote(r: DeleteResult | null): string | null {
   if (!r) return null;
-  const head = r.nodes ? `노드 ${r.nodes}개를 지웠습니다` : `선 ${r.edges}개를 끊었습니다`;
+  const head = r.nodes ? `노드 ${r.nodes}개를 삭제했습니다` : `선 ${r.edges}개의 연결을 해제했습니다`;
   const more = [r.results ? `그중 ${r.results}개는 계산 결과가 있었습니다` : "",
                 r.downstream ? `하류 노드 ${r.downstream}개는 이제 예전 결과입니다` : ""].filter(Boolean);
   return `${head}${more.length ? ` — ${more.join(" · ")}` : ""}.`;
@@ -23,8 +23,8 @@ export function deleteNote(r: DeleteResult | null): string | null {
 
 /** 같은 쪽 점끼리 이으려 할 때의 사유 — 놓은 뒤 토스트·끄는 중 사유 글·다시 꽂기가 같은 말을 쓴다. */
 export const SAME_SIDE = {
-  source: "내는 점끼리는 이을 수 없습니다 — 내는 점에서 받는 점으로 잇습니다.",
-  target: "받는 점끼리는 이을 수 없습니다 — 내는 점에서 받는 점으로 잇습니다.",
+  source: "출력 포트끼리는 연결할 수 없습니다 — 출력 포트에서 입력 포트로 연결합니다.",
+  target: "입력 포트끼리는 연결할 수 없습니다 — 출력 포트에서 입력 포트로 연결합니다.",
 } as const;
 /** CF1 — 예전 크기(폭 150)로 놓인 문서를 불러왔을 때. 자동으로 옮기지 않는다(사용자의 배치를 말없이 바꾸지 않음). */
 export const OVERLAP_NOTE = "예전 크기로 놓인 문서라 노드가 겹칩니다. 위 도구줄의 ‘자동 정리’를 누르면 다시 놓습니다.";
@@ -63,7 +63,7 @@ export function useWireHandlers() {
         : wireProblem(from.type === "source"
             ? { source: from.nodeId, sourceHandle: from.id ?? null, target: to.nodeId, targetHandle: to.id ?? null }
             : { source: to.nodeId, sourceHandle: to.id ?? null, target: from.nodeId, targetHandle: from.id ?? null });
-      if (why) st.setNote(`${why} 선은 그대로 두었습니다.`);
+      if (why) st.setNote(`${why} 선은 그대로 유지했습니다.`);
     }
     st.setReconnecting(null);
     void edge;

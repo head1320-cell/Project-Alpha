@@ -265,7 +265,7 @@ def test_manual_shares_that_do_not_add_up_fail_pair(market):
 
 def test_budgets_must_add_up_to_100(market):
     ok = _node(method="risk_budget", budgets={"s1": 50, "s2": 30, "s3": 20})
-    assert ok["status"] == "ok" and "내가 정한 위험 예산" in _trust(ok)
+    assert ok["status"] == "ok" and "사용자가 지정한 위험 예산" in _trust(ok)
     bad = _node(method="risk_budget", budgets={"s1": 50, "s2": 30, "s3": 30})
     assert bad["status"] == "failed" and "100" in bad["reason"]
 

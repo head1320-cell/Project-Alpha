@@ -57,7 +57,7 @@ export function captionLines(r: { name?: string; now: Date; computed: boolean; p
 /** 받은 뒤 알림 — 띠에 적은 성격을 그대로 말한다(띠는 그림 안이라 화면에서 다시 알린다). */
 export function exportNote(lines: string[]): string {
   const nature = lines.slice(1);
-  return nature.length ? `그림(PNG)을 받았습니다. 그림 아래에 적었습니다: ${nature.join(" · ")}.` : "그림(PNG)을 받았습니다.";
+  return nature.length ? `그림(PNG)을 저장했습니다. 그림 아래에 표시했습니다: ${nature.join(" · ")}.` : "그림(PNG)을 저장했습니다.";
 }
 
 /** html-to-image `filter` — 겹침 클래스가 하나라도 있으면 뺀다. */

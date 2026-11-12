@@ -76,9 +76,9 @@ test("P1 · 기대수익률 추정은 이어진 수익률을 쓰지 않는다고
   await openCanvas(page);
   await run(page);
   await tab(page, "story");
-  await expect(page.locator('.pg-step[data-node-id="estimate"]')).toContainText("이어진 수익률은 이 단계에서 쓰지 않습니다");
+  await expect(page.locator('.pg-step[data-node-id="estimate"]')).toContainText("연결된 수익률은 이 단계에서 사용하지 않습니다");
   await expect(page.locator('.pg-step[data-node-id="optimizer"]'), "짝: 옵티마이저 설명에는 없다")
-    .not.toContainText("이어진 수익률은");
+    .not.toContainText("연결된 수익률은");
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

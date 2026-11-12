@@ -224,7 +224,7 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
               ))}
             </div>
           </div>
-          <p className="mc-card-note">12개월 성과는 각 전략의 현재 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치입니다(합성 데이터에서는 합성 시세). 앞으로의 수익을 보장하지 않습니다.</p>
+          <p className="mc-card-note">12개월 성과는 각 전략의 현재 비중을 지난 12개월 ETF 수익률에 적용해 본 추정치입니다(합성 데이터에서는 합성 시세). 향후 수익률을 보장하지 않습니다.</p>
           {recommend.data_lag_note && <p className="mc-card-note" data-server>{recommend.data_lag_note}</p>}
         </div>
       </div>

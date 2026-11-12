@@ -472,7 +472,7 @@ test("R8b · 노드 도구줄은 고른 카드에만 단다 — 화면 이동 �
 /** 미니맵 칸 — React Flow 는 칸(rect)의 x·y 를 노드의 캔버스 자리로 쓴다. */
 const mmCell = (page: Page, x: number, y: number) => page.locator(`.pg-minimap rect.react-flow__minimap-node[x="${x}"][y="${y}"]`);
 
-test("U1 · 미니맵을 켜도 카드를 끄는 걸음마다 다시 그리는 미니맵 칸은 그 카드 하나 (짝: 처음 열 때 칸을 모두 센다 · 다른 카드를 고르면 그 칸 테두리가 파랑 · 고른 노드를 전략으로 묶으면 그 칸이 띠 색)", async ({ page }) => {
+test("U1 · 미니맵을 켜도 카드를 끄는 걸음마다 다시 그리는 미니맵 칸은 그 카드 하나 (짝: 처음 열 때 칸을 모두 센다 · 다른 카드를 고르면 그 칸 테두리가 파랑 · 선택한 노드를 전략으로 묶으면 그 칸이 띠 색)", async ({ page }) => {
   const doc = chainDoc(10);                                                // 40노드
   await open(page, doc, true, true);
   const boot = await rrTake(page);

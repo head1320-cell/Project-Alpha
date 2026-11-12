@@ -23,7 +23,7 @@ export function OrdersResult({ v }: { v: Dict }) {
   const pre = (v.pretrade as Dict) ?? {};
   return (
     <>
-      <p className="pg-note">주문은 나가지 않습니다 — 무엇을 사고팔지 미리 본 목록입니다.</p>
+      <p className="pg-note">주문은 전송하지 않습니다 — 매매 내역을 사전 산출한 목록입니다.</p>
       <KV rows={[["평가 금액", won(v.portfolio_value)], ["사는 금액", won(s.buy_notional)], ["파는 금액", won(s.sell_notional)],
                  ["예상 비용", won(s.est_cost)], ["사전 점검", pre.can_approve ? "승인 가능" : "승인 불가"]]} />
       <h4 className="pg-h4">주문</h4>
@@ -32,7 +32,7 @@ export function OrdersResult({ v }: { v: Dict }) {
         <tbody>{orders.map((o) => (
           <tr key={String(o.stock_code)}>
             <td className="pg-td-name">{String(o.corp_name ?? o.stock_code)}</td>
-            <td className={o.side === "sell" ? "pg-neg" : ""}>{o.side === "buy" ? "사기" : o.side === "sell" ? "팔기" : String(o.side ?? "—")}</td>
+            <td className={o.side === "sell" ? "pg-neg" : ""}>{o.side === "buy" ? "매수" : o.side === "sell" ? "매도" : String(o.side ?? "—")}</td>
             <td className="pg-td-num">{num(o.quantity)?.toLocaleString("ko-KR") ?? "—"}</td>
             <td className="pg-td-num">{won(o.notional)}</td>
           </tr>
@@ -74,8 +74,8 @@ export function TargetResult({ v }: { v: Dict }) {
             {num(tv.gross_after) !== null ? ` (gross ${pct(tv.gross_after)} · net ${pct(tv.net_after)})` : ""}</p>
           <ul className="pg-list pg-ls-blocked-l">
             <li>차입 가능 여부가 연동돼 있지 않습니다 — 빌릴 수 있는지 늘 모름입니다.</li>
-            <li>KIS 주문 유형에 공매도가 없습니다 — 사기·팔기 주문은 일반 현금 주문입니다.</li>
-            <li>실행기 미보유 종목의 매도를 건너뜁니다 — 숏 진입이 주문으로 나가지 않습니다.</li>
+            <li>KIS 주문 유형에 공매도가 없습니다 — 매수·매도 주문은 일반 현금 주문입니다.</li>
+            <li>실행기 미보유 종목의 매도를 건너뜁니다 — 숏 진입이 주문으로 전송되지 않습니다.</li>
           </ul>
         </div>
       )}
@@ -91,8 +91,8 @@ export function JournalResult({ v }: { v: Dict }) {
     <>
       <KV rows={[["제목", String(v.title ?? "")], ["결정", String(rec.decision ?? "")],
                  ["목표 상태", t.status === "executable" ? "실행 가능" : "연구용"],
-                 ["주문 요약", links.orders ? "함께 남깁니다" : "없습니다"], ["충격 점검", links.stress ? "함께 남깁니다" : "없습니다"]]} />
-      {rec.thesis ? <p className="pg-note">이유: {String(rec.thesis)}</p> : <p className="pg-warn">이유를 적지 않았습니다.</p>}
+                 ["주문 요약", links.orders ? "함께 기록합니다" : "없습니다"], ["충격 점검", links.stress ? "함께 기록합니다" : "없습니다"]]} />
+      {rec.thesis ? <p className="pg-note">이유: {String(rec.thesis)}</p> : <p className="pg-warn">근거를 입력하지 않았습니다.</p>}
     </>
   );
 }

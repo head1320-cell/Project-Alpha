@@ -89,8 +89,8 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
       <div id="pg-left-panel-add" role={procedure ? "tabpanel" : undefined}
            aria-labelledby={procedure ? "pg-left-tab-add" : undefined} hidden={tab !== "add"}>
       {next && next.items.length > 0 && !needle && (
-        <section className="pg-palette-next" aria-label="지금 이을 수 있는 노드">
-          <h4 className="pg-palette-next-h">‘{next.from}’ 뒤에 이을 수 있습니다</h4>
+        <section className="pg-palette-next" aria-label="현재 연결할 수 있는 노드">
+          <h4 className="pg-palette-next-h">‘{next.from}’ 뒤에 연결할 수 있습니다</h4>
           {next.items.map((c) => (
             <button key={c.type} type="button" className="pg-palette-next-item" data-kind={c.type} onClick={() => onAdd(c.type)}>
               <i style={{ background: STAGE_VAR[c.stage] ?? "var(--pg-mute)" }} aria-hidden="true" />
@@ -143,7 +143,7 @@ export function NodePalette({ catalog, stages, initialQuery = "", onAdd, onTempl
         {onGoal && (
           <button type="button" className="pg-goal-entry" onClick={onGoal}>
             <b>목표로 시작하기</b>
-            <span>무엇을 하려는지 · 종목 · 기간을 고르면 흐름을 만들어 바로 계산합니다.</span>
+            <span>작업 목적 · 종목 · 기간을 선택하면 흐름을 구성해 바로 계산합니다.</span>
           </button>
         )}
         {TEMPLATES.map((t) => (
@@ -187,7 +187,7 @@ function MyBlocks() {
       {blocks.map((b, i) => (
         <div key={`${b.label}-${i}`} className="pg-block" data-block={b.label}>
           <button type="button" className="pg-block-add" onClick={() => insert(i)}
-                  title={b.kind === "strategy" ? "새 전략 띠로 넣고 포트폴리오에 잇습니다" : "그룹으로 넣습니다"}>
+                  title={b.kind === "strategy" ? "새 전략 띠로 추가하고 포트폴리오에 연결합니다" : "그룹으로 추가합니다"}>
             <b>{b.label}</b>
             <span>{b.kind === "strategy" ? "전략" : "그룹"} · 노드 {b.nodes.length}개</span>
           </button>

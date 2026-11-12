@@ -21,7 +21,7 @@ function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="pg-kv">{rows.map(([a, b]) => (<div key={a}><dt>{a}</dt><dd>{b}</dd></div>))}</dl>;
 }
 
-const VERDICT: Record<string, string> = { trade: "거래할 가치가 있습니다", hold: "그대로 두는 게 낫습니다", undetermined: "판단 불가" };
+const VERDICT: Record<string, string> = { trade: "거래할 가치가 있습니다", hold: "현재는 리밸런싱하지 않는 편이 유리합니다", undetermined: "판단 불가" };
 
 /** ★이 웨이브의 한 곳★ 저울 — 막대 = 보유 기간 동안의 효용 개선, 선 = 비용 × (1 + 머뭇거림 폭). */
 function Scale({ gain, cost, mult, over }: { gain: number; cost: number; mult: number; over: boolean }) {
@@ -67,7 +67,7 @@ export function RebalanceResult({ v }: { v: Dict }) {
         ["보유 기간", `${String(b.horizon_days ?? "—")}영업일`],
       ]} />
       {(b.provenance as Dict)?.self_referential ? (
-        <p className="pg-note">편익을 잰 기대수익이 이 목표를 고른 바로 그 추정입니다 — 이득은 구조적으로 보장되고, 전망이 맞았다는 증거가 아닙니다.</p>
+        <p className="pg-note">편익 산출에 쓴 기대수익률이 이 목표를 산출한 바로 그 추정치입니다 — 이득은 구조적으로 보장되며, 전망의 적중을 뜻하지 않습니다.</p>
       ) : null}
       {Object.keys(band).length > 0 && (
         <table className="pg-table pg-scen">
@@ -121,7 +121,7 @@ export function PairResult({ v }: { v: Dict }) {
     <>
       <KV rows={[
         ...Object.entries(w).map(([k, x]) => (typeof x === "number" && Number.isFinite(x)
-          ? [`${x >= 0 ? "사기" : "팔기"} · ${labels[k] ?? k}`, `${Math.abs(x).toFixed(1)}`]
+          ? [`${x >= 0 ? "매수" : "매도"} · ${labels[k] ?? k}`, `${Math.abs(x).toFixed(1)}`]
           : [`${labels[k] ?? k}`, "— (모름)"]) as [string, ReactNode]),
         ["순 β", r.net_beta === null ? "모름" : String(r.net_beta)],
       ]} />
@@ -137,7 +137,7 @@ export function ImpactResult({ v }: { v: Dict }) {
     <>
       <div className="pg-risk-lead">
         <span className="pg-risk-big">{num(r.total_impact_bps) === null ? "—" : `${(r.total_impact_bps as number).toFixed(1)}bp`}</span>
-        <span className="pg-risk-say">주문이 가격을 이만큼 밀 것으로 봅니다 — 예상 비용 {krw(r.estimated_cost_krw)}</span>
+        <span className="pg-risk-say">주문의 예상 시장충격입니다 — 예상 비용 {krw(r.estimated_cost_krw)}</span>
       </div>
       <KV rows={[["영구 · 일시", `${String(r.permanent_impact_bps ?? "—")} · ${String(r.temporary_impact_bps ?? "—")}bp`],
                  ["거래대금 대비", pc(num(r.participation_rate) === null ? null : (r.participation_rate as number) * 100, 2)]]} />

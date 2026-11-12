@@ -403,7 +403,7 @@ test("키보드 이동(BM C1): Alt+→ 다음 단계 · Alt+← 앞 단계 · Al
   await expect(node(page, "universe")).toHaveClass(/pg-node--selected/);
   await page.keyboard.press("Alt+ArrowDown");
   await expect(node(page, "universe")).not.toHaveClass(/pg-node--selected/);
-  await expect(page.locator(".pg-sr-live")).toContainText("노드를 골랐습니다");
+  await expect(page.locator(".pg-sr-live")).toContainText("노드를 선택했습니다");
 });
 
 for (const scheme of ["light", "dark"] as const) {
@@ -1153,7 +1153,7 @@ test("포트폴리오 노드의 입력 자리(BN N1): 이은 자리 + 빈 자리
   const labels = pf.params.labels as Record<string, string>;
   for (const [port, label] of Object.entries(labels)) await expect(portName(port)).toHaveText(label);
   // 빈 자리는 선택 입력 — 이름 뒤에 "선택"(CF2 빈 원 소켓)이 붙는다.
-  await expect(portName("s3")).toHaveText("전략 더 잇기 선택");
+  await expect(portName("s3")).toHaveText("전략 추가 연결 선택");
   await expect(portName("s3").locator(".pg-port-opt")).toHaveText(" 선택");
   await addStrategy(page, "tpl:rebalance");
   await expect(handles()).toHaveCount(4);
@@ -1170,7 +1170,7 @@ test("포트폴리오 노드의 입력 자리(BN N1): 이은 자리 + 빈 자리
   await expect(handles()).toHaveCount(3);
   await run(page);
   await page.locator(`.pg-group--strategy[data-group-id="${third.id}"] .pg-group-toggle`).click();
-  await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toContainText("포트폴리오에 잇지 않았습니다");
+  await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toContainText("포트폴리오에 연결하지 않았습니다");
   await expect(page.locator(`.pg-snode[data-group-id="${third.id}"] .pg-snode-share`)).toHaveAttribute("data-share", "");
 });
 
@@ -1323,7 +1323,7 @@ test("대안 승격(BN N2): '이 대안을 원본으로' — 바꾼 설정이 �
   const n0 = doc.nodes.length;
   const before = JSON.stringify(doc.nodes.find((n) => n.id === "optimizer")!.params.constraints ?? null);
   await page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-promote`).click();
-  await expect(page.locator(".pg-note")).toContainText("원본으로 옮겼습니다");
+  await expect(page.locator(".pg-note")).toContainText("원본에 반영했습니다");
   doc = (await wip(page)) as BDoc;
   expect(doc.branches ?? []).toEqual([]);
   expect(doc.nodes.find((n) => n.id === "optimizer")!.params.constraints).toEqual({ max_weight_pct: 20 });

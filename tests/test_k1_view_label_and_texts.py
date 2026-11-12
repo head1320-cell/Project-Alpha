@@ -31,7 +31,7 @@ from tests.test_graph_handoff_rules import gappy  # noqa: E402, F401
 
 NAMES = ["005930", "000660", "035420"]
 VIEW = [{"assets": ["005930"], "direction": 1, "magnitude_pct": 4.0, "confidence": 60}]
-MARKET_SENTENCE = "생각을 반영한 비중을 만들지 못해 시가총액 비중을 썼습니다."
+MARKET_SENTENCE = "투자 뷰를 반영한 비중을 산출하지 못해 시가총액 비중을 적용했습니다."
 
 
 def _R():
@@ -142,7 +142,7 @@ def _opt_view(cap: list[str]) -> dict:
 
 def test_all_caps_missing_says_split_equally():
     texts = _texts(ex.explain_optimizer(_opt_view(list(NAMES)), {}, None))
-    assert any("똑같이" in t for t in texts)
+    assert any("동일 가중" in t for t in texts)
     assert not any("중앙값" in t for t in texts)
 
 
@@ -150,7 +150,7 @@ def test_some_caps_missing_says_median():
     texts = _texts(ex.explain_optimizer(_opt_view(["035420"]), {}, None))
     line = next(t for t in texts if "시가총액" in t and "중앙값" in t)
     assert "1개 종목" in line
-    assert not any("똑같이" in t for t in texts)
+    assert not any("동일 가중" in t for t in texts)
 
 
 def test_the_sentences_match_what_the_engine_does(monkeypatch):

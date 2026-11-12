@@ -92,7 +92,7 @@ async function pick(page: Page, ids: string[]) {
   await blank(page);
   await node(page, ids[0]).click({ position: HEAD });
   for (const id of ids.slice(1)) await node(page, id).click({ position: HEAD, modifiers: ["Control"] });
-  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
+  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 선택`);
 }
 /** 선 위 한 점(길이의 t)의 화면 좌표. */
 const onWire = (page: Page, id: string, t = 0.5) => page.locator(`.react-flow__edge[data-id="${id}"] path.react-flow__edge-path`).evaluate((el, k) => {

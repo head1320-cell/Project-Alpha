@@ -246,7 +246,7 @@ test("고른 방식 대신 다른 비중이면 카드에 '고른 방식 대신�
     trust.push({ state: "assumed", kind: "fallback", text: "‘리스크 패리티’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다." });
   });
   await run(page);
-  await expect(card.locator(".pg-tag--fallback")).toHaveText("고른 방식 대신함");
+  await expect(card.locator(".pg-tag--fallback")).toHaveText("선택 방식 대체");
   // 가정 칩의 수는 대체를 세지 않는다 — 대체 앞과 같은 글.
   const assumeBefore = (before ?? "").match(/가정 (있음|\d+개)/)?.[0] ?? null;
   const assumeAfter = ((await card.locator(".pg-node-ev").textContent()) ?? "").match(/가정 (있음|\d+개)/)?.[0] ?? null;

@@ -460,12 +460,12 @@ export default function DevUiPage() {
         <Specimen name="Answer" from="tx" note="문장 + 숫자 1~3 + 근거 칩 + 다음 행동 하나.">
           <Tx.Answer sentence="(표본) 서버가 준 값을 끼운 한 문장이 여기에 옵니다."
             figures={[{ label: "스트레스", value: "52/100" }, { label: "확률", value: pct(0.54, 0) }]}
-            chips={[{ label: "합성 데이터", tone: "practice" }, { label: "가정 2개", tone: "assumed" }, { label: "재지 않은 것 1가지", tone: "unmeasured" }]}
+            chips={[{ label: "합성 데이터", tone: "practice" }, { label: "가정 2개", tone: "assumed" }, { label: "미측정 항목 1가지", tone: "unmeasured" }]}
             action={<button type="button" className="devui-tx-act">매크로 분석 보기</button>} />
         </Specimen>
         <Specimen name="Chips" from="tx">
           <Tx.Chips items={[{ label: "합성 데이터", tone: "practice" }, { label: "가정 1개", tone: "assumed" }, { label: "N/A 1개", tone: "unknown" },
-                            { label: "재지 않은 것", tone: "unmeasured" }, { label: "정상", tone: "ok" }, { label: "안내", tone: "info" }]} />
+                            { label: "미측정 항목", tone: "unmeasured" }, { label: "정상", tone: "ok" }, { label: "안내", tone: "info" }]} />
         </Specimen>
         <Specimen name="Section" from="tx">
           <Tx.Section title="작업 선택" sub="한 절은 한 가지 일만 합니다.">

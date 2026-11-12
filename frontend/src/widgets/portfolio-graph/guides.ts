@@ -65,8 +65,8 @@ export const ALIGN_ITEMS: { kind: AlignKind; label: string; min: number }[] = [
   { kind: "top", label: "위 맞추기", min: 2 },
   { kind: "middle", label: "세로 가운데 맞추기", min: 2 },
   { kind: "bottom", label: "아래 맞추기", min: 2 },
-  { kind: "hspace", label: "가로 간격 똑같이", min: 3 },
-  { kind: "vspace", label: "세로 간격 똑같이", min: 3 },
+  { kind: "hspace", label: "가로 간격 균등", min: 3 },
+  { kind: "vspace", label: "세로 간격 균등", min: 3 },
 ];
 
 export function alignRects(rects: (Rect & { id: string })[], kind: AlignKind): Map<string, { x: number; y: number }> {

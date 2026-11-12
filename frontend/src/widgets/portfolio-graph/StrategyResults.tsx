@@ -50,8 +50,8 @@ export function StrategyBacktestResult({ v, explain }: { v: Dict; explain?: Node
   const last = Object.entries((v.last_weights as Record<string, number>) ?? {}).map(([k, w]) => [k, w * 100] as [string, number])
     .sort((a, b) => b[1] - a[1]);
   return (
-    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 그룹을 돌려 봤습니다" after={<>
-      <KV rows={[["기간", `${String(per.start)} ~ ${String(per.end)}${per.whole_record ? " (함께 기록된 전체)" : ""}`],
+    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 그룹을 백테스트했습니다" after={<>
+      <KV rows={[["기간", `${String(per.start)} ~ ${String(per.end)}${per.whole_record ? " (공통 기록 전체)" : ""}`],
                  ["다시 나눈 횟수", `${String(s.n_rebalances ?? "—")}번`], ["거래일", `${String(v.n_trading_days ?? "—")}일`]]} />
       <h4 className="pg-h4">마지막 날 전략 비중</h4>
       <Bars rows={last} labels={names} />
@@ -100,7 +100,7 @@ export function CompanyViewsResult({ v }: { v: Dict }) {
   const labels = (v.labels as Record<string, string>) ?? {};
   return (
     <>
-      <p className="pg-model-type pg-model-type--hypo">지금 시점에만 쓰는 전망입니다</p>
+      <p className="pg-model-type pg-model-type--hypo">현재 시점에만 유효한 전망입니다</p>
       <table className="pg-table">
         <thead><tr><th>종목</th><th>방향</th><th className="pg-td-num">연 크기</th><th className="pg-td-num">확신</th></tr></thead>
         <tbody>{views.map((x) => {
@@ -115,7 +115,7 @@ export function CompanyViewsResult({ v }: { v: Dict }) {
           );
         })}</tbody>
       </table>
-      {num(v.n_user_views) ? <p className="pg-note">투자 뷰 {String(v.n_user_views)}개와 함께 ‘포트폴리오 최적화’로 넘깁니다.</p> : null}
+      {num(v.n_user_views) ? <p className="pg-note">투자 뷰 {String(v.n_user_views)}개와 함께 ‘포트폴리오 최적화’로 전달합니다.</p> : null}
       <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="전망을 만들지 못한 종목" />
     </>
   );
@@ -145,7 +145,7 @@ export function ValuationScoresResult({ v }: { v: Dict }) {
         ))}</tbody>
       </table>
       {unscored.length > 0 && <p className="pg-warn">점수를 내지 못한 종목: {unscored.map((c) => labels[c] ?? c).join(", ")}</p>}
-      <p className="pg-note">점수는 −괴리율입니다. 적정가를 내지 못한 종목은 0으로 치지 않고 아래에 따로 적습니다.</p>
+      <p className="pg-note">점수는 −괴리율입니다. 적정가를 산출하지 못한 종목은 0으로 처리하지 않고 아래에 별도로 표시합니다.</p>
       <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="점수를 매기지 못한 종목" />
     </>
   );
@@ -165,17 +165,17 @@ export function AttributionResult({ v }: { v: Dict }) {
   if ((v.fill_quality as Dict)?.basis === "unavailable") unmeasured.push("체결 품질");
   return (
     <>
-      <KV rows={[["결정한 날", String(v.decision_date)], ["되짚은 날", `${String(v.as_of)} (${String(v.elapsed_days)}일 뒤)`],
+      <KV rows={[["결정일", String(v.decision_date)], ["사후 검토일", `${String(v.as_of)} (${String(v.elapsed_days)}일 뒤)`],
                  ["실제 수익", signed(ret.portfolio_pct, 2)],
                  [`${String(ret.benchmark_label ?? "비교 기준")} 대비`, num(ret.excess_pct) === null ? NOT_MEASURED : signed(ret.excess_pct, 2)],
                  ["기대했던 수익", num(eva.expected_return_pct) === null ? NOT_MEASURED : signed(eva.expected_return_pct, 2)],
                  ["기대와의 차이", num(eva.gap_pct) === null ? NOT_MEASURED : signed(eva.gap_pct, 2)],
                  ["변동성 (기대 → 실제)", `${pct((rc.ex_ante as Dict)?.vol_pct)} → ${pct((rc.ex_post as Dict)?.vol_pct)}`],
-                 ["가격을 잰 종목", `${String(cov.covered ?? 0)}/${String(cov.tickers ?? 0)}`]]} />
+                 ["가격 확인 종목", `${String(cov.covered ?? 0)}/${String(cov.tickers ?? 0)}`]]} />
       {assets.length > 0 && (<><h4 className="pg-h4">종목별 기여</h4><Bars rows={assets} labels={(v.labels as Record<string, string>) ?? {}} /></>)}
       {unmeasured.length > 0 && (
         <>
-          <h4 className="pg-h4">안 잰 것</h4>
+          <h4 className="pg-h4">미측정 항목</h4>
           <div className="pg-chips-static">{unmeasured.map((u) => <span key={u} className="pg-tag pg-tag--unknown">{u}</span>)}</div>
           <p className="pg-note">벤치마크 구성종목 비중과 연결된 실제 체결이 있어야 측정할 수 있습니다 — 비슷한 값으로 채우지 않습니다.</p>
         </>

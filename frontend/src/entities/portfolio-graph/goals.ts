@@ -23,10 +23,10 @@ export interface Goal {
 }
 
 export const GOALS: Goal[] = [
-  { key: "build", title: "새 포트폴리오 만들기", sub: "종목을 고르면 비중을 나누고, 위험과 과거 성과를 함께 봅니다.", tickers: "many", period: true, risk: true },
-  { key: "check", title: "비중의 위험 점검", sub: "정한 비중이 하루에 얼마나 잃을 수 있는지, 위기 충격에서 어떤지 봅니다.", tickers: "many", period: true, risk: false },
-  { key: "timing", title: "타이밍 규칙 시험", sub: "타이밍 신호로 노출을 줄였을 때의 목표 비중과 주문 목록을 봅니다. 주문은 나가지 않습니다.", tickers: "many", period: true, risk: true },
-  { key: "company", title: "기업 하나 깊게", sub: "한 기업의 적정가를 여러 모델로 보고, 가치가 어디쯤 몰려 있는지 봅니다.", tickers: "one", period: false, risk: false },
+  { key: "build", title: "새 포트폴리오 만들기", sub: "종목을 선택하면 비중을 산출하고 위험과 과거 성과를 함께 분석합니다.", tickers: "many", period: true, risk: true },
+  { key: "check", title: "비중의 위험 점검", sub: "지정 비중의 1일 손실 위험(VaR)과 위기 충격 시 손실을 점검합니다.", tickers: "many", period: true, risk: false },
+  { key: "timing", title: "타이밍 규칙 시험", sub: "타이밍 신호로 노출을 축소했을 때의 목표 비중과 주문 목록을 산출합니다. 주문은 전송하지 않습니다.", tickers: "many", period: true, risk: true },
+  { key: "company", title: "단일 기업 심층 분석", sub: "한 기업의 적정가를 복수 모형으로 산출하고 가치 분포를 분석합니다.", tickers: "one", period: false, risk: false },
 ];
 
 const TEMPLATE_OF: Record<Exclude<GoalKey, "company">, string> = { build: "core", check: "risk", timing: "timing" };
@@ -45,7 +45,7 @@ export function goalDoc(goal: GoalKey, tickers: string[], lookbackDays: number |
   if (goal === "company") {
     const code = tickers[0];
     return {
-      format: GRAPH_FORMAT, version: GRAPH_VERSION, meta: { name: "기업 하나 깊게", goal: "company" },
+      format: GRAPH_FORMAT, version: GRAPH_VERSION, meta: { name: "단일 기업 심층 분석", goal: "company" },
       nodes: [
         { id: "valuation", type: "company_valuation", params: { code }, position: { x: 0, y: 0 } },
         { id: "distribution", type: "valuation_distribution", params: { code }, position: { x: 0, y: 220 } },

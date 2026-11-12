@@ -77,7 +77,7 @@ test("계산 전에는 안내만(단추 없음) — 짝: 계산하면 [AI 로 �
   await signIn(page);
   await openWith(page, CORE);
   await expect(card(page).locator(".pg-ai-story-h")).toHaveText("AI 가 풀어 쓴 글");
-  await expect(card(page).locator(".pg-ai-story-wait")).toHaveText("계산한 뒤에 풀어 쓸 수 있습니다");
+  await expect(card(page).locator(".pg-ai-story-wait")).toHaveText("계산한 뒤 AI 해설을 받을 수 있습니다");
   await expect(ask(page)).toHaveCount(0);
   await runAll(page);
   await expect(ask(page)).toHaveText("AI 로 풀어 쓰기");                                   // ★짝★
@@ -89,7 +89,7 @@ test("로그아웃이면 로그인 링크 · 요청 0", async ({ page }) => {
   page.on("request", (r) => { if (r.url().includes("/assist/canvas/narrate")) sent.push(r.url()); });
   await openWith(page, CORE);
   await runAll(page);
-  await expect(card(page).locator(".pg-ai-story-login")).toHaveText("로그인하면 AI 로 풀어 쓸 수 있습니다");
+  await expect(card(page).locator(".pg-ai-story-login")).toHaveText("로그인하면 AI 해설을 받을 수 있습니다");
   await expect(card(page).locator(".pg-ai-story-login")).toHaveAttribute("href", "/login");
   await expect(ask(page)).toHaveCount(0);
   await page.waitForTimeout(400);

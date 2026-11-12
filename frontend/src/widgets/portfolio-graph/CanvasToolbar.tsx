@@ -48,9 +48,9 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
                 disabled={s.future.length === 0} onClick={s.redo}><Redo2 size={16} /></button>
         <button type="button" className="pg-icon-tool" aria-label="자동 정리" title="자동 정리"
                 disabled={s.nodes.length === 0} onClick={() => { s.autoLayout(); fit(); }}><LayoutGrid size={16} /></button>
-        <button type="button" className="pg-icon-tool" aria-label="고른 노드 묶기 (Ctrl+G)" title="고른 노드 묶기 (Ctrl+G)"
+        <button type="button" className="pg-icon-tool" aria-label="선택한 노드 묶기 (Ctrl+G)" title="선택한 노드 묶기 (Ctrl+G)"
                 disabled={s.picked.length < 2} onClick={() => s.groupPicked()}><Boxes size={16} /></button>
-        <button type="button" className="pg-icon-tool pg-goal-open" aria-label="목표로 시작" title="목표로 시작 — 무엇을 하려는지 고르면 흐름을 만들어 계산합니다"
+        <button type="button" className="pg-icon-tool pg-goal-open" aria-label="목표로 시작" title="목표로 시작 — 작업 목적을 선택하면 흐름을 구성해 계산합니다"
                 disabled={!s.catalog} onClick={() => setGoalOpen(true)}><Sparkles size={16} /></button>
         <button type="button" className={`pg-icon-tool pg-simple-toggle${s.simple ? " on" : ""}`} aria-pressed={s.simple}
                 aria-label="간단히 보기" title="간단히 보기 — 노드 없이 정할 것과 결과만" onClick={() => s.setSimple(!s.simple)}>
@@ -63,7 +63,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
           </button>
           {stratOpen && (
             <div className="pg-strat-menu" role="menu" aria-label="전략 추가">
-              <p className="pg-strat-menu-h">새 전략 띠로 넣고 ‘전략 결합’에 잇습니다</p>
+              <p className="pg-strat-menu-h">새 전략 띠로 추가하고 ‘전략 결합’에 연결합니다</p>
               {strategySources.map((x) => (
                 <button key={x.key} type="button" role="menuitem" className="pg-strat-item" data-source={x.key}
                         onClick={() => addStrategy(x.src)}>
@@ -120,7 +120,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
                     disabled={s.nodes.length === 0} />
       {/* 그림(R7) — 그래프 전체를 PNG 한 장으로 · 아래 띠에 이름·때·결과의 성격 */}
       <button type="button" className="pg-export-png pg-btn" disabled={s.nodes.length === 0} onClick={() => void exportCanvasPng()}
-              aria-label="그래프 전체를 그림(PNG)으로 받기 — 아래 띠에 이름·때·결과의 성격을 적습니다">
+              aria-label="그래프 전체를 그림(PNG)으로 저장 — 아래 띠에 이름·시각·결과의 성격을 표시합니다">
         <ImageDown size={13} aria-hidden="true" /> <span className="pg-tl">그림</span>
       </button>
       <button type="button" className="pg-run pg-btn pg-btn--primary" onClick={() => void run()} title="Ctrl+Enter"

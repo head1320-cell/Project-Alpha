@@ -66,7 +66,7 @@ export function AiStory({ session, story, badge, onSelect }: {
   const again = ai.state === "ready" || ai.state === "stale";
   const note = ai.state === "idle" || ai.state === "ready" ? ai.note : null;
   const control = !hasFacts || session.kind === "loading" ? null
-    : session.kind === "signed_out" ? <Link href="/login" className="pg-ai-story-login">로그인하면 AI 로 풀어 쓸 수 있습니다</Link>
+    : session.kind === "signed_out" ? <Link href="/login" className="pg-ai-story-login">로그인하면 AI 해설을 받을 수 있습니다</Link>
     : (
       <button type="button" className="pg-ai-story-ask" onClick={() => { void ask(); }} disabled={busy} aria-busy={busy || undefined}>
         {busy ? "AI 가 풀어 쓰는 중입니다" : again ? "AI 로 다시 풀어 쓰기" : "AI 로 풀어 쓰기"}
@@ -79,7 +79,7 @@ export function AiStory({ session, story, badge, onSelect }: {
         {control}
       </div>
       <p className="pg-ai-story-cap">서버 설명을 근거로 Claude 가 씁니다. 숫자는 근거 단계에 있는 것만 통과합니다.</p>
-      {!hasFacts && ai.state !== "ready" && <p className="pg-ai-story-wait">계산한 뒤에 풀어 쓸 수 있습니다</p>}
+      {!hasFacts && ai.state !== "ready" && <p className="pg-ai-story-wait">계산한 뒤 AI 해설을 받을 수 있습니다</p>}
       {ai.state === "stale" && <p className="pg-ai-story-stale" role="status">계산 결과가 바뀌어 AI 글을 지웠습니다</p>}
       {ai.state === "ready" && (
         <>

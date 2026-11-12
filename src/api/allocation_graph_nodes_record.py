@@ -34,7 +34,7 @@ _DATA_KO = {"synthetic": "합성", "real": "실데이터", "unknown": "모름"}
 class RecordParams(BaseModel):
     model_config = _FORBID
     strategy_ids: list[int] = Field(default_factory=list, max_length=6, json_schema_extra={"x-ui": _ui(
-        "등록한 전략", question="함께 볼 등록 전략", widget="pick", source="strategies",
+        "등록한 전략", question="함께 분석할 등록 전략", widget="pick", source="strategies",
         help="백테스트 실행을 전략으로 등록하면 여기에 표시됩니다. 연결한 실행·결과와 함께 분석합니다.")})
     window: Literal[20, 60, 120] = Field(60, json_schema_extra={"x-ui": _ui(
         "상관 창", "advanced", unit="거래일", presets=[{"label": "한 달", "value": 20}, {"label": "석 달", "value": 60},
@@ -143,7 +143,7 @@ def _record_robustness(inputs: dict, p: RecordParams) -> pg.NodeOutput:
     from src.api.allocation_graph_robustness import robustness_view
     series = _collect(inputs, p)
     if len(series) < 2:
-        raise pg.NodeFailure("기록이 둘 이상 있어야 같이 무너지는지 볼 수 있습니다 — 실행·결과를 잇거나 등록한 전략을 선택하십시오")
+        raise pg.NodeFailure("기록이 둘 이상이어야 동반 하락 여부를 분석할 수 있습니다 — 실행·결과를 연결하거나 등록한 전략을 선택하십시오")
     empty = [s["label"] for s in series if len(s["returns"]) < 2]
     if empty:
         raise pg.NodeFailure(f"수익 곡선이 비어 있는 기록이 있습니다({', '.join(empty)})")
@@ -182,14 +182,14 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
                                       f"{rob.get('n_days')}거래일)로 맞춰 측정했습니다."))
         crisis = rob.get("crisis") or {}
         if crisis.get("basis") != "market":
-            trust.append(_t(UNKNOWN, str(crisis.get("market_reason") or crisis.get("note") or "시장 자료 없이 위기일을 골랐습니다.")))
+            trust.append(_t(UNKNOWN, str(crisis.get("market_reason") or crisis.get("note") or "시장 자료 없이 위기일을 선정했습니다.")))
     else:
         trust.append(_t(UNKNOWN, f"견고성 측정 불가 — {rob.get('reason') or '사유 없음'}"))
     eff = rob.get("effective_n") or {}
     headline = None if eff.get("value") is None else {
         "label": "실질 독립 개수", "value": eff["value"], "unit": "개",
         "text": f"기록 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다"}
-    return {"title": f"기록 {len(series)}개가 같이 무너지는지 봤습니다", "headline": headline,
+    return {"title": f"기록 {len(series)}개의 동반 하락 여부를 분석했습니다", "headline": headline,
             "facts": list(rob.get("story") or []), "trust": trust,
             "unmeasured": ["앞으로도 같을지(과거 관계입니다)", "경제적 가치", "실거래에서 같을지"]}
 

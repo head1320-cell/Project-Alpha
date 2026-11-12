@@ -79,7 +79,7 @@ def facts_returns(v: dict) -> list[dict]:
 
 
 # 공분산 출처 코드 → 쉬운 말(모르는 코드는 그대로 — 지어내지 않는다).
-_SIGMA_PLAIN = {"trailing": "지난 수익률로 잰 공분산", "sample_252": "최근 252일 표본 공분산", "conditional": "국면 조건부 공분산"}
+_SIGMA_PLAIN = {"trailing": "과거 수익률로 추정한 공분산", "sample_252": "최근 252일 표본 공분산", "conditional": "국면 조건부 공분산"}
 
 
 def facts_weights(v: dict) -> list[dict]:
@@ -102,7 +102,7 @@ def facts_weights(v: dict) -> list[dict]:
             out.append(_f("neff", "실질 종목 수(1/Σw²)", f"{neff:.1f}개", round(neff, 2)))
     sig = v.get("sigma_annual")
     src = v.get("sigma_source")
-    out.append(_f("sigma", "함께 보낸 공분산",
+    out.append(_f("sigma", "함께 전달한 공분산",
                   (_SIGMA_PLAIN.get(str(src), str(src)) if src else "있음") if sig is not None else "없음"))
     if sig is not None:
         S = np.asarray(sig, dtype=float)
@@ -153,7 +153,7 @@ def facts_universe(v: dict) -> list[dict]:
     t = list(v.get("tickers") or [])
     return [_f("n", "종목", f"{len(t)}개 · " + _names(t), len(t)),
             _f("bench", "벤치마크", str(v.get("benchmark") or "없음")),
-            _f("current", "현재 비중", "함께 보냅니다" if v.get("weights") else "없습니다")]
+            _f("current", "현재 비중", "함께 전달합니다" if v.get("weights") else "없습니다")]
 
 
 def facts_regime(v: dict) -> list[dict]:
@@ -269,7 +269,7 @@ def intake_optimizer_views(h: pg.Handoff) -> dict:
                          "‘블랙-리터먼’·‘엔트로피 풀링’ 방식을 고르면 비중에 반영됩니다."))
     skipped = [s for s in view.get("skipped_views") or [] if ((s or {}).get("view") or {}).get("source") != "conditional"]
     if skipped:
-        issues.append(_i("lost", "skipped", f"생각 {len(skipped)}개는 쓸 수 없어 빠졌습니다 — " + str(skipped[0].get("reason") or "")))
+        issues.append(_i("lost", "skipped", f"생각 {len(skipped)}개는 사용할 수 없어 제외했습니다 — " + str(skipped[0].get("reason") or "")))
     for leg in view.get("view_legs_dropped") or []:
         issues.append(_i("changed", "legs_dropped", f"생각 {leg['index'] + 1}({leg.get('label')})은 유니버스 밖 종목 "
                                                      f"{_names(leg.get('dropped') or [], 3)}이 빠져 나머지만 반영됐습니다.",
@@ -367,7 +367,7 @@ def intake_s2w_returns(h: pg.Handoff) -> dict:
     miss = (h.view or {}).get("sigma_missing") or {}
     if miss.get("reason") == "codes_missing":
         issues.append(_i("lost", "codes_missing", f"이 수익률에 없는 종목({_names(miss.get('codes') or [], 3)})이 있어 "
-                                                  "공분산을 비중과 함께 보내지 못합니다.",
+                                                  "공분산을 비중과 함께 전달하지 못합니다.",
                          "같은 종목으로 ‘수익률 데이터’를 연결하십시오."))
     return _out([_R2_CHECK, "비중의 종목이 모두 이 수익률에 있는지"], issues)
 
@@ -377,7 +377,7 @@ def intake_overlay_signal(h: pg.Handoff) -> dict:
     view = h.view or {}
     issues = []
     if view.get("follow") == "manual":
-        issues.append(_i("unused", "manual", "‘직접 지정’를 골라 이 신호는 나란히 보여 주기만 하고 적용하지 않습니다."))
+        issues.append(_i("unused", "manual", "‘직접 지정’을 선택해 이 신호는 참고로만 표시하고 적용하지 않습니다."))
     elif view.get("unavailable"):
         issues.append(_i("lost", "unread", f"신호 {view.get('n_signals')}개 중 {view['unavailable']}개를 읽지 못한 채 노출을 정했습니다."))
     return _out(["신호를 적용하는지", "읽지 못한 신호"], issues)
@@ -387,7 +387,7 @@ def intake_overlay_regime(h: pg.Handoff) -> dict:
     """R14 — '타이밍 + 경기 국면'을 고르지 않았으면 국면은 보여 주기만 한다."""
     view = h.view or {}
     issues = ([] if view.get("follow") == "timing_macro" else
-              [_i("unused", "regime_shown_only", "‘타이밍 + 경기 국면’을 고르지 않아 경기 국면은 나란히 보여 주기만 하고 "
+              [_i("unused", "regime_shown_only", "‘타이밍 + 경기 국면’을 선택하지 않아 경기 국면은 참고로만 표시하고 "
                                                  "비중에 적용하지 않습니다.")])
     return _out(["경기 국면을 적용하는지"], issues)
 

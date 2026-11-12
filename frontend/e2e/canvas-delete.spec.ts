@@ -54,7 +54,7 @@ async function pick(page: Page, ids: string[]) {
   await blank(page);
   await node(page, ids[0]).click({ position: HEAD });
   for (const id of ids.slice(1)) await node(page, id).click({ position: HEAD, modifiers: ["Control"] });
-  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
+  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 선택`);
 }
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -156,12 +156,12 @@ test("R1 · 그림 고정한 노드를 지웠다 되돌리면 고정도 그대�
 
 // ── ③ 우클릭 ─────────────────────────────────────────────────────────────────
 
-test("R1 · 여럿 고른 채 우클릭하면 고르기를 지키고 '고른 노드 비교' 가 보인다 (짝: 밖을 우클릭하면 하나)", async ({ page }) => {
+test("R1 · 여럿 고른 채 우클릭하면 고르기를 지키고 '선택한 노드 비교' 가 보인다 (짝: 밖을 우클릭하면 하나)", async ({ page }) => {
   await open(page, CORE);
   await pick(page, ["universe", "returns", "estimate"]);
   await node(page, "returns").click({ button: "right", position: HEAD });
   await expect(page.locator(".pg-ctx")).toBeVisible();
-  await expect(page.locator(".pg-selbar-n")).toHaveText("3개 골랐습니다");
+  await expect(page.locator(".pg-selbar-n")).toHaveText("3개 선택");
   await expect(page.locator('.pg-ctx-item[data-action="compare"]')).toBeVisible();
   await page.keyboard.press("Escape");
   await node(page, "optimizer").click({ button: "right", position: HEAD });
@@ -180,11 +180,11 @@ test("R1 · Shift 상자로 고른 뒤 우클릭해도 노드 메뉴가 열린�
   await page.mouse.move(b.x + b.width + 20, b.y + b.height + 20, { steps: 8 });
   await page.mouse.up();
   await page.keyboard.up("Shift");
-  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 골랐습니다");
+  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 선택");
   await page.mouse.click(b.x + 30, b.y + 14, { button: "right" });
   await expect(page.locator(".pg-ctx")).toBeVisible();
   await expect(page.locator('.pg-ctx-item[data-action="remove"]')).toBeVisible();
-  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 골랐습니다");
+  await expect(page.locator(".pg-selbar-n")).toHaveText("2개 선택");
 });
 
 // ── ④ 상자 끌기 · 이름 ────────────────────────────────────────────────────────

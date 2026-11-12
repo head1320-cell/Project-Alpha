@@ -85,7 +85,7 @@ ScenarioParams = _subset(
     ui={
         "severity": _ui("강도", question="충격 강도", widget="slider", ends=["약하게", "세게"],
                         help="가정 충격에만 곱합니다. 실제 시세를 재생하는 과거 위기에는 적용하지 않습니다."),
-        "benchmark": _ui("비교 지수", "advanced", help="과거 위기 재생에서 함께 그릴 지수입니다."),
+        "benchmark": _ui("비교 지수", "advanced", help="과거 위기 재생에서 함께 표시할 지수입니다."),
     },
     scenario=(Literal[_SCENARIOS], Field("rate_hike_200bp", json_schema_extra={"x-ui": _ui(
         "시나리오", question="스트레스 시나리오", widget="cards",
@@ -178,7 +178,7 @@ CorrParams = _subset(
                           presets=[{"label": "0.7", "value": 0.7}, {"label": "0.8", "value": 0.8},
                                    {"label": "0.9", "value": 0.9}]),
         "intensity": _ui("강도", widget="slider", ends=["없음", "완전히"],
-                         help="0이면 평소 상관 그대로, 1이면 위기 상관으로 완전히 바뀝니다."),
+                         help="0이면 평시 상관 그대로, 1이면 위기 상관으로 완전히 대체됩니다."),
         "confidence_level": _ui("VaR 신뢰수준", "advanced"),
         "portfolio_value": _ui("평가 금액(원)", "advanced", unit="원"),
     })
@@ -201,12 +201,12 @@ def _explain_corr(view: dict, prov: dict, params: Any) -> dict:
     dv = r.get("delta_vol_pct")
     shift = r.get("corr_shift") or {}
     if dv is None:
-        title = "상관이 모이면 변동성이 어떻게 되는지 봤습니다"
+        title = "상관 수렴 시 변동성 변화를 산출했습니다"
     elif dv > 0:
         title = f"상관이 {shift.get('to_avg_rho')}로 모이면 변동성이 {_pct(dv)} 커집니다"
     else:
         title = f"상관이 {shift.get('to_avg_rho')}로 모여도 변동성은 커지지 않았습니다"
-    facts = [f"평소 변동성은 연 {_pct(float(b.get('port_vol_pct') or 0))}입니다.",
+    facts = [f"평시 변동성은 연 {_pct(float(b.get('port_vol_pct') or 0))}입니다.",
              f"평균 상관이 {shift.get('from_avg_rho')}에서 {shift.get('to_avg_rho')}로 바뀌었습니다."]
     if r.get("delta_var_pct") is not None:
         facts.append(f"VaR 금액이 {_signed_pct(float(r['delta_var_pct']))} 달라졌습니다.")
@@ -217,7 +217,7 @@ def _explain_corr(view: dict, prov: dict, params: Any) -> dict:
             "headline": {"label": "위기 때 연환산 변동성", "value": s.get("port_vol_pct"), "unit": "%",
                          "text": _pct(float(s.get("port_vol_pct") or 0))},
             "facts": facts, "trust": trust,
-            "unmeasured": ["상관이 실제로 얼마나 모일지", "꼬리 손실의 실제 모양"]}
+            "unmeasured": ["실제 위기 시 상관 수렴 정도", "꼬리 손실의 실제 분포"]}
 
 
 # ── 기대수익 민감도 ───────────────────────────────────────────────────────────
@@ -277,9 +277,9 @@ def _explain_sensitivity(view: dict, prov: dict, params: Any) -> dict:
             else "같은 수익률과 같은 투자 뷰로 다시 풀었습니다.")
     if r.get("still"):
         # 기대 수익을 쓰지 않는 방식 — 0 칸을 '가장 큰 변화' 로 세우지 않고 그렇다고 말한다(사용자 결정 2026-10-18).
-        return {"title": "기대수익이 틀려도 이 비중은 움직이지 않습니다", "headline": None, "facts": [str(r["still"])],
+        return {"title": "이 비중은 기대수익률 추정 오차에 영향을 받지 않습니다", "headline": None, "facts": [str(r["still"])],
                 "trust": [_t(CONFIRMED, redo)],
-                "unmeasured": ["공분산이 틀렸을 때의 민감도", "여러 종목이 함께 틀릴 때"]}
+                "unmeasured": ["공분산 추정 오차에 대한 민감도", "여러 종목의 추정 오차가 동시에 발생하는 경우"]}
     if best[1] is not None:
         ni, nj = names[best[1]], names[best[2]]
         facts.append(f"{labels.get(ni, ni)}의 기대수익을 {bump:g}%p 높이면 {labels.get(nj, nj)} 비중이 "
@@ -294,10 +294,10 @@ def _explain_sensitivity(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(ASSUMED, f"이 점검은 ‘{MODEL_PLAIN.get(view.get('basis'), view.get('basis'))}’ 기준으로 "
                                  f"다시 풉니다 — 고른 방식(‘{MODEL_PLAIN.get(view.get('model'), view.get('model'))}’)의 "
                                  "민감도와 다를 수 있습니다."))
-    return {"title": "기대수익이 조금 틀려도 비중이 얼마나 바뀌는지 봤습니다",
+    return {"title": "기대수익률 추정 오차에 대한 비중 민감도를 산출했습니다",
             "headline": {"label": "가장 큰 비중 변화", "value": best[0], "unit": "%p", "text": f"{best[0]:+.2f}%p"},
             "facts": facts, "trust": trust,
-            "unmeasured": ["공분산이 틀렸을 때의 민감도", "여러 종목이 함께 틀릴 때"]}
+            "unmeasured": ["공분산 추정 오차에 대한 민감도", "여러 종목의 추정 오차가 동시에 발생하는 경우"]}
 
 
 # ── 팩터 성격 ────────────────────────────────────────────────────────────────
@@ -322,8 +322,8 @@ def _explain_xray(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     fs = r.get("factors") or []
     if not fs:
-        return {"title": "잴 수 있는 팩터가 없었습니다",
-                "trust": [_t(UNKNOWN, "종목의 팩터 값이나 비교할 유니버스 표본이 모자라 재지 못했습니다.")],
+        return {"title": "측정 가능한 팩터가 없습니다",
+                "trust": [_t(UNKNOWN, "종목의 팩터 값이나 비교 유니버스 표본이 부족해 측정하지 못했습니다.")],
                 "unmeasured": ["모든 팩터 노출"]}
     top = max(fs, key=lambda f: abs(float(f["portfolio_z"]) - float(f["benchmark_z"])))
     facts = [f"{f['label']}: 이 비중 {float(f['portfolio_z']):+.2f}σ · 기준 {float(f['benchmark_z']):+.2f}σ"
@@ -335,7 +335,7 @@ def _explain_xray(view: dict, prov: dict, params: Any) -> dict:
                                      f"비중의 {_pct(float(f['coverage_pct']))}만 측정했습니다."))
     if mock_allowed():
         trust.append(_t(UNKNOWN, _DEV_STORES))
-    return {"title": f"이 비중은 ‘{top['label']}’ 쪽으로 가장 기울어 있습니다",
+    return {"title": f"이 비중의 최대 팩터 노출은 ‘{top['label']}’입니다",
             "headline": {"label": f"{top['label']} 노출", "value": top["portfolio_z"], "unit": "σ",
                          "text": f"{float(top['portfolio_z']):+.2f}σ"},
             "facts": facts, "trust": trust,

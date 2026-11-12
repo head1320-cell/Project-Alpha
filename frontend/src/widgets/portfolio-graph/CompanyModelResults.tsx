@@ -110,7 +110,7 @@ export function ValueLayersResult({ v }: { v: Dict }) {
       {floors.filter((f) => f.value === null).map((f) => <p key={f.key} className="pg-warn">{f.label}층 측정 불가 — {f.reason ?? "사유 미상"}</p>)}
       <KV rows={[
         ["성장 기여 가치", num(L.growth?.per_share) === null ? "—" : won(L.growth?.per_share)],
-        ["확률로 묶은 값", num(r.weighted_per_share) === null ? `— ${String(r.weighted_reason ?? "")}` : won(r.weighted_per_share)],
+        ["확률가중 값", num(r.weighted_per_share) === null ? `— ${String(r.weighted_reason ?? "")}` : won(r.weighted_per_share)],
         ["가중(자산·수익력·성장까지)", w ? w.map((x) => pc(x, 0)).join(" · ") : "—"],
       ]} />
       {r.franchise ? <p className="pg-note">{String(r.franchise)}</p> : null}
@@ -278,7 +278,7 @@ export function ScenariosResult({ v }: { v: Dict }) {
           </tr>
         ))}</tbody>
       </table>
-      <KV rows={[["확률로 묶은 적정가", won(r.weighted)], ["흩어짐(표준편차)", won(r.std)],
+      <KV rows={[["확률가중 적정가", won(r.weighted)], ["표준편차", won(r.std)],
                  ["지금 가격 이상일 확률", num(r.prob_above_price) === null ? "—" : pc(r.prob_above_price, 0)]]} />
       <InputsTable r={r} />
     </>

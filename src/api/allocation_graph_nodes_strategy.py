@@ -7,7 +7,7 @@
   않는다★(`run_and_save` 가 아니라 `run`). `hrp_macro` 는 선택지에 없다 — 배분기(`allocator.METHODS`)가
   가진 것만 고르게 하고, 문의 거절은 그대로 둔다.
 - 기업 전망(`company_views`): `/analyze` 의 `use_company_views` 와 같은 함수(`prices_for`·
-  `company_views`)다. 뷰는 **지금 시점 전용**(`pit: forward_only`) — 하류 정책 백테스트가 거절한다.
+  `company_views`)다. 뷰는 **현재 시점 전용**(`pit: forward_only`) — 하류 정책 백테스트가 거절한다.
   옵티마이저는 이 뷰를 사용자 뷰와 섞지 않고 `company_views=` 로 따로 넘긴다(`/analyze` 와 같은 자리).
 - 밸류에이션 스코어링(`valuation_scores`): `/valuation/compare` 를 그대로 부른다. 점수는 **−괴리율**
   (싼 만큼 높다). ★적정가를 못 낸 종목(데이터 없음 → 괴리율 0)은 점수에 넣지 않는다★ — 미상 ≠ 0.
@@ -96,7 +96,7 @@ def _common_span(ids: list[int]) -> tuple[str, str]:
     from src.engine.strategy_registry import StrategyRegistry
     m = StrategyRegistry(get_sync_engine()).load_returns_matrix(ids, drop_na_rows=True)
     if m is None or m.empty:
-        raise pg.NodeFailure("고른 전략들이 함께 기록된 날이 없습니다 — 기간이 겹치는 전략을 선택하십시오.")
+        raise pg.NodeFailure("선택한 전략의 공통 기록일이 없습니다 — 기간이 겹치는 전략을 선택하십시오.")
     return str(m.index.min().date()), str(m.index.max().date())
 
 
@@ -152,8 +152,8 @@ def _explain_strategy(view: dict, prov: dict, params: Any) -> dict:
     names = view.get("strategy_names") or {}
     per = view.get("period") or {}
     facts = [f"전략 {len(names)}개를 ‘{_METHOD.get(view.get('method'), view.get('method'))}’ 방식으로 "
-             f"{_POLICY.get(view.get('policy'), view.get('policy'))} 다시 나눴습니다.",
-             f"기간은 {per.get('start')} ~ {per.get('end')}" + (" (함께 기록된 전체)" if per.get("whole_record") else "") + "입니다."]
+             f"{_POLICY.get(view.get('policy'), view.get('policy'))} 리밸런싱했습니다.",
+             f"기간은 {per.get('start')} ~ {per.get('end')}" + (" (공통 기록 전체)" if per.get("whole_record") else "") + "입니다."]
     if s.get("max_drawdown_pct") is not None:
         facts.append(f"MDD(최대낙폭)은 {abs(float(s['max_drawdown_pct'])):.1f}%입니다.")
     dd_fact = drawdown_fact(view)
@@ -167,11 +167,11 @@ def _explain_strategy(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(UNKNOWN, "시점 정합이 확인되지 않은 전략이 있습니다."))
     for w in view.get("warnings") or []:
         trust.append(_t(ASSUMED, str(w)))
-    return {"title": f"전략 {len(names)}개를 묶어 돌려 봤습니다",
+    return {"title": f"전략 {len(names)}개를 결합해 백테스트했습니다",
             "headline": ({"label": "전체 수익", "value": s["total_return_pct"], "unit": "%",
                           "text": f"{float(s['total_return_pct']):+.1f}%"} if s.get("total_return_pct") is not None else None),
             "facts": facts, "trust": trust,
-            "unmeasured": ["매크로 기울기 배분(hrp_macro) — 규칙이 정해지지 않아 아직 없습니다",
+            "unmeasured": ["매크로 틸트 배분(hrp_macro) — 규칙이 정해지지 않아 아직 없습니다",
                            "표본 밖 성과 — 등록된 전략의 과거 기록을 다시 나눈 결과입니다"]}
 
 
@@ -183,7 +183,7 @@ class CompanyViewsParams(BaseModel):
         "괴리 수렴 기간", question="내재가치 괴리 수렴 기간 가정", unit="년",
         presets=[{"label": "가치평가 가정 그대로", "value": None}, {"label": "3년", "value": 3},
                  {"label": "5년", "value": 5}],
-        help="가정입니다 — 잰 값이 아닙니다.")})
+        help="가정입니다 — 측정값이 아닙니다.")})
 
 
 def _company_views(inputs: dict, p: CompanyViewsParams) -> pg.NodeOutput:
@@ -210,14 +210,14 @@ def _explain_company(view: dict, prov: dict, params: Any) -> dict:
     views, reasons = view.get("views") or [], view.get("reasons") or {}
     facts = [f"종목 {len(views)}개에 전망을 만들었습니다" + (f" · {len(reasons)}개는 만들지 못했습니다" if reasons else "") + "."]
     if view.get("n_user_views"):
-        facts.append(f"투자 뷰 {view['n_user_views']}개와 함께 넘깁니다.")
-    trust = [_t(ASSUMED, "적정가와의 차이가 일정 기간에 걸쳐 좁혀진다고 가정했습니다 — 폭은 잰 값이 아닙니다."),
+        facts.append(f"투자 뷰 {view['n_user_views']}개와 함께 전달합니다.")
+    trust = [_t(ASSUMED, "적정가와의 괴리가 일정 기간에 걸쳐 수렴한다고 가정했습니다 — 수렴 폭은 측정값이 아닙니다."),
              _t(UNKNOWN, _TODAY_ONLY)]
     if view.get("saturated"):
         trust.append(_t(ASSUMED, f"{view['saturated']}개는 확신이 상한에 닿았습니다."))
     if view.get("any_mock") or mock_allowed():
         trust.append(_t(UNKNOWN, "개발 모드라 재무·가격이 합성일 수 있습니다 — 실제 전망을 말해 주지 않습니다."))
-    return {"title": f"기업 전망 {len(views)}개를 만들었습니다", "facts": facts, "trust": trust,
+    return {"title": f"기업 전망 {len(views)}개를 생성했습니다", "facts": facts, "trust": trust,
             "unmeasured": ["이 전망이 맞았는지(예측력)", "과거 시점의 재무로 만든 전망(빈티지 재무가 없습니다)"]}
 
 
@@ -285,7 +285,7 @@ def _explain_valuation(view: dict, prov: dict, params: Any) -> dict:
              _t(UNKNOWN, _TODAY_ONLY)]
     if view.get("any_mock") or mock_allowed():
         trust.append(_t(UNKNOWN, "개발 모드라 재무가 합성일 수 있습니다 — 실제 가치를 말해 주지 않습니다."))
-    return {"title": f"{len(scores)}종목에 가치평가 점수를 매겼습니다",
+    return {"title": f"{len(scores)}종목의 가치평가 점수를 산출했습니다",
             "headline": ({"label": f"가장 싼 종목 · {labels.get(top, top)}", "value": scores[top], "unit": "%",
                           "text": f"적정가보다 {scores[top]:.1f}% 저평가" if scores[top] >= 0 else
                                   f"적정가보다 {-scores[top]:.1f}% 고평가"} if top else None),
@@ -301,7 +301,7 @@ class AttributionParams(BaseModel):
         "연구 기록", question="검토 대상 결정", widget="pick", source="research_runs",
         help="‘포트폴리오 최적화’ 결과를 연구 기록으로 남기면 여기에 나옵니다.")})
     as_of: str | None = Field(None, pattern=_DATE, json_schema_extra={"x-ui": _ui(
-        "기준일", "advanced", help="비우면 오늘까지의 가격으로 되짚습니다.")})
+        "기준일", "advanced", help="비우면 오늘까지의 가격으로 사후 검토합니다.")})
 
 
 def _attribution(inputs: dict, p: AttributionParams) -> pg.NodeOutput:
@@ -309,7 +309,7 @@ def _attribution(inputs: dict, p: AttributionParams) -> pg.NodeOutput:
     try:
         rep = _attribution_for(p.run_id, as_of=p.as_of)
     except HTTPException as e:
-        raise pg.NodeFailure(f"그 기록을 되짚지 못했습니다 — {_detail_reason(e.detail)}") from e
+        raise pg.NodeFailure(f"해당 기록의 사후 검토 실패 — {_detail_reason(e.detail)}") from e
     src = (rep.get("coverage") or {}).get("source")
     rep = {**rep, "labels": _labels([a["code"] for a in (rep.get("contribution") or {}).get("assets") or []])}
     return pg.NodeOutput(values={}, view=rep,
@@ -320,7 +320,7 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
     ret = view.get("returns") or {}
     eva = view.get("expected_vs_actual") or {}
     cov = view.get("coverage") or {}
-    facts = [f"{view.get('decision_date')}에 내린 결정을 {view.get('as_of')}까지({view.get('elapsed_days')}일) 되짚었습니다."]
+    facts = [f"{view.get('decision_date')}에 내린 결정을 {view.get('as_of')}까지({view.get('elapsed_days')}일) 사후 검토했습니다."]
     if eva.get("expected_return_pct") is not None and eva.get("actual_return_pct") is not None:
         facts.append(f"기대는 {float(eva['expected_return_pct']):+.1f}%, 실제는 {float(eva['actual_return_pct']):+.1f}%입니다.")
     trust = []
@@ -332,7 +332,7 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
         trust.append(_t(UNKNOWN, f"가격이 없는 종목은 빼고 측정했습니다: {', '.join(cov['missing'])}."))
     if cov.get("source") == "mock":
         trust.append(_practice("합성 가격입니다 — 실제 성과를 말해 주지 않습니다."))
-    return {"title": "결정을 되짚어 봤습니다" if cov.get("has_expost") else "아직 되짚을 결과가 없습니다",
+    return {"title": "결정을 사후 검토했습니다" if cov.get("has_expost") else "아직 사후 검토할 결과가 없습니다",
             "headline": ({"label": "실제 수익", "value": ret["portfolio_pct"], "unit": "%",
                           "text": f"{float(ret['portfolio_pct']):+.1f}%"} if ret.get("portfolio_pct") is not None else None),
             "facts": facts, "trust": trust,
@@ -353,7 +353,7 @@ def register(registry: pg.Registry) -> None:
                     inputs=(P("returns", "Returns"), P("views", "Views", required=False)),
                     outputs=(P("views", "Views"),), run=_company_views, params_model=CompanyViewsParams,
                     explain=_explain_company, category="추정",
-                    description="/analyze use_company_views 와 같은 company_views. 지금 시점 전용(forward_only)."),
+                    description="/analyze use_company_views 와 같은 company_views. 현재 시점 전용(forward_only)."),
         pg.NodeSpec("valuation_scores", "가치평가 점수", stage="signal", plain_label="밸류에이션 스코어링",
                     plain_description="종목별 적정가 대비 저평가 정도를 점수로 산출합니다.",
                     inputs=(P("universe", "Universe"),), outputs=(P("scores", "Scores"),), run=_valuation_scores,

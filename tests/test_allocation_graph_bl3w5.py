@@ -90,7 +90,7 @@ def test_rebalance_decision_says_the_benefit_is_self_referential_only_when_it_is
         return {**out, "benefit": b}
     monkeypatch.setattr(ar, "rebalance_decision_route", fake)
     r = _run(_rebal_graph())["nodes"]["x"]
-    said = any("고른" in t["text"] for t in r["explain"]["trust"])
+    said = any("바로 그 추정치" in t["text"] for t in r["explain"]["trust"])
     assert said is self_ref                                                  # 짝: 자기 참조가 아니면 말하지 않는다
 
 

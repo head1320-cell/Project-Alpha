@@ -163,7 +163,7 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
   results: Record<string, NodeRunResult> | null; staleIds: ReadonlySet<string>;
 }) {
   const roots = [...new Set(branches.map((b) => b.of_root))];
-  if (!roots.length) return <p className="pg-empty">노드를 골라 ‘대안 만들기’를 누르면 여기서 원본과 나란히 봅니다.</p>;
+  if (!roots.length) return <p className="pg-empty">노드를 선택해 ‘대안 만들기’를 누르면 여기서 원본과 비교합니다.</p>;
   return (
     <div className="pg-branch-compare">
       {roots.map((root) => {
@@ -204,12 +204,12 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
           const c = r?.status === "ok" && !r.previous ? (r.view as { equity_curve?: unknown } | undefined)?.equity_curve : null;
           return Array.isArray(c) && c.every((x) => typeof x === "number") ? (c as number[]) : null;
         };
-        const evNote = btests.length ? "지금 남아 있는 대안만 셌습니다 — 그 전에 바꿔 보고 지운 설정까지 치면 실제로 비교한 수는 더 많을 수 있습니다." : null;
+        const evNote = btests.length ? "현재 남아 있는 대안만 집계했습니다 — 이전에 시도하고 삭제한 설정까지 포함하면 실제 비교 횟수는 더 많을 수 있습니다." : null;
         return (
           <section key={root} className="pg-branch-table-wrap" data-root={root}>
             <h4 className="pg-h4">‘{rootEntry?.plain_label ?? root}’ 대안 {bs.length}개</h4>
             <p className="pg-branch-honest" role="note">
-              대안 {bs.length}개를 같은 과거로 비교했습니다 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커집니다.
+              대안 {bs.length}개를 같은 과거로 비교했습니다 — 비교 횟수가 늘수록 우연히 좋아 보이는 대안을 선택할 위험(다중 비교)이 커집니다.
               표본 밖에서 확인하기 전에는 결론 내리지 마십시오.
             </p>
             {btests.length > 0 && (

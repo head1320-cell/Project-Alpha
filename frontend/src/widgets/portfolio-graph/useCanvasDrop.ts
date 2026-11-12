@@ -28,7 +28,7 @@ export function useCanvasDrop(rf: RefObject<ReactFlowInstance | null>, setFileNo
     const t = TEMPLATES.find((x) => x.key === key) ?? TEMPLATES[0];
     const st = usePortfolioGraph.getState();
     st.loadDoc(restackDoc(t.doc, st.catalog));
-    setFileNote(`‘${t.name}’을 불러왔습니다. 종목·조건은 예시입니다 — 노드를 눌러 바꿔 보십시오.`);
+    setFileNote(`‘${t.name}’을 불러왔습니다. 종목·조건은 예시입니다 — 노드를 눌러 변경하십시오.`);
     fit();
   }, [fit, setFileNote]);
 
@@ -73,7 +73,7 @@ export function useCanvasDrop(rf: RefObject<ReactFlowInstance | null>, setFileNo
       const at = rf.current.screenToFlowPosition({ x: e.clientX, y: e.clientY });
       st.act(() => {
         st.insertOnEdge(spot.edge, kind, spot.i, spot.o, { x: at.x - NODE_W / 2, y: at.y - 30 });
-        return "선 사이에 노드를 넣었습니다.";
+        return "선 사이에 노드를 추가했습니다.";
       });
       return;
     }

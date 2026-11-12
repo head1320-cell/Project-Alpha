@@ -20,24 +20,24 @@ function obj(word: string): string {
 /** 이을 수 없으면 사람 말 사유, 이을 수 있으면 null. */
 export function connectionProblem(c: ConnTry, nodes: ConnNode[], edges: ConnEdge[], catalog: NodeCatalogEntry[],
                                   plain: Record<string, string>): string | null {
-  if (!c.source || !c.target) return "잇는 두 끝을 찾지 못했습니다.";
-  if (c.source === c.target) return "노드를 자기 자신에게 이을 수 없습니다.";
+  if (!c.source || !c.target) return "연결할 두 끝을 찾지 못했습니다.";
+  if (c.source === c.target) return "노드를 자기 자신에게 연결할 수 없습니다.";
   const entry = (id: string) => catalog.find((x) => x.type === nodes.find((n) => n.id === id)?.data.kind);
   const out = entry(c.source)?.outputs.find((p) => p.name === c.sourceHandle);
   const inp = entry(c.target)?.inputs.find((p) => p.name === c.targetHandle);
   if (!out || !inp) return "없는 자리입니다 — 카탈로그에 없는 포트입니다.";
   const nm = (p: CatalogPort) => plain[p.type] ?? p.type;
-  if (out.type !== inp.type) return `${obj(nm(out))} ‘${nm(inp)}’ 자리에 이을 수 없습니다 — 같은 색 점끼리 잇습니다.`;
+  if (out.type !== inp.type) return `${obj(nm(out))} ‘${nm(inp)}’ 포트에 연결할 수 없습니다 — 같은 색 포트끼리 연결합니다.`;
   const taken = edges.find((e) => e.target === c.target && e.targetHandle === c.targetHandle);
   if (taken) {
     const who = entry(taken.source)?.plain_label ?? taken.source;
-    return `이 자리에는 이미 ‘${who}’가 이어져 있습니다 — 입력 하나에는 선 하나만 잇습니다.`;
+    return `이 포트에는 이미 ‘${who}’가 연결돼 있습니다 — 입력 하나에는 선 하나만 연결합니다.`;
   }
   const seen = new Set<string>();
   const stack = [c.target];
   while (stack.length) {
     const cur = stack.pop()!;
-    if (cur === c.source) return "이으면 고리가 생깁니다 — 계산 순서를 정할 수 없습니다.";
+    if (cur === c.source) return "연결하면 순환이 생깁니다 — 계산 순서를 정할 수 없습니다.";
     if (seen.has(cur)) continue;
     seen.add(cur);
     edges.filter((e) => e.source === cur).forEach((e) => stack.push(e.target));

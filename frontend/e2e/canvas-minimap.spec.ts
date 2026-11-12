@@ -72,7 +72,7 @@ test("미니맵 켬/끔은 이 브라우저에 남는다 · 모서리 [접기]�
   await expect(mmButton(page)).toHaveAttribute("aria-pressed", "false");
 });
 
-test("미니맵 칸 = 단계색 · 계산 뒤 실패는 빨강·막힘은 주황 테두리 · 고른 노드는 파랑 (짝: 정상은 테두리 없음)", async ({ page }) => {
+test("미니맵 칸 = 단계색 · 계산 뒤 실패는 빨강·막힘은 주황 테두리 · 선택한 노드는 파랑 (짝: 정상은 테두리 없음)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openWith(page, chain(["005930"]));
   await minimapOn(page, true);

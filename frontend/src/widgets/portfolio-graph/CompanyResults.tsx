@@ -181,7 +181,7 @@ export function ValuationDistributionResult({ v }: { v: Dict }) {
       <KV rows={[["현재가의 백분위", num(u.price_percentile) === null ? "—" : `${fx(u.price_percentile, 1)}번째`],
                  ["모델끼리 갈린 정도", `${fx(((r.model_disagreement as Dict) ?? {}).spread_ratio, 2)}배`],
                  ["쓴 표본", `${String(r.n_used ?? "—")} / ${String(r.n_requested ?? "—")}`]]} />
-      {assumed && <p className="pg-note"><span className="pg-tag pg-tag--assumed">가정</span> 가정마다 흔드는 폭은 잰 값이 아니라 정한 값입니다.</p>}
+      {assumed && <p className="pg-note"><span className="pg-tag pg-tag--assumed">가정</span> 가정별 변동 폭은 측정값이 아니라 지정값입니다.</p>}
     </>
   );
 }
@@ -222,7 +222,7 @@ export function RiskDeepResult({ v }: { v: Dict }) {
       ))}</div>
       {stress.length > 0 && (
         <table className="pg-table pg-stress">
-          <caption>할인율이 오르면 적정가는</caption>
+          <caption>할인율 상승 시 적정가</caption>
           <tbody>{stress.map((s) => (
             <tr key={String(s.shock_bp)}><td>+{String(s.shock_bp)}bp</td><td className="pg-td-num">{won(s.unified_value)}</td></tr>
           ))}</tbody>
@@ -252,14 +252,14 @@ export function MacroSensitivityResult({ v }: { v: Dict }) {
         ))}</tbody>
       </table>
       {num(((r.asymmetry as Dict) ?? {}).ratio) !== null && (
-        <p className="pg-note">오를 때와 내릴 때 크기가 {fx(((r.asymmetry as Dict) ?? {}).ratio, 2)}배 다릅니다 — 한 방향만 재면 이 사실이 사라집니다.</p>
+        <p className="pg-note">상승 시와 하락 시 변화폭이 {fx(((r.asymmetry as Dict) ?? {}).ratio, 2)}배 다릅니다(비대칭) — 한 방향만 측정하면 드러나지 않습니다.</p>
       )}
       {((r.unavailable as Dict[]) ?? []).map((x, i) => (
         <p key={i} className="pg-warn">{String(x.shock)} → {String(x.target)}: {String(x.reason ?? "").replace(/\*\*/g, "")}</p>
       ))}
       {st && (
         <table className="pg-table pg-msens-stat">
-          <caption>과거에 같이 움직인 정도 <span className="pg-tag pg-tag--assumed">상관 ≠ 인과</span></caption>
+          <caption>과거 동조 정도(회귀) <span className="pg-tag pg-tag--assumed">상관 ≠ 인과</span></caption>
           <thead><tr><th>계열</th><th className="pg-td-num">기울기</th><th className="pg-td-num">t</th><th className="pg-td-num">R²</th></tr></thead>
           <tbody>{((st.rows as Dict[]) ?? []).map((x) => (
             <tr key={String(x.series)}>

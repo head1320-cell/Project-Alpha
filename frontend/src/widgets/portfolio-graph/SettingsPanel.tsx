@@ -148,7 +148,7 @@ function PerPort({ f, value, ports, onChange }: {
     <div className="pg-basic-field" data-field={f.name}>
       <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
       {ports.length === 0
-        ? <p className="pg-help">전략을 이어 주면 전략마다 고를 수 있습니다.</p>
+        ? <p className="pg-help">전략을 연결하면 전략별로 선택할 수 있습니다.</p>
         : (
           <div className="pg-perport">
             {ports.map((p) => {
@@ -196,7 +196,7 @@ function PerPortNumber({ f, value, ports, onChange }: {
     <div className="pg-basic-field" data-field={f.name}>
       <div className="pg-q">{f.ui.question ?? f.ui.label}</div>
       {ports.length === 0
-        ? <p className="pg-help">전략을 이어 주면 전략마다 정할 수 있습니다.</p>
+        ? <p className="pg-help">전략을 연결하면 전략별로 지정할 수 있습니다.</p>
         : (
           <div className="pg-perport">
             {ports.map((p) => (
@@ -217,7 +217,7 @@ function PerPortNumber({ f, value, ports, onChange }: {
                   ? `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""}`
                   : ok
                     ? `합 ${target}${f.ui.unit ?? ""} — 맞습니다`
-                    : `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""} — ${left > 0 ? `${left}${f.ui.unit ?? ""} 더 정하십시오` : `${-left}${f.ui.unit ?? ""} 줄이십시오`}`}
+                    : `합 ${total.toLocaleString("ko-KR")}${f.ui.unit ?? ""} — ${left > 0 ? `${left}${f.ui.unit ?? ""} 더 배정하십시오` : `${-left}${f.ui.unit ?? ""} 줄이십시오`}`}
             </p>
           </div>
         )}
@@ -437,7 +437,7 @@ function SaveBox({ result, stale, onSave, label, followUp }: {
               }}>
         {busy ? "저장하는 중…" : label ?? "이 미리보기를 저장하기"}
       </button>
-      <p className="pg-help">{why ?? "지금 본 미리보기를 한 번 저장합니다. 주문은 나가지 않습니다."}</p>
+      <p className="pg-help">{why ?? "현재 미리보기를 한 번 저장합니다. 주문은 전송하지 않습니다."}</p>
       {msg && <p className={`pg-save-msg${msg.ok ? "" : " pg-save-msg--err"}`} role="status">{msg.text}</p>}
       {followUp && savedId && (
         <button type="button" className="pg-btn pg-btn--primary pg-save-follow" onClick={() => followUp.run(savedId)}>{followUp.label}</button>
@@ -490,7 +490,7 @@ function SourcePicks({ node, entry, nodes, edges, catalog, plainOf, onRewire }: 
               const [src, h] = ev.target.value ? ev.target.value.split("|") : [null, null];
               onRewire(p.name, src, h);
             }}>
-              <option value="">{p.required === false ? "받지 않습니다(선택 입력)" : "아직 고르지 않았습니다"}</option>
+              <option value="">{p.required === false ? "받지 않습니다(선택 입력)" : "선택하지 않았습니다"}</option>
               {cur && !opts.some((o) => o.node === cur.source && o.port === cur.sourceHandle) && (
                 <option value={value}>{plainOf(cur.source)}</option>
               )}
@@ -545,7 +545,7 @@ function Passport({ stage, result, stale }: { stage: string | null; result?: Nod
   const trust = live?.explain?.trust ?? [];
   const n = (st: string) => trust.filter((t) => t.state === st).length;
   const lin = live?.lineage;
-  const chips = [lin?.practice && "합성", lin?.pit === "forward_only" && "지금 시점 전용", lin?.overlay && "노출 조절"].filter(Boolean) as string[];
+  const chips = [lin?.practice && "합성", lin?.pit === "forward_only" && "현재 시점 전용", lin?.overlay && "노출 조절"].filter(Boolean) as string[];
   return (
     <dl className="pg-passport">
       {stage && <div data-k="stage"><dt>단계</dt><dd>{stage}</dd></div>}
@@ -555,7 +555,7 @@ function Passport({ stage, result, stale }: { stage: string | null; result?: Nod
         <>
           <div data-k="assumed"><dt>가정</dt><dd>{n("assumed")}개</dd></div>
           <div data-k="unknown"><dt>모르는 것</dt><dd>{n("unknown")}개</dd></div>
-          <div data-k="unmeasured"><dt>재지 않은 것</dt><dd>{(live.explain?.unmeasured ?? []).length}가지</dd></div>
+          <div data-k="unmeasured"><dt>미측정 항목</dt><dd>{(live.explain?.unmeasured ?? []).length}가지</dd></div>
           {typeof live.elapsed_ms === "number" && <div data-k="elapsed"><dt>계산 시간</dt><dd>{fmtElapsed(live.elapsed_ms)}</dd></div>}
           {chips.length > 0 && <div data-k="lineage"><dt>계보</dt><dd>{chips.join(" · ")}</dd></div>}
         </>
@@ -593,7 +593,7 @@ function Impact({ node, edges, onImpact }: { node: PgNode; edges: Edge[]; onImpa
        onMouseEnter={() => onImpact?.(ids)} onMouseLeave={() => onImpact?.(null)}
        onFocus={() => onImpact?.(ids)} onBlur={() => onImpact?.(null)}>
       {down.length ? `이 노드를 바꾸면 ${ids.length}개 노드가 재계산됩니다 — 이 노드와 그 뒤 ${down.length}개.`
-        : "이 노드를 바꾸면 이 노드만 재계산됩니다 — 뒤에 이어진 노드가 없습니다."}
+        : "이 노드를 바꾸면 이 노드만 재계산됩니다 — 하류에 연결된 노드가 없습니다."}
     </p>
   );
 }
@@ -675,7 +675,7 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
       {entry?.savable && <SaveBox key={node.id} result={result} stale={stale} onSave={onSave} label={entry.save_label}
                                          followUp={saveFollowUp} />}
       <div className="pg-actions">
-        <button type="button" className="pg-btn pg-dup" onClick={onDuplicate} title="같은 입력으로 하나 더 (Ctrl+D)">
+        <button type="button" className="pg-btn pg-dup" onClick={onDuplicate} title="같은 입력으로 복제 (Ctrl+D)">
           <Copy size={14} /> 복제해서 비교하기
         </button>
       </div>

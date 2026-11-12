@@ -126,8 +126,8 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     if (!ids.length) return "전략으로 묶을 노드를 먼저 선택하십시오.";
     // 출력을 정할 수 없으면(흐름 끝이 둘 이상) 하나를 말없이 고르지 않고 까닭(U6 이어서 — 갈래의 [전략으로 묶기]와 같은 규칙 · CLAUDE.md 침묵 폴백 금지).
     const ends = strategyEnds(ids, s.nodes, s.edges, s.catalog ?? []);
-    if (!ends.length) return "고른 노드에 비중을 내는 노드가 없습니다 — 전략은 비중을 내야 포트폴리오에 합칠 수 있습니다. 그냥 묶으려면 Ctrl+G 를 씁니다.";
-    if (ends.length > 1) return `고른 노드에 비중을 내는 끝이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나만 고르거나 ‘슬리브 결합’으로 모으십시오.`;
+    if (!ends.length) return "선택한 노드에 비중 출력 노드가 없습니다 — 전략은 비중을 출력해야 포트폴리오에 결합할 수 있습니다. 단순 그룹은 Ctrl+G 를 사용하십시오.";
+    if (ends.length > 1) return `선택한 노드에 비중 출력이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나만 선택하거나 ‘슬리브 결합’으로 결합하십시오.`;
     const output = ends[0];
     push();
     const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !ids.includes(m)) })).filter((g) => g.members.length);
@@ -136,7 +136,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const label = uniqueLabel(`전략 ${groups.filter((g) => g.kind === "strategy").length + 1}`, groups);
     set({ groups: [...groups, { id: `grp_${Date.now().toString(36)}${nextSeq().toString(36)}`, label, members: ids,
                                 collapsed: false, kind: "strategy", color, output }] });
-    return `고른 노드 ${ids.length}개를 ‘${label}’로 묶었습니다. 포트폴리오에 합치려면 ‘전략 추가’로 전략을 하나 더 넣거나, 비중 출력을 ‘전략 결합’ 노드에 잇습니다.`;
+    return `선택한 노드 ${ids.length}개를 ‘${label}’로 묶었습니다. 포트폴리오에 결합하려면 ‘전략 추가’로 전략을 추가하거나, 비중 출력을 ‘전략 결합’ 노드에 연결합니다.`;
   },
 
   comparePicked: () => {
@@ -155,7 +155,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       edges = addEdge({ ...c, id: `${c.source}.${c.sourceHandle}->${c.target}.${c.targetHandle}` }, edges);
     });
     set({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges, selectedId: id, picked: [id] });
-    return `고른 ${chk.sources.length}개를 ‘${chk.label}’에 이었습니다 — 계산하면 같이 무너지는지 보입니다.`;
+    return `선택한 ${chk.sources.length}개를 ‘${chk.label}’에 연결했습니다 — 계산하면 동반 하락 여부가 표시됩니다.`;
   },
 
   addStrategy: (src) => {
@@ -220,9 +220,9 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       nodes = nodes.map((n) => (n.id === pid ? { ...n, data: { ...n.data, params: { ...n.data.params, labels } } } : n));
     }
     set({ nodes, edges, groups, selectedId: null, picked: [] });
-    if (!output) return `${wrapped}‘${label}’을 넣었습니다. 이 전략에는 비중을 내는 노드가 없어 포트폴리오에 잇지 않았습니다.`;
-    if (unwired) return `${wrapped}‘${label}’을 넣었습니다. 포트폴리오 노드의 빈 자리(최대 ${PORTFOLIO_PORTS.length}개)가 없어 ${unwired}개는 잇지 못했습니다.`;
-    return `${wrapped}‘${label}’을 넣어 ‘전략 결합’에 이었습니다. 계산하면 전략별 몫이 보입니다.`;
+    if (!output) return `${wrapped}‘${label}’을 추가했습니다. 이 전략에는 비중 출력 노드가 없어 포트폴리오에 연결하지 않았습니다.`;
+    if (unwired) return `${wrapped}‘${label}’을 추가했습니다. 포트폴리오 노드의 빈 포트(최대 ${PORTFOLIO_PORTS.length}개)가 없어 ${unwired}개는 연결하지 못했습니다.`;
+    return `${wrapped}‘${label}’을 추가해 ‘전략 결합’에 연결했습니다. 계산하면 전략별 배분 비중이 표시됩니다.`;
   },
 
   insertBlock: (b) => {
@@ -236,7 +236,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const label = uniqueLabel(b.label, s.groups);
     set({ nodes: [...s.nodes, ...added.nodes], edges: [...s.edges, ...added.edges], groups: [...s.groups, { id: `grp_${Date.now().toString(36)}${nextSeq().toString(36)}`, label,
                                   members: added.nodes.map((n) => n.id), collapsed: false }] });
-    return `‘${label}’ 블록을 넣었습니다 — 노드 ${added.nodes.length}개. 필요한 입력을 연결하십시오.`;
+    return `‘${label}’ 블록을 추가했습니다 — 노드 ${added.nodes.length}개. 필요한 입력을 연결하십시오.`;
   },
 
   ungroup: (id) => { push(); set((s) => ({ groups: s.groups.filter((g) => g.id !== id) })); },
@@ -277,7 +277,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
       if (m.to) into.set(m.to, (into.get(m.to) ?? 0) + 1);
       else if (m.from) outOf.set(m.from, (outOf.get(m.from) ?? 0) + 1);
     }
-    const said = [...[...into].map(([g, k]) => `‘${labelOf(g)}’ 상자에 노드 ${k}개를 넣었습니다`),
+    const said = [...[...into].map(([g, k]) => `‘${labelOf(g)}’ 상자에 노드 ${k}개를 추가했습니다`),
                   ...[...outOf].map(([g, k]) => `‘${labelOf(g)}’ 상자에서 노드 ${k}개를 뺐습니다`)];
     const text = [said.length ? `${said.join(" · ")}.` : "", ...[...new Set(plan.blocked.map((b) => b.why))]].filter(Boolean).join(" ");
     return text || null;
@@ -309,10 +309,10 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const ofRoot = parent ? parent.map[rootId] : rootId;
     // 고른 것은 모두 원본이거나 모두 뿌리와 같은 갈래 안이어야 한다 — 섞이면 어느 쪽 설정을 이을지 정할 수 없다.
     if (picked && members!.some((id) => s.branches.find((b) => id in b.map) !== parent))
-      return "고른 노드가 원본과 대안(또는 서로 다른 대안)에 섞여 있습니다 — 원본에서만, 또는 한 대안 안에서만 선택하십시오.";
+      return "선택한 노드가 원본과 대안(또는 서로 다른 대안)에 섞여 있습니다 — 원본에서만, 또는 한 대안 안에서만 선택하십시오.";
     if (parent && parent.root !== rootId) return "대안은 뿌리 노드에서만 다시 만들 수 있습니다 — 대안 안의 뿌리(점선 틀의 맨 앞)를 선택하십시오.";
     const letter = nextBranchLetter(ofRoot, s.branches);
-    if (!letter) return `한 노드에 대안은 ${MAX_BRANCHES}개까지입니다 — 여러 번 고를수록 우연히 좋아 보이는 쪽을 고를 위험이 커집니다. 쓰지 않는 대안을 지우고 생성하십시오.`;
+    if (!letter) return `한 노드에 대안은 ${MAX_BRANCHES}개까지입니다 — 비교 횟수가 늘수록 우연히 좋아 보이는 대안을 선택할 위험(다중 비교)이 커집니다. 사용하지 않는 대안을 삭제한 뒤 생성하십시오.`;
     // 갈래 안에서 고른 것은 원본 이름으로 — 범위는 늘 원본 노드다(복제의 설정은 아래 `from` 이 잇는다).
     const scope = branchScope(ofRoot, s.nodes, s.edges, s.groups, s.branches, members?.map((id) => parent?.map[id] ?? id));
     push();
@@ -360,7 +360,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
                                     strat.output ? idOf.get(strat.output) ?? null : null, `${strat.label} · ${branch.label}`) : null;
     set({ nodes: [...s.nodes, ...copies], edges: [...s.edges, ...newEdges], branches: [...s.branches, branch],
           ...(box ? { groups: [...s.groups, box] } : {}), selectedId: branch.root, picked: [branch.root], tab: "settings" });
-    return `‘${branch.label}’를 만들었습니다 — 노드 ${scope.length}개를 복제했습니다. 설정을 바꾸고 계산하면 원본과 다른 값만 나란히 보입니다.`;
+    return `‘${branch.label}’를 만들었습니다 — 노드 ${scope.length}개를 복제했습니다. 설정을 바꾸고 계산하면 원본과 다른 값만 비교해 표시합니다.`;
   },
   branchPicked: () => {
     const s = get();
@@ -395,7 +395,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const groups = s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.includes(m)) })).filter((g) => g.members.length);
     const box = strategyBox(groups, copies, output, `${b.label} 전략`);
     set({ groups: [...groups, box] });
-    return `‘${b.label}’를 ‘${box.label}’로 묶었습니다 — 포트폴리오에 합치려면 비중 출력을 ‘전략 결합’에 잇습니다.`;
+    return `‘${b.label}’를 ‘${box.label}’로 묶었습니다 — 포트폴리오에 결합하려면 비중 출력을 ‘전략 결합’에 연결합니다.`;
   },
   promoteBranch: (id) => {
     const s = get();
@@ -416,8 +416,8 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
           branches: s.branches.filter((x) => x.id !== id), pinned: s.pinned.filter((p) => !copies.has(p)),
           selectedId: s.selectedId && copies.has(s.selectedId) ? null : s.selectedId, picked: [] });
     return moved
-      ? `‘${b.label}’의 바꾼 설정 ${moved}개를 원본으로 옮겼습니다 — 재계산하십시오. 되돌리기(Ctrl+Z)로 돌아갈 수 있습니다.`
-      : `‘${b.label}’은 원본과 같아서 옮길 설정이 없었습니다 — 대안만 지웠습니다. 되돌리기(Ctrl+Z)로 돌아갈 수 있습니다.`;
+      ? `‘${b.label}’의 변경 설정 ${moved}개를 원본에 반영했습니다 — 재계산하십시오. 되돌리기(Ctrl+Z)로 복원할 수 있습니다.`
+      : `‘${b.label}’은 원본과 같아 반영할 설정이 없습니다 — 대안만 삭제했습니다. 되돌리기(Ctrl+Z)로 복원할 수 있습니다.`;
   },
   loadBlocks: () => { const r = readBlocks(); set({ blocks: r.blocks, blocksAvailable: r.available }); },
   saveBlock: (groupId) => {
@@ -429,7 +429,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const ok = cur.available && writeBlocks([...cur.blocks.filter((b) => b.label !== block.label), block]);
     const r = readBlocks();
     set({ blocks: r.blocks, blocksAvailable: r.available && ok,
-          noteUndo: false, noteTransient: false, note: ok ? `‘${g.label}’을 내 블록에 넣었습니다 — 이 브라우저에만 있습니다. 다른 곳에서 쓰려면 파일로 받아 두십시오.`
+          noteUndo: false, noteTransient: false, note: ok ? `‘${g.label}’을 내 블록에 저장했습니다 — 이 브라우저에만 저장됩니다. 다른 환경에서 쓰려면 파일로 내려받으십시오.`
                    : `이 브라우저에 블록을 저장할 수 없습니다 — ‘${g.label}’은 파일로 받아 두십시오.` });
     return block;
   },

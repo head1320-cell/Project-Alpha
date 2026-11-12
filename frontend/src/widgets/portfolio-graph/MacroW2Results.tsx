@@ -53,7 +53,7 @@ export function YieldCurveResult({ v }: { v: Dict }) {
       <KV rows={[
         ["10년 − 2년", <span key="s" className={num(r.spread_2y10y_bp) !== null && (r.spread_2y10y_bp as number) < 0 ? "pg-neg" : ""}>
           {sg(r.spread_2y10y_bp, 0, "bp")}</span>],
-        ["판정", inv ? "역전 — 짧은 금리가 더 높습니다" : "정상 — 긴 금리가 더 높습니다"],
+        ["판정", inv ? "역전 — 단기 금리가 더 높습니다" : "정상 — 장기 금리가 더 높습니다"],
       ]} />
       {dips.length > 0 && <p className="pg-note"><span className="pg-dot-inv" aria-hidden="true" />칠한 구간은 만기가 길어지는데 금리가 낮아지는 곳입니다.</p>}
       <p className="pg-note"><span className="pg-tag pg-tag--assumed">경험칙</span> {String(r.interpretation ?? "")}</p>
@@ -203,7 +203,7 @@ export function LongRunResult({ v }: { v: Dict }) {
 /** 엔진 출력 키 → 쉬운 이름. 모르는 키는 원래 이름 그대로(지어내지 않는다). */
 const OUT_KO: Record<string, string> = {
   series: "쓴 계열", series_used: "쓴 계열", k_factors: "요인 수", explained_var: "설명 분산 비율", loadings: "요인 적재",
-  latest: "마지막 값", factors: "요인", level: "수준", slope: "기울기", curvature: "곡률", lambda: "감쇠 λ",
+  latest: "최근값", factors: "요인", level: "수준", slope: "기울기", curvature: "곡률", lambda: "감쇠 λ",
   tenors: "만기(년)", n_series: "계열 수", nodes: "지표", edges: "선후 관계", target: "대상",
 };
 const plain = (x: unknown) => String(x ?? "").replace(/★|\*\*/g, "");

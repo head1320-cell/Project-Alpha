@@ -70,7 +70,7 @@ export function FilterEditor({ value, onChange }: { value: unknown; onChange: (v
                   onClick={() => put({ conditions: conds.filter((_, j) => j !== i) })}><X size={14} /></button>
         </div>
       ))}
-      {(g.groups?.length ?? 0) > 0 && <p className="pg-help">그룹 조건 {g.groups!.length}개는 그대로 두었습니다 — 전문가 설정에서 볼 수 있습니다.</p>}
+      {(g.groups?.length ?? 0) > 0 && <p className="pg-help">그룹 조건 {g.groups!.length}개는 그대로 유지했습니다 — 전문가 설정에서 확인할 수 있습니다.</p>}
       <button type="button" className="pg-add" onClick={() => put({ conditions: [...conds, { field: firstField, op: "gt", value: null }] })}>
         <Plus size={14} /> 조건 추가
       </button>

@@ -82,7 +82,7 @@ async function compute(page: Page) {
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-test("R5 · 도구줄은 고른 선 하나에만 (짝: 안 고르면 · 빈 곳을 누르면 · 노드를 고르면 없다)", async ({ page }) => {
+test("R5 · 도구줄은 선택한 선 하나에만 (짝: 안 고르면 · 빈 곳을 누르면 · 노드를 고르면 없다)", async ({ page }) => {
   await open(page, CORE);
   await expect(tb(page)).toHaveCount(0);
   await pickWire(page, UR);
@@ -136,7 +136,7 @@ test("R5 · 끊기 — Delete 키·선 탭과 같은 문장 · 한 단계", asyn
   await btn(page, "waypoint").click({ button: "right" });
   await expect(page.locator(".pg-ctx")).toHaveCount(0);
   await btn(page, "cut").click();
-  await expect(page.locator(".pg-note")).toHaveText(/^선 1개를 끊었습니다\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^선 1개의 연결을 해제했습니다\.\s*되돌리기/);
   await expect.poll(async () => (await wip(page)).edges.some((x) => x.id === UR)).toBe(false);
   await expect(page.locator('.pg-tab[data-tab="wire"]')).toHaveCount(0);           // 끊은 선을 다시 고르지 않는다(누름이 선까지 번지지 않음)
   await page.keyboard.press("Control+z");
@@ -145,7 +145,7 @@ test("R5 · 끊기 — Delete 키·선 탭과 같은 문장 · 한 단계", asyn
   // 선 탭 [선 끊기]도 같은 길·같은 문장
   await pickWire(page, UR);
   await page.locator(".pg-wire-cut").click();
-  await expect(page.locator(".pg-note")).toHaveText(/^선 1개를 끊었습니다\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^선 1개의 연결을 해제했습니다\.\s*되돌리기/);
 });
 
 test("R5 · (짝) 계산 뒤 끊으면 하류 수를 말한다", async ({ page }) => {
@@ -154,7 +154,7 @@ test("R5 · (짝) 계산 뒤 끊으면 하류 수를 말한다", async ({ page }
   await compute(page);
   await pickWire(page, EO);
   await btn(page, "cut").click();
-  await expect(page.locator(".pg-note")).toHaveText(/선 1개를 끊었습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
 });
 
 test("R5 · 사이에 넣기 — 후보 = 카탈로그에서 센 것 · 고르면 두 선 사이 · 한 단계 (짝: 후보 없는 선은 까닭)", async ({ page }) => {

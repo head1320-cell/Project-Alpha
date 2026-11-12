@@ -6,7 +6,7 @@
 `optimize(risk_aversion=)` 과 제약이면 `constrained_solve(risk_aversion=)` 에 넘긴다(두 함수는 이미 받는다 — 인자 하나 잇기).
 
 ★λ 를 주지 않으면 지금과 한 자리도 같다★(기본 None) — `test_cf3_golden` 의 `bl_backtest` 가 건다.
-★회사 관점은 넘기지 않는다★ — 지금 시점 전용(forward_only)이라 과거에 쓰면 룩어헤드다(`test_allocation_graph_w5` 가 막는다).
+★회사 관점은 넘기지 않는다★ — 현재 시점 전용(forward_only)이라 과거에 쓰면 룩어헤드다(`test_allocation_graph_w5` 가 막는다).
 
 백테스트는 쓴 λ 를 `config.risk_aversion`(위험 성향 효용일 때만 — 다른 방식의 응답 모양은 그대로)으로 밝히고, 선 점검 R9 는 그 값을
 포트폴리오 최적화의 λ 와 견준다(받지 못했으면 여전히 '바뀜').

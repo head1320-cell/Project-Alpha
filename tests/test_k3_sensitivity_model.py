@@ -163,7 +163,7 @@ def test_node_base_weights_equal_the_optimizer_weights(clean, model, opt):
 def test_node_mu_free_explanation_says_it_does_not_move(clean):
     s = _sens("risk_parity")["nodes"]["s"]
     ex = s["explain"]
-    assert "움직이지 않습니다" in ex["title"]
+    assert "영향을 받지 않습니다" in ex["title"]
     assert any("기대 수익을 쓰지 않아" in f for f in ex["facts"])
     assert ex.get("headline") is None                  # 0 을 '가장 큰 변화' 로 세우지 않는다
 

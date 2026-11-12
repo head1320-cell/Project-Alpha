@@ -33,7 +33,7 @@ export function TrustAndUnmeasured({ explain, openUnmeasured = false }: { explai
       )}
       {unmeasured.length > 0 && (
         <details className="pg-unmeasured pf-unmeasured" open={openUnmeasured || undefined}>
-          <summary>재지 않은 것 {unmeasured.length}가지</summary>
+          <summary>미측정 항목 {unmeasured.length}가지</summary>
           <ul>{unmeasured.map((u, i) => <li key={i}>{u}</li>)}</ul>
         </details>
       )}

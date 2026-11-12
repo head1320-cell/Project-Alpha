@@ -147,7 +147,7 @@ test("R6 · 노드에 초점 + Enter = 누르기 · 화살표 한 칸 · 읽어 
   for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
   await expect.poll(async () => (await pos(page, "returns")).x).toBe(330 + 3 * 11);
   const live = page.locator('[id^="react-flow__aria-live"]');
-  await expect(live).toHaveText("고른 노드를 오른쪽으로 옮겼습니다.");
+  await expect(live).toHaveText("선택한 노드를 오른쪽으로 이동했습니다.");
   await expect(undoBtn(page)).toBeEnabled();
   await undoBtn(page).click();
   await expect.poll(async () => (await pos(page, "returns")).x).toBe(330);
@@ -189,10 +189,10 @@ test("R6 · 선에 초점 + Enter = 선 누르기(도구줄 · '선' 탭) · Esc
   await wire(page, UR).focus();
   await page.keyboard.press("Enter");
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/^선 1개를 끊었습니다\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^선 1개의 연결을 해제했습니다\.\s*되돌리기/);
 });
 
-test("R6 · 노드에 초점 + Enter 는 노드 누르기와 같다 — 고른 선이 풀린다 (짝: React Flow 고르기만으로는 선 도구줄이 남는다)", async ({ page }) => {
+test("R6 · 노드에 초점 + Enter 는 노드 누르기와 같다 — 선택한 선이 풀린다 (짝: React Flow 고르기만으로는 선 도구줄이 남는다)", async ({ page }) => {
   await open(page, CORE);
   await wire(page, UR).focus();
   await page.keyboard.press("Enter");

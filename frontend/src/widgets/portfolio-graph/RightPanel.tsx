@@ -94,7 +94,7 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                        : "받는 노드를 이번에 계산하지 않아 점검하지 않았습니다."}
                      onCut={() => { const st = usePortfolioGraph.getState(); st.act(() => deleteNote(st.deleteElements([], [selEdge.id]))); }}
                      onInsert={(k, i, o) => { const st = usePortfolioGraph.getState();
-                       st.act(() => { st.insertOnEdge(selEdge.id, k, i, o); return "선 사이에 노드를 넣었습니다."; }); }} />
+                       st.act(() => { st.insertOnEdge(selEdge.id, k, i, o); return "선 사이에 노드를 추가했습니다."; }); }} />
         )}
         {s.tab !== "story" && s.tab !== "branches" && s.tab !== "wire" && !selected && (
           <p className="pg-empty">캔버스나 이야기에서 노드를 하나 선택하십시오.</p>
@@ -109,11 +109,11 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                          onFocus={focusNode} onImpact={s.setProcHover} onSwap={(k) => swapTo(selected.id, k)}
                          onRewire={(port, src, h) => {
                            const st = usePortfolioGraph.getState();
-                           st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 이었습니다." : "선을 뗐습니다."; });
+                           st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 연결했습니다." : "선 연결을 해제했습니다."; });
                          }}
                          onSave={() => portfolioGraphApi.save(toDoc(s.nodes, s.edges), selected.id, selResult?.view_hash ?? "")}
                          saveFollowUp={selected.data.kind === "backtest_setup" ? {
-                           label: "결과 불러오기 노드 추가",
+                           label: "결과 조회 노드 추가",
                            run: (runId) => {
                              // 시작한 실행을 읽는 노드를 설정 노드 오른쪽에 붙이고 고른다 — 링크는 없다(읽기는 run_id 로 한다).
                              const st = usePortfolioGraph.getState();

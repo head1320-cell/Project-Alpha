@@ -44,7 +44,7 @@ export function useGuide(doc: GraphDoc, state: GuideState, dismissed: ReadonlySe
     const tips = res.tips.filter((t) => live.current.applicable.includes(t.feature as GuideId));
     const why = res.rejected.length ? `${res.rejected.length}개는 검사에서 빠졌습니다: ${res.rejected[0].reason}` : null;
     setAi(tips.length ? { state: "ready", key: asked, tips, at: 0, note: why }
-                      : { state: "idle", note: why ? `AI 가 고른 도구가 없습니다 · ${why}` : "AI 가 고른 도구 없음" });
+                      : { state: "idle", note: why ? `AI 가 선택한 도구가 없습니다 · ${why}` : "AI 가 선택한 도구 없음" });
   }, []);
 
   const shown = ai.state === "ready" ? ai.tips.filter((t) => !dismissed.has(t.feature)) : [];

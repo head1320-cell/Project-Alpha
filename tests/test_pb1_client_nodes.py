@@ -261,7 +261,7 @@ def test_goal_states_a_known_gap_with_its_sign():
     facts = " ".join(_explain_goal(view, {}, None)["facts"])
     assert "목표보다 10.0~20.0%p 많습니다" in facts
     view["result"]["glide"]["gap"] = {"state": "below", "lo": -20.0, "hi": -5.0, "sign": -1}
-    assert "목표보다 5.0~20.0%p 적습니다" in " ".join(_explain_goal(view, {}, None)["facts"])
+    assert "목표보다 5.0~20.0%p 낮습니다" in " ".join(_explain_goal(view, {}, None)["facts"])
 
 
 def test_account_without_a_type_stops_instead_of_defaulting(market):

@@ -284,7 +284,7 @@ def test_weights_facts_speak_plainly():
     def facts(src, sig=S):
         return {f["key"]: f for f in ho.facts_weights({"weights": np.array([0.5, 0.5]), "names": ["a", "b"],
                                                        "sigma_annual": sig, "sigma_source": src})}
-    assert facts("trailing")["sigma"]["text"] == "지난 수익률로 잰 공분산"
+    assert facts("trailing")["sigma"]["text"] == "과거 수익률로 추정한 공분산"
     assert facts("sample_252")["sigma"]["text"] == "최근 252일 표본 공분산"
     assert facts("conditional")["sigma"]["text"] == "국면 조건부 공분산"
     assert facts("weird_src")["sigma"]["text"] == "weird_src"

@@ -45,7 +45,7 @@ const Step = memo(function Step({ id, n, node, entry, result, stale, current, on
       <button type="button" className="pg-step-num" onClick={onSelect} aria-label={`${n}번 노드 선택`}>{n}</button>
       <div className="pg-step-body">
         <h3 className="pg-step-title"><button type="button" onClick={onSelect}>{title}</button></h3>
-        {!ex && <p className="pg-step-p">{stale && result ? "설정을 바꿔서 재계산해야 합니다." : "계산하면 여기서 설명해 드립니다."}</p>}
+        {!ex && <p className="pg-step-p">{stale && result ? "설정이 변경돼 재계산이 필요합니다." : "계산하면 여기에 설명이 표시됩니다."}</p>}
         {ex && result?.status === "ok" && node.data.kind === "optimizer" && view.weights ? (
           <Bars weights={view.weights as Record<string, number>} labels={view.labels as Record<string, string>} />
         ) : ex?.headline && ex.headline.value !== null ? (
@@ -62,7 +62,7 @@ const Step = memo(function Step({ id, n, node, entry, result, stale, current, on
         )}
         {(ex?.unmeasured ?? []).length > 0 && (
           <details className="pg-unmeasured">
-            <summary>재지 않은 것 {ex!.unmeasured!.length}가지</summary>
+            <summary>미측정 항목 {ex!.unmeasured!.length}가지</summary>
             <ul>{ex!.unmeasured!.map((u, i) => <li key={i}>{u}</li>)}</ul>
           </details>
         )}

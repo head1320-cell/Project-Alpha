@@ -78,7 +78,7 @@ function Verdicts({ verdicts }: { verdicts: Dict[] }) {
             <tr key={i} className="pg-acct-verdict" data-verdict={String(x.verdict)}>
               <td>
                 <b>{LIMIT[String(x.kind)] ?? String(x.kind)}</b>
-                <span className="pg-acct-why">선언한 값 {declared} · 잰 값 {seen}</span>
+                <span className="pg-acct-why">선언값 {declared} · 측정값 {seen}</span>
                 {x.reason ? <span className="pg-acct-why">{plain(x.reason)}</span> : null}
               </td>
               <td className="pg-acct-tag"><span className={`pg-tag pg-tag--${tone}`}>{label}</span></td>
@@ -128,7 +128,7 @@ export function GoalResult({ v }: { v: Dict }) {
       {target !== null && (
         <p className="pg-goal-gap" data-state={st}>
           {st === "above" ? `지금 위험자산 비중이 목표보다 ${fmt(gap.lo)}~${fmt(gap.hi)}%p 많습니다`
-            : st === "below" ? `지금 위험자산 비중이 목표보다 ${fmt(-(num(gap.hi) ?? 0))}~${fmt(-(num(gap.lo) ?? 0))}%p 적습니다`
+            : st === "below" ? `현재 위험자산 비중이 목표보다 ${fmt(-(num(gap.hi) ?? 0))}~${fmt(-(num(gap.lo) ?? 0))}%p 낮습니다`
             : `현재 비중과 목표의 차이는 미상입니다 — ${plain(gap.reason)}`}
         </p>
       )}
@@ -170,7 +170,7 @@ export function HoldingsCheckResult({ v }: { v: Dict }) {
       </section>
       <section className="pg-hold-liq">
         <h4 className="pg-h4">유동성</h4>
-        {liq.available ? <p className="pg-note">{Object.keys((liq.by_ticker as Dict) ?? {}).length}종목의 거래대금·시가총액을 봤습니다 — {plain(liq.note)}</p>
+        {liq.available ? <p className="pg-note">{Object.keys((liq.by_ticker as Dict) ?? {}).length}종목의 거래대금·시가총액을 분석했습니다 — {plain(liq.note)}</p>
           : <p className="pg-warn">측정 불가 — {plain(liq.reason ?? "사유 없음")}</p>}
       </section>
       <p className="pg-note">{plain(r.note)}</p>

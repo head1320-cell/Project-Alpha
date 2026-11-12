@@ -85,7 +85,7 @@ def test_the_backtest_refuses_weights_that_carry_no_policy(market):
     rep = pg.run(_fixed_graph(), _registry_with_fixed())
     b = rep["nodes"]["b"]
     assert b["status"] == pg.STATUS_FAILED
-    assert "되돌려 볼 규칙" in b["reason"]
+    assert "재적용할 배분 규칙" in b["reason"]
 
 
 def test_the_backtest_refuses_an_overlay_before_running(market):
@@ -97,7 +97,7 @@ def test_the_backtest_refuses_an_overlay_before_running(market):
 def test_the_backtest_refuses_forward_only_lineage(market):
     rep = pg.run(_fixed_graph(pit="forward_only"), _registry_with_fixed())
     assert rep["nodes"]["b"]["status"] == pg.STATUS_FAILED
-    assert "지금 시점" in rep["nodes"]["b"]["reason"]
+    assert "현재 시점" in rep["nodes"]["b"]["reason"]
 
 
 def test_the_optimizer_policy_still_backtests(market):

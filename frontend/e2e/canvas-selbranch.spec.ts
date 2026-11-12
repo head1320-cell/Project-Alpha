@@ -33,7 +33,7 @@ async function pick(page: Page, ids: string[]) {
   await page.locator(".react-flow__pane").click({ position: { x: 350, y: 20 } });
   await node(page, ids[0]).click({ position: HEAD });
   for (const id of ids.slice(1)) await node(page, id).click({ position: HEAD, modifiers: [mod] });
-  await expect(bar(page).locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
+  await expect(bar(page).locator(".pg-selbar-n")).toHaveText(`${ids.length}개 선택`);
   // 막대의 단추는 모두 정말 누를 수 있다 — 떠 있는 판·미니맵(CF5b 기본 켬) 밑에 깔리지 않는다.
   await page.waitForTimeout(200);
   const covered = await bar(page).locator("button").evaluateAll((els) => els.filter((b) => {
@@ -46,12 +46,12 @@ async function pick(page: Page, ids: string[]) {
 const into = (doc: Doc, b: Branch, id: string) => doc.edges.filter((e) => e.target === id)
   .map((e) => `${b.map[e.source] ?? e.source}.${e.source_port}->${e.target_port}`).sort();
 
-test("고른 노드째 대안: 최적화·추정을 고르면 그 둘만 복제 · 뿌리 = 흐름 맨 앞(추정) · 들어오는 선은 원본과 같이 · 나가는 선 없음 · 되돌리기 한 번", async ({ page }) => {
+test("선택한 노드째 대안: 최적화·추정을 고르면 그 둘만 복제 · 뿌리 = 흐름 맨 앞(추정) · 들어오는 선은 원본과 같이 · 나가는 선 없음 · 되돌리기 한 번", async ({ page }) => {
   await openCanvas(page);
   const before = await wip(page);
   await pick(page, ["optimizer", "estimate"]);                      // 고른 것은 문서 순서로 모인다 — 문서·흐름 순서가 다른 경우는 아래 따로
   const btn = bar(page).locator(".pg-selbar-branch");
-  await expect(btn).toHaveAttribute("title", /고른 노드만 복제/);
+  await expect(btn).toHaveAttribute("title", /선택한 노드만 복제/);
   await btn.click();
   await expect(page.locator(".pg-note")).toContainText("대안 B");
   await expect(page.locator(".pg-note")).toContainText("노드 2개");
@@ -103,7 +103,7 @@ test("뿌리는 문서 순서가 아니라 흐름 맨 앞 — 하류 노드가 �
   expect(b.map[b.root]).toBe("returns");
 });
 
-test("짝: 한 노드 도구줄 대안은 지금처럼 하류 전부 — 고른 노드째 대안과 범위가 다르다", async ({ page }) => {
+test("짝: 한 노드 도구줄 대안은 지금처럼 하류 전부 — 선택한 노드째 대안과 범위가 다르다", async ({ page }) => {
   await openCanvas(page);
   await node(page, "optimizer").click({ position: HEAD });
   await page.locator(".pg-branch-make").click();
@@ -112,11 +112,11 @@ test("짝: 한 노드 도구줄 대안은 지금처럼 하류 전부 — 고른 
   expect(new Set(Object.values(b.map))).toEqual(new Set(["optimizer", "risk", "backtest"]));
 });
 
-test("명령 찾기: 둘 이상 고르면 '고른 노드째 대안 만들기' — 막대 단추와 같은 범위", async ({ page }) => {
+test("명령 찾기: 둘 이상 고르면 '선택한 노드째 대안 만들기' — 막대 단추와 같은 범위", async ({ page }) => {
   await openCanvas(page);
   await pick(page, ["risk", "optimizer"]);
   await page.keyboard.press("Control+k");
-  await page.getByLabel("명령 찾기").last().fill("고른 노드째 대안");
+  await page.getByLabel("명령 찾기").last().fill("선택한 노드째 대안");
   await page.keyboard.press("Enter");
   await expect(page.locator(".pg-note")).toContainText("대안 B");
   const b = (await wip(page)).branches![0];
@@ -124,7 +124,7 @@ test("명령 찾기: 둘 이상 고르면 '고른 노드째 대안 만들기' �
   expect(b.of_root).toBe("optimizer");
 });
 
-test("한 뿌리에 4개까지 — 도구줄 대안과 고른 노드째 대안이 같은 뿌리(추정)면 한도를 함께 센다 · 다섯째는 사유와 함께 거절", async ({ page }) => {
+test("한 뿌리에 4개까지 — 도구줄 대안과 선택한 노드째 대안이 같은 뿌리(추정)면 한도를 함께 센다 · 다섯째는 사유와 함께 거절", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1800 });
   await openCanvas(page);
   await node(page, "estimate").click({ position: HEAD });
@@ -190,7 +190,7 @@ test("포트폴리오 노드는 대안에 넣지 않고 그렇다고 말한다 �
   expect(Object.values(b.map)).toEqual(["optimizer"]);
 });
 
-test("미니맵을 켜도 고른 노드 막대는 그 밑에 깔리지 않는다 — 단추를 모두 누를 수 있고 대안이 만들어진다", async ({ page }) => {
+test("미니맵을 켜도 선택한 노드 막대는 그 밑에 깔리지 않는다 — 단추를 모두 누를 수 있고 대안이 만들어진다", async ({ page }) => {
   await openCanvas(page);
   await minimapOn(page, true);
   await pick(page, ["optimizer", "estimate"]);                      // pick 이 단추마다 가림을 잰다
@@ -199,7 +199,7 @@ test("미니맵을 켜도 고른 노드 막대는 그 밑에 깔리지 않는다
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`고른 노드 막대 대비(${scheme}): 대안 단추를 더해도 AA · 막대가 캔버스 안`, async ({ page }) => {
+  test(`선택한 노드 막대 대비(${scheme}): 대안 단추를 더해도 AA · 막대가 캔버스 안`, async ({ page }) => {
     await openCanvas(page);
     if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
     await pick(page, ["optimizer", "estimate"]);

@@ -148,7 +148,7 @@ test("실패·막힘: 수익률 실패 → 아래는 막힘(시간 없음 —) �
   await expect(page.locator('.react-flow__node[data-id="corr"]')).toHaveClass(/selected/);
 });
 
-test("여기까지 계산: 목록은 계산한 노드(고른 노드와 조상)만", async ({ page }) => {
+test("여기까지 계산: 목록은 계산한 노드(선택한 노드와 조상)만", async ({ page }) => {
   await openWith(page, OK);
   await page.locator('.pg-node[data-node-id="returns"]').click({ position: { x: 30, y: 14 } });
   const resp = page.waitForResponse((r) => isRun(new URL(r.url())));

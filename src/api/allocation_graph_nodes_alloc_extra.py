@@ -130,7 +130,7 @@ def _save_decision(values: dict, view: dict, params: Any) -> dict:
     return {"saved_id": out["dec_id"], "text": f"결정 기록으로 남겼습니다 · {out['dec_id']}"}
 
 
-_DECISION_KO = {"trade": "거래할 가치가 있습니다", "hold": "지금은 그대로 두는 게 낫습니다",
+_DECISION_KO = {"trade": "거래할 가치가 있습니다", "hold": "현재는 리밸런싱하지 않는 편이 유리합니다",
                 "undetermined": "판단할 수 없습니다"}
 
 
@@ -148,14 +148,14 @@ def _explain_rebalance(view: dict, prov: dict, params: Any) -> dict:
         facts.append(f"회전율 {c['turnover_pct']:.1f}% · 주문 {c.get('n_orders')}건 · 비용 {c.get('cost_bp')}bp")
     trust = []
     if (b.get("provenance") or {}).get("self_referential"):
-        trust.append(_t(ASSUMED, "편익을 잰 기대수익이 이 목표를 고른 바로 그 추정입니다 — 이득은 구조적으로 보장되고, "
+        trust.append(_t(ASSUMED, "편익 산출에 쓴 기대수익률이 이 목표를 산출한 바로 그 추정치입니다 — 이득은 구조적으로 보장되며, "
                                  "전망이 맞았다는 증거가 아닙니다."))
     if b.get("note"):
         trust.append(_t(ASSUMED, str(b["note"])))
     if c.get("reason"):
         trust.append(_t(UNKNOWN, f"비용: {c['reason']}"))
     if (r.get("coverage") or {}).get("source") == "mock":
-        trust.append(_practice("합성 수익률로 잰 판단입니다."))
+        trust.append(_practice("합성 수익률로 산출한 판단입니다."))
     trust.append(_t(CONFIRMED, "무거래 밴드는 자산마다 다릅니다(비용·포지션 크기·불확실성에 따라) — 고정 ±5% 가 아닙니다."))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["세금·체결 지연", "판단 뒤 실제 체결가"]}
 
@@ -241,7 +241,7 @@ def _pair(inputs: dict, p: PairParams) -> pg.NodeOutput:
         ({"key": "hedge_ratio", "label": "헤지 비율", "value": res["hedge_ratio"], "basis": "가정", "source": "직접 넣은 값"}
          if p.hedge_ratio is not None else
          {"key": "hedge_ratio", "label": "헤지 비율", "value": res["hedge_ratio"], "basis": "근사",
-          "source": "β_살 ÷ β_팔 — 과거 β 가 유지된다는 가정"}),
+          "source": "β_매수 ÷ β_매도 — 과거 β 가 유지된다는 가정"}),
     ]}
     return pg.NodeOutput(values={}, view={"result": _finite(res), "labels": _labels([p.long_code, p.short_code])},
                          tags={"practice": practice})
@@ -250,8 +250,8 @@ def _pair(inputs: dict, p: PairParams) -> pg.NodeOutput:
 def _explain_pair(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     lab = view.get("labels") or {}
-    title = (f"{lab.get(r.get('long'), r.get('long'))} 1 을 살 때 {lab.get(r.get('short'), r.get('short'))} "
-             f"{r.get('hedge_ratio')} 를 팝니다")
+    title = (f"{lab.get(r.get('long'), r.get('long'))} 1 매수당 {lab.get(r.get('short'), r.get('short'))} "
+             f"{r.get('hedge_ratio')} 매도")
     trust = []
     if r.get("beta_neutral") is None:
         trust.append(_t(UNKNOWN, r.get("beta_reason") or "순 β 를 모르는 상태입니다."))
@@ -281,7 +281,7 @@ class ImpactParams(BaseModel):
     asset_class: Literal[_asset_classes()] = Field("kospi_mid", json_schema_extra={"x-ui": _ui(  # type: ignore[valid-type]
         "종목 규모", "advanced")})
     side: Literal["BUY", "SELL"] = Field("BUY", json_schema_extra={"x-ui": _ui(
-        "방향", options={"BUY": "사기", "SELL": "팔기"})})
+        "방향", options={"BUY": "매수", "SELL": "매도"})})
 
 
 def _impact(inputs: dict, p: ImpactParams) -> pg.NodeOutput:
@@ -298,13 +298,13 @@ def _impact(inputs: dict, p: ImpactParams) -> pg.NodeOutput:
 
 def _explain_impact(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
-    title = (f"이 주문은 가격을 약 {r.get('total_impact_bps'):.1f}bp 움직일 것으로 봅니다"
+    title = (f"이 주문은 가격을 약 {r.get('total_impact_bps'):.1f}bp 변동시킬 것으로 추정합니다"
              if isinstance(r.get("total_impact_bps"), (int, float)) else "시장 충격을 추정했습니다")
     facts = [f"거래대금 대비 주문 {100 * (r.get('participation_rate') or 0):.2f}% · 예상 비용 {r.get('estimated_cost_krw'):,.0f}원"
              if isinstance(r.get("estimated_cost_krw"), (int, float)) else "",
              f"식: {r.get('formula')}"]
     trust = [_t(ASSUMED, "제곱근 법칙(충격 ∝ √(주문/거래대금))의 추정입니다 — 호가창을 읽은 값이 아닙니다."),
-             _t(ASSUMED, f"영구·일시 충격을 {r.get('split')} 로 나눴습니다 — 코드의 가정입니다.")]
+             _t(ASSUMED, f"영구·일시 충격을 {r.get('split')} 로 배분했습니다 — 코드의 가정입니다.")]
     return {"title": title, "facts": [f for f in facts if f], "trust": trust, "unmeasured": ["실제 호가 깊이", "분할 주문의 효과"]}
 
 
@@ -315,7 +315,7 @@ class CashParams(BaseModel):
     invested_ratio: float = Field(0.9, ge=0, le=1, json_schema_extra={"x-ui": _ui(
         "투자 비중", question="투자 비중(자산 대비 %)", help="비중 노드를 연결하면 해당 비중의 합(절댓값, 최대 1)을 적용합니다.")})
     as_of_date: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
-        "기준일", "advanced", help="비우면 오늘입니다. 그날까지 저장된 금리만 봅니다.")})
+        "기준일", "advanced", help="비우면 오늘입니다. 그날까지 저장된 금리만 사용합니다.")})
     cash_floor: float = Field(0.0, ge=0, le=1, json_schema_extra={"x-ui": _ui("최소 현금", "advanced")})
 
 
@@ -430,7 +430,7 @@ def _counterfactual(inputs: dict, p: CounterfactualParams) -> pg.NodeOutput:
 
 def _explain_counterfactual(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
-    return {"title": "같은 전략을 다른 규칙으로 돌렸다면을 나란히 봤습니다",
+    return {"title": "같은 전략의 결합 규칙별 반사실 결과를 비교했습니다",
             "facts": [str(r.get("summary") or "")] if r.get("summary") else [],
             "trust": [_t(ASSUMED, "반사실도 시뮬레이션입니다 — 모든 시나리오가 같은 비용 가정을 받습니다."),
                       _t(UNKNOWN, "원천 실행의 데이터가 합성인지는 전략별 출처 칸을 보십시오.")],

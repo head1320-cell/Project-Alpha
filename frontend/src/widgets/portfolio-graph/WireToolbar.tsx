@@ -81,13 +81,13 @@ export function WireToolbar({ id, at, via, onTool }: { id: string; at: Pt; via: 
   useDismiss(open, useCallback(() => setOpen(false), []), ref);
   return (
     <ViewportPortal>
-      <div ref={ref} className="pg-edge-tb nodrag nopan" data-edge-id={id} data-place={place} role="toolbar" aria-label="고른 선"
+      <div ref={ref} className="pg-edge-tb nodrag nopan" data-edge-id={id} data-place={place} role="toolbar" aria-label="선택한 선"
            style={{ transform: place === "above"
              ? `translate(${at.x}px, ${at.y - PILL_GAP}px) scale(${1 / zoom}) translate(-50%, -100%) translate(0, -${GAP_PX}px)`
              : `translate(${at.x}px, ${at.y + PILL_GAP}px) scale(${1 / zoom}) translate(-50%, 0) translate(0, ${GAP_PX}px)` }}
            onClick={stop} onPointerDown={stop} onMouseDown={stop} onDoubleClick={stop} onContextMenu={stop}>
-        <button type="button" className="pg-edge-tb-b" data-action="cut" aria-label="이 선 끊기 — 토스트의 되돌리기나 Ctrl+Z 로 돌립니다"
-                onClick={() => onTool(id, "cut")}><Scissors size={14} aria-hidden="true" />끊기</button>
+        <button type="button" className="pg-edge-tb-b" data-action="cut" aria-label="이 선 연결 해제 — 토스트의 되돌리기나 Ctrl+Z 로 복원합니다"
+                onClick={() => onTool(id, "cut")}><Scissors size={14} aria-hidden="true" />연결 해제</button>
         <button type="button" className="pg-edge-tb-b" data-action="insert" aria-expanded={open} aria-haspopup="menu" aria-label="선 사이에 노드 넣기"
                 onClick={() => setOpen((v) => !v)}><ListPlus size={14} aria-hidden="true" />사이에 넣기</button>
         <button type="button" className="pg-edge-tb-b" data-action="waypoint" aria-label="선 가운데에 꺾는 점 넣기 — 끌어서 길을 바꿉니다"

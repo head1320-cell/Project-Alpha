@@ -75,7 +75,7 @@ export async function bridgeFromCompany(raw: string | null): Promise<BridgeBoot 
     const labels = ((await r.json()) as { labels?: Record<string, string> }).labels ?? {};
     const name = labels[code];
     if (typeof name !== "string" || name === code) return { doc: null, note: `알 수 없는 코드 ${code}라 가져오지 않았습니다.` };
-    return { doc: goalDoc("company", [code], null), note: `기업 분석에서 넘어온 ${name}(${code})로 ‘기업 하나 깊게’ 흐름을 열었습니다. 가정이 필요한 모형은 노드 추가에서 고르십시오.` };
+    return { doc: goalDoc("company", [code], null), note: `기업 분석에서 넘어온 ${name}(${code})로 ‘단일 기업 심층 분석’ 흐름을 열었습니다. 가정이 필요한 모형은 노드 추가에서 선택하십시오.` };
   } catch {
     return { doc: null, note: "종목 이름을 확인하지 못해 가져오지 않았습니다. 잠시 뒤 다시 넘기십시오." };
   }

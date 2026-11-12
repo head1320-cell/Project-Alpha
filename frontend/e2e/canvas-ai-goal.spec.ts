@@ -23,7 +23,7 @@ const RISK = { action: "add", kind: "risk", label: "위험 기여도 분해", re
                attach: [{ source: "optimizer", source_port: "weights", target: "@new", target_port: "weights" }] };
 const ok = (suggestions: object[]) => ({ available: true, source: "claude", model: "claude-opus-5-5", suggestions, rejected: [], cached: false,
                                          usage: { input_tokens: 1200, output_tokens: 300, cost_usd: 0.0108, cost_note: null } });
-const TITLES = ["새 포트폴리오 만들기", "비중의 위험 점검", "타이밍 규칙 시험", "기업 하나 깊게"];
+const TITLES = ["새 포트폴리오 만들기", "비중의 위험 점검", "타이밍 규칙 시험", "단일 기업 심층 분석"];
 
 const chip = (page: Page) => page.locator(".pg-goalchip");
 const said = (goal: string | null) => `이 설계의 목표: ${goal ?? "정하지 않았습니다"}`;

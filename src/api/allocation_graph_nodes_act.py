@@ -43,8 +43,8 @@ OrderParams = _subset(
     "OrderPreviewParams", ExecPlanRequest, ("current_weights", "portfolio_value", "restricted"),
     ui={
         "current_weights": _ui("현재 비중", question="현재 보유 비중",
-                               presets=[{"label": "없습니다(새로 사기)", "value": {}}],
-                               help="종목 코드별 비중(%)은 전문가 설정에서 넣습니다."),
+                               presets=[{"label": "없습니다(신규 매수)", "value": {}}],
+                               help="종목 코드별 비중(%)은 전문가 설정에서 입력합니다."),
         "portfolio_value": _ui("평가 금액", question="평가 금액 기준", unit="원",
                                presets=[{"label": "1천만 원", "value": 1e7}, {"label": "1억 원", "value": 1e8},
                                         {"label": "10억 원", "value": 1e9}]),
@@ -118,7 +118,7 @@ def _explain_orders(view: dict, prov: dict, params: Any) -> dict:
              f"{sum(1 for o in orders if o.get('side') == 'sell')}건입니다."]
     if s.get("est_cost") is not None:
         facts.append(f"예상 비용은 {float(s['est_cost']):,.0f}원입니다.")
-    trust = [_t(CONFIRMED, "주문은 만들지 않았습니다 — 목록만 미리 봤습니다.")]
+    trust = [_t(CONFIRMED, "주문은 생성하지 않았습니다 — 매매 내역만 사전 산출했습니다.")]
     held = _holdings_line(view.get("holdings_vs_universe"))
     if held:
         trust.append(held)
@@ -126,7 +126,7 @@ def _explain_orders(view: dict, prov: dict, params: Any) -> dict:
     trust += [_t(ASSUMED, f"{c['name']}: {c['detail']}") for c in warns]
     if mock_allowed():
         trust.append(_t(UNKNOWN, "개발 모드라 종가·거래대금이 합성일 수 있습니다 — 실제 체결 금액을 말해 주지 않습니다."))
-    return {"title": f"주문 {len(orders)}건을 미리 만들어 봤습니다" if orders else "바꿀 주문이 없습니다",
+    return {"title": f"주문 {len(orders)}건을 사전 산출했습니다" if orders else "바꿀 주문이 없습니다",
             "headline": {"label": "사전 점검", "value": None, "unit": "",
                          "text": "승인 가능" if pre.get("can_approve") else "승인 불가"},
             "facts": facts, "trust": trust,
@@ -138,7 +138,7 @@ def _explain_orders(view: dict, prov: dict, params: Any) -> dict:
 class TargetParams(BaseModel):
     model_config = _FORBID
     note: str = Field("", max_length=500, json_schema_extra={"x-ui": _ui(
-        "메모", question="목표 메모", widget="text", help="저장할 때 함께 남습니다.")})
+        "메모", question="목표 메모", widget="text", help="저장 시 함께 기록됩니다.")})
 
 
 def _target_version(inputs: dict, p: TargetParams, lineage: dict) -> pg.NodeOutput:
@@ -165,7 +165,7 @@ def _save_target_version(values: dict, view: dict, params: TargetParams) -> dict
     tv = values["target"]["tv"]
     tpv_id = save_target(tv, note=params.note or "노드 캔버스에서 저장")
     if tpv_id is None:
-        raise pg.NodeFailure("DB 를 쓸 수 없어 저장하지 못했습니다.")
+        raise pg.NodeFailure("DB 를 사용할 수 없어 저장하지 못했습니다.")
     kind = "실행할 수 있는" if tv["status"] == "executable" else "연구용"
     return {"saved_id": tpv_id, "text": f"{kind} 실행 목표로 저장했습니다 · {tpv_id}"}
 
@@ -185,8 +185,8 @@ def _explain_target(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, "목표 규칙(롱온리·출처·거래 가능성)을 검사했습니다.")]
     if not ok:
         trust.append(_t("failed", str(tv.get("status_reason") or "실행할 수 없는 목표입니다.")))
-    trust.append(_t(UNKNOWN, "저장하기 전에는 기록되지 않습니다 — 저장해도 주문은 나가지 않습니다."))
-    return {"title": "실행할 수 있는 목표를 만들었습니다" if ok else "연구용 목표를 만들었습니다",
+    trust.append(_t(UNKNOWN, "저장하기 전에는 기록되지 않습니다 — 저장해도 주문은 전송하지 않습니다."))
+    return {"title": "실행 목표 비중을 생성했습니다" if ok else "연구용 목표를 만들었습니다",
             "headline": {"label": "상태", "value": None, "unit": "", "text": "실행 가능" if ok else "연구용"},
             "facts": facts, "trust": trust, "unmeasured": ["이 목표로 실제 체결했을 때의 결과"]}
 
@@ -205,7 +205,7 @@ class JournalParams(BaseModel):
     thesis: str = Field("", max_length=2000, json_schema_extra={"x-ui": _ui(
         "이유", question="결정 사유", widget="text")})
     counter: str = Field("", max_length=2000, json_schema_extra={"x-ui": _ui(
-        "반대 근거", "advanced", widget="text", help="틀릴 수 있는 이유를 남겨 두면 나중에 되짚기 쉬웁니다.")})
+        "반대 근거", "advanced", widget="text", help="반대 근거를 기록해 두면 사후 검토가 쉬워집니다.")})
 
 
 def _journal(inputs: dict, p: JournalParams) -> pg.NodeOutput:
@@ -232,7 +232,7 @@ def _save_journal(values: dict, view: dict, params: JournalParams) -> dict:
     from src.data.journal_store import create_entry
     eid = create_entry(view["title"], links=view["links"], record=view["record"])
     if eid is None:
-        raise pg.NodeFailure("DB 를 쓸 수 없어 저장하지 못했습니다.")
+        raise pg.NodeFailure("DB 를 사용할 수 없어 저장하지 못했습니다.")
     return {"saved_id": eid, "text": f"결정을 기록했습니다 · {eid}"}
 
 
@@ -240,14 +240,14 @@ def _explain_journal(view: dict, prov: dict, params: Any) -> dict:
     rec, links = view.get("record") or {}, view.get("links") or {}
     facts = [f"결정: {rec.get('decision')}.", f"목표 상태: {'실행 가능' if links.get('target', {}).get('status') == 'executable' else '연구용'}."]
     if "orders" in links:
-        facts.append("주문 미리보기 요약을 함께 남깁니다.")
+        facts.append("주문 미리보기 요약을 함께 기록합니다.")
     if "stress" in links:
-        facts.append(f"충격 점검 ‘{links['stress'].get('label')}’을 함께 남깁니다.")
+        facts.append(f"충격 점검 ‘{links['stress'].get('label')}’을 함께 기록합니다.")
     trust = [_t(UNKNOWN, "저장하기 전에는 기록되지 않습니다.")]
     if not (rec.get("thesis") or "").strip():
-        trust.append(_t(ASSUMED, "이유를 적지 않았습니다 — 나중에 이 결정을 되짚기 어려웁니다."))
+        trust.append(_t(ASSUMED, "근거를 입력하지 않았습니다 — 사후 검토가 어려워집니다."))
     return {"title": f"‘{view.get('title')}’ 기록을 준비했습니다", "facts": facts, "trust": trust,
-            "unmeasured": ["이 결정의 결과 — 기록한 뒤 성과 귀인으로 되짚습니다"]}
+            "unmeasured": ["이 결정의 결과 — 기록 후 성과 귀인으로 사후 검토합니다"]}
 
 
 # ── 등록 ─────────────────────────────────────────────────────────────────────

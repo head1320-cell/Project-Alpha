@@ -116,7 +116,7 @@ def test_a_screened_universe_cannot_be_backtested_but_a_hand_picked_one_can(monk
     rep = _run(g)
     assert rep["nodes"]["o"]["status"] == "ok"
     b = rep["nodes"]["b"]
-    assert b["status"] == "failed" and "지금 시점" in b["reason"]
+    assert b["status"] == "failed" and "현재 시점" in b["reason"]
     assert _run(chain(backtest={}))["nodes"]["b"]["status"] == "ok"           # 짝
 
 

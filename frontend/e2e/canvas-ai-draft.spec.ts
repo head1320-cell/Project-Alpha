@@ -397,8 +397,8 @@ test("U5 규칙 · pickDraft — 뺀 줄은 빠지고, 뺀 새 노드에 기대�
   expect(noAdd.body.connect).toEqual([]);
   expect(noAdd.body.set.map((x) => x.node)).toEqual(["returns"]);
   expect(noAdd.n).toBe(1);
-  expect(noAdd.blocked.get(KEYS.w)).toBe("‘정책 백테스트(새)’를 빼서 이 선을 이을 수 없습니다");
-  expect(noAdd.blocked.get(KEYS.r)).toBe("‘정책 백테스트(새)’를 빼서 이 선을 이을 수 없습니다");
+  expect(noAdd.blocked.get(KEYS.w)).toBe("‘정책 백테스트(새)’를 빼서 이 선을 연결할 수 없습니다");
+  expect(noAdd.blocked.get(KEYS.r)).toBe("‘정책 백테스트(새)’를 빼서 이 선을 연결할 수 없습니다");
   expect(noAdd.blocked.get(KEYS.cost)).toBe("‘정책 백테스트(새)’를 빼서 이 값을 넣을 곳이 없습니다");
   expect(noAdd.blocked.has(KEYS.look)).toBe(false);
   const noLook = pickDraft(D, new Set([KEYS.look]), EXIST);
@@ -430,7 +430,7 @@ test("U5 · 새 노드를 빼면 그 노드의 잇기·값 줄이 꺼지고 까�
     await expect(pickBox(page, k)).toBeDisabled();
     await expect(pickBox(page, k)).not.toBeChecked();
   }
-  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.w}"] ~ .pg-say-why`)).toHaveText("‘정책 백테스트(새)’를 빼서 이 선을 이을 수 없습니다");
+  await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.w}"] ~ .pg-say-why`)).toHaveText("‘정책 백테스트(새)’를 빼서 이 선을 연결할 수 없습니다");
   await expect(panel(page).locator(`.pg-say-pick[data-key="${KEYS.cost}"] ~ .pg-say-why`)).toHaveText("‘정책 백테스트(새)’를 빼서 이 값을 넣을 곳이 없습니다");
   await expect(pickBox(page, KEYS.look)).toBeEnabled();
   await expect(pickBox(page, KEYS.look)).toBeChecked();

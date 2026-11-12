@@ -75,7 +75,7 @@ function SectorCard({ value, check, hasNames, onChange }: {
   return (
     <div className="pg-cons-card pg-cons-card--sectors" data-key="group_caps_pct">
       <span className="pg-cons-card-q">업종별 최대 비중</span>
-      {!hasNames ? <p className="pg-help pg-cons-sectors-wait">종목을 먼저 정하면 업종을 고를 수 있습니다.</p>
+      {!hasNames ? <p className="pg-help pg-cons-sectors-wait">종목을 먼저 지정하면 업종을 선택할 수 있습니다.</p>
         : !data ? <p className="pg-help pg-cons-sectors-wait">이 종목들의 업종을 확인하는 중…</p>
         : !data.sectors_readable ? (
           <p className="pg-cons-sectors-none" role="note">이 종목들의 업종 읽기 실패 — 업종 상한을 걸어도 적용되지 않습니다.</p>
@@ -146,7 +146,7 @@ export function ConstraintsEditor({ f, value, root, names, model, onChange }: {
         <p className="pg-cons-short" role="note">{data?.short_note ?? "공매도가 들어간 비중입니다 — 확인하는 중…"}</p>
       )}
       <details className="pg-cons-more" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-        <summary>더 정하기{summary && <span className="pg-cons-more-sum"> · {summary}</span>}</summary>
+        <summary>추가 제약{summary && <span className="pg-cons-more-sum"> · {summary}</span>}</summary>
         <div className="pg-cons-shapes" role="group" aria-label="모양">
           {SHAPES.map((s) => (
             <button key={s.id} type="button" className={`pg-chip pg-cons-shape${shape === s.id ? " on" : ""}`} aria-pressed={shape === s.id}

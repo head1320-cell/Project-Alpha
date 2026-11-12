@@ -48,12 +48,12 @@ test("답 = 서버 total_passed — 137 로 고치면 '137개' · 0 이면 '없�
   await patchStream(page, (r) => { r.total_passed = 137; });
   await open(page);
   await settled(page);
-  await expect(answer(page)).toHaveText("조건에 맞는 종목 137개입니다");
+  await expect(answer(page)).toHaveText("조건을 충족한 종목 137개입니다");
 
   await page.unroute("**/api/v1/screener/run-advanced-stream");
   await patchStream(page, (r) => { r.total_passed = 0; r.items = []; });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(answer(page)).toHaveText("조건에 맞는 종목 없음", { timeout: 30_000 });
+  await expect(answer(page)).toHaveText("조건을 충족한 종목 없음", { timeout: 30_000 });
   await expect(rows(page)).toHaveCount(0);
 });
 

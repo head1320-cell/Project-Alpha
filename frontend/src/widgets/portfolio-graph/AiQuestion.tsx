@@ -25,7 +25,7 @@ const PRESETS: Record<AskTarget["kind"], string[]> = {
   edge: ["전달 항목은 무엇입니까?", "누락·변경 항목이 있습니까?"],
 };
 /** 여러 줄이 있는 부분 — 칩에 몇 번째인지 붙인다. */
-const LISTY = new Set(["사실", "믿음", "재지 않은 것", "건너간 것", "빠지거나 바뀐 것"]);
+const LISTY = new Set(["사실", "믿음", "미측정 항목", "전달된 것", "누락·변경된 것"]);
 
 type Turn =
   | { q: string; state: "loading" }

@@ -356,7 +356,7 @@ test("다시 꽂기(CF2): 맞는 소켓으로 옮기면 선 수 같고 id 바뀜
     .map((x) => ({ source: x.source, target: x.target, sourceHandle: x.source_port, targetHandle: x.target_port }));
   const why = connectionProblem({ source: "returns", sourceHandle: "returns", target: "optimizer", targetHandle: "belief" }, nodes, rest, cat.nodes, cat.port_plain)!;
   await expect(page.locator(".pg-note")).toContainText(why);
-  await expect(page.locator(".pg-note")).toContainText("선은 그대로 두었습니다");
+  await expect(page.locator(".pg-note")).toContainText("선은 그대로 유지했습니다");
   expect(await edgeIds(page)).toEqual(before);
   // 맞는 소켓 — 선 수 같고 id 가 바뀐다.
   await drag(await mid(handle(page, "optimizer", "returns", "target")));

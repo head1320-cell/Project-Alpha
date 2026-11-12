@@ -385,7 +385,7 @@ test("신호·후보 노드(BK W2): 스크리너 → 알파 점수 → 점수로
   const body = await run(page);
   for (const id of ["scr", "alp", "w"]) expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
   expect(body.nodes.scr.lineage.pit).toBe("forward_only");
-  await expect(node(page, "scr").locator(".pg-node-ev")).toContainText("지금 시점 전용");
+  await expect(node(page, "scr").locator(".pg-node-ev")).toContainText("현재 시점 전용");
   await node(page, "w").click();
   await tab(page, "detail");
   await expect(page.locator(".pg-side .pg-table tr")).toHaveCount(5);
@@ -394,7 +394,7 @@ test("신호·후보 노드(BK W2): 스크리너 → 알파 점수 → 점수로
   await node(page, "scr").click();
   await tab(page, "settings");
   const f = page.locator('.pg-basic-field[data-field="filter_ast"]');
-  await f.locator(".pg-chip", { hasText: "꾸준히 버는" }).click();
+  await f.locator(".pg-chip", { hasText: "고ROE" }).click();
   await expect(f.locator(".pg-filter-row")).toHaveCount(1);
   await f.locator(".pg-add").click();
   await expect(f.locator(".pg-filter-row")).toHaveCount(2);
@@ -511,8 +511,8 @@ test("기업·가치평가(BK W5): 기업 전망은 비중까지 가고 과거 �
   expect(body.nodes.optimizer.status).toBe("ok");
   expect(body.nodes.optimizer.view.company_views_used, "회사 뷰는 사용자 뷰와 섞이지 않고 따로 센다").toBe(body.nodes.c.view.views.length);
   expect(body.nodes.optimizer.lineage.pit).toBe("forward_only");
-  expect(body.nodes.backtest.status, "지금 시점 전용 전망이 섞인 비중은 과거로 돌리지 않는다").toBe("failed");
-  expect(body.nodes.backtest.reason).toContain("지금 시점");
+  expect(body.nodes.backtest.status, "현재 시점 전용 전망이 섞인 비중은 과거로 돌리지 않는다").toBe("failed");
+  expect(body.nodes.backtest.reason).toContain("현재 시점");
   expect(body.nodes.s.status, body.nodes.s.reason).toBe("ok");
   expect(body.nodes.w.status, body.nodes.w.reason).toBe("ok");
   for (const [code, sc] of Object.entries(body.nodes.s.view.scores as Record<string, number>)) {
@@ -523,7 +523,7 @@ test("기업·가치평가(BK W5): 기업 전망은 비중까지 가고 과거 �
 
   await node(page, "c").click();
   await tab(page, "detail");
-  await expect(page.locator(".pg-model-type")).toContainText("지금 시점에만");
+  await expect(page.locator(".pg-model-type")).toContainText("현재 시점에만");
   await node(page, "s").click();
   await expect(page.locator(".pg-side .pg-table tbody tr").first()).toBeVisible();
   await expect(page.locator(".pg-side .pg-note")).toContainText("0으로 치지 않고");
@@ -645,7 +645,7 @@ test("여기까지 계산(BL1): 올리면 돌 경로가 밝아지고, 누르면 
   expect(Object.keys(body.nodes).sort()).toEqual(["estimate", "optimizer", "returns", "universe", "views"]);
   expect(body.gates).toBeNull();
   await expect(page.locator(".pg-summary--partial")).toContainText("여기까지 계산 · 5개");
-  await expect(page.locator(".pg-rail-pill")).toContainText("관문은 전체를 계산해야 봅니다");
+  await expect(page.locator(".pg-rail-pill")).toContainText("관문은 전체 계산 후 확인합니다");
   await page.locator(".pg-rail-pill").click();
   await expect(page.locator(".pg-rail-summary")).toContainText("전체를 계산할 때");
 
@@ -675,7 +675,7 @@ test("편집 도구(BL1): 되돌리기·다시하기 · 복사·붙여넣기(링
   // 두 노드(종목 고르기 → 수익률 불러오기)를 함께 골라 복사 → 붙이면 둘과 그 사이 링크 하나만 따라온다.
   await node(page, "universe").click();
   await node(page, "returns").click({ modifiers: [mod === "Meta" ? "Meta" : "Control"] });
-  await expect(page.locator(".pg-hint")).toContainText("2개 골랐습니다");
+  await expect(page.locator(".pg-hint")).toContainText("2개 선택");
   const before = await exportDoc(page);
   await page.keyboard.press(`${mod}+c`);
   await page.keyboard.press(`${mod}+v`);
@@ -704,7 +704,7 @@ test("편집 도구(BL1): 되돌리기·다시하기 · 복사·붙여넣기(링
   expect(x("optimizer")).toBeLessThan(x("backtest"));
 });
 
-test("그룹 상자(BL1): 고른 노드를 묶고 접으면 숨고 요약만 · 파일에 남고 다시 불러와도 그대로", async ({ page }) => {
+test("그룹 상자(BL1): 선택한 노드를 묶고 접으면 숨고 요약만 · 파일에 남고 다시 불러와도 그대로", async ({ page }) => {
   await openCanvas(page);
   await node(page, "risk").click();
   await node(page, "backtest").click({ modifiers: [mod === "Meta" ? "Meta" : "Control"] });
@@ -802,7 +802,7 @@ test("실행실 서랍(BL2): 저장된 실행 목표에서만 계획 · 연구�
   const approve = flow.locator('button[data-to="approved"]');
   if (sb.pretrade.can_approve) await expect(approve).toBeEnabled();
   else { await expect(approve).toBeDisabled(); await expect(flow.locator(".pg-warn")).toContainText("승인 불가"); }
-  await expect(flow.locator(".pg-note")).toContainText("실제 주문은 나가지 않습니다");
+  await expect(flow.locator(".pg-note")).toContainText("실제 주문은 전송하지 않습니다");
   // Esc 로 닫힌다.
   await page.keyboard.press("Escape");
   await expect(s).toBeHidden();
@@ -850,7 +850,7 @@ test("기록함 서랍(BL2): 판단 기록 회고 쓰기·삭제 · 연구 기�
   await expect(item).toHaveCount(0);
 
   await s.getByRole("tab", { name: "국면 스냅샷" }).click();
-  await expect(s.locator(".pg-note", { hasText: "과거 백테스트에는 쓸 수 없습니다" })).toBeVisible();
+  await expect(s.locator(".pg-note", { hasText: "과거 백테스트에는 사용할 수 없습니다" })).toBeVisible();
 
   // ★못 읽은 것과 없는 것은 다른 문장★ — 목록 요청을 실패시키면 '없어요' 가 아니라 '불러오지 못했어요'.
   await page.route("**/research-runs?**", (r) => r.fulfill({ status: 500, body: "x" }));
@@ -1163,8 +1163,8 @@ test("백테스트(BL3 W1): 설정 계산은 아무것도 시작하지 않고 ·
   const done = page.locator(".pg-kv", { hasText: "총수익률" });
   await expect(prog.or(done)).toBeVisible({ timeout: 60_000 });
   if (await prog.isVisible()) {
-    await expect(prog.getByRole("button", { name: "결과 불러오기" })).toBeEnabled({ timeout: 180_000 });
-    await prog.getByRole("button", { name: "결과 불러오기" }).click();
+    await expect(prog.getByRole("button", { name: "결과 조회" })).toBeEnabled({ timeout: 180_000 });
+    await prog.getByRole("button", { name: "결과 조회" }).click();
   }
   await expect(done).toBeVisible({ timeout: 60_000 });
   await expect(page.locator(".pg-side .pg-perf")).toBeVisible();                 // 성과 숫자 옆에 무슨 성과인지
@@ -1235,7 +1235,7 @@ test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리�
   await tab(page, "detail");
   const card = page.locator(".pg-runprog");
   await expect(card).toContainText("45%");
-  await expect(card.getByRole("button", { name: "결과 불러오기" })).toBeDisabled();
+  await expect(card.getByRole("button", { name: "결과 조회" })).toBeDisabled();
   for (const dark of [false, true]) {
     await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), dark);
     const audit = await page.evaluate<AuditResult>(contrastAudit(".pg-runprog"));
@@ -1243,10 +1243,10 @@ test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리�
     expect(audit.low, dark ? "dark" : "light").toEqual([]);
   }
   step = 1;                                                               // 다음 읽기에서 끝남
-  await expect(card.getByRole("button", { name: "결과 불러오기" })).toBeEnabled({ timeout: 10_000 });
+  await expect(card.getByRole("button", { name: "결과 조회" })).toBeEnabled({ timeout: 10_000 });
   await expect(card).toContainText("끝났습니다");
   await page.unroute("**/allocation/graph/run**");
-  await card.getByRole("button", { name: "결과 불러오기" }).click();
+  await card.getByRole("button", { name: "결과 조회" }).click();
   // 이 실행은 진짜로 끝났을 수도, 아직일 수도 있다 — 어느 쪽이든 화면은 그 사실을 말한다.
   await expect(page.locator(".pg-side .pg-kv", { hasText: "총수익률" }).or(page.locator(".pg-runprog"))).toBeVisible({ timeout: 60_000 });
 });
@@ -1589,7 +1589,7 @@ test("리스크 노드(BL3 W4): VaR·MC·변동성·보유기간·FRTB·롤링 �
 
   await pick("vm");
   await expect(page.locator(".pg-side .pg-risk-line")).toHaveCount(2);
-  await expect(page.locator(".pg-side .pg-note").first()).toContainText("앞날을 더 잘 맞힌다는 뜻이 아닙니다");
+  await expect(page.locator(".pg-side .pg-note").first()).toContainText("향후 예측력이 높다는 뜻이 아닙니다");
   await pick("hv");
   await expect(page.locator(".pg-side .pg-scen tbody tr")).toHaveCount(8);
   await pick("fr");
@@ -1728,13 +1728,13 @@ test("배분 추가(BL3 W5): 리밸런싱 저울 · 기록은 버튼 한 번 · 
     await expect(page.locator(".pg-side .pg-scale-bar")).toHaveCount(1);
     await expect(page.locator(".pg-side .pg-scale-gain--over")).toHaveCount(d === "trade" ? 1 : 0);
   }
-  await expect(page.locator(".pg-side .pg-verdict")).toHaveText(d === "trade" ? "거래할 가치가 있습니다" : d === "hold" ? "그대로 두는 게 낫습니다" : "판단 불가");
+  await expect(page.locator(".pg-side .pg-verdict")).toHaveText(d === "trade" ? "거래할 가치가 있습니다" : d === "hold" ? "현재는 리밸런싱하지 않는 편이 유리합니다" : "판단 불가");
   // 짝 — 문턱이 51배면 같은 효용 개선도 넘지 못한다: 판정 '그대로' · 막대는 연하게
   expect(body.nodes.rh.view.result.decision).toBe("hold");
   await pick("rh");
   await expect(page.locator(".pg-side .pg-scale-bar")).toHaveCount(1);
   await expect(page.locator(".pg-side .pg-scale-gain--over")).toHaveCount(0);
-  await expect(page.locator(".pg-side .pg-verdict")).toHaveText("그대로 두는 게 낫습니다");
+  await expect(page.locator(".pg-side .pg-verdict")).toHaveText("현재는 리밸런싱하지 않는 편이 유리합니다");
   await pick("cy");
   await expect(page.locator(".pg-side .pg-co-head .pg-tag")).toHaveText(body.nodes.cy.view.result.rf_is_assumed ? "기본값(가정)" : String(body.nodes.cy.view.result.rf_source));
   await pick("sc");
@@ -1845,7 +1845,7 @@ test("μ 엔진(BL4): 라벨은 서버 mu_engine 그대로 — model 이 bl 이�
   await run(page);
   await detail(page, "optimizer");
   await expect(eng).toHaveText("Entropy Pooling");
-  await expect(page.locator(".pg-side .pg-eng")).toContainText("신뢰도를 쓰지 않습니다");
+  await expect(page.locator(".pg-side .pg-eng")).toContainText("신뢰도를 사용하지 않습니다");
   await expect(page.locator(".pg-side .pg-eng")).toContainText("756 → 640");
 
   // 쓸 수 없는 엔진은 비중 숫자가 아니라 사유가 온다 — 실제 서버 경로. 같은 종목을 +40% 이상이자 −40% 이하로 보는 두 뷰는
@@ -1876,7 +1876,7 @@ test("룩어헤드·예측 구간(BL4): 배지는 응답이 말한 상태만 —
   await expect(badge).toHaveAttribute("data-lookahead", st);
   // 안 잰 축이 있으면 '확인'이 될 수 없다 — 서버 롤업이 그렇게 말하고, 화면은 목록으로 옮긴다.
   expect(st).not.toBe("verified");
-  await expect(page.locator(".pg-side .pg-la-unmeasured li").first()).toContainText("안 잰 것");
+  await expect(page.locator(".pg-side .pg-la-unmeasured li").first()).toContainText("미측정");
 
   // 응답이 말하지 않으면 '미상' — 확인으로 기울지 않는다(짝: 없는 필드를 지어내지 않는다).
   await patchRun(page, (b) => {
@@ -1981,7 +1981,7 @@ test("타이밍 신호(BL4): 소스 없는 신호·목록에 없는 신호는 �
   expect(body.nodes.t2.reason).toContain("no_such_factor");
   expect(body.nodes.t3.status, body.nodes.t3.reason).toBe("ok");
   await detail(page, "t1");
-  await expect(page.locator(".pg-side .pg-node-status-why")).toContainText("쓸 수 없습니다");
+  await expect(page.locator(".pg-side .pg-node-status-why")).toContainText("사용할 수 없습니다");
 });
 
 test("알파(BL4): 보유 기간별 IC 와 앞/뒤 절반을 따로 · 못 잰 IC 를 약세로 칠하지 않음 · 상위 종목 점수의 날짜 · 포트폴리오 경고·상관 · 미승인은 사유", async ({ page }) => {

@@ -99,7 +99,7 @@ def _pit(rs: list[dict]) -> list[dict]:
         cut = ((r.get("view") or {}).get("coverage") or {}).get("as_of_effective")
         if cut:
             out.append(_r(CONFIRMED, f"계산 기준일을 {cut}로 기록했습니다."))
-        out.append(_r(UNKNOWN, "그 날 실제로 알 수 있던 값인지(공표 시점)는 행마다 측정하지 않았습니다."))
+        out.append(_r(UNKNOWN, "해당 일자에 실제 입수 가능했던 값인지(공표 시점)는 행 단위로 측정하지 않았습니다."))
     return out
 
 

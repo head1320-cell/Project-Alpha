@@ -188,9 +188,9 @@ def _sealed(nid, type_, explain, doc=DOC, key=KEY):
     return {"node_id": nid, "explain": explain, "sig": fs.seal(key, nid, type_, fs.deep_sigs(doc)[nid], explain)}
 
 
-EX_U = {"title": "종목 2개를 골랐습니다", "facts": ["삼성전자, SK하이닉스"], "trust": []}
-EX_O = {"title": "비중을 이렇게 나눴습니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
-        "facts": ["계산 방식: 리스크 패리티"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화는 문제없이 끝났습니다."}]}
+EX_U = {"title": "종목 2개를 선정했습니다", "facts": ["삼성전자, SK하이닉스"], "trust": []}
+EX_O = {"title": "비중 산출 결과입니다", "headline": {"label": "삼성전자 비중", "value": 50.5, "unit": "%", "text": "삼성전자 50.5%"},
+        "facts": ["계산 방식: 리스크 패리티"], "trust": [{"state": "confirmed", "text": "포트폴리오 최적화가 정상 완료됐습니다."}]}
 PRACTICE = {"state": "unknown", "text": "합성 데이터입니다.", "kind": "practice"}
 
 
@@ -234,7 +234,7 @@ def test_a_grounded_paragraph_passes():
 def test_numbers_must_come_from_the_paragraphs_own_nodes_and_the_pair_passes():
     ok, bad = nr.check({"paragraphs": [_para("삼성전자 비중이 50.5% 입니다.", ["u"])]}, _g())
     assert ok == [] and bad[0]["code"] == "numbers" and "50.5" in bad[0]["reason"]
-    assert nr.check({"paragraphs": [_para("종목 2개를 골랐습니다.", ["u"])]}, _g())[0]        # ★짝★
+    assert nr.check({"paragraphs": [_para("종목 2개를 선정했습니다.", ["u"])]}, _g())[0]        # ★짝★
 
 
 @pytest.mark.parametrize("para,code", [
@@ -278,17 +278,17 @@ def _narrate(client, facts, graph=DOC, user="alice", key=KEY):
 def test_an_answer_carries_paragraphs_dropped_facts_and_the_server_practice_notice(report):
     facts = _facts(report)
     tampered = {**facts[0], "explain": {**facts[0]["explain"], "title": "지어낸 제목"}}
-    sdk = FakeSDK(_msg({"paragraphs": [_para("비중을 이렇게 나눴습니다.", ["o"])]}))
+    sdk = FakeSDK(_msg({"paragraphs": [_para("비중 산출 결과입니다.", ["o"])]}))
     res = _narrate(_client(sdk), [tampered, *facts[1:]], key=_route_key())             # 경로가 봉인한 사실
     assert res["available"] is True and res["source"] == "claude" and res["cached"] is False
-    assert res["paragraphs"] == [{"text": "비중을 이렇게 나눴습니다.", "node_ids": ["o"]}] and res["rejected"] == []
+    assert res["paragraphs"] == [{"text": "비중 산출 결과입니다.", "node_ids": ["o"]}] and res["rejected"] == []
     assert [d["node_id"] for d in res["dropped"]] == ["u"]
     assert res["notice"] == nr.NOTICE                                                   # 연습용(mock) 결과 — 서버가 붙인다
     kw = sdk.beta.messages.calls[0]
     assert kw["system"] == pr.NARRATE_SYSTEM and kw["output_config"]["effort"] == "medium"
     assert kw["output_config"]["format"]["schema"] == pr.narrate_schema(["r", "es", "o"])
     user = kw["messages"][0]["content"]
-    assert "비중을 이렇게 나눴습니다" in user and "지어낸 제목" not in user                    # 깨진 사실은 근거가 아니다
+    assert "비중 산출 결과입니다" in user and "지어낸 제목" not in user                    # 깨진 사실은 근거가 아니다
 
 
 def test_no_practice_no_notice():

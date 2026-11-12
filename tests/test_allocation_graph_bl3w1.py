@@ -125,7 +125,7 @@ def test_starting_creates_one_run_with_the_previewed_config_and_one_worker(clien
     assert out["ok"] is True and out["saved_id"] == "run_new", out
     assert len(runs["created"]) == 1 and runs["created"][0][1] == rep["nodes"]["s"]["view"]["config"]
     assert len(runs["submitted"]) == 1 and runs["submitted"][0][0] == "run_new"
-    assert "결과 불러오기" in out["text"]
+    assert "백테스트 결과 조회" in out["text"]
 
 
 def test_starting_without_a_store_says_so(client, runs, monkeypatch):

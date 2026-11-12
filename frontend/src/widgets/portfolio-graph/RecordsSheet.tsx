@@ -51,7 +51,7 @@ function JournalRow({ e }: { e: JournalEntry }) {
       {e.record.decision && <p className="pg-rec-text">{e.record.decision}</p>}
       {!edit && (
         <>
-          {e.review ? <p className="pg-rec-text">회고: {e.review}</p> : <p className="pg-help">회고가 아직 없습니다 — 결과가 나온 뒤 실제와 대조해 적습니다.</p>}
+          {e.review ? <p className="pg-rec-text">회고: {e.review}</p> : <p className="pg-help">회고가 아직 없습니다 — 결과 확인 후 실제와 대조해 기록합니다.</p>}
           <div className="pg-rec-actions">
             <button type="button" className="pg-btn" onClick={() => setEdit(true)}>{e.review ? "회고 고치기" : "회고 쓰기"}</button>
             <button type="button" className="pg-btn" aria-label={`${e.title} 삭제`} disabled={del.isPending}
@@ -63,11 +63,11 @@ function JournalRow({ e }: { e: JournalEntry }) {
         <div className="pg-rec-edit">
           <label className="pg-rec-field">회고
             <textarea className="pg-field-input" rows={3} value={review} onChange={(ev) => setReview(ev.target.value)}
-                      placeholder="예: 3개월 뒤 실제 +8%p — 방향은 맞았고 확신은 낮게 잡았습니다" />
+                      placeholder="예: 3개월 뒤 실제 +8%p — 방향은 적중했고 확신도는 낮게 설정했습니다" />
           </label>
           <label className="pg-rec-field">판단의 질
             <select className="pg-field-input" value={dq} onChange={(ev) => setDq(ev.target.value as DecisionQuality | "")}>
-              <option value="">고르지 않음</option>
+              <option value="">선택 안 함</option>
               {(Object.keys(DQ_KO) as DecisionQuality[]).map((k) => <option key={k} value={k}>{DQ_KO[k]}</option>)}
             </select>
           </label>
@@ -195,7 +195,7 @@ function SnapshotsTab() {
           {make.isPending ? "만드는 중" : "지금 국면으로 스냅샷 만들기"}
         </button>
       </div>
-      <p className="pg-note">지금 수집한 값으로 만든 스냅샷은 앞으로의 연구에만 씁니다 — 과거 백테스트에는 쓸 수 없습니다(빈티지 미상).</p>
+      <p className="pg-note">현재 수집한 값으로 만든 스냅샷은 향후 연구에만 사용합니다 — 과거 백테스트에는 사용할 수 없습니다(빈티지 미상).</p>
       {make.isError && <p className="pg-field-err" role="alert">생성 실패 — {(make.error as Error).message}</p>}
       {make.data && (make.data.recorded
         ? <p className="pg-save-msg" role="status">스냅샷을 만들었습니다 · {make.data.snapshot_id}</p>

@@ -27,7 +27,7 @@ export function RegimeResult({ v }: { v: Dict }) {
       <KV rows={[["국면", String(v.regime ?? "미확인")], ["권고", String(v.recommended_mode ?? "—")],
                  ["스트레스", `${num(v.stress_score)?.toFixed(0) ?? "—"}/100`], ["신뢰도", pct((num(v.confidence) ?? 0) * 100, 0)],
                  ["기준일", String(v.as_of ?? "—")], ["스냅샷", String(v.snapshot_id ?? "—")],
-                 ["쓸 수 있는 곳", v.research_usage === "backtest_eligible" ? "과거 검증까지" : "지금 시점만"]]} />
+                 ["사용 범위", v.research_usage === "backtest_eligible" ? "과거 검증까지" : "현재 시점만"]]} />
       {Object.keys(probs).length > 0 && (
         <>
           <h4 className="pg-h4">국면 확률</h4>
@@ -108,7 +108,7 @@ export function OverlayResult({ v }: { v: Dict }) {
       )}
       {v.conflict ? <p className="pg-warn">{String(v.conflict)}</p> : null}
       <KV rows={[["근거", String(v.source ?? "—")], ["적용 강도", pct(v.strength_pct, 0)],
-                 ["목표 규칙 검사", v.status === "executable" ? "통과 — 데이터 출처는 실행 목표 노드가 다시 봅니다" : `막힘 — ${String(v.status_reason ?? "")}`]]} />
+                 ["목표 규칙 검사", v.status === "executable" ? "통과 — 데이터 출처는 실행 목표 노드가 다시 점검합니다" : `막힘 — ${String(v.status_reason ?? "")}`]]} />
     </>
   );
 }
@@ -124,7 +124,7 @@ export function SimulationResult({ v }: { v: Dict }) {
   return (
     <>
       <p className={`pg-model-type pg-model-type--${r.backtest_eligible ? "hist" : "hypo"}`}>
-        {r.backtest_eligible ? "과거 검증에 쓸 수 있는 신호" : "참고용 — 과거 검증이 아닙니다"}
+        {r.backtest_eligible ? "과거 검증에 사용할 수 있는 신호" : "참고용 — 과거 검증이 아닙니다"}
       </p>
       {r.warning ? <p className="pg-warn">{String(r.warning)}</p> : null}
       {/* 직접 SVG (ADR 004 · 2026-11-10) — 계단선 + 읽는 줄(처음 자리 = 마지막 시점) + 표 쌍둥이 */}

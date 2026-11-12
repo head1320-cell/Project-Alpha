@@ -66,7 +66,7 @@ def _needs_errors(nodes: list, edges: list, kinds: dict[str, dict]) -> list[dict
                          for g in o["gives"] if g["key"] == u["key"] and g.get("when")), None)
         if own_when:
             ptype = next((i["type"] for i in src["inputs"] if i["name"] == own_when), own_when)
-            fix = f"‘{src['plain_label']}’에 {proc.quote_obj(PORT_PLAIN.get(ptype, own_when))} 이으면 줄 수 있습니다."
+            fix = f"‘{src['plain_label']}’에 {proc.quote_obj(PORT_PLAIN.get(ptype, own_when))} 연결하면 전달할 수 있습니다."
         else:
             fix = f"{' · '.join(f'‘{g}’' for g in always)}의 비중을 연결하십시오." if always else None
         edge = next((e for e in edges if isinstance(e, dict) and e.get("source") == u["source"]

@@ -66,7 +66,7 @@ def _aligned_weights(R: pd.DataFrame, w: dict) -> tuple[np.ndarray, float]:
     arr = np.array([float(wd.get(c, 0.0)) for c in R.columns])
     gross = float(np.abs(arr).sum())
     if gross <= 0:
-        raise pg.NodeFailure("비중이 모두 0 입니다 — 위험을 잴 포지션이 없습니다.")
+        raise pg.NodeFailure("비중이 모두 0 입니다 — 위험을 측정할 포지션이 없습니다.")
     return arr / gross, gross
 
 
@@ -78,7 +78,7 @@ def _series(inputs: dict, series: str) -> dict:
     if series == PORTFOLIO:
         w = inputs.get("weights")
         if w is None:
-            raise pg.NodeFailure("포트폴리오의 위험을 재려면 비중을 연결하십시오 — 한 종목만 보려면 '분석 대상' 에 종목 코드를 입력합니다.")
+            raise pg.NodeFailure("포트폴리오 위험을 측정하려면 비중을 연결하십시오 — 단일 종목을 분석하려면 '분석 대상' 에 종목 코드를 입력합니다.")
         arr, gross = _aligned_weights(R, w)
         if abs(gross - 1.0) > 1e-9:
             notes.append({"key": "gross", "label": "비중 합(절댓값)", "value": round(gross, 4), "basis": "가정",
@@ -187,7 +187,7 @@ def _var_es(inputs: dict, p: VarEsParams) -> pg.NodeOutput:
     return _out(s, res, [_value_input(v),
                          {"key": "cl", "label": "신뢰수준", "value": cl, "basis": "가정", "source": "직접 정한 값"},
                          {"key": "dist", "label": "정규분포", "value": "정규·EWMA 두 방법", "basis": "가정",
-                          "source": "꼬리가 두꺼운 실제 수익률에선 손실을 작게 볼 수 있습니다 — 역사적 방법과 나란히 보십시오"},
+                          "source": "꼬리가 두꺼운 실제 수익률에서는 손실을 과소 추정할 수 있습니다 — 역사적 방법과 비교하십시오"},
                          {"key": "lambda", "label": "EWMA 감쇠 λ", "value": "0.94", "basis": "가정", "source": "RiskMetrics 관행값"}])
 
 
@@ -203,7 +203,7 @@ def _explain_var_es(view: dict, prov: dict, params: Any) -> dict:
     comps = r.get("components") or []
     if comps:
         top = max(comps, key=lambda c: abs(c.get("amount") or 0))
-        facts.append(f"손실 위험을 가장 많이 만드는 종목: {top['label']} ({_eok(top['amount'])})")
+        facts.append(f"손실 위험 기여가 가장 큰 종목: {top['label']} ({_eok(top['amount'])})")
     trust = [*_base_trust(view),
              _t(ASSUMED, "세 방법은 합치지 않았습니다 — 정규·EWMA 는 분포 가정, 과거 그대로는 표본의 순서 없는 재현입니다."),
              _t(CONFIRMED, f"과거 그대로 방법: {h.get('n_obs')}일 중 {h.get('n_beyond')}일이 이 선을 넘었습니다.")]
@@ -263,7 +263,7 @@ def _explain_mc_var(view: dict, prov: dict, params: Any) -> dict:
              _t(ASSUMED, "가격이 정규 충격의 기하 브라운 운동을 따른다고 가정했습니다 — 급락이 몰리는 날은 작게 나올 수 있습니다."),
              _t(CONFIRMED, "난수 시드를 고정해 같은 입력이면 같은 수가 나옵니다.")]
     return {"title": title, "facts": facts, "trust": trust,
-            "unmeasured": ["점프·꼬리 의존(위기 때 함께 떨어지는 정도의 변화)"]}
+            "unmeasured": ["점프·꼬리 의존(위기 시 동반 하락 정도의 변화)"]}
 
 
 # ── 변동성 모델 ──────────────────────────────────────────────────────────────
@@ -290,7 +290,7 @@ def _explain_vol_models(view: dict, prov: dict, params: Any) -> dict:
     cv, ms = r.get("current_volatility") or {}, r.get("model_selection") or {}
     ga = r.get("garch") or {}
     g, e = cv.get("garch_annual"), cv.get("ewma_annual")
-    title = (f"지금 변동성은 연 {g:.1%}(GARCH) · {e:.1%}(EWMA)로 봅니다"
+    title = (f"현재 변동성 추정: 연 {g:.1%}(GARCH) · {e:.1%}(EWMA)"
              if isinstance(g, (int, float)) and isinstance(e, (int, float)) else "변동성 모델을 비교했습니다")
     facts = []
     if isinstance(ga.get("long_run_vol_annual"), (int, float)):
@@ -298,7 +298,7 @@ def _explain_vol_models(view: dict, prov: dict, params: Any) -> dict:
     if ms:
         facts.append(f"표본 안 적합: AIC 는 {ms.get('aic_winner')}, BIC 는 {ms.get('bic_winner')}")
     trust = [*_base_trust(view),
-             _t(ASSUMED, "AIC·BIC 는 이 표본에 얼마나 잘 맞는지(표본 안 적합)입니다 — 앞날의 변동성을 더 잘 맞힌다는 뜻이 아닙니다."),
+             _t(ASSUMED, "AIC·BIC 는 이 표본에 대한 적합도(표본내)입니다 — 향후 변동성 예측력이 높다는 뜻이 아닙니다."),
              _t(UNKNOWN, "EWMA 는 평균으로 돌아가지 않아 장기 변동성·반감기가 정의되지 않습니다(빈칸).")]
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["표본 밖 변동성 예측 적중률"]}
 
@@ -335,7 +335,7 @@ def _explain_holding_var(view: dict, prov: dict, params: Any) -> dict:
     rows = (view.get("result") or {}).get("results") or []
     top = max(rows, key=lambda x: (x.get("confidence_level") or 0, x.get("holding_period_days") or 0)) if rows else None
     title = (f"{top['holding_period_days']}일 보유 시 {top['confidence_level']:.0%} 확률로 손실이 "
-             f"{_eok(top['var_amount'])}을 넘지 않는다고 봅니다" if top else "보유기간 VaR 를 측정했습니다")
+             f"{_eok(top['var_amount'])}을 넘지 않는 것으로 추정합니다" if top else "보유기간 VaR 를 측정했습니다")
     trust = [*_base_trust(view),
              _t(ASSUMED, "하루 값을 √보유일로 늘렸습니다 — 날마다 독립이라는 가정이라 변동성이 뭉치는 시기엔 작게 나올 수 있습니다.")]
     return {"title": title, "facts": [f"{r['holding_period_days']}일 · {r['confidence_level']:.0%}: {_eok(r['var_amount'])}"
@@ -430,7 +430,7 @@ def _dcc(inputs: dict, p: DccParams) -> pg.NodeOutput:
     rv = inputs["returns"]
     R: pd.DataFrame = rv["returns"]
     if len(R.columns) > _DCC_MAX_ASSETS:
-        raise pg.NodeFailure(f"동적 상관은 종목 {_DCC_MAX_ASSETS}개까지 봅니다 — 지금 {len(R.columns)}개입니다. 유니버스를 줄이십시오.")
+        raise pg.NodeFailure(f"동적 상관은 종목 {_DCC_MAX_ASSETS}개까지 추정합니다 — 현재 {len(R.columns)}개입니다. 유니버스를 줄이십시오.")
     lr_df = _to_log(R, "수익률")
     s = {"lr": lr_df, "R": R, "w": None, "notes": [],
          "meta": {"series": "assets", "label": "종목 쌍", "obs": int(len(lr_df)),
@@ -449,14 +449,14 @@ def _explain_dcc(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     d = r.get("dcc_garch") or {}
     stats = d.get("correlation_stats") or {}
-    title = "종목 사이 상관이 시간에 따라 어떻게 움직였는지 봤습니다"
+    title = "종목 간 상관의 시계열 변화를 추정했습니다"
     facts = []
     if isinstance(d.get("dcc_persistence"), (int, float)):
         facts.append(f"상관의 지속성 {d['dcc_persistence']:.2f} (1 에 가까울수록 한번 바뀐 상관이 오래갑니다)")
     for pair, st in list(stats.items())[:3]:
         if isinstance(st, dict) and isinstance(st.get("mean"), (int, float)):
             facts.append(f"{pair}: 평균 {st['mean']:.2f} · 범위 {st.get('min')} ~ {st.get('max')}")
-    trust = [*_base_trust(view), _t(ASSUMED, "상관은 함께 움직인 정도입니다 — 한쪽이 다른 쪽을 움직인다는 뜻(인과)이 아닙니다.")]
+    trust = [*_base_trust(view), _t(ASSUMED, "상관은 동조 정도입니다 — 인과를 뜻하지 않습니다.")]
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["위기 때 상관이 한꺼번에 오르는 정도(표본 밖)"]}
 
 
@@ -484,7 +484,7 @@ class OptionParams(BaseModel):
     sigma: float = Field(0.25, gt=0, le=5, json_schema_extra={"x-ui": _ui(
         "변동성", question="연환산 변동성 가정", presets=[{"label": "20%", "value": 0.2}, {"label": "30%", "value": 0.3}])})
     option_type: Literal["call", "put"] = Field("call", json_schema_extra={"x-ui": _ui(
-        "종류", presets=[{"label": "콜(살 권리)", "value": "call"}, {"label": "풋(팔 권리)", "value": "put"}])})
+        "종류", presets=[{"label": "콜(매수 권리)", "value": "call"}, {"label": "풋(매도 권리)", "value": "put"}])})
 
 
 def _option(inputs: dict, p: OptionParams) -> pg.NodeOutput:
@@ -505,7 +505,7 @@ def _explain_option(view: dict, prov: dict, params: Any) -> dict:
                           "델타는 내가격이면 ±1, 외가격이면 0, 등가격이면 정의되지 않습니다"],
                 "trust": [_t(ASSUMED, _CALC_TRUST)], "unmeasured": ["만기 당일의 결제 방식(현금/실물)"]}
     return {"title": f"이 {kind} 옵션 가격 계산은 {r.get('Price')}입니다",
-            "facts": [f"델타 {r.get('Delta')} — 기초자산이 1 오르면 옵션값이 이만큼 움직입니다",
+            "facts": [f"델타 {r.get('Delta')} — 기초자산 1 상승 시 옵션 가격 변화",
                       f"베가 {r.get('Vega')} (변동성 1%p 당) · 세타 {r.get('Theta')} (하루 당) · 로 {r.get('Rho')} (금리 1%p 당)"],
             "trust": [_t(ASSUMED, _CALC_TRUST), _t(ASSUMED, "블랙-숄즈 유럽형 — 조기행사·배당·변동성 스마일은 반영하지 않습니다.")],
             "unmeasured": ["시장 호가(내재변동성)와의 차이"]}
@@ -534,7 +534,7 @@ def _bond(inputs: dict, p: BondParams) -> pg.NodeOutput:
 def _explain_bond(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     return {"title": f"이 채권의 가격은 {r.get('Price')}입니다",
-            "facts": [f"수정 듀레이션 {r.get('Modified_Duration')} — 금리가 1%p 오르면 가격이 약 {r.get('Modified_Duration')}% 내립니다",
+            "facts": [f"수정 듀레이션 {r.get('Modified_Duration')} — 금리 1%p 상승 시 가격이 약 {r.get('Modified_Duration')}% 하락합니다",
                       f"볼록성 {r.get('Convexity')} · 1bp 가치(DV01) {r.get('DV01')}"],
             "trust": [_t(ASSUMED, _CALC_TRUST), _t(ASSUMED, "고정 쿠폰·일정한 수익률로 할인했습니다 — 수익률 곡선의 모양은 반영하지 않습니다.")],
             "unmeasured": ["신용 스프레드·조기상환 옵션"]}
@@ -564,7 +564,7 @@ def _measured_beta(inputs: dict) -> tuple[float, int, str]:
     arr, _ = _aligned_weights(R, w)
     both = pd.concat([R @ arr, bench], axis=1).dropna()
     if len(both) < 30:
-        raise pg.NodeFailure(f"β 를 잴 겹치는 날이 {len(both)}일뿐입니다 — 최소 30일이 필요합니다.")
+        raise pg.NodeFailure(f"β 를 측정할 공통 관측일이 {len(both)}일뿐입니다 — 최소 30일이 필요합니다.")
     var_b = float(np.var(both.iloc[:, 1], ddof=1))
     if var_b <= 0:
         raise pg.NodeFailure("비교 기준 수익률이 움직이지 않아(분산 0) β 를 측정할 수 없습니다.")
@@ -581,7 +581,7 @@ def _hedge(inputs: dict, p: HedgeParams) -> pg.NodeOutput:
         beta_in = {"key": "beta", "label": "현재 β", "value": f"{beta:.3f}", "basis": "관측",
                    "source": f"포트폴리오 대 비교 기준 일간 수익률 {n}일({span}) 공분산/분산 — 과거 표본"}
     elif p.current_beta is None:
-        raise pg.NodeFailure("현재 β 가 없습니다 — 값을 넣거나 수익률·비중을 이어 과거 표본으로 측정하십시오.")
+        raise pg.NodeFailure("현재 β 가 없습니다 — 값을 입력하거나 수익률·비중을 연결해 과거 표본으로 측정하십시오.")
     else:
         beta = float(p.current_beta)
         beta_in = _assumed("beta", "현재 β", f"{beta:.3f}")

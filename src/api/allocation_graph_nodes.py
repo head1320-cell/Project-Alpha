@@ -134,7 +134,7 @@ STAGES = [
 
 UniverseParams = _subset("UniverseParams", AnalyzeRequest, ("tickers", "weights", "benchmark"), ui={
     "tickers": _ui("종목", question="대상 종목", widget="tickers",
-                   help="종목 코드를 쉼표로 넣거나, 이름을 치고 후보에서 고릅니다."),
+                   help="종목 코드를 쉼표로 입력하거나, 종목명을 입력해 후보에서 선택합니다."),
     "weights": _ui("현재 비중", "advanced", help="보유 비중을 입력하면 회전율 제약에 반영합니다."),
     "benchmark": _ui("비교 기준", "advanced", help="성과를 비교할 지수입니다."),
 })
@@ -162,9 +162,9 @@ OptimizerParams = _subset(
         # (`allocation_studio.optimize`). 다른 방식에서는 비중이 움직이지 않으니 초심자 질문("위험을 얼마나 피할까요?")으로 두지 않는다.
         # 옵티마이저 의미는 그대로 — 표시만 사실에 맞춘다(tests/test_optimizer_delta_honest.py).
         "delta": _ui("시장 위험회피계수 δ", "advanced", widget="slider", ends=["투자 뷰 쪽", "시장 균형 쪽"],
-                     help="블랙-리터먼에서 투자 뷰가 있을 때만 비중에 영향을 줍니다 — 클수록 시장 균형 쪽으로 기웁니다. "
+                     help="블랙-리터먼에서 투자 뷰가 있을 때만 비중에 영향을 줍니다 — 클수록 시장 균형 비중에 가까워집니다. "
                           "다른 계산 방식에서는 비중이 바뀌지 않습니다."),
-        "tau": _ui("투자 뷰 불확실성 τ", "advanced", help="클수록 투자 뷰가 비중을 더 크게 움직입니다."),
+        "tau": _ui("투자 뷰 불확실성 τ", "advanced", help="클수록 투자 뷰의 비중 반영 강도가 커집니다."),
         # BO O1 — 사용자가 승인한 "움직이는 손잡이". ★`mv_utility` 를 골랐을 때만 보인다★(`show_if`) —
         # 다른 방식에서는 비중이 바뀌지 않으니 초심자 질문으로 내놓지 않는다(δ 의 교훈).
         # 프리셋은 초보자용, 슬라이더("직접 정하기")는 전문가용 — 같은 값 하나를 두 방식으로 고른다.
@@ -185,7 +185,7 @@ OptimizerParams = _subset(
                                     {"label": "40%", "value": {"max_weight_pct": 40}},
                                     {"label": "30%", "value": {"max_weight_pct": 30}},
                                     {"label": "20%", "value": {"max_weight_pct": 20}}],
-                           help="‘더 정하기’ 에서 업종 상한·회전율·시장 베타·현금·공매도 노출을 지정합니다. "
+                           help="‘추가 제약’에서 업종 상한·회전율·시장 베타·현금·공매도 노출을 지정합니다. "
                                 "해가 없는(실현 불가능한) 조합이면 계산 전에 표시합니다."),
     },
     model=(Literal[_MODELS], Field("mvo", json_schema_extra={"x-ui": _ui(
@@ -265,8 +265,8 @@ def _views(inputs: dict, p) -> pg.NodeOutput:
 
 def _estimate(inputs: dict, p) -> pg.NodeOutput:
     settings = p.model_dump()
-    note = ("조건부 μ/Σ 를 요청했습니다 — 옵티마이저가 자기 모델 아래에서 계산하고, 검증 "
-            "관문이 막으면 표본 추정으로 계산하며 그 사유를 옵티마이저 결과에 적습니다."
+    note = ("조건부 μ/Σ 를 요청했습니다 — 옵티마이저가 자체 모형으로 산출하고, 검증 "
+            "관문이 차단하면 표본 추정으로 산출하며 그 사유를 옵티마이저 결과에 기록합니다."
             if p.conditional else
             "표본(trailing) μ/Σ — 조건부 추정을 요청하지 않았습니다.")
     return pg.NodeOutput(values={"belief": settings},
@@ -282,7 +282,7 @@ def _fallback_texts(fallbacks: list[dict], model: str, constraints_report: dict 
         if f.get("stage") == "optimized":
             text = f"‘{name}’ 방식이 답을 내지 못해 역변동성 비중으로 대신했습니다. {f.get('reason')}"
             if resolved:
-                text += " 그 뒤 제약을 걸어 다시 풀어서, 최종 비중이 이 대체를 얼마나 따랐는지는 측정하지 않았습니다."
+                text += " 이후 제약을 적용해 다시 최적화했으며, 최종 비중이 이 대체를 반영한 정도는 측정하지 않았습니다."
         else:
             text = str(f.get("reason") or "")
             text += (" 그래서 비중은 시가총액 비중입니다." if f.get("affects_weights")
@@ -387,7 +387,7 @@ def _risk(inputs: dict, p) -> pg.NodeOutput:
     w = inputs["weights"]
     names, sigma = w["names"], w.get("sigma_annual")
     if sigma is None:
-        raise pg.NodeFailure("이 비중에는 공분산이 함께 오지 않아 위험을 나눌 수 없습니다 — "
+        raise pg.NodeFailure("이 비중에는 공분산이 함께 전달되지 않아 위험을 분해할 수 없습니다 — "
                              "공분산을 추정하는 노드(포트폴리오 최적화)의 비중을 연결하십시오.")
     sigma_source = w.get("sigma_source") or "미상"
     view = {
@@ -407,8 +407,8 @@ def _backtest_admits(lineage: dict) -> str | None:
         return ("오늘 계산한 노출 조절이 얹힌 비중입니다. 오늘의 판단을 과거 전체에 쓰면 미래를 "
                 "보고 한 계산이 됩니다 — ‘타이밍 시뮬레이션’으로 과거를 확인하십시오.")
     if lineage.get("pit") == "forward_only":
-        return ("지금 시점에만 쓸 수 있는 값(전망·국면 스냅샷)이 섞여 있습니다. 과거에 쓰면 미래를 "
-                "보고 한 계산이 돼서 백테스트하지 않습니다.")
+        return ("현재 시점에만 유효한 값(전망·국면 스냅샷)이 포함돼 있습니다. 과거 구간에 적용하면 미래 정보를 "
+                "쓴 계산(룩어헤드)이 되므로 백테스트하지 않습니다.")
     return None
 
 
@@ -418,8 +418,8 @@ def _backtest(inputs: dict, p) -> pg.NodeOutput:
     if req is None:
         # 이 노드는 비중을 되돌리지 않고 **규칙(옵티마이저 요청)** 을 다시 돌린다. 규칙 없는
         # 비중을 받아 옵티마이저 성과를 그 비중의 성과처럼 보이면 안 된다.
-        raise pg.NodeFailure("이 비중에는 과거로 되돌려 볼 규칙이 없습니다 — 정책 백테스트는 "
-                             "‘포트폴리오 최적화’ 노드의 규칙을 시점마다 다시 풉니다. 포트폴리오 최적화 노드를 연결하십시오.")
+        raise pg.NodeFailure("이 비중에는 과거 구간에 재적용할 배분 규칙이 없습니다 — 정책 백테스트는 "
+                             "‘포트폴리오 최적화’ 노드의 규칙을 시점마다 다시 최적화합니다. 포트폴리오 최적화 노드를 연결하십시오.")
     try:
         breq = BacktestRequest(
             tickers=r["universe"]["tickers"], benchmark=r["universe"]["benchmark"],
@@ -470,7 +470,7 @@ def _save_research_run(values: dict, view: dict, params: Any) -> dict:
     out = run_analyze(req.model_copy(update={**upd, "record_run": True}))
     rid = out.get("run_id")
     if not rid:
-        raise pg.NodeFailure("DB 를 쓸 수 없어 연구 기록을 남기지 못했습니다.")
+        raise pg.NodeFailure("DB 를 사용할 수 없어 연구 기록을 저장하지 못했습니다.")
     return {"saved_id": rid, "text": f"연구 기록으로 남겼습니다 · {rid}"}
 
 

@@ -35,7 +35,7 @@ _FORBID = ConfigDict(extra="forbid")
 _STATE_PLAIN = {"risk_on": "위험-온", "risk_off": "위험-오프", "unavailable": "판단 불가"}
 _REGIME_PLAIN = {"Goldilocks": "골디락스", "Reflation": "리플레이션", "Stagflation": "스태그플레이션",
                  "Deflation": "디플레이션"}
-_MODE_PLAIN = {"NORMAL": "평소대로", "CAUTIOUS": "조심", "DEFENSIVE": "방어"}
+_MODE_PLAIN = {"NORMAL": "정상", "CAUTIOUS": "경계", "DEFENSIVE": "방어"}
 
 
 # ── 경기 국면 ────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ class RegimeParams(BaseModel):
     model_config = _FORBID
     snapshot_id: str | None = Field(None, max_length=40, json_schema_extra={"x-ui": _ui(
         "스냅샷 번호", question="사용할 스냅샷", presets=[{"label": "가장 최근", "value": None}],
-        help="비우면 가장 최근에 저장한 스냅샷을 씁니다. 특정 번호는 전문가 설정에서 넣습니다. 스냅샷은 매크로 탭에서 만듭니다.")})
+        help="비우면 최근 저장한 스냅샷을 사용합니다. 특정 번호는 전문가 설정에서 입력합니다. 스냅샷은 매크로 탭에서 생성합니다.")})
 
 
 def _regime(inputs: dict, p: RegimeParams) -> pg.NodeOutput:
@@ -81,14 +81,14 @@ def _explain_regime(view: dict, prov: dict, params: Any) -> dict:
         facts.append("번호를 비워서 가장 최근 스냅샷을 썼습니다.")
     trust = []
     if view.get("research_usage") != "backtest_eligible":
-        trust.append(_t(UNKNOWN, "이 스냅샷은 지금 시점 전용입니다 — 과거 검증에는 쓰지 않습니다."))
+        trust.append(_t(UNKNOWN, "이 스냅샷은 현재 시점 전용입니다 — 과거 검증에는 사용하지 않습니다."))
     if view.get("data_status") in ("partial", "mock", "unavailable"):
         trust.append(_t(UNKNOWN, f"데이터 상태가 ‘{view.get('data_status')}’입니다 — 공표 시각을 모두 확정하지 못했습니다."))
     plain = _REGIME_PLAIN.get(regime, regime)
     last = plain[-1:]
     # ㄹ 받침은 '로' — 받침 없는 말과 같다.
     ro = "으로" if ("가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 not in (0, 8)) else "로"
-    return {"title": f"지금 경기 국면은 ‘{plain}’{ro} 봤습니다", "facts": facts, "trust": trust,
+    return {"title": f"현재 경기 국면을 ‘{plain}’{ro} 판정했습니다", "facts": facts, "trust": trust,
             "unmeasured": ["국면 판정이 앞으로 맞을지", "국면이 바뀌는 시점"]}
 
 
@@ -140,7 +140,7 @@ def _refuse_unreadable_factors(p: TimingParams) -> None:
         if c is None:
             raise pg.NodeFailure(f"카탈로그에 없는 신호입니다: ‘{r.factor_id}’ — 방향을 추측하지 않습니다. 목록에서 선택하십시오.")
         if c.get("availability") == "unavailable":
-            raise pg.NodeFailure(f"‘{c['label']}’은(는) 쓸 수 없습니다 — "
+            raise pg.NodeFailure(f"‘{c['label']}’은(는) 사용할 수 없습니다 — "
                                  f"{c.get('unavailable_reason') or '데이터 소스를 보유하고 있지 않습니다.'}")
         if c.get("requires_as_of") and not p.as_of:
             raise pg.NodeFailure(f"‘{c['label']}’은(는) 기준일(as_of)이 있어야 그 시점의 값을 읽을 수 있습니다 — "
@@ -176,10 +176,10 @@ def _explain_timing(view: dict, prov: dict, params: Any) -> dict:
     st = _STATE_PLAIN.get(c.get("state"), c.get("state"))
     facts = [f"{f['label']}: {_STATE_PLAIN.get(f['state'], f['state'])}" for f in view.get("factor_states") or []]
     facts.append(f"결합 규칙: {_COMBOS.get(view.get('combination'), view.get('combination'))}.")
-    trust = [_t(CONFIRMED, "규칙대로 신호를 읽고 합쳤습니다.")]
+    trust = [_t(CONFIRMED, "규칙에 따라 신호를 판정하고 결합했습니다.")]
     if c.get("unavailable_count"):
         trust.append(_t(UNKNOWN, f"읽지 못한 신호 {c['unavailable_count']}개는 규칙대로 위험-오프로 셌습니다."))
-    trust.append(_t(UNKNOWN, "오늘 기준 신호입니다 — 과거에도 이 판단이 맞았는지는 ‘타이밍 시뮬레이션’으로 봅니다."
+    trust.append(_t(UNKNOWN, "오늘 기준 신호입니다 — 과거 적중 여부는 ‘타이밍 시뮬레이션’에서 확인합니다."
                     if not view.get("as_of") else "기준일 값이지만 그날 실제로 알 수 있었는지는 팩터마다 다릅니다."))
     if mock_allowed():
         trust.append(_t(UNKNOWN, "개발 모드라 시세가 합성일 수 있습니다 — 실제 신호를 말해 주지 않습니다."))
@@ -302,12 +302,12 @@ def _explain_overlay(view: dict, prov: dict, params: Any) -> dict:
     if view.get("follow") == "timing_macro" and not (view.get("overlay") or {}).get("usable", True):
         trust.append(_t(UNKNOWN, "경기 국면을 읽지 못해 국면은 노출을 바꾸지 않았습니다."))
     if view.get("status") != "executable":
-        trust.append(_t(UNKNOWN, f"이 비중은 실행 목표로는 쓸 수 없습니다 — {view.get('status_reason')}"))
+        trust.append(_t(UNKNOWN, f"이 비중은 실행 목표로 사용할 수 없습니다 — {view.get('status_reason')}"))
     trust.append(_t(UNKNOWN, "오늘의 판단을 얹은 비중이라 정책 백테스트는 막습니다."))
     return {"title": title,
             "headline": {"label": "주식 노출", "value": round(e * 100, 1), "unit": "%", "text": _pct(e * 100)},
             "facts": facts, "trust": trust,
-            "unmeasured": ["이 조절이 과거에 손실을 줄였는지 — ‘타이밍 시뮬레이션’으로 따로 봅니다",
+            "unmeasured": ["이 조절의 과거 손실 축소 효과 — ‘타이밍 시뮬레이션’에서 별도로 확인합니다",
                            "현금 보유분의 기회비용"]}
 
 
@@ -319,7 +319,7 @@ class SimulationParams(BaseModel):
         "기간", question="관측 기간(개월)", unit="개월",
         presets=[{"label": "1년", "value": 12}, {"label": "2년", "value": 24}, {"label": "5년", "value": 60}])})
     mode: Literal["backtest", "forward"] = Field("backtest", json_schema_extra={"x-ui": _ui(
-        "방식", widget="cards", options={"backtest": "과거 검증(쓸 수 없는 값이면 멈춤)", "forward": "참고용(쓸 수 없는 값도 표시)"},
+        "방식", widget="cards", options={"backtest": "과거 검증(사용 불가 값이면 중단)", "forward": "참고용(사용 불가 값도 표시)"},
         help="과거 검증은 그 시점에 알 수 없던 값을 쓰는 신호가 있으면 계산하지 않습니다.")})
 
 
@@ -342,12 +342,12 @@ def _explain_simulation(view: dict, prov: dict, params: Any) -> dict:
     if r.get("backtest_eligible"):
         trust.append(_t(CONFIRMED, "모든 신호가 그 시점에 알 수 있던 값으로 계산됐습니다."))
     else:
-        trust.append(_t(UNKNOWN, str(r.get("warning") or "과거 검증에 쓸 수 없는 신호가 있습니다 — 참고용입니다.")))
+        trust.append(_t(UNKNOWN, str(r.get("warning") or "과거 검증에 사용할 수 없는 신호가 있습니다 — 참고용입니다.")))
     if mock_allowed():
         trust.append(_t(UNKNOWN, "개발 모드라 시세가 합성일 수 있습니다."))
     return {"title": f"지난 {len(pts)}개 시점 동안 신호가 {r.get('state_changes', 0)}번 바뀌었습니다",
             "facts": [f"방식: {'과거 검증' if view.get('mode') == 'backtest' else '참고용'}."],
-            "trust": trust, "unmeasured": ["이 신호대로 했을 때의 수익 — 여기서는 노출만 보여 줍니다", "거래 비용"]}
+            "trust": trust, "unmeasured": ["이 신호를 따랐을 때의 수익률 — 여기서는 노출만 표시합니다", "거래 비용"]}
 
 
 def _save_timing_rules(values: dict, view: dict, params: Any) -> dict:

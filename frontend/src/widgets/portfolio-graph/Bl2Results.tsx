@@ -50,13 +50,13 @@ export function FrontierResult({ v }: { v: Dict }) {
       <div className="pg-chart pg-frontier">
         <FrontierPlot dots={dots} curve={curve} point={pt && num(pt.volatility) !== null && num(pt.return) !== null ? { x: pt.volatility, y: pt.return } : null}
           rows={read} initial={bestAt >= 0 ? bestAt : 0}
-          label={`변동성 대비 수익 경계 ${all.length}점${pt ? ` · 이은 비중 연 ${pt.return}% · 변동성 ${pt.volatility}%` : ""}`} />
+          label={`변동성 대비 수익 경계 ${all.length}점${pt ? ` · 연결한 비중 연 ${pt.return}% · 변동성 ${pt.volatility}%` : ""}`} />
       </div>
       <KV rows={[
         ["곡선", `${all.length}점`],
         ["가장 좋은 점", best ? `연 ${pct(best.return)} · 변동성 ${pct(best.volatility)}` : "—"],
-        ["이은 비중", pt ? <><span className="pg-dot-point" aria-hidden="true" />연 {pct(pt.return)} · 변동성 {pct(pt.volatility)}</>
-                       : "비중을 이으면 곡선 위에 찍습니다"],
+        ["연결한 비중", pt ? <><span className="pg-dot-point" aria-hidden="true" />연 {pct(pt.return)} · 변동성 {pct(pt.volatility)}</>
+                       : "비중을 연결하면 곡선 위에 표시합니다"],
       ]} />
       {cloud === null && <p className="pg-warn">무작위 조합 구름은 그리지 못했습니다 — {String(v.cloud_reason ?? "사유 미상")}</p>}
     </>
@@ -117,9 +117,9 @@ export function RegimeExplainResult({ v }: { v: Dict }) {
     <>
       <KV rows={[
         ["지금 국면", tr.available ? rk(tr.current) : `— ${String(tr.reason ?? "")}`],
-        ["이어진 기간", num(tr.run_length_months) === null ? "—" : `${String(tr.run_length_months)}개월`],
+        ["지속 기간", num(tr.run_length_months) === null ? "—" : `${String(tr.run_length_months)}개월`],
         ["관측 창", <span key="w" className="pg-regime-window">{String(span.first ?? "?")} ~ {String(span.last ?? "?")} · {String(span.n_months ?? "—")}개월
-          {span.truncated ? ` (요청 ${String(span.requested ?? "?")}개월보다 짧습니다${num(span.dropped_incomplete) ? ` · 덜 채워진 ${String(span.dropped_incomplete)}개월 뺌` : ""})` : ""}</span>],
+          {span.truncated ? ` (요청 ${String(span.requested ?? "?")}개월보다 짧습니다${num(span.dropped_incomplete) ? ` · 미완결 ${String(span.dropped_incomplete)}개월 제외` : ""})` : ""}</span>],
       ]} />
       {drivers.length > 0 && (
         <>
@@ -158,7 +158,7 @@ export function RegimeExplainResult({ v }: { v: Dict }) {
             </table>
           </div>
           {rows.filter((row) => row.shrunk).map((row) => (
-            <p key={String(row.from)} className="pg-warn pg-regime-sparse">{rk(row.from)}에서 떠난 관측이 적습니다 — 값이 사전분포 쪽에 머물러 구간이 넓습니다{row.reason ? ` (${String(row.reason)})` : ""}.</p>
+            <p key={String(row.from)} className="pg-warn pg-regime-sparse">{rk(row.from)}에서 전이한 관측이 적습니다 — 값이 사전분포에 가까워 구간이 넓습니다{row.reason ? ` (${String(row.reason)})` : ""}.</p>
           ))}
           {tr.note ? <p className="pg-note">{String(tr.note)}</p> : null}
         </>
@@ -211,11 +211,11 @@ const HEALTH_KO: Record<string, string> = { healthy: "건강", watch: "지켜보
 export function HealthResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
   const items = (r.items as Dict[]) ?? [];
-  if (!items.length) return <p className="pg-help">등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 등록하면 여기서 상태를 봅니다.</p>;
+  if (!items.length) return <p className="pg-help">등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 등록하면 여기에 상태가 표시됩니다.</p>;
   return (
     <>
       <table className="pg-table">
-        <thead><tr><th>알파</th><th>상태</th><th className="pg-td-num">못 잰 신호</th></tr></thead>
+        <thead><tr><th>알파</th><th>상태</th><th className="pg-td-num">측정 불가 신호</th></tr></thead>
         <tbody>{items.map((it) => (
           <tr key={String(it.alpha_id)}>
             <td className="pg-td-name">{String(it.name)}</td>
@@ -238,7 +238,7 @@ function useSleeveLegend(ports: string[]): [string, string][] {
   return ports.map((port, i) => {
     const e = edges.find((x) => x.target === selected && x.targetHandle === port);
     const n = e ? nodes.find((x) => x.id === e.source) : undefined;
-    const title = n ? catalog?.find((c) => c.type === n.data.kind)?.plain_label ?? n.data.kind : "이어진 노드 없음";
+    const title = n ? catalog?.find((c) => c.type === n.data.kind)?.plain_label ?? n.data.kind : "연결된 노드 없음";
     // 캔버스 카드의 번호와 같은 번호(흐름 순서) — 같은 종류를 둘 이으면 이름만으로는 가를 수 없다.
     const no = n ? topoOrder(nodes.map((x) => x.id), edges).indexOf(n.id) + 1 : 0;
     return [`그룹 ${i + 1}`, no ? `${no}번 ${title}` : title];
@@ -256,7 +256,7 @@ export function SleeveAnalyticsResult({ v }: { v: Dict }) {
   return (
     <>
       {legend.length ? (
-        <ul className="pg-rob-legend" aria-label="그룹과 이어진 노드">
+        <ul className="pg-rob-legend" aria-label="그룹과 연결된 노드">
           {legend.map(([k, t]) => <li key={k}><b>{k}</b>{t}</li>)}
         </ul>
       ) : null}
@@ -264,7 +264,7 @@ export function SleeveAnalyticsResult({ v }: { v: Dict }) {
       <h4 className="pg-h4">그룹 간 상관 · 위험 기여 비중</h4>
       <KV rows={[["평균 상관", num(r.avg_correlation) === null ? "—" : (r.avg_correlation as number).toFixed(2)],
                  ["군집", `${String(r.n_clusters ?? "—")}개`],
-                 ["함께 빠지는 정도", num(tail.lower_tail_coexceedance) === null ? "—" : `${(tail.lower_tail_coexceedance as number).toFixed(2)} (1 = 서로 무관)`]]} />
+                 ["동반 하락 정도", num(tail.lower_tail_coexceedance) === null ? "—" : `${(tail.lower_tail_coexceedance as number).toFixed(2)} (1 = 서로 무관)`]]} />
       <table className="pg-table pg-corr">
         <thead><tr><th />{names.map((n) => <th key={n} className="pg-td-num">{n}</th>)}<th className="pg-td-num">위험 기여 비중</th></tr></thead>
         <tbody>{names.map((a) => (
@@ -303,7 +303,7 @@ export function AlphaValidateResult({ v, prov }: { v: Dict; prov: Dict }) {
       {/* ★DECAY 와 앞/뒤 절반은 다른 질문이다★ — 보유 기간별 IC(얼마나 오래 가나) · 기간 분할 IC(시간이 지나도 버티나). */}
       {Object.keys(decay).length > 0 && (
         <>
-          <h4 className="pg-h4">보유 기간별 IC (신호가 얼마나 오래 가나)</h4>
+          <h4 className="pg-h4">보유 기간별 IC (신호 지속성)</h4>
           <table className="pg-table pg-av-decay"><tbody>{Object.entries(decay).map(([k, x]) => (
             <tr key={k}><td className="pg-td-name">{k.replace("m", "개월")}</td>
               <td className={`pg-td-num${(num(x) ?? 0) < 0 ? " pg-neg" : ""}`}>{num(x) === null ? "— (측정 불가)" : sgn(x)}</td></tr>
@@ -317,7 +317,7 @@ export function AlphaValidateResult({ v, prov }: { v: Dict; prov: Dict }) {
         <tr><td className="pg-td-name">나눈 방식</td><td className="pg-td-num">{String(oos.split ?? "—")}</td></tr>
       </tbody></table>
       {top.length > 0 && (
-        <p className="pg-note pg-av-stale">상위 종목 점수는 표본 마지막 날({String(r.period_end ?? "미상")}) 값입니다 — 오늘 기준 비중은 ‘알파 포트폴리오’ 노드로 봅니다.
+        <p className="pg-note pg-av-stale">상위 종목 점수는 표본 마지막 날({String(r.period_end ?? "미상")}) 값입니다 — 오늘 기준 비중은 ‘알파 포트폴리오’ 노드에서 산출합니다.
           {" "}{top.slice(0, 5).map((t) => String(t.name ?? t.ticker)).join(", ")}</p>
       )}
       {q.length > 0 && (

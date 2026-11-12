@@ -230,7 +230,7 @@ def test_node_lambda_moves_weights_and_explains(market):
     assert lo["view"]["weights"] != hi["view"]["weights"]
     d = pg.run(_graph(None), gn.REGISTRY)["nodes"]["o"]
     trust = " ".join(t["text"] for t in d["explain"]["trust"])
-    assert "관례적인 값" in trust and "나에게 맞는 값은 아닙니다" in trust
+    assert "관례적인 값" in trust and "투자자별 적정값은 아닙니다" in trust
     assert any("위험 회피 λ 4" in f for f in d["explain"]["facts"])
     utrust = " ".join(t["text"] for t in hi["explain"]["trust"])
     assert "내가 고른 값" in utrust and "관례적인 값" not in utrust

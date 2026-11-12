@@ -203,7 +203,7 @@ export function NameWithGoal({ name, onName, goal, onGoal }: { name: string; onN
     <span className="pg-goalchip-wrap" ref={ref}>
       <input className="pg-name" value={name} placeholder="이름 없는 설계" aria-label="설계 이름" onChange={(e) => onName(e.target.value)} />
       <button type="button" className={`pg-goalchip${goal ? " on" : ""}`} aria-haspopup="menu" aria-expanded={open}
-              aria-label={label} title={`${label} — AI 추천이 이 목표에 비춰 다음 노드를 고릅니다`} onClick={() => setOpen((v) => !v)}>
+              aria-label={label} title={`${label} — AI 추천이 이 목표를 기준으로 다음 노드를 제안합니다`} onClick={() => setOpen((v) => !v)}>
         <Target size={14} aria-hidden="true" />
       </button>
       {open && (
@@ -219,7 +219,7 @@ export function NameWithGoal({ name, onName, goal, onGoal }: { name: string; onN
           <button type="button" role="menuitemradio" aria-checked={goal === null} data-goal="none" onClick={() => pick(null)}>
             <span className="pg-view-check" aria-hidden="true">{goal === null && <Check size={14} />}</span>목표 없음
           </button>
-          <p className="pg-goalchip-note">AI 추천이 이 목표에 비춰 다음 노드를 고릅니다. 규칙 추천은 바뀌지 않습니다.</p>
+          <p className="pg-goalchip-note">AI 추천이 이 목표를 기준으로 다음 노드를 제안합니다. 규칙 추천은 바뀌지 않습니다.</p>
         </div>
       )}
     </span>
@@ -283,7 +283,7 @@ export function StageLanes({ stages }: { stages: WorkflowStage[] }) {
         {geo.lanes.map((l) => (
           <div key={l.key} className="pg-lane" data-stage={l.key} data-count={l.count}
                style={{ left: l.x, top: geo.top, width: l.w, height: geo.h, ["--pg-lane-c" as string]: STAGE_VAR[l.key] ?? "var(--pg-st-data)" }}>
-            <div className="pg-lane-head nodrag nopan" title="끌어서 이 단계의 노드를 위아래로 함께 옮깁니다" {...headProps(l.key)}>
+            <div className="pg-lane-head nodrag nopan" title="끌어서 이 단계의 노드를 위아래로 함께 이동합니다" {...headProps(l.key)}>
               <span className="pg-lane-name">{l.label}</span><span className="pg-lane-n">{l.count}개</span>
             </div>
           </div>

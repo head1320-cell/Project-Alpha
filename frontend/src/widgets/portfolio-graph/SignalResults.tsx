@@ -74,7 +74,7 @@ export function ScoresResult({ v }: { v: Dict }) {
 export function ScoresToWeightsResult({ v }: { v: Dict }) {
   return (
     <>
-      {!v.has_sigma && <p className="pg-warn">공분산이 없어 ‘위험 기여도 분해’에는 쓸 수 없습니다 — 수익률을 연결하십시오.</p>}
+      {!v.has_sigma && <p className="pg-warn">공분산이 없어 ‘위험 기여도 분해’에는 사용할 수 없습니다 — 수익률을 연결하십시오.</p>}
       <h4 className="pg-h4">비중</h4>
       <Bars values={(v.weights as Record<string, number>) ?? {}} labels={v.labels as Record<string, string>} unit="%" />
     </>

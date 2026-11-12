@@ -167,7 +167,7 @@ test("물으면 /run 의 설명·봉인과 전달 점검·봉인을 그대로 �
   const turn = dock(page).locator(".pg-ask-turn").first();
   await expect(turn.locator(".pg-ask-q")).toHaveText("왜 이렇게 나눴나요?");
   await expect(turn.locator(".pg-ask-sent-text")).toHaveText(SENTS.map((x) => x.text));
-  await expect(turn.locator(".pg-ask-sent").nth(1).locator(".pg-ask-chip")).toHaveText(["4 포트폴리오 최적화 · 제목", "2→4 선 · 건너간 것 1"]);
+  await expect(turn.locator(".pg-ask-sent").nth(1).locator(".pg-ask-chip")).toHaveText(["4 포트폴리오 최적화 · 제목", "2→4 선 · 전달된 것 1"]);
   const chip = turn.locator(".pg-ask-sent").first().locator(".pg-ask-chip");
   await expect(chip).toHaveText("3 기대수익률 추정 · 사실 2");
   await expect(chip).toHaveAttribute("aria-expanded", "false");
@@ -304,7 +304,7 @@ test("Ctrl+K '고른 것에게 묻기' 는 칸에 초점을 둔다 · Esc 는 �
   await pick(page, "optimizer");
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("묻기");
-  await expect(page.locator('.pg-cmd-item[data-cmd="ask-here"]')).toContainText("고른 노드에게 묻기");
+  await expect(page.locator('.pg-cmd-item[data-cmd="ask-here"]')).toContainText("선택한 노드에게 묻기");
   await page.keyboard.press("Enter");
   await expect(box(page)).toBeFocused();
   await page.keyboard.press("Escape");

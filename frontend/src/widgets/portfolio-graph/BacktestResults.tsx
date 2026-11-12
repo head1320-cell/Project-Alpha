@@ -81,7 +81,7 @@ export function RunProgress({ runId, onReload }: { runId: string; onReload: () =
             : st ? `${STAGE_LABELS[st.status] ?? st.status}${st.status_message ? ` · ${st.status_message}` : ""}` : "상태 확인 중"}
       </p>
       <button type="button" className={`pg-btn${done ? " pg-btn--primary" : ""}`} disabled={!done} onClick={onReload}>
-        결과 불러오기
+        결과 조회
       </button>
     </div>
   );
@@ -117,7 +117,7 @@ export function BacktestAttributionResult({ v }: { v: Dict }) {
           </tr>
         );
       })}</tbody></table>
-      <p className="pg-note">같이 움직인 정도를 나눈 것입니다 — 원인이라는 뜻은 아닙니다.</p>
+      <p className="pg-note">동조 정도(상관)를 분해한 것입니다 — 인과를 뜻하지 않습니다.</p>
     </>
   );
 }

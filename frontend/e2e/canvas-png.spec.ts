@@ -100,7 +100,7 @@ test("R7 · 띠 문장 — 이름·때는 늘 · 합성·예전 결과·계산 �
   expect(captionLines({ ...base, computed: false, practice: false, stale: false })[1]).toBe("계산 전입니다 — 카드에 결과가 없습니다");
   for (const l of [...all, ...captionLines({ ...base, computed: false, practice: false, stale: false })]) expect(l).not.toContain("실데이터");
   expect(exportNote(all)).toContain("합성");
-  expect(exportNote(captionLines({ ...base, computed: true, practice: false, stale: false }))).toBe("그림(PNG)을 받았습니다.");
+  expect(exportNote(captionLines({ ...base, computed: true, practice: false, stale: false }))).toBe("그림(PNG)을 저장했습니다.");
 });
 
 test("R7 · 글꼴 고르기 — 쓴 글자가 든 범위만 (짝: 안 쓴 범위는 빠지고 범위 없는 글꼴은 늘)", () => {
@@ -139,7 +139,7 @@ test("R7 · 받은 파일 — 이름 · PNG 머리 · 크기 = 경계 + 띠 (짝
   expect(far.w).toBeGreaterThan(got.w);
 });
 
-test("R7 · 같은 문서면 같은 그림 — 유령·고른 노드·고른 선(도구줄)·확대·이동을 바꿔도 같은 바이트 (짝: 노드를 옮기면 다르다)", async ({ page }) => {
+test("R7 · 같은 문서면 같은 그림 — 유령·선택한 노드·선택한 선(도구줄)·확대·이동을 바꿔도 같은 바이트 (짝: 노드를 옮기면 다르다)", async ({ page }) => {
   test.setTimeout(120_000);
   await open(page, CORE);
   await expect(page.locator(".pg-ghost").first()).toBeVisible();          // 유령이 정말 떠 있어야 거름을 잰다
@@ -148,10 +148,10 @@ test("R7 · 같은 문서면 같은 그림 — 유령·고른 노드·고른 선
   expect(again.buf.equals(a.buf), "그대로 두 번").toBe(true);
   await card(page, "returns").click({ position: HEAD });
   await expect(card(page, "returns")).toHaveClass(/pg-node--selected/);
-  expect((await take(page)).buf.equals(a.buf), "고른 노드").toBe(true);
+  expect((await take(page)).buf.equals(a.buf), "선택한 노드").toBe(true);
   await page.locator('.react-flow__edge[data-id="returns.returns->estimate.returns"]').dispatchEvent("click");
   await expect(page.locator(".pg-edge-tb")).toBeVisible();
-  expect((await take(page)).buf.equals(a.buf), "고른 선 · 도구줄").toBe(true);
+  expect((await take(page)).buf.equals(a.buf), "선택한 선 · 도구줄").toBe(true);
   await page.keyboard.press("Control+k");
   await page.locator('.pg-cmd-item[data-cmd="ghosts"]').click();
   await expect(page.locator(".pg-ghost")).toHaveCount(0);
@@ -259,7 +259,7 @@ test("R7 · html-to-image 는 누를 때 받는다 — 누르기 전엔 새 JS �
   expect(js.length).toBe(after);
 });
 
-test("R7 · 찍은 뒤 화면이 그대로 돌아온다 — 확대 단계 · 고른 노드 (짝: 찍다 실패해도 돌아오고 까닭을 말한다)", async ({ page }) => {
+test("R7 · 찍은 뒤 화면이 그대로 돌아온다 — 확대 단계 · 선택한 노드 (짝: 찍다 실패해도 돌아오고 까닭을 말한다)", async ({ page }) => {
   await open(page, CORE);
   for (let i = 0; i < 12 && (await page.locator(".pg-canvas").getAttribute("data-zoom")) !== "near"; i++) {
     await page.locator(".react-flow__controls-zoomin").click();

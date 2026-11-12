@@ -146,7 +146,7 @@ test("여닫기 단축키(BQ Q1): [ 왼쪽 · ] 오른쪽 · \\ 집중 — 입�
   await expect(page.locator(".pg-cmd")).toContainText("오른쪽 창 닫기");
 });
 
-test("오른쪽 창(BQ Q1): 노드를 고르면 열리고 · × 뒤엔 다음 고를 때까지 닫힘 · 집중 모드에서는 고르기만(짝) · 머리에 고른 노드", async ({ page }) => {
+test("오른쪽 창(BQ Q1): 노드를 고르면 열리고 · × 뒤엔 다음 고를 때까지 닫힘 · 집중 모드에서는 고르기만(짝) · 머리에 선택한 노드", async ({ page }) => {
   await openCanvas(page);
   await node(page, "optimizer").click();
   await expect(side(page).locator(".pg-side-head")).toContainText("포트폴리오 최적화");
@@ -202,7 +202,7 @@ test("폭 조절·저장(BQ Q1): 손잡이를 끌거나 ←→ 로 300~600 · �
   expect(Math.abs((await box(side(page))).width - 392)).toBeLessThanOrEqual(2);
 });
 
-test("판을 비켜 선다(BQ Q1): 맞춰 보기의 노드 · 우클릭 메뉴 · 미니맵이 열린 판과 겹치지 않는다 — 고른 노드가 창 밑이면 옮긴다", async ({ page }) => {
+test("판을 비켜 선다(BQ Q1): 맞춰 보기의 노드 · 우클릭 메뉴 · 미니맵이 열린 판과 겹치지 않는다 — 선택한 노드가 창 밑이면 옮긴다", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openCanvas(page);
   await run(page);
@@ -513,7 +513,7 @@ test("U8 이어서 · 844×390 — 노드를 고르면 'AI 에게 묻기' 는 �
   await expect(ask.locator(".pg-ask-login")).toHaveCount(0);
   // 명령 '고른 노드에게 묻기'(Ctrl+K)는 접힌 칸을 먼저 펼친다
   await page.keyboard.press("Control+k");
-  await page.getByLabel("명령 찾기").last().fill("고른 노드에게 묻기");
+  await page.getByLabel("명령 찾기").last().fill("선택한 노드에게 묻기");
   await expect(page.locator('.pg-cmd-item[data-cmd="ask-here"]')).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(fold, "명령이 묻기 칸을 펼친다").toHaveAttribute("aria-expanded", "true");

@@ -93,7 +93,7 @@ export function ProcedurePanel({ procedure, error, gateLabel, gateState, hereSte
                 )}
                 {sug && (
                   <button type="button" className="pg-proc-fix" onClick={() => onApply(sug)} title={sug.text}>
-                    {sug.action === "connect" ? "선 잇기" : `‘${sug.label}’ 붙이기`}
+                    {sug.action === "connect" ? "선 연결" : `‘${sug.label}’ 추가`}
                   </button>
                 )}
               </div>

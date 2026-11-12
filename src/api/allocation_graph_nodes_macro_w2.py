@@ -55,7 +55,7 @@ def _explain_yield_curve(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     sp = r.get("spread_2y10y_bp")
     inv = bool(r.get("inversion"))
-    title = ("장단기 금리가 뒤집혀 있습니다" if inv else "곡선이 정상(장기 금리가 더 높음)입니다")
+    title = ("장단기 금리가 역전돼 있습니다" if inv else "수익률 곡선이 정상(장기 금리 > 단기 금리)입니다")
     headline = ({"label": "10년 − 2년 금리차", "value": round(sp), "unit": "bp",
                  "text": f"{round(sp):+d}bp" + (" 역전" if inv else "")} if isinstance(sp, (int, float)) else None)
     facts = [f"{x.get('label')} {x.get('yield_pct'):.2f}%" for x in r.get("points") or []
@@ -76,7 +76,7 @@ class DashboardParams(BaseModel):
     model_config = _FORBID
     theme: Literal["", "growth", "inflation", "rates", "liquidity", "sentiment", "korea"] = Field(
         "", json_schema_extra={"x-ui": _ui("테마", question="조회 지표", widget="cards", options=_THEMES,
-                                            help="비우면 여섯 테마를 모두 봅니다.")})
+                                            help="비우면 여섯 테마를 모두 표시합니다.")})
 
 
 def _as_dict(s: Any) -> dict:
@@ -102,11 +102,11 @@ def _explain_dashboard(view: dict, prov: dict, params: Any) -> dict:
     no_z = sum(1 for i in inds if not isinstance(i.get("z_score"), (int, float)))
     trust = [_t(CONFIRMED, "z 는 최근 5년(60개월) 창으로 측정했습니다 — 창이 바뀌면 값도 바뀝니다.")]
     if no_z:
-        trust.append(_t(UNKNOWN, f"{no_z}개 지표는 표본이 짧아 z 를 재지 못했습니다 — 0 이 아니라 모름입니다."))
+        trust.append(_t(UNKNOWN, f"{no_z}개 지표는 표본이 짧아 z-score 를 측정하지 못했습니다 — 0 이 아니라 미상입니다."))
     trust += _macro_trust(prov)
-    return {"title": f"지표 {len(inds)}개를 테마별로 모았습니다",
-            "facts": facts + (["평소와 가장 먼 지표부터 적었습니다."] if facts else []),
-            "trust": trust, "unmeasured": ["지표의 극단값이 앞으로의 수익을 말해 주는지(예측력)"]}
+    return {"title": f"지표 {len(inds)}개를 테마별로 집계했습니다",
+            "facts": facts + (["평시 대비 이탈이 큰 지표부터 나열했습니다."] if facts else []),
+            "trust": trust, "unmeasured": ["지표 극단값의 향후 수익률 예측력"]}
 
 
 # ── 국면 합의 ─────────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ class CoverageParams(BaseModel):
         "시장", question="국면 예측 평가 대상 시장", widget="cards", options=_MARKETS)})
     months: int = Field(240, ge=24, le=600, json_schema_extra={"x-ui": _ui(
         "기간", "advanced", unit="개월", presets=[{"label": "10년", "value": 120}, {"label": "20년", "value": 240}],
-        help="국면 경로를 만드는 기간입니다. 저장된 관측이 더 짧으면 있는 만큼만 씁니다.")})
+        help="국면 경로 산출 기간입니다. 저장된 관측이 더 짧으면 가용 구간만 사용합니다.")})
     k: int = Field(1, ge=1, le=12, json_schema_extra={"x-ui": _ui(
         "예측 시차", "advanced", unit="개월", help="몇 개월 뒤 국면 예측의 적중 여부를 평가합니다.")})
     alpha: float = Field(0.1, ge=0.01, le=0.5, json_schema_extra={"x-ui": _ui(
@@ -183,7 +183,7 @@ def _explain_coverage(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED if r.get("walk_forward") else UNKNOWN,
                 "각 시점 이전 경로만으로 예측했습니다(미래를 쓰지 않은 채점)." if r.get("walk_forward")
                 else "시점 이전 경로만 썼는지 확인되지 않았습니다."),
-             _t(ASSUMED, "적중률은 집합 크기와 함께 읽어야 합니다 — 집합을 키우면 적중률은 언제든 올라갑니다."),
+             _t(ASSUMED, "적중률은 집합 크기와 함께 해석해야 합니다 — 집합이 커지면 적중률은 항상 상승합니다."),
              *_macro_trust(prov)]
     if not r.get("baseline_available"):
         trust.append(_t(UNKNOWN, "기준선(기저율) 집합을 만들지 못해 비교가 없습니다."))
@@ -198,7 +198,7 @@ class LongRunParams(BaseModel):
     months: int = Field(240, ge=24, le=600, json_schema_extra={"x-ui": _ui(
         "기간", unit="개월", question="장기 균형관계 추정 기간",
         presets=[{"label": "10년", "value": 120}, {"label": "20년", "value": 240}],
-        help="저장된 관측이 더 짧으면 있는 만큼만 씁니다. 60개월보다 짧으면 판정하지 않습니다.")})
+        help="저장된 관측이 더 짧으면 가용 구간만 사용합니다. 60개월 미만이면 판정하지 않습니다.")})
     vars: str | None = Field(None, max_length=400, json_schema_extra={"x-ui": _ui(
         "계열(쉼표로 구분)", "advanced",
         help="비우면 미리 정해 둔 코어 셋을 씁니다. 최대 7개 — 데이터를 보고 고르면 검정이 검정이 아니게 됩니다.")})

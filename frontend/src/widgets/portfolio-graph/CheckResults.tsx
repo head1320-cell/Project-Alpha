@@ -123,7 +123,7 @@ export function CorrStressResult({ v }: { v: Dict }) {
       ]} />
       <h4 className="pg-h4">종목별 기여 VaR</h4>
       <table className="pg-table">
-        <thead><tr><th>종목</th><th className="pg-td-num">평소</th><th className="pg-td-num">위기</th></tr></thead>
+        <thead><tr><th>종목</th><th className="pg-td-num">평시</th><th className="pg-td-num">위기</th></tr></thead>
         <tbody>{names.map((n) => (
           <tr key={n}><td className="pg-td-name">{labels[n] ?? n}</td><td className="pg-td-num">{won(bc[n])}</td><td className="pg-td-num">{won(sc[n])}</td></tr>
         ))}</tbody>

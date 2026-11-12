@@ -40,7 +40,7 @@ function PlanSummary({ plan, pre }: { plan: ExecutionPlan; pre: PreTrade }) {
   return (
     <>
       <dl className="pg-kv">
-        <div><dt>주문</dt><dd>{s.n_orders}건 (사기 {s.n_buy} · 팔기 {s.n_sell})</dd></div>
+        <div><dt>주문</dt><dd>{s.n_orders}건 (매수 {s.n_buy} · 매도 {s.n_sell})</dd></div>
         <div><dt>회전율</dt><dd>{s.turnover_pct}%</dd></div>
         <div><dt>예상 비용</dt><dd>{won(s.est_cost)} · {s.est_cost_bp}bp</dd></div>
         <div><dt>사전 점검</dt><dd>{pre.can_approve ? "승인할 수 있습니다" : "막힌 항목이 있어 승인 불가"}</dd></div>
@@ -72,11 +72,11 @@ function NewPlan({ onSaved }: { onSaved: (id: string) => void }) {
   const list = targets.data?.versions ?? [];
   return (
     <section className="pg-rec-sec" aria-label="새 실행 계획">
-      <h3 className="pg-h4">1. 실행 목표 고르기</h3>
+      <h3 className="pg-h4">1. 실행 목표 선택</h3>
       {list.length === 0 && <p className="pg-help">저장된 실행 목표가 없습니다 — 캔버스의 ‘실행 목표 비중’ 노드에서 저장하면 여기에 나옵니다.</p>}
       {tv && (
         <button type="button" className="pg-btn pg-btn--ghost pg-rec-change" onClick={() => { setTv(null); preview.reset(); save.reset(); }}>
-          다른 목표 고르기
+          다른 목표 선택
         </button>
       )}
       <div className="pg-pick" role="radiogroup" aria-label="실행 목표">
@@ -178,7 +178,7 @@ function PlanFlow({ planId }: { planId: string }) {
         )}
       </div>
       {msg && <p className="pg-save-msg" role="status">{msg}</p>}
-      <p className="pg-note">실제 주문은 나가지 않습니다 — 모의 제출 뒤 체결은 사람이 입력합니다(브로커 미연결).</p>
+      <p className="pg-note">실제 주문은 전송하지 않습니다 — 모의 제출 뒤 체결은 사람이 입력합니다(브로커 미연결).</p>
       <details className="pg-rec-audit">
         <summary>기록 {p.audit.length}줄</summary>
         <ul className="pg-list">{p.audit.slice().reverse().map((a, i) => (

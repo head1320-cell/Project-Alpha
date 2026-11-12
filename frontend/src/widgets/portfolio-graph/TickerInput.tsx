@@ -133,7 +133,7 @@ export function TickerField({ value, onChange }: { value: unknown; onChange: (v:
         <p className="pg-ticker-note" role="status">‘{left.join(", ")}’은 종목 코드가 아니라 넣지 않았습니다 — 이름이면 후보에서 선택하십시오.</p>
       )}
       {codes.length > 0 && (
-        <div className="pg-stock-chips" aria-label="고른 종목">
+        <div className="pg-stock-chips" aria-label="선택 종목">
           {codes.map((c) => <StockChip key={c} code={c} name={names[c]} className="pg-stock-chip" />)}
         </div>
       )}

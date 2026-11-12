@@ -17,7 +17,7 @@ import { descendantsOf } from "./store";
 
 const LINEAGE_TEXT = {
   practice: "합성 값이 흐릅니다",
-  forward: "지금 시점 전용입니다 — 과거 검증에 쓸 수 없습니다",
+  forward: "현재 시점 전용입니다 — 과거 검증에 사용할 수 없습니다",
   overlay: "오늘 판단한 노출 조절이 얹힌 비중입니다",
 };
 const LEVEL_TEXT: Record<IssueLevel, string> = { lost: "빠짐", changed: "바뀜", structural: "구조", unused: "쓰지 않음" };
@@ -69,7 +69,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       )}
       {record && (
         <div className="pg-wire-row" data-row="facts">
-          <h3>건너간 것</h3>
+          <h3>전달된 것</h3>
           {record.facts ? (
             <table className="pg-wire-facts"><tbody>
               {record.facts.map((f) => <tr key={f.key} data-key={f.key}><th scope="row">{f.label}</th><td>{f.text}</td></tr>)}
@@ -79,7 +79,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       )}
       {(record || recordGap) && (
         <div className="pg-wire-row" data-row="issues">
-          <h3>빠지거나 바뀐 것</h3>
+          <h3>누락·변경된 것</h3>
           {!record ? <p className="pg-wire-muted">{recordGap}</p>
             : record.issues === null ? <p className="pg-wire-muted">{record.issues_reason ?? "이 선은 점검하지 않았습니다."}</p>
             : record.issues.length ? (
@@ -97,10 +97,10 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       <div className="pg-wire-row" data-row="what">
         <h3>전달 데이터</h3>
         <p><b className="pg-wire-type-name">{typeName}</b>{brief ? <> · <span className="pg-wire-brief-text">{brief}</span></>
-          : <span className="pg-wire-muted"> — {live ? "요약할 수 없는 값입니다" : "계산하면 무엇이 흘렀는지 보여 드립니다"}</span>}</p>
+          : <span className="pg-wire-muted"> — {live ? "요약할 수 없는 값입니다" : "계산하면 전달된 값을 표시합니다"}</span>}</p>
       </div>
       <div className="pg-wire-row" data-row="route">
-        <h3>어디서 어디로</h3>
+        <h3>출발 · 도착</h3>
         <p>
           <button type="button" className="pg-wire-node" onClick={() => onFocus(edge.source)}>{label(edge.source)}</button>
           <span aria-hidden="true"> → </span><span className="pg-sr">에서 </span>
@@ -116,7 +116,7 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
       )}
       <div className="pg-wire-row" data-row="trust">
         <h3>신뢰도</h3>
-        {!live ? <p className="pg-wire-muted">계산하면 이 값의 출처를 보여 드립니다.</p>
+        {!live ? <p className="pg-wire-muted">계산하면 이 값의 출처를 표시합니다.</p>
           : live.status !== "ok" ? <p className="pg-wire-muted">보내는 노드가 계산되지 않아 값이 흐르지 않았습니다.</p>
           : chips.length ? (
             <ul className="pg-wire-chips">{chips.map((k) => <li key={k} className={`pg-wire-chip pg-wire-chip--${k}`}>{LINEAGE_TEXT[k]}</li>)}</ul>
@@ -124,13 +124,13 @@ export function WirePanel({ edge, nodes, edges, catalog, results, stale, errors,
         {problem && <p className="pg-wire-warn" role="note">{problem.message}{problem.fix ? ` ${problem.fix}` : ""}</p>}
       </div>
       <div className="pg-wire-row" data-row="cut">
-        <h3>끊으면</h3>
+        <h3>연결 해제 시</h3>
         <p>{required ? `‘${dst?.plain_label}’부터 ${stops.length}개 노드가 계산되지 않습니다.`
           : `이 입력은 없어도 됩니다 — ${josa(`‘${dst?.plain_label ?? ""}’`, ["은", "는"])} 이 값 없이 계산합니다.`}</p>
         {stops.length > 1 && <p className="pg-wire-muted pg-wire-stops">{stops.map(label).join(", ")}</p>}
       </div>
       <div className="pg-wire-actions">
-        <button type="button" className="pg-btn pg-wire-cut" onClick={onCut}>선 끊기</button>
+        <button type="button" className="pg-btn pg-wire-cut" onClick={onCut}>선 연결 해제</button>
       </div>
       {inserts.length > 0 && (
         <div className="pg-wire-row" data-row="insert">

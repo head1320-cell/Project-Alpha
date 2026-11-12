@@ -160,7 +160,7 @@ test("끄는 동안 이을 수 있는 포트만 또렷하다 · 잘못 놓으면
   const before = await edges(page).count();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 });
   await page.mouse.up();
-  await expect(page.locator(".pg-note")).toContainText("같은 색 점끼리 잇습니다");
+  await expect(page.locator(".pg-note")).toContainText("같은 색 포트끼리 연결합니다");
   await expect(edges(page)).toHaveCount(before);
   await expect(page.locator(".pg-port--can")).toHaveCount(0);                                     // 끝나면 강조도 사라진다
 });

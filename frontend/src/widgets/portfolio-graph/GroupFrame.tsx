@@ -60,7 +60,7 @@ const SNODE_PORT_TOP = 46;
 /** 몫을 모를 때의 이유 — 계산 전 · 포트폴리오에 잇지 않음 · 이었는데 서버 값이 없음(지어내지 않는다). */
 function shareWhy(computed: boolean, linked: boolean | undefined): string {
   if (!computed) return "계산하면 보입니다";
-  if (!linked) return "포트폴리오에 잇지 않았습니다";
+  if (!linked) return "포트폴리오에 연결하지 않았습니다";
   return "배분 비중 미상 — 포트폴리오 노드를 확인하십시오";
 }
 const known = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
@@ -127,17 +127,17 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
             </button>
           )}
           <button type="button" className="pg-group-x pg-group-dive nodrag" aria-label={`${noun} 안으로 들어가기`}
-                  title="이 상자만 밝혀 봅니다 (두 번 눌러도 됩니다)" onClick={() => dive(data.groupId)}>
+                  title="이 상자만 강조 표시합니다 (더블클릭으로도 가능합니다)" onClick={() => dive(data.groupId)}>
             <LogIn size={14} aria-hidden="true" />
           </button>
           {strategy && (
             <button type="button" className="pg-group-x pg-group-branch nodrag" aria-label="전략째 대안 만들기"
-                    title="이 전략의 노드를 모두 복제해 설정만 바꿔 나란히 봅니다" onClick={() => data.onBranchStrategy?.(data.groupId)}>
+                    title="이 전략의 노드를 모두 복제해 설정만 바꿔 비교합니다" onClick={() => data.onBranchStrategy?.(data.groupId)}>
               <GitBranch size={14} aria-hidden="true" />
             </button>
           )}
           <button type="button" className="pg-group-x pg-group-save nodrag" aria-label="내 블록으로 저장"
-                  title="이 상자를 내 블록에 넣습니다 (이 브라우저)" onClick={() => saveBlock(data.groupId)}>
+                  title="이 상자를 내 블록에 저장합니다 (이 브라우저)" onClick={() => saveBlock(data.groupId)}>
             <BookmarkPlus size={14} aria-hidden="true" />
           </button>
           <button type="button" className="pg-group-x pg-group-file nodrag" aria-label="블록 파일로 받기"
@@ -195,7 +195,7 @@ function StrategyNode({ data, ok, blocked, failed, total, computed }: {
     <div className={`pg-group pg-group--strategy pg-group--collapsed pg-snode pg-band-${data.color}`}
          data-group-id={data.groupId} data-kind="strategy" style={{ minHeight: SNODE_PORT_TOP + ports * PROXY_GAP + 8 }}>
       <button type="button" className="pg-group-toggle pg-snode-open nodrag" aria-expanded={false} aria-label="전략 펼치기"
-              title="펼쳐서 안의 노드를 봅니다" onClick={() => toggle(data.groupId)}>
+              title="펼쳐서 내부 노드를 표시합니다" onClick={() => toggle(data.groupId)}>
         <ChevronDown size={15} aria-hidden="true" className="pg-palette-chev--closed" />
       </button>
       <div className="pg-node-k">

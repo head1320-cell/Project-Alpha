@@ -25,7 +25,7 @@ export function compareTargets(picked: string[], nodes: N[], catalog: NodeCatalo
   const chosen = picked.map((id) => nodes.find((n) => n.id === id)).filter((n): n is N => !!n);
   if (chosen.length < 2) return { ok: false, reason: "비중이나 기록을 내는 노드를 둘 이상 선택하십시오." };
   if (chosen.length > COMPARE_PORTS.length) {
-    return { ok: false, reason: `넷까지 비교할 수 있습니다 — 지금 ${chosen.length}개를 골랐습니다.` };
+    return { ok: false, reason: `4개까지 비교할 수 있습니다 — 현재 ${chosen.length}개를 선택했습니다.` };
   }
   type Row = { id: string; handle: string; type: string; x: number; y: number };
   const rows: Row[] = [];
@@ -43,7 +43,7 @@ export function compareTargets(picked: string[], nodes: N[], catalog: NodeCatalo
   rows.sort((a, b) => a.y - b.y || a.x - b.x);
   const weights = rows.filter((r) => r.type === "Weights");
   if (weights.length && weights.length < rows.length) {
-    return { ok: false, reason: "비중과 기록은 따로 비교합니다 — 비중은 '들고 있었다면'의 흐름이고 기록은 이미 있는 곡선이라 같은 것이 아닙니다." };
+    return { ok: false, reason: "비중과 기록은 별도로 비교합니다 — 비중은 '보유했다면'의 가정 흐름이고 기록은 실현된 곡선이라 성격이 다릅니다." };
   }
   if (weights.length) {
     return { ok: true, kind: COMPARE_KIND, label: "견고성 비교",

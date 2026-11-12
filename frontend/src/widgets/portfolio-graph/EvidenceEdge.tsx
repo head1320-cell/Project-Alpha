@@ -58,7 +58,7 @@ export function wireOf(src: { status: NodeStatus; lineage?: NodeLineage } | unde
 export const WIRE_LEGEND: { key: string; label: string; help: string }[] = [
   { key: "plain", label: "실선", help: "합성이 아닙니다 — 데이터 등급은 노드에서 확인합니다" },
   { key: "practice", label: "점선", help: "합성 값이 흐릅니다" },
-  { key: "forward", label: "눈금", help: "지금 시점 전용 — 과거 검증에 쓸 수 없습니다" },
+  { key: "forward", label: "눈금", help: "현재 시점 전용 — 과거 검증에 사용할 수 없습니다" },
   { key: "blocked", label: "끊긴 회색", help: "앞 단계가 막히거나 실패해 값이 흐르지 않았습니다" },
 ];
 

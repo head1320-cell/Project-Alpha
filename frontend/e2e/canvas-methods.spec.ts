@@ -84,7 +84,7 @@ test("합치기 방법(BS4): 카드 = 서버 순서·이름·설명 · 기본 �
   await expect(sum).toHaveAttribute("data-ok", "0");
   await shares.locator(`.pg-perport-row[data-port="${pa}"] input`).fill("60");
   await shares.locator(`.pg-perport-row[data-port="${pb}"] input`).fill("30");
-  await expect(sum).toHaveText("합 90% — 10% 더 정하십시오");
+  await expect(sum).toHaveText("합 90% — 10% 더 배정하십시오");
   await shares.locator(`.pg-perport-row[data-port="${pb}"] input`).fill("40");
   await expect(sum).toHaveText("합 100% — 맞습니다");
   await expect(sum).toHaveAttribute("data-ok", "1");

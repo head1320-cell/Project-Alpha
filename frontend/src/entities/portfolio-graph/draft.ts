@@ -36,7 +36,7 @@ export function pickDraft(d: DraftBody, off: ReadonlySet<string>, existing: Read
   const blocked = new Map<string, string>();
   const connect = d.connect.filter((c) => {
     const k = draftKey.connect(c), miss = [c.source, c.target].find((id) => !has(id));
-    if (miss !== undefined) { blocked.set(k, `${gone(miss)} 이 선을 이을 수 없습니다`); return false; }
+    if (miss !== undefined) { blocked.set(k, `${gone(miss)} 이 선을 연결할 수 없습니다`); return false; }
     return !off.has(k);
   });
   const set = d.set.filter((x) => {

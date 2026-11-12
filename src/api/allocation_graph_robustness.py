@@ -88,7 +88,7 @@ def story(rep: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     eff = rep.get("effective_n") or {}
     if eff.get("value") is not None:
-        lines.append(f"{eff['n']}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다 — 적을수록 서로 같이 움직인 것입니다.")
+        lines.append(f"{eff['n']}개가 실제로는 약 {eff['value']:.1f}개 수준이었습니다(유효 개수) — 적을수록 상관이 높았다는 뜻입니다.")
     crisis = rep.get("crisis") or {}
     rows = [p for p in crisis.get("pairs") or [] if p.get("co_drops") is not None and p.get("expected_co_drops")]
     if rows:
@@ -98,9 +98,9 @@ def story(rep: dict[str, Any]) -> list[str]:
         # 사용자가 지은 이름 뒤에는 조사를 붙이지 않는다('충격 점검가' 처럼 어긋난다) — 쌍은 문장 끝에 둔다.
         pair = f"{top['a']}·{top['b']} {top['co_drops']}일 대 약 {top['expected_co_drops']:.0f}일"
         if more:
-            lines.append(f"가장 나빴던 날에 같이 떨어진 날이 평소 관계로 기대되는 것보다 많았습니다 — {pair}.{small}")
+            lines.append(f"최악 구간의 동반 하락일이 평시 상관으로 기대되는 수준보다 많았습니다 — {pair}.{small}")
         else:
-            lines.append(f"가장 나빴던 날에 같이 떨어진 날은 평소 관계로 기대되는 만큼이었습니다 — 가장 많은 쌍 {pair}.{small}")
+            lines.append(f"최악 구간의 동반 하락일은 평시 상관으로 기대되는 수준이었습니다 — 최다 쌍 {pair}.{small}")
     shock = rep.get("shock") or {}
     first = next((s for s in shock.get("scenarios") or [] if s.get("kind") == "assumed"), None)
     if first and first.get("available") and first.get("delta_vol_pct") is not None:
@@ -109,7 +109,7 @@ def story(rep: dict[str, Any]) -> list[str]:
     pairs = [p for p in dd.get("pairs") or [] if p.get("overlap") is not None]
     if pairs:
         top = max(pairs, key=lambda p: p["overlap"])
-        lines.append(f"가장 크게 잃은 구간이 가장 많이 겹친 쌍은 {top['a']}·{top['b']} — {top['overlap'] * 100:.0f}% 겹칩니다.")
+        lines.append(f"낙폭 구간 중첩이 가장 큰 쌍은 {top['a']}·{top['b']} — {top['overlap'] * 100:.0f}% 겹칩니다.")
     return lines
 
 

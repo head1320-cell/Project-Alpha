@@ -112,7 +112,7 @@ class AskRequest(BaseModel):
 
 @router.post("/ask")
 def canvas_ask(req: AskRequest, p: Principal = Depends(require_login)) -> dict:
-    """AI3 — 고른 노드·선에게 묻는다. 근거 = 조상 전부 + 그것 + 바로 아래의 ★봉인이 지금 그래프로 확인되는 설명·전달 점검★ ·
+    """AI3 — 선택한 노드·선에게 묻는다. 근거 = 조상 전부 + 그것 + 바로 아래의 ★봉인이 지금 그래프로 확인되는 설명·전달 점검★ ·
     문장마다 사실 줄 · 숫자는 그 줄 안에서만 · 답할 수 없으면 서버 고정 문장. 키·한도·거절이면 `available:false` + 사유."""
     return service.ask(req.graph, req.target.model_dump(), req.question,
                        req.previous.model_dump() if req.previous else None,

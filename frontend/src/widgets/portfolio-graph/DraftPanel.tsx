@@ -108,7 +108,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
 
   let composer = null;
   if (session.kind === "signed_out") {
-    composer = <Link href="/login" className="pg-say-login">로그인하면 말로 설계를 쓸 수 있습니다</Link>;
+    composer = <Link href="/login" className="pg-say-login">로그인하면 자연어로 설계를 수정할 수 있습니다</Link>;
   } else if (session.kind === "signed_in") {
     composer = (
       <>
@@ -118,7 +118,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
           </div>
         )}
         <textarea ref={inputRef} className="pg-say-text" rows={3} maxLength={MAX} value={text} disabled={busy}
-                  aria-label="캔버스를 어떻게 고칠지 말하기" placeholder="예: 정책 백테스트를 붙이고 5년 기준으로 해 줘"
+                  aria-label="캔버스 수정 요청 입력" placeholder="예: 정책 백테스트를 붙이고 5년 기준으로 해 줘"
                   onChange={(ev) => setText(ev.target.value)}
                   onKeyDown={(ev) => {
                     if (ev.key === "Escape") { ev.stopPropagation(); ev.currentTarget.blur(); return; }
@@ -162,7 +162,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
               </Sec>
             )}
             {dr.connect.length > 0 && (
-              <Sec k="connect" title="이을 선" n={dr.connect.length}>
+              <Sec k="connect" title="연결할 선" n={dr.connect.length}>
                 {dr.connect.map((c) => (
                   <li key={c.id} className="pg-say-item">
                     {pick(draftKey.connect(c), <>{name(c.source)} → {name(c.target)} · {portName(c.target, c.target_port)}</>)}
@@ -209,7 +209,7 @@ export function DraftPanel({ d, session, catalog, plain, nameOf, kindOf: kindOfN
 
   return (
     <section className="pg-say" aria-label="말로 설계">
-      <p className="pg-say-intro">말로 지금 캔버스를 고칩니다 — 노드를 더하고, 잇고, 말한 값을 넣습니다. 받아들일 때만 바뀝니다.</p>
+      <p className="pg-say-intro">자연어로 현재 캔버스를 수정합니다 — 노드 추가·연결·값 입력을 초안으로 제안하며, 수락할 때만 반영됩니다.</p>
       {composer}
       {st.state === "idle" && st.note && <p className="pg-say-note" role="status">{st.note}</p>}
       {st.state === "loading" && <p className="pg-say-wait" role="status">초안을 만드는 중입니다</p>}

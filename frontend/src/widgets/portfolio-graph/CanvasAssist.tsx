@@ -79,7 +79,7 @@ export function QuickAdd({ at, catalog, stageKeys, fromKind, box, inset, onPick,
                }} />
       </label>
       <ul id="pg-quick-list" className="pg-quick-list" role="listbox">
-        {items.length === 0 && <li className="pg-quick-empty">{q ? `‘${q}’에 맞는 노드가 없습니다.` : "이 값을 이을 수 있는 노드 없음"}</li>}
+        {items.length === 0 && <li className="pg-quick-empty">{q ? `‘${q}’에 맞는 노드가 없습니다.` : "이 값을 연결할 수 있는 노드 없음"}</li>}
         {items.map(({ c, port }, i) => (
           <li key={c.type} id={`pg-quick-${i}`} role="option" aria-selected={i === active} className="pg-quick-item" data-kind={c.type}
               onMouseMove={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); onPick(c.type, port); }}>
@@ -162,24 +162,24 @@ export function FindBar({ nodes, onPick, onClose }: {
 
 export const SHORTCUTS: [string, string][] = [
   ["Ctrl+Enter", "계산하기"],
-  ["Shift+Enter", "고른 노드까지 계산"],
+  ["Shift+Enter", "선택한 노드까지 계산"],
   ["Ctrl+K", "명령 찾기"],
   ["Ctrl+F", "캔버스에서 노드 찾기"],
   ["Ctrl+Z / Ctrl+Shift+Z", "되돌리기 / 다시하기"],
   ["Ctrl+C / Ctrl+V", "복사 / 붙여넣기"],
-  ["Ctrl+D", "고른 노드 복제"],
-  ["Ctrl+G", "고른 노드 묶기"],
-  ["Ctrl+A", "보이는 노드 모두 고르기"],
-  ["Shift+끌기", "상자로 고르기 — 닿기만 해도 고릅니다"],
-  ["Delete", "고른 노드·선 삭제 — 토스트의 되돌리기나 Ctrl+Z 로 돌립니다"],
-  ["Enter / Space", "초점 둔 노드·선 고르기 (Tab 으로 옮겨 다닙니다)"],
-  ["← → ↑ ↓", "고른 노드 한 칸 옮기기 — Shift 와 함께면 네 칸"],
+  ["Ctrl+D", "선택한 노드 복제"],
+  ["Ctrl+G", "선택한 노드 묶기"],
+  ["Ctrl+A", "보이는 노드 모두 선택"],
+  ["Shift+끌기", "영역 선택 — 닿기만 해도 선택됩니다"],
+  ["Delete", "선택한 노드·선 삭제 — 토스트의 되돌리기나 Ctrl+Z 로 복원합니다"],
+  ["Enter / Space", "초점 둔 노드·선 선택 (Tab 으로 이동합니다)"],
+  ["← → ↑ ↓", "선택한 노드 한 칸 이동 — Shift 와 함께면 네 칸"],
   ["Alt+← →", "선을 따라 앞·뒤 단계로"],
   ["Alt+↑ ↓", "흐름 번호 순서로"],
   ["[", "왼쪽 목록 열고 닫기"],
   ["]", "오른쪽 창 열고 닫기"],
   ["\\", "집중해서 보기 — 두 판을 잠시 모두 닫기·다시 열기"],
-  ["Esc", "원인 경로 · 들어간 상자 · 판 닫기 · 그다음 고르기 풀기"],
+  ["Esc", "원인 경로 · 들어간 상자 · 판 닫기 · 그다음 선택 해제"],
   ["?", "이 목록"],
 ];
 
@@ -203,7 +203,7 @@ export function ShortcutSheet({ open, onClose }: { open: boolean; onClose: () =>
           <div key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></div>
         ))}
       </dl>
-      <p className="pg-keys-foot">노드·빈 곳을 오른쪽 단추로 누르면 할 수 있는 일이 나옵니다. 선을 빈 곳에 놓으면 그 값을 이을 노드를 찾을 수 있습니다.</p>
+      <p className="pg-keys-foot">노드·빈 곳을 우클릭하면 가능한 작업이 표시됩니다. 선을 빈 곳에 놓으면 해당 값을 연결할 노드를 검색할 수 있습니다.</p>
     </dialog>
   );
 }

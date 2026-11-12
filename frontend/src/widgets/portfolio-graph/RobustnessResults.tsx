@@ -71,7 +71,7 @@ function Trend({ r }: { r: Rolling }) {
         <div><dt>지금</dt><dd>{fx(last)}</dd></div>
         <div><dt>이 기간 최고 · 최저</dt><dd>{got.length ? `${Math.max(...got).toFixed(2)} · ${Math.min(...got).toFixed(2)}` : "—"}</dd></div>
       </dl>
-      {s.lo === null && <p className="pg-help">평균은 모든 쌍의 창 상관 평균입니다 — 표본 오차 띠는 쌍을 고르면 보입니다.</p>}
+      {s.lo === null && <p className="pg-help">평균은 모든 쌍의 창 상관 평균입니다 — 표본 오차 띠는 쌍을 선택하면 표시됩니다.</p>}
       <p className="pg-help">{r.note}</p>
     </>
   );
@@ -82,22 +82,22 @@ function Crisis({ c }: { c: Dict }) {
   return (
     <>
       <p className="pg-note">
-        {c.basis === "market" ? `시장(${String(c.market_label ?? "KODEX 200")})이 가장 나빴던 ${String(c.crisis_days)}일` : `전략 평균이 가장 나빴던 ${String(c.crisis_days)}일`}을 위기일로 봤습니다
+        {c.basis === "market" ? `시장(${String(c.market_label ?? "KODEX 200")})의 수익률 하위 ${String(c.crisis_days)}일` : `전략 평균 수익률 하위 ${String(c.crisis_days)}일`}을 위기일로 정의했습니다
         {c.small_sample ? " — 표본 일수가 적어 불안정한 값입니다." : "."}
       </p>
       {/* 쌍마다 한 덩어리 — 네 칸 표는 판 폭에서 머리글이 음절 가운데서 꺾였다(스크린샷). */}
       <ul className="pg-rob-pairs">{pairs.map((p) => (
         <li key={`${p.a}-${p.b}`} className="pg-rob-pair">
           <b className="pg-rob-pair-name">{p.a}·{p.b}</b>
-          <span>상관 평소 {fx(p.normal_rho)} → 위기일 {fx(p.crisis_rho)}</span>
+          <span>상관 평시 {fx(p.normal_rho)} → 위기일 {fx(p.crisis_rho)}</span>
           <span className="pg-rob-codrop" title={p.reason ? String(p.reason) : undefined}>
-            {num(p.co_drops) ? `같이 떨어진 날 ${p.co_drops}일 · 평소 관계라면 약 ${fx(p.expected_co_drops, 0)}일` : "같이 떨어진 날 —"}
+            {num(p.co_drops) ? `동반 하락일 ${p.co_drops}일 · 평시 상관 기준 기대 약 ${fx(p.expected_co_drops, 0)}일` : "동반 하락일 —"}
           </span>
         </li>
       ))}</ul>
       <p className="pg-help">
-        나쁜 날만 골라 재면 관계가 그대로여도 상관이 높아 보입니다. 그래서 둘 다 제 가장 나쁜 10% 날에 함께 든 날을,
-        전체 상관이 같은 보통 관계에서 기대되는 날 수와 나란히 봅니다.
+        하락일만 추려 측정하면 관계가 같아도 상관이 높게 나옵니다(선택 편향). 그래서 양쪽 모두 각자의 하위 10% 구간에 든 날 수를,
+        전체 상관이 같은 정상 관계에서 기대되는 날 수와 비교합니다.
       </p>
       {c.note ? <p className="pg-help pg-rob-warn">{String(c.note)}{c.market_reason ? ` (${String(c.market_reason)})` : ""}</p> : null}
     </>
@@ -151,7 +151,7 @@ function Drawdown({ d, nDays, period }: { d: Dict; nDays: number; period?: { sta
   return (
     <>
       <svg className="pg-rob-dd" viewBox={`0 0 ${W} ${H}`} role="img"
-           aria-label={`가장 크게 잃은 구간 — ${rows.map((r) => `${String(r.name)} ${num(r.max_drawdown_pct) ? pct(r.max_drawdown_pct, 2) : "없음"}`).join(" · ")}`}>
+           aria-label={`최대 낙폭 구간 — ${rows.map((r) => `${String(r.name)} ${num(r.max_drawdown_pct) ? pct(r.max_drawdown_pct, 2) : "없음"}`).join(" · ")}`}>
         <defs>
           <pattern id={hatch} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" className="pg-rob-hatch" />
@@ -238,7 +238,7 @@ export function RobustnessView({ rob, basis = "weights" }: { rob: Dict | null | 
   const align = rob.alignment as { same?: boolean | null; reason?: string | null } | undefined;
   return (
     <section className="pg-rob" aria-label="견고성">
-      <h4 className="pg-h4">견고성 — 같이 무너지나</h4>
+      <h4 className="pg-h4">견고성 — 동반 하락 여부</h4>
       {/* 성과 종류는 응답이 선언한 것 그대로 — 없으면 PerfLabel 이 '모름'을 그린다(지어내지 않는다). */}
       <div className="pg-perf"><PerfLabel value={rob.perf_label as PerfLabelValue | undefined} scope="낙폭·변동성" compact /></div>
       <ul className="pg-rob-story">{story.map((s) => <li key={s}>{s}</li>)}</ul>
@@ -286,7 +286,7 @@ export function RecordRobustnessResult({ v }: { v: Dict }) {
   const series = (v.series as Dict[]) ?? [];
   return (
     <>
-      <ul className="pg-rec-series" aria-label="이은 기록">
+      <ul className="pg-rec-series" aria-label="연결한 기록">
         {series.map((s) => {
           const [tone, text] = DATA_TAG[String(s.data)] ?? DATA_TAG.unknown;
           return (

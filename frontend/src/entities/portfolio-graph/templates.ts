@@ -66,7 +66,7 @@ const STRESS_TEMPLATE: GraphDoc = doc("충격 점검", [
   e("optimizer", "weights", "sens", "weights"),
 ]);
 
-const SCREENER_TEMPLATE: GraphDoc = doc("조건으로 고른 종목 나누기", [
+const SCREENER_TEMPLATE: GraphDoc = doc("조건식 선별 종목 배분", [
   n("screener", "screener", c(0), 140),
   n("returns", "returns", c(1), 20),
   n("scores", "factor_scores", c(1), 240),
@@ -199,15 +199,15 @@ export const TEMPLATES: GraphTemplate[] = [
   { key: "core", name: "기본 흐름", doc: CORE_CHAIN_TEMPLATE,
     description: "종목 3개로 비중을 산출하고 과거 데이터로 시뮬레이션합니다." },
   { key: "stress", name: "충격 점검", doc: STRESS_TEMPLATE,
-    description: "정한 비중을 위기 상황·상관 급등·기대 수익 오차에 넣어 봅니다." },
-  { key: "screener", name: "조건으로 고른 종목 나누기", doc: SCREENER_TEMPLATE,
-    description: "조건으로 거른 종목에 팩터 점수를 매겨 변동성 기준으로 나눕니다." },
+    description: "지정 비중에 위기 시나리오·상관 급등·기대수익률 추정 오차를 적용합니다." },
+  { key: "screener", name: "조건식 선별 종목 배분", doc: SCREENER_TEMPLATE,
+    description: "조건식으로 선별한 종목의 팩터 점수를 산출해 변동성 기준으로 배분합니다." },
   { key: "timing", name: "타이밍 적용 → 실행 목표", doc: TIMING_TEMPLATE,
-    description: "타이밍 신호로 노출을 줄이고 실행 목표·주문 목록·결정 기록까지 잇습니다." },
+    description: "타이밍 신호로 노출을 축소하고 실행 목표·주문 목록·결정 기록까지 연결합니다." },
   { key: "risk", name: "포트폴리오 위험 점검", doc: RISK_TEMPLATE,
-    description: "정한 비중이 하루에 얼마나 잃을 수 있는지 보고, 지수 선물로 시장 위험을 줄일 계약 수까지 계산합니다." },
+    description: "지정 비중의 1일 손실 위험(VaR)을 측정하고, 지수 선물 헤지에 필요한 계약 수를 산출합니다." },
   { key: "rebalance", name: "리밸런싱 판단", doc: REBALANCE_TEMPLATE,
-    description: "현재 보유 비중에서 목표로 옮길 가치가 있는지 효용과 비용을 견줘 보고 주문 목록까지 봅니다." },
+    description: "현재 보유 비중에서 목표 비중으로의 리밸런싱 여부를 효용·비용으로 판단하고 주문 목록을 산출합니다." },
   { key: "review", name: "정기 점검", doc: REVIEW_TEMPLATE,
-    description: "고객·계좌·목표를 점검하고, 현재 비중에서 목표로 옮길지 본 뒤 주문 목록·결정 기록까지 잇습니다. 고객 정보는 비워 두었습니다 — 채워야 계좌 점검이 실행됩니다." },
+    description: "고객·계좌·목표를 점검하고, 리밸런싱 여부를 판단한 뒤 주문 목록·결정 기록까지 연결합니다. 고객 정보는 비어 있습니다 — 입력해야 계좌 점검이 실행됩니다." },
 ];

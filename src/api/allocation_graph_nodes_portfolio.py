@@ -33,7 +33,7 @@ METHODS = {"risk_parity": "리스크 패리티", "equal": "동일 가중", "inve
 METHOD_HELP = {
     "risk_parity": "전략별 위험 기여도가 같도록 배분합니다.",
     "equal": "전략별로 동일하게 배분합니다.",
-    "inverse_vol": "변동성이 낮은 전략에 더 많이 배분합니다. 전략 사이 상관은 보지 않습니다.",
+    "inverse_vol": "변동성이 낮은 전략에 더 많이 배분합니다. 전략 간 상관은 반영하지 않습니다.",
     "min_var": "결합 변동성이 최소가 되도록 배분합니다. 일부 전략에 집중될 수 있습니다.",
     "hrp": "상관이 높은 전략끼리 군집화한 뒤 군집 간 위험을 배분합니다.",
     "crisis_risk_parity": "시장 하위 10% 일자의 동반 손실 기준으로 위험 기여도를 균등화합니다.",
@@ -213,7 +213,7 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     facts = [f"{s['label']}: 배분 비중 {s['share_pct']:.1f}% · 위험 분담 {s['risk_pct']:.1f}% · "
              f"리밸런싱 {REBALANCE.get(s.get('rebalance') or 'D', REBALANCE['D'])[1]}" for s in view.get("strategies") or []]
-    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 전략의 수익률 흐름으로 배분 비중을 산출하고 종목 비중을 합쳤습니다(슬리브 결합과 같은 계산).")]
+    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 전략의 수익률 흐름으로 배분 비중을 산출하고 종목 비중을 결합했습니다(슬리브 결합과 같은 계산).")]
     trust += _method_trust(r, view)
     rows_all = view.get("strategies") or []
     codes = [x.get("rebalance") or "D" for x in rows_all]
@@ -241,7 +241,7 @@ def _explain(view: dict, prov: dict, params: Any) -> dict:
     top = max(rows, key=lambda x: x["share_pct"]) if rows else None
     headline = None if top is None else {"label": f"{top['label']} 배분 비중", "value": top["share_pct"], "unit": "%",
                                          "text": f"최대 배분 비중은 {top['label']} {top['share_pct']:.1f}%"}
-    return {"title": f"{r.get('n_sleeves')}개 전략을 {r.get('n_stocks')}종목 포트폴리오로 합쳤습니다", "headline": headline, "facts": facts,
+    return {"title": f"{r.get('n_sleeves')}개 전략을 {r.get('n_stocks')}종목 포트폴리오로 결합했습니다", "headline": headline, "facts": facts,
             "trust": trust, "unmeasured": ["전략 사이 상관이 앞으로 유지될지",
                            "슬리피지·시장 충격" if cost > 0 else "리밸런싱 거래비용",
                            "전략 간 리밸런싱 비용"]}
@@ -257,9 +257,9 @@ def _method_trust(r: dict, view: dict) -> list[dict]:
     if m == "manual":
         out.append(_t(ASSUMED, "배분 비율은 사용자가 지정한 값입니다 — 전략 수익률 흐름으로 산출한 것이 아닙니다."))
     elif m == "risk_budget":
-        out.append(_t(ASSUMED, "내가 정한 위험 예산대로 위험을 나눴습니다 — 예산 자체는 흐름으로 정한 것이 아닙니다."))
+        out.append(_t(ASSUMED, "사용자가 지정한 위험 예산대로 위험을 배분했습니다 — 예산 자체는 수익률 흐름으로 산출한 것이 아닙니다."))
     elif m == "score":
-        out.append(_t(ASSUMED, "내가 준 점수에 비례해 나눴습니다 — 점수가 앞날을 맞힌다는 근거는 여기서 측정하지 않았습니다."))
+        out.append(_t(ASSUMED, "사용자가 부여한 점수에 비례해 배분했습니다 — 점수의 예측력은 여기서 측정하지 않았습니다."))
     elif m == "crisis_risk_parity":
         c, mk = r.get("crisis") or {}, view.get("market") or {}
         out.append(_t(ASSUMED, f"위기일은 {mk.get('label')} 이 가장 나빴던 10% 날 {c.get('days')}일입니다 — 전략 흐름과 끝을 맞춰 "

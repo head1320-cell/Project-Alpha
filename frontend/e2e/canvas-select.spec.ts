@@ -53,7 +53,7 @@ async function pick(page: Page, ids: string[]) {
   await blank(page);
   await node(page, ids[0]).click({ position: HEAD });
   for (const id of ids.slice(1)) await node(page, id).click({ position: HEAD, modifiers: ["Control"] });
-  await expect(selN(page)).toHaveText(`${ids.length}개 골랐습니다`);
+  await expect(selN(page)).toHaveText(`${ids.length}개 선택`);
 }
 async function shiftBox(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
   await page.keyboard.down("Shift");
@@ -79,7 +79,7 @@ test("R2 · Shift 상자가 두 카드의 귀퉁이에만 닿아도 둘 다 고�
   const b = (await node(page, "returns").boundingBox())!;
   // 상자: universe 오른쪽 끝 30px ~ returns 왼쪽 30px, 위 40px — 어느 카드도 다 들어가지 않는다
   await shiftBox(page, { x: a.x + a.width - 30, y: a.y - 24 }, { x: b.x + 30, y: b.y + 40 });
-  await expect(selN(page)).toHaveText("2개 골랐습니다");
+  await expect(selN(page)).toHaveText("2개 선택");
   await expect(picked(page)).toHaveCount(2);
   await expect(node(page, "estimate")).not.toHaveClass(/pg-node--selected/);
   // 짝 — 카드 사이 빈 곳만 덮으면 아무것도 고르지 않는다
@@ -94,7 +94,7 @@ test("R2 · Ctrl+A 는 보이는 노드만 고른다 — 접힌 상자 안 노�
   await open(page, FOLDED);
   await blank(page);
   await page.keyboard.press("Control+a");
-  await expect(selN(page)).toHaveText("2개 골랐습니다");
+  await expect(selN(page)).toHaveText("2개 선택");
   await expect(node(page, "estimate")).toHaveClass(/pg-node--selected/);
   await expect(node(page, "optimizer")).toHaveClass(/pg-node--selected/);
   await page.keyboard.press("Escape");
@@ -134,19 +134,19 @@ test("R2 · 메뉴가 열린 채 Esc 는 메뉴만 닫는다 — 우클릭 메�
   await expect(page.locator(".pg-ctx")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator(".pg-ctx")).toHaveCount(0);
-  await expect(selN(page)).toHaveText("3개 골랐습니다");
+  await expect(selN(page)).toHaveText("3개 선택");
   await page.locator(".pg-align-open").click();
   await expect(page.locator(".pg-align-menu")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator(".pg-align-menu")).toHaveCount(0);
-  await expect(selN(page)).toHaveText("3개 골랐습니다");
+  await expect(selN(page)).toHaveText("3개 선택");
   // 증거 관문 카드 — Esc 는 카드만 접는다
   const pill = page.locator(".pg-rail-pill");
   if ((await pill.getAttribute("aria-expanded")) !== "true") await pill.click();
   await expect(pill).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");
   await expect(pill).toHaveAttribute("aria-expanded", "false");
-  await expect(selN(page)).toHaveText("3개 골랐습니다");
+  await expect(selN(page)).toHaveText("3개 선택");
   await page.keyboard.press("Escape");                                          // 메뉴가 없으면 고르기를 푼다
   await expect(picked(page)).toHaveCount(0);
 });
@@ -158,12 +158,12 @@ test.describe("좁은 폭", () => {
     // 좁은 폭에서는 관문 알약이 빈 곳(360, 24)을 덮는다 — 처음엔 고른 것이 없으니 빈 곳 누르기 없이 고른다
     await node(page, "universe").click({ position: HEAD });
     for (const id of ["returns", "estimate"]) await node(page, id).click({ position: HEAD, modifiers: ["Control"] });
-    await expect(selN(page)).toHaveText("3개 골랐습니다");
+    await expect(selN(page)).toHaveText("3개 선택");
     await page.locator(".pg-more").click();
     await expect(page.locator(".pg-more-menu")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator(".pg-more-menu")).toHaveCount(0);
-    await expect(selN(page)).toHaveText("3개 골랐습니다");
+    await expect(selN(page)).toHaveText("3개 선택");
   });
 });
 
@@ -176,7 +176,7 @@ test("R2 · 계산한 뒤 지우면 토스트가 결과·하류를 센다 — [�
   const before = graphOf(await wip(page));
   await node(page, "estimate").click({ position: HEAD });
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/노드 1개를 지웠습니다 — 그중 1개는 계산 결과가 있었습니다 · 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/노드 1개를 삭제했습니다 — 그중 1개는 계산 결과가 있었습니다 · 하류 노드 1개는 이제 예전 결과입니다\./);
   await expect(page.locator(".pg-node--stale")).toHaveCount(1);
   await expect(node(page, "optimizer")).toHaveClass(/pg-node--stale/);
   await page.locator(".pg-note-undo").click();
@@ -186,7 +186,7 @@ test("R2 · 계산한 뒤 지우면 토스트가 결과·하류를 센다 — [�
   // 선만 끊어도 하류를 센다
   await page.locator('.react-flow__edge[data-id="estimate.belief->optimizer.belief"]').click({ force: true });
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/선 1개를 끊었습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
 });
 
 test("R2 · (짝) 이미 예전 결과인 노드는 결과로도 하류로도 세지 않는다", async ({ page }) => {
@@ -197,23 +197,23 @@ test("R2 · (짝) 이미 예전 결과인 노드는 결과로도 하류로도 �
   await page.locator('.react-flow__edge[data-id="returns.returns->optimizer.returns"]').dispatchEvent("click");
   await expect(page.locator('.react-flow__edge[data-id="returns.returns->optimizer.returns"]')).toHaveClass(/selected/);
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/선 1개를 끊었습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
+  await expect(page.locator(".pg-note")).toHaveText(/선 1개의 연결을 해제했습니다 — 하류 노드 1개는 이제 예전 결과입니다\./);
   await expect(node(page, "optimizer")).toHaveClass(/pg-node--stale/);
   await node(page, "optimizer").click({ position: HEAD });                     // 결과는 있지만 예전 결과 — '결과' 로 세지 않는다
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/^노드 1개를 지웠습니다\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^노드 1개를 삭제했습니다\.\s*되돌리기/);
   await page.locator(".pg-note-undo").click();
   await expect(node(page, "optimizer")).toHaveClass(/pg-node--stale/);
   await node(page, "estimate").click({ position: HEAD });                      // 하류(optimizer)가 이미 예전 결과 — 하류로 세지 않는다
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/^노드 1개를 지웠습니다 — 그중 1개는 계산 결과가 있었습니다\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^노드 1개를 삭제했습니다 — 그중 1개는 계산 결과가 있었습니다\.\s*되돌리기/);
 });
 
 test("R2 · (짝) 계산 전에 지우면 결과·하류를 말하지 않는다 · 여럿이면 그 수", async ({ page }) => {
   await open(page, CORE);
   await pick(page, ["estimate", "optimizer"]);
   await page.keyboard.press("Delete");
-  await expect(page.locator(".pg-note")).toHaveText(/^노드 2개를 지웠습니다\.\s*되돌리기/);
+  await expect(page.locator(".pg-note")).toHaveText(/^노드 2개를 삭제했습니다\.\s*되돌리기/);
   await expect(page.locator(".pg-note-undo")).toBeVisible();
   await page.locator(".pg-note-undo").click();
   await expect(page.locator(".pg-node")).toHaveCount(4);
@@ -239,24 +239,24 @@ test("R2 · 명령 — 모두 고르기 · 여럿이면 'N개 삭제'(한 단계
   await pick(page, ["universe", "returns", "estimate"]);
   ids = await palette(page);
   expect(ids).toEqual(expect.arrayContaining(["delete-picked", "align:left", "align:center", "align:top", "align:hspace", "align:vspace"]));
-  await expect(page.locator('.pg-cmd-item[data-cmd="delete-picked"]')).toContainText("고른 노드 3개 삭제");
+  await expect(page.locator('.pg-cmd-item[data-cmd="delete-picked"]')).toContainText("선택한 노드 3개 삭제");
   await page.locator('.pg-cmd-item[data-cmd="delete-picked"]').click();
   await expect(page.locator(".pg-node")).toHaveCount(1);
-  await expect(page.locator(".pg-note")).toContainText("노드 3개를 지웠습니다");
+  await expect(page.locator(".pg-note")).toContainText("노드 3개를 삭제했습니다");
   await page.keyboard.press("Control+z");
   await expect.poll(async () => graphOf(await wip(page))).toEqual(before);
   await expect(undoBtn(page)).toBeDisabled();
   await blank(page);
   await palette(page);
   await page.locator('.pg-cmd-item[data-cmd="select-all"]').click();
-  await expect(selN(page)).toHaveText("4개 골랐습니다");
+  await expect(selN(page)).toHaveText("4개 선택");
 });
 
-test("R2 · 여럿 고른 노드를 우클릭하면 'N개 삭제' (짝: 하나면 그냥 '삭제')", async ({ page }) => {
+test("R2 · 여럿 선택한 노드를 우클릭하면 'N개 삭제' (짝: 하나면 그냥 '삭제')", async ({ page }) => {
   await open(page, CORE);
   await pick(page, ["returns", "estimate"]);
   await node(page, "estimate").click({ button: "right", position: HEAD });
-  await expect(page.locator('.pg-ctx-item[data-action="remove-picked"]')).toHaveText(/고른 노드 2개 삭제/);
+  await expect(page.locator('.pg-ctx-item[data-action="remove-picked"]')).toHaveText(/선택한 노드 2개 삭제/);
   await expect(page.locator('.pg-ctx-item[data-action="remove"]')).toHaveText(/이 노드만 삭제/);   // 둘이 함께 있으면 무엇을 지우는지 이름이 말한다
   await page.locator('.pg-ctx-item[data-action="remove-picked"]').click();
   await expect(page.locator(".pg-node")).toHaveCount(2);

@@ -66,7 +66,7 @@ test("빈 캔버스: 절차 탭이 먼저 · 첫 걸음은 유니버스 · 다�
   await expect(edges(page)).toHaveCount(0);
   await expect(step(page, "data")).toHaveAttribute("data-state", "partial");          // 종목만으로는 데이터 관문을 잴 수 없다
   // 다음 걸음 — 수익률은 종목에서 이어 붙는다(붙이기만 하고 잇지 않는 제안은 없다)
-  await expect(step(page, "data").locator(".pg-proc-fix")).toHaveText("‘수익률 데이터’ 붙이기");
+  await expect(step(page, "data").locator(".pg-proc-fix")).toHaveText("‘수익률 데이터’ 추가");
   await step(page, "data").locator(".pg-proc-fix").click();
   await expect(nodeOf(page, "returns")).toHaveCount(1);
   await expect(edges(page)).toHaveCount(1);
@@ -194,14 +194,14 @@ test("기본 흐름은 절차를 다 채웠다 — 다음 한 걸음이 없다(�
   await expect(page.locator(".pg-next")).toHaveCount(0);
 });
 
-test("사람이 고른 노드 뒤에 붙인다 · 고르지 않았으면 잇지 않는다(짝) · 연속 추가는 사슬이 되지 않는다", async ({ page }) => {
+test("사람이 선택한 노드 뒤에 붙인다 · 고르지 않았으면 잇지 않는다(짝) · 연속 추가는 사슬이 되지 않는다", async ({ page }) => {
   await openWith(page, BUILD_ONLY, "add");
   const base = await edges(page).count();
   await nodeOf(page, "optimizer").click();
   await page.locator('.pg-palette-item[data-kind="risk"]').click();
   await expect(nodeOf(page, "risk")).toHaveCount(1);
   await expect(edges(page)).toHaveCount(base + 1);
-  await expect(page.locator(".pg-note")).toContainText("‘포트폴리오 최적화’ 뒤에 이었습니다");
+  await expect(page.locator(".pg-note")).toContainText("‘포트폴리오 최적화’ 뒤에 연결했습니다");
   // 새 노드가 자동으로 골라졌지만 사람이 고른 것이 아니다 — 한 번 더 눌러도 사슬로 잇지 않는다.
   // ★공허하지 않게★ 비중을 받아 비중을 내는 노출 조절로 본다(자기 자신 뒤에 이을 수 있는 종류 — 흔들림 나눠 보기는 그럴 수 없다).
   await nodeOf(page, "optimizer").click();

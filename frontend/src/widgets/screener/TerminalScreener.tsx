@@ -679,7 +679,7 @@ export default function TerminalScreener() {
         ) : (
           <div className="scr-answer">
             <Answer
-              sentence={total ? `조건에 맞는 종목 ${num(total)}개입니다` : "조건에 맞는 종목 없음"}
+              sentence={total ? `조건을 충족한 종목 ${num(total)}개입니다` : "조건을 충족한 종목 없음"}
               figures={answerFigures} chips={chips}
               action={
                 <>

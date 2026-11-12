@@ -120,7 +120,7 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
   const current = live?.order.find((id) => live.cells[id]?.phase === "running") ?? null;
   const pillText = live ? (live.lost ? "계산 중 · 진행 수신 실패" : `계산 중 ${doneN}/${live.order.length}${current ? ` · ‘${badge(current).name}’` : ""}`)
     : report ? `${stale ? "예전 결과 기준 · " : ""}관문 ${report.summary.confirmed}/${report.summary.total} 확인`
-    : note ? "관문은 전체를 계산해야 봅니다" : "계산하면 관문을 확인합니다";
+    : note ? "관문은 전체 계산 후 확인합니다" : "계산하면 관문을 확인합니다";
 
   return (
     <div className="pg-rail-wrap" ref={wrap} data-open={expanded || undefined} data-stale={(report && stale) || undefined}>
@@ -164,7 +164,7 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
               <strong>결과 신뢰 수준</strong>
               <span className="pg-rail-summary">
                 {report ? `${stale ? "예전 결과 기준입니다 — 그 뒤 바뀐 곳이 있습니다. 바뀐 곳을 재계산하면 새로 판정합니다. " : ""}${report.summary.text} ${report.summary.note}`
-                        : note ?? "계산하면 8개 관문 중 어디까지 확인됐는지 보여 드립니다."}
+                        : note ?? "계산하면 8개 관문 중 확인된 범위를 표시합니다."}
               </span>
             </div>
             <ol className="pg-track">
@@ -200,7 +200,7 @@ export function GateRail({ report, note = null, stale = false, byGate = null, no
                 {(openGate.state === "skipped" || openGate.state === "unknown") && byGate?.[openGate.key] && onApply && (
                   <button type="button" className="pg-gate-fix" title={byGate[openGate.key]!.text}
                           onClick={() => { const sug = byGate[openGate.key]!; setOpen(null); onApply(sug); }}>
-                    ‘{byGate[openGate.key]!.label}’ 붙이기
+                    ‘{byGate[openGate.key]!.label}’ 추가
                   </button>
                 )}
                 <button type="button" className="pg-gate-close" onClick={() => setOpen(null)}>닫기</button>

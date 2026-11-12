@@ -99,7 +99,7 @@ test("견고성 절(BR R1a): 전략 결합 자세히 = 서버 view.robustness �
   const cs = await openSection(page, "위기 상관");
   await expect(cs.locator(".pg-rob-pair")).toHaveCount(crisis.pairs.length);
   const p0 = crisis.pairs[0];
-  await expect(cs.locator(".pg-rob-codrop").first()).toHaveText(`같이 떨어진 날 ${p0.co_drops}일 · 평소 관계라면 약 ${p0.expected_co_drops.toFixed(0)}일`);
+  await expect(cs.locator(".pg-rob-codrop").first()).toHaveText(`동반 하락일 ${p0.co_drops}일 · 평시 상관 기준 기대 약 ${p0.expected_co_drops.toFixed(0)}일`);
   await expect(cs).toContainText(`${crisis.crisis_days}일`);
 
   const shock = rob.shock as { scenarios: { kind: string; available: boolean; stressed_vol_pct?: number }[] };
@@ -144,7 +144,7 @@ test("견고성 절(BR R1a): 모르면 '—' 와 서버 사유 — 0 으로 그�
   await run(page);
   await openCombine(page, pfId);
   const cs = await openSection(page, "위기 상관");
-  await expect(cs.locator(".pg-rob-codrop").first()).toHaveText("같이 떨어진 날 —");
+  await expect(cs.locator(".pg-rob-codrop").first()).toHaveText("동반 하락일 —");
   await expect(cs.locator(".pg-rob-codrop").first()).toHaveAttribute("title", "변동성이 없습니다(테스트)");
   const more = await openSection(page, "더 보기");
   await expect(more.locator(".pg-kv div").first()).toContainText("—");
@@ -165,7 +165,7 @@ test("견고성 절(BR R1a): 모르면 '—' 와 서버 사유 — 0 으로 그�
   await expect(page.locator(".pg-side .pg-rob-sec")).toHaveCount(0);
 });
 
-test("고른 노드 견고성 비교(BR R1b): 비중 노드 둘을 고르면 막대의 단추로 새 노드에 위→아래 a·b · 계산하면 결과 · 되돌리기 한 번에 사라짐", async ({ page }) => {
+test("선택한 노드 견고성 비교(BR R1b): 비중 노드 둘을 고르면 막대의 단추로 새 노드에 위→아래 a·b · 계산하면 결과 · 되돌리기 한 번에 사라짐", async ({ page }) => {
   await openCanvas(page);
   await node(page, "optimizer").click();
   await page.keyboard.press("Control+d");
@@ -177,7 +177,7 @@ test("고른 노드 견고성 비교(BR R1b): 비중 노드 둘을 고르면 막
   await node(page, bottom.id).click({ modifiers: [mod] });
   const bar = page.locator(".pg-selbar");
   await expect(bar).toBeVisible();
-  await expect(bar.locator(".pg-selbar-n")).toHaveText("2개 골랐습니다");
+  await expect(bar.locator(".pg-selbar-n")).toHaveText("2개 선택");
   await expect(bar.locator(".pg-selbar-compare")).not.toHaveAttribute("aria-disabled", "true");
   const before = doc.nodes.length;
   await bar.locator(".pg-selbar-compare").click();
@@ -204,7 +204,7 @@ test("고른 노드 견고성 비교(BR R1b): 비중 노드 둘을 고르면 막
   expect(doc.edges.filter((e) => e.target === cmp[0].id), "선도").toHaveLength(0);
 });
 
-test("고른 노드 견고성 비교(BR R1b) 짝: 비중을 내지 않는 노드가 섞이면 단추가 흐리고, 누르면 사유만 — 노드를 만들지 않는다", async ({ page }) => {
+test("선택한 노드 견고성 비교(BR R1b) 짝: 비중을 내지 않는 노드가 섞이면 단추가 흐리고, 누르면 사유만 — 노드를 만들지 않는다", async ({ page }) => {
   await openCanvas(page);
   await node(page, "optimizer").click();
   await node(page, "returns").click({ modifiers: [mod] });
@@ -240,7 +240,7 @@ test("견고성 절 대비(BR R1): 라이트·다크 AA — 펼친 네 절 모�
   }
 });
 
-test("고른 노드 막대(BR R1b): 고른 노드 아래에 뜨고 · 묶으면 사라져 상자 머리 단추를 누를 수 있다(짝)", async ({ page }) => {
+test("선택한 노드 막대(BR R1b): 선택한 노드 아래에 뜨고 · 묶으면 사라져 상자 머리 단추를 누를 수 있다(짝)", async ({ page }) => {
   await openCanvas(page);
   await node(page, "optimizer").click();
   await node(page, "risk").click({ modifiers: [mod] });
@@ -251,7 +251,7 @@ test("고른 노드 막대(BR R1b): 고른 노드 아래에 뜨고 · 묶으면 
     const b = (await node(page, id).boundingBox())!;
     return b.y + b.height;
   })));
-  expect(barBox.y, "막대는 고른 노드 아래 — 위에 두면 상자 머리를 가린다").toBeGreaterThanOrEqual(lowest - 1);
+  expect(barBox.y, "막대는 선택한 노드 아래 — 위에 두면 상자 머리를 가린다").toBeGreaterThanOrEqual(lowest - 1);
   await page.keyboard.press("Control+g");
   await expect(page.locator(".pg-group")).toHaveCount(1);
   await expect(bar, "묶은 뒤에는 상자 머리가 그 역할 — 막대가 없다").toHaveCount(0);

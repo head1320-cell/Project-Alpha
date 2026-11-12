@@ -136,7 +136,7 @@ export function GhostLayer({ ghosts, catalog, shape, hot, gateLabel, onApply, on
             ? <p className="pg-ghost-reason"><span className="pg-ghost-reason-k">AI</span> {g.aiReason}</p> : null;
           const acts = (
             <div className="pg-ghost-acts">
-              <button type="button" className="pg-ghost-add" onClick={() => onApply(g)}>{g.action === "connect" ? "잇기" : "붙이기"}</button>
+              <button type="button" className="pg-ghost-add" onClick={() => onApply(g)}>{g.action === "connect" ? "연결" : "추가"}</button>
               <button type="button" className="pg-ghost-x" aria-label={`이 추천 닫기${g.label ? ` — ${g.label}` : ""}`} onClick={() => onDismiss(g)}>닫기</button>
             </div>
           );
@@ -169,7 +169,7 @@ export function GhostLayer({ ghosts, catalog, shape, hot, gateLabel, onApply, on
               </div>
               <p className="pg-ghost-text">{g.text}</p>
               {reason}
-              {g.gates.length > 0 && <p className="pg-ghost-gates">잴 수 있게 되는 관문 · {g.gates.map(gateLabel).join(" · ")}</p>}
+              {g.gates.length > 0 && <p className="pg-ghost-gates">측정 가능해지는 관문 · {g.gates.map(gateLabel).join(" · ")}</p>}
               {acts}
               {ports.map((p) => {
                 const ghostPt = ghostPort(g, entry, p.side, p.name);

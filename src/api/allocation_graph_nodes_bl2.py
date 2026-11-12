@@ -43,7 +43,7 @@ P = pg.Port
 _MARKETS = {"kr": "한국", "us": "미국"}
 _UNIVERSES = {"kospi50": "KOSPI 50", "kospi200": "KOSPI 200", "kosdaq150": "KOSDAQ 150"}
 _DEV_MACRO = "개발 모드라 매크로 지표가 합성(합성)입니다 — 실제 국면을 말해 주지 않습니다."
-_STORE_NOTE = "저장된 관측만 읽었습니다(이 계산은 외부를 호출하지 않습니다) — 공표 시각을 모르는 관측이라 지금 시점 전용입니다."
+_STORE_NOTE = "저장된 관측만 읽었습니다(이 계산은 외부를 호출하지 않습니다) — 공표 시각을 모르는 관측이라 현재 시점 전용입니다."
 
 
 def _detail(e: HTTPException) -> str:
@@ -133,19 +133,19 @@ def _explain_frontier(view: dict, prov: dict, params: Any) -> dict:
     best = max(curve, key=lambda r: float(r.get("sharpe") or 0)) if curve else None
     facts = [f"곡선 {len(curve)}점 · 변동성 {_pct(float(curve[0]['volatility']))} ~ {_pct(float(curve[-1]['volatility']))}."] if curve else []
     if best:
-        facts.append(f"변동성 대비 수익이 가장 좋은 점: 연 {_pct(float(best['return']))} · 변동성 {_pct(float(best['volatility']))}.")
+        facts.append(f"변동성 대비 수익률이 가장 높은 점: 연 {_pct(float(best['return']))} · 변동성 {_pct(float(best['volatility']))}.")
     pt = view.get("point")
     if pt:
-        facts.append(f"이은 비중은 연 {_pct(pt['return'])} · 변동성 {_pct(pt['volatility'])} 자리에 있습니다.")
+        facts.append(f"연결한 비중은 연 {_pct(pt['return'])} · 변동성 {_pct(pt['volatility'])} 지점에 있습니다.")
     trust = [_t(CONFIRMED, "불러온 기간의 평균 수익률과 공분산으로 그렸습니다."),
              _t(ASSUMED, "과거 평균이 앞으로도 같다고 가정한 곡선입니다 — 예측이 아닙니다.")]
     if view.get("cloud") is None:
         trust.append(_t(UNKNOWN, f"무작위 조합 구름은 그리지 못했습니다 — {view.get('cloud_reason') or '사유 미상'}."))
-    return {"title": "같은 변동성에서 가장 높은 수익의 경계를 그렸습니다",
-            "headline": ({"label": "가장 좋은 점의 변동성", "value": best["volatility"], "unit": "%",
+    return {"title": "효율적 프런티어를 산출했습니다",
+            "headline": ({"label": "최적점의 변동성", "value": best["volatility"], "unit": "%",
                           "text": _pct(float(best["volatility"]))} if best else None),
             "facts": facts, "trust": trust,
-            "unmeasured": ["추정 오차(기대수익이 조금 틀려도 곡선이 크게 움직입니다)", "거래 비용", "앞으로의 수익"]}
+            "unmeasured": ["추정 오차(기대수익률이 조금만 달라져도 곡선이 크게 변합니다)", "거래 비용", "향후 수익률"]}
 
 
 # ── 국면 앙상블 · 국면 설명 ───────────────────────────────────────────────────
@@ -185,7 +185,7 @@ def _explain_ensemble(view: dict, prov: dict, params: Any) -> dict:
     title = ("세 방법이 같은 국면을 가리킵니다" if agree else
              "방법마다 다른 국면을 가리킵니다" if picks else "국면을 판정할 수 있는 방법이 없었습니다")
     return {"title": title, "facts": facts + ["세 방법을 평균 내지 않습니다 — 갈리는 것 자체가 정보입니다."],
-            "trust": trust, "unmeasured": ["국면 판정이 앞으로의 수익을 맞히는지(예측력)"]}
+            "trust": trust, "unmeasured": ["국면 판정의 향후 수익률 예측력"]}
 
 
 def _regime_explain(inputs: dict, p: ExplainParams) -> pg.NodeOutput:
@@ -210,7 +210,7 @@ def _explain_regime_explain(view: dict, prov: dict, params: Any) -> dict:
         facts.append(f"분류할 수 있었던 기간: {n}개월" + (f" (요청 {asked}개월보다 짧습니다)" if span.get("truncated") else ""))
     trust = [] if tr.get("available") else [_t(UNKNOWN, f"전환 위험 산출 실패 — {tr.get('reason') or '사유 미상'}")]
     trust += _macro_trust(prov)
-    return {"title": "지금 국면이 왜 나왔고 얼마나 이어질지 봤습니다" if tr.get("available") else "국면 경로 생성 실패",
+    return {"title": "현재 국면의 판정 근거와 지속 전망을 산출했습니다" if tr.get("available") else "국면 경로 생성 실패",
             "facts": facts, "trust": trust,
             "unmeasured": ["전환 확률이 실제 전환을 맞히는지", "공표 지연·개정(빈티지)"]}
 
@@ -256,10 +256,10 @@ def _explain_three_way(view: dict, prov: dict, params: Any) -> dict:
                      + (f" · 손실 {_signed_pct(float(loss))}" if loss is not None else " · 손실 미계산"))
     trust = [_t(ASSUMED, str(r.get("composition_note") or "노출을 시나리오 손실에 곱했습니다."))]
     if not r.get("composed"):
-        trust.append(_t(UNKNOWN, "충격을 구하지 못해 대안별 손실을 적지 않았습니다."))
+        trust.append(_t(UNKNOWN, "충격을 산출하지 못해 대안별 손실을 표시하지 않았습니다."))
     if r.get("overlay") is None:
         trust.append(_t(UNKNOWN, "경기 국면을 잇지 않아 ‘타이밍 + 국면’ 대안은 판정하지 않았습니다."))
-    return {"title": f"‘{(r.get('scenario') or {}).get('label')}’에서 세 갈래를 비교했습니다",
+    return {"title": f"‘{(r.get('scenario') or {}).get('label')}’에서 세 대안을 비교했습니다",
             "facts": facts, "trust": trust, "unmeasured": ["시나리오가 실제로 일어날 확률", "대안 사이의 거래 비용"]}
 
 
@@ -302,7 +302,7 @@ def _custom_scenario(inputs: dict, p: Any) -> pg.NodeOutput:
     else:
         factors = {fid: float(getattr(p, fid)) for fid in FACTORS if float(getattr(p, fid)) != 0.0}
         if not factors:
-            raise pg.NodeFailure("팩터 충격을 하나 이상 정하십시오 — 시장 충격만으로는 시나리오를 만들지 않습니다"
+            raise pg.NodeFailure("팩터 충격을 하나 이상 지정하십시오 — 시장 충격만으로는 시나리오를 구성하지 않습니다"
                                  "(0 인 팩터를 지어 넣지 않습니다).")
         req = ScenarioRunRequest(holdings=pct, pack=InlinePack(label=p.label, market=p.market_shock, factors=factors))
     try:
@@ -317,7 +317,7 @@ def _custom_scenario(inputs: dict, p: Any) -> pg.NodeOutput:
 def _explain_custom(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     shock = r.get("shock_pct")
-    return {"title": f"‘{(r.get('pack') or {}).get('label')}’에 이 비중을 넣어 봤습니다",
+    return {"title": f"‘{(r.get('pack') or {}).get('label')}’ 시나리오를 현재 비중에 적용했습니다",
             "headline": ({"label": "예상 충격", "value": shock, "unit": "%", "text": _signed_pct(float(shock))}
                          if shock is not None else None),
             "facts": [f"측정 방식: {r.get('shock_basis') or '미상'}"],
@@ -347,7 +347,7 @@ def _explain_health(view: dict, prov: dict, params: Any) -> dict:
     facts = [f"{_HEALTH_KO.get(k, k)} {v}개" for k, v in counts.items() if v]
     unmeasured = sorted({s.get("label") for it in r.get("items") or [] for s in it.get("signals") or []
                          if s.get("status") == "unmeasured"} - {None})
-    return {"title": f"등록된 알파 {n}개의 상태를 봤습니다" if n else "등록된 알파가 없습니다 — 알파 서랍에서 등록합니다",
+    return {"title": f"등록된 알파 {n}개의 상태를 점검했습니다" if n else "등록된 알파가 없습니다 — 알파 서랍에서 등록합니다",
             "facts": facts, "trust": [_t(CONFIRMED, str(r.get("note") or "측정 가능한 신호로만 판정했습니다."))],
             "unmeasured": unmeasured or ["실거래 성과"]}
 
@@ -404,7 +404,7 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
             trust.append(_t(UNKNOWN, f"{want}거래일을 보려 했지만 시세가 {n_days}거래일뿐이었습니다."))
         crisis = rob.get("crisis") or {}
         if crisis.get("basis") != "market":
-            trust.append(_t(UNKNOWN, str(crisis.get("note") or "시장 자료 없이 위기일을 골랐습니다.")))
+            trust.append(_t(UNKNOWN, str(crisis.get("note") or "시장 자료 없이 위기일을 선정했습니다.")))
         trust.append(_t(ASSUMED, "충격 상관은 사용자가 지정한 가정입니다 — 실제 위기에는 변동성도 함께 커집니다."))
         if rob.get("shorts_dropped"):
             trust.append(_t(UNKNOWN, f"숏 비중 {rob['shorts_dropped']}개는 흐름에서 빼고 측정했습니다."))
@@ -422,7 +422,7 @@ def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
     headline = None if eff.get("value") is None else {
         "label": "실질 독립 개수", "value": eff["value"], "unit": "개",
         "text": f"그룹 {eff.get('n')}개가 실제로는 약 {eff['value']:.1f}개처럼 움직였습니다"}
-    return {"title": f"그룹 {view.get('n')}개가 같이 무너지는지 봤습니다", "headline": headline,
+    return {"title": f"그룹 {view.get('n')}개의 동반 하락 여부를 분석했습니다", "headline": headline,
             "facts": list(rob.get("story") or []), "trust": trust,
             "unmeasured": ["앞으로도 같을지(과거 관계입니다)", "경제적 가치"]
             + ([] if rob.get("axis") == "date" else ["날짜로 맞춘 비교(시세의 끝을 맞췄습니다)"])}
@@ -484,7 +484,7 @@ def _save_alpha_validation(values: dict, view: dict, params: AlphaValidateParams
         raise pg.NodeFailure(_detail(e)) from e
     rid = out.get("run_id")
     if not rid:
-        raise pg.NodeFailure("DB 를 쓸 수 없어 검증 기록을 남기지 못했습니다.")
+        raise pg.NodeFailure("DB 를 사용할 수 없어 검증 기록을 저장하지 못했습니다.")
     if out.get("ic") != (view.get("result") or {}).get("ic"):
         raise pg.NodeFailure(f"기록한 검증({rid})이 미리보기와 다릅니다 — 기록함에서 확인하십시오.")
     tail = " · 알파에 붙였습니다" if params.alpha_id else ""
@@ -496,7 +496,7 @@ def _explain_validate(view: dict, prov: dict, params: Any) -> dict:
     ic = (r.get("ic") or {})
     agg = ic.get("agg") or ic if isinstance(ic, dict) else {}
     mean, icir = agg.get("mean"), agg.get("icir")
-    facts = [f"기간 {r.get('period_start')} ~ {r.get('period_end')} · {r.get('n_periods')}번 잰 결과입니다."]
+    facts = [f"기간 {r.get('period_start')} ~ {r.get('period_end')} · {r.get('n_periods')}회 측정한 결과입니다."]
     if mean is not None:
         facts.append(f"평균 IC {float(mean):+.3f}" + (f" · ICIR {float(icir):+.2f}" if icir is not None else ""))
     src = view.get("expr_source")
@@ -519,7 +519,7 @@ class AlphaPortfolioParams(BaseModel):
     model_config = _FORBID
     alpha_ids: list[str] = Field(..., min_length=1, max_length=8, json_schema_extra={"x-ui": _ui(
         "알파", question="결합 대상 알파", widget="pick", source="alphas",
-        help="승인된 알파만 쓸 수 있습니다 — 나머지는 서버가 사유와 함께 막습니다.")})
+        help="승인된 알파만 사용할 수 있습니다 — 나머지는 서버가 사유와 함께 차단합니다.")})
     universe: Literal[tuple(_UNIVERSES)] = Field("kospi200", json_schema_extra={"x-ui": _ui(
         "종목 범위", "advanced", widget="cards", options=_UNIVERSES)})
     top_k: int = Field(10, ge=2, le=30, json_schema_extra={"x-ui": _ui(
@@ -541,7 +541,7 @@ def _alpha_portfolio(inputs: dict, p: AlphaPortfolioParams) -> pg.NodeOutput:
         raise pg.NodeFailure(f"알파 포트폴리오 생성 실패 — {_detail(e)}") from e
     if not out.get("available"):
         why = "; ".join(f"{b.get('name') or b.get('alpha_id')}: {b.get('reason')}" for b in out.get("blocked") or [])
-        raise pg.NodeFailure(f"{out.get('reason') or '알파 포트폴리오를 만들지 않았습니다.'}" + (f" — {why}" if why else ""))
+        raise pg.NodeFailure(f"{out.get('reason') or '알파 포트폴리오를 구성하지 않았습니다.'}" + (f" — {why}" if why else ""))
     base = {str(c): float(v) for c, v in (out.get("base_weights") or {}).items() if float(v) > 0}
     if not base:
         raise pg.NodeFailure("비중이 모두 0이라 담을 종목이 없습니다.")
@@ -558,13 +558,13 @@ def _alpha_portfolio(inputs: dict, p: AlphaPortfolioParams) -> pg.NodeOutput:
 
 def _explain_alpha_portfolio(view: dict, prov: dict, params: Any) -> dict:
     w = view.get("weights") or {}
-    trust = [_t(CONFIRMED, "승인된 알파의 점수를 합쳐 상위 종목을 골랐습니다."),
+    trust = [_t(CONFIRMED, "승인된 알파의 점수를 결합해 상위 종목을 선정했습니다."),
              _t(UNKNOWN, str(view.get("note") or "거래 비용을 반영하지 않았습니다."))]
     trust += [_t(UNKNOWN, str(x)) for x in view.get("warnings") or []]
     if mock_allowed():
         trust.append(_t(UNKNOWN, "개발 모드라 가격·재무 값이 합성일 수 있습니다."))
     en = view.get("effective_n")
-    return {"title": f"알파를 합쳐 {len(w)}종목의 비중을 정했습니다",
+    return {"title": f"알파를 결합해 {len(w)}종목의 비중을 산출했습니다",
             "facts": [f"실질 알파 수 {float(en):.1f}개" if en is not None else "실질 알파 수 미상"],
             "trust": trust, "unmeasured": ["이 비중의 과거 성과(한 시점의 비중이라 정책 백테스트가 없습니다)"]}
 

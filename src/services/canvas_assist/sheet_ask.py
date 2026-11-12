@@ -16,7 +16,7 @@ CANNOT_CLIENT = {
     "judgement": "투자 판단은 담당 PB와 상담하십시오 — 여기서는 이 한 장에 적힌 내용만 설명합니다.",
     "off_topic": "이 한 장의 포트폴리오에 대해 문의하십시오.",
 }
-_PART = {"title": "제목", "headline": "핵심 값", "fact": "사실", "trust": "믿음", "unmeasured": "재지 않은 것"}
+_PART = {"title": "제목", "headline": "핵심 값", "fact": "사실", "trust": "믿음", "unmeasured": "미측정 항목"}
 
 
 def ground_sheet(sheet: Mapping[str, Any], sheet_id: str, question: str,

@@ -115,7 +115,7 @@ test("혼자 쓰는 도구: 연결점 없이 '선 없이' 줄 · 흐름 노드�
   await expect(node(page, "universe").locator(".react-flow__handle")).not.toHaveCount(0);
 });
 
-test("지금 이을 수 있습니다: 고른 노드가 있을 때만(짝) · 모두 그 출력 타입을 받음 · 누르면 선 하나", async ({ page }) => {
+test("지금 이을 수 있습니다: 선택한 노드가 있을 때만(짝) · 모두 그 출력 타입을 받음 · 누르면 선 하나", async ({ page }) => {
   await openCanvas(page);
   const cat = await catalogOf(page);
   await expect(page.locator(".pg-palette-next")).toHaveCount(0);                            // ★짝★ 아무것도 고르지 않음

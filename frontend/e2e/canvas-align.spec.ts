@@ -34,7 +34,7 @@ async function pick(page: Page, ids: string[]) {
   await page.locator(".react-flow__pane").click({ position: { x: 350, y: 20 } });
   await card(page, ids[0]).locator(".pg-node").click({ position: HEAD });
   for (const id of ids.slice(1)) await card(page, id).locator(".pg-node").click({ position: HEAD, modifiers: [mod] });
-  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 골랐습니다`);
+  await expect(page.locator(".pg-selbar-n")).toHaveText(`${ids.length}개 선택`);
 }
 async function align(page: Page, label: string) {
   await page.locator(".pg-align-open").click();

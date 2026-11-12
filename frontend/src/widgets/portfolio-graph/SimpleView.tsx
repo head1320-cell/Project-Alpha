@@ -49,7 +49,7 @@ function ResultCard({ id, entry, r, onCause }: { id: string; entry: NodeCatalogE
         </ul>
       )}
       {r.status === "ok" && (ex?.unmeasured?.length ?? 0) > 0 && (
-        <details className="pg-simple-unmeasured"><summary>재지 않은 것 {ex!.unmeasured!.length}가지</summary>
+        <details className="pg-simple-unmeasured"><summary>미측정 항목 {ex!.unmeasured!.length}가지</summary>
           <ul>{ex!.unmeasured!.map((u) => <li key={u}>{u}</li>)}</ul>
         </details>
       )}
@@ -83,7 +83,7 @@ export function SimpleView({ nodes, edges, groups, catalog, results, staleIds, r
     <div className="pg-simple" aria-label="간단히 보기">
       <header className="pg-simple-top">
         <div>
-          <h2 className="pg-simple-h">정할 것만 고르고, 결과만 봅니다</h2>
+          <h2 className="pg-simple-h">설정 항목과 결과만 표시합니다</h2>
           <p className="pg-simple-sub">여기서 바꾼 값은 캔버스의 노드 설정에 그대로 들어갑니다. 바꾸지 않은 칸은 서버 기본값입니다.</p>
         </div>
         <button type="button" className="pg-btn pg-btn--primary pg-simple-run" disabled={running || !nodes.length} onClick={onRun}>

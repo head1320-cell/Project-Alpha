@@ -136,7 +136,7 @@ def test_needs_unmet_speaks_when_failure_is_certain_and_names_the_fix():
     [err] = _unmet(rep)
     assert rep["ok"] is False and err["node_id"] == "k" and err["edge_id"] == "s.weights->k.weights"
     assert "공분산" in err["message"] and "실패" in err["message"]
-    assert err["fix"] == "‘스코어 기반 비중’에 ‘수익률’을 이으면 줄 수 있습니다."
+    assert err["fix"] == "‘스코어 기반 비중’에 ‘수익률’을 연결하면 전달할 수 있습니다."
 
 
 def test_needs_unmet_is_silent_when_the_value_may_be_given():

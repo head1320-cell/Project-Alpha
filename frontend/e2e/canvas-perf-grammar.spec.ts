@@ -309,9 +309,9 @@ test("(k) 전략 그룹 — 같은 문법(서버 모양 픽스처) · 낙폭은 
       curve: dates.map((d, i) => ({ date: d, equity: Math.round(eq[i] * 1e8), dd: dd[i] })),       // 원 단위 · 같은 모양(비율이라 기간별 수익·낙폭 사건은 그대로)
       periods: bv.periods, drawdowns: bv.drawdowns, last_weights: { "1": 0.6, "2": 0.4 },
     },
-    explain: { title: "전략 2개를 묶어 돌려 봤습니다",
+    explain: { title: "전략 2개를 결합해 백테스트했습니다",
                headline: { label: "전체 수익", value: total, unit: "%", text: `${total >= 0 ? "+" : ""}${total.toFixed(1)}%` },
-               facts: ["전략 2개를 ‘같은 비중’ 방식으로 달마다 다시 나눴습니다."],
+               facts: ["전략 2개를 ‘같은 비중’ 방식으로 달마다 리밸런싱했습니다."],
                trust: [{ state: "confirmed", text: "기록하지 않고 계산만 했습니다 — 실행 기록은 남지 않습니다." }],
                unmeasured: ["표본 밖 성과 — 등록된 전략의 과거 기록을 다시 나눈 결과입니다"] },
   };
