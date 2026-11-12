@@ -89,7 +89,7 @@ test("R5 · 도구줄은 선택한 선 하나에만 (짝: 안 고르면 · 빈 �
   await expect(tb(page)).toHaveCount(1);
   await expect(tb(page)).toHaveAttribute("data-edge-id", UR);
   for (const a of ["cut", "insert", "waypoint", "ask"]) await expect(btn(page, a)).toBeVisible();
-  await expect(btn(page, "cut")).toHaveText(/끊기/);
+  await expect(btn(page, "cut")).toHaveText(/연결 해제/);
   await blank(page);
   await expect(tb(page)).toHaveCount(0);
   await pickWire(page, EO);

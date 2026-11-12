@@ -106,7 +106,7 @@ test("칩 메뉴: 네 목표 + 설명 + 목표 없음 · 바꾸면 요청이 바
 
   await chip(page).click();
   await expect(items(page).locator(".pg-goalchip-title")).toHaveText(TITLES);
-  await expect(items(page).first().locator(".pg-goalchip-sub")).toContainText("비중을 나누고");
+  await expect(items(page).first().locator(".pg-goalchip-sub")).toContainText("비중을 산출하고");
   await expect(page.locator('.pg-goalchip-menu [data-goal="build"]')).toHaveAttribute("aria-checked", "true");
   await expect(page.locator('.pg-goalchip-menu [data-goal="none"]')).toHaveText("목표 없음");
   await expect(page.locator(".pg-goalchip-note")).toContainText("규칙 추천은 바뀌지 않습니다");

@@ -88,12 +88,12 @@ test("U6 · 전략째 대안 → 복제도 새 전략 상자(이름 '<전략> ·
   expect(doc.branches ?? []).toEqual([]);
 });
 
-test("U6 · 선택한 노드째 대안은 틀만 + [전략으로 묶기] → 누르면 전략 상자(출력 = 포트폴리오 최적화 복제) · 되돌리기 한 번 (짝: 비중 노드 없는 대안은 까닭 · 대안을 지우면 그 상자도)", async ({ page }) => {
+test("U6 · 선택한 노드로 대안은 틀만 + [전략으로 묶기] → 누르면 전략 상자(출력 = 포트폴리오 최적화 복제) · 되돌리기 한 번 (짝: 비중 노드 없는 대안은 까닭 · 대안을 지우면 그 상자도)", async ({ page }) => {
   await openWith(page, CORE);
-  await pickByCmd(page, ["estimate", "optimizer"], "branch-picked", "선택한 노드째 대안");
+  await pickByCmd(page, ["estimate", "optimizer"], "branch-picked", "선택한 노드로 대안");
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   let doc = await wip(page);
-  expect(strategiesOf(doc), "선택한 노드째 대안은 상자를 만들지 않는다").toHaveLength(0);
+  expect(strategiesOf(doc), "선택한 노드로 대안은 상자를 만들지 않는다").toHaveLength(0);
   const br = doc.branches![0];
   const btn = page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-strategy`);
   await expect(btn).toBeVisible();
@@ -111,12 +111,12 @@ test("U6 · 선택한 노드째 대안은 틀만 + [전략으로 묶기] → 누
   await expect(btn).toBeVisible();
 
   // 짝 — 비중 노드가 없는 갈래(종목·수익률)는 까닭 · 상자 없음
-  await pickByCmd(page, ["universe", "returns"], "branch-picked", "선택한 노드째 대안");
+  await pickByCmd(page, ["universe", "returns"], "branch-picked", "선택한 노드로 대안");
   await expect(page.locator(".pg-branch")).toHaveCount(2);
   doc = await wip(page);
   const br2 = doc.branches!.find((x) => x.id !== br.id)!;
   await page.locator(`.pg-branch[data-branch-id="${br2.id}"] .pg-branch-strategy`).click();
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없습니다");
+  await expect(page.locator(".pg-note")).toContainText("비중 출력 노드가 없습니다");
   expect(strategiesOf(await wip(page))).toHaveLength(0);
 
   // 짝 — 첫 갈래를 묶은 뒤 그 갈래를 지우면 상자도 사라진다(둘째 갈래로 화면이 옮겨졌으니 맞춰 보기부터 — 머리가 오른쪽 창 밑에 들지 않게)
@@ -182,13 +182,13 @@ test("U6 · 끝이 둘인 대안은 [전략으로 묶기]가 까닭을 말하고
                               n("optA", "optimizer", 660, 0), n("optB", "optimizer", 990, 0, { model: "risk_parity" })],
                 edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "optA", "returns"), e("returns", "returns", "optB", "returns")] };
   await openWith(page, PAR);
-  await pickByCmd(page, ["optA", "optB"], "branch-picked", "선택한 노드째 대안");
+  await pickByCmd(page, ["optA", "optB"], "branch-picked", "선택한 노드로 대안");
   await expect(page.locator(".pg-branch")).toHaveCount(1);
   const br = (await wip(page)).branches![0];
   await page.locator(".react-flow__controls-fitview").click();
   await page.waitForTimeout(400);
   await page.locator(`.pg-branch[data-branch-id="${br.id}"] .pg-branch-strategy`).click();
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 끝이 2개");
+  await expect(page.locator(".pg-note")).toContainText("비중 출력이 2개");
   expect(strategiesOf(await wip(page)), "끝이 둘이면 상자 없음").toHaveLength(0);
 
   // 짝 — 비중 계산 → 치우침 없애기(줄)는 끝 하나: 묶이고 출력 = 치우침 없애기의 복제
@@ -197,7 +197,7 @@ test("U6 · 끝이 둘인 대안은 [전략으로 묶기]가 까닭을 말하고
                 edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "opt", "returns"), e("opt", "weights", "neu", "weights")] };
   const other = await page.context().newPage();
   await openWith(other, SER);
-  await pickByCmd(other, ["opt", "neu"], "branch-picked", "선택한 노드째 대안");
+  await pickByCmd(other, ["opt", "neu"], "branch-picked", "선택한 노드로 대안");
   const br2 = (await wip(other)).branches![0];
   await other.locator(".react-flow__controls-fitview").click();
   await other.waitForTimeout(400);
@@ -213,7 +213,7 @@ test("U6 이어서 · Ctrl+K '전략으로 묶기' 도 끝이 둘이면 까닭�
                 edges: [e("universe", "universe", "returns", "universe"), e("returns", "returns", "optA", "returns"), e("returns", "returns", "optB", "returns")] };
   await openWith(page, PAR);
   await pickByCmd(page, ["optA", "optB"], "strategy-picked", "전략으로 묶기");
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 끝이 2개");
+  await expect(page.locator(".pg-note")).toContainText("비중 출력이 2개");
   expect(strategiesOf(await wip(page)), "끝이 둘이면 상자 없음").toHaveLength(0);
 
   const SER = { ...F, nodes: [n("universe", "universe", 0, 0, { tickers: ["005930", "000660"] }), n("returns", "returns", 330, 0),
@@ -235,7 +235,7 @@ test("U6 이어서 · '전략 추가' 가 지금 흐름을 '전략 1' 로 묶을
   await openWith(page, PAR);
   await page.locator(".pg-strat-add").click();
   await page.locator('.pg-strat-item[data-source="tpl:stress"]').click();
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 끝이 2개라");
+  await expect(page.locator(".pg-note")).toContainText("비중 출력이 2개라");
   await expect(page.locator(".pg-note")).toContainText("묶지 않았습니다");
   const doc = await wip(page);
   const ss = strategiesOf(doc);

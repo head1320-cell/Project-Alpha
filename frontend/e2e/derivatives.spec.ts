@@ -139,7 +139,7 @@ test("신용 위험 — 답 = 서버 CVA · ★노출 곡선 점 수 = 서버 ee
   const curve = page.getByTestId("cva-curve");
   await expect(curve).toHaveAttribute("data-points", "10");
   await expect(curve.locator(".recharts-line-dots circle")).toHaveCount(10);
-  await expect(page.locator(".dv-out .tx-chip", { hasText: "상품 종류마다 정한 모양" })).toBeVisible();
+  await expect(page.locator(".dv-out .tx-chip", { hasText: "상품 유형별로 가정한 형태" })).toBeVisible();
 });
 
 test("★아직 계산하지 않는 모형 — 설명만, 결과처럼 보이는 상수 카드 0★(옛 '10,000 / ON / ON')", async ({ page }) => {

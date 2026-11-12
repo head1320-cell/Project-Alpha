@@ -82,7 +82,7 @@ export function CanvasToolbar({ s, fit, setGoalOpen, stratOpen, setStratOpen, st
       </div>
       <NameWithGoal name={s.name} onName={s.setName} goal={s.goal} onGoal={s.setGoal} />
       <span className="pg-toolbar-spacer" />
-      {nErrors > 0 && <span className="pg-summary pg-summary--err">설정 확인이 필요한 항목이 {nErrors}개 있습니다</span>}
+      {nErrors > 0 && <span className="pg-summary pg-summary--err">설정 확인 필요 {nErrors}개</span>}
       {s.reportStale && (
         <span className="pg-summary pg-summary--stale" data-count={s.staleIds.length}>
           예전 결과 {s.staleIds.length}개

@@ -76,7 +76,7 @@ export function GateSection({ gate, onChanged }: { gate: UseQueryResult<GateStat
       </div>
 
       <GateForm open={sheet === "declare"} hasCurrent={!!cur} onClose={() => setSheet(null)}
-                onDone={(dropped) => settle(dropped ? "선언했습니다. 실계좌로 돌던 운영 계좌를 기록만으로 돌려놨습니다." : "선언했습니다.")} />
+                onDone={(dropped) => settle(dropped ? "선언했습니다. 실계좌로 운용하던 운영 계좌를 기록만 모드로 전환했습니다." : "선언했습니다.")} />
       <Sheet open={sheet === "revoke"} onClose={() => setSheet(null)} title="실계좌 관문 철회" testId="gate-revoke" className="lv-sheet"
              sub="철회하면 실계좌 주문이 다시 차단됩니다. 실계좌로 운용하던 운영 계좌는 기록만 모드로 복귀합니다. 선언 기록은 삭제하지 않습니다.">
         {revoke.isError ? <p className="lv-err" role="alert">관문 철회 실패. <span data-server>{revoke.error.message}</span></p> : null}

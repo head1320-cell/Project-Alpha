@@ -102,7 +102,7 @@ test("BU9b: 비상 정지 — 이벤트가 있으면 '모든 사용자 계좌' �
   await expect(act(page, "kill-open")).toHaveCount(0);
   const p = await page.context().newPage();
   await open(p, { st: liveState({ kill: { is_active: true, active_event: null } }) });
-  await expect(sentence(p)).toContainText("어떤 정지인지 읽지 못했습니다");
+  await expect(sentence(p)).toContainText("정지 유형을 조회하지 못했습니다");
   await p.close();
 });
 

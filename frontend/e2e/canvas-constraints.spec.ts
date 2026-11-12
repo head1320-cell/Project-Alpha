@@ -57,7 +57,7 @@ test("P1 · 업종 상한이 빠지면 결과가 '적용 안 됨' 이라고 말�
   await tab(page, "story");
   const step = page.locator('.pg-step[data-node-id="optimizer"]');
   await expect(step.locator(".pg-trust")).toContainText("반도체");
-  await expect(step.locator(".pg-trust"), "적용된 것만 지켰다고 말한다").toContainText("적용된 제약 안에서");
+  await expect(step.locator(".pg-trust"), "적용된 것만 지켰다고 말한다").toContainText("적용된 제약 범위에서");
 });
 
 test("P1 · 짝 — 종목 상한만이면 빠진 것이 없다", async ({ page }) => {

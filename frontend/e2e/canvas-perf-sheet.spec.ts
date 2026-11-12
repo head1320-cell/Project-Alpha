@@ -112,7 +112,7 @@ test("(n) 달마다 격자 — 칸 수 = 서버 periods.monthly · 칸 글자 = 
   }
   expect(monthly[0].partial || monthly[monthly.length - 1].partial, "양 끝 달 중 하나는 일부여야 '일부' 표시가 공허하지 않다").toBe(true);
   // 글은 "곡선이 시작·끝나는 달 = 전체가 아닐 수 있다" 까지만 말한다 — 서버도 그 이상은 모른다(2026-11-09 결과 화면 검수에서 고침).
-  await expect(sheet(page).locator(".pf-months-note")).toContainText("달 전체가 아닐 수 있어서");
+  await expect(sheet(page).locator(".pf-months-note")).toContainText("달 전체가 아닐 수 있어");
   // 짝 — 서버 값이 바뀌면 칸이 바뀐다(화면이 제 수를 쓰지 않는다).
   await page.keyboard.press("Escape");
   const key = `${monthly[1].year}-${String(monthly[1].month).padStart(2, "0")}`;

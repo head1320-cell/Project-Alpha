@@ -343,7 +343,7 @@ test("기록끼리 견고성(BS3) 짝: 비중과 기록이 섞이면 흐린 단�
   await node(page, "optimizer").click({ modifiers: [mod] });
   const btn = page.locator(".pg-selbar .pg-selbar-compare");
   await expect(btn).toHaveAttribute("aria-disabled", "true");
-  await expect(btn).toHaveAttribute("title", /비중과 기록은 따로/);
+  await expect(btn).toHaveAttribute("title", /비중과 기록은 별도로/);
   const before = (await wip(page)).nodes.length;
   await btn.click({ force: true });
   await expect(page.locator(".pg-note")).toContainText("비중과 기록은 따로");

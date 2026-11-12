@@ -61,7 +61,7 @@ test("짝 — 과거 검증 원천이 0 이면 '아직 없습니다'(0개라고 
   await page.unroute(`${API}/source-honesty`);
   await page.route(`${API}/source-honesty`, (r) => r.fulfill(fail500));
   await open(page);
-  await expect(page.locator(".tx-answer-s")).toContainText("아직 미상", { timeout: 20_000 });
+  await expect(page.locator(".tx-answer-s")).toContainText("원천 수 미상", { timeout: 20_000 });
 });
 
 test("★출처 등급 500 → 그 절 alert + 재시도 → 풀면 회복★(옛 화면은 절이 조용히 사라졌다) · 짝: 정상은 alert 0", async ({ page }) => {
@@ -108,7 +108,7 @@ test("★적재 확인 창 — 취소하면 요청 0, 시작하면 같은 요청
   await all.click();
   const dlg = page.getByRole("dialog");
   await expect(dlg).toContainText("전체 적재를 시작하시겠습니까?");
-  await expect(dlg).toContainText("전자공시(DART) 하루 요청 한도");
+  await expect(dlg).toContainText("전자공시(DART) 일일 요청 한도");
   await dlg.getByRole("button", { name: "취소" }).click();
   await expect(dlg).toHaveCount(0);
   await page.waitForTimeout(800);

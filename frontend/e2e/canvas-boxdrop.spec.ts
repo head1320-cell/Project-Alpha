@@ -162,7 +162,7 @@ test("R4 · 끌기 전 테두리 밖으로 완전히 빼면 뺀다 (짝: 조금 
   expect(await membersOf(page, "g1")).toEqual(["universe", "returns"]);           // 가장자리 멤버를 조금 밀어도 빠지지 않는다
   await dragBy(page, "returns", 0, 700);
   await expect.poll(() => membersOf(page, "g1")).toEqual(["universe"]);
-  await expect(page.locator(".pg-note")).toContainText("뺐습니다");
+  await expect(page.locator(".pg-note")).toContainText("제외했습니다");
 });
 
 test("R4 · 전략의 비중을 내는 노드는 빼지 않고 까닭을 말한다 (짝: 다른 멤버는 빠진다)", async ({ page }) => {

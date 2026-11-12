@@ -149,7 +149,7 @@ test("잇기 추천 = 카드 없는 점선 + [잇기] → 선이 생긴다", asy
   const g = page.locator('.pg-ghost[data-action="connect"]');
   await expect(g).toHaveCount(1);
   await expect(page.locator('.pg-ghost-wire[data-action="connect"]')).toHaveCount(1);
-  await expect(g.locator(".pg-ghost-add")).toHaveText(/잇기/);
+  await expect(g.locator(".pg-ghost-add")).toHaveText(/연결/);
   await g.locator(".pg-ghost-add").click();
   await expect.poll(async () => (await wip(page)).edges.some((x) => x.source === "universe" && x.target === "returns")).toBe(true);
 });

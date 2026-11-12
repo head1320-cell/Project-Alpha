@@ -526,7 +526,7 @@ test("기업·가치평가(BK W5): 기업 전망은 비중까지 가고 과거 �
   await expect(page.locator(".pg-model-type")).toContainText("현재 시점에만");
   await node(page, "s").click();
   await expect(page.locator(".pg-side .pg-table tbody tr").first()).toBeVisible();
-  await expect(page.locator(".pg-side .pg-note")).toContainText("0으로 치지 않고");
+  await expect(page.locator(".pg-side .pg-note")).toContainText("0으로 처리하지 않고");
   for (const dark of [false, true]) {
     if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
     await page.waitForTimeout(150);
@@ -574,7 +574,7 @@ test("저장된 것에서 고르기(BK W5): 연구 기록을 골라 되짚기 ·
     await tab(page, "detail");
     await expect(page.locator(".pg-side .pg-chips-static")).toContainText("종목 선택");
     await tab(page, "story");
-    await expect(page.locator(".pg-side")).toContainText("되짚");
+    await expect(page.locator(".pg-side")).toContainText("사후 검토");
   } finally {
     await page.request.delete(`${api}/${made.run_id}`);
   }
@@ -2006,7 +2006,7 @@ test("알파(BL4): 보유 기간별 IC 와 앞/뒤 절반을 따로 · 못 잰 I
     await expect(page.locator(".pg-side .pg-av-stale")).toContainText("알파 포트폴리오");
     // 승인되지 않은 알파는 포트폴리오가 되지 않는다 — 서버 사유 그대로.
     expect(body.nodes.ap.status).toBe("failed");
-    expect(body.nodes.ap.reason).toContain("만들지 않았습니다");
+    expect(body.nodes.ap.reason).toContain("구성하지 않았습니다");
 
     await patchRun(page, (b) => {
       const v = b.nodes.av.view as { result: { ic: Record<string, unknown> } };
@@ -2045,7 +2045,7 @@ test("국면 설명(BL4): 관측 창을 적고 · 전환 확률은 90% 신용구
   await expect(page.locator(".pg-side .pg-regime-matrix tbody tr")).toHaveCount(4);
   await expect(page.locator(".pg-side .pg-regime-matrix .pg-ci").first()).toContainText("~");
   await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("=");
-  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("맞습니다");
+  await expect(page.locator(".pg-side .pg-shapley-sum")).toContainText("일치합니다");
 
   // 얇은 행은 숫자만 두지 않는다 · 효율성 잔차가 있으면 어긋난다고 말한다(맞는다고 적지 않는다).
   await patchRun(page, (b) => {

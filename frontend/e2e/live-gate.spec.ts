@@ -50,7 +50,7 @@ test("BU9b 관문: 열림 — 근거·허용 사용자를 서버 값 그대로 (
   await expect(page.locator('.lvg-now + .lvg-facts [data-k="allowed_users"] li')).toHaveText(["admin"]);
   const t = await page.locator(".lvg-h-t").allTextContents();
   expect(t[0], "최신 선언이 먼저").toContain("현재 열려 있습니다");
-  expect(t[1]).toContain("거둠");
+  expect(t[1]).toContain("철회");
 });
 
 test("BU9b 관문: 선언 — 여섯 칸이 다 차야 켜지고, 본문은 정확히 여섯 키", async ({ page }) => {

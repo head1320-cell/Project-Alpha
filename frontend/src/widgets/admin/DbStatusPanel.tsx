@@ -452,7 +452,7 @@ export default function DbStatusPanel() {
           {ask ? (
             <>
               <DialogTitle className="dsx-dlg-t">{ask.target === "all" ? "전체 적재를 시작하시겠습니까?" : `‘${ask.label}’ 적재를 시작하시겠습니까?`}</DialogTitle>
-              <DialogDescription className="dsx-dlg-d">서버 뒤에서 돌고, 끝날 때까지 이 화면이 5초마다 진행을 다시 받습니다.</DialogDescription>
+              <DialogDescription className="dsx-dlg-d">서버 백그라운드에서 실행되며, 완료될 때까지 이 화면이 5초마다 진행 상황을 갱신합니다.</DialogDescription>
               <ul className="dsx-dlg-list">
                 <li><b>대상</b><span className="dsx-dlg-what">{ask.ds.length ? ask.ds.map((d) => <span key={d.key}>{d.label} · {d.source}</span>) : "등록된 대상 없음"}</span></li>
                 <li><b>소요 시간</b><span>대규모 백필은 수 시간이 걸릴 수 있습니다.</span></li>

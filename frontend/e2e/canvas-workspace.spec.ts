@@ -559,7 +559,7 @@ test("전략 이름을 바꾸면 포트폴리오 노드의 전략 이름도 바�
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드가 없습니다");
+  await expect(page.locator(".pg-note")).toContainText("비중 출력 노드가 없습니다");
 });
 
 test("전략 지도(BM C2 → BN N1): 자동 정리 = 노드와 선만(배경 칸 없음) · 전략마다 한 줄 · 포트폴리오 노드는 오른쪽, 여럿이면 세로로 쌓임", async ({ page }) => {
@@ -745,7 +745,7 @@ test("큰 그래프(BM C2): 전략 열여섯(노드 100개 넘게)을 넣고 지
   await openCanvas(page);
   for (let i = 0; i < 15; i++) await addStrategy(page, i % 2 ? "tpl:stress" : "tpl:rebalance");
   // 포트폴리오 노드의 자리는 8개 — 넘치면 잇지 않았다고 말한다(조용히 버리지 않는다).
-  await expect(page.locator(".pg-note")).toContainText("잇지 못했습니다");
+  await expect(page.locator(".pg-note")).toContainText("연결하지 못했습니다");
   const n = (await wip(page)).nodes.length;
   expect(n).toBeGreaterThan(100);
   const t0 = Date.now();
@@ -1512,7 +1512,7 @@ test("선 끌어 놓기(BN N3): 후보 = 비중을 받는 카탈로그 노드 �
   expect(doc.nodes.length).toBe(n0 + 1);
   const added = doc.nodes.find((n) => n.type === "risk" && !["risk"].includes(n.id))!;
   expect(doc.edges.some((e) => e.source === "optimizer" && e.source_port === "weights" && e.target === added.id && e.target_port === "weights")).toBe(true);
-  await expect(page.locator(".pg-note")).toContainText("이었습니다");
+  await expect(page.locator(".pg-note")).toContainText("연결했습니다");
   await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
   await page.keyboard.press("Control+z");
   doc = await wip(page);
@@ -1598,10 +1598,10 @@ test("안내 줄(BN N3): [되돌리기] · 되돌릴 수 있는 안내는 8초 �
   await page.keyboard.press("Control+k");
   await page.getByLabel("명령 찾기").last().fill("전략으로 묶기");
   await page.keyboard.press("Enter");
-  await expect(note).toContainText("비중을 내는 노드가 없습니다");
+  await expect(note).toContainText("비중 출력 노드가 없습니다");
   await expect(note.locator(".pg-note-undo")).toHaveCount(0);
   await page.waitForTimeout(9_000);
-  await expect(note).toContainText("비중을 내는 노드가 없습니다");
+  await expect(note).toContainText("비중 출력 노드가 없습니다");
 });
 
 test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 연결하십시오' · 이으면 사라짐(짝) · 이어진 노드엔 없음", async ({ page }) => {
@@ -1980,7 +1980,7 @@ test("리밸런싱 주기(BO O2): 포트폴리오에 잇지 않은 전략에는 
   await reveal(page, pf.id);
   await node(page, pf.id).click();
   await page.locator('.pg-tab[data-tab="settings"]').click();
-  await expect(page.locator('.pg-basic-field[data-field="rebalance"] .pg-help').first()).toContainText("전략을 이어 주면");
+  await expect(page.locator('.pg-basic-field[data-field="rebalance"] .pg-help').first()).toContainText("전략을 연결하면");
 });
 
 for (const scheme of ["light", "dark"] as const) {
@@ -2051,7 +2051,7 @@ test("대안 보정(BO O3): 칸 = 서버 DSR · 보낸 곡선 = 백테스트 결
     await expect(cells.nth(i)).toHaveText(v === null ? "—" : `${Math.round(v * 100)}%`);
   }
   await expect(page.locator(".pg-branch-n")).toHaveAttribute("data-n", "2");
-  await expect(page.locator(".pg-branch-n")).toContainText("실제로 비교한 수는 더 많을 수");
+  await expect(page.locator(".pg-branch-n")).toContainText("실제 비교 횟수는 더 많을 수");
   // BP P3 — 닮음을 뺀 독립 수로 한 번 더(서버 값 그대로, 못 내면 "—")
   const eff = page.locator('.pg-branch-row--dsr[data-row^="dsr_eff:"]');
   await expect(eff).toHaveCount(1);

@@ -47,7 +47,7 @@ test("설정(BS1): 관리자가 계정을 만들면 임시 비밀번호가 한 �
   await expect(issued).toBeVisible();
   const temp = (await issued.locator(".set-issued-pw").textContent())!.trim();
   expect(temp.length).toBeGreaterThanOrEqual(12);
-  await expect(issued).toContainText("다시 볼 수 없습니다");
+  await expect(issued).toContainText("다시 확인할 수 없습니다");
   await expect(issued.locator(".set-copy")).toBeVisible();
   await expect(admin_.locator(`.set-acct[data-username="${name}"]`)).toContainText("바꿀 차례");
   // 닫으면 임시 비밀번호가 화면에서 사라진다.

@@ -184,7 +184,7 @@ test("[다음에] 는 이 모양에서 숨기고, 기본 흐름(다 채움)에�
   await expect(page.locator(".pg-guidebar")).toHaveAttribute("data-tool", "strategy_add");
   await page.locator(".pg-guide-later").click();
   await expect(page.locator(".pg-guidebar")).toHaveCount(0);
-  await expect(page.locator(".pg-hint")).toContainText("같은 색 점끼리");
+  await expect(page.locator(".pg-hint")).toContainText("같은 색 포트끼리");
 });
 
 test("기본 흐름은 절차를 다 채웠다 — 다음 한 걸음이 없다(짝)", async ({ page }) => {

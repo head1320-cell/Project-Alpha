@@ -404,7 +404,7 @@ test("BV9: 확인 줄을 거쳐 내고 본문은 서버 계약 그대로 (고치
   await page.goto("/my-account");
   await fillOrder(page);
   await page.locator(".ma-order-check").click();
-  await expect(page.locator(".ma-order-confirm")).toContainText("삼성전자(005930) 10주를 지정가 71,000원에 삽니다.");
+  await expect(page.locator(".ma-order-confirm")).toContainText("삼성전자(005930) 10주를 지정가 71,000원에 매수합니다.");
   await expect(page.locator(".ma-order-confirm")).toContainText("기록만");
   await page.locator(".ma-order-edit").click();
   expect(sent.filter((s) => s.method === "POST")).toEqual([]);

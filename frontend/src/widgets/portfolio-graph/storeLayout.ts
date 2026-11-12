@@ -178,7 +178,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
                       kind: "strategy", color: 0, output: ends[0] });
         wrapped = `지금 흐름을 ‘${label}’로 묶고, `;
       } else if (ends.length > 1) {
-        wrapped = `지금 흐름은 비중을 내는 끝이 ${ends.length}개라(${endNames(s, ends)}) 전략으로 묶지 않았습니다 — 출력을 하나로 정할 수 없습니다. `;
+        wrapped = `현재 흐름은 비중 출력이 ${ends.length}개라(${endNames(s, ends)}) 전략으로 묶지 않았습니다 — 출력을 하나로 정할 수 없습니다. `;
       }
     }
     // ② 새 전략을 가장 아래 카드의 ★바닥★ 밑에 넣는다(CF1 — 카드 높이가 카탈로그로 정해져 예전 "맨 위 y + 300" 은 겹쳤다).
@@ -388,7 +388,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     // 결정 5 — 출력을 정할 수 없으면(범위 안 흐름 끝이 둘 이상) 까닭. 끝이 하나면 그것이 출력(`strategyOutput` 과 같은 노드).
     const ends = strategyEnds(copies, s.nodes, s.edges, s.catalog ?? []);
     if (!ends.length) return `‘${b.label}’에 비중을 내는 노드가 없습니다 — 전략은 비중을 내야 포트폴리오에 합칠 수 있습니다.`;
-    if (ends.length > 1) return `‘${b.label}’에 비중을 내는 끝이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나를 지우거나 ‘슬리브 결합’으로 모으십시오.`;
+    if (ends.length > 1) return `‘${b.label}’에 비중 출력이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나를 지우거나 ‘슬리브 결합’으로 모으십시오.`;
     const output = ends[0];
     push();
     // 한 노드는 한 상자 — 복제가 다른 상자에 들어 있으면 거기서 뺀다(`strategyPicked` 와 같다).

@@ -262,6 +262,6 @@ test("R1 · 되돌리기 칸 50개가 다 찬 뒤에도 삭제 토스트에 [되
   }
   await node(page, "optimizer").click({ button: "right", position: HEAD });
   await page.locator('.pg-ctx-item[data-action="remove"]').click();
-  await expect(page.locator(".pg-note")).toContainText("지웠습니다");
+  await expect(page.locator(".pg-note")).toContainText("삭제했습니다");
   await expect(page.locator(".pg-note-undo")).toBeVisible();
 });
