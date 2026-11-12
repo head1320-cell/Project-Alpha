@@ -157,7 +157,7 @@ function GroupFrameImpl({ data }: NodeProps<Node<GroupFrameData>>) {
           <span>{head.label}</span>
         </div>
       )}
-      {strategy && data.output === null && <div className="pg-group-warn">비중을 내는 노드가 없어 포트폴리오에 합칠 수 없습니다.</div>}
+      {strategy && data.output === null && <div className="pg-group-warn">비중 출력 노드가 없어 포트폴리오에 결합할 수 없습니다.</div>}
       {data.collapsed && data.proxyIn.map((p, i) => (
         <div key={p.id} className="pg-proxy pg-proxy--in" style={{ top: PROXY_TOP + i * PROXY_GAP }} title={p.label}>
           <Handle type="target" position={Position.Left} id={p.id} className="pg-handle" isConnectable={false}
@@ -225,7 +225,7 @@ function StrategyNode({ data, ok, blocked, failed, total, computed }: {
           {total !== null && <span className="pg-group-time"> · 계산 {fmtElapsed(total)}</span>}
         </p>
       )}
-      {data.output === null && <p className="pg-group-warn">비중을 내는 노드가 없어 포트폴리오에 합칠 수 없습니다.</p>}
+      {data.output === null && <p className="pg-group-warn">비중 출력 노드가 없어 포트폴리오에 결합할 수 없습니다.</p>}
       <button type="button" className="pg-group-run pg-snode-run nodrag" disabled={running} onClick={() => data.onRunStrategy?.(data.groupId)}
               title="이 전략의 노드만 계산합니다 — 나머지는 이전 계산으로 남습니다">
         <Play size={12} aria-hidden="true" /> 이 전략만 계산

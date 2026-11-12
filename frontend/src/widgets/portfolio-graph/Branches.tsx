@@ -63,7 +63,7 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
           <ArrowUpToLine size={13} aria-hidden="true" /><span className="pg-branch-btn-t">이 대안을 원본으로</span>
         </button>
         {!data.boxed && (
-          <button type="button" className="pg-branch-strategy nodrag" title="이 대안을 전략 상자로 묶습니다 — 비중을 내는 노드가 있어야 합니다 (되돌리기 가능)"
+          <button type="button" className="pg-branch-strategy nodrag" title="이 대안을 전략 상자로 묶습니다 — 비중 출력 노드가 있어야 합니다 (되돌리기 가능)"
                   onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.branchStrategy(data.branchId)); }}>
             <Boxes size={13} aria-hidden="true" /><span className="pg-branch-btn-t">전략으로 묶기</span>
           </button>

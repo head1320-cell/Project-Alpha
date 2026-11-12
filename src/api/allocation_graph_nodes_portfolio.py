@@ -161,7 +161,7 @@ def _portfolio_combine(inputs: dict, p: PortfolioCombineParams) -> pg.NodeOutput
     if dup:
         raise pg.NodeFailure(f"전략 이름이 겹칩니다({', '.join(dup)}) — 이름이 같으면 전략별 비중을 배분할 수 없습니다. 전략 상자 이름을 변경하십시오.")
     if len(sleeves) < 2:
-        raise pg.NodeFailure("전략이 두 개 이상 있어야 합칠 수 있습니다.")
+        raise pg.NodeFailure("전략이 두 개 이상 있어야 결합할 수 있습니다.")
     # 전략별 주기 — 이어진 포트만(이어지지 않은 포트의 칸은 이름처럼 쓰이지 않는다). 모두 매일이면 넘기지 않는다 —
     # 기본 계산은 지금과 같은 호출이다.
     codes_of = {port: p.rebalance.get(port, "D") for port in ports}

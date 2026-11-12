@@ -346,6 +346,6 @@ test("기록끼리 견고성(BS3) 짝: 비중과 기록이 섞이면 흐린 단�
   await expect(btn).toHaveAttribute("title", /비중과 기록은 별도로/);
   const before = (await wip(page)).nodes.length;
   await btn.click({ force: true });
-  await expect(page.locator(".pg-note")).toContainText("비중과 기록은 따로");
+  await expect(page.locator(".pg-note")).toContainText("비중과 기록은 별도로");
   expect((await wip(page)).nodes).toHaveLength(before);
 });

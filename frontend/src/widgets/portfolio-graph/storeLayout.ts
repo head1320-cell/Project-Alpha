@@ -387,7 +387,7 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     if (copies.length && s.groups.some((g) => g.kind === "strategy" && copies.every((c) => g.members.includes(c)))) return `‘${b.label}’는 이미 전략 상자입니다.`;
     // 결정 5 — 출력을 정할 수 없으면(범위 안 흐름 끝이 둘 이상) 까닭. 끝이 하나면 그것이 출력(`strategyOutput` 과 같은 노드).
     const ends = strategyEnds(copies, s.nodes, s.edges, s.catalog ?? []);
-    if (!ends.length) return `‘${b.label}’에 비중을 내는 노드가 없습니다 — 전략은 비중을 내야 포트폴리오에 합칠 수 있습니다.`;
+    if (!ends.length) return `‘${b.label}’에 비중 출력 노드가 없습니다 — 전략은 비중을 출력해야 포트폴리오에 결합할 수 있습니다.`;
     if (ends.length > 1) return `‘${b.label}’에 비중 출력이 ${ends.length}개입니다(${endNames(s, ends)}) — 전략의 출력을 하나로 정할 수 없습니다. 하나를 지우거나 ‘슬리브 결합’으로 모으십시오.`;
     const output = ends[0];
     push();

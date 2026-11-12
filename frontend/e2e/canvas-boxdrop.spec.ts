@@ -57,7 +57,7 @@ test.describe("규칙 (브라우저 없이)", () => {
     const s: GraphGroup = { id: "s1", label: "전략 1", kind: "strategy", members: ["r", "e", "o"], output: "o" };
     const p = plan(["o"], at(BASE, "o", 1800), [s]);
     expect(p.moves).toEqual([]);
-    expect(p.blocked).toEqual([{ id: "o", why: "‘전략 1’의 비중을 내는 노드라 상자 밖으로 뺄 수 없습니다." }]);
+    expect(p.blocked).toEqual([{ id: "o", why: "‘전략 1’의 비중 출력 노드라 상자 밖으로 제외할 수 없습니다." }]);
     expect(plan(["r"], at(BASE, "r", 330, 900), [s]).moves).toEqual([{ id: "r", from: "s1", to: null }]);
   });
 
@@ -170,7 +170,7 @@ test("R4 · 전략의 비중을 내는 노드는 빼지 않고 까닭을 말한�
                   groups: [{ id: "s1", label: "전략 1", kind: "strategy", color: 0, members: ["returns", "estimate", "optimizer"], output: "optimizer" }] };
   await open(page, strat);
   await dragBy(page, "optimizer", 0, 800);
-  await expect(page.locator(".pg-note")).toContainText("비중을 내는 노드라 상자 밖으로 뺄 수 없습니다");
+  await expect(page.locator(".pg-note")).toContainText("비중 출력 노드라 상자 밖으로 제외할 수 없습니다");
   expect(await membersOf(page, "s1")).toEqual(["returns", "estimate", "optimizer"]);
   // 막혀도 자리는 옮겨졌다 — 상자가 그만큼 아래로 커졌으니 되돌리고 다른 멤버를 뺀다
   await page.locator(".pg-note-x").click();

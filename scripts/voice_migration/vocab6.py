@@ -590,6 +590,12 @@ _CANVAS_UI = [
     ('끊긴 곳은 값 미상', '끊긴 구간은 값 미상'),
     ('`지금 흐름은 비중을 내는 끝이 ${ends.length}개라(', '`현재 흐름은 비중 출력이 ${ends.length}개라('),
     ('’에 비중을 내는 끝이 ${ends.length}개입니다(', '’에 비중 출력이 ${ends.length}개입니다('),
+    ('’에 비중을 내는 노드가 없습니다 — 전략은 비중을 내야 포트폴리오에 합칠 수 있습니다.`', '’에 비중 출력 노드가 없습니다 — 전략은 비중을 출력해야 포트폴리오에 결합할 수 있습니다.`'),
+    ('비중을 내는 노드가 없어 포트폴리오에 합칠 수 없습니다.', '비중 출력 노드가 없어 포트폴리오에 결합할 수 없습니다.'),
+    ('’의 비중을 내는 노드라 상자 밖으로 뺄 수 없습니다.', '’의 비중 출력 노드라 상자 밖으로 제외할 수 없습니다.'),
+    ('비중을 내는 노드라 상자 밖으로 뺄 수 없습니다', '비중 출력 노드라 상자 밖으로 제외할 수 없습니다'),
+    ('전략 상자로 묶습니다 — 비중을 내는 노드가 있어야 합니다', '전략 상자로 묶습니다 — 비중 출력 노드가 있어야 합니다'),
+    ('raise pg.NodeFailure("전략이 두 개 이상 있어야 합칠 수 있습니다.")', 'raise pg.NodeFailure("전략이 두 개 이상 있어야 결합할 수 있습니다.")'),
 ]
 _SCREENS = [
     ('hint="얼마로 · 언제부터 언제까지"', 'hint="초기 자본 · 백테스트 기간"'),
@@ -1337,6 +1343,7 @@ _TESTS = [
     ('expect(body.nodes.ap.reason).toContain("만들지 않았습니다")', 'expect(body.nodes.ap.reason).toContain("구성하지 않았습니다")'),
     ('.pg-shapley-sum")).toContainText("맞습니다")', '.pg-shapley-sum")).toContainText("일치합니다")'),
     ('toContainText("다시 볼 수 없습니다")', 'toContainText("다시 확인할 수 없습니다")'),
+    ('.pg-note")).toContainText("비중과 기록은 따로")', '.pg-note")).toContainText("비중과 기록은 별도로")'),
 ]
 
 PAIRS = _CANVAS_SRV + _CANVAS_UI + _SCREENS + _SERVER + _TESTS
