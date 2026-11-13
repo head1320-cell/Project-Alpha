@@ -1,46 +1,25 @@
 /**
- * Backend API base URL — deployment-agnostic resolver.
+ * 백엔드 API 주소 — "API 호출이 어디로 가는가"의 한 자리. 백엔드를 부르는 모든 코드가 여기의 `API_BASE` 를 쓴다.
  * ==========================================================================
- * Single source of truth for "where do API calls go?". Every client/lib that
- * talks to the FastAPI backend imports `API_BASE` from here.
+ *  · 브라우저: 늘 같은 출처의 런타임 프록시 `/api/backend`. Next 서버의 라우트 핸들러
+ *    (`src/app/api/backend/[...path]/route.ts`)가 ★요청마다★ 서버 환경변수 `BACKEND_URL` 을 읽어 넘긴다.
+ *    주소를 번들에 박지 않으므로 같은 이미지가 localhost · IP · 도메인 어디서든 그대로 돈다(CORS·:8000 공개·mixed-content 없음).
+ *  · 서버(SSR·서버 컴포넌트): 상대 주소에는 호스트가 없으므로 `BACKEND_URL` 로 백엔드를 직접 부른다.
  *
- * Precedence:
- *  1. NEXT_PUBLIC_API_URL / NEXT_PUBLIC_API_BASE — explicit absolute override,
- *     baked at build time. Use ONLY when you deliberately point the browser
- *     straight at the backend (e.g. a separate API domain like
- *     https://api.example.com). The literal default "http://localhost:8000"
- *     is treated as "unset" so a misconfigured build falls through to (2).
- *  2. Same-origin proxy "/api/backend" (browser) — the default and the robust
- *     choice for any real deployment. The browser calls the Next.js server on
- *     its OWN origin; `next.config.js` rewrites forward "/api/backend/*" to the
- *     backend via the server-side BACKEND_URL. No IP/domain baking, no CORS, no
- *     need to expose backend :8000 publicly, no http/https mixed-content. Works
- *     identically on localhost, a GCP IP, or a custom domain.
- *  3. BACKEND_URL (server) — for SSR / server components, where a relative URL
- *     has no host. Calls the backend directly over the internal network.
- *
- * Why this matters: NEXT_PUBLIC_* vars are inlined at BUILD time. A GCP build
- * that forgot to pass NEXT_PUBLIC_API_URL used to bake "http://localhost:8000",
- * so every browser request hit the user's own machine and silently failed.
+ * ★API 주소를 빌드 타임에 박지 않는다★(CLAUDE.md §6) — `NEXT_PUBLIC_*` 는 `next build` 때 번들에 글자로 박힌다.
+ * 2026-11-13 까지 여기에 "별도 API 도메인을 쓸 때만"이라는 `NEXT_PUBLIC_API_URL` override 가 있었고, 빌드에서 값을
+ * 빠뜨리면 브라우저가 사용자의 `localhost:8000` 을 불렀다. 걷어 냈다 — 다른 도메인의 백엔드는 `BACKEND_URL` 로 준다
+ * (프록시가 서버에서 넘긴다). `tests/test_no_build_time_api_address.py` 가 정적으로 건다.
  */
 
 import { authHeaders } from "@/shared/api/authToken";
 
-const SENTINEL = "http://localhost:8000";
+/** 서버 쪽 기본값 — `BACKEND_URL` 이 없을 때(로컬 개발). */
+const LOCAL_BACKEND = "http://localhost:8000";
 
 function resolveApiBase(): string {
-  // NEXT_PUBLIC_* must be referenced literally so Next can inline them.
-  const raw = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE;
-  const explicit = raw?.trim();
-  if (explicit && explicit !== SENTINEL) {
-    return explicit.replace(/\/+$/, "");
-  }
-  if (typeof window !== "undefined") {
-    // Browser → same-origin proxy (handled by next.config.js rewrites).
-    return "/api/backend";
-  }
-  // Server-side (SSR / server components) → reach the backend directly.
-  return (process.env.BACKEND_URL || SENTINEL).replace(/\/+$/, "");
+  if (typeof window !== "undefined") return "/api/backend";          // 브라우저 → 같은 출처 런타임 프록시
+  return (process.env.BACKEND_URL || LOCAL_BACKEND).replace(/\/+$/, "");   // 서버 → 백엔드 직접
 }
 
 export const API_BASE: string = resolveApiBase();

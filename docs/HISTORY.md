@@ -26475,3 +26475,24 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   ★로컬 전체 E2E 는 이 트리에서 끝까지 돌리지 않았다★ — 이 커밋의 전체 E2E 판정은 PR #5 의 CI 다.
 - 배운 것(도구의 한계를 README 에 적은 것과 같은 줄기): 문장 조각을 명사형으로 바꾸면 ★조사를 품은 변수★와 어긋날 수 있다. `remnants`·`asserts` 는 이것을 못 잡고 E2E 만 잡았다.
 - 하지 않은 것: 남은 "조사를 품은 이름 표"의 전수 조사(검색으로 본 것은 이 하나 · `CompanyModelResults` 의 "성장이 가치를"은 뒤가 동사라 맞다).
+
+## 정리 묶음 — 빌드 타임 API 주소 override 제거 · PR #1 닫음 · Pages 빌드 실패 원인 (2026-11-13)
+
+- 왜: 사용자 선택("정리 묶음"). PR #5 리뷰에서 적어 둔 세 가지.
+- ① ★API 주소를 빌드 타임에 박지 않는다★(CLAUDE.md §6) — 불변식은 있었는데 지키는 시험이 없었고, `shared/api/apiBase.ts` 에 "별도 API 도메인을 쓸 때만"이라는
+  `NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_API_BASE` override 가 `main` 때부터 남아 있었다(Dockerfile 의 `ARG`·compose 의 build arg·`.env.example` 이 그 값을 날랐다).
+  - 시험 먼저(`tests/test_no_build_time_api_address.py`): 프론트 소스가 `process.env.NEXT_PUBLIC_*` 를 읽지 않는다 · 빌드·배포 설정 셋이 그 값을 싣지 않는다 ·
+    `next.config.js` 에 `rewrites` 가 없다 · ★있어야 하는 쪽★(같은 출처 프록시 경로와 그 라우트가 실제로 있다) · 짝 둘(심은 위반은 잡고, 주석·다른 환경변수는 안 잡는다).
+    고치기 전 ★2 실패★(소스 1곳 · 설정 3줄) → 고친 뒤 6 통과.
+  - 고침: `apiBase.ts` 는 브라우저 = `/api/backend`(런타임 프록시) · 서버 = `BACKEND_URL` 둘뿐. `Dockerfile.frontend` 의 `ARG`/`ENV` · `docker-compose.yml` 의 build arg · `.env.example` 의 변수를 걷음.
+    다른 도메인의 백엔드는 `BACKEND_URL` 로 준다(프록시가 서버에서 넘긴다 — 런타임에 바꿀 수 있다).
+  - 확인: 빌드 산출물(`.next/static`)에 `NEXT_PUBLIC_API` 0건 · tsc · 스모크 E2E 16 통과(검색·데이터 상태 — API 호출이 프록시로 간다).
+  - ★바뀌는 동작(배포하는 분께)★: 브라우저가 백엔드 도메인을 ★직접★ 부르게 하는 구성은 더 이상 없다. 그렇게 쓰던 배포가 있었다면 `BACKEND_URL` 로 옮겨야 한다.
+    이 저장소의 compose·Dockerfile 기본값은 원래 비어 있었으므로(= 프록시) 기본 배포는 그대로다. ★실제 배포 환경에서 확인하지는 않았다(미검증).★
+- ② PR #1(같은 브랜치 → 옛 base `claude/keen-thompson-bdk3e8` · 2026-07-23 생성 · 862 커밋)을 닫았다 — PR #5(→ `main`)가 같은 브랜치를 담는다. 브랜치는 지우지 않았다.
+- ③ `pages build and deployment` 실패의 원인(★조사만 — 고치지 않았다★): GitHub Pages 의 옛 방식(Jekyll · 브랜치를 소스로)이 이 브랜치의 Markdown 을 Liquid 로 해석하다 멈춘다.
+  `docs/plans/aas-macro-timing-research-studio-plan.md`·`docs/superpowers/plans/2026-11-09-backtest-results-perf-grammar.md` 에 JSX 의 `style={{` 가 글로 적혀 있어
+  Liquid 가 닫히지 않은 `{{` 로 읽는다(실패 로그의 스택이 `liquid/document.rb parse`). 문서가 오래된 것이라 이 브랜치의 Pages 빌드는 오래전부터 실패해 왔다.
+  ★고치지 않은 이유★: 빌드를 성공시키면 저장소 문서가 Pages 사이트로 ★게시된다★(Pages 는 요금제에 따라 비공개 저장소도 공개 사이트가 된다). 게시를 의도했는지는 사용자 결정이다 —
+  의도가 아니면 저장소 Settings → Pages 에서 끄면 실패 표시도 사라지고, 의도라면 `{% raw %}` 로 감싸거나 `_config.yml` 로 문서 폴더를 빼면 된다. Pages 설정 자체는 읽을 도구가 없어 ★어느 브랜치가 소스인지는 미상★.
+- 하지 않은 것: Pages 설정 변경 · `.nojekyll`/`_config.yml` 추가 · 브랜치 삭제.
