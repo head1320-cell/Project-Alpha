@@ -211,15 +211,16 @@ def test_in_real_mode_the_base_price_is_unchanged(monkeypatch, code, want):
     assert ValuationScreener._mock_price(code) == want
 
 
-@pytest.mark.parametrize("code,as_of,cur,want", [
-    ("005930", "2024-06-03", 71000.0, 53293.333388082065),
-    ("123456", "2025-06-30", 50000.0, 39490.94252365739),
-    ("005930", "2026-11-11", 71000.0, 66629.55077811869),
-])
-def test_in_real_mode_the_as_of_price_is_unchanged(monkeypatch, code, as_of, cur, want):
+def test_in_real_mode_the_as_of_price_is_no_longer_manufactured(monkeypatch):
+    """2026-11-11 에는 "운영 동작은 범위가 아니다"를 지키려고 운영 식(현재가 × 추세 × 난수)의 값을 골든으로 얼려 두었다.
+    2026-11-13 에 그 식을 운영에서 걷었다(감사 §7 A안) — 운영은 적재된 실제 종가 또는 없음이다.
+    자세한 계약은 `tests/test_pit_asof_real_close.py`. 여기서는 옛 골든 값이 더는 나오지 않는 것만 건다."""
+    import src.engine.universe_select as us
     monkeypatch.setenv("KIS_USE_MOCK", "0")
     monkeypatch.setattr(ps, "datetime", _Fixed)
-    assert ps.PITStore.get_default().get_price_asof(code, as_of, cur) == pytest.approx(want, rel=1e-12)
+    monkeypatch.setattr(us, "close_asof", lambda t, d, engine=None: (None, "not_loaded"))
+    for code, as_of, cur in (("005930", "2024-06-03", 71000.0), ("123456", "2025-06-30", 50000.0), ("005930", "2026-11-11", 71000.0)):
+        assert ps.PITStore().get_price_asof(code, as_of, cur) is None
 
 
 # ── 6. 가장자리 ────────────────────────────────────────────────────────────────────────────────

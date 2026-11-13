@@ -1192,6 +1192,8 @@ def screener_run_pit(req: PITRunRequest):
             "total_passed":    result.total_passed,
             "elapsed_seconds": result.elapsed_seconds,
             "timestamp":       result.timestamp,
+            # 그 시점 종가가 없어 뺀 종목·공시 재무가 미상인 종목(수 · 사유 · 표본) — 조용히 줄어든 목록 금지.
+            "asof":            getattr(result, "asof", None),
             "items":           [it.to_dict() for it in result.items],
         }
     except HTTPException:
@@ -1750,6 +1752,10 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
                      "`approximated` 는 시총 규칙 근사이고, `unknown` 은 보정 여부를 "
                      "**알 수 없다**는 뜻이지 보정됐다는 뜻이 아닙니다."),
         }
+        if _asof_date_for_screener:
+            # 시점 유니버스의 후보 풀은 ★그 시점 종가가 적재된 종목만으로★ 걸러진다(2026-11-13) — 빠진 수·사유를 싣는다.
+            # 시점 유니버스가 아니면 이 칸은 없다(응답 모양 불변).
+            _universe_meta["asof_screening"] = getattr(result, "asof", None)
 
         if not tickers:
             return {

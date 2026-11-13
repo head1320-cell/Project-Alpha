@@ -151,9 +151,23 @@ def test_mock_fallback_without_key(fresh_store, monkeypatch):
         is_configured = False
 
     monkeypatch.setattr(dc, "DARTClient", NoKeyDART)
+    monkeypatch.setenv("KIS_USE_MOCK", "1")         # 2026-11-13: 흔든 값(pit_mock)은 mock 모드에서만 나온다
     snap = fresh_store.get_financials_asof("005930", "2024-05-20", CUR)
-    assert snap["_source"] == "pit_mock"            # 기존 동작 불변
+    assert snap["_source"] == "pit_mock"
     assert snap["roe_pct"] is not None
+
+
+def test_prod_without_key_is_unavailable_not_a_mock_fallback(fresh_store, monkeypatch):
+    """★짝★ — 운영에서는 폴백하지 않는다: 여덟 칸 없음 + 사유(감사 §7 A안)."""
+    import src.data.dart_client as dc
+
+    class NoKeyDART:
+        is_configured = False
+
+    monkeypatch.setattr(dc, "DARTClient", NoKeyDART)
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    snap = fresh_store.get_financials_asof("005930", "2024-05-20", CUR)
+    assert snap["_source"] == "pit_unavailable" and snap["_reason"] == "no_dart_key" and snap["roe_pct"] is None
 
 
 def test_mock_fallback_on_dart_error(fresh_store, monkeypatch):
@@ -167,8 +181,9 @@ def test_mock_fallback_on_dart_error(fresh_store, monkeypatch):
 
     monkeypatch.setattr(dc, "DARTClient", BrokenDART)
     monkeypatch.setattr(dc, "get_corp_code", lambda code: "00126380")
+    monkeypatch.setenv("KIS_USE_MOCK", "0")         # 2026-11-13: 운영에서 DART 가 실패하면 흔든 값이 아니라 미상 + 사유
     snap = fresh_store.get_financials_asof("005930", "2024-05-20", CUR)
-    assert snap["_source"] == "pit_mock"
+    assert snap["_source"] == "pit_unavailable" and snap["_reason"] == "filing_unreadable" and snap["roe_pct"] is None
 
 
 def test_dart_snapshot_cached(fresh_store, monkeypatch):

@@ -97,7 +97,7 @@ def test_not_trying_and_failing_are_different_reasons(monkeypatch):
 
 
 def test_the_mock_note_is_screen_text(monkeypatch):
-    """이 문장은 화면에 그대로 실린다(`data-server`) — 개발자 낱말·환경변수 이름을 싣지 않는다(용어집 §4)."""
+    """이 문장은 화면에 그대로 실린다(`data-server`) — 개발자 낱말·환경변수 이름을 싣지 않는다(용어집 §6)."""
     out, _ = _cb(monkeypatch, "1")
     note = out["banks"]["bok"]["note"]
     assert "합성 데이터" in note

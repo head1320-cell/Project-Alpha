@@ -116,6 +116,10 @@ def _quarter_index(date_str: str) -> int:
 # PIT Store
 # ═══════════════════════════════════════════════════════════════════════════════
 
+#: 시점 재무 스냅샷의 여덟 칸 — 스크리너가 항목에 옮기는 순서 그대로.
+PIT_FIN_KEYS = ("roe_pct", "roa_pct", "per", "pbr", "debt_ratio_pct", "dividend_yield_pct", "fcf_억", "market_cap_억")
+
+
 class PITStore:
     """시점별 재무/가격 스냅샷 제공 (look-ahead 차단)."""
 
@@ -158,12 +162,23 @@ class PITStore:
             if entry and time.time() - entry[0] < self.cache_ttl:
                 return entry[1]
 
-        # 실데이터 우선: DART 키 설정 시 해당 시점 공시 재무로 스냅샷 (실패 시 mock 폴백)
+        # 실데이터 우선: 적재분·DART 의 해당 시점 공시 재무로 스냅샷
         real = self._dart_snapshot(stock_code, as_of_date)
         if real is not None:
             with self._lock:
                 self._cache[cache_key] = (time.time(), real)
             return real
+
+        # ★운영에서는 흔든 값을 만들지 않는다(2026-11-13 · 감사 §7 A안)★ — 그 시점 공시를 못 읽었으면
+        # 여덟 칸은 미상(None)이고 사유를 싣는다. 아래의 '현재 재무 × 추세 × 난수'는 mock 모드에서만 돈다.
+        from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
+            unavailable = {k: None for k in PIT_FIN_KEYS}
+            unavailable.update({"_as_of_date": as_of_date, "_source": "pit_unavailable",
+                                "_reason": self._why_no_snapshot()})
+            with self._lock:
+                self._cache[cache_key] = (time.time(), unavailable)
+            return unavailable
 
         # 시점 변형 계수 (deterministic — 같은 종목/시점은 항상 동일)
         q_idx = _quarter_index(as_of_date)
@@ -199,6 +214,19 @@ class PITStore:
         with self._lock:
             self._cache[cache_key] = (time.time(), snapshot)
         return snapshot
+
+    @staticmethod
+    def _why_no_snapshot() -> str:
+        """그 시점 공시를 못 읽은 사유 — 싸게 가를 수 있는 만큼만 가른다(네트워크를 다시 부르지 않는다).
+
+        `no_dart_key` — 적재된 재무 이력에도 없고 DART 키도 없다(미적재) ·
+        `filing_unreadable` — 키는 있는데 못 읽었다(법인코드 없음 · 그 분기 공시 없음 · 자본총계 결측 · 조회 오류 —
+        ★이 넷은 더 가르지 않았다★: `_dart_snapshot` 이 `None` 하나로 돌려준다)."""
+        try:
+            from src.data.dart_client import DARTClient
+            return "filing_unreadable" if DARTClient().is_configured else "no_dart_key"
+        except Exception:  # noqa: BLE001
+            return "filing_unreadable"
 
     @staticmethod
     def _filing_cutoff(as_of_date: str) -> str | None:
@@ -336,27 +364,41 @@ class PITStore:
             logger.debug(f"PIT DART snapshot 실패 ({stock_code}@{as_of_date}): {e}")
             return None
 
-    def get_price_asof(self, stock_code: str, as_of_date: str, current_price: float) -> float:
-        """as_of_date 시점 종가.
+    def price_asof_detail(self, stock_code: str, as_of_date: str,
+                          current_price: float) -> tuple[float | None, dict | None, str | None]:
+        """as_of_date 시점 종가 — `(가격, 출처 메타, 사유)`.
 
-        ★합성(mock)에서는 그 날의 mock 종가다(원 단위)★(`ohlcv_loader.mock_price_asof` —
-        시세 이력·현재가와 같은 걸음). 예전 식은 넘겨받은 현재가에 분기 수와
-        난수를 곱한 값이라 과거 종가가 아니었고, as_of = 오늘이어도 현재가와 달랐다.
+        ★합성(mock)★: 그 날의 mock 종가(원 단위 · `ohlcv_loader.mock_price_asof` — 시세 이력·현재가와 같은 걸음).
+        메타는 `None`(실데이터가 아니다). mock 봉이 없는 날짜(기점 2000-01-03 이전)만 예전 식을 쓴다.
 
-        운영(`KIS_USE_MOCK≠1`)과 mock 봉이 없는 날짜(기점 2000-01-03 이전)는 예전 식
-        그대로다 — 운영 동작은 이 변경의 범위가 아니다.
+        ★운영(`KIS_USE_MOCK≠1`)★: 적재된 실제 종가(`universe_select.close_asof`)와 그 행의 출처
+        (`trade_date`·`source`·`price_basis`). 없으면 `(None, None, 사유)` — 2026-11-13 까지는 여기서
+        `현재가 × 추세 × 난수`를 과거 종가로 냈다(감사 F1). ★운영에서는 합성값을 만들지 않는다.★
         """
         from src.data.mock_gate import mock_allowed
         if mock_allowed():
             from src.data.ohlcv_loader import mock_price_asof
             px = mock_price_asof(stock_code, as_of_date)
-            if px is not None:
-                return px
+            if px is None:
+                px = self._mock_price_before_the_walk(stock_code, as_of_date, current_price)
+            return px, None, None
+        import src.engine.universe_select as us
+        row, why = us.close_asof(stock_code, as_of_date)
+        if row is None:
+            return None, None, why or "not_loaded"
+        return row["close"], {k: row[k] for k in ("trade_date", "source", "price_basis")}, None
+
+    def get_price_asof(self, stock_code: str, as_of_date: str, current_price: float) -> float | None:
+        """as_of_date 시점 종가. 운영에서 읽을 수 없으면 `None`(사유는 `price_asof_detail`)."""
+        return self.price_asof_detail(stock_code, as_of_date, current_price)[0]
+
+    @staticmethod
+    def _mock_price_before_the_walk(stock_code: str, as_of_date: str, current_price: float) -> float:
+        """mock 봉이 없는 날짜의 예전 식 — ★mock 모드 안에서만★ 불린다(운영 경로는 여기에 오지 않는다)."""
         q_idx = _quarter_index(as_of_date)
         seed = sum(ord(c) for c in stock_code) * 7 + q_idx
         rng = random.Random(seed)
         quarters_ago = max(0, _quarter_index(datetime.now().strftime("%Y-%m-%d")) - q_idx)
-        # 과거 가격 = 현재가 / (성장 누적) * 변동
         trend = 1.0 - quarters_ago * 0.02
         return max(100, current_price * trend * rng.uniform(0.85, 1.15))
 

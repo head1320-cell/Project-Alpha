@@ -26527,3 +26527,33 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   CLAUDE.md 의 문구는 고치지 않았다 — 위 범위로 정정할지는 사용자 결정.
 - 게이트: ruff · 전체 pytest 9,046 통과 · 11 건너뜀 · 3 xfail(as_of 트립와이어 — 다음 묶음) · 실패 0 · tsc · build · eslint(오류 0) · `macro-cards` E2E 88 통과(로컬).
   ★GitHub CI E2E 가 이 변경의 증인이다(스위치를 뗀 채 네트워크가 열린 곳) — 결과는 푸시 뒤 확인한다.★
+- ★CI 판정(2026-11-13 08:12Z 확인 · `0050e78`)★: Backend ✓ · Frontend ✓ · E2E ✓ — push·PR 두 실행 모두. 스위치 없이 네트워크가 열린 곳에서 E2E 가 통과했다 = 11-12 의 CI 전용 실패가 돌아오지 않았다(관측 1회).
+
+## 운영의 과거 시점(as_of) 스크리닝 — 합성 가격·흔든 재무를 걷고, 현재 캐시와의 혼선을 끊다 (2026-11-13)
+
+- 왜: 감사(`docs/specs/2026-11-12-pit-asof-prod-synthetic-audit.md`)가 찾은 F1·F2·F2b — 운영에서 과거 시점 평가의 가격이 `현재가 × 추세 × 난수`, 재무가 `현재 재무 × 추세 × 난수`(공시를 못 읽은 종목)였다.
+  CLAUDE.md §6 *"운영에서는 합성값을 만들지 않습니다 — 실패하면 `None`/빈값 + 사유"* 를 어겼다. 사용자가 감사 §7 의 ★A안★을 고르셨다.
+- ★고치려고 읽다가 더 찾았다(감사 §9 — 로컬 실행으로 재현)★: 과거 시점 평가가 스크리너의 `item:` 캐시를 읽고 썼다.
+  **F4** 캐시에 현재 항목이 있으면 평가 0건으로 오늘 값을 돌려줬다(005930: 76,856 — 그 날 종가 69,224) · **F5** as_of 로 평가한 항목이 캐시에 남아 뒤의 현재 스크리닝이 과거 값을 봤다(3일).
+  A안만 고쳤다면 F4 가 적재된 종목 대부분에서 그 고침을 우회했을 것이다 — 계획에 넣어 승인받고 함께 고쳤다.
+- 고침(자세한 것은 감사 §10):
+  - `src/engine/universe_select.py::close_asof` — as_of 이하 마지막 ★적재된 실제 종가★ + 그 행의 출처(`trade_date`·`source`·`price_basis`). 없으면 `None` + 사유(`not_loaded`·`stale`·`store_error`·`bad_date`). `mktcap_asof` 와 같은 표·같은 관용구.
+  - `src/engine/pit_store.py` — `price_asof_detail`(가격 · 출처 · 사유): mock 은 그대로, 운영은 실제 종가 또는 없음. `get_financials_asof`: 운영에서 공시를 못 읽으면 여덟 칸 `None` + `pit_unavailable` + 사유(`no_dart_key`·`filing_unreadable`).
+  - `src/engine/screener.py` — 종가가 없으면 그 종목을 빼고 사유를 모은다(조회 예외도 — 전에는 삼키고 오늘 가격으로 평가) · 실제 종가 항목에 `price_is_mock=False` + `asof_price` ·
+    재무 미상이면 여덟 칸 `None` + `asof_financials` · `pit_mock` 이면 `fundamentals_is_mock=True` · ★as_of 평가는 `item:` 캐시를 읽지도 쓰지도 않는다★ · `ScreenerResult.asof`.
+  - 응답: `POST /screener/run-pit` 의 `asof` · 백테스트 `universe.asof_screening`(시점 유니버스일 때만) · 캔버스 과거 시점 스크리닝 노드의 view·사실 줄(뺀 것이 있을 때만 — 없으면 모양 불변).
+- 시험(먼저 빨강 24건 → 초록): 새 `tests/test_pit_asof_real_close.py`(19 — 종가 읽기 4 · 운영/mock 3 · 제외·라벨 5 · 캐시 3 · 응답 1 + 짝) ·
+  `test_pit_asof_prod_tripwire.py` 의 `xfail` 셋을 떼고 계약으로(+ 짝 넷 — F2b 단언은 "`None` 은 합성이 아니다"로 다시 썼다) ·
+  옛 운영 동작을 못 박은 시험 셋 갱신(`test_mock_price_single_source.py` 의 운영 as_of 골든 · `test_pit_dart.py` 의 폴백 둘 → 운영은 미상, mock 은 그대로) ·
+  `test_survivorship_universe.py`(+1) · `test_allocation_graph_bl3w1.py`(+2 — 짝). ★변이 열다섯 모두 죽음★(캐시 읽기·쓰기 · 운영 가격·재무 게이트 · 낡음 한도 · DB 오류 뭉개기 · as_of 뒤의 봉 ·
+  제외를 실패로 세기 · 미상에 오늘 값 남기기 · 라벨 둘 · 예외 때 오늘 가격 · 응답 짝 둘 · 사유 뭉개기).
+- 관측(로컬 · 감사 §10): 고친 뒤 F4·F5 재현 스크립트가 두 방향 모두 참값을 낸다 · 운영 게이트에서 적재 종가 81,500 으로 평가(출처 실림) · 미적재/낡음은 사유와 함께 제외 · 외부 시도 0.
+- ★바뀌는 동작(운영 · 실측 아님)★: 일봉이 적재되지 않은 종목이 과거 시점 스크리닝과 생존편향 보정 유니버스의 후보에서 빠진다(전에는 합성으로 채워졌다) ·
+  과거 시점 평가가 전부 새 계산이라 평가 상한(`SCREENER_MAX_LIVE_COMPUTE`)에 더 자주 걸린다(`capped`) · 공시를 못 읽은 종목은 재무 조건을 통과하지 못한다.
+  mock 모드의 결과는 그대로다(가격 걸음 골든 · 노드 view 모양).
+- 하지 않은 것: **F3**(바탕 가격 표·해시) · **F6**(as_of 항목에 현재 펀더멘털·팩터를 붙임 · 읽은 공시에 없는 칸은 현재 값이 남음 — 막으면 팩터 조건이 있는 과거 시점 결과가 크게 줄어 별도 결정) ·
+  **F7**(재무가 없는 "데이터 없음" 항목이 종합 점수 38 을 받음 — 현재 스크리닝도 같은 기존 동작) · `close` → `adj_close` 전환 · 평가 상한 · 스크리너 3-레이어·`ValuationScreener` 구조 · 백테스트 엔진.
+  ★모르는 것★: 운영에서 실제로 몇 종목이 빠지는지 · 분할 전후 주식 수 기준과 `close` 정의의 정합(미검증). 이 작업이 답한 질문은 데이터 무결성·시점 정합이지 예측력·경제적 가치가 아니다.
+- 게이트: ruff · 전체 pytest 9,071 통과 · 11 건너뜀 · ★xfail 0★(트립와이어 셋이 보통 시험이 됐다) · 실패 0 · 로컬 E2E `canvas-golden`·`screener-requests`·`canvas-client-nodes` 11 통과 + 스크리닝 노드 1 통과
+  (화면 골든·요청 골든 그대로). 프론트 소스는 바뀌지 않았다(tsc·build 는 앞 커밋과 같은 입력).
+- 곁다리: 앞 커밋의 주석 둘이 용어집 조항을 §4 라고 적었는데 §6("쓰지 않는 것")이 맞아 고쳤다(`cb_sentiment.py` · `test_mock_no_external_calls.py` — 동작 무관).

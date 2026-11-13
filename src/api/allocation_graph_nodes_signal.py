@@ -106,6 +106,10 @@ def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
             "total_evaluated": out.get("total_evaluated"), "total_passed": out.get("total_passed"),
             "universe": "직접 연결한 종목" if cand else _UNIVERSE_LABEL.get(p.universe, p.universe),
             "data_source": {}, "liquidity_gate": None, "as_of": p.as_of}
+    # 그 시점 종가가 없어 뺀 종목·재무가 미상인 종목 — ★있을 때만★ 싣는다(없으면 view 모양은 그대로).
+    asof = out.get("asof") or {}
+    if (asof.get("excluded") or {}).get("count") or (asof.get("financials_unavailable") or {}).get("count"):
+        view["asof"] = asof
     return pg.NodeOutput(
         values={"universe": {"tickers": tickers, "weights": None, "benchmark": "KOSPI"}}, view=view,
         tags={"pit": "pit", "practice": practice, "sources": [f"screener_pit:{p.as_of}"]})
@@ -149,6 +153,13 @@ def _explain_screener(view: dict, prov: dict, params: Any) -> dict:
     names = [view["labels"].get(c, c) for c in (view.get("tickers") or [])[:3]]
     if names:
         facts.append("앞쪽 종목: " + ", ".join(names) + ".")
+    asof = view.get("asof") or {}
+    n_excluded = (asof.get("excluded") or {}).get("count") or 0
+    n_fin_unknown = (asof.get("financials_unavailable") or {}).get("count") or 0
+    if n_excluded:
+        facts.append(f"과거 시점 종가가 적재되어 있지 않아 {n_excluded}종목을 평가에서 제외했습니다.")
+    if n_fin_unknown:
+        facts.append(f"{n_fin_unknown}종목은 해당 시점의 공시 재무를 읽지 못해 재무 지표가 미상입니다.")
     trust = [_t(CONFIRMED, "조건은 서버의 필드 목록으로 검사했습니다."), _t(UNKNOWN, _TODAY)]
     if not (view.get("data_source") or {}).get("fully_real"):
         trust.append(_t(UNKNOWN, "재무나 시세 중 하나 이상이 합성(mock) 데이터입니다 — 실제 선택을 말해 주지 않습니다."))

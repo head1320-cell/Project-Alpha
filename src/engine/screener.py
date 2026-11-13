@@ -208,6 +208,13 @@ class ScreenerItem:
 
     def to_dict(self) -> dict:
         d = asdict(self)
+        # 과거 시점(as_of) 평가의 출처 — ★있을 때만★ 싣는다(현재 스크리닝·mock 의 응답 모양은 그대로).
+        #   asof_price      = 그 시점 종가로 쓴 적재 봉의 {trade_date, source, price_basis}
+        #   asof_financials = 그 시점 공시를 못 읽었을 때 {available: False, reason}
+        for k in ("asof_price", "asof_financials"):
+            v = getattr(self, k, None)
+            if v is not None:
+                d[k] = v
         # FFL: 동적 부착된 펀더멘털 팩터도 포함 (dataclass 필드 외 속성)
         try:
             from src.data.fundamentals_store import FACTOR_BY_ID
@@ -254,6 +261,9 @@ class ScreenerResult:
     ingested_count:     int = 0      # 유니버스 중 스냅샷 적재 종목 수
     evaluated_actual:   int = 0      # 실제 산출 아이템 수 (복원+평가 성공, 게이트 前)
     capped:             bool = False # SCREENER_MAX_LIVE_COMPUTE 상한 발동 여부
+    # 과거 시점(as_of) 평가에서만: {"excluded": {count, by_reason, sample}, "financials_unavailable": {count, by_reason}}.
+    # 그 시점 종가가 없어 뺀 종목과 공시 재무가 미상인 종목 — 조용히 줄어든 목록을 만들지 않는다. as_of 가 아니면 None.
+    asof:               dict | None = None
     timestamp:          str = field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -464,6 +474,8 @@ class ValuationScreener:
 
         # V2-M4: PIT 기준일 설정 (look-ahead 차단)
         self._active_asof = as_of_date
+        self._asof_excluded = {}          # {종목코드: 사유} — 그 시점 종가가 없어 평가에서 뺀 종목
+        self._asof_fin_unavailable = {}   # {종목코드: 사유} — 그 시점 공시 재무가 미상인 종목
 
         # 1. Universe
         tickers = self._resolve_universe(universe)
@@ -482,7 +494,9 @@ class ValuationScreener:
         failures = 0
         fresh_items: list[ScreenerItem] = []
 
-        cached_items = self._load_cached_items(tickers)   # {code: ScreenerItem} — 즉시
+        # ★과거 시점(as_of) 평가는 `item:` 캐시를 읽지 않는다(2026-11-13 · 감사 F4)★ — 거기 있는 것은 ★오늘★
+        # 항목이라, 읽으면 적재된 종목이 PIT 를 통째로 건너뛰고 오늘 가격·오늘 재무로 돌아온다(룩어헤드).
+        cached_items = {} if as_of_date else self._load_cached_items(tickers)   # {code: ScreenerItem} — 즉시
         items: list[ScreenerItem] = list(cached_items.values())
         to_eval = [t for t in tickers if t not in cached_items]
         # 미적재 평가 상한 (대용량 폭주 방지). ingest 배치(no_cap)는 해제.
@@ -510,6 +524,8 @@ class ValuationScreener:
                         if item:
                             items.append(item)
                             fresh_items.append(item)
+                        elif ticker in self._asof_excluded:
+                            pass      # 그 시점 종가가 없어 뺀 것 — 평가 실패가 아니다(`asof.excluded` 로 따로 센다)
                         else:
                             failures += 1
                     except Exception as e:
@@ -565,7 +581,10 @@ class ValuationScreener:
             except Exception as e:
                 logger.debug(f"펀더멘털 주입 실패: {e}")
             # item:CODE 저장 → 다음 조회부터 즉시 서빙(재적재 시 최신 펀더멘털로 갱신)
-            self._store_items(fund_targets)
+            # ★과거 시점(as_of) 평가분은 저장하지 않는다(감사 F5)★ — 저장하면 뒤의 ★현재★ 스크리닝이
+            # 사흘 동안 과거 가격·과거 재무를 오늘 값으로 돌려준다.
+            if not as_of_date:
+                self._store_items(fund_targets)
 
         # 4. 필터 적용 — filter_ast(M1) 우선, 없으면 기존 ScreenerFilters (하위호환)
         if filter_ast is not None and not filter_ast.is_empty():
@@ -596,7 +615,21 @@ class ValuationScreener:
             ingested_count=self._universe_meta["ingested_count"],
             evaluated_actual=evaluated_actual,
             capped=capped,
+            asof=self._asof_summary() if as_of_date else None,
         )
+
+    def _asof_summary(self) -> dict:
+        """과거 시점 평가가 뺀 것·모르는 것 — 수 · 사유별 수 · 표본(≤20, 종목코드 순)."""
+        def tally(d: dict) -> dict:
+            by: dict = {}
+            for r in d.values():
+                by[r] = by.get(r, 0) + 1
+            return by
+        ex = dict(getattr(self, "_asof_excluded", {}) or {})
+        fu = dict(getattr(self, "_asof_fin_unavailable", {}) or {})
+        return {"excluded": {"count": len(ex), "by_reason": tally(ex),
+                             "sample": [{"code": c, "reason": ex[c]} for c in sorted(ex)[:20]]},
+                "financials_unavailable": {"count": len(fu), "by_reason": tally(fu)}}
 
     # ─────────────────────────────────────────────────────────────────────
     # 캐싱 + 안전 평가
@@ -608,19 +641,29 @@ class ValuationScreener:
         """단일 종목 평가 — 예외 전파 X. V2-M4: as_of_date면 PIT 평가."""
         try:
             asof = getattr(self, "_active_asof", None)
+            asof_px = asof_meta = None
+            if asof:
+                # PIT: 그 시점 종가를 ★먼저★ 읽는다 — 없으면 이 종목은 평가하지 않는다(사유와 함께 뺀다).
+                # 2026-11-13 까지는 예외를 삼키고(`except: pass`) ★오늘 가격★으로 계속 평가했고, 운영에서는
+                # `현재가 × 추세 × 난수`를 과거 종가로 썼다(감사 F1). 평가 캐시에 값이 있어도 읽는다 — 출처
+                # (어느 날의 봉인가)를 항목마다 싣기 위해서다.
+                try:
+                    from src.engine.pit_store import PITStore
+                    asof_px, asof_meta, why = PITStore.get_default().price_asof_detail(
+                        stock_code, asof, self._get_price_safe(stock_code))
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"as_of 종가 조회 중 오류 ({stock_code}@{asof}): {type(e).__name__}: {e}")
+                    asof_px, asof_meta, why = None, None, "price_error"
+                if asof_px is None:
+                    self.__dict__.setdefault("_asof_excluded", {})[stock_code] = why or "price_unavailable"
+                    return None
             # cache_key에 as_of 포함 (PIT/현재 캐시 혼선 방지)
             cache_key = f"{stock_code}:{params.beta}:{params.projection_years}:{asof or 'now'}"
             uv = self.cache.get(cache_key)
             if uv is None:
-                price = self._get_price_safe(stock_code)
+                price = asof_px if asof else self._get_price_safe(stock_code)
                 bsns_year = None
                 if asof:
-                    # PIT: 해당 시점 가격으로 변환
-                    try:
-                        from src.engine.pit_store import PITStore
-                        price = PITStore.get_default().get_price_asof(stock_code, asof, price)
-                    except Exception:
-                        pass
                     # RIM/DCF/DDM은 연간 재무 기준 — as_of 시점에 실제 공시됐을 연도로
                     # bsns_year를 명시 전달하지 않으면 evaluate()가 datetime.now() 기준
                     # 현재 연도로 디폴트해 look-ahead bias가 생긴다(과거 시점 평가에
@@ -640,6 +683,10 @@ class ValuationScreener:
             item = self._to_item(uv, stock_code)
             # V2-M4: PIT 시점 재무로 ScreenerItem 필드 후처리
             if asof and item is not None:
+                if asof_meta is not None:
+                    # 적재된 실제 종가로 평가했다 — 라벨과 출처(어느 날의 봉 · 어느 출처 · 어떤 정의의 종가)를 싣는다.
+                    item.price_is_mock = False
+                    item.asof_price = asof_meta
                 item = self._apply_pit_financials(item, stock_code, asof)
             return item
         except Exception as e:
@@ -647,22 +694,39 @@ class ValuationScreener:
             return None
 
     def _apply_pit_financials(self, item: ScreenerItem, stock_code: str, asof: str) -> ScreenerItem:
-        """V2-M4: ScreenerItem의 재무 지표를 PIT 시점값으로 교체 (look-ahead 차단)."""
+        """V2-M4: ScreenerItem의 재무 지표를 PIT 시점값으로 교체 (look-ahead 차단).
+
+        ★값과 라벨이 함께 간다(2026-11-13 · 감사 F2·F2b)★
+          - 그 시점 공시를 못 읽었다(`pit_unavailable` — 운영) → 여덟 칸은 ★미상(None)★ 이고 사유를 싣는다.
+            오늘 값을 과거 값처럼 남기지 않는다(미상 ≠ 현재값).
+          - 합성 스냅샷(`pit_mock` — mock 모드에서만 나온다) → `fundamentals_is_mock=True`.
+          - 읽은 공시 → 값이 있는 칸만 교체한다(가격 의존 칸은 시총 시계열이 있을 때만 — 없는 칸은 지금 값이 남는다:
+            감사 F6 의 '부분 적용', 이번에 고치지 않았다).
+        """
+        from src.engine.pit_store import PIT_FIN_KEYS, PITStore
+
+        def unknown(reason: str) -> None:
+            for f in PIT_FIN_KEYS:
+                setattr(item, f, None)
+            item.asof_financials = {"available": False, "reason": reason}
+            self.__dict__.setdefault("_asof_fin_unavailable", {})[stock_code] = reason
+
         try:
-            from src.engine.pit_store import PITStore
-            cur = {
-                "roe_pct": item.roe_pct, "roa_pct": item.roa_pct,
-                "per": item.per, "pbr": item.pbr,
-                "debt_ratio_pct": item.debt_ratio_pct,
-                "dividend_yield_pct": item.dividend_yield_pct,
-                "fcf_억": item.fcf_억, "market_cap_억": item.market_cap_억,
-            }
+            cur = {f: getattr(item, f) for f in PIT_FIN_KEYS}
             snap = PITStore.get_default().get_financials_asof(stock_code, asof, cur)
-            for f in ["roe_pct","roa_pct","per","pbr","debt_ratio_pct","dividend_yield_pct","fcf_억","market_cap_억"]:
-                if snap.get(f) is not None:
-                    setattr(item, f, round(snap[f], 2))
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — 실패를 삼키고 오늘 값을 남기지 않는다
+            logger.warning(f"as_of 재무 조회 중 오류 ({stock_code}@{asof}): {type(e).__name__}: {e}")
+            unknown("error")
+            return item
+        source = snap.get("_source")
+        if source == "pit_unavailable":
+            unknown(snap.get("_reason") or "unavailable")
+            return item
+        for f in PIT_FIN_KEYS:
+            if snap.get(f) is not None:
+                setattr(item, f, round(snap[f], 2))
+        if source == "pit_mock":
+            item.fundamentals_is_mock = True
         return item
 
     def _get_price_safe(self, stock_code: str) -> float:

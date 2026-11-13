@@ -261,6 +261,34 @@ def test_the_screener_with_as_of_uses_the_pit_route(monkeypatch):
     assert seen == [] and len(core) == 1
 
 
+def _pit_out(asof):
+    return lambda req: {"as_of_date": req.as_of_date, "universe": req.universe, "total_evaluated": 50, "total_passed": 3, "asof": asof,
+                        "items": [{"stock_code": c, "corp_name": c, "composite_score": 1.0} for c in ("005930", "000660", "035420")]}
+
+
+def test_the_as_of_screener_says_what_it_excluded(monkeypatch):
+    """2026-11-13 — 과거 시점 종가가 없어 빠진 종목과 재무가 미상인 종목을 노드가 말한다(조용히 줄어든 목록 금지)."""
+    import src.api.screener_routes as sr
+    asof = {"excluded": {"count": 4, "by_reason": {"not_loaded": 4}, "sample": []},
+            "financials_unavailable": {"count": 2, "by_reason": {"no_dart_key": 2}}}
+    monkeypatch.setattr(sr, "screener_run_pit", _pit_out(asof))
+    r = _run(_g([_node("x", "screener", as_of="2023-06-30", top_n=3)]))["nodes"]["x"]
+    assert r["status"] == "ok", r["reason"]
+    assert r["view"]["asof"] == asof
+    facts = " ".join(r["explain"]["facts"])
+    assert "4종목" in facts and "제외" in facts and "2종목" in facts and "미상" in facts
+
+
+def test_the_as_of_screener_adds_nothing_when_nothing_was_excluded(monkeypatch):
+    """★짝★ — 뺀 것이 없으면 view·사실 줄이 그대로다(mock 의 결과 모양이 바뀌지 않는다)."""
+    import src.api.screener_routes as sr
+    zero = {"excluded": {"count": 0, "by_reason": {}, "sample": []}, "financials_unavailable": {"count": 0, "by_reason": {}}}
+    monkeypatch.setattr(sr, "screener_run_pit", _pit_out(zero))
+    r = _run(_g([_node("x", "screener", as_of="2023-06-30", top_n=3)]))["nodes"]["x"]
+    assert "asof" not in r["view"]
+    assert not any("제외" in f or "미상" in f for f in r["explain"]["facts"])
+
+
 # ★계산 중 DB 쓰기 0★ (BL0)
 from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
 
