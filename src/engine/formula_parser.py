@@ -27,8 +27,7 @@ _ALLOWED_NODES = (
     ast.Expression,
     ast.BinOp,        # 이항 연산
     ast.UnaryOp,      # 단항 (-x)
-    ast.Num,          # 숫자 (3.8 호환)
-    ast.Constant,     # 숫자 (3.8+)
+    ast.Constant,     # 숫자 — `ast.Num` 은 3.12 에서 제거됐다(남겨 두면 임포트가 실패한다 · 2026-11-13)
     ast.Name,         # 변수 (필드명)
     ast.Load,
     ast.USub,         # 단항 마이너스
@@ -109,9 +108,6 @@ def _eval_node(node, fv: dict) -> float:
         if not isinstance(node.value, (int, float)):
             raise FormulaError("숫자가 아닌 상수")
         return float(node.value)
-
-    if isinstance(node, ast.Num):  # 3.8 호환
-        return float(node.n)
 
     if isinstance(node, ast.Name):
         val = fv.get(node.id)
