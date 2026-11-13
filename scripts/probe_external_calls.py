@@ -4,8 +4,11 @@
 
 - 환경은 호출자가 정한다(`KIS_USE_MOCK` · `LIFECYCLE_DAEMONS` · `DATABASE_URL`). 이 도구는 값을 바꾸지 않는다 — ★프록시 변수만 지운다★:
   프록시가 로컬 주소이면 모든 외부 호출이 '로컬 연결'로 보여 아무것도 못 본다(2026-11-13 첫 탐침이 그래서 0건이라고 잘못 말했다).
-- 잡는 것: `socket.connect` · `socket.getaddrinfo` 의 비로컬 대상(requests · httpx · urllib · yfinance · DB 드라이버 모두 여기를 지난다).
-- ★못 보는 것★: 인자가 있는 경로 · POST 등 사용자가 실행하는 분석 · 키가 있어야 도는 데몬 · 이미 열려 있던 연결.
+- 잡는 것: `socket.connect` · `socket.getaddrinfo` 의 비로컬 대상(requests · httpx · urllib · DB 드라이버는 여기를 지난다).
+- ★못 보는 것★: 인자가 있는 경로 · POST 등 사용자가 실행하는 분석 · 키가 있어야 도는 데몬 · 이미 열려 있던 연결 ·
+  ★파이썬 소켓을 지나지 않는 라이브러리★ — yfinance(0.2.66)는 `curl_cffi`(libcurl)로 나가 이 탐침에 잡히지 않는다(2026-11-13 실측:
+  내려받기를 세 번 시도하는 동안 기록 0건 — 예전 이 줄은 yfinance 도 잡는다고 잘못 적었다). 야후는 함수 호출 횟수로 잰다
+  (`tests/test_mock_yahoo_gate.py` — mock 에서 `yfinance.download`·`Ticker` 0회). 야후로 나가는 세 자리는 모두 mock 게이트를 지난다.
   "0건" 은 '기동 + 인자 없는 GET' 범위의 관측이지 전체에 대한 증명이 아니다.
 - `tests/test_mock_no_external_calls.py` 가 이 파일을 하위 프로세스로 돌린다(앱 전역 캐시를 pytest 프로세스에 남기지 않으려고).
 """

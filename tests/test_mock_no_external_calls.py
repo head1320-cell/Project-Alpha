@@ -6,8 +6,9 @@ CLAUDE.md: *"개발 기본값 `KIS_USE_MOCK=1` — 외부 호출 0"*. 2026-11-13
 
 판정은 `src/data/mock_gate.py::mock_allowed()` 하나다. 마스터 쪽 단위 시험은 `tests/test_lifecycle_daemons.py` 에 있다.
 
-★이 파일이 말하지 않는 것★ — 인자가 있는 경로 · POST 등 사용자가 실행하는 분석(야후 시세를 읽는 `MarketDataLoader` 등은 게이트가 없다) ·
-키가 있어야 도는 데몬. 아래 훑기의 "0건" 은 그 범위의 관측이다.
+★이 파일이 말하지 않는 것★ — 인자가 있는 경로 · POST 등 사용자가 실행하는 분석 · 키가 있어야 도는 데몬. 아래 훑기의 "0건" 은 그 범위의 관측이다.
+야후 시세(사용자가 실행하는 분석이 읽는다)는 `tests/test_mock_yahoo_gate.py` 가 본다 — 야후 라이브러리는 파이썬 소켓 밖(curl)으로 나가
+아래 소켓 가드에 잡히지 않으므로, 거기서는 함수 호출 횟수로 잰다.
 """
 from __future__ import annotations
 

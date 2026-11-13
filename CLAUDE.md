@@ -5,7 +5,7 @@
 > [`docs/plans`](docs/plans) · 아키텍처 [`docs/specs/architecture.md`](docs/specs/architecture.md) ·
 > ★단계·순서 [제품 축 로드맵](docs/plans/2026-09-12-ra-product-roadmap.md)★ · 판정
 > [채점표](docs/specs/2026-09-12-addendum-scorecard.md) · 표현 규칙 [제품 규칙](docs/specs/2026-09-12-ra-product-rules.md) ·
-> 실행 `Makefile` · 환경변수 `.env.example`(**개발 기본값 `KIS_USE_MOCK=1`** — 외부 호출 0).
+> 실행 `Makefile` · 환경변수 `.env.example`(**개발 기본값 `KIS_USE_MOCK=1`** — 외부 호출 0 은 ★잰 범위★만: 기동 · 인자 없는 GET · 야후 시세 분석. 예외: 키가 있어야 도는 데몬 · 수동 수집 — 재는 도구 `scripts/probe_external_calls.py`).
 > **수치는 문서가 아니라 코드가 진실입니다** — 개수를 적으면 반드시 낡습니다(과거
 > "라우트 223 → 268" 이 실측 332였습니다). 세지 말고 레지스트리를 읽으세요.
 

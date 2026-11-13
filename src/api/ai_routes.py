@@ -4,7 +4,7 @@
 import logging
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.legacy_schemas import (
     AICompareRequest,
@@ -12,6 +12,7 @@ from src.api.legacy_schemas import (
     MonitorRequest,
     MultiFeatureRequest,
 )
+from src.api.market_gate import require_market_download
 from src.data_loader import MarketDataLoader
 from src.models.feature_engine import MultiFeatureVolatilityEngine
 from src.models.model_monitor import ModelMonitor
@@ -20,7 +21,7 @@ logger = logging.getLogger("api.ai")
 router = APIRouter(tags=["ai"])
 
 
-@router.post("/ai-vol-compare")
+@router.post("/ai-vol-compare", dependencies=[Depends(require_market_download)])
 def ai_vol_compare(req: AICompareRequest):
     """
     Head-to-head comparison: Random Forest vs LSTM volatility forecast.
@@ -47,7 +48,7 @@ def ai_vol_compare(req: AICompareRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/lstm-forecast")
+@router.post("/lstm-forecast", dependencies=[Depends(require_market_download)])
 def lstm_forecast(req: LSTMForecastRequest):
     """Multi-step-ahead LSTM volatility forecast."""
     try:
@@ -78,7 +79,7 @@ def lstm_forecast(req: LSTMForecastRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/ai-multi-feature")
+@router.post("/ai-multi-feature", dependencies=[Depends(require_market_download)])
 def ai_multi_feature(req: MultiFeatureRequest):
     """
     Train a multi-feature AI volatility model (19 features from OHLCV + VIX).
@@ -126,7 +127,7 @@ def ai_multi_feature(req: MultiFeatureRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/ai-monitor")
+@router.post("/ai-monitor", dependencies=[Depends(require_market_download)])
 def ai_monitor(req: MonitorRequest):
     """
     Full AI model monitoring report.

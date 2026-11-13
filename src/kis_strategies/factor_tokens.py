@@ -600,6 +600,11 @@ def _market_fetch(prefix: str) -> pd.DataFrame | None:
             df = load_ohlcv_unified(loader_sym, "2005-01-01",
                                     datetime.now().strftime("%Y-%m-%d"), prefer="auto")
         elif yf_sym:
+            # ★mock 게이트★(2026-11-13) — 해외 지수는 야후로 나간다. mock 은 시도하지 않고 사유를 올린다(국내 지수는 위의 일봉 로더라 막지 않는다).
+            from src.data.mock_gate import mock_allowed
+            from src.data_loader import MARKET_DOWNLOAD_BLOCKED, MarketDataBlockedInMock
+            if mock_allowed():
+                raise MarketDataBlockedInMock(MARKET_DOWNLOAD_BLOCKED)
             import yfinance as yf
             raw = yf.download(yf_sym, start="2005-01-01", progress=False, auto_adjust=False)
             if raw is not None and not raw.empty:
@@ -621,8 +626,13 @@ def _market_df(prefix: str) -> pd.DataFrame | None:
     if prefix in _market_cache and not (_market_cache[prefix] is None
                                         and not _fail_fresh(f"market:{prefix}")):
         return _market_cache[prefix]
+    from src.data_loader import MarketDataBlockedInMock
     try:
         df = _market_fetch(prefix)
+    except MarketDataBlockedInMock as e:
+        # 시도하지 않은 것 — 사유를 그 문장 그대로 남긴다(예외 이름을 붙이지 않는다 — `macro_availability()` 로 화면까지 간다).
+        df = None
+        _note_failure(f"market:{prefix}", str(e))
     except Exception as e:  # noqa: BLE001
         df = None
         _note_failure(f"market:{prefix}", f"{type(e).__name__}: {e}")

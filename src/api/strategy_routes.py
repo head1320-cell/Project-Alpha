@@ -5,7 +5,7 @@ import logging
 from datetime import date
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.legacy_schemas import (
     DSLBacktestRequest,
@@ -25,6 +25,7 @@ from src.api.legacy_schemas import (
     YamlImportRequest,
     YamlValidateRequest,
 )
+from src.api.market_gate import require_market_download
 from src.data_loader import MarketDataLoader
 from src.models.backtest import VaRBacktester
 from src.models.parametric import ParametricRiskModel
@@ -57,7 +58,7 @@ _DOOR_DSL_BACKTEST = "strategies/dsl/backtest"
 _DOOR_GRAPH_BACKTEST = "backtest/graph"
 
 
-@router.post("/strategy-backtest")
+@router.post("/strategy-backtest", dependencies=[Depends(require_market_download)])
 def strategy_backtest(req: StrategyRequest):
     """Run a single strategy backtest with full performance metrics."""
     try:
@@ -605,7 +606,7 @@ def dsl_backtest(req: DSLBacktestRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
-@router.post("/strategy-optimize")
+@router.post("/strategy-optimize", dependencies=[Depends(require_market_download)])
 def strategy_optimize(req: GridSearchRequest):
     """Grid search parameter optimization for a strategy."""
     try:
@@ -644,7 +645,7 @@ def strategy_optimize(req: GridSearchRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/portfolio-backtest")
+@router.post("/portfolio-backtest", dependencies=[Depends(require_market_download)])
 def run_portfolio_backtest(req: PortfolioBacktestRequest):
     """Multi-asset portfolio backtest with rebalancing."""
     try:
@@ -683,7 +684,7 @@ def run_portfolio_backtest(req: PortfolioBacktestRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/multi-condition-backtest")
+@router.post("/multi-condition-backtest", dependencies=[Depends(require_market_download)])
 def run_multi_condition(req: MultiConditionRequest):
     """Multi-condition strategy backtest with advanced exit logic."""
     try:
@@ -745,7 +746,7 @@ def get_condition_registry():
     """Return available conditions with descriptions and recommended tickers."""
     return CONDITION_REGISTRY
 
-@router.post("/backtest-var")
+@router.post("/backtest-var", dependencies=[Depends(require_market_download)])
 def backtest_var(req: VaRRequest):
     try:
         loader  = MarketDataLoader(req.ticker, req.start_date, req.end_date)
@@ -778,7 +779,7 @@ def backtest_var(req: VaRRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/backtest-pit")
+@router.post("/backtest-pit", dependencies=[Depends(require_market_download)])
 def backtest_pit(req: PITBacktestRequest):
     """
     PIT-based VaR backtest: validates the ENTIRE forecasted distribution.

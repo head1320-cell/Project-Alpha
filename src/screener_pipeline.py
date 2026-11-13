@@ -68,9 +68,12 @@ async def fetch_equity_snapshot() -> list[dict]:
     Returns list of dicts ready for bulk insert.
     """
     rows = []
-    if not USE_YFINANCE:
+    # ★mock 게이트★(2026-11-13) — mock 은 야후를 켜 두었어도(`MARKET_PIPELINE_USE_YFINANCE=1`) 나가지 않는다. 판정은 `mock_allowed()` 하나.
+    from src.data.mock_gate import mock_allowed
+    if not USE_YFINANCE or mock_allowed():
         # Default path: skip the rate-limited external feed entirely.
-        logger.info("Equity snapshot: using deterministic mock (MARKET_PIPELINE_USE_YFINANCE off)")
+        logger.info("Equity snapshot: using deterministic mock (%s)",
+                    "MARKET_PIPELINE_USE_YFINANCE off" if not USE_YFINANCE else "mock gate on — no external feed")
         return _generate_mock_equity_data()
     try:
         import pandas as pd
