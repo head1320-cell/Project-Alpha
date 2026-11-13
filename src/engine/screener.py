@@ -571,6 +571,14 @@ class ValuationScreener:
         #   DART 쿼터 무소모로 ffl:을 채워 스크리너 유니버스가 실제로 확장된다.
         fund_targets = items if reattach_fundamentals else fresh_in_items
         if fund_targets:
+            # ★과거 시점(as_of) 평가의 재무 여덟 칸은 붙이기가 바꾸지 못한다(감사 §11 · F6a)★ — 붙이는 것은 ★오늘★ 저장소의 값이다.
+            #   `per`·`pbr` 은 저장소의 팩터 id 가 기본 필드와 이름이 같아 늘 덮였고, 저장소가 실데이터면 ROE·ROA·배당수익률도
+            #   동기화로 덮였다 → '미상' 라벨이 붙은 항목의 칸에 오늘 값이 들어가고, 그 칸의 조건이 오늘 값으로 걸렸다(룩어헤드).
+            #   현재 스크리닝은 그대로다(동기화를 되돌리지 않는다). 여덟 칸 밖의 팩터는 과거 시점에서도 현재 값으로 붙는다(F6 — 남음).
+            pit_eight = None
+            if as_of_date:
+                from src.engine.pit_store import PIT_FIN_KEYS
+                pit_eight = [(it, {k: getattr(it, k, None) for k in PIT_FIN_KEYS}) for it in fund_targets]
             try:
                 from src.data.fundamentals_store import attach_fundamentals
                 attach_fundamentals(fund_targets)
@@ -580,6 +588,10 @@ class ValuationScreener:
                 attach_extended_factors(fund_targets)
             except Exception as e:
                 logger.debug(f"펀더멘털 주입 실패: {e}")
+            if pit_eight:
+                for it, kept in pit_eight:          # 붙이기가 도중에 실패해도 되돌린다(try 밖)
+                    for k, v in kept.items():
+                        setattr(it, k, v)
             # item:CODE 저장 → 다음 조회부터 즉시 서빙(재적재 시 최신 펀더멘털로 갱신)
             # ★과거 시점(as_of) 평가분은 저장하지 않는다(감사 F5)★ — 저장하면 뒤의 ★현재★ 스크리닝이
             # 사흘 동안 과거 가격·과거 재무를 오늘 값으로 돌려준다.

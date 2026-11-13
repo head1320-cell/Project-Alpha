@@ -83,8 +83,11 @@ class ScreenerParams(BaseModel):
         "standard", json_schema_extra={"x-ui": _ui("유동성 문턱", "advanced", options={
             "off": "없음", "relaxed": "느슨하게", "standard": "보통", "institutional": "기관 수준"})})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
-        "과거 시점", "advanced", help="입력하면 해당일에 알 수 있던 값으로만 선별합니다(시점 고정 스크리너). 비우면 현재 값입니다. "
-                                    "과거 시점 선별은 유동성 문턱·정렬 방향을 사용하지 않습니다.")})
+        # ★주장은 증거보다 강할 수 없다(감사 §11 · 2026-11-13 실측)★ — 예전 문구 "해당일에 알 수 있던 값으로만 선별합니다"는 사실이 아니었다:
+        # 시점 값은 종가와 그 시점 공시의 재무 일부뿐이고, 조건 필드 대부분(펀더멘털·가격·확장 팩터)은 현재 값으로 붙는다.
+        "과거 시점", "advanced", help="입력하면 해당일의 종가와 그 시점 공시의 ROE·ROA·부채비율로 평가합니다(공시 미확보 시 재무 항목은 미상). "
+                                    "그 밖의 조건 필드(팩터·모멘텀·배당수익률 등)는 현재 값이므로, 과거 시점 조건으로 쓰면 미래 정보가 섞입니다. "
+                                    "비우면 현재 값입니다. 과거 시점 선별은 유동성 문턱·정렬 방향을 사용하지 않습니다.")})
 
 
 def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
