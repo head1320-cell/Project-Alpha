@@ -35,6 +35,18 @@ function fieldLabel(entry: NodeCatalogEntry | undefined, key: string): string {
   return fieldsOf(entry?.params_schema ?? null).find((f) => f.name === key)?.ui.label ?? key;
 }
 
+/**
+ * 설정 값을 화면 글로 (2026-11-13) — 선택지는 서버가 준 이름표(`x-ui.options`)로, 그 밖은 `shortValue`.
+ * 서버 열거값 원문(`bl` · `min_var`)을 화면에 싣지 않는다(용어집 §6). 값을 주지 않은 칸은 스키마의 기본값을 같은 방식으로 —
+ * "기본값 → 3.5" 보다 "2.5 → 3.5" 가 무엇이 바뀌었는지 말한다. 기본값도 모르면 "기본값".
+ */
+export function valueText(entry: NodeCatalogEntry | undefined, key: string, v: unknown): string {
+  const f = fieldsOf(entry?.params_schema ?? null).find((x) => x.name === key);
+  const val = v === undefined || v === null ? f?.defaultValue : v;
+  const label = typeof val === "string" ? f?.ui.options?.[val] : undefined;
+  return label ?? shortValue(val);
+}
+
 /** 갈래의 바꾼 설정 — "비중 계산 · 위험 성향 2.5 → 6". */
 export function branchDiffs(b: GraphBranch, nodes: PgNode[], catalog: NodeCatalogEntry[]): string[] {
   const out: string[] = [];
@@ -44,7 +56,7 @@ export function branchDiffs(b: GraphBranch, nodes: PgNode[], catalog: NodeCatalo
     if (!c || !o) continue;
     const entry = catalog.find((x) => x.type === o.data.kind);
     for (const d of paramDiff(o.data.params ?? {}, c.data.params ?? {})) {
-      out.push(`${entry?.plain_label ?? o.data.kind} · ${fieldLabel(entry, d.key)} ${shortValue(d.from)} → ${shortValue(d.to)}`);
+      out.push(`${entry?.plain_label ?? o.data.kind} · ${fieldLabel(entry, d.key)} ${valueText(entry, d.key, d.from)} → ${valueText(entry, d.key, d.to)}`);
     }
   }
   return out;
@@ -183,7 +195,7 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
           const keys = new Set(bs.flatMap((b) => paramDiff(o?.data.params ?? {}, node(copyOf(b, orig))?.data.params ?? {}).map((d) => d.key)));
           for (const k of keys) {
             rows.push({ key: `set:${orig}:${k}`, kind: "set", name: `${entry?.plain_label ?? orig} · ${fieldLabel(entry, k)}`,
-                        cells: [shortValue(o?.data.params?.[k]), ...bs.map((b) => shortValue(node(copyOf(b, orig))?.data.params?.[k]))] });
+                        cells: [valueText(entry, k, o?.data.params?.[k]), ...bs.map((b) => valueText(entry, k, node(copyOf(b, orig))?.data.params?.[k]))] });
           }
         }
         for (const orig of origIds) {

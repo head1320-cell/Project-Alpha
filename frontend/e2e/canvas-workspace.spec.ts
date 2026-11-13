@@ -882,6 +882,42 @@ test("차이만 보기(BM C3): 바꾼 설정 칩 · 표는 값이 다른 행만(
   expect(checked, "Δ 칩을 적어도 하나는 확인한다").toBeGreaterThan(0);
 });
 
+test("대안의 설정 값은 선택지 이름으로(2026-11-13): 서버 열거값 원문을 싣지 않는다 · 짝 — 선택지가 아닌 숫자는 그대로", async ({ page }) => {
+  type Schema = { properties: Record<string, { type?: string; default?: unknown; "x-ui"?: { options?: Record<string, string> } }> };
+  const cat = (await (await page.request.get("http://localhost:8000/api/v1/allocation/graph/node-types")).json()) as { nodes: { type: string; params_schema: Schema }[] };
+  const props = cat.nodes.find((n) => n.type === "optimizer")!.params_schema.properties;
+  const opts = props.model["x-ui"]!.options!;
+  expect(opts.min_var, "서버가 선택지 이름을 준다(없으면 이 시험은 공허하다)").toBeTruthy();
+  await openCanvas(page);
+  await makeBranch(page, "optimizer");
+  const doc = (await wip(page)) as BDoc;
+  const b = doc.branches![0];
+  const copy = doc.nodes.find((n) => n.id === Object.entries(b.map).find(([, x]) => x === "optimizer")![0])!;
+  const orig = doc.nodes.find((n) => n.id === "optimizer")!;
+  const origModel = String(orig.params.model ?? props.model.default);
+  expect(origModel).not.toBe("min_var");
+  expect(opts[origModel]).toBeTruthy();
+  // 짝에 쓸 숫자 칸 — 스키마에서 고른다(선택지가 없는 number)
+  const numKey = Object.keys(props).find((k) => (props[k].type === "number" || props[k].type === "integer") && !props[k]["x-ui"]?.options
+    && typeof (orig.params[k] ?? props[k].default) === "number")!;
+  expect(numKey, "숫자 설정 칸이 하나는 있다").toBeTruthy();
+  const n0 = Number(orig.params[numKey] ?? props[numKey].default);
+  copy.params = { ...copy.params, model: "min_var", [numKey]: n0 + 1 };
+  await page.locator(".pg-import-input").setInputFiles({ name: "b.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "project-alpha.portfolio-graph", version: 1, ...doc })) });
+  const chips = page.locator(".pg-branch-chip");
+  await expect(chips.first()).toContainText("→");
+  const chipText = (await chips.allTextContents()).join(" | ");
+  expect(chipText).toContain(`${opts[origModel]} → ${opts.min_var}`);
+  expect(chipText, "서버 열거값 원문이 화면에 없다").not.toMatch(/\bmin_var\b/);
+  expect(chipText).toContain(`${n0} → ${n0 + 1}`);                 // ★짝★ — 숫자는 값 그대로
+  await page.locator('.pg-tab[data-tab="branches"]').click();
+  const cells = (k: string) => page.locator(`.pg-branch-row--set[data-row$=":${k}"] td`);
+  await expect(cells("model")).toHaveText([opts[origModel], opts.min_var]);
+  await expect(cells(numKey)).toHaveText([String(n0), String(n0 + 1)]);
+  expect((await page.locator(".pg-branch-compare").textContent()) ?? "").not.toMatch(/\bmin_var\b/);
+});
+
 test("대안 삭제·되돌리기·파일 왕복(BM C3): 지우면 복제도 함께 · Ctrl+Z 로 돌아옴 · 내보내고 불러와도 대안 그대로", async ({ page }) => {
   await openCanvas(page);
   const n0 = (await wip(page)).nodes.length;
