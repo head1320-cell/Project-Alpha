@@ -768,6 +768,10 @@ _SERVER = [
     ('구조적 인과가 아님 (정직 라벨)', '구조적 인과가 아님'),
     ('미반영(정직한 근사)', '미반영(근사)'),
     ("unavailable(정직 '—')", "unavailable('—')"),
+    ('증권사가 이 계좌의 잔고 조회를 받아 줬습니다.', '증권사가 이 계좌의 잔고 조회를 수락했습니다.'),
+    ('증권사가 토큰을 내주지 않았습니다. 앱 키·시크릿이 맞는지, 1분 안에 다시 묻지 않았는지 확인하십시오.', '증권사가 토큰 발급을 거부했습니다. 앱 키·시크릿이 올바른지, 1분 이내에 재요청하지 않았는지 확인하십시오.'),
+    ('증권사 연결 실패. 잠시 뒤 다시 하십시오.', '증권사 연결 실패. 잠시 후 다시 시도하십시오.'),
+    ('실패가 이어져 이 계좌의 호출을 잠시 멈췄습니다. 잠시 뒤 다시 하십시오.', '연속 실패로 이 계좌의 호출을 일시 중단했습니다. 잠시 후 다시 시도하십시오.'),
 ]
 
 _TESTS = [
@@ -812,6 +816,16 @@ _TESTS = [
     ('toContainText("주지 않았습니다")', 'toContainText("제공하지 않았습니다")'),
     ('toContainText("파일로 받아 두십시오")', 'toContainText("파일로 내려받아 두십시오")'),
     ('toContainText("첫 원인")', 'toContainText("최초 원인")'),
+    # 원인 따라가기 띠 — 한 화면에서 "첫 원인 — …" 과 "이 노드가 최초 원인입니다" 가 섞여 있었다(전체 E2E 가 찾음). 띠 머리도 '최초 원인'으로.
+    ('? "이 노드가 최초 원인입니다" : "첫 원인"}', '? "이 노드가 최초 원인입니다" : "최초 원인"}'),
+    ('toContainText("끝난 주소")', 'toContainText("만료된 주소")'),
+    ('getByRole("alert").first()).toContainText("불러오지 못했습니다")', 'getByRole("alert").first()).toContainText("자산 가치 조회 실패")'),
+    ('await expect(a).toContainText("늘었습니다");', 'await expect(a).toContainText("증가했습니다");'),
+    ('.ci-money-ans")).toContainText("줄었습니다"', '.ci-money-ans")).toContainText("감소했습니다"'),
+    ('toContainText("잔고 조회를 받아 줬습니다")', 'toContainText("잔고 조회를 수락했습니다")'),
+    ('"증권사가 토큰을 내주지 않았습니다."', '"증권사가 토큰 발급을 거부했습니다."'),
+    ('.toContainText("종류를 말하지 않습니다")', '.toContainText("수치의 종류가 없습니다")'),
+    ('await expect(card).toContainText("끝났습니다");', 'await expect(card).toContainText("완료됐습니다");'),
 ]
 
 PAIRS = _FRONT + _CANVAS + _SERVER + _TESTS

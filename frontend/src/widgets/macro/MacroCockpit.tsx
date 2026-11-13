@@ -54,9 +54,9 @@ type TabId = typeof TABS[number]["id"];
 
 /** 화면이 함께 불러오는 코어 데이터 — 실패한 것만 `coreFail` 에 [다시 시도] 함수로 들어온다. */
 export type CoreKey = "dashboard" | "valuation" | "strategies" | "recommend";
-/** 이름 + 목적격 조사(받침에 따라 을/를) — 조사를 계산하지 않고 적어 둔다(넷뿐이다). */
+/** 실패 알림 제목의 이름("… 조회 실패"). 2026-11-12 — 조사를 뗐다: 문체 ⑦에서 뒤가 명사형("조회 실패")이 되며 "자산 가치를 조회 실패"가 됐었다(전체 E2E 가 찾음). */
 const CORE_KO: Record<CoreKey, string> = {
-  dashboard: "지표 대시보드를", valuation: "자산 가치를", strategies: "전략 목록을", recommend: "추천 배분을",
+  dashboard: "지표 대시보드", valuation: "자산 가치", strategies: "전략 목록", recommend: "추천 배분",
 };
 /** 탭이 무엇을 주 데이터로 쓰는지 — 주 데이터가 실패하면 탭 몸통 대신 실패를 말한다. 개요는 국면만으로도 그려지므로 위에 알리기만 한다. */
 const TAB_NEEDS: Partial<Record<TabId, { main?: CoreKey; also?: CoreKey[] }>> = {

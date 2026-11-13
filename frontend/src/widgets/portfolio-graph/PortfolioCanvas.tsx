@@ -775,7 +775,7 @@ export function PortfolioCanvas({ topExtra, initialDoc, bootNote, legacy, persis
             {cause && (
               <Panel position="top-center" className="pg-cause-banner" role="status">
                 <span>
-                  {cause.roots.length === 1 && cause.roots[0] === cause.from ? "이 노드가 최초 원인입니다" : "첫 원인"}
+                  {cause.roots.length === 1 && cause.roots[0] === cause.from ? "이 노드가 최초 원인입니다" : "최초 원인"}
                   {" — "}
                   {cause.roots.map((r) => {
                     const n = s.nodes.find((x) => x.id === r);

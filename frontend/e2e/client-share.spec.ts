@@ -153,7 +153,7 @@ test("PB6 · 주소 → 고객 PIN(틀리면 같은 말) → 한 장(메뉴 없�
   await expect(page.locator('.cs-share-row[data-state="revoked"]')).toHaveCount(1);
   await c.locator(".cs-ask-input").fill("다시 묻습니다");
   await c.locator(".cs-ask-go").click();
-  await expect(c.locator(".sv-stop")).toContainText("끝난 주소");
+  await expect(c.locator(".sv-stop")).toContainText("만료된 주소");
   await c.context().close();
 });
 

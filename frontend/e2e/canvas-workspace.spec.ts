@@ -1630,9 +1630,14 @@ test("빈 필수 입력(BN N3): 포트 고리 + '‘비중’을 연결하십시
   await expect(card.locator(".pg-port--missing")).toHaveCount(0);
 });
 
+/** 손잡이에서 손잡이로 끈다. ★화면 이동이 멎은 뒤 두 자리를 한 프레임에서 읽는다★(2026-11-13) — 노드를 더한 직후에는 화면이 옮겨 가는 중이라
+ *  `boundingBox()` 로 따로 읽으면 서로 다른 순간의 자리가 되고, 끌기가 손잡이를 빗나갔다(20회 중 6 실패 · 고친 뒤 수치는 HISTORY). */
 async function dragFromTo(page: Page, from: string, to: string) {
-  const a = (await page.locator(from).boundingBox())!;
-  const b = (await page.locator(to).boundingBox())!;
+  await settled(page);
+  const [a, b] = await page.evaluate(([f, t]) => [f, t].map((sel) => {
+    const r = document.querySelector(sel)!.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  }), [from, to] as const);
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
   await page.mouse.down();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 14 });

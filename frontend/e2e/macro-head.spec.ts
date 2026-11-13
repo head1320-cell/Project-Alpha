@@ -92,7 +92,7 @@ test("탭 데이터를 불러오지 못하면 그 탭 안 alert — 다른 탭�
   await page.route("**/api/v1/macro/valuation**", (r) => r.fulfill({ status: 500, body: "boom" }));
   await open(page);
   await page.getByRole("tab", { name: "가치" }).click();
-  await expect(main(page).getByRole("alert").first()).toContainText("불러오지 못했습니다");
+  await expect(main(page).getByRole("alert").first()).toContainText("자산 가치 조회 실패");
   await page.getByRole("tab", { name: "지표" }).click();
   await expect(main(page).getByRole("alert")).toHaveCount(0);
 });

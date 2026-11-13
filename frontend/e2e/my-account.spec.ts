@@ -29,7 +29,7 @@ type Item = { key: string; ok: boolean; reason: string };
 const READY_ITEMS: Item[] = [
   { key: "gate", ok: false, reason: "운영자가 실계좌 관문을 열지 않았습니다(선언 없음)." },
   { key: "real_account", ok: false, reason: "모의투자 계좌입니다. 실계좌 주문은 실계좌로 연결한 계좌에서만 합니다." },
-  { key: "connection", ok: true, reason: "증권사가 이 계좌의 잔고 조회를 받아 줬습니다." },
+  { key: "connection", ok: true, reason: "증권사가 이 계좌의 잔고 조회를 수락했습니다." },
   { key: "paper_practice", ok: true, reason: "내 모의투자 계좌에서 증권사 모의 서버가 받은 주문이 2건 있습니다." },
   { key: "reconciliation", ok: false, reason: "이 계좌를 증권사 잔고와 맞춰 보는 대조 감시가 아직 없습니다. 그래서 실계좌 전환은 열지 않습니다." },
 ];
@@ -285,7 +285,7 @@ test("BV9: 길은 서버 순서대로 네 역이고 지금 상태를 말한다",
   await expect(station(page, "kill")).not.toHaveAttribute("data-blocked", /.*/);   // 짝: 꺼져 있으면 막힘 표시 없음
   await expect(station(page, "broker")).toContainText("전송하지 않습니다");
   await expect(page.locator('.ma-mode-b[data-mode="SHADOW"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(station(page, "broker")).toContainText("잔고 조회를 받아 줬습니다"); // 마지막 연결 확인 = 서버 준비 목록의 connection
+  await expect(station(page, "broker")).toContainText("잔고 조회를 수락했습니다"); // 마지막 연결 확인 = 서버 준비 목록의 connection
 });
 
 test("BV9: 실계좌 칸은 준비 목록만 펼치고 요청을 보내지 않는다", async ({ page }) => {
@@ -365,7 +365,7 @@ test("BV9: 실데이터 잔고엔 합성 표시가 없다 · 모르는 잔고는
 
 test("BV9: 증권사가 거절한 잔고는 사유 + 닫힌 원래 사유 · 닿지 못하면 재시도", async ({ page }) => {
   const { st } = await setup(page, { balance: { ba_1: { account_id: "ba_1", practice: false, as_of: "x", state: "failed",
-    reason: "증권사 연결 실패. 잠시 뒤 다시 하십시오.", detail: "connection refused" } } });
+    reason: "증권사 연결 실패. 잠시 후 다시 시도하십시오.", detail: "connection refused" } } });
   await page.goto("/my-account");
   const bal = page.locator(".ma-bal");
   await expect(bal.locator(".ma-bal-failed")).toContainText("증권사 연결 실패");

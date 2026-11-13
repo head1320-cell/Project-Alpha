@@ -590,7 +590,7 @@ test("수익성 — 답 문장 = 서버 첫·마지막 해 매출(고치면 따�
   const a = sec(page, "money").locator(".ci-money-ans");
   await expect(a).toContainText("1.2조원", { timeout: 30_000 });
   await expect(a).toContainText("2.3조원");
-  await expect(a).toContainText("늘었습니다");
+  await expect(a).toContainText("증가했습니다");
   await page.unroute(`${API}/valuation/financial/*`);
   await patchAnnual(page, (rows) => {
     const ys = rows.map((r) => Number(r.year)); const lo = Math.min(...ys), hi = Math.max(...ys);
@@ -598,7 +598,7 @@ test("수익성 — 답 문장 = 서버 첫·마지막 해 매출(고치면 따�
   });
   await open(page);
   await goSec(page, "money", "수익성");
-  await expect(sec(page, "money").locator(".ci-money-ans")).toContainText("줄었습니다", { timeout: 30_000 });
+  await expect(sec(page, "money").locator(".ci-money-ans")).toContainText("감소했습니다", { timeout: 30_000 });
 });
 test("수익성 — 이야기 그림(매출 막대 = 연도 수 · 이익률 선 둘 + 글자 범례) · 표는 접혀 있고 펼치면 9줄 · '항목(억원)' 거짓 단위 0", async ({ page }) => {
   const finP = page.waitForResponse((r) => r.url().includes("/valuation/financial/") && r.url().includes("period=annual"));

@@ -206,13 +206,13 @@ test("BV8: 확인 성공은 서버 사유 · 실패는 사유 + 닫힌 원래 �
   await page.goto("/settings");
   await page.locator(".set-broker-check").click();
   await expect(page.locator(".set-broker-result")).toHaveAttribute("data-state", "ok");
-  await expect(page.locator(".set-broker-result")).toContainText("잔고 조회를 받아 줬습니다");
+  await expect(page.locator(".set-broker-result")).toContainText("잔고 조회를 수락했습니다");
 
-  reply = checkReply("failed", "증권사가 토큰을 내주지 않았습니다.", "EGW00123 ****");
+  reply = checkReply("failed", "증권사가 토큰 발급을 거부했습니다.", "EGW00123 ****");
   await page.locator(".set-broker-check").click();
   const out = page.locator(".set-broker-result");
   await expect(out).toHaveAttribute("data-state", "failed");
-  await expect(out).toContainText("증권사가 토큰을 내주지 않았습니다.");
+  await expect(out).toContainText("증권사가 토큰 발급을 거부했습니다.");
   const raw = out.locator("details");
   await expect(raw).not.toHaveAttribute("open", "");
   await raw.locator("summary").click();
@@ -263,7 +263,7 @@ for (const scheme of ["light", "dark"] as const) {
   test(`BV8: ${scheme} AA · 390 가로 넘침 없음 (계좌 둘 + 확인 결과 + 폼 오류)`, async ({ page }) => {
     await setup(page, { accounts: [acc("ba_1", "모의 하나", true), acc("ba_2", "실계좌 하나", false, "9012")] });
     await page.route("**/api/v1/broker-accounts/ba_1/check", (r) =>
-      r.fulfill({ json: checkReply("failed", "증권사 연결 실패. 잠시 뒤 다시 하십시오.", "timeout") }));
+      r.fulfill({ json: checkReply("failed", "증권사 연결 실패. 잠시 후 다시 시도하십시오.", "timeout") }));
     await page.route("**/api/v1/broker-accounts", (r) =>
       r.request().method() === "POST" ? r.fulfill({ status: 422, json: { detail: "이름을 입력하십시오." } }) : r.fallback());
     await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* 없음 */ } }, scheme);

@@ -1244,7 +1244,7 @@ test("진행 카드(BL3 W1): 아직이면 상태를 읽기만 하며 기다리�
   }
   step = 1;                                                               // 다음 읽기에서 끝남
   await expect(card.getByRole("button", { name: "결과 조회" })).toBeEnabled({ timeout: 10_000 });
-  await expect(card).toContainText("끝났습니다");
+  await expect(card).toContainText("완료됐습니다");
   await page.unroute("**/allocation/graph/run**");
   await card.getByRole("button", { name: "결과 조회" }).click();
   // 이 실행은 진짜로 끝났을 수도, 아직일 수도 있다 — 어느 쪽이든 화면은 그 사실을 말한다.

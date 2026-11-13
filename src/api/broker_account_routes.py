@@ -42,11 +42,11 @@ _NOT_FOUND = "그 계좌가 없습니다."
 
 #: 실패 종류 → 사람 말. 원문은 `detail` 에 따로 싣는다.
 _REASON_BY_KIND = {
-    KIND_TOKEN: "증권사가 토큰을 내주지 않았습니다. 앱 키·시크릿이 맞는지, 1분 안에 다시 묻지 않았는지 확인하십시오.",
+    KIND_TOKEN: "증권사가 토큰 발급을 거부했습니다. 앱 키·시크릿이 올바른지, 1분 이내에 재요청하지 않았는지 확인하십시오.",
     KIND_BUSINESS: "증권사가 요청을 거절했습니다. 계좌번호와 상품 코드, 모의투자/실계좌 선택이 맞는지 확인하십시오.",
-    KIND_TRANSPORT: "증권사 연결 실패. 잠시 뒤 다시 하십시오.",
-    KIND_HTTP_STATUS: "증권사 연결 실패. 잠시 뒤 다시 하십시오.",
-    KIND_BLOCKED: "실패가 이어져 이 계좌의 호출을 잠시 멈췄습니다. 잠시 뒤 다시 하십시오.",
+    KIND_TRANSPORT: "증권사 연결 실패. 잠시 후 다시 시도하십시오.",
+    KIND_HTTP_STATUS: "증권사 연결 실패. 잠시 후 다시 시도하십시오.",
+    KIND_BLOCKED: "연속 실패로 이 계좌의 호출을 일시 중단했습니다. 잠시 후 다시 시도하십시오.",
 }
 _REASON_OTHER = "증권사 확인에 실패했습니다. 아래 원래 사유를 확인하십시오."
 
@@ -302,7 +302,7 @@ def live_readiness(account_id: str, p: Principal = Depends(require_login)):
     if check is None:
         conn = (False, "이 계좌로 연결 확인을 한 적이 없습니다. '연결 확인'을 먼저 하십시오.")
     elif check["decision"] == "ok":
-        conn = (True, "증권사가 이 계좌의 잔고 조회를 받아 줬습니다.")
+        conn = (True, "증권사가 이 계좌의 잔고 조회를 수락했습니다.")
     elif check["decision"] == "practice":
         conn = (False, "마지막 확인이 합성 데이터 모드라 증권사에 묻지 않았습니다. 합성 확인은 세지 않습니다.")
     else:
