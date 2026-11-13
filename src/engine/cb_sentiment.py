@@ -6,6 +6,10 @@ Fed 성명·BOK 통화정책방향 텍스트를 렉시콘(Apel-Grimaldi 사상: 
 
 수집: Fed(federalreserve.gov 최신 FOMC statement)·BOK(통화정책방향 의결문) — 네트워크
 실패/차단 시 available:false + 사유(허위 점수 금지). 6시간 캐시.
+
+★mock 모드(`mock_gate.mock_allowed()`)에서는 수집하지 않는다(2026-11-13)★ — 이 수집은 키가 필요 없어
+mock 게이트를 지나지 않던 실제 외부 호출이었다. 시도하지 않은 것(`reason:"mock_mode"`)과 시도했다가
+실패한 것(`reason:"fetch_failed"`)은 사유도 문장도 다르다.
 """
 
 from __future__ import annotations
@@ -68,22 +72,33 @@ _BOK_URL = "https://www.bok.or.kr/portal/singl/newsData/listCont.do?menuNo=20076
 
 _CACHE: dict = {}
 _TTL = 6 * 3600
+_BANKS = (("fed", _FED_URL), ("bok", _BOK_URL))
+_METHOD = "렉시콘 기반(Apel-Grimaldi 사상) 매파/비둘기 용어 밀도 — 결정론·검증 가능"
+#: 화면에 그대로 실리는 문장(`data-server`) — 개발자 낱말·환경변수 이름을 싣지 않는다(용어집 §4).
+_MOCK_NOTE = "합성 데이터 모드에서는 중앙은행 정책문을 수집하지 않습니다 — 점수 미산출"
+_FAIL_NOTE = "정책문 수집 실패(네트워크/구조 변경) — 점수 미산출"
 
 
 def cb_sentiment(use_cache: bool = True) -> dict:
     """Fed/BOK 센티먼트 게이지 데이터. 수집 실패 시 available:false(정직 — 합성 금지)."""
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed():
+        # ★캐시보다 먼저 본다 · 캐시에 넣지 않는다★ — 게이트가 바뀌면 답도 바로 바뀐다(mock 의 '미산출'이
+        # 6시간 캐시에 남아 운영 응답이 되거나, 운영 점수가 mock 에서 나오지 않게).
+        return {"as_of": time.strftime("%Y-%m-%d %H:%M"), "method": _METHOD,
+                "banks": {bank: {"available": False, "reason": "mock_mode", "note": _MOCK_NOTE}
+                          for bank, _ in _BANKS}}
     now = time.time()
     if use_cache and _CACHE.get("t", 0) > now - _TTL:
         return _CACHE["v"]
     out: dict = {"as_of": time.strftime("%Y-%m-%d %H:%M"), "banks": {}}
-    for bank, url in (("fed", _FED_URL), ("bok", _BOK_URL)):
+    for bank, url in _BANKS:
         txt = _fetch(url)
         if txt and len(txt) > 500:
             s = score_text(txt)
             out["banks"][bank] = {"available": True, "source": url, **s}
         else:
-            out["banks"][bank] = {"available": False,
-                                  "note": "정책문 수집 실패(네트워크/구조 변경) — 점수 미산출"}
-    out["method"] = "렉시콘 기반(Apel-Grimaldi 사상) 매파/비둘기 용어 밀도 — 결정론·검증 가능"
+            out["banks"][bank] = {"available": False, "reason": "fetch_failed", "note": _FAIL_NOTE}
+    out["method"] = _METHOD
     _CACHE.update(t=now, v=out)
     return out

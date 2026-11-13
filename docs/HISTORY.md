@@ -26496,3 +26496,34 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   ★고치지 않은 이유★: 빌드를 성공시키면 저장소 문서가 Pages 사이트로 ★게시된다★(Pages 는 요금제에 따라 비공개 저장소도 공개 사이트가 된다). 게시를 의도했는지는 사용자 결정이다 —
   의도가 아니면 저장소 Settings → Pages 에서 끄면 실패 표시도 사라지고, 의도라면 `{% raw %}` 로 감싸거나 `_config.yml` 로 문서 폴더를 빼면 된다. Pages 설정 자체는 읽을 도구가 없어 ★어느 브랜치가 소스인지는 미상★.
 - 하지 않은 것: Pages 설정 변경 · `.nojekyll`/`_config.yml` 추가 · 브랜치 삭제.
+
+## mock 모드는 기동·화면 조회에서 외부로 나가지 않는다 — 마스터 내려받기 · 중앙은행 정책문 수집 (2026-11-13)
+
+- 왜: CLAUDE.md 는 *"개발 기본값 `KIS_USE_MOCK=1` — 외부 호출 0"* 이라고 적는데 사실이 아니었다. 키가 필요 없는 호출 둘이 mock 게이트를 지나지 않았다 —
+  네트워크가 열린 곳과 막힌 곳에서 같은 mock 서버가 다른 상태가 됐고(2026-11-12 CI 전용 실패), 그때는 E2E 서버에만 스위치(`LIFECYCLE_MASTER_COLLECT=0`)를 줘서 가렸다.
+- ★먼저 쟀다(관측 · 로컬)★ — `scripts/probe_external_calls.py`(새 도구): 프로세스의 소켓 연결·이름 풀이를 가로채 비로컬 대상을 기록하고 연결은 거부한다. 데몬을 켠 기동 + 인자 없는 GET 137개.
+  | | 고치기 전 | 고친 뒤 |
+  |---|---|---|
+  | 기동 | `new.real.download.dws.co.kr`(`kis_master_parser._download_and_extract`) · `postgres` | `postgres` |
+  | GET `/api/v1/macro/cb-sentiment` | `www.federalreserve.gov` · `www.bok.or.kr`(`cb_sentiment._fetch`) | 없음 |
+  | GET `/api/v1/screener/stocks` · `/api/v1/stocks` | `postgres` | `postgres` |
+  `postgres` 는 `database_async` 의 기본 DB 주소(도커 서비스 이름)다 — 인프라 연결이지 외부 서비스 호출이 아니라서 그대로 뒀다.
+  ★앞선 탐침의 결함★: 처음에는 "외부 시도 0건"이 나왔는데 틀린 값이었다 — 이 환경의 HTTPS 프록시가 로컬 주소라 모든 호출이 '로컬 연결'로 보였다. 도구가 프록시 변수를 지우게 고쳤다.
+- 고침(판정은 `mock_gate.mock_allowed()` 하나):
+  - `src/startup/lifecycle.py` — 마스터 자동 수집 분기에 mock 가지를 더했다(순서: 데몬 스위치 → 마스터 스위치 → mock → 수집). 내려받지 않고 ★경고 로그로 사유를 말한다★(`KIS_USE_MOCK=1` · 받는 방법).
+  - `src/engine/cb_sentiment.py` — mock 이면 `_fetch` 를 부르지 않고 두 은행 모두 `available:false` · `reason:"mock_mode"` · 화면 문장. 수집 실패는 `reason:"fetch_failed"` 로 ★다른 사유·다른 문장★.
+    게이트를 캐시보다 먼저 보고 mock 답은 캐시에 넣지 않는다(게이트가 바뀌면 답도 바로 바뀐다).
+  - 화면 `CbGauge` — `mock_mode` 면 "점수 미산출."(시도하지 않았는데 "점수 산출 실패"라고 말하지 않는다). 실패는 그대로 "점수 산출 실패."
+  - `frontend/playwright.config.ts` 의 `LIFECYCLE_MASTER_COLLECT=0` 을 ★일부러 뗐다★ — 제품 기본 동작이 막는지를 네트워크가 열린 GitHub CI E2E 가 본다(다시 내려받으면 11-12 의 실패가 돌아온다).
+    스위치 자체는 남는다(운영에서 기동 수집을 끄는 용도) · `.env.example` 주석을 새 동작에 맞췄다.
+- 시험(먼저 빨강 8건 → 초록): `tests/test_lifecycle_daemons.py`(+4: mock=1 → 수집 0 + 로그에 게이트 이름 · 미설정도 mock · ★짝★ 정확히 `"1"` 만 · 명시 스위치의 사유가 우선) —
+  기존 "켜짐이면 수집" 시험은 운영 값(`"0"`)을 명시하게 했다. `tests/test_mock_no_external_calls.py`(새 9: 정책문 7 + 가드가 심은 호출을 잡는다(짝) + 하위 프로세스로 기동·GET 137개를 돌려 비로컬 대상 0).
+  `macro-cards.spec.ts`(+2: 고정 응답의 미산출/실패 짝 · ★응답을 고정하지 않은★ mock 서버의 실제 화면). 변이 여섯(게이트 삭제·뒤집기 · 사유 뭉개기 · 캐시 먼저 · 로그의 게이트 이름) 모두 죽음.
+- ★바뀌는 동작★: `KIS_USE_MOCK=1` 로 띄우던 개발 서버가 그동안 기동 때 마스터를 받아 실제 종목명·지수 구성을 보였다면 이제 받지 않는다 — 데이터 관리의 수동 수집(`data_routes.py`)을 쓰거나 `KIS_USE_MOCK=0`.
+  매크로 지표 탭의 중앙은행 게이지는 mock 에서 늘 "점수 미산출"이다(전에는 네트워크가 되면 실제 점수가 나왔다).
+- ★하지 않은 것 · 남는 예외(보고)★ — "외부 호출 0" 은 ★기동 + 인자 없는 GET★ 범위의 관측이다. 다음은 mock 게이트가 없고 고치지 않았다:
+  사용자가 실행하는 분석의 야후 시세(`src/data_loader.py::MarketDataLoader` — risk·credit·portfolio·ai·strategy 라우트 · `factor_tokens._market_fetch`) — mock 경로가 없어 막으면 그 분석이 mock 에서 안 된다(별도 결정) ·
+  키가 있어야 도는 데몬(DART·KRX·FRED — 키를 주면 mock 이어도 돈다) · 수동 마스터 수집 라우트(사용자가 누른 것) · `MARKET_PIPELINE_USE_YFINANCE` 를 켠 경우. 인자가 있는 경로와 POST 는 재지 않았다(미검증).
+  CLAUDE.md 의 문구는 고치지 않았다 — 위 범위로 정정할지는 사용자 결정.
+- 게이트: ruff · 전체 pytest 9,046 통과 · 11 건너뜀 · 3 xfail(as_of 트립와이어 — 다음 묶음) · 실패 0 · tsc · build · eslint(오류 0) · `macro-cards` E2E 88 통과(로컬).
+  ★GitHub CI E2E 가 이 변경의 증인이다(스위치를 뗀 채 네트워크가 열린 곳) — 결과는 푸시 뒤 확인한다.★

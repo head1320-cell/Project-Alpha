@@ -52,6 +52,12 @@ def master_collect_disabled() -> bool:
     return os.getenv(MASTER_ENV) == "0"
 
 
+def _mock_mode() -> bool:
+    """mock 모드인가 — ★판정은 `mock_gate.mock_allowed()` 하나★(여기서 환경변수를 다시 읽지 않는다)."""
+    from src.data.mock_gate import mock_allowed
+    return mock_allowed()
+
+
 def _start_daemon_once(name: str, target) -> str:
     """주기 데몬을 **이름당 하나만** 띄운다. `started`·`already_running`·`disabled`.
 
@@ -471,6 +477,13 @@ async def run_startup() -> None:
             logging.getLogger(__name__).warning(
                 f"KIS 마스터 자동 수집을 하지 않았습니다 — {MASTER_ENV}=0 (명시적으로 꺼짐). "
                 "업종·지수 구성은 적재된 것이 있을 때만 읽습니다.")
+        elif _mock_mode():
+            # ★mock 모드는 외부로 나가지 않는다(2026-11-13)★ — 이 다운로드는 키가 필요 없어 mock 게이트를
+            # 지나지 않던 실제 외부 호출이었다. 판정은 `mock_gate.mock_allowed()` 하나.
+            import logging
+            logging.getLogger(__name__).warning(
+                "KIS 마스터 자동 수집을 하지 않았습니다 — KIS_USE_MOCK=1 (합성 데이터 모드는 외부로 나가지 않습니다). "
+                "업종·지수 구성은 적재된 것이 있을 때만 읽습니다. 받으려면 데이터 관리의 수동 수집을 쓰거나 KIS_USE_MOCK=0 으로 기동하십시오.")
         elif not load_master_flags():
             from src.database import get_engine
             asyncio.create_task(_collect_master_bg(get_engine()))

@@ -45,8 +45,9 @@ async function goTab(page: Page, t: Tab, { settle = true } = {}) {
   await Promise.all(waits);
   if (settle) await page.waitForTimeout(900);
 }
-// 중앙은행 말투 게이지는 서버가 ★외부 정책문★을 받아야 그려진다(mock 모드에서도 실제 수집). 네트워크가 열린 CI 에서만 그려져
-// 같은 시험이 두 곳에서 다른 화면을 봤다(2026-11-12 · 'AA dark — indicators' 가 CI 에서만 실패). 그래서 응답을 고정한다 —
+// 중앙은행 말투 게이지는 서버가 ★외부 정책문★을 받아야 그려진다. 2026-11-12 까지는 mock 모드에서도 실제로 수집해, 네트워크가 열린
+// CI 에서만 그려지고 같은 시험이 두 곳에서 다른 화면을 봤다('AA dark — indicators' 가 CI 에서만 실패). 2026-11-13 부터 mock 서버는
+// 수집하지 않고 두 은행 모두 '미산출'(reason: mock_mode)을 낸다 — 그려진 게이지를 보려면 여전히 응답을 고정해야 한다 —
 // 연준은 수집됨, 한국은행은 수집 실패: 두 갈래가 한 화면에 있다. 값은 시험 고정값이지 관측이 아니다.
 const CB = {
   as_of: "2026-11-12 09:00",
@@ -279,6 +280,33 @@ test("중앙은행 게이지: 바늘 자리는 서버 점수(−1~+1 → 0~100%)
   await goTab(p2, "indicators");
   await expect(panel(p2, "indicators").locator(".mc-cbg-marker")).toHaveAttribute("style", /left:\s*0%/);
   await p2.close();
+});
+
+test("중앙은행 게이지: 합성 데이터 모드는 '실패'가 아니라 '미산출' — 시도하지 않은 것과 실패한 것을 가른다(짝)", async ({ page }) => {
+  const MOCK_NOTE = "합성 데이터 모드에서는 중앙은행 정책문을 수집하지 않습니다 — 점수 미산출";
+  await fixCb(page, { ...CB, banks: { fed: { available: false, reason: "mock_mode", note: MOCK_NOTE },
+                                      bok: { ...CB.banks.bok, reason: "fetch_failed" } } });
+  await open(page);
+  await goTab(page, "indicators");
+  const grid = panel(page, "indicators").locator(".mc-cbg-grid");
+  const fed = grid.locator(".mc-cbg").nth(0), bok = grid.locator(".mc-cbg").nth(1);
+  await expect(fed.locator(".mc-cbg-none")).toContainText("점수 미산출");
+  await expect(fed.locator(".mc-cbg-none"), "수집을 시도하지 않았는데 '실패'라고 말하지 않는다").not.toContainText("실패");
+  await expect(fed.locator(".mc-cbg-none [data-server]")).toHaveText(MOCK_NOTE);
+  await expect(fed.locator(".mc-cbg-marker")).toHaveCount(0);
+  await expect(bok.locator(".mc-cbg-none"), "★짝★ — 실패한 쪽은 그대로 실패라고 말한다").toContainText("점수 산출 실패");
+});
+
+test("mock 서버의 실제 응답: 정책문을 수집하지 않고 두 은행 모두 '미산출'(응답을 고정하지 않는다)", async ({ page }) => {
+  await open(page);
+  await goTab(page, "indicators");
+  const cells = panel(page, "indicators").locator(".mc-cbg-grid .mc-cbg");
+  await expect(cells).toHaveCount(2);
+  for (const i of [0, 1]) {
+    await expect(cells.nth(i).locator(".mc-cbg-none")).toContainText("점수 미산출");
+    await expect(cells.nth(i).locator(".mc-cbg-none")).not.toContainText("실패");
+    await expect(cells.nth(i).locator(".mc-cbg-marker")).toHaveCount(0);
+  }
 });
 
 // ── 실패는 실패로 (지연 로더 넷 + 드릴다운) ─────────────────────────────────

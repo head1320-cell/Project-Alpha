@@ -33,6 +33,7 @@ def test_neutral_text_scores_zero():
 
 def test_cb_sentiment_honest_when_fetch_fails(monkeypatch):
     import src.engine.cb_sentiment as cbs
+    monkeypatch.setenv("KIS_USE_MOCK", "0")     # 수집을 '시도했다가 실패'한 경로 — mock 은 시도하지 않는다(test_mock_no_external_calls)
     monkeypatch.setattr(cbs, "_fetch", lambda url, timeout=8.0: None)
     cbs._CACHE.clear()
     out = cbs.cb_sentiment(use_cache=False)

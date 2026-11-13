@@ -147,7 +147,9 @@ def test_no_periodic_loop_is_started_with_a_bare_thread():
 _UNSET = object()
 
 
-def _startup_collects_master(monkeypatch, switch: str, master=_UNSET) -> list[str]:
+def _startup_collects_master(monkeypatch, switch: str, master=_UNSET, mock: str | None = "0") -> list[str]:
+    """`mock` — `KIS_USE_MOCK` 값(`None` 이면 미설정). ★기본은 운영("0")★ — 2026-11-13 부터 mock 모드는 마스터를
+    내려받지 않으므로, "스위치가 켜져 있으면 수집한다"는 시험은 운영 값에서만 뜻이 있다."""
     import asyncio
 
     import src.data.stock_master as sm
@@ -157,6 +159,10 @@ def _startup_collects_master(monkeypatch, switch: str, master=_UNSET) -> list[st
         seen.append("collect")
 
     monkeypatch.setenv("LIFECYCLE_DAEMONS", switch)
+    if mock is None:
+        monkeypatch.delenv("KIS_USE_MOCK", raising=False)
+    else:
+        monkeypatch.setenv("KIS_USE_MOCK", mock)
     if master is _UNSET or master is None:
         monkeypatch.delenv("LIFECYCLE_MASTER_COLLECT", raising=False)
     else:
@@ -201,3 +207,35 @@ def test_master_switch_is_exactly_zero(monkeypatch):
     """★짝★ — 정확히 "0" 일 때만 끈다. 미설정·그 밖의 값은 지금과 같이 수집한다(mock 게이트 규율)."""
     for v in (None, "1", "", "false", "off", "00", " 0"):
         assert _startup_collects_master(monkeypatch, "1", master=v) == ["collect"], repr(v)
+
+
+# ── ★mock 모드는 마스터를 내려받지 않는다 (2026-11-13)★ ─────────────────────────
+# 그 다운로드는 키가 필요 없는 실제 외부 호출이다(`new.real.download.dws.co.kr`). 개발 기본값(`KIS_USE_MOCK=1`)은
+# 외부로 나가지 않아야 하고, 나가면 네트워크 유무에 따라 서버 상태가 달라진다(위 2026-11-12 CI 사고).
+
+def test_mock_mode_means_no_master_download(monkeypatch, caplog):
+    import logging
+    with caplog.at_level(logging.WARNING):
+        assert _startup_collects_master(monkeypatch, "1", mock="1") == []
+    # ★끄면 로그로 말한다★ — 어느 게이트가 막았는지 이름으로.
+    assert any("KIS_USE_MOCK=1" in r.getMessage() for r in caplog.records)
+
+
+def test_an_unset_gate_is_mock_and_does_not_download(monkeypatch):
+    """`mock_allowed()` 의 기본값은 "1" — 아무것도 설정하지 않은 개발 환경이 바로 이 경우다."""
+    assert _startup_collects_master(monkeypatch, "1", mock=None) == []
+
+
+def test_the_mock_gate_is_exactly_one(monkeypatch):
+    """★짝★ — 정확히 "1" 일 때만 mock. 그 밖의 값은 운영이며 마스터가 없으면 그대로 수집한다."""
+    for v in ("0", "true", "", "01", " 1", "yes"):
+        assert _startup_collects_master(monkeypatch, "1", mock=v) == ["collect"], repr(v)
+
+
+def test_the_master_switch_message_wins_over_the_mock_message(monkeypatch, caplog):
+    """둘 다 걸리면 명시 스위치를 말한다 — 사람이 직접 끈 것이 더 구체적인 사유다."""
+    import logging
+    with caplog.at_level(logging.WARNING):
+        assert _startup_collects_master(monkeypatch, "1", master="0", mock="1") == []
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("LIFECYCLE_MASTER_COLLECT=0" in m for m in msgs) and not any("KIS_USE_MOCK=1" in m for m in msgs)

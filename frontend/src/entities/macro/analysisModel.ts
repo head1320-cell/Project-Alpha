@@ -65,6 +65,8 @@ export interface MacroAllocation {
 export interface CbSentimentBank {
   available: boolean; score?: number; label?: string; hawkish_hits?: number;
   dovish_hits?: number; terms?: string[]; note?: string; source?: string;
+  /** 못 낸 사유 — `mock_mode`(합성 데이터 모드라 수집하지 않음) · `fetch_failed`(수집 실패). */
+  reason?: string;
 }
 export interface CbSentiment { as_of: string; banks: { fed?: CbSentimentBank; bok?: CbSentimentBank }; method: string }
 export interface CausalEdge { from: string; to: string; from_label: string; to_label: string; lag: number; p: number }

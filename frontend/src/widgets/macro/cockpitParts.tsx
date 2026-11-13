@@ -289,13 +289,15 @@ export function AxisBreakdown({ title, detail }: { title: string; detail?: { sco
 }
 
 // CbGauge — 중앙은행 말투 게이지(−1 완화 ~ +1 긴축). 띠는 수준 색(청록 ↔ 주황) · 표식은 잉크.
-export function CbGauge({ name, bank }: { name: string; bank?: { available: boolean; score?: number; label?: string; hawkish_hits?: number; dovish_hits?: number; terms?: string[]; note?: string } }) {
+export function CbGauge({ name, bank }: { name: string; bank?: { available: boolean; score?: number; label?: string; hawkish_hits?: number; dovish_hits?: number; terms?: string[]; note?: string; reason?: string } }) {
   if (!bank) return null;
   if (!bank.available) {
+    // 시도하지 않은 것(합성 데이터 모드 — 서버가 수집하지 않는다)과 시도했다가 실패한 것은 다른 말이다(2026-11-13).
+    const untried = bank.reason === "mock_mode";
     return (
       <div className="mc-cbg">
         <div className="mc-cbg-h">{name}</div>
-        <p className="mc-cbg-none">점수 산출 실패. <span data-server>{bank.note ?? "정책문 수신 실패"}</span></p>
+        <p className="mc-cbg-none">{untried ? "점수 미산출." : "점수 산출 실패."} <span data-server>{bank.note ?? "정책문 수신 실패"}</span></p>
       </div>
     );
   }
