@@ -2073,6 +2073,89 @@ async function branchWithModel(page: Page, model: string) {
   await expect(page.locator(".pg-branch-chip").last()).toContainText("→");
 }
 
+// ── 대안 비교 넓히기(2026-11-13 · 설계 `2026-11-13-canvas-bypass-compare-design.md` §2) ─────────────────────
+type BtView = { summary?: Record<string, number | null>; turnover_avg_pct?: number; config?: { cost_bps?: number }; dates?: string[]; equity_curve?: number[] };
+/** 성과 행의 계약 — 열쇠 · 단위 · 서버 view 의 어디서 읽는가. (연환산 수익률은 이 노드의 헤드라인이라 '결과' 행에 이미 있다.) */
+const BRANCH_PERF: [string, string, (v: BtView) => unknown][] = [
+  ["total_return_pct", "%", (v) => v.summary?.total_return_pct], ["max_drawdown_pct", "%", (v) => v.summary?.max_drawdown_pct],
+  ["volatility_pct", "%", (v) => v.summary?.volatility_pct], ["sharpe_ratio", "", (v) => v.summary?.sharpe_ratio],
+  ["turnover_avg_pct", "%", (v) => v.turnover_avg_pct], ["cost_bps", "bp", (v) => v.config?.cost_bps],
+];
+const perfCell = (n: unknown, unit: string) => (typeof n === "number" && Number.isFinite(n) ? `${Number.isInteger(n) ? n : n.toFixed(2)}${unit}` : "—");
+async function branchBacktests(page: Page) {
+  const doc = (await wip(page)) as BDoc;
+  const b = doc.branches![doc.branches!.length - 1];
+  const orig = doc.nodes.find((n) => n.type === "backtest" && !(n.id in b.map))!.id;
+  const copy = Object.entries(b.map).find(([, o]) => o === orig)![0];
+  return { orig, copy, label: b.label };
+}
+
+test("대안 비교 — 성과 행: 값 = 서버 view 그대로 · 다른 값만 · 응답을 바꾸면 화면이 바뀐다(짝) · 순위 낱말 0", async ({ page }) => {
+  await openCanvas(page);
+  await branchWithModel(page, "min_var");
+  const { orig, copy } = await branchBacktests(page);
+  const body = await run(page);
+  await page.locator('.pg-tab[data-tab="branches"]').click();
+  const view = (id: string) => (body.nodes[id] as unknown as { view: BtView }).view;
+  let shown = 0;
+  for (const [key, unit, get] of BRANCH_PERF) {
+    const a = perfCell(get(view(orig)), unit), c = perfCell(get(view(copy)), unit);
+    const row = page.locator(`.pg-branch-row--perf[data-row="perf:${orig}:${key}"]`);
+    if (a === c) { await expect(row, `${key} 는 같아서 보이지 않는다`).toHaveCount(0); continue; }
+    shown += 1;
+    await expect(row.locator("td"), key).toHaveText([a, c]);
+  }
+  expect(shown, "방식을 바꿨으니 성과 행이 적어도 하나는 다르다(빈 표로 통과하지 않게)").toBeGreaterThan(0);
+  expect((await page.locator(".pg-branch-compare").textContent()) ?? "").not.toMatch(/추천|가장 좋은|최고|우월|더 나은|1위/);
+  // ★짝★ — 화면이 값을 지어내지 않는다: 응답의 한 값을 바꾸면 그 칸이 바뀐다
+  await page.route("**/allocation/graph/run*", async (route) => {
+    const r = await route.fetch();
+    const j = await r.json();
+    j.nodes[copy].view.summary.max_drawdown_pct = -77.77;
+    await route.fulfill({ response: r, json: j });
+  });
+  await run(page);
+  await expect(page.locator(`.pg-branch-row--perf[data-row="perf:${orig}:max_drawdown_pct"] td`).nth(1)).toHaveText("-77.77%");
+});
+
+test("대안 비교 — 곡선 겹쳐 보기: 계산 전에는 사유(짝) · 서버에 보낸 두 곡선 = 원본·대안의 백테스트 결과 · 그림은 서버가 맞춘 것", async ({ page }) => {
+  await openCanvas(page);
+  await branchWithModel(page, "min_var");
+  const { orig, copy, label } = await branchBacktests(page);
+  await page.locator('.pg-tab[data-tab="branches"]').click();
+  const box = page.locator(".pg-branch-curves");
+  await expect(box, "계산 전 — 곡선이 없으면 그리지 않고 사유를 말한다").toContainText("계산");
+  await expect(box.locator("svg.pf-cmp-svg")).toHaveCount(0);
+  const sent = page.waitForRequest((r) => r.url().includes("/api/v1/perf/compare") && r.method() === "POST", { timeout: 120_000 });
+  const body = await run(page);
+  const req = (await sent).postDataJSON() as { a: { label: string; dates: string[]; equity: number[] }; b: { label: string; dates: string[]; equity: number[] }; base: number };
+  const v = (id: string) => (body.nodes[id] as unknown as { view: BtView }).view;
+  expect(req.a.label).toBe("원본");
+  expect(req.b.label).toBe(label);
+  expect(req.a.equity).toEqual(v(orig).equity_curve);
+  expect(req.b.equity).toEqual(v(copy).equity_curve);
+  expect(req.a.dates).toEqual(v(orig).dates!.map(String));
+  await expect(box.locator("svg.pf-cmp-svg")).toBeVisible();
+  await expect(box.locator("svg.pf-cmp-svg path.pf-line-a")).toHaveCount(1);
+  await expect(box.locator("svg.pf-cmp-svg path.pf-line-b")).toHaveCount(1);       // 둘만 — 다섯 선을 겹치지 않는다
+  await expect(box).toContainText("예측력");                                        // 정직성 문장
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`대안 비교 넓히기 — 대비 AA (${theme}): 성과 행 · 곡선 상자 · 정직성 문장`, async ({ page }) => {
+    await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+    await openCanvas(page);
+    if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+    await branchWithModel(page, "min_var");
+    await run(page);
+    await page.locator('.pg-tab[data-tab="branches"]').click();
+    await expect(page.locator(".pg-branch-curves svg.pf-cmp-svg")).toBeVisible();
+    await expect(page.locator(".pg-branch-row--perf").first()).toBeVisible();
+    const r = await page.evaluate<AuditResult>(contrastAudit(".pg-branch-compare"));
+    expect(r.low, JSON.stringify(r.low)).toEqual([]);
+  });
+}
+
 test("대안 보정(BO O3): 칸 = 서버 DSR · 보낸 곡선 = 백테스트 결과 · N 문장·하한 문장 · 대안이 늘면 N 이 늘고 값이 바뀜(짝)", async ({ page }) => {
   await openCanvas(page);
   await branchWithModel(page, "min_var");

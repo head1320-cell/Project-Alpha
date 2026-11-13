@@ -5022,6 +5022,14 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-canvas[data-zoom="far"] .pg-node-delta { display: none; }
 .pg-branch-honest { margin: 6px 0 10px; padding: 8px 10px; font-size: 12.5px; line-height: 1.5; color: var(--pg-ink); background: var(--pg-assume-soft); border-radius: 10px; }
 .pg-branch-table th[scope="row"] { font-size: 12.5px; font-weight: 600; color: var(--pg-ink); text-align: left; }
+/* 대안 비교 넓히기(2026-11-13) — 성과 행은 표의 기존 모양 그대로 · 곡선 겹쳐 보기 상자와 대안 고르기 단추. */
+.pg-branch-table td { word-break: keep-all; }   /* 값 칸이 낱말 중간에서 꺾이지 않게('블랙-리터/먼') */
+.pg-branch-curves { margin-top: 14px; }
+.pg-branch-curves-h { margin: 0 0 6px; font-size: 12.5px; font-weight: 700; color: var(--pg-ink); }
+.pg-branch-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.pg-branch-pick-btn { height: 28px; padding: 0 10px; border: 1px solid var(--pg-line); border-radius: 8px; background: transparent; font-size: 12px; font-weight: 600; color: var(--pg-body); cursor: pointer; }
+.pg-branch-pick-btn.is-on { border-color: var(--pg-blue); color: var(--pg-blue); }
+.pg-branch-curves-note { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--pg-body); }
 .pg-branch-table th[scope="col"] { font-size: 12px; font-weight: 700; color: var(--pg-body); text-align: right; }
 .pg-branch-table th[scope="col"]:first-child { text-align: left; }
 /* 값 칸 사이 간격 — 없으면 "min_var" "risk_parity" 가 붙어 "min_varrisk_parity" 로 읽혔다(BP 점검 스크린샷). */

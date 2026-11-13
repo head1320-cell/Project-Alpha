@@ -23,6 +23,10 @@ import {
   type NodeRunResult,
   type PgNode,
 } from "@/entities/portfolio-graph";
+import { perfApi } from "@/entities/perf/api";
+import { PerfCompare } from "@/shared/ui/perf/PerfCompare";
+import { compareViewOf, type CompareResponse } from "@/shared/ui/perf/perfView";
+import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 import { usePortfolioGraph } from "./store";
 
 export const PG_BRANCH_TYPE = "pgBranch";
@@ -96,6 +100,78 @@ function BranchFrameImpl({ data }: NodeProps<Node<BranchFrameData>>) {
 }
 
 export const BranchFrame = memo(BranchFrameImpl);
+
+type Dict = Record<string, unknown>;
+const dict = (v: unknown): Dict => (v && typeof v === "object" && !Array.isArray(v) ? (v as Dict) : {});
+
+/**
+ * 성과 행(2026-11-13 · 설계 §2.1) — 과거 성과 노드의 서버 view 에 ★이미 있는★ 값만 옮긴다. 화면은 서식만(새 수치 0).
+ * 연환산 수익률은 이 노드의 헤드라인이라 '결과' 행에 이미 있다. 순위·추천·정렬은 하지 않는다(대안 순서 그대로).
+ */
+const PERF_ROWS: { key: string; label: string; unit: string; get: (v: Dict) => unknown }[] = [
+  { key: "total_return_pct", label: "총수익률", unit: "%", get: (v) => dict(v.summary).total_return_pct },
+  { key: "max_drawdown_pct", label: "MDD(최대낙폭)", unit: "%", get: (v) => dict(v.summary).max_drawdown_pct },
+  { key: "volatility_pct", label: "변동성", unit: "%", get: (v) => dict(v.summary).volatility_pct },
+  { key: "sharpe_ratio", label: "샤프지수", unit: "", get: (v) => dict(v.summary).sharpe_ratio },
+  { key: "turnover_avg_pct", label: "평균 회전율", unit: "%", get: (v) => v.turnover_avg_pct },
+  { key: "cost_bps", label: "거래비용 가정", unit: "bp", get: (v) => dict(v.config).cost_bps },
+];
+/** 성과 칸 — 수가 아니면 "—"(0 이 아니다). */
+const perfCell = (n: unknown, unit: string): string =>
+  (typeof n === "number" && Number.isFinite(n) ? `${Number.isInteger(n) ? n : n.toFixed(2)}${unit}` : "—");
+
+type CurveSide = { label: string; dates: string[] | null; equity: number[] | null; perfLabel: PerfLabelValue | null };
+
+/**
+ * 곡선 겹쳐 보기(2026-11-13 · 설계 §2.2) — 원본 ↔ ★고른 대안 하나★. 두 곡선을 서버(`POST /api/v1/perf/compare`)에 보내면 서버가 맞추고 뺀다 —
+ * 비교 화면·현실성 탭과 같은 문. 다섯 선을 한 그림에 겹치지 않는다(읽을 수 없고 '가장 높은 선' 고르기를 부추긴다).
+ * 곡선이 하나라도 없으면 그리지 않고 사유를 말한다.
+ */
+function BranchCurves({ name, sides }: { name: string; sides: CurveSide[] }) {
+  const [pick, setPick] = useState(1);
+  // 받은 답에 그 답의 열쇠를 함께 둔다 — 열쇠가 바뀌면(다른 대안 · 새 계산) 앞 답은 저절로 '아직'이 된다(효과 안에서 지우지 않는다).
+  const [got, setGot] = useState<{ key: string; resp?: CompareResponse; err?: string } | null>(null);
+  const idx = Math.min(Math.max(1, pick), sides.length - 1);
+  const a = sides[0];
+  const b = sides[idx];
+  const has = (x: CurveSide | undefined) => !!(x?.equity && x.dates);
+  const ready = has(a) && has(b);
+  const key = ready ? JSON.stringify([idx, a.equity!.length, a.equity![a.equity!.length - 1], b.equity!.length, b.equity![b.equity!.length - 1]]) : "";
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    perfApi.compare({ a: { label: a.label, dates: a.dates!, equity: a.equity! }, b: { label: b.label, dates: b.dates!, equity: b.equity! }, base: 100 })
+      .then((r) => { if (alive) setGot({ key, resp: r }); })
+      .catch((e: Error) => { if (alive) setGot({ key, err: e.message }); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const cur = got && got.key === key ? got : null;
+  const resp = cur?.resp ?? null;
+  const err = cur?.err ?? null;
+  const missing = [a, b].filter((x) => !has(x)).map((x) => x?.label ?? "").filter(Boolean);
+  return (
+    <div className="pg-branch-curves" data-node={name}>
+      <p className="pg-branch-curves-h">{name} · 누적 곡선 겹쳐 보기</p>
+      {sides.length > 2 && (
+        <div className="pg-branch-pick" role="group" aria-label="원본과 겹쳐 볼 대안">
+          {sides.slice(1).map((x, i) => (
+            <button key={x.label} type="button" className={`pg-branch-pick-btn${i + 1 === idx ? " is-on" : ""}`} aria-pressed={i + 1 === idx}
+                    onClick={() => setPick(i + 1)}>{x.label}</button>
+          ))}
+        </div>
+      )}
+      {!ready ? <p className="pg-help">{missing.join(", ")}의 과거 성과가 아직 없습니다 — 계산하면 원본과 겹쳐 표시합니다.</p>
+        : err ? <p className="pg-help">{err}</p>
+        : !resp ? <p className="pg-help">곡선 정렬 중…</p>
+        : <PerfCompare height={220} title={`원본과 ${b.label}의 누적 곡선과 차이`}
+                       view={compareViewOf(resp, { unit: "base100", labelA: a.label, labelB: b.label,
+                                                   perfLabelA: a.perfLabel, perfLabelB: b.perfLabel,
+                                                   question: "같은 과거에서 원본과 대안의 성과 차이" })} />}
+      <p className="pg-branch-curves-note" role="note">같은 과거에서 본 두 곡선의 차이입니다 — 예측력·경제적 가치의 증거가 아닙니다.</p>
+    </div>
+  );
+}
 
 function headlineText(r: NodeRunResult | undefined, previous: boolean): string {
   if (!r || previous) return "—";
@@ -187,7 +263,7 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
         const node = (id: string | undefined) => nodes.find((n) => n.id === id);
         const res = (id: string | undefined) => (id && results && !staleIds.has(id) ? results[id] : undefined);
         const stale = [root, ...origIds, ...bs.flatMap((b) => Object.keys(b.map))].some((id) => staleIds.has(id));
-        type Row = { key: string; kind: "set" | "out"; name: string; cells: string[] };
+        type Row = { key: string; kind: "set" | "out" | "perf"; name: string; cells: string[] };
         const rows: Row[] = [];
         for (const orig of origIds) {
           const o = node(orig);
@@ -211,6 +287,23 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
         }
         // 과거 성과 노드(백테스트) — 갈래에 복제된 것만. 곡선은 서버 결과 그대로(`equity_curve`), 낡은 결과는 쓰지 않는다.
         const btests = origIds.filter((id) => node(id)?.data.kind === "backtest");
+        const okView = (id: string | undefined): Dict | null => { const r = res(id); return r?.status === "ok" && !r.previous ? dict(r.view) : null; };
+        const btName = (id: string) => catalog.find((c) => c.type === node(id)?.data.kind)?.plain_label ?? id;
+        // 성과 행 — 서버 view 의 값 그대로 · ★값이 다른 행만★.
+        for (const orig of btests) {
+          for (const p of PERF_ROWS) {
+            const cells = [orig, ...bs.map((b) => copyOf(b, orig))].map((id) => { const v = okView(id); return v ? perfCell(p.get(v), p.unit) : "—"; });
+            if (new Set(cells).size > 1) rows.push({ key: `perf:${orig}:${p.key}`, kind: "perf", name: `${btName(orig)} · ${p.label}`, cells });
+          }
+        }
+        const sideOf = (label: string, id: string | undefined): CurveSide => {
+          const v = okView(id);
+          const eq = v && Array.isArray(v.equity_curve) && v.equity_curve.every((x) => typeof x === "number") ? (v.equity_curve as number[]) : null;
+          const dates = v && Array.isArray(v.dates) ? (v.dates as unknown[]).map(String) : null;
+          const ok = !!eq && !!dates && eq.length === dates.length && eq.length >= 2;
+          return { label, equity: ok ? eq : null, dates: ok ? dates : null,
+                   perfLabel: ((res(id)?.provenance?.perf_label ?? v?.perf_label ?? null) as PerfLabelValue | null) };
+        };
         const curveOf = (id: string | undefined): number[] | null => {
           const r = res(id);
           const c = r?.status === "ok" && !r.previous ? (r.view as { equity_curve?: unknown } | undefined)?.equity_curve : null;
@@ -241,7 +334,7 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.key} className={`pg-branch-row--${r.kind}`} data-row={r.key}>
-                      <th scope="row">{r.kind === "set" ? "설정 · " : "결과 · "}{r.name}</th>
+                      <th scope="row">{r.kind === "set" ? "설정 · " : r.kind === "perf" ? "성과 · " : "결과 · "}{r.name}</th>
                       {r.cells.map((c, i) => <td key={i} className={`pg-td-num${i > 0 && c !== r.cells[0] ? " pg-branch-diff" : ""}`}>{c}</td>)}
                     </tr>
                   ))}
@@ -253,6 +346,10 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
                 </tbody>
               </table>
             )}
+            {btests.map((orig) => (
+              <BranchCurves key={`curves:${orig}`} name={btName(orig)}
+                            sides={[sideOf("원본", orig), ...bs.map((b) => sideOf(b.label, copyOf(b, orig)))]} />
+            ))}
             {stale && <p className="pg-help">설정이 바뀐 칸은 비워 두었습니다 — 재계산하십시오.</p>}
           </section>
         );
