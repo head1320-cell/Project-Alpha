@@ -398,12 +398,12 @@ test("신호·후보 노드(BK W2): 스크리너 → 알파 점수 → 점수로
   await expect(f.locator(".pg-filter-row")).toHaveCount(1);
   await f.locator(".pg-add").click();
   await expect(f.locator(".pg-filter-row")).toHaveCount(2);
-  await expect(f.locator(".pg-filter-row").first().locator("select").first().locator('option[value="roe"]')).toHaveCount(1);
+  await expect(f.locator(".pg-filter-row").first().locator("select").first().locator('option[value="roe_pct"]')).toHaveCount(1);
   await f.locator(".pg-filter-row").nth(1).locator("input").fill("5");
   const saved = await exportDoc(page);
   const conds = saved.nodes.find((n: { id: string }) => n.id === "scr").params.filter_ast.conditions;
   expect(conds).toHaveLength(2);
-  expect(conds[0]).toMatchObject({ field: "roe", op: "gt", value: 10 });
+  expect(conds[0]).toMatchObject({ field: "roe_pct", op: "gt", value: 10 });      // 과거 시점에서도 쓸 수 있는 기본 필드(2026-11-13)
   expect(conds[1].value).toBe(5);
 });
 

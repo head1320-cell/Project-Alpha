@@ -476,6 +476,14 @@ class ValuationScreener:
         self._active_asof = as_of_date
         self._asof_excluded = {}          # {종목코드: 사유} — 그 시점 종가가 없어 평가에서 뺀 종목
         self._asof_fin_unavailable = {}   # {종목코드: 사유} — 그 시점 공시 재무가 미상인 종목
+        self._asof_fin_partial = {}       # {종목코드: [칸]} — 그 시점 공시가 주지 않아 미상으로 둔 칸(오늘 값을 걷어 냈다)
+        if as_of_date:
+            # ★과거 시점에는 그 시점 값이 있는 항목으로만 거르고 정렬한다(감사 §12 — 사용자 결정 "막는다")★
+            # 평가 전에 본다 — 시점 값이 없는 항목을 쓴 요청은 계산하지 않고 그 항목을 짚어 사유를 올린다.
+            from src.engine.pit_fields import PitFieldNotAvailable, pit_violations
+            bad = pit_violations(filter_ast, sort_by, sort_by_secondary)
+            if bad:
+                raise PitFieldNotAvailable(bad)
 
         # 1. Universe
         tickers = self._resolve_universe(universe)
@@ -553,7 +561,14 @@ class ValuationScreener:
         #   기본값 standard. 명시적 "off"일 때만 비활성.
         from src.engine.liquidity_gate import apply_liquidity_gate, resolve_floor
         floor = resolve_floor(liquidity_floor if liquidity_floor is not None else "standard")
-        items, self._liquidity_stats = apply_liquidity_gate(items, floor)
+        if as_of_date:
+            # ★과거 시점에는 게이트를 적용하지 않고 그렇다고 말한다(감사 §12 — 사용자 결정)★ 게이트는 ★오늘의★ 거래대금·
+            # 거래 상태로 판정한다 — 그것으로 과거 유니버스를 거르면 오늘 거래정지·관리종목이 과거 후보에서 빠진다.
+            from src.engine.pit_fields import ASOF_LIQUIDITY_NOTE
+            self._liquidity_stats = {"applied": False, "before": len(items), "after": len(items), "filtered_out": 0,
+                                     "reason": "asof_not_supported", "note": ASOF_LIQUIDITY_NOTE}
+        else:
+            items, self._liquidity_stats = apply_liquidity_gate(items, floor)
 
         # 시세보강(KIS 실호출)은 신규 평가분만 — 복원분은 이미 시세 완비.
         fresh_set = {it.stock_code for it in fresh_items}
@@ -637,11 +652,21 @@ class ValuationScreener:
             for r in d.values():
                 by[r] = by.get(r, 0) + 1
             return by
+        from src.engine.pit_fields import ASOF_LIQUIDITY_NOTE
         ex = dict(getattr(self, "_asof_excluded", {}) or {})
         fu = dict(getattr(self, "_asof_fin_unavailable", {}) or {})
+        fp = dict(getattr(self, "_asof_fin_partial", {}) or {})
+        missing: dict = {}
+        for fields in fp.values():
+            for f in fields:
+                missing[f] = missing.get(f, 0) + 1
         return {"excluded": {"count": len(ex), "by_reason": tally(ex),
                              "sample": [{"code": c, "reason": ex[c]} for c in sorted(ex)[:20]]},
-                "financials_unavailable": {"count": len(fu), "by_reason": tally(fu)}}
+                "financials_unavailable": {"count": len(fu), "by_reason": tally(fu)},
+                # 그 시점 공시가 주지 않아 미상으로 둔 칸 — 몇 종목의 어느 칸인지(그 칸에 건 조건은 그 종목을 통과시키지 않는다).
+                "financials_partial": {"count": len(fp), "missing": missing},
+                # 과거 시점에는 유동성 게이트를 적용하지 않는다 — 그 사실을 늘 싣는다.
+                "liquidity_gate": {"applied": False, "reason": "asof_not_supported", "note": ASOF_LIQUIDITY_NOTE}}
 
     # ─────────────────────────────────────────────────────────────────────
     # 캐싱 + 안전 평가
@@ -712,8 +737,8 @@ class ValuationScreener:
           - 그 시점 공시를 못 읽었다(`pit_unavailable` — 운영) → 여덟 칸은 ★미상(None)★ 이고 사유를 싣는다.
             오늘 값을 과거 값처럼 남기지 않는다(미상 ≠ 현재값).
           - 합성 스냅샷(`pit_mock` — mock 모드에서만 나온다) → `fundamentals_is_mock=True`.
-          - 읽은 공시 → 값이 있는 칸만 교체한다(가격 의존 칸은 시총 시계열이 있을 때만 — 없는 칸은 지금 값이 남는다:
-            감사 F6 의 '부분 적용', 이번에 고치지 않았다).
+          - 읽은 공시 → 여덟 칸 모두 공시의 값으로 둔다. ★공시가 주지 않은 칸은 미상(None)이다★(2026-11-13 · 감사 §12) —
+            평가 때 오늘 재무로 계산한 값을 과거 값처럼 남기지 않는다(예전의 '부분 적용'). 걷어 낸 칸은 항목과 요약에 싣는다.
         """
         from src.engine.pit_store import PIT_FIN_KEYS, PITStore
 
@@ -734,9 +759,15 @@ class ValuationScreener:
         if source == "pit_unavailable":
             unknown(snap.get("_reason") or "unavailable")
             return item
+        dropped = []
         for f in PIT_FIN_KEYS:
-            if snap.get(f) is not None:
-                setattr(item, f, round(snap[f], 2))
+            v = snap.get(f)
+            if v is None and getattr(item, f, None) is not None:
+                dropped.append(f)                 # 평가 때는 (오늘 재무로) 값이 있었다 — 걷어 낸다
+            setattr(item, f, round(v, 2) if v is not None else None)
+        if dropped:
+            item.asof_financials = {"available": True, "missing": dropped}
+            self.__dict__.setdefault("_asof_fin_partial", {})[stock_code] = dropped
         if source == "pit_mock":
             item.fundamentals_is_mock = True
         return item

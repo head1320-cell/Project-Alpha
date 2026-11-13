@@ -133,4 +133,7 @@ def test_an_item_filled_from_a_real_filing_keeps_the_real_label(prod, monkeypatc
     monkeypatch.setattr(s, "_dart_snapshot", lambda *a, **k: {"roe_pct": 7.7, "per": 9.9, "_source": "pit_dart"})
     out = _apply(s, monkeypatch, _item())
     assert out.roe_pct == 7.7 and out.per == 9.9 and out.fundamentals_is_mock is False
-    assert not hasattr(out, "asof_financials")
+    # 2026-11-13(감사 §12): 공시가 주지 않은 여섯 칸은 ★미상★이다 — 오늘 값을 과거 값처럼 남기지 않고, 걷어 낸 칸을 싣는다.
+    missing = [k for k in _FIN_KEYS if k not in ("roe_pct", "per")]
+    assert [getattr(out, k) for k in missing] == [None] * 6
+    assert out.asof_financials == {"available": True, "missing": missing}

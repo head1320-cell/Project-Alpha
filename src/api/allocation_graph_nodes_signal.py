@@ -53,13 +53,16 @@ _UNIVERSE_LABEL = {"kospi50": "코스피 50", "kospi200": "코스피 200", "kosd
 
 
 def _presets_filter() -> list[dict]:
+    """기본 조건 — ★과거 시점에서도 쓸 수 있는 항목만★(2026-11-13 · 감사 §12). 예전의 `roe`·`dividend_yield`·`debt_to_equity` 는
+    저장소가 붙이는 오늘의 팩터라 '과거 시점'을 넣으면 거절된다. 같은 지표의 기본 필드로 바꿨다(문턱의 뜻은 같다 —
+    부채자본비율 1배 = 부채비율 100%). `tests/test_pit_asof_block.py` 가 기본 조건마다 과거 시점에 쓸 수 있는지 본다."""
     c = lambda f, op, v: {"field": f, "op": op, "value": v}  # noqa: E731
     return [
         {"label": "조건 없음", "value": {"logic": "AND", "conditions": [], "groups": []}},
         {"label": "싼 종목", "value": {"logic": "AND", "conditions": [c("per", "lt", 10), c("pbr", "lt", 1)], "groups": []}},
-        {"label": "고ROE", "value": {"logic": "AND", "conditions": [c("roe", "gt", 10)], "groups": []}},
-        {"label": "배당 주는", "value": {"logic": "AND", "conditions": [c("dividend_yield", "gt", 3)], "groups": []}},
-        {"label": "빚이 적은", "value": {"logic": "AND", "conditions": [c("debt_to_equity", "lt", 1)], "groups": []}},
+        {"label": "고ROE", "value": {"logic": "AND", "conditions": [c("roe_pct", "gt", 10)], "groups": []}},
+        {"label": "배당 주는", "value": {"logic": "AND", "conditions": [c("dividend_yield_pct", "gt", 3)], "groups": []}},
+        {"label": "빚이 적은", "value": {"logic": "AND", "conditions": [c("debt_ratio_pct", "lt", 100)], "groups": []}},
     ]
 
 
@@ -83,11 +86,12 @@ class ScreenerParams(BaseModel):
         "standard", json_schema_extra={"x-ui": _ui("유동성 문턱", "advanced", options={
             "off": "없음", "relaxed": "느슨하게", "standard": "보통", "institutional": "기관 수준"})})
     as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
-        # ★주장은 증거보다 강할 수 없다(감사 §11 · 2026-11-13 실측)★ — 예전 문구 "해당일에 알 수 있던 값으로만 선별합니다"는 사실이 아니었다:
-        # 시점 값은 종가와 그 시점 공시의 재무 일부뿐이고, 조건 필드 대부분(펀더멘털·가격·확장 팩터)은 현재 값으로 붙는다.
-        "과거 시점", "advanced", help="입력하면 해당일의 종가와 그 시점 공시의 ROE·ROA·부채비율로 평가합니다(공시 미확보 시 재무 항목은 미상). "
-                                    "그 밖의 조건 필드(팩터·모멘텀·배당수익률 등)는 현재 값이므로, 과거 시점 조건으로 쓰면 미래 정보가 섞입니다. "
-                                    "비우면 현재 값입니다. 과거 시점 선별은 유동성 문턱·정렬 방향을 사용하지 않습니다.")})
+        # ★주장은 증거보다 강할 수 없다(감사 §11~§12 · 2026-11-13)★ — 예전 문구 "해당일에 알 수 있던 값으로만 선별합니다"는 사실이 아니었다
+        # (조건 필드 대부분이 오늘 값으로 붙었다). 이제 그 시점 값이 없는 조건·정렬 항목은 서버가 거절하므로 그렇게 적는다.
+        "과거 시점", "advanced", help="입력하면 해당일의 종가와 그 시점 공시의 재무로 평가합니다(공시에 없는 재무 항목은 미상). "
+                                    "조건·정렬에는 그 시점 값이 있는 항목(재무 8개 · 가치평가 점수)만 쓸 수 있습니다 — "
+                                    "현재 값으로만 계산되는 항목(팩터·모멘텀 등)을 쓰면 계산하지 않고 사유를 알립니다. "
+                                    "유동성 문턱은 적용하지 않습니다. 비우면 현재 값입니다.")})
 
 
 def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
@@ -109,9 +113,12 @@ def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
             "total_evaluated": out.get("total_evaluated"), "total_passed": out.get("total_passed"),
             "universe": "직접 연결한 종목" if cand else _UNIVERSE_LABEL.get(p.universe, p.universe),
             "data_source": {}, "liquidity_gate": None, "as_of": p.as_of}
-    # 그 시점 종가가 없어 뺀 종목·재무가 미상인 종목 — ★있을 때만★ 싣는다(없으면 view 모양은 그대로).
     asof = out.get("asof") or {}
-    if (asof.get("excluded") or {}).get("count") or (asof.get("financials_unavailable") or {}).get("count"):
+    # 과거 시점에는 유동성 게이트를 적용하지 않는다 — 서버가 말한 그대로 싣는다(예전엔 `None` 이라 적용 여부를 알 수 없었다).
+    view["liquidity_gate"] = asof.get("liquidity_gate")
+    # 그 시점 종가가 없어 뺀 종목·재무가 미상인 종목·공시에 없어 미상으로 둔 칸 — ★있을 때만★ 싣는다(없으면 view 모양은 그대로).
+    if ((asof.get("excluded") or {}).get("count") or (asof.get("financials_unavailable") or {}).get("count")
+            or (asof.get("financials_partial") or {}).get("count")):
         view["asof"] = asof
     return pg.NodeOutput(
         values={"universe": {"tickers": tickers, "weights": None, "benchmark": "KOSPI"}}, view=view,
@@ -163,6 +170,12 @@ def _explain_screener(view: dict, prov: dict, params: Any) -> dict:
         facts.append(f"과거 시점 종가가 적재되어 있지 않아 {n_excluded}종목을 평가에서 제외했습니다.")
     if n_fin_unknown:
         facts.append(f"{n_fin_unknown}종목은 해당 시점의 공시 재무를 읽지 못해 재무 지표가 미상입니다.")
+    n_partial = (asof.get("financials_partial") or {}).get("count") or 0
+    if n_partial:
+        facts.append(f"{n_partial}종목은 해당 시점 공시에 없는 재무 항목이 미상입니다(현재 값을 대신 쓰지 않습니다).")
+    gate = view.get("liquidity_gate") or {}
+    if gate.get("applied") is False and gate.get("reason") == "asof_not_supported":
+        facts.append("과거 시점에는 유동성 문턱을 적용하지 않았습니다 — 오늘의 거래대금·거래 상태로 과거를 거르지 않습니다.")
     trust = [_t(CONFIRMED, "조건은 서버의 필드 목록으로 검사했습니다."), _t(UNKNOWN, _TODAY)]
     if not (view.get("data_source") or {}).get("fully_real"):
         trust.append(_t(UNKNOWN, "재무나 시세 중 하나 이상이 합성(mock) 데이터입니다 — 실제 선택을 말해 주지 않습니다."))

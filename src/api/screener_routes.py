@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from src.domain.execution_assumption import SIGNAL_LAG_DEFAULT
 from src.domain.perf_kind import backtest_label
+from src.engine.pit_fields import PitFieldNotAvailable
 from src.observability.logging_config import get_logger
 
 logger = get_logger("api.screener")
@@ -1198,6 +1199,9 @@ def screener_run_pit(req: PITRunRequest):
         }
     except HTTPException:
         raise
+    except PitFieldNotAvailable as e:
+        # 시점 값이 없는 조건·정렬 항목 — 계산하지 않았다. 사유(어느 항목인지)를 그대로 낸다(뭉뚱그린 500 이 아니다).
+        raise HTTPException(400, str(e)) from None
     except Exception:
         logger.exception("스크리너 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -1715,18 +1719,24 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         def _screen_progress(done, total, misses):
             _emit({"phase": "screening", "done": done, "total": total})
 
-        result = screener.run(
-            universe=_universe,
-            filter_ast=ast,
-            sort_by=req.sort_by,
-            ascending=(req.sort_dir == "asc"),
-            sort_by_secondary=req.sort_by_secondary,
-            sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
-            limit=pool_cap,
-            liquidity_floor=req.liquidity_floor,
-            as_of_date=_asof_date_for_screener,
-            progress_cb=_screen_progress,
-        )
+        try:
+            result = screener.run(
+                universe=_universe,
+                filter_ast=ast,
+                sort_by=req.sort_by,
+                ascending=(req.sort_dir == "asc"),
+                sort_by_secondary=req.sort_by_secondary,
+                sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
+                limit=pool_cap,
+                liquidity_floor=req.liquidity_floor,
+                as_of_date=_asof_date_for_screener,
+                progress_cb=_screen_progress,
+            )
+        except PitFieldNotAvailable as e:
+            # 시점 유니버스(생존편향 보정)의 후보 풀은 과거 시점 스크리닝으로 만든다 — 시점 값이 없는 조건·정렬 항목을 쓰면
+            # 오늘 값으로 과거 유니버스를 고르게 된다(룩어헤드). 계산하지 않고 그 항목을 짚어 알린다(감사 §12 — 사용자 결정 "막는다").
+            return {"error": True, "message": str(e), "screened_count": 0,
+                    "reason": "pit_field_not_available", "fields": e.violations}
         # screened(≤eval_cap)는 조건식 신호 평가용 후보 풀 — "대상 종목 수"(max_tickers)와는
         # 무관하게 넓게 유지한다(조건식이 넓은 풀에서 매치를 찾아야 하므로). 동시 보유 가능
         # 종목 수는 별도로 max_positions(=req.max_positions, "대상 종목 수" 스테퍼 값)가
