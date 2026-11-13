@@ -5,7 +5,7 @@
  */
 import { useCallback, useMemo, useRef, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
-import { COL, euro, goalDoc, josa, nextKinds, portfolioGraphApi, restackDoc, toDoc, type WorkflowStage } from "@/entities/portfolio-graph";
+import { applyBypassDoc, COL, euro, goalDoc, josa, nextKinds, portfolioGraphApi, restackDoc, toDoc, type WorkflowStage } from "@/entities/portfolio-graph";
 import type { QuickAddState } from "./CanvasAssist";
 import { ancestorsOf, usePortfolioGraph, type PgState } from "./store";
 
@@ -27,7 +27,19 @@ export function useRunActions(s: PgState, stages: WorkflowStage[], rf: RefObject
   const follower = useRef<AbortController | null>(null);
   const run = useCallback(async (targets?: string[]) => {
     const st = usePortfolioGraph.getState();
-    const ids = targets?.length ? ancestorsOf(targets, st.edges) : st.nodes.map((n) => n.id);
+    // 단계 건너뛰기(2026-11-13) — ★서버로 가는 것은 건너뛴 노드를 빼고 선을 돌려 이은 문서★다. 건너뛴 것이 없으면 같은 문서(요청 본문 불변).
+    const applied = applyBypassDoc(toDoc(st.nodes, st.edges), st.catalog ?? []);
+    const skipped = new Set(applied.skipped);
+    if (targets?.length) {
+      const all = targets.length;
+      targets = targets.filter((t) => !skipped.has(t));
+      if (!targets.length) {
+        st.act(() => (all > 1 ? "건너뛴 단계들은 계산하지 않습니다 — 하류 노드에서 ‘여기까지 계산’을 누르십시오."
+                              : "건너뛴 단계는 계산하지 않습니다 — 하류 노드에서 ‘여기까지 계산’을 누르거나, 단계를 다시 적용하십시오."));
+        return;
+      }
+    }
+    const ids = (targets?.length ? ancestorsOf(targets, st.edges) : st.nodes.map((n) => n.id)).filter((x) => !skipped.has(x));
     st.startRun(ids);
     st.setOpenGate(null);
     follower.current?.abort();
@@ -37,7 +49,7 @@ export function useRunActions(s: PgState, stages: WorkflowStage[], rf: RefObject
     portfolioGraphApi.followProgress(rid, (ev) => usePortfolioGraph.getState().applyRunEvent(ev), ctl.signal)
       .catch(() => { if (!ctl.signal.aborted) usePortfolioGraph.getState().progressLost(); });
     try {
-      st.finishRun(await portfolioGraphApi.run(toDoc(st.nodes, st.edges), targets?.length ? targets : undefined, rid));
+      st.finishRun(await portfolioGraphApi.run(applied.doc, targets?.length ? targets : undefined, rid));
     } catch (e) {
       st.finishRun(null, (e as Error).message);
     }

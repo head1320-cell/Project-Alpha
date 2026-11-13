@@ -11,7 +11,7 @@
  * - 결과가 없는 노드(새로 붙인 노드)는 "낡음"이 아니라 "아직 계산 안 함"이다 — 여기서 세지 않는다.
  */
 
-export interface SigNode { id: string; data: { kind: string; params?: Record<string, unknown> | null } }
+export interface SigNode { id: string; data: { kind: string; params?: Record<string, unknown> | null; bypass?: boolean } }
 export interface SigEdge { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }
 
 /** 키 순서와 무관한 JSON — 같은 설정이면 같은 글자. */
@@ -54,7 +54,8 @@ export function deepSigs(nodes: SigNode[], edges: SigEdge[]): Record<string, str
       .map((e) => `${e.targetHandle ?? ""}<${e.sourceHandle ?? ""}@${byId.has(e.source) ? sig(e.source) : "missing"}`)
       .sort();
     visiting.delete(id);
-    return (memo[id] = hash(`${n?.data.kind ?? "?"}|${stableJson(n?.data.params ?? {})}|${ins.join(",")}`));
+    // 건너뛰기(2026-11-13)는 켰을 때만 서명에 든다 — 켜고 끄면 이 노드와 하류가 낡고, 쓰지 않는 문서의 서명은 그대로다.
+    return (memo[id] = hash(`${n?.data.kind ?? "?"}|${stableJson(n?.data.params ?? {})}|${ins.join(",")}${n?.data.bypass ? "|bypass" : ""}`));
   };
   for (const n of nodes) sig(n.id);
   return memo;

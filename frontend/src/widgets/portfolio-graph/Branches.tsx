@@ -18,6 +18,7 @@ import {
   portfolioGraphApi,
   type BranchEvidence,
   shortValue,
+  skippedIds,
   type GraphBranch,
   type NodeCatalogEntry,
   type NodeRunResult,
@@ -51,14 +52,20 @@ export function valueText(entry: NodeCatalogEntry | undefined, key: string, v: u
   return label ?? shortValue(val);
 }
 
-/** 갈래의 바꾼 설정 — "비중 계산 · 위험 성향 2.5 → 6". */
-export function branchDiffs(b: GraphBranch, nodes: PgNode[], catalog: NodeCatalogEntry[]): string[] {
+type SkipEdge = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
+const skipText = (on: boolean) => (on ? "건너뜀" : "적용");
+
+/** 갈래의 바꾼 설정 — "비중 계산 · 위험 성향 2.5 → 6" · 건너뛴 단계는 "노출 중립화 · 적용 → 건너뜀". */
+export function branchDiffs(b: GraphBranch, nodes: PgNode[], catalog: NodeCatalogEntry[], edges: SkipEdge[] = []): string[] {
   const out: string[] = [];
+  const skipped = skippedIds(nodes, edges, catalog);
   for (const [copy, orig] of Object.entries(b.map)) {
     const c = nodes.find((n) => n.id === copy);
     const o = nodes.find((n) => n.id === orig);
     if (!c || !o) continue;
     const entry = catalog.find((x) => x.type === o.data.kind);
+    // 건너뛰기(2026-11-13) — 단계의 유무도 원본과 다른 것이다(설정과 같은 취급 · 승격이 함께 옮긴다).
+    if (skipped.has(orig) !== skipped.has(copy)) out.push(`${entry?.plain_label ?? o.data.kind} · ${skipText(skipped.has(orig))} → ${skipText(skipped.has(copy))}`);
     for (const d of paramDiff(o.data.params ?? {}, c.data.params ?? {})) {
       out.push(`${entry?.plain_label ?? o.data.kind} · ${fieldLabel(entry, d.key)} ${valueText(entry, d.key, d.from)} → ${valueText(entry, d.key, d.to)}`);
     }
@@ -246,11 +253,12 @@ function DsrRows({ name, labels, curves }: { name: string; labels: string[]; cur
   );
 }
 
-export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
-  branches: GraphBranch[]; nodes: PgNode[]; catalog: NodeCatalogEntry[];
+export function BranchCompare({ branches, nodes, edges, catalog, results, staleIds }: {
+  branches: GraphBranch[]; nodes: PgNode[]; edges: SkipEdge[]; catalog: NodeCatalogEntry[];
   results: Record<string, NodeRunResult> | null; staleIds: ReadonlySet<string>;
 }) {
   const roots = [...new Set(branches.map((b) => b.of_root))];
+  const skipped = skippedIds(nodes, edges, catalog);
   if (!roots.length) return <p className="pg-empty">노드를 선택해 ‘대안 만들기’를 누르면 여기서 원본과 비교합니다.</p>;
   return (
     <div className="pg-branch-compare">
@@ -265,6 +273,14 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
         const stale = [root, ...origIds, ...bs.flatMap((b) => Object.keys(b.map))].some((id) => staleIds.has(id));
         type Row = { key: string; kind: "set" | "out" | "perf"; name: string; cells: string[] };
         const rows: Row[] = [];
+        // 단계의 유무 — 원본과 다른 대안이 하나라도 있을 때만 행을 낸다("다른 값만").
+        for (const orig of origIds) {
+          const cells = [orig, ...bs.map((b) => copyOf(b, orig))].map((id) => skipText(!!id && skipped.has(id)));
+          if (new Set(cells).size > 1) {
+            rows.push({ key: `skip:${orig}`, kind: "set", name: `${catalog.find((c) => c.type === node(orig)?.data.kind)?.plain_label ?? orig} · 단계`, cells });
+          }
+        }
+        const hasSkip = rows.length > 0;
         for (const orig of origIds) {
           const o = node(orig);
           const entry = catalog.find((c) => c.type === o?.data.kind);
@@ -317,6 +333,11 @@ export function BranchCompare({ branches, nodes, catalog, results, staleIds }: {
               대안 {bs.length}개를 같은 과거로 비교했습니다 — 비교 횟수가 늘수록 우연히 좋아 보이는 대안을 선택할 위험(다중 비교)이 커집니다.
               표본 밖에서 확인하기 전에는 결론 내리지 마십시오.
             </p>
+            {hasSkip && (
+              <p className="pg-branch-skip-note" role="note">
+                ‘건너뜀’은 그 단계 없이 계산한 것입니다 — 이 단계의 유무에 따른 차이는 같은 과거에서 본 전달 차이이며, 이 단계가 앞으로도 도움이 된다는 증거가 아닙니다.
+              </p>
+            )}
             {btests.length > 0 && (
               <p className="pg-branch-n" data-n={bs.length + 1}>
                 원본과 대안 {bs.length}개, 모두 {bs.length + 1}번 비교했습니다 — 아래 ‘우연을 보정한 확률’은 이 횟수로 보정한 값입니다.

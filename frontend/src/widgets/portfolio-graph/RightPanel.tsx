@@ -6,7 +6,7 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { Edge } from "@xyflow/react";
 import { PanelRightClose } from "lucide-react";
-import { COL, portfolioGraphApi, toDoc, type AskTarget, type NodeCatalogEntry, type NodeRunResult, type PgNode, type WorkflowStage } from "@/entities/portfolio-graph";
+import { applyBypassDoc, canBypass, COL, portfolioGraphApi, toDoc, type AskTarget, type NodeCatalogEntry, type NodeRunResult, type PgNode, type WorkflowStage } from "@/entities/portfolio-graph";
 import type { Session } from "@/entities/session";
 import { AiQuestion, type useAiQuestion } from "./AiQuestion";
 import { AiStory, type useAiStory } from "./AiStory";
@@ -50,6 +50,8 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
   // 이야기 단계의 '숫자 자세히 보기' — 늘 같은 함수(R8 — 새 함수면 이야기 단계가 끌기 한 걸음마다 모두 다시 그려졌다).
   const setTab = s.setTab;
   const onStoryDetail = useCallback((id: string) => { focusNode(id); setTab("detail"); }, [focusNode, setTab]);
+  // 건너뛴 노드(2026-11-13)는 계산되지 않는다 — 결과 탭은 남아 있는 예전 결과도 '아직 계산하지 않았습니다'도 아닌, 건너뛴 단계라고 말한다(카드와 같은 규칙).
+  const selSkipped = !!selected?.data.bypass && canBypass(selected, s.edges, s.catalog ?? []).ok;
   return (
     <aside className="pg-side" aria-label="설명과 설정" hidden={!rightShown}>
       <SideResize width={panels.rightW} onChange={(w, done) => (done ? updatePanels : setPanels)((p) => ({ ...p, rightW: w }))} />
@@ -79,7 +81,7 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                       top={<AiStory session={session} story={aiStory} badge={nodeBadge} onSelect={focusNode} />} />
         )}
         {s.tab === "branches" && (
-          <BranchCompare branches={s.branches} nodes={s.nodes} catalog={s.catalog ?? []}
+          <BranchCompare branches={s.branches} nodes={s.nodes} edges={s.edges} catalog={s.catalog ?? []}
                          results={s.report?.nodes ?? null} staleIds={staleSet} />
         )}
         {s.tab === "wire" && selEdge && (
@@ -111,7 +113,7 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                            const st = usePortfolioGraph.getState();
                            st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 연결했습니다." : "선 연결을 해제했습니다."; });
                          }}
-                         onSave={() => portfolioGraphApi.save(toDoc(s.nodes, s.edges), selected.id, selResult?.view_hash ?? "")}
+                         onSave={() => portfolioGraphApi.save(applyBypassDoc(toDoc(s.nodes, s.edges), s.catalog ?? []).doc, selected.id, selResult?.view_hash ?? "")}
                          saveFollowUp={selected.data.kind === "backtest_setup" ? {
                            label: "결과 조회 노드 추가",
                            run: (runId) => {
@@ -123,7 +125,12 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                            },
                          } : null} />
         )}
-        {s.tab === "detail" && selected && (
+        {s.tab === "detail" && selected && selSkipped && (
+          <p className="pg-panel-note pg-skip-panel-note" role="note">
+            건너뛴 단계입니다 — 이 단계 없이 계산하므로 결과가 없습니다. 다시 적용하려면 노드 도구줄의 ‘이 단계 다시 적용’을 누르십시오.
+          </p>
+        )}
+        {s.tab === "detail" && selected && !selSkipped && (
           <>
           <NodeResultPanel
             kind={selected.data.kind}

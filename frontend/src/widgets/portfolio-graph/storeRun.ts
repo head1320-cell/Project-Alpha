@@ -1,6 +1,7 @@
 /**
  * 캔버스 상태 조각 — 검증·계산·안내 (CF 3부 E3 — `store.ts` 에서 옮김 · 동작 불변)
  */
+import { skippedIds } from "@/entities/portfolio-graph/bypass";
 import { deepSigs } from "@/entities/portfolio-graph/staleness";
 import type { PgState } from "./store";
 import { RUNS, causePath, waitingFor, record, type SliceCtx } from "./storeShared";
@@ -22,8 +23,10 @@ export const runSlice = ({ set, get }: SliceCtx): RunSlice => ({
     let merged = report;
     if (partial && s.report) {
       // ★이번에 계산하지 않은 노드는 이전 결과를 "이전 계산" 으로 남긴다 — 지금 값처럼 보이지 않는다.
+      // 건너뛴 노드(2026-11-13)는 이번 그래프에 없었다 — 예전 결과를 "이전 계산"으로도 남기지 않는다(그 노드의 결과가 아니다).
+      const skipped = skippedIds(s.nodes, s.edges, s.catalog ?? []);
       const prev = Object.fromEntries(Object.entries(s.report.nodes)
-        .filter(([id]) => !(id in report.nodes) && s.nodes.some((n) => n.id === id))
+        .filter(([id]) => !(id in report.nodes) && !skipped.has(id) && s.nodes.some((n) => n.id === id))
         .map(([id, r]) => [id, { ...r, previous: true }]));
       // 선 기록(CF3b2)도 같다 — 이번에 다시 계산하지 않은 받는 쪽의 전달 점검·관계 문장은 예전 계산의 것을 남긴다.
       const kept = new Set(s.edges.map((e) => e.id));

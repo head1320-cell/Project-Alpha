@@ -190,7 +190,7 @@ export function useCanvasGraph(s: PgState, order: string[], path: Set<string>, s
       const root = s.nodes.find((n) => n.id === b.of_root);
       return [{ id: `branch:${b.id}`, type: PG_BRANCH_TYPE, position: { x: x0, y: y0 }, zIndex: -1, selectable: false, draggable: false,
                 className: keep && !ms.some((m) => keep.has(m.id)) ? "pg-dim" : undefined, ariaLabel: branchAria(b.label, ms.length),
-                data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? []), boxed,
+                data: { branchId: b.id, label: b.label, width: x1 - x0, height: y1 - y0, diffs: branchDiffs(b, s.nodes, s.catalog ?? [], s.edges), boxed,
                         rootName: s.catalog?.find((c) => c.type === root?.data.kind)?.plain_label ?? b.of_root } }];
     });
     return keepSame(prevNodes.current, [...frames, ...branchFrames, ...cards]);

@@ -10,6 +10,7 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 import { isGoalKey } from "./goals";
+import { bypassable } from "./bypass";
 import { slotBase, slotHeight, SLOT_MAX_K } from "./size";
 import {
   GRAPH_FORMAT,
@@ -39,6 +40,8 @@ export type PgNodeData = {
   said?: Record<string, string>;
   /** 결과 칸 높이(R3) — 기본보다 늘렸을 때만. 문서의 `size.slot_h`. */
   slotH?: number;
+  /** 단계 건너뛰기(2026-11-13) — 켰을 때만 true. 문서의 `bypass`. */
+  bypass?: boolean;
 }
 
 export type PgNode = Node<PgNodeData>;
@@ -122,6 +125,9 @@ export function parseFile(text: string): ParseResult {
         if (slot <= slotBase(n.type)) slot = null;
       }
     }
+    // 단계 건너뛰기 — 받은 것을 그대로 넘길 수 있는 종류에만. 다른 종류에 붙어 오면 빼고 알린다(말없이 건너뛰지도, 말없이 버리지도 않는다).
+    const skip = n.bypass === true && bypassable(n.type);
+    if (n.bypass !== undefined && !skip) problems.push(`노드 ${n.id} 의 건너뛰기 표시를 뺐습니다 — 건너뛸 수 있는 종류가 아니거나 값이 올바르지 않습니다.`);
     nodes.push({
       id: n.id,
       type: n.type,
@@ -132,6 +138,7 @@ export function parseFile(text: string): ParseResult {
       },
       ...(said.ok ? { said: said.ok } : {}),
       ...(slot ? { size: { slot_h: slot } } : {}),
+      ...(skip ? { bypass: true } : {}),
     });
   }
   const edges: GraphDocEdge[] = [];
@@ -256,6 +263,7 @@ export function fromDoc(doc: GraphDoc, catalog: NodeCatalogEntry[]): { nodes: Pg
         extraOutputs: [...(extraOut.get(n.id) ?? [])],
         ...(said ? { said } : {}),
         ...(n.size ? { slotH: slotHeight(n.type, n.size.slot_h) } : {}),
+        ...(n.bypass ? { bypass: true } : {}),
       },
     };
   });
@@ -290,6 +298,7 @@ export function toDoc(nodes: PgNode[], edges: Edge[], meta?: GraphDoc["meta"], g
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
       ...(n.data.said && Object.keys(n.data.said).length ? { said: { ...n.data.said } } : {}),
       ...(slotHeight(n.data.kind, n.data.slotH) > slotBase(n.data.kind) ? { size: { slot_h: slotHeight(n.data.kind, n.data.slotH) } } : {}),
+      ...(n.data.bypass ? { bypass: true } : {}),
     })),
     edges: edges.map((e) => {
       const wp = viaOf(e);

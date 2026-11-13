@@ -19,7 +19,7 @@ import { TickerField } from "./TickerInput";
 import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
 import { PORT_PLAIN } from "./GraphNode";
-import { fmtElapsed, sameValue, setOrClear, sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
+import { canBypass, fmtElapsed, sameValue, setOrClear, sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
 import { ancestorsOf, descendantsOf } from "./store";
 import { ConstraintsEditor } from "./ConstraintsEditor";
 
@@ -540,8 +540,9 @@ function Gives({ node, entry, edges, plainOf, onFocus }: {
  * 이 노드 명세(BT7) — 흩어진 것을 한 줄로: 단계 · 가정 · 모르는 것 · 재지 않은 것 · 계산 시간 · 계보. ★새 값을 만들지 않는다★ —
  * 서버 explain·elapsed·lineage 를 센다(이야기 탭과 같은 수). 계산 전·예전 결과면 그렇다고만 말한다.
  */
-function Passport({ stage, result, stale }: { stage: string | null; result?: NodeRunResult; stale: boolean }) {
-  const live = result && !stale && result.status === "ok" ? result : null;
+function Passport({ stage, result, stale, skipped }: { stage: string | null; result?: NodeRunResult; stale: boolean; skipped: boolean }) {
+  // 건너뛴 단계(2026-11-13)는 계산되지 않는다 — 남아 있는 예전 결과를 세지 않고, '재계산하면 나옵니다'라고도 하지 않는다.
+  const live = !skipped && result && !stale && result.status === "ok" ? result : null;
   const trust = live?.explain?.trust ?? [];
   const n = (st: string) => trust.filter((t) => t.state === st).length;
   const lin = live?.lineage;
@@ -550,7 +551,7 @@ function Passport({ stage, result, stale }: { stage: string | null; result?: Nod
     <dl className="pg-passport">
       {stage && <div data-k="stage"><dt>단계</dt><dd>{stage}</dd></div>}
       {!live ? (
-        <div data-k="state"><dt>결과</dt><dd>{result && stale ? "예전 결과입니다 — 재계산하면 나옵니다" : result ? "계산되지 않았습니다" : "아직 계산 전입니다"}</dd></div>
+        <div data-k="state"><dt>결과</dt><dd>{skipped ? "건너뛴 단계입니다 — 계산하지 않습니다" : result && stale ? "예전 결과입니다 — 재계산하면 나옵니다" : result ? "계산되지 않았습니다" : "아직 계산 전입니다"}</dd></div>
       ) : (
         <>
           <div data-k="assumed"><dt>가정</dt><dd>{n("assumed")}개</dd></div>
@@ -654,7 +655,8 @@ export function SettingsPanel({ node, entry, nodes, edges, catalog, expert, onEx
 
   return (
     <section className="pg-settings">
-      {entry && <Passport stage={stageLabel ?? null} result={result} stale={stale} />}
+      {entry && <Passport stage={stageLabel ?? null} result={result} stale={stale}
+                           skipped={!!node.data.bypass && canBypass(node, edges, catalog).ok} />}
       {entry && onSwap && <SwapPick node={node} nodes={nodes} edges={edges} catalog={catalog} onSwap={onSwap} />}
       {entry && (
         <dl className="pg-io">

@@ -156,6 +156,8 @@ export interface PgState {
   swapNode: (id: string, kind: string) => string | null;
   addNode: (kind: string, position: { x: number; y: number }) => string;
   updateParams: (id: string, params: Record<string, unknown>) => void;
+  /** 단계 건너뛰기(2026-11-13) — 켜고 끈다. 안내 문장을 돌려준다(건너뛸 수 없으면 사유 — 바꾸지 않는다). 되돌리기 한 번. */
+  toggleBypass: (id: string) => string;
   /** 노드·선을 함께 지운다(R1) — ★되돌리기 한 번★. 지운 것이 없으면 null. Delete 키·메뉴·명령이 모두 이 길이다. */
   deleteElements: (nodeIds: string[], edgeIds: string[]) => DeleteResult | null;
   /** 같은 입력(들어오는 링크)·같은 설정으로 옆에 하나 더 — 설정만 바꿔 나란히 비교할 때. 나가는 링크는 잇지 않는다. */

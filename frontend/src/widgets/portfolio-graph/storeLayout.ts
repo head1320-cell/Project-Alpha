@@ -408,8 +408,11 @@ export const layoutSlice = ({ set, get, push }: SliceCtx): LayoutSlice => ({
     const nodes = s.nodes.filter((n) => !copies.has(n.id)).map((n) => {
       const c = copyOf.has(n.id) ? s.nodes.find((x) => x.id === copyOf.get(n.id)) : undefined;
       if (!c) return n;
-      moved += paramDiff(n.data.params ?? {}, c.data.params ?? {}).length;
-      return { ...n, data: { ...n.data, params: structuredClone(c.data.params ?? {}), said: c.data.said ? { ...c.data.said } : undefined } };
+      moved += paramDiff(n.data.params ?? {}, c.data.params ?? {}).length + (!!n.data.bypass !== !!c.data.bypass ? 1 : 0);
+      // 건너뜀(2026-11-13)도 설정처럼 옮긴다 — 대안에서 건너뛰었으면 원본도 건너뛰고, 대안에서 다시 적용했으면 원본도 적용한다.
+      const { bypass: _was, ...rest } = n.data;
+      return { ...n, data: { ...rest, params: structuredClone(c.data.params ?? {}), said: c.data.said ? { ...c.data.said } : undefined,
+                             ...(c.data.bypass ? { bypass: true as const } : {}) } };
     });
     set({ nodes, edges: s.edges.filter((e) => !copies.has(e.source) && !copies.has(e.target)),
           groups: s.groups.map((g) => ({ ...g, members: g.members.filter((m) => !copies.has(m)) })).filter((g) => g.members.length > 0),

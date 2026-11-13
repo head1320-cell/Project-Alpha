@@ -2,7 +2,7 @@
  * 캔버스 상태 조각 — 노드·선 편집 (CF 3부 E3 — `store.ts` 에서 옮김 · 동작 불변)
  */
 import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
-import { fromDoc, PG_NODE_TYPE, ROW_GAP, nodeHeight, NEW_NODE, placeNodes, placeSuggestion, slotBase, slotHeight, type DraftSet, type PgNodeData, type PgNode } from "@/entities/portfolio-graph";
+import { canBypass, fromDoc, PG_NODE_TYPE, ROW_GAP, nodeHeight, NEW_NODE, placeNodes, placeSuggestion, slotBase, slotHeight, type DraftSet, type PgNodeData, type PgNode } from "@/entities/portfolio-graph";
 import { swapPlan } from "@/entities/portfolio-graph/swap";
 import type { PgState } from "./store";
 import { newId, STRUCTURAL, COALESCE_MS, bare, keepSaid, pruneRemoved, type SliceCtx } from "./storeShared";
@@ -13,7 +13,7 @@ let dragging = false;
 /** 화살표로 같은 노드를 잇달아 옮긴 때(R6) — 이어 누른 것은 한 단계(`updateParams`·상자 이름과 같은 규칙). */
 let lastKeyMove: { key: string; at: number } | null = null;
 
-type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "insertOnEdge" | "addNode" | "updateParams" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "resizeSlot" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
+type GraphSlice = Pick<PgState, "setCatalog" | "onNodesChange" | "onEdgesChange" | "connect" | "swapNode" | "rewire" | "addLinked" | "applySuggestion" | "applyDraft" | "selectEdge" | "insertOnEdge" | "addNode" | "updateParams" | "toggleBypass" | "deleteElements" | "duplicateNode" | "loadDoc" | "setName" | "setGoal" | "select" | "pickIds" | "resizeSlot" | "togglePin" | "toggleFold" | "setReconnecting" | "reconnect">;
 
 export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
   setCatalog: (catalog, err = null) => set({ catalog, catalogError: err }),
@@ -77,7 +77,7 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
       const targetHandle = plan.inputs[e.id] ?? e.targetHandle ?? null;
       return { ...e, sourceHandle, targetHandle, id: `${e.source}.${sourceHandle}->${e.target}.${targetHandle}` };
     });
-    set({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, kind, params: {}, said: undefined } } : n)), edges,
+    set({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, kind, params: {}, said: undefined, bypass: undefined } } : n)), edges,
           selectedEdge: null });
     return id;
   },
@@ -193,6 +193,23 @@ export const graphSlice = ({ set, get, push }: SliceCtx): GraphSlice => ({
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, params, said: keepSaid(n.data.said, n.data.params, params) } } : n)),
     }));
+  },
+
+  toggleBypass: (id) => {
+    const s = get();
+    const n = s.nodes.find((x) => x.id === id);
+    if (!n) return "노드를 찾지 못했습니다.";
+    const name = s.catalog?.find((c) => c.type === n.data.kind)?.plain_label ?? n.data.kind;
+    if (n.data.bypass) {
+      push();
+      set({ nodes: s.nodes.map((x) => { if (x.id !== id) return x; const { bypass: _on, ...data } = x.data; return { ...x, data }; }) });
+      return `‘${name}’ 단계를 다시 적용합니다 — 재계산하십시오. 되돌리기(Ctrl+Z)로 복원할 수 있습니다.`;
+    }
+    const c = canBypass(n, s.edges, s.catalog ?? []);
+    if (!c.ok) return c.reason;
+    push();
+    set({ nodes: s.nodes.map((x) => (x.id === id ? { ...x, data: { ...x.data, bypass: true } } : x)) });
+    return `‘${name}’ 단계를 건너뜁니다 — 이 단계 없이 계산합니다(받은 것을 그대로 넘깁니다). 재계산하십시오. 되돌리기(Ctrl+Z)로 복원할 수 있습니다.`;
   },
 
   deleteElements: (nodeIds, edgeIds) => {

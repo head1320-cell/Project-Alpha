@@ -20,6 +20,8 @@ export interface GraphDocNode {
   said?: Record<string, string>;
   /** 결과 칸 높이(R3) — 기본보다 늘렸을 때만 있다(기본 ~ 세 배). 화면 정보라 서버 검증·계산은 보지 않는다. */
   size?: { slot_h: number };
+  /** 단계 건너뛰기(2026-11-13) — 켰을 때만 있다. ★서버로 가지 않는다★: 계산 요청은 이 노드를 빼고 선을 돌려 이은 문서다(`bypass.ts`). */
+  bypass?: boolean;
 }
 
 export interface GraphDocEdge {

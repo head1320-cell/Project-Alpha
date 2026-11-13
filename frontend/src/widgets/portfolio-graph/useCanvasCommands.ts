@@ -4,7 +4,7 @@
  * (CF 3부 E2b — `PortfolioCanvas.tsx` 에서 옮김 · 동작 불변 · 본체의 같은 자리에서 부른다 — 명령 목록은 예전처럼 열 때마다 새로 만든다).
  */
 import { useEffect, useMemo, type MutableRefObject } from "react";
-import { TEMPLATES } from "@/entities/portfolio-graph";
+import { bypassable, TEMPLATES } from "@/entities/portfolio-graph";
 import type { useAiAssist } from "./AiAsk";
 import { DRAWERS, type DrawerKey } from "./canvasConfig";
 import { neighbour } from "./canvasGeometry";
@@ -122,6 +122,10 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
   };
 
   const multiPicked = s.picked.length > 1;
+  // 단계 건너뛰기(2026-11-13) — 고른 노드가 건너뛸 수 있는 종류일 때만 명령이 있다.
+  const selNode = s.selectedId ? s.nodes.find((n) => n.id === s.selectedId) : undefined;
+  const selKind = selNode?.data.kind ?? null;
+  const selSkip = !!selNode?.data.bypass;
   const commands = useMemo<PaletteCommand[]>(() => [
     { id: "run", group: "계산", label: "전체 계산하기", keys: "Ctrl+Enter", run: () => void run() },
     { id: "find", group: "보기", label: "캔버스에서 노드 찾기", keys: "Ctrl+F", run: () => setFindOpen(true) },
@@ -182,6 +186,9 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     ...(s.selectedId ? [{ id: "branch", group: "비교", label: "선택한 노드에서 대안 만들기",
                           hint: "그 노드와 하류를 복제해 설정만 바꿔 비교합니다(한 노드에 4개까지)",
                           run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.act(() => st.makeBranch(st.selectedId!)); } }] : []),
+    ...(selKind && bypassable(selKind) ? [{ id: "bypass", group: "비교", label: selSkip ? "이 단계 다시 적용" : "이 단계 건너뛰기",
+                                             hint: "이 단계 없이 계산합니다 — 받은 것을 그대로 넘깁니다(입력·출력 종류가 같은 단계만)",
+                                             run: () => { const st = usePortfolioGraph.getState(); if (st.selectedId) st.act(() => st.toggleBypass(st.selectedId!)); } }] : []),
     ...(multiPicked ? [{ id: "branch-picked", group: "비교", label: "선택한 노드로 대안 만들기",
                                  hint: "선택한 노드만 복제해 설정을 바꿔 비교합니다 — 뿌리는 흐름 맨 앞(한 뿌리에 4개까지)",
                                  run: () => { const st = usePortfolioGraph.getState(); st.act(() => st.branchPicked()); } }] : []),
@@ -197,6 +204,6 @@ export function useCanvasCommands(s: PgState, d: CommandDeps) {
     ...TEMPLATES.map((t) => ({ id: `tpl:${t.key}`, group: "템플릿", label: `${t.name} 불러오기`, hint: t.description,
                                run: () => loadTemplate(t.key) })),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 명령은 열 때마다 새로 만든다
-  ], [s.selectedId, s.selectedEdge, multiPicked, s.picked.length, s.showMinimap, s.showLanes, s.showGhosts, s.showCardResults, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus, s.nodes.length]);
+  ], [s.selectedId, selKind, selSkip, s.selectedEdge, multiPicked, s.picked.length, s.showMinimap, s.showLanes, s.showGhosts, s.showCardResults, ai.ask, cmdOpen, strategySources, s.simple, leftShown, rightShown, panels.focus, s.nodes.length]);
   return { toggleLanes, fitToLanes, toggleMinimap, setWire, toggleGhosts, toggleCardResults, commands };
 }

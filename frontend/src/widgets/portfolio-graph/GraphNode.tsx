@@ -12,8 +12,8 @@
  */
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type Node, type NodeProps } from "@xyflow/react";
-import { ChevronDown, ChevronRight, GitBranch, Pin, PinOff, Play, Route } from "lucide-react";
-import { cardFieldsOf, cardState, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, needsGap, nodeHeight, nodeIssues, nodeSummary, PORT_GAP, PORT_TOP, slotBase, slotHeight, SLOT_MAX_K, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { ChevronDown, ChevronRight, GitBranch, Pin, PinOff, Play, Route, SkipForward } from "lucide-react";
+import { BYPASS_PORTS, bypassable, canBypass, cardFieldsOf, cardState, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, josa, needsGap, nodeHeight, nodeIssues, nodeSummary, PORT_GAP, PORT_TOP, slotBase, slotHeight, SLOT_MAX_K, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { NodeWidgets } from "./NodeWidgets";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
@@ -134,7 +134,15 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
   // 이 노드의 결과만 본다(BT5) — 다른 곳을 바꿔도 이 카드는 낡지 않는다(하류일 때만 낡는다).
   const stale = usePortfolioGraph((s) => s.staleIds.includes(id));
   const validation = usePortfolioGraph((s) => s.validation);
-  const result = report?.nodes[id];
+  // 단계 건너뛰기(2026-11-13) — "" 안 켬 · "on" 건너뜀(이 노드 없이 계산) · 그 밖은 켰지만 건너뛸 수 없는 사유(이 노드는 그대로 계산된다).
+  const skipState = usePortfolioGraph((s) => {
+    if (!data.bypass) return "";
+    const c = canBypass({ id, data }, s.edges, s.catalog ?? []);
+    return c.ok ? "on" : c.reason;
+  });
+  const skipOn = skipState === "on";
+  // 건너뛴 노드는 계산되지 않는다 — 예전 결과를 이 카드의 결과처럼 두지 않는다(결과 자리를 비운다).
+  const result = skipOn ? undefined : report?.nodes[id];
   const live = result && !stale ? result : undefined;
   // 혼자 쓰는 도구(BT6) — 입력도 출력도 없다. 포트를 지어 붙이지 않고 그렇다고 말한다.
   const solo = !!entry && isSolo(entry);
@@ -240,9 +248,9 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
     );
   }
 
-  const slotEmpty = !live && !(stale && result) && missing.length === 0 && !fix && errors.length === 0;
+  const slotEmpty = !live && !(stale && result) && missing.length === 0 && !fix && errors.length === 0 && skipState === "";
   return (
-    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}${solo ? " pg-node--solo" : ""}${folded ? " pg-node--folded" : ""}`}
+    <div className={`pg-node pg-node--${state}${selected ? " pg-node--selected" : ""}${live?.previous ? " pg-node--previous" : ""}${pinned ? " pg-node--pinned" : ""}${solo ? " pg-node--solo" : ""}${folded ? " pg-node--folded" : ""}${skipOn ? " pg-node--bypassed" : ""}`}
          data-node-id={id} data-kind={data.kind}
          style={{ minHeight: folded ? undefined : boxH, ["--pg-box-h" as string]: `${boxH}px`, ["--pg-stage" as string]: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)",
                   ["--pg-i" as string]: data.num ?? 0, ["--pg-rows" as string]: rows }}>
@@ -262,6 +270,15 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
                 title="대안 만들기 — 이 노드와 같은 전략 안의 하류를 복제해 설정만 바꿔 비교합니다">
           <GitBranch size={14} aria-hidden="true" />
         </button>
+        {/* 단계 건너뛰기 — 받은 것을 그대로 넘길 수 있는 종류에만 단추가 있다(없는 것을 눌러 보게 하지 않는다). */}
+        {bypassable(data.kind) && (
+          <button type="button" className="pg-bypass-toggle pg-tb-icon" aria-pressed={!!data.bypass}
+                  aria-label={data.bypass ? "이 단계 다시 적용" : "이 단계 건너뛰기"}
+                  onClick={() => { const st = usePortfolioGraph.getState(); st.act(() => st.toggleBypass(id)); }}
+                  title={data.bypass ? "이 단계 다시 적용" : `이 단계 건너뛰기 — 이 단계 없이 계산합니다(받은 ${josa(BYPASS_PORTS[data.kind].what, ["을", "를"])} 그대로 넘깁니다)`}>
+            <SkipForward size={14} aria-hidden="true" />
+          </button>
+        )}
         <button type="button" className="pg-pin pg-tb-icon" aria-pressed={pinned} onClick={() => togglePin(id)}
                 aria-label={pinned ? "그림 고정 풀기" : "그림 고정"}
                 title={pinned ? "그림 고정 풀기" : "그림 고정 — 멀리서 볼 때도 이 노드의 작은 그림을 보입니다"}>
@@ -271,6 +288,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
       <div className="pg-node-k">
         <i className="pg-node-num" style={{ background: STAGE_VAR[entry.stage] ?? "var(--pg-st-data)" }}>{data.num ?? "·"}</i>
         <span className="pg-node-plain">{entry.plain_label}</span>
+        {skipOn && <span className="pg-node-skip">건너뜀</span>}
+        {skipState !== "" && !skipOn && <span className="pg-node-skip pg-node-skip--blocked" title={skipState}>건너뛸 수 없음</span>}
         {warns.length > 0 && (
           <span className="pg-node-warn" role="img" aria-label={`확인할 것 ${warns.length}개`}
                 title={warns.map((t) => t.text).join("\n")}>!{warns.length}</span>
@@ -288,7 +307,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         <span className={`pg-node-far-v pg-node-far-v--${state}`}>
           {headline && headline.value !== null
             ? <>{Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit}</small></>
-            : st.text}
+            : skipOn ? "건너뜀" : st.text}
         </span>
         {chips.length > 0 && (
           <span className="pg-node-far-ev">{chips.map((c) => <span key={c.text} className={`pg-far-chip pg-far-chip--${c.cls}`} data-full={c.text}>{c.short}</span>)}</span>
@@ -306,6 +325,8 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
       )}
       {/* 결과 자리 — 작은 그림 · 막힘 사유 · 고치는 법 · 예전 결과 안내가 나눠 쓴다(넘치면 그때만 카드가 자란다). */}
       <div className="pg-node-slot">
+        {skipOn && <div className="pg-node-skip-note" role="note">이 단계 없이 계산합니다 — 받은 {josa(BYPASS_PORTS[data.kind]?.what ?? "값", ["을", "를"])} 그대로 넘깁니다.</div>}
+        {skipState !== "" && !skipOn && <div className="pg-node-skip-note pg-node-skip-note--blocked" role="note">{skipState}</div>}
         {missing.length > 0 && (
           <div className="pg-node-need" role="note">
             {data.onNeed ? missing.map((p, i) => (
