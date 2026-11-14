@@ -76,6 +76,8 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.broker_account_routes",
     # CF 3부 PB3 — PB 고객 관리(로그인 · 본인 고객만 · 별칭만).
     "src.api.pb_client_routes",
+    # 매매일지 v1 — 체결 내역을 받아 계산만 한다(로그인 · 저장 없음).
+    "src.api.trade_journal_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —

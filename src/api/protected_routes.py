@@ -103,6 +103,10 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/api/v1/auth/users/{username}/reset-password"):
         (REQUIRE_ADMIN, "남의 비밀번호 초기화 — 그 사람의 토큰이 모두 죽는다"),
 
+    # ── 매매일지 — 받은 체결 줄을 계산만 하고 버린다(저장 없음). 그래도 개인의 매매 기록이 지나가는 문이다 ──
+    ("POST", "/api/v1/trade-journal/analyze"):
+        (REQUIRE_LOGIN, "매매일지 분석 — 개인의 매매 기록(체결 내역)을 받는다. 저장하지 않으나 익명으로 열어 두지 않는다"),
+
     # ── PB 고객 관리 (CF 3부 PB3) — 로그인 + ★본인 고객만★(남의 고객 404) · 별칭만(개인정보 모양 거절) · 지우는 경로 없음 ──
     ("GET", "/api/v1/pb/clients"):
         (REQUIRE_LOGIN, "내 고객 목록 — 별칭·성향·평가일. 소유 PB 로 거른다"),

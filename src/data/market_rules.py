@@ -82,7 +82,7 @@ def sell_tax_bp_on(trade_date: Any, market: str, instrument: str = "stock") -> d
 
     `bp` 는 증권거래세 + 농어촌특별세의 합이고 `parts` 가 그 구성이다. 면제(ETF)는 `bp == 0` 이라는 ★값★이고,
     확인하지 못한 구간·시장·상품은 `bp is None` + `reason` 이다 — 가까운 구간의 값으로 채우지 않는다.
-    표의 근거는 보도·안내 자료 요약(`grade: T1`)이다 — 쓰는 쪽은 이 값을 '추정'으로 표시해야 한다.
+    표의 근거는 보도·안내 자료 요약(`grade: T1`)이다 — 쓰는 쪽은 이 값을 '추론'(관측이 아니다)으로 표시해야 한다.
     기준일은 매매체결일이다(증거 파일의 `date_basis`).
     """
     mkt = str(market or "").strip().upper()
