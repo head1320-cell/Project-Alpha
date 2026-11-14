@@ -383,3 +383,35 @@ def test_an_unreadable_store_is_unknown_not_an_empty_trial_list(db, monkeypatch)
         raise RuntimeError("db down")
     monkeypatch.setattr(trials, "_engine", broken)
     assert trials.trials_of("alice") is None
+
+
+# ── 시행 하나 읽기 (규칙 가동 — W5b: 가동되는 것은 전부 시행으로 세어진 것이다) ──────────────
+
+def test_my_trial_is_read_by_its_key_with_what_is_needed_to_run_it_again(db):
+    key = rec(setting=changed("rule.minutes", 31))["trial_key"]
+    got = trials.trial_of("alice", key)
+    assert got["found"] is True and got["trial_key"] == key and got["grade"] == "E3" and got["runs"] == 1
+    assert got["setting"] == changed("rule.minutes", 31)
+    assert got["tickers"] == ["000660", "005930"] and (got["from"], got["to"]) == ("2026-03-02", "2026-03-31")
+    assert "daily" not in got                                                   # 일별 값은 싣지 않는다
+
+
+def test_someone_elses_trial_and_a_missing_trial_are_the_same_answer(db):
+    key = rec("alice")["trial_key"]
+    assert trials.trial_of("bob", key) == {"found": False} == trials.trial_of("alice", "0" * 64)
+
+
+def test_reading_one_trial_does_not_need_a_kept_result_and_does_not_count_as_a_run(db):
+    key = rec()["trial_key"]
+    assert trials.result_of("alice", key) == {"found": False}                   # 결과 요약은 남기지 않았다
+    assert trials.trial_of("alice", key)["found"] is True
+    assert trials.trial_of("alice", key)["runs"] == 1                           # 읽는다고 실행 횟수가 늘지 않는다
+
+
+def test_an_unreadable_store_is_unknown_for_one_trial_too(db, monkeypatch):
+    key = rec()["trial_key"]
+
+    def broken():
+        raise RuntimeError("db down")
+    monkeypatch.setattr(trials, "_engine", broken)
+    assert trials.trial_of("alice", key) is None

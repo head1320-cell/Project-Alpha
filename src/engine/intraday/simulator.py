@@ -80,6 +80,9 @@ class Day:
     sessions: dict[str, Session]
     skipped: tuple[tuple[str, str], ...] = ()  # (종목, 사유) — 봉을 준비한 쪽이 이미 건너뛴 것
     shifted: bool = False                      # 장 운영 시간이 평소와 다른 날
+    #: ★아직 끝나지 않은 하루면 `False`★(걸음 엔진 `stepper` 가 쓴다) — 마지막 봉에서 남은 수량을 강제로 청산하지 않는다.
+    #: 지금까지의 봉으로 다시 돌릴 때마다 가짜 청산이 생기면 보유 한도 · 손실 한도가 풀려 다른 종목의 가짜 진입까지 만든다.
+    final: bool = True
 
 
 SKIP_REASONS = {
@@ -216,9 +219,11 @@ class _Run:
         self.counts = {"days": 0, "sessions": 0, "bars": 0, "entries": 0, "exits": 0}
         self.dates: list[str] = []                              # 실제로 돈 날 — 거래가 없어도 하루다(일별 흐름의 0)
         self.sources = {"kis": 0, "synthetic": 0, "unknown": 0}
+        self.final = True
 
     # 하루 ─────────────────────────────────────────────────────────────────────────────
     def day(self, day: Day) -> None:
+        self.final = day.final
         for ticker, reason in day.skipped:
             self.skipped.append({"date": day.date, "ticker": ticker, "reason": reason})
         live: dict[str, _Ticker] = {}
@@ -327,7 +332,7 @@ class _Run:
         elif tk.entry_sig is not None and tk.entry_sig[i]:
             tk.pending_entry = True
 
-        if i == len(s.time) - 1:                                   # 하루를 넘기지 않는다
+        if i == len(s.time) - 1 and self.final:                    # 하루를 넘기지 않는다(끝나지 않은 하루는 다음 걸음이 잇는다)
             tk.pending_entry = False
             if tk.pos is not None:
                 if v <= 0:

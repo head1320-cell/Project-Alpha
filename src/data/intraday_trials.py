@@ -195,6 +195,26 @@ def trials_of(user: str, limit: int = 50) -> list[dict[str, Any]] | None:
              "runs": int(r[6] or 0), "updated_at": r[7]} for r in rows]
 
 
+def trial_of(user: str, trial_key: str) -> dict[str, Any] | None:
+    """내 시행 하나 → `{found: True, setting, tickers, from, to, grade, runs, …}` · 없거나 남의 것이면 `{found: False}` · 읽지 못하면 `None`.
+
+    규칙 가동이 쓴다(가동되는 것은 전부 시행으로 세어진 것이다). 결과 요약이 없어도 읽힌다 · 읽는다고 실행 횟수가 늘지 않는다."""
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            r = c.execute(text(f"SELECT {_TRIAL_HEAD} FROM {_TABLE} WHERE trial_key = :key AND username = :user"),
+                          {"key": trial_key, "user": user}).fetchone()
+    except Exception as err:                                    # noqa: BLE001 — 실패는 '모른다'로 올린다
+        logger.warning("intraday trial 한 줄 읽기 실패: %s", err)
+        return None
+    if r is None:
+        return {"found": False}
+    return {"found": True, "trial_key": r[0], "grade": r[1], "setting": _load(r[2]), "tickers": _load(r[3]) or [], "from": r[4],
+            "to": r[5], "runs": int(r[6] or 0), "updated_at": r[7]}
+
+
 # ── 결과 요약 ──────────────────────────────────────────────────────────────────────────
 def _results_ready(engine) -> bool:
     _ensure(engine)
