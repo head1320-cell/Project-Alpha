@@ -191,13 +191,107 @@ def test_a_different_model_is_a_scope_mismatch(tmp_path):
     assert lab["this_request_verified"] is False
 
 
+# ── AM3 · ★노후화 검사가 실제로 발동한다★ ────────────────────────────────
+#
+# 옛 구현은 `code_version == mv` 였다. 그런데 실측 결과 **양쪽이 언제나
+# `"dev"`** 여서(701행) 이 비교가 **항상 참**이었다 — 가드는 있는데 도달할 수
+# 없었다. AL 의 하드코딩 `0` 이 `coverage_complete` 를 이긴 것과 같은 모양이다.
+#
+# 이제 `versions_comparable` 이 판정한다: **양쪽이 진짜 버전이고 양쪽 트리가
+# 깨끗할 때만** `True/False`, 아니면 `None`(비교 불가).
+
+_CLEAN = {"code_tree": "clean", "code_version_method": "measured"}
+
+
+def _ident(value, tree="clean"):
+    from src.domain.build_identity import BuildIdentity
+    return BuildIdentity(value=value, method="measured", tree=tree)
+
+
 def test_a_stale_code_version_is_disclosed_but_does_not_block(tmp_path):
     """노후화는 **적되 막지 않는다** — 막는 것은 플래그의 몫이다."""
-    m, _ = load_manifest(_write(tmp_path, A3))
+    m, _ = load_manifest(_write(tmp_path, {**A3, **_CLEAN}))
     lab = verification_label(m, universe=list("abcdef"), months=84, model="bl",
-                             panel="synthetic", code_version="다른-버전")
+                             panel="synthetic", code_version=_ident("다른-버전"))
     assert lab["code_version_matches"] is False
     assert lab["adjudicated"]["code_version"] == "test-version"
+    assert lab["this_request_verified"] is False or lab["passed"] is False
+
+
+def test_the_same_clean_code_version_matches(tmp_path):
+    """★짝★ — 항상 `False`/항상 `None` 인 구현을 배제한다."""
+    m, _ = load_manifest(_write(tmp_path, {**A3, **_CLEAN}))
+    lab = verification_label(m, universe=list("abcdef"), months=84, model="bl",
+                             panel="synthetic",
+                             code_version=_ident("test-version"))
+    assert lab["code_version_matches"] is True
+
+
+def test_two_dev_versions_no_longer_match(tmp_path):
+    """★이것이 버그였다★ 실측 701행이 전부 `"dev"` 라 항상 참이었다."""
+    m, _ = load_manifest(_write(tmp_path, {**A3, **_CLEAN,
+                                           "code_version": "dev"}))
+    lab = verification_label(m, universe=list("abcdef"), months=84, model="bl",
+                             panel="synthetic", code_version=_ident("dev"))
+    assert lab["code_version_matches"] is None, "`\"dev\"` 는 버전이 아니다"
+
+
+@pytest.mark.parametrize("tree", ["dirty", "unknown"])
+def test_an_unclean_tree_makes_the_staleness_check_unknown(tmp_path, tree):
+    """★SHA 는 커밋을 식별하지 트리를 식별하지 않는다★"""
+    m, _ = load_manifest(_write(tmp_path, {**A3, **_CLEAN}))
+    lab = verification_label(m, universe=list("abcdef"), months=84, model="bl",
+                             panel="synthetic",
+                             code_version=_ident("test-version", tree=tree))
+    assert lab["code_version_matches"] is None
+
+
+def test_a_manifest_without_a_tree_record_cannot_be_compared(tmp_path):
+    """★커밋된 메니페스트가 정확히 이 상태다★ 트리를 기록한 적이 없다.
+
+    옛 기록을 깨끗하다고 가정하면 지금 고치려는 거짓 일치가 그대로 돌아온다.
+    """
+    m, _ = load_manifest(_write(tmp_path, A3))  # code_tree 없음
+    lab = verification_label(m, universe=list("abcdef"), months=84, model="bl",
+                             panel="synthetic",
+                             code_version=_ident("test-version"))
+    assert lab["code_version_matches"] is None
+
+
+def test_a_bare_string_request_version_is_not_comparable(tmp_path):
+    """문자열만 넘기면 트리를 모르므로 미상이다 — ★미상은 통과가 아니다★"""
+    m, _ = load_manifest(_write(tmp_path, {**A3, **_CLEAN}))
+    lab = verification_label(m, universe=list("abcdef"), months=84, model="bl",
+                             panel="synthetic", code_version="test-version")
+    assert lab["code_version_matches"] is None
+
+
+def test_the_label_reports_how_the_request_version_was_known(tmp_path):
+    """★값과 그 값을 어떻게 알았는지를 함께 낸다★"""
+    m, _ = load_manifest(_write(tmp_path, {**A3, **_CLEAN}))
+    lab = verification_label(m, universe=list("abcdef"), months=84, model="bl",
+                             panel="synthetic",
+                             code_version=_ident("test-version"))
+    assert lab["code_version_method"] == "measured"
+    assert lab["code_tree"] == "clean"
+    assert lab["adjudicated"]["code_tree"] == "clean"
+
+
+def test_the_committed_manifest_cannot_claim_a_version_match():
+    """★실물 확인★ 저장소에 커밋된 메니페스트는 `"dev"` 를 담고 있다.
+
+    이 프로그램이 고치는 사건 자체를 못 박는다 — 그 파일로는 노후화 검사가
+    참이 될 수 없다.
+    """
+    from src.domain.build_identity import is_version
+    from src.engine.research_manifest import MANIFEST_PATH
+    if not MANIFEST_PATH.exists():
+        pytest.skip("메니페스트가 없습니다")
+    raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    recorded = raw.get("code_version")
+    assert not is_version(recorded) or raw.get("code_tree") != "clean", (
+        "메니페스트가 깨끗한 트리의 진짜 버전을 기록했다면 이 테스트를 "
+        "갱신하십시오 — 그때는 노후화 검사가 실제로 참/거짓을 냅니다")
 
 
 def test_the_evidence_grade_comes_from_provenance_not_a_constant(tmp_path):

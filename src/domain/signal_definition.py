@@ -43,12 +43,22 @@ class SignalDefinition:
     category: str
     #: ★단일 출처★ — 이 신호의 진실이 사는 모듈. 값을 복사해 오지 않는다.
     owner_module: str
+    #: ★데이터 출처★(AW) — 어느 스토어에서 왔나. 스크리너 필드는
+    #: `filter_ast.FieldMeta.origin` 에서 그대로 받는다. 해석이 필요 없는
+    #: 구조적 사실이고, 출처 등급이 읽는 유일한 칸이다.
+    origin: str | None = None
     #: 타이밍 쪽은 이미 이 둘을 안다(`timing_factor_meta` 가 출처에서 파생시킨다).
     release_lag: str | None = None
     revision_policy: str | None = None
     observation_window: dict | None = None
-    #: `source_registry.EVIDENCE_GRADES`(`E0~E3`). ★`SRC_*`·`L0~L3` 와 다른 축.★
+    #: ★출처 척도★ — `signal_evidence.PROVENANCE_GRADES`(`E0~E4`,
+    #: CLAUDE.md 2절: 합성·픽스처·제공자 파생·실 과거·시점 고정).
+    #: ★`source_registry.EVIDENCE_GRADES` 가 아니다★ — 그쪽은 글자만 같은
+    #: **확신도** 척도이고(AV 실측), 예전 주석이 그쪽을 가리키고 있었다.
+    #: `SRC_*`·`L0~L3` 와도 다른 축이다.
     evidence_grade: str | None = None
+    #: 왜 그 등급인가 · 왜 미상인가. ★사유 없이 미상으로 두지 않는다.★
+    evidence_grade_reason: str | None = None
     availability: str | None = None
     #: 왜 못 쓰는가. ★사유 없이 목록에서 빼지 않는다.★
     unavailable_reason: str | None = None
@@ -67,9 +77,12 @@ class SignalCatalog:
 
 def _screener_fields() -> list[SignalDefinition]:
     from src.engine.filter_ast import FIELD_BY_ID
+    # ★AW 가 되살린 칸을 그대로 받는다★ — 예전에는 병합이 출처를 버려서
+    #   여기까지 올 것이 없었다.
     return [SignalDefinition(
         signal_id=f.id, kind=KIND_SCREENER_FIELD, label=f.label,
         category=f.category, owner_module="src.engine.filter_ast",
+        origin=getattr(f, "origin", None),
     ) for f in FIELD_BY_ID.values()]
 
 
@@ -86,8 +99,27 @@ def _timing_rules() -> list[SignalDefinition]:
                 revision_policy=item.get("revision_policy"),
                 availability=item.get("availability"),
                 unavailable_reason=item.get("unavailable_reason"),
+                # ★AX 가 되살린 칸★ — 어느 로더에서 오는지는 카탈로그가
+                #   선언하고 AST 대조가 지킨다. `provenance` 는 다른 축이라
+                #   싣지 않는다(스크리너 카탈로그 API 로 이미 나간다).
+                origin=item.get("origin"),
             ))
     return out
+
+
+#: ★AY — alpha_lab 의 두 로더가 비대칭이다★(실측)
+#:   `_load_price_series` 는 `src.data.ohlcv_loader` 를 지나고,
+#:   `_load_fundamentals` 는 `financials_history` 를 직접 SELECT 한다.
+#:   그래서 `fund` 에는 공급 모듈 이름이 **없다** — 표 이름은 다른 종류라
+#:   출처 어휘에 넣지 않는다(`signal_supply.UNSUPPLIED` 가 사유를 갖는다).
+_ALPHA_ORIGIN_BY_GROUP: dict[str, str | None] = {"price": "ohlcv_loader"}
+
+#: ★개정 축 — 출처 축과 섞지 않는다★(AY)
+#:   `financials_history` 는 정정이 원본을 덮는 표라 `revised` 다(저장소가
+#:   `pit_store`·`kis_backtest_engine`·`valuation_distribution` 세 곳에 적어
+#:   두었다). ★`price` 는 비운다★ — 수정주가가 소급 변경되는지를 이 프로그램은
+#:   재지 않았고, 안 잰 것을 `not_revised` 로 주장하면 그것이 지어내기다.
+_ALPHA_REVISION_BY_GROUP: dict[str, str | None] = {"fund": "revised"}
 
 
 def _alpha_fields() -> list[SignalDefinition]:
@@ -95,6 +127,8 @@ def _alpha_fields() -> list[SignalDefinition]:
     return [SignalDefinition(
         signal_id=fid, kind=KIND_ALPHA_EXPR, label=label, category=group,
         owner_module="src.engine.alpha_lab",
+        origin=_ALPHA_ORIGIN_BY_GROUP.get(group),
+        revision_policy=_ALPHA_REVISION_BY_GROUP.get(group),
     ) for fid, label, group, _formula in FIELDS]
 
 
@@ -127,7 +161,17 @@ _ADAPTERS = {
 
 
 def collect_signals() -> SignalCatalog:
-    """다섯 출처를 조회 시 합친다. ★죽은 출처는 사유와 함께 남긴다.★"""
+    """다섯 출처를 조회 시 합친다. ★죽은 출처는 사유와 함께 남긴다.★
+
+    ★출처 등급은 어댑터가 아니라 규칙이 붙인다★(AV) — 다섯 어댑터는 자기
+    출처만 읽고, `signal_evidence` 가 *"이 신호가 어디서 왔는가"* 를 한 자리에서
+    판정한다. 어댑터마다 등급을 적으면 다섯 벌이 되고, 한쪽만 고쳐도 아무
+    테스트가 깨지지 않는다.
+    """
+    from dataclasses import replace
+
+    from src.domain.signal_evidence import signal_grade
+
     signals: list[SignalDefinition] = []
     unavailable: dict[str, str] = {}
     for kind, adapter in _ADAPTERS.items():
@@ -135,4 +179,10 @@ def collect_signals() -> SignalCatalog:
             signals.extend(adapter())
         except Exception as e:                           # noqa: BLE001
             unavailable[kind] = f"{type(e).__name__}: {e}"
-    return SignalCatalog(signals=tuple(signals), unavailable_sources=unavailable)
+
+    graded = []
+    for s in signals:
+        verdict = signal_grade(s)
+        graded.append(replace(s, evidence_grade=verdict["grade"],
+                              evidence_grade_reason=verdict["reason"]))
+    return SignalCatalog(signals=tuple(graded), unavailable_sources=unavailable)

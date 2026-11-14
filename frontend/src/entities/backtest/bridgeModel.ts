@@ -329,6 +329,34 @@ export interface ScreenToBacktestResult {
     };
     /** 같은 금액을 한 번 사고 한 번 팔면 몇 bp인가(충격 제외) — 모델 비교용 자. */
     round_trip_bps: number;
+    /**
+     * ★비용 **설정**의 판본★ (AM5) — `CostPolicy` 에서 결정론적으로 파생된다.
+     *
+     * 같은 값이면 같은 비용 설정으로 돈 실행이다. ★코드 버전이 아니다★ —
+     * 설정이 그대로면 엔진 코드가 바뀌어도 이 값은 그대로다. 두 실행을
+     * 비교할 때 "비용 가정이 같았나" 만 말해 주고, "같은 코드였나" 는
+     * 말하지 않는다.
+     */
+    version: string;
+  } | null;
+  /**
+   * ★체결 규칙 — 비용이 아니라 체결 가능성★ (BC)
+   *
+   * 옵트인이고 **기본 꺼짐**이다. 꺼져 있으면 계수가 전부 0 이고 가격은 그대로다.
+   * `n_limit_unknown` 은 전일 종가를 몰라 판정하지 못한 체결이다 — ★위반이
+   * 아니라 미상★. `n_tick_not_raw` 는 수정주가 척도라 호가 단위를 적용하지 않은
+   * 체결이다. `not_covered` 는 이 규칙을 타지 않는 경로(래더 매수·ETF 슬리브)다.
+   */
+  fill_rules?: {
+    enforce_price_limit: boolean;
+    round_fills_to_tick: boolean;
+    price_limit_pct: number | null;
+    n_rejected_by_limit: number;
+    n_limit_unknown: number;
+    n_rounded: number;
+    n_tick_not_raw: number;
+    not_covered: string[];
+    note: string;
   } | null;
 }
 

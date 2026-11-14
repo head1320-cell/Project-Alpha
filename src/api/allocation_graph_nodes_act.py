@@ -1,0 +1,275 @@
+"""AAS 그래프 — 실행·기록 노드 (BK W4) · ★계산은 쓰지 않고, 저장은 버튼 · 주문은 없다★
+==============================================================================
+스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W4
+
+- 주문 미리보기(`order_preview`): `execution_routes._compute` — `/execution-plan` 미리보기와 같은
+  오더 diff·비용·사전 점검. **저장·승인·체결 입력 없음.** 주문 경로(`OrderExecutor`·`TradingEngine`)는
+  import 조차 하지 않는다(BK0 AST 트립와이어).
+- 실행 목표 비중(`target_version`): `compile_target` 으로 목표를 **미리보기**하고, 저장은 '저장하기'
+  버튼(`/graph/save` → `save_target` 한 번). ★합성 데이터로 만든 비중은 실행 목표로 두지 않는다★ —
+  입력 계보를 읽어(`wants_lineage`) 상태를 연구용으로 내린다. 저장은 되지만 실행 경로가 거절한다.
+- 결정 기록(`decision_journal`): 저널 항목을 미리보기하고, 저장은 버튼(`create_entry` 한 번).
+- 쓰는 함수는 `_save_*` 안에서만 부른다 — 계산 경로에서는 부르지 않는다(AST 트립와이어).
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Literal
+
+import numpy as np
+from fastapi import HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _pct, _t
+from src.api.allocation_graph_nodes import _subset, _ui
+from src.api.execution_routes import ExecPlanRequest
+from src.data.mock_gate import mock_allowed
+from src.engine import portfolio_graph as pg
+
+logger = logging.getLogger(__name__)
+
+P = pg.Port
+_FORBID = ConfigDict(extra="forbid")
+_PRACTICE_TARGET = "합성 데이터로 만든 비중입니다 — 실행 목표로 쓰지 않습니다."
+
+
+def _pct_of(w: dict) -> dict[str, float]:
+    return {n: float(x) * 100.0 for n, x in zip(w["names"], np.asarray(w["weights"], dtype=float))}
+
+
+# ── 주문 목록 미리보기 ────────────────────────────────────────────────────────
+
+OrderParams = _subset(
+    "OrderPreviewParams", ExecPlanRequest, ("current_weights", "portfolio_value", "restricted"),
+    ui={
+        "current_weights": _ui("현재 비중", question="현재 보유 비중",
+                               presets=[{"label": "없습니다(신규 매수)", "value": {}}],
+                               help="종목 코드별 비중(%)은 전문가 설정에서 입력합니다."),
+        "portfolio_value": _ui("평가 금액", question="평가 금액 기준", unit="원",
+                               presets=[{"label": "1천만 원", "value": 1e7}, {"label": "1억 원", "value": 1e8},
+                                        {"label": "10억 원", "value": 1e9}]),
+        "restricted": _ui("거래 금지 종목", "advanced", help="이 종목은 주문을 만들지 않습니다."),
+    },
+    turnover_cap_pct=(float | None, Field(None, ge=0, le=200, json_schema_extra={"x-ui": _ui(
+        "회전율 한도", "advanced", unit="%", help="넘으면 사전 점검이 경고합니다.")})),
+)
+
+
+#: '지금 비중' 두 값을 같다고 볼 폭(%p) — 손으로 적은 값의 반올림까지만 같다고 본다.
+_SAME_PCT = 0.01
+
+
+def _holdings_vs_universe(order_w: dict, w: dict) -> dict | None:
+    """주문 목록의 '현재 비중' 과 유니버스 노드의 '현재 비중'(비중이 실어 온 요청) 견주기 (PB2 — ★관측만★).
+    유니버스에 현재 비중이 없으면 견주지 않는다(None). 한쪽에 없는 종목은 그쪽 0%."""
+    req = w.get("req")
+    uni = {str(k): float(v) for k, v in ((getattr(req, "weights", None) or {}).items())}
+    if not uni:
+        return None
+    if not order_w:
+        return {"state": "order_empty", "universe_count": len(uni)}
+    order = {str(k): float(v) for k, v in order_w.items()}
+    differs = [{"code": c, "order_pct": order.get(c, 0.0), "universe_pct": uni.get(c, 0.0)}
+               for c in sorted(set(order) | set(uni)) if abs(order.get(c, 0.0) - uni.get(c, 0.0)) > _SAME_PCT]
+    return {"state": "differs" if differs else "same", "differs": differs}
+
+
+def _order_preview(inputs: dict, p) -> pg.NodeOutput:
+    from src.api.execution_routes import _compute
+    target = _pct_of(inputs["weights"])
+    limits = {"turnover_cap_pct": p.turnover_cap_pct} if p.turnover_cap_pct is not None else {}
+    req = ExecPlanRequest(current_weights=dict(p.current_weights), target_weights=target, weight_unit="percent",
+                          portfolio_value=p.portfolio_value, restricted=list(p.restricted), limits=limits)
+    try:
+        plan, pretrade = _compute(req, target)
+    except HTTPException as e:
+        raise pg.NodeFailure(f"주문 목록 생성 실패 — {e.detail}") from e
+    view = {"plan": plan, "pretrade": pretrade, "portfolio_value": p.portfolio_value}
+    cmp_ = _holdings_vs_universe(dict(p.current_weights), inputs["weights"])
+    if cmp_ is not None:
+        view["holdings_vs_universe"] = cmp_
+    return pg.NodeOutput(values={"trades": view}, view=view,
+                         tags={"practice": mock_allowed(), "sources": ["execution_plan"]})
+
+
+def _holdings_line(cmp_: dict | None) -> dict | None:
+    if not cmp_:
+        return None
+    if cmp_["state"] == "same":
+        return _t(CONFIRMED, "주문 목록의 ‘현재 비중’이 유니버스 노드의 ‘현재 비중’과 같습니다 — 같은 보유에서 출발했습니다.")
+    if cmp_["state"] == "order_empty":
+        return _t(ASSUMED, "주문 목록의 ‘현재 비중’을 비워 새로 사는 주문으로 만들었습니다 — 유니버스 노드에는 ‘현재 비중’"
+                           f"({cmp_['universe_count']}종목)이 있습니다. 보유분에서 이행하려면 같은 값을 입력하십시오.")
+    d = cmp_["differs"]
+    shown = " · ".join(f"{x['code']} {x['order_pct']:g}% / {x['universe_pct']:g}%" for x in d[:5])
+    more = f" 외 {len(d) - 5}종목" if len(d) > 5 else ""
+    return _t(ASSUMED, f"주문 목록의 ‘현재 비중’이 유니버스 노드의 ‘현재 비중’과 다릅니다(주문 목록 / 유니버스) — {shown}{more}. "
+                       "주문은 주문 목록 쪽 값으로 만들었습니다 — 유니버스 쪽을 읽는 노드와 출발점이 다릅니다.")
+
+
+def _explain_orders(view: dict, prov: dict, params: Any) -> dict:
+    plan, pre = view.get("plan") or {}, view.get("pretrade") or {}
+    s = plan.get("summary") or {}
+    orders = plan.get("orders") or []
+    checks = pre.get("checks") or []
+    blocks = [c for c in checks if c.get("status") == "block"]
+    warns = [c for c in checks if c.get("status") == "warning"]
+    facts = [f"사는 주문 {sum(1 for o in orders if o.get('side') == 'buy')}건 · 파는 주문 "
+             f"{sum(1 for o in orders if o.get('side') == 'sell')}건입니다."]
+    if s.get("est_cost") is not None:
+        facts.append(f"예상 비용은 {float(s['est_cost']):,.0f}원입니다.")
+    trust = [_t(CONFIRMED, "주문은 생성하지 않았습니다 — 매매 내역만 사전 산출했습니다.")]
+    held = _holdings_line(view.get("holdings_vs_universe"))
+    if held:
+        trust.append(held)
+    trust += [_t("failed", f"{c['name']}: {c['detail']}") for c in blocks]
+    trust += [_t(ASSUMED, f"{c['name']}: {c['detail']}") for c in warns]
+    if mock_allowed():
+        trust.append(_t(UNKNOWN, "개발 모드라 종가·거래대금이 합성일 수 있습니다 — 실제 체결 금액을 말해 주지 않습니다."))
+    return {"title": f"주문 {len(orders)}건을 사전 산출했습니다" if orders else "바꿀 주문이 없습니다",
+            "headline": {"label": "사전 점검", "value": None, "unit": "",
+                         "text": "승인 가능" if pre.get("can_approve") else "승인 불가"},
+            "facts": facts, "trust": trust,
+            "unmeasured": ["실제 체결 가격(슬리피지)", "주문을 나눠 낼 때의 시장 충격"]}
+
+
+# ── 실행 목표 만들기 ──────────────────────────────────────────────────────────
+
+class TargetParams(BaseModel):
+    model_config = _FORBID
+    note: str = Field("", max_length=500, json_schema_extra={"x-ui": _ui(
+        "메모", question="목표 메모", widget="text", help="저장 시 함께 기록됩니다.")})
+
+
+def _target_version(inputs: dict, p: TargetParams, lineage: dict) -> pg.NodeOutput:
+    from src.data.target_versions import MODE_LONG_ONLY, MODE_LONG_SHORT, STATUS_RESEARCH_ONLY, compile_target
+    w = inputs["weights"]
+    base = _pct_of(w)
+    if w.get("target"):
+        tv = dict(w["target"])                              # 노출 조절이 이미 컴파일한 목표 — 다시 만들지 않는다
+    else:
+        mode = MODE_LONG_SHORT if any(v < 0 for v in base.values()) else MODE_LONG_ONLY
+        tv = compile_target(base, None, mode=mode, neutralized=bool(w.get("neutralized")))
+    graph_blocks = []
+    if lineage.get("practice"):
+        graph_blocks.append(_PRACTICE_TARGET)
+    if graph_blocks:
+        reasons = [r for r in [tv.get("status_reason")] if r] + graph_blocks
+        tv = {**tv, "status": STATUS_RESEARCH_ONLY, "status_reason": " / ".join(reasons)}
+    view = {"target": tv, "graph_blocks": graph_blocks, "labels": _labels(list(tv["final_weights"]))}
+    return pg.NodeOutput(values={"target": {"tv": tv}}, view=view)
+
+
+def _save_target_version(values: dict, view: dict, params: TargetParams) -> dict:
+    from src.data.target_versions import save_target
+    tv = values["target"]["tv"]
+    tpv_id = save_target(tv, note=params.note or "노드 캔버스에서 저장")
+    if tpv_id is None:
+        raise pg.NodeFailure("DB 를 사용할 수 없어 저장하지 못했습니다.")
+    kind = "실행할 수 있는" if tv["status"] == "executable" else "연구용"
+    return {"saved_id": tpv_id, "text": f"{kind} 실행 목표로 저장했습니다 · {tpv_id}"}
+
+
+def _labels(names: list[str]) -> dict[str, str]:
+    from src.api.allocation_routes import _labels as lab
+    return lab(names)
+
+
+def _explain_target(view: dict, prov: dict, params: Any) -> dict:
+    tv = view.get("target") or {}
+    ok = tv.get("status") == "executable"
+    cash = tv.get("cash_weight")
+    facts = [f"종목 {len(tv.get('final_weights') or {})}개" + (f" · 현금 {_pct(float(cash))}" if cash else "") + "입니다."]
+    if (tv.get("overlay") or {}).get("source"):
+        facts.append(f"노출 조절 근거: {tv['overlay']['source']}.")
+    trust = [_t(CONFIRMED, "목표 규칙(롱온리·출처·거래 가능성)을 검사했습니다.")]
+    if not ok:
+        trust.append(_t("failed", str(tv.get("status_reason") or "실행할 수 없는 목표입니다.")))
+    trust.append(_t(UNKNOWN, "저장하기 전에는 기록되지 않습니다 — 저장해도 주문은 전송하지 않습니다."))
+    return {"title": "실행 목표 비중을 생성했습니다" if ok else "연구용 목표를 만들었습니다",
+            "headline": {"label": "상태", "value": None, "unit": "", "text": "실행 가능" if ok else "연구용"},
+            "facts": facts, "trust": trust, "unmeasured": ["이 목표로 실제 체결했을 때의 결과"]}
+
+
+# ── 결정 기록 ────────────────────────────────────────────────────────────────
+
+_DECISION = {"adopt": "채택", "hold": "보류", "reject": "기각"}
+
+
+class JournalParams(BaseModel):
+    model_config = _FORBID
+    title: str = Field("캔버스에서 내린 결정", min_length=1, max_length=200, json_schema_extra={"x-ui": _ui(
+        "제목", question="결정 제목", widget="text")})
+    decision: Literal["adopt", "hold", "reject"] = Field("hold", json_schema_extra={"x-ui": _ui(
+        "결정", question="목표 처리 결정", widget="cards", options=_DECISION)})
+    thesis: str = Field("", max_length=2000, json_schema_extra={"x-ui": _ui(
+        "이유", question="결정 사유", widget="text")})
+    counter: str = Field("", max_length=2000, json_schema_extra={"x-ui": _ui(
+        "반대 근거", "advanced", widget="text", help="반대 근거를 기록해 두면 사후 검토가 쉬워집니다.")})
+
+
+def _journal(inputs: dict, p: JournalParams) -> pg.NodeOutput:
+    tv = inputs["target"]["tv"]
+    trades = inputs.get("trades")
+    stress = inputs.get("stress")
+    links = {"target": {"status": tv["status"], "status_reason": tv.get("status_reason"),
+                        "final_weights": tv["final_weights"], "cash_weight": tv.get("cash_weight"),
+                        "overlay": tv.get("overlay")},
+             "source": "node_canvas"}
+    if trades:
+        links["orders"] = {"summary": (trades.get("plan") or {}).get("summary"),
+                           "can_approve": (trades.get("pretrade") or {}).get("can_approve")}
+    if stress:
+        r = stress.get("result") or {}
+        links["stress"] = {"label": r.get("label"), "mode": r.get("mode"),
+                           "shock_pct": r.get("portfolio_shock_pct", r.get("max_dd_pct"))}
+    record = {"decision": _DECISION[p.decision], "thesis": p.thesis, "counter_arguments": p.counter}
+    view = {"title": p.title, "links": links, "record": record}
+    return pg.NodeOutput(values={}, view=view)
+
+
+def _save_journal(values: dict, view: dict, params: JournalParams) -> dict:
+    from src.data.journal_store import create_entry
+    eid = create_entry(view["title"], links=view["links"], record=view["record"])
+    if eid is None:
+        raise pg.NodeFailure("DB 를 사용할 수 없어 저장하지 못했습니다.")
+    return {"saved_id": eid, "text": f"결정을 기록했습니다 · {eid}"}
+
+
+def _explain_journal(view: dict, prov: dict, params: Any) -> dict:
+    rec, links = view.get("record") or {}, view.get("links") or {}
+    facts = [f"결정: {rec.get('decision')}.", f"목표 상태: {'실행 가능' if links.get('target', {}).get('status') == 'executable' else '연구용'}."]
+    if "orders" in links:
+        facts.append("주문 미리보기 요약을 함께 기록합니다.")
+    if "stress" in links:
+        facts.append(f"충격 점검 ‘{links['stress'].get('label')}’을 함께 기록합니다.")
+    trust = [_t(UNKNOWN, "저장하기 전에는 기록되지 않습니다.")]
+    if not (rec.get("thesis") or "").strip():
+        trust.append(_t(ASSUMED, "근거를 입력하지 않았습니다 — 사후 검토가 어려워집니다."))
+    return {"title": f"‘{view.get('title')}’ 기록을 준비했습니다", "facts": facts, "trust": trust,
+            "unmeasured": ["이 결정의 결과 — 기록 후 성과 귀인으로 사후 검토합니다"]}
+
+
+# ── 등록 ─────────────────────────────────────────────────────────────────────
+
+def register(registry: pg.Registry) -> None:
+    for spec in (
+        pg.NodeSpec("order_preview", "주문 목록", stage="act", plain_label="주문 미리보기",
+                    plain_description="현재 비중에서 목표 비중까지의 매매 내역을 미리 산출합니다. 주문은 전송하지 않습니다.",
+                    inputs=(P("weights", "Weights"),), outputs=(P("trades", "Trades"),),
+                    run=_order_preview, params_model=OrderParams, explain=_explain_orders, category="실행",
+                    description="/execution-plan 미리보기와 같은 오더 diff·비용·사전 점검(저장·승인 없음)."),
+        pg.NodeSpec("target_version", "실행 목표", stage="act", plain_label="실행 목표 비중",
+                    plain_description="산출 비중을 실행 목표 비중으로 확정합니다. 저장은 버튼으로 한 번만 실행합니다.",
+                    inputs=(P("weights", "Weights"),), outputs=(P("target", "TargetVersion"),),
+                    run=_target_version, params_model=TargetParams, explain=_explain_target, category="실행",
+                    wants_lineage=True, save=_save_target_version, save_label="실행 목표로 저장",
+                    description="compile_target 미리보기 · 저장은 /graph/save → save_target."),
+        pg.NodeSpec("decision_journal", "결정 기록", stage="act", plain_label="투자 결정 기록",
+                    plain_description="결정 내용과 근거를 투자 저널에 기록합니다. 저장은 버튼으로 실행합니다.",
+                    inputs=(P("target", "TargetVersion"), P("trades", "Trades", required=False),
+                            P("stress", "StressReport", required=False)),
+                    outputs=(), run=_journal, params_model=JournalParams, explain=_explain_journal, category="기록",
+                    save=_save_journal, save_label="판단 기록 저장", description="저널 항목 미리보기 · 저장은 create_entry 한 번."),
+    ):
+        registry.register(spec)

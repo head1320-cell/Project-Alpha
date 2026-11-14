@@ -27,71 +27,12 @@ from src.domain.daily_explanation import (
     DRIVER_REBALANCE,
     DRIVER_SET_HOLDING,
     DRIVER_SET_STRATEGY,
-    RESIDUAL_INTERACTION,
+    RESIDUAL_CLOSED,
     RESIDUAL_UNEXPLAINED,
     STRATEGY_DRIVERS,
     fold_price_basis,
 )
-from src.engine.daily_explain_backtest import explain_backtest_day
 from src.engine.daily_explain_holdings import explain_holdings_day
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 백테스트 어댑터 — 총변동이 독립적으로 있다
-# ═══════════════════════════════════════════════════════════════════════════
-#: ★효과 수를 손으로 적지 않는다★ — AL3 에서 다섯 → 여섯이 되자 이 픽스처가
-#: 낡아 "완전한 행" 이 더 이상 완전하지 않았다.
-_EFFECT_VALUES = {"allocation_effect": 0.31, "selection_effect": 0.16,
-                  "macro_effect": -0.02, "netting_effect": 0.0,
-                  "cost_effect": -0.08, "cash_effect": 0.04}
-
-
-def _row(**over) -> dict:
-    from src.engine.attribution_decomposer import EFFECT_COLUMNS
-    n = len(EFFECT_COLUMNS)
-    assert set(_EFFECT_VALUES) == set(EFFECT_COLUMNS), (
-        "픽스처가 효과 목록과 어긋났습니다 — 값을 채우고 이 검사를 통과시키세요")
-    base = {"date": "2026-09-11", "portfolio_return": 0.41,
-            **_EFFECT_VALUES,
-            "regime": "GOLDILOCKS",
-            "coverage": {"n_total": n, "n_known": n, "complete": True,
-                         "missing": []}}
-    base.update(over)
-    return base
-
-
-def test_a_complete_row_calls_its_residual_interaction():
-    exp = explain_backtest_day(_row(), run_id=7)
-    assert exp.driver_set == DRIVER_SET_STRATEGY
-    assert exp.residual_kind == RESIDUAL_INTERACTION
-    assert exp.residual_pct == pytest.approx(
-        0.41 - sum(_EFFECT_VALUES.values()), abs=1e-9)
-    assert exp.missing_drivers == {}
-
-
-def test_an_incomplete_row_calls_its_residual_unexplained():
-    """★짝★ 커버리지가 불완전하면 복리라고 부르지 않는다."""
-    exp = explain_backtest_day(
-        _row(macro_effect=None,
-             coverage={"n_total": 5, "n_known": 4, "complete": False,
-                       "missing": ["macro_effect"]}), run_id=7)
-    assert exp.residual_kind == RESIDUAL_UNEXPLAINED
-    assert "macro_effect" in exp.missing_drivers
-    assert exp.missing_drivers["macro_effect"]
-    assert "복리" not in exp.summary_ko or "상호작용" not in exp.summary_ko
-
-
-def test_an_unknown_total_makes_the_residual_incalculable():
-    """★총변동을 모르면 잔차도 모른다★ — 0 으로 적지 않는다."""
-    exp = explain_backtest_day(_row(portfolio_return=None), run_id=7)
-    assert exp.total_change_pct is None
-    assert exp.residual_pct is None and exp.residual_reason
-
-
-def test_the_backtest_adapter_uses_only_strategy_drivers():
-    exp = explain_backtest_day(_row(), run_id=7)
-    assert set(exp.drivers) == set(STRATEGY_DRIVERS)
-    assert exp.price_basis is None, "전략 분해에 가격 기준 축은 없다"
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 보유 어댑터 — ★총변동을 독립적으로 관측하지 못한다★
@@ -242,14 +183,8 @@ def test_no_rows_means_no_source_claim(monkeypatch):
 # 재던 테스트는 그것을 놓쳤다. ★검사 대상은 생산물이다.★
 # ═══════════════════════════════════════════════════════════════════════════
 def _produced_sentences(stub_applied: bool = False) -> list[str]:
-    out = [
-        explain_backtest_day(_row(), run_id=7).summary_ko,
-        explain_backtest_day(
-            _row(macro_effect=None,
-                 coverage={"n_total": 5, "n_known": 4, "complete": False,
-                           "missing": ["macro_effect"]}), run_id=7).summary_ko,
-        explain_backtest_day(_row(portfolio_return=None), run_id=7).summary_ko,
-    ]
+    # (ST2, 2026-10-15) 백테스트 어댑터는 여러 전략 귀인과 함께 지웠다 — 보유 어댑터만 남았다.
+    out: list[str] = []
     if stub_applied:
         out += [
             explain_holdings_day({"005930": 100.0}, as_of="2026-09-11").summary_ko,
@@ -275,10 +210,6 @@ def test_produced_sentences_carry_no_markdown(stub):
 def test_produced_reasons_carry_no_markdown_either(stub):
     """★사유도 API 응답이다★ — 문장에 안 꿰여도 그대로 나간다."""
     exps = [
-        explain_backtest_day(
-            _row(macro_effect=None,
-                 coverage={"n_total": 5, "n_known": 4, "complete": False,
-                           "missing": ["macro_effect"]}), run_id=7),
         explain_holdings_day({"005930": 100.0}, as_of="2026-09-11"),
     ]
     for exp in exps:

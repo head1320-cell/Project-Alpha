@@ -67,7 +67,7 @@ def granger_edges(series_map: dict) -> dict:
             if n < _MIN_OBS:
                 continue
             try:
-                res = grangercausalitytests(x, maxlag=_MAX_LAG, verbose=False)
+                res = grangercausalitytests(x, maxlag=_MAX_LAG)      # statsmodels 0.15: verbose 인자 삭제(출력도 안 함)
                 best_lag, best_p = None, 1.0
                 for lag, r in res.items():
                     p = r[0]["ssr_ftest"][1]
@@ -82,4 +82,4 @@ def granger_edges(series_map: dict) -> dict:
     edges.sort(key=lambda e: e["p"])
     return {"available": True, "nodes": nodes, "edges": edges[:24],
             "method": f"그레인저 검정 (maxlag {_MAX_LAG}, p<{_P_CUT}) — 예측적 인과",
-            "note": "★그레인저 인과 = '선행 예측력'이며 구조적 인과가 아님 (정직 라벨)"}
+            "note": "★그레인저 인과 = '선행 예측력'이며 구조적 인과가 아님"}

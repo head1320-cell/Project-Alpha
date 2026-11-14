@@ -18,6 +18,7 @@ import logging
 from fastapi import APIRouter, Query
 
 from src.domain.signal_definition import SIGNAL_KINDS, collect_signals
+from src.domain.signal_evidence import grade_catalog
 
 logger = logging.getLogger("api.signals")
 
@@ -37,7 +38,10 @@ def list_signals(kind: str | None = Query(None, description="종류로 필터"))
                 "signal_id": s.signal_id, "kind": s.kind, "label": s.label,
                 "category": s.category, "owner_module": s.owner_module,
                 "release_lag": s.release_lag, "revision_policy": s.revision_policy,
-                "evidence_grade": s.evidence_grade, "availability": s.availability,
+                "evidence_grade": s.evidence_grade,
+                # ★사유 없는 미상은 금지★ — 등급이 없으면 왜 없는지 말한다.
+                "evidence_grade_reason": s.evidence_grade_reason,
+                "availability": s.availability,
                 "unavailable_reason": s.unavailable_reason,
             } for s in items
         ],
@@ -45,6 +49,10 @@ def list_signals(kind: str | None = Query(None, description="종류로 필터"))
         "counts_by_kind": by_kind,
         # ★못 읽은 출처를 그대로 내보낸다★ — 조용히 빠지면 소비자가 속는다.
         "unavailable_sources": cat.unavailable_sources,
+        # ★출처를 말할 수 없는 신호의 목록★(AV) — 이것이 산출물이다.
+        #   ★`kind` 필터와 무관하게 **전체**를 센다★ — 걸러서 세면 빈틈이
+        #   줄어 보이고, 그 숫자는 아무것도 뜻하지 않는다.
+        "evidence": grade_catalog(cat),
     }
 
 

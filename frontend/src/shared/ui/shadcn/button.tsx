@@ -4,7 +4,7 @@
 // 왜 CLI 가 아닌가: 이 환경의 에이전트 프록시가 ui.shadcn.com 을 403 CONNECT 로 거부한다
 // (npm 레지스트리만 허용). 그래서 shadcn 의 공개 구조·API 를 그대로 따라 직접 작성했다.
 // components.json 은 그대로 두었으니 호스트가 허용되면 `shadcn add button` 이 이 파일을
-// 덮어써도 계약이 같다: cva variants + asChild(Slot) + forwardRef + cn().
+// 덮어써도 계약이 같다: cva variants + asChild(Slot) + ref prop(React 19 — forwardRef 없이) + cn().
 //
 // 색은 hex 를 복제하지 않고 globals.css §34 브릿지의 var() 를 참조한다 —
 // 디자인 토큰의 단일 진실은 계속 --t-* 다.
@@ -53,14 +53,12 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-    return (
-      <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} />
-    );
-  },
-);
+const Button = ({ className, variant, size, asChild = false, ref, ...props }: ButtonProps & { ref?: React.Ref<HTMLButtonElement> }) => {
+  const Comp = asChild ? Slot : "button";
+  return (
+    <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} />
+  );
+};
 Button.displayName = "Button";
 
 export { Button, buttonVariants };

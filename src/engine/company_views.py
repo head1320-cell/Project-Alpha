@@ -169,7 +169,7 @@ def company_views(codes: list[str], prices: dict[str, float], *,
         price = prices.get(code)
         if price is None or float(price) <= 0.0:
             reasons[code] = _reason(KIND_NO_PRICE,
-                                    "현재가가 없어 갭을 잴 수 없습니다")
+                                    "현재가가 없어 갭을 측정할 수 없습니다")
             continue
         price = float(price)
 

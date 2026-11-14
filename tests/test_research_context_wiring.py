@@ -14,6 +14,8 @@ from datetime import date, timedelta  # noqa: E402
 
 import pytest  # noqa: E402
 
+from tests.route_walk import flat_routes  # noqa: E402
+
 URL = "/api/v1/allocation/rebalance-decision"
 TICKERS = ["005930", "000660", "035420"]
 HOLDINGS = {"005930": 50.0, "000660": 30.0, "035420": 20.0}
@@ -50,7 +52,12 @@ def test_the_stores_share_one_code_version():
 def test_the_borrowed_import_still_works():
     """★공개 표면 유지★ `target_versions` 가 `research_runs` 에서 빌려 쓴다."""
     from src.data.research_runs import code_version
-    assert callable(code_version) and isinstance(code_version(), str)
+    from src.domain.build_identity import is_version
+    assert callable(code_version)
+    got = code_version()
+    # ★환경에 따라 `None` 일 수 있다★ — git 을 못 읽는 컨테이너가 그렇다.
+    # 그래도 `"dev"` 같은 **버전 행세 값**은 나오지 않는다 (AM2).
+    assert got is None or is_version(got), got
 
 
 def test_the_backtest_engine_version_recovers_the_app_version_fallback(monkeypatch):
@@ -152,7 +159,7 @@ def test_a_different_as_of_gives_a_different_fingerprint(client):
 
 
 def test_the_neighbours_are_untouched(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     for p in ("/api/v1/allocation/analyze", "/api/v1/allocation/exposures",
               "/api/v1/allocation/implement", URL):
         assert p in paths, p

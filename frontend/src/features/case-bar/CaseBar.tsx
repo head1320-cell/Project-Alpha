@@ -141,12 +141,12 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
           <>
             <span className="as-case-id num">{caseId}</span>
             <span className="as-case-q as-case-unres">
-              이 케이스의 내용을 불러오지 못했습니다 — 질문·고정 증거·목표를 여기서 읽을 수 없습니다.
+              이 케이스의 내용 조회 실패 — 질문·고정 증거·목표를 여기서 읽을 수 없습니다.
             </span>
           </>
         ) : (
           // ★지어낸 id 를 그리지 않는다★ 케이스가 없으면 없다고 적는다.
-          <span className="as-case-none">케이스 없음 — 이 화면의 작업은 아직 어느 연구에도 묶이지 않습니다.</span>
+          <span className="as-case-none">케이스 없음 — 이 화면의 작업은 아직 어느 연구에도 연결되지 않았습니다.</span>
         )}
 
         {/* 케이스 선택 — 네이티브 select(저장소 관례. A3 가 Select 프리미티브를 기각한 근거 그대로) */}
@@ -198,7 +198,7 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
         ) : capQ.isLoading ? (
           <span className="as-case-na">능력 레벨 확인 중…</span>
         ) : (
-          <span className="as-case-na">능력 레벨을 읽지 못했습니다</span>
+          <span className="as-case-na">능력 레벨 읽기 실패</span>
         )}
       </div>
 
@@ -222,12 +222,12 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
         )}
         {unresolved && (
           <div className="as-case-warn as-case-warn-missing">
-            <b className="as-case-warn-l">케이스를 읽지 못했습니다</b>
+            <b className="as-case-warn-l">케이스 읽기 실패</b>
             <span className="as-case-warn-r">
               {chainQ.isError
-                ? `선택한 케이스(${caseId})를 서버에서 가져오지 못했습니다 — 삭제되었거나 저장소를 읽을 수 없습니다.`
+                ? `선택한 케이스(${caseId})를 서버에서 조회하지 못했습니다 — 삭제되었거나 저장소를 읽을 수 없습니다.`
                 : chainQ.isLoading
-                  ? `선택한 케이스(${caseId})를 불러오는 중입니다.`
+                  ? `선택한 케이스(${caseId}) 조회 중`
                   : `선택한 케이스(${caseId})가 열린 케이스 목록에 없습니다.`}
             </span>
           </div>
@@ -242,7 +242,7 @@ export function CaseBar({ sessionSnapshotId = null }: { sessionSnapshotId?: stri
           <div className="as-case-warn as-case-warn-net">
             <b className="as-case-warn-l">네트워크 오류</b>
             <span className="as-case-warn-r">
-              케이스 목록에 닿지 못했습니다 — 케이스가 없는 것과 다릅니다.
+              케이스 목록 연결 실패 — 케이스가 없는 것과 다릅니다.
             </span>
           </div>
         )}

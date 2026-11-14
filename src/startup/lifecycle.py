@@ -6,10 +6,76 @@ DB 초기화 · 고아 백테스트 정리 · 스크리너 테이블 · KIS mast
 """
 
 import logging
+import os
+import threading
 
 from src.database import init_db
 
+#: 감시용 국면 입력 — ★readiness 라우트와 같은 함수★ (BH1). 정의·사유는
+#: `src/execution/risk_monitor.current_regime_state` 로 옮겼다(두 벌을 두면 갈린다).
+from src.execution.risk_monitor import current_regime_state as _monitor_regime_state
+
 logger = logging.getLogger("api.startup")
+
+# ══════════════════════════════════════════════════════════════════════════
+# ★주기 데몬은 한 프로세스에 이름당 하나 — 그리고 명시적으로만 끈다★ (BE)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 예전에는 `run_startup` 이 부를 때마다 **끝나지 않는** 루프를 새 스레드로 띄웠다.
+# 운영(`uvicorn --workers 1`)에서는 기동이 한 번이라 드러나지 않았지만,
+# `with TestClient(create_app())` 를 쓰는 테스트 파일 15개만 돌려도 스윕·리스크
+# 데몬이 ★각각 218개★ 살아 있었다(실측 2026-09-24). 그것들이 모듈 전역 엔진을
+# 바꾼 테스트의 **단일 연결**을 다른 스레드에서 써서 SQLite 안에서 SIGSEGV 가
+# 났다(재현: 5/5, 대조군 0/3).
+
+#: 이 스위치가 **정확히** `"0"` 이면 주기 데몬을 띄우지 않는다(mock 게이트 규율).
+DAEMONS_ENV = "LIFECYCLE_DAEMONS"
+
+#: 이름 → 스레드. ★살아 있는 동안 같은 이름을 다시 띄우지 않는다★
+_DAEMONS: dict[str, threading.Thread] = {}
+_DAEMONS_LOCK = threading.Lock()
+
+
+def daemons_disabled() -> bool:
+    """`LIFECYCLE_DAEMONS` 가 정확히 `"0"` 인가. 그 밖의 값·미설정은 켜짐."""
+    return os.getenv(DAEMONS_ENV) == "0"
+
+
+#: 이 스위치가 **정확히** `"0"` 이면 기동 때 KIS 마스터를 내려받지 않는다 — 데몬은 그대로 돈다.
+#: E2E 서버가 쓴다(2026-11-12): 마스터 다운로드는 `KIS_USE_MOCK=1` 에서도 실제 외부 호출이라,
+#: 네트워크가 열린 CI 와 막힌 곳에서 같은 서버가 다른 상태(업종·지수 구성 있음/없음)가 됐다.
+MASTER_ENV = "LIFECYCLE_MASTER_COLLECT"
+
+
+def master_collect_disabled() -> bool:
+    """`LIFECYCLE_MASTER_COLLECT` 가 정확히 `"0"` 인가. 그 밖의 값·미설정은 켜짐."""
+    return os.getenv(MASTER_ENV) == "0"
+
+
+def _mock_mode() -> bool:
+    """mock 모드인가 — ★판정은 `mock_gate.mock_allowed()` 하나★(여기서 환경변수를 다시 읽지 않는다)."""
+    from src.data.mock_gate import mock_allowed
+    return mock_allowed()
+
+
+def _start_daemon_once(name: str, target) -> str:
+    """주기 데몬을 **이름당 하나만** 띄운다. `started`·`already_running`·`disabled`.
+
+    ★끄면 로그로 말한다★ — 운영에서 누가 이 스위치를 켜 두면 고아 스윕·리스크
+    감시가 조용히 사라지는데, 그것은 CLAUDE.md 4절의 침묵 폴백이다.
+    """
+    if daemons_disabled():
+        logger.warning(f"주기 데몬 '{name}' 을 띄우지 않았습니다 — {DAEMONS_ENV}=0 "
+                       "(명시적으로 꺼짐). 이 프로세스에서는 이 감시가 돌지 않습니다.")
+        return "disabled"
+    with _DAEMONS_LOCK:
+        cur = _DAEMONS.get(name)
+        if cur is not None and cur.is_alive():
+            return "already_running"
+        t = threading.Thread(target=target, name=f"lifecycle:{name}", daemon=True)
+        _DAEMONS[name] = t
+        t.start()
+        return "started"
 
 async def _collect_master_bg(engine):
     """백그라운드: KIS 마스터파일 수집 (다운로드+파싱+DB/플래그 캐시). 실패해도 폴백 유지."""
@@ -89,9 +155,9 @@ def _risk_monitor_bg():
 
             engine = get_engine()
             audit = AuditTrail(engine)
-            # ★재기 전에 적는다★ — 드로다운은 에쿼티 이력에서 나오고, 그 이력에
-            # 쓰는 코드가 저장소에 없어서 `auto_dd`·`auto_cb` 가 발동할 수 없었다(AI).
-            # 기록 실패는 판정을 막지 않는다(`record_observation` 이 예외를 삼킨다).
+            # ★재기 전에 적는다★ — 드로다운은 에쿼티 이력에서 나오므로, 이 줄이
+            # `auto_dd`·`auto_cb` 의 **재료를 만드는 자리**다(AI). 기록 실패는
+            # 판정을 막지 않는다(`record_observation` 이 예외를 삼킨다).
             _record_equity(engine, log)
             last = run_once(
                 kill_switch=KillSwitch(engine, audit),
@@ -142,44 +208,17 @@ def _monitor_account_state() -> dict:
     실행 경로를 우회하는 것이 아니라 **아예 들어가지 않는 것**이다.
     """
     from src.database import get_engine
+    from src.execution.api_failure_probe import observe_into
     from src.execution.drawdown import drawdown_from_history
     dd = drawdown_from_history(get_engine())
-    return {
+    # ★`auto_api` 의 재료★(AQ) — `observe_into` 는 **이미 만들어진** 싱글턴만
+    # 읽는다. `get_kis_client()` 를 부르지 않으므로 위 경계가 그대로 지켜진다.
+    return observe_into({
         "equity_krw": None,
         "current_drawdown_pct": dd.intraday_pct,
         "cumulative_dd_pct": dd.cumulative_pct,
         "drawdown_reason": dd.reason,
-    }
-
-
-def _monitor_regime_state() -> dict | None:
-    """감시용 국면 상태. ★못 읽으면 `None` — 0 으로 만들지 않는다.★
-
-    ★`systemic_risk_score` 를 싣지 않는다 — 지어낼 수 없기 때문이다.★
-
-    킬스위치의 `auto_risk` 는 `systemic_risk_score`(0~100)를 본다. 그런데 실측하면:
-
-      · 이 값의 생산자로 지목된 `src/engine/regime_model.MultiRegimeModel` 은
-        ★저장소에 존재하지 않는다★. `realism_engine._get_systemic_risk_pit` 와
-        `multi_strategy_backtest` 가 `try/except` 안에서 임포트해 ImportError 를
-        삼키므로, 그 경로는 **항상 `None`** 이다.
-      · `regime_analyzer.RegimeState` 가 드는 것은 `stress_score`(0~100)이고,
-        두 이름을 잇는 코드는 저장소 어디에도 없다.
-
-    둘이 같은 양인지 **확인된 적이 없다**. 파이프라인을 돌리려고 이름을 바꿔 끼우는
-    것은 CLAUDE.md §4 가 금지한 일이므로, 여기서는 국면 정보를 그대로 싣고
-    `systemic_risk_score` 는 **비워 둔다** → `auto_risk` 가 `unverified` 로 기록된다.
-    ★그 기록이 이 미상을 다음 사람에게 넘기는 방법이다.★
-    """
-    import logging
-    try:
-        from src.engine.regime_analyzer import get_regime_state
-        st = get_regime_state()
-        return {"regime": st.regime, "stress_score": st.stress_score,
-                "recommended_mode": st.recommended_mode}
-    except Exception as e:                      # noqa: BLE001
-        logging.getLogger("api.main").debug(f"국면 상태 조회 불가(미상으로 기록): {e}")
-        return None
+    })
 
 
 def _prewarm_real_data():
@@ -387,16 +426,14 @@ async def run_startup() -> None:
         import logging
         logging.getLogger(__name__).warning(f"backtest 고아 정리 건너뜀: {e}")
     try:
-        import threading
-        threading.Thread(target=_orphan_sweep_bg, daemon=True).start()
+        _start_daemon_once("orphan_sweep", _orphan_sweep_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"고아 스윕 데몬 기동 실패: {e}")
 
     # 리스크 상시 감시 — ★관측만★(자동 발동은 RISK_MONITOR_AUTOTRIGGER=1 일 때만).
     try:
-        import threading
-        threading.Thread(target=_risk_monitor_bg, daemon=True).start()
+        _start_daemon_once("risk_monitor", _risk_monitor_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"리스크 감시 데몬 기동 실패: {e}")
@@ -426,9 +463,28 @@ async def run_startup() -> None:
 
     # KIS 종목 마스터 자동 수집 (무료·인증불필요): 전종목 코드·실명·KOSPI200/KOSDAQ150·ETF 플래그.
     # → 유니버스(실제 지수·시장전체·ETF 전체)와 종목명 해소의 단일 소스. 미적재 시에만.
+    # ★같은 스위치로 끈다★ — 테스트의 `TestClient` 기동마다 실제 KIS 서버에서 내려받아
+    # `master_flags_cache.json` 을 써 버리면, 네트워크가 열린 CI 에서만 뒤 테스트들이 "플래그 없음"
+    # 전제를 잃고 빨개진다(2026-10-15 CI 13건 — 로컬은 네트워크가 막혀 초록).
     try:
         from src.data.stock_master import load_master_flags
-        if not load_master_flags():
+        if daemons_disabled():
+            import logging
+            logging.getLogger(__name__).warning(
+                f"KIS 마스터 자동 수집을 하지 않았습니다 — {DAEMONS_ENV}=0 (명시적으로 꺼짐).")
+        elif master_collect_disabled():
+            import logging
+            logging.getLogger(__name__).warning(
+                f"KIS 마스터 자동 수집을 하지 않았습니다 — {MASTER_ENV}=0 (명시적으로 꺼짐). "
+                "업종·지수 구성은 적재된 것이 있을 때만 읽습니다.")
+        elif _mock_mode():
+            # ★mock 모드는 외부로 나가지 않는다(2026-11-13)★ — 이 다운로드는 키가 필요 없어 mock 게이트를
+            # 지나지 않던 실제 외부 호출이었다. 판정은 `mock_gate.mock_allowed()` 하나.
+            import logging
+            logging.getLogger(__name__).warning(
+                "KIS 마스터 자동 수집을 하지 않았습니다 — KIS_USE_MOCK=1 (합성 데이터 모드는 외부로 나가지 않습니다). "
+                "업종·지수 구성은 적재된 것이 있을 때만 읽습니다. 받으려면 데이터 관리의 수동 수집을 쓰거나 KIS_USE_MOCK=0 으로 기동하십시오.")
+        elif not load_master_flags():
             from src.database import get_engine
             asyncio.create_task(_collect_master_bg(get_engine()))
     except Exception as e:
@@ -518,8 +574,7 @@ async def run_startup() -> None:
     try:
         import os
         if os.getenv("DART_API_KEY") and os.getenv("DART_HISTORY_BACKFILL", "1") != "0":
-            import threading
-            threading.Thread(target=_dart_history_backfill_bg, daemon=True).start()
+            _start_daemon_once("dart_history_backfill", _dart_history_backfill_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"DART 재무 시계열 백필 시작 실패: {e}")
@@ -532,8 +587,7 @@ async def run_startup() -> None:
         from src.data.mock_gate import mock_allowed
         if (not mock_allowed() and bool(os.getenv("KIS_APP_KEY"))
                 and os.getenv("FLOWS_SYNC", "1") != "0"):
-            import threading
-            threading.Thread(target=_kis_flows_sync_bg, daemon=True).start()
+            _start_daemon_once("kis_flows_sync", _kis_flows_sync_bg)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"KIS 수급 적재 시작 실패: {e}")

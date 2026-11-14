@@ -220,7 +220,7 @@ def allocation_timing_rules_save(req: TimingRuleSetRequest):
             if req.set_id:
                 raise HTTPException(
                     422, f"갱신할 타이밍 룰셋을 찾을 수 없습니다: {req.set_id}. "
-                         "삭제되었을 수 있습니다 — 새 룰셋으로 저장하세요.")
+                         "삭제되었을 수 있습니다 — 새 룰셋으로 저장하십시오.")
             raise HTTPException(503, "규칙 저장소(DB)를 사용할 수 없습니다.")
         # 저장된 버전을 함께 돌려준다 — 호출자가 재현 좌표(id + version)를 바로 들 수 있어야
         # 한다. ★버전 열이 degraded 면 None 을 준다 — 1 로 지어내지 않는다★ 그러면 이후에

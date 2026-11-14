@@ -8,11 +8,12 @@
  *  · MetricCard      — 균질 KPI 카드
  *  · Sparkline       — 미니 SVG line
  *
- *  (RegimeBadge / useRegimeInfo 는 macroApi 의존이라 entities/macro 로 이동)
+ *  (RegimeBadge 는 BR R3 에서 지웠다 — 셸 머리 줄이 유일한 소비자였고 그 자리는 회원 프로필이 됐다. 국면은 /macro)
  *  (CommandPalette / CommandHint 는 삭제 — 도달 불가 코드였다. 커밋 메시지 참고)
  */
 
 import { useEffect, useState, useRef } from "react";
+import { Spark } from "@/shared/ui/plot/Spark";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ export function TickValue({
 
 
 export function MetricCard({
-  label, value, unit = "", delta, sublabel, color = "#1200ff", icon: Icon,
+  label, value, unit = "", delta, sublabel, color = "var(--tx-blue)", icon: Icon,
   loading = false, format = "number", digits = 2,
 }: {
   label: string;
@@ -130,7 +131,7 @@ export function MetricCard({
       </div>
       <div className="flex items-center gap-2 mt-1 min-h-[14px]">
         {delta != null && (
-          <span className="text-[10px] font-mono tabular-nums flex items-center gap-0.5" style={{ color: delta >= 0 ? "#16a34a" : "#dc2626" }}>
+          <span className="text-[10px] font-mono tabular-nums flex items-center gap-0.5" style={{ color: delta >= 0 ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)" }}>
             {delta >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
             {delta >= 0 ? "+" : ""}{delta.toFixed(2)}%
           </span>
@@ -144,21 +145,13 @@ export function MetricCard({
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
 export function Sparkline({
-  data, width = 80, height = 24, color = "#22c55e", className = "",
+  data, width = 80, height = 24, color = "var(--hx-t-22c55e)", className = "",
 }: {
   data: number[]; width?: number; height?: number; color?: string; className?: string;
 }) {
   if (!data || data.length < 2) return <span className={`inline-block ${className}`} style={{ width, height }} />;
-  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
-  const step = width / (data.length - 1);
-  const points = data.map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / range) * height).toFixed(1)}`).join(" ");
   const isUp = data[data.length - 1] >= data[0];
-  const stroke = color === "auto" ? (isUp ? "#16a34a" : "#dc2626") : color;
-  return (
-    <span className={`sparkline inline-block ${className}`}>
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-        <polyline points={points} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-    </span>
-  );
+  const stroke = color === "auto" ? (isUp ? "var(--hx-t-16a34a)" : "var(--hx-t-dc2626)") : color;
+  // 그리는 것은 공용 스파크라인 하나(`shared/ui/plot/Spark`) — 선 1.5px · 끝 점
+  return <span className={`sparkline inline-block ${className}`}><Spark values={data} w={width} h={height} stroke={stroke} /></span>;
 }

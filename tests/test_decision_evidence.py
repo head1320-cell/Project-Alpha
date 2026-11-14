@@ -96,7 +96,7 @@ def test_a_broken_cutoff_is_degraded_and_names_both_values():
 # ═══════════════════════════════════════════════════════════════════════════
 def test_a_recomputed_regime_path_is_degraded():
     out = _ev(regime_path={"path_source": "recomputed",
-                           "path_note": "이 경로는 **현재 데이터로** 다시 계산했습니다",
+                           "path_note": "이 경로는 **현재 데이터로** 재계산했습니다",
                            "reason": None})
     axis = out["axes"]["macro"]
     assert axis["state"] == AXIS_DEGRADED, "재계산을 결함으로 보지 않았습니다"
@@ -173,7 +173,7 @@ def test_all_broken_is_unverified():
     out = _ev(coverage={**_DB, "source": "mock"}, as_of_requested="2026-06-30",
               target_source=None,
               regime_path={"path_source": "recomputed",
-                           "path_note": "현재 데이터로 다시 계산", "reason": None})
+                           "path_note": "현재 데이터로 재계산", "reason": None})
     assert out["status"] == STATUS_UNVERIFIED
 
 

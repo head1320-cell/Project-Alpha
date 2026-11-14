@@ -16,7 +16,9 @@ ingest_to_db(): KIS 일봉을 DB에 적재 (배치 사전 로딩용).
 from __future__ import annotations
 
 import logging
+import math
 import os
+from bisect import bisect_right
 from datetime import datetime, timedelta
 from functools import lru_cache
 
@@ -26,6 +28,40 @@ logger = logging.getLogger(__name__)
 #: mock 시계열의 고정 기점. ★모든 창이 같은 지점에서 출발한다★ — 이것이
 #: "같은 날짜 = 같은 값" 을 만든다. 역사 시나리오(hist_2008_gfc)보다 앞이어야 한다.
 _MOCK_EPOCH = datetime(2000, 1, 3)
+
+#: mock 가격 **수준**의 기준일 — 이 날의 mock 종가가 `mock_price_level()` 이다.
+#: ★"오늘"이 아니라 고정 날짜다★ 오늘에 맞추면 같은 날짜가 날마다 다른 값이 되어
+#: 위의 "같은 날짜 = 같은 값" 이 깨진다(프론트가 하던 배율을 서버로 옮기는 셈).
+_MOCK_ANCHOR = datetime(2026, 11, 10)
+
+_MOCK_INDEX = ("KOSPI", "KOSDAQ", "^KS11", "^KQ11", "KS11", "KQ11", "KS200")
+
+#: 종목별 mock 가격 수준(원). mock 재무(`dart_client._mock_financial_statement`)가
+#: 이 수준에 맞춰져 있다 — 삼성전자 EPS ≈ 4,690 에 71,000. 표에 없으면 해시 값.
+_MOCK_LEVELS: dict[str, float] = {
+    "005930": 71000,    "000660": 200000,
+    "035420": 175000,   "035720": 42000,
+    "373220": 380000,   "051910": 380000,
+    "006400": 280000,   "207940": 850000,
+    "005380": 230000,   "068270": 165000,
+}
+
+
+def mock_price_level(ticker: str) -> float:
+    """종목의 mock 가격 수준 — 기준일(`_MOCK_ANCHOR`)의 mock 종가.
+
+    날짜와 무관한 상수다. 예전에는 이 숫자가 그대로 "현재가"였고
+    (`screener._mock_price`) 시세 이력은 다른 걸음에서 나와 둘이 어긋났다.
+    """
+    if ticker in _MOCK_LEVELS:
+        return _MOCK_LEVELS[ticker]
+    h = sum(ord(c) for c in ticker)
+    return float(10_000 + (h * 137) % 200_000)
+
+
+def _mock_today() -> datetime:
+    """mock 의 "오늘" — 현재가를 읽는 날. 시험이 날짜를 고정할 수 있게 한 곳에 둔다."""
+    return datetime.now()
 
 
 @lru_cache(maxsize=4096)
@@ -50,7 +86,7 @@ def _mock_walk(ticker: str, through_ordinal: int) -> tuple:
     seed = sum(ord(c) for c in ticker)
     rng = random.Random(seed)
     _code = ticker.replace(".KS", "").replace(".KQ", "").upper()
-    is_index = _code in ("KOSPI", "KOSDAQ", "^KS11", "^KQ11", "KS11", "KQ11", "KS200")
+    is_index = _code in _MOCK_INDEX
     if is_index:
         base, drift, vol = 2500, rng.uniform(0.0001, 0.0004), 0.008
     else:
@@ -66,6 +102,58 @@ def _mock_walk(ticker: str, through_ordinal: int) -> tuple:
             closes.append(px)
         cur += timedelta(days=1)
     return tuple(dates), tuple(closes), seed
+
+
+@lru_cache(maxsize=4096)
+def _mock_scale(ticker: str) -> float:
+    """걸음에 곱하는 종목별 ★상수★ 배율 — 기준일의 종가가 `mock_price_level()` 이 되게 한다.
+
+    걸음은 종목마다 10,000~99,000 에서 출발해 26년을 걸으므로 2026년의 수준이
+    mock 재무와 무관하다(실측: 005930 이 56,512 · 표에 없는 123456 이 138 —
+    같은 종목의 "현재가"는 71,000 · 52,333 이었다). 상수를 곱하면 수익률과
+    거래량은 그대로이고 수준만 맞는다. 지수는 맞출 수준이 없어 그대로 둔다.
+    """
+    if ticker.replace(".KS", "").replace(".KQ", "").upper() in _MOCK_INDEX:
+        return 1.0
+    dates, closes, _ = _mock_walk(ticker, datetime(_MOCK_ANCHOR.year, 12, 31).toordinal())
+    i = bisect_right(dates, _MOCK_ANCHOR) - 1
+    return mock_price_level(ticker) / closes[i]
+
+
+def mock_close_asof(ticker: str, as_of: str | datetime | None = None) -> float | None:
+    """`as_of`(없으면 mock 의 오늘) 이하 마지막 거래일의 mock 종가.
+
+    ★mock 가격의 출처는 이 걸음 하나다★ — 현재가(`screener._mock_price`)도
+    시점 가격(`PITStore.get_price_asof`)도 여기서 읽고(원 단위로 반올림해서 —
+    `mock_price_asof`), 일봉(`_mock_ohlcv_df`)도 같은 걸음·같은 배율이다. 그래서
+    "현재가 = 시세 이력의 마지막 종가" 이고 "as_of 가격 = 그 날의 종가" 다.
+
+    기점(`_MOCK_EPOCH`) 이전에는 봉이 없다 → `None`.
+    """
+    code = ticker.replace(".KS", "").replace(".KQ", "")
+    day = _mock_today() if as_of is None else (
+        as_of if isinstance(as_of, datetime) else datetime.strptime(str(as_of)[:10], "%Y-%m-%d"))
+    day = datetime(day.year, day.month, day.day)
+    if day < _MOCK_EPOCH:
+        return None
+    dates, closes, _ = _mock_walk(code, datetime(day.year, 12, 31).toordinal())
+    i = bisect_right(dates, day) - 1
+    if i < 0:
+        return None
+    return closes[i] * _mock_scale(code)
+
+
+def mock_price_asof(ticker: str, as_of: str | datetime | None = None) -> float | None:
+    """`mock_close_asof` 를 ★원 단위로 반올림★한 값 — "가격"으로 내보내는 쪽이 읽는다.
+
+    걸음의 종가는 소수다(73,922.10…). 그대로 "현재가"로 내면 응답에 소수점이
+    실린다 — 예전 고정 표는 늘 정수였고 KRX 가격도 원 단위다. 반은 올린다
+    (화면의 `Math.round` 와 같은 규칙 — 파이썬 `round` 는 반을 짝수로 보낸다).
+    일봉은 반올림하지 않는다(수익률이 바뀐다) — 그래서 현재가와 마지막 종가는
+    0.5원까지 다를 수 있고, 화면은 둘 다 원 단위로 적어 같은 글자가 된다.
+    """
+    px = mock_close_asof(ticker, as_of)
+    return None if px is None else float(math.floor(px + 0.5))
 
 
 def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):
@@ -92,7 +180,10 @@ def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):
     all_dates, all_closes, seed = _mock_walk(ticker, horizon.toordinal())
     keep = [i for i, d in enumerate(all_dates) if start <= d <= end]
     dates = [all_dates[i] for i in keep]
-    closes = [all_closes[i] for i in keep]
+    raw = [all_closes[i] for i in keep]
+    # 수준만 옮긴다(종목별 상수) — 수익률·거래량은 걸음 그대로다.
+    k = _mock_scale(ticker)
+    closes = [c * k for c in raw]
 
     # OHLC·거래량의 잡음은 **날짜에서** 뽑는다 — 위치에서 뽑으면 종가와 같은
     # 결함이 되살아난다(창이 달라지면 같은 날의 시가·거래량이 달라진다).
@@ -100,15 +191,15 @@ def _mock_ohlcv_df(ticker: str, start_date: str, end_date: str):
         return random.Random((seed << 20) ^ d.toordinal())
     rows = {"open": [], "high": [], "low": [], "close": list(closes), "volume": []}
     base_vol = 100000 + (seed % 50) * 50000
-    prev = closes[0] if closes else 10000.0
-    for d, px in zip(dates, closes):
+    prev = raw[0] if raw else 10000.0
+    for d, px, rpx in zip(dates, closes, raw):
         r = _noise(d)
         spread = px * r.uniform(0.005, 0.02)
         rows["open"].append(px - spread * r.uniform(-0.3, 0.3))
         rows["high"].append(px + spread * r.uniform(0.3, 1.0))
         rows["low"].append(px - spread * r.uniform(0.3, 1.0))
-        rows["volume"].append(base_vol * (1 + abs(px / prev - 1) * 8) * r.uniform(0.6, 1.5))
-        prev = px
+        rows["volume"].append(base_vol * (1 + abs(rpx / prev - 1) * 8) * r.uniform(0.6, 1.5))
+        prev = rpx
 
     df = pd.DataFrame(rows, index=pd.DatetimeIndex(dates, name="date"))
     df.attrs["source"] = "mock"   # 데이터 출처 태그(정직성 — 합성 시계열)

@@ -286,7 +286,7 @@ class PortfolioAnalyzer:
         return pd.DataFrame(frontier)
 
     def optimal_weights(self, method: str = "max_sharpe") -> pd.Series:
-        """최적 비중 계산 (max_sharpe 또는 min_volatility)."""
+        """최적 포트폴리오 최적화 (max_sharpe 또는 min_volatility)."""
         try:
             from scipy.optimize import minimize
         except ImportError:

@@ -29,7 +29,7 @@ logger = logging.getLogger("api.scorecard")
 router = APIRouter(prefix="/api/v1/strategies", tags=["strategies"])
 
 _NOTE = (
-    "이 카드는 세 축을 나란히 보여 줄 뿐 종합 등급을 만들지 않습니다 — 승격은 절차, "
+    "이 카드는 세 축을 병렬로 제시할 뿐 종합 등급을 산출하지 않습니다 — 승격은 절차, "
     "건강도는 측정, 증거는 시점 정합이고 서로 다른 질문입니다. unmeasured 는 이 "
     "저장소가 재지 못한다고 스스로 적어 둔 신호들입니다."
 )

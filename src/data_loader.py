@@ -10,7 +10,19 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from src.data.mock_gate import mock_allowed
+
 logger = logging.getLogger(__name__)
+
+#: 화면·응답에 그대로 실리는 문장 — 개발자 낱말·환경변수 이름·제공자 이름을 싣지 않는다(용어집 §6).
+MARKET_DOWNLOAD_BLOCKED = "합성 데이터 모드에서는 해외 시세를 내려받지 않습니다 — 이 분석은 실데이터 모드에서 사용할 수 있습니다."
+
+
+class MarketDataBlockedInMock(ValueError):
+    """mock 게이트가 켜져 있어 야후 시세를 ★시도하지 않았다★(2026-11-13) — 내려받다 실패한 것과 다른 사유다.
+
+    `ValueError` 하위라 '시세 없음'을 `ValueError` 로 받던 호출자(`fetch_vix` — 빈 계열로 열화)는 그대로 돈다.
+    """
 
 # Maximum retries for yfinance downloads
 MAX_RETRIES = 3
@@ -25,6 +37,10 @@ class MarketDataLoader:
 
     def _download_with_retry(self, ticker: str, **kwargs) -> pd.DataFrame:
         """Download data with automatic retry on failure."""
+        # ★mock 게이트(`mock_allowed()` — 유일한 판정 기준)★ — mock 은 외부로 나가지 않는다. 재시도·대기 없이 바로 사유를 올린다.
+        # 합성 시세를 지어내지 않는다(이 로더를 쓰는 분석은 mock 에서 '사용 불가 + 사유'가 된다).
+        if mock_allowed():
+            raise MarketDataBlockedInMock(MARKET_DOWNLOAD_BLOCKED)
         last_error = None
         for attempt in range(1, MAX_RETRIES + 1):
             try:

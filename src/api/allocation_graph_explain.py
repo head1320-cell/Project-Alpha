@@ -1,0 +1,320 @@
+"""AAS 그래프 노드 설명기 — ★쉬운 말로, 과장 없이, 모르는 것은 "N/A" 로★ (BJ1)
+==============================================================================
+스펙 `docs/superpowers/specs/2026-09-25-aas-workflow-ux-design.md` §4.3 · 사용자 결정: 설명
+문장은 **서버가 결정적 규칙으로** 만든다(화면은 그리기만 한다).
+
+설명기는 `(view, provenance, params) -> dict` 순수 함수다. 반환 모양:
+
+    {"title": 합니다체 한 줄,
+     "headline": {"label", "value", "unit", "text"} | 없음,
+     "facts": [한 줄 사실],
+     "trust": [{"state": confirmed|assumed|unknown|failed, "text"}],   # "신뢰도 점검"
+     "unmeasured": [안 잰 것]}
+
+## 규칙 (CLAUDE.md §2 · §4)
+- **숫자는 view 에서만** 가져온다 — 설명이 계산을 다시 하거나 반올림 이상으로 바꾸지 않는다.
+- "확인(confirmed)" 은 **이 코드가 실제로 한 일**에만 쓴다(계산이 끝났다 · 기준일을 기록했다).
+  예측력·경제적 가치를 확인했다는 말은 이 층 어디에도 없다.
+- mock(E0) 은 "합성 데이터" 를 **모릅니다**로 — 실제 성과를 말해 주지 않는다.
+  DB 적재분은 등급을 모른다고 말한다(E3 을 지어내지 않는다).
+- 과장 어휘는 테스트가 전수로 막는다(`tests/test_allocation_graph_explain.py`).
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from src.engine.allocation_evidence import LOOKAHEAD_AXIS_LABELS
+
+CONFIRMED, ASSUMED, UNKNOWN, FAILED = "confirmed", "assumed", "unknown", "failed"
+
+#: 시장 균형(시가총액) 출발점을 쓰는 모델 — 시가총액 미상이 가정이 되는 곳.
+_MARKET_PRIOR_MODELS = frozenset({"bl", "ep"})
+
+MODEL_PLAIN = {
+    "mvo": "평균-분산 최적화", "bl": "블랙-리터먼", "ep": "엔트로피 풀링",
+    "risk_parity": "리스크 패리티", "hrp": "계층적 리스크 패리티(HRP)", "min_var": "최소분산",
+    "max_div": "최대분산화", "min_cvar": "CVaR 최소화", "robust": "강건 최적화",
+    "mv_utility": "평균-분산 효용",
+}
+
+_PRACTICE = "합성 데이터입니다 — 실제 시세가 아니므로 실제 성과를 나타내지 않습니다."
+
+
+def _t(state: str, text: str) -> dict:
+    return {"state": state, "text": text}
+
+
+#: 믿음 줄의 표시(BT7) — 화면의 "연습용 데이터" 칩은 문구가 아니라 이 표시를 본다.
+PRACTICE = "practice"
+#: 믿음 줄의 표시(CF3) — 요청한 방식 대신 다른 비중이 쓰였다. 화면은 "고른 방식 대신함" 칩을 단다.
+FALLBACK = "fallback"
+
+
+def _practice(text: str = _PRACTICE) -> dict:
+    """합성 데이터라서 실제 성과·국면·가치를 말하지 못한다는 믿음 줄 — 모릅니다 + 표시.
+    노드 모듈은 합성 줄을 `_t(UNKNOWN, …)` 로 직접 만들지 않는다(`tests/test_graph_practice_kind.py` AST)."""
+    return {"state": UNKNOWN, "text": text, "kind": PRACTICE}
+
+
+def _josa(word: str, with_batchim: str, without: str) -> str:
+    """받침 유무로 조사를 고른다(한글이 아니면 받침 없음으로 본다)."""
+    ch = word[-1:] if word else ""
+    if "가" <= ch <= "힣":
+        return with_batchim if (ord(ch) - 0xAC00) % 28 else without
+    return without
+
+
+def _pct(v: float, digits: int = 1) -> str:
+    s = f"{v:.{digits}f}".rstrip("0").rstrip(".")
+    return f"{s}%"
+
+
+def _signed_pct(v: float) -> str:
+    return ("+" if v >= 0 else "−") + _pct(abs(v))
+
+
+def _is_practice(prov: dict) -> bool:
+    pl = prov.get("perf_label") or {}
+    return prov.get("source") == "mock" or prov.get("data_source") == "mock" or pl.get("data_real") is False
+
+
+def _names(codes: list[str], labels: dict[str, str] | None) -> str:
+    labels = labels or {}
+    return ", ".join(labels.get(c) or c for c in codes)
+
+
+# ── 노드별 ───────────────────────────────────────────────────────────────────
+
+def explain_universe(view: dict, prov: dict, params: Any) -> dict:
+    tickers = view.get("tickers") or []
+    labels = view.get("labels") or {}
+    facts = [_names(tickers, labels)]
+    facts.append("현재 보유 비중도 함께 전달했습니다." if view.get("weights")
+                 else "현재 보유 비중은 입력하지 않았습니다.")
+    trust = []
+    unk = (view.get("unknown_tickers") or {}).get("codes") or []
+    if unk:
+        trust.append(_t(UNKNOWN, f"종목 목록에 없는 코드입니다: {', '.join(unk)} — 실재하는 종목인지 미상"))
+    return {"title": f"종목 {len(tickers)}개를 선정했습니다", "facts": facts, "trust": trust}
+
+
+def explain_returns(view: dict, prov: dict, params: Any) -> dict:
+    cov = view.get("coverage") or {}
+    n = cov.get("n_obs")
+    years = (n / 252) if isinstance(n, (int, float)) and n else None
+    title = (f"최근 {years:.0f}년 수익률을 조회했습니다" if years and abs(years - round(years)) < 0.15
+             else f"최근 {n}일 수익률을 조회했습니다")
+    facts = [f"{cov.get('start')}부터 {cov.get('end')}까지 {n}일 치입니다."]
+    ex = view.get("excluded") or []
+    facts.append("제외된 종목은 없습니다." if not ex else
+                 "제외된 종목: " + "; ".join(f"{x['ticker']}({x['reason']})" for x in ex))
+    trust = []
+    if _is_practice(prov):
+        trust.append(_practice())
+    elif prov.get("data_grade"):
+        trust.append(_t(CONFIRMED, f"데이터 등급 {prov['data_grade']}로 기록돼 있습니다."))
+    else:
+        trust.append(_t(UNKNOWN, "데이터 출처 등급은 미상입니다 — "
+                                 + str(prov.get("data_grade_reason") or "행 단위 출처가 기록되지 않았습니다.")))
+    if cov.get("as_of_effective"):
+        trust.append(_t(CONFIRMED, f"계산 기준일을 {cov['as_of_effective']}로 기록했습니다."))
+    return {"title": title, "facts": facts, "trust": trust,
+            "unmeasured": ["해당 일자에 실제 입수 가능했던 값인지(공표 시점)는 행 단위로 측정하지 않았습니다."]}
+
+
+def explain_views(view: dict, prov: dict, params: Any) -> dict:
+    from src.api.allocation_routes import _labels
+    views = view.get("views") or []
+    if not views:
+        return {"title": "입력한 투자 뷰가 없습니다", "facts": ["시장 균형만으로 계산합니다."]}
+    facts = []
+    for v in views:
+        mag = float(v.get("direction", 1)) * float(v.get("magnitude_pct", 0))
+        conf = v.get("confidence", 50)
+        if v.get("assets"):
+            codes = list(v["assets"])
+            who = _names(codes, _labels(codes))
+            who = who if len(codes) == 1 else f"{who} 평균"
+            facts.append(f"{who}의 1년 기대수익률을 {_signed_pct(mag)}로 전망했습니다 (확신도 {conf:.0f}%).")
+        else:
+            w = v.get("weights") or {}
+            parts = ", ".join(f"{_names([c], _labels([c]))} {x:+g}" for c, x in w.items())
+            facts.append(f"조합({parts})의 1년 기대수익률을 {_signed_pct(mag)}로 전망했습니다 (확신도 {conf:.0f}%).")
+    return {"title": f"투자 뷰 {len(views)}개를 입력했습니다", "facts": facts,
+            "trust": [_t(ASSUMED, "투자 뷰는 입력한 가정입니다 — 적중 여부는 이 계산이 확인하지 않습니다.")]}
+
+
+#: CF 3부 P1 — 추정 노드는 수익률 입력을 받지만 쓰지 않는다(설정만 넘긴다). 선이 뜻하는 의존과 실제가 달라서 말한다.
+_ESTIMATE_INPUT_UNUSED = "연결된 수익률은 이 단계에서 사용하지 않습니다 — 설정만 전달하고, 기대수익률은 포트폴리오 최적화 단계가 자체 수익률 입력으로 산출합니다."
+
+#: 완화 사다리가 건너뛴 제약 이름(`constrained_solve` 의 relaxed) → 쉬운 말.
+_RELAXED_PLAIN = {"turnover": "회전율", "beta": "시장 민감도", "group": "업종 상한"}
+
+
+def _constraints_approx_text(cr: dict) -> str:
+    """근사해·깎아 맞춘 해를 한 문장으로 — 값은 보고에 있는 것만(새 숫자 없음)."""
+    parts = []
+    if cr.get("projected"):
+        parts.append("이 방식은 제약을 최적화에 직접 반영하지 못해 산출 후 사후 조정했습니다 — 회전율·시장 민감도 제약은 이 방식에서 적용되지 않습니다.")
+    relaxed = [_RELAXED_PLAIN.get(r, str(r)) for r in cr.get("relaxed") or []]
+    if relaxed:
+        parts.append(f"원래 제약으로는 해가 없어 {'·'.join(relaxed)} 제약을 완화했습니다.")
+    viol = cr.get("violations") or []
+    if viol:
+        parts.append(f"위반된 제약 {len(viol)}개가 남았습니다.")
+    return " ".join(parts) or "제약을 모두 충족하지 못해 근사 비중을 산출했습니다."
+
+
+def explain_estimate(view: dict, prov: dict, params: Any) -> dict:
+    s = view.get("settings") or {}
+    if s.get("conditional"):
+        return {"title": "경기 국면 조건부로 기대수익률을 추정하도록 설정했습니다",
+                "facts": ["실제 반영 여부는 포트폴리오 최적화 단계에서 표시합니다.", _ESTIMATE_INPUT_UNUSED],
+                "trust": [_t(ASSUMED, "현재 국면이 지속된다고 가정합니다.")]}
+    return {"title": "과거 수익률 기준으로 기대수익률을 추정했습니다",
+            "facts": ["경기 국면은 반영하지 않았습니다.", _ESTIMATE_INPUT_UNUSED],
+            "trust": [_t(ASSUMED, "과거 평균이 향후에도 유지된다고 가정합니다.")]}
+
+
+def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
+    w: dict[str, float] = view.get("weights") or {}
+    labels = view.get("labels") or {}
+    model = view.get("model")
+    headline = None
+    if w:
+        top = max(w, key=lambda k: w[k])
+        name = labels.get(top) or top
+        headline = {"label": f"{name} 비중", "value": w[top], "unit": "%",
+                    "text": f"{name} {_pct(w[top])}"}
+    # CF3 — 요청한 방식 대신 다른 비중이 쓰였으면 "문제없이" 라고 하지 않는다. 대체마다 가정 줄(`kind: fallback`).
+    used = [f for f in view.get("fallbacks") or [] if f.get("affects_weights")]
+    trust = [_t(CONFIRMED, "포트폴리오 최적화가 완료됐습니다." if used else "포트폴리오 최적화가 정상 완료됐습니다.")]
+    trust += [{"state": ASSUMED, "text": str(f.get("text") or ""), "kind": FALLBACK} for f in used]
+    if _is_practice(prov):
+        trust.append(_practice())
+    cap = view.get("cap_missing") or []
+    if model in _MARKET_PRIOR_MODELS and cap:
+        # `market_cap_weights` 와 같은 일을 말한다(K1) — 모두 모르면 균등, 일부만 모르면 아는 종목들의 중앙값으로 채운다.
+        trust.append(_t(ASSUMED, "시가총액이 모두 미상이라 사전 비중을 동일 가중으로 두었습니다."
+                        if len(cap) >= len(view.get("names") or []) else
+                        f"{len(cap)}개 종목은 시가총액이 미상이라 사전 비중에 나머지 종목 시가총액의 중앙값을 대입했습니다."))
+    cr = view.get("constraints_report") or None
+    if cr:
+        if cr.get("status") == "infeasible":
+            trust.append(_t(FAILED, "제약을 모두 충족하는 해가 없어 무제약 비중을 그대로 표시합니다 — "
+                                    + str(cr.get("reason") or "")))
+        elif cr.get("status") == "approx" or cr.get("projected"):
+            # CF 3부 P1 — 근사해·깎아 맞춘 해는 "제약 안에서" 가 확인이 아니다.
+            trust.append(_t(ASSUMED, _constraints_approx_text(cr)))
+        else:
+            trust.append(_t(CONFIRMED, "적용된 제약 범위에서 산출했습니다." if cr.get("unapplied")
+                            else "지정한 제약 범위에서 산출했습니다."))
+        # 엔진이 말없이 건너뛴 업종 상한(라우트가 센 것) — 모르는 것으로 말한다.
+        trust += [_t(UNKNOWN, str(u.get("text") or "")) for u in cr.get("unapplied") or []]
+    belief = view.get("belief") or {}
+    if belief.get("blocked"):
+        trust.append(_t(ASSUMED, "경기 국면 반영이 차단돼 과거 표본 기준으로 산출했습니다 — "
+                                 + str(belief.get("blocked_reason") or "")))
+    if view.get("skipped_views"):
+        trust.append(_t(UNKNOWN, f"입력한 투자 뷰 중 {len(view['skipped_views'])}개는 사용할 수 없어 제외했습니다."))
+    facts = [f"계산 방식: {MODEL_PLAIN.get(model, model)}"]
+    ra = view.get("risk_aversion") or None
+    if ra:
+        # BO O1 — 쓴 λ 와 그 출처. 비워 두었으면 관례값이라는 사실을 **가정**으로 밝힌다.
+        facts.append(f"위험 회피 λ {ra.get('value'):g}")
+        if ra.get("source") == "default":
+            trust.append(_t(ASSUMED, f"위험회피도를 지정하지 않아 관례적인 값(λ {ra.get('value'):g}, "
+                                     "‘보통’)으로 산출했습니다 — 투자자별 적정값은 아닙니다."))
+        else:
+            trust.append(_t(ASSUMED, f"위험 회피 λ {ra.get('value'):g}는 사용자가 선택한 값입니다 — "
+                                     "이 값의 적정성은 이 계산이 판단하지 않습니다."))
+    if view.get("views_unused"):
+        trust.append(_t(ASSUMED, f"연결된 투자 뷰 {view['views_unused']}개는 이 방식에서 사용되지 않습니다 — "
+                                 "‘블랙-리터먼’·‘엔트로피 풀링’을 고르면 비중에 반영됩니다."))
+    if model in _MARKET_PRIOR_MODELS:
+        market = any(f.get("stage") == "view_applied" for f in used)
+        # K1 — 생각을 넣은 비중을 못 만들어 시가총액 비중을 썼으면 그렇게 말한다(`views_applied` 는 그때 거짓이다).
+        facts.append("투자 뷰를 반영한 비중을 산출하지 못해 시가총액 비중을 적용했습니다." if market
+                     else "투자 뷰를 반영했습니다." if view.get("views_applied") else "반영된 투자 뷰가 없습니다.")
+    return {"title": "비중 산출 결과입니다", "headline": headline, "facts": facts, "trust": trust}
+
+
+def explain_risk(view: dict, prov: dict, params: Any) -> dict:
+    rc = view.get("risk_contribution_optimized") or {}
+    enb = view.get("enb") or {}
+    vol = rc.get("portfolio_volatility_pct")
+    if vol is None:
+        return {"title": "변동성 산출 실패",
+                "trust": [_t(UNKNOWN, str(rc.get("reason") or "사유 수신 실패"))]}
+    facts = []
+    if enb.get("enb") is not None:
+        facts.append(f"종목 간 상관을 반영한 유효 베팅 수는 {enb['enb']:.1f}개 정도입니다.")
+    else:
+        facts.append("유효 베팅 수는 미상입니다 — " + str(enb.get("enb_reason") or ""))
+    return {"title": "연환산 변동성입니다",
+            "headline": {"label": "변동성", "value": round(float(vol), 1), "unit": "%",
+                         "text": f"{_pct(float(vol))} / 년"},
+            "facts": facts,
+            "trust": [_t(ASSUMED, "과거의 종목 간 상관 구조가 유지된다고 가정합니다.")]}
+
+
+def drawdown_fact(view: dict) -> str | None:
+    """가장 깊은 낙폭 구간 한 문장 (2026-11-09 · 캔버스 성과 그림 문법) — `view["drawdowns"]` 의 첫 사건(깊이순).
+
+    회복했으면 며칠 걸렸는지, 못 했으면 "아직" 이라고. ★사건이 없으면 None★ — 0 일·0% 를 지어내지 않는다.
+    """
+    eps = view.get("drawdowns") or []
+    if not eps:
+        return None
+    e = eps[0]
+    depth, peak, to_trough = e.get("depth_pct"), e.get("peak_date"), e.get("days_to_trough")
+    if depth is None or not peak or to_trough is None:
+        return None
+    head = f"최대 낙폭 구간은 {peak} 고점에서 {int(to_trough)}일 만에 {abs(float(depth)):.1f}% 하락이었고, "
+    rec = e.get("days_to_recover")
+    return head + (f"고점 회복까지 {int(rec)}일 걸렸습니다." if rec is not None else "아직 고점을 회복하지 못했습니다.")
+
+
+def explain_backtest(view: dict, prov: dict, params: Any) -> dict:
+    s = view.get("summary") or {}
+    cfg = view.get("config") or {}
+    cagr, mdd = s.get("cagr_pct"), s.get("max_drawdown_pct")
+    headline = None if cagr is None else {
+        "label": "연환산 수익률", "value": cagr, "unit": "%", "text": f"연 {_pct(float(cagr))}"}
+    facts = []
+    if mdd is not None:
+        facts.append(f"MDD(최대낙폭)는 {_pct(float(mdd))}였습니다.")
+    dd_fact = drawdown_fact(view)
+    if dd_fact:
+        facts.append(dd_fact)
+    if view.get("n_rebalances") is not None:
+        facts.append(f"리밸런싱을 {view['n_rebalances']}번 했습니다.")
+    trust = []
+    if _is_practice(prov):
+        trust.append(_practice())
+    # 파라미터가 먼저 — 엔진이 실제로 받은 값이다. 없으면 결과의 config 를 본다.
+    bps = getattr(params, "cost_bps", None)
+    if bps is None:
+        bps = cfg.get("cost_bps")
+    if bps is not None:
+        trust.append(_t(ASSUMED, f"거래비용은 매매 1회당 {_pct(float(bps) / 100, 2)}로 가정했습니다."))
+    la = view.get("lookahead_evidence") or {}
+    for name in la.get("ok_axes") or []:
+        trust.append(_t(CONFIRMED, f"{LOOKAHEAD_AXIS_LABELS.get(name, name)}: 확인했습니다."))
+    unmeasured = []
+    for n in la.get("unknown_axes") or []:
+        lab = LOOKAHEAD_AXIS_LABELS.get(n, n)
+        unmeasured.append(f"{lab}{_josa(lab, '은', '는')} 측정하지 않았습니다.")
+    if view.get("belief_note"):
+        trust.append(_t(ASSUMED, str(view["belief_note"])))
+    # CF3 — 리밸런싱 시점마다 고른 방식을 다시 푸는데, 그때 역변동성으로 대신했는지는 세지 않는다.
+    unmeasured.append("리밸런싱마다 선택한 방식이 해를 냈는지(역변동성으로 대체됐는지)는 집계하지 않았습니다.")
+    return {"title": "배분 정책의 과거 구간 성과입니다", "headline": headline, "facts": facts,
+            "trust": trust, "unmeasured": unmeasured}
+
+
+EXPLAINERS = {
+    "universe": explain_universe, "returns": explain_returns, "views": explain_views,
+    "estimate": explain_estimate, "optimizer": explain_optimizer, "risk": explain_risk,
+    "backtest": explain_backtest,
+}

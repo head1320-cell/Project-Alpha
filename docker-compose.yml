@@ -28,6 +28,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      args:
+        # 빌드 식별자 (AM6). `.dockerignore` 가 `.git` 을 빼므로 컨테이너 안에서는
+        # 측정이 불가능하고, 이 주입이 유일한 경로다. 비워 두면 기록이 미상으로
+        # 남는다 — ★조용한 "dev" 로 남지는 않는다★.
+        #   GIT_SHA=$(git rev-parse HEAD) docker compose build backend
+        GIT_SHA: ${GIT_SHA:-}
     container_name: ficc_backend
     restart: unless-stopped
     ports:
@@ -63,16 +69,11 @@ services:
 
   # ─── Frontend (Next.js 14) ───────────────────────────────────────────────
   # 변경: Streamlit(8501) → Next.js(3000)
-  # NEXT_PUBLIC_API_URL은 빌드 타임에 주입 (런타임 env 아님)
+  # API 주소는 빌드에 넣지 않는다 — 아래 environment 의 BACKEND_URL 을 런타임 프록시가 요청마다 읽는다.
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-      args:
-        # 비워두면 브라우저는 같은 출처 프록시(/api/backend)를 사용 → IP/도메인 baking
-        # 불필요, CORS·방화벽·mixed-content 없이 어디든 동작. 별도 API 도메인을
-        # 쓸 때만 절대 URL(https://api.example.com)을 넣을 것.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     container_name: ficc_frontend
     restart: unless-stopped
     ports:

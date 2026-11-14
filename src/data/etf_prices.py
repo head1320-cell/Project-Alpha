@@ -112,6 +112,32 @@ def monthly_closes(ticker: str, market: str = "kr", n: int = 14) -> list[float]:
     return full[-n:]
 
 
+def monthly_closes_dated(ticker: str, market: str = "kr", n: int = 14) -> list[tuple[str, float]]:
+    """`monthly_closes` 와 같은 월말 종가에 ★그 달의 마지막 거래일(ISO)★ 을 붙인다 — 성과 그림이 어림 라벨 대신 실제 날짜를 쓰게(2026-11-09).
+
+    달력 월말(`ME` 라벨)이 아니라 데이터가 있는 마지막 날이다. 같은 as_of 자르기라 값은 `monthly_closes` 와 자리마다 같다. 따로 캐시한다.
+    """
+    key = (f"md:{market}", ticker)
+    if key in _CACHE:
+        full = _CACHE[key]
+    else:
+        code, _ = resolve(ticker, market)
+        full = []
+        try:
+            df = _daily_df(code)
+            if df is not None and not df.empty:
+                s = df["close"].astype(float).dropna()
+                # 달마다 ★실제 마지막 거래일★ 과 그 종가 — `resample("ME").last().dropna()` 와 자리·값이 같다(빈 달은 둘 다 빠진다).
+                full = [(g.index[-1].date().isoformat(), float(g.iloc[-1])) for _, g in s.groupby(s.index.to_period("M"))]
+        except Exception as e:
+            logger.debug(f"monthly_closes_dated 실패 [{ticker}/{market}]: {e}")
+        _CACHE[key] = full
+    off = _month_off()
+    if off:
+        full = full[:-off] if off < len(full) else []
+    return full[-n:]
+
+
 def daily_closes(ticker: str, market: str = "kr", days: int = 300) -> list[float]:
     """최근 일간 종가 (이동평균 산정용). as_of 활성 시 그 시점까지만(월×21봉)."""
     key = (f"d:{market}", ticker)

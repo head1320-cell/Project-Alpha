@@ -12,14 +12,18 @@
 
 export type VerdictTone = "bull" | "bear" | "caution" | "neutral";
 
-export interface FactorVal { id: string; label: string; value: number; unit: string; pct: number; higherBetter: boolean }
+/** `pct` = 비교 표본 안 백분위(좋은 쪽이 높게 — 서버 `higher_better` 로 뒤집음). ★표본이 없거나 5개 미만이면 null(몰라요) — 50 을 지어내지 않는다(BU6b)★ */
+export interface FactorVal { id: string; label: string; value: number; unit: string; pct: number | null; higherBetter: boolean }
 export interface FactorGroup { id: string; label: string; factors: FactorVal[] }
-export interface YearFin { year: string; revenue: number; op: number; ni: number; equity: number; fcf: number; roe: number; debt: number; eps: number; bps: number; dps: number }
-export interface QuarterFin { q: string; revenue: number; op: number; ni: number; equity: number; roe: number; debt: number; eps: number; bps: number; dps: number; opMargin: number }
+/** 연도·분기 재무 — ★null = 서버가 값을 주지 않음(몰라요). 0 으로 채우지 않는다(BU6b)★ */
+type N = number | null;
+export interface YearFin { year: string; revenue: N; op: N; ni: N; equity: N; fcf: N; roe: N; debt: N; eps: N; bps: N; dps: N }
+export interface QuarterFin { q: string; revenue: N; op: N; ni: N; equity: N; roe: N; debt: N; eps: N; bps: N; dps: N; opMargin: N }
 export interface ModelResult { key: "RIM" | "DCF" | "DDM"; label: string; value: number; weight: number; assumptions: { k: string; v: string }[]; components: { k: string; v: string }[] }
-export interface Peer { code: string; name: string; price: number; per: number; pbr: number; roe: number; gap: number; mktcap: number; self?: boolean }
+export interface Peer { code: string; name: string; price: number; per: N; pbr: N; roe: N; gap: N; mktcap: N; self?: boolean }
 export interface Scenario { key: "bull" | "base" | "bear"; label: string; value: number; gap: number; note: string }
-export interface PricePt { t: string; p: number }
+/** `t` = 축 글자(연.월) · `p` = ★서버 종가 그대로★(옮기거나 반올림하지 않는다) · `date` = 서버 날짜(읽는 줄·표의 머리). */
+export interface PricePt { t: string; p: number; date?: string }
 
 // 지연 로드(lazy) — 탭 진입 시 채워짐
 export interface SignalInfo { action: string; strength: number; reason: string; strategy: string }
@@ -32,24 +36,27 @@ export interface MacroInfo { regime: string; riskFree: number | null; recommende
 export interface CompanyData {
   code: string; name: string; sector: string;
   market?: string; listingDate?: string;
-  price: number; changePct: number; mktcap: number; // 억
+  price: number; mktcap: number | null; // 억 — 모르면 null(0 으로 그리지 않는다)
+  /** 전일 대비 — ★일별 시세의 마지막 두 종가에서만★(둘 미만이면 null — 0% 를 지어내지 않는다). 옛 `changePct: 0` 상수를 대신한다(BU6a+). */
+  dayChange: { pct: number; date: string } | null;
+  /** 머리 문장(evaluate)이 연습용 재무로 계산됐는지 — 서버 `is_mock`. */
+  isMock: boolean;
   verdict: string; tone: VerdictTone;
   intrinsic: number; gapPct: number;
   models: ModelResult[];
-  summary: { per: number; pbr: number; roe: number; roa: number; debt: number; divYield: number; payout: number; eps: number; bps: number; dps: number; revenue: number; op: number; ni: number; fcf: number; equity: number };
+  /** ★null = 몰라요(0 과 다르다 — BU6)★ */
+  summary: { per: number | null; pbr: number | null; roe: number | null; roa: number | null; debt: number | null; divYield: number | null; payout: number | null; eps: number | null; bps: number | null; dps: number | null; revenue: number | null; op: number | null; ni: number | null; fcf: number | null; equity: number | null };
   years: YearFin[];
   quarters: QuarterFin[];
   price1y: PricePt[];
-  priceIsSynthetic?: boolean;          // /prices DB 비어 합성 폴백 사용
+  /** 코어 하위 요청 중 서버에 닿지 못한 것 — 화면이 "없음" 대신 실패 + 다시 시도를 말한다(BU6). 시세가 비면(실패 아님) price1y 가 빈 배열. */
+  failed: ("valuation" | "financials" | "quarters" | "prices" | "factors" | "factorSample" | "peers")[];
+  /** 팩터 백분위의 비교 표본 — 몇 종목과 견줬는지(BU6b). null = 표본을 불러오지 못했다(failed 에 "factorSample"). */
+  factorBasis: { n: number; source: "db" | "kospi200" } | null;
   fundamentals: FactorGroup[];
   priceFactors: FactorGroup[];
   strengths: FactorVal[];
   weaknesses: FactorVal[];
-  shareholder: { divYield: number; payout: number; dps: number; shYield: number };
-  consensus: { fwdPer: number; fwdEpsChg: number; revision: number; targetPrice: number; targetUpside: number };
-  consensusReal?: boolean;             // 컨센서스 실데이터 여부(현재 mock)
-  events: { earningsDays: number; exDivDays: number };
-  eventsReal?: boolean;
   peers: Peer[];
   scenarios: Scenario[];
   score: { composite: number; gap: number; roe: number; stability: number };
@@ -62,7 +69,7 @@ export interface CompanyData {
 }
 
 // ── 포맷 헬퍼 ──
-export const won = (n: number) => `₩${Math.round(n).toLocaleString()}`;
+export const won = (n: number) => `${Math.round(n).toLocaleString()}원`;
 export const eok = (n: number) => {
   const a = Math.abs(n);
   if (a >= 10000) return `${(n / 10000).toFixed(a >= 100000 ? 0 : 1)}조`;

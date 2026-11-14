@@ -6,13 +6,13 @@
 name = "project-alpha"
 version = "2.0.4"
 description = "한국 주식 퀀트 투자 플랫폼 (스크리너 + 백테스터 + 밸류에이션 + 리스크)"
-requires-python = ">=3.10"
+requires-python = ">=3.12"   # numpy 2.5·scipy 1.18 이 3.12 이상(운영·CI 는 3.14)
 
 [tool.ruff]
 # 대상 디렉토리
 src = ["src", "tests"]
 line-length = 120
-target-version = "py310"
+target-version = "py310"   # 린트 문법 기준은 그대로 — 올리면 무관한 현대화 지적(UP) 39개가 생긴다(2026-11-08)
 
 # 생성/벤더 디렉토리 제외
 extend-exclude = [
@@ -29,7 +29,9 @@ extend-exclude = [
 #   I    : isort (import 정렬)
 #   B    : flake8-bugbear (흔한 버그 패턴)
 #   UP   : pyupgrade (구식 문법)
-select = ["E", "W", "F", "I", "B", "UP"]
+#   DTZ003: datetime.utcnow() 금지 — Python 3.12 부터 폐기 예고(3.14 시험에서 경고 19만 건). 값은 naive UTC 그대로
+#           `datetime.now(timezone.utc).replace(tzinfo=None)` 로 쓴다(DB 열·isoformat 이 바뀌지 않게). DTZ 의 나머지는 켜지 않는다.
+select = ["E", "W", "F", "I", "B", "UP", "DTZ003"]
 
 # 실용적 무시 규칙 (과도하게 엄격하지 않게):
 ignore = [

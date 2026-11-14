@@ -16,6 +16,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -141,18 +144,37 @@ def run_studio(studio_id: str, **kwargs: Any) -> dict[str, Any]:
         return unavailable(mod.STUDIO.substitute.name, f"실행 중 오류: {type(e).__name__}: {e}")
 
 
+#: 주입된 계열(`{키: MacroSeries}`) — 캔버스 노드(BL3 W2)가 **저장된 관측만** 넘길 때 쓴다. 비어 있으면(None)
+#: `load_series` 는 원래대로 수집기를 부른다. 컨텍스트 변수라 요청·스레드마다 따로다.
+_SERIES_SOURCE: ContextVar[dict | None] = ContextVar("macro_models_series_source", default=None)
+
+
+@contextmanager
+def series_source(series_map: dict) -> Iterator[None]:
+    """이 블록 안의 `load_series` 는 수집기 대신 `series_map` 을 읽는다 — 예외가 나도 블록을 나가면 거둔다."""
+    token = _SERIES_SOURCE.set(series_map)
+    try:
+        yield
+    finally:
+        _SERIES_SOURCE.reset(token)
+
+
 def load_series(keys: tuple[str, ...], months: int) -> dict[str, list[float]]:
     """매크로 시계열을 키로 뽑아 최근 `months` 개로 자른다.
 
     없는 키는 **조용히 빼지 않고** 호출자가 알 수 있게 결과에서 누락시킨다 —
     각 스튜디오가 "무엇이 없어서 못 했는지" 를 사유로 적을 수 있어야 한다.
+    `series_source(...)` 로 주입된 계열이 있으면 수집기를 부르지 않고 그것을 읽는다.
     """
-    from src.services.macro_collector import MacroCollector
-
-    snap = MacroCollector().collect_all(use_cache=True)
+    injected = _SERIES_SOURCE.get()
+    if injected is not None:
+        series_map = injected
+    else:
+        from src.services.macro_collector import MacroCollector
+        series_map = getattr(MacroCollector().collect_all(use_cache=True), "series", {})
     out: dict[str, list[float]] = {}
     for k in keys:
-        s = getattr(snap, "series", {}).get(k)
+        s = series_map.get(k)
         if s is None or not s.values:
             continue
         vals = [float(v) for v in s.values if v is not None]

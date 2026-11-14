@@ -15,7 +15,7 @@ P3-4 는 **사전 분산**을 팩터로 쪼갰다. 이 모듈은 **사후 실현
 귀인에서 **+14.3%p / −8.3%p** 로 크게 상쇄됐다 — 결합 적합은 멀쩡해도 **개별
 귀인은 불안정**하다. 그래서 VIF 를 팩터마다 내고 라벨을 단다.
 
-★산술 합과 복리 총수익은 다른 숫자다★ 항등식이 닫히는 것은 월별 수익률의
+★산술 합과 복리 총수익률은 다른 숫자다★ 항등식이 닫히는 것은 월별 수익률의
 **산술 합**에 대해서다. 백테스트의 `total_return_pct` 는 복리라 값이 다르다.
 둘을 같은 것처럼 내면 거짓이므로 **둘 다 내고 차이가 복리 효과임을 밝힌다.**
 """
@@ -36,6 +36,11 @@ def monthly_returns_from_result(result: dict | None) -> dict:
     """
     if not isinstance(result, dict):
         return {"available": False, "reason": "백테스트 결과가 없습니다"}
+    # ★워커가 저장하는 모양을 읽는다 (BL3 W1)★ 백그라운드 워커는 `_screen_to_backtest_core` 의 응답 **전체**를
+    # 저장하고, 월별 수익률은 그 안의 `backtest` 에 있다. 예전에는 최상위만 봐서 실제 실행에서는 늘 "없다" 고
+    # 답했다(배선 테스트가 `.get("backtest")` 만 저장해 가려졌다). 최상위에 없을 때만 한 단계 내려간다.
+    if "monthly_returns" not in result and isinstance(result.get("backtest"), dict):
+        result = result["backtest"]
     rows = result.get("monthly_returns")
     if rows is None:
         return {"available": False,
@@ -171,7 +176,7 @@ def factor_attribution(returns_by_month: dict[str, float], resolved: dict, *,
         "method": "joint_ols_monthly",
         "note": ("결합 회귀입니다 — 단변량 베타는 상관된 팩터의 공통 변동을 중복 "
                  "흡수합니다. 항등식은 월별 수익률의 **산술 합**에 대해 닫히며, "
-                 "복리 총수익과의 차이가 `compounding_gap_pct` 입니다"),
+                 "복리 총수익률과의 차이가 `compounding_gap_pct` 입니다"),
         "causality": ("상관·회귀는 인과가 아닙니다 — 이 기여는 동시대 월별 관계이며 "
                       "전략이 그 팩터를 의도했다는 뜻이 아닙니다"),
     }

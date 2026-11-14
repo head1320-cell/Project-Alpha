@@ -237,6 +237,8 @@ class FRTBExpectedShortfall:
             "stress_window_days": window,
             "stress_window_vol": round(float(stress_returns.std()) * np.sqrt(252), 4),
             "current_vol": round(float(returns.std()) * np.sqrt(252), 4),
+            "stress_window_found": True,
+            "reason": None,
         }
 
     def _stress_fallback(self, returns, portfolio_value):
@@ -255,6 +257,10 @@ class FRTBExpectedShortfall:
             "stress_window_days": len(returns),
             "stress_window_vol": round(float(returns.std()) * np.sqrt(252), 4),
             "current_vol": round(float(returns.std()) * np.sqrt(252), 4),
+            # ★값은 문서화된 폴백(현재 ES) 그대로 — 대신 못 찾았다고 말한다★ (BL3 M4)
+            "stress_window_found": False,
+            "reason": (f"표본이 {len(returns)}일이라 {self.STRESS_WINDOW}일 스트레스 구간을 찾지 못했습니다 — "
+                       "스트레스 ES 를 현재 ES 로 대체했습니다."),
         }
 
     # ─── 4. Liquidity-Adjusted ES (IMA Nested Waterfall) ────────────────────

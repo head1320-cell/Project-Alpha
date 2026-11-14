@@ -26,7 +26,7 @@ Shapley 값은 `Σφ_i = v(N) − v(∅)` 를 정확히 만족한다. 기저 v(�
 
 ★se 를 고정하는 이유★
 가치함수에서 축 불확실성(se)은 전체 표본 값으로 **고정**한다. 부분집합마다 se 를
-다시 계산하면 v(∅) 가 0.25 가 아니게 되어 기저가 흔들리고, "지표를 평균에 둔다" 는
+재계산하면 v(∅) 가 0.25 가 아니게 되어 기저가 흔들리고, "지표를 평균에 둔다" 는
 개입의 의미도 흐려진다. se 는 지표 간 불일치의 척도이지 개입 대상이 아니다.
 """
 
@@ -68,7 +68,7 @@ def regime_drivers(series_map: dict, market: str = "kr",
 
     if not g["components"] and not i["components"]:
         return {"available": False,
-                "reason": "성장·물가 축을 만들 지표가 하나도 없어 분해할 것이 없습니다"}
+                "reason": "성장·물가 축을 구성할 지표가 없어 분해할 대상이 없습니다"}
 
     se_g, se_i = g["se"], i["se"]
     probs = quadrant_probs(g["score"], i["score"], se_g, se_i)

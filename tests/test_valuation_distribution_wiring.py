@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import src.data.company_snapshots as cs  # noqa: E402
 import src.engine.company_snapshot_builder as bld  # noqa: E402
+from tests.route_walk import flat_routes  # noqa: E402
 
 CODE = "005930"
 PRICE = 71000.0
@@ -50,7 +51,7 @@ def _snap(**kw) -> dict:
 
 # ── 1. 라이브 라우트 ────────────────────────────────────────────────────────
 def test_the_route_is_registered_alongside_the_existing_four(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     assert "/api/v1/company/{code}/valuation-distribution" in paths
     # ★가산이다★ 기존 넷은 그대로 있다.
     for p in ("/api/v1/company/{code}/valuation-sandbox",

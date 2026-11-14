@@ -160,8 +160,10 @@ COST_SITES: tuple[CostSite, ...] = (
         key="stage12_routes",
         site="src/api/stage12_routes.py:commission_rate",
         label="Stage12 라우트 기본값", commission_bps=1.5, slippage_bps=5.0,
-        components=_BASIC,
-        note="리얼리즘 경로의 라우트 기본값.",
+        components=_c("commission", "slippage", "impact"),
+        note=("리얼리즘 경로의 라우트 기본값. ★문 기본값이 시장충격을 켠다★"
+              "(`enable_market_impact=True`) — BB 전에는 수수료·슬리피지만 적혀 "
+              "있었다."),
     ),
     CostSite(
         key="screener_routes",
@@ -181,10 +183,13 @@ COST_SITES: tuple[CostSite, ...] = (
     ),
     CostSite(
         key="graph_schema",
-        site="src/models/graph_schema.py:slippage_rate",
-        label="그래프 요청 스키마", commission_bps=None, slippage_bps=5.0,
-        components=_c("slippage"),
-        note="슬리피지만 자기 기본값을 적는다(수수료는 러너가 정한다).",
+        site="src/models/graph_schema.py:GraphBacktestRequest",
+        label="그래프 요청 스키마", commission_bps=15.0, slippage_bps=5.0,
+        components=_BASIC,
+        note=("★BB 정정★ 예전에는 *\"슬리피지만 적는다(수수료는 러너가 정한다)\"* "
+              "로 적혀 있었는데, 요청 모델은 수수료 15bp 도 기본으로 갖고 "
+              "`dag_runner` 로 그대로 넘긴다. 왕복 표가 이 문을 10bp 로 낮춰 "
+              "보고하고 있었다."),
     ),
     CostSite(
         key="market_rules",
@@ -227,12 +232,16 @@ UNAPPLIED_RULES: tuple[dict[str, str], ...] = (
     {"rule": "impact_coeff", "status": "opt_in",
      "reason": ("시장충격 `k·√참여율`. AK 에서 `charge_market_impact` 로 켤 수 "
                 "있게 됐고 기본은 꺼짐. ★참여율을 못 구하면 0 이 아니라 미상★.")},
-    {"rule": "tick_size / is_on_tick / round_to_tick", "status": "absent",
-     "reason": ("호가 단위는 **비용이 아니라 체결 가능성**이다 — 체결 모델 변경은 "
-                "별건이라 이 작업의 범위 밖이다. `execution_plan` 만 경고한다.")},
-    {"rule": "price_limit_pct", "status": "absent",
-     "reason": ("가격제한(±30%)은 그날 체결 가능 범위를 정한다 — 역시 체결 모델이다. "
-                "백테스트는 제한가를 넘는 체결을 막지 않는다.")},
+    {"rule": "tick_size / is_on_tick / round_to_tick", "status": "opt_in",
+     "reason": ("호가 단위는 **비용이 아니라 체결 가능성**이다. BC 에서 "
+                "`round_fills_to_tick` 로 켤 수 있게 됐고 기본은 꺼짐 — 켜면 "
+                "★원주가 척도에서만★ 매수 올림·매도 내림. 결과는 `cost_model` 이 "
+                "아니라 `fill_rules` 가 말한다.")},
+    {"rule": "price_limit_pct", "status": "opt_in",
+     "reason": ("가격제한(±30%)은 그날 체결 가능 범위를 정한다. BC 에서 "
+                "`enforce_price_limit` 로 켤 수 있게 됐고 기본은 꺼짐 — 켜면 제한 "
+                "밖 체결은 ★그날 미체결★, 전일 종가 미상은 위반이 아니라 미상으로 "
+                "센다.")},
     {"rule": "board_lot", "status": "absent",
      "reason": ("매매 단위. 현재 전부 1주라 실효가 없지만, ETF·우선주 예외가 "
                 "데이터 계층에 생기면 그때는 수량이 달라진다.")},
@@ -265,7 +274,7 @@ def site_axis(site: CostSite) -> dict[str, Any]:
               "missing": missing, "unmeasurable": foggy}
     if foggy:
         return {"state": AXIS_UNKNOWN,
-                "reason": (f"못 잰 성분이 있습니다({' · '.join(foggy)}) — "
+                "reason": (f"측정하지 못한 성분이 있습니다({' · '.join(foggy)}) — "
                            f"★0 원이 '비용이 없다' 로 읽히면 안 됩니다.★"), **common}
     if missing:
         return {"state": AXIS_DEGRADED,

@@ -9,7 +9,7 @@ from sqlalchemy import text as _sql_text
 from src.api.legacy_schemas import (
     ScreenerRequest,
 )
-from src.screener_pipeline import refresh_all_snapshots
+from src.screener_pipeline import refresh_all_snapshots, snapshot_origin
 from src.screener_sql import ALLOWED_FACTORS, build_screener_sql
 
 logger = logging.getLogger("api.screener_legacy")
@@ -39,6 +39,12 @@ def run_screener(req: ScreenerRequest):
         logger.warning(f"입력 검증 실패: {e}")
         raise HTTPException(status_code=400, detail=f"입력 오류: {e}")
 
+    # ★출처 게이트★(2026-11-14) — 운영은 이 프로세스가 실데이터로 써넣은 표만 낸다. 아니면 표를 읽지 않고 0건 + 사유
+    # (표에 예전 합성 행이 남아 있어도). mock 은 내되 `snapshot.is_mock` 이 붙는다.
+    origin = snapshot_origin(req.universe)
+    if not origin["available"]:
+        return {"universe": req.universe, "count": 0, "results": [], "sql": sql, "snapshot": origin}
+
     try:
         from src.database import get_engine
         engine = get_engine()
@@ -58,6 +64,7 @@ def run_screener(req: ScreenerRequest):
         "count": len(rows),
         "results": rows,
         "sql": sql,  # for debugging / transparency
+        "snapshot": origin,
     }
 
 @router.get("/screener/factors")
@@ -76,6 +83,13 @@ async def manual_refresh_screener():
     except Exception:
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
+
+def _iso(v) -> str | None:
+    """갱신 시각 — sqlite 는 시각을 문자열로 돌려준다(그대로 `.isoformat()` 을 부르면 500 이었다)."""
+    if not v:
+        return None
+    return v.isoformat() if hasattr(v, "isoformat") else str(v)
+
 
 @router.get("/screener/status")
 def screener_status():
@@ -105,8 +119,9 @@ def screener_status():
         return {
             "equity_rows": eq_count or 0,
             "ficc_rows": ficc_count or 0,
-            "equity_updated_at": eq_updated.isoformat() if eq_updated else None,
-            "ficc_updated_at": ficc_updated.isoformat() if ficc_updated else None,
+            "equity_updated_at": _iso(eq_updated),
+            "ficc_updated_at": _iso(ficc_updated),
+            "snapshot": {"equity": snapshot_origin("equity"), "ficc": snapshot_origin("ficc")},
         }
     except Exception:
         logger.exception("요청 처리 실패")

@@ -11,55 +11,45 @@ import * as React from "react";
 import { cn } from "@/shared/lib/cn";
 
 /** 가로 스크롤 래퍼 포함 — 표가 좁은 폭에서 페이지를 밀지 않게 한다. */
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-x-auto">
-      <table
-        ref={ref}
-        className={cn("w-full caption-bottom border-collapse text-[12px]", className)}
-        {...props}
-      />
-    </div>
-  ),
+const Table = ({ className, ref, ...props }: React.HTMLAttributes<HTMLTableElement> & { ref?: React.Ref<HTMLTableElement> }) => (
+  <div className="relative w-full overflow-x-auto">
+    <table
+      ref={ref}
+      className={cn("w-full caption-bottom border-collapse text-[12px]", className)}
+      {...props}
+    />
+  </div>
 );
 Table.displayName = "Table";
 
-const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => (
-    <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-[var(--border)]", className)} {...props} />
-  ),
+const TableHeader = ({ className, ref, ...props }: React.HTMLAttributes<HTMLTableSectionElement> & { ref?: React.Ref<HTMLTableSectionElement> }) => (
+  <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-[var(--border)]", className)} {...props} />
 );
 TableHeader.displayName = "TableHeader";
 
-const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => (
-    <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />
-  ),
+const TableBody = ({ className, ref, ...props }: React.HTMLAttributes<HTMLTableSectionElement> & { ref?: React.Ref<HTMLTableSectionElement> }) => (
+  <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />
 );
 TableBody.displayName = "TableBody";
 
-const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => (
-    <tfoot
-      ref={ref}
-      className={cn("border-t border-[var(--border)] font-medium [&>tr]:last:border-b-0", className)}
-      {...props}
-    />
-  ),
+const TableFooter = ({ className, ref, ...props }: React.HTMLAttributes<HTMLTableSectionElement> & { ref?: React.Ref<HTMLTableSectionElement> }) => (
+  <tfoot
+    ref={ref}
+    className={cn("border-t border-[var(--border)] font-medium [&>tr]:last:border-b-0", className)}
+    {...props}
+  />
 );
 TableFooter.displayName = "TableFooter";
 
-const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
-  ({ className, ...props }, ref) => (
-    <tr
-      ref={ref}
-      className={cn(
-        "border-b border-[var(--border)] transition-colors hover:bg-[var(--muted)]",
-        className,
-      )}
-      {...props}
-    />
-  ),
+const TableRow = ({ className, ref, ...props }: React.HTMLAttributes<HTMLTableRowElement> & { ref?: React.Ref<HTMLTableRowElement> }) => (
+  <tr
+    ref={ref}
+    className={cn(
+      "border-b border-[var(--border)] transition-colors hover:bg-[var(--muted)]",
+      className,
+    )}
+    {...props}
+  />
 );
 TableRow.displayName = "TableRow";
 
@@ -72,32 +62,26 @@ TableRow.displayName = "TableRow";
 export interface TableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   scope: "col" | "row" | "colgroup" | "rowgroup";
 }
-const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
-  ({ className, ...props }, ref) => (
-    <th
-      ref={ref}
-      className={cn(
-        "px-2.5 py-1.5 text-left align-middle font-semibold text-[11px]",
-        "uppercase tracking-wide text-[var(--muted-foreground)]",
-        className,
-      )}
-      {...props}
-    />
-  ),
+const TableHead = ({ className, ref, ...props }: TableHeadProps & { ref?: React.Ref<HTMLTableCellElement> }) => (
+  <th
+    ref={ref}
+    className={cn(
+      "px-2.5 py-1.5 text-left align-middle font-semibold text-[11px]",
+      "uppercase tracking-wide text-[var(--muted-foreground)]",
+      className,
+    )}
+    {...props}
+  />
 );
 TableHead.displayName = "TableHead";
 
-const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
-    <td ref={ref} className={cn("px-2.5 py-1.5 align-middle", className)} {...props} />
-  ),
+const TableCell = ({ className, ref, ...props }: React.TdHTMLAttributes<HTMLTableCellElement> & { ref?: React.Ref<HTMLTableCellElement> }) => (
+  <td ref={ref} className={cn("px-2.5 py-1.5 align-middle", className)} {...props} />
 );
 TableCell.displayName = "TableCell";
 
-const TableCaption = React.forwardRef<HTMLTableCaptionElement, React.HTMLAttributes<HTMLTableCaptionElement>>(
-  ({ className, ...props }, ref) => (
-    <caption ref={ref} className={cn("mt-2 text-[11px] text-[var(--muted-foreground)]", className)} {...props} />
-  ),
+const TableCaption = ({ className, ref, ...props }: React.HTMLAttributes<HTMLTableCaptionElement> & { ref?: React.Ref<HTMLTableCaptionElement> }) => (
+  <caption ref={ref} className={cn("mt-2 text-[11px] text-[var(--muted-foreground)]", className)} {...props} />
 );
 TableCaption.displayName = "TableCaption";
 

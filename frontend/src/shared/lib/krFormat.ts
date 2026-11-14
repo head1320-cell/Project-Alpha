@@ -1,0 +1,119 @@
+// BU0 · 한국식 숫자 표기 한곳 (ADR-003 · 스펙 §7.1)
+// ─────────────────────────────────────────────────────────────────────────────
+// 새 화면(`shared/ui/tx`·토스식 모듈)은 숫자를 이 함수들로만 쓴다. 옛 `format.ts`(formatKrw·formatPct)는
+// 기존 화면이 쓰는 그대로 둔다 — 모듈을 옮길 때 이쪽으로 바꾼다.
+//
+// ★미상 ≠ 0★ 유한하지 않은 값(null·undefined·NaN·±∞)은 "몰라요" 를 돌려준다 — `0`·`NaN`·`—` 로 그리지 않는다.
+// 왜 모르는지 아는 호출자는 `shared/ui/tx` 의 `Unknown`(사유 필수)을 쓴다.
+// ★비율과 퍼센트를 섞지 않는다★ `pct(0.241)` = "24.1%" — 입력은 늘 비율이다(0.241). 이미 퍼센트인 값은 100 으로 나눠 넣는다.
+
+export const UNKNOWN_TEXT = "N/A";
+/** 음수 부호 — 하이픈(-) 대신 빼기 기호(U+2212). 숫자 폭이 맞고 화면 낭독기가 "마이너스"로 읽는다. */
+export const MINUS = "−";
+
+type N = number | null | undefined;
+const ok = (v: N): v is number => typeof v === "number" && Number.isFinite(v);
+const group = (v: number, digits: number) =>
+  v.toLocaleString("ko-KR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+/** 부호 — 보이는 자릿수로 반올림해 0 이 되면 부호를 붙이지 않는다(−0.0% 를 만들지 않는다). */
+const sign = (v: number, signed: boolean, digits = 0) => {
+  const r = Number(Math.abs(v).toFixed(digits));
+  return r === 0 ? "" : v < 0 ? MINUS : signed ? "+" : "";
+};
+
+/** 1234.5 → "1,235" · digits=1 → "1,234.5" */
+export function num(v: N, digits = 0): string {
+  if (!ok(v)) return UNKNOWN_TEXT;
+  return sign(v, false, digits) + group(Math.abs(v), digits);
+}
+
+/** 한국식 큰 수 — 1.2조 · 3,400억 · 5,600만 · 1,234. 조는 소수 한 자리, 억·만은 정수(반올림). */
+/** 손익(원) — 부호를 늘 붙인다(+27,175원 · −13,970원 · 0원). 원 단위 그대로(만·억으로 줄이지 않는다). 모르면 N/A — 0원이 아니다. */
+export function signedWon(v: N): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return UNKNOWN_TEXT;
+  const r = Math.round(Math.abs(v));
+  return `${r === 0 ? "" : v < 0 ? MINUS : "+"}${num(r)}원`;
+}
+
+export function krUnit(v: N): string {
+  if (!ok(v)) return UNKNOWN_TEXT;
+  const a = Math.abs(v), s = sign(v, false);
+  // 작은 단위부터 — 반올림이 다음 단위에 닿으면(9,999.6만 → 10,000만) 큰 단위로 넘긴다(→ 1억).
+  if (Math.round(a) < 1e4) return s + group(Math.round(a), 0);
+  const man = Math.round(a / 1e4);
+  if (a < 1e8 && man < 1e4) return `${s}${group(man, 0)}만`;
+  const eok = Math.round(a / 1e8);
+  if (a < 1e12 && eok < 1e4) return `${s}${group(eok, 0)}억`;
+  return `${s}${group(Math.round(a / 1e11) / 10, 1)}조`;
+}
+
+/**
+ * 차트 축 눈금 — ★한 축은 한 단위★. 축에 그릴 값의 가장 큰 절댓값으로 단위(조·억·만·없음)를 한 번 정하고, 눈금마다 그 단위로
+ * 소수 둘째 자리까지(끝의 0 은 뺀다) 쓴다. 0 은 단위 없이 "0". `krUnit` 은 억·만을 정수로 반올림해 1.2억·1.4억이 둘 다 "1억" 이
+ * 되므로 축에 쓰지 않는다. krAxisTick(1.12e8)(1.05e8) = "1.05억" · krAxisTick(5.6e7)(6e7) = "6,000만" · krAxisTick(112)(30) = "30"
+ */
+export function krAxisTick(maxAbs: N): (v: number) => string {
+  const m = ok(maxAbs) ? Math.abs(maxAbs) : 0;
+  const [div, unit] = m >= 1e12 ? [1e12, "조"] : m >= 1e8 ? [1e8, "억"] : m >= 1e4 ? [1e4, "만"] : [1, ""];
+  return (v: number) => {
+    if (!ok(v)) return UNKNOWN_TEXT;
+    const r = Number(Math.abs(v / div).toFixed(2));
+    if (r === 0) return "0";
+    return (v < 0 ? MINUS : "") + r.toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + unit;
+  };
+}
+
+/** 원 — 만 이상은 한국식 단위(3,400억원), 그 아래는 그대로(1,234원). */
+export function won(v: N): string {
+  if (!ok(v)) return UNKNOWN_TEXT;
+  return `${krUnit(v)}원`;
+}
+
+/** 가격 — 원 단위 그대로(71,200원). 시세는 뭉개면 안 되므로 `won` 의 만·억 축약을 쓰지 않는다. */
+export function priceWon(v: N): string {
+  if (!ok(v)) return UNKNOWN_TEXT;
+  return `${num(v)}원`;
+}
+
+/** 비율 → 퍼센트. pct(0.241) = "24.1%" · pct(-0.03) = "−3.0%" */
+export function pct(ratio: N, digits = 1): string {
+  if (!ok(ratio)) return UNKNOWN_TEXT;
+  const p = ratio * 100;
+  return `${sign(p, false, digits)}${group(Math.abs(p), digits)}%`;
+}
+
+/** 부호를 늘 붙인 퍼센트(수익률·등락). signedPct(0.241) = "+24.1%" · 0 → "0.0%" */
+export function signedPct(ratio: N, digits = 1): string {
+  if (!ok(ratio)) return UNKNOWN_TEXT;
+  const p = ratio * 100;
+  return `${sign(p, true, digits)}${group(Math.abs(p), digits)}%`;
+}
+
+/** 퍼센트포인트 — 두 비율의 차이. pp(0.021) = "+2.1%p" */
+export function pp(ratioDiff: N, digits = 1): string {
+  if (!ok(ratioDiff)) return UNKNOWN_TEXT;
+  const p = ratioDiff * 100;
+  return `${sign(p, true, digits)}${group(Math.abs(p), digits)}%p`;
+}
+
+/** 등락 방향 — 색과 ▲▼ 를 고르는 데 쓴다. 미상은 "unknown"(평평함과 다르다). */
+/**
+ * 서버 시각 → "10월 9일 21:00". ★오프셋이 있으면 한국 시간으로 바꾸고, 없으면 적힌 그대로★(어느 시간대인지 모르는 값을
+ * 한국 시간이라고 우기지 않는다). 읽지 못하면 null.
+ */
+export function krDateTime(iso: string | null | undefined): string | null {
+  const m = iso?.match(/^\d{4}-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/);
+  if (!m) return null;
+  if (!m[5]) return `${Number(m[1])}월 ${Number(m[2])}일 ${m[3]}:${m[4]}`;
+  const t = Date.parse(iso as string);
+  if (!Number.isFinite(t)) return null;
+  const k = new Date(t + 9 * 3_600_000);
+  const two = (v: number) => String(v).padStart(2, "0");
+  return `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일 ${two(k.getUTCHours())}:${two(k.getUTCMinutes())}`;
+}
+
+export type Direction = "up" | "down" | "flat" | "unknown";
+export function direction(v: N): Direction {
+  if (!ok(v)) return "unknown";
+  return v > 0 ? "up" : v < 0 ? "down" : "flat";
+}

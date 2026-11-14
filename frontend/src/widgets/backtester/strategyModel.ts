@@ -97,6 +97,13 @@ export const mapConds = (cs: BacktestStrategy["buy"]["conditions"]) =>
     expr: c.direct ? c.expr : null,  // 직접 입력(자유 산술식)
   }));
 
+/**
+ * 실행 이름 — 편집기의 전략 이름(사람이 보고 고친 이름). 결과 제목·비교 목록·진행 화면이 이 이름을 쓴다.
+ * ★엔진 키가 아니다★ — `strategyToRun(...).strategy_name`("Condition"·"tactical:…")은 엔진이 고르는 값이고 config 안에 그대로 간다.
+ * 전에는 그 키가 먼저 쓰여 결과 제목이 영어 "Condition" 이었다. 이름이 비면 "백테스트". 서버 칸 길이에 맞춰 100자.
+ */
+export const runLabel = (s: Pick<BacktestStrategy, "name">): string => (s.name ?? "").trim().slice(0, 100) || "백테스트";
+
 // 전략 상태 → screenToBacktest payload 어댑터
 export function strategyToRun(s: BacktestStrategy, handoff: ScreenerStrategyHandoff | null, macroCfg: StrategyBacktestConfig | null = null) {
   const { buy, sell } = s;

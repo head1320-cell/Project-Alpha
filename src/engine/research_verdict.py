@@ -77,15 +77,15 @@ def classify(*, null_outside: bool | None, spa_ok: bool | None,
     # 둘 다 못 넘었다 — ★여기서 검정력이 뜻을 가른다★
     if power is None:
         return {**common, "verdict": VERDICT_NO_EVIDENCE, "passed": False,
-                "why": ["검정력을 모릅니다 — 불유의를 '효과 없음' 으로 읽을 수 "
+                "why": ["검정력이 미상입니다 — 불유의를 '효과 없음' 으로 읽을 수 "
                         "없고 '검정력 부족' 이라고도 할 수 없습니다"]}
     if float(power) >= tp:
         return {**common, "verdict": VERDICT_EVIDENCE_OF_NO_EFFECT, "passed": False,
-                "why": [f"관문을 못 넘었고 검정력 {float(power):.2f} ≥ 목표 "
-                        f"{tp:.2f} 라 찾을 힘은 있었습니다"]}
+                "why": [f"관문을 통과하지 못했고 검정력 {float(power):.2f} ≥ 목표 "
+                        f"{tp:.2f} 라 검출력은 충분했습니다"]}
     return {**common, "verdict": VERDICT_UNDERPOWERED, "passed": False,
-            "why": [f"관문을 못 넘었지만 검정력 {float(power):.2f} < 목표 "
-                    f"{tp:.2f} 입니다 — 없다는 뜻이 아니라 찾을 힘이 없었습니다"]}
+            "why": [f"관문을 통과하지 못했지만 검정력 {float(power):.2f} < 목표 "
+                    f"{tp:.2f} 입니다 — 효과가 없다는 뜻이 아니라 검출력이 부족했습니다"]}
 
 
 def _reason_for(report: dict[str, Any], field: str) -> str | None:

@@ -130,8 +130,8 @@ def test_the_detector_does_not_cry_wolf():
 #: 볼 수 없는 자리에 있다 — 정적 분석상의 불일치이지 시각 버그가 아니다.
 #:
 #: ★그리고 지우면 오히려 살아 있는 화면이 깨진다★
-#: `.card-md` 가 실제로 렌더되는 곳은 /derivatives(1개)와 /dev/ui(3개)이고, 거기서는
-#: 경쟁하는 padding 유틸리티가 없다. 653행을 지우면 그 넷의 padding 이 14px → **0px** 로
+#: `.card-md` 가 실제로 렌더되는 곳은 /dev/ui(3개)이고(/derivatives 는 BU7c 에서 PV 부품을 걷었다), 거기서는
+#: 경쟁하는 padding 유틸리티가 없다. 653행을 지우면 그 셋의 padding 이 14px → **0px** 로
 #: 떨어진다(실측). 즉 653행은 중복이 아니라 **살아 있는 화면이 기대는 규칙**이다.
 #:
 #: 결론: 653행을 지우지 않는다. 올바른 정리는 도달 불가 컴포넌트 네 개를 지우는 쪽이고
@@ -142,19 +142,10 @@ def test_the_detector_does_not_cry_wolf():
 # 실제 충돌은 하나도 늘지 않았고 총계는 22로 그대로다. A12~A14 가 프론트 전용이라
 # pytest 를 돌리지 않아 세 단계 동안 조용히 빨간 채였다 — 아래 수치는 그때 밀린 값으로
 # 다시 잡은 것이다. **줄 번호가 아니라 선택자로 키를 잡는 개선은 부채로 남긴다.**
-KNOWN_COLLISIONS: frozenset[str] = frozenset({
-    "src/widgets/macro/MacroRadar.tsx:65", "src/widgets/macro/MacroRadar.tsx:74",
-    "src/widgets/macro/MacroRadar.tsx:125", "src/widgets/macro/MacroRadar.tsx:214",
-    "src/widgets/macro/MacroRadar.tsx:276", "src/widgets/macro/MacroRadar.tsx:354",
-    "src/widgets/macro/MacroRadar.tsx:438", "src/widgets/macro/MacroRadar.tsx:478",
-    "src/widgets/narrative/index.tsx:431", "src/widgets/narrative/index.tsx:438",
-    "src/widgets/valuation/ScreenerPanel.tsx:74", "src/widgets/valuation/ScreenerPanel.tsx:206",
-    "src/widgets/valuation/ScreenerPanel.tsx:213", "src/widgets/valuation/ScreenerPanel.tsx:220",
-    "src/widgets/valuation/StockDetail.tsx:60", "src/widgets/valuation/StockDetail.tsx:120",
-    "src/widgets/valuation/StockDetail.tsx:125", "src/widgets/valuation/StockDetail.tsx:178",
-    "src/widgets/valuation/StockDetail.tsx:236", "src/widgets/valuation/StockDetail.tsx:304",
-    "src/widgets/valuation/StockDetail.tsx:371", "src/widgets/valuation/StockDetail.tsx:450",
-})
+#: ★BU10a(2026-10-16): 위 주석이 말한 "올바른 정리"를 했다★ — 22건이 있던 네 파일(MacroRadar · narrative/index ·
+#: ScreenerPanel · StockDetail)을 도달 불가 코드로 지웠다. 그래서 이 기준선은 옳은 이유로 비었다.
+#: 다시 무언가를 여기 넣어야 한다면 그 이유를 위처럼 적는다.
+KNOWN_COLLISIONS: frozenset[str] = frozenset()
 
 
 def _scan() -> dict[str, list[str]]:
@@ -173,7 +164,7 @@ def _scan() -> dict[str, list[str]]:
 
 
 def test_no_new_specificity_collision_is_introduced():
-    """★새 충돌은 0건이어야 한다★ 기존 22건은 위 주석의 이유로 기준선에 잠겨 있다.
+    """★새 충돌은 0건이어야 한다★ 옛 22건은 도달 불가 파일과 함께 지웠다(BU10a) — 기준선은 비어 있다.
 
     걸리면 고르는 길은 둘이다 — 그 요소에서 유틸리티를 빼거나, 레거시 규칙에서 그 속성을
     빼거나. `@layer` 로 저장소 전체 캐스케이드를 바꾸는 것은 이 목록이 **크게 늘었을 때**
@@ -191,7 +182,7 @@ def test_the_known_collision_baseline_does_not_silently_grow_stale():
     found = _scan()
     gone = sorted(KNOWN_COLLISIONS - set(found))
     assert not gone, (
-        "이미 해결된 충돌이 기준선에 남아 있습니다 — KNOWN_COLLISIONS 에서 지우세요:\n  "
+        "이미 해결된 충돌이 기준선에 남아 있습니다 — KNOWN_COLLISIONS 에서 지우십시오:\n  "
         + "\n  ".join(gone))
 
 
@@ -205,4 +196,4 @@ def test_globals_css_layer_split_is_recorded_honestly():
     css = GLOBALS_CSS.read_text()
     assert "@layer utilities {" in css, "레이어 블록이 사라졌습니다 — 감사 기록과 어긋납니다"
     # 최상위(레이어 밖) 클래스 규칙이 여전히 다수라는 사실 자체가 이 가드의 존재 이유다.
-    assert len(_legacy_rules()) > 500, "최상위 레거시 규칙이 급감했습니다 — 기록을 갱신하세요"
+    assert len(_legacy_rules()) > 500, "최상위 레거시 규칙이 급감했습니다 — 기록을 갱신하십시오"

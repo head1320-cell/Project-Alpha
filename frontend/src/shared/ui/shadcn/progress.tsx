@@ -32,40 +32,38 @@ export interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   tone?: "default" | "warn";
 }
 
-const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
-  ({ className, value, max = 100, label, tone = "default", ...props }, ref) => {
-    const known = value != null && Number.isFinite(value);
-    const pct = known ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-    return (
-      <div
-        ref={ref}
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={max}
-        // ★미계산이면 aria-valuenow 를 아예 붙이지 않는다★ 0 을 넣으면 스크린리더가
-        // "0퍼센트"라고 읽는다 — 이 저장소에서 0 ≠ 미계산 이다.
-        aria-valuenow={known ? value : undefined}
-        data-tone={tone}
-        className={cn(
-          "relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--secondary)]",
-          className,
-        )}
-        {...props}
-      >
-        {known && (
-          <div
-            className={cn(
-              "h-full transition-[width] duration-150",
-              tone === "warn" ? "bg-[var(--destructive)]" : "bg-[var(--primary)]",
-            )}
-            style={{ width: `${pct}%` }}
-          />
-        )}
-      </div>
-    );
-  },
-);
+const Progress = ({ className, value, max = 100, label, tone = "default", ref, ...props }: ProgressProps & { ref?: React.Ref<HTMLDivElement> }) => {
+  const known = value != null && Number.isFinite(value);
+  const pct = known ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div
+      ref={ref}
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      // ★미계산이면 aria-valuenow 를 아예 붙이지 않는다★ 0 을 넣으면 스크린리더가
+      // "0퍼센트"라고 읽는다 — 이 저장소에서 0 ≠ 미계산 이다.
+      aria-valuenow={known ? value : undefined}
+      data-tone={tone}
+      className={cn(
+        "relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--secondary)]",
+        className,
+      )}
+      {...props}
+    >
+      {known && (
+        <div
+          className={cn(
+            "h-full transition-[width] duration-150",
+            tone === "warn" ? "bg-[var(--destructive)]" : "bg-[var(--primary)]",
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      )}
+    </div>
+  );
+};
 Progress.displayName = "Progress";
 
 export { Progress };

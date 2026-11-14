@@ -6,7 +6,7 @@
 `as_<ms>`, localStorage, 최대 30개)뿐이었다. 그래서 다른 브라우저에서 열면 진행 중인
 연구가 사라지고, 서버에 있는 MES·TPV·Run 을 무엇이 묶는지 아무도 모른다.
 
-`ResearchCase` 는 그 묶음을 서버에 둔다. Case 하나가 **연구 질문 하나**이고, 그 아래로
+`ResearchCase` 는 그 그룹을 서버에 둔다. Case 하나가 **연구 질문 하나**이고, 그 아래로
 증거 사슬이 붙는다:
 
     rc_*  (질문)
@@ -212,7 +212,7 @@ def advance_pointer(case_id: str | None, kind: str,
         moved = update_case(case_id, **{field: artifact_id})
     except Exception as e:  # noqa: BLE001 — 저장소 장애를 성공으로 답하지 않는다
         logger.warning(f"case 포인터 전진 실패({case_id}/{kind}): {e}")
-        return {"ok": False, "reason": "연구 케이스 저장소를 쓸 수 없습니다."}
+        return {"ok": False, "reason": "연구 케이스 저장소를 사용할 수 없습니다."}
     if not moved:
         return {"ok": False, "reason": f"연구 케이스를 찾을 수 없습니다: {case_id}"}
     return {"ok": True, "reason": None}

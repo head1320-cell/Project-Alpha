@@ -2,6 +2,7 @@
 
 랜딩의 '보장' 밴드는 주장마다 그것을 강제하는 테스트 파일 경로를 함께 적는다.
 그 경로가 이름이 바뀌거나 지워지면, 랜딩은 **없는 보장을 광고하는 페이지**가 된다.
+(BU8a 에서 그 띠를 지웠다 — 아래 주석. 지금은 내부 링크와 낡은 숫자만 건다.)
 사람 눈에는 띄지 않는다 — 화면에는 그럴듯한 경로 문자열이 그대로 남아 있기 때문이다.
 
 같은 이유로 푸터의 내부 링크도 검사한다. 라우트가 사라져도 링크는 남고, 방문자는
@@ -24,59 +25,20 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LANDING = REPO_ROOT / "frontend" / "src" / "app" / "page.tsx"
 
-# 랜딩이 인용하는 테스트 경로 — GUARANTEES 항목의 `test:` 값만 센다.
-#
-# ★처음에는 그냥 "tests/test_....py" 를 파일 전체에서 찾았는데, 그 정규식은 구멍이었다★
-# 랜딩 주석에 이 파일 이름(tests/test_landing_claims.py)이 적혀 있어서, 보장을 하나
-# 지워도 총 인용 수가 6을 유지해 최소 개수 검사가 통과했다(프로브로 확인).
-# 주석·문서 언급이 보장 개수를 부풀리지 않도록 `test:` 키에 붙은 값만 센다.
-_TEST_CITATION = re.compile(r'test:\s*"(tests/test_[a-z0-9_]+\.py)"')
 # 랜딩이 링크하는 내부 라우트 — href="/..." (앵커 "#..." 와 외부 URL 은 제외)
 _INTERNAL_HREF = re.compile(r'href="(/[a-zA-Z0-9/_\-]*)"')
 
-# 보장 밴드가 약속하는 항목 수. 줄이려면 이 상수와 랜딩을 함께 고쳐야 한다.
-MIN_CITATIONS = 6
+# ★(BU8a) 보장 띠와 그 인용 테스트 셋을 거뒀다★
+# 예전 첫 화면에는 '보장 여섯 + 그것을 강제하는 테스트 경로' 띠가 있었고, 이 파일이 인용 6건 이상 · 실재 · 테스트 함수 있음을 걸었다.
+# 사용자 지시로 첫 화면을 히어로 · 스튜디오 · 리서치 경로만 남기고 그 띠를 지웠다(docs/HISTORY.md BU8a).
+# 보장을 광고하지 않으니 "광고한 보장이 실재하는가" 를 볼 대상이 없다 — 남은 인용 0건에 존재 검사를 걸면 늘 통과하는
+# 공허한 검사가 되므로, 최소 개수와 함께 셋 다 지웠다. 첫 화면에 보장을 다시 적는다면 인용 검사도 함께 되살릴 것.
 
 
 @pytest.fixture(scope="module")
 def landing_source() -> str:
     assert LANDING.exists(), f"랜딩 소스가 없다: {LANDING}"
     return LANDING.read_text(encoding="utf-8")
-
-
-def test_landing_cites_at_least_the_promised_number_of_tests(landing_source: str) -> None:
-    """★인용이 사라지면 이 줄이 먼저 빨개진다★
-
-    존재 검사만 두면 인용 0건일 때도 통과한다 — 보장 밴드를 지운 것을 못 잡는다.
-    """
-    cited = sorted(set(_TEST_CITATION.findall(landing_source)))
-    assert len(cited) >= MIN_CITATIONS, (
-        f"랜딩이 인용한 테스트가 {len(cited)}건뿐이다(최소 {MIN_CITATIONS}건). "
-        f"보장 밴드가 지워졌거나 인용 형식이 바뀌었다: {cited}"
-    )
-
-
-def test_every_cited_test_file_exists(landing_source: str) -> None:
-    """인용한 경로가 실재해야 한다. 파일명이 바뀌면 랜딩도 함께 고쳐야 한다."""
-    cited = sorted(set(_TEST_CITATION.findall(landing_source)))
-    missing = [c for c in cited if not (REPO_ROOT / c).exists()]
-    assert not missing, (
-        f"랜딩이 실재하지 않는 테스트를 보장의 근거로 인용하고 있다: {missing}. "
-        "파일을 옮겼다면 frontend/src/app/page.tsx 의 GUARANTEES 도 함께 고칠 것."
-    )
-
-
-def test_cited_tests_are_collectible(landing_source: str) -> None:
-    """인용된 파일이 비어 있거나 테스트가 없으면 '강제한다'는 말이 성립하지 않는다."""
-    cited = sorted(set(_TEST_CITATION.findall(landing_source)))
-    toothless = []
-    for c in cited:
-        body = (REPO_ROOT / c).read_text(encoding="utf-8")
-        if not re.search(r"^\s*(def test_|class Test)", body, re.MULTILINE):
-            toothless.append(c)
-    assert not toothless, (
-        f"인용된 파일에 테스트 함수가 없다 — 보장을 강제하지 못한다: {toothless}"
-    )
 
 
 def test_every_internal_link_resolves_to_a_real_route(landing_source: str) -> None:

@@ -48,7 +48,7 @@ def create(req: CreateCaseRequest):
     if cid is None:
         # 저장 실패를 성공으로 위장하지 않는다 (`recorded:false` 관례와 같다).
         return {"created": False, "case_id": None,
-                "message": "연구 케이스 저장소를 쓸 수 없습니다 — 케이스가 저장되지 않았습니다."}
+                "message": "연구 케이스 저장소를 사용할 수 없습니다 — 케이스가 저장되지 않았습니다."}
     return {"created": True, "case_id": cid}
 
 
@@ -86,7 +86,7 @@ def update_one(case_id: str, req: UpdateCaseRequest):
         ok = update_case(case_id, **fields)
     except Exception as e:
         logger.warning(f"research case 갱신 실패: {e}")
-        raise HTTPException(503, "연구 케이스 저장소를 쓸 수 없습니다.")
+        raise HTTPException(503, "연구 케이스 저장소를 사용할 수 없습니다.")
     if not ok:
         raise HTTPException(404, "연구 케이스를 찾을 수 없습니다.")
     return {"updated": True, "case_id": case_id}

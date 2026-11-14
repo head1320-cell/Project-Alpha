@@ -10,7 +10,7 @@
     130,601 calls  8.59s   condition_strategy.py  required_days   ← cumtime 27%
 
 `kis_backtest_engine.py` 의 하루 × 종목 루프가 봉마다 `strategy.required_days`
-를 읽는데(200 × 653 = 130,600), 그 `@property` 는 **매번 처음부터 다시 계산**한다.
+를 읽는데(200 × 653 = 130,600), 그 `@property` 는 **매번 처음부터 재계산**한다.
 그런데 입력(`buy_conditions`·`sell_conditions`·`_prio_ast`)은 루프가 시작되기
 전에 전부 확정된다 — `set_priority_expr` 는 루프보다 한참 위에서 끝난다.
 
@@ -57,7 +57,7 @@ def frames(monkeypatch):
     idx = pd.bdate_range("2023-01-02", periods=N_BAR)
     out: dict[str, pd.DataFrame] = {}
     for i in range(N_SYM):
-        c = 10000 * np.exp(np.cumsum(rng.normal(0, 0.018, N_BAR)))
+        c = np.round(10000 * np.exp(np.cumsum(rng.normal(0, 0.018, N_BAR))), 4)
         out[f"{i:06d}"] = pd.DataFrame(
             {"open": c * .995, "high": c * 1.01, "low": c * .99,
              "close": c, "volume": rng.integers(1e5, 1e6, N_BAR)}, index=idx)
@@ -124,7 +124,10 @@ def test_required_days_is_read_a_handful_of_times_not_once_per_bar(frames, monke
 #: `impact`(거래 행)와 `total_tax`·`total_spread`·`total_impact`(통계)이고 기본
 #: 정책에서 전부 `0` 이다. ★지문이 깨지면 먼저 이 대조를 하고, 값이 움직였으면
 #: 갱신하지 말 것★ — 그것이 이 골든의 존재 이유다.
-GOLDEN_SHA256 = "6958cffe20303b72b997d2439c52afae4ffb75733a33e473d2b11a6db5d29299"
+#: ★2026-10-15 다시 뜸 — CPU 독립★ 픽스처의 `np.exp` 는 CPU(AVX-512 유무)에 따라 마지막 비트가 달라
+#: CI 러너에서만 지문이 `c31e…` 로 갈렸다(로컬에서 `NPY_DISABLE_CPU_FEATURES` 로 재현). 픽스처 가격을
+#: 소수 넷째 자리로 반올림해 두 모드에서 같은 지문(아래)을 확인했다 — 거래 275 그대로, 엔진 코드 변경 0.
+GOLDEN_SHA256 = "6c57b1d2ca058a2491c3376a00356cc617e25c5fce0b4994ad9849ddea0c0b29"
 GOLDEN_TRADES = 275
 
 

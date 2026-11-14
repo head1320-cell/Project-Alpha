@@ -10,8 +10,10 @@ main_api.py는 이 팩토리를 호출하는 얇은 진입점일 뿐이다(`uvic
 from __future__ import annotations
 
 import importlib
+import inspect
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,10 +37,13 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.stage11_routes",
     "src.api.stage12_routes",
     "src.api.stage13_routes",
-    "src.api.stage13_extensions",
+    "src.api.live_gate_routes",
+    "src.api.distribution_gate_routes",
+    "src.api.share_routes",
     "src.api.valuation_routes",
     "src.api.company_routes",
     "src.api.company_snapshot_routes",
+    "src.api.company_model_routes",
     "src.api.screener_routes",
     "src.api.screener_universe_count",
     "src.api.narrative_routes",
@@ -46,6 +51,8 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.trading_routes",
     "src.api.allocation_routes",
     "src.api.allocation_stress_routes",
+    "src.api.allocation_graph_routes",
+    "src.api.canvas_assist_routes",
     "src.api.timing_routes",
     "src.api.scenario_routes",
     "src.api.research_routes",
@@ -57,13 +64,22 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.experimental_routes",
     "src.api.sleeve_routes",
     "src.api.backtest_run_routes",
+    "src.api.perf_compare_routes",
     "src.api.signal_routes",
     "src.api.diagnostics_routes",
     "src.api.explain_routes",
     "src.api.auth_routes",
     "src.api.account_policy_routes",
+    "src.api.glidepath_routes",
     "src.api.report_routes",
     "src.api.scorecard_routes",
+    "src.api.broker_account_routes",
+    # CF 3부 PB3 — PB 고객 관리(로그인 · 본인 고객만 · 별칭만).
+    "src.api.pb_client_routes",
+    # 매매일지 v1 — 체결 내역을 받아 계산만 한다(로그인 · 저장 없음).
+    "src.api.trade_journal_routes",
+    # 분봉 백테스트(W4) — 적재 범위 보고부터(로그인 · 파일만 읽는다).
+    "src.api.intraday_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —
@@ -110,11 +126,30 @@ def register_routers(app: FastAPI) -> int:
     return n
 
 
+async def _call(fn) -> None:
+    r = fn()
+    if inspect.isawaitable(r):
+        await r
+
+
 def create_app() -> FastAPI:
+    # 뜰 때·내려갈 때의 훅 — 아래에서 예전과 같은 순서로 정해 넣는다. Starlette 1.x(FastAPI 0.162)에서 `app.add_event_handler` 가
+    # 없어져 lifespan 으로 옮겼다(동작 같음 — `tests/test_app_lifespan.py`).
+    hooks: dict[str, object] = {}
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):
+        if "startup" in hooks:
+            await _call(hooks["startup"])
+        yield
+        if "shutdown" in hooks:
+            await _call(hooks["shutdown"])
+
     app = FastAPI(
         title="FICC Risk Management API",
         version="2.0.0",
         description="Full-stack quantitative risk platform: VaR, Greeks, Hedging, AI Forecasting",
+        lifespan=_lifespan,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -142,7 +177,7 @@ def create_app() -> FastAPI:
         logging.getLogger(__name__).warning(f"인증 상태 확인 실패(계속 진행): {e}")
 
     from src.startup.lifecycle import run_startup
-    app.add_event_handler("startup", run_startup)
+    hooks["startup"] = run_startup
 
     # 백테스트 워커 풀 종료 (P0-2) — ★기다리지 않는다★
     # 진행 중인 실행을 기다리면 uvicorn 종료가 최대 19분 막힌다(large 실측). 예전
@@ -150,7 +185,7 @@ def create_app() -> FastAPI:
     # `sweep_orphaned()` 가 failed 로 확정한다.
     try:
         from src.api.backtest_run_routes import shutdown_pool
-        app.add_event_handler("shutdown", shutdown_pool)
+        hooks["shutdown"] = shutdown_pool
     except Exception as e:
         logging.getLogger(__name__).warning(f"워커 풀 종료 훅 등록 실패(계속 진행): {e}")
 

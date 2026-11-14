@@ -4,7 +4,7 @@
 import logging
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.legacy_schemas import (
     AggregateVaRRequest,
@@ -19,6 +19,7 @@ from src.api.legacy_schemas import (
     StressRequest,
     VaRRequest,
 )
+from src.api.market_gate import require_market_download
 from src.data_loader import MarketDataLoader
 from src.models.ai_engine import AIVolatilityEngine
 from src.models.ficc_aggregation import FICCRiskAggregator
@@ -38,7 +39,7 @@ logger = logging.getLogger("api.risk")
 router = APIRouter(tags=["risk"])
 
 
-@router.post("/calculate-var")
+@router.post("/calculate-var", dependencies=[Depends(require_market_download)])
 def calculate_var(req: VaRRequest):
     try:
         loader  = MarketDataLoader(req.ticker, req.start_date, req.end_date)
@@ -73,7 +74,7 @@ def calculate_var(req: VaRRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/calculate-portfolio-var")
+@router.post("/calculate-portfolio-var", dependencies=[Depends(require_market_download)])
 def calculate_portfolio_var(req: PortfolioVaRRequest):
     try:
         loader  = MarketDataLoader(req.tickers[0], req.start_date, req.end_date)
@@ -109,7 +110,7 @@ def aggregate_var(req: AggregateVaRRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/mc-var")
+@router.post("/mc-var", dependencies=[Depends(require_market_download)])
 def mc_var_single(req: MCVaRRequest):
     """Single-asset Monte Carlo VaR using Geometric Brownian Motion."""
     try:
@@ -132,7 +133,7 @@ def mc_var_single(req: MCVaRRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/mc-portfolio-var")
+@router.post("/mc-portfolio-var", dependencies=[Depends(require_market_download)])
 def mc_portfolio_var(req: MCPortfolioVaRRequest):
     """
     Multi-asset Monte Carlo VaR with Cholesky-decomposed correlation structure.
@@ -163,7 +164,7 @@ def mc_portfolio_var(req: MCPortfolioVaRRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/garch-compare")
+@router.post("/garch-compare", dependencies=[Depends(require_market_download)])
 def garch_compare(req: GARCHRequest):
     """
     Fit GARCH(1,1) via MLE and compare head-to-head with EWMA.
@@ -189,7 +190,7 @@ def garch_compare(req: GARCHRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/frtb-es")
+@router.post("/frtb-es", dependencies=[Depends(require_market_download)])
 def frtb_es(req: FRTBRequest):
     """
     FRTB-aligned Expected Shortfall calculation.
@@ -216,7 +217,7 @@ def frtb_lh_map():
     """Return the FRTB risk factor → liquidity horizon mapping table."""
     return {"liquidity_horizon_map": LIQUIDITY_HORIZON_MAP}
 
-@router.post("/holding-period-var")
+@router.post("/holding-period-var", dependencies=[Depends(require_market_download)])
 def run_holding_period_var(req: HoldingPeriodVaRRequest):
     """Holding-period scaled VaR and ES using sqrt(T) rule."""
     try:
@@ -233,7 +234,7 @@ def run_holding_period_var(req: HoldingPeriodVaRRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/mc-paths")
+@router.post("/mc-paths", dependencies=[Depends(require_market_download)])
 def run_mc_paths(req: MCPathRequest):
     """Monte Carlo GBM path simulation for spaghetti plot."""
     try:
@@ -252,7 +253,7 @@ def run_mc_paths(req: MCPathRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/rolling-sharpe")
+@router.post("/rolling-sharpe", dependencies=[Depends(require_market_download)])
 def run_rolling_sharpe(req: RollingStatsRequest):
     """Rolling Sharpe ratio timeline."""
     try:

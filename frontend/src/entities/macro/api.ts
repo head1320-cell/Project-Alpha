@@ -250,7 +250,21 @@ export interface HeatmapRow {
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
+/** `GET /macro/connection-status` — 연습용(mock) 여부는 서버 게이트(`mock_gate.mock_allowed()`)가 정한다(화면이 추측하지 않는다). */
+export interface MacroConnectionStatus {
+  mock_allowed: boolean;
+  real_mode: boolean;
+  bok_configured: boolean;
+  fred_configured: boolean;
+  note?: string;
+}
+
 export const macroApi = {
+  connectionStatus: async (): Promise<MacroConnectionStatus> => {
+    const r = await fetch(`${API_BASE}/api/v1/macro/connection-status`);
+    if (!r.ok) throw new Error(`Connection status failed: ${r.status}`);
+    return r.json();
+  },
   snapshot: async (useCache = true): Promise<MacroSnapshot> => {
     const r = await fetch(`${API_BASE}/api/v1/macro/snapshot?use_cache=${useCache}`);
     if (!r.ok) throw new Error(`Snapshot failed: ${r.status}`);
@@ -322,42 +336,10 @@ export const macroApi = {
 
 // ─── Style helpers ──────────────────────────────────────────────────────────
 
-// ★하드코딩 hex 를 토큰으로 (A4-X2)★
-// 이 두 스케일은 라이트 전용 값을 반환했다. 다크 스윕에서 `#1d4ed8` 이 zinc-950 위
-// **2.64:1**, `#0891b2` 가 3.68:1, 국면 칩 배경 `#dcfce7` 는 다크에서도 연초록 그대로였다.
-// 인라인 style 로 들어가므로 CSS 규칙으로는 덮을 수 없다 — 값 자체가 토큰이어야 한다.
-// 라이트 값은 §52 에서 **한 글자도 바뀌지 않는다**. 다크 짝만 새로 생긴다.
-// (§51 이 DONUT_COLORS 를 --cat-* 로 옮긴 것과 같은 기법이다.)
-export const REGIME_COLORS: Record<Regime, { fg: string; bg: string; border: string }> = {
-  Goldilocks:   { fg: "var(--rg-gold-fg)",  bg: "var(--rg-gold-bg)",  border: "var(--rg-gold-bd)" },
-  Reflation:    { fg: "var(--rg-refl-fg)",  bg: "var(--rg-refl-bg)",  border: "var(--rg-refl-bd)" },
-  Stagflation:  { fg: "var(--rg-stag-fg)",  bg: "var(--rg-stag-bg)",  border: "var(--rg-stag-bd)" },
-  Disinflation: { fg: "var(--rg-disi-fg)",  bg: "var(--rg-disi-bg)",  border: "var(--rg-disi-bd)" },
-};
-
-export function zScoreColor(z: number | null): string {
-  if (z == null) return "var(--z-none)";
-  if (z > 2)  return "var(--z-vhigh)";   // 매우 높음
-  if (z > 1)  return "var(--z-high)";    // 높음
-  if (z > 0)  return "var(--z-up)";      // 약간 위
-  if (z > -1) return "var(--z-down)";    // 약간 아래
-  if (z > -2) return "var(--z-low)";     // 낮음
-  return "var(--z-vlow)";                // 매우 낮음
-}
-
-export function trendIcon(trend: string): string {
-  return trend === "up" ? "▲" : trend === "down" ? "▼" : "—";
-}
-
-export function trendColor(trend: string): string {
-  // 상승/하락은 이미 토큰이 있다(§52 가 다크 짝을 정의). 세 번째 팔레트를 만들지 않는다.
-  return trend === "up" ? "var(--color-bull)" : trend === "down" ? "var(--color-bear)" : "var(--z-none)";
-}
-
 export function stressColor(score: number): string {
-  if (score >= 80) return "#7f1d1d";
-  if (score >= 60) return "#dc2626";
-  if (score >= 40) return "#f97316";
-  if (score >= 20) return "#16a34a";
-  return "#0891b2";
+  if (score >= 80) return "var(--hx-t-7f1d1d)";
+  if (score >= 60) return "var(--hx-t-dc2626)";
+  if (score >= 40) return "var(--hx-t-f97316)";
+  if (score >= 20) return "var(--hx-t-16a34a)";
+  return "var(--hx-t-0891b2)";
 }

@@ -177,12 +177,31 @@ class FundamentalsStore(DeterministicMockStore):
     def get_raw_financials(self, stock_code: str, item=None) -> dict:
         """원천 재무 항목(42키, 단위: 억 / EPS류는 원) — 조건식 raw 금액 토큰용 공개 API.
 
-        get_factors와 동일 정책: DART 키 설정 시 실데이터, 아니면 결정론적 mock."""
-        return self.cached(
-            f"ffl_raw:{stock_code}",
-            lambda: (self._real_raw_financials(stock_code, item)
-                     or self._mock_raw_financials(stock_code, item)),
-        )
+        `get_factors` 와 같은 정책: 실데이터가 있으면 그 값, 없으면 ★mock 모드에서만★ 결정론적 합성값.
+        운영에서 실데이터가 없으면 빈 dict 다(읽는 쪽이 미상으로 다룬다) — 예전에는 여기만 게이트 없이
+        `real or mock` 이었고, 확장 팩터 파생·기업 화면 시총·Altman·조건식 원천 토큰이 그 합성값을 읽었다."""
+        key = f"ffl_raw:{stock_code}"
+        raw = self.cached(key, lambda: self._build_raw(stock_code, item))
+        if raw and not self._servable_raw(raw):
+            # 게이트가 없던 때 영속된 합성 원천 — 운영에서는 읽지 않고 다시 만든다(실데이터 또는 빈값).
+            raw = self._build_raw(stock_code, item)
+            self._put(key, raw)
+        return raw
+
+    def _build_raw(self, stock_code: str, item=None) -> dict:
+        raw = self._real_raw_financials(stock_code, item)
+        if raw is not None:
+            return raw
+        from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
+            return {}  # 운영 — 합성 금지. 빈 결과는 `cached()` 가 짧게만 붙잡아 적재 뒤 다시 읽는다.
+        return self._mock_raw_financials(stock_code, item)
+
+    @staticmethod
+    def _servable_raw(raw: dict) -> bool:
+        """이 원천을 지금 내보내도 되는가 — mock 모드면 무엇이든, 운영이면 실데이터 표식이 있는 것만."""
+        from src.data.mock_gate import mock_allowed
+        return mock_allowed() or raw.get("_source") == "dart_real"
 
     def _build_factors(self, stock_code: str, item=None) -> dict:
         """
@@ -693,9 +712,11 @@ class FundamentalsStore(DeterministicMockStore):
         payout_z = min(1, max(-1, (shareholder_yield or 0) / 5))
         qmj_score = round((prof_z + growth_z + safety_z + payout_z + 4) / 8 * 100, 1)
 
-        # Magic Formula rank proxy (이익수익률+ROIC 순위 — mock 순위)
+        # Magic Formula rank — ★순위는 유니버스 단면이 있어야 안다★. 한 종목의 재무만으로는 미상이다.
+        # 예전에는 실데이터에도 `품질×3 + N(0, 15)`(종목 코드 씨앗)를 냈다 — 같은 재무인데 종목 코드에 따라 값이 달랐다.
         mf_quality = (earnings_yield or 0) + (roic or 0) * 0.5
-        magic_formula_rank = max(1, round(200 - mf_quality * 3 + self._normal(stock_code, "mf", mu=0, sigma=15)))
+        magic_formula_rank = None if is_real else \
+            max(1, round(200 - mf_quality * 3 + self._normal(stock_code, "mf", mu=0, sigma=15)))
 
         # ══════════════════════════════════════════════════════════════════════
         # 확장 팩터 (DART 원천 파생 — 추가 API 불필요)
@@ -750,9 +771,11 @@ class FundamentalsStore(DeterministicMockStore):
         _roe_r, _payout = safe_div(ni, te), safe_div(r["dividend"], ni)
         sustainable_growth = (pct(_roe_r * (1 - _payout))
                               if (_roe_r is not None and _payout is not None) else None)
-        # FCF 성장: 영업이익 성장률을 프록시로 사용 (FCF 전년값 미보유)
+        # FCF 성장: 전년 FCF 원천이 없다 → 실데이터는 미상. 예전에는 영업이익 성장률에 난수 배율 U(0.7, 1.2)을 곱해 냈다
+        # (미상은 다른 값의 비율이 아니다). mock 은 기존 그대로.
         _fcf_g = (op_growth_yoy or 0) / 100
-        fcf_growth = round((op_growth_yoy or 0) * self._uniform(stock_code, "fcfg", lo=0.7, hi=1.2), 2) if op_growth_yoy is not None else None
+        fcf_growth = None if (is_real or op_growth_yoy is None) else \
+            round((op_growth_yoy or 0) * self._uniform(stock_code, "fcfg", lo=0.7, hi=1.2), 2)
 
         # ── 안전성 심화 (safety) ──
         _ebitda_d = add(op, dep)

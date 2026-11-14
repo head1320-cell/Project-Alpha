@@ -8,16 +8,18 @@ Memory-safe design for e2-micro (1GB):
   - Bulk inserts using SQLAlchemy core (no ORM object accumulation)
   - 'replace' strategy: TRUNCATE then bulk INSERT
 
-Data sources (with graceful fallback to mock data):
-  - yfinance: equity fundamentals + technicals
-  - Mock generator: FICC (bonds, options, FX)
+Data sources — ★운영에서는 합성 스냅샷을 만들지 않는다★ (2026-11-14 · 감사 `docs/specs/2026-11-13-market-snapshot-synthetic-audit.md` §7):
+  - mock(`mock_gate.mock_allowed()`): 난수 고정 합성 행(주식 28 · FICC 267) — 출처 라벨 `is_mock: True` 가 붙는다.
+  - 운영 · 주식: `MARKET_PIPELINE_USE_YFINANCE` 를 켰을 때 ★받은 행만★. 꺼져 있거나 하나도 못 받으면 빈 결과 + 사유(합성 대체 없음).
+  - 운영 · FICC: 실데이터 원천이 코드에 없다 → 늘 빈 결과 + 사유.
+  빈 결과는 표를 ★비운다★(예전 버전이 써 둔 합성 행이 남지 않게). 읽는 쪽(레거시 라우트)은 `snapshot_origin()` 한 곳에 묻는다.
 """
 
 import asyncio
 import logging
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 from sqlalchemy import text
@@ -30,9 +32,41 @@ REFRESH_INTERVAL_SEC = 300
 
 # yfinance is heavily rate-limited (HTTP 429) from cloud IPs and is NOT required
 # for the Korean screener (which uses its own KIS/DART/mock data path). Default
-# OFF → use the deterministic mock snapshot, which keeps the FICC tables
-# populated without spamming the logs. Opt in with MARKET_PIPELINE_USE_YFINANCE=1.
+# OFF → 운영에서는 주식 스냅샷이 비어 있다(사유 `feed_off`) — 합성 행으로 채우지 않는다.
+# Opt in with MARKET_PIPELINE_USE_YFINANCE=1.
 USE_YFINANCE = os.getenv("MARKET_PIPELINE_USE_YFINANCE", "0").strip().lower() in ("1", "true", "yes", "on")
+
+#: 출처 사유 문장 — 응답에 그대로 실린다(합니다체 · 개발자 낱말·환경변수 이름 없음 — 용어집 §6).
+SNAPSHOT_SYNTHETIC = "합성 데이터 모드의 시장 스냅샷입니다 — 실제 시세·재무가 아닙니다."
+SNAPSHOT_FEED_OFF = "시장 스냅샷의 실데이터 수집이 꺼져 있어 값이 없습니다."
+SNAPSHOT_DOWNLOAD_FAILED = "시장 스냅샷의 시세를 내려받지 못해 값이 없습니다."
+SNAPSHOT_NO_FEED = "채권·외환·옵션 스냅샷은 실데이터 원천이 연결돼 있지 않아 값이 없습니다."
+SNAPSHOT_NOT_REFRESHED = "시장 스냅샷을 아직 갱신하지 못해 값이 없습니다."
+
+#: universe → 이 프로세스가 표에 마지막으로 ★써넣는 데 성공한★ 스냅샷의 출처. 프로세스 로컬이다(`uvicorn --workers 1` — CLAUDE.md §6).
+_WRITTEN: dict[str, dict] = {}
+
+
+def _origin(source: str | None, *, reason: str | None = None, message: str | None = None, **extra) -> dict:
+    """스냅샷의 출처 라벨 — `source` 는 `"synthetic"`(합성) · `"yahoo"`(받은 실데이터) · `None`(값 없음 + 사유)."""
+    return {"available": source is not None, "source": source, "is_mock": source == "synthetic",
+            "reason": reason, "message": message, **extra}
+
+
+def snapshot_origin(universe: str) -> dict:
+    """그 표를 ★내도 되는지★와 출처 라벨 — 읽는 쪽이 묻는 한 곳.
+
+    mock 은 합성 라벨로 낸다. 운영은 ★이 프로세스가 실데이터로 써넣은 표만★ 낸다 — 써넣은 적이 없거나(갱신 전·갱신 실패)
+    기록이 합성이면 `available: False` + 사유다(표에 예전 합성 행이 남아 있어도 내지 않는다).
+    """
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed():
+        return _origin("synthetic", message=SNAPSHOT_SYNTHETIC)
+    written = _WRITTEN.get(universe)
+    if written is None or written["is_mock"]:
+        return _origin(None, reason="not_refreshed", message=SNAPSHOT_NOT_REFRESHED)
+    return dict(written)
+
 
 # Curated ticker lists — small enough for e2-micro
 EQUITY_TICKERS = [
@@ -60,18 +94,19 @@ def _safe_float(v, default=None):
         return default
 
 
-async def fetch_equity_snapshot() -> list[dict]:
+async def fetch_equity_snapshot() -> tuple[list[dict], dict]:
     """
-    Fetch equity factor data.
+    Fetch equity factor data — `(rows, origin)`: 행과 그 출처 라벨을 ★함께★ 돌려준다.
 
-    Attempts yfinance; falls back to deterministic mock data on any failure.
-    Returns list of dicts ready for bulk insert.
+    mock → 합성 행(야후를 켜 두었어도 나가지 않는다). 운영 → 야후를 켰을 때 받은 행만 —
+    꺼져 있거나 하나도 못 받으면 `[]` + 사유다(★합성 행으로 대신하지 않는다★). 판정은 `mock_allowed()` 하나.
     """
     rows = []
+    from src.data.mock_gate import mock_allowed
+    if mock_allowed():
+        return _generate_mock_equity_data(), _origin("synthetic", message=SNAPSHOT_SYNTHETIC)
     if not USE_YFINANCE:
-        # Default path: skip the rate-limited external feed entirely.
-        logger.info("Equity snapshot: using deterministic mock (MARKET_PIPELINE_USE_YFINANCE off)")
-        return _generate_mock_equity_data()
+        return [], _origin(None, reason="feed_off", message=SNAPSHOT_FEED_OFF)
     try:
         import pandas as pd
         import yfinance as yf
@@ -157,7 +192,7 @@ async def fetch_equity_snapshot() -> list[dict]:
                             "return_3m": round(r3m, 2),
                             "beta": _safe_float(info.get("beta")),
                             "volatility_annual": round(vol_ann, 2),
-                            "updated_at": datetime.utcnow(),
+                            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
                         })
 
                     except Exception as e:
@@ -170,17 +205,15 @@ async def fetch_equity_snapshot() -> list[dict]:
             await asyncio.sleep(0.1)
 
     except ImportError:
-        logger.warning("yfinance unavailable, using mock equity data")
+        logger.warning("yfinance unavailable — equity snapshot stays empty")
 
-    # Fallback: generate mock data if yfinance returned nothing
     if not rows:
-        rows = _generate_mock_equity_data()
-
-    return rows
+        return [], _origin(None, reason="download_failed", message=SNAPSHOT_DOWNLOAD_FAILED)
+    return rows, _origin("yahoo", requested=len(EQUITY_TICKERS), received=len(rows))
 
 
 def _generate_mock_equity_data() -> list[dict]:
-    """Deterministic mock equity data fallback."""
+    """Deterministic mock equity data — ★mock 게이트 안에서만★ 부른다(`fetch_equity_snapshot`)."""
     np.random.seed(42)
     sectors = ["Technology", "Financial", "Consumer", "Healthcare",
                 "Industrial", "Energy"]
@@ -206,7 +239,7 @@ def _generate_mock_equity_data() -> list[dict]:
             "return_3m": round(float(np.random.normal(3, 15)), 2),
             "beta": round(float(np.random.normal(1.0, 0.4)), 2),
             "volatility_annual": round(float(np.random.normal(25, 10)), 2),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
         })
     return rows
 
@@ -215,13 +248,16 @@ def _generate_mock_equity_data() -> list[dict]:
 # Phase 2b: FICC Snapshot Builder
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def fetch_ficc_snapshot() -> list[dict]:
+async def fetch_ficc_snapshot() -> tuple[list[dict], dict]:
     """
-    Generate FICC snapshot data (bonds, options, FX).
+    FICC snapshot data (bonds, options, FX) — `(rows, origin)`.
 
-    Uses deterministic mock data — plug in a real feed (Bloomberg API,
-    Refinitiv) by replacing this function.
+    실데이터 원천이 코드에 없다(plug in a real feed — Bloomberg API, Refinitiv). 그래서 운영은 늘 `[]` + 사유이고,
+    mock 만 난수 고정 합성 행을 만든다.
     """
+    from src.data.mock_gate import mock_allowed
+    if not mock_allowed():
+        return [], _origin(None, reason="no_feed", message=SNAPSHOT_NO_FEED)
     np.random.seed(42)
     rows = []
 
@@ -248,7 +284,7 @@ async def fetch_ficc_snapshot() -> list[dict]:
             # FX fields NULL
             "daily_vol": None, "carry_annual": None, "momentum_12m": None,
             "ppp_deviation": None, "real_rate_diff": None,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
         })
 
     # Options
@@ -281,7 +317,7 @@ async def fetch_ficc_snapshot() -> list[dict]:
                         # FX fields NULL
                         "daily_vol": None, "carry_annual": None, "momentum_12m": None,
                         "ppp_deviation": None, "real_rate_diff": None,
-                        "updated_at": datetime.utcnow(),
+                        "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
                     })
 
     # FX
@@ -305,10 +341,10 @@ async def fetch_ficc_snapshot() -> list[dict]:
             "momentum_12m": round(float(np.random.normal(0, 8)), 2),
             "ppp_deviation": round(float(np.random.normal(0, 15)), 2),
             "real_rate_diff": round(float(np.random.normal(0, 3)), 2),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
         })
 
-    return rows
+    return rows, _origin("synthetic", message=SNAPSHOT_SYNTHETIC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -319,11 +355,9 @@ def _bulk_refresh_table(engine, table_name: str, rows: list[dict]):
     """
     Memory-safe refresh: TRUNCATE then bulk INSERT in chunks.
     Uses SQLAlchemy core — no ORM objects accumulated in memory.
-    """
-    if not rows:
-        logger.warning(f"No rows to insert into {table_name}")
-        return 0
 
+    ★빈 `rows` 도 표를 비운다★ — 스냅샷은 '이번 갱신의 결과'다. 건드리지 않고 돌아가면 예전에 써 둔 행(합성 포함)이 남는다.
+    """
     CHUNK_SIZE = 50  # small to stay within 1GB limit
 
     with engine.begin() as conn:
@@ -332,6 +366,10 @@ def _bulk_refresh_table(engine, table_name: str, rows: list[dict]):
             conn.execute(text(f"TRUNCATE TABLE {table_name}"))
         except Exception:
             conn.execute(text(f"DELETE FROM {table_name}"))
+
+        if not rows:
+            logger.info(f"No rows for {table_name} — table left empty")
+            return 0
 
         # Determine columns from first row (all rows must have same keys)
         cols = list(rows[0].keys())
@@ -351,28 +389,32 @@ def _bulk_refresh_table(engine, table_name: str, rows: list[dict]):
 async def refresh_all_snapshots(engine) -> dict:
     """Refresh both equity and FICC snapshot tables."""
     logger.info("Starting market snapshot refresh...")
-    start = datetime.utcnow()
+    start = datetime.now(timezone.utc).replace(tzinfo=None)
 
+    # 출처 기록(`_WRITTEN`)은 ★써넣기가 성공한 뒤에만★ 고친다 — 실패하면 표가 그대로이므로 기록도 그대로여야 한다.
     try:
-        eq_rows = await fetch_equity_snapshot()
+        eq_rows, eq_origin = await fetch_equity_snapshot()
         eq_count = _bulk_refresh_table(engine, "market_snapshot_equity", eq_rows)
+        _WRITTEN["equity"] = eq_origin
     except Exception as e:
         logger.error(f"Equity refresh failed: {e}")
         eq_count = 0
 
     try:
-        ficc_rows = await fetch_ficc_snapshot()
+        ficc_rows, ficc_origin = await fetch_ficc_snapshot()
         ficc_count = _bulk_refresh_table(engine, "market_snapshot_ficc", ficc_rows)
+        _WRITTEN["ficc"] = ficc_origin
     except Exception as e:
         logger.error(f"FICC refresh failed: {e}")
         ficc_count = 0
 
-    elapsed = (datetime.utcnow() - start).total_seconds()
+    elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds()
     result = {
         "equity_rows": eq_count,
         "ficc_rows": ficc_count,
         "elapsed_sec": round(elapsed, 2),
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+        "snapshot": {"equity": snapshot_origin("equity"), "ficc": snapshot_origin("ficc")},
     }
     logger.info(f"Snapshot refresh complete: {result}")
     return result

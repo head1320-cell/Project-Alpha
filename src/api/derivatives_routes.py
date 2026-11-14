@@ -21,6 +21,9 @@ router = APIRouter(tags=["derivatives"])
 def analyze_option(req: OptionRequest):
     try:
         return FICCEngine.bs_greeks(req.S, req.K, req.T, req.r, req.sigma, req.option_type)
+    except ValueError as e:
+        # ★불가능한 입력은 사유와 함께 422★ (BL3 M2) — 예전에는 엔진이 모든 값 0 을 돌려줘 200 으로 나갔다.
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception:
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")

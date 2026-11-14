@@ -1,0 +1,34 @@
+"use client";
+/**
+ * 해마다 수익 — 등락 막대(부호와 함께) · 부분 연도는 '일부' 라고 (2026-11-09 · 캔버스 성과 그림 문법 §4.1)
+ * ★서버 `periods.yearly` 그대로★ — 연환산하지 않은 값이고 화면도 다시 계산하지 않는다. 없으면 없다고 말한다.
+ */
+import { fmtSignedPct, type PerfView } from "./perfView";
+
+export function PeriodBars({ view }: { view: PerfView }) {
+  const rows = view.periods?.yearly ?? null;
+  if (!rows) return <p className="pg-note pf-years-none">연도별 수익률은 이 결과에 없습니다 — 서버가 기간별 수익을 제공하지 않았습니다.</p>;
+  if (!rows.length) return <p className="pg-note pf-years-none">연도별 수익률을 산출하기에는 곡선이 짧습니다.</p>;
+  const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.return_pct)));
+  return (
+    <div className="pf-years">
+      <h4 className="pg-h4">연도별 수익률</h4>
+      <ul className="pf-year-list">
+        {rows.map((r) => {
+          const w = Math.min(50, (Math.abs(r.return_pct) / max) * 50);
+          return (
+            <li key={r.year} className="pf-year" data-partial={r.partial ? "true" : "false"}>
+              <span className="pf-year-lab">{r.year}{r.partial ? <small> 일부</small> : null}</span>
+              <span className="pf-year-track" aria-hidden="true">
+                <i className={`pf-year-bar pf-year-bar--${r.return_pct >= 0 ? "up" : "down"}`}
+                   style={r.return_pct >= 0 ? { left: "50%", width: `${w}%` } : { right: "50%", width: `${w}%` }} />
+              </span>
+              <span className={`pf-year-val pf-delta--${r.return_pct >= 0 ? "up" : "down"}`}>{fmtSignedPct(r.return_pct)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {rows.some((r) => r.partial) && <p className="pg-note">‘일부’는 1~12월 전체를 채우지 못한 해입니다 — 해당 기간 수익률 그대로이며 연환산하지 않았습니다.</p>}
+    </div>
+  );
+}

@@ -83,7 +83,7 @@ def combine_forecasts(forecasts: list[dict], *,
     live = [f for f in (forecasts or []) if f.get("mu") is not None
             and f.get("se") is not None]
     if not live:
-        return {"available": False, "reason": "쓸 수 있는 예측이 없습니다"}
+        return {"available": False, "reason": "사용 가능한 예측이 없습니다"}
 
     names = [str(f.get("name") or f"forecast_{i}") for i, f in enumerate(live)]
     try:

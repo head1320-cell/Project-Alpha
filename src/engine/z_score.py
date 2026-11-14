@@ -52,10 +52,15 @@ def compute_rolling_stats(stock_code: str, z_field: str, window: int,
     pit_store의 단조 트렌드는 PIT 가치평가용이므로, 시계열 통계는 자체 생성.
     같은 (종목, 지표) → 항상 같은 시계열 (재현 가능).
 
+    ★이 과거 시계열은 합성이다 — 실데이터 원천이 없다.★ 그래서 mock 모드에서만 만들고, 운영에서는 `None` 이다
+    (조건 종류 `z_score` 를 쓴 요청은 `src/engine/condition_sources.py` 가 거절한다).
+
     Returns: {"mean": float, "std": float, "z": float} | None
     """
     import random
-    if current_value is None:
+
+    from src.data.mock_gate import mock_allowed
+    if current_value is None or not mock_allowed():
         return None
 
     # 결정론적 시드 (종목 + 지표)

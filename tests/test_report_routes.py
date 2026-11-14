@@ -203,6 +203,26 @@ _PLAINTEXT_MODULES = (
     "src/domain/distribution_gate.py",
     "src/domain/strategy_scorecard.py",
     "src/execution/kill_switch.py",
+    # AP — 조치 사유·note 가 `/kill-switch/*` 응답으로 그대로 나간다.
+    "src/domain/kill_action.py",
+    # AQ — 관측 사유·note 가 `/kill-switch/readiness` 응답으로 나간다.
+    "src/domain/api_health.py",
+    # AR — 실패 종류의 책임 사유·note 가 같은 응답에 실려 나간다.
+    "src/domain/kis_failure.py",
+    # AS — 표의 미상 사유·note 가 `/kill-switch/kis-codes` 응답으로 나간다.
+    "src/domain/kis_rt_cd.py",
+    # AT — 구성 사유·문장이 `auto_api` 발동 사유로 `live_kill_events` 에 남는다.
+    "src/domain/failure_streak.py",
+    # AU — 관문의 미충족 사유가 `/kill-switch/kis-codes` 응답으로 나간다.
+    "src/domain/breaker_change_gate.py",
+    # AV — 신호 출처 등급의 사유·note 가 `GET /signals` 응답으로 나간다.
+    "src/domain/signal_evidence.py",
+    # AX — §6.1 "소스 없음" 사유·설명이 타이밍 팩터 카탈로그 응답으로 나간다.
+    "src/engine/timing_factor_meta.py",
+    # AY — 공급 모듈이 없는 묶음의 사유·막는 질문이 `GET /signals` 로 나간다.
+    "src/domain/signal_supply.py",
+    # AZ — 요율 출처의 사유·note 가 백테스트 `cost_model` 블록으로 나간다.
+    "src/domain/cost_provenance.py",
 )
 
 

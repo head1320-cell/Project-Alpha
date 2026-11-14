@@ -50,8 +50,11 @@ def _records():
     out = []
     for r, e in zip(rets, eq, strict=True):
         d = {a: 0.0 for a in attrs}
+        # 국면 칸은 수가 아니라 라벨이다 — 0.0 으로 채우면 "알려진 국면" 이 된다.
+        # `regimes`·`regime_reasons` 는 `_compute_summary` 가 부르는 국면 커버리지
+        # 도우미(BH3)가 읽어 위 소스 스캔에 잡히지 않는다 → 미상(None)으로 명시.
         d.update(portfolio_return=float(r), portfolio_equity=float(e),
-                 regime=None, num_trades=0)
+                 regime=None, regimes=None, regime_reasons=None, num_trades=0)
         out.append(SimpleNamespace(**d))
     return out
 

@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 
 from src.domain.execution_assumption import SIGNAL_LAG_DEFAULT
 from src.domain.perf_kind import backtest_label
+from src.engine.condition_sources import ConditionSourceUnavailable
+from src.engine.pit_fields import PitFieldNotAvailable
 from src.observability.logging_config import get_logger
 
 logger = get_logger("api.screener")
@@ -711,28 +713,28 @@ def screener_count(req: AdvancedRunRequest):
 # 국면별 추천 팩터 + 가이드 텍스트
 _REGIME_GUIDANCE = {
     "Goldilocks": {
-        "text": "골디락스 국면 (성장↑·물가↓) — 성장주에 유리합니다. 높은 ROE·수익성 팩터 가중을 높이세요.",
+        "text": "골디락스 국면 (성장↑·물가↓) — 성장주에 유리합니다. 높은 ROE·수익성 팩터 가중을 높이십시오.",
         "filters": [
             {"field": "roe_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "ROE 상위 30%"},
             {"field": "composite_score", "op": "gte", "value": 60, "label": "종합 점수 ≥ 60"},
         ],
     },
     "Reflation": {
-        "text": "리플레이션 국면 (성장↑·물가↑) — 경기민감·가치주에 유리합니다. 저PER·저PBR 팩터를 강화하세요.",
+        "text": "리플레이션 국면 (성장↑·물가↑) — 경기민감·가치주에 유리합니다. 저PER·저PBR 팩터를 강화하십시오.",
         "filters": [
             {"field": "per", "op": "lt", "value": 12, "label": "PER < 12"},
             {"field": "pbr", "op": "lt", "value": 1.5, "label": "PBR < 1.5"},
         ],
     },
     "Stagflation": {
-        "text": "스태그플레이션 국면 (성장↓·물가↑) — 방어주·배당주에 유리합니다. 고배당·저부채·FCF 흑자 팩터 가중을 높이세요.",
+        "text": "스태그플레이션 국면 (성장↓·물가↑) — 방어주·배당주에 유리합니다. 고배당·저부채·FCF 흑자 팩터 가중을 높이십시오.",
         "filters": [
             {"field": "dividend_yield_pct", "rank_mode": "top_pct", "rank_value": 30, "label": "배당수익률 상위 30%"},
             {"field": "debt_ratio_pct", "op": "lt", "value": 100, "label": "부채비율 < 100%"},
         ],
     },
     "Disinflation": {
-        "text": "디스인플레이션 국면 (성장↓·물가↓ 둔화) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하세요.",
+        "text": "디스인플레이션 국면 (성장↓·물가↓ 둔화) — 안정성·대형 우량주에 유리합니다. 저부채·고FCF·대형주 팩터를 강화하십시오.",
         "filters": [
             {"field": "debt_ratio_pct", "op": "lt", "value": 80, "label": "부채비율 < 80%"},
             {"field": "market_cap_억", "rank_mode": "top_pct", "rank_value": 40, "label": "시가총액 상위 40%"},
@@ -847,6 +849,9 @@ def screener_preset_run(preset_id: str, req: PresetRunRequest):
         }
     except HTTPException:
         raise
+    except ConditionSourceUnavailable as e:
+        # 프리셋이 원천 없는 조건 종류를 쓴다 — 계산하지 않았다. 사유를 그대로 낸다(뭉뚱그린 500 이 아니다).
+        raise HTTPException(400, str(e)) from None
     except Exception:
         logger.exception("스크리너 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -1192,10 +1197,15 @@ def screener_run_pit(req: PITRunRequest):
             "total_passed":    result.total_passed,
             "elapsed_seconds": result.elapsed_seconds,
             "timestamp":       result.timestamp,
+            # 그 시점 종가가 없어 뺀 종목·공시 재무가 미상인 종목(수 · 사유 · 표본) — 조용히 줄어든 목록 금지.
+            "asof":            getattr(result, "asof", None),
             "items":           [it.to_dict() for it in result.items],
         }
     except HTTPException:
         raise
+    except PitFieldNotAvailable as e:
+        # 시점 값이 없는 조건·정렬 항목 — 계산하지 않았다. 사유(어느 항목인지)를 그대로 낸다(뭉뚱그린 500 이 아니다).
+        raise HTTPException(400, str(e)) from None
     except Exception:
         logger.exception("스크리너 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -1490,6 +1500,126 @@ class ScreenToBacktestRequest(BaseModel):
     replenishment_pool_cap: int = Field(default=100, ge=0, le=1000)
 
 
+#: ★이 문의 이름★(AZ) — 결과의 `cost_model.rate_provenance` 가 이것을 낸다.
+#: 실측: 이 문의 기본값은 왕복 40.0bp 이고 `stage11` 계열은 13.0bp 다.
+_COST_DOOR = "screener"
+
+
+def _effective_strategy(req: ScreenToBacktestRequest) -> tuple[str, dict]:
+    """조건식 전략 분기 (Genport식 진입/청산) — ★코어와 전략 레지스트리(BG)가 같은 함수를 쓴다★
+
+    strategy_name이 명시적으로 "Condition"이면 조건이 비어있어도(리스크룰만 설정) 이 분기를
+    태워 eff_params를 채운다 — 그래야 ConditionStrategy가 올바른 buy/sell_conditions로
+    생성되고, "GoldenCross" 같은 하드코딩 기본 전략(데드크로스 등 원치 않는 매도사유)으로
+    조용히 대체되지 않는다.
+    """
+    eff_strategy = req.strategy_name
+    eff_params = dict(req.strategy_params or {})
+    if req.buy_conditions or req.sell_conditions or req.strategy_name == "Condition":
+        from src.kis_strategies import condition_strategy  # noqa: F401 (레지스트리 자기등록)
+        _ = condition_strategy
+        eff_strategy = "Condition"
+        eff_params = {
+            "buy_conditions": req.buy_conditions or [],
+            "sell_conditions": req.sell_conditions or [],
+            "allow_snapshot_fundamentals": bool(req.allow_snapshot_fundamentals),
+            "buy_logic": req.buy_logic,
+            "sell_logic": req.sell_logic,
+        }
+    return eff_strategy, eff_params
+
+
+def _factor_weights(req: ScreenToBacktestRequest, scores: dict) -> dict | None:
+    """팩터가중 모드: 종목별 점수를 0~1로 정규화한 가중치 맵. 아니면 `None`.
+
+    점수가 높을수록 가중치↑ (0~1). 전부 같으면 0.5(동일가중).
+    """
+    if req.buy_weight_mode != "factor" or not scores:
+        return None
+    lo, hi = min(scores.values()), max(scores.values())
+    rng = hi - lo
+    return {t: ((s - lo) / rng if rng > 0 else 0.5) for t, s in scores.items()}
+
+
+def _backtest_kwargs(req: ScreenToBacktestRequest, tickers: list, pool_tickers: list,
+                     factor_weights: dict | None, eff_strategy: str, eff_params: dict,
+                     progress_cb=None) -> dict:
+    """스크리닝이 끝난 뒤 `run_backtest` 에 넘기는 인자 전부.
+
+    ★원래 경로와 전략 레지스트리의 재실행(BG)이 **같은 함수**를 쓴다★ — 인자 구성을 두
+    벌 두면 한쪽만 고쳐져 재현 검증이 이유 없이 실패하거나, 더 나쁘게는 통과한다.
+    """
+    return dict(
+        symbols=tickers,
+        strategy_name=eff_strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        strategy_params=eff_params,
+        initial_capital=req.initial_capital,
+        commission_rate=req.commission_rate,
+        slippage_rate=req.slippage_rate,
+        # ★문이 아는 사실을 결과까지 나른다★(AZ) — 요청이 요율을 명시했나,
+        #   아니면 **이 문의 기본값이 채웠나**. 값은 위 두 줄 그대로이고
+        #   여기서 바뀌는 것은 없다. `model_fields_set` 은 pydantic 이
+        #   *"요청 본문에 이 필드가 있었는가"* 를 그대로 답하는 자리다.
+        cost_door=_COST_DOOR,
+        cost_explicit_fields=frozenset(req.model_fields_set),
+        stop_loss_pct=req.stop_loss_pct,
+        take_profit_pct=req.take_profit_pct,
+        trailing_stop_pct=req.trailing_stop_pct,
+        max_positions=req.max_positions,
+        buy_fill_type=req.buy_fill_type,
+        sell_fill_type=req.sell_fill_type,
+        max_hold_days=req.max_hold_days,
+        min_hold_days=req.min_hold_days,
+        day_trade=req.day_trade,
+        sell_divide_pct=req.sell_divide_pct,
+        max_sell_divisions=req.max_sell_divisions,
+        buy_weight_mode=req.buy_weight_mode,
+        buy_divide_pct=req.buy_divide_pct,
+        max_buy_per_day=req.max_buy_per_day,
+        max_buy_count=req.max_buy_count,
+        factor_weights=factor_weights,
+        breakthrough_buy=req.breakthrough_buy,
+        rebalance_period=req.rebalance_period,
+        market_timing=req.market_timing,
+        signal_lag=req.signal_lag,
+        charge_sell_tax=req.charge_sell_tax,
+        charge_spread=req.charge_spread,
+        charge_market_impact=req.charge_market_impact,
+        rebuy_block_days=req.rebuy_block_days,
+        liquidate_at_end=req.liquidate_at_end,
+        price_basis_policy=req.price_basis_policy,
+        buy_fill_offset_pct=req.buy_fill_offset_pct,
+        sell_fill_offset_pct=req.sell_fill_offset_pct,
+        max_buy_amount=req.max_buy_amount,
+        cash_reserve_pct=req.cash_reserve_pct,
+        asset_alloc=req.asset_alloc,
+        buy_sort_expr=req.buy_sort_expr,
+        buy_sort_desc=req.buy_sort_desc,
+        intraday_fill=req.intraday_fill,
+        buy_time_start=req.buy_time_start,
+        buy_time_end=req.buy_time_end,
+        sell_time_start=req.sell_time_start,
+        sell_time_end=req.sell_time_end,
+        buy_fill_expr=req.buy_fill_expr,
+        sell_fill_expr=req.sell_fill_expr,
+        expiry_fill_type=req.expiry_fill_type,
+        expiry_fill_offset_pct=req.expiry_fill_offset_pct,
+        buy_ladder=req.buy_ladder,
+        sell_ladder=req.sell_ladder,
+        expiry_sell_method=req.expiry_sell_method,
+        breakthrough_base_type=req.breakthrough_base_type,
+        breakthrough_offset_pct=req.breakthrough_offset_pct,
+        breakthrough_direction=req.breakthrough_direction,
+        buy_timing=req.buy_timing,
+        progress_cb=progress_cb,
+        dynamic_replenishment=bool(pool_tickers),
+        replenishment_pool=pool_tickers or None,
+
+    )
+
+
 def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
     """screen-to-backtest 핵심 로직 (unary + 스트리밍 공용).
 
@@ -1593,18 +1723,28 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         def _screen_progress(done, total, misses):
             _emit({"phase": "screening", "done": done, "total": total})
 
-        result = screener.run(
-            universe=_universe,
-            filter_ast=ast,
-            sort_by=req.sort_by,
-            ascending=(req.sort_dir == "asc"),
-            sort_by_secondary=req.sort_by_secondary,
-            sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
-            limit=pool_cap,
-            liquidity_floor=req.liquidity_floor,
-            as_of_date=_asof_date_for_screener,
-            progress_cb=_screen_progress,
-        )
+        try:
+            result = screener.run(
+                universe=_universe,
+                filter_ast=ast,
+                sort_by=req.sort_by,
+                ascending=(req.sort_dir == "asc"),
+                sort_by_secondary=req.sort_by_secondary,
+                sort_secondary_ascending=(req.sort_secondary_dir == "asc"),
+                limit=pool_cap,
+                liquidity_floor=req.liquidity_floor,
+                as_of_date=_asof_date_for_screener,
+                progress_cb=_screen_progress,
+            )
+        except PitFieldNotAvailable as e:
+            # 시점 유니버스(생존편향 보정)의 후보 풀은 과거 시점 스크리닝으로 만든다 — 시점 값이 없는 조건·정렬 항목을 쓰면
+            # 오늘 값으로 과거 유니버스를 고르게 된다(룩어헤드). 계산하지 않고 그 항목을 짚어 알린다(감사 §12 — 사용자 결정 "막는다").
+            return {"error": True, "message": str(e), "screened_count": 0,
+                    "reason": "pit_field_not_available", "fields": e.violations}
+        except ConditionSourceUnavailable as e:
+            # 원천이 없는 조건 종류(이벤트 · Z-Score)로 후보 풀을 고르면 지어낸 값으로 백테스트 대상을 정하게 된다 — 계산하지 않는다.
+            return {"error": True, "message": str(e), "screened_count": 0,
+                    "reason": "condition_source_unavailable"}
         # screened(≤eval_cap)는 조건식 신호 평가용 후보 풀 — "대상 종목 수"(max_tickers)와는
         # 무관하게 넓게 유지한다(조건식이 넓은 풀에서 매치를 찾아야 하므로). 동시 보유 가능
         # 종목 수는 별도로 max_positions(=req.max_positions, "대상 종목 수" 스테퍼 값)가
@@ -1630,11 +1770,15 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
                      "`approximated` 는 시총 규칙 근사이고, `unknown` 은 보정 여부를 "
                      "**알 수 없다**는 뜻이지 보정됐다는 뜻이 아닙니다."),
         }
+        if _asof_date_for_screener:
+            # 시점 유니버스의 후보 풀은 ★그 시점 종가가 적재된 종목만으로★ 걸러진다(2026-11-13) — 빠진 수·사유를 싣는다.
+            # 시점 유니버스가 아니면 이 칸은 없다(응답 모양 불변).
+            _universe_meta["asof_screening"] = getattr(result, "asof", None)
 
         if not tickers:
             return {
                 "error": True,
-                "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하세요.",
+                "message": "스크리닝 통과 종목이 없습니다. 필터를 완화하십시오.",
                 "screened_count": 0,
                 # 유니버스가 텅 빈 이유가 폴백 때문일 수 있다 — 그 사실을 여기서도 낸다.
                 "universe": _universe_meta,
@@ -1642,100 +1786,16 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
         _emit({"phase": "screened", "count": len(tickers)})
 
         # 팩터가중 모드: 종목별 점수를 0~1로 정규화한 가중치 맵 생성
-        factor_weights = None
-        if req.buy_weight_mode == "factor":
-            scores = {it.stock_code: float(getattr(it, "composite_score", 0) or 0)
-                      for it in screened if getattr(it, "stock_code", None)}
-            if scores:
-                lo, hi = min(scores.values()), max(scores.values())
-                rng = hi - lo
-                # 점수가 높을수록 가중치↑ (0~1). 전부 같으면 0.5(동일가중)
-                factor_weights = {
-                    t: ((s - lo) / rng if rng > 0 else 0.5) for t, s in scores.items()
-                }
+        factor_weights = _factor_weights(req, {
+            it.stock_code: float(getattr(it, "composite_score", 0) or 0)
+            for it in screened if getattr(it, "stock_code", None)})
 
         # 조건식 전략 분기 (Genport식 진입/청산)
-        eff_strategy = req.strategy_name
-        eff_params = dict(req.strategy_params or {})
-        # strategy_name이 명시적으로 "Condition"이면 조건이 비어있어도(리스크룰만 설정) 이 분기를
-        # 태워 eff_params를 채운다 — 그래야 ConditionStrategy가 올바른 buy/sell_conditions로
-        # 생성되고, "GoldenCross" 같은 하드코딩 기본 전략(데드크로스 등 원치 않는 매도사유)으로
-        # 조용히 대체되지 않는다.
-        if req.buy_conditions or req.sell_conditions or req.strategy_name == "Condition":
-            from src.kis_strategies import condition_strategy  # noqa: F401 (레지스트리 자기등록)
-            _ = condition_strategy
-            eff_strategy = "Condition"
-            eff_params = {
-                "buy_conditions": req.buy_conditions or [],
-                "sell_conditions": req.sell_conditions or [],
-                "allow_snapshot_fundamentals": bool(req.allow_snapshot_fundamentals),
-                "buy_logic": req.buy_logic,
-                "sell_logic": req.sell_logic,
-            }
+        eff_strategy, eff_params = _effective_strategy(req)
 
         # 2) 백테스트
-        bt = run_backtest(
-            symbols=tickers,
-            strategy_name=eff_strategy,
-            start_date=req.start_date,
-            end_date=req.end_date,
-            strategy_params=eff_params,
-            initial_capital=req.initial_capital,
-            commission_rate=req.commission_rate,
-            slippage_rate=req.slippage_rate,
-            stop_loss_pct=req.stop_loss_pct,
-            take_profit_pct=req.take_profit_pct,
-            trailing_stop_pct=req.trailing_stop_pct,
-            max_positions=req.max_positions,
-            buy_fill_type=req.buy_fill_type,
-            sell_fill_type=req.sell_fill_type,
-            max_hold_days=req.max_hold_days,
-            min_hold_days=req.min_hold_days,
-            day_trade=req.day_trade,
-            sell_divide_pct=req.sell_divide_pct,
-            max_sell_divisions=req.max_sell_divisions,
-            buy_weight_mode=req.buy_weight_mode,
-            buy_divide_pct=req.buy_divide_pct,
-            max_buy_per_day=req.max_buy_per_day,
-            max_buy_count=req.max_buy_count,
-            factor_weights=factor_weights,
-            breakthrough_buy=req.breakthrough_buy,
-            rebalance_period=req.rebalance_period,
-            market_timing=req.market_timing,
-            signal_lag=req.signal_lag,
-            charge_sell_tax=req.charge_sell_tax,
-            charge_spread=req.charge_spread,
-            charge_market_impact=req.charge_market_impact,
-            rebuy_block_days=req.rebuy_block_days,
-            liquidate_at_end=req.liquidate_at_end,
-            price_basis_policy=req.price_basis_policy,
-            buy_fill_offset_pct=req.buy_fill_offset_pct,
-            sell_fill_offset_pct=req.sell_fill_offset_pct,
-            max_buy_amount=req.max_buy_amount,
-            cash_reserve_pct=req.cash_reserve_pct,
-            asset_alloc=req.asset_alloc,
-            buy_sort_expr=req.buy_sort_expr,
-            buy_sort_desc=req.buy_sort_desc,
-            intraday_fill=req.intraday_fill,
-            buy_time_start=req.buy_time_start,
-            buy_time_end=req.buy_time_end,
-            sell_time_start=req.sell_time_start,
-            sell_time_end=req.sell_time_end,
-            buy_fill_expr=req.buy_fill_expr,
-            sell_fill_expr=req.sell_fill_expr,
-            expiry_fill_type=req.expiry_fill_type,
-            expiry_fill_offset_pct=req.expiry_fill_offset_pct,
-            buy_ladder=req.buy_ladder,
-            sell_ladder=req.sell_ladder,
-            expiry_sell_method=req.expiry_sell_method,
-            breakthrough_base_type=req.breakthrough_base_type,
-            breakthrough_offset_pct=req.breakthrough_offset_pct,
-            breakthrough_direction=req.breakthrough_direction,
-            buy_timing=req.buy_timing,
-            progress_cb=progress_cb,
-            dynamic_replenishment=bool(pool_tickers),
-            replenishment_pool=pool_tickers or None,
-        )
+        bt = run_backtest(**_backtest_kwargs(req, tickers, pool_tickers, factor_weights,
+                                             eff_strategy, eff_params, progress_cb))
 
         # 3) 통합 응답
         _emit({"phase": "done"})

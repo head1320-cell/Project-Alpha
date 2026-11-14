@@ -1,0 +1,185 @@
+"use client";
+/**
+ * 전략·기업 노드의 결과 (BK W5) — 전략 묶음 · 기업 전망 · 가치평가 점수 · 결정 되짚기
+ * ==========================================================================
+ * 수는 서버 view 그대로다. ★재지 않은 칸은 0 이 아니라 "안 쟀어요"★ — 귀인 효과·체결 품질·브린슨 분해가
+ * `null` 이면 그 이름을 적고 비워 둔다. 전략 묶음의 곡선은 계좌 금액, 낙폭은 같은 축의 아래 띠로 보인다.
+ */
+import type { ReactNode } from "react";
+import type { NodeExplain } from "@/entities/portfolio-graph";
+import { PerfPanel } from "./perf/PerfPanel";
+import { perfViewOfStrategy } from "@/shared/ui/perf/perfView";
+
+type Dict = Record<string, unknown>;
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const pct = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number).toFixed(d)}%`);
+const signed = (v: unknown, d = 1) => (num(v) === null ? "—" : `${(v as number) >= 0 ? "+" : ""}${(v as number).toFixed(d)}%`);
+const NOT_MEASURED = "측정하지 않았습니다";
+
+function KV({ rows }: { rows: [string, ReactNode][] }) {
+  return <dl className="pg-kv">{rows.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>;
+}
+
+function Bars({ rows, labels, fmt = (x) => pct(x, 2) }: {
+  rows: [string, number][]; labels?: Record<string, string>; fmt?: (x: number) => string;
+}) {
+  const max = Math.max(1e-9, ...rows.map(([, v]) => Math.abs(v)));
+  return (
+    <table className="pg-table"><tbody>
+      {rows.map(([k, v]) => (
+        <tr key={k}><td className="pg-td-name" title={k}>{labels?.[k] ?? k}</td>
+          <td className="pg-td-bar"><span className={`pg-bar${v < 0 ? " pg-bar--neg" : ""}`} style={{ width: `${(Math.abs(v) / max) * 100}%` }} /></td>
+          <td className="pg-td-num">{fmt(v)}</td></tr>
+      ))}
+    </tbody></table>
+  );
+}
+
+// ── 전략 묶음 ────────────────────────────────────────────────────────────────
+
+const EFFECT: [string, string][] = [["allocation_effect_pct", "배분 방식"], ["cost_effect_pct", "거래 비용"],
+  ["netting_effect_pct", "주문 상계"], ["cash_effect_pct", "현금 이자"], ["macro_effect_pct", "매크로 조정"]];
+
+/** 성과 그림 문법(2026-11-09) — 7번·불러오기와 같은 부품(`perf/PerfPanel`): 숨은 오른쪽 축 낙폭 대신 같은 물속 그림. 아래 절은 그대로. */
+export function StrategyBacktestResult({ v, explain }: { v: Dict; explain?: NodeExplain | null }) {
+  const s = (v.summary as Dict) ?? {};
+  const names = (v.strategy_names as Record<string, string>) ?? {};
+  const attr = (s.attribution as Dict) ?? {};
+  const per = (v.period as Dict) ?? {};
+  const srcs = ((v.sources as Dict)?.strategies as Dict[]) ?? [];
+  const last = Object.entries((v.last_weights as Record<string, number>) ?? {}).map(([k, w]) => [k, w * 100] as [string, number])
+    .sort((a, b) => b[1] - a[1]);
+  return (
+    <PerfPanel view={perfViewOfStrategy(v, explain)} fallbackTitle="전략 그룹을 백테스트했습니다" after={<>
+      <KV rows={[["기간", `${String(per.start)} ~ ${String(per.end)}${per.whole_record ? " (공통 기록 전체)" : ""}`],
+                 ["다시 나눈 횟수", `${String(s.n_rebalances ?? "—")}번`], ["거래일", `${String(v.n_trading_days ?? "—")}일`]]} />
+      <h4 className="pg-h4">마지막 날 전략 비중</h4>
+      <Bars rows={last} labels={names} />
+      <h4 className="pg-h4">수익 분해</h4>
+      <table className="pg-table"><tbody>
+        {EFFECT.map(([k, label]) => (
+          <tr key={k}><td className="pg-td-name">{label}</td>
+            <td className="pg-td-num">{num(attr[k]) === null ? <span className="pg-tag pg-tag--unknown">{NOT_MEASURED}</span> : signed(attr[k], 2)}</td></tr>
+        ))}
+      </tbody></table>
+      <h4 className="pg-h4">전략 출처</h4>
+      <ul className="pg-src">
+        {srcs.map((x) => (
+          <li key={String(x.strategy_id)}>
+            <b>{String(x.name ?? `전략 ${String(x.strategy_id)}`)}</b>
+            {x.registered === false ? <span className="pg-tag pg-tag--failed">등록 안 됨</span> : null}
+            {x.is_mock_data === true ? <span className="pg-tag pg-tag--unknown">합성 데이터</span>
+              : x.is_mock_data === null ? <span className="pg-tag pg-tag--unknown">데이터 출처 미상</span> : null}
+            {x.is_pit_verified === true ? <span className="pg-tag pg-tag--confirmed">시점 정합 확인</span> : <span className="pg-tag pg-tag--assumed">시점 정합 미확인</span>}
+            {x.repro_equal === true ? <span className="pg-tag pg-tag--confirmed">다시 돌려 같음</span> : null}
+          </li>
+        ))}
+      </ul>
+      {((v.warnings as string[]) ?? []).map((w) => <p key={w} className="pg-warn">{w}</p>)}
+    </>} />
+  );
+}
+
+// ── 기업 전망 ────────────────────────────────────────────────────────────────
+
+function Reasons({ reasons, labels, title }: { reasons: Record<string, unknown>; labels: Record<string, string>; title: string }) {
+  const rows = Object.entries(reasons);
+  if (!rows.length) return null;
+  return (
+    <>
+      <h4 className="pg-h4">{title}</h4>
+      <ul className="pg-list">{rows.map(([c, r]) => (
+        <li key={c}>{labels[c] ?? c} <span className="pg-code">{c}</span> — {typeof r === "string" ? r : String((r as Dict)?.reason ?? "")}</li>
+      ))}</ul>
+    </>
+  );
+}
+
+export function CompanyViewsResult({ v }: { v: Dict }) {
+  const views = (v.views as Dict[]) ?? [];
+  const labels = (v.labels as Record<string, string>) ?? {};
+  return (
+    <>
+      <p className="pg-model-type pg-model-type--hypo">현재 시점에만 유효한 전망입니다</p>
+      <table className="pg-table">
+        <thead><tr><th>종목</th><th>방향</th><th className="pg-td-num">연 크기</th><th className="pg-td-num">확신</th></tr></thead>
+        <tbody>{views.map((x) => {
+          const code = String(((x.assets as string[]) ?? [])[0] ?? "");
+          return (
+            <tr key={code}>
+              <td className="pg-td-name" title={code}>{labels[code] ?? code}</td>
+              <td className={x.direction === -1 ? "pg-neg" : ""}>{x.direction === -1 ? "내린다" : "오른다"}</td>
+              <td className="pg-td-num">{pct(x.magnitude_pct)}</td>
+              <td className="pg-td-num">{pct(x.confidence, 0)}{x.confidence_saturated ? " · 상한" : ""}</td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+      {num(v.n_user_views) ? <p className="pg-note">투자 뷰 {String(v.n_user_views)}개와 함께 ‘포트폴리오 최적화’로 전달합니다.</p> : null}
+      <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="전망 산출 실패 종목" />
+    </>
+  );
+}
+
+// ── 가치평가 점수 ────────────────────────────────────────────────────────────
+
+export function ValuationScoresResult({ v }: { v: Dict }) {
+  const rows = (v.rows as Dict[]) ?? [];
+  const scores = (v.scores as Record<string, number>) ?? {};
+  const labels = (v.labels as Record<string, string>) ?? {};
+  // 수를 모르는 종목은 순위에 넣지 않는다(0 으로 가운데에 세우지 않는다) — 아래에 따로 적는다.
+  const ranked = Object.entries(scores).filter(([, s]) => typeof s === "number" && Number.isFinite(s)).sort((a, b) => b[1] - a[1]);
+  const unscored = Object.entries(scores).filter(([, s]) => !(typeof s === "number" && Number.isFinite(s))).map(([c]) => c);
+  const byCode = Object.fromEntries(rows.map((r) => [String(r.ticker), r]));
+  const max = Math.max(1e-9, ...ranked.map(([, s]) => Math.abs(s)));
+  return (
+    <>
+      <table className="pg-table">
+        <thead><tr><th>종목 · 판정</th><th className="pg-td-bar">싼 정도</th><th className="pg-td-num">적정가 대비</th></tr></thead>
+        <tbody>{ranked.map(([c, s]) => (
+          <tr key={c}>
+            <td className="pg-td-name" title={c}>{labels[c] ?? c}<span className="pg-verdict">{String(byCode[c]?.verdict ?? "—")}</span></td>
+            <td className="pg-td-bar"><span className={`pg-bar${s < 0 ? " pg-bar--neg" : ""}`} style={{ width: `${(Math.abs(s) / max) * 100}%` }} /></td>
+            <td className="pg-td-num">{s >= 0 ? `${s.toFixed(1)}% 저평가` : `${(-s).toFixed(1)}% 고평가`}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+      {unscored.length > 0 && <p className="pg-warn">점수 산출 실패 종목: {unscored.map((c) => labels[c] ?? c).join(", ")}</p>}
+      <p className="pg-note">점수는 −괴리율입니다. 적정가를 산출하지 못한 종목은 0으로 처리하지 않고 아래에 별도로 표시합니다.</p>
+      <Reasons reasons={(v.reasons as Record<string, unknown>) ?? {}} labels={labels} title="점수 산출 실패 종목" />
+    </>
+  );
+}
+
+// ── 결정 되짚기 ──────────────────────────────────────────────────────────────
+
+export function AttributionResult({ v }: { v: Dict }) {
+  const ret = (v.returns as Dict) ?? {};
+  const eva = (v.expected_vs_actual as Dict) ?? {};
+  const rc = (v.risk_compare as Dict) ?? {};
+  const cov = (v.coverage as Dict) ?? {};
+  const brin = (v.brinson_effects as Dict) ?? {};
+  const assets = (((v.contribution as Dict)?.assets as Dict[]) ?? []).map((a) => [String(a.code), num(a.contribution_pct) ?? 0] as [string, number]);
+  const unmeasured = [["selection", "종목 선택"], ["allocation", "업종 배분"], ["factor", "팩터"], ["hedge", "헤지"], ["timing", "타이밍"]]
+    .filter(([k]) => brin[k] == null).map(([, l]) => l);
+  if ((v.fill_quality as Dict)?.basis === "unavailable") unmeasured.push("체결 품질");
+  return (
+    <>
+      <KV rows={[["결정일", String(v.decision_date)], ["사후 검토일", `${String(v.as_of)} (${String(v.elapsed_days)}일 뒤)`],
+                 ["실제 수익", signed(ret.portfolio_pct, 2)],
+                 [`${String(ret.benchmark_label ?? "비교 기준")} 대비`, num(ret.excess_pct) === null ? NOT_MEASURED : signed(ret.excess_pct, 2)],
+                 ["기대했던 수익", num(eva.expected_return_pct) === null ? NOT_MEASURED : signed(eva.expected_return_pct, 2)],
+                 ["기대와의 차이", num(eva.gap_pct) === null ? NOT_MEASURED : signed(eva.gap_pct, 2)],
+                 ["변동성 (기대 → 실제)", `${pct((rc.ex_ante as Dict)?.vol_pct)} → ${pct((rc.ex_post as Dict)?.vol_pct)}`],
+                 ["가격 확인 종목", `${String(cov.covered ?? 0)}/${String(cov.tickers ?? 0)}`]]} />
+      {assets.length > 0 && (<><h4 className="pg-h4">종목별 기여</h4><Bars rows={assets} labels={(v.labels as Record<string, string>) ?? {}} /></>)}
+      {unmeasured.length > 0 && (
+        <>
+          <h4 className="pg-h4">미측정 항목</h4>
+          <div className="pg-chips-static">{unmeasured.map((u) => <span key={u} className="pg-tag pg-tag--unknown">{u}</span>)}</div>
+          <p className="pg-note">벤치마크 구성종목 비중과 연결된 실제 체결이 있어야 측정할 수 있습니다 — 유사값으로 대체하지 않습니다.</p>
+        </>
+      )}
+    </>
+  );
+}

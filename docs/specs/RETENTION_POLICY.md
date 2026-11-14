@@ -52,7 +52,8 @@
 `financials_history` · `daily_prices` · `investor_flows`
 
 **② 실거래 감사** — `live_orders` · `live_fills` · `live_daily_pnl` ·
-`live_kill_events` · `live_audit_trail` · `reconciliation_history`
+`live_kill_events` · `live_audit_trail` · `live_gate_declarations` ·
+`distribution_gate_declarations` · `pb_client_links`
 <!-- PROTECTED-LIST:END -->
 
 사유는 **코드에 한 줄씩** 있다(`KEEP_FOREVER` · `AUDIT`). 요지만 옮기면:
@@ -64,7 +65,7 @@
   유니버스를 다시 세울 수 없고 생존편향이 되돌아온다.
 - **수급** — KIS 종목별 투자자 TR 은 **최근 ~30영업일만** 준다. 그 이전은
   비공식 KRX 백필뿐이고 이 환경에서는 그 도메인이 막혀 있다(실측).
-- **실거래 기록 여섯** — ★규제·감사 요건은 이 저장소가 판단할 문제가 아니다.★
+- **실거래 기록 여섯과 실계좌 관문 선언(BV7)·유통 관문 선언(PB5)·고객 주소(PB6)** — ★규제·감사 요건은 이 저장소가 판단할 문제가 아니다.★
   확인하기 전에는 영구로 둔다. 이것은 결론이 아니라 **명시된 미상**이다.
 
 ### 무엇이 이것을 지키나
@@ -97,12 +98,13 @@
 ## 3. ③ 결정 기록 — 기본 영구, 삭제는 막지 않는다
 
 `backtest_runs` · `multibacktest_runs` · `multibacktest_daily` ·
-`multibacktest_strategy_daily` · `research_runs` · `research_cases` ·
+`multibacktest_strategy_daily` · `strategy_registry` · `strategy_daily` ·
+`research_runs` · `research_cases` ·
 `alpha_registry` · `journal_entries` · `investment_decisions` ·
 `investment_decision_legs` · `target_portfolio_versions` · `execution_plans` ·
 `company_snapshots` · `regime_snapshots` · `scenario_packs` ·
 `scenario_pack_versions` · `timing_rule_sets` · `timing_rule_set_versions` ·
-`risk_snapshots` · `model_monitor_runs`
+`risk_snapshots` · `model_monitor_runs` · `intraday_trials`
 
 재생성은 되지만 ★그때의 입력으로는 안 된다★ — 빈티지가 그 사이 늘었고 매크로는
 개정됐다. 오늘 다시 만든 스냅샷은 **다른 값**이지 복구가 아니다.
@@ -110,6 +112,9 @@
 그런데도 삭제를 **금지하지는 않는다**. 사용자가 지목해 지우는 경로
 (`DELETE … WHERE <id> = :id`)가 이미 있고 그것은 정상적인 CRUD 다. 막으면
 기존 기능이 깨진다. ★금지가 아니라 순서다★ — 지우기 전에 무엇을 잃는지 안다.
+
+`intraday_trials`(분봉 백테스트의 시행 기록)만은 지우는 경로를 두지 않았다 — 이 표는 ★몇 번 해 봤는가(N)★ 를
+세는 자리이고, 지우면 N 이 줄어 다중 비교 보정이 약해진다(`src/data/intraday_trials.py`).
 
 ### 크기 기준 정리의 후보 — ★수치는 아직 미상★
 
@@ -126,8 +131,7 @@
 ## 4. ④ 재생성 가능 — 지워도 잃는 것이 없다
 
 `factor_snapshot` · `market_snapshot_equity` · `market_snapshot_ficc` ·
-`instrument_master` · `local_portfolio_state` · `local_account_state` ·
-`stocks`
+`instrument_master` · `stocks`
 
 공통점은 **시간 축이 없다는 것**이다. 캐시이거나 오늘 상태의 사본이라 애초에
 과거를 담지 않는다(그래서 ①과 정확히 반대다).
@@ -142,10 +146,21 @@
 
 ## 5. ⑤ 계정 소유 — 이 저장소가 정할 문제가 아니다
 
-`users` · `portfolios` · `trade_log`
+`users` · `portfolios` · `trade_log` · `user_security` · `broker_accounts` · `pb_clients` · `pb_client_docs` · `pb_client_snapshots`
 
 지울지 말지는 **계정 소유자**가 정한다. 그래서 보호하지도, 재생성 가능이라고도
-하지 않는다. `users` 삭제는 나머지 둘로 `ON DELETE CASCADE` 되도록 선언돼 있다.
+하지 않는다. `users` 삭제는 나머지 표로 `ON DELETE CASCADE` 되도록 선언돼 있다.
+
+★`user_security` 는 계정째로만 지운다★(BS1) — 행만 지우면 토큰 판이 0 으로 돌아가
+비밀번호를 바꿔 폐기했던 옛 토큰이 다시 산다.
+
+`broker_accounts`(BV3)는 사용자가 연결한 증권 계좌 자격이다 — 앱 키·시크릿·계좌번호는 `BROKER_CRED_KEY`
+로 봉인한 암호문만 있다. 본인이 지울 수 있고 계정째로도 지워진다. 실거래 감사 기록(`live_*`)과는 다른 표다.
+
+`pb_clients`·`pb_client_docs`(CF 3부 PB3)는 PB 가 관리하는 고객(★별칭만★ — 실명·연락처를 담지 않는다)과 고객별 설계 문서다.
+계정(PB)째로 지워지고, 문서는 고객 행과 함께 간다. ★지우는 경로는 두지 않았다★ — 보관(`archived_at`)만 있다.
+`pb_client_snapshots`(PB4)는 고객 한 장 — 만든 때의 그래프와 서버가 다시 계산한 설명·비중이다. ★고객에게 보여 준 한 장(`shared_at`)은
+지우는 경로가 거절한다★(무엇을 보여 줬는지가 남아야 한다). 보여 주기 전에는 PB 가 지울 수 있다.
 
 ★`trade_log` 와 `live_fills` 를 혼동하지 말 것★ — 이름이 비슷하지만 다른 표다.
 실거래 감사 기록은 `live_*` 쪽이고 그것은 ②로 보호된다.

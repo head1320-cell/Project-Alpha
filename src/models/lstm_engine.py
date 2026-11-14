@@ -49,7 +49,7 @@ def _require_torch():
     if not TORCH_AVAILABLE:
         raise RuntimeError(
             "LSTM 기능을 사용하려면 torch가 필요합니다. "
-            "`pip install torch`로 설치하세요. (나머지 플랫폼 기능은 torch 없이 작동합니다)"
+            "`pip install torch`로 설치하십시오. (나머지 플랫폼 기능은 torch 없이 작동합니다)"
         )
 
 

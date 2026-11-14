@@ -48,12 +48,19 @@ class AllocationView(BaseModel):
       `direction=1` 로 둔다 — 양쪽에 넣으면 상쇄된다.
     """
 
-    assets: list[str] | None = Field(None, min_length=1)
-    weights: dict[str, float] | None = None   # 부호 허용 (상대·팩터 뷰)
-    direction: int = 1                      # +1 상회 / -1 하회
-    magnitude_pct: float = Field(2.0, ge=0, le=50)   # 연간 기대수익 크기(%)
-    confidence: float = Field(50, ge=0, le=100)
-    label: str | None = None                # 테제 문장 (표시용, 계산 미사용)
+    # `x-ui` 는 화면용 쉬운 이름뿐이다(BJ3) — 검증 규칙·계산에 끼어들지 않는다.
+    assets: list[str] | None = Field(None, min_length=1, json_schema_extra={
+        "x-ui": {"label": "종목", "tier": "basic", "help": "한 종목 또는 여러 종목(평균)"}})
+    weights: dict[str, float] | None = Field(None, json_schema_extra={
+        "x-ui": {"label": "조합 비중", "tier": "advanced", "help": "부호 있는 조합(상대·팩터 뷰)"}})
+    direction: int = Field(1, json_schema_extra={                        # +1 상회 / -1 하회
+        "x-ui": {"label": "방향", "tier": "basic", "options": {"1": "오른다", "-1": "내린다"}}})
+    magnitude_pct: float = Field(2.0, ge=0, le=50, json_schema_extra={   # 연간 기대수익 크기(%)
+        "x-ui": {"label": "1년 기대수익률(%)", "tier": "basic"}})
+    confidence: float = Field(50, ge=0, le=100, json_schema_extra={
+        "x-ui": {"label": "확신도(%)", "tier": "basic", "widget": "slider", "ends": ["조금", "아주"]}})
+    label: str | None = Field(None, json_schema_extra={                  # 테제 문장 (표시용, 계산 미사용)
+        "x-ui": {"label": "메모", "tier": "advanced"}})
 
     @model_validator(mode="after")
     def _exactly_one_target_form(self):
@@ -154,6 +161,10 @@ class AnalyzeRequest(BaseModel):
     views: list[AllocationView] | None = None
     model: str = "mvo"                                # mvo|bl|risk_parity|hrp|min_var
     delta: float = Field(2.5, ge=0.5, le=10)          # 위험회피 λ (π 스케일)
+    # ── BO O1: 평균-분산 효용(`mv_utility`)의 위험 회피 λ (선택) ──────────────────
+    #   ★`mv_utility` 만 읽는다★ 다른 방식에서는 들어가지 않는다. 없으면 엔진이 관례값을 쓰고
+    #   `risk_aversion.source == "default"` 로 가정임을 밝힌다. 기존 요청은 None 이라 동작 불변.
+    risk_aversion: float | None = Field(None, ge=0.5, le=20)
     tau: float = Field(0.05, ge=0.001, le=1.0)
     lookback_days: int = Field(756, ge=90, le=3650)   # 거래일 기준 ~3년
     # ── P1: 데이터 절단일 고정 (선택) ──────────────────────────────────────
@@ -225,6 +236,9 @@ class BacktestRequest(BaseModel):
     as_of: str | None = Field(None, pattern=_AS_OF_PAT)   # P1 — 데이터 절단일 고정(선택)
     delta: float = Field(2.5, ge=0.5, le=10)
     tau: float = Field(0.05, ge=0.001, le=1.0)
+    # ── K2: 위험 회피 λ — `/analyze` 와 같은 범위. 위험 성향 효용(mv_utility)만 읽는다. 없으면 지금과 같은 기본값.
+    #   (회사 관점은 여기 없다 — 지금 시점 전용이라 과거에 쓰면 룩어헤드다. 위 `use_company_views` 주석.)
+    risk_aversion: float | None = Field(None, ge=0.5, le=20)
 
 
 # ── 팩터 기반 포트폴리오 ──────────────────────────────────────────────────────
@@ -319,6 +333,7 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
         returns = returns.iloc[-lookback_days:]
     if bench is not None:
         bench = bench.reindex(returns.index).dropna()
+    alignment = _alignment(df[keep], returns, bench, lookback_days, benchmark is not None)
     coverage = {
         "start": str(returns.index.min().date()) if len(returns) else None,
         "end": str(returns.index.max().date()) if len(returns) else None,
@@ -331,8 +346,174 @@ def _load_clean_returns(tickers: list[str], benchmark: str | None, lookback_days
         # `end`(관측 마지막 날)와도 다르다: 휴장일이면 절단일보다 앞선다.
         "as_of_requested": as_of,
         "as_of_effective": end.isoformat(),
+        # ── 날짜를 맞추며 잃은 것 (CF3 · 관측만) ─────────────────────────────
+        "alignment": alignment,
     }
     return returns, bench, excluded, coverage
+
+
+def _alignment(raw, returns, bench, lookback_days: int, bench_requested: bool) -> dict:
+    """종목 날짜 교집합(`dropna`)이 잃은 것 — ★`notna()` 만 읽는다★(값·창은 바꾸지 않는다, CF3).
+
+    - `shortfall_days` — 요청한 일수보다 모자란 날.
+    - `holes_in_window` — 창 안에서 어느 한 종목이라도 비어 통째로 빠진 날.
+    - `latest_start` — 가장 늦게 시작한 종목(모두 같은 날 시작하면 None) · `binding` — 그 종목이 창의 시작을 정했는지.
+    - `bench_gap_days` — 창 안에서 벤치마크가 빈 날. 벤치를 요청하지 않았으면 잴 대상이 없어 None.
+    """
+    avail = raw.notna()
+    firsts = {t: avail.index[avail[t].to_numpy()].min() for t in raw.columns if bool(avail[t].any())}
+    latest = None
+    if firsts and len(set(firsts.values())) > 1:
+        t = max(firsts, key=lambda k: (firsts[k], k))
+        latest = {"ticker": str(t), "first": str(firsts[t].date())}
+    holes = 0
+    if len(returns):
+        span = avail.loc[returns.index.min():returns.index.max()]
+        holes = int((~span.all(axis=1)).sum())
+    return {
+        "requested_days": int(lookback_days),
+        "shortfall_days": max(0, int(lookback_days) - int(len(returns))),
+        "holes_in_window": holes,
+        "latest_start": latest,
+        "binding": bool(latest and len(returns) and latest["first"] == str(returns.index.min().date())),
+        "bench_gap_days": (None if not bench_requested
+                           else int(len(returns)) - (0 if bench is None else int(len(bench)))),
+    }
+
+
+def _ep_unavailable_reason(probes: dict) -> str | None:
+    """엔트로피 풀링 요건 프로브 → 못 쓰면 사유(`/analyze` 와 그래프 옵티마이저 노드 공용)."""
+    ep_probe = probes.get("entropy_pooling", {})
+    if not ep_probe.get("ok"):
+        return ("엔트로피 풀링 엔진을 사용할 수 없습니다 — "
+                f"{ep_probe.get('reason') or '요건 미가용'}")
+    return None
+
+
+#: `constrained_solve` 가 베타 제약을 걸 벤치마크를 받지 못했을 때 쓰는 문장(엔진 글 그대로 — `constrained_opt.py` 는
+#: SHA 가드라 고치지 않는다). 라우트가 벤치마크를 길이 때문에 버린 경우에만 정확한 사유로 바꿔 싣는다(K1).
+_ENGINE_BETA_NO_BENCH = "베타 제약이 지정됐지만 벤치마크 수익률이 없어 적용 불가 — 제약 무시됨(정직 보고)."
+
+
+def _group_cap_gaps(caps: dict[str, float], names: list[str], groups_of: dict[str, str]) -> list[dict]:
+    """업종 상한 중 ★엔진이 말없이 건너뛴 것★ (CF 3부 P1) — 보고만 한다.
+
+    `constrained_solve` 는 `groups_of` 에 있는 업종만 돈다. 그래서 ① 이 종목들 중 그 업종이 없는 상한과 ② 업종을 하나도
+    못 읽었을 때(`sector_groups_for` → `{}`)의 상한 전부는 적용되지 않는다. ③ 업종 미상 종목은 어떤 상한에도 들지 않는다.
+    엔진(`constrained_opt.py`)은 SHA 가드라 고치지 않고, 같은 사실을 여기서 센다.
+    """
+    if not caps:
+        return []
+    from src.data.stock_master import resolve_name
+    if not groups_of:
+        return [{"kind": "group_cap", "group": g, "cap_pct": float(cap),
+                 "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았습니다 — 이 종목들의 업종 읽기 실패"}
+                for g, cap in caps.items()]
+    present = set(groups_of.values())
+    out = [{"kind": "group_cap", "group": g, "cap_pct": float(cap),
+            "text": f"업종 상한 ‘{g}’ {cap:g}%는 적용되지 않았습니다 — 이 종목들 중 그 업종이 없습니다."}
+           for g, cap in caps.items() if g not in present]
+    unknown = [t for t in names if t not in groups_of]
+    if unknown:
+        shown = ", ".join(resolve_name(t) for t in unknown[:5]) + (" 등" if len(unknown) > 5 else "")
+        out.append({"kind": "unknown_sector", "names": unknown,
+                    "text": f"업종 미상 종목 {len(unknown)}개({shown})는 어떤 업종 상한에도 들지 않았습니다."})
+    return out
+
+
+def _apply_constraints(req, names: list[str], R: np.ndarray, opt: dict, bench) -> dict | None:
+    """P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체한다.
+
+    infeasible 이면 무제약 해를 유지하되 정직 사유를 함께 반환한다(조용한 무시 금지).
+    ★`/analyze` 와 AAS 그래프의 옵티마이저 노드가 이 함수 하나를 부른다★ (BI2) —
+    같은 산수를 두 곳에 두면 갈라진다. `opt` 를 제자리에서 바꾼다(예전 인라인과 같다).
+    """
+    if req.constraints is None:
+        return None
+    from src.engine.constrained_opt import Constraints, constrained_solve, sector_groups_for
+    cobj = Constraints(**req.constraints.model_dump())
+    if not cobj.any_active():
+        return None
+    bench_cut = bench is not None and len(bench) != R.shape[0]
+    # 한 번만 읽어 엔진에 넘긴 그 dict 로 빠진 상한을 센다 — 두 번 읽으면 엔진이 본 것과 다를 수 있다.
+    groups_of = sector_groups_for(names)
+    sol = constrained_solve(
+        req.model, names, R,
+        mu=np.asarray(opt["mu_used"], dtype=float),
+        S=np.asarray(opt["sigma_annual"], dtype=float),
+        constraints=cobj,
+        w_current=req.weights,
+        groups_of=groups_of,
+        bench_returns=(None if bench is None or bench_cut else bench.values),
+        risk_aversion=getattr(req, "risk_aversion", None),
+    )
+    report = {k: sol.get(k) for k in
+              ("status", "violations", "binding", "relaxed",
+               "notes", "reason", "projected")}
+    report["unapplied"] = _group_cap_gaps(cobj.group_caps_pct, names, groups_of)
+    if bench_cut and report["notes"]:
+        # 벤치마크는 있었는데 빈 날 때문에 길이가 달라 버렸다 — "없어" 가 아니라 그 사실을 적는다(K1).
+        report["notes"] = [
+            (f"베타 제약이 지정됐지만 벤치마크에 빈 날이 있어 기간 길이가 수익률과 맞지 않아(수익률 {R.shape[0]}일 · "
+             f"벤치마크 {len(bench)}일) 적용 불가 — 제약 무시됨(정직 보고).") if n == _ENGINE_BETA_NO_BENCH else n
+            for n in report["notes"]]
+    if sol["status"] != "infeasible" and sol.get("weights") is not None:
+        opt["weights"] = np.asarray(sol["weights"], dtype=float)
+        opt["flow"]["optimized"] = opt["weights"]
+        if req.model == "bl" and opt.get("mu_engine") == "bl" and not opt.get("views_applied"):
+            # ★생각이 비중에 다시 닿는다★ (K1) — 사후 max-sharpe 는 못 풀어 시장 비중이었지만, 제약 해는 사후 μ(`mu_used`)로
+            # 풀었다. 라벨을 참으로 되돌리고 그 대체 기록은 최종 비중에 닿지 않은 것으로 고친다(관문·선 점검이 그걸 읽는다).
+            opt["views_applied"] = True
+            if opt.get("fallbacks"):
+                opt["fallbacks"] = [({**f, "affects_weights": False, "resolved_by": "constraints"}
+                                     if f.get("stage") == "view_applied" else f) for f in opt["fallbacks"]]
+    return report
+
+
+# ── 제약 확인 (CF 3부 P2) — 편집기가 계산 전에 "풀 수 없어요" 를 말하게 ─────────────────────────
+
+#: 공매도(음수 하한)가 든 비중 — 실행 목표로 만들면 실행 게이트가 막는다(`allows_short` → research_only).
+_SHORT_NOTE = "공매도가 들어간 비중은 연구·백테스트용입니다 — 실행 목표로 만들면 실행할 수 없다고 막힙니다."
+#: 공분산만 쓰는 방식 — 엔진이 롱숏을 거절한다(`constrained_solve` 의 cov_only 갈래와 같은 집합).
+_COV_ONLY_MODELS = ("risk_parity", "hrp")
+
+
+class ConstraintsCheckRequest(BaseModel):
+    constraints: ConstraintsInput = Field(default_factory=ConstraintsInput)
+    #: 이 옵티마이저 위쪽 '종목 고르기' 의 종목. 비면 '× n종목' 판정을 하지 않는다.
+    names: list[str] = Field(default_factory=list, max_length=500)
+    model: str | None = Field(None, max_length=32)
+
+
+@router.post("/constraints/check")
+def constraints_check(req: ConstraintsCheckRequest) -> dict:
+    """★엔진과 같은 판정★ — `_precheck`(구조적 불능)와 `sector_groups_for`(업종 표)를 그대로 부르고, 빠질 업종 상한은
+    `_group_cap_gaps`(P1)로 센다. 계산하지 않고 저장하지 않는다. 엔진(`constrained_opt.py`)은 읽기만 한다.
+    """
+    from src.engine.constrained_opt import Constraints, _precheck, constrained_solve, sector_groups_for
+    names = list(dict.fromkeys(n.strip() for n in req.names if n and n.strip()))
+    cobj = Constraints(**req.constraints.model_dump())
+    short = cobj.allows_short()
+    groups_of = sector_groups_for(names) if names else {}
+    out = {"checked": bool(names), "ok": None, "reason": None, "groups": groups_of,
+           "group_names": sorted(set(groups_of.values())), "unknown": [t for t in names if t not in groups_of],
+           "sectors_readable": bool(groups_of),
+           "unapplied": _group_cap_gaps(cobj.group_caps_pct, names, groups_of) if names else [],
+           "allows_short": short, "short_note": _SHORT_NOTE if short else None}
+    if not names:
+        return out
+    idx: dict[str, list[int]] = {}
+    for i, t in enumerate(names):
+        if groups_of.get(t):
+            idx.setdefault(groups_of[t], []).append(i)
+    reason = _precheck(len(names), cobj, idx)
+    if reason is None and short and req.model in _COV_ONLY_MODELS:
+        # 엔진의 문장을 다시 쓰지 않는다 — 같은 조건으로 엔진을 불러 그 사유를 그대로 옮긴다(데이터는 쓰지 않는 갈래).
+        n = len(names)
+        probe = constrained_solve(req.model, names, np.zeros((2, n)), np.zeros(n), np.eye(n), cobj, groups_of=groups_of)
+        reason = probe.get("reason") if probe.get("status") == "infeasible" else None
+    out.update(ok=reason is None, reason=reason)
+    return out
 
 
 def _series_stats(ret: np.ndarray, ppy: int = 252) -> dict:
@@ -485,6 +666,7 @@ from src.api.allocation_pipeline import (  # noqa: F401
 )
 from src.data.mock_gate import mock_allowed
 from src.domain.perf_kind import backtest_label
+from src.engine.allocation_evidence import lookahead_evidence
 
 
 # ── /analyze ─────────────────────────────────────────────────────────────────
@@ -565,11 +747,9 @@ def run_analyze(req: AnalyzeRequest) -> dict:
     if req.model == "ep":
         from src.engine.capability import probe_all
         probes = probe_all()
-        ep_probe = probes.get("entropy_pooling", {})
-        if not ep_probe.get("ok"):
-            raise HTTPException(
-                422, "엔트로피 풀링 엔진을 쓸 수 없습니다 — "
-                     f"{ep_probe.get('reason') or '요건 미가용'}")
+        ep_why = _ep_unavailable_reason(probes)
+        if ep_why:
+            raise HTTPException(422, ep_why)
         if mes_block is not None:
             # ★불일치는 정보다★ MES 가 고정된 시점의 레벨과 지금 레벨이 다르면
             # 그 사실을 숨기지 않는다 — CaseBar 가 세션 스냅샷 vs 케이스 MES 에
@@ -581,7 +761,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
                     mes_block["capability_level"] != live["level"]:
                 mes_block["capability_diverged"] = (
                     f"이 증거가 고정될 때는 {mes_block['capability_level']} 였고 "
-                    f"지금은 {live['level']} 입니다 — 같은 증거라도 지금 쓸 수 있는 "
+                    f"현재는 {live['level']} 입니다 — 같은 증거라도 현재 사용 가능한 "
                     "도구가 달라졌습니다.")
 
     scenario_pack_hash: str | None = None
@@ -604,7 +784,7 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
             return {"error": True,
-                    "message": "분석 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요.",
+                    "message": "분석 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하십시오.",
                     "excluded": excluded}
 
         names = list(returns.columns)
@@ -629,31 +809,12 @@ def run_analyze(req: AnalyzeRequest) -> dict:
         opt = optimize(req.model, names, R, views=views or None,
                        delta=req.delta, tau=req.tau,
                        s_override=s_override, extra_views=extra_views,
-                       company_views=(co_stack or {}).get("views"))
+                       company_views=(co_stack or {}).get("views"),
+                       risk_aversion=req.risk_aversion)
 
         # 1b) P3 제약 엔진 (opt-in) — 최종 optimized 가중치를 제약 해로 교체.
         #     infeasible이면 무제약 해를 유지하되 정직 사유를 함께 반환(조용한 무시 금지).
-        constraints_report = None
-        if req.constraints is not None:
-            from src.engine.constrained_opt import Constraints, constrained_solve, sector_groups_for
-            cobj = Constraints(**req.constraints.model_dump())
-            if cobj.any_active():
-                sol = constrained_solve(
-                    req.model, names, R,
-                    mu=np.asarray(opt["mu_used"], dtype=float),
-                    S=np.asarray(opt["sigma_annual"], dtype=float),
-                    constraints=cobj,
-                    w_current=req.weights,
-                    groups_of=sector_groups_for(names),
-                    bench_returns=(bench.values if bench is not None
-                                   and len(bench) == R.shape[0] else None),
-                )
-                constraints_report = {k: sol.get(k) for k in
-                                      ("status", "violations", "binding", "relaxed",
-                                       "notes", "reason", "projected")}
-                if sol["status"] != "infeasible" and sol.get("weights") is not None:
-                    opt["weights"] = np.asarray(sol["weights"], dtype=float)
-                    opt["flow"]["optimized"] = opt["weights"]
+        constraints_report = _apply_constraints(req, names, R, opt, bench)
 
         # 1c) P2.5 — 목표 비중 **구간**. 같은 Σ 를 여러 모델로 풀어 산포를 낸다.
         #     ★제약 해는 넣지 않는다★ 제약이 걸린 가중치와 무제약 가중치를 한 구간에
@@ -800,6 +961,8 @@ def run_analyze(req: AnalyzeRequest) -> dict:
             # EP 일 때만 채워진다.
             "mu_engine": opt.get("mu_engine"),
             "ep": opt.get("ep"),
+            # BO O1 — 평균-분산 효용일 때만 쓴 λ 와 그 출처(가정/사용자). 다른 방식은 키도 없다.
+            **({"risk_aversion": opt["risk_aversion"]} if "risk_aversion" in opt else {}),
             # 고정된 매크로 증거 — 없으면 `None` 이고, 그것이 "증거 없이 돌았다" 는 사실이다.
             "mes": mes_block,
             # ★`summary` 는 과거 수익률 위의 시뮬레이션 통계다★ (`_series_stats`) —
@@ -877,42 +1040,61 @@ def run_analyze(req: AnalyzeRequest) -> dict:
 @router.post("/backtest")
 def allocation_backtest(req: BacktestRequest):
     """정책(모델+뷰+제약+리밸런싱+비용)을 시점 밖으로 재현 — 각 리밸런싱 가중치는
-    과거 데이터로만 산출(look-ahead 없음). OOS 자산곡선 + compute_metrics 지표 반환."""
+    **그 시점 이전** 데이터로만 산출된다. OOS 자산곡선 + compute_metrics 지표 반환.
+
+    ★"look-ahead 없음" 이라고 적지 않는다★ 이 문장이 예전에 여기 있었고,
+    `PolicyBacktest.tsx` 가 그것을 **상수 배지**로 옮겨 적어 화면이 근거 없이
+    단정하고 있었다(E). 학습창 격리는 **한 축**일 뿐이고, 이 경로는 생존편향과
+    가격 정의를 아예 재지 않는다. 판정은 응답의 `lookahead_evidence` 가 한다 —
+    네 축 중 둘이 미상이라 그 롤업은 `verified` 가 될 수 없다."""
     _check_as_of(req.as_of)
     try:
         returns, bench, excluded, coverage = _load_clean_returns(
             req.tickers, req.benchmark, req.lookback_days, as_of=req.as_of)
         if returns is None or len(returns.columns) < 2:
             return {"error": True, "excluded": excluded,
-                    "message": "백테스트 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하세요."}
+                    "message": "백테스트 가능한 자산이 2개 미만입니다. 시세가 적재된 자산을 추가하십시오."}
 
-        names = list(returns.columns)
-        from src.engine.allocation_backtest import walk_forward
-        cobj = None
-        if req.constraints is not None:
-            from src.engine.constrained_opt import Constraints
-            cobj = Constraints(**req.constraints.model_dump())
-        views = [v.model_dump() for v in (req.views or [])]
-        bench_arr = (bench.reindex(returns.index).fillna(0.0).values
-                     if bench is not None else None)
-
-        out = walk_forward(
-            names, returns.values, list(returns.index),
-            model=req.model, views=views or None, constraints=cobj,
-            rebalance=req.rebalance, window_days=req.window_days,
-            cost_bps=req.cost_bps, bench=bench_arr, delta=req.delta, tau=req.tau)
-
-        out["excluded"] = excluded
-        if not out.get("error"):
-            out["labels"] = _labels(names)
-            out["coverage"] = coverage
-            out["benchmark_label"] = req.benchmark if out.get("bench_curve") else None
-        # ★이 곡선이 무엇인지 응답이 말한다★ — mock 게이트가 유일한 데이터 판정 기준.
-        out["perf_label"] = backtest_label(is_mock_data=mock_allowed()).to_dict()
-        return out
+        return _policy_backtest(req, returns, bench, excluded, coverage)
     except Exception:
         logger.exception("allocation backtest 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
+def _policy_backtest(req: BacktestRequest, returns, bench, excluded, coverage) -> dict:
+    """적재된 수익률 위에서 정책 walk-forward 를 돌리고 응답을 만든다.
+
+    ★`/backtest` 와 AAS 그래프의 백테스트 노드가 이 함수 하나를 부른다★ (BI2).
+    """
+    names = list(returns.columns)
+    from src.engine.allocation_backtest import walk_forward
+    cobj = None
+    if req.constraints is not None:
+        from src.engine.constrained_opt import Constraints
+        cobj = Constraints(**req.constraints.model_dump())
+    views = [v.model_dump() for v in (req.views or [])]
+    bench_arr = (bench.reindex(returns.index).fillna(0.0).values
+                 if bench is not None else None)
+
+    out = walk_forward(
+        names, returns.values, list(returns.index),
+        model=req.model, views=views or None, constraints=cobj,
+        rebalance=req.rebalance, window_days=req.window_days,
+        cost_bps=req.cost_bps, bench=bench_arr, delta=req.delta, tau=req.tau,
+        risk_aversion=req.risk_aversion)
+
+    out["excluded"] = excluded
+    if not out.get("error"):
+        out["labels"] = _labels(names)
+        out["coverage"] = coverage
+        out["benchmark_label"] = req.benchmark if out.get("bench_curve") else None
+    # ★이 곡선이 무엇인지 응답이 말한다★ — mock 게이트가 유일한 데이터 판정 기준.
+    out["perf_label"] = backtest_label(is_mock_data=mock_allowed()).to_dict()
+    # ★룩어헤드를 어디까지 통제했는지도 응답이 말한다★ (E) — 예전에는 화면이
+    # 근거 없이 "look-ahead 없음" 이라고 단정했다. 관측·기록만이고 계산은
+    # 한 줄도 바뀌지 않는다.
+    out["lookahead_evidence"] = lookahead_evidence(coverage)
+    return out
 
 
 # ── /resolve-names ───────────────────────────────────────────────────────────
@@ -1007,47 +1189,57 @@ def _factor_weights(codes: list[str], score_map: dict[str, float],
     return {names[i]: round(float(wv[i]) * 100, 2) for i in range(len(names))}
 
 
+def factor_scores(rows: list[dict], factors: list[FactorSpec]) -> tuple[list[tuple[str, float]], list[dict], dict[str, float]]:
+    """방향 인지 z-score 가중합 — `/factor-portfolio` 와 그래프 노드가 같은 함수를 부른다 (BK W2).
+
+    반환 `(ranked, factor_meta, cov_w)` — `ranked` 는 점수 내림차순 `(코드, 점수)`, `cov_w` 는
+    종목별 커버된 팩터 가중치 합(1 미만이면 일부 팩터 결측을 재정규화한 것).
+    """
+    from src.engine.filter_ast import FIELD_BY_ID
+    total_w = sum(max(f.weight, 0.0) for f in factors) or 1.0
+    scores: dict[str, float] = {}
+    cov_w: dict[str, float] = {}
+    factor_meta = []
+    for f in factors:
+        meta = FIELD_BY_ID.get(f.id)
+        hb = bool(getattr(meta, "higher_better", True)) if meta else True
+        direction = f.direction if f.direction in (1, -1) else (1 if hb else -1)
+        pairs = [(r["stock_code"], _xf(r.get(f.id), None)) for r in rows]
+        arr = np.array([v for _, v in pairs if v is not None], dtype=float)
+        covered = arr.size >= 10 and float(arr.std(ddof=1)) > 1e-12
+        factor_meta.append({"id": f.id, "label": getattr(meta, "label", f.id),
+                            "direction": direction, "covered": covered, "n": int(arr.size)})
+        if not covered:
+            continue
+        mean, std = float(arr.mean()), float(arr.std(ddof=1))
+        wf = max(f.weight, 0.0) / total_w
+        for code, v in pairs:
+            if v is None:
+                continue
+            z = float(np.clip((v - mean) / std * direction, -3.0, 3.0))
+            scores[code] = scores.get(code, 0.0) + wf * z
+            cov_w[code] = cov_w.get(code, 0.0) + wf
+
+    ranked = sorted(((c, scores[c] / cov_w[c]) for c in scores if cov_w[c] > 0),
+                    key=lambda x: x[1], reverse=True)
+    return ranked, factor_meta, cov_w
+
+
 @router.post("/factor-portfolio")
 def allocation_factor_portfolio(req: FactorPortfolioRequest):
     """팩터 기반 포트폴리오 — 방향 인지 z-score 가중합으로 후보 유니버스를 점수화하고
     상위 K종목을 선정, 지정 방식(균등/팩터틸트/역변동성/리스크패리티/최소분산/HRP)으로 비중화."""
     try:
         from src.data.stock_master import get_stock_name
-        from src.engine.filter_ast import FIELD_BY_ID
 
         rows = _rows_for_tickers(req.tickers) if req.tickers else _factor_sample_rows(req.sample_size)
         rows = [r for r in rows if r.get("stock_code")]
         if len(rows) < max(req.top_k, 3):
             return {"error": True,
-                    "message": "후보 종목이 부족합니다. 유니버스를 적재하거나 종목을 직접 지정하세요.",
+                    "message": "후보 종목이 부족합니다. 유니버스를 적재하거나 종목을 직접 지정하십시오.",
                     "candidates": len(rows)}
 
-        total_w = sum(max(f.weight, 0.0) for f in req.factors) or 1.0
-        scores: dict[str, float] = {}
-        cov_w: dict[str, float] = {}
-        factor_meta = []
-        for f in req.factors:
-            meta = FIELD_BY_ID.get(f.id)
-            hb = bool(getattr(meta, "higher_better", True)) if meta else True
-            direction = f.direction if f.direction in (1, -1) else (1 if hb else -1)
-            pairs = [(r["stock_code"], _xf(r.get(f.id), None)) for r in rows]
-            arr = np.array([v for _, v in pairs if v is not None], dtype=float)
-            covered = arr.size >= 10 and float(arr.std(ddof=1)) > 1e-12
-            factor_meta.append({"id": f.id, "label": getattr(meta, "label", f.id),
-                                "direction": direction, "covered": covered, "n": int(arr.size)})
-            if not covered:
-                continue
-            mean, std = float(arr.mean()), float(arr.std(ddof=1))
-            wf = max(f.weight, 0.0) / total_w
-            for code, v in pairs:
-                if v is None:
-                    continue
-                z = float(np.clip((v - mean) / std * direction, -3.0, 3.0))
-                scores[code] = scores.get(code, 0.0) + wf * z
-                cov_w[code] = cov_w.get(code, 0.0) + wf
-
-        ranked = sorted(((c, scores[c] / cov_w[c]) for c in scores if cov_w[c] > 0),
-                        key=lambda x: x[1], reverse=True)
+        ranked, factor_meta, cov_w = factor_scores(rows, req.factors)
         if len(ranked) < 2:
             return {"error": True,
                     "message": "선택한 팩터로 점수화 가능한 종목이 부족합니다(팩터 데이터 결측).",
@@ -1292,7 +1484,8 @@ def rebalance_decision_route(req: RebalanceDecisionRequest):
                        views=[v.model_dump() for v in (req.views or [])] or None,
                        delta=req.delta, tau=req.tau,
                        s_override=s_override, extra_views=extra_views,
-                       company_views=(co_stack or {}).get("views"))
+                       company_views=(co_stack or {}).get("views"),
+                       risk_aversion=req.risk_aversion)
 
         if req.target_weights:
             target = {k: float(v) for k, v in req.target_weights.items()}
@@ -1513,7 +1706,7 @@ def list_exposures():
             "available": True, "exposures": rows,
             "score_weights": dict(WEIGHTS),
             "unavailable_criteria": dict(UNAVAILABLE_CRITERIA),
-            "note": ("KR 상장을 기본 구현으로 삼고 해외는 대안으로 함께 냅니다 — "
+            "note": ("KR 상장을 기본 구현으로 삼고 해외는 대안으로 함께 제시합니다 — "
                      "환노출과 과세 체계가 다르기 때문입니다"),
         })
     except Exception:

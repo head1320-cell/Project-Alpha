@@ -29,20 +29,18 @@ export interface SliderProps
   onValueChange?: (value: number[]) => void;
 }
 
-const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
-  ({ className, value, min = 0, max = 100, step = 1, onValueChange, ...props }, ref) => (
-    <input
-      ref={ref}
-      type="range"
-      className={cn("as-range", className)}
-      min={min}
-      max={max}
-      step={step}
-      value={value[0]}
-      onChange={(e) => onValueChange?.([parseFloat(e.target.value)])}
-      {...props}
-    />
-  ),
+const Slider = ({ className, value, min = 0, max = 100, step = 1, onValueChange, ref, ...props }: SliderProps & { ref?: React.Ref<HTMLInputElement> }) => (
+  <input
+    ref={ref}
+    type="range"
+    className={cn("as-range", className)}
+    min={min}
+    max={max}
+    step={step}
+    value={value[0]}
+    onChange={(e) => onValueChange?.([parseFloat(e.target.value)])}
+    {...props}
+  />
 );
 Slider.displayName = "Slider";
 

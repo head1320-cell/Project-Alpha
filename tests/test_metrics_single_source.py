@@ -3,7 +3,7 @@
 설계: `docs/specs/2026-08-30-macro-to-portfolio-architecture-review.md` §2 W1 · §6 P1
 
 `allocation_backtest` 는 `compute_metrics()` 를 부른 **바로 다음 줄에서**
-sharpe·sortino·calmar 를 인라인으로 다시 계산했다 — 같은 함수 안에 지표가 두
+sharpe·sortino·calmar 를 인라인으로 재계산했다 — 같은 함수 안에 지표가 두
 벌이었고, 그것이 관례가 갈라진 지점이다.
 
 ★이전은 값을 바꾸지 않는다★ 인라인 공식과 단일 출처의 공식이 대수적으로 동일하고
@@ -63,7 +63,7 @@ def test_the_backtest_no_longer_computes_ratios_inline():
     """★두 벌이 다시 생기는 것을 막는다★
 
     소스 텍스트가 아니라 **동작**을 보는 것이 원칙이지만, 여기서 막으려는 결함이
-    정확히 "같은 함수 안에서 다시 계산한다" 라는 **구조**다. 인라인 공식이
+    정확히 "같은 함수 안에서 재계산한다" 라는 **구조**다. 인라인 공식이
     되살아나면 관례가 다시 갈라진다.
     """
     import inspect

@@ -1,0 +1,72 @@
+"use client";
+// 파생상품 계산기의 차트 둘 — `lazyChart` 로 ★화면이 뜬 뒤에★ 받는다(recharts 를 첫 화면 JS 에서 뺌 · 2026-11-08 · `e2e/charts-lazy.spec.ts`).
+// 본문은 OptionCalc·CvaCalc 에 있던 그대로다. 소비자는 그 파일들이 같은 이름으로 내보내는 것을 쓴다.
+import { useMemo } from "react";
+import { Area, CartesianGrid, ComposedChart, Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { won as wonK } from "@/shared/lib/krFormat";
+import { ReadoutFrame, followChart, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
+import { AXIS_TICK, CROSSHAIR, GRID, MARK, pickDot, ringDot } from "@/shared/ui/chart/chartSpec";
+import { f4, type Kind } from "./OptionCalc";
+import { POS_KO, type Pos } from "./CvaCalc";
+
+/** 만기 손익 = 만기 내재가치 − 지금 이론가(옵션 한 개를 사서 만기까지 들고 갈 때). 손익분기 = 행사가 ± 이론가. */
+export function Payoff({ kind, K, S, price }: { kind: Kind; K: number; S: number; price: number }) {
+  const be = kind === "call" ? K + price : K - price;
+  const lo = Math.max(0, Math.min(S, K) * 0.6), hi = Math.max(S, K, be) * 1.4;
+  const pts = Array.from({ length: 61 }, (_, i) => {
+    const x = lo + ((hi - lo) * i) / 60;
+    const pl = (kind === "call" ? Math.max(x - K, 0) : Math.max(K - x, 0)) - price;
+    return { x: Number(x.toFixed(4)), pl: Number(pl.toFixed(4)) };
+  });
+  return (
+    <div className="dv-chart" data-testid="payoff" data-breakeven={be.toFixed(4)}>
+      <h3 className="dv-h3">만기 손익 구조</h3>
+      <p className="dv-note">옵션 1계약을 현재 이론가에 매수해 만기까지 보유한 경우입니다. 손익분기는 <b className="dv-be">{f4(be)}원</b>(행사가 {kind === "call" ? "+" : "−"} 이론가)이고, 최대 손실은 이론가 {f4(price)}원입니다.</p>
+      <div className="dv-chart-box" role="img" aria-label={`만기 손익 그림. 손익분기 ${f4(be)}원, 최대 손실 ${f4(price)}원`}>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
+            <CartesianGrid {...GRID} />
+            <XAxis dataKey="x" type="number" domain={[lo, hi]} tick={AXIS_TICK} tickFormatter={(x: number) => x.toFixed(0)} />
+            <YAxis tick={AXIS_TICK} width={48} tickFormatter={(x: number) => x.toFixed(0)} />
+            <ReferenceLine y={0} stroke="var(--tx-mute)" />
+            <ReferenceLine x={be} stroke="var(--tx-ink)" strokeDasharray="4 4" />
+            <ReferenceLine x={S} stroke="var(--tx-mute)" strokeDasharray="2 4" />
+            <Area dataKey="pl" type="linear" stroke="none" fill="var(--tx-blue)" fillOpacity={MARK.wash} isAnimationActive={false} />
+            <Line dataKey="pl" type="linear" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={false} isAnimationActive={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="dv-keys"><span><i className="dv-key-be" aria-hidden />손익분기 {f4(be)}원</span><span><i className="dv-key-s" aria-hidden />현재 기초자산 {S}원</span></p>
+    </div>
+  );
+}
+
+export function ExposureCurve({ ee, T, epe, peak, pos }: { ee: number[]; T: number; epe: number; peak: number; pos: Pos }) {
+  const pts = useMemo(() => ee.map((y, i) => ({ t: Number(((T * (i + 1)) / ee.length).toFixed(3)), y })), [ee, T]);
+  // 읽는 줄 — 시점마다 기대 노출(서버 `ee_values` 를 화면 서식으로). 예전에는 시점별 값을 읽을 길이 없었다(선과 점뿐). 처음 자리 = 마지막 시점.
+  const rows: ReadRow[] = pts.map((p) => ({ head: `${p.t}년`, cells: [{ key: "y", label: "기대 노출", text: wonK(p.y) }] }));
+  const { idx, setIdx, onKeyDown } = useReadout(rows.length);
+  const cur = idx >= 0 ? pts[idx] : null;
+  return (
+    <div className="dv-chart" data-testid="cva-curve" data-points={ee.length}>
+      <h3 className="dv-h3">기대 노출(EE) 추이</h3>
+      <p className="dv-note">거래상대방이 해당 시점에 부도 시 발생할 수 있는 손실의 기대값입니다. {POS_KO[pos]} 형태로 {ee.length}개 시점을 계산했습니다. 최대 {wonK(peak)}, 평균 {wonK(epe)}입니다.</p>
+      <div className="dv-chart-box">
+        <ReadoutFrame id="cva-exposure" label={`기대 노출 곡선 ${ee.length}개 점. 가장 클 때 ${wonK(peak)}, 평균 ${wonK(epe)}`} headLabel="시점" rows={rows} idx={idx} onKeyDown={onKeyDown}>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={pts} margin={{ top: 12, right: 16, bottom: 4, left: 4 }} onMouseMove={followChart(setIdx)}>
+              <CartesianGrid {...GRID} />
+              <XAxis dataKey="t" type="number" domain={[0, T]} tick={AXIS_TICK} tickFormatter={(x: number) => `${x}년`} />
+              <YAxis tick={AXIS_TICK} width={64} tickFormatter={(x: number) => wonK(x).replace("원", "")} />
+              <ReferenceLine y={epe} stroke="var(--tx-mute)" strokeDasharray="4 4" />
+              <Line dataKey="y" type="monotone" stroke="var(--tx-blue)" strokeWidth={MARK.line} dot={ringDot("var(--tx-blue)")} isAnimationActive={false} />
+              {cur && <ReferenceLine x={cur.t} {...CROSSHAIR} />}
+              {cur && <ReferenceDot x={cur.t} y={cur.y} {...pickDot("var(--tx-blue)")} />}
+            </LineChart>
+          </ResponsiveContainer>
+        </ReadoutFrame>
+      </div>
+      <p className="dv-keys"><span><i className="dv-key-line" aria-hidden />기대 노출</span><span><i className="dv-key-s" aria-hidden />평균(EPE) {wonK(epe)}</span></p>
+    </div>
+  );
+}

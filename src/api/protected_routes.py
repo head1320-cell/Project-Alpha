@@ -42,8 +42,6 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_ADMIN, "실주문 제출"),
     ("DELETE", "/api/v1/live/orders/{client_order_id}"):
         (REQUIRE_ADMIN, "주문 취소"),
-    ("POST", "/api/v1/live/orders/cleanup-eod"):
-        (REQUIRE_ADMIN, "장 마감 미체결 정리 — 미체결 주문을 실제로 취소한다"),
     ("POST", "/api/v1/live/kill-switch/trigger"):
         (REQUIRE_ADMIN, "비상 정지 — 청산 모드에 따라 포지션을 건드린다"),
     ("POST", "/api/v1/live/kill-switch/resolve"):
@@ -76,37 +74,174 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "주문 이력 — 무엇을 거래 중인지 드러난다"),
     ("GET", "/api/v1/live/orders/{client_order_id}"):
         (REQUIRE_LOGIN, "주문 상세"),
-    ("GET", "/api/v1/live/orders/active"):
-        (REQUIRE_LOGIN, "미체결 주문 목록"),
-    ("GET", "/api/v1/live/orders/state-distribution"):
-        (REQUIRE_LOGIN, "주문 상태 분포 — 활동량이 드러난다"),
     ("GET", "/api/v1/live/kill-switch/events"):
         (REQUIRE_LOGIN, "킬스위치 이력 — 이벤트에 당시 자기자본이 실린다"),
     ("GET", "/api/v1/live/kill-switch/readiness"):
         (REQUIRE_LOGIN, "자동 트리거 무장 여부(AF4) — 계좌 상태에서 파생된다"),
+    ("GET", "/api/v1/live/kill-switch/kis-codes"):
+        (REQUIRE_LOGIN, "본 KIS 업무 코드와 뜻 미상 목록(AS4) — 감사 로그의 "
+                        "실패 이력에서 파생되고 표본 `msg1` 원문이 실린다"),
     ("GET", "/api/v1/account/holdings"):
         (REQUIRE_LOGIN, "보유 종목"),
     ("GET", "/api/v1/account/balance"):
         (REQUIRE_LOGIN, "예수금·평가금액"),
+    # ── BV0a — 감사가 찾은 열린 계좌 조회(예전 면제 사유는 다른 경로를 설명했다) ──
+    ("GET", "/api/v1/trading/status"):
+        (REQUIRE_LOGIN, "브로커의 예수금·평가금액·보유 종목 전체(TradingEngine.get_account_status)"),
 
     # ── 경로에 남의 이름이 들어간다 ───────────────────────────────────────
     ("GET", "/trade-history/{username}"):
         (REQUIRE_SELF_OR_ADMIN, "★타인 PII★ — 로드맵 완료 판정의 403 이 이 라우트다"),
+
+    # ── 계정 (BS1) — 공개 가입은 없다: 발급은 관리자만 ─────────────────────
+    ("POST", "/api/v1/auth/password"):
+        (REQUIRE_LOGIN, "내 비밀번호 바꾸기 — 바꿀 차례여도 열린다(여기를 막으면 영영 못 바꾼다)"),
+    ("GET", "/api/v1/auth/users"):
+        (REQUIRE_ADMIN, "계정 목록 — 누가 이 시스템에 들어올 수 있는지 드러난다"),
+    ("POST", "/api/v1/auth/users"):
+        (REQUIRE_ADMIN, "계정 발급 — 로그인만 하면 실계좌 잔고가 열리므로 운영자만"),
+    ("POST", "/api/v1/auth/users/{username}/reset-password"):
+        (REQUIRE_ADMIN, "남의 비밀번호 초기화 — 그 사람의 토큰이 모두 죽는다"),
+
+    # ── 매매일지 — 받은 체결 줄을 계산만 하고 버린다(저장 없음). 그래도 개인의 매매 기록이 지나가는 문이다 ──
+    ("POST", "/api/v1/trade-journal/analyze"):
+        (REQUIRE_LOGIN, "매매일지 분석 — 개인의 매매 기록(체결 내역)을 받는다. 저장하지 않으나 익명으로 열어 두지 않는다"),
+
+    # ── 분봉 백테스트(W4) — 적재된 분봉의 범위·출처·품질. 파일만 읽는다. 어떤 종목의 분봉을 쌓았는지가 드러나므로 익명으로 열지 않는다 ──
+    ("GET", "/api/v1/intraday/coverage"):
+        (REQUIRE_LOGIN, "분봉 적재 범위 — 날짜별 종목 수·봉 수·출처·결함. 운영에서는 합성 분봉을 세지 않는다"),
+    ("GET", "/api/v1/intraday/templates"):
+        (REQUIRE_LOGIN, "분봉 백테스트의 규칙 틀과 설정 칸 — 값은 없지만 같은 화면의 문이라 함께 묶는다"),
+    ("POST", "/api/v1/intraday/simulate"):
+        (REQUIRE_LOGIN, "분봉 백테스트 실행 — 고른 종목·규칙으로 계산한다. 무엇을 시험하는지가 드러나고 계산량이 크다"),
+    ("POST", "/api/v1/intraday/validate"):
+        (REQUIRE_LOGIN, "분봉 백테스트 판정 — 같은 규칙을 표본외·비용·시행 횟수로 다시 본다. 사용자별 시행 기록을 쓰고 읽는다"),
+    ("GET", "/api/v1/intraday/results"):
+        (REQUIRE_LOGIN, "캔버스에서 실행한 분봉 백테스트 결과의 목록 — 본인 것만. 무엇을 시험했는지가 드러난다"),
+
+    # ── PB 고객 관리 (CF 3부 PB3) — 로그인 + ★본인 고객만★(남의 고객 404) · 별칭만(개인정보 모양 거절) · 지우는 경로 없음 ──
+    ("GET", "/api/v1/pb/clients"):
+        (REQUIRE_LOGIN, "내 고객 목록 — 별칭·성향·평가일. 소유 PB 로 거른다"),
+    ("POST", "/api/v1/pb/clients"):
+        (REQUIRE_LOGIN, "고객 더하기 — 별칭만 받는다(전화·이메일·주민번호·긴 숫자열 모양 거절)"),
+    ("GET", "/api/v1/pb/clients/{cid}"):
+        (REQUIRE_LOGIN, "내 고객 하나와 그 고객의 설계 문서 목록 — 남의 고객은 404"),
+    ("PATCH", "/api/v1/pb/clients/{cid}"):
+        (REQUIRE_LOGIN, "내 고객 고치기 — 보관한 고객은 409"),
+    ("POST", "/api/v1/pb/clients/{cid}/archive"):
+        (REQUIRE_LOGIN, "내 고객 보관 — 지우지 않고 목록에서 숨긴다(읽기만)"),
+    ("POST", "/api/v1/pb/clients/{cid}/unarchive"):
+        (REQUIRE_LOGIN, "보관한 내 고객 다시 꺼내기"),
+    ("POST", "/api/v1/pb/clients/{cid}/docs"):
+        (REQUIRE_LOGIN, "내 고객의 설계 문서 만들기 — 그래프 모양·512KB·문서 안 별칭 확인"),
+    ("GET", "/api/v1/pb/clients/{cid}/docs/{did}"):
+        (REQUIRE_LOGIN, "내 고객의 설계 문서 열기 — 그 고객의 문서만(다른 고객 문서 id 는 404)"),
+    ("PUT", "/api/v1/pb/clients/{cid}/docs/{did}"):
+        (REQUIRE_LOGIN, "내 고객의 설계 문서 저장 — 보관한 고객은 409"),
+    ("POST", "/api/v1/pb/clients/{cid}/snapshots"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 만들기(PB4) — 서버가 재계산하고 PB 가 본 미리보기와 같을 때만 둔다"),
+    ("GET", "/api/v1/pb/clients/{cid}/snapshots"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 목록"),
+    ("GET", "/api/v1/pb/clients/{cid}/snapshots/{sid}"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 보기 — 그 고객의 한 장만"),
+    ("DELETE", "/api/v1/pb/clients/{cid}/snapshots/{sid}"):
+        (REQUIRE_LOGIN, "내 고객의 한 장 삭제 — 고객에게 보여 준 적 없는 것만(보여 준 것은 409)"),
+    ("POST", "/api/v1/pb/clients/{cid}/snapshots/{sid}/ask"):
+        (REQUIRE_LOGIN, "한 장에게 미리 묻기 — 근거는 그 한 장의 줄뿐 · PB 의 시간당 한도"),
+    # ── 고객 주소 (PB6) — 본인 고객만. 만들기·다시 열기·한 장 바꾸기는 유통 관문 뒤(`distribution_surface`) ──
+    ("POST", "/api/v1/pb/clients/{cid}/share-links"):
+        (REQUIRE_LOGIN, "내 고객의 주소 만들기 — 관문이 열려 있을 때만 · 토큰은 이번 한 번만 보인다"),
+    ("GET", "/api/v1/pb/clients/{cid}/share-links"):
+        (REQUIRE_LOGIN, "내 고객의 주소 목록·상태와 관문 판정 — 토큰·한 장을 내지 않는다"),
+    ("PATCH", "/api/v1/pb/clients/{cid}/share-links/{lid}"):
+        (REQUIRE_LOGIN, "내 고객 주소가 보여 줄 한 장 바꾸기 — 그 고객의 한 장만 · 관문 뒤"),
+    ("POST", "/api/v1/pb/clients/{cid}/share-links/{lid}/reopen"):
+        (REQUIRE_LOGIN, "잠긴 내 고객 주소 다시 열기 — 관문 뒤"),
+    ("POST", "/api/v1/pb/clients/{cid}/share-links/{lid}/revoke"):
+        (REQUIRE_LOGIN, "내 고객 주소 끄기 — 관문과 무관하게 늘 된다"),
+
+    # ── 내 증권 계좌 (BV4) — 로그인 + ★본인 계좌만★: 소유자는 토큰에서 오고, 남의 계좌는 404 ──
+    ("GET", "/api/v1/broker-accounts"):
+        (REQUIRE_LOGIN, "내 증권 계좌 목록(가림) — 소유자로 거른다"),
+    ("POST", "/api/v1/broker-accounts"):
+        (REQUIRE_LOGIN, "증권 계좌 연결 — 앱 키·시크릿·계좌번호를 받아 암호화해 둔다"),
+    ("DELETE", "/api/v1/broker-accounts/{account_id}"):
+        (REQUIRE_LOGIN, "내 증권 계좌 삭제 — 남의 계좌는 404"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/check"):
+        (REQUIRE_LOGIN, "내 증권 계좌 연결 확인 — 그 계좌 자격으로 증권사에 잔고를 한 번 묻는다. 남의 계좌는 404"),
+
+    # ── 내 계좌로 모의 주문 (BV6) — 로그인 + 본인 계좌만(남의 계좌 404) · SHADOW 기본 · LIVE 는 열지 않는다 ──
+    ("POST", "/api/v1/broker-accounts/{account_id}/orders"):
+        (REQUIRE_LOGIN, "내 계좌로 주문 — SHADOW 면 기록만, PAPER(모의투자 계좌만)면 증권사 모의 서버로 보낸다"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/orders"):
+        (REQUIRE_LOGIN, "내 계좌 주문 목록 — 그 계좌 주문만"),
+    ("DELETE", "/api/v1/broker-accounts/{account_id}/orders/{client_order_id}"):
+        (REQUIRE_LOGIN, "내 계좌 주문 취소 — 그 계좌 주문만"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/mode"):
+        (REQUIRE_LOGIN, "내 계좌 실행 모드 보기"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/mode"):
+        (REQUIRE_LOGIN, "내 계좌 실행 모드 바꾸기 — SHADOW·PAPER 만, PAPER 는 모의투자 계좌만, LIVE 는 거절"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/kill-switch"):
+        (REQUIRE_LOGIN, "내 계좌 비상 정지 상태 — 운영자 전역 정지도 센다"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/kill-switch/trigger"):
+        (REQUIRE_LOGIN, "내 계좌 비상 정지 — 그 계좌 미체결만 취소, 기본은 보유 그대로(hold)"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/kill-switch/resolve"):
+        (REQUIRE_LOGIN, "내 계좌 비상 정지 해제 — 내가 건 정지만(운영자 정지는 못 푼다)"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/live-readiness"):
+        (REQUIRE_LOGIN, "내 계좌 실계좌 준비 목록 — 무엇이 왜 아직 안 됐는지(읽기만). 남의 계좌는 404"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/balance"):
+        (REQUIRE_LOGIN, "내 계좌 잔고 — 예수금·평가·보유(읽기만, 증권사 원문은 싣지 않는다). 남의 계좌는 404"),
+
+    # ── 실계좌 관문 (BV7) — 누구에게 무슨 근거로 실계좌를 여는지 선언·철회. 선언자는 토큰에서 ──
+    ("GET", "/api/v1/admin/live-gate"):
+        (REQUIRE_ADMIN, "실계좌 관문 선언과 이력 — 누구에게 실계좌가 열렸는지 드러난다"),
+    ("POST", "/api/v1/admin/live-gate"):
+        (REQUIRE_ADMIN, "실계좌 관문 선언 — 이름을 적은 사용자에게 실계좌 주문을 연다"),
+    ("DELETE", "/api/v1/admin/live-gate"):
+        (REQUIRE_ADMIN, "실계좌 관문 철회 — LIVE 였던 운영자 실행기는 SHADOW 로"),
+
+    # ── 유통 관문 (PB5) — 고객 화면(PB6)을 여는 인가 기록 선언·철회. 선언자는 토큰에서 ──
+    ("GET", "/api/v1/admin/distribution-gate"):
+        (REQUIRE_ADMIN, "유통 관문 선언·판정·이력 — 무슨 인가로 고객에게 화면이 열렸는지 드러난다"),
+    ("POST", "/api/v1/admin/distribution-gate"):
+        (REQUIRE_ADMIN, "유통 관문 선언 — 인가 기록 다섯 칸이 다 있어야 저장되고 그때 열린다"),
+    ("DELETE", "/api/v1/admin/distribution-gate"):
+        (REQUIRE_ADMIN, "유통 관문 철회 — 고객 주소·고객 화면·고객 AI 가 즉시 막힌다"),
+
+    # ── 캔버스 AI 도우미 (AI0) — 화면은 열려 있고 AI 만 로그인. 돈·PII 가 아니라 운영자 비용이라 잠근다 ──
+    ("POST", "/api/v1/assist/canvas/suggest"):
+        (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도"),
+    ("POST", "/api/v1/assist/canvas/narrate"):
+        (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도(추천과 한 그릇)"),
+    ("POST", "/api/v1/assist/canvas/ask"):
+        (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도(추천·풀어 쓰기와 한 그릇)"),
+    ("POST", "/api/v1/assist/canvas/guide"):
+        (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도(추천·풀어 쓰기·묻기와 한 그릇)"),
+    ("POST", "/api/v1/assist/canvas/draft"):
+        (REQUIRE_LOGIN, "Claude 호출 — 운영자 비용 · 사용자별 시간당 한도(추천·풀어 쓰기·묻기·길잡이와 한 그릇)"),
 }
 
 #: 돈·PII 키워드에 걸리지만 **의도적으로 열어 둔** 라우트 → ★왜 열었는지★.
 #: 사유 없는 면제는 금지 — 여기 비어 있는 값이 있으면 트립와이어가 실패한다.
 OPEN_WITH_REASON: dict[tuple[str, str], str] = {
+    # ── 고객이 여는 경로 (PB6) — 고객 계정이 없다(사용자 결정: 비밀 주소 + PIN). 로그인 대신 ★매 요청 유통 관문★ + 주소·PIN 또는
+    #    주소에 묶인 30분 세션을 본다(`src/api/share_routes.py`). 관문이 닫혀 있으면 무엇보다 먼저 403 ──
+    ("POST", "/api/v1/share/open"):
+        "고객이 주소 토큰 + PIN 으로 연다 — 계정 대신 토큰(256비트)·PIN(5번 틀리면 잠김)·유통 관문",
+    ("GET", "/api/v1/share/sheet"):
+        "고객이 한 장을 본다 — 주소에 묶인 서명 세션 · 매 요청 관문과 주소 상태(철회·만료·잠김)",
+    ("POST", "/api/v1/share/ask"):
+        "고객 AI — 같은 세션·관문 · 근거는 그 한 장뿐 · 주소마다 시간당 10번",
     ("GET", "/api/v1/live/mode"):
         "현재 실행 모드 표시 — 관리 화면이 로그인 전에 상태를 읽어야 하고, 값이 돈을 옮기지 않는다",
     ("GET", "/api/v1/live/kill-switch/status"):
         "정지 상태 표시 — 같은 이유. 막혀 있다는 사실은 숨길수록 위험하다",
-    ("GET", "/api/v1/trading/status"):
-        "프로세스 로컬 설정값(auto_mode·var_limit) 표시 — 계좌 자료가 아니다",
     ("GET", "/api/v1/trading/mode"):
         "mock/paper/real 라벨 표시 — 계좌 자료가 아니다",
+    # BV0a 정정: 이 사유는 예전에 `/api/v1/trading/status` 에 붙어 있었다. 그 경로는 브로커 잔고를
+    # 내므로 보호로 옮겼고, 사유가 실제로 설명하던 이 경로에 글을 옮겨 왔다.
     ("GET", "/trading-status"):
-        "위와 같은 설정값의 레거시 경로",
+        "프로세스 로컬 설정값(trading_config) 표시 — 계좌 자료가 아니다",
     ("POST", "/api/v1/portfolio/rebalance"):
         "요청 본문의 티커로 도는 리밸런싱 **시뮬레이션** — 계좌를 건드리지 않는다",
     ("POST", "/api/v1/allocation/rebalance-decision"):
@@ -142,10 +277,16 @@ OPEN_WITH_REASON: dict[tuple[str, str], str] = {
     ("POST", "/api/v1/strategies/dsl/backtest"):
         "DSL 정의를 백테스트한다 — 주문 경로가 아니다",
 
-    ("POST", "/api/v1/multibacktest/init-schema"):
-        "백테스트 결과 테이블 DDL — 연구 인프라이고 계좌·주문을 건드리지 않는다",
+    # ★`/strategies/` 마커에 걸린 BG5 의 새 문★ — 멀티전략 레지스트리는 연구 표면이다.
+    # 실측: `StrategyRegistry` 를 쓰는 곳은 stage11·stage12 라우트 · 멀티전략 엔진 ·
+    # 캔버스 노드뿐이고, 주문·계좌·킬스위치 경로는 한 곳도 읽지 않는다.
+    ("DELETE", "/api/v1/multibacktest/strategies/{strategy_id}"):
+        "멀티전략 연구 레지스트리의 전략 비활성(BG5) — 지우지 않고 표시만 바꾼다. 레지스트리는 "
+        "백테스트·귀인만 읽고 주문·계좌 경로는 읽지 않는다(실측)",
     ("POST", "/api/v1/accounts/diagnose"):
         "요청 본문의 보유·계좌유형·한도로 도는 판정(AD4) — 저장된 계좌를 읽지 않는다",
+    ("POST", "/api/v1/accounts/glidepath"):
+        "요청 본문의 보유·기간·곡선·적립 계획으로 도는 관측(AO4) — 저장된 계좌를 읽지 않고 아무것도 저장하지 않는다",
     ("POST", "/api/v1/report/portfolio"):
         "요청 본문으로 도는 표면 넷의 조립(AD5) — 저장된 계좌를 읽지 않고 새 수치도 만들지 않는다",
 }
@@ -159,6 +300,10 @@ MONEY_PATH_MARKERS = (
     "auto-trading",
     "trading-status",
     "/api/v1/trading/",
+    # BV0a — 실거래 표면 전체. 예전 조각들(/live/mode 등)만으로는 대조·알림·게이트웨이·종합 상태
+    # 경로가 사정거리 밖이었다. 앞으로 생길 /live 경로도 여기서 자동으로 걸린다.
+    "/api/v1/live/",
+    "reconcile",
     "/live/mode",
     "/live/balance",
     "/live/audit",
@@ -175,6 +320,16 @@ MONEY_PATH_MARKERS = (
     # AE4 로 전략 평가 표면이 생겼다 — 유통(P4)과 인접한 영역이라 전수 검사의
     # 사정거리 안에 둔다.
     "/strategies/",
+    # BV4 — 사용자 증권 계좌. `"/accounts/"` 는 `broker-accounts` 에 걸리지 않는다(실측).
+    "broker-account",
+    # BV7 — 실계좌 관문 선언·철회.
+    "live-gate",
+    # CF 3부 PB3 — PB 고객 자료(별칭·성향·설계 문서). 돈은 아니지만 고객 자료라 전수 검사의 사정거리 안에 둔다.
+    "/pb/",
+    # CF 3부 PB5 — 유통 관문 선언·철회.
+    "distribution-gate",
+    # CF 3부 PB6 — 고객이 여는 경로(로그인 대신 관문 + 주소·PIN·세션).
+    "/share/",
 )
 
 
@@ -193,11 +348,18 @@ def auth_requirement_of_route(route) -> str | None:
 
     레지스트리와 대조하려면 "적어 둔 것" 이 아니라 "붙어 있는 것" 을 봐야 한다.
     """
-    from src.api.auth import require_admin, require_login, require_self_or_admin
+    from src.api.auth import (
+        require_admin,
+        require_login,
+        require_login_to_change_password,
+        require_self_or_admin,
+    )
 
     by_call = {
         require_admin: REQUIRE_ADMIN,
         require_login: REQUIRE_LOGIN,
+        # 바꿀 차례여도 통과하는 로그인 — 요구 수준은 로그인이다(BS1).
+        require_login_to_change_password: REQUIRE_LOGIN,
         require_self_or_admin: REQUIRE_SELF_OR_ADMIN,
     }
     dependant = getattr(route, "dependant", None)

@@ -86,3 +86,23 @@ def test_all_asof_fallback_still_sets_as_of_date(monkeypatch):
     fake, _bt, _out = _run(monkeypatch, universe="all_asof", start_date="2020-06-15")
     assert fake.calls[0]["universe"] == "all_listed"
     assert fake.calls[0]["as_of_date"] == "2020-06-15"
+
+
+# ── 2026-11-13: as_of 스크리닝이 뺀 종목을 universe 메타가 말한다 ─────────────────
+
+def test_the_universe_meta_reports_what_as_of_screening_excluded(monkeypatch):
+    """생존편향 보정 유니버스의 후보 풀은 그 시점 종가가 있는 종목만으로 걸러진다 — 빠진 수·사유가 응답에 실린다."""
+    asof = {"excluded": {"count": 7, "by_reason": {"not_loaded": 6, "stale": 1}, "sample": []},
+            "financials_unavailable": {"count": 2, "by_reason": {"no_dart_key": 2}}}
+    real_run = _FakeScreener.run
+
+    def run(self, **kwargs):
+        r = real_run(self, **kwargs)
+        r.asof = asof if kwargs.get("as_of_date") else None
+        return r
+    monkeypatch.setattr(_FakeScreener, "run", run)
+    _f, _bt, out = _run(monkeypatch, universe="all_asof", start_date="2020-06-15")
+    assert out["universe"]["asof_screening"] == asof
+    # ★짝★ — 시점 유니버스가 아니면 이 칸은 없다(응답 모양이 바뀌지 않는다)
+    _f, _bt, out = _run(monkeypatch, universe="kospi200", start_date="2020-06-15")
+    assert "asof_screening" not in out["universe"]

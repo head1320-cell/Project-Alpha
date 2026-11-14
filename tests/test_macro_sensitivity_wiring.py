@@ -23,6 +23,7 @@ from src.engine.valuation.macro_sensitivity import (  # noqa: E402
     MIN_MONTHS,
     statistical_sensitivity,
 )
+from tests.route_walk import flat_routes  # noqa: E402
 
 CODE = "005930"
 PRICE = 71000.0
@@ -146,7 +147,7 @@ def test_the_route_reports_the_impossible_channels(client):
 
 
 def test_the_route_is_registered_alongside_the_existing_five(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     assert "/api/v1/company/{code}/macro-sensitivity" in paths
     for p in ("/api/v1/company/{code}/valuation-sandbox",
               "/api/v1/company/{code}/financial-deep",

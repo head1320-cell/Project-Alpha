@@ -9,7 +9,7 @@
     (look-ahead 없음). 경과 시간이 없거나 시세가 없으면 날조하지 않고 basis="unavailable".
   · 섹터/팩터/타이밍/헤지 Brinson 효과는 벤치마크 구성종목 가중·섹터수익 데이터가
     있어야 정확 — 미보유 시 basis="unavailable"(근사 날조 금지). 대신 실제로 근거가
-    있는 것(총수익·초과수익·종목별 기여·비용·슬리피지·리스크 사전/사후)은 실측한다.
+    있는 것(총수익률·초과수익·종목별 기여·비용·슬리피지·리스크 사전/사후)은 실측한다.
   · 체결 품질·슬리피지는 연결된 실행계획의 실제 체결(fills)이 있을 때만 실측.
 
 순수 함수 — 가격 경로/체결은 주입 가능(테스트), 미주입 시 실로더(ohlcv_loader).
@@ -45,7 +45,7 @@ def _to_frac(weights: dict[str, float]) -> dict[str, float]:
 
 
 def _load_path(code: str, start_iso: str, end_iso: str) -> list[float] | None:
-    """결정일~as-of 종가 경로. ohlcv_loader(DB→KIS→mock). 실패 시 None(정직 결측)."""
+    """결정일~as-of 종가 경로. ohlcv_loader(DB→KIS→mock). 실패 시 None(결측)."""
     try:
         from src.data.ohlcv_loader import load_ohlcv_unified
         df = load_ohlcv_unified(code, start_iso, end_iso)
@@ -131,7 +131,7 @@ def timing_effect(
                           "않은 것과 기록이 없는 것은 다른 사실이라 0 으로 적지 않습니다."}
     if not port_daily:
         return {"value": None, "basis": "unavailable",
-                "reason": "결정일 이후 일별 수익이 없어 타이밍 효과를 잴 수 없습니다."}
+                "reason": "결정일 이후 일별 수익이 없어 타이밍 효과를 측정할 수 없습니다."}
 
     try:
         from src.data.timing_rules import get_rule_set, get_rule_set_version
@@ -345,7 +345,7 @@ def compute_attribution(
             "top_name_share_pct": round(shares[0] * 100, 1) if shares else None,
             "top_name": (top["code"] if top else None),
             "concentrated": hhi > 0.4,
-            "note": "기여도 허핀달 지수(HHI) — 0.4 초과면 소수 종목 과의존(정직 경고).",
+            "note": "기여도 허핀달 지수(HHI) — 0.4 초과면 소수 종목 과의존(경고).",
             "basis": "real",
         }
 

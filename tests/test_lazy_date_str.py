@@ -59,7 +59,10 @@ SELL = [{"factor_token": "종가", "function_id": "pct", "params": {"n": 5},
 #: 기존 키 전부 동일. 새로 붙은 것은 `tax`·`spread`·`impact` 와
 #: `total_tax`·`total_spread`·`total_impact` 이고 기본 정책에서 전부 `0` 이다.
 #: ★지문이 깨지면 먼저 이 대조를 하고, 값이 움직였으면 갱신하지 말 것.★
-GOLDEN_SHA256 = "6958cffe20303b72b997d2439c52afae4ffb75733a33e473d2b11a6db5d29299"
+#: ★2026-10-15 다시 뜸 — CPU 독립★ 픽스처의 `np.exp` 는 CPU(AVX-512 유무)에 따라 마지막 비트가 달라
+#: CI 러너에서만 지문이 `c31e…` 로 갈렸다(로컬에서 `NPY_DISABLE_CPU_FEATURES` 로 재현). 픽스처 가격을
+#: 소수 넷째 자리로 반올림해 두 모드에서 같은 지문(아래)을 확인했다 — 거래 275 그대로, 엔진 코드 변경 0.
+GOLDEN_SHA256 = "6c57b1d2ca058a2491c3376a00356cc617e25c5fce0b4994ad9849ddea0c0b29"
 GOLDEN_TRADES = 275
 
 
@@ -69,7 +72,7 @@ def frames(monkeypatch):
     idx = pd.bdate_range("2023-01-02", periods=N_BAR)
     out = {}
     for i in range(N_SYM):
-        c = 10000 * np.exp(np.cumsum(rng.normal(0, .018, N_BAR)))
+        c = np.round(10000 * np.exp(np.cumsum(rng.normal(0, .018, N_BAR))), 4)
         out[f"{i:06d}"] = pd.DataFrame(
             {"open": c * .995, "high": c * 1.01, "low": c * .99,
              "close": c, "volume": rng.integers(1e5, 1e6, N_BAR)}, index=idx)

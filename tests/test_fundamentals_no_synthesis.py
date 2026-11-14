@@ -110,6 +110,10 @@ def _factors(st) -> dict:
 #: 제거하면 그 항목에 의존하는 팩터는 완전 적재에서도 미상이 된다 — 그것이 옳다.
 #:
 #: 그래서 계약을 실측으로 다시 썼다: **아래 12개를 뺀 52개는 비트 동일**.
+#:
+#: ★2026-11-14 다시 한 번★ — 52개 가운데 둘(`fcf_growth`·`magic_formula_rank`)은 실데이터에서도 종목 코드로 씨앗을 준
+#: 난수가 섞인 값이었다(이 파일 ③ 절). 그 둘은 이제 미상이다. 골든은 **나머지 50개**의 지문으로 다시 떴다 —
+#: 고치기 ★전★ 코드에서 그 둘을 빼고 뜬 값이고, 고친 뒤에도 같다(= 둘 말고는 한 글자도 안 바뀌었다).
 _UNPROVIDED_BY_DART = sorted([
     "acquirers_multiple",   # ev ← cash
     "cash_ratio",           # cash
@@ -122,8 +126,9 @@ _UNPROVIDED_BY_DART = sorted([
     "sloan_accruals",       # depreciation
 ])
 
-#: 변경 전 코드가 완전 적재 픽스처에서 낸, **위 12개를 뺀** 나머지의 지문.
-GOLDEN_UNCHANGED_SHA256 = "6bc4d54830d86251dc616d516d87149ce0d60f06558ac1c0f73442dd3bcabe65"
+#: 변경 전 코드가 완전 적재 픽스처에서 낸, **위 12개와 난수가 섞이던 둘을 뺀** 나머지 50개의 지문.
+#: (12개만 뺀 52개의 예전 지문은 `6bc4d548…cabe65` 였다 — 난수가 섞인 두 값이 그 안에 들어 있었다.)
+GOLDEN_UNCHANGED_SHA256 = "2f883aa0faa9301bdd8470dd256381148c5443d9c9118d05620497ba9a98668c"
 
 
 def test_a_fully_loaded_company_keeps_every_factor_dart_can_support():
@@ -133,9 +138,9 @@ def test_a_fully_loaded_company_keeps_every_factor_dart_can_support():
     """
     _raw, fac = _factors(_store(_Full))
     vals = {k: v for k, v in sorted(fac.items())
-            if not k.startswith("_") and k not in _UNPROVIDED_BY_DART}
+            if not k.startswith("_") and k not in _UNPROVIDED_BY_DART and k not in _SEEDED_IN_THE_REAL_PATH}
     got = hashlib.sha256(json.dumps(vals, default=str, sort_keys=True).encode()).hexdigest()
-    assert len(vals) == 52, f"팩터 집합이 달라졌다: {len(vals)}개"
+    assert len(vals) == 50, f"팩터 집합이 달라졌다: {len(vals)}개"
     assert got == GOLDEN_UNCHANGED_SHA256, (
         "완전 적재인데 결과가 바뀌었다 — 조작 제거가 실측 경로까지 건드렸다")
 
@@ -345,3 +350,56 @@ def test_the_update_block_does_not_drop_inventory():
     raw, _ = _factors(_store(_Sparse))
     assert raw["inventory"] is None, (
         f"재고가 mock 값으로 남았다: {raw['inventory']!r} — update 에서 키가 빠졌다")
+
+
+# ══ ③ 실데이터 파생에 난수가 섞이지 않는다 (2026-11-14 · 합성값 전수 감사 §3) ═══════════════
+
+#: 실데이터 원천으로 파생할 때도 ★종목 코드로 씨앗을 준 난수★가 들어가던 팩터 둘.
+#: `magic_formula_rank = 200 − 품질×3 + N(0, 15)` · `fcf_growth = 영업이익 성장률 × U(0.7, 1.2)`.
+#: 관측: 같은 재무(완전 적재 픽스처)에 종목 코드만 `005930`→`000660` 으로 바꾸면 `fcf_growth` 10.83→8.85,
+#: `magic_formula_rank` 181→175. 응답의 `_source` 는 `dart_real` 이었다.
+#: 순위는 한 종목만 보고는 알 수 없고(유니버스 단면이 필요하다), FCF 성장률은 전년 FCF 가 있어야 한다 — 둘 다 미상이다.
+_SEEDED_IN_THE_REAL_PATH = ["fcf_growth", "magic_formula_rank"]
+
+
+def _rng_spy(monkeypatch) -> list:
+    from src.data import mock_base
+    calls: list = []
+    real = mock_base.DeterministicMockStore._rng
+    monkeypatch.setattr(mock_base.DeterministicMockStore, "_rng",
+                        lambda self, *keys: calls.append(keys) or real(self, *keys))
+    return calls
+
+
+@pytest.mark.parametrize("fixture", [_Full, _Sparse])
+def test_real_financials_never_reach_the_synthetic_primitive(monkeypatch, fixture):
+    """★값이 아니라 '뽑았는가'를 본다★ — 실데이터 표식이 붙은 결과에 난수가 한 번이라도 들어가면 안 된다."""
+    st = _store(fixture)
+    raw = st._real_raw_financials("005930")
+    calls = _rng_spy(monkeypatch)
+    fac = st._derive_factors("005930", raw)
+    assert fac["_source"] == "dart_real"
+    assert calls == [], f"실데이터 파생에서 난수를 뽑았다: {sorted({c[1] for c in calls})}"
+
+
+def test_the_same_financials_give_the_same_factors_whatever_the_ticker():
+    """재무가 같으면 팩터도 같다 — 종목 코드에 따라 달라지는 값은 재무가 아니라 씨앗에서 나온 것이다."""
+    st = _store(_Full)
+    raw = st._real_raw_financials("005930")
+    a, b = st._derive_factors("005930", raw), st._derive_factors("000660", raw)
+    assert {k: (a[k], b[k]) for k in a if a[k] != b[k]} == {}
+
+
+@pytest.mark.parametrize("factor", _SEEDED_IN_THE_REAL_PATH)
+def test_a_factor_that_was_seeded_noise_is_unknown_on_real_data(factor):
+    _raw, fac = _factors(_store(_Full))
+    assert fac[factor] is None, f"{factor} 가 실데이터에서 값을 냈다: {fac[factor]!r}"
+
+
+@pytest.mark.parametrize("factor", _SEEDED_IN_THE_REAL_PATH)
+def test_the_mock_path_still_produces_those_factors(monkeypatch, factor):
+    """짝 — mock 원천에서는 예전처럼 값이 나온다(항상 None 인 구현을 배제)."""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    st = FundamentalsStore()
+    fac = st._derive_factors("005930", st._mock_raw_financials("005930"))
+    assert fac["_source"] == "ffl_mock" and isinstance(fac[factor], (int, float))

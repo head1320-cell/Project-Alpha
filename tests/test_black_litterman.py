@@ -210,7 +210,7 @@ def test_the_studio_matches_the_shared_source():
 def test_unifying_the_ridge_changes_almost_nothing():
     """★공개하는 유일한 변경★ `risk_allocations` 의 ridge 1e-8 → 1e-10.
 
-    실측 `max|Δw| = 7.5e-7` 로 P1 에서 관측한 CPU 흔들림(~6e-7)과 같은 자릿수다.
+    실측 `max|Δw| = 7.5e-7` 로 P1 에서 관측한 CPU 잡음(~6e-7)과 같은 자릿수다.
     그 자리에서 비트 동일을 고집하는 것은 의미가 없다 — 크기를 못 박고 공개한다.
     """
     from src.engine.allocation_studio import _max_sharpe_w

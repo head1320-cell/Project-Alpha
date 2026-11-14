@@ -83,7 +83,7 @@ def test_the_percentiles_are_ordered_and_centred_on_the_base_case():
 def test_the_per_model_distributions_survive_the_weighted_average():
     """★실측: 모델 불일치(약 3배)가 파라미터 불확실성(±16%)보다 크다★
 
-    통합값 하나만 내면 더 큰 쪽이 사라진다. 평균이 그것을 지우기 때문이다.
+    통합값 하나만 내면 더 큰 쪽이 사라진다. 평균이 그것을 삭제 때문이다.
     """
     out = _dist()
     by = out["by_model"]

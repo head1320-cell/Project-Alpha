@@ -16,7 +16,7 @@
     equity(cost) = equity(0) × Π_k (1 − τ_k · bps_k/1e4)
 
 가 정확히 성립해야 한다. 정액 경로에 충격이 몰래 끼면 이 항등식이 깨진다.
-호스트가 달라도(OpenBLAS `DYNAMIC_ARCH` 흔들림, `f0c7b10`) 같은 프로세스 안의
+호스트가 달라도(OpenBLAS `DYNAMIC_ARCH` 잡음, `f0c7b10`) 같은 프로세스 안의
 두 실행을 비교하므로 안전하다 — 동결 해시보다 이쪽이 옳다.
 """
 
@@ -157,7 +157,7 @@ def test_the_square_root_law_is_not_reimplemented_here():
     called = {n.func.attr for n in ast.walk(tree)
               if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     assert "turnover_based_impact" in called
-    assert "sqrt" not in src, "√을 여기서 다시 계산하고 있다 — 위임해야 한다"
+    assert "sqrt" not in src, "√을 여기서 재계산하고 있다 — 위임해야 한다"
 
 
 def test_it_delegates_to_the_model_the_rest_of_the_repo_uses():

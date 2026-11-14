@@ -30,8 +30,15 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 
 import pytest  # noqa: E402
 
+from tests.factor_asof import stack_as_of  # noqa: E402
+
 _W = {"005930": 60.0, "000660": 40.0}
 _CODES = ["005930", "000660"]
+
+#: ★매크로 창에 닿는 시험의 as_of 는 오늘에서 센다★ 연습용 매크로는 오늘 기준 최근 60개월이라
+#: 고정 날짜(`2024-06-30`)는 2026-12-01 부터 24개월을 못 채웠다(`tests/factor_asof.py`).
+#: 시세만 보는 시험(아래 1번 묶음 · `portfolio_monthly_returns`)은 고정 날짜 그대로다.
+AS_OF = stack_as_of()
 
 
 # ── 1. ★창의 끝이 실제로 옮겨진다★ ─────────────────────────────────────
@@ -75,18 +82,22 @@ def test_asset_factor_betas_respects_as_of():
     처음에는 베타 **값**을 비교했고, 자산 경로만 배선 해제하는 프로브로 격리를
     시도했다. 두 번 다 실패했고 이유가 드러났다:
 
-      · 매크로 계열이 자산 창보다 **먼저 끝난다**(현재 데이터에서 2023-12).
-        그래서 교집합을 묶는 것은 매크로 쪽이고, 자산 수익률을 2024-06 으로
-        잘라도 `n_months`·`span`·베타가 **하나도 바뀌지 않는다.**
+      · 회귀는 매크로 변화와 자산 수익률이 **함께 갖는 달**로 돈다. 매크로를 as_of 로
+        자르면 그 교집합의 끝이 as_of 에 묶이므로, 자산 수익률을 따로 자르지 않아도
+        `n_months`·`span`·베타가 **하나도 바뀌지 않는다.**
       · 즉 "자산 경로 배선 해제" 는 이 구성에서 **equivalent mutant** 다.
-        억지로 잡히게 만들지 않고 그렇게 적는다.
+        억지로 잡히게 만들지 않고 그렇게 적는다(2026-11-11 에 다시 넣어 봤다 — 여전히 산다).
+      · ★고쳐 적는다★ 예전에는 여기에 "매크로 계열이 자산 창보다 먼저 끝난다(현재
+        데이터에서 2023-12)" 라고 적었다. 자료 사정이 아니라 **결함**이었다 —
+        `truncate_series` 가 `YYYYMM` 계열을 as_of 가 든 해의 앞 해 12월에서 잘랐다
+        (`tests/test_macro_cut_formats.py`). 이제 매크로 절단은 as_of 의 달까지 닿는다.
 
     자산 경로 자체는 `_monthly_returns` 수준에서 이미 걸려 있다(위 세 테스트).
     배선을 유지하는 이유는 매크로가 자산 창을 넘어서는 실데이터에서 의미가
     생기기 때문이다. 여기서는 **매크로 절단이 창을 옮긴다**는 것을 건다.
     """
     from src.engine.factor_exposure import asset_factor_betas
-    past, cur = asset_factor_betas(_CODES, as_of="2024-06-30"), asset_factor_betas(_CODES)
+    past, cur = asset_factor_betas(_CODES, as_of=AS_OF), asset_factor_betas(_CODES)
     assert past["available"] and cur["available"]
     assert past["sample"]["n_months"] < cur["sample"]["n_months"], (
         past["sample"], cur["sample"])
@@ -101,12 +112,12 @@ def test_asset_factor_betas_respects_as_of():
     sp, sc = _span(past), _span(cur)
     assert sp and sc, "span 이 없다 — 가드가 공허하다"
     assert sp[1] < sc[1], f"회귀 창의 끝이 옮겨지지 않았다: {sp} vs {sc}"
-    assert sp[1] <= "2024-06", sp
+    assert sp[1] <= AS_OF[:7], sp
 
 
 def test_factor_risk_model_respects_as_of():
     from src.engine.factor_risk_model import build_factor_risk_model
-    past = build_factor_risk_model(_CODES, as_of="2024-06-30")
+    past = build_factor_risk_model(_CODES, as_of=AS_OF)
     cur = build_factor_risk_model(_CODES)
     assert past["available"] and cur["available"], (past.get("reason"), cur.get("reason"))
     assert past["diagnostics"] != cur["diagnostics"]
@@ -118,10 +129,16 @@ def test_macro_series_are_cut_at_as_of():
     sm, _ = _macro_series_map()
     assert sm, "매크로 계열이 없다 — 가드가 공허하다"
     name = next(k for k, v in sm.items() if len(getattr(v, "timestamps", []) or []) > 30)
-    cut, ok = truncate_series(sm[name], "2024-06-30")
+    cut, ok = truncate_series(sm[name], AS_OF)
     assert ok
+    assert cut.timestamps, "자른 뒤 아무것도 안 남았다 — 아래 단언이 공허하다"
     assert len(cut.timestamps) < len(sm[name].timestamps)
-    assert all(str(t)[:10] <= "2024-06-30" for t in cut.timestamps)
+    # ★글자로 견주지 않는다★ 예전 단언은 `str(t)[:10] <= as_of` 였다 — 고치려는 결함과 같은 식이라
+    # `YYYYMM` 계열이 as_of 가 든 해의 앞 해 12월에서 잘려도 통과했다(`tests/test_macro_cut_formats.py`).
+    from src.engine.conditional_market import _normalize_month
+    months = [_normalize_month(str(t)[:7]) for t in cut.timestamps]
+    assert all(m is not None and m <= AS_OF[:7] for m in months), months[-3:]
+    assert max(months) == AS_OF[:7], f"절단이 as_of 의 달까지 닿지 않았다: {max(months)} (as_of {AS_OF})"
 
 
 def test_an_empty_series_counts_as_honored():
@@ -140,7 +157,7 @@ def test_an_empty_series_counts_as_honored():
 def test_honored_is_scoped_to_the_series_actually_used():
     """★쓰지도 않은 계열 때문에 '못 지켰다' 고 말하면 그것도 거짓이다★"""
     from src.engine.factor_exposure import resolve_proxies
-    p = resolve_proxies(as_of="2024-06-30")
+    p = resolve_proxies(as_of=AS_OF)
     assert p["available"] and p["resolved"]
     assert p["as_of_honored"] is True, "쓰인 계열이 전부 잘렸는데 못 지켰다고 말한다"
 
@@ -167,15 +184,15 @@ def _rc(client, as_of=None) -> dict:
 
 
 def test_the_response_declares_the_cutoffs_it_actually_honored(client):
-    rc = _rc(client, "2024-06-30")
-    assert rc["cutoffs_declared"] == {"market_data_as_of": "2024-06-30",
-                                      "macro_data_as_of": "2024-06-30"}, rc
+    rc = _rc(client, AS_OF)
+    assert rc["cutoffs_declared"] == {"market_data_as_of": AS_OF,
+                                      "macro_data_as_of": AS_OF}, rc
 
 
 def test_it_still_says_what_it_did_not_cut(client):
     """★짝 — 전부 declared 로 밀어 넣으면 그것도 거짓이다★
     재무는 이 경로에서 자르지 않으므로 `unspecified` 로 남아야 한다."""
-    rc = _rc(client, "2024-06-30")
+    rc = _rc(client, AS_OF)
     assert rc["cutoffs_unspecified"] == ["fundamental_data_as_of"], rc
 
 
@@ -215,8 +232,8 @@ def test_the_route_does_not_declare_macro_when_as_of_never_reached_it(client):
     """★공허한 참을 배제한다★ `as_of` 를 안 넘기면 `as_of_honored` 가 공허하게
     True 가 되는데, 그것을 "지켰다" 로 읽으면 절단하지 않은 것을 선언하게 된다.
     요청한 절단일이 실제로 내려갔는지까지 확인해야 한다."""
-    rc = _rc(client, "2024-06-30")
-    assert rc["cutoffs_declared"].get("macro_data_as_of") == "2024-06-30"
+    rc = _rc(client, AS_OF)
+    assert rc["cutoffs_declared"].get("macro_data_as_of") == AS_OF
     # 그리고 그 판정이 `prox["as_of"]` 일치에 달려 있다는 것을 엔진 수준에서 건다.
     from src.engine.factor_exposure import resolve_proxies
     assert resolve_proxies()["as_of"] is None, "as_of 를 안 넘겼는데 값이 실렸다"

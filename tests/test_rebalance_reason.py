@@ -281,7 +281,7 @@ def test_the_scan_is_not_vacuous():
         or (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
             and node.func.attr == "update"
             and isinstance(node.func.value, ast.Name) and node.func.value.id == "out"))
-    assert exits >= 6, f"결정 종료 경로가 {exits}개뿐입니다 — 스캐너를 의심하세요"
+    assert exits >= 6, f"결정 종료 경로가 {exits}개뿐입니다 — 스캐너를 의심하십시오"
 
 
 @pytest.mark.parametrize("reason", DECISION_REASONS)

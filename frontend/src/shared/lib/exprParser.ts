@@ -114,7 +114,7 @@ export function parseExpr(text: string, count: number): ParseResult {
     return { ok: true, ast: parseTokens(toks) };
   } catch (e) {
     if (e instanceof ParseError) return { ok: false, error: e.message };
-    return { ok: false, error: "조건식을 해석할 수 없습니다" };
+    return { ok: false, error: "조건식 해석 불가" };
   }
 }
 
