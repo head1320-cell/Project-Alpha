@@ -1053,13 +1053,26 @@ def get_kis_client(force_reload: bool = False, *, account_id: str | None = None)
                              "evict_account_client 로 비웁니다.")
         return _account_client(account_id)
     global _kis_singleton
-    if _kis_singleton is not None and not force_reload:
+    if _kis_singleton is not None and not force_reload and _servable(_kis_singleton):
         return _kis_singleton
     with _kis_singleton_lock:
-        if _kis_singleton is not None and not force_reload:
+        if _kis_singleton is not None and not force_reload and _servable(_kis_singleton):
             return _kis_singleton
         _kis_singleton = _build_kis_client()
         return _kis_singleton
+
+
+def _servable(client) -> bool:
+    """붙잡아 둔 서버 클라이언트를 ★지금★ 내보내도 되는가 — mock 클라이언트는 mock 모드에서만, 실 클라이언트는 그 밖에서만.
+
+    싱글턴은 만든 시점의 모드를 기억하지만 판정은 부르는 시점에 한다(`mock_allowed()` 가 유일한 기준 — CLAUDE.md §6).
+    예전에는 한 번 만든 mock 이 게이트가 닫힌 뒤에도 그대로 나갔고, 반대로 실 클라이언트가 mock 모드에서 나갔다.
+    모드가 그대로면 같은 객체를 돌려준다(토큰 재사용). 두 클래스가 아닌 것(시험이 꽂은 대역)은 판정하지 않는다."""
+    if isinstance(client, MockKISClient):
+        return mock_allowed()
+    if isinstance(client, KISClient):
+        return not mock_allowed()
+    return True
 
 
 def _account_client(account_id: str):

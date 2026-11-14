@@ -232,3 +232,5 @@ class GraphBacktestResponse(BaseModel):
     monthly_returns: list[dict[str, Any]] = Field(default_factory=list)
     trades: list[dict[str, Any]] = Field(default_factory=list)
     symbol_results: list[dict[str, Any]] = Field(default_factory=list)
+    #: 계산에 쓴 시세의 출처 — 적재분(`daily_prices`)인가 합성인가, 없으면 왜 없는가. 시세를 읽기 전의 실패는 빈 dict.
+    data_origin: dict[str, Any] = Field(default_factory=dict)

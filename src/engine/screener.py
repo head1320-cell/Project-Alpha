@@ -485,6 +485,12 @@ class ValuationScreener:
             if bad:
                 raise PitFieldNotAvailable(bad)
 
+        # ★원천이 없는 조건 종류는 계산하지 않는다(평가 전에 본다)★ — 그 조건을 짚어 사유를 올린다.
+        from src.engine.condition_sources import ConditionSourceUnavailable, unsourced_conditions
+        unsourced = unsourced_conditions(filter_ast)
+        if unsourced:
+            raise ConditionSourceUnavailable(unsourced)
+
         # 1. Universe
         tickers = self._resolve_universe(universe)
         if not tickers:

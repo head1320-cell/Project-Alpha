@@ -290,7 +290,8 @@ class FilterCondition:
                 return f"Invalid op: {self.op}"
             if self.value is None:
                 return "value (sigma threshold) required for z_score"
-            return None
+            from src.engine.condition_sources import unsourced_reason
+            return unsourced_reason(self.kind)      # 모양이 맞아도 값의 원천이 없으면 계산하지 않는다
 
         # V2-M3: technical 검증
         if self.kind == "technical":
@@ -310,7 +311,8 @@ class FilterCondition:
                 return f"Unknown event_type: {self.event_type}"
             if self.within_days is None or self.within_days < 0:
                 return "within_days required for event"
-            return None
+            from src.engine.condition_sources import unsourced_reason
+            return unsourced_reason(self.kind)      # 모양이 맞아도 값의 원천이 없으면 계산하지 않는다
 
         if self.rank_mode is not None:
             if self.rank_mode not in VALID_RANK_MODES:
@@ -692,6 +694,12 @@ def apply_filter_ast(items: list, group: FilterGroup) -> list:
     """
     if group.is_empty():
         return items
+
+    # ★원천이 없는 조건 종류는 계산하지 않는다★ — 조용히 '통과 0건'으로 만들지 않고 그 조건을 짚는다.
+    from src.engine.condition_sources import ConditionSourceUnavailable, unsourced_conditions
+    bad = unsourced_conditions(group)
+    if bad:
+        raise ConditionSourceUnavailable(bad)
 
     rank_fields = collect_rank_fields(group)
     ctx = build_rank_context(items, rank_fields) if rank_fields else {}

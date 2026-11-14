@@ -17,6 +17,7 @@ Pipeline:
 from __future__ import annotations
 
 import logging
+import zlib
 from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any
@@ -139,7 +140,7 @@ def _topological_sort(g: ParsedGraph) -> list[str]:
 
 def _load_ohlcv(symbol: str, lookback: int, start_date: str = None, end_date: str = None) -> pd.DataFrame:
     """
-    DB에서 OHLCV 로드. DB 연결 불가 시 시뮬레이션용 더미 데이터 생성.
+    DB에서 OHLCV 로드. 없으면 ★mock 모드에서만★ 합성 시세 — 운영에서는 만들지 않고 실패한다.
     """
     # 1차: DB 조회 시도
     try:
@@ -167,14 +168,17 @@ def _load_ohlcv(symbol: str, lookback: int, start_date: str = None, end_date: st
     except Exception as e:
         logger.debug(f"DB load failed for {symbol}: {e}")
 
-    # 2차: 더미 데이터 생성 (GBM 시뮬레이션)
+    # 2차: 합성 시세 — mock 모드에서만. 운영에서는 지어내지 않는다(`dag_runner._load_ohlcv` 와 같은 규칙).
+    from src.data.mock_gate import mock_allowed
+    if not mock_allowed():
+        raise RuntimeError(f"{symbol} 의 시세가 적재되지 않아 백테스트를 계산할 수 없습니다.")
     logger.info(f"Generating dummy OHLCV for {symbol} ({lookback} days)")
     return _generate_dummy_ohlcv(symbol, lookback)
 
 
 def _generate_dummy_ohlcv(symbol: str, days: int = 200) -> pd.DataFrame:
     """Geometric Brownian Motion 기반 현실적 더미 OHLCV."""
-    np.random.seed(hash(symbol) % 2**31)
+    np.random.seed(zlib.crc32(symbol.encode("utf-8")))     # `hash()` 는 프로세스마다 다르다
 
     # 초기 가격 (종목별로 다르게)
     prices_map = {

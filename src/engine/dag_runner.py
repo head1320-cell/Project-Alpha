@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import abc
 import logging
+import zlib
 from datetime import datetime
 from typing import Any
 
@@ -148,6 +149,7 @@ class ExecutionContext:
         self.signals: pd.Series | None = None           # 최종 BUY/SELL/HOLD
         self.primary_df: pd.DataFrame | None = None     # 첫 번째 데이터소스
         self.primary_symbol: str = ""
+        self.primary_origin: dict = {}                     # 그 시세가 어디서 왔는가(적재분 · 합성)
 
 
 class NodeProcessor(abc.ABC):
@@ -170,6 +172,7 @@ class DataSourceProcessor(NodeProcessor):
         if ctx.primary_df is None:
             ctx.primary_df = df
             ctx.primary_symbol = data.symbol
+            ctx.primary_origin = dict(df.attrs.get("origin") or {})
         logger.info(f"[{node_id}] Loaded {len(df)} rows for {data.symbol}")
 
 
@@ -391,8 +394,28 @@ class VectorizedIndicatorEngine:
 # 4. Data Loader
 # ═══════════════════════════════════════════════════════════════════════════════
 
+SYNTHETIC_PRICES = "합성 데이터 모드의 시세입니다 — 실제 시세가 아닙니다."
+
+
+class PriceDataUnavailable(RuntimeError):
+    """운영에서 시세가 없다 — 계산하지 않는다. 문장은 응답에 그대로 실린다."""
+
+    def __init__(self, symbol: str):
+        self.symbol = symbol
+        super().__init__(f"{symbol} 의 시세가 적재되지 않아 백테스트를 계산할 수 없습니다.")
+
+
+def _origin(source: str | None, *, reason: str | None = None, message: str | None = None, **extra) -> dict:
+    """시세의 출처 블록 — `screener_pipeline._origin` 과 같은 모양(있음 · 원천 · 합성 여부 · 사유 · 문장)."""
+    return {"available": source is not None, "source": source, "is_mock": source == "synthetic",
+            "reason": reason, "message": message, **extra}
+
+
 def _load_ohlcv(symbol: str, lookback: int) -> pd.DataFrame:
-    """DB 조회 → 실패 시 GBM 더미 데이터 자동 생성."""
+    """적재된 일봉(`daily_prices`) → 없으면 ★mock 모드에서만★ 합성 시세. 출처는 `df.attrs["origin"]` 에 싣는다.
+
+    운영에서는 만들지 않는다(`PriceDataUnavailable`) — 예전에는 게이트 없이 합성으로 넘어가, 지어낸 시세 위의
+    성과가 라벨 없이 나갔다."""
     try:
         from sqlalchemy import text
 
@@ -407,16 +430,25 @@ def _load_ohlcv(symbol: str, lookback: int) -> pd.DataFrame:
         if rows and len(rows) >= 20:
             df = pd.DataFrame(rows, columns=["date","open","high","low","close","volume"])
             df["date"] = pd.to_datetime(df["date"])
-            return df.sort_values("date").reset_index(drop=True)
+            df = df.sort_values("date").reset_index(drop=True)
+            df.attrs["origin"] = _origin("daily_prices", rows=len(df))
+            return df
     except Exception as e:
         logger.debug(f"DB load failed for {symbol}: {e}")
 
-    return _generate_gbm(symbol, lookback)
+    from src.data.mock_gate import mock_allowed
+    if not mock_allowed():
+        raise PriceDataUnavailable(symbol)
+    df = _generate_gbm(symbol, lookback)
+    df.attrs["origin"] = _origin("synthetic", message=SYNTHETIC_PRICES, rows=len(df))
+    return df
 
 
 def _generate_gbm(symbol: str, days: int) -> pd.DataFrame:
-    """GBM 기반 현실적 더미 OHLCV."""
-    np.random.seed(hash(symbol) % 2**31)
+    """GBM 기반 합성 OHLCV — mock 모드 전용(`_load_ohlcv` 가 게이트를 지난 뒤에만 부른다).
+
+    씨앗은 종목 코드의 CRC — `hash()` 는 프로세스마다 달라 같은 요청이 재시작마다 다른 성과를 냈다."""
+    np.random.seed(zlib.crc32(symbol.encode("utf-8")))
     initial = {"005930": 70000, "000660": 130000, "035420": 200000}.get(
         symbol, 50000 + np.random.randint(0, 100000)
     )
@@ -625,10 +657,12 @@ def execute_dag_backtest(req: GraphBacktestRequest) -> GraphBacktestResponse:
             action_data=action_data,
         )
 
+        synthetic = bool(ctx.primary_origin.get("is_mock"))
         return GraphBacktestResponse(
             success=True,
+            data_origin=ctx.primary_origin,
             message=(
-                f"DAG 백테스트 완료: {ctx.primary_symbol}, "
+                f"DAG 백테스트 완료{'(합성 시세)' if synthetic else ''}: {ctx.primary_symbol}, "
                 f"{len(ctx.primary_df)}일, "
                 f"{result['statistics'].num_trades}회 거래"
             ),
@@ -649,6 +683,9 @@ def execute_dag_backtest(req: GraphBacktestRequest) -> GraphBacktestResponse:
 
     except CyclicGraphError as e:
         return GraphBacktestResponse(success=False, message=str(e))
+    except PriceDataUnavailable as e:
+        return GraphBacktestResponse(success=False, message=str(e),
+                                     data_origin=_origin(None, reason="not_loaded", message=str(e)))
     except ValueError as e:
         return GraphBacktestResponse(success=False, message=f"Validation error: {e}")
     except Exception as e:
