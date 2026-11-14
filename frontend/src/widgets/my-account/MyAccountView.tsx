@@ -9,7 +9,7 @@
  * 계좌를 바꾸면 화면을 새로 세운다(key) — 쿼리 키도 계좌 id 를 품어서 옛 계좌 숫자가 새 계좌 자리에 남지 않는다.
  */
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -18,9 +18,10 @@ import {
 } from "@/entities/broker-account";
 import { macroApi } from "@/entities/macro/api";
 import { useSession } from "@/entities/session";
+import { ACCOUNT_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
 import { priceWon } from "@/shared/lib/krFormat";
-import { Answer, Notice, PageHead, RetryFail, type Chip } from "@/shared/ui/tx";
+import { Answer, ModeSwitch, Notice, PageHead, RetryFail, type Chip } from "@/shared/ui/tx";
 import { BalanceCard } from "./BalanceCard";
 import { KillSheet } from "./KillSheet";
 import { OrderForm } from "./OrderForm";
@@ -31,24 +32,34 @@ import { unwrap } from "./parts";
 const TITLE = "내 계좌";
 const LEDE = "한국투자증권 계좌로 주문을 연습하고, 실계좌 전환 전 남은 요건을 확인합니다.";
 
+/** 머리 + 모드 전환 줄(ADR 006 §7) — 세션이 어떤 상태든 매매일지로 가는 길은 같은 자리에 있다. */
+function Head({ actions }: { actions?: ReactNode }) {
+  return (
+    <>
+      <PageHead title={TITLE} lede={LEDE} actions={actions} />
+      <ModeSwitch label="내 계좌 모드" modes={ACCOUNT_MODES} current="/my-account" />
+    </>
+  );
+}
+
 export function MyAccountView() {
   const { session, retry } = useSession();
   return (
     <div className="tx-page ma">
       {session.kind === "loading" ? (
-        <><PageHead title={TITLE} lede={LEDE} /><p className="tx-sec-sub" aria-busy="true">계정 확인 중</p></>
+        <><Head /><p className="tx-sec-sub" aria-busy="true">계정 확인 중</p></>
       ) : session.kind === "unknown" ? (
-        <><PageHead title={TITLE} lede={LEDE} />
+        <><Head />
           <RetryFail title="계정 정보 확인 실패" onRetry={() => void retry()}>{session.reason}</RetryFail></>
       ) : session.kind === "signed_out" ? (
-        <><PageHead title={TITLE} lede={LEDE} />
+        <><Head />
           <section className="tx-sec ma-signed-out">
             <p className="ma-strong">로그인하면 내 계좌를 조회할 수 있습니다.</p>
             <p className="tx-sec-sub">계정은 관리자가 발급합니다. 증권 계좌는 로그인 후 설정에서 연결합니다.</p>
             <Link href={loginHref("/my-account")} className="tx-btn tx-btn--main">로그인</Link>
           </section></>
       ) : session.mustChange ? (
-        <><PageHead title={TITLE} lede={LEDE} />
+        <><Head />
           <section className="tx-sec ma-must" role="alert">
             <p className="ma-strong">비밀번호를 먼저 변경하십시오.</p>
             <p className="tx-sec-sub">관리자가 발급한 임시 비밀번호로는 계좌를 사용할 수 없습니다.</p>
@@ -80,7 +91,7 @@ function Accounts() {
 
   return (
     <>
-      <PageHead title={TITLE} lede={LEDE} actions={pick} />
+      <Head actions={pick} />
       {q.isError ? (
         <RetryFail title="증권 계좌 목록 조회 실패" onRetry={() => void q.refetch()}>{q.error.message}</RetryFail>
       ) : !q.data ? (

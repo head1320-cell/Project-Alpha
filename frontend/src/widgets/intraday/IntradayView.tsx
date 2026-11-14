@@ -1,6 +1,6 @@
 "use client";
 /**
- * 분봉 백테스트 — `/intraday`. 데이터 → 규칙 → 포지션·위험 → 비용 가정 → 결과 → 판정이 한 화면에 위에서 아래로 쌓인다.
+ * 분봉 백테스트 — 백테스트 › 분봉 규칙(`/backtest/intraday` · ADR 006 §7 — 따로 있던 화면이 백테스트 메뉴 안의 모드가 됐다). 데이터 → 규칙 → 포지션·위험 → 비용 가정 → 결과 → 판정이 한 화면에 위에서 아래로 쌓인다.
  * ==========================================================================
  * 설계: `docs/superpowers/specs/2026-11-14-intraday-minute-simulator-design.md` §7.2 · §8.
  * ★도구는 규칙을 추천하지 않는다★ — 종목·기간·틀·매개변수는 사용자가 정하고, 화면은 그 규칙이 과거 분봉에서 무엇을 남겼는지와
@@ -14,16 +14,17 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { getCoverage, getTemplates, simulate, validate, type Coverage, type Validation } from "@/entities/intraday";
 import { useSession } from "@/entities/session";
+import { BACKTEST_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
-import { Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
+import { ModeSwitch, Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
 import { build, buildGrid, initialForm, parseTickers, recentPeriod, templateOf, type Form } from "./form";
 import { IntradayResult, type Sim } from "./IntradayResult";
 import { GridForm, SetupForm, type CoverageState } from "./SetupForm";
 import { Verdict } from "./Verdict";
 
-const TITLE = "분봉 백테스트";
+const TITLE = "백테스트";
 const LEDE = "정한 규칙을 과거 분봉에서 돌려 모의 체결의 승률·손익비·비용을 집계하고, 그 숫자를 어디까지 읽을 수 있는지 관문으로 점검합니다. 규칙이나 종목을 권하지 않으며 주문을 내지 않습니다.";
-const HERE = "/intraday";
+const HERE = "/backtest/intraday";
 const COVERAGE_DAYS = 31;
 
 type Run<T> = { kind: "idle" } | { kind: "pending" } | { kind: "fail"; status: number; error: string } | { kind: "done"; value: T };
@@ -33,6 +34,7 @@ export function IntradayView() {
   return (
     <div className="tx-page tj itd">
       <PageHead title={TITLE} lede={LEDE} />
+      <ModeSwitch label="백테스트 모드" modes={BACKTEST_MODES} current={HERE} />
       {session.kind === "loading" ? (
         <p className="tx-sec-sub" aria-busy="true">계정 확인 중</p>
       ) : session.kind === "unknown" ? (

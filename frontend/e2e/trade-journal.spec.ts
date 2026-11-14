@@ -3,7 +3,7 @@ import { test, expect, type Page, type Request } from "./fixtures";
 import { contrastAudit, voiceAudit, type AuditResult, type VoiceResult } from "./helpers";
 
 // ════════════════════════════════════════════════════════════════════════════
-// 매매일지 v1 — `/trade-journal` (★실제 서버★ — 계산을 가로채지 않는다. 설계 `docs/superpowers/specs/2026-11-14-trade-journal-design.md`)
+// 매매일지 v1 — 내 계좌 › 매매일지 `/my-account/journal` (★실제 서버★ — 계산을 가로채지 않는다. 설계 `docs/superpowers/specs/2026-11-14-trade-journal-design.md`)
 // ────────────────────────────────────────────────────────────────────────────
 // 체결 내역 파일 → 열 맞추기 → 결과. 거는 것:
 //  · ★화면의 값 = 손으로 계산한 값★(거래 여섯 — 계산 과정은 `tests/test_trade_journal_analyze.py` 머리)
@@ -18,6 +18,8 @@ import { contrastAudit, voiceAudit, type AuditResult, type VoiceResult } from ".
 const API = "/api/backend/api/v1";
 const FIX = path.join(__dirname, "fixtures", "trade-journal");
 const MINUS = "−";
+const HERE = "/my-account/journal";                 // ADR 006 §7 — 따로 있던 `/trade-journal` 은 내 계좌 메뉴 안의 모드가 됐다
+const NEXT = /\/login\?next=%2Fmy-account%2Fjournal/;
 
 async function login(page: Page): Promise<void> {
   const r = await page.request.post(`${API}/auth/login`, { data: { username: "admin", password: "frm123!" } });
@@ -28,7 +30,7 @@ async function login(page: Page): Promise<void> {
 
 async function open(page: Page) {
   await login(page);
-  await page.goto("/trade-journal", { waitUntil: "domcontentloaded" });
+  await page.goto(HERE, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".tj-file")).toBeVisible();
 }
 
@@ -58,12 +60,33 @@ const cost = (page: Page, k: string) => page.locator(`.tj-costs [data-k="${k}"]`
 const bucket = (page: Page, key: string) => page.locator(`.tj-bucket-row[data-key="${key}"]`);
 const tab = (page: Page, name: string) => page.locator(".tj-buckets").getByRole("tab", { name });
 
-test("로그인 전에는 로그인하라고만 말한다 · 메뉴에 '매매일지'", async ({ page }) => {
-  await page.goto("/trade-journal", { waitUntil: "domcontentloaded" });
+test("로그인 전에는 로그인하라고만 말한다 · 메뉴는 '내 계좌' 하나다", async ({ page }) => {
+  await page.goto(HERE, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".tj-signed-out")).toContainText("로그인");
-  await expect(page.locator(".tj-signed-out a")).toHaveAttribute("href", /\/login\?next=%2Ftrade-journal/);
-  await expect(page.locator('.nav-item[href="/trade-journal"]')).toContainText("매매일지");
+  await expect(page.locator(".tj-signed-out a")).toHaveAttribute("href", NEXT);
+  await expect(page.locator('.nav-item[href="/trade-journal"]')).toHaveCount(0);
+  await expect(page.locator('.terminal-nav [aria-current="page"]')).toHaveText("내 계좌");
   await expect(page.locator(".tj-file")).toHaveCount(0);
+});
+
+test("내 계좌 메뉴 안의 모드: 전환 줄이 두 화면에 있다 · 옛 주소는 새 주소로 넘어간다 · 계좌를 연결하지 않아도 매매일지는 쓴다", async ({ page }) => {
+  await login(page);
+  await page.route("**/api/v1/broker-accounts", (r) => r.fulfill({ json: { accounts: [] } }));   // 연결한 증권 계좌가 없는 사람
+  await page.goto("/trade-journal", { waitUntil: "domcontentloaded" });              // 옛 주소 — 끊지 않고 넘긴다
+  await expect(page).toHaveURL(/\/my-account\/journal$/);
+  await expect(page.locator(".tj h1")).toHaveText("내 계좌");
+  await expect(page.locator(".tj .tx-subnav a")).toHaveText(["계좌·주문", "매매일지"]);
+  await expect(page.locator('.tj .tx-subnav [aria-current="page"]')).toHaveText("매매일지");
+  await expect(page.locator(".tj-file")).toBeVisible();                              // 파일만으로 된다 — 계좌 판정을 타지 않는다
+  await page.locator(".tj-sample").click();
+  await expect(page.locator(".tj-run")).toBeEnabled();
+
+  await page.locator(".tj .tx-subnav a").filter({ hasText: "계좌·주문" }).click();
+  await expect(page).toHaveURL(/\/my-account$/);
+  await expect(page.locator(".ma h1")).toHaveText("내 계좌");
+  await expect(page.locator('.ma .tx-subnav [aria-current="page"]')).toHaveText("계좌·주문");
+  await expect(page.locator(".ma-empty")).toContainText("연결한 증권 계좌 없음");     // 계좌가 없다는 말은 이쪽 모드에서만 한다
+  await expect(page.locator('.terminal-nav [aria-current="page"]')).toHaveText("내 계좌");
 });
 
 test("파일 → 열 어림 → 분석: 화면의 값이 손 계산과 같다 · 서버로는 맞춘 열만 간다", async ({ page }) => {
@@ -381,7 +404,7 @@ test("로그인이 끝났으면 다시 로그인하라고 말한다 · 서버 �
     : r.fulfill({ status: Number(mode), json: { detail: mode === "401" ? "인증 토큰이 만료됐습니다." : "계산 실패(시험)" } }));
   await page.locator(".tj-run").click();
   await expect(page.locator(".tj-run-fail")).toContainText("로그인");
-  await expect(page.locator(".tj-run-fail a")).toHaveAttribute("href", /\/login\?next=%2Ftrade-journal/);
+  await expect(page.locator(".tj-run-fail a")).toHaveAttribute("href", NEXT);
   mode = "500";
   await page.locator(".tj-run").click();
   await expect(page.locator(".tj-run-fail")).toContainText("계산 실패(시험)");

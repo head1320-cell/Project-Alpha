@@ -202,6 +202,10 @@ test("BV9: 계좌가 없으면 설정에서 연결하라고 한다", async ({ pa
   await page.goto("/my-account");
   await expect(page.locator('.ma-empty a[href="/settings#broker"]')).toBeVisible();
   await expect(page.locator(".ma-path")).toHaveCount(0);
+  // 모드 전환 줄(ADR 006 §7) — 계좌가 없어도 매매일지로 가는 길은 있다(매매일지는 파일만으로 된다).
+  await expect(page.locator(".ma .tx-subnav a")).toHaveText(["계좌·주문", "매매일지"]);
+  await expect(page.locator('.ma .tx-subnav [aria-current="page"]')).toHaveText("계좌·주문");
+  await expect(page.locator('.ma .tx-subnav a[href="/my-account/journal"]')).toBeVisible();
 });
 
 test("BV9: 목록 실패는 alert + 재시도 → 회복 (짝: 정상엔 alert 없음)", async ({ page }) => {
@@ -285,6 +289,10 @@ test("BV9: 길은 서버 순서대로 네 역이고 지금 상태를 말한다",
   await expect(station(page, "kill")).not.toHaveAttribute("data-blocked", /.*/);   // 짝: 꺼져 있으면 막힘 표시 없음
   await expect(station(page, "broker")).toContainText("전송하지 않습니다");
   await expect(page.locator('.ma-mode-b[data-mode="SHADOW"]')).toHaveAttribute("aria-pressed", "true");
+  // 실행 모드 묶음(`.tx-modes`)은 단추 셋의 격자다 — 화면 머리의 전환 줄(`.tx-subnav`)과 이름·모양이 섞이지 않는다
+  // (전환 줄을 처음에 같은 이름으로 만들어 이 묶음에 밑줄이 샜다 — 2026-11-14).
+  const group = await page.locator(".ma-mode.tx-modes").evaluate((el) => { const cs = getComputedStyle(el); return { display: cs.display, line: cs.borderBottomWidth }; });
+  expect(group).toEqual({ display: "grid", line: "0px" });
   await expect(station(page, "broker")).toContainText("잔고 조회를 수락했습니다"); // 마지막 연결 확인 = 서버 준비 목록의 connection
 });
 

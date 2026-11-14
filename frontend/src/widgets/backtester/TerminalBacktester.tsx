@@ -11,7 +11,8 @@ import {
   mergeStrategy, type SavedBacktestStrategy,
 } from "@/entities/backtest/strategyLibrary";
 import type { BacktestStrategy } from "@/entities/backtest/strategy";
-import { Notice, PageHead } from "@/shared/ui/tx";
+import { BACKTEST_MODES } from "@/shared/lib/modes";
+import { ModeSwitch, Notice, PageHead } from "@/shared/ui/tx";
 import BuyConditionPanel from "./panels/BuyConditionPanel";
 import SellConditionPanel from "./panels/SellConditionPanel";
 import UniversePanel from "./panels/UniversePanel";
@@ -107,6 +108,8 @@ export default function TerminalBacktester() {
   return (
     <div className="tpage-fade tx-page tx-page--wide bte">
       <PageHead title="백테스트" lede="전략을 과거 데이터로 시뮬레이션합니다. 단계별로 설정한 뒤 실행합니다." />
+      {/* 모드 전환(ADR 006 §7) — 이 화면에 더한 것은 이 한 줄뿐이다. 전략 모델·요청·단계 넷은 그대로(`backtest-requests.spec` 골든). */}
+      <ModeSwitch label="백테스트 모드" modes={BACKTEST_MODES} current="/backtest" />
 
       {handoff && (
         <div className="bte-handoff tscreener-handoff">

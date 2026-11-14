@@ -1,11 +1,6 @@
-import { TradeJournalView } from "@/widgets/trade-journal/TradeJournalView";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "매매일지",
-  description: "체결 내역 파일로 왕복 거래의 승률·손익비·비용 비중을 집계합니다. 서버에 저장하지 않습니다",
-};
-
-/** /trade-journal (매매일지 v1) — 화면은 `widgets/trade-journal`. */
-export default function TradeJournalPage() {
-  return <TradeJournalView />;
+/** 옛 주소 — 매매일지는 내 계좌 메뉴 안의 모드가 됐다(ADR 006 §7). 끊지 않고 넘긴다. */
+export default function TradeJournalMovedPage() {
+  redirect("/my-account/journal");
 }

@@ -150,6 +150,20 @@ function rove<T extends string>(e: KeyboardEvent, opts: Opt<T>[], cur: T, pick: 
   refs[to]?.focus();
 }
 
+/**
+ * 한 메뉴 안의 모드 전환 — ★링크다★(탭이 아니다: 주소가 바뀌고 화면이 통째로 바뀐다). 지금 자리는 `aria-current="page"`.
+ * 따로 화면·따로 메뉴를 만들지 않고 기존 모듈 안에 자리를 잡을 때 쓴다(ADR 006 §7).
+ */
+export function ModeSwitch({ label, modes, current }: { label: string; modes: readonly { href: string; label: string }[]; current: string }) {
+  return (
+    <nav className="tx-subnav" aria-label={label}>
+      {modes.map((m) => (
+        <Link key={m.href} href={m.href} className="tx-subnav-a" aria-current={m.href === current ? "page" : undefined}>{m.label}</Link>
+      ))}
+    </nav>
+  );
+}
+
 export function Segmented<T extends string>({ label, options, value, onChange }: {
   label: string; options: Opt<T>[]; value: T; onChange: (v: T) => void;
 }) {

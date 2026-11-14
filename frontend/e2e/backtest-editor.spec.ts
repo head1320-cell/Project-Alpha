@@ -35,6 +35,9 @@ const tokenRgb = (p: Page, name: string) => p.evaluate((n) => {
 test("머리 · 단계 넷이 설계 순서대로 · 고른 단계만 펼친다(짝)", async ({ page }) => {
   await open(page);
   await expect(page.locator(".bte h1")).toHaveText("백테스트");
+  // 모드 전환 줄(ADR 006 §7) — 편집기에 더한 것은 이 한 줄뿐이다. 단계 넷과 요청은 그대로다(`backtest-requests.spec` 골든).
+  await expect(page.locator(".bte .tx-subnav a")).toHaveText(["일봉 조건식", "분봉 규칙"]);
+  await expect(page.locator('.bte .tx-subnav [aria-current="page"]')).toHaveText("일봉 조건식");
   await expect(steps(page)).toHaveCount(4);
   expect(await steps(page).locator(".bte-step-t").allInnerTexts()).toEqual(STEP_NAMES);
   expect(await steps(page).locator(".bte-step-n").allInnerTexts()).toEqual(["1", "2", "3", "4"]);

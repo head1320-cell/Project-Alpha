@@ -1,6 +1,6 @@
 "use client";
 /**
- * 매매일지 (v1) — `/trade-journal`. 체결 내역 파일 → 열 맞추기 → 결과. 세 단계가 한 화면에 위에서 아래로 쌓인다.
+ * 매매일지 (v1) — 내 계좌 › 매매일지(`/my-account/journal` · ADR 006 §7 — 따로 있던 화면이 내 계좌 메뉴 안의 모드가 됐다). ★증권 계좌를 연결하지 않아도 쓴다★(파일만으로 된다). 체결 내역 파일 → 열 맞추기 → 결과. 세 단계가 한 화면에 위에서 아래로 쌓인다.
  * ==========================================================================
  * 설계: `docs/superpowers/specs/2026-11-14-trade-journal-design.md`.
  * ★파일은 이 브라우저에서 읽는다★ — 서버로는 맞춘 줄만 보내고(계좌번호 같은 다른 열은 나가지 않는다) 서버는 저장하지 않는다.
@@ -14,15 +14,16 @@ import {
   type Encoding, type Journal, type Mapping, type SideChoice, type Table,
 } from "@/entities/trade-journal";
 import { useSession } from "@/entities/session";
+import { ACCOUNT_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
-import { Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
+import { ModeSwitch, Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
 import { JournalResult } from "./JournalResult";
 import { MapStep, SIDE_LIMIT, problemsOf, rateToBp, type Settings } from "./MapStep";
 
-const TITLE = "매매일지";
+const TITLE = "내 계좌";
 const LEDE = "체결 내역 파일로 왕복 거래의 승률·손익비·비용을 집계합니다. 관측값만 보여 주며 종목이나 매매 시점을 권하지 않습니다.";
 const MAX_BYTES = 20 * 1024 * 1024;
-const HERE = "/trade-journal";
+const HERE = "/my-account/journal";
 
 type Loaded = { name: string; encoding: Encoding; table: Table; sample: boolean };
 type Run =
@@ -35,6 +36,7 @@ export function TradeJournalView() {
   return (
     <div className="tx-page tj">
       <PageHead title={TITLE} lede={LEDE} />
+      <ModeSwitch label="내 계좌 모드" modes={ACCOUNT_MODES} current={HERE} />
       {session.kind === "loading" ? (
         <p className="tx-sec-sub" aria-busy="true">계정 확인 중</p>
       ) : session.kind === "unknown" ? (

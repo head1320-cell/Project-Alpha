@@ -4,7 +4,7 @@ import { test, expect, type Page, type Request } from "./fixtures";
 import { contrastAudit, voiceAudit, type AuditResult, type VoiceResult } from "./helpers";
 
 // ════════════════════════════════════════════════════════════════════════════
-// 분봉 백테스트 — `/intraday` (★실제 서버★ — 계산을 가로채지 않는다. 설계 `docs/superpowers/specs/2026-11-14-intraday-minute-simulator-design.md`)
+// 분봉 백테스트 — 백테스트 › 분봉 규칙 `/backtest/intraday` (★실제 서버★ — 계산을 가로채지 않는다. 설계 `docs/superpowers/specs/2026-11-14-intraday-minute-simulator-design.md`)
 // ────────────────────────────────────────────────────────────────────────────
 // 분봉은 `e2e/fixtures/intraday/seed_bars.py` 가 서버의 `MINUTE_BARS_DIR`(저장소 밖)에 심는다. 두 묶음:
 //  · 손으로 만든 열흘(035720 · 2026-03-02 ~ 03-13 · 출처 열 `kis`) — ★화면의 값 = 손 계산★
@@ -30,6 +30,8 @@ const BARS = "/tmp/e2e_minute_bars";                 // playwright.config.ts 의
 const MINUS = "−";
 const HAND = { tickers: "035720", from: "2026-03-02", to: "2026-03-13" };
 const SYNTH = { tickers: "005930, 000660", from: "2026-04-01", to: "2026-04-16" };
+const HERE = "/backtest/intraday";                    // ADR 006 §7 — 따로 있던 `/intraday` 는 백테스트 메뉴 안의 모드가 됐다
+const NEXT = /\/login\?next=%2Fbacktest%2Fintraday/;
 
 test.beforeAll(() => {
   execFileSync(process.env.E2E_PYTHON ?? "python3", [path.join("frontend", "e2e", "fixtures", "intraday", "seed_bars.py")],
@@ -45,7 +47,7 @@ async function login(page: Page): Promise<void> {
 
 async function open(page: Page) {
   await login(page);
-  await page.goto("/intraday", { waitUntil: "domcontentloaded" });
+  await page.goto(HERE, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".itd-tickers")).toBeVisible();
 }
 
@@ -96,15 +98,53 @@ const trialN = async (page: Page): Promise<number> => {
   return Number(m![1].replace(/,/g, ""));
 };
 
-test("로그인 전에는 로그인하라고만 말한다 · 서버에 아무것도 묻지 않는다 · 메뉴에 '분봉 백테스트'", async ({ page }) => {
+test("로그인 전에는 로그인하라고만 말한다 · 서버에 아무것도 묻지 않는다 · 메뉴는 '백테스트' 하나다", async ({ page }) => {
   const asked: string[] = [];
   page.on("request", (r) => { if (r.url().includes("/intraday/")) asked.push(r.url()); });
-  await page.goto("/intraday", { waitUntil: "domcontentloaded" });
+  await page.goto(HERE, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".itd-signed-out")).toContainText("로그인");
-  await expect(page.locator(".itd-signed-out a")).toHaveAttribute("href", /\/login\?next=%2Fintraday/);
-  await expect(page.locator('.nav-item[href="/intraday"]')).toContainText("분봉 백테스트");
+  await expect(page.locator(".itd-signed-out a")).toHaveAttribute("href", NEXT);
+  // 따로 있던 메뉴는 없다 — '백테스트'가 이 주소에서도 켜진다.
+  await expect(page.locator('.nav-item[href="/intraday"]')).toHaveCount(0);
+  await expect(page.locator('.terminal-nav [aria-current="page"]')).toHaveText("백테스트");
   await expect(page.locator(".itd-tickers")).toHaveCount(0);
   expect(asked).toEqual([]);
+});
+
+test("백테스트 메뉴 안의 모드: 전환 줄이 두 화면에 있고 지금 자리를 가리킨다 · 옛 주소는 새 주소로 넘어간다", async ({ page }) => {
+  await login(page);
+  await page.goto("/intraday", { waitUntil: "domcontentloaded" });                  // 옛 주소 — 끊지 않고 넘긴다
+  await expect(page).toHaveURL(/\/backtest\/intraday$/);
+  await expect(page.locator(".itd h1")).toHaveText("백테스트");
+  const modes = page.locator(".itd .tx-subnav a");
+  await expect(modes).toHaveText(["일봉 조건식", "분봉 규칙"]);
+  await expect(page.locator('.itd .tx-subnav [aria-current="page"]')).toHaveText("분봉 규칙");
+  await expect(page.locator(".itd-tickers")).toBeVisible();
+  // 모양 — 링크는 글자 너비이고(다른 묶음의 규칙을 물려받아 늘어나지 않는다) 아래 절과 붙지 않는다.
+  const shape = (root: string) => page.evaluate((r) => {
+    const nav = document.querySelector(`${r} .tx-subnav`) as HTMLElement;
+    const next = nav.nextElementSibling as HTMLElement;
+    return { widest: Math.max(...[...nav.querySelectorAll("a")].map((a) => a.getBoundingClientRect().width)),
+             gap: next.getBoundingClientRect().top - nav.getBoundingClientRect().bottom, display: getComputedStyle(nav).display };
+  }, root);
+  const here = await shape(".itd");
+  expect(here.display).toBe("flex");
+  expect(here.widest).toBeLessThan(140);
+  expect(here.gap).toBeGreaterThanOrEqual(8);
+
+  await modes.filter({ hasText: "일봉 조건식" }).click();
+  await expect(page).toHaveURL(/\/backtest$/);
+  await expect(page.locator(".bte h1")).toHaveText("백테스트");
+  await expect(page.locator(".bte .tx-subnav a")).toHaveText(["일봉 조건식", "분봉 규칙"]);
+  await expect(page.locator('.bte .tx-subnav [aria-current="page"]')).toHaveText("일봉 조건식");
+  await expect(page.locator('.terminal-nav [aria-current="page"]')).toHaveText("백테스트");
+  await expect(page.locator(".bte .tbt-mode")).toHaveCount(4);                       // 편집기의 단계 넷은 그대로다
+  const there = await shape(".bte");
+  expect(there.display).toBe("flex");
+  expect(there.widest).toBeLessThan(140);
+  expect(there.gap).toBeGreaterThanOrEqual(8);
+  await page.locator(".bte .tx-subnav a").filter({ hasText: "분봉 규칙" }).click();
+  await expect(page).toHaveURL(/\/backtest\/intraday$/);
 });
 
 test("설정 칸은 서버의 틀 목록 그대로 · 종목은 비어서 시작한다 · 틀을 바꾸면 매개변수가 새 틀의 출발값으로", async ({ page }) => {
@@ -446,7 +486,7 @@ test("거절은 서버 사유 그대로 · 실패는 재시도 · 로그인이 �
   mode = "401";
   await page.locator(".itd-run").click();
   await expect(page.locator(".itd-run-fail")).toContainText("로그인 세션이 만료됐습니다.");
-  await expect(page.locator(".itd-run-fail a")).toHaveAttribute("href", /\/login\?next=%2Fintraday/);
+  await expect(page.locator(".itd-run-fail a")).toHaveAttribute("href", NEXT);
   mode = "500";
   await page.locator(".itd-run").click();
   await expect(page.locator(".itd-run-fail")).toContainText("계산 실패(시험)");

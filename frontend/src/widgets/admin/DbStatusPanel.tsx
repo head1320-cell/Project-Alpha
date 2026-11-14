@@ -23,6 +23,7 @@ import type { DataStatus, ResearchUsage } from "@/entities/regime-snapshot/model
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { Answer, Notice, PageHead, RetryFail, type Chip, type Figure } from "@/shared/ui/tx";
 import { UNKNOWN_TEXT } from "@/shared/lib/krFormat";
+import { MinuteBarsSection } from "./MinuteBarsSection";
 
 type DbStatus = Awaited<ReturnType<typeof api.dbStatus>>;
 type Honesty = Awaited<ReturnType<typeof api.sourceHonesty>>;
@@ -193,6 +194,9 @@ export default function DbStatusPanel() {
             </ul>
           )}
       </section>
+
+      {/* 분봉 적재(ADR 006 §7) — DB 표가 아니라 일파일이라 아래 '표별 적재'와 따로 둔다. DB 상태를 못 읽어도 이 절은 제 문으로 답한다. */}
+      <MinuteBarsSection />
 
       {db.isError && !st ? <RetryFail title="데이터 상태 조회 실패" onRetry={() => void db.refetch()} />
         : db.isPending ? <p className="dsx-wait">적재 현황 점검 중</p>
