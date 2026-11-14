@@ -30,7 +30,7 @@
 
 - 만든다: `src/engine/trade_journal/costs.py` · 시험은 `tests/test_trade_journal_analyze.py` 의 '비용과 그 근거' 절
 - 시험: 수수료 열이 있으면 관측 · 없고 요율이 있으면 가정(요율 × 대금) · 둘 다 없으면 미상(`None` — 0 이 아니다) ·
-  세금 열이 있으면 관측 · 없으면 `sell_tax_bp_on` 추정(등급·출처가 따라온다) · 매수에는 세금 없음 · ETF 는 0(값) · 시장을 모르면 미상 ·
+  세금 열이 있으면 관측 · 없으면 `sell_tax_bp_on` 추론(등급·출처가 따라온다) · 매수에는 세금 없음 · ETF 는 0(값) · 시장을 모르면 미상 ·
   사용자가 정한 시장은 '가정' · 종목 마스터가 알면 그 값(주입한 대역으로) · 2025년과 2026년 체결의 세금이 다르다(고정값이 아니라는 증거).
 - 명령: `python -m pytest tests/test_trade_journal_analyze.py -q`
 
@@ -53,11 +53,11 @@
 
 ## 과제 6 — 화면
 
-- 만든다: `frontend/src/entities/trade-journal/{parse.ts,api.ts,types.ts}` · `frontend/src/widgets/trade-journal/{TradeJournal.tsx,JournalResult.tsx,PnlCurve.tsx,trade-journal.css}` ·
-  `frontend/src/app/trade-journal/page.tsx` · `frontend/e2e/trade-journal.spec.ts` · `frontend/e2e/fixtures/trade-journal/*.csv`
-- 고친다: `frontend/src/widgets/layout/TerminalShell.tsx`(내비) · `frontend/src/shared/theme/theme.ts`(라벨) · 다크 모듈 생성(`node scripts/gen-dark-modules.mjs`)
+- 만든다: `frontend/src/entities/trade-journal/{parse.ts,api.ts,types.ts,sample.ts,index.ts}` · `frontend/src/widgets/trade-journal/{TradeJournalView.tsx,MapStep.tsx,JournalResult.tsx,PnlCurve.tsx,format.ts}` ·
+  `frontend/src/app/trade-journal/page.tsx` · `frontend/e2e/trade-journal.spec.ts` · `frontend/e2e/fixtures/trade-journal/*` · CSS 는 `frontend/src/app/globals.css` 의 `.tj-*` 절(저장소 관례)
+- 고친다: `frontend/src/widgets/layout/TerminalShell.tsx`(내비) · `frontend/src/shared/theme/theme.ts`(다크 대응 화면 목록) · `frontend/src/entities/session/accessMap.json`(로그인 화면의 접근 지도 — 보호 등록부와 짝) · `frontend/e2e/nav.spec.ts`(메뉴 목록)
 - E2E(먼저): 파일 올리기 → 열이 어림으로 골라져 있다 → 결과의 요약 값이 표본의 손 계산과 같다 · EUC-KR 파일이 깨지지 않는다 · 버린 줄 사유가 보인다 ·
-  수수료 '모름'이면 비용 뒤 값이 "—" 와 사유 · 서버로 간 요청 본문에 파일 원문이 없다(정규화한 줄만) · 라이트·다크 AA · 문체 감사(`voiceAudit`).
+  수수료 '모름'이면 비용 후 값이 `N/A` 와 사유 · 서버로 간 요청 본문에 파일 원문이 없다(정규화한 줄만) · 라이트·다크 AA · 문체 감사(`voiceAudit`).
 - 명령: `npx tsc --noEmit -p . && npx eslint src && PLAYWRIGHT_BASE_URL=http://localhost:3000 npx playwright test e2e/trade-journal.spec.ts --trace off --reporter=line`
 
 ## 과제 7 — 마무리
