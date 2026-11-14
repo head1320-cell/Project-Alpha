@@ -19,7 +19,7 @@ __all__ = ["ASSUMPTIONS", "NOT_MODELED", "SKIP_REASONS", "CostAssumptions", "Day
            "Session", "SimError", "run", "simulate"]
 
 #: 이 시뮬레이터가 ★모형에 넣지 않은 것★ — 결과의 `journal.not_covered` 에 싣는다.
-#: 일지 엔진의 목록은 '올린 파일'의 이야기라(파일에 없는 체결 …) 모의 체결에 그대로 내면 거짓이 된다.
+#: 일지 엔진의 목록은 '올린 파일'의 이야기라(파일에 없는 체결 …) 시뮬레이션 체결에 그대로 내면 거짓이 된다.
 NOT_MODELED: tuple[str, ...] = (
     "호가·틱·체결 대기열: 분봉의 시가·고가·저가·종가로만 체결을 가정",
     "시장 충격: 참여율 상한은 수량만 줄이고 가격은 움직이지 않음",

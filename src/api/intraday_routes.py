@@ -32,17 +32,18 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import src.data.minute_bars as minute_bars
 from src.api.auth import require_login
-from src.api.trade_journal_routes import master_lookup
+from src.api.trade_journal_routes import MAX_FILLS, master_lookup
 from src.data import intraday_trials as trials
 from src.data import minute_feed
 from src.data.market_rules import session_rules
 from src.data.minute_quality import DEFECTS, check_day
 from src.data.mock_gate import mock_allowed
 from src.engine import intraday
-from src.engine.intraday import expr, rules, simulator
+from src.engine.intraday import divergence, expr, rules, simulator
 from src.engine.intraday import gates as gate_table
 from src.engine.intraday import validate as validation
 from src.engine.intraday.simulator import ASSUMPTIONS, SKIP_REASONS, CostAssumptions, PositionRules, RuleSpec, SimError
+from src.engine.trade_journal import analyze
 
 __all__ = ["RuleSpec", "router"]
 
@@ -649,6 +650,86 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
 
 
 # ── 캔버스에서 실행한 결과의 목록 (캔버스 분봉 노드 설계 §7.1) ────────────────────────────────────
+# ── 내 시행의 목록 — 괴리 보고가 고를 것 (설계 W5 §4.5) ──────────────────────────────────────────────────
+@router.get("/trials")
+def my_trials(limit: int = Query(50, ge=1, le=200), user=Depends(require_login)) -> dict:
+    """내가 돌린 분봉 백테스트의 설정들(마지막으로 돌린 것이 먼저) — 줄마다 ★다시 보낼 수 있는 요청★이 온다. 본인 것만.
+
+    못 읽으면 빈 목록이 아니라 `available: false` + 사유다. 설정이 깨져 요청으로 만들 수 없는 줄은 싣지 않고 센다."""
+    rows = trials.trials_of(user.username, limit)
+    if rows is None:
+        return {"available": False, "reason": trials.REASONS["store_unavailable"], "trials": [], "unreadable": 0}
+    labels = {t["kind"]: t["label"] for t in rules.describe()}
+    out, unreadable = [], 0
+    for r in rows:
+        setting = r["setting"] if isinstance(r["setting"], dict) else {}
+        rule, position, costs = setting.get("rule"), setting.get("position"), setting.get("costs")
+        if not (isinstance(rule, dict) and isinstance(position, dict) and isinstance(costs, dict) and r["tickers"]):
+            unreadable += 1
+            continue
+        out.append({"trial_key": r["trial_key"], "rule_label": labels.get(rule.get("kind")) or rule.get("kind"),
+                    "runs": r["runs"], "updated_at": r["updated_at"],
+                    "request": {"tickers": r["tickers"], "from": r["from"], "to": r["to"], "rule": rule, "position": position,
+                                "costs": costs}})
+    return {"available": True, "reason": None, "trials": out, "unreadable": unreadable}
+
+
+# ── 괴리 — 올린 체결 ↔ 같은 규칙의 시뮬레이션 체결 (설계 W5 §4) ─────────────────────────────────────────────
+#: 화면에 싣는 목록의 줄 수. ★건수와 분포는 전부를 센 값이다★ — 잘리는 것은 목록뿐이다.
+DIVERGENCE_ROWS_LIMIT = 500
+
+
+class DivergenceBody(SimulateBody):
+    """분봉 백테스트 요청 + 올린 체결 줄(매매일지와 같은 줄) + 짝짓기 허용 시간."""
+    fills: list[dict]
+    window_minutes: int = Field(divergence.DEFAULT_WINDOW, ge=1, le=divergence.MAX_WINDOW)
+
+
+@router.post("/divergence")
+def divergence_report(body: DivergenceBody, user=Depends(require_login)) -> dict:
+    """★올린 체결은 저장하지 않는다★(계산에만 쓴다). 시뮬레이션 쪽은 실행 문과 같은 길로 시행에 남는다."""
+    rows = len(body.fills)
+    if rows == 0:
+        raise HTTPException(400, {"code": "no_rows", "reason": "견줄 체결 줄이 없습니다."})
+    if rows > MAX_FILLS:
+        raise HTTPException(400, {"code": "too_many_rows", "limit": MAX_FILLS, "rows": rows,
+                                  "reason": f"체결 줄이 {rows:,}건으로 상한 {MAX_FILLS:,}건을 넘습니다. 기간을 나눠 올려 주십시오(앞부분만 잘라서 계산하지 않습니다)."})
+    tickers, spec, params, position, costs = _setting(body)
+    plan = _plan(body, tickers)
+    session = session_rules()
+    master = master_lookup()
+    shared = _shared(body, tickers, params, session)
+    shared = {**shared, "limits": {**shared["limits"], "fills": MAX_FILLS}}
+    nothing = {"data": dict(_NO_DATA), "origin": None, "trial": None, "divergence": None, "pnl": None}
+    if not plan.dates:
+        logger.info("intraday divergence: tickers=%s days=0 rows=%s", len(tickers), rows)
+        return {**shared, **nothing, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}}
+
+    days = minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master, need_prev=_needs_prev(spec))
+    out = intraday.run(days, spec, position, costs, rules=session, master=master)
+    if out["counts"]["sessions"] == 0:                           # 본 것이 없으면 견줄 것도 해 본 것도 없다
+        return {**shared, **nothing, "data": _data(days, out), "origin": out["origin"],
+                "empty": {"reason": "no_usable_bars", "message": EMPTY["no_usable_bars"]}}
+
+    made = _record(user.username, out, _trial_setting(body.rule.kind, params, body.position.model_dump(),
+                                                      body.costs.model_dump()), tickers, body)
+    trial = _trial_view(made, _family(user.username, out, tickers, body) if made else None)
+    start, end = body.from_.isoformat(), body.to.isoformat()
+    report = divergence.compare(out["fills"], body.fills, tickers=tickers, start=start, end=end,
+                                window_minutes=body.window_minutes)
+    # 실제 쪽 손익은 ★견준 것과 같은 줄★로 — 같은 일지 엔진 · 같은 비용 가정.
+    actual = analyze(divergence.rows_in_scope(body.fills, tickers, start, end), costs.journal_options(), master=master)
+    pnl = divergence.pnl_gap(out["journal"], actual)
+    rejected = report["set_aside"]["rejected"]
+    report = {**report, **{key: report[key][:DIVERGENCE_ROWS_LIMIT] for key in ("matched", "sim_only", "actual_only")},
+              "set_aside": {**report["set_aside"], "rejected": rejected[:DIVERGENCE_ROWS_LIMIT]},
+              "rejected_total": len(rejected), "rows_limit": DIVERGENCE_ROWS_LIMIT}
+    logger.info("intraday divergence: tickers=%s days=%s rows=%s matched=%s sim_only=%s actual_only=%s", len(tickers),
+                len(days), rows, report["counts"]["matched"], report["counts"]["sim_only"], report["counts"]["actual_only"])
+    return {**shared, "empty": None, "data": _data(days, out), "origin": out["origin"], "trial": trial,
+            "divergence": report, "pnl": pnl}
+
+
 @router.get("/results")
 def results(limit: int = Query(50, ge=1, le=200), user=Depends(require_login)) -> dict:
     """캔버스의 '분봉 결과 조회' 노드가 고를 목록 — ★내 것만★. 요약 자체는 싣지 않는다(노드가 읽는다).

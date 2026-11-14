@@ -4,7 +4,9 @@
  */
 import { getWithAuth, postJson } from "@/shared/api/apiBase";
 import { call, type Result } from "@/shared/api/result";
-import type { Coverage, ResultList, SimulateRequest, Simulation, Templates, ValidateRequest, Validation } from "./types";
+import type {
+  Coverage, Divergence, DivergenceRequest, ResultList, SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
+} from "./types";
 
 const BASE = "/api/v1/intraday";
 
@@ -24,3 +26,8 @@ export const simulate = (body: SimulateRequest): Promise<Result<Simulation>> => 
 export const validate = (body: ValidateRequest): Promise<Result<Validation>> => call<Validation>(postJson(`${BASE}/validate`, body));
 /** 캔버스의 '분봉 결과 조회' 노드가 고를 목록 — 내 것만. */
 export const listResults = (): Promise<Result<ResultList>> => call<ResultList>(getWithAuth(`${BASE}/results`));
+/** 올린 체결을 같은 규칙의 시뮬레이션과 견준다. ★서버는 올린 체결을 저장하지 않는다★ · 시뮬레이션 쪽은 시행으로 기록된다. */
+export const divergence = <F,>(body: DivergenceRequest<F>): Promise<Result<Divergence>> =>
+  call<Divergence>(postJson(`${BASE}/divergence`, body));
+/** 내가 돌린 분봉 백테스트의 설정들(마지막으로 돌린 것이 먼저) — 괴리 보고가 고를 목록. 내 것만. */
+export const listTrials = (): Promise<Result<TrialList>> => call<TrialList>(getWithAuth(`${BASE}/trials`));

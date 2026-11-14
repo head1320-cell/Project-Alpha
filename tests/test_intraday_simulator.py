@@ -465,7 +465,7 @@ def test_changing_later_bars_never_changes_earlier_fills(setup):
 
 # ── 일지 엔진으로 넘어간다 ─────────────────────────────────────────────────────────────
 def test_the_journal_of_a_simulated_run_lists_what_the_simulator_does_not_model_not_what_a_file_lacks():
-    """일지 엔진의 목록은 '올린 파일'의 이야기다(파일에 없는 체결 …). 모의 체결에는 파일이 없다 — 그 문장이 그대로 나가면 거짓이다."""
+    """일지 엔진의 목록은 '올린 파일'의 이야기다(파일에 없는 체결 …). 시뮬레이션 체결에는 파일이 없다 — 그 문장이 그대로 나가면 거짓이다."""
     from src.engine.trade_journal import NOT_COVERED, analyze
     out = intraday.run(one_day(sess([R0, R1, R2, R3])), RULE, POS, COST, rules=RULES)
     listed = out["journal"]["not_covered"]

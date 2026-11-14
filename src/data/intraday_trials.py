@@ -172,6 +172,29 @@ def family(user: str, *, grade: str, tickers: Iterable[str], start: str, end: st
     return {"trials": found, "user_total": int(total or 0)}
 
 
+# ── 내 시행의 목록 (괴리 보고가 고를 것 — 설계 W5 §4.5) ─────────────────────────────────────────
+_TRIAL_HEAD = "trial_key, grade, setting, tickers, period_from, period_to, runs, updated_at"
+
+
+def trials_of(user: str, limit: int = 50) -> list[dict[str, Any]] | None:
+    """내 시행들(마지막으로 돌린 것이 먼저 · 일별 값은 싣지 않는다). 읽지 못하면 `None` — 빈 목록과 다르다.
+
+    줄마다 ★다시 돌릴 수 있는 설정★(규칙 · 포지션 · 비용 · 종목 · 기간)이 온다. 남의 시행은 오지 않는다."""
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            rows = c.execute(text(f"SELECT {_TRIAL_HEAD} FROM {_TABLE} WHERE username = :user "
+                                  "ORDER BY updated_at DESC, trial_key LIMIT :limit"),
+                             {"user": user, "limit": int(limit)}).fetchall()
+    except Exception as err:                                    # noqa: BLE001 — 실패는 '모른다'로 올린다
+        logger.warning("intraday trial 목록 읽기 실패: %s", err)
+        return None
+    return [{"trial_key": r[0], "grade": r[1], "setting": _load(r[2]), "tickers": _load(r[3]) or [], "from": r[4], "to": r[5],
+             "runs": int(r[6] or 0), "updated_at": r[7]} for r in rows]
+
+
 # ── 결과 요약 ──────────────────────────────────────────────────────────────────────────
 def _results_ready(engine) -> bool:
     _ensure(engine)

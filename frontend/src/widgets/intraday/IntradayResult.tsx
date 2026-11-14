@@ -2,10 +2,11 @@
 /**
  * 분봉 백테스트 ⑤ 결과 — 매매일지 결과와 ★같은 부품·같은 순서★(`features/journal-result`) + 이 화면에만 있는 것
  * ==========================================================================
- * 서버가 모의 체결을 만들어 매매일지 엔진으로 계산한다 — 그래서 승률·손익비·비용의 정의가 실거래 분석과 한 벌이다.
+ * 서버가 시뮬레이션 체결을 만들어 매매일지 엔진으로 계산한다 — 그래서 승률·손익비·비용의 정의가 실거래 분석과 한 벌이다.
  * 이 화면에만 있는 것: 쓰인 분봉의 출처와 건너뛴 것 · 손익분기 비용 · 체결 가정에서 센 것 · 시행 횟수.
  * ★모든 숫자는 서버 값이다★ — 여기서는 고르고 서식만 입힌다. 미상은 N/A + 서버 사유. 권고·예측 문장을 만들지 않는다.
  */
+import Link from "next/link";
 import type { Simulation } from "@/entities/intraday";
 import type { Journal } from "@/entities/trade-journal";
 import {
@@ -41,8 +42,8 @@ export function IntradayResult({ sim }: { sim: Sim }) {
   const chips: Chip[] = [originChip(sim.origin), ...costChips(j), { label: `슬리피지 가정 ${String(slippage)}틱`, tone: "assumed" }];
   return (
     <div className="tj-result itd-result">
-      <p className="tx-sr" role="status">실행 완료: 청산된 모의 거래 {num(closed)}건</p>
-      <Answer sentence={closed === 0 ? "청산된 모의 거래 없음" : `모의 거래 ${num(closed)}건의 ${PNL_KO[basis]} 실현손익 ${signedWon(head.total)}`}
+      <p className="tx-sr" role="status">실행 완료: 청산된 시뮬레이션 거래 {num(closed)}건</p>
+      <Answer sentence={closed === 0 ? "청산된 시뮬레이션 거래 없음" : `시뮬레이션 거래 ${num(closed)}건의 ${PNL_KO[basis]} 실현손익 ${signedWon(head.total)}`}
               figures={closed === 0 ? [] : [
                 { label: "승률", value: pct(head.win_rate) },
                 { label: "손익비", value: ratio2(head.payoff) },
@@ -82,7 +83,13 @@ export function IntradayResult({ sim }: { sim: Sim }) {
         ) : <p className="tj-note">센 것 없음</p>}
         <TrialLine trial={sim.trial} />
       </Section>
-      <Basis j={j} sub="이 결과는 과거 분봉 위에서 규칙을 돌려 만든 모의 체결을 집계한 것입니다. 향후 성과를 뜻하지 않습니다." />
+      <Basis j={j} sub="이 결과는 과거 분봉 위에서 규칙을 돌려 만든 시뮬레이션 체결을 집계한 것입니다. 향후 성과를 뜻하지 않습니다." />
+      <Section title="실제 체결과 견주기" sub="이 규칙의 시뮬레이션 체결을 내 실제 체결 내역과 견줍니다. 체결가 차이, 놓친 신호, 규칙 밖 매매를 셉니다.">
+        <div className="itd-compare">
+          <p className="tj-read">체결 내역 파일은 내 계좌의 매매일지에서 올립니다. 분석을 마치면 ‘백테스트와 견주기’에서 방금 돌린 이 설정이 맨 위에 선택됩니다.</p>
+          <Link href="/my-account/journal" className="tx-btn tx-btn--sub itd-compare-go">내 계좌 › 매매일지로 이동</Link>
+        </div>
+      </Section>
       <Section title="분봉만으로는 알 수 없는 것" sub="아래 사정은 분봉에 표시가 없어 계산에 반영하지 못했습니다.">
         <ul className="tj-plain-list itd-unknowns">
           {sim.unknowns.map((u) => <li key={u.what}><b data-server>{u.label}</b> <span data-server>{u.reason}</span></li>)}

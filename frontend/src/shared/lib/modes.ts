@@ -4,7 +4,7 @@
  */
 export type Mode = { href: string; label: string };
 
-/** 백테스트 — 일봉 조건식(포트폴리오 · 실행 기록 · 수익률) | 분봉 규칙(모의 체결 · 원 단위 · 관문 일곱). 엔진과 결과의 정의는 따로다. */
+/** 백테스트 — 일봉 조건식(포트폴리오 · 실행 기록 · 수익률) | 분봉 규칙(시뮬레이션 체결 · 원 단위 · 관문 일곱). 엔진과 결과의 정의는 따로다. */
 export const BACKTEST_MODES: readonly Mode[] = [
   { href: "/backtest", label: "일봉 조건식" },
   { href: "/backtest/intraday", label: "분봉 규칙" },

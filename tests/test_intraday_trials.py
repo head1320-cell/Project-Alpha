@@ -350,3 +350,36 @@ def test_the_helpers_answer_is_what_decides_not_whether_the_columns_happen_to_ex
     assert trials.keep_result("alice", key, RESULT) is None
     assert trials.result_of("alice", key) is None and trials.results_of("alice") is None
     assert fam()["user_total"] == 1                                             # 시행 세기는 그대로 돈다
+
+
+# ── 내 시행의 목록 (괴리 보고가 고를 것 — 설계 W5 §4.5) ─────────────────────────────────────────
+def test_my_trials_are_listed_most_recently_run_first_with_the_setting_to_rerun(db, monkeypatch):
+    from types import SimpleNamespace
+    clock = iter([100.0, 200.0, 300.0])
+    monkeypatch.setattr(trials, "time", SimpleNamespace(time=lambda: next(clock)))      # 이 모듈의 시계만
+    old = rec()["trial_key"]                                                    # 100
+    new = rec(setting=changed("rule.minutes", 31))["trial_key"]                 # 200
+    rec()                                                                       # 300 — 같은 설정을 다시 돌리면 그 줄이 맨 위로 온다
+    rows = trials.trials_of("alice")
+    assert [r["trial_key"] for r in rows] == [old, new]
+    assert rows[0]["runs"] == 2 and rows[0]["updated_at"] == 300.0 and rows[1]["runs"] == 1
+    assert rows[1]["setting"] == changed("rule.minutes", 31)                    # 다시 돌릴 수 있는 설정 그대로
+    assert rows[0]["tickers"] == ["000660", "005930"] and (rows[0]["from"], rows[0]["to"]) == ("2026-03-02", "2026-03-31")
+    assert rows[0]["grade"] == "E3" and "daily" not in rows[0]                  # 목록은 일별 값을 싣지 않는다
+    assert [r["trial_key"] for r in trials.trials_of("alice", limit=1)] == [old]
+
+
+def test_the_trial_list_holds_only_my_own(db):
+    rec("alice")
+    rec("bob", setting=changed("rule.minutes", 31))
+    assert len(trials.trials_of("alice")) == 1 and len(trials.trials_of("bob")) == 1
+    assert trials.trials_of("carol") == []                                      # 없음은 빈 목록이다
+
+
+def test_an_unreadable_store_is_unknown_not_an_empty_trial_list(db, monkeypatch):
+    rec()
+
+    def broken():
+        raise RuntimeError("db down")
+    monkeypatch.setattr(trials, "_engine", broken)
+    assert trials.trials_of("alice") is None

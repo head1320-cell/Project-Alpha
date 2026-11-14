@@ -214,7 +214,7 @@ test("손으로 만든 열흘: 화면의 값이 손 계산과 같다 · 서버�
   });
 
   const answer = page.locator(".itd-result .tx-answer");
-  await expect(answer.locator(".tx-answer-s")).toHaveText(`모의 거래 10건의 비용 후 실현손익 ${MINUS}3,195원`);
+  await expect(answer.locator(".tx-answer-s")).toHaveText(`시뮬레이션 거래 10건의 비용 후 실현손익 ${MINUS}3,195원`);
   expect(await answer.locator(".tx-fig").allInnerTexts().then((a) => a.map((s) => s.replace(/\s+/g, " ")))).toEqual(
     ["승률 0.0%", "손익비 N/A", `거래당 기대값 ${MINUS}319원`, "손익분기 비용(편도) 9.9bp"]);
   await expect(chips(page, ".itd-result .tx-answer")).toHaveText(["실제 분봉", "비용 후 기준", "수수료 가정 0.015%", "매도세 가정", "슬리피지 가정 1틱"]);
@@ -251,7 +251,7 @@ test("★미상 ≠ 0★ 시장 구분을 모르면 비용 후는 N/A + 서버 �
   await setHand(page, { market: false });
   const req = await run(page);
   expect(req.postDataJSON().costs).toEqual({ commission_bp: 1.5, slippage_ticks: 1, participation_cap: 0.1, unknown_market: null, unknown_instrument: null });
-  await expect(page.locator(".itd-result .tx-answer-s")).toHaveText("모의 거래 10건의 비용 전 실현손익 +19,800원");
+  await expect(page.locator(".itd-result .tx-answer-s")).toHaveText("시뮬레이션 거래 10건의 비용 전 실현손익 +19,800원");
   await expect(chips(page, ".itd-result .tx-answer")).toHaveText(["실제 분봉", "비용 전 기준", "수수료 가정 0.015%", "매도세 미상", "슬리피지 가정 1틱"]);
   await expect(sum(page, "total", "gross")).toHaveText("+19,800원");
   await expect(sum(page, "total", "net")).toHaveText("N/A");
@@ -409,7 +409,7 @@ test("분봉이 없는 기간: 결과 대신 서버 사유 · 판정 칸이 없�
   await run(page);
   await expect(page.locator(".itd-used-read")).toHaveText("거래일 10일 · 종목×일 10건 · 봉 40개 · 건너뛴 종목×일 10건");
   expect(await page.locator('.itd-skipped li[data-reason="no_bars"]').innerText()).toMatch(/^10건\s+이 날짜에 이 종목의 분봉이 없습니다\.$/);
-  await expect(page.locator(".itd-result .tx-answer-s")).toContainText("모의 거래 10건");
+  await expect(page.locator(".itd-result .tx-answer-s")).toContainText("시뮬레이션 거래 10건");
 });
 
 test("보낼 수 없는 설정은 어느 칸인지 말하고 실행 단추가 꺼진다", async ({ page }) => {
@@ -492,7 +492,7 @@ test("거절은 서버 사유 그대로 · 실패는 재시도 · 로그인이 �
   await expect(page.locator(".itd-run-fail")).toContainText("계산 실패(시험)");
   mode = "pass";
   await page.locator(".itd-run-fail").getByRole("button", { name: "재시도" }).click();
-  await expect(page.locator(".itd-result .tx-answer-s")).toContainText("모의 거래 10건");
+  await expect(page.locator(".itd-result .tx-answer-s")).toContainText("시뮬레이션 거래 10건");
 
   mode = "500";
   await page.locator(".itd-judge-btn").click();

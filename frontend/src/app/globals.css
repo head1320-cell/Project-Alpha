@@ -10400,9 +10400,26 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .tj-src { display: inline-flex; gap: 8px; }
 .tj-src a { color: var(--tx-cta); text-decoration: underline; }
 .tj-not-covered { list-style: disc; padding-left: 18px; }
+/* ── 괴리 보고 (features/divergence-result · widgets/trade-journal/CompareSection) — 표와 글은 tj-* 를 그대로 쓴다 ── */
+.dv-wrap > * + *, .dv-result > * + * { margin-top: 12px; }
+.dv-compare { display: flex; flex-direction: column; gap: 14px; }
+.dv-pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 180px); gap: 12px; align-items: end; }
+.dv-none { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); }
+.dv-none b { color: var(--tx-ink); font-weight: 600; }
+.dv-split, .dv-time { margin-top: 10px; }
+.dv-list { padding: 10px 0; border-top: 1px solid var(--tx-line); }
+.dv-list:first-of-type { border-top: 0; padding-top: 0; }
+.dv-list > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--tx-ink); }
+.dv-list > summary:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 2px; border-radius: 6px; }
+.dv-list > .tj-note, .dv-list > .tj-scroll-x { margin-top: 8px; }
+.dv-windows tr[data-chosen] th, .dv-windows tr[data-chosen] td { font-weight: 600; background: var(--tx-soft); }
+.dv-pnl tr[data-k="gap"] th, .dv-pnl tr[data-k="gap"] td { font-weight: 600; border-top: 1px solid var(--tx-line); }
+.dv-aside { display: flex; flex-direction: column; gap: 10px; }
+.itd-compare { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 @media (max-width: 640px) {
   .tj-extremes { grid-template-columns: minmax(0, 1fr); }
   .tj-fields--pair { grid-template-columns: minmax(0, 1fr); }
+  .dv-pick { grid-template-columns: minmax(0, 1fr); }
   .tj .tx-sec, .tj .tx-answer { padding: 18px 16px; }
   .tj-sum th, .tj-sum td, .tj-after-loss th, .tj-after-loss td { padding: 8px 4px; font-size: 13px; }
   .tj-sum tr[data-k="streak"] td { white-space: normal; }

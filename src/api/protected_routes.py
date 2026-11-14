@@ -116,6 +116,10 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "분봉 백테스트 실행 — 고른 종목·규칙으로 계산한다. 무엇을 시험하는지가 드러나고 계산량이 크다"),
     ("POST", "/api/v1/intraday/validate"):
         (REQUIRE_LOGIN, "분봉 백테스트 판정 — 같은 규칙을 표본외·비용·시행 횟수로 다시 본다. 사용자별 시행 기록을 쓰고 읽는다"),
+    ("GET", "/api/v1/intraday/trials"):
+        (REQUIRE_LOGIN, "내가 돌린 분봉 백테스트의 설정 목록 — 본인 것만. 무엇을 시험했는지가 드러난다"),
+    ("POST", "/api/v1/intraday/divergence"):
+        (REQUIRE_LOGIN, "괴리 보고 — 올린 체결을 같은 규칙의 분봉 백테스트와 견준다. 체결 내역을 받고 시행 기록을 쓴다(체결은 저장하지 않는다)"),
     ("GET", "/api/v1/intraday/results"):
         (REQUIRE_LOGIN, "캔버스에서 실행한 분봉 백테스트 결과의 목록 — 본인 것만. 무엇을 시험했는지가 드러난다"),
 

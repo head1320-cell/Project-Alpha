@@ -11,12 +11,13 @@ import Link from "next/link";
 import { useRef, useState, type DragEvent } from "react";
 import {
   SAMPLE_CSV, SAMPLE_NAME, DELIMITER_KO, analyzeTrades, decodeBytes, distinctValues, guessMapping, guessSide, normalizeRows, parseTable,
-  type Encoding, type Journal, type Mapping, type SideChoice, type Table,
+  type Encoding, type FillRow, type Journal, type Mapping, type SideChoice, type Table,
 } from "@/entities/trade-journal";
 import { useSession } from "@/entities/session";
 import { ACCOUNT_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
 import { ModeSwitch, Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
+import { CompareSection } from "./CompareSection";
 import { JournalResult } from "./JournalResult";
 import { MapStep, SIDE_LIMIT, problemsOf, rateToBp, type Settings } from "./MapStep";
 
@@ -29,7 +30,7 @@ type Loaded = { name: string; encoding: Encoding; table: Table; sample: boolean 
 type Run =
   | { kind: "idle" } | { kind: "pending" }
   | { kind: "fail"; status: number; error: string }
-  | { kind: "done"; journal: Journal; lines: number[]; skipped: number; padded: number; sample: boolean };
+  | { kind: "done"; journal: Journal; fills: FillRow[]; lines: number[]; skipped: number; padded: number; sample: boolean };
 
 export function TradeJournalView() {
   const { session, retry } = useSession();
@@ -127,7 +128,7 @@ function Journal_() {
       commission_bp: settings.feeMode === "rate" ? rateToBp(settings.ratePct) : null,
       unknown_market: assume, unknown_instrument: assume ? "stock" : null,
     });
-    setRun(r.ok ? { kind: "done", journal: r.value, lines: n.lines, skipped: n.skipped, padded: n.padded, sample: file.sample }
+    setRun(r.ok ? { kind: "done", journal: r.value, fills: n.fills, lines: n.lines, skipped: n.skipped, padded: n.padded, sample: file.sample }
       : { kind: "fail", status: r.status, error: r.error });
   };
 
@@ -179,6 +180,7 @@ function Journal_() {
       ) : null}
 
       {run.kind === "done" ? <JournalResult journal={run.journal} extra={{ lines: run.lines, skipped: run.skipped, padded: run.padded, sample: run.sample }} /> : null}
+      {run.kind === "done" && run.fills.length > 0 ? <CompareSection fills={run.fills} /> : null}
     </>
   );
 }

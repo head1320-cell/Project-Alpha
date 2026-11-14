@@ -90,6 +90,56 @@ export type ResultList = { available: boolean; reason: string | null; results: R
 /** `J` 는 매매일지의 모양이다 — 서버가 같은 엔진으로 계산해 같은 모양으로 준다. 엔티티끼리 서로 참조하지 않으므로(FSD) 쓰는 위젯이 끼운다. */
 export type Simulation<J = unknown> = Shared & { journal: J | null; events_by_kind: Record<string, number> };
 
+// ── 괴리 — 올린 체결 ↔ 같은 규칙의 시뮬레이션 체결 ─────────────────────────────────
+
+export type Side = "buy" | "sell";
+/** 짝지은 것 하나. `adverse` 는 불리함(매수는 비싸게 · 매도는 싸게 체결된 만큼이 양수)이다. 하루 단위로 견줬으면 `minutes` 가 `null`. */
+export type DivergencePair = {
+  symbol: string; side: Side; date: string; sim_at: string; actual_at: string; minutes: number | null;
+  sim_price: number; actual_price: number; adverse: number; ticks: number; bp: number;
+  sim_quantity: number; actual_quantity: number; quantity_diff: number; parts: number;
+};
+export type DivergenceAlone = { symbol: string; side: Side; at: string; price: number; quantity: number; parts: number };
+export type DivergenceStat = { won: number; ticks: number; bp: number };
+/** 짝이 없으면 차이는 0 이 아니라 사유다. */
+export type PriceGap =
+  | { n: 0; reason: string; message: string }
+  | { n: number; mean: DivergenceStat; median: DivergenceStat; worst: DivergencePair; adverse: number; favorable: number; even: number };
+export type WindowRow = { minutes: number; matched: number; sim_only: number; actual_only: number; chosen: boolean };
+export type DivergenceReport = {
+  mode: "timed" | "daily"; degraded: { reason: string; message: string } | null; window_minutes: number;
+  counts: { matched: number; sim_only: number; actual_only: number };
+  by_window: WindowRow[];
+  matched: DivergencePair[]; sim_only: DivergenceAlone[]; actual_only: DivergenceAlone[];
+  price_gap: PriceGap;
+  time_gap: { mean_minutes: number; median_minutes: number; max_minutes: number } | null;
+  quantity_gap: { differs: number };
+  set_aside: {
+    rejected: { row: number; reason: string; message: string }[]; outside_period: number;
+    other_symbols: { rows: number; symbols: string[] }; untimed: number;
+  };
+  inputs: { sim_fills: number; actual_rows: number; actual_fills: number };
+  rejected_total: number; rows_limit: number;
+};
+export type PnlSide = { gross: number; net: number | null; trades: number };
+/** 차이 = 실제 − 시뮬레이션. 한쪽의 비용을 모르면 비용 후 차이는 `null` + 사유다. */
+export type PnlGap = {
+  simulated: PnlSide; actual: PnlSide; gap: { gross: number; net: number | null };
+  net_reason: string | null; net_message: string | null;
+};
+export type Divergence = {
+  request: SimulateRequest; template: Template; gate: { mock: boolean };
+  empty: { reason: string; message: string } | null;
+  data: DataBlock; origin: Origin | null; trial: Trial | null;
+  divergence: DivergenceReport | null; pnl: PnlGap | null;
+};
+/** 내가 돌린 분봉 백테스트의 설정 한 줄(`GET /intraday/trials`) — `request` 는 그대로 다시 보낼 수 있는 요청이다. */
+export type TrialRow = { trial_key: string; rule_label: string | null; runs: number; updated_at: number; request: SimulateRequest };
+/** 못 읽으면 빈 목록이 아니라 `available: false` + 사유다. `unreadable` 은 설정이 깨져 싣지 못한 줄 수. */
+export type TrialList = { available: boolean; reason: string | null; trials: TrialRow[]; unreadable: number };
+/** `F` 는 매매일지의 체결 줄이다 — 엔티티끼리 서로 참조하지 않으므로(FSD) 쓰는 자리가 끼운다. */
+export type DivergenceRequest<F = unknown> = SimulateRequest & { fills: F[]; window_minutes?: number };
+
 // ── 판정 ────────────────────────────────────────────────────────────────────
 
 /** 판정에 쓰는 요약 — 비용 전은 늘 있고, 비용 후는 모르면 `null`. */
