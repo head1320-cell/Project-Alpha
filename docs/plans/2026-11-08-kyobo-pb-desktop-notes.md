@@ -32,6 +32,8 @@
 [KB증권 개인 개방 보도(파이낸셜뉴스)](https://www.fnnews.com/news/202608041339192032) · [LS증권 통합 API](https://openapi.ls-sec.co.kr/intro) ·
 [메리츠증권 Open API](https://github.com/meritz-securities) · [증권사 오픈API 경쟁 보도(뉴스투데이)](https://www.news2day.co.kr/article/20260901500312)
 
+**후속(2026-11-14)** — 다시 조사했으나 ★형태는 여전히 미상★이다: 확장 검색 두 번에 교보증권의 공개 개발자 포털·문서·사용 후기가 잡히지 않았고, 코스콤 개발자 센터의 계좌 서비스 목록에도 보이지 않았으며, 이 환경의 네트워크 정책이 `www.iprovest.com` 을 막아(프록시 403) 메뉴의 본문을 읽지 못했다. 추론은 "개인용 REST 트레이딩 API 는 지금 공개돼 있지 않을 가능성이 높다"이다. 물을 것은 [회사 질문지](2026-11-14-company-questions.md) A0, 그 사이의 설계 방향은 [로드맵](2026-11-14-pb-trader-tool-roadmap.md) 5단계(증권사 중립 설계 먼저).
+
 ## 3. 지금 코드가 증권사에 묶인 모양 (2026-11-08 측정)
 
 **연결 부품은 작다.** `src/execution/kis_client.py` 의 `KISClient` 가 하는 일: `place_order` · `cancel_order` · `get_balance` · `get_price` ·
