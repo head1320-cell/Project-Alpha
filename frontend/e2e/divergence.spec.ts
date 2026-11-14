@@ -34,6 +34,8 @@ const JOURNAL = "/my-account/journal";
 const INTRADAY = "/backtest/intraday";
 const DAYS = ["2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13"];
 const HEAD = "체결일시,종목코드,매매구분,체결수량,체결단가";
+/** 권고로 읽히는 낱말 — 괴리 판은 센 값만 말한다(설계 §8). */
+const ADVICE = "추천|권장|권합니다|권고|바람직|올리십시오|낮추십시오|늘리십시오|줄이십시오|바꾸십시오|조정하십시오|고치십시오";
 
 test.beforeAll(() => {
   execFileSync(process.env.E2E_PYTHON ?? "python3", [path.join("frontend", "e2e", "fixtures", "intraday", "seed_bars.py")],
@@ -386,7 +388,8 @@ for (const theme of ["light", "dark"] as const) {
       expect(a.checked).toBeGreaterThan(root === ".dv-result" ? 60 : 8);
       expect(a.low, `${theme} ${root}`).toEqual([]);
       if (theme === "dark") expect(a.bright, "다크에 밝은 배경").toEqual([]);
-      const v = (await page.evaluate(voiceAudit(root))) as VoiceResult;
+      // 결과 판에는 권고 낱말이 없다(도구는 규칙을 추천하지 않는다 — 관측만). 견주기 절의 안내("규칙을 권하지 않습니다")는 부정문이라 결과 판에만 건다.
+      const v = (await page.evaluate(voiceAudit(root, root === ".dv-result" ? ADVICE : ""))) as VoiceResult;
       expect(v.haeyo).toEqual([]);
       expect(v.dash).toEqual([]);
       expect(v.banned).toEqual([]);

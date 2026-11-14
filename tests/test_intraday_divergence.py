@@ -268,3 +268,26 @@ def test_rows_in_scope_are_the_readable_rows_of_the_rules_tickers_inside_the_per
             {"executed_at": "?", "symbol": "005930", "side": "buy", "quantity": 1, "price": 1}]
     got = dv.rows_in_scope(rows, ["005930"], DAY, DAY)
     assert got == rows[:2] and got[0] is rows[0]                                             # 받은 줄 그대로 · 받은 순서
+
+
+# ── 문장은 관측만 한다 (설계 §4.3 · §8 — 도구는 규칙을 추천하지 않는다) ──────────────
+
+ADVICE = ("추천", "권장", "권합", "권고", "바람직", "십시오")
+
+
+def _advice_in(text: str) -> list[str]:
+    return [w for w in ADVICE if w in text]
+
+
+def test_every_sentence_the_engine_can_say_only_observes():
+    said = list(dv.REASONS.values())
+    said.append(compare([row("", "buy", 10, 10_050)])["degraded"]["message"])                   # 시각 없는 파일
+    said.append(compare([])["price_gap"]["message"])                                           # 짝 없음
+    said.append(dv.pnl_gap(_journal(1.0, None, 1), _journal(1.0, 1.0, 1))["net_message"])      # 비용 미상
+    assert len(said) == len(dv.REASONS) + 3 and all(isinstance(m, str) and m for m in said)
+    assert [m for m in said if _advice_in(m)] == []
+
+
+def test_the_advice_check_catches_a_recommendation():
+    assert _advice_in("슬리피지 가정을 2틱으로 올리십시오.") == ["십시오"]
+    assert _advice_in("이 규칙을 추천합니다.") == ["추천"]

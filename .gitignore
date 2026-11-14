@@ -47,6 +47,8 @@ yarn-error.log*
 dist/
 build/
 .cache/
+# 탐침 스크립트의 결과(증권사 응답 원문 — 비밀은 가리지만 저장소에 두지 않는다)
+probe_out/
 
 # ─── 데이터베이스 / 로컬 데이터 ───
 *.sqlite
