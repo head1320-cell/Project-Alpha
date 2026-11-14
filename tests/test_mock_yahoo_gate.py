@@ -10,7 +10,7 @@
 시도하지 않은 것은 실패가 아니다(사유가 다르다). 합성 시세를 지어내지도 않는다(막힌 분석은 '사용 불가 + 사유').
 
 ★이 파일이 말하지 않는 것★ — 운영에서 야후가 답하는 값의 품질 · 키가 있어야 도는 데몬 · 수동 수집 라우트.
-`fetch_equity_snapshot` 은 야후를 쓰지 않을 때 합성 스냅샷을 만든다(운영에서도 — 이 묶음이 고치지 않은 기존 동작이며 HISTORY 에 적었다).
+`fetch_equity_snapshot` 이 운영에서 합성 스냅샷을 만들던 것은 2026-11-14 에 고쳤다 — 그 계약은 `tests/test_market_snapshot_gate.py` 가 본다.
 """
 from __future__ import annotations
 
@@ -242,8 +242,8 @@ def test_mock_mode_snapshot_pipeline_does_not_download_even_when_opted_in(monkey
     import src.screener_pipeline as sp
     _mode(monkeypatch, "1")
     monkeypatch.setattr(sp, "USE_YFINANCE", True)
-    rows = asyncio.run(sp.fetch_equity_snapshot())
-    assert yahoo == [] and len(rows) > 0
+    rows, origin = asyncio.run(sp.fetch_equity_snapshot())
+    assert yahoo == [] and len(rows) == 28 and origin["is_mock"] is True
 
 
 def test_real_mode_snapshot_pipeline_downloads_when_opted_in(monkeypatch, yahoo):
@@ -252,5 +252,6 @@ def test_real_mode_snapshot_pipeline_downloads_when_opted_in(monkeypatch, yahoo)
     _mode(monkeypatch, "0")
     monkeypatch.setattr(sp, "USE_YFINANCE", True)
     monkeypatch.setattr(sp, "EQUITY_TICKERS", ["AAPL", "MSFT"])
-    asyncio.run(sp.fetch_equity_snapshot())
+    rows, origin = asyncio.run(sp.fetch_equity_snapshot())
     assert "AAPL,MSFT" in yahoo and "Ticker:AAPL" in yahoo, yahoo
+    assert sorted(r["ticker"] for r in rows) == ["AAPL", "MSFT"] and origin["source"] == "yahoo" and origin["is_mock"] is False
