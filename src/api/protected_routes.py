@@ -107,6 +107,10 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/api/v1/trade-journal/analyze"):
         (REQUIRE_LOGIN, "매매일지 분석 — 개인의 매매 기록(체결 내역)을 받는다. 저장하지 않으나 익명으로 열어 두지 않는다"),
 
+    # ── 분봉 백테스트(W4) — 적재된 분봉의 범위·출처·품질. 파일만 읽는다. 어떤 종목의 분봉을 쌓았는지가 드러나므로 익명으로 열지 않는다 ──
+    ("GET", "/api/v1/intraday/coverage"):
+        (REQUIRE_LOGIN, "분봉 적재 범위 — 날짜별 종목 수·봉 수·출처·결함. 운영에서는 합성 분봉을 세지 않는다"),
+
     # ── PB 고객 관리 (CF 3부 PB3) — 로그인 + ★본인 고객만★(남의 고객 404) · 별칭만(개인정보 모양 거절) · 지우는 경로 없음 ──
     ("GET", "/api/v1/pb/clients"):
         (REQUIRE_LOGIN, "내 고객 목록 — 별칭·성향·평가일. 소유 PB 로 거른다"),

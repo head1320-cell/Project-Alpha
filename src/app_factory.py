@@ -78,6 +78,8 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.pb_client_routes",
     # 매매일지 v1 — 체결 내역을 받아 계산만 한다(로그인 · 저장 없음).
     "src.api.trade_journal_routes",
+    # 분봉 백테스트(W4) — 적재 범위 보고부터(로그인 · 파일만 읽는다).
+    "src.api.intraday_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —

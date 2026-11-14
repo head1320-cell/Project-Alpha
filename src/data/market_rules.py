@@ -124,6 +124,57 @@ def sell_tax_bp_on(trade_date: Any, market: str, instrument: str = "stock") -> d
             "note": row.get("note") or None, "reason": None, "message": None}
 
 
+# ── 장 운영 시각 (정규장 · 종가 단일가) ──────────────────────────────────────────
+#: 체크인된 증거 파일. `SESSION_RULES_EVIDENCE_PATH` 로 덮어쓸 수 있다(매도세 표와 같은 이유).
+SESSION_RULES_EVIDENCE_PATH = Path(__file__).resolve().parents[2] / "docs" / "specs" / "krx-session-rules-evidence.json"
+
+_SESSION_MESSAGES = {
+    "no_evidence_file": "장 운영 규칙 증거 파일을 읽지 못했습니다.",
+    "bad_rules": "장 운영 규칙 증거 파일의 시각을 읽지 못했습니다.",
+    "below_grade_floor": "장 운영 규칙의 근거가 적용선에 못 미쳐 적용하지 않습니다.",
+}
+
+
+def _hhmm(value: Any) -> str | None:
+    """`"09:00"` → `"0900"`. 그 밖은 `None`(어림해 읽지 않는다)."""
+    try:
+        return datetime.strptime(str(value).strip(), "%H:%M").strftime("%H%M")
+    except ValueError:
+        return None
+
+
+def session_rules() -> dict:
+    """정규장의 시작·종가 단일가 시작·끝(`"HHMM"`) — ★값과 출처를 함께★ 돌려준다.
+
+    시각은 코드에 없다 — 증거 파일이 갖는다. 파일을 읽지 못하거나 시각이 읽히지 않으면 값 없이 사유만 준다
+    (기본 시각으로 채우지 않는다). 근거는 보도·증권사 안내 요약(`grade: T1`)이라, 쓰는 쪽은 이 시각으로 붙인 표시를
+    '시각으로 추론'한 것으로 다뤄야 한다 — 그날 실제로 그렇게 운영됐는지는 이 표가 알지 못한다(`special_days` · `unknown`).
+    """
+    def no(reason: str, **extra) -> dict:
+        return {"available": False, "open": None, "closing_auction_from": None, "close": None, "grade": None,
+                "sources": [], "note": None, "special_days": None, "unknown": [], "reason": reason,
+                "message": _SESSION_MESSAGES[reason], **extra}
+
+    override = os.getenv("SESSION_RULES_EVIDENCE_PATH", "").strip()     # 부르는 시점에 읽는다
+    try:
+        doc = json.loads((Path(override) if override else SESSION_RULES_EVIDENCE_PATH).read_text(encoding="utf-8"))
+        row = doc["regular_session"]
+        grades = list(doc["grades"])
+        below = grades.index(row["grade"]) < grades.index(doc.get("min_grade_to_apply", grades[-1]))
+    except (OSError, ValueError, KeyError, TypeError):
+        return no("no_evidence_file")
+    if below:
+        return no("below_grade_floor", grade=row["grade"])
+    opens, auction, closes = (_hhmm(row.get(k)) for k in ("open", "closing_auction_from", "close"))
+    if None in (opens, auction, closes) or not opens < auction < closes:
+        return no("bad_rules")
+    known = doc.get("sources", {})
+    return {"available": True, "open": opens, "closing_auction_from": auction, "close": closes, "grade": row["grade"],
+            "sources": [{"title": known[s]["title"], "url": known[s]["url"]} for s in row.get("sources", []) if s in known],
+            "note": row.get("note") or None, "special_days": doc.get("special_days"),
+            "unknown": list(doc.get("unknown", [])), "reason": None, "message": None}
+
+
 def spread_bp_default() -> float:
     """스프레드 비용 프록시 (편도, bp). 종목별 실측 스프레드 미보유 시 기본값."""
     return _envf("KR_SPREAD_BP", 5.0)
