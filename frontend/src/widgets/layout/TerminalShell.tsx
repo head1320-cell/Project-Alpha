@@ -14,7 +14,7 @@ import { allocationApi } from "@/entities/allocation/api";
 import { useSession } from "@/entities/session";
 import { ProfileMenu, useThemeSync } from "@/features/profile";
 import {
-  Building2, Database, Globe2, Home, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Users, Wallet, Workflow,
+  Building2, Database, Globe2, Home, LineChart, ListFilter, NotebookText, Radio, Settings, ShieldAlert, Sigma, Users, Wallet, Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { Breadcrumb } from "./Breadcrumb";
@@ -38,6 +38,7 @@ const MAIN: NavLink[] = [
   { label: "위험 점검", href: "/risk-tools", Icon: ShieldAlert },
   { label: "포트폴리오 설계", href: "/allocation", Icon: Workflow },
   { label: "고객", href: "/clients", Icon: Users },
+  { label: "매매일지", href: "/trade-journal", Icon: NotebookText },
   { label: "내 계좌", href: "/my-account", Icon: Wallet },
   { label: "데이터 상태", href: "/admin/data", Icon: Database },
 ];

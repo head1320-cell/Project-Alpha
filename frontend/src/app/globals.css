@@ -10246,3 +10246,138 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 /* ⑵ 스파크라인은 하나(`shared/ui/plot/Spark.tsx`) — 선 1.5px · 둥근 이음 · 그림이 늘어나도 굵기는 그대로 · 끝 점 = 지금 */
 .sp-line { stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .sp-end { stroke: none; }
+
+/* ════ 매매일지(.tj) — `/trade-journal` (2026-11-14 · 설계 `docs/superpowers/specs/2026-11-14-trade-journal-design.md` · `e2e/trade-journal.spec.ts`) ════
+   파일 → 열 맞추기 → 결과가 한 화면에 위에서 아래로 쌓인다. 공용 tx 부품 그대로, 색은 --tx-* 토큰만(다크 짝 자동 · 글자로 적은 색 0).
+   손익의 색은 등락색(이익 = 오름 · 손실 = 내림)이고 ★부호(+ −)가 늘 함께 간다★(색만으로 말하지 않는다). 비용은 등락이 아니라 차감이라 회색.
+   그림은 성과 그림 문법(`.pf-*` — 선 2px · 읽는 줄 · 툴팁 0)을 그대로 쓰고, 막대는 가운데 0 선의 양쪽으로 뻗는다. */
+.tj > * + * { margin-top: 12px; }
+.tj > .tx-head + * { margin-top: 0; }
+.tj-strong { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.tj-signed-out, .tj-must { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.tj-signed-out .tx-sec-sub, .tj-must .tx-sec-sub { margin: 0; }
+.tj-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-mute); word-break: keep-all; }
+.tj-read { margin: 0; padding: 10px 12px; font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); background: var(--tx-soft); border-radius: 10px; word-break: keep-all; overflow-wrap: anywhere; }
+.tj-read b { color: var(--tx-ink); font-weight: 600; }
+.tj-h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.tj-plain-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+.tj-plain-list b { color: var(--tx-ink); font-weight: 600; }
+.tj-code { font-family: var(--t-mono); font-size: 12px; font-weight: 400; color: var(--tx-mute); }
+.tj [data-mono] { font-family: var(--t-mono); font-variant-numeric: tabular-nums; }
+.tj-link { color: var(--tx-cta); font-weight: 600; text-decoration: underline; }
+.tj [data-dir="up"] { color: var(--tx-up-ink); }
+.tj [data-dir="down"] { color: var(--tx-down-ink); }
+.tj .pf-curve:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; border-radius: 6px; }
+/* ① 파일 */
+.tj-file { display: flex; flex-direction: column; gap: 12px; }
+.tj-drop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; border: 1.5px dashed var(--tx-line); border-radius: var(--tx-r-row); }
+.tj-drop--over { border-color: var(--tx-blue); background: var(--tx-blue-soft); }
+.tj-drop-t { margin: 0; font-size: 15px; font-weight: 600; color: var(--tx-ink); word-break: keep-all; }
+.tj-drop-act { display: flex; flex-wrap: wrap; gap: 8px; }
+.tj-file-notes { list-style: disc; padding-left: 18px; font-size: 13px; color: var(--tx-mute); gap: 2px; }
+/* ② 열 맞추기 */
+.tj-map { display: flex; flex-direction: column; gap: 16px; }
+.tj-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.tj-fields--pair { grid-template-columns: repeat(2, minmax(0, 220px)); width: 100%; }
+.tj-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tj-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.tj-req { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--tx-cta); }
+.tj-input { box-sizing: border-box; width: 100%; min-width: 0; height: 40px; padding: 0 10px; border: 1px solid var(--tx-line); border-radius: 10px;
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tj-input:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 1px; }
+.tj-input[aria-invalid="true"] { border-color: var(--tx-danger); }
+.tj-block { display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid var(--tx-line); }
+.tj-sides { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.tj-side-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.tj-side-v { min-width: 112px; font-size: 14px; color: var(--tx-ink); overflow-wrap: anywhere; }
+.tj-pick { flex-wrap: wrap; max-width: 100%; }
+.tj-pick .tx-seg-opt { height: 32px; padding: 0 12px; font-size: 13px; }
+.tj-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.tj-opt + .tj-opt { margin-top: 8px; padding-top: 12px; border-top: 1px dashed var(--tx-line); }
+.tj-opt > .tj-field { width: min(100%, 260px); }
+.tj-run-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-top: 16px; border-top: 1px solid var(--tx-line); }
+.tj-run { min-width: 96px; }
+.tj-map-miss { margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 1.55; color: var(--tx-danger); word-break: keep-all; }
+/* 표 — 숫자 칸은 오른쪽 · 고정폭 숫자. 긴 표는 제 상자 안에서 넘긴다(화면이 옆으로 밀리지 않게) */
+.tj-scroll { overflow: auto; max-height: 440px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row); }
+.tj-table { width: 100%; border-collapse: collapse; font-size: 13.5px; color: var(--tx-ink); }
+.tj-table th, .tj-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--tx-line); white-space: nowrap; }
+.tj-table thead th { position: sticky; top: 0; z-index: 1; background: var(--tx-surface); font-size: 12.5px; font-weight: 600; color: var(--tx-mute); }
+.tj-table tbody th { font-weight: 500; color: var(--tx-sub); white-space: normal; word-break: keep-all; }
+.tj-table tbody tr:last-child > * { border-bottom: 0; }
+.tj-table .tj-num, .tj-num { text-align: right; font-variant-numeric: tabular-nums; }
+.tj-table td[data-bad] { color: var(--tx-danger); }
+.tj-scroll-x { overflow-x: auto; }
+.tj-sub { font-size: 12.5px; color: var(--tx-mute); }
+.tj-after-loss tbody th { min-width: 112px; }
+.tj-when { color: var(--tx-sub); font-variant-numeric: tabular-nums; }
+/* ③ 결과 */
+.tj-result { display: flex; flex-direction: column; gap: 12px; }
+.tj-result > .tx-sec, .tj-result > .tx-answer { margin-top: 0; }
+.tj-result .tx-sec-body { display: flex; flex-direction: column; gap: 12px; }
+.tj-sum { max-width: 640px; }
+.tj-sum .tj-sum-net { font-weight: 700; }
+.tj-reasons { margin: 0 0 6px; padding-left: 18px; }
+.tj-costs { display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+.tj-cost-figs { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0; }
+.tj-cost-figs > div { display: flex; flex-direction: column; gap: 3px; }
+.tj-cost-figs dt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--tx-mute); }
+.tj-cost-figs dd { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--tx-ink); font-variant-numeric: normal; }
+.tj-basis-tag { font-size: 11.5px; font-weight: 700; line-height: 1; padding: 4px 6px; border-radius: 6px; background: var(--tx-soft); color: var(--tx-sub); }
+.tj-basis-tag[data-basis="assumed"] { background: var(--tx-warn-soft); color: var(--tx-warn); }
+.tj-basis-tag[data-basis="inferred"] { background: var(--tx-blue-soft); color: var(--tx-cta); }
+.tj-basis-tag[data-basis="unknown"] { background: transparent; box-shadow: inset 0 0 0 1px var(--tx-line); }
+.tj-wf { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; max-width: 720px; }
+.tj-wf-row { display: grid; grid-template-columns: minmax(76px, 132px) minmax(48px, 1fr) minmax(84px, auto); align-items: center; gap: 10px; font-size: 13px; color: var(--tx-sub); }
+.tj-wf-track { position: relative; display: block; height: 14px; }
+.tj-wf-zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--tx-mute); }
+.tj-wf-bar { position: absolute; top: 2px; height: 10px; border-radius: 2px; }
+.tj-wf-bar--up { background: var(--tx-up); } .tj-wf-bar--down { background: var(--tx-down); }
+.tj-wf-bar--flat, .tj-wf-bar--cost { background: var(--tx-mute); }
+.tj-wf-val { text-align: right; font-weight: 600; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+/* 좁으면 이름과 값을 한 줄에, 막대는 그 아래 온 폭으로 — 막대가 점처럼 줄어들지 않게 */
+@container (max-width: 460px) {
+  .tj-wf-row { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; }
+  .tj-wf-track { grid-column: 1 / -1; grid-row: 2; }
+}
+.tj-buckets { container-type: inline-size; }
+.tj-buckets .tx-tabpanel { display: flex; flex-direction: column; gap: 10px; }
+.tj-bucket-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; max-height: 420px; overflow: auto; }
+.tj-bucket-head, .tj-bucket-row { display: grid; grid-template-columns: minmax(96px, 1.3fr) 56px 60px minmax(80px, 2fr) 108px 96px; align-items: center; gap: 10px; padding: 7px 2px; font-size: 13.5px; color: var(--tx-ink); }
+.tj-bucket-head { position: sticky; top: 0; z-index: 1; background: var(--tx-surface); font-size: 12.5px; font-weight: 600; color: var(--tx-mute); border-bottom: 1px solid var(--tx-line); }
+.tj-bucket-row + .tj-bucket-row { border-top: 1px solid var(--tx-line); }
+.tj-bucket-lab { min-width: 0; overflow-wrap: anywhere; }
+.tj-bucket-track { position: relative; display: block; height: 12px; background: var(--tx-soft); border-radius: 3px; }
+.tj-bucket-track::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--tx-mute); }
+.tj-bucket-bar { position: absolute; top: 3px; height: 6px; border-radius: 2px; }
+.tj-bucket-bar--up { background: var(--tx-up); } .tj-bucket-bar--down { background: var(--tx-down); }
+.tj-bucket-val { font-weight: 600; }
+.tj-bucket-exp { color: var(--tx-sub); }
+@container (max-width: 560px) {
+  .tj-bucket-head, .tj-bucket-row { grid-template-columns: minmax(64px, 1fr) 44px 52px auto; gap: 8px; font-size: 13px; }
+  .tj-bucket-head > :nth-child(4), .tj-bucket-head > :nth-child(6), .tj-bucket-track, .tj-bucket-exp { display: none; }
+}
+.tj-extremes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; }
+.tj-extremes > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tj-ext-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.tj-ext-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--tx-line); font-size: 13.5px; }
+.tj-ext-list li:first-child { border-top: 0; }
+.tj-ext-name { min-width: 0; font-weight: 600; color: var(--tx-ink); overflow-wrap: anywhere; }
+.tj-ext-when { grid-column: 1; font-size: 12.5px; color: var(--tx-mute); }
+.tj-ext-val { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-weight: 700; }
+.tj-excluded, .tj-basis { display: flex; flex-direction: column; gap: 14px; }
+.tj-excluded > div, .tj-basis > div { display: flex; flex-direction: column; gap: 6px; }
+.tj-basis-list { margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+.tj-basis-list > div { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; }
+.tj-basis-list dt { font-weight: 600; color: var(--tx-ink); }
+.tj-basis-list dd { margin: 0; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+.tj-src { display: inline-flex; gap: 8px; }
+.tj-src a { color: var(--tx-cta); text-decoration: underline; }
+.tj-not-covered { list-style: disc; padding-left: 18px; }
+@media (max-width: 640px) {
+  .tj-extremes { grid-template-columns: minmax(0, 1fr); }
+  .tj-fields--pair { grid-template-columns: minmax(0, 1fr); }
+  .tj .tx-sec, .tj .tx-answer { padding: 18px 16px; }
+  .tj-sum th, .tj-sum td, .tj-after-loss th, .tj-after-loss td { padding: 8px 4px; font-size: 13px; }
+  .tj-sum tr[data-k="streak"] td { white-space: normal; }
+}
