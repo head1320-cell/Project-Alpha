@@ -12,7 +12,11 @@ KRX 규칙 근사(정직 라벨). 실 운영 시 브로커·규정 변경을 여
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
 
 
 def _envf(key: str, default: float) -> float:
@@ -30,8 +34,94 @@ def commission_bp() -> float:
 
 def sell_tax_bp() -> float:
     """매도 시 증권거래세+농특세 합계 (bp). 2024 기준 코스피 ~18bp·코스닥 ~18bp 근사.
-    시장·시점별 상이 — env로 조정. 매수엔 미부과."""
+    시장·시점별 상이 — env로 조정. 매수엔 미부과.
+
+    ★이 고정값은 2024년 한 해의 값이다★ — 거래일·시장·상품에 맞는 값은 `sell_tax_bp_on()` 이 출처와 함께 준다.
+    이 함수는 그대로 둔다(읽는 엔진의 결과가 바뀌지 않게)."""
     return _envf("KR_SELL_TAX_BP", 18.0)
+
+
+# ── 매도세의 시점·시장·상품별 표 ─────────────────────────────────────────────
+#: 체크인된 증거 파일(확인한 칸만 · 미확인 구간은 그 파일의 `unknown` 에 사유와 함께).
+#: `SELL_TAX_EVIDENCE_PATH` 로 덮어쓸 수 있다 — 갓 고친 파일을 운영 파일을 건드리지 않고 시험해 보기 위한 것이다.
+SELL_TAX_EVIDENCE_PATH = Path(__file__).resolve().parents[2] / "docs" / "specs" / "sell-tax-schedule-evidence.json"
+
+#: 이 표가 다루는 시장 · 상품. 그 밖은 값을 만들지 않는다.
+SELL_TAX_MARKETS = ("KOSPI", "KOSDAQ", "KONEX")
+SELL_TAX_INSTRUMENTS = ("stock", "etf")
+
+_SELL_TAX_MESSAGES = {
+    "bad_date": "거래일을 읽지 못해 매도세를 정할 수 없습니다.",
+    "unknown_market": "이 시장의 매도세는 표에 없습니다(코스피·코스닥·코넥스만 다룹니다).",
+    "unknown_instrument": "이 상품의 매도세는 확인하지 못했습니다(주식·ETF 만 다룹니다).",
+    "outside_schedule": "이 거래일의 매도세는 확인하지 못한 구간입니다.",
+    "below_grade_floor": "이 구간의 근거가 적용선에 못 미쳐 매도세를 적용하지 않습니다.",
+    "no_evidence_file": "매도세 증거 파일을 읽지 못했습니다.",
+}
+
+
+def _trade_date(value: Any) -> date | None:
+    """`date` · `datetime` · `YYYY-MM-DD` · `YYYYMMDD` → `date`. 그 밖은 `None`(어림해 읽지 않는다)."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    for fmt in ("%Y-%m-%d", "%Y%m%d"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def sell_tax_bp_on(trade_date: Any, market: str, instrument: str = "stock") -> dict:
+    """그 거래일·시장·상품의 매도세(bp) — ★값과 출처를 함께★ 돌려준다.
+
+    `bp` 는 증권거래세 + 농어촌특별세의 합이고 `parts` 가 그 구성이다. 면제(ETF)는 `bp == 0` 이라는 ★값★이고,
+    확인하지 못한 구간·시장·상품은 `bp is None` + `reason` 이다 — 가까운 구간의 값으로 채우지 않는다.
+    표의 근거는 보도·안내 자료 요약(`grade: T1`)이다 — 쓰는 쪽은 이 값을 '추정'으로 표시해야 한다.
+    기준일은 매매체결일이다(증거 파일의 `date_basis`).
+    """
+    mkt = str(market or "").strip().upper()
+    inst = str(instrument or "").strip().lower()
+
+    def no(reason: str, **extra) -> dict:
+        return {"available": False, "bp": None, "parts": None, "market": mkt, "instrument": inst, "grade": None,
+                "period": None, "sources": [], "note": None, "reason": reason,
+                "message": _SELL_TAX_MESSAGES[reason], **extra}
+
+    day = _trade_date(trade_date)
+    if day is None:
+        return no("bad_date")
+    if mkt not in SELL_TAX_MARKETS:
+        return no("unknown_market")
+    if inst not in SELL_TAX_INSTRUMENTS:
+        return no("unknown_instrument")
+    override = os.getenv("SELL_TAX_EVIDENCE_PATH", "").strip()      # 부르는 시점에 읽는다
+    try:
+        doc = json.loads((Path(override) if override else SELL_TAX_EVIDENCE_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return no("no_evidence_file")
+
+    iso = day.isoformat()
+    row = next((r for r in doc.get("schedule", [])
+                if r["market"] == mkt and r["instrument"] == inst
+                and r["from"] <= iso and (r["to"] is None or iso <= r["to"])), None)
+    if row is None:
+        return no("outside_schedule")
+    period = {"from": row["from"], "to": row["to"]}
+    grades = list(doc.get("grades", {}))
+    if grades.index(row["grade"]) < grades.index(doc.get("min_grade_to_apply", grades[-1])):
+        return no("below_grade_floor", grade=row["grade"], period=period)
+    parts = {"transaction_tax_bp": row["transaction_tax_bp"], "rural_special_tax_bp": row["rural_special_tax_bp"]}
+    known = doc.get("sources", {})
+    return {"available": True, "bp": parts["transaction_tax_bp"] + parts["rural_special_tax_bp"], "parts": parts,
+            "market": mkt, "instrument": inst, "grade": row["grade"], "period": period,
+            "sources": [{"title": known[s]["title"], "url": known[s]["url"]} for s in row["sources"]],
+            "note": row.get("note") or None, "reason": None, "message": None}
 
 
 def spread_bp_default() -> float:
