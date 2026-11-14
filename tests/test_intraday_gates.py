@@ -19,13 +19,18 @@ def brief(trades=40, net=1_000.0, gross=2_000.0):
             "basis": "gross" if net is None else "net"}
 
 
+def doubled(net, commission_bp=3.0, slippage_ticks=2) -> dict:
+    """비용을 두 배로 놓은 계산 — 두 배로 놓은 수수료율과 슬리피지가 함께 온다."""
+    return {"double": brief(net=net), "commission_bp": commission_bp, "slippage_ticks": slippage_ticks}
+
+
 def good(**changes) -> dict:
     """전부 통과하는 입력 — 시험마다 한 군데만 바꾼다."""
     base = dict(
         origin={"grade": "E3", "grade_reason": "쓰인 분봉이 전부 제공자의 실제 응답입니다.", "sessions": {"kis": 60, "synthetic": 0, "unknown": 0}},
         sessions=60, skipped=0, bar_label_known=True, summary=brief(), slippage_ticks=1,
         oos={"reason": None, "split": {"in_sample_days": 42, "out_of_sample_days": 18}, "in_sample": brief(), "out_of_sample": brief(trades=30)},
-        oos_views=1, stress={"double": brief(net=200.0)},
+        oos_views=1, stress=doubled(200.0),
         multiplicity={"n": 3, "value": 0.97, "threshold": 0.95, "corrected": True, "reason": None, "days": 60, "note": "하한입니다."},
         trial_error=None)
     return {**base, **changes}
@@ -100,6 +105,10 @@ def test_out_of_sample_needs_thirty_trades_and_a_positive_net_expectancy(trades,
 def test_a_period_too_short_to_split_is_unknown():
     oos = {"reason": "too_few_days", "split": None, "in_sample": None, "out_of_sample": None}
     assert states(gates.build(**good(oos=oos)))["out_of_sample"] == UNKNOWN
+    # 가르지 못했으면 본 것도 없다 — '몇 번째 보는지 세지 못했다'는 말은 시행 기록이 실패했을 때의 말이다
+    for views in (None, 1):
+        facts = gates.build(**good(oos=oos, oos_views=views))["gates"][3]["facts"]
+        assert not any("번째" in f or "세지 못했습니다" in f for f in facts) and any("사후" in f for f in facts)
 
 
 def test_looking_again_at_the_same_out_of_sample_is_said_out_loud():
@@ -116,10 +125,27 @@ def test_an_unrecorded_trial_cannot_say_how_many_times_it_was_looked_at():
 
 
 # ── 비용 강건성 ───────────────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("stress, want", [({"double": brief(net=1.0)}, OK), ({"double": brief(net=0.0)}, BAD),
-                                           ({"double": brief(net=None)}, UNKNOWN), (None, UNKNOWN)])
+@pytest.mark.parametrize("stress, want", [(doubled(1.0), OK), (doubled(0.0), BAD), (doubled(None), UNKNOWN), (None, UNKNOWN)])
 def test_cost_robustness_is_the_net_expectancy_under_doubled_costs(stress, want):
     assert states(gates.build(**good(stress=stress)))["cost_robustness"] == want
+
+
+def robust(stress) -> dict:
+    return next(g for g in gates.build(**good(stress=stress))["gates"] if g["key"] == "cost_robustness")
+
+
+def test_doubling_costs_that_are_both_zero_measures_nothing():
+    gate = robust(doubled(200.0, commission_bp=0.0, slippage_ticks=0))
+    assert gate["state"] == UNKNOWN and "달라지는 것이 없습니다" in gate["reason"]        # 0 의 두 배는 0 — 통과로 읽히면 공허한 통과다
+    assert robust(doubled(200.0, commission_bp=3.0, slippage_ticks=0))["state"] == OK     # 짝: 하나라도 0 이 아니면 잰 것이다
+    assert robust(doubled(200.0, commission_bp=0.0, slippage_ticks=2))["state"] == OK
+
+
+def test_a_zero_assumption_is_named_when_only_the_other_cost_was_doubled():
+    assert any("슬리피지" in f and "0틱" in f for f in robust(doubled(200.0, commission_bp=3.0, slippage_ticks=0))["facts"])
+    assert any("수수료율" in f and "0" in f for f in robust(doubled(200.0, commission_bp=0.0, slippage_ticks=2))["facts"])
+    plain = robust(doubled(200.0))["facts"]
+    assert not any("0틱" in f for f in plain) and len(plain) == 1
 
 
 # ── 다중 비교 ─────────────────────────────────────────────────────────────────────────
@@ -156,3 +182,9 @@ def test_the_vocabulary_is_the_repository_s_and_nothing_else():
     banned = ("검증됨", "입증", "견고", "프로덕션", "투자 우위", "더 나은 전략")
     best = gates.build(**good())
     assert not any(word in text for g in best["gates"] for text in (g["reason"], *g["facts"], best["sentence"]) for word in banned)
+
+
+def test_the_out_of_sample_gate_always_says_the_whole_period_result_already_contained_it():
+    for views in (1, 3, None):
+        facts = next(g for g in gates.build(**good(oos_views=views))["gates"] if g["key"] == "out_of_sample")["facts"]
+        assert any("전체 기간 결과" in f and "이미 들어 있습니다" in f for f in facts)

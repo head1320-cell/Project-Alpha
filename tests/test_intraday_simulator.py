@@ -341,6 +341,27 @@ def test_days_are_independent_and_nothing_is_held_overnight():
     assert [f["side"] for f in out["fills"]] == ["buy", "sell", "buy", "sell"]
 
 
+def test_a_day_s_limits_do_not_leak_into_the_next_day():
+    # 판정(표본외 · 워크포워드)은 체결 줄을 날짜로 잘라 쓴다 — 하루씩 따로 돌린 것과 같아야 그 자르기가 옳다.
+    pos = PositionRules(amount=1_000_000, stop_pct=1.0, daily_loss_limit=10_000, cooldown_after_loss_min=30)
+
+    def day(date):
+        return Day(date, {"000660": sess(LOSER, ticker="000660", date=date), "005930": sess(LATER, date=date)})
+    both = go([day("2026-03-04"), day("2026-03-05")], position=pos)
+    alone = go([day("2026-03-04")], position=pos)["fills"] + go([day("2026-03-05")], position=pos)["fills"]
+    assert both["fills"] == alone and len(alone) == 4               # 이튿날에도 첫 종목은 다시 들어간다
+
+
+def test_the_days_that_actually_ran_are_listed():
+    ran = Day("2026-03-04", {"005930": sess([R0, R1, R2, R3], date="2026-03-04")})
+    shifted = Day("2026-03-05", {"005930": sess([R0, R1, R2, R3], date="2026-03-05")}, shifted=True)
+    nothing = Day("2026-03-06", {}, skipped=(("005930", "no_bars"),))
+    quiet = Day("2026-03-09", {"005930": sess(FLAT, date="2026-03-09")})        # 돌았지만 거래가 없다 — 그래도 하루다
+    out = go([ran, shifted, nothing, quiet])
+    assert out["dates"] == ["2026-03-04", "2026-03-09"] and out["counts"]["days"] == 2
+    assert intraday.run([ran, shifted, nothing, quiet], RULE, POS, COST, rules=RULES)["dates"] == out["dates"]
+
+
 def test_the_order_of_the_ticker_dict_does_not_change_the_result():
     a, b = sess([R0, R1, R2, R3], ticker="000660"), sess([R0, R1, R2, R3], ticker="005930")
     pos = PositionRules(amount=1_000_000, max_open_positions=1)
@@ -465,6 +486,18 @@ def test_an_unknown_market_keeps_the_net_unknown_even_with_a_commission_rate():
     out = intraday.run(one_day(sess([R0, R1, R2, R3], market=None, instrument=None)), RULE, POS,
                        CostAssumptions(10, 1, None), rules=RULES)
     assert out["journal"]["summary"]["gross"]["total"] == 1_980 and out["journal"]["summary"]["net"] is None
+
+
+def test_a_declared_market_assumption_gives_a_net_and_is_marked_as_an_assumption():
+    days = one_day(sess([R0, R1, R2, R3], market=None, instrument=None))
+    blind = intraday.run(days, RULE, POS, CostAssumptions(commission_bp=1.5, participation_cap=None), rules=RULES)
+    assumed = intraday.run(days, RULE, POS, CostAssumptions(commission_bp=1.5, participation_cap=None, unknown_market="KOSPI",
+                                                           unknown_instrument="stock"), rules=RULES)
+    assert blind["journal"]["summary"]["net"] is None
+    # 매수 997,920 · 매도 999,900 → 수수료 1.5bp 299.67 · 매도세 20bp 1,999.80 → 1,980 − 2,299.47 = −319.47
+    assert assumed["journal"]["summary"]["net"]["total"] == pytest.approx(-319.47, abs=0.01)
+    assert assumed["journal"]["basis"]["unknown_market"] == "KOSPI" and assumed["journal"]["basis"]["tax"]["assumed"] == 1
+    assert assumed["fills"] == blind["fills"]                                    # 가정은 계산만 바꾼다 — 체결은 같다
 
 
 @pytest.mark.parametrize("sources, grade", [(("kis", "kis"), "E3"), (("kis", "synthetic"), "E0"), (("kis", "unknown"), None),

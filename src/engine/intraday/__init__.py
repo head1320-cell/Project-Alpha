@@ -37,6 +37,6 @@ def run(days: Sequence[Day], rule: RuleSpec, position: PositionRules, costs: Cos
         master: Callable[[str], dict | None] | None = None) -> dict:
     """규칙 하나를 돌리고 그 체결을 매매일지로 계산한다."""
     out = simulate(days, rule, position, costs, rules=rules)
-    journal = analyze(out["fills"], {"commission_bp": costs.commission_bp}, master=master)
+    journal = analyze(out["fills"], costs.journal_options(), master=master)
     return {"fills": out["fills"], "events": out["events"], "journal": journal, "origin": _origin(out["sources"]),
-            "assumptions": out["assumptions"], "skipped": out["skipped"], "counts": out["counts"]}
+            "assumptions": out["assumptions"], "skipped": out["skipped"], "counts": out["counts"], "dates": out["dates"]}

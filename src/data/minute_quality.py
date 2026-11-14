@@ -142,6 +142,15 @@ def check_day(day: pd.DataFrame, rules: dict | None = None, *, detail: Iterable[
     return out
 
 
+def defect_counts(day: pd.DataFrame, rules: dict | None = None) -> dict[str, int]:
+    """종목마다 결함의 합만 — `check_day(...)["by_ticker"][t]["defect_total"]` 과 같은 값을, 종목별 표를 짓지 않고 낸다."""
+    if len(day) == 0:
+        return {}
+    marks, keyed, _, _ = _marks(day, rules)
+    totals = marks[list(DEFECTS)].sum(axis=1).groupby(keyed["ticker"]).sum()
+    return {str(t): int(n) for t, n in totals.items()}
+
+
 def _shift(earliest: str | None, started: int, rules: dict | None) -> dict[str, Any]:
     if not _rules_ok(rules):
         return {"session_shifted": None, "session_shift": None, "shift_reason": "no_session_rules"}

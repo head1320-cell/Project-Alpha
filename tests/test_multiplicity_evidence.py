@@ -244,3 +244,24 @@ def test_the_preregistration_scan_actually_finds_something():
     hits = [p for p in sorted((_ROOT / "docs" / "specs").glob("*.md"))
             if "Benjamini" in p.read_text(encoding="utf-8")]
     assert hits, "스캔이 후보를 하나도 못 찾았다 — 검사가 공허하다"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 시행 횟수를 세는 자리 — 분봉 백테스트 (W4d · 2026-11-14)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_the_intraday_trial_log_is_registered_as_a_place_that_counts_and_corrects():
+    """★N 을 세는 자리가 처음 생겼다★ — 등록부가 그것을 모르면 '없다'는 옛 문장이 거짓이 된다."""
+    from src.domain.multiplicity import CORRECTION_DSR
+    site = next(s for s in SEARCH_SITES if s.key == "intraday_trials")
+    assert (site.family_source, site.correction, site.applied, site.decision_touching) == \
+        (FAMILY_DECLARED, CORRECTION_DSR, True, False)
+    assert site_axis(site)["state"] == AXIS_OK and CORRECTION_DSR in CORRECTIONS
+    assert "하한" in site.note                                     # 기록된 것만 센다는 사실이 설명에 있어야 한다
+
+
+def test_the_note_says_which_runs_are_counted_and_which_are_not():
+    """짝: 분봉 백테스트는 센다 · 그 밖의 실행 이력은 여전히 세지 않는다 — 둘 다 적혀야 한다."""
+    note = registry_evidence()["note"]
+    assert "분봉 백테스트" in note and "하한" in note
+    assert "backtest_runs" in note and "세는 자리가 없" in note

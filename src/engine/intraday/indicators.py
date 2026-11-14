@@ -45,7 +45,14 @@ class Indicator:
 
 def minutes_of(time: np.ndarray) -> np.ndarray:
     """`"HHMMSS"` 배열 → 자정부터의 분."""
-    return np.array([int(t[:2]) * 60 + int(t[2:4]) for t in time], dtype=float)
+    if len(time) == 0:
+        return np.zeros(0)
+    # 앞 네 글자(HHMM)를 글자 넷의 코드값으로 펴서 한 번에 센다. 숫자가 아니거나 네 글자가 안 되면 ValueError 다
+    # (봉마다 `int()` 로 읽던 때와 같은 실패 — 틀린 시각을 0 으로 읽지 않는다).
+    digits = np.ascontiguousarray(np.asarray(time).astype("U4")).view(np.uint32).reshape(len(time), 4).astype(np.int64) - 48
+    if ((digits < 0) | (digits > 9)).any():
+        raise ValueError("시각을 읽지 못했다 — HHMM 으로 시작하는 숫자여야 한다")
+    return (digits[:, 0] * 600 + digits[:, 1] * 60 + digits[:, 2] * 10 + digits[:, 3]).astype(float)
 
 
 def _windows(a: np.ndarray, n: int) -> np.ndarray:

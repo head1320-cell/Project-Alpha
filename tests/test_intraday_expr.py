@@ -242,3 +242,13 @@ def test_the_trees_in_the_property_test_do_fire_somewhere():
             out = expr.evaluate(tree, _random_session(seed))
             hits += int(np.count_nonzero(out if out.dtype == bool else ~np.isnan(out)))
         assert hits > 0, i
+
+
+def test_a_cross_is_unknown_when_the_bar_before_it_is_unknown():
+    """돌파는 앞 봉과 이 봉을 함께 본다 — 앞 봉의 값을 모르면 '돌파하지 않았다'가 아니라 ★모른다★. 그래야 '아님'이 참이 되지 않는다."""
+    s = session([10, 11, 12, 30, 5, 40])
+    cross = op("cross_up", I("close"), I("sma", n=3))               # 이동평균은 셋째 봉부터 있다 → 셋째 봉의 앞 봉은 모름
+    assert bools(cross, s)[:3] == [False, False, False]
+    assert bools(op("not", cross), s)[:4] == [False, False, False, True]     # 셋째 봉: 모름의 아님은 모름 · 넷째 봉부터 안다
+    down = op("cross_down", I("close"), I("sma", n=3))
+    assert bools(op("not", down), s)[:3] == [False, False, False]

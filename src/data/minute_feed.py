@@ -19,9 +19,10 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 import numpy as np
+import pandas as pd
 
 import src.data.minute_bars as minute_bars
-from src.data.minute_quality import check_day, session_shift
+from src.data.minute_quality import defect_counts, session_shift
 from src.engine.intraday.simulator import Day
 from src.engine.intraday.types import PrevDay, Session
 from src.engine.trade_journal.costs import market_and_instrument
@@ -50,23 +51,39 @@ def plan(start: date, end: date) -> Plan:
     return Plan([day for day, _ in found], sum(path.stat().st_size for _, path in found))
 
 
-def _regular(frame, rules: dict):
-    if not rules.get("available"):
-        return frame
-    hhmm = frame["time"].astype(str).str[:4]
-    return frame[(hhmm >= rules["open"]) & (hhmm <= rules["close"])]
+_VALUES = ("open", "high", "low", "close", "volume")
 
 
-def _session(ticker: str, day: str, rows, prev: PrevDay | None, master) -> Session:
-    rows = rows.sort_values("time")
-    sources = set(rows["source"]) if "source" in rows.columns else {"unknown"}
+def _split(frame, rules: dict) -> dict[str, dict[str, np.ndarray]]:
+    """고른 종목의 하루치 표 → 종목마다의 배열(정규장 안의 봉만 · 시각 순). ★하루에 한 번★ 가르고 정렬한다.
+
+    종목마다 표를 다시 거르면 종목 수만큼 하루 전체를 훑는다 — 서른 종목 × 66일에서 그것이 실행 시간의 절반이었다(잰 값은 HISTORY)."""
+    tick = frame["ticker"].astype(str).to_numpy().astype("U")
+    time = frame["time"].astype(str).to_numpy().astype("U")
+    keep = np.ones(len(time), dtype=bool)
+    if rules.get("available"):                                  # 규칙을 못 읽었으면 가르지 않고 전부 싣는다
+        hhmm = time.astype("U4")
+        keep = (hhmm >= rules["open"]) & (hhmm <= rules["close"])
+    order = np.flatnonzero(keep)
+    order = order[np.lexsort((time[order], tick[order]))]       # 종목 → 시각 (같은 시각은 파일의 순서 그대로)
+    tick, time = tick[order], time[order]
+    values = {k: pd.to_numeric(frame[k], errors="coerce").to_numpy(dtype=np.float64)[order] for k in _VALUES}
+    source = frame["source"].astype(str).to_numpy()[order] if "source" in frame.columns else None
+    names, starts = np.unique(tick, return_index=True)
+    out = {}
+    for name, a, b in zip(names, starts, [*starts[1:], len(tick)], strict=True):
+        origins = set(source[a:b]) if source is not None else {"unknown"}
+        out[str(name)] = {"time": time[a:b], **{k: values[k][a:b] for k in _VALUES},
+                          "source": origins.pop() if len(origins) == 1 else "unknown"}
+    return out
+
+
+def _session(ticker: str, day: str, rows: dict, prev: PrevDay | None, master) -> Session:
     market, instrument = market_and_instrument(ticker, master)
     record = master(ticker) if master is not None else None
     name = record.get("name") if isinstance(record, dict) and isinstance(record.get("name"), str) else None
-    return Session(ticker=ticker, date=day, time=rows["time"].astype(str).to_numpy(),
-                   **{k: rows[k].to_numpy(dtype=np.float64) for k in ("open", "high", "low", "close", "volume")},
-                   source=sources.pop() if len(sources) == 1 else "unknown", prev=prev,
-                   market=market, instrument=instrument, name=name)
+    return Session(ticker=ticker, date=day, time=rows["time"], **{k: rows[k] for k in _VALUES}, source=rows["source"],
+                   prev=prev, market=market, instrument=instrument, name=name)
 
 
 def build_days(tickers: list[str], start: date, end: date, *, rules: dict,
@@ -87,13 +104,13 @@ def build_days(tickers: list[str], start: date, end: date, *, rules: dict,
                 out.append(Day(day, {}, tuple((t, loaded.reason) for t in wanted)))
             continue
         asked = loaded.frame[loaded.frame["ticker"].astype(str).isin(wanted)]
-        checked = check_day(asked, rules)["by_ticker"] if len(asked) else {}
+        defects = defect_counts(asked, rules)                  # 봉이 하나라도 있는 종목 → 결함의 수
+        parts = _split(asked, rules) if len(asked) else {}
         sessions: dict[str, Session] = {}
         skipped: list[tuple[str, str]] = []
         for ticker in wanted:
-            quality = checked.get(ticker)
-            rows = _regular(asked[asked["ticker"].astype(str) == ticker], rules) if quality else None
-            reason = ("no_bars" if not quality or len(rows) == 0 else "defects" if quality["defect_total"] else None)
+            rows = parts.get(ticker)
+            reason = "no_bars" if ticker not in defects or rows is None else "defects" if defects[ticker] else None
             if reason:
                 skipped.append((ticker, reason))
                 last_seen.pop(ticker, None)                    # 쓰지 않은 하루는 다음 날의 '전일'도 되지 못한다

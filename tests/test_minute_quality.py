@@ -199,3 +199,16 @@ def test_the_cheap_shift_check_gives_the_same_answer_as_the_full_check():
         for rules in (RULES, NO_RULES):
             full = mq.check_day(frame, rules)
             assert mq.session_shift(frame, rules) == {k: full[k] for k in ("session_shifted", "session_shift", "shift_reason")}
+
+
+def test_the_cheap_defect_count_gives_the_same_totals_as_the_full_check():
+    """분봉 백테스트의 봉 준비는 종목마다 '결함이 있는가'만 묻는다 — 그 답이 전체 검사와 어긋나면 안 된다."""
+    broken = [("090000", 100, 99, 98, 100, 10), ("090000", 100, 101, 99, 100, -5), ("0901", 100, 101, 99, None, 10)]
+    frames = [day(t005930=(CLEAN, "kis")), day(t005930=(CLEAN, "kis"), t000660=(broken, "kis")),
+              day(t005930=(broken, "synthetic"), t000660=(broken, "kis"), t035720=(CLEAN, "kis"))]
+    for frame in frames:
+        for rules in (RULES, NO_RULES):
+            full = mq.check_day(frame, rules)["by_ticker"]
+            assert mq.defect_counts(frame, rules) == {t: row["defect_total"] for t, row in full.items()}
+    assert mq.defect_counts(frames[1], RULES)["000660"] > 0 and mq.defect_counts(frames[1], RULES)["005930"] == 0
+    assert mq.defect_counts(pd.DataFrame(columns=["ticker", "time", "open", "high", "low", "close", "volume"]), RULES) == {}

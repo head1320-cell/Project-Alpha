@@ -104,7 +104,7 @@
 `investment_decision_legs` · `target_portfolio_versions` · `execution_plans` ·
 `company_snapshots` · `regime_snapshots` · `scenario_packs` ·
 `scenario_pack_versions` · `timing_rule_sets` · `timing_rule_set_versions` ·
-`risk_snapshots` · `model_monitor_runs`
+`risk_snapshots` · `model_monitor_runs` · `intraday_trials`
 
 재생성은 되지만 ★그때의 입력으로는 안 된다★ — 빈티지가 그 사이 늘었고 매크로는
 개정됐다. 오늘 다시 만든 스냅샷은 **다른 값**이지 복구가 아니다.
@@ -112,6 +112,9 @@
 그런데도 삭제를 **금지하지는 않는다**. 사용자가 지목해 지우는 경로
 (`DELETE … WHERE <id> = :id`)가 이미 있고 그것은 정상적인 CRUD 다. 막으면
 기존 기능이 깨진다. ★금지가 아니라 순서다★ — 지우기 전에 무엇을 잃는지 안다.
+
+`intraday_trials`(분봉 백테스트의 시행 기록)만은 지우는 경로를 두지 않았다 — 이 표는 ★몇 번 해 봤는가(N)★ 를
+세는 자리이고, 지우면 N 이 줄어 다중 비교 보정이 약해진다(`src/data/intraday_trials.py`).
 
 ### 크기 기준 정리의 후보 — ★수치는 아직 미상★
 

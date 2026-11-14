@@ -208,3 +208,13 @@ def test_the_property_test_would_catch_a_looking_ahead_indicator(monkeypatch):
     monkeypatch.setitem(ind.INDICATORS, "cheat", cheat)
     with pytest.raises(AssertionError):
         test_no_indicator_looks_ahead("cheat")
+
+
+def test_a_time_that_is_not_four_digits_is_an_error_not_a_zero():
+    """분은 봉마다 읽지 않고 한 번에 센다 — 그래도 틀린 시각을 0 분으로 읽어서는 안 된다."""
+    from src.engine.intraday.indicators import minutes_of
+    assert list(minutes_of(np.array(["090000", "153000", "0005"], dtype=object))) == [540.0, 930.0, 5.0]
+    assert list(minutes_of(np.array(["091500"]))) == [555.0] and len(minutes_of(np.array([], dtype=object))) == 0
+    for bad in ("9시0000", "09", "0a0000", ""):
+        with pytest.raises(ValueError):
+            minutes_of(np.array(["090000", bad], dtype=object))

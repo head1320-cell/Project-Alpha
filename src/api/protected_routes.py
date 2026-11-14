@@ -114,6 +114,8 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "분봉 백테스트의 규칙 틀과 설정 칸 — 값은 없지만 같은 화면의 문이라 함께 묶는다"),
     ("POST", "/api/v1/intraday/simulate"):
         (REQUIRE_LOGIN, "분봉 백테스트 실행 — 고른 종목·규칙으로 계산한다. 무엇을 시험하는지가 드러나고 계산량이 크다"),
+    ("POST", "/api/v1/intraday/validate"):
+        (REQUIRE_LOGIN, "분봉 백테스트 판정 — 같은 규칙을 표본외·비용·시행 횟수로 다시 본다. 사용자별 시행 기록을 쓰고 읽는다"),
 
     # ── PB 고객 관리 (CF 3부 PB3) — 로그인 + ★본인 고객만★(남의 고객 404) · 별칭만(개인정보 모양 거절) · 지우는 경로 없음 ──
     ("GET", "/api/v1/pb/clients"):

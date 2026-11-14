@@ -135,6 +135,27 @@ def test_a_previous_day_more_than_five_days_back_is_unknown(bars_dir):
     assert day.sessions["005930"].prev is None
 
 
+def test_a_loaded_day_inside_the_range_but_more_than_five_days_back_is_not_the_previous_day(bars_dir):
+    write_day("2026-03-02", D1)
+    write_day("2026-03-12", [bar("005930", "090000", 10_100)])                            # 열흘 뒤 — 그 사이의 날은 적재되지 않았다
+    out = days(["005930"], "2026-03-02", "2026-03-12", need_prev=True)
+    assert [d.date for d in out] == ["2026-03-02", "2026-03-12"] and out[1].sessions["005930"].prev is None
+    write_day("2026-03-07", [bar("005930", "090000", 10_070)])                            # 짝: 닷새 안에 적재일이 있으면 그날이 전일이다
+    again = days(["005930"], "2026-03-02", "2026-03-12", need_prev=True)
+    assert again[2].sessions["005930"].prev.date == "2026-03-07"
+
+
+def test_a_skipped_day_is_not_stepped_over_to_an_older_previous_day(bars_dir):
+    write_day("2026-03-03", D1)
+    write_day("2026-03-04", [bar("005930", "090000", 10_000), ("005930", "090100", 10_000, 9_000, 9_500, 10_000, 100, "kis")])
+    write_day("2026-03-05", [bar("005930", "090000", 10_100)])
+    out = days(["005930"], "2026-03-03", "2026-03-05", need_prev=True)
+    assert out[1].skipped == (("005930", "defects"),)
+    assert out[2].sessions["005930"].prev is None             # 전일(3월 4일)을 쓰지 못했다 — 그 앞날의 값을 전일 값으로 내주지 않는다
+    write_day("2026-03-04", [bar("000660", "090000", 20_000)])                            # 그날 이 종목의 봉이 아예 없어도 같다
+    assert days(["005930"], "2026-03-03", "2026-03-05", need_prev=True)[2].sessions["005930"].prev is None
+
+
 def test_a_previous_day_with_defects_is_not_used_as_the_previous_day(bars_dir):
     write_day("2026-03-04", [*D1, ("005930", "090300", 10_000, 9_000, 9_500, 10_000, 100, "kis")])
     write_day("2026-03-05", [bar("005930", "090000", 10_100)])
@@ -150,6 +171,13 @@ def test_without_need_prev_nothing_before_the_range_is_read(bars_dir, monkeypatc
     monkeypatch.setattr(mb, "load_day_frame", lambda d: read.append(str(d)) or real(d))
     days(["005930"], "2026-03-02", "2026-03-02")
     assert read == ["2026-03-02"]
+
+
+def test_without_need_prev_no_session_carries_a_previous_day_even_inside_the_range(bars_dir):
+    write_day("2026-03-04", D1)
+    write_day("2026-03-05", [bar("005930", "090000", 10_100)])
+    out = days(["005930"], "2026-03-04", "2026-03-05")                                   # 전일 값을 쓰는 규칙이 아니다
+    assert [d.sessions["005930"].prev for d in out] == [None, None]
 
 
 # ── 종목 마스터 ───────────────────────────────────────────────────────────────────────

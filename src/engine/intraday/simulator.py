@@ -65,6 +65,13 @@ class CostAssumptions:
     commission_bp: float | None = None         # 편도 수수료율 — 일지 엔진에 그대로 넘긴다(None = 모름)
     slippage_ticks: int = 1                    # 시장가 체결의 불리한 틱 수
     participation_cap: float | None = 0.1      # 그 봉 거래량 대비 체결 상한(None = 상한 없음)
+    unknown_market: str | None = None          # 시장 구분을 모르는 종목을 이렇게 본다(사용자의 가정 — 매도세가 여기서 갈린다)
+    unknown_instrument: str | None = None      # 체결에는 쓰이지 않는다. 일지 엔진에 그대로 넘긴다
+
+    def journal_options(self) -> dict:
+        """매매일지 엔진에 넘기는 비용 가정 — 수수료율과 '모르는 종목을 무엇으로 볼지'."""
+        return {"commission_bp": self.commission_bp, "unknown_market": self.unknown_market,
+                "unknown_instrument": self.unknown_instrument}
 
 
 @dataclass(frozen=True)
@@ -179,6 +186,8 @@ class _Ticker:
     exit_sig: np.ndarray | None
     levels: np.ndarray | None
     index: dict[str, int]
+    bars: tuple[list[float], ...] = ()         # (시 · 고 · 저 · 종 · 거래량) — 봉마다 꺼내 쓰는 값이라 미리 풀어 둔다
+    hot: tuple[int, ...] = ()                  # 진입이 일어날 수 있는 봉의 번호(신호가 선 봉 · 미리 건 매수 값에 닿은 봉)
     pos: _Position | None = None
     pending_entry: bool = False
     pending_exit: str | None = None
@@ -205,6 +214,7 @@ class _Run:
         self.skipped: list[dict] = []
         self.counters: Counter = Counter()
         self.counts = {"days": 0, "sessions": 0, "bars": 0, "entries": 0, "exits": 0}
+        self.dates: list[str] = []                              # 실제로 돈 날 — 거래가 없어도 하루다(일별 흐름의 0)
         self.sources = {"kis": 0, "synthetic": 0, "unknown": 0}
 
     # 하루 ─────────────────────────────────────────────────────────────────────────────
@@ -220,33 +230,62 @@ class _Run:
                 self.skipped.append({"date": day.date, "ticker": ticker, "reason": reason})
                 continue
             cache: dict = {}
+            entry = expr.evaluate(self.rule.entry, s, cache) if self.rule.entry is not None else None
+            levels = expr.evaluate(self.rule.entry_stop, s, cache) if self.rule.entry_stop is not None else None
+            hot = set(np.flatnonzero(entry).tolist()) if entry is not None else set()
+            if levels is not None and len(levels) > 1:             # 미리 건 매수 — 앞 봉까지로 정해진 값에 고가가 닿은 봉만
+                with np.errstate(invalid="ignore"):                # (호가 단위로 올리면 문턱이 더 높아질 뿐이라 놓치는 봉이 없다)
+                    hot.update((np.flatnonzero(np.asarray(s.high, dtype=float)[1:] >= levels[:-1]) + 1).tolist())
             live[ticker] = _Ticker(
                 session=s,
-                entry_sig=expr.evaluate(self.rule.entry, s, cache) if self.rule.entry is not None else None,
+                entry_sig=entry,
                 exit_sig=expr.evaluate(self.rule.exit, s, cache) if self.rule.exit is not None else None,
-                levels=expr.evaluate(self.rule.entry_stop, s, cache) if self.rule.entry_stop is not None else None,
-                index={str(t): i for i, t in enumerate(s.time)})
+                levels=levels,
+                index={str(t): i for i, t in enumerate(s.time)},
+                bars=tuple(np.asarray(a, dtype=float).tolist() for a in (s.open, s.high, s.low, s.close, s.volume)),
+                hot=tuple(sorted(hot)))
             self.sources[s.source if s.source in self.sources else "unknown"] += 1
         if not live:
             return
         self.counts["days"] += 1
+        self.dates.append(day.date)
         self.counts["sessions"] += len(live)
         if self.cutoff is None:
             self.counters["no_closing_auction_cutoff"] += 1
         state = _DayState()
-        for label in sorted({str(t) for tk in live.values() for t in tk.session.time}):
-            for ticker in live:                                   # 같은 분 안에서는 종목 코드 순
-                i = live[ticker].index.get(label)
-                if i is not None:
-                    self.bar(day.date, live[ticker], i, label, state)
+        order = list(live.values())                               # 같은 분 안에서는 종목 코드 순
+        self.counts["bars"] += sum(len(tk.index) for tk in order)
+        # 봉 대부분에서는 할 일이 없다 — 보유도 · 대기 중인 진입도 · 그 봉에서 진입이 일어날 조건도 없는 종목의 봉은
+        # `bar` 를 지나도 아무것도 바뀌지 않는다. 그래서 분마다 ★할 일이 있는 종목만★ 종목 코드 순으로 돈다:
+        #   busy  보유 중이거나 다음 봉에 진입이 걸린 종목(봉을 지날 때마다 다시 본다)
+        #   watch 그 분에 진입 신호가 섰거나 미리 건 매수 값에 닿은 종목(하루를 시작할 때 정해진다 — 그 봉까지의 값으로만
+        #         정해지는 것이라 앞을 보지 않는다. 실제로 체결되는지는 그 봉에 와서 `bar` 가 판단한다)
+        watch: dict[str, list[int]] = {}
+        for n, tk in enumerate(order):
+            for i in tk.hot:
+                watch.setdefault(str(tk.session.time[i]), []).append(n)
+        busy: set[int] = set()
+        for label in sorted({label for tk in order for label in tk.index}):
+            signalled = watch.get(label)
+            if not (busy or signalled):
+                continue
+            for n in sorted({*busy, *(signalled or ())}):
+                tk = order[n]
+                i = tk.index.get(label)
+                if i is None:
+                    continue
+                self.bar(day.date, tk, i, label, state)
+                if tk.pos is not None or tk.pending_entry:
+                    busy.add(n)
+                else:
+                    busy.discard(n)
 
     # 봉 하나 ──────────────────────────────────────────────────────────────────────────
     def bar(self, date: str, tk: _Ticker, i: int, label: str, state: _DayState) -> None:
         s = tk.session
-        o, h, low, c, v = (float(a[i]) for a in (s.open, s.high, s.low, s.close, s.volume))
+        o, h, low, c, v = (column[i] for column in tk.bars)
         hhmm, minute = label[:4], int(label[:2]) * 60 + int(label[2:4])
         ctx = (date, tk, i, label, state, minute)
-        self.counts["bars"] += 1
         acted = False
 
         if tk.pos is not None:
@@ -399,4 +438,4 @@ def simulate(days: Sequence[Day], rule: RuleSpec, position: PositionRules, costs
     for day in days:
         run.day(day)
     return {"fills": run.fills, "events": run.events, "skipped": run.skipped, "assumptions": dict(run.counters),
-            "counts": run.counts, "sources": run.sources}
+            "counts": run.counts, "sources": run.sources, "dates": run.dates}

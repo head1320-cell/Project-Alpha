@@ -143,3 +143,138 @@ def test_a_flat_series_cannot_be_scored():
 def test_the_trial_count_is_reported_as_a_lower_bound():
     assert "하한" in v.multiplicity(series(1, 300.0), [])["note"]
     assert math.isclose(v.DSR_THRESHOLD, 0.95)
+
+
+def test_a_trial_without_a_net_flow_is_counted_but_cannot_be_scored():
+    out = v.multiplicity(None, [series(2, 0.0), series(3, 0.0)])
+    assert out["n"] == 3 and out["value"] is None and out["psr0"] is None and out["dsr"] is None
+    assert out["reason"] == v.REASONS["net_unknown"]
+
+
+def test_family_trials_without_a_net_flow_still_count_and_only_make_the_correction_stronger():
+    current, others = series(1, 300.0), [series(s, 0.0) for s in (2, 3)]
+    measured = v.multiplicity(current, others)
+    with_blind = v.multiplicity(current, [*others, None, None])
+    assert measured["n"] == 3 and with_blind["n"] == 5
+    assert with_blind["dsr"] < measured["dsr"]                      # 흐름을 모르는 시행도 '해 본 것'이다 — 빼면 보정이 약해진다
+    assert with_blind["unscored"] == 2 and measured["unscored"] == 0
+
+
+def test_when_only_one_trial_can_be_scored_the_correction_is_unknown_not_skipped():
+    out = v.multiplicity(series(1, 300.0), [None])
+    assert out["n"] == 2 and out["corrected"] is True and out["value"] is None and out["reason"]
+    assert out["psr0"] is not None                                  # 보정 전 확률은 있다 — 그러나 관문이 보는 값은 없다
+
+
+def test_similarity_is_only_measured_when_every_trial_covers_the_same_days():
+    current, others = series(1, 300.0), [series(s, 0.0) for s in (2, 3, 4)]
+    same = v.multiplicity(current, others)
+    mixed = v.multiplicity(current, others, same_days=False)
+    assert same["n_effective"] is not None and same["n_effective_reason"] is None
+    assert mixed["n_effective"] is None and mixed["dsr_effective"] is None
+    assert mixed["n_effective_reason"] == v.REASONS["different_days"]
+    assert mixed["dsr"] == same["dsr"]                              # 시행 횟수로 한 보정은 그대로다
+
+
+# ── 워크포워드 ────────────────────────────────────────────────────────────────────────
+#   여드레를 넷으로: [D0 D1] [D2 D3] [D4 D5] [D6 D7].  칸 A 와 칸 B 의 날마다 손익(원):
+#       A   100  100 | −50  −50 | 200  200 | −100 −100
+#       B  −100 −100 |  80   80 | −30  −30 |  300  300
+#   구간 1 에서 고른다(A 100 > B −100) → 구간 2 에 A: −100 · 구간 2 에서 고른다(B 80 > A −50) → 구간 3 에 B: −60
+#   구간 3 에서 고른다(A 200 > B −30) → 구간 4 에 A: −200.   이어 붙이면 −360(여섯 거래).
+#   ★적용할 구간을 미리 보고 골랐다면★ B · A · B 로 +160 +400 +600 = +1,160 이 나온다 — 그 값이 나오면 앞을 본 것이다.
+WF_DATES = DATES[:8]
+CELL_A = [100, 100, -50, -50, 200, 200, -100, -100]
+CELL_B = [-100, -100, 80, 80, -30, -30, 300, 300]
+
+
+def cell(pnl, dates=WF_DATES) -> list[dict]:
+    return [f for d, p in zip(dates, pnl) if p is not None for f in day_fills(d, p)]
+
+
+def wf(cells, folds=4, dates=WF_DATES, commission_bp=0):
+    return v.walk_forward(cells, dates, folds, commission_bp=commission_bp)
+
+
+def test_the_days_are_cut_into_consecutive_folds_as_evenly_as_they_go():
+    assert [len(f) for f in v.fold_dates(DATES, 4)] == [3, 3, 2, 2]
+    assert v.fold_dates(reversed(WF_DATES), 4) == [WF_DATES[0:2], WF_DATES[2:4], WF_DATES[4:6], WF_DATES[6:8]]
+    assert v.fold_dates(DATES[:3], 4) == []                         # 구간보다 날이 적다
+
+
+def test_walk_forward_chooses_on_one_fold_and_applies_to_the_next():
+    out = wf([cell(CELL_A), cell(CELL_B)])
+    assert out["reason"] is None and out["folds"] == 4
+    assert [s["chosen"] for s in out["steps"]] == [0, 1, 0]
+    assert [s["chosen_expectancy"] for s in out["steps"]] == [100.0, 80.0, 200.0]
+    assert [s["candidates"] for s in out["steps"]] == [[100.0, -100.0], [-50.0, 80.0], [200.0, -30.0]]
+    assert [s["applied"]["net_total"] for s in out["steps"]] == [-100.0, -60.0, -200.0]
+    assert out["steps"][0]["choose"] == {"from": WF_DATES[0], "to": WF_DATES[1]}
+    assert out["steps"][0]["apply"] == {"from": WF_DATES[2], "to": WF_DATES[3]}
+    assert out["stitched"]["net_total"] == -360.0 and out["stitched"]["trades"] == 6
+    assert out["stitched"]["net_expectancy"] == pytest.approx(-60.0)
+
+
+def test_the_choice_never_sees_the_fold_it_is_applied_to():
+    base = wf([cell(CELL_A), cell(CELL_B)])
+    last_changed = wf([cell([*CELL_A[:6], 9_000, 9_000]), cell([*CELL_B[:6], -9_000, -9_000])])
+    assert [s["chosen"] for s in last_changed["steps"]] == [s["chosen"] for s in base["steps"]]
+    assert last_changed["steps"][2]["applied"]["net_total"] == 18_000.0      # 적용한 결과만 달라진다
+    assert base["stitched"]["net_total"] != 1_160.0                          # 머리말의 '앞을 본' 값이 아니다
+
+
+def test_the_first_fold_is_only_ever_used_to_choose():
+    out = wf([cell(CELL_A), cell(CELL_B)])
+    applied_days = {s["apply"]["from"] for s in out["steps"]} | {s["apply"]["to"] for s in out["steps"]}
+    assert WF_DATES[0] not in applied_days and WF_DATES[1] not in applied_days
+    assert out["stitched"]["trades"] == 6                           # 여덟 거래 가운데 첫 구간의 둘은 이어 붙인 결과에 없다
+
+
+def test_a_tie_goes_to_the_cell_declared_first_and_a_cell_without_trades_is_not_chosen():
+    tie = wf([cell(CELL_B), cell(CELL_B)])
+    assert [s["chosen"] for s in tie["steps"]] == [0, 0, 0]
+    quiet_first = wf([cell([None, None, *CELL_A[2:]]), cell(CELL_B)])        # 칸 A 는 첫 구간에 거래가 없다
+    assert quiet_first["steps"][0]["chosen"] == 1 and quiet_first["steps"][0]["candidates"] == [None, -100.0]
+
+
+def test_a_fold_where_no_cell_traded_chooses_nothing_and_adds_nothing():
+    out = wf([cell([None, None, *CELL_A[2:]]), cell([None, None, *CELL_B[2:]])])
+    first = out["steps"][0]
+    assert first["chosen"] is None and first["applied"] is None and first["reason"] == "no_choice"
+    assert [s["chosen"] for s in out["steps"][1:]] == [1, 0]
+    assert out["stitched"]["net_total"] == -260.0 and out["stitched"]["trades"] == 4
+    assert v.REASONS["no_choice"].endswith("니다.")
+
+
+def test_without_a_net_result_walk_forward_does_not_fall_back_to_the_gross_one():
+    out = wf([cell(CELL_A), cell(CELL_B)], commission_bp=None)
+    assert out["reason"] == "net_unknown" and out["steps"] == [] and out["stitched"] is None
+
+
+def test_fewer_days_than_folds_gives_no_walk_forward():
+    out = wf([cell(CELL_A[:3], WF_DATES[:3]), cell(CELL_B[:3], WF_DATES[:3])], dates=WF_DATES[:3])
+    assert out["reason"] == "too_few_days" and out["steps"] == [] and out["stitched"] is None
+
+
+def test_when_nothing_could_be_chosen_anywhere_there_is_no_stitched_result():
+    out = wf([[], []])
+    assert out["reason"] is None and all(s["chosen"] is None for s in out["steps"]) and out["stitched"] is None
+
+
+# ── 시장 구분을 모르는 종목 ───────────────────────────────────────────────────────────
+BLIND = [{**f, "market": None, "instrument": None} for f in FILLS]
+ASSUME = {"unknown_market": "KOSPI", "unknown_instrument": "etf"}
+
+
+def test_without_a_market_the_net_side_is_unknown_until_an_assumption_is_declared():
+    assert v.out_of_sample(BLIND, DATES, commission_bp=0)["out_of_sample"]["net_total"] is None
+    assert v.out_of_sample(BLIND, DATES, commission_bp=0, assume=ASSUME)["out_of_sample"]["net_total"] == 500
+    assert v.result(BLIND, commission_bp=0)["net_total"] is None
+    assert v.result(BLIND, commission_bp=0, assume=ASSUME)["net_total"] == 750
+
+
+def test_walk_forward_uses_the_declared_assumption_too():
+    cells = [[{**f, "market": None, "instrument": None} for f in cell(c)] for c in (CELL_A, CELL_B)]
+    assert v.walk_forward(cells, WF_DATES, 4, commission_bp=0)["reason"] == "net_unknown"
+    out = v.walk_forward(cells, WF_DATES, 4, commission_bp=0, assume=ASSUME)
+    assert out["reason"] is None and out["stitched"]["net_total"] == -360.0

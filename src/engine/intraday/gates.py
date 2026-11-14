@@ -62,19 +62,20 @@ def _costs(summary: dict, slippage_ticks: int) -> dict:
 def _oos(oos: dict | None, views: int | None) -> dict:
     seen = ("같은 표본외 구간을 몇 번째 보는지 세지 못했습니다." if views is None
             else f"이 표본외 구간을 {views}번째 봅니다. 두 번째부터는 표본외가 아닙니다." if views >= 2 else "")
-    picked = "종목은 검증 기간이 지난 뒤에 고른 것입니다. 기간은 갈랐지만 종목 선택은 사후입니다."
-    if not oos or oos.get("reason") or not oos.get("out_of_sample"):
-        return _gate("out_of_sample", AXIS_UNKNOWN, "거래일이 모자라 표본내와 표본외로 가르지 못했습니다.", seen, picked)
+    tail = (seen, "종목은 검증 기간이 지난 뒤에 고른 것입니다. 기간은 갈랐지만 종목 선택은 사후입니다.",
+            "전체 기간 결과에는 표본외 구간의 손익이 이미 들어 있습니다. 그 결과를 보고 규칙을 고쳤다면 이 구간은 표본외가 아닙니다.")
+    if not oos or oos.get("reason") or not oos.get("out_of_sample"):          # 가르지 못했으면 본 것도 없다 — 본 횟수는 적지 않는다
+        return _gate("out_of_sample", AXIS_UNKNOWN, "거래일이 모자라 표본내와 표본외로 가르지 못했습니다.", *tail[1:])
     out = oos["out_of_sample"]
     days = f"거래일의 앞 {oos['split']['in_sample_days']}일을 표본내로, 뒤 {oos['split']['out_of_sample_days']}일을 표본외로 갈랐습니다."
     if out["trades"] < SMALL_SAMPLE:
         return _gate("out_of_sample", AXIS_UNKNOWN, f"표본외 거래가 {out['trades']}건으로 {SMALL_SAMPLE}건에 못 미쳐 판단하지 않았습니다.",
-                     days, seen, picked)
+                     days, *tail)
     if out["net_expectancy"] is None:
-        return _gate("out_of_sample", AXIS_UNKNOWN, "비용 뒤 손익을 계산하지 못해 표본외를 판단하지 않았습니다.", days, seen, picked)
+        return _gate("out_of_sample", AXIS_UNKNOWN, "비용 뒤 손익을 계산하지 못해 표본외를 판단하지 않았습니다.", days, *tail)
     if out["net_expectancy"] > 0:
-        return _gate("out_of_sample", AXIS_OK, "표본외 구간에서 비용 뒤 거래당 기대값이 0 보다 큽니다.", days, seen, picked)
-    return _gate("out_of_sample", AXIS_DEGRADED, "표본외 구간에서 비용 뒤 거래당 기대값이 0 이하입니다.", days, seen, picked)
+        return _gate("out_of_sample", AXIS_OK, "표본외 구간에서 비용 뒤 거래당 기대값이 0 보다 큽니다.", days, *tail)
+    return _gate("out_of_sample", AXIS_DEGRADED, "표본외 구간에서 비용 뒤 거래당 기대값이 0 이하입니다.", days, *tail)
 
 
 def _robust(stress: dict | None) -> dict:
@@ -82,9 +83,15 @@ def _robust(stress: dict | None) -> dict:
     doubled = (stress or {}).get("double")
     if not doubled or doubled["net_expectancy"] is None:
         return _gate("cost_robustness", AXIS_UNKNOWN, "비용을 두 배로 놓은 계산을 하지 못했습니다.", how)
+    no_fee, no_slip = not stress.get("commission_bp"), not stress.get("slippage_ticks")
+    if no_fee and no_slip:                                          # 0 의 두 배는 0 — 잰 것이 없다
+        return _gate("cost_robustness", AXIS_UNKNOWN,
+                     "수수료율과 슬리피지가 모두 0 이라 두 배로 놓아도 달라지는 것이 없습니다. 비용 강건성을 재지 못했습니다.")
+    zero = ("슬리피지 가정이 0틱이라 두 배로 놓아도 0틱입니다. 수수료율만 두 배로 놓은 결과입니다." if no_slip
+            else "수수료율이 0 이라 두 배로 놓아도 0 입니다. 슬리피지만 두 배로 놓은 결과입니다." if no_fee else "")
     if doubled["net_expectancy"] > 0:
-        return _gate("cost_robustness", AXIS_OK, "비용을 두 배로 놓아도 거래당 기대값이 0 보다 큽니다.", how)
-    return _gate("cost_robustness", AXIS_DEGRADED, "비용을 두 배로 놓으면 거래당 기대값이 0 이하입니다.", how)
+        return _gate("cost_robustness", AXIS_OK, "비용을 두 배로 놓아도 거래당 기대값이 0 보다 큽니다.", how, zero)
+    return _gate("cost_robustness", AXIS_DEGRADED, "비용을 두 배로 놓으면 거래당 기대값이 0 이하입니다.", how, zero)
 
 
 def _multiplicity(m: dict | None, trial_error: str | None) -> dict:

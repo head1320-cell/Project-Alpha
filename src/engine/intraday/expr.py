@@ -135,11 +135,20 @@ def _number(node: dict, s: Session, cache: dict) -> np.ndarray:
     return _ARITH[name](_number(args[0], s, cache), _number(args[1], s, cache))
 
 
+def _all_before(flags: np.ndarray, bars: int) -> np.ndarray:
+    """봉 i 에서 — 바로 앞 `bars` 개 봉(`i-bars … i-1`)이 전부 참인가. 앞에 그만큼의 봉이 없으면 거짓. 그 봉 자신은 보지 않는다."""
+    out = np.zeros(len(flags), bool)
+    if len(flags) > bars:
+        seen = np.concatenate(([0], np.cumsum(flags)))          # seen[i] = 봉 i 앞까지의 참의 수
+        out[bars:] = (seen[bars:-1] - seen[:-bars - 1]) == bars
+    return out
+
+
 def _judge(node: dict, s: Session, cache: dict) -> tuple[np.ndarray, np.ndarray]:
     """(값, 아는가)."""
     name, args, n = node["op"], node.get("args", []), len(s.close)
     if name == "time_between":
-        hhmm = np.array([t[:4] for t in s.time], dtype=object) if n else np.array([], dtype=object)
+        hhmm = np.asarray(s.time).astype("U4")                  # 앞 네 글자(HHMM) — 봉마다 돌지 않는다
         return (hhmm >= node["from"]) & (hhmm <= node["to"]) if n else np.zeros(0, bool), np.ones(n, bool)
     if name in _COMPARE or name in _CROSS:
         a, b = _number(args[0], s, cache), _number(args[1], s, cache)
@@ -160,11 +169,8 @@ def _judge(node: dict, s: Session, cache: dict) -> tuple[np.ndarray, np.ndarray]
         return ~value, known
     if name == "held_before":
         value, known = parts[0]
-        bars, held, sure = node["bars"], np.zeros(n, bool), np.zeros(n, bool)
-        for i in range(bars, n):
-            sure[i] = known[i - bars:i].all()
-            held[i] = sure[i] and value[i - bars:i].all()
-        return held, sure
+        sure = _all_before(known, node["bars"])
+        return sure & _all_before(value, node["bars"]), sure
     # 세 값 논리 — 아는 쪽만으로 답이 정해지면 모름이 그 답을 흐리지 않는다.
     all_known = np.logical_and.reduce([k for _, k in parts])
     if name == "and":

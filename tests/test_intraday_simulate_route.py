@@ -112,7 +112,7 @@ def test_templates_tell_the_screen_what_it_can_offer_and_what_cannot_be_known(cl
     assert keys[0] == "amount" and {"stop_pct", "target_pct", "trail_pct", "time_exit", "daily_loss_limit",
                                     "cooldown_after_loss_min", "max_entries_per_ticker", "max_open_positions"} <= set(keys)
     assert all(f["label"] and f["type"] in ("int", "float", "time") for f in body["position"])
-    assert [f["key"] for f in body["costs"]] == ["commission_bp", "slippage_ticks", "participation_cap"]
+    assert [f["key"] for f in body["costs"]] == ["commission_bp", "slippage_ticks", "participation_cap", "unknown_market", "unknown_instrument"]
     assert body["limits"]["tickers"] == 30 and body["limits"]["ticker_days"] > 0 and body["limits"]["range_days"] > 0
     assert {u["what"] for u in body["unknowns"]} == {"bar_label", "lookback", "auction_vi_halt"}
     assert body["session_rules"]["available"] is True and body["gate"] == {"mock": True}
@@ -293,8 +293,8 @@ def test_the_intraday_modules_never_import_the_order_path():
     """정적 시험 — 분봉 백테스트의 문·봉 준비·엔진은 주문 경로와 증권사 클라이언트를 들이지 않는다."""
     banned = ("trading_engine", "order_executor", "kis_client", "execution")
     files = [ROOT / "src/api/intraday_routes.py", ROOT / "src/data/minute_feed.py", ROOT / "src/data/minute_quality.py",
-             *sorted((ROOT / "src/engine/intraday").glob("*.py"))]
-    assert len(files) >= 11
+             ROOT / "src/data/intraday_trials.py", *sorted((ROOT / "src/engine/intraday").glob("*.py"))]
+    assert len(files) >= 12
     for path in files:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         names = [n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)] + \
