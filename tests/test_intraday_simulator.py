@@ -464,6 +464,21 @@ def test_changing_later_bars_never_changes_earlier_fills(setup):
 
 
 # ── 일지 엔진으로 넘어간다 ─────────────────────────────────────────────────────────────
+def test_the_journal_of_a_simulated_run_lists_what_the_simulator_does_not_model_not_what_a_file_lacks():
+    """일지 엔진의 목록은 '올린 파일'의 이야기다(파일에 없는 체결 …). 모의 체결에는 파일이 없다 — 그 문장이 그대로 나가면 거짓이다."""
+    from src.engine.trade_journal import NOT_COVERED, analyze
+    out = intraday.run(one_day(sess([R0, R1, R2, R3])), RULE, POS, COST, rules=RULES)
+    listed = out["journal"]["not_covered"]
+    assert listed == list(intraday.NOT_MODELED) and len(listed) >= 6 and len(set(listed)) == len(listed)
+    text = " ".join(listed)
+    assert "파일" not in text and "미청산" not in text            # 일지 전용 문장이 섞이지 않는다
+    for word in ("호가", "시장 충격", "공매도", "하루를 넘기는", "수익률(%)", "기업행위", "선물", "세후"):
+        assert word in text, word
+    # 짝: 일지 엔진 자신의 목록은 그대로다(실거래 분석 화면은 달라지지 않는다).
+    assert analyze(out["fills"], COST.journal_options())["not_covered"] == list(NOT_COVERED)
+    assert any("파일" in s for s in NOT_COVERED)
+
+
 def test_run_hands_the_fills_to_the_trade_journal_and_reports_the_same_gross():
     out = intraday.run(one_day(sess([R0, R1, R2, R3])), RULE, POS, COST, rules=RULES)
     assert out["journal"]["summary"]["gross"]["total"] == 1_980

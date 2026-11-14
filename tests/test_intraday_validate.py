@@ -115,7 +115,17 @@ def series(seed: int, drift: float, n: int = 80) -> list[float]:
 
 def test_a_short_series_gives_no_probability_and_says_why():
     out = v.multiplicity(series(1, 300.0, n=40), [])
-    assert out["psr0"] is None and out["dsr"] is None and out["days"] == 40 and out["reason"]
+    assert out["psr0"] is None and out["dsr"] is None and out["days"] == 40
+    # 이 화면의 말로 적는다(거래일) — 통계 모듈의 문장('수익이 40개뿐 …')은 무엇의 개수인지 여기서는 읽히지 않는다.
+    assert out["reason"] == "거래일이 40일뿐입니다. 60일 이상이어야 확률을 산출합니다."
+
+
+def test_the_day_floor_is_the_statistic_module_s_and_at_the_floor_there_is_a_probability():
+    from src.engine import deflated_sharpe
+    below = v.multiplicity(series(1, 300.0, n=deflated_sharpe.MIN_OBS - 1), [])
+    at = v.multiplicity(series(1, 300.0, n=deflated_sharpe.MIN_OBS), [])
+    assert below["psr0"] is None and str(deflated_sharpe.MIN_OBS) in below["reason"]
+    assert at["psr0"] is not None and at["reason"] is None
 
 
 def test_a_single_trial_has_a_probability_but_nothing_to_correct_for():
@@ -137,7 +147,7 @@ def test_more_trials_lower_the_corrected_probability():
 
 def test_a_flat_series_cannot_be_scored():
     out = v.multiplicity([0.0] * 80, [])
-    assert out["psr0"] is None and out["reason"]
+    assert out["psr0"] is None and out["reason"] and "거래일이" not in out["reason"]      # 날 수가 모자란 것이 아니다
 
 
 def test_the_trial_count_is_reported_as_a_lower_bound():

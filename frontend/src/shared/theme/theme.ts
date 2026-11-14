@@ -25,6 +25,8 @@ export const DARK_READY: { pattern: RegExp; label: string }[] = [
   { pattern: /^\/my-account\/?$/, label: "내 계좌" },
   // 매매일지 v1 — `--tx-*` 토큰만 쓴다. trade-journal.spec 이 라이트·다크 AA 로 확인한다.
   { pattern: /^\/trade-journal\/?$/, label: "매매일지" },
+  // 분봉 백테스트 — 매매일지와 같은 부품·같은 토큰(`--tx-*`). intraday.spec 이 라이트·다크 AA 로 확인한다.
+  { pattern: /^\/intraday\/?$/, label: "분봉 백테스트" },
   // CF 3부 PB3·PB4 — 고객 화면·고객 한 장도 `--tx-*` 토큰만 쓴다. clients.spec · client-sheet.spec 이 라이트·다크 AA 로 확인한다.
   { pattern: /^\/clients(\/|$)/, label: "고객" },
   // CF 3부 PB6 — 고객 화면(단독). client-share.spec 이 라이트·다크 AA 로 확인한다.

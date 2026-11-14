@@ -14,7 +14,7 @@ import { allocationApi } from "@/entities/allocation/api";
 import { useSession } from "@/entities/session";
 import { ProfileMenu, useThemeSync } from "@/features/profile";
 import {
-  Building2, Database, Globe2, Home, LineChart, ListFilter, NotebookText, Radio, Settings, ShieldAlert, Sigma, Users, Wallet, Workflow,
+  Building2, CandlestickChart, Database, Globe2, Home, LineChart, ListFilter, NotebookText, Radio, Settings, ShieldAlert, Sigma, Users, Wallet, Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { Breadcrumb } from "./Breadcrumb";
@@ -33,6 +33,7 @@ const MAIN: NavLink[] = [
   { label: "홈", href: "/dashboard", Icon: Home },
   { label: "종목 찾기", href: "/screener", Icon: ListFilter },
   { label: "백테스트", href: "/backtest", Icon: LineChart },
+  { label: "분봉 백테스트", href: "/intraday", Icon: CandlestickChart },
   { label: "매크로 분석", href: "/macro", Icon: Globe2 },
   { label: "기업 분석", href: "/insights", Icon: Building2 },
   { label: "위험 점검", href: "/risk-tools", Icon: ShieldAlert },

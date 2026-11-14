@@ -331,6 +331,24 @@ def test_the_trial_count_feeds_the_correction_on_enough_days(client, auth):
     assert after["dsr"] < again["multiplicity"]["dsr"]            # 세는 수가 늘었으니 보정은 더 세진다 — 흐름을 몰라도 약해지지 않는다
 
 
+def test_trials_that_saw_different_days_are_counted_but_their_likeness_is_not_measured(client, auth, monkeypatch):
+    """가족은 기간이 ★겹치면★ 든다 — 날이 어긋난 두 흐름의 상관은 뜻이 없으므로 닮음으로 줄인 수는 내지 않고 그렇게 말한다."""
+    from src.engine.intraday import validate as v
+    with_days(monkeypatch, made_days(10))
+    client.post(VAL, json=BODY, headers=auth)
+    with_days(monkeypatch, made_days(8))
+    shorter = client.post(VAL, json={**BODY, "to": weekdays(8)[-1], "position": {"amount": 1_000_000, "stop_pct": 1}},
+                          headers=auth).json()
+    m = shorter["multiplicity"]
+    assert m["n"] == 2 and m["corrected"] is True                 # 세는 데에는 든다
+    assert m["n_effective"] is None and m["dsr_effective"] is None and m["n_effective_reason"] == v.REASONS["different_days"]
+
+    # 짝: 같은 날들을 본 시행끼리는 그 사유가 붙지 않는다.
+    same = client.post(VAL, json={**BODY, "to": weekdays(8)[-1], "position": {"amount": 1_000_000, "stop_pct": 2}},
+                       headers=auth).json()["multiplicity"]
+    assert same["n"] == 3 and same["n_effective_reason"] == v.REASONS["different_days"]      # 열흘짜리 시행이 여전히 가족에 있다
+
+
 # ── 시장 구분을 모르는 종목 ───────────────────────────────────────────────────────────
 ASSUMED = {"commission_bp": 1.5, "slippage_ticks": 1, "unknown_market": "KOSPI", "unknown_instrument": "stock"}
 
@@ -347,6 +365,26 @@ def test_a_ticker_whose_market_is_unknown_has_no_net_until_the_user_declares_an_
         assert assumed["journal"]["summary"]["net"] is not None and assumed["journal"]["basis"]["tax"]["assumed"] > 0
     assert assumed["request"]["costs"]["unknown_market"] == "KOSPI"
     assert assumed["trial"]["new"] is True and assumed["trial"]["family_n"] == 2          # 가정이 다르면 다른 시행이다
+
+
+def test_the_declared_market_reaches_every_check_that_recomputes_costs(client, auth, monkeypatch):
+    """표본외 분할 · 두 배 비용 · 워크포워드는 체결 줄을 ★다시★ 계산한다 — 선언한 가정이 거기까지 가지 않으면 그 칸만 비용 뒤가 빈다."""
+    t, o, h, low, c, v = zip(*WIN)
+    days = [Day(d, {"005930": Session("005930", d, np.array(t), np.array(o, float), np.array(h, float), np.array(low, float),
+                                      np.array(c, float), np.array(v, float), "kis", None, None, None, "삼성전자")})
+            for d in weekdays(10)]
+    with_days(monkeypatch, days)
+    grid = {"folds": 2, "position": {"stop_pct": [1, 2]}}
+    blind = client.post(VAL, json={**BODY, "walk_forward": grid}, headers=auth).json()
+    assert blind["summary"]["net_total"] is None and blind["out_of_sample"]["out_of_sample"]["net_total"] is None
+    assert blind["stress"]["double"]["net_total"] is None and blind["walk_forward"]["reason"] == "net_unknown"
+
+    out = client.post(VAL, json={**BODY, "costs": ASSUMED, "walk_forward": grid}, headers=auth).json()
+    assert out["summary"]["net_total"] == pytest.approx(-3_194.7, abs=0.1)     # 코스피 주식으로 가정 = 손 계산의 그 값
+    assert out["out_of_sample"]["in_sample"]["net_total"] is not None
+    assert out["out_of_sample"]["out_of_sample"]["net_total"] == pytest.approx(-958.41, abs=0.1)
+    assert out["stress"]["double"]["net_total"] == pytest.approx(-25_971.66, abs=0.1)
+    assert out["walk_forward"]["reason"] is None and out["walk_forward"]["stitched"]["net_total"] is not None
 
 
 def test_the_assumption_must_be_a_market_the_tax_table_knows(client, auth):

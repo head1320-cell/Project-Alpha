@@ -10381,3 +10381,50 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .tj-sum th, .tj-sum td, .tj-after-loss th, .tj-after-loss td { padding: 8px 4px; font-size: 13px; }
   .tj-sum tr[data-k="streak"] td { white-space: normal; }
 }
+
+/* ════ 분봉 백테스트(.itd) — `/intraday` (2026-11-14 · 설계 `docs/superpowers/specs/2026-11-14-intraday-minute-simulator-design.md` §7.2 · `e2e/intraday.spec.ts`) ════
+   매매일지와 같은 부품(`.tj-*` — 클래스 이름 그대로)을 쓰고, 이 화면에만 있는 것(틀 고르기 · 적재 범위 · 관문 표 · 격자)만 여기에 둔다.
+   색은 --tx-* 토큰만(다크 짝 자동). 관문의 상태는 색만으로 말하지 않는다 — 글자(통과 · 미달 · 미상)와 차례 번호가 함께 간다. */
+.itd-banner { position: sticky; top: 8px; z-index: 5; }
+.itd-banner .tx-notice { box-shadow: 0 0 0 1px var(--tx-line), 0 6px 18px rgb(25 31 40 / 8%); }
+.itd-hint { font-size: 12px; line-height: 1.4; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
+.itd-tickers { height: auto; min-height: 64px; padding: 9px 10px; line-height: 1.5; resize: vertical; font-family: var(--t-mono); font-size: 13.5px; }
+.itd select.tj-input { appearance: auto; padding-right: 6px; }
+.itd-kinds .tx-seg { display: flex; flex-wrap: wrap; }
+.itd-kinds .tx-seg-opt { flex: 0 0 auto; }
+.itd-coverage { display: flex; flex-direction: column; gap: 12px; }
+.itd-days { max-height: 260px; }
+.itd-days td { white-space: normal; word-break: keep-all; }
+.itd-days tr[data-status="blocked"] td, .itd-days tr[data-status="unreadable"] td { color: var(--tx-sub); }
+.itd-why { color: var(--tx-mute); }
+.itd-used, .itd-trials, .itd-walk, .itd-judge { display: flex; flex-direction: column; gap: 12px; }
+.itd-notes, .itd-cost-notes, .itd-assumptions, .itd-skipped, .itd-unknowns { font-size: 13px; }
+.itd-notes, .itd-cost-notes { list-style: disc; padding-left: 18px; color: var(--tx-mute); gap: 2px; }
+.itd-run-row { padding: 16px 20px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-surface); }
+.itd-trial { padding-top: 10px; border-top: 1px dashed var(--tx-line); }
+.itd-trial[data-recorded="false"] { color: var(--tx-warn); }
+.itd-verdict > * + * { margin-top: 12px; }
+.itd-gates { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.itd-gate { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--tx-line); }
+.itd-gate:first-child { padding-top: 0; }
+.itd-gate:last-child { padding-bottom: 0; border-bottom: 0; }
+.itd-gate-no { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--tx-soft); color: var(--tx-sub); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.itd-gate-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.itd-gate-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.itd-gate-name { font-size: 15px; font-weight: 700; color: var(--tx-ink); }
+.itd-gate-state { padding: 5px 8px; font-size: 12.5px; }
+.itd-gate-state[data-tone="unknown"] { background: transparent; box-shadow: inset 0 0 0 1px var(--tx-line); color: var(--tx-sub); }
+.itd-gate-reason { margin: 0; font-size: 14px; line-height: 1.55; color: var(--tx-ink); word-break: keep-all; }
+.itd-gate-facts { font-size: 13px; color: var(--tx-mute); gap: 3px; }
+.itd-double > * { border-top: 2px solid var(--tx-line); font-weight: 600; }
+.itd-oos th, .itd-slippage th, .itd-cells th, .itd-steps th { white-space: nowrap; }
+.itd-grid { display: flex; flex-direction: column; gap: 10px; }
+.itd-grid-on { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--tx-ink); cursor: pointer; }
+.itd-grid-on input { width: 16px; height: 16px; accent-color: var(--tx-cta); }
+@media (max-width: 640px) {
+  .itd-banner { top: 4px; }
+  .itd-run-row { padding: 14px 16px; }
+  .itd-gate { grid-template-columns: 24px minmax(0, 1fr); gap: 10px; }
+  .itd-gate-no { width: 24px; height: 24px; font-size: 12px; }
+}

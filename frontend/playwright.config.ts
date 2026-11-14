@@ -35,7 +35,8 @@ export default defineConfig({
       // 2026-11-12 에는 그 다운로드가 네트워크가 열린 CI 에서만 성공해 같은 E2E 가 "업종·지수 구성을 아는 서버"와 "모르는 서버"를 따로 봤고(CI 전용 실패 6건),
       // 그때는 여기서 `LIFECYCLE_MASTER_COLLECT=0` 으로 막았다. ★지금은 그 스위치를 일부러 주지 않는다★ — 제품 기본 동작이 막는지를 CI E2E 가 본다.
       command:
-        "cd .. && KIS_USE_MOCK=1 DATABASE_URL=sqlite:////tmp/e2e_pw.db python3 -m uvicorn main_api:app --port 8000 --log-level warning",
+        // `MINUTE_BARS_DIR` — 분봉 백테스트 스펙이 심는 분봉의 자리(`e2e/intraday.spec.ts` · `e2e/fixtures/intraday/seed_bars.py`). 저장소 밖이라 작업 트리에 파일이 남지 않는다.
+        "cd .. && KIS_USE_MOCK=1 MINUTE_BARS_DIR=/tmp/e2e_minute_bars DATABASE_URL=sqlite:////tmp/e2e_pw.db python3 -m uvicorn main_api:app --port 8000 --log-level warning",
       url: "http://localhost:8000/api/v1/macro/health",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

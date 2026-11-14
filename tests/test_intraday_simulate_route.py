@@ -171,6 +171,14 @@ def test_the_request_reaches_the_engine_as_sent(client, auth, monkeypatch):
     assert body["request"]["tickers"] == ["005930"]
 
 
+def test_the_answer_lists_what_the_simulator_does_not_model(client, auth):
+    import src.api.intraday_routes as mod
+    collect(["005930"], "2026-03-04")
+    body = client.post(SIM, json=BODY, headers=auth).json()
+    assert body["journal"]["not_covered"] == list(mod.intraday.NOT_MODELED)
+    assert not any("파일" in s for s in body["journal"]["not_covered"])
+
+
 def test_with_synthetic_bars_the_answer_says_so(client, auth):
     collect(["005930", "000660"], "2026-03-04")
     body = client.post(SIM, json={**BODY, "tickers": ["005930", "000660", "035720"]}, headers=auth).json()

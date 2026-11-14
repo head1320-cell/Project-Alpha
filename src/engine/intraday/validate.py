@@ -118,6 +118,8 @@ def multiplicity(current: list[float] | None, family: list[list[float] | None], 
     corrected = n >= 2
     value = row["dsr"] if corrected else row["psr0"]
     reason = row["reason"] or (table["reason"] if corrected and row["dsr"] is None else None)
+    if row["t"] < deflated_sharpe.MIN_OBS:       # 통계 모듈의 문장은 '수익이 N개' 다 — 이 화면에서는 거래일이다
+        reason = f"거래일이 {row['t']}일뿐입니다. {deflated_sharpe.MIN_OBS}일 이상이어야 확률을 산출합니다."
     return {**blank, "days": row["t"], "sharpe_per_day": row["sr"], "psr0": row["psr0"], "dsr": row["dsr"],
             "dsr_effective": row.get("dsr_eff") if same_days else None,
             "n_effective": table.get("n_eff") if same_days else None,

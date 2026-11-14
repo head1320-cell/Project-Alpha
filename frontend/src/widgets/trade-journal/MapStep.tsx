@@ -12,7 +12,7 @@ import {
 } from "@/entities/trade-journal";
 import { num } from "@/shared/lib/krFormat";
 import { Section } from "@/shared/ui/tx";
-import { INSTRUMENT_KO, MARKET_KO } from "./format";
+import { INSTRUMENT_KO, MARKET_KO } from "@/features/journal-result";
 
 export type FeeMode = "file" | "rate" | "unknown";
 export type TaxMode = "file" | "table";
