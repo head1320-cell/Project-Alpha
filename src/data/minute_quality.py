@@ -138,14 +138,34 @@ def check_day(day: pd.DataFrame, rules: dict | None = None, *, detail: Iterable[
         if detail is None or rows.any():
             table = _per_ticker(marks[rows], keyed[rows], valid[rows], minutes[rows])
             out["by_ticker"] = {str(t): _session_dict(table.loc[t], rules) for t in table.index}
-    if not _rules_ok(rules):
-        out["shift_reason"] = "no_session_rules"
-    elif earliest is None:
-        out["shift_reason"] = "no_bars"
-    else:
-        # 한 종목이라도 제때 시작했으면 장은 제때 열린 것이다 — 그날 가장 이른 봉으로 본다.
-        late = (int(earliest[:2]) * 60 + int(earliest[2:4])) - (int(rules["open"][:2]) * 60 + int(rules["open"][2:]))
-        out["session_shifted"] = late > SHIFT_MINUTES
-        out["session_shift"] = {"earliest_first": earliest, "expected_open": rules["open"], "minutes_late": late,
-                                "tickers": started}
+    out.update(_shift(earliest, started, rules))
     return out
+
+
+def _shift(earliest: str | None, started: int, rules: dict | None) -> dict[str, Any]:
+    if not _rules_ok(rules):
+        return {"session_shifted": None, "session_shift": None, "shift_reason": "no_session_rules"}
+    if earliest is None:
+        return {"session_shifted": None, "session_shift": None, "shift_reason": "no_bars"}
+    # 한 종목이라도 제때 시작했으면 장은 제때 열린 것이다 — 그날 가장 이른 봉으로 본다.
+    late = (int(earliest[:2]) * 60 + int(earliest[2:4])) - (int(rules["open"][:2]) * 60 + int(rules["open"][2:]))
+    return {"session_shifted": late > SHIFT_MINUTES, "shift_reason": None,
+            "session_shift": {"earliest_first": earliest, "expected_open": rules["open"], "minutes_late": late, "tickers": started}}
+
+
+def session_shift(day: pd.DataFrame, rules: dict | None = None) -> dict[str, Any]:
+    """하루 전체에서 운영 시간 변동만 본다 — `check_day` 의 그 부분과 같은 답을, 봉마다 표시를 매기지 않고 낸다.
+
+    분봉 백테스트는 고른 종목만 검사하지만 "장이 늦게 열렸는가"는 ★그날 적재된 모든 종목★으로 봐야 한다."""
+    if len(day) == 0:
+        return _shift(None, 0, rules)
+    times = day["time"].astype(str)
+    earliest = times.min()
+    valid, _ = _clock(pd.Series([earliest]))
+    if not bool(valid.iloc[0]):                                # 가장 작은 글자가 시각이 아니다 — 읽히는 것만 다시 본다
+        ok, _ = _clock(times)
+        earliest = times[ok].min() if ok.any() else None
+        started = int(day["ticker"].astype(str)[ok].nunique()) if ok.any() else 0
+    else:
+        started = int(day["ticker"].astype(str).nunique())
+    return _shift(earliest, started, rules)

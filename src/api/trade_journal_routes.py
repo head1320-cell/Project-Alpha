@@ -50,6 +50,9 @@ def _master_lookup():
     return lookup
 
 
+#: 같은 조회를 분봉 백테스트의 문도 쓴다(종목의 시장·상품·이름을 정하는 길은 하나다).
+master_lookup = _master_lookup
+
 @router.post("/analyze")
 def analyze_trades(body: AnalyzeBody, _principal=Depends(require_login)):
     rows = len(body.fills)

@@ -81,11 +81,18 @@ def _master_instrument(flags: dict) -> str | None:
     return "stock" if group == "ST" else None
 
 
+def market_and_instrument(symbol: str, master: Callable[[str], dict | None] | None) -> tuple[str | None, str | None]:
+    """종목 마스터가 ★아는★ 시장과 상품 — 모르면 `None`. 체결 줄이 없는 자리(분봉 백테스트)에서 같은 판정을 쓴다."""
+    flags = master(symbol) if master is not None else None
+    flags = flags if isinstance(flags, dict) else {}
+    return _master_market(flags), _master_instrument(flags)
+
+
 def classify(fill: Fill, options: CostOptions) -> tuple[str | None, str | None, bool]:
     """시장·상품을 체결 줄 → 종목 마스터 → 사용자의 가정 순으로 정한다. 셋째 값은 '사용자의 가정을 썼는가'."""
-    flags = master_flags_of(fill.symbol, options)
-    market = fill.market or _master_market(flags)
-    instrument = fill.instrument or _master_instrument(flags)
+    known_market, known_instrument = market_and_instrument(fill.symbol, options.master)
+    market = fill.market or known_market
+    instrument = fill.instrument or known_instrument
     assumed = False
     if market is None and options.unknown_market is not None:
         market, assumed = options.unknown_market, True

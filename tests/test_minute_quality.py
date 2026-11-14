@@ -187,3 +187,15 @@ def test_the_per_ticker_results_of_a_day_equal_the_session_check_of_each_ticker(
     assert out["defect_total"] == sum(s["defect_total"] for s in out["by_ticker"].values())
     assert out["by_ticker"]["000660"]["defects"] == {"bad_time": 1, "duplicate_time": 1, "ohlc_inconsistent": 1,
                                                      "nonpositive_price": 0, "negative_volume": 1, "missing_value": 0}
+
+
+def test_the_cheap_shift_check_gives_the_same_answer_as_the_full_check():
+    late = [("100000", 100, 101, 99, 100, 10), ("100100", 100, 102, 100, 101, 20)]
+    odd = [("9시", 1, 1, 1, 1, 1), *late]                             # 가장 작은 글자가 시각이 아닌 표
+    frames = [day(t005930=(CLEAN, "kis")), day(t005930=(late, "kis"), t000660=(late, "kis")),
+              day(t005930=(late, "kis"), t000660=(CLEAN, "kis")), day(t005930=(odd, "kis")),
+              pd.DataFrame(columns=["ticker", "time", "open", "high", "low", "close", "volume", "source"])]
+    for frame in frames:
+        for rules in (RULES, NO_RULES):
+            full = mq.check_day(frame, rules)
+            assert mq.session_shift(frame, rules) == {k: full[k] for k in ("session_shifted", "session_shift", "shift_reason")}

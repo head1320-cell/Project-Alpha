@@ -110,6 +110,10 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     # ── 분봉 백테스트(W4) — 적재된 분봉의 범위·출처·품질. 파일만 읽는다. 어떤 종목의 분봉을 쌓았는지가 드러나므로 익명으로 열지 않는다 ──
     ("GET", "/api/v1/intraday/coverage"):
         (REQUIRE_LOGIN, "분봉 적재 범위 — 날짜별 종목 수·봉 수·출처·결함. 운영에서는 합성 분봉을 세지 않는다"),
+    ("GET", "/api/v1/intraday/templates"):
+        (REQUIRE_LOGIN, "분봉 백테스트의 규칙 틀과 설정 칸 — 값은 없지만 같은 화면의 문이라 함께 묶는다"),
+    ("POST", "/api/v1/intraday/simulate"):
+        (REQUIRE_LOGIN, "분봉 백테스트 실행 — 고른 종목·규칙으로 계산한다. 무엇을 시험하는지가 드러나고 계산량이 크다"),
 
     # ── PB 고객 관리 (CF 3부 PB3) — 로그인 + ★본인 고객만★(남의 고객 404) · 별칭만(개인정보 모양 거절) · 지우는 경로 없음 ──
     ("GET", "/api/v1/pb/clients"):
