@@ -14,6 +14,7 @@ from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field, StrictBool, ValidationError, field_validator
 
 from src.api import allocation_graph_routes as graph_routes
+from src.api.allocation_graph_nodes_intraday import NOT_OFFERED
 from src.api.auth import derived_key, require_login
 from src.data import stock_master
 from src.domain import fact_seal
@@ -32,10 +33,16 @@ MAX_PREV_ANSWER = 1200
 router = APIRouter(prefix="/api/v1/assist/canvas", tags=["canvas-assist"])
 
 
+def offered_kinds() -> dict[str, dict]:
+    """AI 가 ★새로 붙이자고 할 수 있는★ 종류 표 — 도구가 규칙·종목을 추천하지 않는 노드(분봉 백테스트)는 뺀다.
+    설명 · 묻기 · 길잡이는 온전한 표(`_kinds`)를 쓴다 — 이미 놓인 노드를 설명하는 일은 추천이 아니다."""
+    return {t: k for t, k in graph_routes._kinds().items() if t not in NOT_OFFERED}
+
+
 @router.post("/suggest")
 def canvas_suggest(graph: Any = Body(...), p: Principal = Depends(require_login)) -> dict:
     """다음에 붙일 노드 1~3 — 검사를 통과한 것만. 키·한도·거절이면 `available:false` + 사유 + 규칙 대체."""
-    return service.suggest(graph, p.username, catalog=graph_routes._kinds, validate=graph_routes.graph_validate)
+    return service.suggest(graph, p.username, catalog=offered_kinds, validate=graph_routes.graph_validate)
 
 
 def _small_dict(v: dict) -> dict:
@@ -159,7 +166,7 @@ def canvas_guide(req: GuideRequest, p: Principal = Depends(require_login)) -> di
 def _draft_kinds() -> dict[str, dict]:
     """말로 설계의 종류 표 — 절차 판정 표(`_kinds`)에 칸 스키마(`params_schema`)를 더한 것. 등록은 시작 때 끝나 한 번만 만든다."""
     schemas = {e["type"]: e.get("params_schema") or {} for e in graph_routes.REGISTRY.catalog()}
-    return {t: {**k, "params_schema": schemas.get(t) or {}} for t, k in graph_routes._kinds().items()}
+    return {t: {**k, "params_schema": schemas.get(t) or {}} for t, k in offered_kinds().items()}
 
 
 def _field_errors(kind: str, params: dict) -> set[tuple[str, str]]:

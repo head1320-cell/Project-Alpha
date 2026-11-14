@@ -6,12 +6,12 @@
  * 앞으로도 그렇다는 말이 아니고 계좌에서 돈이 된다는 말도 아니다 — 경제적 가치와 모의·실계좌 관문은 늘 미상으로 남는다.
  * ★종합 점수·등급을 만들지 않는다★ — 통과·미달·미상의 개수만 센다. 상태는 색만으로 말하지 않고 글자(통과 · 미달 · 미상)가 함께 간다.
  * 숫자와 사유 문장은 전부 서버 값이다.
+ * 화면(백테스트 › 분봉 규칙)과 캔버스의 '분봉 결과 조회' 판이 같이 쓴다 — 그래서 feature 에 둔다(위젯끼리 서로 참조하지 않는다).
  */
 import type { Brief, GateState, Multiplicity, Validation, Value, WalkForward } from "@/entities/intraday";
-import { signedWon } from "@/features/journal-result";
-import { UNKNOWN_TEXT, num, pct } from "@/shared/lib/krFormat";
+import { UNKNOWN_TEXT, num, pct, signedWon } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type ChipTone } from "@/shared/ui/tx";
-import { TrialLine, bp1, originChip } from "./IntradayResult";
+import { TrialLine, bp1, originChip } from "./parts";
 
 const STATE_KO: Record<GateState, string> = { ok: "통과", degraded: "미달", unknown: "미상" };
 const STATE_TONE: Record<GateState, ChipTone> = { ok: "ok", degraded: "assumed", unknown: "unknown" };

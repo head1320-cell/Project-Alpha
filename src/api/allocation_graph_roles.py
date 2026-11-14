@@ -107,7 +107,8 @@ GIVES: dict[tuple[str, str], tuple[pg.Gives, ...]] = {
 
 #: 과거를 시뮬레이션하거나 그 기록을 읽는 노드. ★새로 생기면 사람이 판단해 더한다★(트립와이어가 목록을 고정).
 HISTORY = ("backtest", "strategy_backtest", "backtest_setup", "backtest_load", "backtest_compare",
-           "backtest_attribution", "timing_simulation", "counterfactual", "record_robustness")
+           "backtest_attribution", "timing_simulation", "counterfactual", "record_robustness",
+           "intraday_setup", "intraday_load")
 
 
 def register(registry: pg.Registry) -> None:

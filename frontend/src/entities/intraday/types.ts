@@ -80,6 +80,13 @@ type Shared = {
   empty: { reason: string; message: string } | null;
   data: DataBlock; origin: Origin | null; assumptions: Assumption[]; breakeven: Breakeven | null; trial: Trial | null;
 };
+/** 캔버스에서 실행해 남긴 결과의 목록 한 줄(`GET /intraday/results`) — 요약 자체는 노드가 읽는다. */
+export type ResultRow = {
+  trial_key: string; rule_kind: string | null; rule_label: string | null; tickers: string[]; from: string; to: string;
+  synthetic: boolean; grade_known: boolean; result_at: number; runs: number;
+};
+/** 못 읽으면 빈 목록이 아니라 `available: false` + 사유다. */
+export type ResultList = { available: boolean; reason: string | null; results: ResultRow[] };
 /** `J` 는 매매일지의 모양이다 — 서버가 같은 엔진으로 계산해 같은 모양으로 준다. 엔티티끼리 서로 참조하지 않으므로(FSD) 쓰는 위젯이 끼운다. */
 export type Simulation<J = unknown> = Shared & { journal: J | null; events_by_kind: Record<string, number> };
 

@@ -118,7 +118,9 @@ export interface ParamUi {
   question?: string;
   help?: string;
   unit?: string;
-  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers" | "per_port" | "per_port_number" | "constraints";
+  widget?: "slider" | "cards" | "filter" | "text" | "pick" | "tickers" | "per_port" | "per_port_number" | "constraints" | "input";
+  /** `widget: "input"` 의 칸 모양 — 날짜면 달력 입력. 없으면 값의 종류(수 · 글)로 정한다. */
+  input?: "date";
   /** `widget: "pick"` 가 부를 목록 이름(BK W5) — `strategies` · `research_runs`. 주소가 아니다. */
   source?: string;
   ends?: [string, string];

@@ -28,6 +28,13 @@ export function num(v: N, digits = 0): string {
 }
 
 /** 한국식 큰 수 — 1.2조 · 3,400억 · 5,600만 · 1,234. 조는 소수 한 자리, 억·만은 정수(반올림). */
+/** 손익(원) — 부호를 늘 붙인다(+27,175원 · −13,970원 · 0원). 원 단위 그대로(만·억으로 줄이지 않는다). 모르면 N/A — 0원이 아니다. */
+export function signedWon(v: N): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return UNKNOWN_TEXT;
+  const r = Math.round(Math.abs(v));
+  return `${r === 0 ? "" : v < 0 ? MINUS : "+"}${num(r)}원`;
+}
+
 export function krUnit(v: N): string {
   if (!ok(v)) return UNKNOWN_TEXT;
   const a = Math.abs(v), s = sign(v, false);

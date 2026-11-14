@@ -15,6 +15,10 @@
 - 기록하지 못하면 `None` 이다. ★N=1 로 꾸미지 않는다★ — 부르는 쪽이 '모른다'로 답한다(`REASONS`).
 
 N 은 ★하한★이다. 이 도구 밖에서 해 본 것 · 기록에 실패한 실행은 세지 못한다.
+
+**결과 요약**(캔버스 노드 설계 §6) — 캔버스의 '분봉 백테스트 실행' 단추가 그 실행의 판정 요약을 시행 줄에 함께 남기고,
+'분봉 결과 조회' 노드가 그것을 읽는다. ★시행을 세는 길과 닿지 않는다★: 열을 붙이지 못한 DB 에서도 N 은 지금처럼 세고,
+결과 기능만 '모른다'(`None`)가 된다. 읽기는 늘 본인 것만이고, 남의 것과 없는 것은 같은 답이다.
 남기는 것은 모의 실행의 설정과 그 결과의 일별 합계다 — 주문·계좌·고객 정보가 아니다.
 `backtest_runs` 와 같은 방어적 raw-SQL 관용구(DB 는 선택적이고 실패하면 `None`).
 """
@@ -27,11 +31,16 @@ import time
 from collections.abc import Iterable
 from typing import Any
 
+from src.data import schema_add_columns
+
 logger = logging.getLogger(__name__)
 
 _TABLE = "intraday_trials"
 #: 표를 만들어 둔 DB. 프로세스가 다른 DB 로 붙으면(시험 · 폴백) 그 DB 에도 표를 만든다.
 _ready_for: str | None = None
+#: 결과 요약 열을 쓸 수 있는 DB. 붙이지 못했으면 `None` — 결과 기능만 '모른다'가 되고 시행 세기는 그대로 돈다.
+_results_for: str | None = None
+_RESULT_COLS = [("result", "TEXT"), ("result_at", "DOUBLE PRECISION")]
 
 REASONS = {
     "store_unavailable": "시행 기록을 읽거나 쓰지 못했습니다. 시행 횟수를 알 수 없어 보정하지 않았습니다.",
@@ -47,7 +56,7 @@ def _engine():
 
 
 def _ensure(engine) -> None:
-    global _ready_for
+    global _ready_for, _results_for
     url = str(engine.url)
     if _ready_for == url:
         return
@@ -61,6 +70,8 @@ def _ensure(engine) -> None:
             "runs INTEGER, oos_views INTEGER, oos_from VARCHAR(10), oos_to VARCHAR(10), "
             "created_at DOUBLE PRECISION, updated_at DOUBLE PRECISION)"))
         c.execute(text(f"CREATE INDEX IF NOT EXISTS ix_itr_user ON {_TABLE} (username, grade, period_from, period_to)"))
+    # 결과 요약 열 — 먼저 만들어진 표(W4d)에도 덧붙인다. 붙었는지는 도우미가 SELECT 로 확인한다.
+    _results_for = url if schema_add_columns.add_columns(engine, _TABLE, _RESULT_COLS, label="분봉 시행의 결과 요약") else None
     _ready_for = url
 
 
@@ -159,6 +170,79 @@ def family(user: str, *, grade: str, tickers: Iterable[str], start: str, end: st
                       "daily": _load(r[5]), "runs": int(r[6] or 0), "oos_views": int(r[7] or 0), "oos_from": r[8],
                       "oos_to": r[9], "created_at": r[10], "updated_at": r[11]})
     return {"trials": found, "user_total": int(total or 0)}
+
+
+# ── 결과 요약 ──────────────────────────────────────────────────────────────────────────
+def _results_ready(engine) -> bool:
+    _ensure(engine)
+    return _results_for == str(engine.url)
+
+
+def keep_result(user: str, trial_key: str, result: dict) -> bool | None:
+    """내 시행 줄에 그 실행의 결과 요약을 남긴다(다시 실행하면 바꿔 쓴다) → 남겼으면 참 · 내 시행이 아니면 거짓 · 실패하면 `None`."""
+    try:
+        engine = _engine()
+        if not _results_ready(engine):
+            return None
+        from sqlalchemy import text
+        with engine.begin() as c:
+            done = c.execute(text(f"UPDATE {_TABLE} SET result = :result, result_at = :now "
+                                  "WHERE trial_key = :key AND username = :user"),
+                             {"result": _canonical(result), "now": time.time(), "key": trial_key, "user": user}).rowcount
+        return bool(done)
+    except Exception as err:                                    # noqa: BLE001
+        logger.warning("intraday trial 결과 요약 기록 실패: %s", err)
+        return None
+
+
+_RESULT_HEAD = "trial_key, grade, setting, tickers, period_from, period_to, runs, result_at"
+
+
+def _head(r) -> dict[str, Any]:
+    return {"trial_key": r[0], "grade": r[1], "setting": _load(r[2]), "tickers": _load(r[3]) or [], "from": r[4], "to": r[5],
+            "runs": int(r[6] or 0), "result_at": r[7]}
+
+
+def result_of(user: str, trial_key: str) -> dict[str, Any] | None:
+    """내 시행의 결과 요약 → `{found: True, result, …}` · 없으면 `{found: False}` · 읽지 못하면 `None`.
+
+    ★남의 시행과 없는 시행은 같은 답이다★ — 있는지를 알려 주지 않는다. 요약이 깨져 읽히지 않으면 '없음'이 아니라 '모른다'다."""
+    try:
+        engine = _engine()
+        if not _results_ready(engine):
+            return None
+        from sqlalchemy import text
+        with engine.connect() as c:
+            row = c.execute(text(f"SELECT {_RESULT_HEAD}, result FROM {_TABLE} "
+                                 "WHERE trial_key = :key AND username = :user AND result IS NOT NULL"),
+                            {"key": trial_key, "user": user}).fetchone()
+    except Exception as err:                                    # noqa: BLE001
+        logger.warning("intraday trial 결과 요약 읽기 실패: %s", err)
+        return None
+    if row is None:
+        return {"found": False}
+    result = _load(row[8])
+    if not isinstance(result, dict):
+        logger.warning("intraday trial 결과 요약이 깨져 있다: %s", trial_key)
+        return None
+    return {"found": True, "result": result, **_head(row)}
+
+
+def results_of(user: str, limit: int = 50) -> list[dict[str, Any]] | None:
+    """결과 요약이 있는 내 시행들(남긴 시각의 최근 순 · 요약 자체는 싣지 않는다). 읽지 못하면 `None` — 빈 목록과 다르다."""
+    try:
+        engine = _engine()
+        if not _results_ready(engine):
+            return None
+        from sqlalchemy import text
+        with engine.connect() as c:
+            rows = c.execute(text(f"SELECT {_RESULT_HEAD} FROM {_TABLE} WHERE username = :user AND result IS NOT NULL "
+                                  "ORDER BY result_at DESC, trial_key LIMIT :limit"),
+                             {"user": user, "limit": int(limit)}).fetchall()
+    except Exception as err:                                    # noqa: BLE001
+        logger.warning("intraday trial 결과 목록 읽기 실패: %s", err)
+        return None
+    return [_head(r) for r in rows]
 
 
 def views_of(rows: Iterable[dict], oos_from: str, oos_to: str) -> int:

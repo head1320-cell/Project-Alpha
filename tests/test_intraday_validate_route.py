@@ -24,6 +24,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+import src.data.backtest_runs as br
 import src.data.minute_bars as mb
 import src.database as dbmod
 from src.data import intraday_trials as trials
@@ -54,6 +55,9 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("KIS_USE_MOCK", "1")
     monkeypatch.setenv("MINUTE_BARS_DIR", str(tmp_path / "bars"))
     monkeypatch.setattr(dbmod, "DATABASE_URL", f"sqlite:///{tmp.name}", raising=False)
+    # 실행 저장소의 "표를 만들었다" 표시는 프로세스 전역이다(DB 주소를 보지 않는다). 기동이 임시 DB 에 표를 만들고
+    # 그 표시를 남기면, 뒤에 도는 시험이 기본 DB 에서 "표 없음"으로 실패한다 — 시험이 끝나면 앞의 값으로 되돌린다.
+    monkeypatch.setattr(br, "_inited", False)
     dbmod.reset_session()
     dbmod.init_db()
     dbmod.create_user("alice", "alice-pw", role=ROLE_ANALYST)

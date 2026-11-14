@@ -7,7 +7,7 @@
  * 파라미터를 쉬운 이름 + 파라미터 키 + 범위로(`NodeInspector`). ★규칙은 서버에만 있다★ —
  * 값이 틀리면 서버 검증이 노드 위에 빨갛게 말한다. 빈 칸 = 서버 기본값(키를 지운다).
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Edge } from "@xyflow/react";
 import { Copy, Plus, X } from "lucide-react";
 import {
@@ -247,6 +247,40 @@ function linkedPorts(params: Params, edges?: Edge[], nodeId?: string): LinkedPor
     .map((port) => ({ port, label: labels[port] ?? `전략 ${port.replace(/^s/, "")}` }));
 }
 
+/**
+ * 값 하나를 직접 적는 칸(수 · 날짜 · 짧은 글) — 고를 선택지가 없는 설정(`widget: "input"`).
+ * 적는 동안에는 적은 글자를 그대로 보이고(지워도 기본값으로 되돌아가지 않는다), 칸을 떠나면 지금 쓰이는 값을 보인다.
+ * 비우면 칸을 지운다 — 서버 기본값이 쓰이고, 기본값이 없는 칸은 '정하지 않음'이다(0 이 아니다).
+ */
+function InputField({ f, value, onChange, q, help }: {
+  f: FieldSpec; value: unknown; onChange: (v: unknown) => void; q: ReactNode; help: ReactNode;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const numeric = f.kind === "number" || f.kind === "integer";
+  const eff = value !== undefined ? value : f.defaultValue;
+  const shown = draft ?? (eff === undefined || eff === null ? "" : String(eff));
+  return (
+    <div className="pg-basic-field" data-field={f.name}>
+      {q}
+      <span className="pg-input-row">
+        <input className="pg-text pg-input" type={numeric ? "number" : f.ui.input === "date" ? "date" : "text"} aria-label={f.ui.label}
+               min={numeric ? f.min : undefined} max={numeric ? f.max : undefined} step={numeric ? (f.kind === "integer" ? 1 : "any") : undefined}
+               value={shown} placeholder={f.nullable || f.defaultValue === undefined ? "정하지 않음" : undefined}
+               onChange={(e) => {
+                 const raw = e.target.value;
+                 setDraft(raw);
+                 if (raw === "") onChange(undefined);
+                 else if (!numeric) onChange(raw);
+                 else if (Number.isFinite(Number(raw))) onChange(Number(raw));
+               }}
+               onBlur={() => setDraft(null)} />
+        {f.ui.unit && <span className="pg-input-unit">{f.ui.unit}</span>}
+      </span>
+      {help}
+    </div>
+  );
+}
+
 function BasicField({ f, value, root, ports, onChange, said, names, model }: {
   f: FieldSpec; value: unknown; root: JsonSchema | null; ports: LinkedPort[]; onChange: (v: unknown) => void;
   /** 말로 설계(AI4) — 이 값을 말한 말씀 조각. 사람이 이 칸을 고치면 사라진다(store `updateParams`). */
@@ -308,6 +342,7 @@ function BasicField({ f, value, root, ports, onChange, said, names, model }: {
       </div>
     );
   }
+  if (f.ui.widget === "input") return <InputField f={f} value={value} onChange={onChange} q={q} help={help} />;
   if (f.ui.widget === "text") {
     return (
       <div className="pg-basic-field" data-field={f.name}>

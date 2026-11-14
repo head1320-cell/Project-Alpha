@@ -13,7 +13,7 @@
 import { memo } from "react";
 import { Handle, NodeToolbar, Position, useStore, type Node, type NodeProps } from "@xyflow/react";
 import { ChevronDown, ChevronRight, GitBranch, Pin, PinOff, Play, Route, SkipForward } from "lucide-react";
-import { BYPASS_PORTS, bypassable, canBypass, cardFieldsOf, cardState, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, headlineDelta, isSolo, josa, needsGap, nodeHeight, nodeIssues, nodeSummary, PORT_GAP, PORT_TOP, slotBase, slotHeight, SLOT_MAX_K, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
+import { BYPASS_PORTS, bypassable, canBypass, cardFieldsOf, cardState, connectionProblem, FOLD_PORT_TOP, fmtDelta, fmtElapsed, fmtHeadline, headlineDelta, isSolo, josa, needsGap, nodeHeight, nodeIssues, nodeSummary, PORT_GAP, PORT_TOP, slotBase, slotHeight, SLOT_MAX_K, type CatalogPort, type NodeExplain, type NodeLineage, type PgNodeData, type ProcedureSuggestion } from "@/entities/portfolio-graph";
 import { NodeWidgets } from "./NodeWidgets";
 import { Glance } from "./Glance";
 import { StrategyDonut, type DonutSlice } from "./StrategyDonut";
@@ -306,7 +306,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
         {summary && <span className="pg-node-far-sum">{summary}</span>}
         <span className={`pg-node-far-v pg-node-far-v--${state}`}>
           {headline && headline.value !== null
-            ? <>{Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit}</small></>
+            ? <>{fmtHeadline(headline.value)}<small>{headline.unit}</small></>
             : skipOn ? "건너뜀" : st.text}
         </span>
         {chips.length > 0 && (
@@ -320,7 +320,7 @@ function GraphNodeImpl({ id, data, selected }: NodeProps<Node<CanvasNodeData>>) 
       <NodeWidgets id={id} fields={cw.fields} more={cw.more} params={data.params ?? {}} schema={entry.params_schema ?? null} />
       {headline && headline.value !== null && (
         <div className="pg-node-v" title={headline.label}>
-          {Number.isInteger(Number(headline.value)) ? Number(headline.value) : Number(headline.value).toFixed(1)}<small>{headline.unit} {headline.label.replace(/ 비중$/, "")}</small>
+          {fmtHeadline(headline.value)}<small>{headline.unit} {headline.label.replace(/ 비중$/, "")}</small>
         </div>
       )}
       {/* 결과 자리 — 작은 그림 · 막힘 사유 · 고치는 법 · 예전 결과 안내가 나눠 쓴다(넘치면 그때만 카드가 자란다). */}

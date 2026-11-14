@@ -11,6 +11,7 @@ import { multibacktestApi } from "@/entities/multibacktest";
 import { researchApi } from "@/entities/research";
 import { alphaApi } from "@/entities/alpha/api";
 import { backtestRunApi } from "@/entities/backtest-run";
+import { listResults } from "@/entities/intraday";
 import { API_BASE } from "@/shared/api/apiBase";
 
 /** 저장된 시나리오 팩 — 목록 문은 `/scenario-packs` 하나다. 실패를 빈 목록으로 삼키지 않는다. */
@@ -28,6 +29,7 @@ const EMPTY: Record<string, string> = {
   research_runs: "연구 기록이 없습니다 — 포트폴리오 최적화 결과를 연구 기록으로 남기면 여기에 표시됩니다.",
   alphas: "등록된 알파가 없습니다 — 상단 ‘알파’ 서랍에서 식을 등록하면 여기에 표시됩니다.",
   backtest_runs: "백테스트가 없습니다 — ‘조건식 백테스트 설정’에서 ‘백테스트 시작’을 누르면 여기에 표시됩니다(목록을 못 읽어도 비어 보일 수 있습니다).",
+  intraday_results: "실행한 분봉 백테스트가 없습니다 — ‘분봉 백테스트’ 노드에서 ‘분봉 백테스트 실행’을 누르면 여기에 표시됩니다.",
   scenario_packs: "저장된 시나리오가 없습니다 — 직접 지정한 충격을 사용하거나, 시나리오를 저장하면 여기에 표시됩니다.",
 };
 
@@ -70,6 +72,20 @@ async function load(source: string): Promise<Item[]> {
         ...(r.status !== "completed" ? [{ text: r.status === "failed" ? "실패" : `진행 ${Math.round(r.progress_percent ?? 0)}%`, tone: "assumed" as const }] : []),
         ...(r.is_mock_data === true ? [{ text: "합성 데이터", tone: "unknown" as const }] : []),
         ...(r.is_mock_data === null ? [{ text: "데이터 출처 미상", tone: "unknown" as const }] : []),
+      ],
+    }));
+  }
+  if (source === "intraday_results") {
+    const res = await listResults();
+    if (!res.ok) throw new Error(res.error);
+    if (!res.value.available) throw new Error(res.value.reason ?? "분봉 결과 저장소 읽기 실패");
+    return res.value.results.map((r) => ({
+      value: r.trial_key,
+      label: `${r.rule_label ?? "규칙 틀 미상"} · ${r.tickers[0] ?? "종목 없음"}${r.tickers.length > 1 ? ` 외 ${r.tickers.length - 1}` : ""}`,
+      sub: `${r.from} ~ ${r.to} · 실행 ${new Date(r.result_at * 1000).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`,
+      chips: [
+        ...(r.synthetic ? [{ text: "합성 분봉", tone: "unknown" as const }] : []),
+        ...(!r.grade_known ? [{ text: "분봉 출처 미상", tone: "unknown" as const }] : []),
       ],
     }));
   }

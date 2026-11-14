@@ -75,6 +75,12 @@ export function headlineDelta(orig: NodeRunResult | undefined, copy: NodeRunResu
   return { value: d, unit: a.unit === "%" ? "%p" : a.unit };
 }
 
+/** 카드의 머리 수 — 정수는 천 단위로 끊고(원 단위 금액 같은 큰 수), 소수는 한 자리. 1,000 미만의 수는 예전과 같은 글자다. */
+export function fmtHeadline(value: unknown): string {
+  const n = Number(value);
+  return Number.isInteger(n) ? n.toLocaleString("ko-KR") : n.toFixed(1);
+}
+
 export function fmtDelta(d: { value: number; unit: string }): string {
   const v = Math.abs(d.value) >= 10 ? d.value.toFixed(1) : d.value.toFixed(2);
   return `${d.value > 0 ? "+" : d.value < 0 ? "" : "±"}${v}${d.unit}`;

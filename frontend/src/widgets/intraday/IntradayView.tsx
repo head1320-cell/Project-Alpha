@@ -14,13 +14,13 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { getCoverage, getTemplates, simulate, validate, type Coverage, type Validation } from "@/entities/intraday";
 import { useSession } from "@/entities/session";
+import { Verdict } from "@/features/intraday-verdict";
 import { BACKTEST_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
 import { ModeSwitch, Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
 import { build, buildGrid, initialForm, parseTickers, recentPeriod, templateOf, type Form } from "./form";
 import { IntradayResult, type Sim } from "./IntradayResult";
 import { GridForm, SetupForm, type CoverageState } from "./SetupForm";
-import { Verdict } from "./Verdict";
 
 const TITLE = "백테스트";
 const LEDE = "정한 규칙을 과거 분봉에서 돌려 모의 체결의 승률·손익비·비용을 집계하고, 그 숫자를 어디까지 읽을 수 있는지 관문으로 점검합니다. 규칙이나 종목을 권하지 않으며 주문을 내지 않습니다.";

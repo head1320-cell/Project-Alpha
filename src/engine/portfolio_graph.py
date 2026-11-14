@@ -170,6 +170,10 @@ class NodeSpec:
     #: 과거를 시뮬레이션하거나 그 기록을 읽는 노드(BT1) — 증거 관문이 "과거로 돌려 보는 단계가 없어요"라고
     #: 사실과 다르게 말하지 않게 한다(있지만 관문이 아직 그 결과를 읽지 않는다 = 몰라요).
     simulates_history: bool = False
+    #: 참이면 `run(inputs, params[, lineage], actor)` · `save(values, view, params, actor)` — ★누가 했는가★가 있어야 도는
+    #: 노드(분봉 백테스트의 시행 기록 · 본인 결과 읽기). 엔진은 그 값의 뜻을 모르고 받은 그대로 넘긴다. 주변 상태를 쓰지 않으므로
+    #: 앞 실행의 실행자가 다음 실행에 남지 않는다. 주지 않으면 `None` 이다(판단은 노드가 한다).
+    wants_actor: bool = False
 
     @property
     def human(self) -> str:
@@ -567,7 +571,7 @@ def _briefs_ok(spec: NodeSpec, values: Mapping, registry: Registry) -> dict[str,
 
 
 def run(graph: Any, registry: Registry, targets: list[str] | None = None,
-        on_node: Callable[[dict], None] | None = None) -> dict:
+        on_node: Callable[[dict], None] | None = None, actor: Any = None) -> dict:
     """검증 → 위상 순서 실행. 반환:
     `{"ok", "errors", "order", "nodes": {id: {type, status, reason, view, provenance,
     explain, lineage, view_hash}}}`.
@@ -578,8 +582,10 @@ def run(graph: Any, registry: Registry, targets: list[str] | None = None,
 
     `on_node` 를 주면 진행을 알린다(CF5a 실행 줄) — `plan`(계산할 순서) · 노드마다 `node_start` → `node_done {status, elapsed_ms}`.
     ★알리기만 한다★ — 보고서는 콜백이 있든 없든 같다(테스트가 건다).
+
+    `actor` 는 `wants_actor` 를 선언한 노드에만 마지막 인자로 넘어간다(누가 했는가 — 엔진은 뜻을 모른다 · 없으면 `None`).
     """
-    report, values, params = _execute(graph, registry, targets, on_node)
+    report, values, params = _execute(graph, registry, targets, on_node, actor)
     if report.get("nodes"):
         report["edges"] = _handoffs(graph, registry, report, values, params)
     return report
@@ -733,7 +739,7 @@ def _done_event(nid: str, r: dict) -> dict:
 
 
 def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
-             on_node: Callable[[dict], None] | None = None,
+             on_node: Callable[[dict], None] | None = None, actor: Any = None,
              ) -> tuple[dict, dict[str, dict[str, Any]], dict[str, Any]]:
     """`run` 의 본체 — 보고서와 함께 노드별 내부 값·파라미터를 돌려준다(저장 액션 전용)."""
     doc = _document_errors(graph)
@@ -801,8 +807,8 @@ def _execute(graph: Any, registry: Registry, targets: list[str] | None = None,
             continue
         t0 = time.perf_counter()
         try:
-            out = (spec.run(inputs, params.get(nid), in_lineage) if spec.wants_lineage
-                   else spec.run(inputs, params.get(nid)))
+            extra = ((in_lineage,) if spec.wants_lineage else ()) + ((actor,) if spec.wants_actor else ())
+            out = spec.run(inputs, params.get(nid), *extra)
             missing = [p.name for p in spec.outputs if p.name not in (out.values or {})]
             if missing:
                 raise NodeFailure(f"노드가 선언한 출력 {', '.join(missing)} 을 내지 않았습니다.")
@@ -861,12 +867,12 @@ def run_for_sheet(graph: Any, node_id: str, preview: Mapping[str, str | None], r
     return {"ok": True, "report": report, "values": values}
 
 
-def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry) -> dict:
+def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry, actor: Any = None) -> dict:
     """그래프를 **재계산**해 `node_id` 의 view 해시가 사용자가 본 미리보기와 같을 때만
     그 노드의 `save` 를 **한 번** 부른다. 결과 `{"ok": True, saved_id, text, node_id}` 또는
     `{"ok": False, code, message}` — 코드: `no_node` · `not_savable` · `not_ok` · `stale` · `save_failed`.
     """
-    report, values, params = _execute(graph, registry)
+    report, values, params = _execute(graph, registry, actor=actor)
     res = report["nodes"].get(node_id)
     if res is None:
         return {"ok": False, "code": "no_node", "message": f"그래프에 {node_id} 노드가 없습니다."}
@@ -880,7 +886,7 @@ def save_node(graph: Any, node_id: str, preview_hash: str, registry: Registry) -
         return {"ok": False, "code": "stale",
                 "message": "확인한 미리보기와 현재 계산이 다릅니다. 재계산 후 저장하십시오."}
     try:
-        out = spec.save(values[node_id], res["view"] or {}, params.get(node_id))
+        out = spec.save(values[node_id], res["view"] or {}, params.get(node_id), *((actor,) if spec.wants_actor else ()))
     except NodeFailure as e:
         return {"ok": False, "code": "save_failed", "message": e.reason}
     except Exception as e:                            # noqa: BLE001

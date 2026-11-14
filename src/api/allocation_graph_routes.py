@@ -11,10 +11,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Body, Header, Path, Query
+from fastapi import APIRouter, Body, Header, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from src.api import graph_actor
 from src.api.allocation_graph_nodes import PORT_PLAIN, PORT_TYPES, REGISTRY, STAGES
 from src.api.allocation_graph_relations import briefs_of, relations
 from src.api.allocation_graph_roles import NEED_PLAIN
@@ -149,9 +150,15 @@ def _relations(graph: Any, kinds: dict[str, dict], briefs: dict | None = None) -
 _PROGRESS = ProgressHub()
 
 
+def _actor(graph: Any, request: Request | None) -> graph_actor.Actor | None:
+    """★문은 열려 있다★ — 실행자를 받는 노드(분봉 백테스트)가 그래프에 있을 때만 요청의 신원을 읽어 넘긴다. 없으면 묻지 않는다."""
+    return graph_actor.actor_of(request) if graph_actor.wanted(graph, REGISTRY) else None
+
+
 @router.post("/run")
 def graph_run(graph: Any = Body(...), targets: str | None = Query(None, max_length=2000),
-              progress: str | None = Header(None, alias="X-Graph-Progress", pattern=RID_PATTERN, max_length=64)) -> dict:
+              progress: str | None = Header(None, alias="X-Graph-Progress", pattern=RID_PATTERN, max_length=64),
+              request: Request = None) -> dict:
     """위상 순서로 실행. 노드별 `{status, reason, view, provenance}` — 실패는 번지되
     지어내지 않는다(`portfolio_graph` 의 약속).
 
@@ -161,10 +168,11 @@ def graph_run(graph: Any = Body(...), targets: str | None = Query(None, max_leng
     머리글 `X-Graph-Progress: <rid>` 를 주면 노드 진행을 그 통에 흘린다(CF5a — `GET /progress/{rid}` 가 읽는다). 보고서는 같다.
     ★주소가 아니라 머리글★ — `/run` 주소를 가로채는 화면 테스트가 많아 질의 문자열이 붙으면 그 패턴이 조용히 빗나간다.
     """
+    actor = _actor(graph, request)
     if not isinstance(progress, str):            # 없음 — 함수를 직접 부르면(테스트) 기본값이 Header 객체다
-        return _graph_run(graph, targets, None)
+        return _graph_run(graph, targets, None, actor)
     try:
-        return _graph_run(graph, targets, lambda ev: _PROGRESS.emit(progress, ev))
+        return _graph_run(graph, targets, lambda ev: _PROGRESS.emit(progress, ev), actor)
     finally:
         _PROGRESS.close(progress)
 
@@ -181,9 +189,9 @@ def graph_progress(rid: str = Path(..., pattern=RID_PATTERN, max_length=64)) -> 
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def _graph_run(graph: Any, targets: str | None, on_node) -> dict:
+def _graph_run(graph: Any, targets: str | None, on_node, actor: Any = None) -> dict:
     ids = [t for t in (targets or "").split(",") if t] if targets is not None else None
-    report = pg.run(graph, REGISTRY, targets=ids, on_node=on_node)
+    report = pg.run(graph, REGISTRY, targets=ids, on_node=on_node, actor=actor)
     report["relations"] = _relations(graph, _kinds(), briefs_of(report.get("nodes") or {}))
     _seal_explains(graph, report)
     if ids is not None:
@@ -222,13 +230,13 @@ class GraphSaveRequest(BaseModel):
 
 
 @router.post("/save")
-def graph_save(req: GraphSaveRequest) -> dict:
+def graph_save(req: GraphSaveRequest, request: Request = None) -> dict:
     """★저장은 여기서만★ (BK0) — `/run` 은 어떤 노드도 DB 에 쓰지 않는다(사용자 결정).
 
     그래프를 재계산해 그 노드의 미리보기 해시가 같을 때만 노드의 저장 함수를 **한 번** 부른다.
     거절(`ok: false` + `code`)은 200 으로 — 캔버스가 사유를 그 노드 옆에 그린다.
     """
-    return pg.save_node(req.graph, req.node_id, req.preview_hash, REGISTRY)
+    return pg.save_node(req.graph, req.node_id, req.preview_hash, REGISTRY, actor=_actor(req.graph, request))
 
 
 class BranchSeries(BaseModel):

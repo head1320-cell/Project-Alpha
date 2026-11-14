@@ -226,3 +226,127 @@ def test_the_table_is_classified_as_a_decision_record_and_has_no_delete_path():
     assert "N" in retention.DECISION_RECORD["intraday_trials"]
     source = open(trials.__file__, encoding="utf-8").read()
     assert "DELETE" not in source.upper().replace("ON DELETE", "")           # 지우면 N 이 줄어든다 — 지우는 길을 두지 않는다
+
+
+# ── 결과 요약 (캔버스 노드 설계 §6) ────────────────────────────────────────────────────────
+RESULT = {"summary": {"trades": 10, "gross_total": 19_800.0, "net_total": -3_194.73}, "origin": {"grade": "E3"},
+          "gates": {"counts": {"ok": 2, "degraded": 1, "unknown": 4}}}
+
+
+def test_a_result_is_kept_on_my_trial_and_read_back_as_it_was(db):
+    key = rec()["trial_key"]
+    assert trials.keep_result("alice", key, RESULT) is True
+    found = trials.result_of("alice", key)
+    assert found["found"] is True and found["result"] == RESULT and found["runs"] == 1
+    assert found["result_at"] > 0 and found["grade"] == "E3"
+    assert (found["tickers"], found["from"], found["to"]) == (["000660", "005930"], "2026-03-02", "2026-03-31")
+
+
+def test_a_trial_without_a_kept_result_reads_as_not_found(db):
+    """시행만 있고 결과 요약이 없으면(화면에서 돌린 것) '없음'이다 — 빈 결과를 지어내지 않는다."""
+    key = rec()["trial_key"]
+    assert trials.result_of("alice", key) == {"found": False}
+    assert trials.results_of("alice") == []
+
+
+def test_someone_elses_trial_reads_exactly_like_a_missing_one(db):
+    key = rec("alice")["trial_key"]
+    trials.keep_result("alice", key, RESULT)
+    assert trials.result_of("bob", key) == trials.result_of("bob", "0" * 64) == {"found": False}
+    assert trials.results_of("bob") == []
+    assert trials.result_of("alice", key)["found"] is True                       # 짝 — 본인은 읽는다
+
+
+def test_i_cannot_keep_a_result_on_someone_elses_trial(db):
+    key = rec("alice")["trial_key"]
+    assert trials.keep_result("bob", key, {"summary": "남의 것"}) is False
+    assert trials.result_of("alice", key) == {"found": False}                   # 덮어쓰이지 않았다
+
+
+def test_running_the_same_trial_again_replaces_the_result_and_keeps_one_row(db):
+    key = rec()["trial_key"]
+    trials.keep_result("alice", key, RESULT)
+    assert rec()["trial_key"] == key
+    trials.keep_result("alice", key, {**RESULT, "summary": {"trades": 11}})
+    found = trials.result_of("alice", key)
+    assert found["result"]["summary"] == {"trades": 11} and found["runs"] == 2
+    assert len(trials.results_of("alice")) == 1
+
+
+def test_my_results_are_listed_newest_first_with_what_a_picker_needs(db, monkeypatch):
+    from types import SimpleNamespace
+    clock = iter([100.0, 200.0, 300.0, 400.0])
+    monkeypatch.setattr(trials, "time", SimpleNamespace(time=lambda: next(clock)))      # 이 모듈의 시계만 — 전역 time 은 그대로
+    old = rec()["trial_key"]
+    new = rec(setting=changed("rule.minutes", 31))["trial_key"]
+    trials.keep_result("alice", old, RESULT)                                    # 300
+    trials.keep_result("alice", new, RESULT)                                    # 400
+    rows = trials.results_of("alice")
+    assert [r["trial_key"] for r in rows] == [new, old]
+    assert rows[0]["setting"]["rule"] == {"kind": "opening_range_breakout", "params": {"minutes": 31}}
+    assert rows[0]["tickers"] == ["000660", "005930"] and rows[0]["grade"] == "E3" and rows[0]["result_at"] == 400.0
+    assert "result" not in rows[0]                                              # 목록은 요약을 싣지 않는다
+    assert [r["trial_key"] for r in trials.results_of("alice", limit=1)] == [new]
+
+
+def test_keeping_a_result_never_changes_what_the_family_counts(db):
+    """결과 요약은 N 을 세는 길에 닿지 않는다 — 남겨도 가족과 시행 수는 그대로다."""
+    key = rec()["trial_key"]
+    rec(setting=changed("rule.minutes", 31))
+    before = fam()
+    trials.keep_result("alice", key, RESULT)
+    assert fam() == before
+
+
+def test_a_store_that_cannot_be_reached_is_unknown_not_empty(db, monkeypatch):
+    key = rec()["trial_key"]
+    trials.keep_result("alice", key, RESULT)
+
+    def broken():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(trials, "_engine", broken)
+    assert trials.keep_result("alice", key, RESULT) is None                     # 못 남김 ≠ 내 것이 아님(False)
+    assert trials.result_of("alice", key) is None                               # 못 읽음 ≠ 없음({"found": False})
+    assert trials.results_of("alice") is None                                   # 못 읽음 ≠ 빈 목록([])
+
+
+def test_a_table_made_before_the_result_columns_gets_them_without_losing_rows(db):
+    """W4d 에서 만든 표(결과 열 없음)를 가진 DB — 열을 덧붙이고, 있던 시행은 그대로다."""
+    engine = dbmod.get_engine()
+    with engine.begin() as c:
+        c.execute(text(
+            "CREATE TABLE intraday_trials (trial_key VARCHAR(64) PRIMARY KEY, username VARCHAR(60), grade VARCHAR(10), "
+            "setting_digest VARCHAR(64), setting TEXT, tickers TEXT, period_from VARCHAR(10), period_to VARCHAR(10), "
+            "daily TEXT, runs INTEGER, oos_views INTEGER, oos_from VARCHAR(10), oos_to VARCHAR(10), "
+            "created_at DOUBLE PRECISION, updated_at DOUBLE PRECISION)"))
+    trials._ready_for = None
+    key = rec()["trial_key"]
+    assert trials.keep_result("alice", key, RESULT) is True
+    assert trials.result_of("alice", key)["result"] == RESULT
+    assert fam()["user_total"] == 1
+
+
+def test_without_the_result_columns_trials_still_count_and_results_are_unknown(db, monkeypatch):
+    """열을 붙이지 못한 DB — ★시행 세기는 그대로 돌고★ 결과 기능만 '모른다'가 된다."""
+    import src.data.schema_add_columns as adder
+    monkeypatch.setattr(adder, "add_columns", lambda *a, **k: False)
+    trials._ready_for = None
+    made = rec()
+    assert made["new"] is True and fam()["user_total"] == 1
+    assert trials.keep_result("alice", made["trial_key"], RESULT) is None
+    assert trials.result_of("alice", made["trial_key"]) is None
+    assert trials.results_of("alice") is None
+
+
+def test_the_helpers_answer_is_what_decides_not_whether_the_columns_happen_to_exist(db, monkeypatch):
+    """열을 덧붙이는 도우미가 '쓸 수 없다'고 답하면 결과 기능은 '모른다'다 — 열이 마침 있더라도 그 답을 따른다
+    (도우미의 계약: 거짓이면 부르는 쪽은 그 열 없이 돈다). 짝은 위의 '열을 덧붙인다' 시험이다."""
+    import src.data.schema_add_columns as adder
+    key = rec()["trial_key"]                                                    # 열이 붙은 표가 생긴다
+    assert trials.keep_result("alice", key, RESULT) is True
+    monkeypatch.setattr(adder, "add_columns", lambda *a, **k: False)
+    trials._ready_for = None                                                    # 다시 준비 — 이번에는 도우미가 거짓을 답한다
+    assert trials.keep_result("alice", key, RESULT) is None
+    assert trials.result_of("alice", key) is None and trials.results_of("alice") is None
+    assert fam()["user_total"] == 1                                             # 시행 세기는 그대로 돈다

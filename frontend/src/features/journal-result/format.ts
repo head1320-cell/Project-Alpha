@@ -2,18 +2,14 @@
  * 매매일지 화면의 글자 서식 — 값은 서버가 준 그대로, 여기서는 자릿수와 부호만 정한다.
  * ★미상 ≠ 0★ `null` 은 `N/A` 로 그린다(0원·0% 로 그리지 않는다). 사유는 부르는 자리가 옆에 적는다.
  */
-import { MINUS, UNKNOWN_TEXT, num } from "@/shared/lib/krFormat";
+import { UNKNOWN_TEXT, num } from "@/shared/lib/krFormat";
 import type { CostBasis } from "@/entities/trade-journal";
 
 type N = number | null | undefined;
 const ok = (v: N): v is number => typeof v === "number" && Number.isFinite(v);
 
-/** 손익 — 부호를 늘 붙인다(+27,175원 · −13,970원 · 0원). 원 단위 그대로(만·억으로 줄이지 않는다). */
-export function signedWon(v: N): string {
-  if (!ok(v)) return UNKNOWN_TEXT;
-  const r = Math.round(Math.abs(v));
-  return `${r === 0 ? "" : v < 0 ? MINUS : "+"}${num(r)}원`;
-}
+/** 손익 서식은 공용이다(`shared/lib/krFormat`) — 분봉 판정 부품도 같은 서식을 쓴다. 이 묶음의 부르는 자리는 그대로 여기서 가져간다. */
+export { signedWon } from "@/shared/lib/krFormat";
 
 /** 금액(비용·대금·하락 폭) — 부호 없는 크기. */
 export const amountWon = (v: N): string => (ok(v) ? `${num(Math.abs(v))}원` : UNKNOWN_TEXT);

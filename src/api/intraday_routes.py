@@ -22,7 +22,7 @@ import logging
 import math
 import time
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from itertools import product
 from typing import Literal
@@ -107,6 +107,10 @@ REASONS = {
     "bad_commission": "수수료율은 0 이상이어야 합니다.",
     "bad_setting": "설정을 받아들이지 못했습니다.",
 }
+
+#: 출처 등급 — 시뮬레이터가 매기는 이름(`intraday._origin`): 실제 분봉만이면 E3 · 합성이 섞였으면 E0.
+GRADE_REAL, GRADE_SYNTHETIC = "E3", "E0"
+RESULTS_UNREADABLE = "분봉 결과 저장소를 읽지 못했습니다(결과가 없는 것과 다릅니다)."
 
 EMPTY = {
     "not_loaded": "이 기간에 적재된 분봉이 없습니다.",
@@ -357,10 +361,15 @@ def _plan(body: SimulateBody, tickers: list[str]) -> minute_feed.Plan:
     return plan
 
 
+def request_view(body: SimulateBody, tickers: list[str], params: dict) -> dict:
+    """정해진 요청 — 받은 꼴이 아니라 검사를 지난 꼴(중복을 뺀 종목 · 기본값을 채운 매개변수). 다시 본문으로 읽을 수 있다."""
+    return {"tickers": tickers, "from": body.from_.isoformat(), "to": body.to.isoformat(),
+            "rule": {"kind": body.rule.kind, "params": params},
+            "position": body.position.model_dump(), "costs": body.costs.model_dump()}
+
+
 def _shared(body: SimulateBody, tickers: list[str], params: dict, session: dict) -> dict:
-    request = {"tickers": tickers, "from": body.from_.isoformat(), "to": body.to.isoformat(),
-               "rule": {"kind": body.rule.kind, "params": params},
-               "position": body.position.model_dump(), "costs": body.costs.model_dump()}
+    request = request_view(body, tickers, params)
     return {"request": request, "template": next(t for t in rules.describe() if t["kind"] == body.rule.kind),
             "session_rules": _session_view(session), "unknowns": [dict(u) for u in UNKNOWNS], "gate": {"mock": mock_allowed()},
             "limits": {"tickers": MAX_DETAIL_TICKERS, "ticker_days": MAX_TICKER_DAYS}}
@@ -487,8 +496,31 @@ def _cells(body: ValidateBody, base: dict, costs: CostAssumptions) -> list[dict]
     return cells
 
 
-@router.post("/validate")
-def validate(body: ValidateBody, user=Depends(require_login)) -> dict:
+@dataclass(frozen=True)
+class Prepared:
+    """읽기 전 검사를 지난 판정 요청 — 정해진 설정 · 격자의 칸 · 다시 돌릴 횟수 · 읽을 날."""
+    tickers: list[str]
+    spec: RuleSpec
+    params: dict
+    position: PositionRules
+    costs: CostAssumptions
+    base_setting: dict
+    cells: list[dict]
+    base_ticks: int
+    doubled_ticks: int
+    ticks: list[int]
+    simulations: int
+    plan: minute_feed.Plan
+
+    @property
+    def ticker_days(self) -> int:
+        return len(self.tickers) * len(self.plan.dates)
+
+
+def prepare(body: ValidateBody) -> Prepared:
+    """판정의 ★읽기 전 검사 전부★ — 설정 · 격자 · 읽을 날의 크기 · 계산량. 어긋나면 사유와 함께 거절한다. 봉을 읽지 않는다.
+
+    문(`validate`)과 캔버스의 '분봉 백테스트 설정' 노드가 같이 쓴다 — 노드가 통과시킨 요청을 실행 단추가 거절하는 일이 없게."""
     tickers, spec, params, position, costs = _setting(body)
     base_setting = _trial_setting(body.rule.kind, params, body.position.model_dump(), body.costs.model_dump())
     cells = _cells(body, base_setting, costs)
@@ -500,6 +532,23 @@ def validate(body: ValidateBody, user=Depends(require_login)) -> dict:
     if ticker_days * simulations > MAX_VALIDATE_WORK:
         raise _refuse("too_much_work", limit=MAX_VALIDATE_WORK, work=ticker_days * simulations, ticker_days=ticker_days,
                       simulations=simulations)
+    return Prepared(tickers, spec, params, position, costs, base_setting, cells, base_ticks, doubled_ticks, ticks,
+                    simulations, plan)
+
+
+@router.post("/validate")
+def validate(body: ValidateBody, user=Depends(require_login)) -> dict:
+    return run_validation(body, user.username)[0]
+
+
+def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None]:
+    """판정의 본체 → (응답, 시행 기록의 답 `{trial_key, new, runs}` — 본 것이 없거나 기록하지 못했으면 `None`).
+
+    문과 캔버스의 '분봉 백테스트 실행' 단추가 같이 쓴다 — ★실행은 이 길 하나만 지난다★(모든 실행이 시행으로 세어진다)."""
+    ready = prepare(body)
+    tickers, spec, params, position, costs = ready.tickers, ready.spec, ready.params, ready.position, ready.costs
+    base_setting, cells, plan, simulations = ready.base_setting, ready.cells, ready.plan, ready.simulations
+    base_ticks, doubled_ticks, ticks = ready.base_ticks, ready.doubled_ticks, ready.ticks
 
     session = session_rules()
     master = master_lookup()
@@ -512,7 +561,7 @@ def validate(body: ValidateBody, user=Depends(require_login)) -> dict:
                "multiplicity": None, "trial": None, "gates": None, "breakeven": None, "assumptions": []}
     if not plan.dates:
         logger.info("intraday validate: tickers=%s days=0", len(tickers))
-        return {**shared, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}, "data": dict(_NO_DATA), **nothing}
+        return {**shared, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}, "data": dict(_NO_DATA), **nothing}, None
 
     days = minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master,
                                   need_prev=_needs_prev(spec, *(c["spec"] for c in cells)))
@@ -524,7 +573,7 @@ def validate(body: ValidateBody, user=Depends(require_login)) -> dict:
     if base["counts"]["sessions"] <= 0:
         logger.info("intraday validate: tickers=%s days=%s sessions=0", len(tickers), len(days))
         return {**shared, "empty": {"reason": "no_usable_bars", "message": EMPTY["no_usable_bars"]}, "data": _data(days, base),
-                **nothing, "origin": base["origin"]}
+                **nothing, "origin": base["origin"]}, None
 
     # ① 같은 체결 줄을 날짜로 가른다 · ② 슬리피지 가정을 바꿔 다시 돌린다 · ③ 비용을 두 배로 놓는다
     dates, fee = base["dates"], costs.commission_bp
@@ -552,7 +601,7 @@ def validate(body: ValidateBody, user=Depends(require_login)) -> dict:
                            "whole": validation.brief(r["journal"])} for c, r in zip(cells, cell_runs, strict=True)]}
 
     # ⑤ 시행을 남기고 센다 — 하나라도 남기지 못했으면 시행 횟수는 모른다
-    who = user.username
+    who = username
     made = _record(who, base, base_setting, tickers, body)
     others_made = [_record(who, r, c["setting"], tickers, body) for c, r in zip(cells, cell_runs, strict=True) if not c["is_base"]]
     split = oos["split"]
@@ -596,4 +645,26 @@ def validate(body: ValidateBody, user=Depends(require_login)) -> dict:
         "gates": table,
         "breakeven": validation.breakeven_cost(base["journal"]),
         "assumptions": [{"key": key, "label": ASSUMPTIONS[key], "count": count} for key, count in base["assumptions"].items()],
-    }
+    }, made
+
+
+# ── 캔버스에서 실행한 결과의 목록 (캔버스 분봉 노드 설계 §7.1) ────────────────────────────────────
+@router.get("/results")
+def results(limit: int = Query(50, ge=1, le=200), user=Depends(require_login)) -> dict:
+    """캔버스의 '분봉 결과 조회' 노드가 고를 목록 — ★내 것만★. 요약 자체는 싣지 않는다(노드가 읽는다).
+
+    운영 게이트에서는 합성 등급의 결과를 뺀다(노드도 내주지 않는다). 못 읽으면 빈 목록이 아니라 `available: false` + 사유."""
+    rows = trials.results_of(user.username, limit)
+    if rows is None:
+        return {"available": False, "reason": RESULTS_UNREADABLE, "results": []}
+    labels = {t["kind"]: t["label"] for t in rules.describe()}
+    mock = mock_allowed()
+    out = []
+    for r in rows:
+        if r["grade"] == GRADE_SYNTHETIC and not mock:
+            continue
+        kind = ((r["setting"] or {}).get("rule") or {}).get("kind")
+        out.append({"trial_key": r["trial_key"], "rule_kind": kind, "rule_label": labels.get(kind) or kind,
+                    "tickers": r["tickers"], "from": r["from"], "to": r["to"], "synthetic": r["grade"] == GRADE_SYNTHETIC,
+                    "grade_known": r["grade"] in (GRADE_REAL, GRADE_SYNTHETIC), "result_at": r["result_at"], "runs": r["runs"]})
+    return {"available": True, "reason": None, "results": out}

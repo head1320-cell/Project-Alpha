@@ -4334,6 +4334,14 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-perf { font-size: 12px; }
 .pg-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--pg-mute); }
 .pg-warn { margin: 0; font-size: 13px; line-height: 1.55; color: var(--pg-assume); }
+/* 캔버스의 분봉 백테스트 결과 판 — 화면(백테스트 › 분봉 규칙)의 판정 부품을 좁은 판에 맞춘다(절은 카드가 아니라 선으로 가른다). */
+.pg-itd { display: flex; flex-direction: column; gap: 12px; }
+.pg-itd-h { margin: 6px 0 0; font-size: 14px; font-weight: 700; color: var(--pg-ink); }
+.pg-itd .pg-itd-net { font-weight: 700; }
+.pg-itd .itd-verdict .tx-answer { padding: 0; border-radius: 0; background: none; }
+.pg-itd .itd-verdict .tx-sec { padding: 14px 0 0; border-radius: 0; background: none; border-top: 1px solid var(--pg-line); }
+.pg-itd .itd-verdict .tx-sec-t { font-size: 14px; }
+.pg-itd .itd-verdict .tj-table { font-size: 12.5px; }
 .pg-kv, .pf-mkv { display: grid; gap: 4px; margin: 0; font-size: 13.5px; }
 .pg-kv > div, .pf-mkv > div { display: flex; justify-content: space-between; gap: 8px; }
 .pg-kv dt, .pf-mkv dt { color: var(--pg-mute); } .pg-kv dd, .pf-mkv dd { margin: 0; font-weight: 600; text-align: right; color: var(--pg-ink); }
@@ -4408,6 +4416,10 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* ── 실행·기록 노드 (BK W4) ── */
 .pg-text { width: 100%; padding: 10px 12px; font: inherit; font-size: 14px; line-height: 1.5; color: var(--pg-ink); background: var(--pg-paper); border: 1.5px solid var(--pg-line); border-radius: 12px; resize: vertical; }
 .pg-text:focus { border-color: var(--pg-blue); outline: none; }
+/* 값 하나를 직접 적는 칸(`widget: "input"`) — 한 줄 · 단위는 칸 오른쪽에. */
+.pg-input-row { display: flex; align-items: center; gap: 8px; }
+.pg-input { resize: none; min-height: 40px; font-variant-numeric: tabular-nums; }
+.pg-input-unit { flex: none; font-size: 13px; color: var(--pg-mute); }
 .pg-save { display: grid; gap: 6px; margin: 4px 0 14px; padding: 14px; background: var(--pg-soft); border-radius: 14px; }
 .pg-save-btn { justify-self: start; }
 .pg-save-msg { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--pg-ok); }

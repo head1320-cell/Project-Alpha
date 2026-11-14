@@ -538,6 +538,9 @@ _bl2.register(REGISTRY)
 from src.api import allocation_graph_nodes_backtest as _backtest  # noqa: E402
 
 _backtest.register(REGISTRY)
+from src.api import allocation_graph_nodes_intraday as _intraday  # noqa: E402
+
+_intraday.register(REGISTRY)
 from src.api import allocation_graph_nodes_record as _record  # noqa: E402
 
 _record.register(REGISTRY)

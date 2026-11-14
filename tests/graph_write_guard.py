@@ -45,6 +45,9 @@ WRITERS: tuple[tuple[str, str], ...] = (
     ("src.engine.multi_strategy_backtest", "MultiStrategyBacktester._persist"),
     # BL3 W5 — 리밸런싱 판단의 결정 기록. 계산은 record_decision=False 라 부르지 않는다(저장 버튼만).
     ("src.data.investment_decisions", "save_decision"),
+    # 캔버스의 분봉 백테스트 — 계산(설정 노드 · 결과 노드)은 시행을 세지도 결과를 남기지도 않는다(실행 단추만).
+    ("src.data.intraday_trials", "record"), ("src.data.intraday_trials", "mark_oos"),
+    ("src.data.intraday_trials", "keep_result"),
 )
 
 

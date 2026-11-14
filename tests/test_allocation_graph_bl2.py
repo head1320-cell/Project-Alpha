@@ -129,7 +129,8 @@ def test_an_unwritable_rule_store_is_a_failure(client, monkeypatch):
 def test_the_savable_set_is_exactly_the_record_nodes():
     cat = {c["type"]: c for c in gn.REGISTRY.catalog()}
     assert {t for t, c in cat.items() if c["savable"]} == {"target_version", "decision_journal", "optimizer", "timing_signal",
-                                                                "alpha_validate", "backtest_setup", "rebalance_decision"}
+                                                                "alpha_validate", "backtest_setup", "rebalance_decision",
+                                                                "intraday_setup"}
     assert cat["order_preview"]["savable"] is False                    # 실행 계획은 승인된 목표에서만
 
 
@@ -140,7 +141,7 @@ def test_every_save_button_says_what_it_does():
     assert labels == {"target_version": "실행 목표로 저장", "decision_journal": "판단 기록 저장",
                       "optimizer": "연구 기록 남기기", "timing_signal": "타이밍 규칙 저장",
                       "alpha_validate": "검증 기록 남기기", "backtest_setup": "백테스트 시작",
-                      "rebalance_decision": "투자 결정 기록"}
+                      "rebalance_decision": "투자 결정 기록", "intraday_setup": "분봉 백테스트 실행"}
     assert all(c["save_label"] is None for c in cat.values() if not c["savable"])
 
 

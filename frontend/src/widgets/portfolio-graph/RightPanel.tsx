@@ -23,6 +23,12 @@ import { usePortfolioGraph, type PgState } from "./store";
 import { StoryPanel } from "./StoryPanel";
 import { WirePanel } from "./WirePanel";
 
+/** 실행을 시작하는 노드 → 그 결과를 읽는 노드와 열쇠 칸. 저장 뒤 '결과 조회 노드 추가'가 이 표로 노드를 붙인다. */
+const FOLLOW_UP: Record<string, [kind: string, param: string]> = {
+  backtest_setup: ["backtest_load", "run_id"],
+  intraday_setup: ["intraday_load", "trial_key"],
+};
+
 export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, selected, selEdge, selEntry, selResult, order, staleSet, stages,
                              focusNode, nodeBadge, session, aiStory, askTarget, aiQ, askFocus, swapTo, runTo }: {
   s: PgState;
@@ -114,13 +120,14 @@ export function RightPanel({ s, rightShown, panels, updatePanels, setPanels, sel
                            st.act(() => { st.rewire(selected.id, port, src, h); return src ? "선을 연결했습니다." : "선 연결을 해제했습니다."; });
                          }}
                          onSave={() => portfolioGraphApi.save(applyBypassDoc(toDoc(s.nodes, s.edges), s.catalog ?? []).doc, selected.id, selResult?.view_hash ?? "")}
-                         saveFollowUp={selected.data.kind === "backtest_setup" ? {
+                         saveFollowUp={FOLLOW_UP[selected.data.kind] ? {
                            label: "결과 조회 노드 추가",
-                           run: (runId) => {
-                             // 시작한 실행을 읽는 노드를 설정 노드 오른쪽에 붙이고 고른다 — 링크는 없다(읽기는 run_id 로 한다).
+                           run: (savedId) => {
+                             // 시작한 실행을 읽는 노드를 설정 노드 오른쪽에 붙이고 고른다 — 링크는 없다(읽기는 남긴 열쇠로 한다).
+                             const [kind, param] = FOLLOW_UP[selected.data.kind];
                              const st = usePortfolioGraph.getState();
-                             const id = st.addNode("backtest_load", { x: selected.position.x + COL, y: selected.position.y });
-                             st.updateParams(id, { run_id: runId });
+                             const id = st.addNode(kind, { x: selected.position.x + COL, y: selected.position.y });
+                             st.updateParams(id, { [param]: savedId });
                              st.select(id);
                            },
                          } : null} />
