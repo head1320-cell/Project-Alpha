@@ -10570,3 +10570,57 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .itd-gate { grid-template-columns: 24px minmax(0, 1fr); gap: 10px; }
   .itd-gate-no { width: 24px; height: 24px; font-size: 12px; }
 }
+
+/* ════ 분봉 규칙 '직접 구성' 편집기(.ire) — 자유 조건식 설계 §6.2 (2026-11-15 · `e2e/intraday-custom.spec.ts`) ════
+   조건 줄 = [수] [연산] [수]. 줄은 좁은 폭에서 접힌다(가로 넘침 없음). 색은 --tx-* 토큰만(다크 짝 자동).
+   빈 칸은 `aria-invalid` 로 표시한다 — 색만으로 말하지 않는다: 어느 자리에 몇 곳인지는 실행 단추 곁의 문제 목록이 글로 말한다. */
+.ire { display: flex; flex-direction: column; gap: 14px; }
+.ire-slot { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row); }
+.ire-slot-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.ire-empty { margin: 0; font-size: 13px; color: var(--tx-mute); }
+.ire-cond { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ire-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.ire-num, .ire-calc, .ire-param, .ire-time, .ire-wrap { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.ire-select, .ire-input { box-sizing: border-box; height: 36px; border: 1px solid var(--tx-line); border-radius: 8px; background: var(--tx-surface);
+  color: var(--tx-ink); font: inherit; font-size: 14px; }
+.ire-select { max-width: 100%; padding: 0 6px; }
+.ire-input { width: 76px; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.ire-clock { width: 118px; }
+.ire-select:focus-visible, .ire-input:focus-visible, .ire-tool:focus-visible, .ire-add:focus-visible, .ire-x:focus-visible,
+.itd-load-row:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 1px; }
+.ire-select[aria-invalid="true"], .ire-input[aria-invalid="true"] { border-color: var(--tx-danger); background: var(--tx-danger-soft); }
+.ire-unit, .ire-paren { font-size: 13.5px; color: var(--tx-sub); }
+.ire-sym { font-size: 13.5px; font-weight: 600; color: var(--tx-ink); }
+.ire-wrap { padding: 3px 4px 3px 10px; border-radius: 8px; background: var(--tx-blue-soft); color: var(--tx-cta); font-size: 13px; font-weight: 600; }
+.ire-wrap .ire-input { width: 56px; height: 30px; }
+.ire-x { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
+.ire-x:hover { background: var(--tx-surface); }
+.ire-tools { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.ire-tool, .ire-add { height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--tx-soft); color: var(--tx-sub);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.ire-tool:hover { background: var(--tx-line); color: var(--tx-ink); }
+.ire-tool--del { color: var(--tx-danger); }
+.ire-add-row { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ire-add { background: var(--tx-blue-soft); color: var(--tx-cta); }
+.ire-add:hover { filter: brightness(0.97); }
+.ire-group { display: flex; flex-direction: column; gap: 8px; padding-left: 14px; border-left: 1px solid var(--tx-line); }
+.ire-group-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.ire-where { padding: 6px 8px; border-radius: 8px; background: var(--tx-soft); }
+.itd-check { display: flex; flex-direction: column; gap: 6px; }
+.itd-rule-text { color: var(--tx-ink); }
+.itd-rule-size { margin: 0; padding: 0 12px; }   /* 위의 글 상자와 왼쪽 선을 맞춘다 */
+.itd-load { display: flex; flex-direction: column; gap: 10px; }
+.itd-load-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow: auto; }
+.itd-load-row { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 10px 12px; border: 1px solid var(--tx-line); border-radius: 10px;
+  background: var(--tx-surface); color: var(--tx-ink); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.itd-load-row:hover { background: var(--tx-soft); }
+.itd-load-text { line-height: 1.5; color: var(--tx-sub); word-break: keep-all; overflow-wrap: anywhere; }
+/* 규칙을 풀어 쓴 글 — 가동 줄(내 계좌)과 견주기(매매일지)에서도 같은 글을 보인다. 이름표 아래 한 줄을 통째로 쓴다. */
+.ma-arm-text { flex: 0 0 100%; min-width: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; overflow-wrap: anywhere; }
+.dv-rule { display: flex; flex-direction: column; gap: 4px; margin: 0; min-width: 0; }
+.dv-rule-text { font-size: 13px; line-height: 1.5; color: var(--tx-ink); word-break: keep-all; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .ire-slot { padding: 12px; }
+  .ire-tools { margin-left: 0; }
+  .ire-group { padding-left: 10px; }
+}

@@ -114,6 +114,8 @@ async function openAccount(page: Page, c: Ctx) {
 const arm = (page: Page) => page.locator(".ma-arm");
 const request = (page: Page, id: number) => page.locator(`.ma-arm-req[data-request="${id}"]`);
 const runRow = (page: Page) => page.locator(".ma-arm-run").first();
+/** 손 계산의 규칙(시가 범위 돌파 · 1분)을 서버가 풀어 쓴 글 — 이름표가 같은 규칙을 가르는 것이 이 글이다. */
+const ORB_TEXT = "진입 조건: 종가 상향 돌파 시가 범위 고가(1분) 또는 ((시가 범위 종료(1분) > 0.5 그리고 아님(직전 1봉 동안(시가 범위 종료(1분) > 0.5))) 그리고 종가 > 시가 범위 고가(1분))";
 
 /** 가동 준비를 열어 날짜를 고르고 시작한다 → 가동 번호. */
 async function startFromScreen(page: Page, id: number, day = DAY): Promise<number> {
@@ -181,6 +183,7 @@ test("캔버스의 요청 → 내 계좌에서 가동 → 끝까지: 가상 체�
   const row = request(page, requestId);
   await expect(arm(page).locator(".ma-arm-req")).toHaveCount(1);
   await expect(row.locator(".ma-arm-rule")).toHaveText("시가 범위 돌파");
+  await expect(row.locator(".ma-arm-text")).toHaveText(ORB_TEXT);                 // 이름표만이 아니라 조건의 글(서버가 낸다)
   await expect(row.locator(".ma-arm-what")).toContainText("종목 1개");
   await expect(row.locator(".ma-arm-what")).toContainText("035720");
   await expect(row.locator(".ma-arm-period")).toHaveText("실행 기간 2026-03-02 ~ 2026-03-13");
@@ -215,6 +218,7 @@ test("캔버스의 요청 → 내 계좌에서 가동 → 끝까지: 가상 체�
   const run = runRow(page);
   await expect(run).toHaveAttribute("data-status", "running");
   await expect(run.locator(".ma-arm-status")).toHaveText("가동 중");
+  await expect(run.locator(".ma-arm-text")).toHaveText(ORB_TEXT);                 // 가동하는 규칙의 글
   await expect(run.locator(".ma-arm-daytext")).toHaveText(DAY);
   await expect(run.locator(".ma-arm-clock")).toHaveText("봉 0 / 4 · 다음 09:00");
   await expect(run.locator(".ma-arm-meter")).toHaveAttribute("aria-valuenow", "0");

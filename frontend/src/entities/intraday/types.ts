@@ -48,8 +48,35 @@ export type Limits = {
   grid_cells: number; validate_work: number; folds_min: number; folds_max: number;
 };
 export type Templates = {
-  templates: Template[]; position: FieldDef[]; costs: FieldDef[]; limits: Limits;
+  templates: Template[]; grammar: Grammar; position: FieldDef[]; costs: FieldDef[]; limits: Limits;
   session_rules: SessionRules; unknowns: UnknownNote[]; gate: { mock: boolean };
+};
+
+// ── 직접 구성 — 조건 나무와 그 문법 (`src/engine/intraday/expr.py` · `rules.grammar()`) ─────────────────
+
+/** 지표 잎 — 매개변수는 같은 층에 놓인다(`{"ind": "sma", "n": 20}`). 편집 중의 빈 칸은 `null`. */
+export type IndNode = { ind: string } & { [param: string]: number | string | null };
+export type ConstNode = { const: number | null };
+/** 연산 마디. `op` 가 빈 글자면 아직 고르지 않은 것이다(편집 중에만). `bars` 는 '직전 M봉 동안', `from`·`to` 는 시각 창(HHMM). */
+export type OpNode = { op: string; args: (Tree | null)[]; bars?: number | null; from?: string; to?: string };
+export type Tree = IndNode | ConstNode | OpNode;
+
+export type GrammarParam = { key: string; label: string; type: "int" | "float"; min: number; max: number; default: number; unit: string };
+export type GrammarIndicator = { name: string; label: string; unit: string; needs_prev: boolean; params: GrammarParam[] };
+export type GrammarOp = {
+  name: string; label: string; symbol: string | null; gives: "bool" | "number"; args: ("bool" | "number")[];
+  variadic: { kind: "bool" | "number"; min: number; max: number } | null;
+  extra: { key: string; label: string; type: "int" | "time"; min?: number; max?: number; unit?: string }[];
+};
+/** 화면이 조건을 짓는 데 쓰는 표 — 지표 · 연산 · 이름표 · 범위는 전부 서버의 것이다(화면이 지어내지 않는다). */
+export type Grammar = {
+  slots: { key: "entry" | "entry_stop" | "exit"; label: string; kind: "bool" | "number" }[]; entry_rule: string;
+  indicators: GrammarIndicator[]; ops: GrammarOp[]; units: Record<string, string>; limits: { nodes: number; depth: number };
+};
+/** `POST /intraday/rules/expand` 의 답 — 규칙을 나무로 풀고 검사한 것. 계산 · 기록은 없다. */
+export type Expanded = {
+  rule: { kind: "custom"; params: Record<string, Tree> }; source: { kind: string; label: string };
+  text: string; nodes: number; depth: number; limits: { nodes: number; depth: number }; needs_prev: boolean; notes: string[];
 };
 
 // ── 실행 ────────────────────────────────────────────────────────────────────
@@ -57,7 +84,7 @@ export type Templates = {
 export type Value = number | string | null;
 export type SimulateRequest = {
   tickers: string[]; from: string; to: string;
-  rule: { kind: string; params: Record<string, Value> };
+  rule: { kind: string; params: Record<string, Value | Tree> };       // 직접 구성이면 값이 조건 나무다
   position: Record<string, Value>;
   costs: Record<string, Value>;
 };
@@ -85,7 +112,8 @@ type Shared = {
 };
 /** 캔버스에서 실행해 남긴 결과의 목록 한 줄(`GET /intraday/results`) — 요약 자체는 노드가 읽는다. */
 export type ResultRow = {
-  trial_key: string; rule_kind: string | null; rule_label: string | null; tickers: string[]; from: string; to: string;
+  trial_key: string; rule_kind: string | null; rule_label: string | null; rule_text: string | null; rule_text_reason: string | null;
+  tickers: string[]; from: string; to: string;
   synthetic: boolean; grade_known: boolean; result_at: number; runs: number;
 };
 /** 못 읽으면 빈 목록이 아니라 `available: false` + 사유다. */
@@ -137,7 +165,10 @@ export type Divergence = {
   divergence: DivergenceReport | null; pnl: PnlGap | null;
 };
 /** 내가 돌린 분봉 백테스트의 설정 한 줄(`GET /intraday/trials`) — `request` 는 그대로 다시 보낼 수 있는 요청이다. */
-export type TrialRow = { trial_key: string; rule_label: string | null; runs: number; updated_at: number; request: SimulateRequest };
+export type TrialRow = {
+  trial_key: string; rule_label: string | null; rule_text: string | null; rule_text_reason: string | null;
+  runs: number; updated_at: number; request: SimulateRequest;
+};
 /** 못 읽으면 빈 목록이 아니라 `available: false` + 사유다. `unreadable` 은 설정이 깨져 싣지 못한 줄 수. */
 export type TrialList = { available: boolean; reason: string | null; trials: TrialRow[]; unreadable: number };
 /** `F` 는 매매일지의 체결 줄이다 — 엔티티끼리 서로 참조하지 않으므로(FSD) 쓰는 자리가 끼운다. */

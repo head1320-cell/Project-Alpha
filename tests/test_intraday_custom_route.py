@@ -88,7 +88,10 @@ def test_a_template_expands_to_the_trees_it_builds(client, auth):
     assert body["text"] == rules.text_of(spec) and body["text"].startswith("진입 조건: 종가 상향 돌파 시가 범위 고가(5분)")
     assert (body["nodes"], body["depth"]) == expr.size(spec.entry) and body["nodes"] > 10
     assert body["limits"] == {"nodes": 64, "depth": 12} and body["needs_prev"] is False
-    assert len(body["notes"]) == 1 and "그날의 봉" in body["notes"][0]
+    # 이 틀은 '직전 M봉 동안'으로 범위가 막 끝난 봉을 짚는다 — 그 연산이 그 봉을 보지 않는다는 말이 붙는다(쓰지 않는 규칙에는 없다 — 짝).
+    assert len(body["notes"]) == 2 and "그날의 봉" in body["notes"][0] and "그 봉을 포함하지 않습니다" in body["notes"][1]
+    plain = expand(client, auth, {"kind": "custom", "params": {"entry": {"op": "gt", "args": [{"ind": "close"}, {"ind": "vwap"}]}}}).json()
+    assert len(plain["notes"]) == 1 and "그날의 봉" in plain["notes"][0]
 
 
 def test_a_template_that_uses_yesterday_says_so(client, auth):

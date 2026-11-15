@@ -121,6 +121,7 @@ test("분봉 결과에서 매매일지로 가는 길이 있고, 견준 값이 �
   expect(pickedText).toContain("2026-03-02 ~ 2026-03-13");
   expect(pickedText).toContain(`${before.runs.toLocaleString("ko-KR")}회 실행`);
   await expect(page.locator(".dv-window")).toHaveValue("5");
+  await expect(page.locator(".dv-rule-text")).toHaveText("진입 조건: 종가 상향 돌파 시가 범위 고가(1분) 또는 ((시가 범위 종료(1분) > 0.5 그리고 아님(직전 1봉 동안(시가 범위 종료(1분) > 0.5))) 그리고 종가 > 시가 범위 고가(1분))");   // 고른 백테스트의 규칙(서버가 낸 글)
 
   const req = await compare(page);
   const body = req.postDataJSON();

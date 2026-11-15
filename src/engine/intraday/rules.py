@@ -179,6 +179,7 @@ _OP_EXTRA = {"held_before": ("bars",), "time_between": ("from", "to")}
 _TRIAL_NOTE = ("조건을 변경해 실행할 때마다 시행으로 기록됩니다. 시행 횟수가 늘수록 시행 횟수 보정 관문은 엄격해집니다. "
                "검사는 시행으로 기록되지 않습니다.")
 _WARMUP_NOTE = "지표는 그날의 봉으로만 계산합니다. 창이 N봉인 지표는 처음 N봉 동안 값이 없으며, 값이 없는 조건은 충족으로 보지 않습니다."
+_HELD_NOTE = "‘직전 M봉 동안 계속’은 그 봉을 포함하지 않습니다. 앞선 M개 봉에서 모두 충족했는지 봅니다."
 _ENTRY_RULE = "진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다."
 RULE_TEXT_UNREADABLE = "이 설정의 규칙을 지금의 문법으로 읽지 못했습니다."
 
@@ -360,10 +361,17 @@ def text_of(spec: RuleSpec) -> str:
     return " · ".join(parts)
 
 
+def _uses_op(tree: Any, name: str) -> bool:
+    """그 연산이 나무 어디엔가 있는가(읽기만 — 평가하지 않는다)."""
+    return isinstance(tree, dict) and (tree.get("op") == name or any(_uses_op(arg, name) for arg in tree.get("args", [])))
+
+
 def notes_of(spec: RuleSpec) -> list[str]:
-    """그 나무들이 알아야 할 것 — 덥혀지지 않은 지표(늘) · 전일 값(쓰는 지표가 있을 때)."""
-    uses_prev = any(expr.uses_prev(tree) for tree in (spec.entry, spec.entry_stop, spec.exit) if tree is not None)
-    return [_WARMUP_NOTE, *([_PREV_NOTE] if uses_prev else [])]
+    """그 나무들이 알아야 할 것 — 덥혀지지 않은 지표(늘) · 전일 값(쓰는 지표가 있을 때) · '직전 M봉 동안'이 보는 봉(쓸 때)."""
+    trees = [tree for tree in (spec.entry, spec.entry_stop, spec.exit) if tree is not None]
+    uses_prev = any(expr.uses_prev(tree) for tree in trees)
+    held = any(_uses_op(tree, "held_before") for tree in trees)
+    return [_WARMUP_NOTE, *([_PREV_NOTE] if uses_prev else []), *([_HELD_NOTE] if held else [])]
 
 
 def rule_text(rule: Any) -> dict:

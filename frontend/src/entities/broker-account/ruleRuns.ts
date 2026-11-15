@@ -13,7 +13,9 @@ export type GateCounts = { ok: number; degraded: number; unknown: number };
 
 /** 요청이 가리키는 시행 — 있음(무엇을 가동하게 되는지) / 없음 / 못 읽음(`found: null`). 뒤의 둘은 사유를 싣는다. */
 export type ArmTrial =
-  | { found: true; rule_kind: string | null; rule_label: string | null; tickers: string[]; from: string; to: string;
+  | { found: true; rule_kind: string | null; rule_label: string | null;
+      /** 규칙을 풀어 쓴 글(서버가 낸다) — '직접 구성'은 이름표만으로는 구별되지 않는다. 못 읽으면 `null` + 사유. */
+      rule_text: string | null; rule_text_reason: string | null; tickers: string[]; from: string; to: string;
       grade: string | null; synthetic: boolean; runs: number }
   | { found: false | null; reason: string };
 
@@ -40,6 +42,8 @@ export type RunFill = {
 export type RuleRun = {
   run_id: number; account_id: string; trial_key: string; tickers: string[]; day: string; feed: string; mode: string; grade: string;
   request: { rule?: { kind?: string } } | null;
+  /** 가동하는 규칙을 풀어 쓴 글(서버가 낸다). 못 읽으면 `null` + 사유. */
+  rule_text: string | null; rule_text_reason: string | null;
   /** `running` · `finished` · `stopped` · `interrupted` — 모르는 값이 와도 문자열로 들고 다닌다. */
   status: string; stop_reason: string | null; stop_message: string | null;
   last_bar: string | null; bars: number; signals: number; started_at: number | null; ended_at: number | null;

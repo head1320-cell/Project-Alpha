@@ -157,6 +157,12 @@ export function RuleArming({ accountId, mode, kill }: { accountId: string } & Ga
 
 // ── 받은 가동 요청 ───────────────────────────────────────────────────────────
 
+/** 규칙을 풀어 쓴 글(서버 문장 그대로) — 이름표가 같은 규칙('직접 구성')을 가른다. 못 읽었으면 그 사유를 보인다. */
+function RuleText({ text, reason }: { text: string | null | undefined; reason: string | null | undefined }) {
+  const said = text ?? reason;
+  return said ? <span className="ma-arm-text" data-known={String(Boolean(text))} data-server>{said}</span> : null;
+}
+
 function RequestRow({ row, accountId, gate, label, onStarted, onRemoved, onFail }: {
   row: ArmRequest; accountId: string; gate: Gate; label: (kind: string | null | undefined) => string | null;
   onStarted: (reply: RunReply) => void; onRemoved: () => void; onFail: (text: string, raw?: string) => void;
@@ -179,6 +185,7 @@ function RequestRow({ row, accountId, gate, label, onStarted, onRemoved, onFail 
             <span>종목 {num(t.tickers.length)}개<span className="ma-code" data-mono>{t.tickers.slice(0, 3).join(" ")}{t.tickers.length > 3 ? " 외" : ""}</span></span>
             <span className="ma-arm-period">실행 기간 {t.from} ~ {t.to}</span>
             {t.synthetic ? <span className="tx-chip" data-tone="practice">합성 분봉</span> : null}
+            <RuleText text={t.rule_text} reason={t.rule_text_reason} />
           </>
         ) : (
           <span className="ma-arm-gone" data-server>{t.reason}</span>
@@ -308,6 +315,7 @@ function RunRow({ run, accountId, label, onDone, onFail }: {
         <span className="tx-chip" data-tone="plain">{MODE_KO[run.mode] ?? <span data-server>{run.mode}</span>}</span>
         {run.grade === "E0" ? <span className="tx-chip" data-tone="practice">합성 분봉</span>
           : run.grade !== "E3" ? <span className="tx-chip" data-tone="unknown">분봉 출처 미상</span> : null}
+        <RuleText text={run.rule_text} reason={run.rule_text_reason} />
       </div>
       {c ? (
         <div className="ma-arm-progress">

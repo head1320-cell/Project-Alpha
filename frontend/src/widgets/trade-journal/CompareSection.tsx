@@ -77,6 +77,12 @@ export function CompareSection({ fills }: { fills: FillRow[] }) {
                 </select>
               </label>
             </div>
+            {cur.rule_text ?? cur.rule_text_reason ? (
+              <p className="dv-rule" data-known={String(Boolean(cur.rule_text))}>
+                <span className="tj-label">고른 백테스트의 규칙</span>
+                <span className="dv-rule-text" data-server>{cur.rule_text ?? cur.rule_text_reason}</span>
+              </p>
+            ) : null}
             <ul className="tj-plain-list dv-notes">
               <li>허용 시간은 선언한 가정입니다. 결과에 1분·5분·15분에서의 건수를 함께 적습니다.</li>
               <li>비용은 고른 백테스트의 비용 가정으로 계산합니다. 파일에 수수료·세금 열을 지정했으면 그 값을 먼저 씁니다.</li>

@@ -7,10 +7,11 @@
  * 적재 범위는 ★있는 그대로★ 보인다 — 어느 날 · 어떤 출처로 · 얼마나. 값이 없는 날(운영 게이트가 막은 합성 하루 · 읽지 못한 파일)은
  * 0 이 아니라 사유로 그린다.
  */
-import type { Coverage, CoverageDay, FieldDef, Templates } from "@/entities/intraday";
+import type { Coverage, CoverageDay, FieldDef, SimulateRequest, Templates } from "@/entities/intraday";
 import { num } from "@/shared/lib/krFormat";
-import { Notice, RetryFail, Section, Segmented } from "@/shared/ui/tx";
-import { GRID_POSITION, parseTickers, rangeText, readField, templateOf, withKind, type Form, type Texts } from "./form";
+import { Notice, RetryFail, Section } from "@/shared/ui/tx";
+import { GRID_POSITION, parseTickers, rangeText, readField, templateOf, type Form, type Texts } from "./form";
+import { RuleSection, type Move, type RuleCheck } from "./RuleSection";
 
 export type CoverageState =
   | { kind: "idle" } | { kind: "pending" } | { kind: "fail"; status: number; error: string } | { kind: "done"; value: Coverage };
@@ -83,10 +84,11 @@ function CoverageView({ c, asked }: { c: Coverage; asked: string[] }) {
   );
 }
 
-export function SetupForm({ templates: t, form, onChange, coverage, onCoverage, problems, pending, stale, onRun }: {
+export function SetupForm({ templates: t, form, onChange, coverage, onCoverage, problems, pending, stale, onRun, ruleReady, check, move, onToCustom }: {
   templates: Templates; form: Form; onChange: (next: Form) => void;
   coverage: CoverageState; onCoverage: () => void;
   problems: string[]; pending: boolean; stale: boolean; onRun: () => void;
+  ruleReady: boolean; check: RuleCheck; move: Move; onToCustom: (rule: SimulateRequest["rule"] | null) => void;
 }) {
   const template = templateOf(t, form.kind);
   const tickers = parseTickers(form.tickers);
@@ -123,21 +125,8 @@ export function SetupForm({ templates: t, form, onChange, coverage, onCoverage, 
         </div>
       </Section>
 
-      <Section title="규칙" sub="규칙 틀과 매개변수를 정합니다. 신호는 봉 종가까지의 값으로 계산하고 다음 봉 시가에 체결합니다.">
-        <div className="tj-map itd-rule">
-          <div className="itd-kinds">
-            {/* 직접 구성(`custom`)은 조건 편집기가 들어올 때 연다(자유 조건식 f2) — 그때까지 칸이 없는 선택지를 내놓지 않는다. */}
-            <Segmented label="규칙 틀" options={t.templates.filter((x) => !x.custom).map((x) => ({ value: x.kind, label: x.label }))} value={form.kind}
-                       onChange={(kind) => onChange(withKind(form, t, kind))} />
-          </div>
-          <p className="tj-read itd-rule-summary" data-server>{template.summary}</p>
-          <div className="tj-fields itd-params">
-            {template.params.map((p) => <Field key={p.key} def={p} value={form.params[p.key] ?? ""} required onChange={(v) => set("params", p.key, v)} />)}
-          </div>
-          {template.notes.length ? <ul className="tj-plain-list itd-notes">{template.notes.map((n) => <li key={n} data-server>{n}</li>)}</ul> : null}
-          {template.needs_prev ? <p className="tj-note itd-needs-prev">전일 값은 앞선 적재일의 분봉에서 얻습니다. 닷새 안에 적재된 날이 없는 종목·일자는 건너뜁니다.</p> : null}
-        </div>
-      </Section>
+      <RuleSection templates={t} form={form} onChange={onChange} ruleReady={ruleReady} check={check} move={move} onToCustom={onToCustom}
+                   params={template.params.map((p) => <Field key={p.key} def={p} value={form.params[p.key] ?? ""} required onChange={(v) => set("params", p.key, v)} />)} />
 
       <Section title="포지션과 위험" sub="모든 규칙 틀에 공통으로 적용합니다. 비워 둔 칸의 규칙은 사용하지 않습니다. 보유는 하루를 넘기지 않으며 마지막 봉에서 청산합니다.">
         <div className="tj-fields itd-position">
@@ -185,6 +174,7 @@ export function GridForm({ templates: t, form, onChange, cells }: { templates: T
       {g.on ? (
         <>
           <p className="tj-note">칸마다 볼 값을 쉼표로 나눠 입력합니다. 앞 구간에서 비용 후 거래당 기대값이 가장 큰 칸을 다음 구간에 적용합니다. 격자의 칸은 전부 시행 횟수에 더합니다.</p>
+          {template.custom ? <p className="tj-note itd-grid-custom">직접 구성한 규칙은 포지션 설정의 격자만 사용할 수 있습니다.</p> : null}
           <div className="tj-fields">
             <label className="tj-field"><span className="tj-label">구간 수<i className="tj-req">필수</i></span>
               <input className="tj-input itd-folds" inputMode="numeric" autoComplete="off" value={g.folds} onChange={(e) => onChange({ ...form, grid: { ...g, folds: e.target.value } })} />

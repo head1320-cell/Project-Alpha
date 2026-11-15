@@ -6,11 +6,14 @@
  * 범위와 꼴은 서버가 다시 검사한다 — 여기의 검사는 보내기 전에 어느 칸이 어긋났는지 말해 주려는 것이다.
  */
 import type { FieldDef, Grid, SimulateRequest, Template, Templates, Value } from "@/entities/intraday";
+import { EMPTY, issuesOf, toParams, type Drafts } from "@/features/intraday-rule-editor";
 
 export type Texts = Record<string, string>;
 export type Form = {
   tickers: string; from: string; to: string;
   kind: string; params: Texts; position: Texts; costs: Texts;
+  /** 직접 구성한 조건 나무 셋 — 틀을 고른 동안에도 남아 있다(틀로 갔다 돌아와도 지은 조건을 잃지 않는다). */
+  custom: Drafts;
   grid: { on: boolean; folds: string; rule: Texts; position: Texts };
 };
 
@@ -28,6 +31,7 @@ export function initialForm(t: Templates, period: { from: string; to: string }):
   const first = t.templates[0];
   return {
     tickers: "", ...period, kind: first.kind, params: defaults(first.params), position: defaults(t.position), costs: defaults(t.costs),
+    custom: EMPTY,
     grid: { on: false, folds: "4", rule: {}, position: {} },
   };
 }
@@ -80,7 +84,8 @@ function readAll(scope: string, fields: FieldDef[], texts: Texts, required: (key
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000) + 1;
 
-export type Built = { request: SimulateRequest; problems: string[] };
+/** `ruleReady` — 규칙 칸(틀의 매개변수 또는 직접 구성한 조건)에 어긋난 것이 없다. 조건 검사와 '조건으로 풀기'가 이것을 본다. */
+export type Built = { request: SimulateRequest; problems: string[]; ruleReady: boolean };
 
 /** 지금 설정 → 서버에 보낼 요청과, 보낼 수 없는 사유들(없으면 빈 배열). */
 export function build(form: Form, t: Templates): Built {
@@ -92,13 +97,15 @@ export function build(form: Form, t: Templates): Built {
   if (!isDate(form.from) || !isDate(form.to)) problems.push("기간의 시작일과 종료일을 입력하십시오.");
   else if (form.from > form.to) problems.push("시작일이 종료일보다 늦습니다.");
   else if (daysBetween(form.from, form.to) > t.limits.range_days) problems.push(`기간은 한 번에 ${t.limits.range_days}일까지입니다.`);
-  const params = readAll("rule", template.params, form.params, () => true);
+  // 직접 구성이면 매개변수 칸 대신 조건 나무 셋이 규칙이다 — 빈 칸이 있으면 보내지 않는다(어느 자리인지 말한다).
+  const params = template.custom ? { values: toParams(form.custom), problems: issuesOf(form.custom, t.grammar) }
+    : readAll("rule", template.params, form.params, () => true);
   const position = readAll("position", t.position, form.position, (k) => REQUIRED.has(k));
   const costs = readAll("costs", t.costs, form.costs, (k) => REQUIRED.has(k));
   problems.push(...params.problems, ...position.problems, ...costs.problems);
   return {
     request: { tickers, from: form.from, to: form.to, rule: { kind: form.kind, params: params.values }, position: position.values, costs: costs.values },
-    problems,
+    problems, ruleReady: params.problems.length === 0,
   };
 }
 

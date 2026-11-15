@@ -388,6 +388,27 @@ def test_the_notes_say_what_the_trees_need():
     assert all(n.endswith("니다.") and "—" not in n for n in with_prev)
 
 
+def test_the_notes_say_that_held_before_does_not_look_at_the_bar_itself__only_when_it_is_used():
+    """'직전 M봉 동안 계속'은 ★그 봉을 보지 않는다★(앞 봉들만 — 인과). 쓰는 규칙에만 그 말이 붙는다(짝) — 깊이 묻혀 있어도, 어느 자리에 있어도."""
+    held = {"op": "held_before", "bars": 3, "args": [ABOVE]}
+    said = "‘직전 M봉 동안 계속’은 그 봉을 포함하지 않습니다. 앞선 M개 봉에서 모두 충족했는지 봅니다."
+    assert said in rules.notes_of(rules.build("custom", {"entry": held}))
+    assert said not in rules.notes_of(rules.build("custom", {"entry": ABOVE}))
+    assert said not in rules.notes_of(rules.build("custom", {"entry": op("not", ABOVE), "exit": BELOW}))
+    deep = op("and", BELOW, op("not", op("or", ABOVE, held)))
+    assert said in rules.notes_of(rules.build("custom", {"entry": ABOVE, "exit": deep}))
+    priced = {"op": "where", "args": [held, I("day_open")]}
+    assert said in rules.notes_of(rules.build("custom", {"entry_stop": priced}))
+    both = rules.notes_of(rules.build("custom", {"entry": op("and", held, op("gt", I("close"), I("prev_high")))}))
+    assert len(both) == 3 and len(set(both)) == 3                               # 덥히기 · 전일 값 · 직전 M봉 — 한 번씩
+    # 그 말은 사실이다 — 다섯째 봉(종가 1)은 조건에 어긋나지만 답은 참이고(앞의 셋만 본다), 그 봉이 창에 드는 여섯째 봉은 거짓이다.
+    close = np.array([10.0, 11.0, 12.0, 13.0, 1.0, 14.0])
+    time = np.array([f"09{m:02d}00" for m in range(len(close))])
+    session = Session("005930", "2026-03-04", time, close, close, close, close, np.ones(len(close)), "kis", None, "KOSPI", "stock", None)
+    fired = expr.evaluate({"op": "held_before", "bars": 3, "args": [op("gt", I("close"), {"const": 5.0})]}, session)
+    assert fired.tolist() == [False, False, False, True, True, False]
+
+
 def test_rule_text_reads_a_stored_rule_or_says_why_it_cannot():
     kept = {"kind": "custom", "params": rules.resolve("custom", {"entry": ABOVE})}
     assert rules.rule_text(kept) == {"rule_text": "진입 조건: 종가 > 이동평균(20봉)", "rule_text_reason": None}
