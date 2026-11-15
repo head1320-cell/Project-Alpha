@@ -343,6 +343,26 @@ def test_the_declaration_scan_sees_both_spellings():
     assert orm == {"stocks"}, orm
 
 
+def _unreadable_declarations_in(src: str) -> list[str]:
+    """`CREATE TABLE … {이름}` 인데 그 이름을 표 이름으로 풀지 못한 것 — 스캔이 ★보지 못한 표★다."""
+    body = "\n".join(_code_lines(src).values())
+    consts = _module_constants(src)
+    return sorted({name for braced, name in _CREATE.findall(body) if braced and not consts.get(name)})
+
+
+def test_a_declaration_the_scan_cannot_name_is_reported_not_skipped():
+    """★풀지 못한 이름은 '표 없음'이 아니다★ — 조용히 빠지면 분류 검사가 그 표를 영영 보지 못한다.
+
+    실제로 겪었다(2026-11-15): `_A, _B = "a", "b"` 처럼 묶어 적은 표 이름 셋(`src/data/rule_runs.py`)이 스캔에 잡히지 않아
+    새 표가 분류 없이 지나갔다."""
+    assert _unreadable_declarations_in('_A, _B = "a", "b"\nDDL = f"CREATE TABLE IF NOT EXISTS {_A} (x INT)"\n') == ["_A"]
+    assert _unreadable_declarations_in('_A = "a"\nDDL = f"CREATE TABLE IF NOT EXISTS {_A} (x INT)"\n') == []     # 짝 — 풀리면 없다
+    unreadable = {str(path): names for path in _source_files()
+                  if (names := _unreadable_declarations_in(path.read_text(encoding="utf-8")))}
+    assert not unreadable, ("표 이름을 스캔이 읽지 못하는 선언이 있습니다 — 모듈 최상위에 `이름 = \"표\"` 한 줄씩으로 적으십시오"
+                            f"(그래야 보존 분류 검사가 그 표를 봅니다): {unreadable}")
+
+
 def test_the_declaration_scan_ignores_prose_about_ddl():
     """`ohlcv_loader` 의 설명 주석이 실제로 `IF` 라는 표를 만들어 냈었다."""
     prose = '#: `ensure_table` 은 `CREATE TABLE IF NOT EXISTS` + ALTER 를 부른다\nX = 1\n'

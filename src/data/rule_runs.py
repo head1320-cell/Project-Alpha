@@ -19,7 +19,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_REQUESTS, _RUNS, _FILLS = "rule_arm_requests", "rule_runs", "rule_run_fills"
+#: 표 이름은 한 줄에 하나씩 적는다 — 보존 분류 검사(`tests/test_retention_policy.py`)가 모듈 최상위의 `이름 = "표"` 를 읽는다.
+_REQUESTS = "rule_arm_requests"
+_RUNS = "rule_runs"
+_FILLS = "rule_run_fills"
 #: 표를 만들어 둔 DB(주소별) — 프로세스가 다른 DB 로 붙으면 그 DB 에도 만든다.
 _ready_for: str | None = None
 
