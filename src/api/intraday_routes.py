@@ -34,7 +34,7 @@ import src.data.minute_bars as minute_bars
 from src.api.auth import require_login
 from src.api.trade_journal_routes import MAX_FILLS, master_lookup
 from src.data import intraday_trials as trials
-from src.data import minute_feed
+from src.data import minute_feed, rule_runs
 from src.data.market_rules import session_rules
 from src.data.minute_quality import DEFECTS, check_day
 from src.data.mock_gate import mock_allowed
@@ -749,3 +749,57 @@ def results(limit: int = Query(50, ge=1, le=200), user=Depends(require_login)) -
                     "tickers": r["tickers"], "from": r["from"], "to": r["to"], "synthetic": r["grade"] == GRADE_SYNTHETIC,
                     "grade_known": r["grade"] in (GRADE_REAL, GRADE_SYNTHETIC), "result_at": r["result_at"], "runs": r["runs"]})
     return {"available": True, "reason": None, "results": out}
+
+
+# ── 가동 요청 — 캔버스가 남긴 '이 시행을 가동해 달라'는 줄 (설계 W5 §5.2 · §5.3) ────────────────────────────
+# ★요청은 가동이 아니다★ — 여기서는 읽고 지우기만 한다. 가동 · 정지는 내 계좌의 문(`broker_account_routes`)이 한다.
+# 이 파일은 주문 경로를 들여오지 않는다(정적 시험) — 그래서 가동의 문을 여기에 두지 않았다.
+NO_VERDICT = "판정 결과를 남기지 않은 실행입니다. 관문의 상태를 알 수 없습니다."
+VERDICT_UNREADABLE = "판정 결과를 읽지 못했습니다(결과가 없는 것과 다릅니다)."
+TRIAL_GONE = "이 요청이 가리키는 분봉 백테스트 기록이 없습니다. 가동할 수 없는 요청입니다."
+TRIAL_UNREADABLE = "분봉 백테스트 기록을 읽지 못했습니다(기록이 없는 것과 다릅니다)."
+_NO_REQUEST = "그 가동 요청이 없습니다."
+
+
+def _request_view(username: str, row: dict, labels: dict) -> dict:
+    """요청 한 줄 + 그것이 가동할 시행(규칙 · 종목 · 기간 · 출처 등급 · 실행 횟수) + 남긴 판정의 관문 수.
+
+    관문은 ★보여 주기만 한다★ — 미달 · 미상이 있어도 가동을 막지 않는다(설계 §12 D3). 판정을 남기지 않은 실행이면 그렇게 적는다."""
+    trial = trials.trial_of(username, row["trial_key"])
+    if trial is None:                                           # 못 읽음 ≠ 없음
+        return {**row, "trial": {"found": None, "reason": TRIAL_UNREADABLE},
+                "gates": {"known": False, "counts": None, "reason": VERDICT_UNREADABLE}}
+    if not trial["found"]:
+        return {**row, "trial": {"found": False, "reason": TRIAL_GONE}, "gates": {"known": False, "counts": None, "reason": NO_VERDICT}}
+    kind = ((trial["setting"] or {}).get("rule") or {}).get("kind") if isinstance(trial["setting"], dict) else None
+    info = {"found": True, "rule_kind": kind, "rule_label": labels.get(kind) or kind, "tickers": trial["tickers"], "from": trial["from"],
+            "to": trial["to"], "grade": trial["grade"], "synthetic": trial["grade"] == GRADE_SYNTHETIC, "runs": trial["runs"]}
+    kept = trials.result_of(username, row["trial_key"])
+    counts = ((kept["result"].get("gates") or {}).get("counts") if kept and kept["found"] else None)
+    if isinstance(counts, dict):
+        gates = {"known": True, "counts": counts, "reason": None}
+    else:
+        gates = {"known": False, "counts": None, "reason": VERDICT_UNREADABLE if kept is None else NO_VERDICT}
+    return {**row, "trial": info, "gates": gates}
+
+
+@router.get("/arm-requests")
+def arm_requests(limit: int = Query(50, ge=1, le=200), user=Depends(require_login)) -> dict:
+    """내가 남긴 가동 요청들(최근 순) — ★내 것만★. 못 읽으면 빈 목록이 아니라 `available: false` + 사유."""
+    rows = rule_runs.requests_of(user.username, limit)
+    if rows is None:
+        return {"available": False, "reason": rule_runs.REASONS["store_unavailable"], "requests": [], "gate": {"mock": mock_allowed()}}
+    labels = {t["kind"]: t["label"] for t in rules.describe()}
+    return {"available": True, "reason": None, "requests": [_request_view(user.username, r, labels) for r in rows],
+            "gate": {"mock": mock_allowed()}}
+
+
+@router.delete("/arm-requests/{request_id}")
+def remove_arm_request(request_id: int, user=Depends(require_login)) -> dict:
+    """내 요청을 목록에서 뺀다(줄은 남는다). 남의 것 · 없는 것 · 이미 뺀 것은 같은 404 다."""
+    done = rule_runs.remove_request(user.username, request_id)
+    if done is None:
+        raise HTTPException(status_code=503, detail={"code": "store_unavailable", "reason": rule_runs.REASONS["store_unavailable"]})
+    if not done:
+        raise HTTPException(status_code=404, detail=_NO_REQUEST)
+    return {"removed": True, "id": request_id}

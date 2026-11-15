@@ -21,8 +21,9 @@ import datetime as dt
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
+from src.api import intraday_routes
 from src.api.auth import require_login
 from src.api.stage13_routes import SignalRequest
 from src.data.mock_gate import mock_allowed
@@ -31,7 +32,7 @@ from src.domain.auth_identity import Principal, observed_actor
 from src.domain.kis_failure import KIND_BLOCKED, KIND_BUSINESS, KIND_HTTP_STATUS, KIND_TOKEN, KIND_TRANSPORT
 from src.domain.live_gate import LIVE_ALLOWED, live_gate
 from src.execution import broker_accounts as ba
-from src.execution import live_gate_store
+from src.execution import live_gate_store, rule_runner
 from src.execution.account_executors import get_account_executor
 from src.execution.audit_trail import AuditTrail, EventType
 from src.execution.kis_client import KISCallError, get_kis_client
@@ -265,6 +266,113 @@ def resolve_account_kill(account_id: str, req: AccountResolveRequest, p: Princip
     _owned_or_404(p, account_id)
     who = observed_actor(p, None)
     return {**_executor(account_id).kill_switch.resolve(who["actor"], req.notes), **who}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 규칙 가동 (W5b) — 기록 전용 · 재생. 분봉 백테스트로 돌려 본 설정을 이 계좌에서 봉 단위로 다시 흘린다.
+# ═══════════════════════════════════════════════════════════════════════════════
+# ★증권사로는 아무것도 나가지 않는다★ — 가동기(`rule_runner`)는 기록 전용 모드에서만 열리고, 신호는 이 계좌의 실행기 한 길로만 간다.
+# 설정은 본문으로 받지 않는다: 시행 열쇠와 날짜뿐이다(가동되는 것은 분봉 백테스트로 세어진 설정뿐 — 다른 규칙을 끼울 칸이 없다).
+# 소유 확인은 ★의존성★이다 — 본문 · 경로 값의 검사보다 먼저 돈다. 남의 계좌는 본문이 틀려도 404 다(422 로 계좌가 있음을 흘리지 않는다).
+
+_NO_RUN = "그 가동이 없습니다."
+_DAY_NOT_LOADED = "그 날짜의 분봉이 적재돼 있지 않습니다."
+
+
+class RuleRunStart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    trial_key: str
+    day: dt.date
+
+
+class RuleRunAdvance(BaseModel):
+    #: 민 봉의 수. 없으면 끝까지. 글자 · 참거짓 · 0 은 받지 않는다.
+    bars: StrictInt | None = Field(default=None, ge=1)
+
+
+def _own_account(account_id: str, p: Principal = Depends(require_login)) -> dict:
+    return _owned_or_404(p, account_id)
+
+
+def _run_refused(err: rule_runner.RunRefused) -> HTTPException:
+    if err.code == "not_found":
+        return HTTPException(404, _NO_RUN)
+    return HTTPException(503 if err.code == "store_unavailable" else 400,
+                         detail={"code": err.code, "reason": err.message, **err.extra})
+
+
+def _run_context(account_id: str) -> dict:
+    """가동을 보는 화면이 함께 읽어야 하는 것 — 지금 모드 · 비상 정지 · 상한 · 모의 모드인지."""
+    ex = _executor(account_id)
+    return {"mode": ex.state.mode, "kill_switch": ex.kill_switch.is_active(),
+            "limits": {"runs": rule_runner.MAX_RUNS_PER_ACCOUNT, "tickers": rule_runner.MAX_RUN_TICKERS,
+                       "gap_minutes": rule_runner.GAP_MINUTES},
+            "gate": {"mock": mock_allowed()}}
+
+
+def _day_for_run(username: str, trial_key: str, day: dt.date):
+    """가동할 하루의 봉 — ★분봉 백테스트와 같은 준비★(같은 함수 · 같은 종목 마스터 · 같은 장 운영 규칙 · 같은 전일 값 판정)."""
+    setting = rule_runner.setting_of(username, trial_key)
+    feed = intraday_routes.minute_feed
+    if not feed.plan(day, day).dates:
+        raise HTTPException(400, detail={"code": "not_loaded", "reason": _DAY_NOT_LOADED})
+    session = intraday_routes.session_rules()
+    days = feed.build_days(list(setting.tickers), day, day, rules=session, master=intraday_routes.master_lookup(),
+                           need_prev=intraday_routes._needs_prev(setting.rule))
+    if not days:
+        raise HTTPException(400, detail={"code": "not_loaded", "reason": _DAY_NOT_LOADED})
+    return days[0], session
+
+
+@router.get("/{account_id}/rule-runs")
+def list_rule_runs(account_id: str, limit: int = Query(50, ge=1, le=200), _acc: dict = Depends(_own_account),
+                   p: Principal = Depends(require_login)):
+    ctx = _run_context(account_id)
+    try:
+        rows = rule_runner.runs(p.username, account_id, limit)
+    except rule_runner.RunRefused as err:
+        if err.code != "store_unavailable":
+            raise _run_refused(err) from None
+        return {**ctx, "available": False, "reason": err.message, "runs": []}       # 못 읽음은 빈 목록이 아니다
+    return {**ctx, "available": True, "reason": None, "runs": rows}
+
+
+@router.post("/{account_id}/rule-runs", status_code=201)
+def start_rule_run(account_id: str, req: RuleRunStart, _acc: dict = Depends(_own_account), p: Principal = Depends(require_login)):
+    try:
+        day, session = _day_for_run(p.username, req.trial_key, req.day)
+        run = rule_runner.start(p.username, account_id, req.trial_key, day, session=session)
+    except rule_runner.RunRefused as err:
+        raise _run_refused(err) from None
+    return {**_run_context(account_id), "run": run}
+
+
+@router.get("/{account_id}/rule-runs/{run_id}")
+def get_rule_run(account_id: str, run_id: int, _acc: dict = Depends(_own_account), p: Principal = Depends(require_login)):
+    try:
+        run = rule_runner.get(p.username, account_id, run_id)
+    except rule_runner.RunRefused as err:
+        raise _run_refused(err) from None
+    return {**_run_context(account_id), "run": run}
+
+
+@router.post("/{account_id}/rule-runs/{run_id}/advance")
+def advance_rule_run(account_id: str, run_id: int, req: RuleRunAdvance, _acc: dict = Depends(_own_account),
+                     p: Principal = Depends(require_login)):
+    try:
+        run = rule_runner.advance(p.username, account_id, run_id, req.bars)
+    except rule_runner.RunRefused as err:
+        raise _run_refused(err) from None
+    return {**_run_context(account_id), "run": run}
+
+
+@router.post("/{account_id}/rule-runs/{run_id}/stop")
+def stop_rule_run(account_id: str, run_id: int, _acc: dict = Depends(_own_account), p: Principal = Depends(require_login)):
+    try:
+        run = rule_runner.stop(p.username, account_id, run_id)
+    except rule_runner.RunRefused as err:
+        raise _run_refused(err) from None
+    return {**_run_context(account_id), "run": run}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -122,6 +122,10 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "괴리 보고 — 올린 체결을 같은 규칙의 분봉 백테스트와 견준다. 체결 내역을 받고 시행 기록을 쓴다(체결은 저장하지 않는다)"),
     ("GET", "/api/v1/intraday/results"):
         (REQUIRE_LOGIN, "캔버스에서 실행한 분봉 백테스트 결과의 목록 — 본인 것만. 무엇을 시험했는지가 드러난다"),
+    ("GET", "/api/v1/intraday/arm-requests"):
+        (REQUIRE_LOGIN, "내가 남긴 가동 요청의 목록 — 본인 것만. 요청은 가동이 아니다(읽기만)"),
+    ("DELETE", "/api/v1/intraday/arm-requests/{request_id}"):
+        (REQUIRE_LOGIN, "내 가동 요청을 목록에서 뺀다 — 본인 것만(남의 것은 404). 줄은 남는다"),
 
     # ── PB 고객 관리 (CF 3부 PB3) — 로그인 + ★본인 고객만★(남의 고객 404) · 별칭만(개인정보 모양 거절) · 지우는 경로 없음 ──
     ("GET", "/api/v1/pb/clients"):
@@ -195,6 +199,18 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 계좌 실계좌 준비 목록 — 무엇이 왜 아직 안 됐는지(읽기만). 남의 계좌는 404"),
     ("GET", "/api/v1/broker-accounts/{account_id}/balance"):
         (REQUIRE_LOGIN, "내 계좌 잔고 — 예수금·평가·보유(읽기만, 증권사 원문은 싣지 않는다). 남의 계좌는 404"),
+
+    # ── 규칙 가동 (W5b) — 로그인 + 본인 계좌만(남의 계좌 404) · ★기록 전용 모드에서만★ · 설정은 시행 기록에서만 읽는다 ──
+    ("GET", "/api/v1/broker-accounts/{account_id}/rule-runs"):
+        (REQUIRE_LOGIN, "내 계좌의 규칙 가동 목록 — 그 계좌 것만(읽기만)"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/rule-runs"):
+        (REQUIRE_LOGIN, "내 계좌에서 규칙 가동 시작 — 기록 전용 모드에서만 열린다. 분봉 백테스트로 돌려 본 설정과 날짜만 받는다"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/rule-runs/{run_id}"):
+        (REQUIRE_LOGIN, "내 계좌의 규칙 가동 하나와 그 가상 체결 — 그 계좌 것만"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/rule-runs/{run_id}/advance"):
+        (REQUIRE_LOGIN, "가동을 봉 단위로 민다 — 신호는 그 계좌의 주문 경로(위험 검사·비상 정지) 한 길로만 간다"),
+    ("POST", "/api/v1/broker-accounts/{account_id}/rule-runs/{run_id}/stop"):
+        (REQUIRE_LOGIN, "가동 정지 — 내 계좌의 가동만"),
 
     # ── 실계좌 관문 (BV7) — 누구에게 무슨 근거로 실계좌를 여는지 선언·철회. 선언자는 토큰에서 ──
     ("GET", "/api/v1/admin/live-gate"):

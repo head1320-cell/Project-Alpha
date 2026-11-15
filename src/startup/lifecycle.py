@@ -425,6 +425,14 @@ async def run_startup() -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"backtest 고아 정리 건너뜀: {e}")
+    # 규칙 가동(W5b)은 메모리에만 있다 — ★재시작하면 전부 꺼진다★. 기록에 '가동 중'으로 남은 줄을 '중단됨'으로 바꾼다
+    # (되살리지 않는다 — 사람이 다시 켜야 한다). 못 바꿔도 읽는 자리에서 한 번 더 바로잡는다(`rule_runner._repaired`).
+    try:
+        from src.execution import rule_runner
+        rule_runner.reset()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"규칙 가동 정리 건너뜀: {e}")
     try:
         _start_daemon_once("orphan_sweep", _orphan_sweep_bg)
     except Exception as e:
