@@ -49,11 +49,14 @@ const ROWS: { k: string; label: string; fmt: (s: Summary) => string; tone?: (s: 
   { k: "streak", label: "최대 연속 손실", fmt: (s) => (s.max_losing_streak.count ? `${s.max_losing_streak.count}회 · ${signedWon(s.max_losing_streak.amount)}` : "없음") },
 ];
 
-export function SummaryTable({ j }: { j: Journal }) {
+/** 다른 절 안에 넣어 그릴 때의 제목 단계(기본 2 — 화면의 절). 관제 판처럼 절 안의 절일 때만 넘긴다. */
+type Level = 2 | 3 | 4;
+
+export function SummaryTable({ j, level }: { j: Journal; level?: Level }) {
   const { gross, net, net_excluded: excluded } = j.summary;
   const feeUnknown = j.basis.fee.unknown;
   return (
-    <Section title="비용 전과 비용 후" sub="같은 거래를 비용(수수료·매도세) 차감 전과 후로 집계했습니다. 본전 거래는 승도 패도 아니며 승률의 분모에 포함합니다.">
+    <Section level={level} title="비용 전과 비용 후" sub="같은 거래를 비용(수수료·매도세) 차감 전과 후로 집계했습니다. 본전 거래는 승도 패도 아니며 승률의 분모에 포함합니다.">
       <div className="tj-scroll-x">
       <table className="tj-table tj-sum">
         <thead><tr><th scope="col">지표</th><th scope="col" className="tj-num">비용 전</th><th scope="col" className="tj-num">비용 후</th></tr></thead>
@@ -265,10 +268,10 @@ export function Extremes({ j }: { j: Journal }) {
   );
 }
 
-export function Trades({ j }: { j: Journal }) {
+export function Trades({ j, level }: { j: Journal; level?: Level }) {
   const more = j.trades_total > j.trades.length;
   return (
-    <Section title="거래 목록" sub={more ? `청산 순서입니다. 전체 ${j.trades_total.toLocaleString("ko-KR")}건 중 앞 ${j.trades.length.toLocaleString("ko-KR")}건을 표시합니다(요약과 곡선은 전체 기준).` : "청산 순서입니다. 한 거래는 보유 수량이 0 에서 시작해 다시 0 이 될 때까지입니다."}>
+    <Section level={level} title="거래 목록" sub={more ? `청산 순서입니다. 전체 ${j.trades_total.toLocaleString("ko-KR")}건 중 앞 ${j.trades.length.toLocaleString("ko-KR")}건을 표시합니다(요약과 곡선은 전체 기준).` : "청산 순서입니다. 한 거래는 보유 수량이 0 에서 시작해 다시 0 이 될 때까지입니다."}>
       <div className="tj-scroll">
         <table className="tj-table tj-trades">
           <thead>
@@ -301,11 +304,12 @@ export function Trades({ j }: { j: Journal }) {
 
 // ── 값의 근거 ───────────────────────────────────────────────────────────────
 
-export function Basis({ j, sub = "이 결과는 올린 파일 안의 체결을 집계한 관측값입니다. 향후 성과를 뜻하지 않습니다." }: { j: Journal; sub?: string }) {
+export function Basis({ j, sub = "이 결과는 올린 파일 안의 체결을 집계한 관측값입니다. 향후 성과를 뜻하지 않습니다.", level }: { j: Journal; sub?: string; level?: Level }) {
   const { fee, tax, tax_rates: rates } = j.basis;
   const n = (v: number) => v.toLocaleString("ko-KR");
+  const Sub = `h${(level ?? 2) + 1}` as "h3" | "h4" | "h5";      // 안쪽 제목은 절의 제목보다 한 단계 아래
   return (
-    <Section title="값의 근거와 범위" sub={sub}>
+    <Section level={level} title="값의 근거와 범위" sub={sub}>
       <div className="tj-basis">
         <dl className="tj-basis-list">
           <div><dt>수수료</dt><dd>관측(파일의 값) {n(fee.observed)}건 · 가정(입력한 수수료율{j.basis.commission_bp === null ? "" : ` ${bpAsPct(j.basis.commission_bp)}`}) {n(fee.assumed)}건 · 미상 {n(fee.unknown)}건</dd></div>
@@ -313,7 +317,7 @@ export function Basis({ j, sub = "이 결과는 올린 파일 안의 체결을 �
         </dl>
         {rates.length ? (
           <>
-            <h3 className="tj-h3">적용한 매도세율</h3>
+            <Sub className="tj-h3">적용한 매도세율</Sub>
             <p className="tj-note">증권거래세와 농어촌특별세의 합입니다. 세율표의 근거는 보도·안내 자료 요약(등급 T1)이며 법령 원문과 대조하지 않았습니다. 실제 정산과 다를 수 있습니다.</p>
             <div className="tj-scroll">
               <table className="tj-table tj-rates">
@@ -335,7 +339,7 @@ export function Basis({ j, sub = "이 결과는 올린 파일 안의 체결을 �
             </div>
           </>
         ) : null}
-        <h3 className="tj-h3">이 도구가 다루지 않는 것</h3>
+        <Sub className="tj-h3">이 도구가 다루지 않는 것</Sub>
         <ul className="tj-not-covered tj-plain-list">{j.not_covered.map((s) => <li key={s} data-server>{s}</li>)}</ul>
       </div>
     </Section>

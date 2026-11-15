@@ -9773,13 +9773,48 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .ma-arm-cap { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
 .ma-arm-virtual { padding: 5px 8px; font-size: 12px; }
 .ma-arm .tx-sec-aside { flex-shrink: 0; }
+/* 관제 판(W5c) — 가동 줄 안에 편다. 읽기만 하는 사실의 격자: 주문 · 체결 · 실현손익 · 한도 · 비상 정지 · 봉 지연. */
+.ma-mon { grid-column: 1 / -1; margin-top: 6px; padding: 14px 16px; border-radius: var(--tx-r-row); background: var(--tx-soft); display: grid; gap: 12px; min-width: 0; }
+.ma-mon .tx-notice { margin: 0; }
+.ma-mon-live { margin: 0; font-size: 12.5px; color: var(--tx-sub); }
+.ma-mon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px 24px; margin: 0; }
+.ma-mon-cell { display: grid; align-content: start; gap: 3px; min-width: 0; }
+.ma-mon-cell dt { font-size: 12.5px; color: var(--tx-mute); }
+.ma-mon-cell dd { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 14px; font-weight: 600; color: var(--tx-ink); font-variant-numeric: tabular-nums; word-break: keep-all; }
+.ma-mon-cell dd b { font-weight: 700; }
+.ma-mon-cell dd.ma-mon-sub, .ma-mon-cell dd.ma-mon-note { font-size: 13px; font-weight: 400; line-height: 1.5; color: var(--tx-sub); }
+.ma-mon-cell dd.ma-mon-warn { font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--tx-warn); }
+.ma-mon [data-dir="up"] { color: var(--tx-up-ink); }
+.ma-mon [data-dir="down"] { color: var(--tx-down-ink); }
+.ma-mon-bar { padding: 3px 0 1px; }
+.ma-mon-meter { position: relative; display: block; width: 100%; max-width: 280px; height: 6px; border-radius: 3px; background: var(--tx-line); overflow: hidden; }
+.ma-mon-meter-fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--tx-warn); transition: width .25s cubic-bezier(.22, 1, .36, 1); }
+.ma-mon-h { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: var(--tx-ink); }
+.ma-mon-no { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px 0; font-size: 13.5px; color: var(--tx-ink); font-variant-numeric: tabular-nums; }
+.ma-mon-no + .ma-mon-no { border-top: 1px solid var(--tx-line); }
+.ma-mon-no-what, .ma-mon-no-why { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.ma-mon-no-at, .ma-mon-no-why { color: var(--tx-sub); }
+.ma-mon-no-why { word-break: keep-all; }
+.ma-mon-backtest { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; line-height: 1.5; color: var(--tx-ink); word-break: keep-all; }
+.ma-mon-backtest .tx-chip { padding: 5px 8px; font-size: 12px; }
+.ma-mon-backtest .ma-mon-sub { color: var(--tx-sub); font-variant-numeric: tabular-nums; }
+/* 판의 배경이 보조 단추 · 무채색 표식의 배경과 같은 색이라 경계가 사라진다 — 판 안에서는 표면색 위에 선을 두른다. */
+.ma-mon .tx-btn--sub, .ma-mon .tx-chip[data-tone="plain"], .ma-mon .tx-chip[data-tone="unknown"] { background: var(--tx-surface); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.ma-mon-journal { display: grid; gap: 10px; justify-items: start; min-width: 0; }
+.ma-mon-journal-body { width: 100%; min-width: 0; }
+/* 판 안의 매매일지 부품은 카드를 겹치지 않는다 — 테두리 · 배경 · 안쪽 여백을 걷고 제목을 판의 글자 크기에 맞춘다. */
+.ma-mon-journal-body > .tx-sec { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.ma-mon-journal-body > .tx-sec + .tx-sec { padding-top: 12px; border-top: 1px solid var(--tx-line); }
+.ma-mon-journal-body .tx-sec-head { padding: 0; margin-bottom: 8px; }
+.ma-mon-journal-body .tx-sec-t { font-size: 14px; }
+.ma-mon-journal-body .tx-sec-body { padding: 0; }
 .ma-arm-refresh { white-space: nowrap; }
 @container (max-width: 640px) {
   .ma-arm-req, .ma-arm-run, .ma-arm-fill { grid-template-columns: minmax(0, 1fr); }
   .ma-arm-act, .ma-arm-run .ma-arm-act { grid-column: 1; grid-row: auto; justify-content: flex-start; }
   .ma-arm-fill-marks { justify-content: flex-start; }
 }
-@media (prefers-reduced-motion: reduce) { .ma-arm-meter-fill { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ma-arm-meter-fill, .ma-mon-meter-fill { transition: none; } }
 
 .dark .ma-seg-b[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--tx-line); }
 @media (max-width: 1000px) { .ma-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "bal" "form" "list"; grid-template-rows: none; } }

@@ -11,6 +11,7 @@
  *  · 관문 — 표시만 한다. 미달 · 미상이 있어도 가동을 막지 않는다(받은 결정). 판정이 없으면 서버 사유를 그대로 적는다.
  *  · 멈춘 까닭 — 서버 문장 그대로(`data-server`).
  * 못 읽음은 빈 목록이 아니다 — 서버가 `available: false` 와 사유를 주면 그 사유를 보인다.
+ * 가동 줄마다 ‘관제’ 판을 편다(W5c — `RuleMonitor`): 주문 · 체결 · 실현손익 · 한도까지 남은 폭 · 백테스트와 같은지. 읽기만 한다.
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -22,6 +23,7 @@ import {
 import { getCoverage, getTemplates } from "@/entities/intraday";
 import { num, priceWon } from "@/shared/lib/krFormat";
 import { Notice, RetryFail } from "@/shared/ui/tx";
+import { RuleMonitor } from "./RuleMonitor";
 import { unwrap, useNames, when } from "./parts";
 
 /** 한 번에 미는 봉 수 — 재생을 눈으로 따라갈 만한 걸음(서버는 1 이상의 정수면 받는다). */
@@ -270,6 +272,7 @@ function RunRow({ run, accountId, label, onDone, onFail }: {
   onDone: (text: string) => void; onFail: (text: string, raw?: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [watching, setWatching] = useState(false);
   const kind = run.request?.rule?.kind;
   /** 서버가 실제로 민 봉 수와 새 가상 체결 수를 그대로 말한다(누른 단추의 수가 아니다 — 하루가 먼저 끝날 수 있다). */
   const after = (reply: RunReply) => {
@@ -328,10 +331,14 @@ function RunRow({ run, accountId, label, onDone, onFail }: {
             <button type="button" className="tx-btn ma-btn-danger ma-sm ma-arm-stop" disabled={busy} onClick={() => stop.mutate()}>정지</button>
           </>
         ) : null}
+        <button type="button" className="tx-btn tx-btn--sub ma-sm ma-arm-mon-open" aria-expanded={watching} onClick={() => setWatching((v) => !v)}>
+          {watching ? "관제 닫기" : "관제"}
+        </button>
         <button type="button" className="tx-btn tx-btn--sub ma-sm ma-arm-fills-open" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           {open ? "가상 체결 닫기" : "가상 체결 보기"}
         </button>
       </div>
+      {watching ? <RuleMonitor accountId={accountId} run={run} /> : null}
       {open ? <Fills accountId={accountId} runId={run.run_id} /> : null}
     </li>
   );

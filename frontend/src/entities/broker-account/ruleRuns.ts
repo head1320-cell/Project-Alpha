@@ -1,5 +1,5 @@
 /**
- * 규칙 가동의 문 (W5b) — 내 계좌의 `rule-runs` 다섯 + 분봉의 `arm-requests` 둘.
+ * 규칙 가동의 문 (W5b · 관제 W5c) — 내 계좌의 `rule-runs` 여섯 + 분봉의 `arm-requests` 둘.
  * ==========================================================================
  * ★요청은 가동이 아니다★: 요청은 캔버스가 남긴 한 줄이고, 가동 · 정지는 이 문들이 한다(전부 로그인 · 본인 계좌만).
  * 가동은 실행 모드 ‘기록만’에서만 열린다 — 증권사로는 아무것도 나가지 않고, 체결은 시뮬레이터가 계산한 ★가상★ 체결이다.
@@ -52,6 +52,37 @@ export type RunContext = {
 export type RunList = RunContext & { available: boolean; reason: string | null; runs: RuleRun[] };
 export type RunReply = RunContext & { run: RuleRun };
 
+/** 거절된 신호 한 줄 — 사유 문장은 주문 기록의 것(주문 기록을 못 읽었으면 `null`). */
+export type RejectedSignal = {
+  seq: number; executed_at: string; symbol: string; side: string; quantity: number; reason_code: string | null; message: string | null;
+};
+
+/**
+ * 가동 하나의 관제 (W5c) — ★서버가 읽기만 해서 모은 것★. 값이 없으면 0 이 아니라 `null` + 사유다.
+ * `J` 는 매매일지의 모양이다 — 엔티티끼리 들여오지 않으므로(FSD) 그리는 쪽이 정한다(분봉 백테스트의 `Simulation<J>` 와 같은 관례).
+ */
+export type RunMonitor<J = unknown> = {
+  /** `basis`: `order_log`(주문 기록에서 셈) · `run_record`(주문 기록을 못 읽어 가동 기록의 답으로 셈 — `reason`). */
+  orders: { basis: string; reason: string | null; signals: number; by_status: Record<string, number>; rejected: RejectedSignal[];
+            /** 신호는 있는데 주문 기록에 줄이 없는 수. 주문 기록을 다 읽지 못했으면 `null`. */
+            unrecorded: number | null };
+  fills: { virtual: number; broker: number | null; broker_reason: string | null };
+  /** 실현손익(매매일지 엔진) — 청산을 마친 거래와 일부 청산한 몫. 미청산 수량은 평가하지 않는다. */
+  pnl: { available: boolean; reason: string | null; gross: number | null; cost: number | null; net: number | null; net_reason: string | null;
+         closed_trades: number | null; open_positions: number | null;
+         /** 주문 경로가 거절한 신호의 가상 체결 수 — 손익에 들어 있다(실제 주문이었다면 없었을 체결). */
+         includes_rejected: number | null; basis: unknown };
+  /** 규칙 안 일 손실 한도 — 비용 전 실현손익의 그날 누계로 잰다. `touched` 는 한 번이라도 닿았는지(닿으면 그날 새 진입이 없다). */
+  loss_limit: { limit: number | null; reason: string | null; realized_gross: number | null; room: number | null; touched: boolean | null };
+  kill: { active: boolean; own: boolean };
+  feed: { kind: string; lag_seconds: number | null; lag_reason: string | null };
+  /** `same` · `differs` · `unknown` · `not_compared` — 지금 적재된 봉으로 그날을 다시 계산해 견준 관측이다. */
+  backtest: { state: string; reason: string; run_fills: number; backtest_fills: number | null };
+  /** 끝난 가동이고 체결이 있을 때만 — 매매일지 전체. */
+  journal: J | null;
+};
+export type MonitorReply<J = unknown> = RunContext & { run: RuleRun; monitor: RunMonitor<J> };
+
 const BROKER = "/api/v1/broker-accounts";
 const REQUESTS = "/api/v1/intraday/arm-requests";
 const runs = (id: string, tail = "") => `${BROKER}/${encodeURIComponent(id)}/rule-runs${tail}`;
@@ -62,6 +93,9 @@ export const removeArmRequest = (requestId: number) =>
 
 export const listRuleRuns = (accountId: string) => call<RunList>(getWithAuth(runs(accountId)));
 export const getRuleRun = (accountId: string, runId: number) => call<RunReply>(getWithAuth(runs(accountId, `/${runId}`)));
+/** 관제 — 읽기만 한다(가동 · 정지 · 비상 정지는 다른 문이 한다). */
+export const getRunMonitor = <J = unknown>(accountId: string, runId: number) =>
+  call<MonitorReply<J>>(getWithAuth(runs(accountId, `/${runId}/monitor`)));
 /** 본문은 시행 열쇠와 날짜뿐 — 서버는 남는 칸을 422 로 거절한다(설정을 끼워 넣을 칸이 없다). */
 export const startRuleRun = (accountId: string, body: { trial_key: string; day: string }) =>
   call<RunReply>(postJson(runs(accountId), body));

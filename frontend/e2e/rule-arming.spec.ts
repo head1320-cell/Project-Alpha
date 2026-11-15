@@ -20,6 +20,12 @@ import { contrastAudit, trackErrors, uniq, voiceAudit, type AuditResult, type Vo
 //  · 실행 모드가 ‘기록만’이 아니거나 비상 정지 중이면 시작 단추가 잠기고 까닭을 말한다(↔ 풀면 열린다) · 서버의 거절은 서버 문장으로
 //  · 못 읽음은 빈 목록이 아니다 · 시행이 없는 요청은 가동 단추가 없다 · 합성 분봉이면 절 맨 위에 적는다
 //  · 오류 0 · 라이트/다크 AA · 문체 · 좁은 폭에서 넘치지 않는다
+// 관제 (W5c — 가동 줄 안의 판 · ★읽기만★):
+//  · 도는 가동은 주기적으로 다시 읽고(읽기 요청뿐) 끝난 가동은 다시 묻지 않는다 · 든 채로는 손익이 아니다
+//  · 끝까지 돈 가동: 비용 전 (10,100 − 10,080) × 99 = 1,980원 · 비용 2,299원 · 비용 후 −319원 = 그날의 분봉 백테스트가 낸 값 · ‘백테스트와 같음’
+//  · 거절된 신호는 주문 경로의 문장과 함께 · 그 가상 체결이 손익에 들어 있다고 말한다 · 일 손실 한도까지 남은 폭
+//  · 값이 없으면 0 이 아니라 사유 · 주문 기록에 없는 신호 · 한도에 닿음 · 백테스트와 다름 · 합성이면 판 맨 위
+//  · 하루가 끝난 가동의 매매일지는 매매일지 결과와 같은 부품
 // ═════════════════════════════════════════════════════════════════════════════
 
 const API = "/api/backend/api/v1";
@@ -121,6 +127,19 @@ async function startFromScreen(page: Page, id: number, day = DAY): Promise<numbe
   expect(res.status(), await res.text()).toBe(201);
   return (await res.json()).run.run_id as number;
 }
+
+/** 문으로 가동을 열고 `bars` 개(없으면 끝까지) 민다 → 가동 번호. 요청 줄 없이도 가동은 열린다(요청은 캔버스가 남기는 쪽지일 뿐이다). */
+async function runByDoor(page: Page, c: Ctx, trialKey: string, bars?: number, day = DAY): Promise<number> {
+  const made = await page.request.post(`${API}/broker-accounts/${c.account}/rule-runs`, { headers: c.headers, data: { trial_key: trialKey, day } });
+  expect(made.status(), await made.text()).toBe(201);
+  const runId = (await made.json()).run.run_id as number;
+  const moved = await page.request.post(`${API}/broker-accounts/${c.account}/rule-runs/${runId}/advance`, { headers: c.headers, data: bars ? { bars } : {} });
+  expect(moved.ok(), await moved.text()).toBe(true);
+  return runId;
+}
+
+const monitorOf = async (page: Page, c: Ctx, runId: number) =>
+  (await page.request.get(`${API}/broker-accounts/${c.account}/rule-runs/${runId}/monitor`, { headers: c.headers })).json();
 
 test.afterAll(async ({ browser }) => {
   const page = await browser.newPage();
@@ -395,6 +414,225 @@ test("못 읽음은 빈 목록이 아니다 · 시행이 없는 요청에는 가
   await expect(row.locator(".ma-arm-remove")).toBeVisible();
 });
 
+test("관제: 도는 가동은 주기적으로 다시 읽고 · 끝까지 돈 가동은 손 계산과 같으며 그날의 분봉 백테스트와 같다고 말한다", async ({ page }) => {
+  test.setTimeout(240_000);
+  const sink = trackErrors(page);
+  const c = await prepare(page);
+  const { id } = await leaveRequest(page, c);
+  await openAccount(page, c);
+  const runId = await startFromScreen(page, id);
+  const run = runRow(page);
+  const polls: string[] = [];
+  page.on("request", (r) => { if (/\/rule-runs\/\d+\/monitor$/.test(new URL(r.url()).pathname)) polls.push(r.method()); });
+
+  // ① 도는 가동 — 아직 신호가 없다 · 견주지 않는다 · 주기적으로 다시 읽는다(읽기 요청뿐)
+  await expect(run).toHaveAttribute("data-status", "running");                     // 가동 줄이 뜬 뒤에 잰다(줄이 없어서 0 인 것이 아니다)
+  await expect(run.locator(".ma-arm-clock")).toBeVisible();
+  await expect(run.locator(".ma-mon")).toHaveCount(0);                             // 펴기 전에는 판이 없고
+  expect(polls, "펴기 전에는 관제를 묻지 않는다").toEqual([]);
+  await run.locator(".ma-arm-mon-open").click();
+  const mon = run.locator(".ma-mon");
+  await expect(mon).toHaveAttribute("data-live", "true");
+  await expect(mon.locator(".ma-mon-live")).toHaveText("가동 중: 5초마다 다시 읽습니다.");
+  await expect(mon.locator(".ma-mon-signals")).toHaveText("신호 0건");
+  await expect(mon.locator(".ma-mon-status")).toHaveCount(0);
+  await expect(mon.locator(".ma-mon-virtual")).toHaveText("가상 0건");
+  await expect(mon.locator(".ma-mon-gross")).toHaveText("비용 전 0원");
+  await expect(mon.locator(".ma-mon-backtest")).toHaveAttribute("data-state", "not_compared");
+  await expect(mon.locator(".ma-mon-backtest .tx-chip")).toHaveText("견주지 않음");
+  await expect(mon.locator(".ma-mon-backtest")).toContainText("가동 중입니다.");
+  await expect(mon.locator(".ma-mon-journal")).toHaveCount(0);                     // 하루가 끝나지 않았다
+  await expect.poll(() => polls.length, { timeout: 20_000 }).toBeGreaterThanOrEqual(3);   // 처음 한 번 + 주기 조회 둘
+  expect([...new Set(polls)]).toEqual(["GET"]);
+
+  // 세 봉(09:02 의 매수까지)을 문으로 민다 → 새로 고침을 누르지 않아도 주기 조회가 읽어 온다 · 든 채로는 손익이 아니다
+  const three = await page.request.post(`${API}/broker-accounts/${c.account}/rule-runs/${runId}/advance`, { headers: c.headers, data: { bars: 3 } });
+  expect(three.ok(), await three.text()).toBe(true);
+  await expect(mon.locator('.ma-mon-status[data-status="SHADOW_LOGGED"]')).toHaveText("기록만 1건", { timeout: 20_000 });
+  await expect(mon.locator(".ma-mon-virtual")).toHaveText("가상 1건");
+  await expect(mon.locator(".ma-mon-pnl .ma-mon-sub")).toHaveText("청산 0건 · 미청산 1종목(평가하지 않음)");
+  await expect(mon.locator(".ma-mon-gross")).toHaveText("비용 전 0원");
+
+  // ② 끝까지 — 손 계산: 비용 전 (10,100 − 10,080) × 99 = 1,980원 · 수수료 1.5bp × (997,920 + 999,900) = 299.673 · 매도세 20bp × 999,900 = 1,999.8
+  await run.locator(".ma-arm-finish").click();
+  await expect(mon).toHaveAttribute("data-live", "false");
+  await expect(mon.locator(".ma-mon-live")).toHaveText("끝난 가동: 다시 읽지 않습니다.");
+  await expect(mon.locator(".ma-mon-signals")).toHaveText("신호 2건");
+  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록만 2건"]);
+  await expect(mon.locator(".ma-mon-orders")).toHaveAttribute("data-basis", "order_log");
+  await expect(mon.locator(".ma-mon-virtual")).toHaveText("가상 2건");
+  await expect(mon.locator(".ma-mon-broker")).toHaveText("증권사 체결 0건");
+  await expect(mon.locator(".ma-mon-gross")).toHaveText("비용 전 +1,980원");
+  await expect(mon.locator(".ma-mon-cost")).toHaveText("비용 2,299원");
+  await expect(mon.locator(".ma-mon-net")).toHaveText("비용 후 −319원");
+  await expect(mon.locator(".ma-mon-pnl .ma-mon-sub")).toHaveText("청산 1건 · 미청산 0종목");
+  await expect(mon.locator(".ma-mon-rejected, .ma-mon-rejected-in, .ma-mon-unrecorded, .ma-mon-touched")).toHaveCount(0);
+  await expect(mon.locator(".ma-mon-limit")).toHaveAttribute("data-known", "false");   // 이 설정에는 한도가 없다 — 0원이 아니라 사유
+  await expect(mon.locator(".ma-mon-limit")).toContainText("값 없음");
+  await expect(mon.locator(".ma-mon-limit")).toContainText("이 설정에는 하루 최대 손실이 없습니다.");
+  await expect(mon.locator(".ma-mon-kill")).toContainText("미사용");
+  await expect(mon.locator(".ma-mon-feed")).toContainText("재지 않음");
+  await expect(mon.locator(".ma-mon-backtest")).toHaveAttribute("data-state", "same");
+  await expect(mon.locator(".ma-mon-backtest .tx-chip")).toHaveText("백테스트와 같음");
+  await expect(mon.locator(".ma-mon-backtest")).toContainText("가상 체결 2줄 · 백테스트 체결 2줄");
+  await expect(mon.locator('.tx-notice[data-tone="practice"]')).toHaveCount(0);     // 실제 분봉 — 합성 알림이 없다(짝은 아래)
+
+  // ③ 같은 수가 분봉 백테스트의 문에서 나온다(문끼리 견준다)
+  const sim = await (await page.request.post(`${API}/intraday/simulate`, { headers: c.headers, timeout: 120_000, data: {
+    tickers: HAND.tickers, from: DAY, to: DAY, rule: { kind: HAND.rule, params: { minutes: 1 } },
+    position: { amount: HAND.amount }, costs: { commission_bp: HAND.commission_bp, slippage_ticks: HAND.slippage_ticks, unknown_market: "KOSPI", unknown_instrument: "stock" } } })).json();
+  const got = (await monitorOf(page, c, runId)).monitor;
+  expect([got.pnl.gross, got.pnl.net]).toEqual([sim.journal.summary.gross.total, sim.journal.summary.net.total]);
+  expect(got.pnl.gross).toBe(1_980);
+  expect(got.pnl.cost).toBeCloseTo(299.673 + 1_999.8, 6);
+  expect(got.backtest).toMatchObject({ state: "same", run_fills: 2, backtest_fills: 2 });
+
+  // ④ 하루가 끝났다 — 그날의 체결을 매매일지 결과와 같은 부품으로(절 안의 절이라 제목 단계를 낮춘다)
+  await mon.locator(".ma-mon-journal-open").click();
+  const journal = mon.locator(".ma-mon-journal-body");
+  await expect(journal.locator("h4.tx-sec-t")).toHaveText(["비용 전과 비용 후", "거래 목록", "값의 근거와 범위"]);
+  await expect(journal.locator("h2, h3")).toHaveCount(0);
+  await expect(journal.locator('.tj-sum tr[data-k="total"] .tj-sum-gross')).toHaveText("+1,980원");
+  await expect(journal.locator('.tj-sum tr[data-k="total"] .tj-sum-net')).toHaveText("−319원");
+  await expect(journal.locator(".tj-trades tbody tr")).toHaveCount(1);
+  await expect(journal.locator(".tj-not-covered")).toContainText("호가·틱·체결 대기열");   // 시뮬레이션의 한계를 적는다(올린 파일의 이야기가 아니다)
+  await expect(journal).toContainText("재생한 하루의 가상 체결을 집계한 것입니다.");
+
+  // ⑤ 끝난 가동은 다시 묻지 않는다
+  const seen = polls.length;
+  await page.waitForTimeout(6_500);
+  expect(polls.length, "끝난 가동의 주기 조회").toBe(seen);
+  expect([...new Set(polls)]).toEqual(["GET"]);
+
+  expect(uniq(sink.api404), "404").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+test("관제: 거절된 신호는 주문 경로의 문장과 함께 세고 그 가상 체결이 손익에 들어 있다고 말한다 · 일 손실 한도까지 남은 폭", async ({ page }) => {
+  test.setTimeout(180_000);
+  const c = await prepare(page);
+  // 한 종목 4천만 원 — 계좌의 전략 비중 한도를 넘어 위험 검사가 매수를 거절한다(매도는 받는다). 참여율 상한을 끄는 칸은 캔버스 설정에 없어 문으로 실행한다.
+  const big = await page.request.post(`${API}/intraday/simulate`, { headers: c.headers, timeout: 120_000, data: {
+    tickers: HAND.tickers, from: HAND.start_date, to: HAND.end_date, rule: { kind: HAND.rule, params: { minutes: 1 } },
+    position: { amount: 40_000_000, daily_loss_limit: 100_000 },
+    costs: { commission_bp: 1.5, slippage_ticks: 1, participation_cap: null, unknown_market: "KOSPI", unknown_instrument: "stock" } } });
+  expect(big.ok(), await big.text()).toBe(true);
+  const trials = (await (await page.request.get(`${API}/intraday/trials`, { headers: c.headers })).json()).trials as
+    { trial_key: string; request: { position: { amount: number; daily_loss_limit: number | null } } }[];
+  const key = trials.find((t) => t.request.position.amount === 40_000_000 && t.request.position.daily_loss_limit === 100_000)!.trial_key;
+  const runId = await runByDoor(page, c, key);
+  await openAccount(page, c);
+  const run = page.locator(`.ma-arm-run[data-run="${runId}"]`);
+  await expect(run).toHaveAttribute("data-status", "finished");
+  await run.locator(".ma-arm-mon-open").click();
+  const mon = run.locator(".ma-mon");
+
+  // 주문 — 기록만 1 · 거절 1. 거절은 주문 기록에 적힌 위험 검사의 문장 그대로(서버 문장)와 사유 코드
+  await expect(mon.locator(".ma-mon-signals")).toHaveText("신호 2건");
+  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록만 1건", "거절 1건"]);
+  const refused = mon.locator(".ma-mon-no");
+  await expect(refused).toHaveCount(1);
+  await expect(refused.locator(".ma-mon-no-what")).toContainText("3월 4일 09:02");
+  await expect(refused.locator(".ma-mon-no-what")).toContainText("035720");
+  await expect(refused.locator(".ma-mon-no-what")).toContainText("매수 3,968주");     // 4천만 원 ÷ 10,080원
+  const logged = ((await (await page.request.get(`${API}/broker-accounts/${c.account}/orders`, { headers: c.headers })).json()).orders as
+    { status: string; error_message: string | null }[]).find((o) => o.status === "REJECTED")!.error_message!;
+  expect(logged).toContain("한도 초과");
+  await expect(refused.locator(".ma-mon-no-why")).toContainText(logged);
+  await expect(refused.locator(".ma-mon-no-why")).toContainText("risk_check_failed");
+  // 가상 체결은 시뮬레이터가 계산한 것 — 거절된 신호의 체결도 손익에 들어 있고, 화면이 그렇게 말한다
+  await expect(mon.locator(".ma-mon-gross")).toHaveText("비용 전 +79,360원");        // (10,100 − 10,080) × 3,968
+  await expect(mon.locator(".ma-mon-rejected-in")).toHaveText("거절된 신호 1건의 가상 체결이 손익에 포함돼 있습니다. 실제 주문이었다면 없는 체결입니다.");
+
+  // 일 손실 한도 — 닿지 않은 날: 한도 · 비용 전 누계 · 남은 폭
+  const limit = mon.locator(".ma-mon-limit");
+  await expect(limit).toHaveAttribute("data-touched", "false");
+  await expect(limit.locator(".ma-mon-limit-of")).toHaveText("한도 100,000원");
+  await expect(limit.locator(".ma-mon-limit-sum")).toHaveText("비용 전 누계 +79,360원");
+  await expect(limit.locator(".ma-mon-room")).toHaveText("남은 폭 179,360원");
+  await expect(limit.locator(".ma-mon-meter")).toHaveAttribute("aria-valuenow", "0");
+  await expect(limit.locator(".ma-mon-meter")).toHaveAttribute("aria-valuemax", "100000");
+  await expect(mon.locator(".ma-mon-backtest")).toHaveAttribute("data-state", "same");   // 거절돼도 가상 체결은 그날의 백테스트 그대로다
+});
+
+test("관제: 값이 없으면 0 이 아니라 사유 · 한도에 닿은 날 · 주문 기록에 없는 신호 · 백테스트와 다름 · 차단 · 합성이면 판 맨 위", async ({ page }) => {
+  test.setTimeout(180_000);
+  const c = await prepare(page);
+  const runId = await runByDoor(page, c, await keptTrial(page, c));
+  const real = await monitorOf(page, c, runId);
+  const costWhy = "비용을 모르는 체결이 있어 비용 뒤 손익을 내지 않았습니다.";
+  const logWhy = "주문 기록을 읽지 못했습니다. 가동 기록에 적힌 답으로 집계했으며 거절 문장은 없습니다.";
+  const badWhy = "가동 기록에 적힌 설정을 지금의 규칙 틀로 읽지 못했습니다.";
+  const differs = "가상 체결이 지금 적재된 봉으로 다시 계산한 그날의 분봉 백테스트 체결과 다릅니다. 가동 뒤에 봉이 바뀌었거나 결함입니다.";
+  // 손실로 끝나 한도에 닿은 날 · 비용 미상 · 주문 기록에 없는 신호 · 백테스트와 다름 · 운영자 정지 · 합성 분봉
+  let body: object = { ...real, run: { ...real.run, grade: "E0" }, monitor: { ...real.monitor,
+    orders: { ...real.monitor.orders, unrecorded: 1 },
+    pnl: { ...real.monitor.pnl, gross: -7_920, cost: null, net: null, net_reason: costWhy },
+    loss_limit: { limit: 5_000, reason: null, realized_gross: -7_920, room: -2_920, touched: true },
+    kill: { active: true, own: false },
+    backtest: { state: "differs", reason: differs, run_fills: 2, backtest_fills: 3 } } };
+  await page.route("**/rule-runs/*/monitor", (r) => r.fulfill({ json: body }));
+  await openAccount(page, c);
+  const run = page.locator(`.ma-arm-run[data-run="${runId}"]`);
+  await run.locator(".ma-arm-mon-open").click();
+  const mon = run.locator(".ma-mon");
+  expect(await mon.evaluate((el) => el.firstElementChild?.classList.contains("tx-notice"))).toBe(true);     // 합성 알림이 판 맨 위
+  await expect(mon.locator('.tx-notice[data-tone="practice"]')).toContainText("합성 분봉으로 가동한 기록입니다.");
+  await expect(mon.locator(".ma-mon-unrecorded")).toHaveText("주문 기록에 없는 신호 1건");
+  await expect(mon.locator(".ma-mon-gross")).toHaveText("비용 전 −7,920원");
+  await expect(mon.locator(".ma-mon-cost")).toHaveText("비용 미상");                  // 0원이 아니다
+  await expect(mon.locator(".ma-mon-net")).toHaveText("비용 후 미상");
+  await expect(mon.locator(".ma-mon-pnl")).toContainText(costWhy);
+  const limit = mon.locator(".ma-mon-limit");
+  await expect(limit).toHaveAttribute("data-touched", "true");
+  await expect(limit.locator(".ma-mon-room")).toHaveText("한도 초과 2,920원");
+  await expect(limit.locator(".ma-mon-touched")).toHaveText("한도에 닿았습니다. 그날은 새로 진입하지 않습니다.");
+  await expect(limit.locator(".ma-mon-meter")).toHaveAttribute("aria-valuenow", "5000");   // 막대는 한도에서 멈춘다
+  await expect(mon.locator(".ma-mon-kill")).toContainText("주문 차단 중");            // 이 계좌가 건 정지가 아니다 — ‘사용’이라고 하지 않는다
+  await expect(mon.locator(".ma-mon-kill")).toContainText("이 계좌에서 발동한 정지가 아닙니다.");
+  await expect(mon.locator(".ma-mon-backtest")).toHaveAttribute("data-state", "differs");
+  await expect(mon.locator(".ma-mon-backtest .tx-chip")).toHaveText("백테스트와 다름");
+  await expect(mon.locator(".ma-mon-backtest")).toContainText(differs);
+  await expect(mon.locator(".ma-mon-backtest")).toContainText("가상 체결 2줄 · 백테스트 체결 3줄");
+
+  // ★짝★ 이 계좌가 건 정지 · 한도가 딱 맞은 날 · 설정을 읽지 못함 · 주문 기록을 읽지 못함 · 모르는 주문 상태
+  body = { ...real, monitor: { ...real.monitor,
+    orders: { ...real.monitor.orders, basis: "run_record", reason: logWhy, unrecorded: null, by_status: { SHADOW_LOGGED: 1, HELD_BY_BROKER: 1 } },
+    fills: { virtual: 2, broker: null, broker_reason: logWhy },
+    pnl: { available: false, reason: badWhy, gross: null, cost: null, net: null, net_reason: null, closed_trades: null, open_positions: null,
+           includes_rejected: null, basis: null },
+    loss_limit: { limit: null, reason: badWhy, realized_gross: null, room: null, touched: null },
+    kill: { active: true, own: true },
+    backtest: { state: "unknown", reason: badWhy, run_fills: 2, backtest_fills: null }, journal: null } };
+  await run.locator(".ma-arm-mon-open").click();                                   // 닫고
+  await run.locator(".ma-arm-mon-open").click();                                   // 다시 편다(새로 읽는다)
+  await expect(mon.locator(".ma-mon-orders")).toHaveAttribute("data-basis", "run_record");
+  await expect(mon.locator(".ma-mon-orders")).toContainText(logWhy);
+  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록만 1건", "HELD_BY_BROKER 1건"]);   // 모르는 상태는 원문 그대로
+  await expect(mon.locator(".ma-mon-unrecorded")).toHaveCount(0);                  // 모른다 — '0건'이라고도 하지 않는다
+  await expect(mon.locator(".ma-mon-broker")).toHaveText("증권사 체결 미상");
+  await expect(mon.locator(".ma-mon-pnl")).toHaveAttribute("data-available", "false");
+  await expect(mon.locator(".ma-mon-pnl")).toContainText("값 없음");
+  await expect(mon.locator(".ma-mon-pnl")).toContainText(badWhy);
+  await expect(mon.locator(".ma-mon-gross, .ma-mon-net")).toHaveCount(0);           // 0원을 그리지 않는다
+  await expect(mon.locator(".ma-mon-limit")).toHaveAttribute("data-known", "false");
+  await expect(mon.locator(".ma-mon-kill")).toContainText("사용");
+  await expect(mon.locator(".ma-mon-kill")).not.toContainText("차단");
+  await expect(mon.locator(".ma-mon-backtest .tx-chip")).toHaveText("견줌 미상");
+  await expect(mon.locator(".ma-mon-journal")).toHaveCount(0);
+  await expect(mon.locator('.tx-notice[data-tone="practice"]')).toHaveCount(0);     // 실제 분봉의 가동 — 합성 알림이 없다
+
+  // 관제를 읽지 못하면 빈 판이 아니라 실패라고 말한다
+  await page.unroute("**/rule-runs/*/monitor");
+  await page.route("**/rule-runs/*/monitor", (r) => r.fulfill({ status: 503, json: { detail: { code: "store_unavailable", reason: "가동 기록이나 실행 기록을 읽거나 쓰지 못했습니다(없는 것과 다릅니다)." } } }));
+  await run.locator(".ma-arm-mon-open").click();
+  await run.locator(".ma-arm-mon-open").click();
+  await expect(mon.locator('.tx-notice[data-tone="danger"]')).toContainText("관제 조회 실패");
+  await expect(mon.locator(".ma-mon-grid")).toHaveCount(0);
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`합성 분봉(${theme}): 절 맨 위에 적는다 · 대비 AA · 문체 · 좁은 폭에서 넘치지 않는다`, async ({ page }) => {
     test.setTimeout(240_000);
@@ -418,6 +656,12 @@ for (const theme of ["light", "dark"] as const) {
     await expect(run.locator(".ma-arm-fills, .ma-arm-nofills")).toHaveCount(1);
     await request(page, id).locator(".ma-arm-open").click();                       // 준비 판도 함께 잰다
     await expect(request(page, id).locator(".ma-arm-facts")).toContainText("합성 분봉");
+    await run.locator(".ma-arm-mon-open").click();                                 // 관제 판도 함께 잰다 — 합성 분봉의 가동이면 판 맨 위에 적는다
+    const mon = run.locator(".ma-mon");
+    await expect(mon.locator(".ma-mon-grid")).toBeVisible();
+    expect(await mon.evaluate((el) => el.firstElementChild?.classList.contains("tx-notice"))).toBe(true);
+    await expect(mon.locator('.tx-notice[data-tone="practice"]')).toContainText("합성 분봉으로 가동한 기록입니다.");
+    if (await mon.locator(".ma-mon-journal-open").count()) await mon.locator(".ma-mon-journal-open").click();   // 체결이 있는 날이면 매매일지도 편다
 
     await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark).*$/);
     const a = (await page.evaluate(contrastAudit(".ma-arm"))) as AuditResult;
@@ -434,7 +678,7 @@ for (const theme of ["light", "dark"] as const) {
     const wide = await arm(page).evaluate((el) => {
       const out: string[] = [];
       const box = el.getBoundingClientRect();
-      for (const child of Array.from(el.querySelectorAll<HTMLElement>(".ma-arm-req, .ma-arm-run, .ma-arm-start, .ma-arm-act, .ma-arm-what, .ma-arm-fill, .ma-arm-virtual, .ma-arm-refresh"))) {
+      for (const child of Array.from(el.querySelectorAll<HTMLElement>(".ma-arm-req, .ma-arm-run, .ma-arm-start, .ma-arm-act, .ma-arm-what, .ma-arm-fill, .ma-arm-virtual, .ma-arm-refresh, .ma-mon, .ma-mon-cell, .ma-mon-cell dd, .ma-mon-backtest, .ma-mon-journal-body > .tx-sec"))) {
         const r = child.getBoundingClientRect();
         if (r.right > box.right + 1 || r.left < box.left - 1) out.push(child.className);
       }

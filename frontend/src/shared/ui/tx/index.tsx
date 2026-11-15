@@ -69,15 +69,18 @@ export function Answer({ sentence, figures = [], chips = [], action }: {
 
 // ── 절 · 목록 행 ────────────────────────────────────────────────────────────
 
-export function Section({ title, sub, aside, children }: {
+export function Section({ title, sub, aside, level = 2, children }: {
   title?: string; sub?: ReactNode; aside?: ReactNode; children: ReactNode;
+  /** 제목의 단계 — 다른 절 안에 넣을 때만 바꾼다(기본은 화면의 절 = 2). 모양은 같다. */
+  level?: 2 | 3 | 4;
 }) {
+  const H = `h${level}` as "h2" | "h3" | "h4";
   return (
     <section className="tx-sec">
       {title || aside ? (
         <header className="tx-sec-head">
           <div>
-            {title ? <h2 className="tx-sec-t">{title}</h2> : null}
+            {title ? <H className="tx-sec-t">{title}</H> : null}
             {sub ? <p className="tx-sec-sub">{sub}</p> : null}
           </div>
           {aside ? <div className="tx-sec-aside">{aside}</div> : null}
