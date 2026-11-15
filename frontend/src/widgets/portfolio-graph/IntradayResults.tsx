@@ -1,12 +1,13 @@
 "use client";
 /**
- * 분봉 백테스트 노드 둘의 결과 — 설정(요청 요약) · 결과 조회(판정 요약)
+ * 분봉 백테스트 노드의 결과 — 설정(요청 요약) · 결과 조회(판정 요약) · 가동 요청(무엇을 요청하는지)
  * ==========================================================================
  * 설계 `docs/superpowers/specs/2026-11-14-canvas-intraday-nodes-design.md` §7.2
  * 실행은 단추, 읽기는 노드다. 결과 판은 화면(백테스트 › 분봉 규칙)과 ★같은 판정 부품★(`features/intraday-verdict`)을 쓴다 —
  * 관문 일곱의 상태와 사유는 서버 값 그대로이고 종합 점수를 만들지 않는다. 합성 분봉이면 맨 위에 적는다.
  * 여기서 새 수를 만들지 않는다 — 고르고 서식만 입힌다. 미상은 0 이 아니라 N/A 다.
  */
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Breakeven, Brief, Validation } from "@/entities/intraday";
 import { Verdict, bp1 } from "@/features/intraday-verdict";
@@ -78,6 +79,43 @@ export function IntradayLoadResult({ v }: { v: Dict }) {
       <p className="pg-note">실행할 때 남긴 요약입니다. 다시 계산하지 않았고, 시행 횟수는 그때의 값입니다. 거래 목록과 손익 곡선은 ‘백테스트 › 분봉 규칙’ 화면에서 확인합니다.</p>
       <p className="pg-itd-h">이 실행의 관문 일곱</p>
       <Verdict v={view} labels={{}} />
+    </div>
+  );
+}
+
+// ── 가동 요청 (W5b) ─────────────────────────────────────────────────────────────
+
+/** 요청 상태 — 서버의 세 값(남김 · 남기지 않음 · 미상)을 그대로 말한다. 못 읽음을 '없음'으로 접지 않는다. */
+const REQUESTED: Record<string, string> = { true: "이미 남김", false: "남기지 않음", unknown: "미상 · 요청 기록을 읽지 못함" };
+
+/**
+ * ★요청은 가동이 아니다★ — 이 판은 무엇을 요청하게 되는지만 보인다(규칙 · 종목 · 기간 · 관문 수 · 요청 상태).
+ * 가동 · 정지 · 비상 정지는 내 계좌에서만 한다. 관문은 표시만 한다(가동을 차단하지 않는다 — 설계 §12 D3).
+ */
+export function IntradayArmResult({ v }: { v: Dict }) {
+  const tickers = Array.isArray(v.tickers) ? v.tickers.map(String) : [];
+  const gates = dict(v.gates), counts = dict(gates.counts);
+  const state = v.requested === true ? "true" : v.requested === false ? "false" : "unknown";
+  const rows: [string, ReactNode][] = [
+    ["규칙 틀", <span key="k" data-server>{String(v.rule_label ?? UNKNOWN_TEXT)}</span>],
+    ["종목 · 기간", `${num(tickers.length)}개 · ${String(v.from)} ~ ${String(v.to)}`],
+    ["같은 설정 실행", count(v.runs, "회")],
+    ["관문 일곱", <span key="g" className="pg-itd-gates">{gates.known === true
+      ? `통과 ${count(counts.ok, "")} · 미달 ${count(counts.degraded, "")} · 미상 ${count(counts.unknown, "")}` : "미상 · 판정 결과 없음"}</span>],
+    ["요청 상태", <span key="s" className="pg-itd-state" data-requested={state}>{REQUESTED[state]}</span>],
+  ];
+  if (typeof v.note === "string" && v.note) rows.push(["메모", <span key="n" className="pg-itd-memo">{v.note}</span>]);
+  return (
+    <div className="pg-itd pg-itd-arm" data-requested={state} data-grade={typeof v.grade === "string" ? v.grade : "unknown"}>
+      {v.synthetic === true ? (
+        <Notice tone="practice" title="합성 분봉으로 실행한 설정입니다.">
+          계산 장치를 확인하는 용도이며 예측력이나 수익의 증거가 아닙니다.
+        </Notice>
+      ) : null}
+      <KV rows={rows} />
+      <p className="pg-note">요청은 가동이 아닙니다. 설정 탭의 ‘가동 요청 남기기’는 요청 한 줄만 남기며, 가동 · 정지 · 비상 정지는 ‘내 계좌 › 규칙 가동’에서 직접 합니다.</p>
+      <p className="pg-note">가동은 기록 전용 모드에서만 시작하며 증권사로 주문을 전송하지 않습니다. 관문은 표시만 하며 가동을 차단하지 않습니다.</p>
+      <Link className="pg-itd-go" href="/my-account">내 계좌 › 규칙 가동</Link>
     </div>
   );
 }

@@ -143,7 +143,8 @@ def test_the_save_route_needs_its_fields(client):
 
 #: 노드 모듈이 **계산 경로에서** 부르면 안 되는 이름 — 저장·기록·승인·주문.
 _WRITE_CALLS = ("save_target", "create_plan", "record_run", "advance_pointer", "transition",
-                "record_fills", "create_entry", "place_order", "submit_order")
+                "record_fills", "create_entry", "place_order", "submit_order",
+                "add_request", "open_run", "add_fill")        # W5b — 가동 요청 · 가동 · 가상 체결
 _FORBIDDEN_IMPORTS = ("src.kis_order_executor", "src.engine.trading_engine")
 
 

@@ -3933,7 +3933,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --pg-port-Weights: #159946; --pg-port-RiskReport: #ef4444; --pg-port-BacktestResult: #109788; --pg-port-Scenario: #e11d48;
   --pg-port-StressReport: #9f1239; --pg-port-Scores: #5d960c; --pg-port-RegimeState: #b27904; --pg-port-TimingSignal: #e5560c;
   --pg-port-Trades: #475569; --pg-port-TargetVersion: #0f766e; --pg-port-StrategyResult: #c026d3; --pg-port-BacktestRun: #b45309;
-  --pg-port-Client: #9d174d; --pg-port-Account: #1d4ed8;
+  --pg-port-Client: #9d174d; --pg-port-Account: #1d4ed8; --pg-port-IntradayRun: #0e7490;
   --pg-port-unknown: #798697;
   /* 전략 띠 6색(BM C2) — 단계 색·상태 색과 다른 저채도 계열. 넓은 띠의 옅은 바탕과 왼쪽 레일에만 쓴다. */
   --pg-band-0: #3d5a80; --pg-band-1: #5b6b2a; --pg-band-2: #7a3f6f; --pg-band-3: #8a5a12; --pg-band-4: #6b4a3a; --pg-band-5: #3f5f5a;
@@ -3955,7 +3955,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   --pg-port-Weights: #16a34a; --pg-port-RiskReport: #ef4444; --pg-port-BacktestResult: #14b8a6; --pg-port-Scenario: #e11d48;
   --pg-port-StressReport: #b03d5d; --pg-port-Scores: #65a30d; --pg-port-RegimeState: #ca8a04; --pg-port-TimingSignal: #ea580c;
   --pg-port-Trades: #5d697b; --pg-port-TargetVersion: #0f766e; --pg-port-StrategyResult: #c026d3; --pg-port-BacktestRun: #b45309;
-  --pg-port-Client: #f472b6; --pg-port-Account: #60a5fa;
+  --pg-port-Client: #f472b6; --pg-port-Account: #60a5fa; --pg-port-IntradayRun: #22d3ee;
   --pg-port-unknown: #94a3b8;
   --pg-band-0: #8fb0dc; --pg-band-1: #b3c47a; --pg-band-2: #d59ccb; --pg-band-3: #deb173; --pg-band-4: #c9a391; --pg-band-5: #93bdb6;
 }
@@ -4338,6 +4338,13 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-itd { display: flex; flex-direction: column; gap: 12px; }
 .pg-itd-h { margin: 6px 0 0; font-size: 14px; font-weight: 700; color: var(--pg-ink); }
 .pg-itd .pg-itd-net { font-weight: 700; }
+/* 가동 요청(W5b) — 요청 상태는 글자로 말한다(색만으로 구분하지 않는다) · 내 계좌로 가는 길은 링크 하나 */
+.pg-itd-arm .pg-itd-state { font-weight: 700; }
+.pg-itd-arm .pg-itd-state[data-requested="unknown"] { color: var(--pg-mute); font-weight: 600; }
+.pg-theme .pg-itd-go { align-self: flex-start; display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; font-size: 13px;
+  font-weight: 700; color: var(--pg-blue-ink); background: none; border: 1px solid var(--pg-line); border-radius: 8px; text-decoration: none; }
+.pg-theme .pg-itd-go:hover { background: var(--pg-soft); }
+.pg-theme .pg-itd-go:focus-visible { outline: 2px solid var(--pg-blue); outline-offset: 2px; }
 .pg-itd .itd-verdict .tx-answer { padding: 0; border-radius: 0; background: none; }
 .pg-itd .itd-verdict .tx-sec { padding: 14px 0 0; border-radius: 0; background: none; border-top: 1px solid var(--pg-line); }
 .pg-itd .itd-verdict .tx-sec-t { font-size: 14px; }

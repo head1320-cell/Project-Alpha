@@ -29,7 +29,7 @@ export const PORT_PLAIN: Record<string, string> = {
   Weights: "비중", RiskReport: "위험 나눔", BacktestResult: "과거 성과",
   Scenario: "시나리오", StressReport: "충격 결과", Scores: "점수", RegimeState: "경기 국면",
   TimingSignal: "타이밍 신호", Trades: "주문 목록", TargetVersion: "실행 목표", StrategyResult: "전략 그룹 성과",
-  BacktestRun: "백테스트 실행", Client: "고객", Account: "계좌",
+  BacktestRun: "백테스트 실행", Client: "고객", Account: "계좌", IntradayRun: "분봉 결과",
 };
 
 /** 워크플로우 단계 → 번호 배지 색(토큰). */

@@ -15,6 +15,8 @@ import { contrastAudit, trackErrors, uniq, voiceAudit, type AuditResult, type Vo
 //  · 실행 뒤 '결과 조회 노드 추가' → 결과 판의 값 = 손 계산 = 화면(백테스트 › 분봉 규칙)과 같은 판정 부품
 //  · 설정 판은 고른 규칙 틀의 칸만 보인다 · 고르기 목록에 내 결과가 뜬다
 //  · 오류 0 · 라이트/다크 AA · 문체
+//  · ★가동 요청(W5b)★: 결과 조회 → 가동 요청 — 계산은 쓰지 않고 · 단추 한 번이 요청 한 줄만 남기며 · 아무것도 가동하지 않는다
+//    (가동 · 정지는 내 계좌에서만 — `rule-arming.spec.ts`)
 // ═════════════════════════════════════════════════════════════════════════════
 
 const API = "/api/backend/api/v1";
@@ -34,11 +36,12 @@ const node = (page: Page, id: string) => page.locator(`.pg-node[data-node-id="${
 const tab = (page: Page, k: "story" | "settings" | "detail") => page.locator(`.pg-tab[data-tab="${k}"]`).click();
 const gate = (page: Page, key: string) => page.locator(`.pg-itd-load .itd-gate[data-gate="${key}"]`);
 
-async function login(page: Page): Promise<void> {
+async function login(page: Page): Promise<string> {
   const r = await page.request.post(`${API}/auth/login`, { data: { username: "admin", password: "frm123!" } });
   expect(r.ok(), await r.text()).toBe(true);
   const token = (await r.json()).access_token as string;
   await page.addInitScript((t) => { try { localStorage.setItem("project-alpha.auth-token", t); } catch { /* */ } }, token);
+  return token;
 }
 
 async function openCanvas(page: Page) {
@@ -48,8 +51,8 @@ async function openCanvas(page: Page) {
   await page.locator(".react-flow__controls-fitview").click();
 }
 
-async function importDoc(page: Page, nodes: object[]) {
-  const doc = { format: "project-alpha.portfolio-graph", version: 1, meta: { name: "분봉 노드" }, edges: [], nodes };
+async function importDoc(page: Page, nodes: object[], edges: object[] = []) {
+  const doc = { format: "project-alpha.portfolio-graph", version: 1, meta: { name: "분봉 노드" }, edges, nodes };
   await page.locator(".pg-import-input").setInputFiles({ name: "intraday.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(doc)) });
 }
 
@@ -236,6 +239,141 @@ test("고르기 목록: 결과 저장소를 못 읽으면 빈 목록이 아니�
   await tab(page, "settings");
   await expect(page.locator(".pg-side .pg-pick-err")).toContainText(why);
   await expect(page.locator(".pg-side .pg-pick")).toHaveCount(0);                 // '실행한 분봉 백테스트가 없습니다'로 보이지 않는다
+});
+
+// ── 가동 요청 (W5b) ────────────────────────────────────────────────────────────────────
+
+type ArmRow = { id: number; trial_key: string; gates: { known: boolean; counts: Record<string, number> | null } };
+const armRequests = async (page: Page, token: string): Promise<ArmRow[]> => {
+  const r = await page.request.get(`${API}/intraday/arm-requests`, { headers: { Authorization: `Bearer ${token}` } });
+  expect(r.ok(), await r.text()).toBe(true);
+  return (await r.json()).requests as ArmRow[];
+};
+const clearArmRequests = async (page: Page, token: string) => {
+  for (const row of await armRequests(page, token)) {
+    await page.request.delete(`${API}/intraday/arm-requests/${row.id}`, { headers: { Authorization: `Bearer ${token}` } });
+  }
+};
+
+/** 캔버스의 단추와 같은 두 문(계산 → 저장)으로 실행 하나를 남기고 그 열쇠를 돌려준다 — 화면을 거치지 않는 준비. */
+async function keptTrial(page: Page, token: string): Promise<string> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const graph = { format: "project-alpha.portfolio-graph", version: 1, edges: [], nodes: [{ id: "is", type: "intraday_setup", params: HAND }] };
+  const ran = await page.request.post(`${API}/allocation/graph/run`, { data: graph, headers, timeout: 120_000 });
+  expect(ran.ok(), await ran.text()).toBe(true);
+  const hash = (await ran.json()).nodes.is.view_hash as string;
+  const saved = await page.request.post(`${API}/allocation/graph/save`, { data: { graph, node_id: "is", preview_hash: hash }, headers, timeout: 120_000 });
+  const body = await saved.json();
+  expect(body.ok, body.message).toBe(true);
+  return body.saved_id as string;
+}
+
+const armDoc = (key: string): [object[], object[]] => [
+  [{ id: "il", type: "intraday_load", position: { x: 0, y: 0 }, params: { trial_key: key } },
+   { id: "ar", type: "intraday_arm_request", position: { x: 420, y: 0 }, params: { note: "개장 전 점검" } }],
+  [{ source: "il", source_port: "run", target: "ar", target_port: "run" }],
+];
+
+for (const theme of ["light", "dark"] as const) {
+  test(`가동 요청(${theme}): 계산은 쓰지 않고 · 단추 한 번이 요청 한 줄만 남기며 · 아무것도 가동하지 않는다`, async ({ page }) => {
+    test.setTimeout(240_000);
+    const sink = trackErrors(page);
+    await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+    const token = await login(page);
+    await clearArmRequests(page, token);
+    const key = await keptTrial(page, token);
+    await openCanvas(page);
+    await importDoc(page, ...armDoc(key));
+
+    // ① 계산 — 요청 표에 아무것도 쓰지 않는다 · 판은 무엇을 요청하게 되는지만 보인다
+    const first = await run(page);
+    expect(first.nodes.ar.status, first.nodes.ar.reason).toBe("ok");
+    expect(first.nodes.ar.view.requested).toBe(false);
+    expect(await armRequests(page, token), "계산은 요청을 남기지 않는다").toEqual([]);
+    await expect(node(page, "ar")).toContainText("가동 요청");
+    // 포트 — 분봉 결과의 색이 '모르는 타입'의 회색이 아니다 · 선이 이어져 있다
+    const colors = await page.evaluate(() => {
+      const css = getComputedStyle(document.querySelector(".pg-theme") ?? document.documentElement);
+      return { run: css.getPropertyValue("--pg-port-IntradayRun").trim(), unknown: css.getPropertyValue("--pg-port-unknown").trim() };
+    });
+    expect(colors.run).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(colors.run).not.toBe(colors.unknown);
+    await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+    await expect(node(page, "ar").locator(".pg-port--unknown")).toHaveCount(0);
+
+    await node(page, "ar").click();
+    await tab(page, "detail");
+    const panel = page.locator(".pg-side .pg-itd-arm");
+    await expect(panel).toHaveAttribute("data-requested", "false");
+    await expect(panel).toHaveAttribute("data-grade", "E3");
+    await expect(panel.locator(".tx-notice")).toHaveCount(0);                      // 실제 등급 — 합성 알림이 없다
+    await expect(panel.locator(".pg-kv")).toContainText("시가 범위 돌파");
+    await expect(panel.locator(".pg-kv")).toContainText("1개 · 2026-03-02 ~ 2026-03-13");
+    await expect(panel.locator(".pg-itd-gates")).toHaveText("통과 2 · 미달 1 · 미상 4");
+    await expect(panel.locator(".pg-itd-state")).toHaveText("남기지 않음");
+    await expect(panel.locator(".pg-itd-memo")).toHaveText("개장 전 점검");
+    await expect(panel).toContainText("요청은 가동이 아닙니다.");
+    await expect(panel).toContainText("증권사로 주문을 전송하지 않습니다.");
+    await expect(panel.locator(".pg-itd-go")).toHaveAttribute("href", "/my-account");
+
+    // 대비 · 문체 — 뿌리는 이 판이다
+    await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark).*$/);
+    const a = (await page.evaluate(contrastAudit(".pg-side .pg-itd-arm"))) as AuditResult;
+    expect(a.checked).toBeGreaterThan(10);
+    expect(a.low, theme).toEqual([]);
+    if (theme === "dark") expect(a.bright, "다크에 밝은 배경").toEqual([]);
+    const v = (await page.evaluate(voiceAudit(".pg-side .pg-itd-arm"))) as VoiceResult;
+    expect(v.checked).toBeGreaterThan(3);
+    expect(v.haeyo).toEqual([]);
+    expect(v.dash).toEqual([]);
+    expect(v.banned).toEqual([]);
+
+    // ② 단추 한 번 — 요청 한 줄. 가동을 시작하는 요청은 어디에도 가지 않는다
+    const started: string[] = [];
+    const watch = (r: Request) => { if (/\/rule-runs(\/|$)/.test(new URL(r.url()).pathname)) started.push(`${r.method()} ${new URL(r.url()).pathname}`); };
+    page.on("request", watch);
+    await tab(page, "settings");
+    await expect(page.locator(".pg-save-btn")).toHaveText("가동 요청 남기기");
+    const saved = page.waitForResponse((r) => r.url().includes("/allocation/graph/save"), { timeout: 120_000 });
+    await page.locator(".pg-save-btn").click();
+    const sv = await (await saved).json();
+    expect(sv.ok, sv.message).toBe(true);
+    await expect(page.locator(".pg-save-msg")).toContainText("가동 요청을 남겼습니다");
+    await expect(page.locator(".pg-save-msg")).toContainText("내 계좌 › 규칙 가동");
+    await expect(page.locator(".pg-save-follow")).toHaveCount(0);                  // 이어 붙일 노드가 없다 — 다음은 내 계좌다
+    const rows = await armRequests(page, token);
+    expect(rows.map((r) => [String(r.id), r.trial_key])).toEqual([[sv.saved_id, key]]);
+    expect(rows[0].gates).toEqual({ known: true, counts: { ok: 2, degraded: 1, unknown: 4 }, reason: null });
+    expect(started, "캔버스는 가동의 문을 부르지 않는다").toEqual([]);
+    page.off("request", watch);
+
+    // ③ 다시 계산 — 이미 남긴 요청이라고 말한다
+    const second = await run(page);
+    expect(second.nodes.ar.view.requested).toBe(true);
+    await node(page, "ar").click();
+    await tab(page, "detail");
+    await expect(panel).toHaveAttribute("data-requested", "true");
+    await expect(panel.locator(".pg-itd-state")).toHaveText("이미 남김");
+
+    await clearArmRequests(page, token);
+    expect(uniq(sink.api404), "404").toEqual([]);
+    expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+    expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+    expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+  });
+}
+
+test("가동 요청: 로그인 전에는 사유와 함께 실패하고 요청 판을 지어내지 않는다", async ({ page }) => {
+  await openCanvas(page);
+  await importDoc(page, ...armDoc("a".repeat(64)));
+  const body = await run(page);
+  expect(body.nodes.il.status).toBe("failed");
+  expect(body.nodes.ar.status).not.toBe("ok");
+  await node(page, "ar").click();
+  await tab(page, "detail");
+  await expect(page.locator(".pg-side .pg-itd-arm")).toHaveCount(0);
+  await tab(page, "settings");
+  await expect(page.locator(".pg-save-btn")).toBeDisabled();
 });
 
 for (const theme of ["light", "dark"] as const) {

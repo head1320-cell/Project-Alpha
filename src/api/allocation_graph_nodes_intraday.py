@@ -1,4 +1,4 @@
-"""AAS 그래프 — 분봉 백테스트 노드 둘 · ★실행은 단추, 읽기는 노드★ (기존 조건식 백테스트와 같은 꼴)
+"""AAS 그래프 — 분봉 백테스트 노드 둘 + 가동 요청 · ★실행은 단추, 읽기는 노드★ (기존 조건식 백테스트와 같은 꼴)
 ==============================================================================
 설계 `docs/superpowers/specs/2026-11-14-canvas-intraday-nodes-design.md` · ADR 006 §7(새 기능은 기존 모듈 안에)
 
@@ -8,8 +8,13 @@
 - **분봉 결과 불러오기**(`intraday_load`) — 남긴 요약을 ★읽기만★ 한다(다시 계산하지 않는다). 본인 것만 · 남의 것과 없는 것은
   같은 문장 · 운영 게이트에서는 합성 등급의 결과를 내주지 않는다.
 
-둘 다 실행자를 받는다(`wants_actor`) — 시행 기록은 사용자별이다. 둘 다 출력 포트가 없다 — 분봉 결과를 비교·순위에 잇는 길이
-구조에 없다. ★도구는 규칙과 종목을 추천하지 않는다★: 종목 칸은 비어서 시작하고, AI 추천·말로 설계의 후보 표에도 없다(`NOT_OFFERED`).
+- **가동 요청**(`intraday_arm_request` · W5b) — 분봉 결과를 받아 '이 시행을 가동해 달라'는 ★요청 한 줄★을 남긴다(단추).
+  ★요청은 가동이 아니다★: 가동 · 정지 · 비상 정지는 내 계좌에서만 한다. 이 파일은 가동기 · 계좌 실행기 · 증권사 클라이언트를
+  들이지 않는다(정적 시험 `tests/test_allocation_graph_arm_request.py`) — 캔버스는 주문 경로에 닿지 않는다.
+
+셋 다 실행자를 받는다(`wants_actor`) — 시행 기록과 요청은 사용자별이다. 분봉 결과의 출력 포트(`IntradayRun`)는 가동 요청만
+받는다 — 분봉 결과를 비교·순위·비중에 잇는 길이 구조에 없다. ★도구는 규칙과 종목을 추천하지 않는다★: 종목 칸은 비어서 시작하고,
+AI 추천·말로 설계의 후보 표에도 없다(`NOT_OFFERED`).
 
 매개변수 모델은 등록부에서 만든다(`rules.describe()` · `POSITION_FIELDS` · `COST_FIELDS`) — 칸의 사본을 여기 두지 않는다.
 """
@@ -26,16 +31,24 @@ from src.api import intraday_routes as routes
 from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _practice, _t
 from src.api.allocation_graph_nodes import _FORBID, _pydantic_reason, _ui
 from src.data import intraday_trials as trials
+from src.data import rule_runs
 from src.data.mock_gate import mock_allowed
+from src.domain.pii_guard import pii_reason
 from src.engine import portfolio_graph as pg
 from src.engine.intraday import rules
 
 P = pg.Port
 
-SETUP, LOAD = "intraday_setup", "intraday_load"
+SETUP, LOAD, ARM = "intraday_setup", "intraday_load", "intraday_arm_request"
 #: AI 추천 · 말로 설계가 후보로 삼지 않는 종류 — 도구는 규칙과 종목을 추천하지 않는다(`canvas_assist_routes.offered_kinds`).
-NOT_OFFERED = (SETUP, LOAD)
+NOT_OFFERED = (SETUP, LOAD, ARM)
 _WHO = "분봉 백테스트는 로그인한 사용자만 사용합니다"
+_WHO_ARM = "가동 요청은 로그인한 사용자만 남깁니다"
+#: 요청 메모의 길이 상한 — 한 줄 메모다(설명 글 · 고객 정보를 적는 칸이 아니다).
+NOTE_MAX = 80
+#: '이미 남긴 요청'을 찾을 때 읽는 줄 수(요청 목록의 문과 같은 상한).
+_REQUEST_SCAN = 200
+_WHERE = "내 계좌 › 규칙 가동"
 _DATE = r"^\d{4}-\d{2}-\d{2}$"
 _KEY = r"^[0-9a-f]{64}$"
 _REAL, _SYNTHETIC = routes.GRADE_REAL, routes.GRADE_SYNTHETIC
@@ -48,6 +61,7 @@ REASONS = {
     "synthetic_in_production": "모의 모드에서 합성 분봉으로 만든 결과입니다 — 운영에서는 조회하지 않습니다.",
     "trial_not_recorded": "시행을 기록하지 못해 결과를 남기지 않았습니다 — 시행 횟수를 셀 수 없는 실행은 캔버스에 남기지 않습니다.",
     "result_not_kept": "시행은 기록했지만 결과 요약을 남기지 못했습니다 — 결과 저장소에 쓰지 못했습니다.",
+    "request_not_kept": "가동 요청을 남기지 못했습니다 — 요청 기록에 쓰지 못했습니다.",
 }
 
 
@@ -221,7 +235,9 @@ def _load(inputs: dict, p: LoadParams, actor: Any) -> pg.NodeOutput:
     if grade == _SYNTHETIC and not mock_allowed():               # 운영에서는 합성 위의 숫자를 내주지 않는다
         raise pg.NodeFailure(REASONS["synthetic_in_production"])
     view = {**result, "trial_key": p.trial_key, "result_at": found["result_at"], "runs": found["runs"]}
-    return pg.NodeOutput(values={}, view=view,
+    counts = (result.get("gates") or {}).get("counts")
+    handed = {"trial_key": p.trial_key, "grade": grade, "gates": counts if isinstance(counts, dict) else None}
+    return pg.NodeOutput(values={"run": handed}, view=view,
                          tags={"pit": "unknown", "practice": grade != _REAL, "sources": [f"intraday_trial:{p.trial_key[:12]}"]})
 
 
@@ -253,6 +269,80 @@ def _explain_load(view: dict, prov: dict, params: Any) -> dict:
             "unmeasured": ["실제 계좌에서의 경제적 가치", "모의·실계좌 체결", "호가·체결 대기열·시장 충격"]}
 
 
+# ── 가동 요청 (W5b) — ★요청은 가동이 아니다★ ───────────────────────────────────────────────────
+class ArmParams(BaseModel):
+    model_config = _FORBID
+    note: str | None = Field(None, max_length=NOTE_MAX, json_schema_extra={"x-ui": _ui(
+        "메모", question="요청에 남길 메모", widget="input",
+        help="내 계좌의 요청 목록에 함께 표시됩니다. 연락처 · 계좌번호 등 개인정보는 입력하지 않습니다.")})
+
+
+def _arm(inputs: dict, p: ArmParams, actor: Any) -> pg.NodeOutput:
+    """미리보기 — ★쓰기 0★. 무엇을 요청하게 되는지(규칙 · 종목 · 기간 · 등급 · 관문 수)와 이미 남긴 요청이 있는지를 읽는다."""
+    user = graph_actor.require(actor, _WHO_ARM)
+    handed = inputs["run"]
+    key = str(handed.get("trial_key"))
+    note = (p.note or "").strip() or None
+    why = pii_reason(note, label="가동 요청 메모", max_len=NOTE_MAX)
+    if why:
+        raise pg.NodeFailure(why)
+    trial = trials.trial_of(user, key)                           # 가동되는 것은 ★내가 돌려 시행으로 세어진 설정★뿐이다
+    if trial is None:
+        raise pg.NodeFailure(REASONS["store_unreadable"])
+    if not trial["found"]:                                       # 남의 것과 없는 것은 같은 문장이다
+        raise pg.NodeFailure(REASONS["not_found"])
+    grade = trial["grade"]
+    synthetic = _SYNTHETIC in (grade, handed.get("grade"))       # 가장 약한 출처가 정한다
+    if synthetic and not mock_allowed():                         # 운영에서는 합성 위의 설정을 요청으로 남기지 않는다
+        raise pg.NodeFailure(REASONS["synthetic_in_production"])
+    setting = trial["setting"] if isinstance(trial["setting"], dict) else {}
+    kind = (setting.get("rule") or {}).get("kind")
+    counts = handed.get("gates")
+    rows = rule_runs.requests_of(user, _REQUEST_SCAN)            # 읽기만 — 못 읽으면 '이미 남겼는지'는 미상이다(없다고 하지 않는다)
+    mine = None if rows is None else next((r for r in rows if r["trial_key"] == key), None)
+    view = {"trial_key": key, "rule_kind": kind, "rule_label": (_TEMPLATES.get(kind) or {}).get("label") or kind,
+            "tickers": trial["tickers"], "from": trial["from"], "to": trial["to"], "grade": grade, "synthetic": synthetic,
+            "runs": trial["runs"], "gates": {"known": isinstance(counts, dict), "counts": counts if isinstance(counts, dict) else None},
+            "requested": None if rows is None else mine is not None, "request_id": mine["id"] if mine else None,
+            "note": note, "where": _WHERE, "mock": mock_allowed()}
+    return pg.NodeOutput(values={}, view=view,
+                         tags={"pit": "unknown", "practice": grade != _REAL, "sources": [f"intraday_trial:{key[:12]}"]})
+
+
+def _save_request(values: dict, view: dict, params: Any, actor: Any) -> dict:
+    """'가동 요청 남기기' — 요청 표에 ★한 줄★. 가동 · 주문 · 가상 체결은 만들지 않는다. 같은 시행의 살아 있는 요청이 있으면 그것을 돌려준다."""
+    user = graph_actor.require(actor, _WHO_ARM)
+    if view.get("synthetic") and not mock_allowed():
+        raise pg.NodeFailure(REASONS["synthetic_in_production"])
+    made = rule_runs.add_request(user, view["trial_key"], view.get("note"))
+    if made is None:
+        raise pg.NodeFailure(REASONS["request_not_kept"])
+    said = ("가동 요청을 남겼습니다" if made["new"] else "이미 남긴 요청입니다 — 새로 남기지 않았습니다")
+    return {"saved_id": str(made["id"]), "text": f"{said}. 가동은 ‘{_WHERE}’에서 직접 시작합니다"}
+
+
+def _explain_arm(view: dict, prov: dict, params: Any) -> dict:
+    counts, requested = (view.get("gates") or {}).get("counts"), view.get("requested")
+    facts = [f"‘{view.get('rule_label')}’ · 종목 {len(view.get('tickers') or [])}개 · 기간 {view.get('from')} ~ {view.get('to')} · "
+             f"같은 설정 실행 {view.get('runs')}회",
+             (f"이 실행의 관문 일곱: 통과 {counts.get('ok', 0)} · 미달 {counts.get('degraded', 0)} · 미상 {counts.get('unknown', 0)} — "
+              "관문은 표시만 하며 가동을 차단하지 않습니다") if counts else "판정 결과를 남기지 않은 실행입니다 — 관문의 상태는 미상입니다"]
+    if requested:
+        facts.append("이미 남긴 요청이 있습니다 — 다시 눌러도 새로 남기지 않습니다")
+    trust = [_t(CONFIRMED, "본인이 실행해 시행으로 기록한 설정입니다."),
+             _t(ASSUMED, f"요청은 가동이 아닙니다 — 가동 · 정지 · 비상 정지는 ‘{_WHERE}’에서 직접 합니다."),
+             _t(ASSUMED, "가동은 기록 전용 모드에서만 시작하며 증권사로 주문을 전송하지 않습니다.")]
+    if requested is None:
+        trust.append(_t(UNKNOWN, "이미 남긴 요청이 있는지 확인하지 못했습니다 — 요청 기록을 읽지 못했습니다."))
+    if view.get("synthetic"):
+        trust.append(_practice("합성 분봉으로 실행한 설정입니다 — 계산 장치를 확인하는 용도이며 예측력이나 수익의 증거가 아닙니다."))
+    elif view.get("grade") != _REAL:
+        trust.append(_t(UNKNOWN, "분봉의 출처 등급은 미상입니다."))
+    return {"title": "이미 가동 요청을 남긴 실행입니다" if requested else "가동 요청을 남길 준비를 마쳤습니다",
+            "facts": facts, "trust": trust,
+            "unmeasured": ["가동한 결과 — 요청만 남긴 상태이며 아무것도 가동하지 않았습니다", "실제 계좌에서의 체결", "모의투자 · 실계좌 주문"]}
+
+
 # ── 등록 ─────────────────────────────────────────────────────────────────────────────
 def register(registry: pg.Registry) -> None:
     for spec in (
@@ -264,11 +354,16 @@ def register(registry: pg.Registry) -> None:
                     description="판정 문의 읽기 전 검사(prepare)만 · 쓰기 0 · 봉을 읽지 않음 · 실행 = run_validation(같은 본체 · 시행 기록)."),
         pg.NodeSpec(LOAD, "분봉 결과 불러오기", stage="check", plain_label="분봉 결과 조회",
                     plain_description="실행한 분봉 백테스트의 판정 요약을 조회합니다. 본인이 실행한 결과만 조회합니다.",
-                    inputs=(), outputs=(), run=_load, params_model=LoadParams, explain=_explain_load, category="백테스트",
-                    wants_actor=True,
+                    inputs=(), outputs=(P("run", "IntradayRun"),), run=_load, params_model=LoadParams, explain=_explain_load,
+                    category="백테스트", wants_actor=True,
                     description="시행 줄의 결과 요약(읽기만) · 본인 것만 · 운영 게이트에서는 합성 등급을 내주지 않음."),
+        pg.NodeSpec(ARM, "분봉 가동 요청", stage="act", plain_label="가동 요청",
+                    plain_description="실행한 분봉 백테스트의 설정을 내 계좌에서 가동하도록 요청을 남깁니다. 이 노드는 가동하지 않습니다.",
+                    inputs=(P("run", "IntradayRun"),), outputs=(), run=_arm, params_model=ArmParams, explain=_explain_arm,
+                    category="실행", save=_save_request, save_label="가동 요청 남기기", wants_actor=True,
+                    description="rule_arm_requests 에 한 줄(단추) · 계산은 쓰기 0 · 가동 · 정지는 내 계좌의 문에서만 · 주문 경로 import 없음."),
     ):
         registry.register(spec)
 
 
-__all__ = ["LOAD", "NOT_OFFERED", "REASONS", "SETUP", "register"]
+__all__ = ["ARM", "LOAD", "NOT_OFFERED", "REASONS", "SETUP", "register"]

@@ -63,7 +63,9 @@ PORT_TYPES = ("Universe", "Returns", "Belief", "Views", "Weights", "RiskReport",
               # BL3 W1 — 백그라운드에서 끝난 조건식 백테스트 실행 한 건(불러오기 노드가 낸다).
               "BacktestRun",
               # CF 3부 PB1 — 고객(별칭·성향)과 점검한 계좌(유형·보유·선언한 한도). 비중이 아니다 — 관측 노드끼리만 잇는다.
-              "Client", "Account")
+              "Client", "Account",
+              # W5b — 실행해 남긴 분봉 백테스트 한 건(분봉 결과 조회가 낸다). ★가동 요청만 받는다★ — 비교 · 순위 · 비중으로 가는 길이 없다.
+              "IntradayRun")
 
 #: 포트 타입 → 사람이 읽는 이름(BT1 — 캔버스·절차 문장이 같은 말을 쓴다. 화면 사본은 이것을 받는다).
 PORT_PLAIN = {
@@ -72,7 +74,7 @@ PORT_PLAIN = {
     "Scenario": "시나리오", "StressReport": "충격 결과", "Scores": "점수", "RegimeState": "경기 국면",
     "TimingSignal": "타이밍 신호", "Trades": "주문 목록", "TargetVersion": "실행 목표",
     "StrategyResult": "전략 그룹 성과", "BacktestRun": "백테스트 실행",
-    "Client": "고객", "Account": "계좌",
+    "Client": "고객", "Account": "계좌", "IntradayRun": "분봉 결과",
 }
 
 

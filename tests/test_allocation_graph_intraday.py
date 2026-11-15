@@ -468,10 +468,16 @@ def test_a_results_list_that_cannot_be_read_says_so_instead_of_looking_empty(cli
 
 
 # ── 닫힌 길 ───────────────────────────────────────────────────────────────────────────
-def test_neither_node_has_an_output_port_so_results_cannot_be_ranked_or_compared():
+def test_results_cannot_be_ranked_or_compared_the_only_way_out_is_the_arm_request():
+    """분봉 결과를 비교 · 순위 · 비중에 잇는 길은 구조에 없다. W5b 에서 결과 조회에 출력 하나(`IntradayRun`)가 생겼지만
+    그 종류를 받는 노드는 가동 요청 하나뿐이다(`tests/test_allocation_graph_arm_request.py` 가 같은 것을 요청 쪽에서 건다)."""
     for kind in ("intraday_setup", "intraday_load"):
         spec = REGISTRY.get(kind)
-        assert spec.outputs == () and spec.wants_actor is True and spec.category == "백테스트"
+        assert spec.wants_actor is True and spec.category == "백테스트"
+    assert REGISTRY.get("intraday_setup").outputs == ()
+    assert [(p.name, p.type) for p in REGISTRY.get("intraday_load").outputs] == [("run", "IntradayRun")]
+    takers = {c["type"] for c in REGISTRY.catalog() for p in c["inputs"] if p["type"] == "IntradayRun"}
+    assert takers == {"intraday_arm_request"}
     assert REGISTRY.get("intraday_setup").save_label == "분봉 백테스트 실행"
     assert REGISTRY.get("intraday_load").save is None                           # 읽는 노드는 남기지 않는다
     assert {"intraday_setup", "intraday_load"} <= set(HISTORY)

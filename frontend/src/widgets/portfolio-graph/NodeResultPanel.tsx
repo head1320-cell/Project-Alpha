@@ -26,7 +26,7 @@ import {
 import {
   BacktestAttributionResult, BacktestCompareResult, BacktestLoadResult, BacktestSetupResult, RunProgress,
 } from "./BacktestResults";
-import { IntradayLoadResult, IntradaySetupResult } from "./IntradayResults";
+import { IntradayArmResult, IntradayLoadResult, IntradaySetupResult } from "./IntradayResults";
 import {
   ConsensusResult, CoverageResult, LongRunResult, MacroDashboardResult, StudioResult, YieldCurveResult,
 } from "./MacroW2Results";
@@ -446,6 +446,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict; explain?: NodeExplain
   backtest_compare: ({ v }) => <BacktestCompareResult v={v} />,
   intraday_setup: ({ v }) => <IntradaySetupResult v={v} />,
   intraday_load: ({ v }) => <IntradayLoadResult v={v} />,
+  intraday_arm_request: ({ v }) => <IntradayArmResult v={v} />,
   yield_curve: ({ v }) => <YieldCurveResult v={v} />,
   macro_dashboard: ({ v }) => <MacroDashboardResult v={v} />,
   regime_consensus: ({ v }) => <ConsensusResult v={v} />,

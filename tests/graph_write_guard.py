@@ -48,6 +48,9 @@ WRITERS: tuple[tuple[str, str], ...] = (
     # 캔버스의 분봉 백테스트 — 계산(설정 노드 · 결과 노드)은 시행을 세지도 결과를 남기지도 않는다(실행 단추만).
     ("src.data.intraday_trials", "record"), ("src.data.intraday_trials", "mark_oos"),
     ("src.data.intraday_trials", "keep_result"),
+    # W5b — 가동 기록. 캔버스의 가동 요청 노드는 계산에서 요청을 남기지 않는다(단추만) · 가동 · 가상 체결은 캔버스가 쓰지 않는다.
+    ("src.data.rule_runs", "add_request"), ("src.data.rule_runs", "remove_request"), ("src.data.rule_runs", "open_run"),
+    ("src.data.rule_runs", "update_run"), ("src.data.rule_runs", "add_fill"), ("src.data.rule_runs", "mark_interrupted"),
 )
 
 
