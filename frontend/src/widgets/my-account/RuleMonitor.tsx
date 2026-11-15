@@ -5,7 +5,7 @@
  * ★읽기만 한다★ — 가동 · 정지 · 비상 정지는 이 판에 없다(가동 줄과 ‘주문이 가는 길’이 한다). 숫자는 전부 서버 값이고 여기서는 고르고 서식만 입힌다.
  *
  *  · 주문 — 주문 기록에서 센 상태별 수. 거절은 주문 경로가 한 말과 함께(서버 문장 그대로). 주문 기록에 없는 신호가 있으면 그 수를 적는다.
- *  · 체결 — 가상(시뮬레이터가 계산) / 증권사 체결. ‘기록만’ 가동에는 증권사 체결이 없다.
+ *  · 체결 — 가상(시뮬레이터가 계산) / 증권사 체결. ‘기록 전용’ 가동에는 증권사 체결이 없다.
  *  · 실현손익 — 매매일지 엔진(분봉 백테스트와 같은 계산). 미청산 수량은 평가하지 않는다. 거절된 신호의 가상 체결이 들어 있으면 그렇게 적는다.
  *  · 일 손실 한도 — 그 설정의 한도와 비용 전 실현손익 누계, 남은 폭. 한 번 닿으면 닿은 것이다(뒤의 청산으로 회복돼도).
  *  · 분봉 백테스트와 견주기 — 끝까지 돈 가동을 지금 적재된 봉으로 다시 계산해 견준 ★관측★. 같다 · 다르다 · 미상 · 견주지 않음.
@@ -28,10 +28,10 @@ export const MONITOR_POLL_MS = 5_000;
 
 /** 주문 상태 → 건수 옆에 적는 말. 모르는 상태는 원문 그대로(`data-server`). */
 const COUNT_KO: Record<string, string> = {
-  SHADOW_LOGGED: "기록만", REJECTED: "거절", PENDING: "대기", SUBMITTED: "전송 완료", PARTIAL_FILL: "일부 체결", FILLED: "체결",
+  SHADOW_LOGGED: "기록 전용", REJECTED: "거절", PENDING: "대기", SUBMITTED: "전송 완료", PARTIAL_FILL: "일부 체결", FILLED: "체결",
   CANCELLED: "취소", FAILED: "전송 실패",
 };
-/** 기록만 → 거절 → 그 밖(이름 순) — 화면마다 순서가 흔들리지 않게. */
+/** 기록 전용 → 거절 → 그 밖(이름 순) — 화면마다 순서가 흔들리지 않게. */
 const ORDER = ["SHADOW_LOGGED", "REJECTED"];
 const byStatus = (m: Record<string, number>): [string, number][] =>
   Object.entries(m).sort(([a], [b]) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));

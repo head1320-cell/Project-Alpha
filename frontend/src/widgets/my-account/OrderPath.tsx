@@ -3,8 +3,8 @@
  * 주문이 가는 길 (BV9) — 비상 정지 → 위험 검사 → 실행 모드 → 증권사.
  * ==========================================================================
  * 평소에는 역마다 "지금 주문하면 여기서 무엇이 일어나나"를 서버 값으로 말하고, 주문을 내면 서버가 멈춘 역에 표시를 켠다.
- * 실행 모드 역에 세 칸(기록만 · 모의 체결 · 실계좌)이 있다. ★실계좌 칸은 요청을 보내지 않는다★ — 준비 목록만 펼친다(서버에 전환 길이 없다).
- * 모의 체결로 바꾸기는 확인 줄을 거친다(주문이 밖으로 나가기 시작하는 쪽). 기록만으로 돌아가기는 바로(더 안전한 쪽).
+ * 실행 모드 역에 세 칸(기록 전용 · 모의 체결 · 실계좌)이 있다. ★실계좌 칸은 요청을 보내지 않는다★ — 준비 목록만 펼친다(서버에 전환 길이 없다).
+ * 모의 체결로 바꾸기는 확인 줄을 거친다(주문이 밖으로 나가기 시작하는 쪽). 기록 전용으로 돌아가기는 바로(더 안전한 쪽).
  */
 import { useState } from "react";
 import { useMutation, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
@@ -87,7 +87,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
             <div className="ma-mode tx-modes" role="group" aria-label="실행 모드">
               <button type="button" className="ma-mode-b tx-mode-b" data-mode="SHADOW" aria-pressed={cur === "SHADOW"}
                       disabled={cur === null || change.isPending} onClick={() => pick("SHADOW")}>
-                <span className="ma-mode-t tx-mode-t">기록만</span><span className="ma-mode-d tx-mode-d">전송하지 않습니다</span>
+                <span className="ma-mode-t tx-mode-t">기록 전용</span><span className="ma-mode-d tx-mode-d">전송하지 않습니다</span>
               </button>
               <button type="button" className="ma-mode-b tx-mode-b" data-mode="PAPER" aria-pressed={cur === "PAPER"}
                       disabled={cur === null || change.isPending || !acc.is_paper} onClick={() => pick("PAPER")}>
@@ -103,7 +103,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
               <p className="ma-st-sub tx-st-sub ma-mode-why">모의 체결은 모의투자 계좌에서만 사용합니다. 이 계좌는 실계좌로 연결돼 있습니다.</p>
             ) : null}
             <p className="ma-st-sub tx-st-sub">
-              {mode.data?.changed_by ? `${mode.data.changed_by} 님이 변경했습니다. ` : ""}서버를 재시작하면 기록만 모드로 복귀합니다.
+              {mode.data?.changed_by ? `${mode.data.changed_by} 님이 변경했습니다. ` : ""}서버를 재시작하면 기록 전용 모드로 복귀합니다.
             </p>
             {asking ? (
               <div className="ma-confirm tx-confirm ma-mode-confirm" role="group" aria-label="모의 체결로 바꾸기 확인">
@@ -158,7 +158,7 @@ export function OrderPath({ acc, mode, kill, ready, practice, trace }: {
 
 /**
  * 주문이 멈춘 곳 — 서버 상태·사유 코드를 옮긴다. 거절 사유·실패 원문은 보이게(무엇이 막았는지가 답이다),
- * 기록만·보냄의 서버 상투 문장은 닫힌 "서버 원문" 안에 그대로 둔다(지우지 않는다).
+ * 기록 전용·보냄의 서버 상투 문장은 닫힌 "서버 원문" 안에 그대로 둔다(지우지 않는다).
  */
 function StopWhy({ trace, practice }: { trace: Trace; practice: boolean | null }) {
   const r = trace.reply;
@@ -169,7 +169,7 @@ function StopWhy({ trace, practice }: { trace: Trace; practice: boolean | null }
       : `${STOPS.find((s) => s.key === trace.stop)?.label}에서 중단됐습니다`;
   const visible = r.status === "REJECTED" ? r.message : r.status === "FAILED" ? r.error : null;
   const tucked = visible ? null : r.message;
-  const said = r.status === "SHADOW_LOGGED" ? "기록만 남기고 전송하지 않았습니다."
+  const said = r.status === "SHADOW_LOGGED" ? "기록 전용이라 전송하지 않았습니다."
     : r.status === "SUBMITTED" ? "주문을 받았습니다."
     : STATUS_KO[r.status] ? `${STATUS_KO[r.status]}.` : null;
   return (

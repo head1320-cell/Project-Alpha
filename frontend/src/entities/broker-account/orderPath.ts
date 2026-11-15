@@ -19,7 +19,7 @@ export const STOPS: { key: Stop; label: string }[] = [
 /** 서버 주문 상태 → 사람 말. 없으면 undefined(부르는 쪽이 원문을 그린다). */
 export const STATUS_KO: Record<string, string> = {
   PENDING: "대기", SUBMITTED: "전송 완료", PARTIAL_FILL: "일부 체결", FILLED: "체결",
-  CANCELLED: "취소됨", REJECTED: "주문하지 않았습니다", FAILED: "전송 실패", SHADOW_LOGGED: "기록만",
+  CANCELLED: "취소됨", REJECTED: "주문하지 않았습니다", FAILED: "전송 실패", SHADOW_LOGGED: "기록 전용",
 };
 
 /** 거절 사유 코드 → 그 사유를 낸 역(서버 `_reject_order` 를 부르는 자리). */
@@ -29,7 +29,7 @@ const REASON_STOP: Record<string, Stop> = {
   unknown_mode: "mode",
   paper_mode_real_client: "broker",
 };
-/** 거절이 아닌 상태 → 멈춘(닿은) 역. 기록만은 실행 모드에서 멈추고, 보냈거나 실패한 주문은 증권사까지 갔다. */
+/** 거절이 아닌 상태 → 멈춘(닿은) 역. 기록 전용은 실행 모드에서 멈추고, 보냈거나 실패한 주문은 증권사까지 갔다. */
 const STATUS_STOP: Record<string, Stop> = {
   SHADOW_LOGGED: "mode", PENDING: "mode",
   SUBMITTED: "broker", PARTIAL_FILL: "broker", FILLED: "broker", FAILED: "broker", CANCELLED: "broker",
@@ -42,7 +42,7 @@ export function stopOf(status: string, reason: string | null | undefined): Stop 
 }
 
 /** 실행 모드 이름 — 서버 열거값 번역. */
-export const MODE_KO: Record<string, string> = { SHADOW: "기록만", PAPER: "모의 체결", LIVE: "실계좌" };
+export const MODE_KO: Record<string, string> = { SHADOW: "기록 전용", PAPER: "모의 체결", LIVE: "실계좌" };
 
 /**
  * 모드 + 연습용 여부 → 주문이 어디로 가는지. `practice` 는 서버 mock 게이트(connection-status) — 모르면 null.
@@ -61,7 +61,7 @@ export function answerSentence(label: string, mode: ExecMode | null, kill: Accou
   if (kill?.active && kill.event) return `${at}는 현재 비상 정지 중이라 주문이 전송되지 않습니다.`;
   if (kill?.active) return `${at} 제출하는 주문은 현재 차단됩니다. 이 계좌에서 발동한 정지가 아닙니다(운영자 정지이거나 상태 조회 실패).`;
   if (mode === null) return `‘${label}’의 실행 모드 확인 실패`;
-  if (mode === "SHADOW") return `${at} 제출하는 주문은 현재 기록만 남깁니다. 증권사로 전송하지 않습니다.`;
+  if (mode === "SHADOW") return `${at} 제출하는 주문은 현재 기록 전용입니다. 증권사로 전송하지 않습니다.`;
   if (mode === "PAPER") {
     if (practice === true) return `${at} 제출하는 주문은 현재 가상 체결기로 전송됩니다. 증권사에는 전송되지 않습니다.`;
     if (practice === false) return `${at} 제출하는 주문은 현재 증권사 모의 서버로 전송됩니다. 실제 자금은 사용하지 않습니다.`;

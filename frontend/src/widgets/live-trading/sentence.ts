@@ -11,10 +11,10 @@
 import type { OpKill, OpModeName } from "@/entities/trading/operator";
 
 /** 모드 표 이름 — /내 계좌와 같은 말(서버 열거값 번역). */
-export const MODE_NAME: Record<string, string> = { SHADOW: "기록만", PAPER: "모의 체결", LIVE: "실계좌" };
+export const MODE_NAME: Record<string, string> = { SHADOW: "기록 전용", PAPER: "모의 체결", LIVE: "실계좌" };
 /** 조사가 받침에 따라 바뀌어서 붙이지 않고 통째로 적는다. */
-export const MODE_TO: Record<string, string> = { SHADOW: "기록만으로", PAPER: "모의 체결로", LIVE: "실계좌로" };
-export const MODE_IS: Record<string, string> = { SHADOW: "기록만입니다", PAPER: "모의 체결입니다", LIVE: "실계좌입니다" };
+export const MODE_TO: Record<string, string> = { SHADOW: "기록 전용으로", PAPER: "모의 체결로", LIVE: "실계좌로" };
+export const MODE_IS: Record<string, string> = { SHADOW: "기록 전용입니다", PAPER: "모의 체결입니다", LIVE: "실계좌입니다" };
 
 type Read<T> = { pending: boolean; failed: boolean; value: T | null };
 
@@ -28,7 +28,7 @@ export function opSentence(mode: Read<OpModeName>, kill: Read<OpKill>, practice:
   const m = mode.value;
   if (mode.failed || m === null) return "운영 계좌의 실행 모드 확인 실패";
   const at = "운영 계좌에서 제출하는 주문은 현재";
-  if (m === "SHADOW") return `${at} 기록만 남깁니다. 증권사로 전송하지 않습니다.`;
+  if (m === "SHADOW") return `${at} 기록 전용입니다. 증권사로 전송하지 않습니다.`;
   if (m === "PAPER") {
     if (practice === true) return `${at} 가상 체결기로 전송됩니다. 증권사에는 전송되지 않습니다.`;
     if (practice === false) return `${at} 모의 체결로 처리됩니다. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다.`;

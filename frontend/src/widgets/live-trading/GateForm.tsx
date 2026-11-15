@@ -55,7 +55,7 @@ export function GateForm({ open, hasCurrent, onClose, onDone }: {
 
   return (
     <Sheet open={open} onClose={() => { declare.reset(); onClose(); }} title="실계좌 관문 선언하기" testId="gate-declare" className="lv-sheet lvg-sheet"
-           sub={hasCurrent ? "새로 선언하면 현재 선언은 철회된 것으로 기록됩니다. 실계좌로 운용하던 운영 계좌는 기록만 모드로 복귀합니다."
+           sub={hasCurrent ? "새로 선언하면 현재 선언은 철회된 것으로 기록됩니다. 실계좌로 운용하던 운영 계좌는 기록 전용 모드로 복귀합니다."
              : "선언하면 허용한 사용자만 실계좌로 주문할 수 있습니다. 개방 근거는 기록에 남습니다."}>
       <form className="lvg-form" onSubmit={(e) => { e.preventDefault(); if (full) declare.mutate(); }}>
         {(Object.keys(EMPTY) as Text[]).map((k) => (

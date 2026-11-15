@@ -138,3 +138,40 @@ def test_the_detector_catches_haeyo_in_strings_templates_and_jsx(src):
 ])
 def test_the_detector_ignores_comments_nouns_and_formal_endings(src):
     assert haeyo_hits(src) == [], haeyo_hits(src)
+
+
+# ── 실행 모드의 이름 — '기록만'이 아니라 '기록 전용' (용어집 §3.3 · 2026-11-15 결정) ─────────────────────────────
+#: 실행 모드 · 주문 상태를 말하는 화면들. 여기서는 증권사로 주문을 내지 않는 모드를 '기록 전용'이라고 부른다
+#: (용어집: "막힘 · 기록만 → 차단 · 기록 전용"). 서버 문장 · 캔버스 노드 · 접근 지도는 이미 그 말을 쓴다 — 화면만 옛 말이었다.
+MODE_NAME_DIRS = ("frontend/src/entities/broker-account", "frontend/src/widgets/my-account", "frontend/src/widgets/live-trading")
+OLD_MODE_NAME = "기록만"
+
+
+def old_mode_name_hits(text: str) -> list[tuple[int, str]]:
+    """주석을 걷은 글자(문자열 · 템플릿 · JSX 글자)에서 옛 이름을 찾는다 → [(줄 번호, 그 줄)]."""
+    body = strip_comments(text)
+    return [(n, line.strip()[:120]) for n, line in enumerate(body.splitlines(), 1) if OLD_MODE_NAME in line]
+
+
+def test_the_execution_mode_is_named_as_the_glossary_says_on_every_screen_that_shows_it():
+    found = [f"{_rel(p)}:{line}  {snippet}" for p in _files() if _rel(p).startswith(MODE_NAME_DIRS)
+             for line, snippet in old_mode_name_hits(p.read_text(encoding="utf-8"))]
+    assert not found, "실행 모드의 이름은 '기록 전용'입니다(용어집 §3.3):\n" + "\n".join(found)
+
+
+def test_the_mode_name_check_looks_at_real_files():
+    """★공허한 통과가 아니다★ — 보는 폴더마다 파일이 있고, 그 화면들은 새 이름을 실제로 쓴다."""
+    for folder in MODE_NAME_DIRS:
+        files = [p for p in _files() if _rel(p).startswith(folder)]
+        assert files, folder
+        assert any("기록 전용" in strip_comments(p.read_text(encoding="utf-8")) for p in files), folder
+
+
+@pytest.mark.parametrize("src", ['const t = "기록만";', "const t = `${at} 기록만으로`;", "<span>기록만</span>", 'label: "기록만 모드로 복귀합니다."'])
+def test_the_mode_name_detector_catches_strings_templates_and_jsx(src):
+    assert old_mode_name_hits(src), src
+
+
+@pytest.mark.parametrize("src", ['// 기록만은 바로\nconst t = "기록 전용";', "/* 기록만 */ const a = 1;", 'const t = "기록 전용으로";', 'const t = "신호만 기록합니다";'])
+def test_the_mode_name_detector_ignores_comments_and_the_new_name(src):
+    assert old_mode_name_hits(src) == [], old_mode_name_hits(src)

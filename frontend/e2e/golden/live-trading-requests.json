@@ -28,7 +28,7 @@
    "GET /api/v1/live/orders?limit=20"
   ]
  },
- "04 기록만으로": {
+ "04 기록 전용으로": {
   "writes": [
    "POST /api/v1/live/mode {\"mode\":\"SHADOW\"}"
   ],

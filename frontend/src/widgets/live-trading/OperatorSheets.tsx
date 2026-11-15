@@ -38,7 +38,7 @@ export function LiveSheet({ open, gate, onClose, onSettled }: {
       <ul className="lv-sheet-l">
         <li>주문마다 위험 검사(가격·일일 거래 한도·장 운영 시간)는 그대로 적용됩니다.</li>
         <li>비상 정지를 발동하면 미체결 주문을 취소하고 신규 주문을 중단합니다.</li>
-        <li>서버를 재시작하면 기록만 모드로 복귀합니다.</li>
+        <li>서버를 재시작하면 기록 전용 모드로 복귀합니다.</li>
       </ul>
       <p className="lv-said">함께 전송하는 확인 코드 <code data-mono>{LIVE_CONFIRM_TOKEN}</code></p>
       <div className="tx-confirm-act">

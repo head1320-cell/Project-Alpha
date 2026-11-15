@@ -96,7 +96,7 @@ test("BU9b 관문: 422 는 사유 그대로 + 칸 이름, 시트는 남는다 ·
   await expect(page.locator('[data-sheet="gate-declare"]')).toBeVisible();
   gate.declareReply = { status: 201, json: { current: GATE_OPEN, live_dropped_to_shadow: true } };
   await page.locator(".lvg-declare-go").click();
-  await expect(page.locator(".lvg-said")).toContainText("실계좌로 운용하던 운영 계좌를 기록만 모드로 전환했습니다");
+  await expect(page.locator(".lvg-said")).toContainText("실계좌로 운용하던 운영 계좌를 기록 전용 모드로 전환했습니다");
 });
 
 test("BU9b 관문: 거두기는 확인 — 취소 0 · 확인 DELETE 1 · 404 사유", async ({ page }) => {

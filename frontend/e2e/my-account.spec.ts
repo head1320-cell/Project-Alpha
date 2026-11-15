@@ -239,7 +239,7 @@ test("BV9: 주소의 계좌가 내 목록에 없으면 그렇다고 말하고 �
 test("BV9: 답 문장은 모드·합성 여부를 따른다 (짝 넷)", async ({ page }) => {
   const { st } = await setup(page);
   await page.goto("/my-account");
-  await expect(sentence(page)).toHaveText("‘내 모의 계좌’에서 제출하는 주문은 현재 기록만 남깁니다. 증권사로 전송하지 않습니다.");
+  await expect(sentence(page)).toHaveText("‘내 모의 계좌’에서 제출하는 주문은 현재 기록 전용입니다. 증권사로 전송하지 않습니다.");
 
   st.mode.ba_1 = "PAPER";
   await page.reload();
@@ -281,7 +281,7 @@ test("BV9: 모드를 못 읽으면 그렇게 말하고 주문을 막는다", asy
   await expect(page.locator(".ma-order-check")).toBeDisabled();
   delete st.fail.mode;
   await root(page).getByRole("alert").filter({ hasText: "실행 모드" }).getByRole("button", { name: "재시도" }).click();
-  await expect(sentence(page)).toContainText("기록만 남깁니다");
+  await expect(sentence(page)).toContainText("기록 전용입니다");
   await expect(page.locator(".ma-order-check")).toBeEnabled();
 });
 
@@ -421,7 +421,7 @@ test("BV9: 확인 줄을 거쳐 내고 본문은 서버 계약 그대로 (고치
   await fillOrder(page);
   await page.locator(".ma-order-check").click();
   await expect(page.locator(".ma-order-confirm")).toContainText("삼성전자(005930) 10주를 지정가 71,000원에 매수합니다.");
-  await expect(page.locator(".ma-order-confirm")).toContainText("기록만");
+  await expect(page.locator(".ma-order-confirm")).toContainText("기록 전용");
   await page.locator(".ma-order-edit").click();
   expect(sent.filter((s) => s.method === "POST")).toEqual([]);
   await page.locator(".ma-order-check").click();
@@ -436,7 +436,7 @@ test("BV9: 주문 결과는 서버가 멈춘 역에 표시된다", async ({ page
   const { st } = await setup(page);
   await page.goto("/my-account");
   const cases: [Reply["json"], string, string][] = [
-    [{ client_order_id: "CO-1", status: "SHADOW_LOGGED", mode: "SHADOW", message: "SHADOW mode — 주문 발송하지 않음 (신호만 기록)" }, "mode", "기록만"],
+    [{ client_order_id: "CO-1", status: "SHADOW_LOGGED", mode: "SHADOW", message: "SHADOW mode — 주문 발송하지 않음 (신호만 기록)" }, "mode", "기록 전용"],
     [{ client_order_id: "CO-2", status: "REJECTED", reason: "risk_check_failed", message: "Tier1: 장 외 시간 (09:00-15:30 KST)" }, "risk", "Tier1: 장 외 시간 (09:00-15:30 KST)"],
     [{ client_order_id: "CO-3", status: "SUBMITTED", mode: "PAPER", kis_order_id: "MOCK-1", message: "PAPER mode — KIS 모의투자 발주 완료" }, "broker", "MOCK-1"],
     [{ client_order_id: "CO-4", status: "FAILED", mode: "PAPER", error: "Mock 잔고 부족" }, "broker", "Mock 잔고 부족"],
@@ -486,7 +486,7 @@ test("BV9: 최근 주문은 서버 행 그대로 · 상태 번역 · 멈춘 곳 
   await page.goto("/my-account");
   const rows = page.locator(".ma-ord");
   await expect(rows).toHaveCount(4);
-  await expect(rows.nth(0).locator(".ma-ord-status")).toHaveText("기록만");
+  await expect(rows.nth(0).locator(".ma-ord-status")).toHaveText("기록 전용");
   await expect(rows.nth(1).locator(".ma-ord-status")).toHaveText("전송 완료");
   await expect(rows.nth(2).locator(".ma-ord-status")).toHaveText("주문하지 않았습니다");
   await expect(rows.nth(2).locator(".ma-ord-stop")).toHaveAttribute("data-stop", "risk");
@@ -529,7 +529,7 @@ test("BV9: 내가 건 정지는 다시 열 수 있다", async ({ page }) => {
   await page.goto("/my-account");
   await page.locator(".ma-kill-resolve-open").click();
   await page.locator('[data-sheet="resolve"] .ma-kill-resolve').click();
-  await expect(sentence(page)).toContainText("기록만 남깁니다");
+  await expect(sentence(page)).toContainText("기록 전용입니다");
   expect(sent.filter((s) => s.method === "POST").map((s) => s.path)).toEqual(["/ba_1/kill-switch/resolve"]);
 });
 

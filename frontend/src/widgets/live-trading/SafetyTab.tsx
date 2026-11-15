@@ -30,7 +30,7 @@ export const SOURCE_KO: Record<string, string> = {
   auto_dd: "누적 손실 자동 정지", auto_cb: "일일 손실 자동 정지", auto_risk: "시장 위험 자동 정지", auto_api: "증권사 연결 실패 자동 정지",
 };
 export const ACTION_STATE_KO: Record<string, string> = { done: "했습니다", skipped: "하지 않았습니다", failed: "실패했습니다", unknown: "미상" };
-const MODE_KO: Record<string, string> = { SHADOW: "기록만", PAPER: "모의 체결", LIVE: "실계좌" };
+const MODE_KO: Record<string, string> = { SHADOW: "기록 전용", PAPER: "모의 체결", LIVE: "실계좌" };
 const SEV_ORDER = ["CRITICAL", "ERROR", "WARN", "INFO"] as const;
 const SEV_KO: Record<string, string> = { CRITICAL: "심각", ERROR: "오류", WARN: "주의", INFO: "알림" };
 

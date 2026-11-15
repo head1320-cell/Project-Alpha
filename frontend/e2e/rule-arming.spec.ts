@@ -15,9 +15,9 @@ import { contrastAudit, trackErrors, uniq, voiceAudit, type AuditResult, type Vo
 // 계좌는 이 스펙이 실제 서버에 연결한다(합성 데이터 모드라 증권사에 닿지 않는다 · 서버의 금고 키는 `playwright.config.ts` 가 준다).
 // 거는 것:
 //  · ★요청은 가동이 아니다★ — 캔버스에서 남긴 요청이 내 계좌의 목록에 뜨고, 가동은 여기서 사람이 켠다
-//  · 재생한 가상 체결 = 손 계산 = 같은 날의 분봉 백테스트 체결 · 줄마다 ‘가상’ 표식 · 주문은 ‘기록만’으로 남는다
+//  · 재생한 가상 체결 = 손 계산 = 같은 날의 분봉 백테스트 체결 · 줄마다 ‘가상’ 표식 · 주문은 ‘기록 전용’으로 남는다
 //  · 정지하면 멈춘 까닭이 서버 문장 그대로 뜨고 다시 밀 단추가 없다 · 요청은 확인을 거쳐 목록에서 뺀다
-//  · 실행 모드가 ‘기록만’이 아니거나 비상 정지 중이면 시작 단추가 잠기고 까닭을 말한다(↔ 풀면 열린다) · 서버의 거절은 서버 문장으로
+//  · 실행 모드가 ‘기록 전용’이 아니거나 비상 정지 중이면 시작 단추가 잠기고 까닭을 말한다(↔ 풀면 열린다) · 서버의 거절은 서버 문장으로
 //  · 못 읽음은 빈 목록이 아니다 · 시행이 없는 요청은 가동 단추가 없다 · 합성 분봉이면 절 맨 위에 적는다
 //  · 오류 0 · 라이트/다크 AA · 문체 · 좁은 폭에서 넘치지 않는다
 // 관제 (W5c — 가동 줄 안의 판 · ★읽기만★):
@@ -195,7 +195,7 @@ test("캔버스의 요청 → 내 계좌에서 가동 → 끝까지: 가상 체�
   const panel = row.locator(".ma-arm-start");
   await expect(panel.locator(".ma-arm-day-pick option")).toHaveCount(10);
   await expect(panel.locator(".ma-arm-day-pick")).toHaveValue("2026-03-13");       // 기본은 가장 최근에 적재된 날
-  await expect(panel.locator(".ma-arm-mode")).toHaveText("기록만");
+  await expect(panel.locator(".ma-arm-mode")).toHaveText("기록 전용");
   await expect(panel.locator(".ma-arm-kill")).toHaveText("미사용");
   await expect(panel.locator(".ma-arm-facts")).toContainText("통과 2 · 미달 1 · 미상 4");
   await expect(panel.locator(".ma-arm-facts")).toContainText("적재된 실제 분봉");
@@ -242,10 +242,10 @@ test("캔버스의 요청 → 내 계좌에서 가동 → 끝까지: 가상 체�
   await expect(run.locator(".ma-arm-fill-price")).toHaveText(["10,080원", "10,100원"]);
   await expect(run.locator(".ma-arm-fill-what").first()).toContainText("035720");
   await expect(run.locator(".ma-arm-virtual")).toHaveText(["가상", "가상"]);                           // 줄마다 표식
-  await expect(run.locator(".ma-arm-fill-order")).toHaveText(["주문 경로 기록만", "주문 경로 기록만"]);   // 주문 경로의 답
+  await expect(run.locator(".ma-arm-fill-order")).toHaveText(["주문 경로 기록 전용", "주문 경로 기록 전용"]);   // 주문 경로의 답
   await expect(run.locator(".ma-arm-cap")).toContainText("실제 체결이 아닙니다");
 
-  // ⑥ 같은 날의 분봉 백테스트 체결과 같다(문끼리 견준다) · 주문은 ‘기록만’ 두 줄로 남는다
+  // ⑥ 같은 날의 분봉 백테스트 체결과 같다(문끼리 견준다) · 주문은 ‘기록 전용’ 두 줄로 남는다
   const sim = await (await page.request.post(`${API}/intraday/simulate`, { headers: c.headers, timeout: 120_000, data: {
     tickers: HAND.tickers, from: DAY, to: DAY, rule: { kind: HAND.rule, params: { minutes: 1 } },
     position: { amount: HAND.amount }, costs: { commission_bp: HAND.commission_bp, slippage_ticks: HAND.slippage_ticks, unknown_market: "KOSPI", unknown_instrument: "stock" } } })).json();
@@ -260,7 +260,7 @@ test("캔버스의 요청 → 내 계좌에서 가동 → 끝까지: 가상 체�
   expect([trade.opened_at, trade.quantity, trade.avg_buy, trade.closed_at, trade.avg_sell]).toEqual([`${DAY} 09:02:00`, 99, 10_080, `${DAY} 09:03:00`, 10_100]);
   const orders = page.locator(".ma-orders .ma-ord");
   await expect(orders).toHaveCount(2);
-  await expect(page.locator(".ma-orders .ma-ord-status")).toHaveText(["기록만", "기록만"]);
+  await expect(page.locator(".ma-orders .ma-ord-status")).toHaveText(["기록 전용", "기록 전용"]);
 
   // ⑦ 좁은 폭 — 줄마다 ‘가상’ 표식이 옆으로 밀려 가려지지 않는다(체결이 있는 이 하루에서 잰다)
   await page.setViewportSize({ width: 390, height: 844 });
@@ -309,7 +309,7 @@ test("정지하면 까닭이 서버 문장으로 뜨고 다시 밀 수 없다 ·
   await expect(arm(page).locator(".ma-arm-run")).toHaveCount(1);                  // 가동 기록은 남는다
 });
 
-test("‘기록만’이 아니거나 비상 정지 중이면 시작 단추가 잠기고 까닭을 말한다 ↔ 풀면 열린다 · 서버의 거절은 서버 문장", async ({ page }) => {
+test("‘기록 전용’이 아니거나 비상 정지 중이면 시작 단추가 잠기고 까닭을 말한다 ↔ 풀면 열린다 · 서버의 거절은 서버 문장", async ({ page }) => {
   test.setTimeout(180_000);
   const c = await prepare(page);
   const { id } = await leaveRequest(page, c);
@@ -321,10 +321,10 @@ test("‘기록만’이 아니거나 비상 정지 중이면 시작 단추가 �
   await request(page, id).locator(".ma-arm-open").click();
   const panel = request(page, id).locator(".ma-arm-start");
   await expect(panel.locator(".ma-arm-mode")).toHaveText("모의 체결");
-  await expect(panel.locator(".ma-arm-block")).toContainText("실행 모드가 ‘기록만’이 아니어서 가동할 수 없습니다.");
+  await expect(panel.locator(".ma-arm-block")).toContainText("실행 모드가 ‘기록 전용’이 아니어서 가동할 수 없습니다.");
   await expect(panel.locator(".ma-arm-go")).toBeDisabled();
 
-  // 기록만 + 비상 정지 — 잠김
+  // 기록 전용 + 비상 정지 — 잠김
   expect((await post("/mode", { mode: "SHADOW" })).ok()).toBe(true);
   expect((await post("/kill-switch/trigger", { reason: "E2E 점검", liquidation_mode: "hold" })).ok()).toBe(true);
   await openAccount(page, c);
@@ -448,7 +448,7 @@ test("관제: 도는 가동은 주기적으로 다시 읽고 · 끝까지 돈 �
   // 세 봉(09:02 의 매수까지)을 문으로 민다 → 새로 고침을 누르지 않아도 주기 조회가 읽어 온다 · 든 채로는 손익이 아니다
   const three = await page.request.post(`${API}/broker-accounts/${c.account}/rule-runs/${runId}/advance`, { headers: c.headers, data: { bars: 3 } });
   expect(three.ok(), await three.text()).toBe(true);
-  await expect(mon.locator('.ma-mon-status[data-status="SHADOW_LOGGED"]')).toHaveText("기록만 1건", { timeout: 20_000 });
+  await expect(mon.locator('.ma-mon-status[data-status="SHADOW_LOGGED"]')).toHaveText("기록 전용 1건", { timeout: 20_000 });
   await expect(mon.locator(".ma-mon-virtual")).toHaveText("가상 1건");
   await expect(mon.locator(".ma-mon-pnl .ma-mon-sub")).toHaveText("청산 0건 · 미청산 1종목(평가하지 않음)");
   await expect(mon.locator(".ma-mon-gross")).toHaveText("비용 전 0원");
@@ -458,7 +458,7 @@ test("관제: 도는 가동은 주기적으로 다시 읽고 · 끝까지 돈 �
   await expect(mon).toHaveAttribute("data-live", "false");
   await expect(mon.locator(".ma-mon-live")).toHaveText("끝난 가동: 다시 읽지 않습니다.");
   await expect(mon.locator(".ma-mon-signals")).toHaveText("신호 2건");
-  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록만 2건"]);
+  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록 전용 2건"]);
   await expect(mon.locator(".ma-mon-orders")).toHaveAttribute("data-basis", "order_log");
   await expect(mon.locator(".ma-mon-virtual")).toHaveText("가상 2건");
   await expect(mon.locator(".ma-mon-broker")).toHaveText("증권사 체결 0건");
@@ -530,9 +530,9 @@ test("관제: 거절된 신호는 주문 경로의 문장과 함께 세고 그 �
   await run.locator(".ma-arm-mon-open").click();
   const mon = run.locator(".ma-mon");
 
-  // 주문 — 기록만 1 · 거절 1. 거절은 주문 기록에 적힌 위험 검사의 문장 그대로(서버 문장)와 사유 코드
+  // 주문 — 기록 전용 1 · 거절 1. 거절은 주문 기록에 적힌 위험 검사의 문장 그대로(서버 문장)와 사유 코드
   await expect(mon.locator(".ma-mon-signals")).toHaveText("신호 2건");
-  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록만 1건", "거절 1건"]);
+  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록 전용 1건", "거절 1건"]);
   const refused = mon.locator(".ma-mon-no");
   await expect(refused).toHaveCount(1);
   await expect(refused.locator(".ma-mon-no-what")).toContainText("3월 4일 09:02");
@@ -616,7 +616,7 @@ test("관제: 값이 없으면 0 이 아니라 사유 · 한도에 닿은 날 ·
   await run.locator(".ma-arm-mon-open").click();                                   // 다시 편다(새로 읽는다)
   await expect(mon.locator(".ma-mon-orders")).toHaveAttribute("data-basis", "run_record");
   await expect(mon.locator(".ma-mon-orders")).toContainText(logWhy);
-  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록만 1건", "HELD_BY_BROKER 1건"]);   // 모르는 상태는 원문 그대로
+  await expect(mon.locator(".ma-mon-status")).toHaveText(["기록 전용 1건", "HELD_BY_BROKER 1건"]);   // 모르는 상태는 원문 그대로
   await expect(mon.locator(".ma-mon-unrecorded")).toHaveCount(0);                  // 모른다 — '0건'이라고도 하지 않는다
   await expect(mon.locator(".ma-mon-broker")).toHaveText("증권사 체결 미상");
   await expect(mon.locator(".ma-mon-pnl")).toHaveAttribute("data-available", "false");

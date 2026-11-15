@@ -9,8 +9,8 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // 요청 바이트는 `admin-requests.spec`(BU9a 골든)이 건다. 여기는 ★화면이 말하는 것★:
 //  · 세션 넷(로그아웃 · 임시 비밀번호 · 분석가 · 관리자) — 관리자가 아니면 쓰기 단추 0, 읽기는 그대로
-//  · ★답 문장 = 서버 값★(모드 · 연습용 · 비상 정지) — 응답을 바꾸면 문장이 바뀐다(짝) · 불러오는 중은 '기록만'이 아니다
-//  · 미상 ≠ 0 · 실패는 사유와 함께 · 모의 체결·풀기는 확인을 거친다(취소면 요청 0) · 기록만은 바로
+//  · ★답 문장 = 서버 값★(모드 · 연습용 · 비상 정지) — 응답을 바꾸면 문장이 바뀐다(짝) · 불러오는 중은 '기록 전용'이 아니다
+//  · 미상 ≠ 0 · 실패는 사유와 함께 · 모의 체결·풀기는 확인을 거친다(취소면 요청 0) · 기록 전용은 바로
 //  · 켜진 모드 단추는 눌린 채 잠김 · 실계좌·비상 정지·풀기는 공용 시트(dialog, Esc) · 거절은 서버 사유 그대로
 //  · 주문이 가는 길 네 역 순서 · 손익 등락색(짝) · AA 라이트/다크 · 390
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -75,9 +75,9 @@ test("BU9b: 로그아웃이면 로그인 링크가 이 화면으로 돌아온다
 
 // ── 답 문장 ────────────────────────────────────────────────────────────────
 
-test("BU9b: 답 문장은 서버 모드·합성 값을 따른다 (기록만 / 모의+합성 / 모의+실 / 모의+모름 / 실계좌)", async ({ page }) => {
+test("BU9b: 답 문장은 서버 모드·합성 값을 따른다 (기록 전용 / 모의+합성 / 모의+실 / 모의+모름 / 실계좌)", async ({ page }) => {
   const cases: [Partial<LiveState>, boolean | "fail", RegExp][] = [
-    [{ mode: "SHADOW" }, true, /기록만 남깁니다\. 증권사로 전송하지 않습니다/],
+    [{ mode: "SHADOW" }, true, /기록 전용입니다\. 증권사로 전송하지 않습니다/],
     [{ mode: "PAPER" }, true, /가상 체결기로 전송됩니다/],
     [{ mode: "PAPER" }, false, /모의 체결로 처리됩니다\. 서버의 증권사 연결이 모의투자가 아니면 서버가 거절합니다/],
     [{ mode: "PAPER" }, "fail", /현재 모의 체결로 처리됩니다\.$/],
@@ -106,7 +106,7 @@ test("BU9b: 비상 정지 — 이벤트가 있으면 '모든 사용자 계좌' �
   await p.close();
 });
 
-test("BU9b: 읽기 실패는 사유와 함께 · 불러오는 중은 '기록만'이 아니다 · 잔고 미상은 0 이 아니다", async ({ page }) => {
+test("BU9b: 읽기 실패는 사유와 함께 · 불러오는 중은 '기록 전용'이 아니다 · 잔고 미상은 0 이 아니다", async ({ page }) => {
   const st = liveState({ fail: { mode: 500, balance: 500 } });
   await signIn(page, "admin");
   await routeConnection(page);
@@ -137,7 +137,7 @@ test("BU9b: 읽기 실패는 사유와 함께 · 불러오는 중은 '기록만'
 
 // ── 모드 ───────────────────────────────────────────────────────────────────
 
-test("BU9b: 모의 체결로는 확인을 거친다(취소 0 · 바꾸기 1) · 기록만으로는 바로 · 켜진 단추는 잠김", async ({ page }) => {
+test("BU9b: 모의 체결로는 확인을 거친다(취소 0 · 바꾸기 1) · 기록 전용으로는 바로 · 켜진 단추는 잠김", async ({ page }) => {
   const { st, posts } = await open(page);
   await expect(act(page, "mode-shadow")).toBeDisabled();
   await expect(act(page, "mode-shadow")).toHaveAttribute("aria-pressed", "true");
@@ -154,7 +154,7 @@ test("BU9b: 모의 체결로는 확인을 거친다(취소 0 · 바꾸기 1) · 
   await expect(act(page, "mode-paper")).toHaveAttribute("aria-pressed", "true");
   await expect(act(page, "mode-paper")).toBeDisabled();
   await act(page, "mode-shadow").click();
-  await expect.poll(() => posts.length, "기록만으로는 확인 없이 바로").toBe(2);
+  await expect.poll(() => posts.length, "기록 전용으로는 확인 없이 바로").toBe(2);
   expect(posts[1].body).toEqual({ mode: "SHADOW" });
   expect(st.mode).toBe("SHADOW");
 });

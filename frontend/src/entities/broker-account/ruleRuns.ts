@@ -2,7 +2,7 @@
  * 규칙 가동의 문 (W5b · 관제 W5c) — 내 계좌의 `rule-runs` 여섯 + 분봉의 `arm-requests` 둘.
  * ==========================================================================
  * ★요청은 가동이 아니다★: 요청은 캔버스가 남긴 한 줄이고, 가동 · 정지는 이 문들이 한다(전부 로그인 · 본인 계좌만).
- * 가동은 실행 모드 ‘기록만’에서만 열린다 — 증권사로는 아무것도 나가지 않고, 체결은 시뮬레이터가 계산한 ★가상★ 체결이다.
+ * 가동은 실행 모드 ‘기록 전용’에서만 열린다 — 증권사로는 아무것도 나가지 않고, 체결은 시뮬레이터가 계산한 ★가상★ 체결이다.
  * 설정은 본문으로 보내지 않는다: 시행 열쇠와 날짜뿐이다(가동되는 것은 분봉 백테스트로 실행해 시행으로 세어진 설정뿐).
  * 못 읽음은 빈 목록이 아니다 — `available: false` + 사유. 실패는 `Result` 로(서버 사유 그대로).
  */
@@ -28,7 +28,7 @@ export type ArmRequestList = { available: boolean; reason: string | null; reques
 /** 도는 가동에만 있다 — 봉 몇 개 가운데 몇 개를 돌았고 다음 봉이 언제인지(`HHMMSS`). */
 export type RunClock = { total: number; done: number; next: string | null };
 
-/** 가상 체결 한 줄 + 그 신호가 주문 경로에서 받은 답(기록만 · 거절 …). `kind` 는 늘 `virtual` 이다. */
+/** 가상 체결 한 줄 + 그 신호가 주문 경로에서 받은 답(기록 전용 · 거절 …). `kind` 는 늘 `virtual` 이다. */
 export type RunFill = {
   seq: number; executed_at: string; symbol: string; side: string; quantity: number; price: number; kind: string; event: string;
   client_order_id: string | null; order_status: string | null; order_reason: string | null;

@@ -36,14 +36,14 @@ test("ST3b 탭: 기본은 지금 · 주소와 함께 움직임 · 답과 비상 
   const { reads } = await open(page);
   await expect(tab(page, "now")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".tx-path-l")).toBeVisible();
-  await expect(page.locator(".lv .tx-answer-s")).toContainText("기록만");
+  await expect(page.locator(".lv .tx-answer-s")).toContainText("기록 전용");
   await page.waitForTimeout(1500);
   expect(reads, "[지금] 탭은 안전 읽기를 하지 않는다").toEqual([]);
 
   await tab(page, "safety").click();
   await expect(page).toHaveURL(/\/admin\/live-trading\?tab=safety$/);
   await expect(page.locator(".lvs-sec")).toHaveCount(4);
-  await expect(page.locator(".lv .tx-answer-s"), "답은 탭 위에 그대로").toContainText("기록만");
+  await expect(page.locator(".lv .tx-answer-s"), "답은 탭 위에 그대로").toContainText("기록 전용");
   await expect(page.locator('[data-act="kill-open"]'), "비상 정지 단추도").toBeVisible();
   await expect(page.locator(".tx-path-l"), "길은 [지금] 탭에만").toHaveCount(0);
   await expect.poll(() => [...new Set(reads)].sort()).toEqual([...SAFETY_PATHS].sort());

@@ -16,7 +16,7 @@ const FILTERS: { key: Filter; label: string; has: (status: string) => boolean }[
   { key: "all", label: "전체", has: () => true },
   { key: "sent", label: "보냄", has: (st) => ["SUBMITTED", "PARTIAL_FILL", "FILLED", "CANCELLED"].includes(st) },
   { key: "stopped", label: "중단", has: (st) => st === "REJECTED" || st === "FAILED" },
-  { key: "shadow", label: "기록만", has: (st) => st === "SHADOW_LOGGED" },
+  { key: "shadow", label: "기록 전용", has: (st) => st === "SHADOW_LOGGED" },
 ];
 
 export function OperatorOrders({ result, onRetry }: { result: Result<OpOrders> | null; onRetry: () => void }) {

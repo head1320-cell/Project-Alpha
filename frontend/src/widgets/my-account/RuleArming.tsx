@@ -3,8 +3,8 @@
  * 규칙 가동 (W5b) — 내 계좌 화면의 절. 받은 가동 요청 → 가동(재생) → 가상 체결.
  * ==========================================================================
  * ★요청은 가동이 아니다★: 요청은 캔버스의 ‘가동 요청’ 노드가 남긴 한 줄이고, 가동 · 정지는 이 절에서만 한다.
- * 가동은 실행 모드 ‘기록만’에서만 열린다 — 증권사로는 아무것도 나가지 않는다. 적재된 하루의 분봉을 봉 단위로 다시 흘리고,
- * 그 체결은 시뮬레이터가 계산한 ★가상★ 체결이다(줄마다 표식). 신호는 이 계좌의 주문 경로를 지나 ‘기록만’ 주문으로 남는다.
+ * 가동은 실행 모드 ‘기록 전용’에서만 열린다 — 증권사로는 아무것도 나가지 않는다. 적재된 하루의 분봉을 봉 단위로 다시 흘리고,
+ * 그 체결은 시뮬레이터가 계산한 ★가상★ 체결이다(줄마다 표식). 신호는 이 계좌의 주문 경로를 지나 ‘기록 전용’ 주문으로 남는다.
  *
  * 화면이 정하지 않는 것:
  *  · 설정 — 서버가 시행 기록에서만 읽는다(본문은 시행 열쇠와 날짜뿐).
@@ -58,7 +58,7 @@ function blockedWhy({ mode, kill }: Gate): string | null {
   if (mode === null || kill === null) return "실행 모드나 비상 정지 상태를 확인하지 못해 가동할 수 없습니다.";
   if (kill.active && kill.event) return "비상 정지 중에는 가동할 수 없습니다.";
   if (kill.active) return "주문이 차단돼 있어 가동할 수 없습니다. 이 계좌에서 발동한 정지가 아닙니다. 운영자 정지이거나 상태 조회 실패입니다.";
-  if (mode !== "SHADOW") return "실행 모드가 ‘기록만’이 아니어서 가동할 수 없습니다. ‘주문이 가는 길’에서 ‘기록만’으로 변경하십시오.";
+  if (mode !== "SHADOW") return "실행 모드가 ‘기록 전용’이 아니어서 가동할 수 없습니다. ‘주문이 가는 길’에서 ‘기록 전용’으로 변경하십시오.";
   return null;
 }
 
@@ -85,7 +85,7 @@ export function RuleArming({ accountId, mode, kill }: { accountId: string } & Ga
         <div>
           <h2 className="tx-sec-t" id="ma-arm-h">규칙 가동</h2>
           <p className="tx-sec-sub">
-            분봉 백테스트로 실행한 설정을 이 계좌에서 봉 단위로 재생합니다. 실행 모드가 ‘기록만’일 때만 가동하며 증권사로 주문을 전송하지 않습니다.
+            분봉 백테스트로 실행한 설정을 이 계좌에서 봉 단위로 재생합니다. 실행 모드가 ‘기록 전용’일 때만 가동하며 증권사로 주문을 전송하지 않습니다.
           </p>
         </div>
         <div className="tx-sec-aside">
@@ -253,7 +253,7 @@ function StartPanel({ row, trial, accountId, gate, onStarted }: {
           <dd>{row.gates.known && row.gates.counts ? gateLine(row.gates.counts) : <span data-server>{row.gates.reason ?? "미상"}</span>}</dd></div>
         <div><dt>분봉 출처</dt><dd>{trial.synthetic ? "합성 분봉" : trial.grade === "E3" ? "적재된 실제 분봉" : "미상"}</dd></div>
       </dl>
-      <p className="ma-arm-how">관문은 표시만 하며 가동을 차단하지 않습니다. 체결은 시뮬레이터가 계산한 가상 체결이고, 신호는 이 계좌의 주문 경로를 지나 ‘기록만’ 주문으로 남습니다.</p>
+      <p className="ma-arm-how">관문은 표시만 하며 가동을 차단하지 않습니다. 체결은 시뮬레이터가 계산한 가상 체결이고, 신호는 이 계좌의 주문 경로를 지나 ‘기록 전용’ 주문으로 남습니다.</p>
       {why ? <p className="ma-arm-block" role="note">{why}</p> : null}
       {start.isError ? <p className="ma-err ma-arm-refused" role="alert"><span data-server>{start.error.message}</span></p> : null}
       <div className="tx-confirm-act">

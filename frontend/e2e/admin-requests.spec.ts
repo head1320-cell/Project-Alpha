@@ -76,7 +76,7 @@ test("실거래 요청 골든: 모드·실계좌·비상 정지·풀기·새로 
   await close("03 모의 체결로");
   await expect.poll(() => st.mode).toBe("PAPER");
   await act(page, "mode-shadow").click();
-  await close("04 기록만으로");
+  await close("04 기록 전용으로");
   await act(page, "mode-live").click();
   await act(page, "live-no").click();
   await close("05 실계좌 취소", false);
