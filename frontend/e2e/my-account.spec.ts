@@ -106,6 +106,9 @@ async function setup(page: Page, o: Partial<St> & { signedIn?: boolean; mustChan
     return r.fulfill({ json: { labels: Object.fromEntries(codes.map((c) => [c, st.names[c] ?? c])) } });
   });
   const reply = (r: Route, x: Reply) => r.fulfill({ status: x.status ?? 200, json: x.json });
+  // 규칙 가동 절이 읽는 분봉 쪽 문 둘 — 받은 요청 없음 · 규칙 틀 이름표 없음(이 스펙은 그 절을 걸지 않는다)
+  await page.route("**/api/v1/intraday/arm-requests", (r) => r.fulfill({ json: { available: true, reason: null, requests: [], gate: { mock: st.mockAllowed === true } } }));
+  await page.route("**/api/v1/intraday/templates", (r) => r.fulfill({ json: { templates: [], position: [], costs: [], limits: {}, session_rules: {}, unknowns: [], gate: { mock: st.mockAllowed === true } } }));
   await page.route("**/api/v1/broker-accounts**", async (r) => {
     const req = r.request();
     const url = new URL(req.url());
@@ -147,6 +150,11 @@ async function setup(page: Page, o: Partial<St> & { signedIn?: boolean; mustChan
       if (st.fail.orders) return r.fulfill({ status: st.fail.orders, json: { detail: "x" } });
       const list = st.orders[id] ?? [];
       return r.fulfill({ json: { count: list.length, orders: list } });
+    }
+    // 규칙 가동(W5b) — 이 스펙의 계좌에는 가동이 없다(그 절의 흐름은 `rule-arming.spec.ts` 가 실제 서버로 건다)
+    if (tail === "rule-runs" && m === "GET") {
+      return r.fulfill({ json: { available: true, reason: null, runs: [], mode: st.mode[id] ?? "SHADOW", kill_switch: st.kill[id]?.active ?? false,
+        gate: { mock: st.mockAllowed === true }, limits: { runs: 3, tickers: 10, gap_minutes: 5 } } });
     }
     if (tail === "orders" && m === "POST") return reply(r, st.orderReply);
     if (tail.startsWith("orders/") && m === "DELETE") return reply(r, st.cancelReply);

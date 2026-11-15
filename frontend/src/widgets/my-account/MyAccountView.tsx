@@ -7,6 +7,7 @@
  * 세션 넷은 설정 화면과 같은 판정(`useSession`) · 임시 비밀번호면 계좌를 묻지 않는다(서버도 막는다).
  * 계좌는 `?account=` 로 고른다 — 주소의 계좌가 내 목록에 없으면 그렇다고 말하고 첫 계좌를 보인다(표시한 대체).
  * 계좌를 바꾸면 화면을 새로 세운다(key) — 쿼리 키도 계좌 id 를 품어서 옛 계좌 숫자가 새 계좌 자리에 남지 않는다.
+ * 맨 아래 절 ‘규칙 가동’(W5b)은 캔버스가 남긴 가동 요청을 이 계좌에서 재생한다 — 새 화면이 아니라 이 화면 안이다(ADR 006 §7).
  */
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -27,6 +28,7 @@ import { KillSheet } from "./KillSheet";
 import { OrderForm } from "./OrderForm";
 import { OrderList } from "./OrderList";
 import { OrderPath, type Trace } from "./OrderPath";
+import { RuleArming } from "./RuleArming";
 import { unwrap } from "./parts";
 
 const TITLE = "내 계좌";
@@ -164,6 +166,7 @@ function AccountView({ acc }: { acc: BrokerAccount }) {
                    holdings={b?.state === "ok" ? b.positions : []} cash={b?.state === "ok" ? b.cash_krw : null} />
         <OrderList accountId={id} q={orders} />
       </div>
+      <RuleArming accountId={id} mode={mode.isError ? null : mode.data?.mode} kill={kill.isError ? null : kill.data} />
       <KillSheet accountId={id} open={sheet} onClose={() => setSheet(null)}
                  onDone={(s) => { setSheet(null); setDone(s); setTrace(null); void kill.refetch(); void mode.refetch(); }} />
     </>
