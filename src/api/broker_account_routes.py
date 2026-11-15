@@ -32,7 +32,7 @@ from src.domain.auth_identity import Principal, observed_actor
 from src.domain.kis_failure import KIND_BLOCKED, KIND_BUSINESS, KIND_HTTP_STATUS, KIND_TOKEN, KIND_TRANSPORT
 from src.domain.live_gate import LIVE_ALLOWED, live_gate
 from src.execution import broker_accounts as ba
-from src.execution import live_gate_store, rule_runner
+from src.execution import live_gate_store, rule_monitor, rule_runner
 from src.execution.account_executors import get_account_executor
 from src.execution.audit_trail import AuditTrail, EventType
 from src.execution.kis_client import KISCallError, get_kis_client
@@ -310,18 +310,26 @@ def _run_context(account_id: str) -> dict:
             "gate": {"mock": mock_allowed()}}
 
 
-def _day_for_run(username: str, trial_key: str, day: dt.date):
-    """가동할 하루의 봉 — ★분봉 백테스트와 같은 준비★(같은 함수 · 같은 종목 마스터 · 같은 장 운영 규칙 · 같은 전일 값 판정)."""
-    setting = rule_runner.setting_of(username, trial_key)
+def _day_of(tickers: list[str], rule, day: dt.date):
+    """그 종목들의 하루의 봉 — ★분봉 백테스트와 같은 준비★(같은 함수 · 같은 종목 마스터 · 같은 장 운영 규칙 · 같은 전일 값 판정).
+
+    → `(Day, session)` · 그 날짜가 적재돼 있지 않으면 `None`."""
     feed = intraday_routes.minute_feed
     if not feed.plan(day, day).dates:
-        raise HTTPException(400, detail={"code": "not_loaded", "reason": _DAY_NOT_LOADED})
+        return None
     session = intraday_routes.session_rules()
-    days = feed.build_days(list(setting.tickers), day, day, rules=session, master=intraday_routes.master_lookup(),
-                           need_prev=intraday_routes._needs_prev(setting.rule))
-    if not days:
+    days = feed.build_days(tickers, day, day, rules=session, master=intraday_routes.master_lookup(),
+                           need_prev=intraday_routes._needs_prev(rule))
+    return (days[0], session) if days else None
+
+
+def _day_for_run(username: str, trial_key: str, day: dt.date):
+    """가동할 하루의 봉 — 시행의 종목 · 시행의 규칙으로 짓는다. 적재돼 있지 않으면 사유와 함께 거절."""
+    setting = rule_runner.setting_of(username, trial_key)
+    built = _day_of(list(setting.tickers), setting.rule, day)
+    if built is None:
         raise HTTPException(400, detail={"code": "not_loaded", "reason": _DAY_NOT_LOADED})
-    return days[0], session
+    return built
 
 
 @router.get("/{account_id}/rule-runs")
@@ -354,6 +362,18 @@ def get_rule_run(account_id: str, run_id: int, _acc: dict = Depends(_own_account
     except rule_runner.RunRefused as err:
         raise _run_refused(err) from None
     return {**_run_context(account_id), "run": run}
+
+
+@router.get("/{account_id}/rule-runs/{run_id}/monitor")
+def monitor_rule_run(account_id: str, run_id: int, _acc: dict = Depends(_own_account), p: Principal = Depends(require_login)):
+    """가동 하나의 관제 — ★읽기만★(주문 · 체결 · 실현손익 · 한도까지 남은 폭 · 비상 정지 · 그날의 백테스트와 같은지)."""
+    ctx = _run_context(account_id)
+    try:
+        seen = rule_monitor.view(p.username, account_id, run_id, master=intraday_routes.master_lookup(),
+                                 day_of=lambda tickers, rule, day: _day_of(tickers, rule, dt.date.fromisoformat(day)))
+    except rule_runner.RunRefused as err:
+        raise _run_refused(err) from None
+    return {**ctx, **seen}
 
 
 @router.post("/{account_id}/rule-runs/{run_id}/advance")

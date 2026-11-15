@@ -132,6 +132,20 @@ _lock = threading.Lock()
 
 # ── 설정 ─────────────────────────────────────────────────────────────────────────────
 
+def parts_of(setting: dict) -> tuple[RuleSpec, PositionRules, CostAssumptions]:
+    """설정 사본(시행 줄의 설정 · 가동 줄의 `request`) → 규칙 · 포지션 · 비용. 지금의 틀로 읽히지 않으면 `bad_setting`.
+
+    관제(`rule_monitor`)도 이 함수로 ★그때 돌린 설정★을 다시 짓는다 — 읽는 길이 둘로 갈리지 않는다."""
+    try:
+        rule = rules.build(setting["rule"]["kind"], setting["rule"]["params"])
+        position = PositionRules(**setting["position"])
+        costs = CostAssumptions(**setting["costs"])
+        validate(rule, position, costs)
+    except (rules.RuleError, SimError, expr.ExprError, KeyError, TypeError):
+        raise RunRefused("bad_setting") from None
+    return rule, position, costs
+
+
 def setting_of(username: str, trial_key: str) -> Setting:
     """내 시행 하나를 가동할 설정으로 — 없거나 남의 것이면 `no_trial`, 지금의 틀로 읽히지 않으면 `bad_setting`."""
     row = trials.trial_of(username, trial_key)
@@ -140,13 +154,7 @@ def setting_of(username: str, trial_key: str) -> Setting:
     if not row["found"]:
         raise RunRefused("no_trial")
     setting = row["setting"]
-    try:
-        rule = rules.build(setting["rule"]["kind"], setting["rule"]["params"])
-        position = PositionRules(**setting["position"])
-        costs = CostAssumptions(**setting["costs"])
-        validate(rule, position, costs)
-    except (rules.RuleError, SimError, expr.ExprError, KeyError, TypeError):
-        raise RunRefused("bad_setting") from None
+    rule, position, costs = parts_of(setting)
     tickers = tuple(sorted(row["tickers"]))
     request = {**setting, "tickers": list(tickers), "from": row["from"], "to": row["to"]}
     return Setting(trial_key, row["grade"], tickers, request, rule, position, costs)

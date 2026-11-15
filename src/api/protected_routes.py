@@ -207,6 +207,8 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 계좌에서 규칙 가동 시작 — 기록 전용 모드에서만 열린다. 분봉 백테스트로 돌려 본 설정과 날짜만 받는다"),
     ("GET", "/api/v1/broker-accounts/{account_id}/rule-runs/{run_id}"):
         (REQUIRE_LOGIN, "내 계좌의 규칙 가동 하나와 그 가상 체결 — 그 계좌 것만"),
+    ("GET", "/api/v1/broker-accounts/{account_id}/rule-runs/{run_id}/monitor"):
+        (REQUIRE_LOGIN, "가동 하나의 관제 — 주문·체결·실현손익·한도까지 남은 폭·그날의 백테스트와 같은지(읽기만 · 그 계좌 것만)"),
     ("POST", "/api/v1/broker-accounts/{account_id}/rule-runs/{run_id}/advance"):
         (REQUIRE_LOGIN, "가동을 봉 단위로 민다 — 신호는 그 계좌의 주문 경로(위험 검사·비상 정지) 한 길로만 간다"),
     ("POST", "/api/v1/broker-accounts/{account_id}/rule-runs/{run_id}/stop"):
