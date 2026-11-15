@@ -4,6 +4,8 @@
 - `GET  /templates` 화면이 내놓을 수 있는 규칙 틀과 설정 칸, 상한, 분봉만으로는 알 수 없는 것.
 - `POST /simulate`  규칙 하나를 돌린다 — 체결을 만들고 매매일지 엔진으로 계산해 돌려준다.
 - `POST /validate`  같은 규칙을 ★판정★한다 — 표본외 · 비용 두 배 · 슬리피지 민감도 · (선언한 격자의) 워크포워드 · 다중 비교 → 관문 표.
+- `POST /rules/expand` 규칙을 ★나무로 풀고 검사만 한다★(자유 조건식 설계 §5) — 틀이면 그 틀이 만든 나무, 직접 구성이면 검사한 하나의 꼴.
+  계산하지 않는다: 쓰기 0 · 분봉 읽기 0 · 시행 기록 0(편집 중의 검사는 시행이 아니다).
 
 분봉은 파일만 읽는다(증권사 클라이언트를 만들지 않는다 · 분봉 파일에 쓰지 않는다 · 주문 경로에 닿지 않는다).
 쓰는 것은 하나다 — ★시행 기록★(`src/data/intraday_trials`): 돌릴 때마다 설정 요약값과 일별 손익 흐름을 남겨 몇 번 해 봤는지를 센다.
@@ -94,7 +96,7 @@ REASONS = {
     "bad_folds": "구간 수가 허용 범위를 벗어났습니다.",
     # 엔진이 거절한 설정(`RuleError` · `SimError` · `ExprError` 의 사유)
     "unknown_kind": "모르는 규칙 틀입니다.",
-    "unknown_param": "그 규칙 틀에 없는 매개변수가 있습니다.",
+    "unknown_param": "그 규칙 틀이나 지표에 없는 매개변수가 있습니다.",
     "param_out_of_range": "매개변수가 허용 범위를 벗어났습니다.",
     "param_not_integer": "정수여야 하는 매개변수에 정수가 아닌 값이 들어왔습니다.",
     "param_not_number": "수여야 하는 매개변수에 수가 아닌 값이 들어왔습니다.",
@@ -107,6 +109,22 @@ REASONS = {
     "bad_participation": "참여율 상한은 0 보다 크고 1 이하여야 합니다.",
     "bad_commission": "수수료율은 0 이상이어야 합니다.",
     "bad_setting": "설정을 받아들이지 못했습니다.",
+    # 직접 구성한 규칙(`custom`)에서만 나는 사유 — 틀은 늘 맞는 나무를 만들어 이 코드들이 나지 않았다
+    "no_entry": "진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다.",
+    "entry_not_a_condition": "진입 조건 자리에는 참 또는 거짓을 내는 조건이 와야 합니다.",
+    "entry_stop_not_a_price": "미리 건 매수 가격 자리에는 수를 내는 식이 와야 합니다.",
+    "exit_not_a_condition": "청산 조건 자리에는 참 또는 거짓을 내는 조건이 와야 합니다.",
+    "too_many_nodes": "조건의 마디 수가 상한을 넘었습니다. 진입 조건, 미리 건 매수 가격, 청산 조건을 합쳐 셉니다.",
+    "too_deep": "조건의 겹침 깊이가 상한을 넘었습니다.",
+    "not_a_node": "조건의 모양을 읽지 못했습니다.",
+    "bad_const": "상수는 유한한 수여야 합니다.",
+    "unknown_op": "모르는 연산입니다.",
+    "wrong_arity": "연산에 넘긴 항의 수가 맞지 않습니다.",
+    "wrong_kind": "연산에 넘긴 항의 종류가 맞지 않습니다.",
+    "bad_bars": "봉 수는 1 이상 240 이하의 정수여야 합니다.",
+    "unknown_indicator": "모르는 지표입니다.",
+    "unknown_key": "조건에 알 수 없는 항목이 있습니다.",
+    "grid_rule_axis_custom": "직접 구성한 규칙에는 규칙 매개변수의 격자를 사용할 수 없습니다. 포지션 설정의 격자만 사용할 수 있습니다.",
 }
 
 #: 출처 등급 — 시뮬레이터가 매기는 이름(`intraday._origin`): 실제 분봉만이면 E3 · 합성이 섞였으면 E0.
@@ -171,6 +189,13 @@ def clear_coverage_cache() -> None:
 
 def _refuse(code: str, **extra) -> HTTPException:
     return HTTPException(status_code=400, detail={"code": code, "reason": REASONS[code], **extra})
+
+
+def _engine_refusal(err: ValueError, **extra) -> HTTPException:
+    """엔진이 거절한 설정 → 사유 코드 그대로(문장이 없는 코드만 `bad_setting`) · 어긋난 나무의 자리(`slot` — 있으면)."""
+    code = getattr(err, "code", None)
+    return _refuse(code if code in REASONS else "bad_setting", detail=getattr(err, "detail", ""), slot=getattr(err, "slot", None),
+                   **extra)
 
 
 def _blank(day: str, status: str, reason: str, message: str, blocked_rows: int = 0) -> dict:
@@ -308,6 +333,11 @@ class ValidateBody(SimulateBody):
     walk_forward: WalkForwardBody | None = None
 
 
+class ExpandBody(_Strict):
+    """규칙만 받는다 — 포지션 · 비용 · 종목 · 기간은 이 문이 보지 않는다(계산하지 않는다)."""
+    rule: RuleBody
+
+
 def _session_view(found: dict) -> dict:
     return {k: found.get(k) for k in ("available", "open", "closing_auction_from", "close", "grade", "sources", "reason", "message")}
 
@@ -316,6 +346,7 @@ def _session_view(found: dict) -> dict:
 def templates(_user=Depends(require_login)) -> dict:
     return {
         "templates": rules.describe(),
+        "grammar": rules.grammar(),                              # 직접 구성의 지표 · 연산 · 상한 — 화면이 지어내지 않는다
         "position": [dict(f) for f in POSITION_FIELDS],
         "costs": [dict(f) for f in COST_FIELDS],
         "limits": {"tickers": MAX_DETAIL_TICKERS, "ticker_days": MAX_TICKER_DAYS, "range_days": MAX_RANGE_DAYS,
@@ -346,9 +377,26 @@ def _setting(body: SimulateBody) -> tuple[list[str], RuleSpec, dict, PositionRul
         spec = rules.build(body.rule.kind, body.rule.params)
         simulator.validate(spec, position, costs)
     except (rules.RuleError, SimError, expr.ExprError) as err:
-        code = err.code if err.code in REASONS else "bad_setting"
-        raise _refuse(code, detail=err.detail) from None
+        raise _engine_refusal(err) from None
     return tickers, spec, params, position, costs
+
+
+@router.post("/rules/expand")
+def expand_rule(body: ExpandBody, _user=Depends(require_login)) -> dict:
+    """규칙을 나무로 풀고 검사한다 — ★계산하지 않는다★(쓰기 0 · 분봉 읽기 0 · 시행 기록 0).
+
+    틀이면 그 틀이 만든 나무를(편집기의 '틀에서 출발'), 직접 구성이면 검사한 하나의 꼴을 돌려준다. 한 번 푼 것을 다시 풀어도 같다."""
+    try:
+        spec = rules.build(body.rule.kind, body.rule.params)
+        params = rules.as_custom(spec)
+    except (rules.RuleError, SimError, expr.ExprError) as err:
+        raise _engine_refusal(err) from None
+    sizes = [expr.size(tree) for tree in params.values()]
+    label = next(t["label"] for t in rules.describe() if t["kind"] == body.rule.kind)
+    return {"rule": {"kind": rules.CUSTOM, "params": params}, "source": {"kind": body.rule.kind, "label": label},
+            "text": rules.text_of(spec), "nodes": sum(n for n, _ in sizes), "depth": max(d for _, d in sizes),
+            "limits": {"nodes": expr.MAX_NODES, "depth": expr.MAX_DEPTH}, "needs_prev": _needs_prev(spec),
+            "notes": rules.notes_of(spec)}
 
 
 def _plan(body: SimulateBody, tickers: list[str]) -> minute_feed.Plan:
@@ -462,6 +510,10 @@ def _cells(body: ValidateBody, base: dict, costs: CostAssumptions) -> list[dict]
         return []
     if not MIN_FOLDS <= wf.folds <= MAX_FOLDS:
         raise _refuse("bad_folds", min=MIN_FOLDS, max=MAX_FOLDS, folds=wf.folds)
+    if body.rule.kind == rules.CUSTOM and wf.rule:
+        # 직접 구성에는 이름 붙은 규칙 매개변수가 없다(설계 §7 · 받은 결정 D3 — 격자는 포지션 축만). 엔진에 맡기면 축의 이름이
+        # 자리(`entry` …)이고 값이 나무일 때 아래의 '겹친 값 걷기'가 깨져 500 이 된다(나무는 사전이라 해시할 수 없다) — 먼저 사유와 함께 거절한다.
+        raise _refuse("grid_rule_axis_custom", keys=sorted(wf.rule))
     unknown = sorted(set(wf.position) - set(PositionBody.model_fields))
     if unknown:
         raise _refuse("grid_unknown_position", keys=unknown)
@@ -486,7 +538,7 @@ def _cells(body: ValidateBody, base: dict, costs: CostAssumptions) -> list[dict]
             position_rules = PositionRules(**position.model_dump())
             simulator.validate(spec, position_rules, costs)
         except (rules.RuleError, SimError, expr.ExprError) as err:
-            raise _refuse(err.code if err.code in REASONS else "bad_setting", detail=err.detail, cell=index) from None
+            raise _engine_refusal(err, cell=index) from None
         except ValidationError:
             raise _refuse("bad_setting", cell=index) from None
         setting = _trial_setting(body.rule.kind, params, position.model_dump(), body.costs.model_dump())
@@ -668,6 +720,7 @@ def my_trials(limit: int = Query(50, ge=1, le=200), user=Depends(require_login))
             unreadable += 1
             continue
         out.append({"trial_key": r["trial_key"], "rule_label": labels.get(rule.get("kind")) or rule.get("kind"),
+                    **rules.rule_text(rule),                     # 직접 구성은 이름표만으로는 구별되지 않는다 — 조건의 글을 함께 싣는다
                     "runs": r["runs"], "updated_at": r["updated_at"],
                     "request": {"tickers": r["tickers"], "from": r["from"], "to": r["to"], "rule": rule, "position": position,
                                 "costs": costs}})
@@ -744,8 +797,9 @@ def results(limit: int = Query(50, ge=1, le=200), user=Depends(require_login)) -
     for r in rows:
         if r["grade"] == GRADE_SYNTHETIC and not mock:
             continue
-        kind = ((r["setting"] or {}).get("rule") or {}).get("kind")
-        out.append({"trial_key": r["trial_key"], "rule_kind": kind, "rule_label": labels.get(kind) or kind,
+        rule = (r["setting"] or {}).get("rule") if isinstance(r["setting"], dict) else None
+        kind = (rule or {}).get("kind") if isinstance(rule, dict) else None
+        out.append({"trial_key": r["trial_key"], "rule_kind": kind, "rule_label": labels.get(kind) or kind, **rules.rule_text(rule),
                     "tickers": r["tickers"], "from": r["from"], "to": r["to"], "synthetic": r["grade"] == GRADE_SYNTHETIC,
                     "grade_known": r["grade"] in (GRADE_REAL, GRADE_SYNTHETIC), "result_at": r["result_at"], "runs": r["runs"]})
     return {"available": True, "reason": None, "results": out}
@@ -771,8 +825,10 @@ def _request_view(username: str, row: dict, labels: dict) -> dict:
                 "gates": {"known": False, "counts": None, "reason": VERDICT_UNREADABLE}}
     if not trial["found"]:
         return {**row, "trial": {"found": False, "reason": TRIAL_GONE}, "gates": {"known": False, "counts": None, "reason": NO_VERDICT}}
-    kind = ((trial["setting"] or {}).get("rule") or {}).get("kind") if isinstance(trial["setting"], dict) else None
-    info = {"found": True, "rule_kind": kind, "rule_label": labels.get(kind) or kind, "tickers": trial["tickers"], "from": trial["from"],
+    rule = trial["setting"].get("rule") if isinstance(trial["setting"], dict) else None
+    kind = rule.get("kind") if isinstance(rule, dict) else None
+    info = {"found": True, "rule_kind": kind, "rule_label": labels.get(kind) or kind, **rules.rule_text(rule),
+            "tickers": trial["tickers"], "from": trial["from"],
             "to": trial["to"], "grade": trial["grade"], "synthetic": trial["grade"] == GRADE_SYNTHETIC, "runs": trial["runs"]}
     kept = trials.result_of(username, row["trial_key"])
     counts = ((kept["result"].get("gates") or {}).get("counts") if kept and kept["found"] else None)

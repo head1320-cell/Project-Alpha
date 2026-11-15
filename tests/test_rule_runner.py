@@ -173,6 +173,26 @@ def test_a_run_pushed_to_the_end_writes_the_hand_computed_fills(acc):
     assert [(f["seq"], f["side"]) for f in done["new_fills"]] == [(0, "buy"), (1, "sell")]      # 이번 부름에서 새로 적은 줄
 
 
+def test_a_custom_rule_s_trial_replays_to_the_same_hand_computed_fills(acc):
+    """직접 구성한 규칙(자유 조건식 f1)의 시행도 같은 길로 가동된다 — 설정은 시행 줄에서 읽고(`parts_of`), 시행 줄에 나무가 들어 있다."""
+    crossing = {"entry": {"op": "cross_up", "args": [{"ind": "close"}, {"const": 10_050}]}}      # 종가가 10,050 을 상향 돌파
+    setting = {"rule": {"kind": "custom", "params": templates.resolve("custom", crossing)}, "position": POSITION, "costs": COSTS}
+    started = _start(acc, _trial(setting=setting))
+    assert (started["rule_text"], started["rule_text_reason"]) == ("진입 조건: 종가 상향 돌파 10050", None)
+    done = runner.advance("kim", acc, started["run_id"])
+    assert done["status"] == "finished" and _rows(done["run_id"]) == [BUY, SELL] == _batch(setting, _day())
+    assert [r["rule_text"] for r in runner.runs("kim", acc)] == ["진입 조건: 종가 상향 돌파 10050"]
+
+
+def test_a_template_run_says_its_rule_in_words_and_an_unreadable_copy_says_why(acc):
+    started = _start(acc)
+    assert started["rule_text"].startswith("진입 조건: 종가 상향 돌파 시가 범위 고가(1분)") and started["rule_text_reason"] is None
+    rr.update_run(started["run_id"], status="stopped", stop_reason="user", ended=True)
+    broken = runner._view({"run_id": 0, "request": {"rule": {"kind": "macd_cross", "params": {}}}})
+    assert broken["rule_text"] is None and broken["rule_text_reason"].endswith("니다.")
+    assert runner._view({"run_id": 0, "request": None})["rule_text"] is None
+
+
 def test_stepping_one_bar_at_a_time_writes_the_same_rows_and_no_exit_before_the_day_ends(acc):
     run_id = _start(acc)["run_id"]
     seen = []

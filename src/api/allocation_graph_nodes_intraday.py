@@ -86,7 +86,11 @@ def _field(d: dict, tier: str, **hints: Any) -> tuple[Any, Any]:
     return (kind | None if optional else kind), Field(d.get("default"), json_schema_extra={"x-ui": ui}, **bounds)
 
 
-_TEMPLATES = {t["kind"]: t for t in rules.describe()}
+#: 설정 노드가 내놓는 것은 ★틀 일곱★이다 — 직접 구성(`custom`)은 편집 부품이 캔버스에 들어올 때 연다(자유 조건식 f3).
+#: 그때까지 걸러 둔다: 칸이 없는 빈 선택지를 내놓지 않는다.
+_TEMPLATES = {t["kind"]: t for t in rules.describe() if not t["custom"]}
+#: 이름표는 여덟 전부 — 문으로 돌린 직접 구성 시행을 결과 · 가동 요청 노드가 읽을 수 있다.
+_LABELS = {t["kind"]: t["label"] for t in rules.describe()}
 _BASIC_POSITION = ("amount", "stop_pct", "target_pct")
 _BASIC_COSTS = ("commission_bp", "slippage_ticks")
 _HELP = {
@@ -300,7 +304,7 @@ def _arm(inputs: dict, p: ArmParams, actor: Any) -> pg.NodeOutput:
     counts = handed.get("gates")
     rows = rule_runs.requests_of(user, _REQUEST_SCAN)            # 읽기만 — 못 읽으면 '이미 남겼는지'는 미상이다(없다고 하지 않는다)
     mine = None if rows is None else next((r for r in rows if r["trial_key"] == key), None)
-    view = {"trial_key": key, "rule_kind": kind, "rule_label": (_TEMPLATES.get(kind) or {}).get("label") or kind,
+    view = {"trial_key": key, "rule_kind": kind, "rule_label": _LABELS.get(kind) or kind,
             "tickers": trial["tickers"], "from": trial["from"], "to": trial["to"], "grade": grade, "synthetic": synthetic,
             "runs": trial["runs"], "gates": {"known": isinstance(counts, dict), "counts": counts if isinstance(counts, dict) else None},
             "requested": None if rows is None else mine is not None, "request_id": mine["id"] if mine else None,

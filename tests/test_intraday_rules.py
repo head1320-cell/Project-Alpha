@@ -179,9 +179,10 @@ def test_resolve_fills_defaults_and_gives_one_canonical_setting():
 
 def test_describe_tells_the_screen_everything_it_needs_and_speaks_in_sentences():
     listing = rules.describe()
-    assert [t["kind"] for t in listing] == list(rules.TEMPLATES)
+    assert [t["kind"] for t in listing] == [*rules.TEMPLATES, rules.CUSTOM]     # 여덟째는 직접 구성(`test_intraday_custom_rules.py`)
     for t in listing:
-        assert t["label"] and isinstance(t["needs_prev"], bool) and t["summary"].endswith("니다.")
+        assert t["label"] and t["summary"].endswith("니다.")
+        assert isinstance(t["needs_prev"], bool) or (t["custom"] and t["needs_prev"] is None)
         assert all(note.endswith("니다.") and "—" not in note for note in t["notes"])
         for p in t["params"]:
             assert p["key"] and p["label"] and p["type"] in ("int", "float", "choice")

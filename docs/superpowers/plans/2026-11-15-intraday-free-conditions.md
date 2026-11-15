@@ -19,8 +19,10 @@
 4. **거절의 문장**: 문은 엔진의 사유 코드에 문장이 없으면 `bad_setting` 으로 뭉갠다(지금 틀에서는 날 수 없는 코드들이라 문장이 없었다). `custom` 에서는 그 코드들이 실제로 난다 →
    문장을 더한다: `no_entry` · `entry_not_a_condition` · `entry_stop_not_a_price` · `exit_not_a_condition` · `too_many_nodes` · `too_deep` · `not_a_node` · `bad_const` · `unknown_op` · `wrong_arity` · `wrong_kind` · `bad_bars` · `unknown_indicator` · `unknown_key`.
    `unknown_param` 의 문장은 지표의 매개변수에도 맞게 고친다("그 규칙 틀이나 지표에 없는 매개변수가 있습니다." — 시험 · E2E 에 고정돼 있지 않음을 확인했다). 거절에는 어느 자리인지(`slot`)를 싣는다.
-5. **격자의 규칙 축 — 설계와 달라진다.** 설계 §7 은 "엔진의 사유(`unknown_param`)로 거절된다"고 적었으나, 축의 이름이 `entry` 면 ★나무 전체를 갈아 끼우는 격자★가 그대로 지나간다(문이 `{**params, **축}` 으로 합치기 때문 — 관측).
-   → `custom` 에 규칙 축이 하나라도 오면 문이 먼저 거절한다(새 사유 `grid_rule_axis_custom`). 포지션 축은 그대로다.
+5. **격자의 규칙 축 — 설계와 달라진다.** 설계 §7 은 "엔진의 사유(`unknown_param`)로 거절된다"고 적었다. 축의 이름이 매개변수 이름(`n` …)이면 그렇다.
+   그러나 축의 이름이 자리(`entry` …)이고 값이 나무면 ★500 으로 깨진다★ — 격자가 겹친 값을 걷는 자리(`dict.fromkeys`)가 사전을 해시하지 못한다(변이 R4 로 관측 · 2026-11-15).
+   → `custom` 에 규칙 축이 하나라도 오면 문이 먼저 사유와 함께 거절한다(새 사유 `grid_rule_axis_custom`). 포지션 축은 그대로다.
+   ★바로잡음★: 이 문서의 첫 판은 "나무 전체를 갈아 끼우는 격자가 그대로 지나간다(관측)"고 적었다 — 코드를 읽고 한 추론을 관측이라고 적은 것이고 틀렸다.
 6. **`describe()` 의 `custom` 항목**: `{"kind": "custom", "label": "직접 구성", "custom": true, "params": [], "needs_prev": null, …}` — 전일 값이 필요한지는 ★조건에 따라 다르다★(틀처럼 미리 말할 수 없다 → `null` · 실제 값은 `rules/expand` 의 답이 말한다). 틀 일곱에는 `"custom": false` 가 붙는다.
    편집기의 두 문장(시행 횟수 · 덥혀지지 않은 지표)은 이 항목의 `notes` 로 서버가 낸다.
 7. **f1 에서는 아직 고를 수 없다.** 틀 목록에 `custom` 이 실리면 편집기가 없는 화면과 캔버스에 빈 선택지가 생긴다 →

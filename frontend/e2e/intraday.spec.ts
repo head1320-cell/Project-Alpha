@@ -150,7 +150,7 @@ test("백테스트 메뉴 안의 모드: 전환 줄이 두 화면에 있고 지�
 test("설정 칸은 서버의 틀 목록 그대로 · 종목은 비어서 시작한다 · 틀을 바꾸면 매개변수가 새 틀의 출발값으로", async ({ page }) => {
   await open(page);
   await expect(page.locator(".itd-kinds").getByRole("radio")).toHaveText(
-    ["시가 범위 돌파", "VWAP 상향 돌파", "변동성 돌파", "갭", "거래량 급증", "RSI", "볼린저 밴드"]);
+    ["시가 범위 돌파", "VWAP 상향 돌파", "변동성 돌파", "갭", "거래량 급증", "RSI", "볼린저 밴드"]);   // 서버의 여덟째 '직접 구성'은 아직 내놓지 않는다(편집기는 f2)
   await expect(page.locator(".itd-tickers")).toHaveValue("");                       // 도구가 종목을 고르지 않는다
   await expect(field(page, "minutes")).toHaveValue("30");
   await expect(field(page, "amount")).toHaveValue("1000000");

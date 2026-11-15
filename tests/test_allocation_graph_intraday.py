@@ -516,7 +516,7 @@ def test_the_setup_form_is_built_from_the_registries_not_copied():
     import src.api.intraday_routes as mod
     from src.engine.intraday import rules
     props = {c["type"]: c for c in REGISTRY.catalog()}["intraday_setup"]["params_schema"]["properties"]
-    templates = rules.describe()
+    templates = [t for t in rules.describe() if not t["custom"]]                # 직접 구성은 아직 내놓지 않는다(아래 시험)
     assert props["rule"]["enum"] == [t["kind"] for t in templates]
     assert props["rule"]["x-ui"]["order"] == [t["kind"] for t in templates]
     assert props["rule"]["x-ui"]["options"] == {t["kind"]: t["label"] for t in templates}
@@ -534,3 +534,16 @@ def test_the_setup_form_is_built_from_the_registries_not_copied():
         assert props[d["key"]]["x-ui"]["label"] == d["label"] and props[d["key"]].get("default") == d["default"]
     assert props["tickers"].get("default", []) == [] and props["start_date"]["default"] is None       # 종목·기간은 비어서 시작한다
     assert props["commission_bp"]["default"] is None                            # 수수료율은 모름에서 시작한다(0 이 아니다)
+
+
+def test_the_setup_node_does_not_offer_the_custom_kind_until_it_has_an_editor(client, auth):
+    """직접 구성(`custom`)은 문에는 열렸지만 캔버스의 설정 노드에는 편집 부품이 아직 없다(자유 조건식 f3 에서 연다 — 그때 이 시험을 뒤집는다).
+
+    칸이 없는 빈 선택지를 내놓지 않는다 ↔ 문으로 돌린 직접 구성 시행의 이름표는 읽는다."""
+    from src.api import allocation_graph_nodes_intraday as nodes
+    from src.engine.intraday import rules
+    props = {c["type"]: c for c in REGISTRY.catalog()}["intraday_setup"]["params_schema"]["properties"]
+    assert "custom" not in props["rule"]["enum"] and len(props["rule"]["enum"]) == 7
+    assert "custom" in [t["kind"] for t in rules.describe()]                    # 짝 — 엔진의 목록에는 있다
+    assert run(client, graph(setup_node(rule="custom")), auth)["s"]["status"] == "blocked"      # 매개변수 검사에서 막힌다 — 돌지 않는다
+    assert nodes._LABELS["custom"] == "직접 구성" and nodes._LABELS["opening_range_breakout"] == "시가 범위 돌파"

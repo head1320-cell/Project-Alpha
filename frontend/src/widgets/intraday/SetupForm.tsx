@@ -126,7 +126,8 @@ export function SetupForm({ templates: t, form, onChange, coverage, onCoverage, 
       <Section title="규칙" sub="규칙 틀과 매개변수를 정합니다. 신호는 봉 종가까지의 값으로 계산하고 다음 봉 시가에 체결합니다.">
         <div className="tj-map itd-rule">
           <div className="itd-kinds">
-            <Segmented label="규칙 틀" options={t.templates.map((x) => ({ value: x.kind, label: x.label }))} value={form.kind}
+            {/* 직접 구성(`custom`)은 조건 편집기가 들어올 때 연다(자유 조건식 f2) — 그때까지 칸이 없는 선택지를 내놓지 않는다. */}
+            <Segmented label="규칙 틀" options={t.templates.filter((x) => !x.custom).map((x) => ({ value: x.kind, label: x.label }))} value={form.kind}
                        onChange={(kind) => onChange(withKind(form, t, kind))} />
           </div>
           <p className="tj-read itd-rule-summary" data-server>{template.summary}</p>

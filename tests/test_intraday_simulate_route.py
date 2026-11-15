@@ -107,7 +107,7 @@ def test_without_a_login_nothing_is_read_or_computed(client, monkeypatch):
 def test_templates_tell_the_screen_what_it_can_offer_and_what_cannot_be_known(client, auth):
     body = client.get(TEMPLATES, headers=auth).json()
     assert [t["kind"] for t in body["templates"]] == ["opening_range_breakout", "vwap_cross", "volatility_breakout", "gap",
-                                                      "volume_surge", "rsi_reversal", "bollinger"]
+                                                      "volume_surge", "rsi_reversal", "bollinger", "custom"]
     keys = [f["key"] for f in body["position"]]
     assert keys[0] == "amount" and {"stop_pct", "target_pct", "trail_pct", "time_exit", "daily_loss_limit",
                                     "cooldown_after_loss_min", "max_entries_per_ticker", "max_open_positions"} <= set(keys)

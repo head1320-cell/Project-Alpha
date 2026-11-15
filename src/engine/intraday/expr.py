@@ -29,6 +29,8 @@ from .types import Session
 
 MAX_DEPTH = 12
 MAX_NODES = 64
+#: 'M봉 동안'의 M 이 될 수 있는 범위(양끝 포함).
+HELD_BARS = (1, 240)
 
 _ARITH = {"add": np.add, "sub": np.subtract, "mul": np.multiply}
 _COMPARE = {"gt": np.greater, "ge": np.greater_equal, "lt": np.less, "le": np.less_equal}
@@ -44,6 +46,15 @@ _SHAPES: dict[str, tuple[tuple[str, ...] | str, int, int, str]] = {
     "where": (("bool", "number"), 2, 2, "number"),
     "time_between": ("number", 0, 0, "bool"),
 }
+
+#: 연산의 이름표 — 화면이 조건을 짓는 데 쓴다(자유 조건식 설계 §4). ★연산마다 하나씩 있어야 한다★(시험이 건다).
+OP_LABELS = {
+    "add": "더하기", "sub": "빼기", "mul": "곱하기", "where": "조건부 값",
+    "gt": "초과", "ge": "이상", "lt": "미만", "le": "이하", "cross_up": "상향 돌파", "cross_down": "하향 돌파",
+    "and": "모두 충족", "or": "하나 이상 충족", "not": "아님", "held_before": "직전 봉 동안 계속", "time_between": "시각 창",
+}
+#: 규칙의 글에 쓰는 기호(산술 셋 · 비교 넷). 돌파는 기호가 없다 — 이름표를 쓴다.
+OP_SYMBOLS = {"add": "+", "sub": "−", "mul": "×", "gt": ">", "ge": "≥", "lt": "<", "le": "≤"}
 
 
 class ExprError(ValueError):
@@ -93,7 +104,7 @@ def _check(node: Any, depth: int, count: list[int]) -> str:
         raise ExprError("wrong_kind", f"{name}: {kinds} (필요: {expected})")
     if name == "held_before":
         bars = node.get("bars")
-        if isinstance(bars, bool) or not isinstance(bars, int) or not 1 <= bars <= 240:
+        if isinstance(bars, bool) or not isinstance(bars, int) or not HELD_BARS[0] <= bars <= HELD_BARS[1]:
             raise ExprError("bad_bars", repr(bars))
     if name == "time_between" and not _hhmm(node.get("from")) <= _hhmm(node.get("to")):
         raise ExprError("bad_time", f"{node.get('from')} > {node.get('to')}")
@@ -103,6 +114,17 @@ def _check(node: Any, depth: int, count: list[int]) -> str:
 def validate(tree: Any) -> str:
     """나무를 검사하고 그것이 내는 값의 종류(`"bool"` · `"number"`)를 돌려준다. 어긋나면 `ExprError`."""
     return _check(tree, 1, [0])
+
+
+def shapes() -> dict[str, tuple[tuple[str, ...] | str, int, int, str]]:
+    """연산 → (인자의 종류, 인자 수의 하한 · 상한, 결과의 종류) — 문법 표(`rules.grammar`)가 읽는다."""
+    return dict(_SHAPES)
+
+
+def size(tree: Any) -> tuple[int, int]:
+    """(마디 수, 깊이) — 검사기와 같은 법으로 센다(뿌리의 깊이가 1). 나무 셋의 마디 수를 합쳐 상한을 볼 때 쓴다."""
+    kids = [size(arg) for arg in tree.get("args", [])] if isinstance(tree, dict) and "op" in tree else []
+    return 1 + sum(n for n, _ in kids), 1 + max((d for _, d in kids), default=0)
 
 
 def canonical(tree: Any) -> str:

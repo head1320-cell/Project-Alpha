@@ -408,4 +408,6 @@ def _view(row: dict) -> dict:
     clock = None
     if act is not None and not act.closed:
         clock = {"total": len(act.labels), "done": act.done, "next": act.labels[act.done] if act.done < len(act.labels) else None}
-    return {**{k: v for k, v in row.items() if k != "found"}, "active": clock is not None, "clock": clock, "new_fills": []}
+    request = row.get("request")
+    said = rules.rule_text(request.get("rule") if isinstance(request, dict) else None)     # 읽기만 — 가동의 뜻은 바뀌지 않는다
+    return {**{k: v for k, v in row.items() if k != "found"}, **said, "active": clock is not None, "clock": clock, "new_fills": []}

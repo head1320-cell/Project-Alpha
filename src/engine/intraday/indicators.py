@@ -6,6 +6,8 @@
 - 지표는 ★그날 봉으로만★ 계산한다. 전일 봉으로 덥히지 않는다(전일 값이 필요한 것은 `prev_*` 셋뿐이고 따로 받는다).
 - 덥혀지지 않은 자리 · 전일 값이 없는 자리 · 0 으로 나누게 되는 자리는 `NaN` 이다(0 이나 50 같은 값으로 채우지 않는다).
 - 시가 범위의 창은 ★그날 첫 봉의 시각★부터 잰다(장 운영 시각을 가정하지 않는다 — 봉 시각의 뜻이 미상이어도 성립한다).
+- 이름표(`label`)와 단위(`unit`)는 화면이 조건을 짓는 데 쓴다(자유 조건식 설계 §4) — ★등록부의 지표는 전부 이름표가 있어야 한다★
+  (`tests/test_intraday_custom_rules.py`). 화면이 이름을 지어내지 않는다.
 """
 from __future__ import annotations
 
@@ -34,6 +36,8 @@ class Range:
     high: float
     default: float
     integer: bool = True
+    label: str = ""                 # 화면의 이름표
+    unit: str = ""                  # 화면의 단위(봉 · 분 · 배)
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,12 @@ class Indicator:
     fn: Callable[..., np.ndarray]
     params: dict[str, Range]
     needs_prev: bool = False        # 전일 값이 없으면 전부 NaN 이 되는 지표
+    label: str = ""                 # 화면의 이름표
+    unit: str = ""                  # 값의 단위 — `UNITS` 의 열쇠
+
+
+#: 지표 값의 단위 → 이름표. 화면이 "가격과 거래량을 견주고 있다" 같은 것을 알려 줄 때 쓴다(막지는 않는다).
+UNITS = {"price": "가격(원)", "volume": "거래량(주)", "minute": "시각(자정부터의 분)", "index": "지수(0~100)", "flag": "여부(1 또는 0)"}
 
 
 def minutes_of(time: np.ndarray) -> np.ndarray:
@@ -125,33 +135,34 @@ def _prev(s: Session, field: str) -> np.ndarray:
     return np.full(len(s.close), getattr(s.prev, field) if s.prev is not None else np.nan, dtype=float)
 
 
-_N = Range(1, 240, 20)
-_K = Range(0.5, 4.0, 2.0, integer=False)
-_OR = Range(1, 120, 30)
-_BARS = Range(1, 240, 20)
+_N = Range(1, 240, 20, label="기간", unit="봉")
+_K = Range(0.5, 4.0, 2.0, integer=False, label="표준편차 배수", unit="배")
+_OR = Range(1, 120, 30, label="범위를 재는 시간", unit="분")
+_BARS = Range(1, 240, 20, label="직전 봉 수", unit="봉")
 
 INDICATORS: dict[str, Indicator] = {
-    "open": Indicator(lambda s: s.open.astype(float), {}),
-    "high": Indicator(lambda s: s.high.astype(float), {}),
-    "low": Indicator(lambda s: s.low.astype(float), {}),
-    "close": Indicator(lambda s: s.close.astype(float), {}),
-    "volume": Indicator(lambda s: s.volume.astype(float), {}),
-    "minute": Indicator(lambda s: minutes_of(s.time), {}),
-    "day_open": Indicator(lambda s: np.full(len(s.close), s.open[0] if len(s.open) else np.nan, dtype=float), {}),
-    "vwap": Indicator(_vwap, {}),
-    "or_high": Indicator(lambda s, minutes: _opening_range(s, minutes)[0], {"minutes": _OR}),
-    "or_low": Indicator(lambda s, minutes: _opening_range(s, minutes)[1], {"minutes": _OR}),
-    "or_done": Indicator(lambda s, minutes: _opening_range(s, minutes)[2], {"minutes": _OR}),
-    "sma": Indicator(lambda s, n: _rolling(s.close, n, np.mean), {"n": _N}),
-    "bb_mid": Indicator(lambda s, n, k: _rolling(s.close, n, np.mean), {"n": _N, "k": _K}),
-    "bb_upper": Indicator(lambda s, n, k: _band(s, n, k, +1), {"n": _N, "k": _K}),
-    "bb_lower": Indicator(lambda s, n, k: _band(s, n, k, -1), {"n": _N, "k": _K}),
-    "rsi": Indicator(_rsi, {"n": Range(2, 60, 14)}),
-    "vol_avg": Indicator(lambda s, bars: _before(s.volume, bars, np.mean), {"bars": _BARS}),
-    "highest_close": Indicator(lambda s, bars: _before(s.close, bars, np.max), {"bars": _BARS}),
-    "prev_close": Indicator(lambda s: _prev(s, "close"), {}, needs_prev=True),
-    "prev_high": Indicator(lambda s: _prev(s, "high"), {}, needs_prev=True),
-    "prev_low": Indicator(lambda s: _prev(s, "low"), {}, needs_prev=True),
+    "open": Indicator(lambda s: s.open.astype(float), {}, label="시가", unit="price"),
+    "high": Indicator(lambda s: s.high.astype(float), {}, label="고가", unit="price"),
+    "low": Indicator(lambda s: s.low.astype(float), {}, label="저가", unit="price"),
+    "close": Indicator(lambda s: s.close.astype(float), {}, label="종가", unit="price"),
+    "volume": Indicator(lambda s: s.volume.astype(float), {}, label="거래량", unit="volume"),
+    "minute": Indicator(lambda s: minutes_of(s.time), {}, label="봉 시각", unit="minute"),
+    "day_open": Indicator(lambda s: np.full(len(s.close), s.open[0] if len(s.open) else np.nan, dtype=float), {},
+                          label="당일 시가", unit="price"),
+    "vwap": Indicator(_vwap, {}, label="VWAP", unit="price"),
+    "or_high": Indicator(lambda s, minutes: _opening_range(s, minutes)[0], {"minutes": _OR}, label="시가 범위 고가", unit="price"),
+    "or_low": Indicator(lambda s, minutes: _opening_range(s, minutes)[1], {"minutes": _OR}, label="시가 범위 저가", unit="price"),
+    "or_done": Indicator(lambda s, minutes: _opening_range(s, minutes)[2], {"minutes": _OR}, label="시가 범위 종료", unit="flag"),
+    "sma": Indicator(lambda s, n: _rolling(s.close, n, np.mean), {"n": _N}, label="이동평균", unit="price"),
+    "bb_mid": Indicator(lambda s, n, k: _rolling(s.close, n, np.mean), {"n": _N, "k": _K}, label="볼린저 중심선", unit="price"),
+    "bb_upper": Indicator(lambda s, n, k: _band(s, n, k, +1), {"n": _N, "k": _K}, label="볼린저 상단", unit="price"),
+    "bb_lower": Indicator(lambda s, n, k: _band(s, n, k, -1), {"n": _N, "k": _K}, label="볼린저 하단", unit="price"),
+    "rsi": Indicator(_rsi, {"n": Range(2, 60, 14, label="기간", unit="봉")}, label="RSI", unit="index"),
+    "vol_avg": Indicator(lambda s, bars: _before(s.volume, bars, np.mean), {"bars": _BARS}, label="직전 평균 거래량", unit="volume"),
+    "highest_close": Indicator(lambda s, bars: _before(s.close, bars, np.max), {"bars": _BARS}, label="직전 최고 종가", unit="price"),
+    "prev_close": Indicator(lambda s: _prev(s, "close"), {}, needs_prev=True, label="전일 종가", unit="price"),
+    "prev_high": Indicator(lambda s: _prev(s, "high"), {}, needs_prev=True, label="전일 고가", unit="price"),
+    "prev_low": Indicator(lambda s: _prev(s, "low"), {}, needs_prev=True, label="전일 저가", unit="price"),
 }
 
 

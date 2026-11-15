@@ -39,7 +39,10 @@ export type FieldDef = {
   key: string; label: string; type: "int" | "float" | "time" | "choice";
   min?: number | null; max?: number | null; default: number | string | null; unit?: string; choices?: Choice[];
 };
-export type Template = { kind: string; label: string; summary: string; needs_prev: boolean; params: FieldDef[]; notes: string[] };
+/** `custom`(직접 구성)은 매개변수 칸이 없고 조건 나무를 짓는다 — 전일 값이 필요한지는 조건에 따라 달라 `null` 이다. */
+export type Template = {
+  kind: string; label: string; summary: string; needs_prev: boolean | null; params: FieldDef[]; notes: string[]; custom: boolean;
+};
 export type Limits = {
   tickers: number; ticker_days: number; range_days: number; bytes: number;
   grid_cells: number; validate_work: number; folds_min: number; folds_max: number;
