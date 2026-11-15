@@ -6,6 +6,7 @@
   설정은 가동할 때의 사본을 함께 적는다(시행 줄이 뒤에 바뀌어도 그때 무엇을 돌렸는지 남는다).
 - **가상 체결**(`rule_run_fills`): 기록 전용 가동에서 시뮬레이터가 계산한 체결과, 그 신호가 주문 경로에서 받은 답.
   ★종류는 늘 `virtual` 이다★ — 증권사가 알려 준 체결이 아니다. 실제 체결의 자리(`live_fills`)에는 쓰지 않는다.
+  줄마다 ★가동할 때의★ 시장 · 상품을 함께 적는다(준비가 종목 마스터에서 정한 값) — 뒤에 마스터가 달라져도 지난 가동의 매도세가 움직이지 않게.
 
 전부 사용자로 갈린다 — 남의 것과 없는 것은 같은 답이다. 읽거나 쓰지 못하면 `None` 이다(빈 목록 · '없음'과 다르다 — `REASONS`).
 `intraday_trials` 와 같은 방어적 raw-SQL 관용구다. 합성값을 만들지 않는다 — 적힌 것만 돌려준다.
@@ -17,6 +18,8 @@ import logging
 import time
 from typing import Any
 
+from src.data import schema_add_columns
+
 logger = logging.getLogger(__name__)
 
 #: 표 이름은 한 줄에 하나씩 적는다 — 보존 분류 검사(`tests/test_retention_policy.py`)가 모듈 최상위의 `이름 = "표"` 를 읽는다.
@@ -25,6 +28,11 @@ _RUNS = "rule_runs"
 _FILLS = "rule_run_fills"
 #: 표를 만들어 둔 DB(주소별) — 프로세스가 다른 DB 로 붙으면 그 DB 에도 만든다.
 _ready_for: str | None = None
+#: 가상 체결 줄의 ★그때의★ 시장 · 상품과 그 표시. 먼저 만들어진 표(W5b)에도 덧붙인다.
+#: `classified` 가 1 이면 두 칸은 가동 때의 값이다(그때 몰랐으면 비어 있다) — ★미상(그때 몰랐다) ≠ 미기록(칸이 없던 줄)★.
+_CLASS_COLS = [("market", "VARCHAR(10)"), ("instrument", "VARCHAR(10)"), ("classified", "INTEGER")]
+#: 그 칸들이 붙은 DB(주소) — 못 붙였으면 `None`: 그 칸 없이 쓰고 읽으며, 읽은 줄은 '그때의 값'이라고 말하지 않는다.
+_class_for: str | None = None
 
 STATUSES = ("running", "stopped", "finished", "interrupted")
 REASONS = {
@@ -43,7 +51,7 @@ def _engine():
 
 
 def _ensure(engine) -> None:
-    global _ready_for
+    global _ready_for, _class_for
     url = str(engine.url)
     if _ready_for == url:
         return
@@ -63,7 +71,20 @@ def _ensure(engine) -> None:
             f"CREATE TABLE IF NOT EXISTS {_FILLS} (run_id INTEGER, seq INTEGER, executed_at VARCHAR(19), symbol VARCHAR(12), "
             "side VARCHAR(4), quantity DOUBLE PRECISION, price DOUBLE PRECISION, kind VARCHAR(10), event VARCHAR(30), "
             "client_order_id VARCHAR(40), order_status VARCHAR(20), order_reason VARCHAR(60), PRIMARY KEY (run_id, seq))"))
+    # 붙었는지는 도우미가 SELECT 로 확인한다(`intraday_trials` 의 결과 요약 열과 같은 관용구).
+    _class_for = url if schema_add_columns.add_columns(engine, _FILLS, _CLASS_COLS, label="가상 체결의 시장 · 상품") else None
     _ready_for = url
+
+
+def keeps_class() -> bool | None:
+    """이 DB 의 가상 체결 줄이 ★그때의★ 시장 · 상품을 갖는가. 칸을 붙이지 못했으면 거짓, 저장소에 닿지 못하면 `None`."""
+    try:
+        engine = _engine()
+        _ensure(engine)
+        return _class_for == str(engine.url)
+    except Exception as err:                                    # noqa: BLE001
+        logger.warning("가상 체결 칸 확인 실패: %s", err)
+        return None
 
 
 def _dump(value: Any) -> str:
@@ -235,19 +256,24 @@ def mark_interrupted() -> int | None:
 # ── 가상 체결 ────────────────────────────────────────────────────────────────
 
 def add_fill(run_id: int, seq: int, fill: dict, *, event: str, order: dict) -> bool | None:
-    """가상 체결 한 줄과 그 신호가 주문 경로에서 받은 답. 같은 순번을 두 번 쓰지 못한다(덮어쓰지 않고 `None`)."""
+    """가상 체결 한 줄과 그 신호가 주문 경로에서 받은 답. 같은 순번을 두 번 쓰지 못한다(덮어쓰지 않고 `None`).
+
+    줄의 `market` · `instrument`(가동 때 준비가 정한 값 — 몰랐으면 없다)을 함께 적고 '그때의 값'이라고 표시한다."""
     try:
         engine = _engine()
         _ensure(engine)
         from sqlalchemy import text
+        kept = _class_for == str(engine.url)
+        cols, values = (", market, instrument, classified", ", :market, :instrument, 1") if kept else ("", "")
         with engine.begin() as c:
             c.execute(text(
                 f"INSERT INTO {_FILLS} (run_id, seq, executed_at, symbol, side, quantity, price, kind, event, client_order_id, "
-                "order_status, order_reason) VALUES (:run_id, :seq, :at, :symbol, :side, :qty, :price, 'virtual', :event, "
-                ":coid, :status, :reason)"),
+                f"order_status, order_reason{cols}) VALUES (:run_id, :seq, :at, :symbol, :side, :qty, :price, 'virtual', :event, "
+                f":coid, :status, :reason{values})"),
                 {"run_id": int(run_id), "seq": int(seq), "at": fill["executed_at"], "symbol": fill["symbol"], "side": fill["side"],
                  "qty": fill["quantity"], "price": fill["price"], "event": event, "coid": order.get("client_order_id"),
-                 "status": order.get("status"), "reason": order.get("reason")})
+                 "status": order.get("status"), "reason": order.get("reason"),
+                 **({"market": fill.get("market"), "instrument": fill.get("instrument")} if kept else {})})
         return True
     except Exception as err:                                    # noqa: BLE001
         logger.warning("가상 체결 기록 실패: %s", err)
@@ -260,12 +286,15 @@ def fills_of(run_id: int) -> list[dict[str, Any]] | None:
         engine = _engine()
         _ensure(engine)
         from sqlalchemy import text
+        # 칸을 붙이지 못한 DB 에서는 비워 읽는다 — 그 줄들은 '그때의 값'이 아니다(`classified` 거짓).
+        kept = ", market, instrument, classified" if _class_for == str(engine.url) else ", NULL, NULL, NULL"
         with engine.connect() as c:
             rows = c.execute(text(f"SELECT seq, executed_at, symbol, side, quantity, price, kind, event, client_order_id, "
-                                  f"order_status, order_reason FROM {_FILLS} WHERE run_id = :run_id ORDER BY seq"),
+                                  f"order_status, order_reason{kept} FROM {_FILLS} WHERE run_id = :run_id ORDER BY seq"),
                              {"run_id": int(run_id)}).fetchall()
     except Exception as err:                                    # noqa: BLE001
         logger.warning("가상 체결 읽기 실패: %s", err)
         return None
     return [{"seq": int(r[0]), "executed_at": r[1], "symbol": r[2], "side": r[3], "quantity": r[4], "price": r[5], "kind": r[6],
-             "event": r[7], "client_order_id": r[8], "order_status": r[9], "order_reason": r[10]} for r in rows]
+             "event": r[7], "client_order_id": r[8], "order_status": r[9], "order_reason": r[10],
+             "market": r[11], "instrument": r[12], "classified": bool(r[13])} for r in rows]

@@ -276,10 +276,12 @@ def _emit(act: _Active, executor, rows: list[dict], new: list[dict]) -> tuple[st
         act.signals += 1
         if rule_runs.add_fill(act.run_id, act.seq, row, event=event, order=answer) is None:
             return ("store_unavailable", None)
+        kept = bool(rule_runs.keeps_class())                      # 적힌 줄과 같은 모양으로 답한다(칸을 못 붙인 DB 면 비운다)
         new.append({"seq": act.seq, "executed_at": row["executed_at"], "symbol": row["symbol"], "side": row["side"],
                     "quantity": row["quantity"], "price": row["price"], "kind": "virtual", "event": event,
                     "client_order_id": answer.get("client_order_id"), "order_status": answer.get("status"),
-                    "order_reason": answer.get("reason")})
+                    "order_reason": answer.get("reason"), "market": row.get("market") if kept else None,
+                    "instrument": row.get("instrument") if kept else None, "classified": kept})
         act.seq += 1
         status = answer.get("status")
         if status == "SHADOW_LOGGED":

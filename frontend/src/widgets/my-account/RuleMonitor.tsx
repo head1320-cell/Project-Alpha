@@ -132,6 +132,8 @@ function Pnl({ p }: { p: RunMonitor["pnl"] }) {
       </dd>
       <dd className="ma-mon-sub">청산 {num(p.closed_trades ?? 0)}건 · 미청산 {num(open)}종목{open > 0 ? "(평가하지 않음)" : ""}</dd>
       {p.net_reason ? <dd className="ma-mon-note" data-server>{p.net_reason}</dd> : null}
+      {/* 시장 · 상품이 체결 줄에 적힌 가동 때의 값이면 사유가 없다 — 옛 줄일 때만 서버가 말한다. */}
+      {p.classification?.reason ? <dd className="ma-mon-note ma-mon-classified" data-server>{p.classification.reason}</dd> : null}
       {p.includes_rejected ? (
         <dd className="ma-mon-warn ma-mon-rejected-in">
           거절된 신호 {num(p.includes_rejected)}건의 가상 체결이 손익에 포함돼 있습니다. 실제 주문이었다면 없는 체결입니다.

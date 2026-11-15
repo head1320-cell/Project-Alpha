@@ -467,6 +467,7 @@ test("관제: 도는 가동은 주기적으로 다시 읽고 · 끝까지 돈 �
   await expect(mon.locator(".ma-mon-net")).toHaveText("비용 후 −319원");
   await expect(mon.locator(".ma-mon-pnl .ma-mon-sub")).toHaveText("청산 1건 · 미청산 0종목");
   await expect(mon.locator(".ma-mon-rejected, .ma-mon-rejected-in, .ma-mon-unrecorded, .ma-mon-touched")).toHaveCount(0);
+  await expect(mon.locator(".ma-mon-classified"), "시장 · 상품은 체결 줄에 적힌 가동 때의 값이다").toHaveCount(0);
   await expect(mon.locator(".ma-mon-limit")).toHaveAttribute("data-known", "false");   // 이 설정에는 한도가 없다 — 0원이 아니라 사유
   await expect(mon.locator(".ma-mon-limit")).toContainText("값 없음");
   await expect(mon.locator(".ma-mon-limit")).toContainText("이 설정에는 하루 최대 손실이 없습니다.");
@@ -566,10 +567,14 @@ test("관제: 값이 없으면 0 이 아니라 사유 · 한도에 닿은 날 ·
   const logWhy = "주문 기록을 읽지 못했습니다. 가동 기록에 적힌 답으로 집계했으며 거절 문장은 없습니다.";
   const badWhy = "가동 기록에 적힌 설정을 지금의 규칙 틀로 읽지 못했습니다.";
   const differs = "가상 체결이 지금 적재된 봉으로 다시 계산한 그날의 분봉 백테스트 체결과 다릅니다. 가동 뒤에 봉이 바뀌었거나 결함입니다.";
+  const atRead = "이 가동의 체결 줄에는 가동 때의 시장 · 상품이 적혀 있지 않아, 지금의 종목 마스터로 매도세를 정했습니다.";
+  expect(real.monitor.pnl.classification, "실제 서버의 가동은 그때의 값을 줄에 적는다").toEqual({ basis: "recorded", reason: null });
+  expect(real.run.fills.map((f: { classified: boolean }) => f.classified)).toEqual([true, true]);
   // 손실로 끝나 한도에 닿은 날 · 비용 미상 · 주문 기록에 없는 신호 · 백테스트와 다름 · 운영자 정지 · 합성 분봉
   let body: object = { ...real, run: { ...real.run, grade: "E0" }, monitor: { ...real.monitor,
     orders: { ...real.monitor.orders, unrecorded: 1 },
-    pnl: { ...real.monitor.pnl, gross: -7_920, cost: null, net: null, net_reason: costWhy },
+    pnl: { ...real.monitor.pnl, gross: -7_920, cost: null, net: null, net_reason: costWhy,
+           classification: { basis: "read_time_master", reason: atRead } },
     loss_limit: { limit: 5_000, reason: null, realized_gross: -7_920, room: -2_920, touched: true },
     kill: { active: true, own: false },
     backtest: { state: "differs", reason: differs, run_fills: 2, backtest_fills: 3 } } };
@@ -585,6 +590,7 @@ test("관제: 값이 없으면 0 이 아니라 사유 · 한도에 닿은 날 ·
   await expect(mon.locator(".ma-mon-cost")).toHaveText("비용 미상");                  // 0원이 아니다
   await expect(mon.locator(".ma-mon-net")).toHaveText("비용 후 미상");
   await expect(mon.locator(".ma-mon-pnl")).toContainText(costWhy);
+  await expect(mon.locator(".ma-mon-classified")).toHaveText(atRead);                // 옛 줄 — 읽는 때의 종목 마스터로 정했다고 적는다
   const limit = mon.locator(".ma-mon-limit");
   await expect(limit).toHaveAttribute("data-touched", "true");
   await expect(limit.locator(".ma-mon-room")).toHaveText("한도 초과 2,920원");
@@ -602,7 +608,7 @@ test("관제: 값이 없으면 0 이 아니라 사유 · 한도에 닿은 날 ·
     orders: { ...real.monitor.orders, basis: "run_record", reason: logWhy, unrecorded: null, by_status: { SHADOW_LOGGED: 1, HELD_BY_BROKER: 1 } },
     fills: { virtual: 2, broker: null, broker_reason: logWhy },
     pnl: { available: false, reason: badWhy, gross: null, cost: null, net: null, net_reason: null, closed_trades: null, open_positions: null,
-           includes_rejected: null, basis: null },
+           includes_rejected: null, basis: null, classification: null },
     loss_limit: { limit: null, reason: badWhy, realized_gross: null, room: null, touched: null },
     kill: { active: true, own: true },
     backtest: { state: "unknown", reason: badWhy, run_fills: 2, backtest_fills: null }, journal: null } };

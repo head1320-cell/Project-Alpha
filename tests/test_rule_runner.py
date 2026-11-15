@@ -133,6 +133,31 @@ def _halt(acc: str) -> None:
 
 # ── ① 가상 체결 = 그 하루의 분봉 백테스트 체결 ─────────────────────────────────────────
 
+def _class(fill: dict) -> tuple:
+    return fill["market"], fill["instrument"], fill["classified"]
+
+
+def test_each_virtual_fill_keeps_the_market_and_instrument_the_simulator_saw(acc):
+    """준비가 정한 시장 · 상품을 체결 줄에 남긴다(관제의 매도세가 뒤에 달라지는 종목 마스터에 기대지 않게)."""
+    done = runner.advance("kim", acc, _start(acc)["run_id"])
+    kept = [_class(f) for f in rr.fills_of(done["run_id"])]
+    assert kept == [("KOSPI", "stock", True)] * 2
+    assert [_class(f) for f in done["new_fills"]] == kept                  # 답의 새 줄도 적힌 것과 같은 모양이다
+    # ★짝★ — 준비가 시장을 몰랐던 종목은 모른다고 적힌다(지어내지 않는다 · 그래도 '그때의 값'이다)
+    unknown = runner.advance("kim", acc, _start(acc, day=_day(sess(HAND, market=None, instrument=None)))["run_id"])
+    assert [_class(f) for f in rr.fills_of(unknown["run_id"])] == [(None, None, True)] * 2
+
+
+def test_on_a_store_that_could_not_take_the_columns_the_answer_does_not_claim_them_either(acc, monkeypatch):
+    """칸을 붙이지 못한 DB — 줄은 적히지만 '그때의 값'이라고 하지 않는다. 답의 새 줄도 ★적힌 것과 같은 말★을 한다."""
+    monkeypatch.setattr(rr.schema_add_columns, "add_columns", lambda *a, **k: False)
+    monkeypatch.setattr(rr, "_ready_for", None)                           # 이 DB 의 표를 다시 살핀다
+    done = runner.advance("kim", acc, _start(acc)["run_id"])
+    assert done["status"] == "finished" and done["signals"] == 2           # 가동은 그대로 돈다
+    assert [_class(f) for f in rr.fills_of(done["run_id"])] == [(None, None, False)] * 2
+    assert [_class(f) for f in done["new_fills"]] == [(None, None, False)] * 2
+
+
 def test_a_run_pushed_to_the_end_writes_the_hand_computed_fills(acc):
     started = _start(acc)
     assert started["status"] == "running" and started["active"] is True and started["mode"] == "SHADOW" and started["feed"] == "replay"

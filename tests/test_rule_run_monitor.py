@@ -50,12 +50,15 @@ MON = BASE + "/{account_id}/rule-runs/{run_id}/monitor"
 BIG = {**BODY, "position": {"amount": 40_000_000}, "costs": {"commission_bp": 1.5, "slippage_ticks": 1, "participation_cap": None}}
 #: 손실로 끝나는 하루: 09:02 에 99주 @10,080 → 하루 끝 09:03 종가 10,010 − 한 틱 = 10,000 → (10,000 − 10,080) × 99 = −7,920원.
 LOSING = [R0, R1, R2, ("090300", 10_090, 10_090, 10_000, 10_010, 1_000)]
+#: 문 시험의 손 계산 하루(`hand_made_day`)와 같은 봉 — 시장 · 상품만 바꿔 짓는 데 쓴다.
+WINNING = [R0, R1, R2, ("090300", 10_090, 10_120, 10_080, 10_110, 1_000)]
+RECORDED = {"basis": "recorded", "reason": None}
 
 
-def _day_of(rows, ticker="005930", source="kis") -> list[Day]:
+def _day_of(rows, ticker="005930", source="kis", market="KOSPI", instrument="stock") -> list[Day]:
     t, o, h, low, c, v = zip(*rows, strict=True)
     s = Session(ticker, DAY, np.array(t), np.array(o, float), np.array(h, float), np.array(low, float), np.array(c, float),
-                np.array(v, float), source, None, "KOSPI", "stock", "삼성전자")
+                np.array(v, float), source, None, market, instrument, "삼성전자")
     return [Day(DAY, {ticker: s})]
 
 
@@ -101,12 +104,19 @@ def _monitor(client, acc, run_id) -> dict:
 
 @pytest.fixture()
 def known_master(monkeypatch):
-    """종목 마스터가 이 종목을 안다(코스피 · 주식) — 손으로 만든 봉의 시장 칸과 같은 답이다.
+    """종목 마스터가 이 종목을 안다(코스피 · 주식). 시험 환경의 기본 마스터는 시장을 모른다.
 
-    실제 준비(`minute_feed`)는 봉의 시장 · 상품 칸을 ★이 마스터에서★ 정하고, 관제도 같은 마스터로 읽는다. 시험 환경의 기본 마스터는 시장을 모른다
-    (그 경우는 아래 '비용을 모르면' 시험이 본다)."""
+    가동의 체결 줄은 ★그때의★ 시장 · 상품을 갖고 있어 관제는 이 마스터에 기대지 않는다 — 이 고정물은 그 칸이 생기기 전에 적힌 줄
+    (읽는 때의 마스터로 정한다)을 볼 때만 쓴다."""
     import src.api.intraday_routes as mod
     monkeypatch.setattr(mod, "master_lookup", lambda: lambda _symbol: {"market": "KOSPI", "group_code": "ST", "name": "삼성전자"})
+
+
+def _forget_classes(run_id: int, seq: int | None = None) -> None:
+    """그 가동의 줄(또는 한 줄)을 시장 · 상품 칸이 생기기 전에 적힌 줄처럼 만든다."""
+    where, args = ("run_id = :r", {"r": run_id}) if seq is None else ("run_id = :r AND seq = :s", {"r": run_id, "s": seq})
+    with dbmod.get_sync_engine().begin() as c:
+        assert c.execute(text(f"UPDATE rule_run_fills SET market = NULL, instrument = NULL, classified = NULL WHERE {where}"), args).rowcount
 
 
 def _table_rows() -> dict[str, int]:
@@ -142,13 +152,15 @@ def test_someone_elses_account_and_a_run_of_another_account_are_both_404(client)
 
 # ── 끝까지 돈 가동 = 손 계산 = 그날의 백테스트 ──────────────────────────────────────────
 
-def test_a_finished_run_shows_the_hand_computed_day_and_the_backtests_own_numbers(client, known_master):
+def test_a_finished_run_shows_the_hand_computed_day_and_the_backtests_own_numbers(client):
+    """시험 환경의 종목 마스터는 시장을 모른다 — 그래도 관제의 비용은 그날의 백테스트와 같다(시장 · 상품은 체결 줄에 적혀 있다)."""
     acc = _connect(client)
     key, backtest = _backtest(client)
     run_id = _run(client, acc, key)
     body = _get(client, acc, run_id).json()
     assert (body["mode"], body["kill_switch"], body["gate"]) == ("SHADOW", False, {"mock": True})
     assert (body["run"]["status"], body["run"]["active"], len(body["run"]["fills"])) == ("finished", False, 2)
+    assert [(f["market"], f["instrument"], f["classified"]) for f in body["run"]["fills"]] == [("KOSPI", "stock", True)] * 2
     m = body["monitor"]
     assert m["orders"] == {"basis": "order_log", "reason": None, "signals": 2, "by_status": {"SHADOW_LOGGED": 2}, "rejected": [], "unrecorded": 0}
     assert m["fills"] == {"virtual": 2, "broker": 0, "broker_reason": None}
@@ -162,6 +174,7 @@ def test_a_finished_run_shows_the_hand_computed_day_and_the_backtests_own_number
     assert pnl["gross"] == backtest["summary"]["gross"]["total"]          # 그날의 백테스트가 낸 값과 같다
     assert pnl["net"] == pytest.approx(backtest["summary"]["net"]["total"])
     assert pnl["basis"] == backtest["basis"]                              # 무엇이 관측 · 추론 · 가정인지도 같다
+    assert pnl["classification"] == RECORDED                              # 시장 · 상품은 가동 때 적힌 값이다
 
     assert m["backtest"] == {"state": "same", "reason": monitor.BACKTEST["same"], "run_fills": 2, "backtest_fills": 2}
     assert m["loss_limit"] == {"limit": None, "reason": monitor.REASONS["no_loss_limit"], "realized_gross": 1_980.0, "room": None, "touched": None}
@@ -170,6 +183,46 @@ def test_a_finished_run_shows_the_hand_computed_day_and_the_backtests_own_number
     journal = m["journal"]                                                # 하루가 끝났다 — 매매일지 전체
     assert (journal["trades_total"], journal["summary"]["gross"]["total"]) == (1, 1_980.0)
     assert journal["not_covered"] == list(NOT_MODELED)                    # 올린 파일의 이야기가 아니라 시뮬레이션의 한계를 적는다
+
+
+def test_a_master_that_changes_after_the_run_does_not_move_the_net(client, monkeypatch):
+    """가동 때의 시장 · 상품은 줄에 적혀 있다 — 뒤에 종목 마스터가 다른 말을 해도 지난 가동의 비용 뒤 손익은 움직이지 않는다."""
+    acc = _connect(client)
+    key, backtest = _backtest(client)
+    run_id = _run(client, acc, key)
+    before = _monitor(client, acc, run_id)["pnl"]
+    import src.api.intraday_routes as mod
+    etf = {"market": "KOSDAQ", "group_code": "EF", "name": "다른 이름"}
+    assert sell_tax_bp_on(dt.date(2026, 3, 4), "KOSDAQ", "etf")["bp"] != sell_tax_bp_on(dt.date(2026, 3, 4), "KOSPI", "stock")["bp"]   # 마스터를 믿으면 달라질 값
+    monkeypatch.setattr(mod, "master_lookup", lambda: lambda _symbol: etf)
+    after = _monitor(client, acc, run_id)
+    assert after["pnl"]["net"] == before["net"] == pytest.approx(backtest["summary"]["net"]["total"])
+    assert after["pnl"]["cost"] == before["cost"] and after["pnl"]["basis"] == before["basis"]
+    assert after["pnl"]["classification"] == RECORDED
+    assert after["journal"]["trades"][0]["name"] == "다른 이름"            # 이름은 지금의 마스터에서 읽는다(표시일 뿐 — 값에 닿지 않는다)
+
+
+def test_rows_written_before_the_columns_are_classified_by_todays_master_and_the_monitor_says_so(client, known_master):
+    """★짝★ — 그때의 시장 · 상품이 적히지 않은 옛 줄은 지어내지 않는다: 읽는 때의 마스터로 정하고 그렇게 적는다."""
+    acc = _connect(client)
+    key, backtest = _backtest(client)
+    run_id = _run(client, acc, key)
+    at_read = {"basis": "read_time_master", "reason": monitor.REASONS["classified_at_read"]}
+    _forget_classes(run_id, seq=0)                                        # 한 줄만 미기록이어도 가동 전체가 그렇다(한 가동에 두 기준을 섞지 않는다)
+    assert _monitor(client, acc, run_id)["pnl"]["classification"] == at_read
+    _forget_classes(run_id)
+    pnl = _monitor(client, acc, run_id)["pnl"]
+    assert pnl["classification"] == at_read
+    assert pnl["net"] == pytest.approx(backtest["summary"]["net"]["total"])   # 지금의 마스터가 안다 — 그 값으로 센다
+
+
+def test_old_rows_and_a_master_that_does_not_know_leave_the_net_without_a_value(client):
+    acc = _connect(client)
+    run_id = _run(client, acc, _backtest(client)[0])
+    _forget_classes(run_id)
+    pnl = _monitor(client, acc, run_id)["pnl"]
+    assert (pnl["gross"], pnl["net"], pnl["net_reason"]) == (1_980.0, None, monitor.REASONS["cost_unknown"])
+    assert pnl["classification"] == {"basis": "read_time_master", "reason": monitor.REASONS["classified_at_read"]}
 
 
 def test_a_running_run_counts_what_closed_and_never_values_what_is_still_open(client):
@@ -391,24 +444,32 @@ def test_a_setting_copy_that_no_longer_reads_leaves_pnl_limit_and_comparison_wit
     m = res.json()["monitor"]
     why = monitor.REASONS["bad_setting"]
     assert m["pnl"] == {"available": False, "reason": why, "gross": None, "cost": None, "net": None, "net_reason": None,
-                        "closed_trades": None, "open_positions": None, "includes_rejected": None, "basis": None}
+                        "closed_trades": None, "open_positions": None, "includes_rejected": None, "basis": None, "classification": None}
     assert m["loss_limit"] == {"limit": None, "reason": why, "realized_gross": None, "room": None, "touched": None}
     assert m["backtest"] == {"state": "unknown", "reason": why, "run_fills": 2, "backtest_fills": None}
     assert m["journal"] is None
     assert m["orders"]["by_status"] == {"SHADOW_LOGGED": 2} and m["fills"]["virtual"] == 2      # 가동 줄과 주문은 그대로 보인다
 
 
-def test_a_sell_whose_tax_cannot_be_determined_leaves_the_net_without_a_value(client):
-    """시험 환경의 종목 마스터는 시장을 모른다 → 매도세 미상 → 비용 뒤 손익은 값이 없다(0 도, 수수료만 뺀 값도 아니다)."""
+def test_a_sell_whose_tax_cannot_be_determined_leaves_the_net_without_a_value(client, monkeypatch):
+    """가동 때 시장을 몰랐던 종목 → 매도세 미상 → 비용 뒤 손익은 값이 없다(0 도, 수수료만 뺀 값도 아니다)."""
+    with_days(monkeypatch, _day_of(WINNING, market=None, instrument=None))
     acc = _connect(client)
     key, _journal = _backtest(client)
-    pnl = _monitor(client, acc, _run(client, acc, key))["pnl"]
+    run_id = _run(client, acc, key)
+    pnl = _monitor(client, acc, run_id)["pnl"]
     assert (pnl["available"], pnl["gross"], pnl["cost"], pnl["net"], pnl["net_reason"]) == (True, 1_980.0, None, None, monitor.REASONS["cost_unknown"])
+    assert pnl["classification"] == RECORDED                              # ★미상도 그때의 기록이다★(미기록이 아니다)
     # ★짝★ — 모르는 종목을 무엇으로 볼지(사용자의 가정)가 설정에 있으면 값이 있다.
     assumed = {**BODY, "costs": {"commission_bp": 1.5, "slippage_ticks": 1, "unknown_market": "KOSPI", "unknown_instrument": "stock"}}
     key, journal = _backtest(client, assumed)
     pnl = _monitor(client, acc, _run(client, acc, key))["pnl"]
     assert pnl["net_reason"] is None and pnl["net"] == pytest.approx(journal["summary"]["net"]["total"]) and pnl["net"] < pnl["gross"]
+    # 뒤에 종목 마스터가 알게 돼도 ★그때의 미상은 미상★이다 — 지금의 마스터가 지난 가동의 빈칸을 채우지 않는다.
+    import src.api.intraday_routes as mod
+    monkeypatch.setattr(mod, "master_lookup", lambda: lambda _symbol: {"market": "KOSPI", "group_code": "ST", "name": "삼성전자"})
+    later = _monitor(client, acc, run_id)["pnl"]
+    assert (later["net"], later["net_reason"], later["classification"]) == (None, monitor.REASONS["cost_unknown"], RECORDED)
 
 
 def test_an_order_log_cut_at_the_scan_limit_does_not_claim_to_know_what_is_missing(client, monkeypatch):

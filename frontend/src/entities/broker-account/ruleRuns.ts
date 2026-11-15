@@ -32,6 +32,9 @@ export type RunClock = { total: number; done: number; next: string | null };
 export type RunFill = {
   seq: number; executed_at: string; symbol: string; side: string; quantity: number; price: number; kind: string; event: string;
   client_order_id: string | null; order_status: string | null; order_reason: string | null;
+  /** ★가동할 때의★ 시장 · 상품(매도세가 여기서 갈린다). `classified` 가 참이면 그때의 값이다 — 그때 몰랐으면 `null` 이다.
+   *  거짓이면 이 칸이 생기기 전에 적힌 줄이다(관제가 읽는 때의 종목 마스터로 정하고 그렇게 적는다). */
+  market: string | null; instrument: string | null; classified: boolean;
 };
 
 export type RuleRun = {
@@ -71,7 +74,10 @@ export type RunMonitor<J = unknown> = {
   pnl: { available: boolean; reason: string | null; gross: number | null; cost: number | null; net: number | null; net_reason: string | null;
          closed_trades: number | null; open_positions: number | null;
          /** 주문 경로가 거절한 신호의 가상 체결 수 — 손익에 들어 있다(실제 주문이었다면 없었을 체결). */
-         includes_rejected: number | null; basis: unknown };
+         includes_rejected: number | null; basis: unknown;
+         /** 매도세를 가른 시장 · 상품이 어디서 왔는가 — `recorded`(체결 줄에 적힌 가동 때의 값) ·
+          *  `read_time_master`(그 칸이 없는 옛 줄이라 지금의 종목 마스터로 정함 — `reason`). 손익을 내지 못했으면 `null`. */
+         classification: { basis: string; reason: string | null } | null };
   /** 규칙 안 일 손실 한도 — 비용 전 실현손익의 그날 누계로 잰다. `touched` 는 한 번이라도 닿았는지(닿으면 그날 새 진입이 없다). */
   loss_limit: { limit: number | null; reason: string | null; realized_gross: number | null; room: number | null; touched: boolean | null };
   kill: { active: boolean; own: boolean };

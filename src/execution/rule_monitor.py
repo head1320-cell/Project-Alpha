@@ -45,6 +45,7 @@ REASONS = {
     "bad_setting": "가동 기록에 적힌 설정을 지금의 규칙 틀로 읽지 못했습니다.",
     "no_loss_limit": "이 설정에는 하루 최대 손실이 없습니다.",
     "cost_unknown": "비용을 모르는 체결이 있어 비용 뒤 손익을 내지 않았습니다.",
+    "classified_at_read": "이 가동의 체결 줄에는 가동 때의 시장 · 상품이 적혀 있지 않아, 지금의 종목 마스터로 매도세를 정했습니다.",
     "replay_has_no_lag": "재생은 적재된 하루를 다시 흘립니다. 봉의 지연은 장중 공급에서만 잽니다.",
 }
 
@@ -58,11 +59,29 @@ BACKTEST = {
 }
 
 _FILL_KEYS = ("executed_at", "symbol", "side", "quantity", "price")
+_CLASS_KEYS = ("market", "instrument")
 
 
 def _rows(fills: list[dict]) -> list[dict]:
-    """체결 줄에서 체결 자체만(시각 · 종목 · 방향 · 수량 · 가격) — 매매일지의 입력이자 백테스트와 견주는 단위다."""
+    """체결 줄에서 체결 자체만(시각 · 종목 · 방향 · 수량 · 가격) — 한도의 누계와 백테스트와 견주는 단위다."""
     return [{k: f[k] for k in _FILL_KEYS} for f in fills]
+
+
+def _recorded(fills: list[dict]) -> bool:
+    """모든 줄의 시장 · 상품이 ★가동 때 적힌 값★인가. 하나라도 아니면 가동 전체를 읽는 때의 마스터로 정한다(한 가동에 두 기준을 섞지 않는다)."""
+    return all(f.get("classified") for f in fills)
+
+
+def _names_only(master: Callable[[str], dict | None] | None) -> Callable[[str], dict | None] | None:
+    """종목의 ★이름만★ 주는 마스터 — 가동 때 몰랐던 시장 · 상품을 지금의 마스터가 채우지 않게 한다(이름은 표시일 뿐 값에 닿지 않는다)."""
+    if master is None:
+        return None
+
+    def lookup(symbol: str) -> dict | None:
+        flags = master(symbol)
+        name = flags.get("name") if isinstance(flags, dict) else None
+        return {"name": name} if name else None
+    return lookup
 
 
 # ── 주문 ─────────────────────────────────────────────────────────────────────────────
@@ -108,8 +127,14 @@ def _orders(fills: list[dict], log: dict[str, dict] | None, truncated: bool) -> 
 # ── 실현손익 · 한도 ───────────────────────────────────────────────────────────────────
 
 def pnl_of(fills: list[dict], costs: CostAssumptions, master: Callable[[str], dict | None] | None) -> tuple[dict, dict]:
-    """→ (손익 묶음, 매매일지 전체). 실현손익은 청산을 마친 거래 + 일부 청산한 몫이다(미청산 수량은 평가하지 않는다)."""
-    journal = {**analyze(_rows(fills), costs.journal_options(), master=master), "not_covered": list(NOT_MODELED)}
+    """→ (손익 묶음, 매매일지 전체). 실현손익은 청산을 마친 거래 + 일부 청산한 몫이다(미청산 수량은 평가하지 않는다).
+
+    매도세를 가르는 시장 · 상품은 ★체결 줄에 적힌 가동 때의 값★이다(그때 몰랐으면 모른다 — 사용자의 가정이 있으면 가정). 그 값이 적히지
+    않은 옛 줄이면 읽는 때의 종목 마스터로 정하고 `classification` 에 그렇게 적는다."""
+    recorded = _recorded(fills)
+    rows = [{k: f.get(k) for k in _FILL_KEYS + _CLASS_KEYS} for f in fills] if recorded else _rows(fills)
+    journal = {**analyze(rows, costs.journal_options(), master=_names_only(master) if recorded else master),
+               "not_covered": list(NOT_MODELED)}
     summary = journal["summary"]
     partial = summary["open_realized"]
     gross = summary["gross"]["total"] + partial["gross"]
@@ -119,7 +144,9 @@ def pnl_of(fills: list[dict], costs: CostAssumptions, master: Callable[[str], di
     return ({"available": True, "reason": None, "gross": gross, "cost": gross - net if cost_known else None, "net": net,
              "net_reason": None if cost_known else REASONS["cost_unknown"],
              "closed_trades": journal["trades_total"], "open_positions": len(journal["open_positions"]),
-             "includes_rejected": sum(1 for f in fills if f["order_status"] == "REJECTED"), "basis": journal["basis"]},
+             "includes_rejected": sum(1 for f in fills if f["order_status"] == "REJECTED"), "basis": journal["basis"],
+             "classification": ({"basis": "recorded", "reason": None} if recorded
+                                else {"basis": "read_time_master", "reason": REASONS["classified_at_read"]})},
             journal)
 
 
@@ -166,7 +193,7 @@ def view(username: str, account_id: str, run_id: int, *, master: Callable[[str],
          day_of: Callable | None = None) -> dict:
     """내 계좌의 가동 하나와 그 관제 → `{"run": …, "monitor": …}`. 없거나 남의 것이면 `RunRefused("not_found")`.
 
-    `master` 는 종목 마스터(매매일지가 시장 · 상품 · 이름을 읽는다), `day_of(tickers, rule, day)` 는 그날의 봉을 분봉 백테스트와 같은 준비로
+    `master` 는 종목 마스터(매매일지가 이름을 읽는다 — 시장 · 상품은 옛 줄일 때만), `day_of(tickers, rule, day)` 는 그날의 봉을 분봉 백테스트와 같은 준비로
     지어 `(Day, session)` 을 주거나 적재돼 있지 않으면 `None` 을 준다."""
     run = rule_runner.get(username, account_id, run_id)
     fills = run["fills"]
@@ -180,7 +207,7 @@ def view(username: str, account_id: str, run_id: int, *, master: Callable[[str],
     if parts is None:
         why = REASONS["bad_setting"]
         pnl = {"available": False, "reason": why, "gross": None, "cost": None, "net": None, "net_reason": None,
-               "closed_trades": None, "open_positions": None, "includes_rejected": None, "basis": None}
+               "closed_trades": None, "open_positions": None, "includes_rejected": None, "basis": None, "classification": None}
         limit = {"limit": None, "reason": why, "realized_gross": None, "room": None, "touched": None}
     else:
         pnl, journal = pnl_of(fills, parts[2], master)

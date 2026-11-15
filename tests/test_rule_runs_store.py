@@ -152,6 +152,59 @@ def test_fills_of_one_run_do_not_leak_into_another(db):
     assert rr.fills_of(b) == [] and len(rr.fills_of(a)) == 1
 
 
+# ── 그때의 시장 · 상품 (미상 ≠ 미기록) ─────────────────────────────────────────────
+
+#: 이 칸들이 생기기 전(W5b)의 표 — 이미 그렇게 만들어진 DB 가 있다.
+_OLD_FILLS = ("CREATE TABLE rule_run_fills (run_id INTEGER, seq INTEGER, executed_at VARCHAR(19), symbol VARCHAR(12), "
+              "side VARCHAR(4), quantity DOUBLE PRECISION, price DOUBLE PRECISION, kind VARCHAR(10), event VARCHAR(30), "
+              "client_order_id VARCHAR(40), order_status VARCHAR(20), order_reason VARCHAR(60), PRIMARY KEY (run_id, seq))")
+_OLD_ROW = ("INSERT INTO rule_run_fills VALUES (7, 0, '2026-03-02 09:02:00', '035720', 'buy', 99, 10080.0, 'virtual', 'entry_signal', "
+            "'CO-0', 'SHADOW_LOGGED', NULL)")
+
+
+def _class(row: dict) -> tuple:
+    return row["market"], row["instrument"], row["classified"]
+
+
+def test_a_fill_keeps_the_market_and_instrument_it_had_at_the_run(db):
+    """가동할 때 준비가 정한 시장 · 상품을 줄에 남긴다 — 뒤에 종목 마스터가 달라져도 그때의 값이 남는다."""
+    run_id = _open()
+    assert rr.add_fill(run_id, 0, {**BUY, "market": "KOSPI", "instrument": "stock"}, event="entry_signal", order=LOGGED) is True
+    assert rr.add_fill(run_id, 1, {**SELL, "market": "KOSDAQ", "instrument": "etf"}, event="session_end", order=LOGGED) is True
+    assert [_class(r) for r in rr.fills_of(run_id)] == [("KOSPI", "stock", True), ("KOSDAQ", "etf", True)]
+    assert rr.keeps_class() is True
+
+
+def test_unknown_at_the_run_is_recorded_as_unknown_not_left_unrecorded(db):
+    """★미상(그때 몰랐다) ≠ 미기록(칸이 없던 줄)★ — 그때 몰랐던 줄도 '그때의 값'이라는 표시를 갖는다."""
+    run_id = _open()
+    assert rr.add_fill(run_id, 0, {**BUY, "market": None, "instrument": None}, event="entry_signal", order=LOGGED) is True
+    assert rr.add_fill(run_id, 1, SELL, event="session_end", order=LOGGED) is True          # 칸 자체가 없는 줄도 같다
+    assert [_class(r) for r in rr.fills_of(run_id)] == [(None, None, True), (None, None, True)]
+
+
+def test_a_table_made_before_these_columns_gets_them_and_its_old_rows_read_as_not_recorded(db):
+    from sqlalchemy import text
+    with dbmod.get_engine().begin() as c:
+        c.execute(text(_OLD_FILLS))
+        c.execute(text(_OLD_ROW))
+    assert rr.add_fill(7, 1, {**SELL, "market": "KOSPI", "instrument": "stock"}, event="session_end", order=LOGGED) is True
+    rows = rr.fills_of(7)
+    assert [_class(r) for r in rows] == [(None, None, False), ("KOSPI", "stock", True)]      # 옛 줄은 지어내지 않는다
+    assert [(r["seq"], r["side"], r["price"]) for r in rows] == [(0, "buy", 10_080.0), (1, "sell", 10_100.0)]   # 옛 줄도 그대로 읽힌다
+    assert rr.keeps_class() is True
+
+
+def test_when_the_columns_cannot_be_added_fills_are_still_written_and_read_without_them(db, monkeypatch):
+    """칸을 붙이지 못한 DB 에서도 가동은 적힌다 — 다만 그 줄은 '그때의 값'이라고 말하지 않는다(읽는 쪽이 그렇게 적는다)."""
+    monkeypatch.setattr(rr.schema_add_columns, "add_columns", lambda *a, **k: False)
+    run_id = _open()
+    assert rr.add_fill(run_id, 0, {**BUY, "market": "KOSPI", "instrument": "stock"}, event="entry_signal", order=LOGGED) is True
+    rows = rr.fills_of(run_id)
+    assert [_class(r) for r in rows] == [(None, None, False)] and (rows[0]["side"], rows[0]["price"]) == ("buy", 10_080.0)
+    assert rr.keeps_class() is False
+
+
 # ── 재시작 ──────────────────────────────────────────────────────────────────
 
 def test_a_restart_marks_only_the_runs_still_running(db):
