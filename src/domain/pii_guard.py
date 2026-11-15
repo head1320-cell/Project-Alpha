@@ -25,6 +25,8 @@ _PHONE = re.compile(r"(?<!\d)0\d{1,2}[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)")
 _LONG_DIGITS = re.compile(r"\d{9,}")
 #: 날짜(2026-10-29 · 2026.10.29 · 2026/10/29) — 긴 숫자열을 셀 때는 날짜를 구분 기호로 바꾼다(PB4 — 별칭 끝 숫자 + 날짜가 하이픈·공백을
 #: 걷으면 9자리를 넘어 계좌번호로 잘못 보였다). 날짜는 개인정보 모양이 아니다.
+#: ★전화번호를 볼 때도 같다★ — 화면이 짓는 한 장 제목은 `별칭 + 날짜 + 한 장` 이라, 별칭이 0 과 숫자 넷 · 다섯으로 끝나면 뒤의 연도와
+#: 이어져("06630 2026") 전화번호로 잘못 보였다. 별칭만으로는 통과하는데 도구가 지은 제목이 거절됐다(CI E2E 의 간헐 실패로 드러남 — 2026-11-14).
 _DATE = re.compile(r"(?<!\d)\d{4}[-./]\d{1,2}[-./]\d{1,2}(?!\d)")
 
 
@@ -40,8 +42,9 @@ def pii_reason(text: str | None, *, label: str = "별칭", max_len: int = ALIAS_
         return f"{label}에 이메일 형식이 포함돼 있습니다 — 연락처는 입력하지 않습니다."
     if _RRN.search(s):
         return f"{label}에 주민등록번호 형식이 포함돼 있습니다 — 개인정보는 입력하지 않습니다."
-    if _PHONE.search(s):
+    undated = _DATE.sub("·", s)                                # 날짜는 전화번호 · 계좌번호의 조각이 아니다
+    if _PHONE.search(undated):
         return f"{label}에 전화번호 형식이 포함돼 있습니다 — 연락처는 입력하지 않습니다."
-    if _LONG_DIGITS.search(re.sub(r"[\s-]", "", _DATE.sub("·", s))):
+    if _LONG_DIGITS.search(re.sub(r"[\s-]", "", undated)):
         return f"{label}에 긴 숫자열(계좌번호 형식)이 포함돼 있습니다 — 계좌번호는 입력하지 않습니다."
     return None

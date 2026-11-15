@@ -354,7 +354,8 @@ def test_investment_judgement_gets_the_client_sentence(client, monkeypatch):
 
 # ── 개인정보 모양 검사가 날짜를 계좌번호로 보지 않는다 (PB4 E2E 에서 찾음) ─────────────
 
-@pytest.mark.parametrize("text", ["고객 A-12 2026-10-29 한 장", "PB4 한 장 ab3c12 2026-10-29 한 장", "2026.10.29 점검 · 고객 7"])
+@pytest.mark.parametrize("text", ["고객 A-12 2026-10-29 한 장", "PB4 한 장 ab3c12 2026-10-29 한 장", "2026.10.29 점검 · 고객 7",
+                                  "고객 1234 2026-10-29 56789 점검"])                # 날짜 앞뒤의 숫자는 이어지지 않는다
 def test_dates_next_to_digits_are_not_account_numbers(text):
     """제목에 날짜를 붙이면(별칭 끝 숫자 + 2026-10-29) 공백·하이픈을 걷은 숫자열이 9자리를 넘어 계좌번호로 잘못 봤다."""
     from src.domain.pii_guard import pii_reason
@@ -366,6 +367,37 @@ def test_account_shaped_runs_are_still_refused(text):
     """짝 — 날짜를 빼도 계좌번호 모양은 그대로 거절한다."""
     from src.domain.pii_guard import pii_reason
     assert "계좌번호" in (pii_reason(text, label="한 장 제목", max_len=80) or "")
+
+
+# ── … 전화번호로도 보지 않는다 (CI E2E 의 간헐 실패에서 찾음 — 2026-11-14) ──────────────
+
+@pytest.mark.parametrize("alias", ["PB6 io06630", "고객 06630", "정기 점검 x 01234"])
+@pytest.mark.parametrize("day", ["2026-11-14", "2026.11.14", "2026/11/14"])
+def test_an_alias_ending_in_digits_next_to_a_date_is_not_a_phone_number(alias, day):
+    """화면은 한 장 제목을 `별칭 + 날짜 + 한 장` 으로 짓는다. 별칭이 0 과 숫자 넷 · 다섯으로 끝나면 뒤의 연도와 이어져("06630 2026")
+    전화번호로 잘못 봤다 — ★별칭만으로는 통과하는데 도구가 지은 제목이 거절됐다★(그 고객의 한 장을 만들 수 없었다)."""
+    from src.domain.pii_guard import pii_reason
+    assert pii_reason(alias) is None                                       # 별칭 자체는 받아들여진 것이다
+    assert pii_reason(f"{alias} {day} 한 장", label="한 장 제목", max_len=80) is None
+
+
+@pytest.mark.parametrize("text", ["010-1234-5678", "고객 010 1234 5678 2026-11-14 한 장", "02-2026-1114 점검",
+                                  "2026-11-14 010.1234.5678", "01012345678 2026-11-14 한 장", "고객 06630 2026 1114"])
+def test_phone_shaped_text_is_still_refused_next_to_a_date(text):
+    """짝 — 날짜를 걷어도 전화번호 모양은 그대로 거절한다. 날짜 모양이 아닌 숫자(`2026 1114`)는 걷지 않는다."""
+    from src.domain.pii_guard import pii_reason
+    assert "전화번호" in (pii_reason(text, label="한 장 제목", max_len=80) or "")
+
+
+def test_the_sheet_route_accepts_the_title_the_screen_builds_for_an_alias_ending_in_digits(client):
+    """실패했던 길 그대로 — 받아들여진 별칭("고객 06630")으로 화면이 짓는 제목(`별칭 날짜 한 장`)이 한 장을 만든다.
+    ★짝★: 제목에 사람이 적은 전화번호가 있으면 여전히 422 다."""
+    h = _auth(client, "alice")
+    cid = _cid(client, h, alias="고객 06630")
+    made, _ = _make(client, h, cid, title="고객 06630 2026-11-14 한 장")
+    assert made.status_code == 201, made.text
+    refused, _ = _make(client, h, cid, title="고객 06630 010-1234-5678 한 장")
+    assert refused.status_code == 422 and "전화번호" in refused.text
 
 
 def test_sheet_id_of_another_client_is_404_even_for_the_owner(client):
