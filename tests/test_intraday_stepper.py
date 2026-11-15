@@ -74,6 +74,31 @@ def test_stepping_through_a_day_emits_exactly_the_batch_fills(setup):
     assert total > 0, "이 설정은 체결을 하나도 내지 않았다 — 공허한 성질 시험이다"
 
 
+def _cut(s: Session, n: int) -> Session:
+    """그 종목의 봉이 `n` 개에서 끝난다(다른 종목은 더 거래된다)."""
+    return _drop(s, range(n, len(s.time)))
+
+
+@pytest.mark.parametrize("setup", range(len(SETUPS)))
+def test_stepping_matches_the_batch_when_tickers_stop_trading_at_different_times(setup):
+    """한 종목의 봉이 일찍 끝나도 성질은 같다. 장중에는 그 봉이 마지막인지 알 수 없다 — 청산은 하루의 끝(`finish`)에서 나온다.
+    (그 종목의 마지막 봉에서 청산하던 때는 `finish` 가 `not_monotone` 으로 깨졌다 — 재현: seed 5 · 6, 40봉에서 끝난 종목)"""
+    rule, position = SETUPS[setup]
+    total = stale = 0
+    for seed in range(12):
+        a, b = _random_session(seed, "000660"), _random_session(seed + 100, "005930")
+        for n in (40, 55, 70):
+            day = _day(_cut(a, n), b)
+            batch = simulate([day], rule, position, COSTS, rules=RULES)
+            walked, st = _walk(day, rule, position)
+            assert walked == batch["fills"], (setup, seed, n)
+            total += len(walked)
+            stale += batch["assumptions"].get("forced_exit_stale_price", 0)
+    assert total > 0, "이 설정은 체결을 하나도 내지 않았다 — 공허한 성질 시험이다"
+    if setup in (0, 3):                                               # 이 두 설정에서는 일찍 끝난 종목이 들고 있던 경우가 실제로 있다
+        assert stale > 0, "일찍 끝난 종목이 포지션을 들고 있던 경우가 한 번도 없었다 — 이 시험이 보려는 것을 보지 않았다"
+
+
 def _with_prev(s: Session, close: float) -> Session:
     return Session(s.ticker, s.date, s.time, s.open, s.high, s.low, s.close, s.volume, s.source,
                    PrevDay(close, close + 80.0, close - 80.0, "minute"), s.market, s.instrument, s.name)

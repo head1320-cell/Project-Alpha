@@ -7,6 +7,9 @@
 봉은 이 파일 안의 작은 난수기로 만든다 — 합성 분봉 생성기나 numpy 의 난수 흐름이 바뀌어도 골든이 흔들리지 않게.
 규칙의 뜻은 `test_intraday_simulator.py`(손 계산)와 `test_intraday_rules.py` 가 건다. 여기는 뜻이 아니라 ★불변★만 본다:
 골든이 깨졌다면 체결이 달라진 것이다 — 의도한 변경이면 손 계산 시험을 먼저 고치고 그다음 이 값을 다시 뜬다.
+
+한 번 다시 떴다(2026-11-14): 강제 청산이 '그 종목의 마지막 봉'에서 '하루의 끝'으로 옮겨 가며 열넷 가운데 하나의 ★줄 순서★가 바뀌었다
+(마지막 분에 다른 종목의 시간 청산이 강제 청산보다 먼저 온다). 옛 구현과 줄 단위로 견줘 줄의 집합 · 사건 수 · 센 것이 같음을 확인했다.
 """
 from __future__ import annotations
 
@@ -78,7 +81,8 @@ GOLDEN = {
     "vwap_cross/guarded": ("9734dba4e64d787b88ec", 61),
     "vwap_cross/plain": ("b1567dd3dc3a6cfe8b09", 102),
     "volatility_breakout/guarded": ("c38ea208793c80a180c9", 28),
-    "volatility_breakout/plain": ("b5a1536c1743ee684b92", 186),
+    # 2026-11-14 다시 뜸 — 강제 청산을 '하루의 끝'으로 옮기며 마지막 분의 두 줄 순서가 바뀌었다(줄의 집합 · 센 것은 그대로 — HISTORY).
+    "volatility_breakout/plain": ("817605f4e6cb82816886", 186),
     "gap/guarded": ("d71ad396c922162bf30b", 8),
     "gap/plain": ("326acaa32bf86cd7276b", 18),
     "volume_surge/guarded": ("9da763e8068cc08bfc42", 2),

@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
 from src.engine.trade_journal import analyze
 
@@ -16,7 +16,7 @@ from .simulator import ASSUMPTIONS, SKIP_REASONS, CostAssumptions, Day, Position
 from .types import PrevDay, Session
 
 __all__ = ["ASSUMPTIONS", "NOT_MODELED", "SKIP_REASONS", "CostAssumptions", "Day", "PositionRules", "PrevDay", "RuleSpec",
-           "Session", "SimError", "run", "simulate"]
+           "Session", "SimError", "run", "session_grade", "simulate"]
 
 #: 이 시뮬레이터가 ★모형에 넣지 않은 것★ — 결과의 `journal.not_covered` 에 싣는다.
 #: 일지 엔진의 목록은 '올린 파일'의 이야기라(파일에 없는 체결 …) 시뮬레이션 체결에 그대로 내면 거짓이 된다.
@@ -24,7 +24,7 @@ NOT_MODELED: tuple[str, ...] = (
     "호가·틱·체결 대기열: 분봉의 시가·고가·저가·종가로만 체결을 가정",
     "시장 충격: 참여율 상한은 수량만 줄이고 가격은 움직이지 않음",
     "공매도·신용·대주 거래: 매수로만 진입",
-    "하루를 넘기는 보유: 그 종목의 마지막 봉에 전부 청산",
+    "하루를 넘기는 보유: 하루의 끝에 전부 청산(그 종목의 마지막 봉 종가)",
     "수익률(%)·MDD(%): 진입 금액이 고정이라 계좌 평가금액이 없음",
     "기업행위(권리락·분할): 원주가를 그대로 쓰며 보정하지 않음",
     "선물·옵션·해외 종목",
@@ -45,6 +45,14 @@ def _origin(sources: dict[str, int]) -> dict:
     key = ("none" if not any(sources.values()) else "E0" if sources["synthetic"] else "unknown" if sources["unknown"] else "E3")
     return {"kind": "simulated", "sessions": dict(sources), "grade": key if key in ("E0", "E3") else None,
             "grade_reason": GRADE_REASONS[key]}
+
+
+def session_grade(sessions: Iterable[Session]) -> str:
+    """그 봉들의 출처 등급 — `run` 의 `origin.grade` 와 같은 규칙이다(가장 약한 출처가 정한다). 매기지 못하면 `"unknown"`."""
+    counts = {"kis": 0, "synthetic": 0, "unknown": 0}
+    for s in sessions:
+        counts[s.source if s.source in counts else "unknown"] += 1
+    return _origin(counts)["grade"] or "unknown"
 
 
 def run(days: Sequence[Day], rule: RuleSpec, position: PositionRules, costs: CostAssumptions, *, rules: dict | None = None,

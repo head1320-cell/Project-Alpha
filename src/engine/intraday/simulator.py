@@ -9,7 +9,9 @@
 - 예외는 미리 걸어 둔 가격 주문뿐이다 — 손절·익절·추적 손절(진입 때 정해진 값)과 미리 건 매수(앞 봉까지로 정해진 값).
 - 추적 손절의 기준 고가는 ★끝난 봉까지만★ 올린다. 미리 건 매수가 체결된 봉에서는 손절·익절을 보지 않는다(그 봉의 저가가
   진입 앞인지 뒤인지 모른다 — 세어 둔다).
-- 하루를 넘기지 않는다: 그 종목의 마지막 봉에서 남은 수량을 종가에 청산한다.
+- 하루를 넘기지 않는다: ★하루의 끝★(그날 모든 종목의 봉을 다 돈 뒤)에 남은 수량을 그 종목의 마지막 봉 종가에 청산한다.
+  ★그 종목의 마지막 봉에서 청산하지 않는다★ — 어느 봉이 마지막인지는 하루가 끝나야 안다. 거기서 청산하면 풀린 자리(보유 한도 ·
+  손실 한도 · 쉬는 시간)로 다른 종목의 진입이 달라진다(하루가 끝나야 알 수 있는 것을 쓴 진입이다). 그때 봉이 없던 종목은 센다.
 
 **세어 두는 것** — 가정이 쓰인 횟수와 막힌 진입(`ASSUMPTIONS`). 지어내지 않은 것은 건너뛰고 사유를 남긴다(`SKIP_REASONS`).
 하루 최대 손실은 ★비용 전★ 실현손익으로 본다(수수료·세금은 일지 엔진이 뒤에 계산한다) — 그것도 가정이라 문장에 적는다.
@@ -80,7 +82,7 @@ class Day:
     sessions: dict[str, Session]
     skipped: tuple[tuple[str, str], ...] = ()  # (종목, 사유) — 봉을 준비한 쪽이 이미 건너뛴 것
     shifted: bool = False                      # 장 운영 시간이 평소와 다른 날
-    #: ★아직 끝나지 않은 하루면 `False`★(걸음 엔진 `stepper` 가 쓴다) — 마지막 봉에서 남은 수량을 강제로 청산하지 않는다.
+    #: ★아직 끝나지 않은 하루면 `False`★(걸음 엔진 `stepper` 가 쓴다) — 하루의 끝에 하는 강제 청산을 하지 않는다.
     #: 지금까지의 봉으로 다시 돌릴 때마다 가짜 청산이 생기면 보유 한도 · 손실 한도가 풀려 다른 종목의 가짜 진입까지 만든다.
     final: bool = True
 
@@ -112,6 +114,7 @@ ASSUMPTIONS = {
     "exit_spread_by_participation": "참여율 상한 때문에 청산을 여러 봉에 나눴습니다.",
     "forced_exit_without_trades": "마지막 봉에 거래가 없었지만 종가에 청산한 것으로 보았습니다.",
     "forced_exit_over_participation": "마지막 봉의 강제 청산이 참여율 상한을 넘었습니다.",
+    "forced_exit_stale_price": "하루가 끝날 때 봉이 없던 종목은 그 종목의 마지막 봉 종가에 청산한 것으로 보았습니다.",
     "no_closing_auction_cutoff": "장 운영 시각 규칙을 읽지 못해 종가 단일가 구간의 진입 마감을 적용하지 않았습니다.",
     "etf_uses_stock_tick_table": "ETF 체결에 주식의 호가 단위 표를 적용했습니다. 실제 호가 단위와 다를 수 있습니다.",
 }
@@ -219,11 +222,9 @@ class _Run:
         self.counts = {"days": 0, "sessions": 0, "bars": 0, "entries": 0, "exits": 0}
         self.dates: list[str] = []                              # 실제로 돈 날 — 거래가 없어도 하루다(일별 흐름의 0)
         self.sources = {"kis": 0, "synthetic": 0, "unknown": 0}
-        self.final = True
 
     # 하루 ─────────────────────────────────────────────────────────────────────────────
     def day(self, day: Day) -> None:
-        self.final = day.final
         for ticker, reason in day.skipped:
             self.skipped.append({"date": day.date, "ticker": ticker, "reason": reason})
         live: dict[str, _Ticker] = {}
@@ -270,7 +271,8 @@ class _Run:
             for i in tk.hot:
                 watch.setdefault(str(tk.session.time[i]), []).append(n)
         busy: set[int] = set()
-        for label in sorted({label for tk in order for label in tk.index}):
+        labels = sorted({label for tk in order for label in tk.index})
+        for label in labels:
             signalled = watch.get(label)
             if not (busy or signalled):
                 continue
@@ -284,11 +286,32 @@ class _Run:
                     busy.add(n)
                 else:
                     busy.discard(n)
+        if day.final:
+            self.close_out(day.date, order, labels[-1], state)
+
+    # 하루의 끝 ─────────────────────────────────────────────────────────────────────────
+    def close_out(self, date: str, order: list[_Ticker], label: str, state: _DayState) -> None:
+        """하루를 넘기지 않는다 — 남은 수량을 ★하루의 마지막 시각★에 그 종목의 마지막 봉 종가로 청산한다(종목 코드 순).
+
+        걸어 둔 진입은 체결될 다음 봉이 없어 그대로 사라진다(종목의 상태는 하루마다 새로 만든다).
+        끝나지 않은 하루(`Day.final=False`)는 여기에 오지 않는다 — 다음 걸음이 잇는다."""
+        minute = int(label[:2]) * 60 + int(label[2:4])
+        for tk in order:
+            if tk.pos is None:
+                continue
+            i = len(tk.session.time) - 1
+            c, v = tk.bars[3][i], tk.bars[4][i]
+            if str(tk.session.time[i]) != label:
+                self.counters["forced_exit_stale_price"] += 1     # 그 종목의 봉은 더 일찍 끝났다 — 그때의 값이다
+            elif v <= 0:
+                self.counters["forced_exit_without_trades"] += 1
+            elif fills.capped(tk.pos.qty, bar_volume=v, cap=self.costs.participation_cap) < tk.pos.qty:
+                self.counters["forced_exit_over_participation"] += 1
+            self.sell((date, tk, i, label, state, minute), fills.sell_market(c, self.costs.slippage_ticks), None, "session_end")
 
     # 봉 하나 ──────────────────────────────────────────────────────────────────────────
     def bar(self, date: str, tk: _Ticker, i: int, label: str, state: _DayState) -> None:
-        s = tk.session
-        o, h, low, c, v = (column[i] for column in tk.bars)
+        o, h, low, _c, v = (column[i] for column in tk.bars)
         hhmm, minute = label[:4], int(label[:2]) * 60 + int(label[2:4])
         ctx = (date, tk, i, label, state, minute)
         acted = False
@@ -331,15 +354,6 @@ class _Run:
                 tk.pending_exit = "rule_exit"
         elif tk.entry_sig is not None and tk.entry_sig[i]:
             tk.pending_entry = True
-
-        if i == len(s.time) - 1 and self.final:                    # 하루를 넘기지 않는다(끝나지 않은 하루는 다음 걸음이 잇는다)
-            tk.pending_entry = False
-            if tk.pos is not None:
-                if v <= 0:
-                    self.counters["forced_exit_without_trades"] += 1
-                elif fills.capped(tk.pos.qty, bar_volume=v, cap=self.costs.participation_cap) < tk.pos.qty:
-                    self.counters["forced_exit_over_participation"] += 1
-                self.sell(ctx, fills.sell_market(c, self.costs.slippage_ticks), None, "session_end")
 
     # 진입 ─────────────────────────────────────────────────────────────────────────────
     def enter(self, ctx, kind: str, raw: float, volume: float, hhmm: str) -> bool:

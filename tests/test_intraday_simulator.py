@@ -96,6 +96,69 @@ def test_the_fill_rows_are_the_trade_journal_rows():
     assert "fee" not in row and "tax" not in row            # 비용 금액을 싣지 않는다 — 실으면 일지가 '관측'으로 읽는다
 
 
+# ── 하루를 넘기지 않는다 = ★하루의 끝★에서 청산한다(그 종목의 마지막 봉이 아니다) ─────────────────
+# 어느 봉이 그 종목의 마지막 봉인지는 하루가 끝나야 안다. 그 봉에서 청산하면 "이 종목은 더 거래되지 않는다"를 미리 안 셈이고,
+# 풀린 자리(보유 한도 · 손실 한도 · 쉬는 시간)로 다른 종목의 진입이 달라진다 — 장중에 돌리는 가동은 그렇게 할 수 없다.
+QUIET_DAY = [(f"09{m:02d}00", 10_000, 10_010, 9_990, 10_000, 1_000) for m in range(7)]          # 09:00 ~ 09:06 · 신호 없음
+SECOND = [*QUIET_DAY[:4], ("090400", 10_000, 10_060, 10_000, 10_060, 1_000), ("090500", 10_070, 10_100, 10_060, 10_090, 1_000),
+        ("090600", 10_090, 10_120, 10_080, 10_110, 1_000)]                                         # 09:04 가 신호 봉 → 09:05 진입
+
+
+def test_a_ticker_whose_bars_end_early_is_closed_when_the_day_ends_at_its_own_last_price():
+    """A 의 봉은 09:02 에서 끝나고 다른 종목은 09:06 까지 거래된다. A 는 09:06(하루의 끝)에 자기 마지막 종가 − 한 틱으로 청산된다."""
+    out = go(one_day(sess([R0, R1, R2]), sess(QUIET_DAY, ticker="000660")))
+    assert trades(out) == [("09:02:00", "005930", "buy", 99, 10_080.0), ("09:06:00", "005930", "sell", 99, 10_080.0)]   # 10,090 − 10
+    assert kinds(out) == ["entry_signal", "session_end"]
+    assert out["assumptions"]["forced_exit_stale_price"] == 1                 # 그때 그 종목에는 봉이 없었다 — 센다
+    assert sim.ASSUMPTIONS["forced_exit_stale_price"]                          # 화면이 읽는 문장이 있다
+
+
+def test_a_ticker_that_trades_to_the_last_minute_is_closed_on_that_bar_and_nothing_is_counted():
+    """★짝★ — 모든 종목의 마지막 봉이 같은 분이면 전과 한 글자도 다르지 않다(낡은 값으로 청산했다고 세지 않는다)."""
+    out = go(one_day(sess([R0, R1, R2, R3]), sess(QUIET_DAY[:4], ticker="000660")))
+    assert trades(out) == [("09:02:00", "005930", "buy", 99, 10_080.0), ("09:03:00", "005930", "sell", 99, 10_100.0)]
+    assert "forced_exit_stale_price" not in out["assumptions"]
+
+
+def test_an_open_position_keeps_its_slot_until_the_day_ends():
+    """보유 한도 1. A 는 09:02 에 들어가고 봉이 거기서 끝난다. B 의 신호는 09:04 다 — A 가 아직 들고 있으니 B 는 들어가지 못한다.
+    (그 종목의 마지막 봉에서 청산하던 때는 A 의 자리가 09:02 에 풀려 B 가 09:05 에 들어갔다 — 하루가 끝나야 알 수 있는 것을 쓴 진입이다)"""
+    one = PositionRules(amount=1_000_000, max_open_positions=1)
+    out = go(one_day(sess([R0, R1, R2]), sess(SECOND, ticker="000660")), position=one)
+    assert [(t[1], t[2]) for t in trades(out)] == [("005930", "buy"), ("005930", "sell")]
+    assert out["assumptions"]["entry_blocked_max_open"] == 1
+    two = PositionRules(amount=1_000_000, max_open_positions=2)                # ★짝★ — 자리가 있으면 들어간다
+    both = go(one_day(sess([R0, R1, R2]), sess(SECOND, ticker="000660")), position=two)
+    assert trades(both) == [("09:02:00", "005930", "buy", 99, 10_080.0), ("09:05:00", "000660", "buy", 99, 10_080.0),
+                            ("09:06:00", "000660", "sell", 99, 10_100.0), ("09:06:00", "005930", "sell", 99, 10_080.0)]
+    assert both["assumptions"]["forced_exit_stale_price"] == 1                 # 낡은 값으로 청산한 것은 A 하나다
+
+
+def test_closing_on_a_last_bar_without_trades_is_counted():
+    """마지막 봉에 거래가 없어도 종가에 청산한 것으로 본다 — 그것은 가정이라 센다. ★짝★: 거래가 있으면 세지 않는다."""
+    silent = ("090300", 10_090, 10_120, 10_080, 10_110, 0)
+    out = go(one_day(sess([R0, R1, R2, silent])))
+    assert trades(out)[1] == ("09:03:00", "005930", "sell", 99, 10_100.0) and out["assumptions"]["forced_exit_without_trades"] == 1
+    assert "forced_exit_without_trades" not in go(one_day(sess([R0, R1, R2, R3])))["assumptions"]
+
+
+def test_closing_more_than_the_participation_cap_allows_is_counted():
+    """강제 청산은 참여율 상한을 보지 않고 전량이다 — 상한을 넘겼으면 센다. ★짝★: 상한 안이면 세지 않는다."""
+    capped = CostAssumptions(commission_bp=None, slippage_ticks=1, participation_cap=0.1)
+    thin = ("090300", 10_090, 10_120, 10_080, 10_110, 500)                    # 상한 50주 < 들고 있는 99주
+    out = go(one_day(sess([R0, R1, R2, thin])), costs=capped)
+    assert trades(out)[1] == ("09:03:00", "005930", "sell", 99, 10_100.0) and out["assumptions"]["forced_exit_over_participation"] == 1
+    assert "forced_exit_over_participation" not in go(one_day(sess([R0, R1, R2, R3])), costs=capped)["assumptions"]
+
+
+def test_the_fills_stay_in_time_order_when_tickers_stop_trading_at_different_times():
+    for seed in range(8):
+        a, b = _random_session(seed, "000660"), _random_session(seed + 100, "005930")
+        for rule, position in SETUPS:
+            stamps = [f["executed_at"] for f in go(one_day(_cut(a, 40), b), rule=rule, position=position)["fills"]]
+            assert stamps == sorted(stamps), (seed, stamps)
+
+
 # ── 손절 ─────────────────────────────────────────────────────────────────────────────
 STOP = PositionRules(amount=1_000_000, stop_pct=1.0)
 
