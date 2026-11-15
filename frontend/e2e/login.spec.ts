@@ -164,6 +164,9 @@ test("이미 로그인했으면 그렇다고 말하고 이어서 갈 곳을 준�
 
 test("로그인 링크는 지금 화면을 next 로 넘긴다 — 프로필 카드(홈) · 설정", async ({ page }) => {
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+  // 서버가 그린 동그라미는 `loading` 이다 — 수화 전에 누른 클릭은 사라진다(스크립트 청크를 늦추면 10/10 재현 · 2026-11-15).
+  // 클라이언트가 세션을 정한 뒤(`signed_out`)에 누른다.
+  await expect(page.locator(".terminal-header .pf-avatar").first()).toHaveAttribute("data-state", "signed_out");
   await page.locator(".terminal-header .pf-avatar").first().click();
   await expect(page.locator(".pf-card .pf-login")).toHaveAttribute("href", "/login?next=%2Fdashboard");
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
