@@ -1,4 +1,23 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+
+/**
+ * 셸 머리 줄(프로필 동그라미 · 찾기 칸)을 ★누르기 전에★ 기다리는 준비 신호 (2026-11-16 · `login.spec.ts:165` 조사).
+ *
+ * 머리 줄은 서버가 먼저 그린다 — `domcontentloaded` 직후에도 보이고, 멈춰 있고, 눌린다. 그러나 React 가 그 단추를 넘겨받기
+ * 전에 온 클릭·키·입력은 ★아무 일도 일으키지 않고 사라진다★(카드가 열리지 않는다). 실측: pytest + 빌드 부하에서 400번 중 4번,
+ * 네 번 모두 누른 순간 단추가 서버가 그린 상태(`data-state="loading"`)였다 · 스크립트를 1.5초 늦추면 5번 중 5번.
+ *
+ * 시한을 늘리거나 쉬는 것이 아니다. 프로필 동그라미의 `data-state` 는 서버 HTML 에서 늘 `loading` 이고, 세션을 읽는 effect 가
+ * 돈 뒤에만 바뀐다(`entities/session/session.ts` · `features/profile/ProfileMenu.tsx`). 바뀌었다면 셸은 넘겨받기를 마쳤고
+ * 같은 셸의 effect(찾기 칸의 `/` 키 듣기)도 붙었다.
+ *
+ * 짝: 서버 HTML 에서도 참인 조건(`toBeVisible`)으로 바꾸면 늦은 스크립트에서 다시 실패한다(변이로 확인 · HISTORY).
+ * 토큰이 있는데 `/auth/me` 가 답하지 않으면 `loading` 에 머문다 — 그때는 이 신호가 아니라 그 상태를 직접 단언할 것.
+ */
+export async function shellReady(page: Page): Promise<void> {
+  await expect(page.locator(".terminal-header .pf-avatar").first(), "셸이 눌릴 준비가 됨(프로필 동그라미가 서버 상태 loading 을 벗어남)")
+    .toHaveAttribute("data-state", /^(signed_out|signed_in|unknown)$/);
+}
 
 /**
  * 차트 애니메이션을 끈다 — 스크린샷·DOM 단정을 결정적으로 만들기 위해 (A12).
