@@ -65,23 +65,47 @@ export function FrontierResult({ v }: { v: Dict }) {
 
 // ── 국면 앙상블 · 국면 설명 ─────────────────────────────────────────────────
 
-const TOOL_KO: Record<string, string> = { axis: "성장·물가 축", markov: "상태 전환", cluster: "군집" };
+const TOOL_KO: Record<string, string> = { axis: "성장·물가 축", markov: "상태 전환", cluster: "군집(GMM)", kmeans: "군집(k-평균)" };
+
+/**
+ * 두 덩어리 이름표 — 방법이 넷(M1)이라 칸이 좁다. 낱말 가운데('상태 전/환' · '군집(k-/평균)')에서 끊기지 않게
+ * 마지막 띄어쓰기나 여는 괄호 앞에서 두 덩어리로 나눠 덩어리 안은 끊지 않는다. 글자는 그대로다(E2E 계약).
+ * 열 머리(방법 이름)와 행 이름(국면 — '스태그플레이션' / '(성장↓·물가↑)')이 같이 쓴다.
+ */
+function ChunkLabel({ text }: { text: string }) {
+  const cut = text.lastIndexOf(" ") > 0 ? text.lastIndexOf(" ") : text.lastIndexOf("(");
+  if (cut <= 0) return <>{text}</>;
+  const sep = text[cut] === " " ? " " : "";
+  return (
+    <>
+      <span className="whitespace-nowrap">{text.slice(0, cut)}</span>{sep}
+      <span className="whitespace-nowrap">{text.slice(sep ? cut + 1 : cut)}</span>
+    </>
+  );
+}
 
 export function EnsembleResult({ v }: { v: Dict }) {
   const r = (v.result as Dict) ?? {};
   const regimes = (r.regimes as string[]) ?? [];
   const tools = (r.tools as Record<string, Dict>) ?? {};
   const agree = (r.agreement as Dict) ?? {};
+  // 시드로 다시 적합한 팔(M1) — 시드마다의 답이 얼마나 모이는지. 서버의 세기를 그대로 옮긴다(다시 세지 않는다).
+  const seeded = Object.entries(tools).filter(([, t]) => t.available && t.stability);
+  const shareTools = seeded.filter(([, t]) => t.probs_kind === "seed_share");
+  // ★흔들리는 팔 위의 만장일치는 초록이 아니다★ — 답이 같아도 시드별 최다 답이 과반이 아닌 팔이 있으면 주의 색.
+  const shaky = seeded.some(([, t]) => !(t.stability as Dict).stable);
   return (
     <>
-      <p className={`pg-model-type pg-model-type--${agree.unanimous ? "hist" : "hypo"}`}>{String(agree.note ?? "")}</p>
-      {/* 국면이 행, 방법이 열 — 국면 이름이 길어 열 머리에 두면 뭉개진다. 각 방법이 고른 칸은 굵게. */}
+      <p className={`pg-model-type pg-model-type--${agree.unanimous && !shaky ? "hist" : "hypo"}`}>{String(agree.note ?? "")}</p>
+      {/* 국면이 행, 방법이 열 — 국면 이름이 길어 열 머리에 두면 뭉개진다. 각 방법이 고른 칸은 굵게.
+          감싼 칸이 폭의 기준(컨테이너)이다 — 좁은 판에서는 글자를 줄이고, 그래도 모자라면 잘리지 않고 가로로 민다. */}
+      <div className="pg-ensemble-wrap">
       <table className="pg-table pg-ensemble">
-        <thead><tr><th>국면</th>{Object.keys(tools).map((k) => <th key={k} className="pg-td-num">{TOOL_KO[k] ?? k}</th>)}</tr></thead>
+        <thead><tr><th>국면</th>{Object.keys(tools).map((k) => <th key={k} className="pg-td-num"><ChunkLabel text={TOOL_KO[k] ?? k} /></th>)}</tr></thead>
         <tbody>
           {regimes.map((g) => (
             <tr key={g}>
-              <td className="pg-td-name">{rk(g)}</td>
+              <td className="pg-td-name"><ChunkLabel text={rk(g)} /></td>
               {Object.entries(tools).map(([k, t]) => {
                 const p = t.available ? num((t.probs as Dict)?.[g]) : null;
                 return <td key={k} className={`pg-td-num${t.available && t.argmax === g ? " pg-strong" : ""}`}>{p === null ? "—" : `${(p * 100).toFixed(0)}%`}</td>;
@@ -90,9 +114,24 @@ export function EnsembleResult({ v }: { v: Dict }) {
           ))}
         </tbody>
       </table>
+      </div>
       {Object.entries(tools).filter(([, t]) => !t.available).map(([k, t]) => (
         <p key={k} className="pg-warn">{TOOL_KO[k] ?? k}은 계산하지 못했습니다 — {String(t.reason ?? "사유 미상")}</p>
       ))}
+      {shareTools.map(([k, t]) => (
+        <p key={`share-${k}`} className="pg-note pg-ensemble-share">
+          {TOOL_KO[k] ?? k} 열의 값은 확률이 아니라 난수 시드 {String((t.stability as Dict).seeds)}개 가운데 그 국면을 고른 비율입니다.
+        </p>
+      ))}
+      {seeded.map(([k, t]) => {
+        const st = t.stability as Dict;
+        return (
+          <p key={`seed-${k}`} data-tool={k} data-stable={st.stable ? "yes" : "no"}
+             className={`${st.stable ? "pg-note" : "pg-warn"} pg-ensemble-seed`}>
+            {TOOL_KO[k] ?? k} · 난수 시드별 최다 답 {rk(st.modal)} {String(st.agree)}/{String(st.seeds)} · {st.stable ? "과반" : "과반 미만"}
+          </p>
+        );
+      })}
       <p className="pg-note">{String(r.note ?? "")} 관측 {String(r.n_obs ?? "—")}개월.</p>
     </>
   );

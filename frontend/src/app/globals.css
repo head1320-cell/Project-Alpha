@@ -4652,6 +4652,23 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-rec-change { align-self: flex-start; height: 30px; padding: 0 10px; font-size: 13px; }
 .pg-casebox-panel { position: absolute; right: 0; top: 42px; z-index: 30; width: min(720px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; padding: 4px; background: var(--pg-paper); border: 1px solid var(--pg-line); border-radius: 14px; box-shadow: var(--pg-shadow); }
 .pg-ensemble .pg-strong { font-weight: 700; color: var(--pg-ink); }
+/* 방법이 넷(M1) — 머리 칸이 두 줄이 되므로 아래 줄을 맞추고 칸 사이를 띄운다(덩어리 나누기는 ChunkLabel).
+   열이 다섯이 되자 처음 폭(344px) 판에서 표가 판 밖으로 25~34px 나가 k-평균 열이 잘렸고, 숫자 칸 사이가 0 이라 굵은 숫자가
+   '62%100%' 로 붙었다(재 본 값) → 국면 이름은 여는 괄호 앞에서만 접고 이름 칸의 42% 폭 고정을 풀며, 숫자 칸 사이를 띄운다. */
+.pg-ensemble th { vertical-align: bottom; line-height: 1.3; }
+.pg-ensemble th + th, .pg-ensemble td + td { padding-left: 8px; }
+.pg-ensemble td + td { white-space: nowrap; }
+.pg-ensemble .pg-td-name { width: auto; overflow: visible; white-space: normal; line-height: 1.35; }
+/* 국면 이름의 괄호 덩어리는 늘 둘째 줄 — 폭에 따라 짧은 이름(골디락스)만 한 줄이 되어 행 높이가 들쭉날쭉했다(392px 판). 글자는 그대로다. */
+.pg-ensemble .pg-td-name > span + span { display: block; }
+/* 최소 폭(300px) 판에서는 그래도 6~14px 모자랐다(재 본 값) — 감싼 칸이 280px 이하면 글자 12px · 칸 사이 6px.
+   마지막 수단: 큰 기본 글꼴 등으로 여전히 모자라면 잘리지 않고 가로로 민다. */
+.pg-ensemble-wrap { container-type: inline-size; overflow-x: auto; }
+@container (max-width: 280px) {
+  .pg-ensemble { font-size: 12px; }
+  .pg-ensemble th { font-size: 11.5px; }
+  .pg-ensemble th + th, .pg-ensemble td + td { padding-left: 6px; }
+}
 .pg-dot-point { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: 1px; background: var(--pg-assume); border-radius: 50%; }
 .pg-casebox { position: relative; }
 .pg-casebox > summary { list-style: none; }

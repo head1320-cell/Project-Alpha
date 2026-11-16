@@ -1,7 +1,8 @@
-"""regime_ensemble — 세 도구를 나란히 돌리고, 못 하는 것은 못 한다고 말하는가 (A7).
+"""regime_ensemble — 네 도구를 나란히 돌리고, 못 하는 것은 못 한다고 말하는가 (A7 · M1 에서 k-평균 팔을 더함).
 
 ★이 테스트가 지키는 것★
-1. 세 방법을 **합치지 않는다** — 각각의 확률이 따로 나오고 argmax 도 따로다.
+1. 방법끼리 **합치지 않는다** — 각각의 확률이 따로 나오고 argmax 도 따로다.
+   (한 방법 안의 시드 평균과 안정성은 `test_regime_seed_stability.py` 가 손 계산으로 건다.)
 2. 표본 부족·미수렴·라이브러리 부재는 `available: False` + **사유** 다.
    0 이나 균등분포로 채우면 "국면을 모르겠다" 가 "네 국면이 똑같이 가능하다" 로
    둔갑한다 — 이 저장소가 반복해서 고쳐 온 결함 유형이다.
@@ -42,9 +43,9 @@ def _series(n: int, seed: int = 7) -> dict:
     }
 
 
-def test_three_tools_run_side_by_side():
+def test_four_tools_run_side_by_side():
     r = regime_ensemble(_series(140), "kr", months=90)
-    assert set(r["tools"]) == {"axis", "markov", "cluster"}
+    assert list(r["tools"]) == ["axis", "markov", "cluster", "kmeans"]
     for name, tool in r["tools"].items():
         assert tool["available"] is True, f"{name}: {tool.get('reason')}"
         # 확률은 4국면 전부에 대해 나오고 합이 1이다.
@@ -107,7 +108,7 @@ def test_short_sample_is_unavailable_with_a_reason_not_a_uniform_prior(months):
     실제로는 아무것도 추정하지 못한 것이다.
     """
     r = regime_ensemble(_series(months + 4), "kr", months=months)
-    for name in ("markov", "cluster"):
+    for name in ("markov", "cluster", "kmeans"):
         tool = r["tools"][name]
         assert tool["available"] is False, name
         assert "probs" not in tool, f"{name}: 미가용인데 확률을 만들었다"
@@ -122,7 +123,7 @@ def test_no_axis_indicators_is_unavailable_not_zero():
 
 
 def test_agreement_reports_disagreement_when_tools_differ():
-    """세 도구가 갈리면 `unanimous` 가 False 여야 한다 — 갈린 사실이 정보다."""
+    """도구가 갈리면 `unanimous` 가 False 여야 한다 — 갈린 사실이 정보다."""
     r = regime_ensemble(_series(140), "kr", months=90)
     picks = r["agreement"]["picks"]
     assert r["agreement"]["unanimous"] == (len(set(picks.values())) == 1)

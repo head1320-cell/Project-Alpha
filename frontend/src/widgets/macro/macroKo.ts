@@ -95,4 +95,4 @@ export function reasonKo(p: { code: string | null; text: string }): string | nul
 }
 
 /** 국면 도구 이름 — 서버 `per_tool` 키. */
-export const TOOL_KO: Record<string, string> = { axis: "축 모형", markov: "마르코프 전환", cluster: "군집" };
+export const TOOL_KO: Record<string, string> = { axis: "축 모형", markov: "마르코프 전환", cluster: "군집(GMM)", kmeans: "군집(k-평균)" };

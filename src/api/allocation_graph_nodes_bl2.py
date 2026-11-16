@@ -34,6 +34,7 @@ from src.data.mock_gate import mock_allowed
 from src.domain.perf_kind import backtest_label
 from src.engine import portfolio_graph as pg
 from src.engine.kr_scenario_pack import FACTORS
+from src.engine.regime_ensemble import TOOL_NAMES, UNSTABLE_QUALIFIER, unstable_arms
 from src.engine.scenario_packs import PACKS
 
 logger = logging.getLogger(__name__)
@@ -172,19 +173,49 @@ def _regime_ensemble(inputs: dict, p: EnsembleParams) -> pg.NodeOutput:
                          provenance={"practice": tags["practice"]})
 
 
+#: 국면 앙상블의 팔 이름 — 엔진의 표 하나(`regime_ensemble.TOOL_NAMES`)를 쓴다(합의 노드의 해설도 같은 표).
+ENSEMBLE_TOOL_NAMES = TOOL_NAMES
+
+
+def _seed_lines(tools: dict) -> tuple[list[str], list[dict]]:
+    """시드로 다시 적합한 팔(군집 둘)의 안정성 → 사실 줄 · 과반 미만이면 미상 줄 (M1)."""
+    facts: list[str] = []
+    trust: list[dict] = []
+    for k, t in tools.items():
+        st = t.get("stability") if t.get("available") else None
+        if not st:
+            continue
+        name = ENSEMBLE_TOOL_NAMES.get(k, k)
+        facts.append(f"{name}: 난수 시드 {st['seeds']}개 중 {st['agree']}개가 {st['modal']}입니다"
+                     f"({'과반' if st['stable'] else '과반 미만'}).")
+        if t.get("probs_kind") == "seed_share":
+            facts.append(f"{name}의 값은 확률이 아니라 난수 시드 {st['seeds']}개 가운데 그 국면을 고른 비율입니다.")
+        if not st["stable"]:
+            trust.append(_t(UNKNOWN, f"{name}의 답이 난수 시드에 따라 갈립니다 — "
+                                     f"시드 {st['seeds']}개 중 최다 답이 {st['agree']}개입니다."))
+        if t.get("argmax") != st["modal"]:
+            # GMM 팔의 답은 시드 평균의 최댓값이라 시드별 최다 답과 다를 수 있다 — 다르면 그 사실을 적는다.
+            trust.append(_t(UNKNOWN, f"{name}의 답({t.get('argmax')})이 난수 시드별 최다 답({st['modal']})과 다릅니다 — "
+                                     "시드 평균의 답입니다."))
+    return facts, trust
+
+
 def _explain_ensemble(view: dict, prov: dict, params: Any) -> dict:
     r = view.get("result") or {}
     tools = r.get("tools") or {}
-    names = {"axis": "성장·물가 축", "markov": "상태 전환 모형", "cluster": "군집 모형"}
+    names = ENSEMBLE_TOOL_NAMES
     picks = (r.get("agreement") or {}).get("picks") or {}
     facts = [f"{names.get(k, k)}: {v}" for k, v in picks.items()]
     trust = [_t(UNKNOWN, f"{names.get(k, k)}는 계산하지 못했습니다 — {t.get('reason') or '사유 미상'}")
              for k, t in tools.items() if not t.get("available")]
-    trust += _macro_trust(prov)
+    seed_facts, seed_trust = _seed_lines(tools)
+    trust += seed_trust + _macro_trust(prov)
     agree = (r.get("agreement") or {}).get("unanimous")
-    title = ("세 방법이 같은 국면을 가리킵니다" if agree else
+    title = ("모든 방법이 같은 국면을 가리킵니다" if agree else
              "방법마다 다른 국면을 가리킵니다" if picks else "국면을 판정할 수 있는 방법이 없었습니다")
-    return {"title": title, "facts": facts + ["세 방법을 평균하지 않습니다 — 불일치 자체가 정보입니다."],
+    if agree and unstable_arms(tools):
+        title = f"{title} — {UNSTABLE_QUALIFIER}"
+    return {"title": title, "facts": facts + seed_facts + ["방법끼리 평균하지 않습니다 — 불일치 자체가 정보입니다."],
             "trust": trust, "unmeasured": ["국면 판정의 향후 수익률 예측력"]}
 
 
@@ -579,7 +610,7 @@ def register(registry: pg.Registry) -> None:
                     run=_frontier, params_model=FrontierParams, explain=_explain_frontier, category="확인",
                     description="PortfolioAnalyzer.efficient_frontier + MC 구름(/analyze 3·4 단계와 같다)."),
         pg.NodeSpec("regime_ensemble", "국면 앙상블", stage="signal", plain_label="국면 앙상블",
-                    plain_description="축 판정·상태 전환·군집 세 방법의 국면 판정을 비교합니다.",
+                    plain_description="축 판정·상태 전환·군집(GMM·k-평균) 네 방법의 국면 판정을 비교합니다.",
                     inputs=(), outputs=(), run=_regime_ensemble, params_model=EnsembleParams,
                     explain=_explain_ensemble, category="거시",
                     description="regime_ensemble(/macro/regime-ensemble 과 같다) · 운영은 저장된 관측만."),

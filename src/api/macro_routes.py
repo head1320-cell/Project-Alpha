@@ -808,9 +808,14 @@ def macro_regime_forecast_coverage(market: str = Query("kr"),
 
 
 def regime_consensus_view(series: dict, *, market: str, months: int) -> dict:
-    """세 국면 도구의 합의/불일치 본문 — 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다(계열만 주입)."""
+    """네 국면 도구의 합의/불일치 본문 — 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다(계열만 주입).
+
+    ★군집 두 팔은 서로 독립이 아니다(M1)★ GMM 과 k-평균은 같은 (성장, 물가) 좌표를 묶는다. 합의 규칙
+    (`combine_studio_views`)은 그대로 두고, 둘이 함께 답했을 때만 그 사실을 `note` 에 붙인다 — 다수의 수를
+    독립된 표의 수로 읽지 않게.
+    """
     from src.engine.macro_models.ensemble import combine_studio_views
-    from src.engine.regime_ensemble import regime_ensemble
+    from src.engine.regime_ensemble import CLUSTER_DEPENDENCE_NOTE, TOOL_NAMES, regime_ensemble, unstable_arms
     ens = regime_ensemble(series, market=market, months=months)
     views = {}
     for name, res in (ens.get("tools") or {}).items():
@@ -819,6 +824,14 @@ def regime_consensus_view(series: dict, *, market: str, months: int) -> dict:
         else:
             views[name] = {"available": False, "reason": res.get("reason")}
     out = combine_studio_views(views)
+    if {"cluster", "kmeans"} <= set(out.get("per_tool") or {}):
+        out["note"] = f'{out["note"]} {CLUSTER_DEPENDENCE_NOTE}'
+    shaky = unstable_arms(ens.get("tools") or {})
+    out["seed_unstable"] = shaky              # ★늘 싣는다★ — 화면이 색을 고르는 근거(없으면 빈 목록)
+    if shaky:
+        # ★합의 규칙은 그대로★ — 시드에 따라 갈리는 팔의 이름만 적는다(그 표를 빼거나 약하게 세지 않는다).
+        names = " · ".join(TOOL_NAMES.get(k, k) for k in shaky)
+        out["note"] = f'{out["note"]} {names}의 답은 난수 시드에 따라 갈립니다(시드별 최다 답이 과반이 아닙니다).'
     out["market"] = market
     out["months"] = months
     return out
@@ -827,9 +840,9 @@ def regime_consensus_view(series: dict, *, market: str, months: int) -> dict:
 @router.get("/regime-consensus")
 def macro_regime_consensus(market: str = Query("kr"),
                            months: int = Query(60, ge=12, le=600)):
-    """세 국면 도구의 합의/불일치 — **평균 내지 않는다** (P4-M3).
+    """네 국면 도구의 합의/불일치 — **평균 내지 않는다** (P4-M3 · M1 에서 k-평균을 더함).
 
-    `regime_ensemble` 이 이미 축·Markov·GMM 을 나란히 낸다. 여기서는 그 결과를
+    `regime_ensemble` 이 이미 축·Markov·GMM·k-평균을 나란히 낸다. 여기서는 그 결과를
     `combine_studio_views` 에 그대로 태워 불일치를 일급으로 만든다 — 미가용 도구는
     사유와 함께 이름이 남고, 하나만 답했으면 합의가 아니며, 동수는 결론이 아니다.
     """

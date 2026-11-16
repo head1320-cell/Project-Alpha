@@ -213,6 +213,11 @@ export interface RegimeConsensus {
   reasons: Record<string, string>;
   disagreement: { score: number; unique: number; counts: Record<string, number>; n: number };
   note: string;
+  /**
+   * 시드별 최다 답이 과반이 아닌 도구(M1 · 군집 두 팔). ★합의 규칙은 그대로★ — 판정이 같아도 이 목록이 비어 있지
+   * 않으면 그 만장일치는 난수 시드 하나만 바꿔도 깨질 수 있다. 서버는 늘 싣는다(옛 응답 · 스텁을 위해 선택).
+   */
+  seed_unstable?: string[];
 }
 
 export const macroIntelApi = {

@@ -31,7 +31,7 @@ const REGIME_KO: Record<string, string> = {
   Stagflation: "스태그플레이션(성장↓·물가↑)", Disinflation: "디스인플레이션(성장↓·물가↓)",
 };
 const rk = (r: unknown) => REGIME_KO[String(r)] ?? String(r ?? "—");
-const TOOL_KO: Record<string, string> = { axis: "성장·물가 축", markov: "상태 전환", cluster: "군집" };
+const TOOL_KO: Record<string, string> = { axis: "성장·물가 축", markov: "상태 전환", cluster: "군집(GMM)", kmeans: "군집(k-평균)" };
 
 // ── 수익률 곡선 ─────────────────────────────────────────────────────────────
 
@@ -108,10 +108,14 @@ export function ConsensusResult({ v }: { v: Dict }) {
   const per = (r.per_tool as Record<string, string>) ?? {};
   const reasons = (r.reasons as Record<string, string>) ?? {};
   const dis = (r.disagreement as Dict) ?? {};
+  // 판정이 모두 같아도 시드에 따라 갈리는 방법이 있으면 초록으로 칠하지 않는다(M1 · 서버 `seed_unstable`).
+  const shaky = ((r.seed_unstable as string[]) ?? []).length > 0;
   return (
     <>
-      <p className={`pg-model-type pg-model-type--${r.consensus ? "hist" : "hypo"}`}>
-        {r.tie ? "표가 갈려 결론 없음" : r.consensus ? `모두 ${rk(r.verdict)}` : `다수 ${rk(r.verdict)} · 갈림`}
+      <p className={`pg-model-type pg-model-type--${r.consensus && !shaky ? "hist" : "hypo"}`}>
+        {r.tie ? "표가 갈려 결론 없음"
+          : r.consensus ? `모두 ${rk(r.verdict)}${shaky ? " · 시드에 따라 갈리는 방법 있음" : ""}`
+          : `다수 ${rk(r.verdict)} · 갈림`}
       </p>
       <table className="pg-table pg-consensus"><tbody>
         {Object.keys({ ...per, ...reasons }).map((k) => (
@@ -124,7 +128,7 @@ export function ConsensusResult({ v }: { v: Dict }) {
         ))}
       </tbody></table>
       <KV rows={[["답한 방법", `${String(r.n_available ?? 0)}개`], ["갈림 정도", fx(dis.score, 2)]]} />
-      <p className="pg-note">{String(r.note ?? "")} 세 방법을 평균하지 않습니다.</p>
+      <p className="pg-note">{String(r.note ?? "")} 방법끼리 평균하지 않습니다.</p>
     </>
   );
 }

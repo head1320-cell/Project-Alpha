@@ -139,6 +139,9 @@ EXCLUDED_SITES: tuple[dict[str, str], ...] = (
     {"site": "src/engine/regime_ensemble.py:_cluster_probs", "family": "GaussianMixture",
      "reason": "마지막 점을 포함해 적합한 뒤 그 점을 채점하지만, 같은 모듈이라 "
                "진단 전용이다."},
+    {"site": "src/engine/regime_ensemble.py:_kmeans_probs", "family": "KMeans",
+     "reason": "GMM 팔과 같이 마지막 점을 포함해 적합한 뒤 그 점이 속한 중심을 읽는다 — "
+               "같은 모듈이라 진단 전용이다(M1 · 2026-11-16)."},
     {"site": "src/engine/macro_models/tsfm_latent.py:run", "family": "DynamicFactor",
      "reason": "표준화와 부호 고정이 전체표본이지만 매크로 스튜디오 리포트 전용이다."},
     {"site": "src/engine/macro_models/pinn_tail.py:run", "family": "genpareto",

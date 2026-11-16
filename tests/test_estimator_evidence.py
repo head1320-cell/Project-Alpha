@@ -187,6 +187,42 @@ def test_excluded_sites_are_not_also_registered():
     assert not (leaked & excluded), f"두 목록에 겹치는 파일: {leaked & excluded}"
 
 
+def _fitting_arms(source: str) -> list[str]:
+    """`_…_probs` 이름의 함수 가운데 몸에서 `.fit(` 을 부르는 것 — 추정기를 적합하는 팔."""
+    out = []
+    for fn in ast.walk(ast.parse(source)):
+        if not (isinstance(fn, ast.FunctionDef) and fn.name.startswith("_") and fn.name.endswith("_probs")):
+            continue
+        if any(isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "fit"
+               for c in ast.walk(fn)):
+            out.append(fn.name)
+    return out
+
+
+def test_the_arm_scanner_finds_a_planted_fitting_arm_and_skips_a_plain_one():
+    """★스캐너 자체를 시험한다★ — 심은 팔은 찾고, 적합하지 않는 팔은 고르지 않는다(공허한 통과 방지)."""
+    planted = (
+        "def _planted_probs(x):\n    return Model(n=2).fit(x).predict(x)\n"
+        "def _plain_probs(x):\n    return {'a': 1.0}\n"
+        "def helper(x):\n    return Model().fit(x)\n"
+    )
+    assert _fitting_arms(planted) == ["_planted_probs"]
+
+
+def test_every_fitting_arm_of_the_regime_ensemble_is_declared_excluded():
+    """★넷째 팔(k-평균)을 더하고 등록하지 않으면 여기서 빨강★
+
+    앙상블의 팔은 마지막 점을 포함해 적합한 뒤 그 점을 채점한다(전체표본). 진단 전용이라 재지 않는다는
+    사실을 `EXCLUDED_SITES` 가 팔마다 사유와 함께 적어야 축이 "다 봤다" 로 읽히지 않는다.
+    """
+    src = (_ROOT / "src/engine/regime_ensemble.py").read_text(encoding="utf-8")
+    arms = _fitting_arms(src)
+    assert {"_markov_probs", "_cluster_probs", "_kmeans_probs"} <= set(arms), arms
+    declared = {r["site"] for r in EXCLUDED_SITES}
+    missing = [a for a in arms if f"src/engine/regime_ensemble.py:{a}" not in declared]
+    assert not missing, f"적합하는 팔이 제외 목록에 없다: {missing}"
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ⑤ ★백테스트 쪽 — 실측이 계획을 뒤집었다★
 #

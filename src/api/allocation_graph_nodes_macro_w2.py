@@ -32,6 +32,7 @@ from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _t
 from src.api.allocation_graph_nodes import _FORBID, _ui
 from src.api.allocation_graph_nodes_bl2 import _MARKETS, EnsembleParams, _macro_trust, macro_series_map
 from src.engine import portfolio_graph as pg
+from src.engine.regime_ensemble import TOOL_NAMES
 
 _STORE_GUIDE = "매크로 화면에서 먼저 수집하십시오"
 
@@ -111,7 +112,7 @@ def _explain_dashboard(view: dict, prov: dict, params: Any) -> dict:
 
 # ── 국면 합의 ─────────────────────────────────────────────────────────────────
 
-_TOOLS = {"axis": "성장·물가 축", "markov": "상태 전환 모형", "cluster": "군집 모형"}
+_TOOLS = TOOL_NAMES                       # 엔진의 표 하나(`regime_ensemble.TOOL_NAMES`) — 앙상블 노드와 같은 이름
 
 
 def _consensus(inputs: dict, p: EnsembleParams) -> pg.NodeOutput:
@@ -137,7 +138,7 @@ def _explain_consensus(view: dict, prov: dict, params: Any) -> dict:
         title = f"다수는 ‘{v}’지만 갈립니다"
     facts = [f"{_TOOLS.get(k, k)}: {x}" for k, x in (r.get("per_tool") or {}).items()]
     trust = [_t(UNKNOWN, f"{_TOOLS.get(k, k)}는 판정하지 못했습니다 — {x}") for k, x in (r.get("reasons") or {}).items()]
-    trust += [_t(CONFIRMED, "세 방법을 평균하지 않습니다 — 불일치 자체가 정보입니다."), *_macro_trust(prov)]
+    trust += [_t(CONFIRMED, "방법끼리 평균하지 않습니다 — 불일치 자체가 정보입니다."), *_macro_trust(prov)]
     return {"title": title, "facts": facts, "trust": trust,
             "unmeasured": ["합의된 국면이 실제로 맞는지(예측력)"]}
 
@@ -297,7 +298,7 @@ def register(registry: pg.Registry) -> None:
                     explain=_explain_dashboard, category="거시",
                     description="macro_routes.dashboard_themes(/macro/dashboard 본문) · 운영은 저장된 관측만."),
         pg.NodeSpec("regime_consensus", "국면 합의", stage="signal", plain_label="국면 합의도",
-                    plain_description="세 방법의 국면 판정 일치 여부를 표시합니다.",
+                    plain_description="네 방법의 국면 판정 일치 여부를 표시합니다.",
                     inputs=(), outputs=(), run=_consensus, params_model=EnsembleParams,
                     explain=_explain_consensus, category="거시",
                     description="macro_routes.regime_consensus_view(/macro/regime-consensus 본문) · 운영은 저장된 관측만."),

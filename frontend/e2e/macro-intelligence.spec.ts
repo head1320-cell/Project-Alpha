@@ -125,17 +125,47 @@ test.describe("P4 매크로 지능 패널", () => {
   test("짝 — 전부 일치하면 갈림 표시가 없다", async ({ page }) => {
     await stubIntel(page, {
       consensus: {
-        verdict: "Goldilocks", consensus: true, tie: false, n_available: 3,
-        per_tool: { axis: "Goldilocks", markov: "Goldilocks", cluster: "Goldilocks" },
+        verdict: "Goldilocks", consensus: true, tie: false, n_available: 4,
+        per_tool: { axis: "Goldilocks", markov: "Goldilocks", cluster: "Goldilocks", kmeans: "Goldilocks" },
         unavailable: [], reasons: {},
-        disagreement: { score: 0, unique: 1, counts: { Goldilocks: 3 }, n: 3 },
-        note: "가용한 도구 3개가 모두 일치합니다.",
+        disagreement: { score: 0, unique: 1, counts: { Goldilocks: 4 }, n: 4 },
+        note: "가용한 도구 4개가 모두 일치합니다. 군집 두 방법(GMM · k-평균)은 같은 좌표를 묶는 방법이라 서로 독립이 아닙니다.",
+        seed_unstable: [],
       },
     });
     await page.goto("/macro");
     await expect(page.locator(".mx-panel .mx-split")).toHaveCount(0);
+    // 넷째 팔(M1)의 이름표 — 서버 키를 그대로 보이지 않고 이름을 붙인다(키는 곁에 남는다)
+    await expect(page.locator(".mx-panel .mx-tools")).toContainText("군집(k-평균)");
+    await expect(page.locator(".mx-panel .mx-tools")).toContainText("kmeans");
+    // 합의 블록의 서버 문장(패널에는 .mx-why 가 블록마다 있다 — 합의 블록으로 좁힌다)
+    const consensusCard = page.locator(".mx-panel .mx-card", { has: page.locator(".mx-card-t", { hasText: "국면 판정 도구끼리 맞는지" }) });
+    await expect(consensusCard.locator(".mx-why")).toContainText("서로 독립이 아닙니다");
+    await expect(page.locator(".mx-panel .mx-seed")).toHaveCount(0);   // 짝 — 시드에 따라 갈리는 도구가 없으면 그 줄도 없다
     // BU5c: 국면 이름은 한국어(번역표 `regimeName`) — 서버 열거값을 옮길 뿐 판단은 서버 것 그대로
     await expect(page.locator(".mx-panel .mx-tools")).toContainText("골디락스");
+  });
+
+  test("M1 — 판정이 모두 같아도 시드에 따라 갈리는 도구가 있으면 그 사실이 곁에 선다", async ({ page }) => {
+    await stubIntel(page, {
+      consensus: {
+        verdict: "Stagflation", consensus: true, tie: false, n_available: 4,
+        per_tool: { axis: "Stagflation", markov: "Stagflation", cluster: "Stagflation", kmeans: "Stagflation" },
+        unavailable: [], reasons: {},
+        disagreement: { score: 0, unique: 1, counts: { Stagflation: 4 }, n: 4 },
+        note: "가용한 도구 4개가 모두 'Stagflation' 로 일치합니다. 군집 모형(GMM)의 답은 난수 시드에 따라 갈립니다(시드별 최다 답이 과반이 아닙니다).",
+        seed_unstable: ["cluster"],
+      },
+    });
+    await page.goto("/macro");
+    // 패널에는 `.mx-ok` 가 블록마다 있다(데이터 출처 · 키) — 합의 블록으로 좁힌다.
+    const consensusCard = page.locator(".mx-panel .mx-card", { has: page.locator(".mx-card-t", { hasText: "국면 판정 도구끼리 맞는지" }) });
+    const line = consensusCard.locator(".mx-verdict-s");
+    await expect(line.locator(".mx-ok")).toHaveText("사용 가능한 도구가 모두 동일합니다");   // 판정이 같다는 사실은 그대로 선다
+    await expect(line).not.toContainText("엇갈렸습니다");                                   // 갈림으로 바꿔 그리지 않는다
+    await expect(line.locator(".mx-seed")).toHaveText("난수 시드에 따라 답이 갈리는 도구가 있습니다");
+    await expect(consensusCard.locator(".mx-tools li")).toHaveCount(4);
+    await expect(consensusCard.locator(".mx-why")).toContainText("난수 시드에 따라 갈립니다");
   });
 
   test("모형 선택 사유와 검정 근거가 함께 보인다", async ({ page }) => {

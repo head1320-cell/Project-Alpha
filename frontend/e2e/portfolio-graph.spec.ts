@@ -1001,8 +1001,26 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
     await page.evaluate(() => document.documentElement.classList.remove("dark"));
   }
   await node(page, "en").click();
-  await expect(page.locator(".pg-ensemble thead th")).toHaveCount(4);          // 국면 + 세 방법
+  await expect(page.locator(".pg-ensemble thead th")).toHaveCount(5);          // 국면 + 네 방법(M1 · k-평균)
   await expect(page.locator(".pg-ensemble tbody tr")).toHaveCount(4);          // 네 국면
+  // ★시드 안정성(M1)★ — 시드로 다시 적합한 팔마다 한 줄 · 서버의 세기 그대로(다시 세지 않는다).
+  type Seeded = { available: boolean; probs_kind?: string; stability?: { seeds: number; agree: number; stable: boolean } };
+  const ensTools = (body.nodes.en.view as { result: { tools: Record<string, Seeded> } }).result.tools;
+  const seededArms = Object.entries(ensTools).filter(([, t]) => t.available && t.stability);
+  expect(seededArms.map(([k]) => k), "개발 모드의 합성 축에서는 군집 두 팔이 모두 답한다 — 아니면 이 검사는 공허하다")
+    .toEqual(["cluster", "kmeans"]);
+  for (const [k, t] of seededArms) {
+    const line = page.locator(`.pg-side .pg-ensemble-seed[data-tool="${k}"]`);
+    await expect(line).toContainText(`${t.stability!.agree}/${t.stability!.seeds}`);
+    // ★줄 끝에 고정한다★ '과반 미만'은 '· 과반'을 글자로 품어 포함 검사로는 뒤집힌 글을 못 잡는다(변이 F2).
+    await expect(line).toHaveText(t.stability!.stable ? /· 과반$/ : /· 과반 미만$/);
+    await expect(line).toHaveAttribute("data-stable", t.stability!.stable ? "yes" : "no");
+    await expect(line).toHaveClass(t.stability!.stable ? /pg-note/ : /pg-warn/);           // 과반 미만은 경고 색
+  }
+  // k-평균 열은 확률이 아니라 시드 비율이다 — 그렇게 적힌다(짝: GMM 은 비율 주석이 없다)
+  await expect(page.locator(".pg-side .pg-ensemble-share")).toHaveCount(1);
+  await expect(page.locator(".pg-side .pg-ensemble-share")).toContainText("군집(k-평균) 열의 값은 확률이 아니라 난수 시드");
+  await expect(page.locator(".pg-side .pg-ensemble thead th").nth(4)).toHaveText("군집(k-평균)");
   await node(page, "tw").click();
   await expect(page.locator(".pg-threeway tbody tr")).toHaveCount(3);
   // 국면을 잇지 않았으니 '타이밍 + 국면' 갈래는 손실을 적지 않는다(0 으로 채우지 않는다).
@@ -1021,6 +1039,97 @@ test("새 계산 노드(BL2b): 프런티어·국면 앙상블·세 갈래·직�
 
 // ── 시점별 노출 — 계단선도 직접 SVG (ADR 004 · 2026-11-10) ──
 // BL2b 시험에 붙이면 그 시험의 시간 한도(90초)를 넘겨서 따로 둔다. 타이밍 신호 하나 → 시뮬레이션 하나.
+// ── M1 · 시드 안정성 — 흔들리는 팔 위의 만장일치는 초록이 아니다 ─────────────────────
+test("국면 앙상블 · 합의(M1): 판정이 모두 같아도 시드에 따라 갈리는 팔이 있으면 초록으로 칠하지 않는다 · 짝: 갈리지 않으면 그대로", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push(
+    { id: "ek", type: "regime_ensemble", params: { market: "kr" }, position: { x: 1000, y: 0 } },
+    { id: "eu", type: "regime_ensemble", params: { market: "us" }, position: { x: 1000, y: 160 } },
+    { id: "ck", type: "regime_consensus", params: { market: "kr" }, position: { x: 1000, y: 320 } },
+    { id: "cu", type: "regime_consensus", params: { market: "us" }, position: { x: 1000, y: 480 } },
+  );
+  await importText(page, "m1.json", JSON.stringify(await spread(page, doc)));
+  await page.getByRole("button", { name: "파일 안내 닫기" }).click();
+  const body = await run(page);
+  type Tool = { available: boolean; stability?: { seeds: number; agree: number; stable: boolean } };
+  type Ens = { result: { tools: Record<string, Tool>; agreement: { unanimous: boolean | null; note: string } } };
+  type Con = { result: { consensus: boolean; tie: boolean; seed_unstable: string[] } };
+  const seen: string[] = [];
+  const minorityLines: string[] = [];
+  for (const id of ["ek", "eu"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+    const r = (body.nodes[id].view as Ens).result;
+    const shaky = Object.values(r.tools).some((t) => t.available && t.stability && !t.stability.stable);
+    const green = !!r.agreement.unanimous && !shaky;
+    if (r.agreement.unanimous && shaky) seen.push(`${id}: 같지만 흔들림`);
+    await node(page, id).click();
+    await tab(page, "detail");
+    const banner = page.locator(".pg-side .pg-model-type");
+    await expect(banner, id).toHaveText(r.agreement.note);                         // 띠의 글 = 서버 문장
+    await expect(banner, id).toHaveClass(green ? /pg-model-type--hist/ : /pg-model-type--hypo/);
+    // ★과반 미만 줄의 화면 모양★ — kr 자료는 시드 줄이 모두 과반이라 BL2b 시험은 경고 갈래를 밟지 못한다(변이 F15 ~ F17 이 그 시험에서 살아남았다).
+    for (const [k, t] of Object.entries(r.tools)) {
+      if (!t.available || !t.stability) continue;
+      const line = page.locator(`.pg-side .pg-ensemble-seed[data-tool="${k}"]`);
+      const tag = `${id}·${k}`;
+      await expect(line, tag).toContainText(`${t.stability.agree}/${t.stability.seeds}`);
+      await expect(line, tag).toHaveText(t.stability.stable ? /· 과반$/ : /· 과반 미만$/);
+      await expect(line, tag).toHaveAttribute("data-stable", t.stability.stable ? "yes" : "no");
+      await expect(line, tag).toHaveClass(t.stability.stable ? /pg-note/ : /pg-warn/);
+      if (!t.stability.stable) minorityLines.push(tag);
+    }
+  }
+  // ★표가 판 안에 든다 · 이웃 숫자가 붙지 않는다★ — 방법이 넷이 되자 처음 폭(344px)에서 표가 판 밖으로 나가 k-평균 열이 잘렸고
+  // 굵은 숫자가 '62%100%' 로 붙었다(스크린샷 검수에서 찾음 · E2E 는 글과 색만 봐서 못 잡았다). 처음 폭 · 넓은 창의 처음 폭(← 세 번) · 최소 폭(Home).
+  // 국면 이름의 괄호 덩어리는 늘 둘째 줄이라 행 높이가 같다 — 392px 에서 짧은 이름만 한 줄이 되어 들쭉날쭉했다.
+  const resize = page.locator(".pg-side-resize");
+  for (const step of [{ keys: [], w: 344 }, { keys: ["ArrowLeft", "ArrowLeft", "ArrowLeft"], w: 392 }, { keys: ["Home"], w: 300 }]) {
+    for (const k of step.keys) { await resize.focus(); await page.keyboard.press(k); }
+    const w = Number(await resize.getAttribute("aria-valuenow"));
+    expect(w, "처음 폭 344px(1440px 미만 창) · ← 세 번 392px · Home 은 최소 300px").toBe(step.w);
+    for (const id of ["ek", "eu"]) {
+      await node(page, id).click();
+      await tab(page, "detail");
+      const g = await page.locator(".pg-side .pg-ensemble").evaluate((t) => {
+        const box = (t.parentElement as HTMLElement).getBoundingClientRect();
+        let minGap = Infinity;
+        for (const tr of Array.from(t.querySelectorAll("tbody tr"))) {
+          const nums = Array.from(tr.querySelectorAll("td")).slice(1);
+          for (let i = 0; i + 1 < nums.length; i++) {
+            const a = document.createRange(); a.selectNodeContents(nums[i]);
+            const b = document.createRange(); b.selectNodeContents(nums[i + 1]);
+            minGap = Math.min(minGap, b.getBoundingClientRect().left - a.getBoundingClientRect().right);
+          }
+        }
+        const hs = Array.from(t.querySelectorAll("tbody tr")).map((tr) => tr.getBoundingClientRect().height);
+        return { over: t.getBoundingClientRect().right - box.right, minGap, rowSpread: Math.max(...hs) - Math.min(...hs) };
+      });
+      expect(g.over, `${id} · ${w}px: 표의 오른쪽 끝이 판 안쪽을 넘은 길이(px)`).toBeLessThanOrEqual(0.5);
+      expect(g.minGap, `${id} · ${w}px: 이웃 숫자 사이(px)`).toBeGreaterThanOrEqual(4);
+      expect(g.rowSpread, `${id} · ${w}px: 국면 행 높이의 차(px)`).toBeLessThanOrEqual(1);
+    }
+  }
+  for (const id of ["ck", "cu"]) {
+    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
+    const r = (body.nodes[id].view as Con).result;
+    const shaky = r.seed_unstable.length > 0;
+    await node(page, id).click();
+    await tab(page, "detail");
+    const banner = page.locator(".pg-side .pg-model-type");
+    await expect(banner, id).toHaveClass(r.consensus && !shaky ? /pg-model-type--hist/ : /pg-model-type--hypo/);
+    if (r.consensus && shaky) await expect(banner, id).toContainText("시드에 따라 갈리는 방법 있음");
+    else await expect(banner, id).not.toContainText("시드에 따라");               // 짝
+  }
+  // ★공허하지 않다★ 개발 자료의 us 60개월은 네 방법이 모두 Stagflation 인데 GMM 의 최다 답이 과반 미만이다(HISTORY M1) — 그 갈래를 실제로 밟는다.
+  expect(seen, "만장일치 + 흔들리는 팔의 경우가 하나도 없으면 이 시험은 공허하다(개발 자료가 바뀌었는지 본다)").toEqual(["eu: 같지만 흔들림"]);
+  expect(minorityLines, "과반 미만 줄을 하나도 밟지 않으면 위 경고 갈래 단언은 공허하다").toEqual(["eu·cluster"]);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+});
+
 test("타이밍 시뮬레이션: 노출 계단선 = 직접 SVG · 읽는 줄의 처음 자리 = 마지막 시점 · ← 로 앞 시점 · 표 쌍둥이 = 전부 · recharts 0", async ({ page }) => {
   await openCanvas(page);
   const doc = await exportDoc(page);
@@ -1327,9 +1436,10 @@ test("매크로 노드(BL3 W2): 곡선·대시보드·합의·예측 적중률·
   await pick("dr");
   await expect(page.locator(".pg-side .pg-dash-theme")).toHaveCount(1);
   await expect(page.locator(".pg-side .pg-dash-h")).toHaveText("금리·통화");
-  // 합의: 세 방법이 한 줄씩(평균 한 줄이 아니다)
+  // 합의: 네 방법이 한 줄씩(평균 한 줄이 아니다 · M1 에서 k-평균을 더함)
   await pick("rc");
-  await expect(page.locator(".pg-side .pg-consensus tbody tr")).toHaveCount(3);
+  await expect(page.locator(".pg-side .pg-consensus tbody tr")).toHaveCount(4);
+  await expect(page.locator(".pg-side .pg-consensus")).toContainText("군집(k-평균)");
   // 적중률: 목표·실측과 집합 크기 두 묶음
   await pick("fc");
   await expect(page.locator(".pg-side .pg-bars")).toHaveCount(2);

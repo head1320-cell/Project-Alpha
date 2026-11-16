@@ -273,6 +273,9 @@ function ConsensusBlock() {
               {d.consensus
                 ? <span className="mx-ok">사용 가능한 도구가 모두 동일합니다</span>
                 : <span className="mx-split">도구 간 판정이 엇갈렸습니다</span>}
+              {/* ★흔들리는 도구 위의 만장일치★(M1) — 판정이 같다는 사실 곁에 시드에 따라 갈리는 도구가 있다는 사실을 둔다. */}
+              {d.consensus && (d.seed_unstable?.length ?? 0) > 0
+                && <span className="mx-split mx-seed">난수 시드에 따라 답이 갈리는 도구가 있습니다</span>}
               <span>불일치 점수 <b className="num">{d.disagreement.score.toFixed(2)}</b></span>
             </p>
             {/* ★평균 옆에 원본이 남는다★ 남지 않으면 결론을 되짚을 수 없다. */}

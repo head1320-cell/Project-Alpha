@@ -76,7 +76,7 @@ export interface RegimeState {
 }
 
 // ─── 국면 앙상블 (A7) ────────────────────────────────────────────────────────
-// `GET /macro/regime-ensemble` — 축 · 상태전환(Markov) · 군집(GMM) 세 도구를
+// `GET /macro/regime-ensemble` — 축 · 상태전환(Markov) · 군집(GMM · k-평균) 네 도구를
 // **나란히** 받는다. 평균내지 않는다: 어느 모형이 무슨 말을 했는지가 정보다.
 //
 // ★유니온으로 짜는 이유★ 미가용 도구에는 `probs` 자체가 없다(서버가 만들지 않는다).
@@ -87,10 +87,24 @@ export interface RegimeToolUnavailable {
   available: false;
   reason: string;
 }
+/**
+ * 시드로 다시 적합한 팔(군집 둘 · M1)의 안정성 — 시드마다의 답을 센 것.
+ * `stable` 은 엄격한 과반(`agree × 2 > seeds`)이다 — 10개 중 5개는 과반이 아니다.
+ */
+export interface SeedStability {
+  seeds: number;
+  modal: Regime;
+  agree: number;
+  shares: Record<string, number>;
+  stable: boolean;
+}
 export interface RegimeToolAvailable {
   available: true;
-  method: "axis" | "markov" | "cluster";
+  method: "axis" | "markov" | "cluster" | "kmeans";
   probs: Record<string, number>;
+  /** 군집 두 팔만 싣는다 — ★`seed_share` 는 확률이 아니라 시드 비율★(k-평균). */
+  probs_kind?: "probability" | "seed_share";
+  stability?: SeedStability;
   argmax: Regime;
   detail: Record<string, unknown>;
   note: string;
@@ -124,7 +138,7 @@ export interface RegimeEnsemble {
   months: number;
   n_obs: number;
   regimes: Regime[];
-  tools: { axis: RegimeTool; markov: RegimeTool; cluster: RegimeTool };
+  tools: { axis: RegimeTool; markov: RegimeTool; cluster: RegimeTool; kmeans: RegimeTool };
   agreement: { unanimous: boolean | null; picks: Record<string, Regime>; note: string };
   note: string;
 }
