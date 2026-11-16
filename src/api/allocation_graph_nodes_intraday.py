@@ -17,6 +17,8 @@
 AI 추천·말로 설계의 후보 표에도 없다(`NOT_OFFERED`).
 
 매개변수 모델은 등록부에서 만든다(`rules.describe()` · `POSITION_FIELDS` · `COST_FIELDS`) — 칸의 사본을 여기 두지 않는다.
+여덟째 종류 '직접 구성'(자유 조건식 f3)은 칸 여럿이 아니라 ★조건 나무 셋을 담는 칸 하나★다 — 화면의 편집 부품이 그리고, 검사는
+문과 같은 길(`prepare` → `rules.resolve`)이 한다. 여기서 조건을 읽거나 고치지 않는다.
 """
 from __future__ import annotations
 
@@ -86,11 +88,12 @@ def _field(d: dict, tier: str, **hints: Any) -> tuple[Any, Any]:
     return (kind | None if optional else kind), Field(d.get("default"), json_schema_extra={"x-ui": ui}, **bounds)
 
 
-#: 설정 노드가 내놓는 것은 ★틀 일곱★이다 — 직접 구성(`custom`)은 편집 부품이 캔버스에 들어올 때 연다(자유 조건식 f3).
-#: 그때까지 걸러 둔다: 칸이 없는 빈 선택지를 내놓지 않는다.
-_TEMPLATES = {t["kind"]: t for t in rules.describe() if not t["custom"]}
-#: 이름표는 여덟 전부 — 문으로 돌린 직접 구성 시행을 결과 · 가동 요청 노드가 읽을 수 있다.
-_LABELS = {t["kind"]: t["label"] for t in rules.describe()}
+#: 설정 노드가 내놓는 종류 — 틀 일곱 + 직접 구성(화면 백테스트 › 분봉 규칙과 같은 여덟 · 같은 순서).
+_TEMPLATES = {t["kind"]: t for t in rules.describe()}
+_LABELS = {kind: t["label"] for kind, t in _TEMPLATES.items()}
+#: 직접 구성한 조건을 담는 칸의 이름(틀의 칸은 `<종류>__<열쇠>` 이고, 이것은 나무 셋을 통째로 든다).
+_CUSTOM_FIELD = "custom_rule"
+_SLOT_LABELS = {key: label for key, _, label, _ in rules.SLOTS}
 _BASIC_POSITION = ("amount", "stop_pct", "target_pct")
 _BASIC_COSTS = ("commission_bp", "slippage_ticks")
 _HELP = {
@@ -118,6 +121,10 @@ def _setup_model() -> type[BaseModel]:
     for kind, template in _TEMPLATES.items():
         for d in template["params"]:
             fields[f"{kind}__{d['key']}"] = _field(d, "basic", show_if={"rule": [kind]})
+    # 직접 구성 — 비어서 시작한다(조건을 지어 넣지 않는다). 모양의 검사는 문과 같은 길이 한다(`_body` → `prepare`).
+    fields[_CUSTOM_FIELD] = (dict[str, Any] | None, Field(None, json_schema_extra={"x-ui": _ui(
+        "조건", question="직접 구성한 조건", widget="intraday_rule", show_if={"rule": [rules.CUSTOM]},
+        help="진입 조건, 미리 건 매수 가격, 청산 조건을 지표와 연산으로 구성합니다. 도구는 조건을 추천하지 않습니다.")}))
     for d in routes.POSITION_FIELDS:
         fields[d["key"]] = _field(d, "basic" if d["key"] in _BASIC_POSITION else "advanced",
                                   **({"help": _HELP[d["key"]]} if d["key"] in _HELP else {}))
@@ -142,6 +149,8 @@ def _refusal(err: HTTPException) -> str:
     """판정 문의 거절 → 노드의 실패 사유. ★문의 문장 그대로★ — 여기서 규칙을 새로 정하지 않는다."""
     d = err.detail if isinstance(err.detail, dict) else {"reason": str(err.detail)}
     text = str(d.get("reason"))
+    if d.get("slot") in _SLOT_LABELS:                            # 직접 구성 — 어느 자리의 조건인지(문이 준 자리 그대로)
+        text = f"{_SLOT_LABELS[d['slot']]}: {text}"
     if d.get("detail"):
         text += f" ({d['detail']})"
     now = next((d[k] for k in ("work", "ticker_days", "tickers", "days", "bytes", "cells") if isinstance(d.get(k), int)), None)
@@ -157,7 +166,9 @@ def _body(inputs: dict, p: Any) -> tuple[routes.ValidateBody, str, int]:
     linked = inputs.get("universe")
     typed = [str(t) for t in p.tickers]
     tickers = [str(t) for t in (linked.get("tickers") or [])] if linked is not None else typed
-    params = {d["key"]: getattr(p, f"{p.rule}__{d['key']}") for d in _TEMPLATES[p.rule]["params"]}
+    # 고른 종류의 것만 간다 — 틀이면 그 틀의 칸, 직접 구성이면 조건 나무 셋(다른 종류의 흔적은 싣지 않는다).
+    params = (dict(getattr(p, _CUSTOM_FIELD) or {}) if p.rule == rules.CUSTOM
+              else {d["key"]: getattr(p, f"{p.rule}__{d['key']}") for d in _TEMPLATES[p.rule]["params"]})
     try:
         body = routes.ValidateBody(**{
             "tickers": tickers, "from": p.start_date, "to": p.end_date, "rule": {"kind": p.rule, "params": params},
@@ -176,7 +187,8 @@ def _setup(inputs: dict, p: Any, actor: Any) -> pg.NodeOutput:
     except HTTPException as e:
         raise pg.NodeFailure(_refusal(e)) from e
     view = {"request": routes.request_view(body, ready.tickers, ready.params),
-            "rule_label": _TEMPLATES[p.rule]["label"], "tickers_from": source, "typed_ignored": ignored,
+            "rule_kind": p.rule, "rule_label": _LABELS[p.rule], **rules.rule_text({"kind": p.rule, "params": ready.params}),
+            "tickers_from": source, "typed_ignored": ignored,
             "days": {"calendar": (body.to - body.from_).days + 1, "loaded": len(ready.plan.dates)},
             "work": {"ticker_days": ready.ticker_days, "simulations": ready.simulations,
                      "total": ready.ticker_days * ready.simulations, "limit": routes.MAX_VALIDATE_WORK},
@@ -211,9 +223,14 @@ def _explain_setup(view: dict, prov: dict, params: Any) -> dict:
              f"계산량 {work.get('total'):,} (상한 {work.get('limit'):,})"]
     if view.get("typed_ignored"):
         facts.append(f"종목 묶음을 연결해 직접 넣은 종목 {view['typed_ignored']}개는 사용하지 않았습니다.")
+    custom = view.get("rule_kind") == rules.CUSTOM
+    if custom:                                                   # 이름표('직접 구성')는 조건을 말하지 않는다 — 글로 적는다
+        facts.append(f"직접 구성한 조건 — {view.get('rule_text') or view.get('rule_text_reason')}")
     trust = [_t(CONFIRMED, "판정 문과 같은 규칙으로 요청과 계산량을 검사했습니다."),
              _t(ASSUMED, "종목은 지금 정한 묶음입니다 — 과거 구간에서는 사후 선택입니다."),
              _t(ASSUMED, "실행은 계산하지 않고 ‘분봉 백테스트 실행’을 눌러야 시작하며, 실행마다 시행으로 기록됩니다.")]
+    if custom:
+        trust.append(_t(ASSUMED, "조건은 사용자가 직접 구성했습니다 — 도구는 조건을 추천하지 않습니다. 조건을 고쳐 실행할 때마다 시행 횟수가 늘어납니다."))
     if view.get("mock"):
         trust.append(_t(ASSUMED, "모의 모드입니다 — 적재된 분봉이 합성일 수 있으며 출처는 실행할 때 정해집니다."))
     return {"title": f"‘{view.get('rule_label')}’ 분봉 백테스트 실행 준비를 마쳤습니다", "facts": facts, "trust": trust,
@@ -238,7 +255,10 @@ def _load(inputs: dict, p: LoadParams, actor: Any) -> pg.NodeOutput:
     grade = _grade(result)
     if grade == _SYNTHETIC and not mock_allowed():               # 운영에서는 합성 위의 숫자를 내주지 않는다
         raise pg.NodeFailure(REASONS["synthetic_in_production"])
-    view = {**result, "trial_key": p.trial_key, "result_at": found["result_at"], "runs": found["runs"]}
+    rule = (result.get("request") or {}).get("rule") if isinstance(result.get("request"), dict) else None
+    kind = rule.get("kind") if isinstance(rule, dict) else None
+    view = {**result, "trial_key": p.trial_key, "result_at": found["result_at"], "runs": found["runs"],
+            "rule_kind": kind, "rule_label": _LABELS.get(kind) or kind, **rules.rule_text(rule)}       # 읽기만 — 남긴 요약은 그대로다
     counts = (result.get("gates") or {}).get("counts")
     handed = {"trial_key": p.trial_key, "grade": grade, "gates": counts if isinstance(counts, dict) else None}
     return pg.NodeOutput(values={"run": handed}, view=view,
@@ -304,7 +324,7 @@ def _arm(inputs: dict, p: ArmParams, actor: Any) -> pg.NodeOutput:
     counts = handed.get("gates")
     rows = rule_runs.requests_of(user, _REQUEST_SCAN)            # 읽기만 — 못 읽으면 '이미 남겼는지'는 미상이다(없다고 하지 않는다)
     mine = None if rows is None else next((r for r in rows if r["trial_key"] == key), None)
-    view = {"trial_key": key, "rule_kind": kind, "rule_label": _LABELS.get(kind) or kind,
+    view = {"trial_key": key, "rule_kind": kind, "rule_label": _LABELS.get(kind) or kind, **rules.rule_text(setting.get("rule")),
             "tickers": trial["tickers"], "from": trial["from"], "to": trial["to"], "grade": grade, "synthetic": synthetic,
             "runs": trial["runs"], "gates": {"known": isinstance(counts, dict), "counts": counts if isinstance(counts, dict) else None},
             "requested": None if rows is None else mine is not None, "request_id": mine["id"] if mine else None,
@@ -331,6 +351,8 @@ def _explain_arm(view: dict, prov: dict, params: Any) -> dict:
              f"같은 설정 실행 {view.get('runs')}회",
              (f"이 실행의 관문 일곱: 통과 {counts.get('ok', 0)} · 미달 {counts.get('degraded', 0)} · 미상 {counts.get('unknown', 0)} — "
               "관문은 표시만 하며 가동을 차단하지 않습니다") if counts else "판정 결과를 남기지 않은 실행입니다 — 관문의 상태는 미상입니다"]
+    if view.get("rule_kind") == rules.CUSTOM:                    # 무엇을 가동해 달라는 것인지 — 이름표만으로는 알 수 없다
+        facts.append(f"직접 구성한 조건 — {view.get('rule_text') or view.get('rule_text_reason')}")
     if requested:
         facts.append("이미 남긴 요청이 있습니다 — 다시 눌러도 새로 남기지 않습니다")
     trust = [_t(CONFIRMED, "본인이 실행해 시행으로 기록한 설정입니다."),

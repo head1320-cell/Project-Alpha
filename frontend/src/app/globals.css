@@ -4445,6 +4445,12 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-pick-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
 .pg-pick-main b { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .pg-pick-sub { font-size: 12px; color: var(--pg-mute); }
+/* 분봉 결과의 규칙을 풀어 쓴 글 — 고르기 목록의 줄 · 결과 판의 한 칸. 길면 줄바꿈한다(잘라 내지 않는다). */
+.pg-pick-text { display: block; font-size: 12px; line-height: 1.45; color: var(--pg-body); word-break: keep-all; overflow-wrap: anywhere; }
+.pg-itd-rule-text { line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+/* 캔버스 설정 판의 '직접 구성' 칸 — 편집 부품은 화면과 같고, 판이 좁아 칸이 줄바꿈된다. */
+.pg-itd-rule { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pg-itd-rule-issues { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--pg-body); }
 .pg-pick-err { display: grid; gap: 6px; justify-items: start; }
 .pg-src { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .pg-src li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--pg-ink); }

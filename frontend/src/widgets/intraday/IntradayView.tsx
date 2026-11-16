@@ -14,14 +14,14 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { expandRule, getCoverage, getTemplates, simulate, validate, type Coverage, type SimulateRequest, type Validation } from "@/entities/intraday";
 import { useSession } from "@/entities/session";
-import { fromParams } from "@/features/intraday-rule-editor";
+import { fromParams, useRuleCheck } from "@/features/intraday-rule-editor";
 import { Verdict } from "@/features/intraday-verdict";
 import { BACKTEST_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
 import { ModeSwitch, Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
 import { build, buildGrid, initialForm, parseTickers, recentPeriod, templateOf, type Form } from "./form";
 import { IntradayResult, type Sim } from "./IntradayResult";
-import type { Move, RuleCheck } from "./RuleSection";
+import type { Move } from "./RuleSection";
 import { GridForm, SetupForm, type CoverageState } from "./SetupForm";
 
 const TITLE = "백테스트";
@@ -90,10 +90,7 @@ function Workbench() {
   // 직접 구성한 조건의 검사 — 빈 칸이 없을 때만 서버에 묻는다. ★계산도 시행 기록도 없다★(같은 조건은 다시 묻지 않는다).
   const custom = t !== null && form !== null && templateOf(t, form.kind).custom;
   const toCheck = custom && built?.ruleReady ? built.request.rule : null;
-  const checked = useQuery({
-    queryKey: ["intraday", "expand", toCheck ? JSON.stringify(toCheck) : ""], queryFn: unwrap(() => expandRule(toCheck as SimulateRequest["rule"])),
-    enabled: toCheck !== null, staleTime: Infinity, retry: false,
-  });
+  const ruleCheck = useRuleCheck(toCheck);
   const [move, setMove] = useState<Move>({ kind: "idle" });
 
   if (templates.isPending) return <p className="tx-sec-sub" aria-busy="true">설정 칸 불러오는 중</p>;
@@ -114,11 +111,6 @@ function Workbench() {
     if (move.kind === "fail") setMove({ kind: "idle" });
     if (run.kind !== "idle" || check.kind !== "idle") { setRun({ kind: "idle" }); setCheck({ kind: "idle" }); setStale(true); }
   };
-  const refusedCheck = checked.isError ? failOf(checked.error) : null;
-  const ruleCheck: RuleCheck = toCheck === null ? { kind: "idle" }
-    : refusedCheck ? (refusedCheck.status === 400 || refusedCheck.status === 422
-      ? { kind: "refused", error: refusedCheck.error } : { kind: "fail", error: refusedCheck.error, retry: () => void checked.refetch() })
-    : checked.data ? { kind: "ok", value: checked.data } : { kind: "pending" };
   // 서버가 거절한 조건으로는 실행하지 않는다(사유는 규칙 절에 서버 문장 그대로 뜬다).
   const problems = ruleCheck.kind === "refused" ? [...built.problems, "조건 검사에서 거절됐습니다. 규칙 절의 사유를 확인하십시오."] : built.problems;
   /** 규칙을 조건으로 풀어 편집기에 싣는다 — 틀에서 출발하기 · 내 시행에서 불러오기. 계산도 시행 기록도 없다. */

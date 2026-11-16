@@ -162,6 +162,179 @@ test("설정 → 실행 → 결과 조회: 계산은 실행하지 않고 · 단�
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
 });
 
+test("직접 구성: 설정 판에서 조건을 짓고 → 계산 → 실행 → 결과 조회의 값 = 손 계산 · 판과 고르기 목록에 조건의 글 · 빈 칸이면 서버의 사유로 실패", async ({ page }) => {
+  test.setTimeout(180_000);
+  const sink = trackErrors(page);
+  const TEXT = "진입 조건: 종가 상향 돌파 10050";      // 손 계산의 규칙 — 틀 '시가 범위 돌파 1분'과 같은 체결(09:02 매수 · 09:03 청산)
+  await login(page);
+  await openCanvas(page);
+  await importDoc(page, [setup()]);
+  await node(page, "is").click();
+  await tab(page, "settings");
+  const field = page.locator('.pg-side .pg-basic-field[data-field="custom_rule"]');
+  await expect(field).toHaveCount(0);                                             // 틀을 골랐을 때는 조건 칸이 없다
+  await expect(page.locator('.pg-basic-field[data-field="rule"] .pg-choice')).toHaveCount(8);
+  await page.locator('.pg-basic-field[data-field="rule"] .pg-choice', { hasText: "직접 구성" }).click();
+  await expect(field.locator(".ire-slot-title")).toHaveText(["진입 조건", "미리 건 매수 가격", "청산 조건"]);   // 화면과 같은 편집 부품 · 비어서 시작한다
+  await expect(page.locator('.pg-basic-field[data-field="opening_range_breakout__minutes"]')).toHaveCount(0);
+  await expect(field.locator(".pg-itd-rule-issues li")).toHaveText(["진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다."]);
+  await expect(field.locator('.itd-check[data-state="idle"]')).toBeVisible();
+  await expect(field).toContainText("도구는 조건을 추천하지 않습니다.");
+  await expect(node(page, "is").locator('[data-field="custom_rule"]')).toHaveCount(0);   // 편집은 오른쪽 설정 판에서만 — 카드에는 칸이 없다
+
+  // ① 빈 채로 계산하면 노드가 서버의 사유로 실패한다(지어낸 조건으로 돌지 않는다)
+  const empty = await run(page);
+  expect(empty.nodes.is.status).toBe("failed");
+  expect(empty.nodes.is.reason).toContain("진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다.");
+
+  // ② 빈 줄이 있는 채로 — 서버가 어느 자리인지 말하고, 설정 판은 몇 곳이 비었는지 말한다
+  const entry = field.locator('.ire-slot[data-slot="entry"]');
+  await entry.locator('.ire-add[data-add="compare"]').click();
+  await expect(field.locator(".pg-itd-rule-issues li")).toHaveText(["진입 조건: 비어 있는 칸이 3곳 있습니다."]);
+  const half = await run(page);
+  expect(half.nodes.is.status).toBe("failed");
+  expect(half.nodes.is.reason).toMatch(/^진입 조건: /);
+
+  // ③ 조건을 짓는다 → 서버의 글 → 계산 ok(요청의 규칙 = 지은 나무)
+  await entry.getByLabel("진입 조건: 왼쪽 값", { exact: true }).selectOption("ind:close");
+  await entry.getByLabel("진입 조건: 연산", { exact: true }).selectOption("cross_up");
+  await entry.getByLabel("진입 조건: 오른쪽 값", { exact: true }).selectOption("const");
+  await entry.getByLabel("진입 조건: 오른쪽 값 상수", { exact: true }).fill("10050");
+  await expect(field.locator(".itd-rule-text")).toHaveText(TEXT);
+  await expect(field.locator(".pg-itd-rule-issues")).toHaveCount(0);
+  const sent = page.waitForRequest((r) => r.url().includes("/allocation/graph/run") && r.method() === "POST");
+  const ok = await run(page);
+  const carried = ((await sent).postDataJSON() as { nodes: { id: string; params: Record<string, unknown> }[] }).nodes.find((n) => n.id === "is")!.params;
+  expect(carried.rule).toBe("custom");
+  expect(carried.custom_rule, "문서에는 지은 나무가 그대로 · 쓰지 않는 자리는 없다").toEqual({ entry: { op: "cross_up", args: [{ ind: "close" }, { const: 10050 }] } });
+  expect(Object.keys(carried.custom_rule as object)).toEqual(["entry"]);
+  expect(ok.nodes.is.status, ok.nodes.is.reason).toBe("ok");
+  expect(ok.nodes.is.view.request.rule).toEqual({ kind: "custom", params: { entry: { op: "cross_up", args: [{ ind: "close" }, { const: 10050 }] } } });
+  expect(ok.nodes.is.view.rule_text).toBe(TEXT);
+  expect(ok.nodes.is.explain.facts).toContain(`직접 구성한 조건 — ${TEXT}`);
+  await tab(page, "detail");
+  const kv = page.locator(".pg-side .pg-itd-setup .pg-kv");
+  await expect(kv).toContainText("직접 구성");
+  await expect(kv.locator(".pg-itd-rule-text")).toHaveText(TEXT);
+
+  // ④ 단추 한 번 → 결과 조회: 값 = 틀의 손 계산과 같다 · 판과 고르기 목록이 조건의 글을 보인다
+  await tab(page, "settings");
+  const saved = page.waitForResponse((r) => r.url().includes("/allocation/graph/save"), { timeout: 120_000 });
+  await page.locator(".pg-save-btn").click();
+  const sv = await (await saved).json();
+  expect(sv.ok, sv.message).toBe(true);
+  await page.locator(".pg-save-follow").click();
+  const loader = page.locator(".pg-node").filter({ hasText: "분봉 결과 조회" });
+  await expect(loader).toHaveCount(1);
+  const second = await run(page);
+  const lid = Object.keys(second.nodes).find((k) => second.nodes[k].type === "intraday_load")!;
+  expect(second.nodes[lid].status, second.nodes[lid].reason).toBe("ok");
+  expect(second.nodes[lid].view.trial_key).toBe(sv.saved_id);
+  await loader.click();
+  await tab(page, "detail");
+  const panel = page.locator(".pg-side .pg-itd-load");
+  await expect(panel.locator(".pg-itd-gross")).toHaveText("+19,800원");
+  await expect(panel.locator(".pg-kv")).toContainText("직접 구성");
+  await expect(panel.locator(".pg-itd-rule-text")).toHaveText(TEXT);
+  await tab(page, "settings");
+  const picked = page.locator(".pg-side .pg-pick-row.on");
+  await expect(picked).toHaveCount(1);
+  await expect(picked).toContainText("직접 구성 · 035720");
+  await expect(picked.locator(".pg-pick-text")).toHaveText(TEXT);
+
+  expect(uniq(sink.api404), "404").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
+const BUILT = { entry: { op: "cross_up", args: [{ ind: "close" }, { const: 10050 }] }, exit: { op: "lt", args: [{ ind: "close" }, { ind: "vwap" }] } };
+const BUILT_TEXT = "진입 조건: 종가 상향 돌파 10050 · 청산 조건: 종가 < VWAP";
+
+for (const theme of ["light", "dark"] as const) {
+  test(`직접 구성(${theme}): 조건이 실린 문서를 들여오면 편집기가 그 조건을 보인다 · 종류를 틀로 바꾸면 요청에 조건이 실리지 않고 문서에는 남는다 · 대비 · 문체`, async ({ page }) => {
+    test.setTimeout(180_000);
+    const sink = trackErrors(page);
+    await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+    await login(page);
+    await openCanvas(page);
+    const asked: string[] = [];
+    const watch = (r: Request) => { if (r.url().includes("/api/v1/intraday/")) asked.push(`${r.method()} ${new URL(r.url()).pathname}`); };
+    page.on("request", watch);
+    await importDoc(page, [setup({ ...HAND, rule: "custom", custom_rule: BUILT })]);
+    await node(page, "is").click();
+    await tab(page, "settings");
+    const field = page.locator('.pg-side .pg-basic-field[data-field="custom_rule"]');
+    const entry = field.locator('.ire-slot[data-slot="entry"]');
+    const exit = field.locator('.ire-slot[data-slot="exit"]');
+
+    // ① 문서의 조건이 편집기에 그대로 실린다 → 서버의 글(검사는 시행이 아니다 — 분봉 문에는 틀 목록과 검사만 간다)
+    await expect(entry.getByLabel("진입 조건: 왼쪽 값", { exact: true })).toHaveValue("ind:close");
+    await expect(entry.getByLabel("진입 조건: 연산", { exact: true })).toHaveValue("cross_up");
+    await expect(entry.getByLabel("진입 조건: 오른쪽 값 상수", { exact: true })).toHaveValue("10050");
+    await expect(exit.getByLabel("청산 조건: 오른쪽 값", { exact: true })).toHaveValue("ind:vwap");
+    await expect(field.locator(".itd-rule-text")).toHaveText(BUILT_TEXT);
+    await expect(field.locator(".itd-rule-size")).toHaveText("마디 6/64 · 겹침 깊이 2/12");
+    await expect(field.locator(".pg-itd-rule-issues")).toHaveCount(0);
+    expect([...new Set(asked)].sort()).toEqual([`GET ${API}/intraday/templates`, `POST ${API}/intraday/rules/expand`]);
+    const first = await run(page);
+    expect(first.nodes.is.status, first.nodes.is.reason).toBe("ok");
+    expect(first.nodes.is.view.request.rule).toEqual({ kind: "custom", params: BUILT });
+    expect(first.nodes.is.view.rule_text).toBe(BUILT_TEXT);
+
+    // ② 빈 줄을 하나 더하면 — 검사를 멈추고 어느 자리에 몇 곳이 비었는지 말한다(대비 · 문체는 이 상태와 채운 상태 둘 다)
+    await exit.locator(':scope > .ire-add-row .ire-add[data-add="compare"]').click();
+    await expect(field.locator(".pg-itd-rule-issues li")).toHaveText(["청산 조건: 비어 있는 칸이 3곳 있습니다."]);
+    await expect(field.locator('.itd-check[data-state="idle"]')).toBeVisible();
+    await expect(field.locator(".itd-rule-text")).toHaveCount(0);
+    await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark).*$/);
+    for (const state of ["holes", "ok"] as const) {
+      if (state === "ok") {
+        await exit.locator(".ire-group-list").first().locator(":scope > li").nth(1).locator('.ire-tool[data-act="remove"]').click();
+        await expect(field.locator(".itd-rule-text")).toHaveText(BUILT_TEXT);          // 하나 남은 묶음은 풀린다 — 처음의 조건으로 돌아온다
+        await expect(field.locator(".pg-itd-rule-issues")).toHaveCount(0);
+      }
+      const a = (await page.evaluate(contrastAudit('.pg-side .pg-basic-field[data-field="custom_rule"]'))) as AuditResult;
+      expect(a.checked, state).toBeGreaterThan(10);
+      expect(a.low, `${theme} ${state}`).toEqual([]);
+      if (theme === "dark") expect(a.bright, `다크에 밝은 배경 ${state}`).toEqual([]);
+      const v = (await page.evaluate(voiceAudit('.pg-side .pg-basic-field[data-field="custom_rule"]'))) as VoiceResult;
+      expect(v.checked, state).toBeGreaterThan(3);
+      expect(v.haeyo).toEqual([]);
+      expect(v.dash).toEqual([]);
+      expect(v.banned).toEqual([]);
+    }
+    // 설정 판 안에서 넘치지 않는다(편집기는 좁은 판에 들어간다)
+    const over = await page.evaluate(() => {
+      const side = document.querySelector(".pg-side")!; const right = side.getBoundingClientRect().right + 1;
+      return [...side.querySelectorAll(".pg-itd-rule *")].filter((el) => el.getClientRects().length && el.getBoundingClientRect().right > right).map((el) => el.className);
+    });
+    expect(over, "설정 판 밖으로 넘친 것").toEqual([]);
+
+    // ③ 종류를 틀로 바꾼다 — 조건 칸이 사라지고 요청에는 틀의 것만 간다
+    await page.locator('.pg-basic-field[data-field="rule"] .pg-choice', { hasText: "시가 범위 돌파" }).click();
+    await expect(field).toHaveCount(0);
+    const second = await run(page);
+    expect(second.nodes.is.status, second.nodes.is.reason).toBe("ok");
+    expect(second.nodes.is.view.request.rule).toEqual({ kind: "opening_range_breakout", params: { minutes: 1 } });
+    await tab(page, "detail");
+    await expect(page.locator(".pg-side .pg-itd-setup .pg-itd-rule-text")).toContainText("시가 범위 고가(1분)");   // 틀에도 규칙의 글
+    await expect(page.locator(".pg-side .pg-itd-setup .pg-itd-rule-text")).not.toContainText("10050");
+    // ④ 다시 직접 구성 — 지은 조건은 문서에 남아 있다(다시 짓지 않는다)
+    await tab(page, "settings");
+    await page.locator('.pg-basic-field[data-field="rule"] .pg-choice', { hasText: "직접 구성" }).click();
+    await expect(entry.getByLabel("진입 조건: 오른쪽 값 상수", { exact: true })).toHaveValue("10050");
+    await expect(field.locator(".itd-rule-text")).toHaveText(BUILT_TEXT);
+    page.off("request", watch);
+    expect(asked.filter((a) => !/\/(templates|rules\/expand)$/.test(a)), "편집과 계산은 분봉 백테스트를 실행하지 않는다").toEqual([]);
+
+    expect(uniq(sink.api404), "404").toEqual([]);
+    expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+    expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+    expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+  });
+}
+
 test("합성 분봉 위의 결과는 판 맨 위에 그렇게 적는다 · 고르기 목록에도 표식", async ({ page }) => {
   test.setTimeout(180_000);
   await login(page);
@@ -268,6 +441,9 @@ async function keptTrial(page: Page, token: string): Promise<string> {
   return body.saved_id as string;
 }
 
+/** 틀 '시가 범위 돌파 1분'을 풀어 쓴 글 — 서버가 낸다(화면은 그대로 보인다). */
+const ORB_TEXT = "진입 조건: 종가 상향 돌파 시가 범위 고가(1분) 또는 ((시가 범위 종료(1분) > 0.5 그리고 아님(직전 1봉 동안(시가 범위 종료(1분) > 0.5))) 그리고 종가 > 시가 범위 고가(1분))";
+
 const armDoc = (key: string): [object[], object[]] => [
   [{ id: "il", type: "intraday_load", position: { x: 0, y: 0 }, params: { trial_key: key } },
    { id: "ar", type: "intraday_arm_request", position: { x: 420, y: 0 }, params: { note: "개장 전 점검" } }],
@@ -308,6 +484,8 @@ for (const theme of ["light", "dark"] as const) {
     await expect(panel).toHaveAttribute("data-grade", "E3");
     await expect(panel.locator(".tx-notice")).toHaveCount(0);                      // 실제 등급 — 합성 알림이 없다
     await expect(panel.locator(".pg-kv")).toContainText("시가 범위 돌파");
+    await expect(panel.locator(".pg-itd-rule-text")).toHaveText(ORB_TEXT);          // 무엇을 가동해 달라는 것인지 — 이름표만이 아니라 조건의 글
+    await expect(panel.locator(".pg-itd-rule-text")).toHaveAttribute("data-known", "true");
     await expect(panel.locator(".pg-kv")).toContainText("1개 · 2026-03-02 ~ 2026-03-13");
     await expect(panel.locator(".pg-itd-gates")).toHaveText("통과 2 · 미달 1 · 미상 4");
     await expect(panel.locator(".pg-itd-state")).toHaveText("남기지 않음");
@@ -362,6 +540,43 @@ for (const theme of ["light", "dark"] as const) {
     expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
   });
 }
+
+test("규칙의 글: 읽은 결과는 글을 보이고 · 읽지 못했다는 답이면 그 사유를 보이며 · 둘 다 없으면 미상으로 둔다(지어내지 않는다)", async ({ page }) => {
+  test.setTimeout(180_000);
+  const token = await login(page);
+  const key = await keptTrial(page, token);
+  await openCanvas(page);
+  await importDoc(page, [{ id: "il", type: "intraday_load", position: { x: 0, y: 0 }, params: { trial_key: key } }]);
+  const first = await run(page);
+  expect(first.nodes.il.status, first.nodes.il.reason).toBe("ok");
+  expect(first.nodes.il.view.rule_text).toBe(ORB_TEXT);
+  await node(page, "il").click();
+  await tab(page, "detail");
+  const text = page.locator(".pg-side .pg-itd-load .pg-itd-rule-text");
+  await expect(text).toHaveText(ORB_TEXT);
+  await expect(text).toHaveAttribute("data-known", "true");
+  await expect(page.locator(".pg-side .pg-pick-row")).toHaveCount(0);            // 자세히 탭 — 고르기 목록은 설정 탭에 있다
+
+  // 서버가 '읽지 못했다'고 답한 때(대역 — 실제 답에서 글만 걷고 서버의 사유 문장을 싣는다)
+  const REASON = "이 설정의 규칙을 지금의 문법으로 읽지 못했습니다.";
+  let patch: (view: Record<string, unknown>) => void = (view) => { view.rule_text = null; view.rule_text_reason = REASON; };
+  await page.route("**/allocation/graph/run", async (route) => {
+    const resp = await route.fetch();
+    const body = await resp.json();
+    patch(body.nodes.il.view);
+    await route.fulfill({ response: resp, json: body });
+  });
+  await run(page);
+  await expect(text).toHaveText(REASON);
+  await expect(text).toHaveAttribute("data-known", "false");
+  await expect(page.locator(".pg-side .pg-itd-load .pg-itd-gross")).toHaveText("+19,800원");   // 숫자는 그대로다 — 글만 없다
+
+  patch = (view) => { view.rule_text = null; view.rule_text_reason = null; };
+  await run(page);
+  await expect(text).toHaveText("N/A");
+  await expect(text).toHaveAttribute("data-known", "false");
+  await expect(page.locator(".pg-side .pg-itd-load")).not.toContainText("시가 범위 고가");       // 글을 지어내지 않는다
+});
 
 test("가동 요청: 로그인 전에는 사유와 함께 실패하고 요청 판을 지어내지 않는다", async ({ page }) => {
   await openCanvas(page);

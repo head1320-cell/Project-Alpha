@@ -21,7 +21,8 @@ async function scenarioPackList(): Promise<{ pack_id: string; label: string; ver
   return ((await r.json()) as { packs?: { pack_id: string; label: string; version?: number }[] }).packs ?? [];
 }
 
-type Item = { value: string | number; label: string; sub?: string; chips: { text: string; tone: "assumed" | "unknown" }[] };
+/** `text` 는 서버가 낸 글 한 줄이다(분봉 결과의 규칙 — 이름표가 같은 줄을 가른다). */
+type Item = { value: string | number; label: string; sub?: string; text?: string; chips: { text: string; tone: "assumed" | "unknown" }[] };
 type State = { kind: "loading" } | { kind: "error"; text: string } | { kind: "ready"; items: Item[] };
 
 const EMPTY: Record<string, string> = {
@@ -83,6 +84,7 @@ async function load(source: string): Promise<Item[]> {
       value: r.trial_key,
       label: `${r.rule_label ?? "규칙 틀 미상"} · ${r.tickers[0] ?? "종목 없음"}${r.tickers.length > 1 ? ` 외 ${r.tickers.length - 1}` : ""}`,
       sub: `${r.from} ~ ${r.to} · 실행 ${new Date(r.result_at * 1000).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`,
+      text: r.rule_text ?? r.rule_text_reason ?? undefined,
       chips: [
         ...(r.synthetic ? [{ text: "합성 분봉", tone: "unknown" as const }] : []),
         ...(!r.grade_known ? [{ text: "분봉 출처 미상", tone: "unknown" as const }] : []),
@@ -138,7 +140,8 @@ export function PickField({ source, multi, value, onChange }: {
           <button key={String(it.value)} type="button" role={multi ? "checkbox" : "radio"} aria-checked={on}
                   className={`pg-pick-row${on ? " on" : ""}`} onClick={() => toggle(it.value)}>
             <span className="pg-pick-box" aria-hidden="true" />
-            <span className="pg-pick-main"><b>{it.label}</b>{it.sub && <span className="pg-pick-sub">{it.sub}</span>}</span>
+            <span className="pg-pick-main"><b>{it.label}</b>{it.sub && <span className="pg-pick-sub">{it.sub}</span>}
+              {it.text && <span className="pg-pick-text" data-server>{it.text}</span>}</span>
             {it.chips.map((c) => <span key={c.text} className={`pg-tag pg-tag--${c.tone}`}>{c.text}</span>)}
           </button>
         );

@@ -18,6 +18,12 @@ type Dict = Record<string, unknown>;
 const dict = (v: unknown): Dict => (v && typeof v === "object" ? (v as Dict) : {});
 const count = (v: unknown, unit: string): string => (typeof v === "number" && Number.isFinite(v) ? `${num(v)}${unit}` : UNKNOWN_TEXT);
 
+/** 규칙을 풀어 쓴 글 — 서버가 낸 글 그대로. 못 읽었으면 그 사유, 둘 다 없으면 미상. */
+const ruleText = (v: Dict): ReactNode => {
+  const said = typeof v.rule_text === "string" ? v.rule_text : typeof v.rule_text_reason === "string" ? v.rule_text_reason : null;
+  return <span key="rt" className="pg-itd-rule-text" data-known={String(typeof v.rule_text === "string")} data-server>{said ?? UNKNOWN_TEXT}</span>;
+};
+
 function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="pg-kv">{rows.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>;
 }
@@ -32,6 +38,7 @@ export function IntradaySetupResult({ v }: { v: Dict }) {
     <div className="pg-itd pg-itd-setup">
       <KV rows={[
         ["규칙 틀", String(v.rule_label ?? UNKNOWN_TEXT)],
+        ["규칙", ruleText(v)],
         ["종목", `${num(tickers.length)}개${v.tickers_from === "universe" ? " · 연결한 종목 묶음" : ""}`],
         ["기간", `${String(r.from)} ~ ${String(r.to)}`],
         ["분봉이 적재된 날", `달력 ${count(days.calendar, "일")} 가운데 ${count(days.loaded, "일")}`],
@@ -67,6 +74,7 @@ export function IntradayLoadResult({ v }: { v: Dict }) {
       ) : null}
       <KV rows={[
         ["규칙 틀", <span key="k" data-server>{view.template?.label ?? UNKNOWN_TEXT}</span>],
+        ["규칙", ruleText(v)],
         ["종목 · 기간", `${num(tickers.length)}개 · ${String(r.from)} ~ ${String(r.to)}`],
         ["거래", s ? `${num(s.trades)}건` : UNKNOWN_TEXT],
         ["비용 전 실현손익", <span key="g" className="pg-itd-gross">{signedWon(s?.gross_total ?? null)}</span>],
@@ -98,6 +106,7 @@ export function IntradayArmResult({ v }: { v: Dict }) {
   const state = v.requested === true ? "true" : v.requested === false ? "false" : "unknown";
   const rows: [string, ReactNode][] = [
     ["규칙 틀", <span key="k" data-server>{String(v.rule_label ?? UNKNOWN_TEXT)}</span>],
+    ["규칙", ruleText(v)],
     ["종목 · 기간", `${num(tickers.length)}개 · ${String(v.from)} ~ ${String(v.to)}`],
     ["같은 설정 실행", count(v.runs, "회")],
     ["관문 일곱", <span key="g" className="pg-itd-gates">{gates.known === true

@@ -10,16 +10,13 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { listTrials, type Expanded, type SimulateRequest, type Templates } from "@/entities/intraday";
-import { RuleEditor } from "@/features/intraday-rule-editor";
+import { listTrials, type SimulateRequest, type Templates } from "@/entities/intraday";
+import { RuleCheckView, RuleEditor, type RuleCheck } from "@/features/intraday-rule-editor";
 import { num } from "@/shared/lib/krFormat";
 import { Notice, RetryFail, Section, Segmented } from "@/shared/ui/tx";
 import { templateOf, withKind, type Form } from "./form";
 
-/** 조건 검사의 상태 — 빈 칸이 있으면 묻지 않는다(`idle`). 거절(400)과 실패(그 밖)를 가른다. */
-export type RuleCheck =
-  | { kind: "idle" } | { kind: "pending" } | { kind: "ok"; value: Expanded }
-  | { kind: "refused"; error: string } | { kind: "fail"; error: string; retry: () => void };
+export type { RuleCheck };
 /** 규칙을 편집기로 옮기는 일(틀에서 풀기 · 시행에서 불러오기)의 상태. */
 export type Move = { kind: "idle" } | { kind: "pending" } | { kind: "fail"; error: string };
 type Rule = SimulateRequest["rule"];
@@ -29,24 +26,6 @@ const unwrap = <T,>(fn: () => Promise<{ ok: true; value: T } | { ok: false; stat
   if (!r.ok) throw new Error(r.error);
   return r.value;
 };
-
-function CheckView({ check }: { check: RuleCheck }) {
-  if (check.kind === "idle") return <p className="tj-note itd-check" data-state="idle">조건을 모두 채우면 검사 결과를 표시합니다.</p>;
-  if (check.kind === "pending") return <p className="tj-note itd-check" data-state="pending" aria-busy="true">조건 검사 중</p>;
-  if (check.kind === "refused") {
-    return <div className="itd-check" data-state="refused"><Notice tone="danger" title="조건 검사 거절"><span data-server>{check.error}</span></Notice></div>;
-  }
-  if (check.kind === "fail") {
-    return <div className="itd-check" data-state="fail"><RetryFail title="조건 검사 실패" onRetry={check.retry}><span data-server>{check.error}</span></RetryFail></div>;
-  }
-  const v = check.value;
-  return (
-    <div className="itd-check" data-state="ok" aria-live="polite">
-      <p className="tj-read itd-rule-text" data-server>{v.text}</p>
-      <p className="itd-hint itd-rule-size">마디 {num(v.nodes)}/{num(v.limits.nodes)} · 겹침 깊이 {num(v.depth)}/{num(v.limits.depth)}</p>
-    </div>
-  );
-}
 
 function TrialLoader({ onLoad, busy }: { onLoad: (rule: Rule) => void; busy: boolean }) {
   const [open, setOpen] = useState(false);
@@ -101,7 +80,7 @@ export function RuleSection({ templates: t, form, onChange, params, ruleReady, c
         {template.custom ? (
           <>
             <RuleEditor grammar={t.grammar} value={form.custom} onChange={(custom) => onChange({ ...form, custom })} />
-            <CheckView check={check} />
+            <RuleCheckView check={check} />
             <TrialLoader onLoad={onToCustom} busy={move.kind === "pending"} />
           </>
         ) : (

@@ -516,7 +516,7 @@ def test_the_setup_form_is_built_from_the_registries_not_copied():
     import src.api.intraday_routes as mod
     from src.engine.intraday import rules
     props = {c["type"]: c for c in REGISTRY.catalog()}["intraday_setup"]["params_schema"]["properties"]
-    templates = [t for t in rules.describe() if not t["custom"]]                # 직접 구성은 아직 내놓지 않는다(아래 시험)
+    templates = rules.describe()                                                # 틀 일곱 + 직접 구성(칸 대신 편집 부품 — 아래 시험)
     assert props["rule"]["enum"] == [t["kind"] for t in templates]
     assert props["rule"]["x-ui"]["order"] == [t["kind"] for t in templates]
     assert props["rule"]["x-ui"]["options"] == {t["kind"]: t["label"] for t in templates}
@@ -536,14 +536,140 @@ def test_the_setup_form_is_built_from_the_registries_not_copied():
     assert props["commission_bp"]["default"] is None                            # 수수료율은 모름에서 시작한다(0 이 아니다)
 
 
-def test_the_setup_node_does_not_offer_the_custom_kind_until_it_has_an_editor(client, auth):
-    """직접 구성(`custom`)은 문에는 열렸지만 캔버스의 설정 노드에는 편집 부품이 아직 없다(자유 조건식 f3 에서 연다 — 그때 이 시험을 뒤집는다).
+# ── 직접 구성(자유 조건식 f3) — 설정 노드가 여덟째 종류를 편집 부품과 함께 내놓는다 ─────────────────────────
+# 손 계산의 규칙(종가가 10,050 을 상향 돌파)을 ★직접 구성한 조건 그 자체★로 돌린다 — 다른 시험들은 도우미가 틀의 규칙을 이것으로
+# 바꿔 끼우지만(`with_days(crossing=True)`), 여기서는 끈다(`real_rules`): 규칙을 읽는 길이 진짜여야 직접 구성을 시험한 것이다.
+CROSS = {"op": "cross_up", "args": [{"ind": "close"}, {"const": 10050}]}
+CROSS_TEXT = "진입 조건: 종가 상향 돌파 10050"
 
-    칸이 없는 빈 선택지를 내놓지 않는다 ↔ 문으로 돌린 직접 구성 시행의 이름표는 읽는다."""
-    from src.api import allocation_graph_nodes_intraday as nodes
+
+def real_rules(monkeypatch) -> None:
+    with_days(monkeypatch, made_days(), crossing=False)
+
+
+def test_the_setup_node_offers_the_custom_kind_with_one_field_for_the_rule_editor():
+    """'직접 구성'은 칸 여럿이 아니라 ★조건 나무 셋을 담는 칸 하나★다 — 화면의 편집 부품(`intraday_rule`)이 그린다. 비어서 시작한다."""
     from src.engine.intraday import rules
     props = {c["type"]: c for c in REGISTRY.catalog()}["intraday_setup"]["params_schema"]["properties"]
-    assert "custom" not in props["rule"]["enum"] and len(props["rule"]["enum"]) == 7
-    assert "custom" in [t["kind"] for t in rules.describe()]                    # 짝 — 엔진의 목록에는 있다
-    assert run(client, graph(setup_node(rule="custom")), auth)["s"]["status"] == "blocked"      # 매개변수 검사에서 막힌다 — 돌지 않는다
-    assert nodes._LABELS["custom"] == "직접 구성" and nodes._LABELS["opening_range_breakout"] == "시가 범위 돌파"
+    kinds = [t["kind"] for t in rules.describe()]
+    assert props["rule"]["enum"] == kinds and kinds[-1] == "custom" and len(kinds) == 8
+    assert props["rule"]["x-ui"]["options"]["custom"] == "직접 구성"
+    assert props["rule"]["default"] == "opening_range_breakout"                 # 출발은 그대로 첫 틀이다(직접 구성에서 시작하지 않는다)
+    ui = props["custom_rule"]["x-ui"]
+    assert ui["widget"] == "intraday_rule" and ui["show_if"] == {"rule": ["custom"]}
+    assert props["custom_rule"].get("default") is None                          # 조건을 지어 넣지 않는다
+    assert "추천하지 않습니다" in ui["help"]
+    assert not [k for k in props if k.startswith("custom__")]                   # 이름 붙은 매개변수 칸은 없다
+
+
+def test_a_custom_rule_on_the_canvas_is_the_rule_the_route_would_run(client, auth, monkeypatch):
+    """캔버스의 직접 구성 = 문의 직접 구성: 같은 한 꼴 · 같은 글 · 같은 시행 열쇠 · 같은 숫자(틀의 손 계산과 같은 체결)."""
+    from src.engine.intraday import rules
+    real_rules(monkeypatch)
+    trees = {"entry": CROSS}
+    g = graph(setup_node(rule="custom", custom_rule=trees))
+    seen = run(client, g, auth)["s"]
+    assert seen["status"] == "ok", seen["reason"]
+    v = seen["view"]
+    assert v["request"]["rule"] == {"kind": "custom", "params": rules.resolve("custom", trees)}
+    assert v["rule_label"] == "직접 구성" and v["rule_text_reason"] is None
+    assert v["rule_text"] == rules.text_of(rules.build("custom", trees)) == CROSS_TEXT
+    out = press(client, g, "s", auth)
+    assert out["ok"] is True, out
+    kept = trials.result_of("alice", out["saved_id"])["result"]
+    assert kept["summary"]["gross_total"] == pytest.approx(19_800.0)             # 열흘 × 1,980원 — 손 계산(규칙을 바꿔 끼우지 않았다)
+    assert stored_rows() == 1
+    said = client.post(VAL, json={**BODY, "rule": {"kind": "custom", "params": trees}}, headers=auth).json()
+    assert said["trial"]["new"] is False and said["trial"]["runs"] == 2 and stored_rows() == 1      # 문으로 같은 것을 돌리면 같은 시행이다
+    assert said["summary"]["gross_total"] == kept["summary"]["gross_total"]
+    by_template = client.post(VAL, json=BODY, headers=auth).json()
+    assert by_template["trial"]["new"] is True and stored_rows() == 2            # 짝 — 틀은 다른 시행이다
+
+
+def test_computing_a_custom_rule_writes_nothing_and_reads_no_bars(client, auth, monkeypatch):
+    real_rules(monkeypatch)
+    no_bars_may_be_read(monkeypatch)
+    g = graph(setup_node(rule="custom", custom_rule={"entry": CROSS}))
+    run(client, g, auth)
+    before = table_rows()
+    for _ in range(3):
+        out = run(client, g, auth)["s"]
+        assert out["status"] == "ok", out["reason"]
+    assert table_rows() == before and stored_rows() == 0
+
+
+def test_only_the_chosen_kinds_rule_reaches_the_request(client, auth, monkeypatch):
+    """틀을 바꾼 흔적은 가지 않는다 — 직접 구성에는 틀의 칸이, 틀에는 직접 구성한 조건이 실리지 않는다."""
+    real_rules(monkeypatch)
+    custom = run(client, graph(setup_node(rule="custom", custom_rule={"entry": CROSS}, rsi_reversal__n=10)), auth)["s"]["view"]
+    assert custom["request"]["rule"] == {"kind": "custom", "params": {"entry": {"op": "cross_up", "args": [{"ind": "close"}, {"const": 10050.0}]}}}
+    template = run(client, graph(setup_node(custom_rule={"entry": CROSS})), auth)["s"]["view"]
+    assert template["request"]["rule"] == {"kind": "opening_range_breakout", "params": {"minutes": 5}}
+    assert template["rule_label"] == "시가 범위 돌파" and "시가 범위 고가(5분)" in template["rule_text"]       # 틀의 글도 함께 준다
+
+
+@pytest.mark.parametrize(("trees", "code", "slot"), [
+    (None, "no_entry", None),                                                   # 편집기를 열고 아무것도 짓지 않았다
+    ({}, "no_entry", None),
+    ({"exit": CROSS}, "no_entry", None),                                        # 청산만으로는 규칙이 아니다
+    ({"entry": {"op": "", "args": [None, None]}}, "unknown_op", "진입 조건"),      # 편집기의 빈 줄이 그대로 왔다
+    ({"entry": {"op": "gt", "args": [{"ind": "close"}, None]}}, "not_a_node", "진입 조건"),
+    ({"entry": CROSS, "exit": {"op": "gt", "args": [{"ind": "close"}, {"ind": "sma", "n": 500}]}}, "param_out_of_range", "청산 조건"),
+    ({"entry_stop": CROSS}, "entry_stop_not_a_price", "미리 건 매수 가격"),
+    ({"entry": CROSS, "stop": CROSS}, "unknown_param", None),
+])
+def test_a_custom_rule_that_cannot_run_fails_with_the_routes_reason_and_names_the_slot(client, auth, monkeypatch, trees, code, slot):
+    """거절은 문의 문장 그대로이고, 어느 자리의 조건인지를 앞에 붙인다(자리를 모르는 거절에는 붙이지 않는다)."""
+    import src.api.intraday_routes as mod
+    from src.engine.intraday import rules
+    real_rules(monkeypatch)
+    no_bars_may_be_read(monkeypatch)
+    over = {"rule": "custom"} if trees is None else {"rule": "custom", "custom_rule": trees}
+    out = run(client, graph(setup_node(**over)), auth)["s"]
+    assert out["status"] == "failed" and mod.REASONS[code] in out["reason"], out["reason"]
+    labels = [label for _, _, label, _ in rules.SLOTS]
+    assert slot is None or slot in labels                                       # 시험의 자리 이름이 엔진의 것과 같다
+    named = [label for label in labels if out["reason"].startswith(f"{label}: ")]
+    assert named == ([slot] if slot else []), out["reason"]
+    assert stored_rows() == 0
+
+
+def test_the_explanation_says_the_custom_condition_and_leaves_templates_as_they_were(client, auth, monkeypatch):
+    """직접 구성은 이름표가 아무것도 말하지 않는다 — 설명에 조건의 글을 적는다. 틀의 설명은 그대로다(짝)."""
+    real_rules(monkeypatch)
+    custom = run(client, graph(setup_node(rule="custom", custom_rule={"entry": CROSS})), auth)["s"]["explain"]
+    assert custom["title"] == "‘직접 구성’ 분봉 백테스트 실행 준비를 마쳤습니다"
+    assert f"직접 구성한 조건 — {CROSS_TEXT}" in custom["facts"]
+    assert any("추천하지 않습니다" in t["text"] for t in custom["trust"])
+    template = run(client, graph(setup_node()), auth)["s"]["explain"]
+    assert not any("직접 구성한 조건" in f for f in template["facts"])
+    assert not any("추천하지 않습니다" in t["text"] for t in template["trust"])
+    assert len(custom["facts"]) == len(template["facts"]) + 1
+
+
+def test_a_custom_rule_made_on_the_canvas_can_be_read_back_and_requested(client, auth, monkeypatch):
+    """직접 구성으로 돌린 시행을 결과 조회 · 가동 요청 노드가 읽는다 — 이름표와 조건의 글과 함께."""
+    real_rules(monkeypatch)
+    key = press(client, graph(setup_node(rule="custom", custom_rule={"entry": CROSS})), "s", auth)["saved_id"]
+    loaded = run(client, graph(load_node(key)), auth)["l"]
+    assert loaded["status"] == "ok", loaded["reason"]
+    assert loaded["view"]["rule_label"] == "직접 구성" and loaded["view"]["rule_text"] == CROSS_TEXT
+    arm = {"id": "a", "type": "intraday_arm_request", "params": {}}
+    edge = {"source": "l", "source_port": "run", "target": "a", "target_port": "run"}
+    asked = run(client, graph(load_node(key), arm, edges=[edge]), auth)["a"]
+    assert asked["status"] == "ok", asked["reason"]
+    assert asked["view"]["rule_label"] == "직접 구성" and asked["view"]["rule_text"] == loaded["view"]["rule_text"]
+    assert f"직접 구성한 조건 — {CROSS_TEXT}" in asked["explain"]["facts"]                    # 무엇을 가동해 달라는 것인지 글로 말한다
+
+
+def test_a_result_made_by_a_template_also_carries_its_text_and_its_request_says_nothing_about_a_custom_condition(client, auth, monkeypatch):
+    """틀로 돌린 결과도 규칙의 글을 함께 준다(이름표는 매개변수를 말하지 않는다) ↔ 가동 요청의 설명에 '직접 구성한 조건' 줄은 없다(짝)."""
+    real_rules(monkeypatch)
+    kept = press(client, graph(setup_node()), "s", auth)["saved_id"]
+    v = run(client, graph(load_node(kept)), auth)["l"]["view"]
+    assert v["rule_label"] == "시가 범위 돌파" and "시가 범위 고가(5분)" in v["rule_text"] and v["rule_text_reason"] is None
+    arm = {"id": "a", "type": "intraday_arm_request", "params": {}}
+    edge = {"source": "l", "source_port": "run", "target": "a", "target_port": "run"}
+    asked = run(client, graph(load_node(kept), arm, edges=[edge]), auth)["a"]
+    assert asked["view"]["rule_text"] == v["rule_text"]
+    assert not any("직접 구성한 조건" in f for f in asked["explain"]["facts"])

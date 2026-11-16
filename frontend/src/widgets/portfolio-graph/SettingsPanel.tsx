@@ -18,6 +18,7 @@ import { ListField, NodeInspector } from "./NodeInspector";
 import { TickerField } from "./TickerInput";
 import { FilterEditor } from "./FilterEditor";
 import { PickField } from "./PickField";
+import { IntradayRuleField } from "./IntradayRuleField";
 import { PORT_PLAIN } from "./GraphNode";
 import { canBypass, fmtElapsed, sameValue, setOrClear, sourcesFor, swapCandidates } from "@/entities/portfolio-graph";
 import { ancestorsOf, descendantsOf } from "./store";
@@ -408,6 +409,16 @@ function BasicField({ f, value, root, ports, onChange, said, names, model }: {
         <input className="pg-slider" type="range" min={f.min} max={f.max} step={f.kind === "integer" ? 1 : (f.max - f.min) / 100}
                value={v} aria-label={f.ui.label} onChange={(e) => onChange(Number(e.target.value))} />
         <div className="pg-slider-ends"><span>{f.ui.ends?.[0] ?? f.min}</span><span className="pg-slider-v">{v.toFixed(1)}</span><span>{f.ui.ends?.[1] ?? f.max}</span></div>
+        {help}
+      </div>
+    );
+  }
+  if (f.ui.widget === "intraday_rule") {
+    // 분봉 규칙의 '직접 구성' — 화면(백테스트 › 분봉 규칙)과 같은 편집 부품 · 같은 서버 검사.
+    return (
+      <div className="pg-basic-field" data-field={f.name}>
+        {q}
+        <IntradayRuleField value={eff} onChange={onChange} />
         {help}
       </div>
     );

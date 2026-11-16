@@ -370,6 +370,17 @@ test("전일 값을 쓰는 조건이면 그렇게 말한다 · 범위 밖 매개
   await expect(page.locator(".itd-problems li")).toHaveText(["조건 검사에서 거절됐습니다. 규칙 절의 사유를 확인하십시오."]);
   await page.unroute("**/intraday/rules/expand");
 
+  // 요청의 모양이 틀렸다는 답(422)도 거절이다 — 다시 물어도 같은 답이라 재시도 단추를 내놓지 않는다.
+  await page.route("**/intraday/rules/expand", (r) => r.fulfill({
+    status: 422, contentType: "application/json",
+    body: JSON.stringify({ detail: [{ loc: ["body", "rule", "params"], msg: "Input should be a valid dictionary", type: "dict_type" }] }) }));
+  await period.fill("24");
+  await expect(check(page, "refused").locator("[data-server]")).toHaveText("body.rule.params: Input should be a valid dictionary");
+  await expect(check(page, "refused").getByRole("button")).toHaveCount(0);
+  await expect(check(page, "fail")).toHaveCount(0);
+  await expect(page.locator(".itd-run")).toBeDisabled();
+  await page.unroute("**/intraday/rules/expand");
+
   // 서버가 답하지 못하면 재시도할 수 있다(거절과 가른다).
   let fail = true;
   await page.route("**/intraday/rules/expand", (r) => (fail
