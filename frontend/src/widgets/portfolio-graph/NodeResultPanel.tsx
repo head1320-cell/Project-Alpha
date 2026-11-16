@@ -28,7 +28,7 @@ import {
 } from "./BacktestResults";
 import { IntradayArmResult, IntradayLoadResult, IntradaySetupResult } from "./IntradayResults";
 import {
-  ConsensusResult, CoverageResult, LongRunResult, MacroDashboardResult, StudioResult, YieldCurveResult,
+  ConsensusResult, CoverageResult, LongRunResult, MacroDashboardResult, SkillResult, StudioResult, YieldCurveResult,
 } from "./MacroW2Results";
 import {
   CompanyValuationResult, FinancialDeepResult, MacroSensitivityResult, ReverseDcfResult, RiskDeepResult, ThesisCheckResult,
@@ -451,6 +451,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict; explain?: NodeExplain
   macro_dashboard: ({ v }) => <MacroDashboardResult v={v} />,
   regime_consensus: ({ v }) => <ConsensusResult v={v} />,
   regime_forecast_coverage: ({ v }) => <CoverageResult v={v} />,
+  regime_skill: ({ v }) => <SkillResult v={v} />,
   long_run: ({ v }) => <LongRunResult v={v} />,
   macro_studio: ({ v }) => <StudioResult v={v} />,
   company_valuation: ({ v }) => <CompanyValuationResult v={v} />,

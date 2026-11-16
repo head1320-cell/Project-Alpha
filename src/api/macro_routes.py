@@ -807,6 +807,45 @@ def macro_regime_forecast_coverage(market: str = Query("kr"),
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
 
+def regime_skill_view(series: dict, *, market: str, months: int, k: int) -> dict:
+    """국면 예측 비교 본문 (M2) — 라우트와 캔버스 노드가 같은 함수를 쓴다(계열만 주입).
+
+    ★입력은 `regime_path` 의 점(두 축이 다 계산된 달만)★ — 앙상블(M1b)과 같은 입력이다. 뺀 달의 수는 `span` 이 말한다.
+    시점마다의 군집 적합은 축 값의 튜플을 열쇠로 기억한다(`regime_skill.cached_arms`) — k 만 바뀐 요청은 다시 적합하지 않는다.
+    """
+    from src.engine.regime_skill import regime_skill
+    from src.engine.regime_transitions import regime_path
+    path_out = regime_path(series, market=market, months=months)
+    points = path_out.get("points") or []
+    if points:
+        out = regime_skill(points, k=k)
+    else:
+        out = {"available": False, "k": k,
+               "reason": path_out.get("reason") or "국면 경로를 만들 수 없습니다 — 매크로 계열이 부족합니다."}
+    out.update(market=market, months=months, span=path_out.get("span") or {})
+    return out
+
+
+@router.get("/regime-skill")
+def macro_regime_skill(market: str = Query("kr", pattern="^(kr|us)$"),
+                       months: int = Query(120, ge=60, le=240),
+                       k: int = Query(1, ge=1, le=12)):
+    """국면 예측 비교 — 후보 여섯의 워크포워드 점수 (M2). ★고르지 않는다★ 점수를 나란히 보일 뿐이다.
+
+    시점마다 군집 두 팔을 다시 적합하므로 첫 계산이 길다 — 120개월 약 30초 · 240개월 약 84초(4코어 · 혼자 잰 값 ·
+    합성 축). k 만 바꾼 요청은 적합을 다시 쓴다(0.1초 미만). 기간 상한 240개월은 그 비용 때문이다 — 한 프로세스(`--workers 1`)를
+    오래 붙잡지 않게(프록시 시간 한도 300초 안).
+    """
+    try:
+        from src.services.macro_collector import MacroCollector
+
+        snap = MacroCollector().collect_all(use_cache=True)
+        return regime_skill_view(getattr(snap, "series", {}) or {}, market=market, months=months, k=k)
+    except Exception:
+        logger.exception("regime-skill 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+
+
 def regime_consensus_view(series: dict, *, market: str, months: int) -> dict:
     """네 국면 도구의 합의/불일치 본문 — 라우트와 캔버스 노드(BL3 W2)가 같은 함수를 쓴다(계열만 주입).
 

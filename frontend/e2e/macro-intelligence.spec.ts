@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { test, expect } from "./fixtures";
 import { trackErrors, contrastAudit, type AuditResult } from "./helpers";
 
@@ -60,6 +62,31 @@ const COVERAGE = {
   ],
   ladder: { level: "L1", note: "DeePM + 수익률곡선", blocked_level: "L0",
             blocked_reason: "torch 미설치 · 실측 표본 부족" },
+};
+
+/**
+ * 국면 예측 비교(M2) — 표가 있는 응답. ★손으로 지은 것이 아니다★ 서버의 캔버스 노드를 긴 합성 계열로 돌린 출력이고
+ * (`frontend/e2e/fixtures/regime-skill-node.json`), pytest `test_the_screen_fixture_is_what_the_node_produces` 가 그 고정물 = 지금 서버의 출력을 건다.
+ * 노드의 `view.result` = 문(`/macro/regime-skill`)의 답이다(pytest `test_the_node_equals_the_view_when_there_is_a_table`).
+ */
+type SkillC = { key: string; name: string; available: boolean; hit_rate: number | null; brier: number | null; gain: number | null;
+  evidence: { peak: number; passed: boolean; saturated: boolean; e_value: number } | null; reason: string | null };
+type Skill = { candidates: SkillC[]; baseline: string; n_eval: number; k: number; note: string; not_measured: string[];
+  evidence: { computed: boolean; threshold: number; note: string; reason: string | null } };
+const SKILL_OK = (JSON.parse(readFileSync(path.join(__dirname, "fixtures/regime-skill-node.json"), "utf8")) as { view: { result: Skill } }).view.result;
+const skillCopy = (): Skill => structuredClone(SKILL_OK);
+
+/** 화면 규칙(`entities/macro/skill.ts`)을 시험 쪽에서 다시 적는다 — 칸 글자 = 서버 값의 이 서식. */
+const fmt = {
+  hit: (c: SkillC) => `${((c.hit_rate as number) * 100).toFixed(0)}%`,
+  brier: (c: SkillC) => (c.brier as number).toFixed(3),
+  gain: (c: SkillC) => `${(c.gain as number) >= 0 ? "+" : "\u2212"}${Math.abs(c.gain as number).toFixed(3)}`,
+  ev: (c: SkillC) => {
+    const e = c.evidence;
+    if (!e) return "—";
+    const v = e.saturated ? "10¹² 이상" : e.peak >= 1000 ? Math.round(e.peak).toLocaleString("ko-KR") : e.peak.toFixed(2);
+    return e.passed ? `${v}*` : v;
+  },
 };
 
 /** 프록시 API 경로만 가로챈다 — 문서 내비게이션은 절대 건드리지 않는다. */
@@ -316,5 +343,201 @@ test.describe("P4 매크로 지능 패널", () => {
     expect(r.texts.filter((s) => s.includes("—")), "보이는 em-dash").toEqual([]);
     expect(r.texts.filter((s) => /\b(Goldilocks|Stagflation|forward-only|trace 통계량)\b|r ≤/.test(s)), "영어 꼬리표").toEqual([]);
     expect(r.titles).toBe(0);
+  });
+
+  // ── M2 — 국면 예측 비교: 단추로만 계산 · 서버 순서 그대로 · 이긴 행을 칠하지 않는다 ─────────────────────
+  const skillCard = (page: import("@playwright/test").Page) =>
+    page.locator(".mx-panel .mx-card", { has: page.locator(".mx-card-t", { hasText: "국면 예측 비교" }) });
+  async function stubSkill(page: import("@playwright/test").Page, body: unknown, asked: string[] = []) {
+    await page.route("**/api/backend/api/v1/macro/regime-skill**", (r) => {
+      asked.push(r.request().url());
+      return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    });
+    return asked;
+  }
+  /** 칸 글자 = 서버 값의 서식 · 행 순서 = 서버 순서 · 기준선 · 세우지 못한 후보 — 표 하나를 통째로 견준다. */
+  async function checkSkillTable(page: import("@playwright/test").Page, d: Skill) {
+    const rows = skillCard(page).locator(".mx-skill tbody tr");
+    await expect(rows).toHaveCount(d.candidates.length);
+    expect(await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-key"))), "행 순서 = 서버의 고정 순서").toEqual(d.candidates.map((c) => c.key));
+    for (const c of d.candidates) {
+      const row = skillCard(page).locator(`.mx-skill tbody tr[data-key="${c.key}"]`);
+      await expect(row.locator("th")).toHaveText(c.name);                          // 이름표 = 서버 이름(화면이 짓지 않는다)
+      const cells = row.locator("td");
+      if (!c.available) {
+        await expect(cells, c.key).toHaveCount(1);                                   // 숫자 칸 없음
+        await expect(cells.first()).toHaveText(`값 없음 · ${c.reason}`);
+      } else if (c.key === d.baseline) {
+        await expect(cells, c.key).toHaveText([fmt.hit(c), fmt.brier(c), "기준선"]);
+      } else {
+        await expect(cells, c.key).toHaveText([fmt.hit(c), fmt.brier(c), fmt.gain(c), fmt.ev(c)]);
+      }
+    }
+    // ★이긴 행을 칠하지 않는다★ 기준선이 아닌 채점된 행의 숫자 칸은 굵기 · 글자색 · 바탕이 모두 같다(기준을 넘은 행도 '*' 글자만 다르다).
+    // 행은 서버 값으로 고른다(클래스로 고르면 이긴 행에 클래스를 붙이는 결함이 걸러져 빠진다) — 행 자신과 숫자 칸의 모양.
+    const scored = d.candidates.filter((c) => c.available && c.key !== d.baseline).map((c) => c.key);
+    const looks = await rows.evaluateAll((trs, keys) => trs.filter((tr) => keys.includes(tr.getAttribute("data-key") ?? "")).map((tr) => {
+      const own = getComputedStyle(tr);
+      return [`${own.fontWeight}|${own.color}|${own.backgroundColor}`, ...Array.from(tr.querySelectorAll("th, td")).map((td) => {
+        const st = getComputedStyle(td); return `${st.fontWeight}|${st.color}|${st.backgroundColor}`; })].join(",");
+    }), scored);
+    expect(looks.length, "견줄 행이 둘 이상이어야 공허하지 않다").toBeGreaterThanOrEqual(2);
+    expect(new Set(looks).size, "행마다 숫자 칸의 모양이 같다").toBe(1);
+  }
+
+  test("M2 — 국면 예측 비교는 단추로만 계산한다 · 표는 서버 순서와 서버 값 그대로 · 이긴 행을 칠하지 않는다", async ({ page }) => {
+    const sink = trackErrors(page);
+    await stubIntel(page);
+    const asked = await stubSkill(page, SKILL_OK);
+    await page.goto("/macro");
+    const card = skillCard(page);
+    await expect(card.locator(".mx-skill-run")).toHaveText("계산 시작");
+    await expect(page.locator(".mx-panel .mx-keys li").first()).toBeVisible({ timeout: 20_000 });   // 다른 블록이 다 온 뒤에도
+    expect(asked, "단추를 누르기 전에는 부르지 않는다(첫 계산이 수십 초)").toEqual([]);
+    await card.locator(".mx-skill-run").click();
+    await checkSkillTable(page, SKILL_OK);
+    expect(asked.length).toBe(1);
+    const q = new URL(asked[0]).searchParams;
+    expect([q.get("market"), q.get("months"), q.get("k")]).toEqual(["kr", "120", "1"]);
+    await expect(card.locator("dl")).toContainText(`${SKILL_OK.n_eval}개`);
+    await expect(card.locator(".mx-why[data-server]").first()).toHaveText(SKILL_OK.evidence.note);    // 순차 증거의 뜻 = 서버 문장
+    await expect(card.locator(".mx-why[data-server]").last()).toHaveText(SKILL_OK.note);
+    await expect(card.locator(".mx-bias")).toContainText(SKILL_OK.not_measured[0]);                  // 재지 않은 것을 접지 않는다
+    // 짝: 기준을 넘은 후보가 없는 응답이면 '*' 도 범례도 없다
+    expect(SKILL_OK.candidates.some((c) => c.evidence?.passed), "고정물 전제 — 기준을 넘은 후보 없음").toBe(false);
+    await expect(card.locator(".mx-skill-pass")).toHaveCount(0);
+    expect(await card.locator(".mx-skill td").evaluateAll((tds) => tds.filter((td) => (td.textContent ?? "").includes("*")).length)).toBe(0);
+    expect(sink.pageErrors, sink.pageErrors.join("\n")).toEqual([]);
+    expect(sink.api404, sink.api404.join("\n")).toEqual([]);
+  });
+
+  test("M2 — 기준을 넘은 후보는 '*' 와 범례로 말한다(색이 아니다) · 세우지 못한 후보는 숫자 없이 서버 사유", async ({ page }) => {
+    const d = skillCopy();
+    const tr = d.candidates.find((c) => c.key === "transition")!;
+    tr.evidence = { ...(tr.evidence as NonNullable<SkillC["evidence"]>), peak: 151.37, passed: true };
+    for (const c of d.candidates.filter((x) => x.key === "gmm_start" || x.key === "gmm_now")) {
+      Object.assign(c, { available: false, hits: null, hit_rate: null, brier: null, gain: null, evidence: null,
+        reason: "2019-11 시점에 세우지 못했습니다 — 표본이 부족해 GMM 이 수렴하지 않았습니다" });
+    }
+    await stubIntel(page);
+    await stubSkill(page, d);
+    await page.goto("/macro");
+    await skillCard(page).locator(".mx-skill-run").click();
+    await checkSkillTable(page, d);
+    await expect(skillCard(page).locator(`.mx-skill tbody tr[data-key="transition"] td`).last()).toHaveText("151.37*");
+    await expect(skillCard(page).locator(".mx-skill-pass")).toHaveText(`* 순차 증거가 기준(${d.evidence.threshold.toFixed(0)})을 넘은 후보입니다.`);
+  });
+
+  test("M2 — 순차 증거를 계산하지 않은 응답(k > 1)은 그 사유 · 증거 칸은 0 이 아니라 —", async ({ page }) => {
+    const d = skillCopy();
+    d.k = 3;
+    d.evidence = { ...d.evidence, computed: false,
+      reason: "k개월 앞(k > 1) 예측은 앞 예측이 실현되기 전에 다음 예측이 나와 평가 결과가 겹칩니다 — 순차 검정의 전제가 서지 않아 1개월 앞(k = 1)에서만 계산합니다." };
+    for (const c of d.candidates) c.evidence = null;
+    await stubIntel(page);
+    await stubSkill(page, d);
+    await page.goto("/macro");
+    await skillCard(page).locator(".mx-skill-run").click();
+    await checkSkillTable(page, d);
+    await expect(skillCard(page).locator(".mx-why", { hasText: "순차 증거를 계산하지 않았습니다." })).toContainText("겹칩니다");
+    await expect(skillCard(page).locator(".mx-why[data-server]", { hasText: "상한 가정 없이" })).toHaveCount(0);   // 짝
+  });
+
+  test("M2 — 개발 자료(실제 서버)는 평가 시점이 모자라 표 대신 서버 사유를 낸다(지어내지 않는다)", async ({ page }) => {
+    await stubIntel(page);                                                      // 다른 블록만 스텁 — 이 블록은 실제 서버
+    await page.goto("/macro");
+    const card = skillCard(page);
+    const resp = page.waitForResponse((r) => r.url().includes("/macro/regime-skill"), { timeout: 60_000 });
+    await card.locator(".mx-skill-run").click();
+    const body = await (await resp).json();
+    expect(body.available).toBe(false);
+    await expect(card.locator(".mx-reason")).toContainText("평가 시점이 17개로 최소 20개에 못 미칩니다");
+    await expect(card.locator(".mx-skill")).toHaveCount(0);
+    await expect(card.locator(".num")).toHaveCount(0);
+  });
+
+  for (const width of [390, 360]) test(`M2 — 좁은 화면(${width}px): 표가 카드 안에 든다 · 숫자는 한 줄이고 붙지 않는다 · 이름은 띄어쓰기에서만 접힌다 · '×' 는 뒤 낱말과 한 줄`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    // 가장 긴 숫자 글(상한에 닿은 e-값 '10¹² 이상*')까지 심는다 — 고정물의 그 칸만 덮어쓴다.
+    const d = skillCopy();
+    const km = d.candidates.find((c) => c.key === "kmeans_share")!;
+    km.evidence = { ...(km.evidence as NonNullable<SkillC["evidence"]>), peak: 1e12, saturated: true, passed: true };
+    await stubIntel(page);
+    await stubSkill(page, d);
+    await page.goto("/macro");
+    await skillCard(page).locator(".mx-skill-run").click();
+    await checkSkillTable(page, d);
+    const g = await skillCard(page).locator(".mx-skill").evaluate((tb) => {
+      const wrap = tb.parentElement as HTMLElement;
+      let minGap = Infinity;
+      const wrapped: string[] = [];
+      for (const tr of Array.from(tb.querySelectorAll("tbody tr"))) {
+        const nums = Array.from(tr.querySelectorAll("td.num"));
+        for (let i = 0; i + 1 < nums.length; i++) {
+          const a = document.createRange(); a.selectNodeContents(nums[i]);
+          const b = document.createRange(); b.selectNodeContents(nums[i + 1]);
+          minGap = Math.min(minGap, b.getBoundingClientRect().left - a.getBoundingClientRect().right);
+        }
+        for (const td of nums) {
+          const r = document.createRange(); r.selectNodeContents(td);
+          if (new Set(Array.from(r.getClientRects()).map((x) => Math.round(x.top))).size > 1) wrapped.push(td.textContent ?? "");
+        }
+      }
+      const split: string[] = [];
+      for (const th of Array.from(tb.querySelectorAll('tbody th[scope="row"]'))) {
+        const node = th.firstChild;
+        if (!node || node.nodeType !== Node.TEXT_NODE) { split.push(`글 노드 아님: ${th.textContent}`); continue; }
+        const text = node.textContent ?? "";
+        const spans: [number, number][] = [];
+        for (const m of text.matchAll(/[^ ]+/g)) spans.push([m.index ?? 0, (m.index ?? 0) + m[0].length]);
+        const xi = text.indexOf("×");
+        if (xi >= 0) { const next = spans.find(([a]) => a > xi); spans.push([xi, next ? next[1] : xi + 1]); }
+        for (const [a, b] of spans) {
+          const r = document.createRange(); r.setStart(node, a); r.setEnd(node, b);
+          if (new Set(Array.from(r.getClientRects()).map((x) => Math.round(x.top))).size > 1) split.push(text.slice(a, b));
+        }
+      }
+      return { overflow: wrap.scrollWidth - wrap.clientWidth, minGap, wrapped, split };
+    });
+    expect(g.overflow, "표가 감싼 칸보다 넓은 길이(px) — 옆으로 밀어야 보이는 열이 없다").toBeLessThanOrEqual(0.5);
+    expect(g.minGap, "이웃 숫자 사이(px)").toBeGreaterThanOrEqual(4);
+    expect(g.wrapped, "두 줄로 감긴 숫자 칸").toEqual([]);
+    expect(g.split, "두 줄에 걸친 낱말(또는 '×' 와 뒤 낱말)").toEqual([]);
+  });
+
+  test("M2 — 실패(500)는 사유 배지가 아니라 alert + 재시도 · 표가 열린 뒤에도 글 규칙(em-dash 0)과 라이트/다크 대비", async ({ page }) => {
+    await stubIntel(page);
+    await page.route("**/api/backend/api/v1/macro/regime-skill**",
+      (r) => r.fulfill({ status: 500, contentType: "application/json", body: "{}" }));
+    await page.goto("/macro");
+    await skillCard(page).locator(".mx-skill-run").click();
+    await expect(skillCard(page).locator("[role=alert]")).toHaveCount(1, { timeout: 20_000 });
+    await page.unroute("**/api/backend/api/v1/macro/regime-skill**");
+    await stubSkill(page, SKILL_OK);
+    await skillCard(page).getByRole("button", { name: "재시도" }).click();
+    await expect(skillCard(page).locator(".mx-skill tbody tr")).toHaveCount(SKILL_OK.candidates.length, { timeout: 20_000 });
+    const texts = await skillCard(page).evaluate((root) => {
+      const out: string[] = [];
+      const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let n: Node | null;
+      while ((n = walk.nextNode())) {
+        const el = n.parentElement!; const s = (n.textContent ?? "").trim();
+        if (s && el.getClientRects().length && !el.closest("[data-server]")) out.push(s);
+      }
+      return out;
+    });
+    expect(texts.length).toBeGreaterThan(10);
+    expect(texts.filter((s) => s.includes("—")), "보이는 em-dash(서버 문장 밖)").toEqual([]);
+    for (const dark of [false, true]) {
+      await page.evaluate((dk) => {
+        document.documentElement.setAttribute("data-theme", dk ? "dark" : "light");
+        document.documentElement.classList.toggle("dark", dk);
+      }, dark);
+      await page.waitForTimeout(200);
+      const res = await page.evaluate<AuditResult>(contrastAudit(".mx-panel .mx-card:has(.mx-skill)"));
+      expect(res.checked, "검사한 텍스트 노드 수").toBeGreaterThan(10);
+      expect(res.low, `${dark ? "dark" : "light"} AA 미달`).toEqual([]);
+      if (dark) expect(res.bright, "다크인데 밝은 배경").toEqual([]);
+    }
   });
 });

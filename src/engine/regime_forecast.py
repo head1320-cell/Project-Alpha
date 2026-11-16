@@ -53,12 +53,11 @@ def prediction_set(probs: dict[str, float], *, alpha: float = 0.1) -> list[str]:
     return chosen
 
 
-def _posterior_forecast(path: list[str], k: int) -> dict[str, float]:
-    """경로 → 전이 사후평균 행렬 → k단계 뒤 분포.
+def transition_posterior_mean(path: list[str]) -> list[list[float]]:
+    """경로 → 전이 사후평균 행렬(행 = 지금 국면, 열 = 다음 국면 · `REGIMES` 순서).
 
-    사후평균 한 번으로 거듭제곱한다(A8 의 사후예측 표집이 아니라). 여기서 필요한
-    것은 구간이 아니라 **점 분포**이고, walk-forward 로 수십 번 돌리므로 표집은
-    비용만 크다. 구간이 필요한 화면 경로는 `k_step_forecast` 가 그대로 담당한다.
+    Dirichlet 사후평균 — 관측이 없는 행은 사전분포 그대로다(지속성 선호). 국면 예측 비교(M2)가
+    '시작 분포 × 전이'를 계산하려고 이 행렬을 따로 쓴다 — 그래서 `_posterior_forecast` 에서 뺐다(동작 불변).
     """
     idx = {r: i for i, r in enumerate(REGIMES)}
     counts = [[0] * len(REGIMES) for _ in REGIMES]
@@ -66,20 +65,32 @@ def _posterior_forecast(path: list[str], k: int) -> dict[str, float]:
         if a in idx and b in idx:
             counts[idx[a]][idx[b]] += 1
 
-    # Dirichlet 사후평균 — 관측이 없는 행은 사전분포 그대로다(지속성 선호).
     matrix = []
     for i in range(len(REGIMES)):
         alphas = [(ALPHA_DIAG if j == i else ALPHA_OFF) + counts[i][j]
                   for j in range(len(REGIMES))]
         total = sum(alphas)
         matrix.append([a / total for a in alphas])
+    return matrix
 
-    vec = [0.0] * len(REGIMES)
-    vec[idx[path[-1]]] = 1.0
+
+def propagate(dist: dict[str, float], matrix: list[list[float]], k: int) -> dict[str, float]:
+    """분포 × 행렬^k — 시작 분포를 전이 행렬로 k단계 민다(국면 이름 → 확률)."""
+    vec = [float(dist.get(r, 0.0)) for r in REGIMES]
     for _ in range(k):
         vec = [sum(vec[i] * matrix[i][j] for i in range(len(REGIMES)))
                for j in range(len(REGIMES))]
     return {REGIMES[j]: vec[j] for j in range(len(REGIMES))}
+
+
+def _posterior_forecast(path: list[str], k: int) -> dict[str, float]:
+    """경로 → 전이 사후평균 행렬 → k단계 뒤 분포.
+
+    사후평균 한 번으로 거듭제곱한다(A8 의 사후예측 표집이 아니라). 여기서 필요한
+    것은 구간이 아니라 **점 분포**이고, walk-forward 로 수십 번 돌리므로 표집은
+    비용만 크다. 구간이 필요한 화면 경로는 `k_step_forecast` 가 그대로 담당한다.
+    """
+    return propagate({path[-1]: 1.0}, transition_posterior_mean(path), k)
 
 
 #: ★기준선이 없으면 적중률은 귀속할 수 없다★

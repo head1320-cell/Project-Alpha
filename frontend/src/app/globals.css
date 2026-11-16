@@ -4669,6 +4669,20 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   .pg-ensemble th { font-size: 11.5px; }
   .pg-ensemble th + th, .pg-ensemble td + td { padding-left: 6px; }
 }
+/* 국면 예측 비교(M2) — 후보 여섯 × 숫자 넷. 앙상블 표와 같은 판 폭(300 · 344 · 392px)에 들게: 이름 · 머리는 낱말 단위로만 감고
+   (keep-all — 'GMM 시작 분포 × 전이'가 낱말 가운데에서 끊기지 않게) 숫자는 감지 않으며 칸 사이를 띄운다. 이긴 후보를 칠하는 규칙은 없다. */
+.pg-skill th { vertical-align: bottom; line-height: 1.3; word-break: keep-all; }
+.pg-skill th + th, .pg-skill td + td { padding-left: 8px; }
+.pg-skill .pg-td-num { white-space: nowrap; }
+.pg-skill .pg-td-name { width: auto; overflow: visible; white-space: normal; word-break: keep-all; line-height: 1.35; }
+/* 세우지 못한 후보의 사유는 네 칸을 합친 칸에서 감는다(숫자 칸이 아니다). */
+.pg-skill .pg-skill-why { white-space: normal; text-align: left; line-height: 1.4; }
+.pg-skill-wrap { container-type: inline-size; overflow-x: auto; }
+@container (max-width: 280px) {
+  .pg-skill { font-size: 12px; }
+  .pg-skill th { font-size: 11.5px; }
+  .pg-skill th + th, .pg-skill td + td { padding-left: 6px; }
+}
 .pg-dot-point { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: 1px; background: var(--pg-assume); border-radius: 50%; }
 .pg-casebox { position: relative; }
 .pg-casebox > summary { list-style: none; }
@@ -8042,6 +8056,25 @@ details[open] > .rs-more { margin-bottom: 12px; }
 .mx-panel .mx-key-v { font-size: 12px; color: var(--tx-sub); overflow-wrap: anywhere; }
 .mx-panel .mx-key-u { font-size: 13px; color: var(--tx-sub); }
 .mx-panel .mx-reason { padding: 12px 14px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); }
+/* 국면 예측 비교(M2) — 단추로만 계산(첫 계산 수십 초) · 후보 여섯은 서버 순서 그대로이고 이긴 행을 칠하는 규칙이 없다. 토큰만 쓴다(다크 짝은 토큰이 갖는다). */
+.mx-panel .mx-skill-run { display: inline-flex; align-items: center; min-height: 40px; margin-top: 14px; padding: 0 16px; border: 0;
+  border-radius: var(--tx-r-row); background: var(--tx-cta); font-family: var(--tx-font); font-size: 15px; font-weight: 600; color: var(--tx-on-cta); cursor: pointer; }
+.mx-panel .mx-skill-run:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; }
+.mx-panel .mx-skill th[scope="row"] { font-weight: 600; word-break: keep-all; }
+.mx-panel .mx-skill td.num, .mx-panel .mx-skill th.num { white-space: nowrap; text-align: right; }
+.mx-panel .mx-skill .mx-skill-basecell, .mx-panel .mx-skill .mx-skill-off td { color: var(--tx-sub); }
+.mx-panel .mx-skill .mx-skill-why { line-height: 1.5; }
+.mx-panel .mx-skill thead th { word-break: keep-all; }
+/* 좁은 카드(감싼 칸 420px 이하 — 폰 화면): 표가 카드보다 34px 넓어 마지막 열을 옆으로 밀어야 보였고 이름이 'k-' / '평균' 처럼 낱말 가운데에서 끊겼다(390px · 잰 값)
+   → 칸 여백 · 글자를 줄여 다섯 열이 카드 안에 든다(390 · 375 · 360px 넘침 0 · 낱말 끊김 0). 이름 칸에 최소 폭을 두면 오히려 375px 에서 8px · 360px 에서 23px 넘쳐(잰 값) 두지 않는다.
+   340px 아래에서는 18px 넘치고 'k-평균'이 끊긴다 — 감싼 칸의 가로 밀기가 마지막 수단이다. */
+.mx-panel .mx-skill-wrap { container-type: inline-size; }
+@container (max-width: 420px) {
+  .mx-panel .mx-skill { font-size: 13px; }
+  .mx-panel .mx-skill thead th { font-size: 12px; }
+  .mx-panel .mx-skill th, .mx-panel .mx-skill td { padding: 8px 3px; }
+}
+.mx-panel .mx-skill-legend { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); }
 .mx-panel .tev { font-size: 14px; }
 .mx-panel .tev-r { font-size: 14px; color: var(--tx-ink); }
 .mx-panel .tev-unavailable .tev-l { padding: 2px 8px; border: 0; border-radius: 6px; background: var(--tx-surface); color: var(--tx-ink); font-size: 13px; }

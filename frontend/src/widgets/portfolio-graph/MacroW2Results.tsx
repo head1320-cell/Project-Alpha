@@ -1,12 +1,14 @@
 "use client";
 /**
- * 매크로 웨이브의 결과 (BL3 W2) — 수익률 곡선 · 지표 대시보드 · 국면 합의 · 국면 예측 적중률 · 장기 관계 · 스튜디오 모델
+ * 매크로 웨이브의 결과 (BL3 W2) — 수익률 곡선 · 지표 대시보드 · 국면 합의 · 국면 예측 적중률 · 국면 예측 비교(M2) · 장기 관계 · 스튜디오 모델
  * ==========================================================================
  * 수는 서버 view 그대로 그린다(다시 계산하지 않는다). 재지 못한 칸은 0 이 아니라 "—" 와 사유다.
  * 이 웨이브에서 눈에 띄게 그리는 것은 곡선 하나다 — 뒤집힌 구간을 곡선 위에 칠해 "어디가 역전인지" 를 보여 준다.
  */
 import type { ReactNode } from "react";
 import { Spark as SparkLine } from "@/shared/ui/plot/Spark";
+import type { SkillCandidate } from "@/entities/macro/studios";
+import { skillAnyPassed, skillBrier, skillEvidence, skillGain, skillHit, skillName } from "@/entities/macro/skill";
 import { CurvePlot } from "./MiniPlots";
 
 type Dict = Record<string, unknown>;
@@ -167,6 +169,62 @@ export function CoverageResult({ v }: { v: Dict }) {
         ["채점", `${String(r.n_eval ?? "—")}회 · 맞힘 ${String(r.hits ?? "—")} · 놓침 ${String(r.misses ?? "—")}`],
         ["방식", r.walk_forward ? "그 시점 이전 경로만 써서 예측" : "확인되지 않음"],
       ]} />
+    </>
+  );
+}
+
+// ── 국면 예측 비교 (M2) ─────────────────────────────────────────────────────
+
+/**
+ * 후보 여섯을 ★서버의 고정 순서로★ 그린다 — 점수로 줄 세우지 않고 어느 칸도 '이긴 것'으로 칠하지 않는다.
+ * 기준선(오늘 국면 유지)은 유지 대비 · 순차 증거 칸이 '기준선' 하나다. 세우지 못한 후보는 숫자 없이 서버 사유.
+ */
+export function SkillResult({ v }: { v: Dict }) {
+  const r = (v.result as Dict) ?? {};
+  const cs = ((r.candidates as SkillCandidate[]) ?? []);
+  const ev = (r.evidence as Dict) ?? {};
+  const scored = (r.scored as Dict) ?? {};
+  const span = (r.span as Dict) ?? {};
+  const dropped = num(span.dropped_incomplete);
+  const base = cs.find((c) => c.key === r.baseline);
+  return (
+    <>
+      <KV rows={[
+        ["채점", `${String(r.n_eval ?? "—")}개 시점 · ${String(scored.first ?? "—")} ~ ${String(scored.last ?? "—")}`],
+        ["예측", `${String(r.k ?? "—")}개월 뒤 국면`],
+        ["기준선", base?.name ?? String(r.baseline ?? "—")],
+        ["쓴 구간", `${String(span.n_months ?? "—")}개월${dropped ? ` · 축 미계산 ${dropped}개월 제외` : ""}`],
+      ]} />
+      <div className="pg-skill-wrap">
+        <table className="pg-table pg-skill">
+          <thead><tr>
+            <th>후보</th><th className="pg-td-num">적중률</th><th className="pg-td-num">브라이어</th>
+            <th className="pg-td-num">유지 대비</th><th className="pg-td-num">순차 증거</th>
+          </tr></thead>
+          <tbody>
+            {cs.map((c) => (
+              <tr key={c.key} data-key={c.key} className={c.available ? (c.key === r.baseline ? "pg-skill-base" : "") : "pg-skill-off"}>
+                <td className="pg-td-name">{skillName(c)}</td>
+                {!c.available ? (
+                  <td colSpan={4} className="pg-muted pg-skill-why">값 없음 — {c.reason ?? "사유 미상"}</td>
+                ) : (
+                  <>
+                    <td className="pg-td-num">{skillHit(c)}</td>
+                    <td className="pg-td-num">{skillBrier(c)}</td>
+                    {c.key === r.baseline
+                      ? <td colSpan={2} className="pg-td-num pg-muted">기준선</td>
+                      : <><td className="pg-td-num">{skillGain(c)}</td><td className="pg-td-num">{skillEvidence(c)}</td></>}
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="pg-note">브라이어는 0(확신하고 맞힘) ~ 2(확신하고 틀림)입니다. 유지 대비가 양이면 기준선보다 확률을 잘 맞혔습니다.</p>
+      {skillAnyPassed(cs) && <p className="pg-note pg-skill-pass">* 순차 증거가 기준({fx(ev.threshold, 0)})을 넘은 후보입니다.</p>}
+      <p className="pg-note">{ev.computed ? String(ev.note ?? "") : `순차 증거를 계산하지 않았습니다 — ${String(ev.reason ?? "사유 미상")}`}</p>
+      <p className="pg-note">{String(r.note ?? "")}</p>
     </>
   );
 }

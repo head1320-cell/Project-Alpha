@@ -8,6 +8,7 @@
 | 지표 대시보드 | `macro_routes.dashboard_themes` (`/macro/dashboard` 본문) |
 | 국면 합의 | `macro_routes.regime_consensus_view` (`/macro/regime-consensus` 본문) |
 | 국면 예측 적중률 | `macro_routes.forecast_coverage_view` (`/macro/regime-forecast-coverage` 본문) |
+| 국면 예측 비교 | `macro_routes.regime_skill_view` (`/macro/regime-skill` 본문 · M2) |
 | 장기 관계 | `macro_routes.long_run_view` (`/macro/long-run` 본문) — 계열은 `series_source` 주입 |
 | 스튜디오 모델 | `macro_models.run_studio` (`/macro/studios/{id}`) — 계열은 `series_source` 주입 |
 
@@ -192,6 +193,62 @@ def _explain_coverage(view: dict, prov: dict, params: Any) -> dict:
             "unmeasured": ["국면을 맞히는 것이 수익으로 이어지는지(경제적 가치)"]}
 
 
+# ── 국면 예측 비교 (M2) ───────────────────────────────────────────────────────
+
+class SkillParams(BaseModel):
+    model_config = _FORBID
+    market: Literal["kr", "us"] = Field("kr", json_schema_extra={"x-ui": _ui(
+        "시장", question="국면 예측 비교 대상 시장", widget="cards", options=_MARKETS)})
+    months: int = Field(120, ge=60, le=240, json_schema_extra={"x-ui": _ui(
+        "기간", "advanced", unit="개월", presets=[{"label": "10년", "value": 120}, {"label": "20년", "value": 240}],
+        help="국면 경로 산출 기간입니다. 저장된 관측이 더 짧으면 가용 구간만 사용합니다. 기간이 길수록 계산 시간이 늘어납니다.")})
+    k: int = Field(1, ge=1, le=12, json_schema_extra={"x-ui": _ui(
+        "예측 시차", "advanced", unit="개월",
+        help="몇 개월 뒤 국면을 예측하는지입니다. 순차 증거(e-값)는 1개월에서만 계산합니다.")})
+
+
+def _skill(inputs: dict, p: SkillParams) -> pg.NodeOutput:
+    from src.api.macro_routes import regime_skill_view
+    series, tags = macro_series_map()
+    out = regime_skill_view(series, market=p.market, months=p.months, k=p.k)
+    if not out.get("available"):
+        raise pg.NodeFailure(f"국면 예측을 비교할 수 없습니다 — {out.get('reason') or '사유 미상'}")
+    return _out({"result": out}, tags)
+
+
+def _skill_fact(c: dict, n: int) -> str:
+    if not c.get("available"):
+        return f"{c.get('name')}: 값 없음 — {c.get('reason') or '사유 미상'}"
+    line = f"{c.get('name')}: 적중 {c.get('hits')}/{n}회 · 브라이어 {c.get('brier'):.3f}"
+    if isinstance(c.get("gain"), (int, float)):
+        line += f" · 유지 대비 {c['gain']:+.3f}"
+    ev = c.get("evidence") or {}
+    if isinstance(ev.get("peak"), (int, float)):
+        line += f" · 순차 증거 최고 {ev['peak']:.2f}" + (" (기준 넘음)" if ev.get("passed") else "")
+    return line
+
+
+def _explain_skill(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    n, k = r.get("n_eval"), r.get("k")
+    ev = r.get("evidence") or {}
+    # ★한 숫자를 앞세우지 않는다★ headline 이 없다 — 어느 후보를 앞에 놓으면 고른 것처럼 읽힌다. 사실 줄은 엔진의 고정 순서.
+    facts = [_skill_fact(c, n) for c in r.get("candidates") or []]
+    trust = [_t(CONFIRMED if r.get("walk_forward") else UNKNOWN,
+                "각 시점 이전 자료만으로 후보를 세워 채점했습니다(미래를 쓰지 않은 채점)." if r.get("walk_forward")
+                else "시점 이전 자료만 썼는지 확인되지 않았습니다."),
+             _t(CONFIRMED, "점수를 나란히 보일 뿐 어느 후보도 고르지 않습니다 — 배분이 받는 국면 확률의 출처는 따로 정합니다.")]
+    if ev.get("computed"):
+        trust.append(_t(CONFIRMED, f"순차 증거(e-값)는 브라이어 차가 늘 −2 ~ 2 안이라 상한 가정 없이 성립합니다 — "
+                                   f"기준 {ev.get('threshold'):g}(견준 후보 {ev.get('compared')} ÷ α {ev.get('alpha'):g})."))
+    else:
+        trust.append(_t(UNKNOWN, f"순차 증거를 계산하지 않았습니다 — {ev.get('reason') or '사유 미상'}"))
+    trust += _macro_trust(prov)
+    return {"title": f"후보 여섯의 {k}개월 뒤 국면 예측을 같은 {n}개 시점에서 채점했습니다",
+            "facts": facts, "trust": trust,
+            "unmeasured": ["국면을 맞히는 것이 배분의 수익 · 위험으로 이어지는지(경제적 가치)"]}
+
+
 # ── 장기 관계 ─────────────────────────────────────────────────────────────────
 
 class LongRunParams(BaseModel):
@@ -307,6 +364,12 @@ def register(registry: pg.Registry) -> None:
                     inputs=(), outputs=(), run=_coverage, params_model=CoverageParams,
                     explain=_explain_coverage, category="거시",
                     description="macro_routes.forecast_coverage_view(/macro/regime-forecast-coverage 본문)."),
+        pg.NodeSpec("regime_skill", "국면 예측 비교", stage="signal", plain_label="국면 예측 비교",
+                    plain_description="후보 여섯의 다음 국면 예측을 같은 시점에서 채점해 나란히 표시합니다(어느 후보도 고르지 않습니다).",
+                    inputs=(), outputs=(), run=_skill, params_model=SkillParams,
+                    explain=_explain_skill, category="거시",
+                    description="macro_routes.regime_skill_view(/macro/regime-skill 본문) · 시점마다 군집 두 팔을 다시 적합해 "
+                                "첫 계산에 수십 초가 듭니다(120개월 약 30초 · 240개월 약 84초 · 잰 값)."),
         pg.NodeSpec("long_run", "장기 관계", stage="signal", plain_label="장기 균형관계(VECM)",
                     plain_description="지표 간 장기 균형관계(공적분) 존재 여부를 검정합니다.",
                     inputs=(), outputs=(), run=_long_run, params_model=LongRunParams,

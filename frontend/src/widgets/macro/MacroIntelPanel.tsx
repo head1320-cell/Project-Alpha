@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * P4 매크로 지능 패널 — 국면 합의 · 예측 적중률 · 장기관계 · 데이터 출처 (→ BU5c 토스식)
+ * P4 매크로 지능 패널 — 국면 합의 · 예측 적중률 · 국면 예측 비교(M2) · 장기관계 · 데이터 출처 (→ BU5c 토스식)
  * ==========================================================================
  * D1~D5 와 M1~M3 가 만든 것을 **화면이 처음으로 보는 자리**다. 네 블록 전부 같은 규칙을 따른다:
  *
@@ -16,10 +16,11 @@
  * (BU5c) 그림을 더했다 — 공적분 검정 통계량 막대(95% 임계 눈금) · 적중률 막대(목표 눈금). 표·숫자는 그대로다.
  */
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EvidenceBadge } from "@/shared/ui/evidence";
 import { macroIntelApi } from "@/entities/macro/studios";
+import { skillAnyPassed, skillBrier, skillEvidence, skillGain, skillHit, skillName } from "@/entities/macro/skill";
 import { regimeName } from "@/entities/macro/regimeKo";
 import { IND_KR, TOOL_KO } from "./macroKo";
 import { ReasonWhy, RetryFail } from "./studioBits";
@@ -250,6 +251,94 @@ function ForecastBlock() {
   );
 }
 
+/**
+ * M2(2026-11-16) — 국면 예측 비교. 후보 여섯의 1개월 뒤 국면 예측을 같은 시점에서 채점한 표.
+ * ★단추로만 계산한다★ 시점마다 군집 모형을 다시 적합해 첫 계산에 수십 초가 들 수 있다(서버 설명 · 잰 값) — 화면을 열 때마다 부르지 않는다.
+ * ★고르지 않는다★ 표는 서버의 고정 순서이고 어느 행도 '이긴 것'으로 칠하지 않는다.
+ */
+function SkillBlock() {
+  const [asked, setAsked] = useState(false);
+  const q = useQuery({
+    queryKey: ["macro", "regime-skill", "kr", 120, 1],
+    queryFn: () => macroIntelApi.regimeSkill("kr", 120, 1),
+    enabled: asked,
+    staleTime: Infinity,
+  });
+  if (!asked) {
+    return (
+      <section className="mx-card mx-skill-card">
+        <h3 className="mx-card-t">국면 예측 비교</h3>
+        <p className="mx-why">후보 여섯의 1개월 뒤 국면 예측을 같은 시점 · 같은 실현값으로 채점해 나란히 표시합니다. 어느 후보도 고르지 않습니다.</p>
+        <p className="mx-why">시점마다 군집 모형을 다시 적합하므로 첫 계산에 수십 초가 걸릴 수 있습니다.</p>
+        <button type="button" className="mx-skill-run" onClick={() => setAsked(true)}>계산 시작</button>
+      </section>
+    );
+  }
+  return (
+    <Block title="국면 예측 비교" q={q} loading="국면 예측 비교 계산 중 · 시점마다 군집 모형을 다시 적합합니다"
+           fail="국면 예측 비교 조회 실패">
+      {() => {
+        if (!q.data) return null;
+        if (!q.data.available) return <Reason text={q.data.reason} />;
+        const d = q.data;
+        const base = d.candidates.find((c) => c.key === d.baseline);
+        const dropped = d.span.dropped_incomplete ?? 0;
+        return (
+          <>
+            <dl className="mx-dl">
+              <div><dt>채점 시점</dt><dd><b className="num">{d.n_eval}</b>개 <span className="mx-stat-s">{d.scored.first} ~ {d.scored.last}</span></dd></div>
+              <div><dt>예측</dt><dd><b className="num">{d.k}</b>개월 뒤 국면</dd></div>
+              <div><dt>기준선</dt><dd>{base?.name ?? d.baseline}</dd></div>
+            </dl>
+            {dropped > 0 && <p className="mx-why">성장 · 물가 축이 둘 다 계산되지 않은 {dropped}개월은 빼고 셉니다.</p>}
+            <div className="mx-tblwrap mx-skill-wrap">
+              <table className="mx-tbl mx-skill">
+                <thead>
+                  <tr>
+                    <th scope="col">후보</th>
+                    <th scope="col" className="num">적중률</th>
+                    <th scope="col" className="num">브라이어</th>
+                    <th scope="col" className="num">유지 대비</th>
+                    <th scope="col" className="num">순차 증거</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.candidates.map((c) => (
+                    <tr key={c.key} data-key={c.key} className={c.available ? (c.key === d.baseline ? "mx-skill-base" : "") : "mx-skill-off"}>
+                      <th scope="row">{skillName(c)}</th>
+                      {!c.available ? (
+                        <td colSpan={4} className="mx-skill-why">값 없음 · <span data-server>{c.reason ?? "사유 미상"}</span></td>
+                      ) : (
+                        <>
+                          <td className="num">{skillHit(c)}</td>
+                          <td className="num">{skillBrier(c)}</td>
+                          {c.key === d.baseline
+                            ? <td colSpan={2} className="num mx-skill-basecell">기준선</td>
+                            : <><td className="num">{skillGain(c)}</td><td className="num">{skillEvidence(c)}</td></>}
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mx-skill-legend">브라이어는 0(확신하고 맞힘) ~ 2(확신하고 틀림)입니다. 유지 대비가 양이면 기준선보다 확률을 잘 맞혔습니다.</p>
+            {skillAnyPassed(d.candidates) && (
+              <p className="mx-skill-legend mx-skill-pass">* 순차 증거가 기준({d.evidence.threshold.toFixed(0)})을 넘은 후보입니다.</p>
+            )}
+            {d.evidence.computed
+              ? <p className="mx-why" data-server>{d.evidence.note}</p>
+              : <p className="mx-why">순차 증거를 계산하지 않았습니다. <span data-server>{d.evidence.reason ?? "사유 미상"}</span></p>}
+            <p className="mx-why" data-server>{d.note}</p>
+            {/* ★재지 않은 것을 접지 않는다★ — 맞히는 것과 돈이 되는 것은 다른 물음이다. */}
+            {d.not_measured.map((m) => <p key={m} className="mx-bias" role="note">재지 않은 것: <span data-server>{m}</span></p>)}
+          </>
+        );
+      }}
+    </Block>
+  );
+}
+
 /** M3 — 국면 도구의 합의/불일치 */
 function ConsensusBlock() {
   const q = useQuery({
@@ -307,6 +396,7 @@ export default function MacroIntelPanel() {
     <div className="mx-panel">
       <ConsensusBlock />
       <ForecastBlock />
+      <SkillBlock />
       <LongRunBlock />
       <CoverageBlock />
     </div>

@@ -1147,6 +1147,180 @@ test("국면 앙상블 · 합의(M1): 판정이 모두 같아도 시드에 따�
   expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
 });
 
+/**
+ * 국면 예측 비교(M2) — 표가 있는 노드 결과. ★손으로 지은 응답이 아니다★ 서버의 노드를 긴 합성 계열(+ 결정적 가짜 군집 팔)로 돌린 출력이고
+ * pytest `test_the_screen_fixture_is_what_the_node_produces` 가 고정물 = 지금 서버의 출력을 건다. 개발 자료로는 표가 나오지 않는다(평가 시점 17개).
+ */
+type SkillC = { key: string; name: string; available: boolean; hit_rate: number | null; brier: number | null; gain: number | null;
+  evidence: { peak: number; passed: boolean; saturated: boolean; e_value: number } | null; reason: string | null };
+type SkillNode = { type: string; status: string; reason: string | null; explain: unknown;
+  view: { result: { candidates: SkillC[]; baseline: string; k: number; n_eval: number; note: string;
+    evidence: { computed: boolean; threshold: number; note: string; reason: string | null } } } };
+const SKILL_NODE = JSON.parse(readFileSync(`${__dirname}/fixtures/regime-skill-node.json`, "utf-8")) as SkillNode;
+const skillFmt = {
+  hit: (c: SkillC) => `${((c.hit_rate as number) * 100).toFixed(0)}%`,
+  brier: (c: SkillC) => (c.brier as number).toFixed(3),
+  gain: (c: SkillC) => `${(c.gain as number) >= 0 ? "+" : "−"}${Math.abs(c.gain as number).toFixed(3)}`,
+  ev: (c: SkillC) => {
+    const e = c.evidence;
+    if (!e) return "—";
+    const v = e.saturated ? "10¹² 이상" : e.peak >= 1000 ? Math.round(e.peak).toLocaleString("ko-KR") : e.peak.toFixed(2);
+    return e.passed ? `${v}*` : v;
+  },
+};
+
+test("국면 예측 비교(M2): 개발 자료는 실패 + 엔진 사유 · 표는 서버 순서와 서버 값 그대로 · 이긴 행을 칠하지 않는다 · 판 폭 셋에 든다", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openCanvas(page);
+  const doc = await exportDoc(page);
+  doc.nodes.push({ id: "sk", type: "regime_skill", params: { market: "kr", months: 120, k: 1 }, position: { x: 1000, y: 0 } });
+  await importText(page, "m2.json", JSON.stringify(await spread(page, doc)));
+  await page.getByRole("button", { name: "파일 안내 닫기" }).click();
+
+  // ① 개발 자료 그대로 — 두 축이 다 계산된 달이 53개라 1개월 앞 평가 시점이 17개(< 20): 실패 + 엔진 사유(평가 하한을 낮추거나 값을 지어내지 않는다)
+  const body = await run(page);
+  expect(body.nodes.sk.status).toBe("failed");
+  expect(body.nodes.sk.reason).toContain("평가 시점이 17개로 최소 20개에 못 미칩니다");
+  await expect(status(page, "sk")).toHaveText("실패");
+  await expect(node(page, "sk").locator(".pg-node-status-why")).toContainText("평가 시점이 17개");
+  expect((body.nodes.sk.reason ?? "").match(/—/g)?.length, "실패 문장의 줄표는 하나(앞말 — 엔진 사유)").toBe(1);
+
+  const check = async (d: SkillNode["view"]["result"]) => {
+    await detail(page, "sk");
+    const t = page.locator(".pg-side .pg-skill");
+    const rows = t.locator("tbody tr");
+    await expect(rows).toHaveCount(d.candidates.length);
+    expect(await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-key"))), "행 순서 = 서버의 고정 순서").toEqual(d.candidates.map((c) => c.key));
+    for (const c of d.candidates) {
+      const cells = t.locator(`tbody tr[data-key="${c.key}"] td`);
+      if (!c.available) await expect(cells, c.key).toHaveText([c.name, `값 없음 — ${c.reason}`]);
+      else if (c.key === d.baseline) await expect(cells, c.key).toHaveText([c.name, skillFmt.hit(c), skillFmt.brier(c), "기준선"]);
+      else await expect(cells, c.key).toHaveText([c.name, skillFmt.hit(c), skillFmt.brier(c), skillFmt.gain(c), skillFmt.ev(c)]);
+    }
+    // ★이긴 행을 칠하지 않는다★ — 기준선이 아닌 채점된 행의 숫자 칸 모양(굵기 · 글자색 · 바탕)이 모두 같다
+    // 행은 서버 값으로 고른다(클래스로 고르면 이긴 행에 클래스를 붙이는 결함이 걸러져 빠진다) — 행 자신과 모든 칸의 모양.
+    const scored = d.candidates.filter((c) => c.available && c.key !== d.baseline).map((c) => c.key);
+    const looks = await rows.evaluateAll((trs, keys) => trs.filter((tr) => keys.includes(tr.getAttribute("data-key") ?? "")).map((tr) => {
+      const own = getComputedStyle(tr);
+      return [`${own.fontWeight}|${own.color}|${own.backgroundColor}`, ...Array.from(tr.querySelectorAll("td")).map((td) => {
+        const st = getComputedStyle(td); return `${st.fontWeight}|${st.color}|${st.backgroundColor}`; })].join(",");
+    }), scored);
+    expect(looks.length, "견줄 행이 둘 이상").toBeGreaterThanOrEqual(2);
+    expect(new Set(looks).size, "행마다 숫자 칸의 모양이 같다").toBe(1);
+    const passed = d.candidates.some((c) => c.evidence?.passed);
+    await expect(page.locator(".pg-side .pg-skill-pass")).toHaveCount(passed ? 1 : 0);   // '*' 범례는 넘은 후보가 있을 때만(짝)
+    await expect(page.locator(".pg-side .pg-note", { hasText: d.note })).toHaveCount(1);
+    return t;
+  };
+
+  // ② 표가 있는 응답(고정물 그대로) — 넘은 후보 없음 → '*' 없음
+  const fixture = SKILL_NODE.view.result;
+  expect(fixture.candidates.some((c) => c.evidence?.passed), "고정물 전제 — 기준을 넘은 후보 없음").toBe(false);
+  await patchRun(page, (b) => { b.nodes.sk = structuredClone(SKILL_NODE) as unknown as RunBody["nodes"][string]; });
+  await run(page);
+  await expect(status(page, "sk")).toHaveText("완료");
+  await check(fixture);
+
+  // ★표가 판 안에 든다 · 이웃 숫자가 붙지 않는다 · 숫자는 한 줄 · 이름은 잘리지 않는다★ — M1 의 앙상블 표와 같은 검사
+  const fits = async (w: number) => {
+    const g = await page.locator(".pg-side .pg-skill").evaluate((tb) => {
+      const box = (tb.parentElement as HTMLElement).getBoundingClientRect();
+      let minGap = Infinity;
+      const wrapped: string[] = [];
+      for (const tr of Array.from(tb.querySelectorAll("tbody tr"))) {
+        const nums = Array.from(tr.querySelectorAll("td")).slice(1);
+        for (let i = 0; i + 1 < nums.length; i++) {
+          const a = document.createRange(); a.selectNodeContents(nums[i]);
+          const b = document.createRange(); b.selectNodeContents(nums[i + 1]);
+          minGap = Math.min(minGap, b.getBoundingClientRect().left - a.getBoundingClientRect().right);
+        }
+        for (const td of nums.filter((x) => x.classList.contains("pg-td-num"))) {
+          const r = document.createRange(); r.selectNodeContents(td);
+          if (new Set(Array.from(r.getClientRects()).map((x) => Math.round(x.top))).size > 1) wrapped.push(td.textContent ?? "");
+        }
+      }
+      // 이름이 '…'로 잘리지 않는다 — 캔버스 표의 이름 칸은 기본이 한 줄 · 넘치면 감춤이라, 잘려도 글자(textContent)는 그대로라 위 단언이 못 본다.
+      const names = Array.from(tb.querySelectorAll("tbody td.pg-td-name"));
+      const clipped = names.filter((td) => td.scrollWidth > td.clientWidth + 0.5).map((td) => td.textContent);
+      // 이름은 띄어쓰기에서만 접힌다(낱말 가운데 — 'k-' / '평균' — 에서 끊기지 않는다) · '×' 는 뒤 낱말과 한 줄(줄 끝에 홀로 남지 않는다).
+      const split: string[] = [];
+      for (const td of names) {
+        const node = td.firstChild;
+        if (!node || node.nodeType !== Node.TEXT_NODE) { split.push(`글 노드 아님: ${td.textContent}`); continue; }
+        const text = node.textContent ?? "";
+        const spans: [number, number][] = [];
+        for (const m of text.matchAll(/[^ ]+/g)) spans.push([m.index ?? 0, (m.index ?? 0) + m[0].length]);
+        const xi = text.indexOf("×");
+        if (xi >= 0) { const next = spans.find(([a]) => a > xi); spans.push([xi, next ? next[1] : xi + 1]); }
+        for (const [a, b] of spans) {
+          const r = document.createRange(); r.setStart(node, a); r.setEnd(node, b);
+          if (new Set(Array.from(r.getClientRects()).map((x) => Math.round(x.top))).size > 1) split.push(text.slice(a, b));
+        }
+      }
+      return { over: tb.getBoundingClientRect().right - box.right, minGap, wrapped, clipped, split };
+    });
+    expect(g.over, `${w}px: 표의 오른쪽 끝이 판 안쪽을 넘은 길이(px)`).toBeLessThanOrEqual(0.5);
+    expect(g.minGap, `${w}px: 이웃 숫자 사이(px)`).toBeGreaterThanOrEqual(4);
+    expect(g.wrapped, `${w}px: 두 줄로 감긴 숫자 칸`).toEqual([]);
+    expect(g.clipped, `${w}px: 잘린 후보 이름`).toEqual([]);
+    expect(g.split, `${w}px: 두 줄에 걸친 낱말(또는 '×' 와 뒤 낱말)`).toEqual([]);
+  };
+  // 처음 폭(344px) · ← 세 번(392px) · Home(최소 300px)
+  const resize = page.locator(".pg-side-resize");
+  for (const step of [{ keys: [], w: 344 }, { keys: ["ArrowLeft", "ArrowLeft", "ArrowLeft"], w: 392 }, { keys: ["Home"], w: 300 }]) {
+    for (const k of step.keys) { await resize.focus(); await page.keyboard.press(k); }
+    const w = Number(await resize.getAttribute("aria-valuenow"));
+    expect(w).toBe(step.w);
+    await fits(w);
+  }
+
+  // ③ 기준을 넘은 후보 · 세우지 못한 후보 — 고정물의 그 칸만 덮어쓴다(색이 아니라 '*' 와 범례 · 숫자 없이 서버 사유)
+  const patched = structuredClone(SKILL_NODE);
+  const r3 = patched.view.result;
+  const tr3 = r3.candidates.find((c) => c.key === "transition")!;
+  tr3.evidence = { ...(tr3.evidence as NonNullable<SkillC["evidence"]>), peak: 151.37, passed: true };
+  for (const c of r3.candidates.filter((x) => x.key === "gmm_start" || x.key === "gmm_now")) {
+    Object.assign(c, { available: false, hits: null, hit_rate: null, brier: null, gain: null, evidence: null,
+      reason: "2019-11 시점에 세우지 못했습니다 — 표본이 부족해 GMM 이 수렴하지 않았습니다" });
+  }
+  await patchRun(page, (b) => { b.nodes.sk = structuredClone(patched) as unknown as RunBody["nodes"][string]; });
+  await run(page);
+  await check(r3);
+  await expect(page.locator('.pg-side .pg-skill tbody tr[data-key="transition"] td').last()).toHaveText("151.37*");
+  await expect(page.locator(".pg-side .pg-skill-pass")).toHaveText(`* 순차 증거가 기준(${r3.evidence.threshold.toFixed(0)})을 넘은 후보입니다.`);
+
+  // ③' 가장 긴 숫자 글 — 상한에 닿은 e-값('10¹² 이상*')을 모든 후보가 세워진 고정물에 심는다. 최소 폭(300px)에서 숫자 칸 사이 규칙이 없으면 이웃 숫자가 0px 로 붙고
+  // 감지 않기 규칙이 없으면 이 칸이 두 줄로 감겼다(잰 값). 세우지 못한 후보의 긴 사유 칸이 있으면 열이 넓어져 이 경우를 밟지 못한다 — 그래서 따로 둔다.
+  const sat = structuredClone(SKILL_NODE);
+  const km = sat.view.result.candidates.find((c) => c.key === "kmeans_share")!;
+  km.evidence = { ...(km.evidence as NonNullable<SkillC["evidence"]>), peak: 1e12, saturated: true, passed: true };
+  await patchRun(page, (b) => { b.nodes.sk = structuredClone(sat) as unknown as RunBody["nodes"][string]; });
+  await run(page);
+  await check(sat.view.result);
+  await expect(page.locator('.pg-side .pg-skill tbody tr[data-key="kmeans_share"] td').last()).toHaveText("10¹² 이상*");
+  expect(Number(await resize.getAttribute("aria-valuenow")), "아직 최소 폭").toBe(300);
+  await fits(300);                                   // 감싼 칸 280px 이하 — 좁은 판 규칙(글자 12px · 칸 사이 6px)이 맡는다
+  for (let i = 0; i < 3; i++) { await resize.focus(); await page.keyboard.press("ArrowLeft"); }
+  expect(Number(await resize.getAttribute("aria-valuenow"))).toBe(348);
+  await fits(348);                                   // 처음 폭 근처 — 좁은 판 규칙 밖이라 칸 사이 8px 규칙이 맡는다(없으면 3.2px · 잰 값)
+
+  // ④ 순차 증거를 계산하지 않은 응답(k > 1) — 사유를 적고 증거 칸은 0 이 아니라 —
+  const k3 = structuredClone(SKILL_NODE);
+  k3.view.result.k = 3;
+  k3.view.result.evidence = { ...k3.view.result.evidence, computed: false,
+    reason: "k개월 앞(k > 1) 예측은 앞 예측이 실현되기 전에 다음 예측이 나와 평가 결과가 겹칩니다 — 순차 검정의 전제가 서지 않아 1개월 앞(k = 1)에서만 계산합니다." };
+  for (const c of k3.view.result.candidates) c.evidence = null;
+  await patchRun(page, (b) => { b.nodes.sk = structuredClone(k3) as unknown as RunBody["nodes"][string]; });
+  await run(page);
+  await check(k3.view.result);
+  await expect(page.locator(".pg-side .pg-note", { hasText: "순차 증거를 계산하지 않았습니다" })).toContainText("겹칩니다");
+  await expect(page.locator(".pg-side .pg-note", { hasText: "상한 가정 없이" })).toHaveCount(0);   // 짝
+
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+});
+
 test("타이밍 시뮬레이션: 노출 계단선 = 직접 SVG · 읽는 줄의 처음 자리 = 마지막 시점 · ← 로 앞 시점 · 표 쌍둥이 = 전부 · recharts 0", async ({ page }) => {
   await openCanvas(page);
   const doc = await exportDoc(page);
