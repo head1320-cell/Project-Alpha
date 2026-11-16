@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "./fixtures";
-import { contrastAudit, type AuditResult } from "./helpers";
+import { contrastAudit, shellReady, type AuditResult } from "./helpers";
 
 /**
  * BU3 · 백테스트 편집기 — 설계 순서 넷 · 지금 설정 되읽기 · 거짓 약속 없음 · 실패는 실패로 (계획 "BU3 상세")
@@ -20,6 +20,9 @@ const STEP_NAMES = ["매수 설정", "매도 설정", "매매 대상", "투자�
 async function open(page: Page) {
   await page.goto("/backtest", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".bte")).toBeVisible({ timeout: 20_000 });
+  // 편집기는 서버가 먼저 그린다 — 보이는 것만으로는 눌릴 준비가 아니다. React 가 넘겨받기 전의 클릭은 사라진다
+  // (스크립트를 1.5초 늦추면 이 파일 9개가 실패하고 390px 검사는 클릭 넷이 사라진 채 통과했다 · 2026-11-16).
+  await shellReady(page);
 }
 
 /** CSS 변수 값을 계산된 rgb 로 — 토큰이 실제로 칠해졌는지 견준다. */
@@ -75,6 +78,7 @@ test("★업종 목록 실패는 alert★(예전에는 빈 칸) · 정상이면 
   await expect(page.locator(".bte-step-body [role='alert']")).toContainText("업종 목록 조회 실패");
   await page.unroute("**/api/v1/screener/theme-tree");
   await page.reload({ waitUntil: "domcontentloaded" });
+  await shellReady(page);                                  // 새로고침 뒤에도 같다 — 서버가 그린 단계 단추는 넘겨받기 전에 눌리면 펼쳐지지 않는다
   await steps(page).nth(2).click();
   await expect(page.locator(".bte-tree-g").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".bte-step-body [role='alert']")).toHaveCount(0);
@@ -157,6 +161,8 @@ test("390 폭: 가로로 넘치지 않고 실행 단추가 보인다", async ({ 
   await open(page);
   for (let i = 0; i < 4; i++) {
     await steps(page).nth(i).click();
+    // 펼쳐진 뒤에 잰다 — 클릭이 사라지면 접힌 단계만 재고도 '넘치지 않는다'가 참이 된다(클릭 줄을 지워도 통과했다 · 2026-11-16).
+    await expect(steps(page).nth(i)).toHaveAttribute("aria-expanded", "true");
     const over = await page.locator(".terminal-main").evaluate((m) => m.scrollWidth - m.clientWidth);
     expect(over, `단계 ${i + 1}`).toBeLessThanOrEqual(0);
   }

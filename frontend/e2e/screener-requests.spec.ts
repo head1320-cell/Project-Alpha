@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "./fixtures";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { recordApi, stableJson } from "./helpers";
+import { recordApi, shellReady, stableJson } from "./helpers";
 
 /**
  * BU2a · 스크리너 요청 골든 — ★모습을 바꿔도 서버에 가는 요청은 한 바이트도 바뀌지 않는다★
@@ -35,6 +35,9 @@ async function scenario(page: Page): Promise<Record<string, unknown>> {
   const rec = recordApi(page, "/api/v1/screener/");
   await page.goto("/screener", { waitUntil: "domcontentloaded" });
   await expect(act(page, "add-factor").first()).toBeVisible({ timeout: 20_000 });
+  // 종목 찾기는 서버가 먼저 그린다 — React 가 넘겨받기 전에 고른 유니버스는 요청을 내지 않는다. 아래 `rec.step` 의 '요청이 잠잠해질 때까지'는
+  // 넘겨받기를 기다리는 것이 아니다(스크립트를 4.5초 늦추면 그 기다림이 먼저 끝나고 선택이 사라졌다 · 1.5초에서는 우연히 가려졌다 · 2026-11-16).
+  await shellReady(page);
   await rec.step("01 첫 화면");
 
   await act(page, "universe").selectOption("kosdaq150");

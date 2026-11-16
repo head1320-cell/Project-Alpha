@@ -12,6 +12,8 @@ import { expect, type Page } from "@playwright/test";
  * 같은 셸의 effect(찾기 칸의 `/` 키 듣기)도 붙었다.
  *
  * 짝: 서버 HTML 에서도 참인 조건(`toBeVisible`)으로 바꾸면 늦은 스크립트에서 다시 실패한다(변이로 확인 · HISTORY).
+ * 머리 줄 밖에도 쓴다(2026-11-16 · 머리 줄 밖 감사): 셸이 있는 화면에서 서버가 먼저 그리는 본문 컨트롤(`/backtest` · `/dev/ui` · `/screener`)도
+ * 이 신호 뒤에 누르면 넘겨받은 뒤였다(같은 지연 아래 실측 · 유실 0). 셸이 없는 화면(`/` · `/login` · `/c`)에는 쓸 수 없다 — 그 화면의 상태를 기다릴 것.
  * 토큰이 있는데 `/auth/me` 가 답하지 않으면 `loading` 에 머문다 — 그때는 이 신호가 아니라 그 상태를 직접 단언할 것.
  */
 export async function shellReady(page: Page): Promise<void> {

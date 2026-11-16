@@ -31,9 +31,20 @@ type Regime = { recommended_mode: string; stress_score: number };
 const live = (p: Page) => p.locator(".ld-live");
 const answer = (p: Page) => p.locator(".ld-live .tx-answer-s");
 
+/**
+ * 첫 화면이 ★눌릴 준비★가 됐는지 — 셸이 없는 화면이라 `shellReady` 를 쓸 수 없다.
+ * `data-arm` 은 서버 HTML 에 없고 `InView`·`StudioTour`·`ToolHub` 의 effect 가 돈 뒤에만 붙는다. 붙었다면 같은 커밋의 effect
+ * (`HeroFx` 의 포인터 듣기)와 단추의 처리도 붙었다. `.ld` 가 보이는 것만으로는 아니다 — 서버가 먼저 그린다
+ * (스크립트를 1.5초 늦추면 포인터 이동과 Enter 가 React 보다 먼저 떨어졌다 · 2026-11-16).
+ */
+async function hydrated(page: Page) {
+  await expect(page.locator(".ld [data-arm]").first(), "첫 화면이 넘겨받아짐(data-arm)").toBeAttached();
+}
+
 async function open(page: Page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".ld")).toBeVisible({ timeout: 20_000 });
+  await hydrated(page);
 }
 /** 히어로의 `data-focus` 가 바뀐 기록 — 처음부터 남긴다(되풀이 단언은 저절로 지워진 뒤에 통과해 버리므로 기록으로 본다). */
 async function recordFocus(page: Page) {
@@ -195,6 +206,8 @@ test("히어로 바탕: 포인터를 따라 점이 밝아진다 · 짝: 감속 �
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator(".ld")).toBeVisible();
+  // 넘겨받은 뒤에 움직인다 — 그 전의 이동은 어차피 아무것도 붙이지 않아, 아래 '따라오지 않는다'가 감속 모션과 무관하게 참이 된다.
+  await hydrated(page);
   await page.mouse.move(box.x + 220, box.y + 180);
   await page.mouse.move(box.x + 300, box.y + 220);
   await page.waitForTimeout(300);
@@ -279,10 +292,15 @@ test("★스튜디오 둘러보기: 가운데 온 단계가 그 부위를 비추
 test("스튜디오 둘러보기: 단계 제목은 단추라 눌러서(키보드로도) 고른다 · 실제 화면이 불러와지고 합성 캡션이 붙는다", async ({ page }) => {
   await open(page);
   const btn = page.locator('.ld-tour-step[data-step="4"] .ld-tour-btn');
-  await btn.focus();
+  // ★화면을 움직이지 않고★ 초점을 준다 — `focus()` 는 단추를 화면 가운데로 끌어오고, 그러면 관찰자가 4단계로 바꾼다
+  // (Enter 줄을 지워도 통과했다 · 2026-11-16). 누르기 전이 '한눈에'여야 아래 '4'가 Enter 가 한 일이다(짝).
+  await btn.evaluate((e: HTMLElement) => e.focus({ preventScroll: true }));
+  await expect(btn).toBeFocused();
+  expect(await tourActive(page), "누르기 전에는 그 단계가 아니다").toBe("0");
   await page.keyboard.press("Enter");
   await expect.poll(() => tourActive(page)).toBe("4");
   await expect(page.locator('.ld-spot[data-spot="4"]')).toHaveAttribute("data-on");
+  await centerStep(page, 4);                               // 그림은 화면 가까이 와야 불러온다(lazy) — 가운데 온 단계도 4 그대로다
 
   const img = page.locator(".ld-tour-zoom img.ld-shot-light");
   await expect(img).toBeVisible();

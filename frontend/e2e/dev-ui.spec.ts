@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import { trackErrors, uniq } from "./helpers";
+import { shellReady, trackErrors, uniq } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // /dev/ui — shared/ui 프리미티브 격리 갤러리에 대한 회귀 검사.
@@ -102,6 +102,8 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
 
   test("Tabs 표본이 실제로 상호작용한다(active 가 옮겨감)", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    // 갤러리는 서버가 먼저 그린다 — React 가 넘겨받기 전의 클릭·키는 사라진다(스크립트를 1.5초 늦추면 이 파일 여섯이 실패 · 2026-11-16).
+    await shellReady(page);
     const g = page.locator(".devui");   // 셸 마크업과 격리
 
     const tabs = g.locator(".pv-tabs .pv-tab");
@@ -189,6 +191,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
 
   test("EvidenceDrawer 는 포털되고, 키보드로 열리고 닫히고, 포커스가 돌아온다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    await shellReady(page);
     const g = page.locator(".devui");
     const trigger = g.locator(".tev-drawer-t");
 
@@ -253,6 +256,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
   // BU3 — kit 에 `kit-*` 클래스가 생겼지만(모습 전용) 계약은 여전히 role·태그 구조로 본다.
   test("kit 은 클래스가 없으므로 role·태그 구조로 검증한다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    await shellReady(page);
     const g = page.locator(".devui");   // 셸 마크업과 격리
 
     // GroupedSelect — optgroup 2개 / option 3개
@@ -320,6 +324,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
   // 이 테스트는 그 사실 자체를 계약으로 박아 둔다(Phase 6 에서 모달을 옮길 때의 근거).
   test("shadcn Dialog 는 .devui 밖(document.body)으로 포털된다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    await shellReady(page);
     await page.locator(".devui-dialog-open").click();
 
     const content = page.locator(".devui-dialog-content");
@@ -427,6 +432,7 @@ test("★AllocationMap 이 숏을 두 번째 스트립으로 그린다 — 버�
 test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
   test("Tabs: 화살표·Home·End 로 고르고 초점이 따라간다 · 고른 탭은 늘 하나 · 패널이 바뀐다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    await shellReady(page);
     const tx = page.locator(".devui-tx");
     const tabs = tx.locator('.tx-tablist [role="tab"]');
     await expect(tabs).toHaveCount(3);
@@ -452,6 +458,7 @@ test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
 
   test("Segmented: radiogroup — 화살표로 고르면 aria-checked 가 옮겨간다(짝: 하나만 켜진다)", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
+    await shellReady(page);
     const seg = page.locator('.devui-tx .tx-seg[role="radiogroup"]');
     const opts = seg.locator('[role="radio"]');
     await expect(opts.nth(0)).toHaveAttribute("aria-checked", "true");

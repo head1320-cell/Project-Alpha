@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Request } from "./fixtures";
+import { shellReady } from "./helpers";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { recordApi, stableJson } from "./helpers";
@@ -35,6 +36,8 @@ async function setup(page: Page, seed?: (p: Page) => Promise<void>): Promise<Run
   await page.goto("/backtest", { waitUntil: "domcontentloaded" });
   if (seed) { await seed(page); await page.reload({ waitUntil: "domcontentloaded" }); }
   await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
+  // 실행 단추는 서버가 먼저 그린다 — React 가 넘겨받기 전에 누르면 요청이 나가지 않는다(스크립트를 1.5초 늦추면 이 파일 셋이 실패 · 2026-11-16).
+  await shellReady(page);
   return runs;
 }
 
@@ -49,6 +52,7 @@ async function runOnce(page: Page, runs: Runs): Promise<string> {
 async function back(page: Page) {
   await page.goto("/backtest", { waitUntil: "domcontentloaded" });
   await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
+  await shellReady(page);
 }
 
 /** 돈·기간·비용 칸이 있는 단계로 — BU3 부터 ④(`step-capital`), 그 전에는 매수 단계에 있었다(골든 자료는 같다). */
@@ -166,6 +170,7 @@ test("백테스트 요청 골든: 스크리너·매크로에서 넘어온 설정
   });
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
+  await shellReady(page);                                  // 새로고침 뒤에도 같다 — 넘겨받기 전에 누른 실행은 요청을 내지 않는다
   out["09 매크로 넘김"] = await runOnce(page, runs);
 
   const key = "handoff";
