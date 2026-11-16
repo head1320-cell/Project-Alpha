@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "./fixtures";
-import { contrastAudit, type AuditResult } from "./helpers";
+import { contrastAudit, shellReady, type AuditResult } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BR R3 — 머리 줄 프로필 (설계 docs/superpowers/specs/2026-09-28-br-robustness-profile-design.md §R3)
@@ -149,14 +149,19 @@ test("화면 테마: 다크를 고르면 설계 화면·모듈은 어둡게(새�
   await page.goto("/screener", { waitUntil: "domcontentloaded" });
   await expect(avatar(page)).toBeVisible();
   expect(await isDark(page), "다크를 갖춘 모듈은 어둡게").toBe(true);
+  // 보이는 것만으로는 눌릴 준비가 아니다(서버가 먼저 그린다) — 넘겨받기 전의 클릭은 사라지고, 그러면 아래 '안내 0'은 카드가 없어서 참이 된다.
+  await shellReady(page);
   await avatar(page).click();
+  await expect(card(page), "카드가 열린 뒤에 안내가 없는지 본다").toBeVisible();
   await expect(card(page).locator(".pf-theme-note")).toHaveCount(0);
   await page.keyboard.press("Escape");
   // BU9b — 실거래는 테마를 따른다(늘 어둡게가 아니다): 어둡고 안내가 없다.
   await page.goto("/admin/live-trading", { waitUntil: "domcontentloaded" });
   await expect(avatar(page)).toBeVisible();
   expect(await isDark(page), "실거래는 다크를 갖췄다").toBe(true);
+  await shellReady(page);
   await avatar(page).click();
+  await expect(card(page), "카드가 열린 뒤에 안내가 없는지 본다").toBeVisible();
   await expect(card(page).locator(".pf-theme-note")).toHaveCount(0);
   await page.keyboard.press("Escape");
   // ST3c — 늘 어두운 화면은 이제 없다(현실성 점검은 실거래 탭). 옛 주소도 다크를 따른다.
@@ -167,6 +172,7 @@ test("화면 테마: 다크를 고르면 설계 화면·모듈은 어둡게(새�
   await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
   await expect(avatar(page)).toBeVisible();
   expect(await isDark(page), "다크가 없는 화면은 밝게").toBe(false);
+  await shellReady(page);
   await avatar(page).click();
   await expect(card(page).locator(".pf-theme-note")).toContainText("라이트 테마만");
   await card(page).locator('.pf-seg-b[data-theme="light"]').click();
@@ -192,6 +198,7 @@ test("프로필 카드: 390px 에서 화면 안 · 라이트·다크 AA · 다�
   await me(page, 200, { username: "kim", role: "analyst" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+  await shellReady(page);
   await avatar(page).click();
   const b = (await card(page).boundingBox())!;
   expect(b.x).toBeGreaterThanOrEqual(0);

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "./fixtures";
-import { contrastAudit, type AuditResult } from "./helpers";
+import { contrastAudit, shellReady, type AuditResult } from "./helpers";
 
 /**
  * BU0 · 머리 줄 찾기(`/`) — 종목·화면을 한 칸에서 (스펙 2026-09-30-bu-toss-app-wide-design.md §7.2)
@@ -16,6 +16,8 @@ const opts = (page: Page) => page.locator(".tx-find-pop [role='option']");
 async function open(page: Page, path = "/dashboard") {
   await page.goto(path, { waitUntil: "domcontentloaded" });
   await expect(box(page)).toBeVisible();
+  // 찾기 칸은 서버가 먼저 그려 보이지만, React 가 넘겨받기 전의 `/` 키·입력은 사라진다(스크립트를 1.5초 늦추면 이 파일 6개가 모두 실패했다).
+  await shellReady(page);
 }
 
 test("`/` 로 찾기 칸에 초점이 간다 — 다른 입력 칸에서 친 `/` 는 그 칸의 글자다(짝)", async ({ page }) => {

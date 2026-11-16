@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test, expect, type Page, type Request } from "./fixtures";
-import { contrastAudit, type AuditResult } from "./helpers";
+import { contrastAudit, shellReady, type AuditResult } from "./helpers";
 
 /**
  * BU8b · 로그인 `/login` — 메뉴 없는 단독 한 화면 (계획 "BU8 상세" · 사용자 결정)
@@ -164,6 +164,8 @@ test("이미 로그인했으면 그렇다고 말하고 이어서 갈 곳을 준�
 
 test("로그인 링크는 지금 화면을 next 로 넘긴다 — 프로필 카드(홈) · 설정", async ({ page }) => {
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+  // 동그라미는 서버가 먼저 그려 바로 눌리지만, React 가 넘겨받기 전의 클릭은 사라진다(부하에서 400번 중 4번 재현 — 2026-11-15 의 실패와 같은 오류 문장).
+  await shellReady(page);
   await page.locator(".terminal-header .pf-avatar").first().click();
   await expect(page.locator(".pf-card .pf-login")).toHaveAttribute("href", "/login?next=%2Fdashboard");
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
