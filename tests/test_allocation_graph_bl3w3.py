@@ -23,8 +23,12 @@ from src.engine import portfolio_graph as pg  # noqa: E402
 from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
 from tests.test_allocation_graph import _node  # noqa: E402
 from tests.test_allocation_graph_bl2b import live_and_store  # noqa: E402,F401
+from tests.test_allocation_graph_explain import _texts  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("graph_write_guard")
+
+#: 기업 노드의 합성 줄 — 실데이터가 아닐 때만 나온다. '합성' 은 한 번(2026-11-16 · 예전에는 괄호 안에 한 번 더 붙어 있었다).
+DEV_COMPANY_LINE = "개발 모드라 재무·가격이 합성입니다 — 실제 기업 가치를 말해 주지 않습니다."
 
 CODE = "005930"
 KINDS = ("company_valuation", "reverse_dcf", "valuation_distribution", "financial_deep", "risk_deep",
@@ -79,6 +83,38 @@ def test_each_node_is_practice_in_mock_mode_and_names_the_company(kind, monkeypa
     assert r["view"]["name"] == "삼성전자"
     assert r["lineage"]["practice"] is True and r["lineage"]["pit"] == "forward_only"
     assert r["explain"]["title"] and r["explain"]["trust"]
+    # 실데이터가 아닐 때만 합성 줄이 나온다 — 표시(kind: practice)가 붙은 한 줄, '합성' 은 한 번(합니다체).
+    assert [t["text"] for t in r["explain"]["trust"] if t.get("kind") == "practice"] == [DEV_COMPANY_LINE]
+
+
+def test_on_real_data_no_company_explanation_says_synthetic(monkeypatch):
+    """★짝★ — 실데이터(개발 모드 아님 · 결과도 합성 아님)면 설명 어디에도 '합성' 이 없다(사용자 결정 2026-11-16).
+    운영 재무를 이 시험에서 만들 수 없어, 노드가 계보를 정하는 함수(`_out`)와 설명기를 그대로 잇는다(일곱 설명기가 같은 `_base_trust`)."""
+    from src.api import allocation_graph_nodes_company as company
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    head = {"code": CODE, "name": "삼성전자", "price": 70000.0, "price_source": "직접 입력"}
+    out = company._out(head, {"is_mock": False, "unified": {}})
+    assert out.provenance == {"practice": False} and out.tags["practice"] is False
+    ex = company._explain_sandbox(out.view, out.provenance, None)
+    assert ex["trust"] and not [t for t in _texts(ex) if "합성" in t], ex
+
+
+def test_the_distribution_explanation_reads_width_items_and_skips_the_note():
+    """가치 분포의 폭 표는 항목(dict)과 설명 문장(`note` · str)이 섞여 온다(엔진 `repo_widths()` · 화면 타입도 `| string`).
+    설명기는 항목만 본다 — 예전에는 문장에 `.get` 을 불러 설명 전체가 '설명 생성 실패' 로 바뀌었다(개발 모드의 합성 줄도 함께
+    사라졌다 · 2026-11-16 위 시험이 찾음)."""
+    from src.api import allocation_graph_nodes_company as company
+    from src.engine.valuation.valuation_distribution import repo_widths
+    widths = repo_widths()
+    assert any(isinstance(w, str) for w in widths.values()), "★공허 금지★ — 문장이 섞인 실제 모양으로 잰다"
+    view = {"name": "삼성전자", "result": {"unified": {}, "widths": widths}}
+    ex = company._explain_distribution(view, {"practice": True}, None)
+    assert any("가정별 변동 폭" in t["text"] for t in ex["trust"] if t["state"] == "assumed"), ex["trust"]
+    assert [t["text"] for t in ex["trust"] if t.get("kind") == "practice"] == [DEV_COMPANY_LINE]
+    # 짝: 측정된 폭이 하나라도 있으면 '모두 지정값' 이라고 말하지 않는다
+    measured = {**widths, "beta": {**widths["beta"], "measured": True}}
+    ex = company._explain_distribution({**view, "result": {"unified": {}, "widths": measured}}, {"practice": True}, None)
+    assert not [t for t in ex["trust"] if "가정별 변동 폭" in t["text"]], ex["trust"]
 
 
 # ══ 골든 — 노드 == 라우트 ════════════════════════════════════════════════════

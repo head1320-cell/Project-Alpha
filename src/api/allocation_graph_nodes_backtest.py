@@ -227,7 +227,9 @@ def _attribution(inputs: dict, p: Any) -> pg.NodeOutput:
     if not out.get("available"):
         raise pg.NodeFailure(f"귀인 산출 실패 — {out.get('reason') or '사유 미상'}")
     labels = {r["factor"]: FACTOR_KO.get(r["factor"], r["factor"]) for r in out.get("rows") or []}
-    return pg.NodeOutput(values={}, view={"result": out, "labels": labels}, tags=tags)
+    # 설명기는 `provenance` 만 받는다 — 계보의 합성 표시를 넘겨야 개발 모드에서만 합성 줄이 나온다(형제 매크로 노드와 같은 꼴).
+    return pg.NodeOutput(values={}, view={"result": out, "labels": labels}, tags=tags,
+                         provenance={"practice": tags["practice"]})
 
 
 def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
@@ -237,7 +239,7 @@ def _explain_attribution(view: dict, prov: dict, params: Any) -> dict:
     trust = [_t(CONFIRMED, f"실행의 월별 수익률 {r.get('months_from_run')}개월을 매크로 팩터로 분해했습니다(결합 회귀).")]
     if any(x.get("collinear") for x in rows):
         trust.append(_t(UNKNOWN, "상관이 높은 팩터가 있어 개별 기여는 서로 상쇄될 수 있습니다 — 개별로 해석하지 마십시오."))
-    trust += ([_practice("개발 모드라 매크로 지표가 합성(합성)입니다.")] if prov.get("practice") else [])
+    trust += ([_practice("개발 모드라 매크로 지표가 합성입니다.")] if prov.get("practice") else [])
     return {"title": "수익을 매크로 팩터별 기여로 분해했습니다",
             "facts": ([f"최대 기여 팩터: {FACTOR_KO.get(top.get('factor'), top.get('factor'))} {_signed_pct(float(top.get('contribution_pct') or 0))}"] if top else [])
                      + ([f"설명력(R²) {r['diagnostics']['r_squared']:.2f}"] if (r.get("diagnostics") or {}).get("r_squared") is not None else []),

@@ -9,12 +9,14 @@
 - 시장 균형 출발점(BL·EP)에서 시가총액 미상 → 가정(assumed) — 짝: MVO 에서는 그 말을 하지 않는다.
 - 백테스트 비용은 가정이고 값이 파라미터를 따른다(짝) · 룩어헤드의 안 잰 축이 `unmeasured` 에 그대로.
 - 금지어("검증됨·입증됨·견고함·프로덕션 레디·투자 우위·더 나은 전략") 0 — 출력 전수 + 소스 리터럴 AST.
+- 같은 낱말을 괄호에 되풀이한 겹말(`낱말(낱말)`) 0 — 소스 리터럴 AST · 검사기 짝(되풀이는 잡고 풀이 괄호는 두고).
 """
 from __future__ import annotations
 
 import ast
 import os
 import pathlib
+import re
 
 import pandas as pd
 import pytest
@@ -148,17 +150,45 @@ def test_no_overclaiming_words_in_any_explanation(market, kw):
     assert not bad, bad
 
 
-def test_no_overclaiming_words_in_the_explainer_source():
-    lits = []
+def _explainer_source_literals() -> list[tuple[str, int, str]]:
+    """설명기 · 노드 · 문 · 웨이브 모듈의 문자열 리터럴 전부 → [(파일, 줄, 글)]."""
+    out = []
     files = sorted({*map(str, pathlib.Path("src/api").glob("allocation_graph_*.py")),
                     "src/domain/workflow_gates.py"})
     assert len(files) >= 4, files                 # 설명기 · 노드 · 문 · 웨이브 모듈이 모두 쓸린다
     for f in files:
         tree = ast.parse(pathlib.Path(f).read_text("utf-8"))
-        lits += [n.value for n in ast.walk(tree)
-                 if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-    assert lits
+        out += [(f, n.lineno, n.value) for n in ast.walk(tree)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+    assert out
+    return out
+
+
+def test_no_overclaiming_words_in_the_explainer_source():
+    lits = [s for _, _, s in _explainer_source_literals()]
     assert not [s for s in lits for w in FORBIDDEN if w in s and "금지" not in s]
+
+
+#: 같은 낱말이 괄호 안에 한 번 더 붙은 겹말 — 용어 치환이 `옛말(새말)` 의 옛말만 새말로 바꾸면 남는 자국이다
+#: (2026-11-11 해요체 → 합니다체 전환 때 `그룹` 과 `합성` 에서 생겼다 · HISTORY).
+_DOUBLED = re.compile(r"([가-힣][가-힣· ]*)\s?\(\1\)")
+
+
+def doubled_words(text: str) -> list[str]:
+    return [m.group(0) for m in _DOUBLED.finditer(text)]
+
+
+def test_no_doubled_word_in_the_explainer_source():
+    """화면에 나가는 설명 문장은 한 낱말을 한 번만 말한다 — `낱말(낱말)` 이 없다."""
+    bad = [f"{f}:{line} {doubled_words(s)}" for f, line, s in _explainer_source_literals() if doubled_words(s)]
+    assert bad == [], bad
+
+
+def test_the_doubled_word_detector_catches_a_repeat_and_spares_glosses():
+    """★짝★ — 검사기가 공허하지 않다: 되풀이(띄어 쓴 것 · 여러 낱말 포함)는 잡고, 풀이 괄호는 잡지 않는다."""
+    assert doubled_words("개발 모드라 시세(시세)입니다.") == ["시세(시세)"]
+    assert doubled_words("가상 체결기 (가상 체결기)로 돌렸습니다.") == ["가상 체결기 (가상 체결기)"]
+    assert doubled_words("MDD(최대낙폭) · 계층적 리스크 패리티(HRP) · 군집(k-평균) · 시세가 합성입니다.") == []
 
 
 def test_every_core_node_has_an_explainer_plain_words_and_a_stage():

@@ -24,6 +24,7 @@ import src.data.backtest_runs as br  # noqa: E402
 from src.api import allocation_graph_nodes as gn  # noqa: E402
 from src.engine import portfolio_graph as pg  # noqa: E402
 from tests.test_allocation_graph import _edge, _node, client  # noqa: E402,F401
+from tests.test_allocation_graph_explain import _texts  # noqa: E402
 
 
 def _run(g):
@@ -214,6 +215,38 @@ def test_attribution_in_production_passes_only_stored_series(runs, monkeypatch):
     g = _g([_load("run_ok"), _node("a", "backtest_attribution")], [_edge("l", "run", "a", "run")])
     _run(g)
     assert seen and list(seen[0]) == ["STORED"], "★수집기가 아니라 저장된 관측★"
+
+
+#: 귀인 노드의 합성 줄 — 실데이터가 아닐 때(개발 모드의 합성 매크로 지표)만 나온다. '합성' 은 한 번.
+DEV_ATTRIBUTION_LINE = "개발 모드라 매크로 지표가 합성입니다."
+
+
+def _practice_lines(r: dict) -> list[str]:
+    return [t["text"] for t in (r.get("explain") or {}).get("trust") or [] if t.get("kind") == "practice"]
+
+
+def test_attribution_in_development_says_its_macro_series_are_synthetic(runs):
+    """개발 모드의 매크로 계열은 합성이다 — 설명이 그렇게 말한다. 예전에는 노드가 계보(`tags`)만 넘기고 설명기가 읽는
+    `provenance` 를 비워 두어 이 줄이 한 번도 나오지 않았다(공허한 분기 · 2026-11-16)."""
+    g = _g([_load("run_ok"), _node("a", "backtest_attribution")], [_edge("l", "run", "a", "run")])
+    r = _run(g)["nodes"]["a"]
+    assert r["status"] == "ok", r["reason"]
+    assert r["provenance"].get("practice") is True
+    assert _practice_lines(r) == [DEV_ATTRIBUTION_LINE]
+
+
+def test_attribution_on_stored_observations_never_says_synthetic(runs, monkeypatch):
+    """★짝★ — 저장된 관측(운영 계보)으로 계산하면 '합성' 이라는 말이 설명 어디에도 없다(사용자 결정 2026-11-16)."""
+    from src.api import allocation_graph_nodes_bl2 as bl2
+    series, _ = bl2.macro_series_map()                 # 계열 값은 개발 수집기 것 — 이 시험이 보는 것은 계보다
+    monkeypatch.setenv("KIS_USE_MOCK", "0")
+    monkeypatch.setattr(bl2, "macro_series_map", lambda: (
+        series, {"pit": "forward_only", "practice": False, "sources": ["macro_observation_store"]}))
+    g = _g([_load("run_ok"), _node("a", "backtest_attribution")], [_edge("l", "run", "a", "run")])
+    r = _run(g)["nodes"]["a"]
+    assert r["status"] == "ok", r["reason"]
+    assert r["provenance"].get("practice") is False
+    assert not [t for t in _texts(r["explain"]) if "합성" in t], r["explain"]
 
 
 # ══ 비교 ═════════════════════════════════════════════════════════════════════

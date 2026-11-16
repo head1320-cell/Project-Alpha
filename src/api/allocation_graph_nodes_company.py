@@ -90,7 +90,7 @@ def _base_trust(view: dict, prov: dict) -> list[dict]:
         out.append(_t(CONFIRMED if src == "직접 입력" else UNKNOWN,
                       f"현재가 {view.get('price'):,.0f}원 — 출처: {src}."))
     if prov.get("practice"):
-        out.append(_practice("개발 모드라 재무·가격이 합성(합성)입니다 — 실제 기업 가치를 말해 주지 않습니다."))
+        out.append(_practice("개발 모드라 재무·가격이 합성입니다 — 실제 기업 가치를 말해 주지 않습니다."))
     return out
 
 
@@ -176,9 +176,10 @@ def _explain_distribution(view: dict, prov: dict, params: Any) -> dict:
     sr = (r.get("model_disagreement") or {}).get("spread_ratio")
     if isinstance(sr, (int, float)):
         facts.append(f"모델끼리 {sr:.2f}배 갈립니다 — 분포 폭보다 크면 불확실성의 주인은 모델 선택입니다.")
-    widths = r.get("widths") or {}
+    # 폭 표는 항목(dict)과 설명 문장(`note` · str)이 섞여 온다(엔진 `repo_widths()`) — 항목만 본다.
+    widths = [w for w in (r.get("widths") or {}).values() if isinstance(w, dict)]
     trust = [*_base_trust(view, prov)]
-    if widths and not any(w.get("measured") for w in widths.values()):
+    if widths and not any(w.get("measured") for w in widths):
         trust.append(_t(ASSUMED, "가정별 변동 폭은 측정값이 아니라 지정값입니다 — 분포의 폭도 가정입니다."))
     return {"title": title, "facts": facts, "trust": trust, "unmeasured": ["폭 자체의 근거(측정된 불확실성)"]}
 

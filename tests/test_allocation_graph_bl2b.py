@@ -21,6 +21,10 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 from src.api import allocation_graph_nodes as gn  # noqa: E402
 from src.engine import portfolio_graph as pg  # noqa: E402
 from tests.test_allocation_graph import T3, _edge, _node, chain, client, market  # noqa: E402,F401
+from tests.test_allocation_graph_explain import _texts  # noqa: E402
+
+#: 개발 모드 매크로 노드의 합성 줄 — ★'합성' 을 한 번만 말한다★(2026-11-16 · 예전에는 괄호 안에 한 번 더 붙어 있었다).
+DEV_MACRO_LINE = "개발 모드라 매크로 지표가 합성입니다 — 실제 국면을 말해 주지 않습니다."
 
 
 def _run(g):
@@ -151,6 +155,9 @@ def test_regime_ensemble_in_production_reads_only_the_store(live_and_store, monk
     assert r["status"] == "ok", r["reason"]
     assert calls == [] and live_and_store["recorded"] == []
     assert r["lineage"]["practice"] is False
+    # ★실데이터면 '합성' 이라는 말을 하지 않는다★(사용자 결정 2026-11-16) — 대신 저장된 관측이라고 말한다(짝: 아래 개발 모드).
+    assert not [t for t in _texts(r["explain"]) if "합성" in t], r["explain"]
+    assert any(t["text"].startswith("저장된 관측만 읽었습니다") for t in r["explain"]["trust"]), r["explain"]["trust"]
     from src.engine.regime_ensemble import regime_ensemble
     ref = regime_ensemble(mc.MacroCollector().collect_all(use_cache=False, store_only=True).series, market="us", months=36)
     assert r["view"]["result"] == ref
@@ -174,7 +181,8 @@ def test_regime_ensemble_in_development_equals_the_route_and_is_practice(monkeyp
     assert r["status"] == "ok", r["reason"]
     assert r["view"]["result"] == macro_regime_ensemble(market="kr", months=48)
     assert r["lineage"]["practice"] is True
-    assert any("합성" in t["text"] for t in r["explain"]["trust"])
+    # 실데이터가 아닐 때만 합성 줄이 나온다 — 표시(kind: practice)가 붙은 한 줄, '합성' 은 한 번(합니다체).
+    assert [t["text"] for t in r["explain"]["trust"] if t.get("kind") == "practice"] == [DEV_MACRO_LINE]
 
 
 def test_regime_explain_in_development_equals_the_route(monkeypatch):
