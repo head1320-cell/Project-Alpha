@@ -27915,4 +27915,6 @@ README 새로 고침 때 '관찰(고치지 않음)'으로 적은 셋을 고쳤�
   다른 노드의 문장 · 화면 코드 · `ruff format`(이 파일들은 HEAD 에서도 포맷 경고 — CI 에서 경고만).
 - **증거 등급**: `structural`. 표시 문구와 계보 배선의 정직성 — 예측 스킬 · 경제적 가치와 무관하다.
 - **게이트**: ruff 0(CI 고정 0.15.8) · 손댄 시험 넷 + 이웃 여섯(287개) 통과 · tsc 0 · 다크 구역 점검 · `next build` · 관련 E2E 둘(`portfolio-graph` 'BL3 W1' 귀인 · 'BL3 W3' 기업 노드와 대비 AA) 통과.
-  ★전체 pytest 는 이 커밋 시점에 격리 worktree 에서 돌고 있다(코드·시험 패치 sha256 `f967aff3…` · 새 기본 DB) — 결과는 뒤 커밋에 적는다.★
+  전체 pytest(격리 worktree · 코드·시험 패치 sha256 `f967aff3…` · 새 기본 DB) **10,715 통과 · 11 건너뜀 · 실패 1**(38분 36초).
+  실패 1 은 `test_build_probe.py::test_the_probe_runs_git_against_the_repository_root_not_the_cwd` — 저장소 뿌리 경로가 `Project-Alpha` 로 끝나야 한다고 단언해
+  worktree 경로(`…/gate`)에서 떨어진다. 이 변경과 무관하고, 같은 커밋(`4085735`)의 본 체크아웃에서 그 파일 24 통과. 그 시험의 폴더 이름 의존은 고치지 않았다(범위 밖).
