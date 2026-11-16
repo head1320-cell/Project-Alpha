@@ -185,13 +185,15 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
 #
 # 세 팔:
 #   B0  regime=None            국면 배선 없음(사다리의 바닥)
-#   B1  weighting="hard"       오늘 라벨 하나 = 확률 1 (현행 프로덕션)
+#   B1  weighting="hard"       오늘 라벨 하나 = 확률 1 (오늘 국면 유지 — M4 전의 프로덕션 기본값)
 #   N   weighting="probabilistic"  π_1..π_h 혼합 (MS1-a)
 #   G   weighting="gmm"        GMM 시작 분포 × 전이 (M3) — 달마다 그 달까지 자른 경로로 π₀ · 점수를 다시 낸다.
 #                              그 달에 세우지 못하면 ★그 달만★ 전이 예측(N 과 같은 셈) + 감사의 `gmm_fallback` 사유.
+#   E   weighting="evidence"   근거 관문 (M4 · 프로덕션 기본값) — 달마다 ★그 달까지 자른 경로의 점수★로 G 또는 N 을 고른다
+#                              (앞보기 0 · 새 셈 0줄 — 고른 달은 그 팔의 계산 그대로). 하네스의 팔은 늘 이름으로 부른다(암묵 기본값은 그대로).
 
-_REGIME_ARMS = ("hard", "probabilistic", "gmm")
-_ARM_LABELS = {"hard": "B1", "probabilistic": "N", "gmm": "G"}
+_REGIME_ARMS = ("hard", "probabilistic", "gmm", "evidence")
+_ARM_LABELS = {"hard": "B1", "probabilistic": "N", "gmm": "G", "evidence": "E"}
 
 
 def _month_of(d) -> str:
@@ -292,6 +294,9 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
     if regime.get("weighting") == "gmm":
         # 팔 G 의 줄에만 있다(B1 · N 의 감사는 한 바이트도 바뀌지 않는다 — 골든). 세운 달은 `gmm`, 열화한 달은 `gmm_fallback`.
         audit.update({"gmm": None, "gmm_fallback": None})
+    elif regime.get("weighting") == "evidence":
+        # 팔 E 의 줄에만 — 그 달의 관문(고른 쪽 · 사유 · 견준 점수)과, 관문이 GMM 을 고른 달의 세움 · 열화(G 와 같은 칸).
+        audit.update({"gate": None, "gmm": None, "gmm_fallback": None})
     pts = _truncated_points(regime.get("points") or [], month)
     audit["path_len"] = len(pts)
     audit["last_path_month"] = _month_of_point(pts[-1]) if pts else ""
@@ -324,6 +329,13 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
         )
         h_hold = int(regime.get("h_hold") or 1)
         audit["h_hold"] = h_hold
+        if weighting == "evidence":
+            from src.engine import regime_gmm_start as gs
+            gate = gs.evidence_gate(pts, h_hold)          # ★그 달까지 자른 경로(pts)의 점수만★ — 앞보기 0
+            audit["gate"] = {"chosen": gate["chosen"], "available": gate["available"], "reason": gate["reason"],
+                             "n_eval": gate["n_eval"], "compared": [{"key": c["key"], "brier": c["brier"]}
+                                                                    for c in gate["compared"]]}
+            weighting = gate["chosen"]
         cond = _gmm_cond_at(pts, h_hold, df, by_month, audit) if weighting == "gmm" else None
         if cond is None:
             try:
@@ -787,7 +799,12 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             # 팔 G 만 — GMM 시작 분포를 세운 달 · 전이 예측으로 열화한 달(사유는 `detail[*].gmm_fallback`).
             **({"gmm_months": sum(1 for d in plan.regime_detail if d.get("gmm") is not None),
                 "gmm_fallback_months": sum(1 for d in plan.regime_detail if d.get("gmm_fallback"))}
-               if plan.arm == "G" else {}),
+               if plan.arm in ("G", "E") else {}),
+            # 팔 E 만 — 관문이 GMM 을 고른 달 · 전이 예측을 고른 달(사유는 `detail[*].gate.reason`).
+            **({"gate_gmm_months": sum(1 for d in plan.regime_detail if (d.get("gate") or {}).get("chosen") == "gmm"),
+                "gate_transition_months": sum(1 for d in plan.regime_detail
+                                              if (d.get("gate") or {}).get("chosen") == "probabilistic")}
+               if plan.arm == "E" else {}),
         },
         "turnover_avg_pct": round(float(np.mean(turnovers)), 2) if turnovers else 0.0,
         "impact": impact_block,

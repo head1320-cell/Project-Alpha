@@ -183,7 +183,7 @@ function Optimizer({ v }: { v: Dict }) {
       ]} />
       {cr && <ConstraintReport cr={cr as unknown as ConstraintsReport} />}
       <EngineEvidence v={v} />
-      {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 를 산출하지 못해 표본 추정으로 계산했습니다 — {String(belief.blocked_reason)}</p>}
+      {belief?.blocked && <p className="pg-warn pg-rw-blocked-line">경기 국면 반영이 차단돼 표본 추정으로 계산했습니다 — {String(belief.blocked_reason)}</p>}
       <RegimeWeightingBlock reg={belief?.regime as RegimeBlock | null | undefined} />
       {cap.length > 0 && <p className="pg-note">시가총액 미상 종목 {cap.length}개 — 시장 균형 가중은 그 종목에 대해 가정입니다.</p>}
       {((v.skipped_views as unknown[]) ?? []).length > 0 && (

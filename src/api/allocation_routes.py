@@ -205,10 +205,13 @@ class AnalyzeRequest(BaseModel):
     #   켜면 판정이 `positive` 가 **아니거나** 이 요청이 판정된 대상이 아닐 때
     #   조건부 μ/Σ 를 적용하지 않는다. 조용히 떨어지지 않고 사유를 남긴다.
     require_verified_macro: bool = False
-    # ★기본값이 "hard" 인 것이 계약이다★ 보내지 않으면 현행 경로·현행 신뢰도 그대로.
+    # ★기본값은 근거 관문 "evidence"(M4 · 받은 결정 D1-b)★ 같은 경로 · k = 보유 기간의 워크포워드 브라이어로 'GMM 시작 분포 × 전이'가
+    #   '오늘 국면 유지'와 '전이 예측'보다 엄격히 낮을 때만 그것을, 아니면 전이 예측을 쓴다 — 견준 점수 · 고른 쪽 · 사유는
+    #   `conditional.gate`. 고르는 규칙은 받은 결정이고 점수는 그 입력이다(합성 자료의 점수는 예측력의 증거가 아니다).
+    # "hard"(오늘 국면 유지 · M4 전의 기본값) · "probabilistic"(전이 예측)은 보내면 그대로다(관문을 지나지 않는다).
     # "gmm"(M3) — GMM 시작 분포 × 전이. 같은 경로의 워크포워드 점수가 없으면 전이 예측으로 ★명시적으로★ 열화한다
     # (`conditional.requested_weighting` · `regime_weighting`(쓴 것) · `gmm_fallback`(사유)).
-    regime_weighting: str = Field("hard", pattern="^(hard|probabilistic|gmm)$")
+    regime_weighting: str = Field("evidence", pattern="^(evidence|hard|probabilistic|gmm)$")
     # 라이브(오늘 스냅샷) vs 백테스트(as_of 절단). 백테스트는 아직 열려 있지 않다 —
     # ECOS revision 정책 문서가 선행조건이다(계획 §1.6.2).
     regime_mode: str = Field("live", pattern="^(live|backtest)$")

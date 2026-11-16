@@ -102,6 +102,8 @@ CONDITIONAL_KEYS = {
     "regime", "regime_weighting", "requested", "sharpness", "shrinkage_lambda",
     "unlabeled_obs", "verification", "view_confidence",
 }
+#: M4 — 기본 요청(근거 관문)의 조건부 블록에만 더해지는 두 키(요청 표시 · 관문 블록). 명시한 `hard` 는 `CONDITIONAL_KEYS` 그대로(짝).
+CONDITIONAL_GATE_EXTRA = {"requested_weighting", "gate"}
 VERIFICATION_KEYS = {
     "adjudicated", "blocked", "blocked_reason", "code_version_matches",
     # AM3 — ★값과 그 값을 어떻게 알았는지를 함께 낸다★ `code_version_matches`
@@ -160,9 +162,13 @@ def test_the_conditional_block_shape_is_pinned_on_both_routes(client):
     a = _analyze(client, model="bl", conditional=True)["conditional"]
     d = _decide(client, model="bl", conditional=True)["conditional"]
     for blk in (a, d):
-        assert set(blk) == CONDITIONAL_KEYS
+        assert set(blk) == CONDITIONAL_KEYS | CONDITIONAL_GATE_EXTRA
         assert set(blk["verification"]) == VERIFICATION_KEYS
     assert set(a) == set(d), "두 화면의 조건부 블록이 갈렸다"
+    # 짝 — 명시한 `hard`(M4 전의 기본값)는 관문을 지나지 않아 M4 전의 모양 그대로다
+    ah = _analyze(client, model="bl", conditional=True, regime_weighting="hard")["conditional"]
+    dh = _decide(client, model="bl", conditional=True, regime_weighting="hard")["conditional"]
+    assert set(ah) == set(dh) == CONDITIONAL_KEYS
 
 
 # ══════════════════════════════════════════════════════════════════════════

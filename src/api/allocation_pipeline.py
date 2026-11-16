@@ -267,7 +267,8 @@ def _conditional_stack(req, returns) -> dict:
     path = _regime_path_for(req)
     by_month, _dropped = regime_by_month_from_path(path["points"])
     current = path["points"][-1].get("regime") if path["points"] else None
-    weighting = getattr(req, "regime_weighting", "hard")
+    # M4 — 기본값은 근거 관문(`AnalyzeRequest.regime_weighting` 과 같은 값 · 한쪽만 바꾸면 부르는 길마다 달라진다).
+    weighting = getattr(req, "regime_weighting", "evidence")
     mode = getattr(req, "regime_mode", "live")
     h_hold = _HOLD_MONTHS.get(getattr(req, "rebalance", "M"), 1)
     meta: dict = {"regime_weighting": "hard", "mode": mode,
@@ -280,6 +281,10 @@ def _conditional_stack(req, returns) -> dict:
         # 두 키는 GMM 을 요청한 응답에만 있다(하드 · 전이 예측의 응답은 한 바이트도 바뀌지 않는다 — 골든).
         meta["requested_weighting"] = "gmm"
         meta["gmm_fallback"] = None
+    elif weighting == "evidence":
+        # ★근거 관문 (M4 · D1-b)★ 요청 표시와 관문 블록은 이 요청에만 있다. 닫힌 모드에서는 계산하지 않는다(`gate: None`).
+        meta["requested_weighting"] = "evidence"
+        meta["gate"] = None
 
     # ★백테스트 모드는 아직 열려 있지 않다★ 라이브 수치를 백테스트인 척 쓰지
     # 못하게, 계산하지 않고 사유를 돌려준다(계획 §1.6.2 의 3단계 전).
@@ -292,6 +297,15 @@ def _conditional_stack(req, returns) -> dict:
                 "extra_views": None, "view_conf": None, "meta": meta}
 
     cond = _hard_conditional(returns, by_month, current)
+
+    if weighting == "evidence":
+        # 같은 경로 · k = 보유 기간의 워크포워드 브라이어로 고른다 — GMM 시작 분포 × 전이가 다른 둘보다 엄격히 낮을 때만 그 길,
+        # 아니면 전이 예측(사유는 관문 블록에). 고른 뒤에는 그 방식의 기존 길을 그대로 지난다(새 셈 0줄 · 그 길의 열화도 그대로).
+        from src.engine import regime_gmm_start as gs
+        meta["gate"] = gs.evidence_gate(path["points"], h_hold)
+        weighting = meta["gate"]["chosen"]
+        if weighting == "gmm":
+            meta["gmm_fallback"] = None
 
     if weighting == "gmm":
         # ★GMM 시작 분포 (M3)★ 세우지 못하거나 혼합하지 못하면 ★명시적으로 열화★한다 — 전이 예측으로 계산하고

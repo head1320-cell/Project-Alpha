@@ -1353,7 +1353,8 @@ test("국면 가중(M3): 'GMM 시작 분포 × 전이' — 선택지는 서버 �
   await tab(page, "settings");
   await page.locator(".pg-mode input").check();
   const sel = page.locator(".pg-inspector .pg-field", { hasText: "국면 가중 방식" }).locator("select");
-  await expect(sel.locator("option")).toHaveText(["기본값 (오늘 국면 유지)", "오늘 국면 유지", "전이 예측", "GMM 시작 분포 × 전이"]);
+  // M4 — 맨 앞에 기본값 '근거 관문'(의도한 변화)
+  await expect(sel.locator("option")).toHaveText(["기본값 (근거 관문)", "근거 관문", "오늘 국면 유지", "전이 예측", "GMM 시작 분포 × 전이"]);
   await sel.selectOption({ label: "GMM 시작 분포 × 전이" });
   await page.locator(".pg-inspector .pg-field", { hasText: "경기 국면 반영" }).locator("select").selectOption("true");
   const doc = await exportDoc(page);
@@ -1506,6 +1507,153 @@ test("국면 가중(M3): 'GMM 시작 분포 × 전이' — 선택지는 서버 �
   await expect(step.locator(".pg-step-p", { hasText: "국면 가중 방식:" }), "쓰지 않은 방식을 사실로 적지 않는다").toHaveCount(0);
   await expect(step.locator(".pg-trust-a").filter({ hasText: "경기 국면 반영이 차단돼 과거 표본 기준으로 산출했습니다" })).toHaveCount(1);
   await expect(step.locator(".pg-trust-a").filter({ hasText: /’[을를] 쓰지 못해/ }), "차단이면 대체 줄도 없다").toHaveCount(0);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+});
+
+/**
+ * 근거 관문(M4) — 기본 배분 경로가 받는 국면 분포의 출처를 같은 경로의 워크포워드 브라이어로 고른다. ★화면은 서버의 점수 · 선택 · 사유를 옮긴다★
+ *   ⓪ 선택지 맨 앞 '근거 관문' · 고르지 않으면 문서에 방식이 없다(서버의 기본값).
+ *   ① 개발 자료(평가 시점 17개 < 20): 견주지 못함 → 전이 예측 + 서버 사유 · 표 · 낙관 줄 · 열화 줄 없음 · 이야기의 사실 줄 · 가정 줄.
+ *   ②③ 관문이 고른 응답 — 고정물 `fixtures/regime-evidence-optimizer.json` = 서버 출력(pytest): 한 달 보유 → GMM · 한 분기 → 전이 예측.
+ *      표의 숫자 = 서버가 지은 글자(다시 반올림하지 않는다) · '고름'은 글자로 한 줄 · 사유 · 낙관 줄 · 라이트/다크 AA.
+ *   ②′ 정확히 반인 브라이어(0.0625) — 서버 글자 '0.062' 그대로(JS 로 다시 반올림하면 '0.063').
+ *   ④ 짝 — 명시한 방식(오늘 국면 유지)에는 관문 절이 없다(실제 서버).
+ *   ⑤ 관문이 막은 응답(실제 서버) — 결과 판의 차단 줄은 '차단돼'(못 만든 것이 아니다 · M3 게이트에서 넘겨받은 고침) ↔ 막히지 않으면 그 줄이 없다.
+ */
+type EvGate = { available: boolean; chosen: string; chosen_name: string; reason: string; k: number; n_eval: number | null; n_compared: number;
+  compared: { key: string; name: string; brier: number | null; available: boolean; shown: string | null }[]; digits: number | null; note: string | null };
+type EvBlock = RwBlock & { gate: EvGate | null };
+const EV_FIXTURE = JSON.parse(readFileSync(`${__dirname}/fixtures/regime-evidence-optimizer.json`, "utf-8")) as
+  Record<"monthly" | "quarterly", { belief: { conditional: boolean; blocked: boolean; blocked_reason: string | null; regime: EvBlock }; explain: RwExplain }>;
+
+test("근거 관문(M4): 기본 배분 경로 — 같은 경로의 워크포워드 점수로 'GMM 시작 분포 × 전이' ↔ '전이 예측' · 화면은 서버의 점수 · 선택 · 사유 그대로", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openCanvas(page);
+  // ⓪ 선택지 — 근거 관문이 맨 앞 · 고르지 않으면 서버의 기본값
+  await node(page, "estimate").click();
+  await tab(page, "settings");
+  await page.locator(".pg-mode input").check();
+  const sel = page.locator(".pg-inspector .pg-field", { hasText: "국면 가중 방식" }).locator("select");
+  await expect(sel.locator("option")).toHaveText(["기본값 (근거 관문)", "근거 관문", "오늘 국면 유지", "전이 예측", "GMM 시작 분포 × 전이"]);
+  await page.locator(".pg-inspector .pg-field", { hasText: "경기 국면 반영" }).locator("select").selectOption("true");
+  const doc = await exportDoc(page);
+  const est = doc.nodes.find((n: { id: string }) => n.id === "estimate").params;
+  expect([est.regime_weighting, est.conditional], "고르지 않으면 문서에 방식이 없다 — 서버의 기본값을 쓴다").toEqual([undefined, true]);
+  await page.locator(".pg-mode input").uncheck();
+
+  // ① 개발 자료 — 견주지 못함 → 전이 예측 + 서버 사유(값을 지어내지 않는다)
+  const body = await run(page);
+  const o = body.nodes.optimizer as unknown as { status: string; view: { belief: { blocked: boolean; regime: EvBlock } }; explain: RwExplain };
+  expect(o.status).toBe("ok");
+  const reg = o.view.belief.regime;
+  const g0 = reg.gate!;
+  expect([reg.requested, reg.used, g0.available, g0.chosen]).toEqual(["evidence", "probabilistic", false, "probabilistic"]);
+  expect(g0.reason).toContain("평가 시점이 17개");
+  await detail(page, "optimizer");
+  const blk = page.locator(".pg-side .pg-rw");
+  await expect(blk.locator(".pg-rw-kv").first().locator("dd")).toHaveText([reg.requested_name, reg.used_name!, `${reg.h_hold}개월`]);
+  expect(reg.requested_name).toBe("근거 관문");
+  const gate = blk.locator(".pg-rw-gate");
+  await expect(gate.locator(".pg-rw-h5")).toHaveText(`근거 관문 ${g0.k}개월 앞 · 견주지 못함`);
+  await expect(gate.locator(".pg-rw-gate-table"), "견주지 못했으면 표가 없다(점수를 지어내지 않는다)").toHaveCount(0);
+  await expect(gate.locator(".pg-rw-gate-why")).toHaveText(g0.reason);
+  await expect(gate.locator(".pg-rw-gate-note"), "견주지 못했으면 낙관 줄도 없다").toHaveCount(0);
+  await expect(blk.locator(".pg-rw-fallback"), "관문이 고른 것은 열화가 아니다").toHaveCount(0);
+  await expect(page.locator(".pg-side .pg-rw-blocked-line"), "짝 — 막히지 않았으면 차단 줄이 없다").toHaveCount(0);
+  await tab(page, "story");
+  const step = page.locator('.pg-step[data-node-id="optimizer"]');
+  await expect(step.locator(".pg-step-p", { hasText: "국면 가중 방식:" })).toHaveText("국면 가중 방식: 전이 예측(요청: 근거 관문)");
+  await expect(step.locator(".pg-trust-a").filter({ hasText: "같은 경로의 워크포워드 점수가 없어" }).locator("span").last()).toHaveText(g0.reason);
+  await expect(step.locator(".pg-step-p", { hasText: "근거 관문:" }), "견주지 못했으면 점수 사실 줄이 없다").toHaveCount(0);
+
+  // 라이트 · 다크 AA — 관문 절 · 표 · '고름' · 사유 · 낙관 줄의 글자가 모두 대비 기준을 넘는다 · 다크에 밝은 배경 0
+  const gateAudit = async (label: string) => {
+    for (const dark of [false, true]) {
+      await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), dark);
+      await page.waitForTimeout(200);
+      const a = await page.evaluate<AuditResult>(contrastAudit(".pg-side .pg-rw-gate"));
+      expect(a.checked, `${label}: 검사한 글자 노드 수(0 이면 조용히 통과한다)`).toBeGreaterThan(8);
+      expect(a.low, `${label} ${dark ? "다크" : "라이트"} AA 미달`).toEqual([]);
+      if (dark) expect(a.bright, `${label}: 다크인데 밝은 배경`).toEqual([]);
+    }
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  };
+
+  // ②③ 관문이 고른 응답(고정물 = 서버 출력) — 한 달 보유 → GMM · 한 분기 → 전이 예측
+  for (const [key, chosenKey] of [["monthly", "gmm_start"], ["quarterly", "transition"]] as const) {
+    const fx = EV_FIXTURE[key];
+    const g = fx.belief.regime.gate!;
+    expect([g.available, g.chosen], `${key}: 고정물 전제`).toEqual([true, chosenKey === "gmm_start" ? "gmm" : "probabilistic"]);
+    await patchRun(page, (b) => {
+      const opt = b.nodes.optimizer as unknown as { view: { belief: unknown }; explain: unknown };
+      opt.view.belief = structuredClone(fx.belief);
+      opt.explain = structuredClone(fx.explain);
+    });
+    await run(page);
+    await detail(page, "optimizer");
+    const gb = page.locator(".pg-side .pg-rw .pg-rw-gate");
+    await expect(gb.locator(".pg-rw-h5")).toHaveText(`근거 관문 ${g.k}개월 앞 · 평가 시점 ${g.n_eval}개 · 견준 후보 ${g.n_compared}`);
+    await expect(gb.locator(".pg-rw-gate-table thead th")).toHaveText(["후보", "브라이어", "관문의 선택"]);
+    await expect(gb.locator(".pg-rw-gate-table tbody td.pg-td-name")).toHaveText(g.compared.map((c) => c.name));
+    await expect(gb.locator(".pg-rw-gate-table tbody td.pg-td-num"), "숫자 = 서버가 지은 글자").toHaveText(g.compared.map((c) => c.shown!));
+    await expect(gb.locator(".pg-rw-gate-table tbody tr[data-chosen]")).toHaveCount(1);
+    await expect(gb.locator(".pg-rw-gate-table tbody tr[data-chosen]")).toHaveAttribute("data-key", chosenKey);
+    await expect(gb.locator(".pg-rw-gate-pick")).toHaveText(g.compared.map((c) => (c.key === chosenKey ? "고름" : "")));
+    await expect(gb.locator(".pg-rw-gate-why")).toHaveText(g.reason);
+    await expect(gb.locator(".pg-rw-gate-note")).toHaveText(g.note!);
+    await gateAudit(key);
+    await tab(page, "story");
+    const fact = fx.explain.facts.find((f) => f.startsWith("근거 관문:"))!;
+    expect(fact, `${key}: 해설의 사실 줄 전제`).toBeTruthy();
+    await expect(step.locator(".pg-step-p", { hasText: "근거 관문:" })).toHaveText(fact);
+  }
+
+  // ②′ 표의 숫자는 서버 글자 그대로 — 이진으로 정확히 반인 브라이어 0.0625 를 서버(Python 서식)는 '0.062' 로 짓고 JS 의 toFixed(3) 은 '0.063' 을 낸다(관측).
+  //    화면이 숫자를 다시 반올림하면 표와 해설의 글자가 어긋난다. 전제를 먼저 건다 — 다시 반올림한 글자가 서버 글자와 달라야 이 단계가 무언가를 거른다.
+  {
+    const fx = structuredClone(EV_FIXTURE.monthly);
+    const g = fx.belief.regime.gate!;
+    Object.assign(g.compared[0], { brier: 0.0625, shown: "0.062" });
+    expect(g.compared[0].brier!.toFixed(g.digits!), "전제 — 화면이 다시 반올림하면 다른 글자").not.toBe(g.compared[0].shown);
+    await patchRun(page, (b) => {
+      const opt = b.nodes.optimizer as unknown as { view: { belief: unknown }; explain: unknown };
+      opt.view.belief = structuredClone(fx.belief);
+      opt.explain = structuredClone(fx.explain);
+    });
+    await run(page);
+    await detail(page, "optimizer");
+    await expect(page.locator(".pg-side .pg-rw-gate-table tbody td.pg-td-num")).toHaveText(g.compared.map((c) => c.shown!));
+  }
+
+  // ④ 짝 — 명시한 방식(오늘 국면 유지 · 실제 서버)에는 관문 절이 없다
+  await page.unroute("**/api/v1/allocation/graph/run**");
+  await node(page, "estimate").click();
+  await tab(page, "settings");
+  await page.locator(".pg-mode input").check();
+  await sel.selectOption({ label: "오늘 국면 유지" });
+  await page.locator(".pg-mode input").uncheck();
+  const b4 = await run(page);
+  const r4 = (b4.nodes.optimizer as unknown as { view: { belief: { regime: EvBlock } } }).view.belief.regime;
+  expect([r4.requested, r4.gate]).toEqual(["hard", null]);
+  await detail(page, "optimizer");
+  await expect(page.locator(".pg-side .pg-rw-gate"), "명시한 방식은 관문을 지나지 않는다").toHaveCount(0);
+
+  // ⑤ 관문이 막은 응답(★실제 서버★ — '확인된 국면 판정만 쓰기' · 개발 자료의 판정은 미검증) — 결과 판의 차단 줄은 '차단돼'
+  await node(page, "estimate").click();
+  await tab(page, "settings");
+  await page.locator(".pg-mode input").check();
+  await sel.selectOption({ label: "근거 관문" });
+  await page.locator(".pg-inspector .pg-field", { hasText: "확인된 국면 판정만 쓰기" }).locator("select").selectOption("true");
+  await page.locator(".pg-mode input").uncheck();
+  const b5 = await run(page);
+  const o5 = b5.nodes.optimizer as unknown as { view: { belief: { blocked: boolean; blocked_reason: string } } };
+  expect(o5.view.belief.blocked, "막혔다").toBe(true);
+  await detail(page, "optimizer");
+  await expect(page.locator(".pg-side .pg-rw-blocked-line")).toHaveText(`경기 국면 반영이 차단돼 표본 추정으로 계산했습니다 — ${o5.view.belief.blocked_reason}`);
+  await expect(page.locator(".pg-side .pg-rw-blocked"), "M3 의 차단 줄과 같은 말 — 서로 어긋나지 않는다")
+    .toHaveText("경기 국면 반영이 차단돼 이 추정은 비중에 쓰이지 않았습니다.");
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
   expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);

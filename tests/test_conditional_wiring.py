@@ -326,11 +326,17 @@ def test_a_degenerate_sample_is_flagged_instead_of_looking_like_a_broken_wire(
                        index=idx, columns=TICKERS)
     wired(path, returns=iid)
 
+    # M4 — 이 시험이 묻는 것은 ★하드 라벨 표본★이 무너질 때 알리는가이므로 하드를 명시한다(기본값은 근거 관문이 되었다).
     b = client.post("/api/v1/allocation/analyze",
                     json=_body(model="min_var", conditional=True,
-                               mes_id="rgs_x")).json()
+                               mes_id="rgs_x", regime_weighting="hard")).json()
     c = b["conditional"]
     assert c["available"] is True
     assert c["shrinkage_lambda"] == 1.0
     assert c["degenerate"] is True
     assert c["applied_to"]["sigma"] is True
+    # 짝 — 기본값(근거 관문 → 이 짧은 경로에서는 전이 예측)도 국면별 표본이 무너진 사실을 알린다. 혼합의 λ 는 Ω 분해에서 오므로 1 이 아니다.
+    d = client.post("/api/v1/allocation/analyze",
+                    json=_body(model="min_var", conditional=True, mes_id="rgs_x")).json()["conditional"]
+    assert (d["requested_weighting"], d["regime_weighting"]) == ("evidence", "probabilistic")
+    assert d["available"] is True and d["degenerate"] is True and d["shrinkage_lambda"] < 1.0

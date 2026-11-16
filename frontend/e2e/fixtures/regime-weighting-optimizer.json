@@ -81,7 +81,8 @@
    "fallbacks": [],
    "dropped_regimes": {},
    "dropped_notes": [],
-   "path_source": "regime_snapshot"
+   "path_source": "regime_snapshot",
+   "gate": null
   }
  },
  "explain": {

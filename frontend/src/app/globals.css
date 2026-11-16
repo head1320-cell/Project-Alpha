@@ -4703,6 +4703,15 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-rw-kv .pg-td-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pg-rw-dist .pg-rw-na { color: var(--pg-assume); font-weight: 600; }
 .pg-rw-dropped { margin-top: 6px; color: var(--pg-assume); word-break: keep-all; overflow-wrap: anywhere; }
+/* M4 — 근거 관문: 견준 점수 표 · 관문의 선택은 글자('고름')로(색만으로 말하지 않는다) */
+.pg-rw-gate { margin-top: 10px; }
+.pg-rw-gate-table th { vertical-align: bottom; word-break: keep-all; font-weight: 600; color: var(--pg-mute); text-align: right; }
+.pg-rw-gate-table th:first-child { text-align: left; }
+.pg-rw-gate-table th + th, .pg-rw-gate-table td + td { padding-left: 10px; }
+.pg-rw-gate-table .pg-td-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pg-rw-gate-table tr[data-chosen] td { font-weight: 700; color: var(--pg-ink); }
+.pg-rw-gate-pick { text-align: right; white-space: nowrap; }
+.pg-rw-gate-why, .pg-rw-gate-note { margin-top: 6px; word-break: keep-all; overflow-wrap: anywhere; }
 .pg-dot-point { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: 1px; background: var(--pg-assume); border-radius: 50%; }
 .pg-casebox { position: relative; }
 .pg-casebox > summary { list-style: none; }

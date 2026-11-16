@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.engine.allocation_evidence import LOOKAHEAD_AXIS_LABELS
+from src.engine.regime_gmm_start import GATE_NAME as _GATE_NAME
 from src.engine.regime_skill import CANDIDATE_NAMES as _SKILL_NAMES
 
 CONFIRMED, ASSUMED, UNKNOWN, FAILED = "confirmed", "assumed", "unknown", "failed"
@@ -40,7 +41,9 @@ MODEL_PLAIN = {
 
 #: 국면 가중 방식(`AnalyzeRequest.regime_weighting`) → 화면 이름 — 국면 예측 비교(M2)의 후보 이름과 같은 말(M3 · 용어집 §3.16).
 #: 캔버스 선택지 · 해설 · 결과 판이 이 이름을 쓴다(`MODEL_PLAIN` 과 같은 자리 · 이름의 출처는 `regime_skill.CANDIDATE_NAMES` 한 곳).
+#: M4 — 맨 앞은 기본값인 근거 관문(고르는 규칙의 이름 · `regime_gmm_start.GATE_NAME`).
 WEIGHTING_PLAIN: dict[str, str] = {
+    "evidence": _GATE_NAME,
     "hard": _SKILL_NAMES["persistence"],
     "probabilistic": _SKILL_NAMES["transition"],
     "gmm": _SKILL_NAMES["gmm_start"],
@@ -195,6 +198,10 @@ def _constraints_approx_text(cr: dict) -> str:
 def _weighting_assumption(key: str) -> str:
     """국면 가중 방식마다의 가정 — ★고른 방식의 가정을 말한다★(M3 전에는 무엇을 골라도 '현재 국면이 지속된다'였다)."""
     N = WEIGHTING_PLAIN
+    if key == "evidence":
+        return (f"보유 기간의 국면 분포는 {N['evidence']}이 고릅니다 — 같은 경로의 워크포워드 점수에서 ‘{N['gmm']}’가 "
+                f"‘{N['hard']}’와 ‘{N['probabilistic']}’보다 낮을 때만 그것을, 아니면 ‘{N['probabilistic']}’을 씁니다"
+                "(견준 점수 · 고른 쪽 · 사유는 포트폴리오 최적화 결과에 적습니다).")
     if key == "probabilistic":
         return (f"보유 기간의 국면을 ‘{N['probabilistic']}’{_ro(N['probabilistic'])} 잡는다고 가정합니다"
                 "(오늘 국면에서 출발 · 과거 경로의 전이행렬 사후평균).")
@@ -208,7 +215,7 @@ def _weighting_assumption(key: str) -> str:
 def explain_estimate(view: dict, prov: dict, params: Any) -> dict:
     s = view.get("settings") or {}
     if s.get("conditional"):
-        key = str(s.get("regime_weighting") or "hard")
+        key = str(s.get("regime_weighting") or "evidence")      # M4 — 기본값(문의 모형과 같은 값)
         return {"title": "경기 국면 조건부로 기대수익률을 추정하도록 설정했습니다",
                 "facts": [f"국면 가중 방식: {WEIGHTING_PLAIN.get(key, key)}",
                           "실제 반영 여부는 포트폴리오 최적화 단계에서 표시합니다.", _ESTIMATE_INPUT_UNUSED],
@@ -306,6 +313,16 @@ def _regime_lines(reg: dict | None, trust: list[dict]) -> tuple[list[str], list[
     # 열화 걸음마다 서버 문장 하나(`weighting_fallback_sentence` — 블록이 지었다) · 결과 판의 사유 줄과 같은 글
     trust += [{"state": ASSUMED, "kind": FALLBACK, "text": str(text)} for text in reg.get("fallbacks") or []]
     trust += [_t(ASSUMED, str(n)) for n in reg.get("dropped_notes") or []]
+    gate = reg.get("gate")
+    if gate and gate.get("available"):
+        # 근거 관문(M4) — 견준 점수(블록의 자릿수 그대로) · 고른 쪽과 그 까닭은 사실 · 같은 자료로 고른 쪽의 낙관은 가정
+        nums = " · ".join(f"{c['name']} {c['shown']}" for c in gate.get("compared") or [])      # 엔진이 지은 글자 그대로
+        facts.append(f"{reg.get('requested_name')}: 브라이어 점수 {nums}(평가 시점 {gate.get('n_eval')}개 · "
+                     f"{gate.get('k')}개월 앞). {gate.get('reason')}")
+        if gate.get("note"):
+            trust.append(_t(ASSUMED, str(gate["note"])))
+    elif gate:
+        trust.append(_t(ASSUMED, str(gate.get("reason") or "근거 관문이 점수를 견주지 못했습니다(사유 미상).")))
     if used == "hard":
         trust.append(_t(ASSUMED, "오늘 국면이 보유 기간 내내 지속된다고 가정했습니다 — 국면이 바뀔 가능성은 비중에 들어가지 않았습니다."))
     else:

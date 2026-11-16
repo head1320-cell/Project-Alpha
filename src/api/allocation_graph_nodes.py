@@ -155,7 +155,8 @@ EstimateParams = _subset("EstimateParams", AnalyzeRequest,
     "require_verified_macro": _ui("확인된 국면 판정만 쓰기", "advanced"),
     # M3 — 이름은 국면 예측 비교(M2)의 후보 이름과 같은 말(`allocation_graph_explain.WEIGHTING_PLAIN` · 용어집 §3.16).
     "regime_weighting": _ui("국면 가중 방식", "advanced", options=dict(WEIGHTING_PLAIN),
-                            help="오늘 국면 유지 — 오늘 국면이 보유 기간 내내 이어진다고 가정합니다. "
+                            help="근거 관문(기본값) — 같은 경로의 워크포워드 점수로 ‘GMM 시작 분포 × 전이’와 ‘전이 예측’ 가운데 하나를 "
+                                 "고릅니다(GMM 이 다른 둘보다 낮을 때만 GMM). 오늘 국면 유지 — 오늘 국면이 보유 기간 내내 이어진다고 가정합니다. "
                                  "전이 예측 — 오늘 국면에서 출발해 과거 경로의 전이행렬로 보유 기간의 국면 분포를 잡습니다. "
                                  "GMM 시작 분포 × 전이 — GMM 이 판정한 지금의 국면 분포에서 출발합니다. 같은 경로의 "
                                  "워크포워드 점수가 없으면 전이 예측으로 산출하고 그 사유를 포트폴리오 최적화 결과에 적습니다."),
@@ -325,6 +326,8 @@ def _regime_block(req, belief) -> dict | None:
         "stability": src.get("stability"), "robustness": src.get("robustness"),
         "fallbacks": fallbacks, "dropped_regimes": dropped, "dropped_notes": dropped_notes,
         "path_source": path.get("path_source"),
+        # M4 — 근거 관문(견준 점수 · 고른 쪽 · 사유). 파이프라인이 근거 관문 요청의 meta 에만 싣는다 — 명시한 방식은 None.
+        "gate": meta.get("gate"),
     }
 
 

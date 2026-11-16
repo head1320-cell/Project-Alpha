@@ -8,7 +8,7 @@
 import type { ReactNode } from "react";
 import { regimeName } from "@/entities/macro/regimeKo";
 import { skillBrier, skillEvidence, skillGain, skillHit } from "@/entities/macro/skill";
-import { distRows, type RegimeBlock, type RegimeSkill } from "@/entities/portfolio-graph/regimeWeighting";
+import { distRows, gateRows, type GateBlock, type RegimeBlock, type RegimeSkill } from "@/entities/portfolio-graph/regimeWeighting";
 
 function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="pg-kv pg-rw-kv">{rows.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>;
@@ -32,6 +32,37 @@ function Skill({ sk }: { sk: RegimeSkill }) {
         <p className="pg-note pg-rw-pass">* 순차 증거가 기준({typeof sk.threshold === "number" ? sk.threshold.toFixed(0) : "—"})을 넘었습니다.</p>
       )}
       <p className="pg-note">{sk.note}</p>
+    </div>
+  );
+}
+
+/** 근거 관문(M4) — 견준 세 후보의 브라이어 · 관문의 선택(글자) · 서버의 사유와 낙관 줄. 견주지 못했으면 사유 하나. */
+function Gate({ g }: { g: GateBlock }) {
+  return (
+    <div className="pg-rw-gate">
+      <h5 className="pg-rw-h5">
+        근거 관문{" "}
+        <span className="pg-rw-sub">
+          {g.k}개월 앞{g.available ? ` · 평가 시점 ${g.n_eval}개 · 견준 후보 ${g.n_compared}` : " · 견주지 못함"}
+        </span>
+      </h5>
+      {g.available && (
+        <table className="pg-table pg-rw-gate-table">
+          <caption className="pg-rw-cap">같은 경로의 워크포워드 브라이어(낮을수록 잘 맞힘)</caption>
+          <thead><tr><th scope="col">후보</th><th scope="col">브라이어</th><th scope="col">관문의 선택</th></tr></thead>
+          <tbody>
+            {gateRows(g).map((r) => (
+              <tr key={r.key} data-key={r.key} data-chosen={r.chosen ? "true" : undefined}>
+                <td className="pg-td-name">{r.name}</td>
+                <td className="pg-td-num">{r.brier}</td>
+                <td className="pg-rw-gate-pick">{r.chosen ? "고름" : ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p className="pg-note pg-rw-gate-why">{g.reason}</p>
+      {g.note && <p className="pg-note pg-rw-gate-note">{g.note}</p>}
     </div>
   );
 }
@@ -68,6 +99,7 @@ export function RegimeWeightingBlock({ reg }: { reg: RegimeBlock | null | undefi
     <section className="pg-rw" aria-label="국면 가중">
       <h4 className="pg-h4">국면 가중</h4>
       <KV rows={rows} />
+      {reg.gate && <Gate g={reg.gate} />}
       {reg.fallbacks.length > 0 && (
         <ul className="pg-list pg-rw-fallbacks" aria-label="요청한 방식을 쓰지 못한 사유">
           {reg.fallbacks.map((t, i) => <li key={i} className="pg-rw-fallback">{t}</li>)}

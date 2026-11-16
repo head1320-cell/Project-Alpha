@@ -728,13 +728,14 @@ def _canvas(weighting: str | None, **est):
 
 
 def test_the_estimate_options_are_the_names_of_the_skill_table():
-    """선택지 이름 = 국면 예측 비교(M2)의 후보 이름 — 한 곳(`regime_skill.CANDIDATE_NAMES`)에서 온다."""
+    """선택지 이름 = 국면 예측 비교(M2)의 후보 이름 — 한 곳(`regime_skill.CANDIDATE_NAMES`)에서 온다.
+    M4 — 맨 앞에 기본값 '근거 관문'(고르는 규칙의 이름 · `regime_gmm_start.GATE_NAME`)이 더해졌다(의도한 변화)."""
     opts = gn.EstimateParams.model_json_schema()["properties"]["regime_weighting"]["x-ui"]["options"]
-    assert opts == NAMES
-    assert opts == {"hard": rs.CANDIDATE_NAMES["persistence"], "probabilistic": rs.CANDIDATE_NAMES["transition"],
-                    "gmm": rs.CANDIDATE_NAMES["gmm_start"]} == gx.WEIGHTING_PLAIN
+    assert opts == {"evidence": gs.GATE_NAME, **NAMES}
+    assert opts == {"evidence": gs.GATE_NAME, "hard": rs.CANDIDATE_NAMES["persistence"],
+                    "probabilistic": rs.CANDIDATE_NAMES["transition"], "gmm": rs.CANDIDATE_NAMES["gmm_start"]} == gx.WEIGHTING_PLAIN
     pattern = gn.EstimateParams.model_json_schema()["properties"]["regime_weighting"]["pattern"]
-    assert pattern == "^(hard|probabilistic|gmm)$", "선택지와 받는 값이 같다"
+    assert pattern == "^(evidence|hard|probabilistic|gmm)$", "선택지와 받는 값이 같다"
 
 
 @pytest.mark.parametrize("w", ["hard", "probabilistic", "gmm"])
