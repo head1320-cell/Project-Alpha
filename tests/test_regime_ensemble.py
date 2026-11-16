@@ -127,3 +127,58 @@ def test_agreement_reports_disagreement_when_tools_differ():
     r = regime_ensemble(_series(140), "kr", months=90)
     picks = r["agreement"]["picks"]
     assert r["agreement"]["unanimous"] == (len(set(picks.values())) == 1)
+
+
+# ── M1b · 축이 계산되지 않은 달은 0 으로 채우지 않는다(미상 ≠ 0) ─────────────────────
+# 앙상블은 예전에 성분이 없는 달의 축 점수를 0 으로 채워(`compute_axis_detail` 의 빈 값) Markov · 군집 두 팔에 넘겼다.
+# (0, 0) 은 사분면으로 Reflation 이 된다 — 계산되지 않은 달이 한 국면으로 찍혀 적합에 들어간다. `regime_path` 와 같은 규칙으로
+# 두 축이 다 계산된 달만 쓰고, 뺀 달의 수를 응답과 문장에 적는다(M2 의 국면 예측 비교와 같은 입력).
+
+def _spy_arms(monkeypatch):
+    import src.engine.regime_ensemble as ens
+    seen: dict = {}
+    for name in ("_markov_probs", "_cluster_probs", "_kmeans_probs"):
+        real = getattr(ens, name)
+
+        def spy(g, i, _real=real, _name=name):
+            seen[_name] = (list(g), list(i))
+            return _real(g, i)
+        monkeypatch.setattr(ens, name, spy)
+    return seen
+
+
+def test_months_without_both_axes_are_left_out_not_filled_with_zero(monkeypatch):
+    from src.engine.regime_transitions import regime_path
+    smap = _series(80)                                         # 예열 7개월 — 90개월을 청하면 앞의 17개월은 축이 계산되지 않는다
+    rp = regime_path(smap, market="kr", months=90)
+    dropped = rp["span"]["dropped_incomplete"]
+    assert dropped > 0, "빠진 달이 없는 자료다 — 이 시험은 공허하다"
+    seen = _spy_arms(monkeypatch)
+    r = regime_ensemble(smap, "kr", months=90)
+    want = ([p["growth"] for p in rp["points"]], [p["inflation"] for p in rp["points"]])
+    for name in ("_markov_probs", "_cluster_probs", "_kmeans_probs"):
+        assert seen[name] == want, name                       # 세 팔이 받은 것 = 두 축이 다 계산된 달만
+    assert r["n_obs"] == len(rp["points"]) == 90 - dropped
+    assert r["dropped_incomplete"] == dropped
+    assert f"축이 둘 다 계산되지 않은 {dropped}개월은 빼고 셉니다" in r["note"]
+
+
+def test_with_every_month_complete_nothing_is_left_out_and_no_sentence_is_added(monkeypatch):
+    from src.engine.regime_transitions import regime_path
+    smap = _series(400)
+    assert regime_path(smap, market="kr", months=60)["span"]["dropped_incomplete"] == 0
+    seen = _spy_arms(monkeypatch)
+    r = regime_ensemble(smap, "kr", months=60)
+    assert r["n_obs"] == 60 and r["dropped_incomplete"] == 0
+    assert len(seen["_cluster_probs"][0]) == 60
+    assert "빼고 셉니다" not in r["note"]
+
+
+def test_too_few_complete_months_makes_the_history_arms_say_so():
+    """빠진 달을 빼고 나니 36개월이 안 되면 Markov · 군집 두 팔은 값 없음 + 사유(0 으로 채워 채우지 않는다)."""
+    smap = _series(40)                                         # 60개월을 청해도 두 축이 다 계산된 달은 33개
+    r = regime_ensemble(smap, "kr", months=60)
+    assert r["n_obs"] < MIN_OBS < 60
+    for name in ("markov", "cluster", "kmeans"):
+        t = r["tools"][name]
+        assert t["available"] is False and f"표본 {r['n_obs']}개월" in t["reason"], name

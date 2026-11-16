@@ -1053,23 +1053,20 @@ test("국면 앙상블 · 합의(M1): 판정이 모두 같아도 시드에 따�
   await importText(page, "m1.json", JSON.stringify(await spread(page, doc)));
   await page.getByRole("button", { name: "파일 안내 닫기" }).click();
   const body = await run(page);
-  type Tool = { available: boolean; stability?: { seeds: number; agree: number; stable: boolean } };
+  type Tool = { available: boolean; stability?: { seeds: number; modal?: string; agree: number; shares?: Record<string, number>; stable: boolean } };
   type Ens = { result: { tools: Record<string, Tool>; agreement: { unanimous: boolean | null; note: string } } };
   type Con = { result: { consensus: boolean; tie: boolean; seed_unstable: string[] } };
-  const seen: string[] = [];
-  const minorityLines: string[] = [];
-  for (const id of ["ek", "eu"]) {
-    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
-    const r = (body.nodes[id].view as Ens).result;
+  // 띠 · 시드 줄을 응답에서 고른 값과 견준다 — 개발 자료 그대로(①)와 흔들리는 팔을 심은 응답(②)에 같은 검사를 쓴다.
+  const checkEnsemble = async (b: RunBody, id: string) => {
+    expect(b.nodes[id].status, `${id}: ${b.nodes[id].reason}`).toBe("ok");
+    const r = (b.nodes[id].view as Ens).result;
     const shaky = Object.values(r.tools).some((t) => t.available && t.stability && !t.stability.stable);
-    const green = !!r.agreement.unanimous && !shaky;
-    if (r.agreement.unanimous && shaky) seen.push(`${id}: 같지만 흔들림`);
     await node(page, id).click();
     await tab(page, "detail");
     const banner = page.locator(".pg-side .pg-model-type");
     await expect(banner, id).toHaveText(r.agreement.note);                         // 띠의 글 = 서버 문장
-    await expect(banner, id).toHaveClass(green ? /pg-model-type--hist/ : /pg-model-type--hypo/);
-    // ★과반 미만 줄의 화면 모양★ — kr 자료는 시드 줄이 모두 과반이라 BL2b 시험은 경고 갈래를 밟지 못한다(변이 F15 ~ F17 이 그 시험에서 살아남았다).
+    await expect(banner, id).toHaveClass(!!r.agreement.unanimous && !shaky ? /pg-model-type--hist/ : /pg-model-type--hypo/);
+    const minority: string[] = [];
     for (const [k, t] of Object.entries(r.tools)) {
       if (!t.available || !t.stability) continue;
       const line = page.locator(`.pg-side .pg-ensemble-seed[data-tool="${k}"]`);
@@ -1078,9 +1075,29 @@ test("국면 앙상블 · 합의(M1): 판정이 모두 같아도 시드에 따�
       await expect(line, tag).toHaveText(t.stability.stable ? /· 과반$/ : /· 과반 미만$/);
       await expect(line, tag).toHaveAttribute("data-stable", t.stability.stable ? "yes" : "no");
       await expect(line, tag).toHaveClass(t.stability.stable ? /pg-note/ : /pg-warn/);
-      if (!t.stability.stable) minorityLines.push(tag);
+      if (!t.stability.stable) minority.push(tag);
     }
-  }
+    return { kind: !r.agreement.unanimous ? "갈림" : shaky ? "같지만 흔들림" : "같고 안정", minority };
+  };
+  const checkConsensus = async (b: RunBody, id: string) => {
+    expect(b.nodes[id].status, `${id}: ${b.nodes[id].reason}`).toBe("ok");
+    const r = (b.nodes[id].view as Con).result;
+    const shaky = r.seed_unstable.length > 0;
+    await node(page, id).click();
+    await tab(page, "detail");
+    const banner = page.locator(".pg-side .pg-model-type");
+    await expect(banner, id).toHaveClass(r.consensus && !shaky ? /pg-model-type--hist/ : /pg-model-type--hypo/);
+    if (r.consensus && shaky) await expect(banner, id).toContainText("시드에 따라 갈리는 방법 있음");
+    else await expect(banner, id).not.toContainText("시드에 따라");               // 짝
+    return !r.consensus ? "갈림" : shaky ? "같지만 흔들림" : "같고 안정";
+  };
+
+  // ① 개발 자료 그대로 — kr 은 방법끼리 갈리고(2:2) us 는 모두 같고 군집 두 팔이 과반이다(M1b 뒤 · HISTORY).
+  const seen1: Record<string, string> = {};
+  for (const id of ["ek", "eu"]) seen1[id] = (await checkEnsemble(body, id)).kind;
+  for (const id of ["ck", "cu"]) seen1[id] = await checkConsensus(body, id);
+  expect(seen1, "개발 자료의 갈래가 바뀌면 아래 ②만으로는 초록 갈래를 밟았는지 모른다").toEqual({ ek: "갈림", eu: "같고 안정", ck: "갈림", cu: "같고 안정" });
+
   // ★표가 판 안에 든다 · 이웃 숫자가 붙지 않는다★ — 방법이 넷이 되자 처음 폭(344px)에서 표가 판 밖으로 나가 k-평균 열이 잘렸고
   // 굵은 숫자가 '62%100%' 로 붙었다(스크린샷 검수에서 찾음 · E2E 는 글과 색만 봐서 못 잡았다). 처음 폭 · 넓은 창의 처음 폭(← 세 번) · 최소 폭(Home).
   // 국면 이름의 괄호 덩어리는 늘 둘째 줄이라 행 높이가 같다 — 392px 에서 짧은 이름만 한 줄이 되어 들쭉날쭉했다.
@@ -1111,20 +1128,20 @@ test("국면 앙상블 · 합의(M1): 판정이 모두 같아도 시드에 따�
       expect(g.rowSpread, `${id} · ${w}px: 국면 행 높이의 차(px)`).toBeLessThanOrEqual(1);
     }
   }
-  for (const id of ["ck", "cu"]) {
-    expect(body.nodes[id].status, `${id}: ${body.nodes[id].reason}`).toBe("ok");
-    const r = (body.nodes[id].view as Con).result;
-    const shaky = r.seed_unstable.length > 0;
-    await node(page, id).click();
-    await tab(page, "detail");
-    const banner = page.locator(".pg-side .pg-model-type");
-    await expect(banner, id).toHaveClass(r.consensus && !shaky ? /pg-model-type--hist/ : /pg-model-type--hypo/);
-    if (r.consensus && shaky) await expect(banner, id).toContainText("시드에 따라 갈리는 방법 있음");
-    else await expect(banner, id).not.toContainText("시드에 따라");               // 짝
-  }
-  // ★공허하지 않다★ 개발 자료의 us 60개월은 네 방법이 모두 Stagflation 인데 GMM 의 최다 답이 과반 미만이다(HISTORY M1) — 그 갈래를 실제로 밟는다.
-  expect(seen, "만장일치 + 흔들리는 팔의 경우가 하나도 없으면 이 시험은 공허하다(개발 자료가 바뀌었는지 본다)").toEqual(["eu: 같지만 흔들림"]);
-  expect(minorityLines, "과반 미만 줄을 하나도 밟지 않으면 위 경고 갈래 단언은 공허하다").toEqual(["eu·cluster"]);
+
+  // ② 흔들리는 팔을 심은 응답 — 개발 자료에는 이제 과반 미만인 팔이 없다(M1 의 us 3/10 은 지어낸 (0, 0) 점 탓이었다 · M1b).
+  // 서버가 흔들림을 세는 일은 pytest 가 건다. 여기서는 화면이 그 값을 주의 색 · 단서 · 과반 미만 줄로 그리는지만 본다(변이 F10 ~ F17).
+  await patchRun(page, (b) => {
+    const eu = (b.nodes.eu.view as Ens).result;
+    eu.tools.cluster.stability = { seeds: 10, modal: "Reflation", agree: 3, stable: false,
+      shares: { Goldilocks: 0.2, Reflation: 0.3, Stagflation: 0.3, Disinflation: 0.2 } };
+    eu.agreement.note = "모든 방법이 같은 국면을 가리킵니다 — 다만 난수 시드에 따라 답이 갈리는 방법이 있습니다";
+    (b.nodes.cu.view as Con).result.seed_unstable = ["cluster"];
+  });
+  const body2 = await run(page);
+  const eu2 = await checkEnsemble(body2, "eu");
+  expect(eu2, "심은 흔들림을 화면이 밟지 않으면 위 경고 갈래 단언은 공허하다").toEqual({ kind: "같지만 흔들림", minority: ["eu·cluster"] });
+  expect(await checkConsensus(body2, "cu")).toBe("같지만 흔들림");
   expect(uniq(sink.pageErrors), "page errors").toEqual([]);
   expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
   expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);

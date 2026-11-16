@@ -44,6 +44,7 @@ import warnings
 
 from src.engine.regime_axes import AXES, compute_axis_detail, quadrant, quadrant_probs
 from src.engine.regime_probability import USAGE_DIAGNOSTIC
+from src.engine.regime_transitions import regime_path
 
 #: ★이 앙상블은 배분에 흘러들지 않는다 — 그 사실을 페이로드가 직접 말한다★
 #:
@@ -89,19 +90,17 @@ def unstable_arms(tools: dict) -> list[str]:
             if t.get("available") and (t.get("stability") or {}).get("stable") is False]
 
 
-def _axis_history(series_map: dict, market: str, months: int) -> tuple[list[float], list[float]]:
-    """성장·물가 축의 월별 시계열 (과거 → 현재).
+def _complete_history(series_map: dict, market: str, months: int) -> tuple[list[float], list[float], int]:
+    """성장·물가 축의 월별 시계열 (과거 → 현재) — ★두 축이 다 계산된 달만★ + 뺀 달의 수.
 
-    `macro_visuals.axis_history` 와 같은 방식(`back=k`)이다. 그쪽은 지표별 기여
-    스택을 만들고 여기서는 스코어만 필요해서 축 두 줄만 뽑는다.
+    `regime_transitions.regime_path` 의 점을 그대로 쓴다(같은 `back=k` 계산 · 국면 예측 비교 M2 와 같은 입력).
+    ★0 으로 채우지 않는다(M1b)★ 예전에는 성분이 없는 달의 점수(`compute_axis_detail` 의 빈 값 0.0)를 그대로 넣어
+    (0, 0) — 사분면으로 Reflation — 이 Markov · 군집 두 팔의 적합에 들어갔다. 계산되지 않은 달은 미상이지 중립값이 아니다.
     """
-    g_def, i_def = AXES.get(market, AXES["kr"])
-    g_hist: list[float] = []
-    i_hist: list[float] = []
-    for k in range(months - 1, -1, -1):
-        g_hist.append(compute_axis_detail(series_map, g_def, back=k)["score"])
-        i_hist.append(compute_axis_detail(series_map, i_def, back=k)["score"])
-    return g_hist, i_hist
+    rp = regime_path(series_map, market=market, months=months)
+    points = rp.get("points") or []
+    dropped = int((rp.get("span") or {}).get("dropped_incomplete") or 0)
+    return [float(p["growth"]) for p in points], [float(p["inflation"]) for p in points], dropped
 
 
 def _axis_probs(series_map: dict, market: str) -> dict:
@@ -361,7 +360,7 @@ def regime_ensemble(series_map: dict, market: str = "kr", months: int = 60) -> d
     반환의 `agreement` 는 **합의된 답이 아니라** 가용한 argmax 가 모두 같은지 여부다.
     갈릴 때 어느 쪽을 믿을지는 사람이 정한다.
     """
-    g_hist, i_hist = _axis_history(series_map, market, months)
+    g_hist, i_hist, dropped = _complete_history(series_map, market, months)
     tools = {
         "axis": _axis_probs(series_map, market),
         "markov": _markov_probs(g_hist, i_hist),
@@ -374,7 +373,7 @@ def regime_ensemble(series_map: dict, market: str = "kr", months: int = 60) -> d
     if agree and unstable_arms(tools):
         unanimous_note = f"{unanimous_note} — {UNSTABLE_QUALIFIER}"
     return {
-        "market": market, "months": months, "n_obs": len(g_hist),
+        "market": market, "months": months, "n_obs": len(g_hist), "dropped_incomplete": dropped,
         "regimes": REGIMES,
         "tools": tools,
         "agreement": {
@@ -385,7 +384,8 @@ def regime_ensemble(series_map: dict, market: str = "kr", months: int = 60) -> d
                      if picks else "사용 가능한 도구가 없습니다"),
         },
         "note": ("방법끼리는 평균하지 않습니다. 불일치 자체가 정보이며, 하나로 결합하면 모형별 판정이 드러나지 않습니다. "
-                 f"군집 두 방법은 한 방법 안에서만 난수 시드 {SEEDS}개의 답을 모읍니다."),
+                 f"군집 두 방법은 한 방법 안에서만 난수 시드 {SEEDS}개의 답을 모읍니다."
+                 + (f" 축이 둘 다 계산되지 않은 {dropped}개월은 빼고 셉니다(0 으로 채우지 않습니다)." if dropped else "")),
         # ★어휘를 두 벌 만들지 않는다★ `regime_probability` 의 상수를 그대로 쓴다.
         "usage": USAGE_DIAGNOSTIC,
         "usage_note": USAGE_NOTE,
