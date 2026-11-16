@@ -70,6 +70,12 @@ SOURCE_SMOOTHED = "smoothed_markov"
 
 SOURCE_FORECAST_MEAN = "k_step_forecast_mean"
 
+#: 셋째 국면 가중 'GMM 시작 분포'(M3) — 시작 분포 π₀ 가 오늘 국면의 원핫이 아니라 GMM 의 시드 평균 소속 확률이고
+#: 그 뒤는 같은 사후평균 전이행렬로 민다(π_j = π₀ · P̄^j — 같은 사슬). ★실측 점수가 실렸을 때만 배분에 닿는다★ —
+#: 이 모듈이 k단계 예측을 받는 까닭("그 예측만이 적중률이 실측돼 있다")을 그대로 잇는다: 같은 경로의 워크포워드
+#: 점수(M2 · 후보 `gmm_start`)가 `detail.skill` 에 없으면 생성자도 문지기(`require_portfolio_source`)도 거부한다.
+SOURCE_GMM_START = "gmm_start_forecast"
+
 #: ★배분이 받아들이는 출처의 화이트리스트★ 새 출처를 추가하면 여기에 넣을지
 #: **의식적으로** 결정하게 된다. 기본은 거부다.
 #:
@@ -81,7 +87,10 @@ SOURCE_FORECAST_MEAN = "k_step_forecast_mean"
 #: 사슬에서 나와야 공분산이 된다. 표집 평균은 `E[P^j] ≠ (E[P])^j` (Jensen)이라
 #: 사후평균 행렬과 어긋나고(실측 j=3 에서 8.9e−3), 어긋난 채로 이중합을 돌리면
 #: 결과가 공분산이 아니게 된다.
-_PORTFOLIO_SOURCES = frozenset({SOURCE_FORECAST, SOURCE_FORECAST_MEAN})
+#:
+#: 셋째 `gmm_start_forecast`(M3)는 시작 분포만 다르고 사슬은 `k_step_forecast_mean` 과 같다 — 다만 ★실측 점수를
+#: 함께 실은 객체만★ 통과한다(아래 `require_portfolio_source`). 받은 승인: 설계 M3(CLAUDE.md §3).
+_PORTFOLIO_SOURCES = frozenset({SOURCE_FORECAST, SOURCE_FORECAST_MEAN, SOURCE_GMM_START})
 
 
 def _sharpness(probs: dict[str, float]) -> float | None:
@@ -156,7 +165,26 @@ def require_portfolio_source(prob: RegimeProbabilities) -> RegimeProbabilities:
     if prob.usage != USAGE_PORTFOLIO:
         raise ValueError(
             f"'{prob.source}' 의 usage 가 '{prob.usage}' 입니다 — 배분에 사용할 수 없습니다.")
+    if prob.source == SOURCE_GMM_START:
+        # ★값으로 거른다★ 생성자를 건너뛰고 지은 객체도 여기서 걸린다 — 점수가 객체와 함께 다닌다.
+        _check_skill((prob.detail or {}).get("skill"))
     return prob
+
+
+def _check_skill(skill: Any, h_hold: int | None = None) -> dict[str, Any]:
+    """GMM 시작 분포에 실린 실측 점수(M2 · 후보 `gmm_start`)의 검사 — 통과하면 그대로, 아니면 사유와 함께 올린다."""
+    from src.engine.regime_forecast import MIN_EVAL_POINTS
+
+    if not isinstance(skill, dict) or skill.get("available") is not True:
+        why = (skill or {}).get("reason") if isinstance(skill, dict) else None
+        raise ValueError("GMM 시작 분포는 같은 경로의 워크포워드 점수(국면 예측 비교)가 실렸을 때만 배분에 쓸 수 있습니다"
+                         + (f" — {why}" if why else " — 점수가 없습니다."))
+    n_eval = int(skill.get("n_eval") or 0)
+    if n_eval < MIN_EVAL_POINTS:
+        raise ValueError(f"GMM 시작 분포의 점수가 평가 시점 {n_eval}개에서 나왔습니다 — 최소 {MIN_EVAL_POINTS}개가 필요합니다.")
+    if h_hold is not None and int(skill.get("k") or 0) != int(h_hold):
+        raise ValueError(f"GMM 시작 분포의 점수는 {skill.get('k')}개월 앞을 채점한 것입니다 — 보유 기간 {h_hold}개월의 점수가 필요합니다.")
+    return skill
 
 
 def from_k_step_forecast(rows: list[dict], current: str, k: int, *,
@@ -212,15 +240,7 @@ def from_posterior_mean_path(rows: list[dict], current: str, h_hold: int,
         raise ValueError(f"현재 국면 '{current}' 를 알 수 없습니다.")
     if int(h_hold) < 1:
         raise ValueError("홀딩 기간은 1개월 이상이어야 합니다.")
-    P = np.asarray(posterior_mean_transition(rows, regimes), dtype=float)
-    # ★행 재정규화★ `transition_posterior` 는 표시용으로 6자리 반올림해 내보내므로
-    # 행 합이 1에서 최대 ~2e−6 벗어난다. 한 번은 무해하지만 h=3 이면 거듭제곱으로
-    # 누적돼 확률 합이 깨진다(실제로 그렇게 걸렸다). 확률벡터를 확률벡터로 되돌리는
-    # 것이지 검사를 무르게 하는 것이 아니다 — 검사는 그대로 엄격하다.
-    rowsum = P.sum(axis=1, keepdims=True)
-    if (rowsum <= 0).any():
-        raise ValueError("전이행렬에 합이 0인 행이 있습니다.")
-    P = P / rowsum
+    P = _normalized_transition(rows, regimes)
     pi = np.zeros(len(regimes))
     pi[regimes.index(current)] = 1.0
 
@@ -236,6 +256,82 @@ def from_posterior_mean_path(rows: list[dict], current: str, h_hold: int,
                   "결합분포 계산에 사용할 수 있습니다. 파라미터 불확실성은 여기에 "
                   "전파되지 않으며 `k_step_forecast` 의 신용구간이 따로 보고합니다."),
             detail={"from": current},
+        ))
+    return out, P.tolist()
+
+
+def _normalized_transition(rows: list[dict], regimes: list[str]):
+    """사후평균 전이행렬을 행 합 1 로 되돌린다 — 두 경로(전이 예측 · GMM 시작 분포)가 같은 행렬을 쓴다.
+
+    ★행 재정규화★ `transition_posterior` 는 표시용으로 6자리 반올림해 내보내므로
+    행 합이 1에서 최대 ~2e−6 벗어난다. 한 번은 무해하지만 h=3 이면 거듭제곱으로
+    누적돼 확률 합이 깨진다(실제로 그렇게 걸렸다). 확률벡터를 확률벡터로 되돌리는
+    것이지 검사를 무르게 하는 것이 아니다 — 검사는 그대로 엄격하다.
+    """
+    import numpy as np
+
+    P = np.asarray(posterior_mean_transition(rows, regimes), dtype=float)
+    rowsum = P.sum(axis=1, keepdims=True)
+    if (rowsum <= 0).any():
+        raise ValueError("전이행렬에 합이 0인 행이 있습니다.")
+    return P / rowsum
+
+
+#: GMM 팔은 시드 평균을 4자리로 반올림해 낸다 — 그 반올림(합 ±2e−4)까지는 받고 합을 1 로 되돌린다.
+_START_SUM_TOLERANCE = 1e-3
+
+
+def _start_vector(pi0: Any, regimes: list[str]):
+    """시작 분포 검사 — 국면 넷 · 유한한 숫자 · 음수 없음 · 합 1(반올림 허용) → 합 1 의 벡터."""
+    import numpy as np
+
+    if not isinstance(pi0, dict) or set(pi0) != set(regimes):
+        raise ValueError(f"시작 분포의 국면이 맞지 않습니다 — 필요한 국면: {', '.join(regimes)}")
+    try:
+        vec = np.array([float(pi0[r]) for r in regimes], dtype=float)
+    except (TypeError, ValueError) as e:
+        raise ValueError("시작 분포에 숫자가 아닌 값이 있습니다.") from e
+    if not np.isfinite(vec).all():
+        raise ValueError("시작 분포에 숫자가 아닌 값(결측 · 무한)이 있습니다.")
+    if (vec < 0).any():
+        raise ValueError("시작 분포에 음수가 있습니다.")
+    total = float(vec.sum())
+    if abs(total - 1.0) > _START_SUM_TOLERANCE:
+        raise ValueError(f"시작 분포의 합이 {total:.6f} 입니다 — 확률 분포의 합은 1 이어야 합니다.")
+    return vec / total
+
+
+def from_gmm_start_path(pi0: dict[str, float], rows: list[dict], h_hold: int, regimes: list[str], *,
+                        skill: dict[str, Any] | None, mode: str = "live",
+                        stability: dict[str, Any] | None = None,
+                        robustness: dict[str, Any] | None = None,
+                        ) -> tuple[list[RegimeProbabilities], list[list[float]]]:
+    """GMM 시작 분포 × 사후평균 전이 — `π_1 … π_h`(π_j = π₀ · P̄^j) · ★실측 점수가 있어야 만든다★ (M3).
+
+    시작 분포만 `from_posterior_mean_path` 와 다르다(원핫 대신 GMM 의 시드 평균 소속 확률) — 같은 행렬 · 같은 거듭제곱이라
+    혼합 함수의 일관성 검사(π 와 P 가 같은 사슬)를 그대로 지난다. `skill` 은 같은 경로 · k = 보유 기간의 워크포워드 점수
+    (국면 예측 비교의 후보 `gmm_start`) — 없거나 미가용이면 그 사유와 함께 올린다(부르는 쪽이 명시적으로 열화한다).
+    `stability`(시드 안정성) · `robustness`(부트스트랩 안정성)는 관측으로 함께 싣는다 — π 를 바꾸지 않는다.
+    """
+    import numpy as np
+
+    if int(h_hold) < 1:
+        raise ValueError("홀딩 기간은 1개월 이상이어야 합니다.")
+    _check_skill(skill, h_hold)
+    start = _start_vector(pi0, regimes)
+    P = _normalized_transition(rows, regimes)
+    detail = {"pi0": dict(pi0), "skill": dict(skill or {}), "stability": stability, "robustness": robustness}
+    out = []
+    for j in range(1, int(h_hold) + 1):
+        probs = start @ np.linalg.matrix_power(P, j)
+        probs = probs / probs.sum()
+        out.append(RegimeProbabilities(
+            source=SOURCE_GMM_START, step_months=j,
+            probs={r: float(v) for r, v in zip(regimes, probs, strict=True)},
+            usage=USAGE_PORTFOLIO, mode=mode,
+            note=("GMM 의 시드 평균 소속 확률에서 출발해 사후평균 전이행렬을 j회 거듭제곱한 경로입니다 — 시작 분포만 전이 예측과 "
+                  "다르고 사슬은 같습니다. 같은 경로의 워크포워드 점수가 함께 실려 있습니다."),
+            detail=detail,
         ))
     return out, P.tolist()
 

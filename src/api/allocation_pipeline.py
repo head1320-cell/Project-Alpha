@@ -275,6 +275,11 @@ def _conditional_stack(req, returns) -> dict:
                   "A_contribution_pct": None, "sharpness": None,
                   "probability_source": None, "mixture_note": None,
                   "dropped_regimes": None, "pit": _pit_block(mode)}
+    if weighting == "gmm":
+        # ★요청한 방식과 쓴 방식을 따로 적는다★ — `regime_weighting` 은 늘 실제로 쓴 방식이다.
+        # 두 키는 GMM 을 요청한 응답에만 있다(하드 · 전이 예측의 응답은 한 바이트도 바뀌지 않는다 — 골든).
+        meta["requested_weighting"] = "gmm"
+        meta["gmm_fallback"] = None
 
     # ★백테스트 모드는 아직 열려 있지 않다★ 라이브 수치를 백테스트인 척 쓰지
     # 못하게, 계산하지 않고 사유를 돌려준다(계획 §1.6.2 의 3단계 전).
@@ -287,6 +292,17 @@ def _conditional_stack(req, returns) -> dict:
                 "extra_views": None, "view_conf": None, "meta": meta}
 
     cond = _hard_conditional(returns, by_month, current)
+
+    if weighting == "gmm":
+        # ★GMM 시작 분포 (M3)★ 세우지 못하거나 혼합하지 못하면 ★명시적으로 열화★한다 — 전이 예측으로 계산하고
+        # `requested_weighting`(요청) · `regime_weighting`(실제로 쓴 것) · `gmm_fallback`(사유)을 함께 적는다.
+        # 전이 예측까지 못 하면 아래 경로가 그대로 하드 + `mixture_note` 다.
+        mixed, meta = _gmm_conditional(returns, by_month, current, path,
+                                       h_hold, mode, meta)
+        if mixed is not None:
+            cond = mixed
+        else:
+            weighting = "probabilistic"
 
     if weighting == "probabilistic":
         mixed, meta = _mixture_conditional(req, returns, by_month, current,
@@ -321,13 +337,7 @@ def _unavailable_conditional(reason: str) -> dict:
 def _mixture_conditional(req, returns, by_month, current, path,
                          h_hold: int, mode: str, meta: dict):
     """확률 혼합 경로. 실패하면 `(None, meta)` 로 돌려 하드로 떨어지되 **사유를 남긴다**."""
-    import numpy as _np
-
-    from src.engine.conditional_market import (
-        implied_confidence,
-        regime_mixture_moments,
-        view_omega_terms,
-    )
+    from src.engine.conditional_market import regime_mixture_moments
     from src.engine.regime_probability import (
         from_k_step_forecast,
         from_posterior_mean_path,
@@ -370,7 +380,39 @@ def _mixture_conditional(req, returns, by_month, current, path,
         meta["dropped_regimes"] = mix.get("dropped_regimes")
         return None, meta
 
-    # ★신뢰도는 Ω 를 분해해 계산한다★ 스칼라 휴리스틱을 표준으로 굳히지 않는다.
+    _omega_confidence(mix, h_hold)
+    mix["regime"] = current
+
+    sharp = _pi_sharpness(mix["pi_bar"], h_hold, mode)
+    prob0 = {
+        "source": probs[-1].source, "usage": probs[-1].usage,
+        "step_months": h_hold, "mode": mode,
+        "probs": mix["pi_path"][-1],
+        "sharpness": sharp,
+        # ★파라미터 불확실성은 Σ̄ 에 전파되지 않는다 — 여기서 따로 보고한다★
+        "sampled_forecast": {"probs": sampled.probs, "ci90": sampled.ci90,
+                             "note": sampled.note},
+        "uncertainty_note": _UNCERTAINTY_NOTE,
+    }
+    _mixture_meta(meta, "probabilistic", mix, h_hold, sharp, prob0)
+    return mix, meta
+
+
+_UNCERTAINTY_NOTE = ("Σ̄ 는 사후평균 전이행렬로 계산했습니다 — π 와 P 가 같은 "
+                     "사슬에서 나와야 국면 간 항이 공분산이 되기 때문입니다. "
+                     "전이행렬 **파라미터**의 불확실성(위 `sampled_forecast` 의 "
+                     "구간)은 Σ̄ 에 전파되지 않았고, 잔여 모델리스크로 남습니다.")
+
+
+def _omega_confidence(mix: dict, h_hold: int) -> None:
+    """★신뢰도는 Ω 를 분해해 계산한다★ 스칼라 휴리스틱을 표준으로 굳히지 않는다 — 두 혼합(전이 예측 · GMM 시작 분포)이 같은 셈을 쓴다.
+
+    `mix` 에 `confidence_model` 과 `shrinkage_lambda` 를 싣는다.
+    """
+    import numpy as _np
+
+    from src.engine.conditional_market import implied_confidence, view_omega_terms
+
     sig = _np.asarray(mix["sigma"], dtype=float)
     W_ann = _np.asarray(mix["W_h"], dtype=float) * (12.0 / h_hold)
     A_ann = _np.asarray(mix["A_h"], dtype=float) * (12.0 / h_hold)
@@ -392,28 +434,18 @@ def _mixture_conditional(req, returns, by_month, current, path,
     }
     # 자산별 신뢰도를 하나로 줄여 뷰에 넘긴다 — ★가장 약한 쪽을 따른다★.
     mix["shrinkage_lambda"] = 1.0 - float(_np.min(conf)) / 100.0
-    mix["regime"] = current
 
+
+def _pi_sharpness(pi_bar: dict, h_hold: int, mode: str) -> float | None:
     from src.engine.regime_probability import RegimeProbabilities
-    sharp = RegimeProbabilities(source="k_step_forecast_mean", step_months=h_hold,
-                                probs=mix["pi_bar"], usage="portfolio",
-                                mode=mode).sharpness
-    prob0 = {
-        "source": probs[-1].source, "usage": probs[-1].usage,
-        "step_months": h_hold, "mode": mode,
-        "probs": mix["pi_path"][-1],
-        "sharpness": sharp,
-        # ★파라미터 불확실성은 Σ̄ 에 전파되지 않는다 — 여기서 따로 보고한다★
-        "sampled_forecast": {"probs": sampled.probs, "ci90": sampled.ci90,
-                             "note": sampled.note},
-        "uncertainty_note": ("Σ̄ 는 사후평균 전이행렬로 계산했습니다 — π 와 P 가 같은 "
-                             "사슬에서 나와야 국면 간 항이 공분산이 되기 때문입니다. "
-                             "전이행렬 **파라미터**의 불확실성(위 `sampled_forecast` 의 "
-                             "구간)은 Σ̄ 에 전파되지 않았고, 잔여 모델리스크로 남습니다."),
-    }
+    return RegimeProbabilities(source="k_step_forecast_mean", step_months=h_hold,
+                               probs=pi_bar, usage="portfolio", mode=mode).sharpness
 
+
+def _mixture_meta(meta: dict, weighting: str, mix: dict, h_hold: int,
+                  sharp: float | None, prob0: dict) -> None:
     meta.update({
-        "regime_weighting": "probabilistic",
+        "regime_weighting": weighting,
         "h_hold": h_hold,
         "pi_path": mix["pi_path"],
         "pi_bar": mix["pi_bar"],
@@ -423,6 +455,62 @@ def _mixture_conditional(req, returns, by_month, current, path,
         "dropped_regimes": mix.get("dropped_regimes"),
         "mixture_note": mix.get("note"),
     })
+
+
+def _error_text(e: Exception) -> str:
+    """계약의 거부(ValueError)는 그 문장 그대로, 그 밖의 예외는 종류 이름과 함께."""
+    return str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
+
+
+def _gmm_conditional(returns, by_month, current, path, h_hold: int, mode: str, meta: dict):
+    """GMM 시작 분포 혼합 (M3) — π_j = π₀ · P̄^j · 같은 경로의 워크포워드 점수가 함께 실린다.
+
+    세우지 못하거나(점수 없음 등 — 엔진의 사유) 혼합하지 못하면 `(None, meta)` 이고 `meta["gmm_fallback"]` 에 사유를 적는다.
+    ★다른 방식으로 몰래 바꿔 내지 않는다★ 열화는 부르는 쪽(`_conditional_stack`)이 하고, 그때 `regime_weighting` 은 실제로 쓴 방식이다.
+    """
+    from src.engine import regime_gmm_start as gs
+    from src.engine.conditional_market import regime_mixture_moments
+    from src.engine.regime_probability import require_portfolio_source
+    from src.engine.regime_transitions import (
+        REGIMES,
+        count_transitions,
+        transition_posterior,
+    )
+
+    got = gs.gmm_start_path(path["points"], h_hold, mode=mode)
+    if not got.get("available"):
+        meta["gmm_fallback"] = got.get("reason") or "GMM 시작 분포를 세우지 못했습니다(사유 미상)."
+        return None, meta
+    try:
+        # ★문지기는 여기서도 부른다★ 엔진이 점수 없는 객체를 내더라도(회귀 · 위조) 배분에 닿기 전에 걸린다.
+        probs = [require_portfolio_source(p) for p in got["probs"]]
+        rows = transition_posterior(count_transitions(path["points"]))
+        sampled = gs.sampled_forecast(rows, got["pi0"], h_hold)
+        mix = regime_mixture_moments(returns, by_month, [p.probs for p in probs], got["P"],
+                                     list(REGIMES), h_hold=h_hold)
+    except Exception as e:  # noqa: BLE001
+        meta["gmm_fallback"] = f"GMM 시작 분포를 배분에 쓰지 못했습니다. {_error_text(e)}"
+        return None, meta
+    if not mix.get("available"):
+        meta["gmm_fallback"] = gs._why("GMM 시작 분포로 혼합하지 못했습니다", mix.get("reason") or "사유 미상")
+        return None, meta
+
+    _omega_confidence(mix, h_hold)
+    mix["regime"] = current
+    sharp = _pi_sharpness(mix["pi_bar"], h_hold, mode)
+    prob0 = {
+        "source": probs[-1].source, "usage": probs[-1].usage,
+        "step_months": h_hold, "mode": mode,
+        "probs": mix["pi_path"][-1],
+        "sharpness": sharp,
+        # ★출처의 실측과 관측을 함께 싣는다★ — 시작 분포 · 그 최다 국면 · 같은 경로의 워크포워드 점수 · 시드 안정성 · 부트스트랩 안정성.
+        "pi0": got["pi0"], "label": got["label"], "skill": got["skill"],
+        "stability": got["stability"], "robustness": got["robustness"],
+        "sampled_forecast": {"probs": sampled["mean"], "ci90": sampled["ci90"],
+                             "note": sampled["note"]},
+        "uncertainty_note": _UNCERTAINTY_NOTE,
+    }
+    _mixture_meta(meta, "gmm", mix, h_hold, sharp, prob0)
     return mix, meta
 
 

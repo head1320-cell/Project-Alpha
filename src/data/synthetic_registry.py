@@ -71,6 +71,10 @@ SITES: dict[str, Site] = {
     "src/engine/auto_alpha.py::generate_candidates": _sim("후보 알파 식의 탐색 — 씨앗을 받아 결정론적"),
     "src/engine/macro_allocation.py::macro_embedded_allocation":
         _sim("성장·물가 추정의 표준오차 아래에서 비중 분포를 뽑는다(신뢰구간 · 씨앗 고정). ★배분 결정 경로 — 이 감사는 손대지 않았다★"),
+    "src/engine/regime_gmm_start.py::bootstrap_agreement":
+        _sim("받은 국면 경로의 달을 복원 추출해 GMM 을 다시 적합한다(다시 뽑기 · 씨앗 고정 · 관측만 — 값을 지어내지 않는다)"),
+    "src/engine/regime_gmm_start.py::sampled_forecast":
+        _sim("전이행렬 사후분포에서 뽑아 GMM 시작 분포로부터 k개월 뒤 국면 확률을 낸다(전이 예측의 표집과 같은 씨앗)"),
     "src/engine/regime_transitions.py::k_step_forecast": _sim("전이행렬 사후분포에서 k개월 뒤 국면 확률을 뽑는다"),
     "src/engine/research_preregistration.py::null_behaviour_fingerprint": _sim("귀무 경로 생성기의 동작 지문(사전등록 고정용)"),
     "src/engine/valuation/practice_models.py::driver_monte_carlo": _sim("성장률·마진·재투자율의 분포에서 가치 분포를 뽑는다"),

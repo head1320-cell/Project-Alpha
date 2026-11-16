@@ -1321,6 +1321,196 @@ test("국면 예측 비교(M2): 개발 자료는 실패 + 엔진 사유 · 표�
   expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
 });
 
+/**
+ * 국면 가중(M3) — 추정 설정의 셋째 방식 'GMM 시작 분포 × 전이'. ★화면은 서버의 이름 · 사유 · 값을 옮긴다★
+ *   ① 개발 자료(두 축이 다 계산된 달 53개 · 1개월 앞 평가 시점 17개 < 20): 서버가 전이 예측으로 열화 — 요청 · 산출한 방식 · 사유가
+ *      결과 판과 이야기에 서버 글 그대로 · 점수 절과 시작 분포 칸은 없다(지어내지 않는다).
+ *   ② GMM 을 쓴 응답 — 고정물 `fixtures/regime-weighting-optimizer.json` = 서버 출력(pytest `test_the_screen_fixture_is_what_the_optimizer_produces`).
+ *   ③ 조건부 추정을 못 만든 응답 · ④ 다시 뽑기를 재지 못한 응답 — 고정물의 그 칸만 덮어쓴다(서버 문장은 pytest 가 건다).
+ *   ⑤ 관문이 막은 응답 — 실제 서버('확인된 국면 판정만 쓰기').
+ */
+type RwBlock = { available: boolean; applied: boolean; requested: string; requested_name: string; used: string | null; used_name: string | null;
+  h_hold: number | null; pi_bar: Record<string, number> | null; pi0: Record<string, number> | null; label: string | null; fallbacks: string[];
+  dropped_regimes: Record<string, string>; dropped_notes: string[];
+  skill: { available: boolean; k: number; n_eval: number; hits: number; hit_rate: number; brier: number; gain: number;
+    baseline: { name: string } | null; evidence: { peak: number; passed: boolean; saturated: boolean; e_value: number } | null;
+    evidence_reason: string | null; threshold: number; note: string } | null;
+  stability: { seeds: number; modal: string; agree: number; stable: boolean } | null;
+  robustness: { available: boolean; resamples: number; agree: number; label: string } | null };
+type RwExplain = { title: string; facts: string[]; trust: { state: string; text: string; kind?: string }[]; unmeasured: string[] };
+const RW_FIXTURE = JSON.parse(readFileSync(`${__dirname}/fixtures/regime-weighting-optimizer.json`, "utf-8")) as
+  { belief: { conditional: boolean; blocked: boolean; blocked_reason: string | null; regime: RwBlock }; explain: RwExplain };
+const RW_KO: Record<string, string> = { Goldilocks: "골디락스", Reflation: "리플레이션", Stagflation: "스태그플레이션", Disinflation: "디스인플레이션" };
+const RW_ORDER = ["Goldilocks", "Reflation", "Stagflation", "Disinflation"];
+const pct1 = (v: number | undefined) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "—");
+
+test("국면 가중(M3): 'GMM 시작 분포 × 전이' — 선택지는 서버 이름 · 개발 자료는 전이 예측으로 열화 + 사유 · GMM 을 쓰면 시작 분포 · 점수 · 안정성을 서버 값 그대로", async ({ page }) => {
+  const sink = trackErrors(page);
+  await openCanvas(page);
+
+  // ⓪ 전문가 칸 — 보이는 글은 서버 선택지 이름 · 고르는 값은 코드(문서에 남는 것은 'gmm')
+  await node(page, "estimate").click();
+  await tab(page, "settings");
+  await page.locator(".pg-mode input").check();
+  const sel = page.locator(".pg-inspector .pg-field", { hasText: "국면 가중 방식" }).locator("select");
+  await expect(sel.locator("option")).toHaveText(["기본값 (오늘 국면 유지)", "오늘 국면 유지", "전이 예측", "GMM 시작 분포 × 전이"]);
+  await sel.selectOption({ label: "GMM 시작 분포 × 전이" });
+  await page.locator(".pg-inspector .pg-field", { hasText: "경기 국면 반영" }).locator("select").selectOption("true");
+  const doc = await exportDoc(page);
+  const est = doc.nodes.find((n: { id: string }) => n.id === "estimate").params;
+  expect([est.regime_weighting, est.conditional], "문서에는 코드가 남는다").toEqual(["gmm", true]);
+  await page.locator(".pg-mode input").uncheck();
+
+  // ① 개발 자료 — 서버가 열화한 사실 · 사유
+  const body = await run(page);
+  const o = body.nodes.optimizer as unknown as { status: string; view: { belief: { regime: RwBlock } }; explain: RwExplain };
+  expect(o.status).toBe("ok");
+  const reg = o.view.belief.regime;
+  expect([reg.requested, reg.used, reg.available]).toEqual(["gmm", "probabilistic", true]);
+  expect(reg.fallbacks.length).toBe(1);
+  expect(reg.fallbacks[0]).toContain("워크포워드 점수가 없습니다");
+  expect(reg.fallbacks[0]).toContain("평가 시점이 17개");
+  await detail(page, "optimizer");
+  const blk = page.locator(".pg-side .pg-rw");
+  await expect(blk.locator(".pg-rw-kv").first().locator("dt")).toHaveText(["요청한 방식", "산출한 방식", "보유 기간"]);
+  await expect(blk.locator(".pg-rw-kv").first().locator("dd")).toHaveText([reg.requested_name, reg.used_name!, `${reg.h_hold}개월`]);
+  await expect(blk.locator(".pg-rw-fallback")).toHaveText(reg.fallbacks);
+  await expect(blk.locator(".pg-rw-skill"), "열화했으면 점수 절이 없다(점수를 지어내지 않는다)").toHaveCount(0);
+  await expect(blk.locator(".pg-rw-stab")).toHaveCount(0);
+  await expect(blk.locator(".pg-rw-dist thead th"), "시작 분포가 없으면 그 칸도 없다").toHaveText(["국면", "보유 기간 평균"]);
+  // 이 표본(756거래일)에는 스태그플레이션 달이 없다 — 서버가 그 국면을 빼고 재정규화했다: 칸은 "추정 불가"(0% 가 아니다) · 서버 문장 그대로
+  expect(Object.keys(reg.dropped_regimes), "개발 자료 전제 — 뺀 국면이 있다(없으면 아래 단언이 공허하다)").toEqual(["Stagflation"]);
+  await expect(blk.locator(".pg-rw-dist tbody tr td:last-child"))
+    .toHaveText(RW_ORDER.map((r) => (r in reg.dropped_regimes ? "추정 불가" : pct1(reg.pi_bar?.[r]))));
+  await expect(blk.locator('.pg-rw-dist tbody tr[data-dropped="true"]')).toHaveCount(1);
+  await expect(blk.locator(".pg-rw-dropped")).toHaveText(reg.dropped_notes);
+  expect(o.explain.trust.filter((t) => reg.dropped_notes.includes(t.text)).map((t) => t.state), "해설에도 같은 문장 · 가정").toEqual(["assumed"]);
+  // 라이트 · 다크 AA — 이 절의 글자(가정 색의 사유 · '추정 불가' 포함)가 모두 대비 기준을 넘는다 · 다크에 밝은 배경 0
+  const rwAudit = async (label: string) => {
+    for (const dark of [false, true]) {
+      await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), dark);
+      await page.waitForTimeout(200);
+      const a = await page.evaluate<AuditResult>(contrastAudit(".pg-side .pg-rw"));
+      expect(a.checked, `${label}: 검사한 글자 노드 수(0 이면 조용히 통과한다)`).toBeGreaterThan(15);
+      expect(a.low, `${label} ${dark ? "다크" : "라이트"} AA 미달`).toEqual([]);
+      if (dark) expect(a.bright, `${label}: 다크인데 밝은 배경`).toEqual([]);
+    }
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  };
+  await rwAudit("열화");
+  // 이야기 — 대체 줄 = 서버 해설 그대로 · 사실 줄에 산출한 방식(요청과 함께)
+  await tab(page, "story");
+  const step = page.locator('.pg-step[data-node-id="optimizer"]');
+  const fb = o.explain.trust.filter((t) => t.kind === "fallback");
+  expect(fb.length).toBe(1);
+  await expect(step.locator(".pg-trust-a").filter({ hasText: "GMM 시작 분포 × 전이’를 쓰지 못해" })).toHaveCount(1);
+  await expect(step.locator(".pg-trust-a").filter({ hasText: "GMM 시작 분포 × 전이’를 쓰지 못해" }).locator("span").last()).toHaveText(fb[0].text);
+  await expect(step.locator(".pg-step-p", { hasText: "국면 가중 방식:" })).toHaveText("국면 가중 방식: 전이 예측(요청: GMM 시작 분포 × 전이)");
+  // 추정 설정 결과 — 코드 대신 이름
+  await detail(page, "estimate");
+  await expect(page.locator(".pg-side .pg-estimate-table tr", { hasText: "국면 가중 방식" }).locator("td").last()).toHaveText("GMM 시작 분포 × 전이");
+
+  // ② GMM 을 쓴 응답(고정물) — 국면 가중 블록과 해설만 덮어쓴다(비중 · 다른 칸은 이번 실행의 서버 값)
+  await patchRun(page, (b) => {
+    const opt = b.nodes.optimizer as unknown as { view: { belief: unknown }; explain: unknown };
+    opt.view.belief = structuredClone(RW_FIXTURE.belief);
+    opt.explain = structuredClone(RW_FIXTURE.explain);
+  });
+  await run(page);
+  await detail(page, "optimizer");
+  const r2 = RW_FIXTURE.belief.regime;
+  const sk = r2.skill!;
+  expect([r2.used, r2.fallbacks.length, sk.available], "고정물 전제 — GMM 을 썼고 열화 사유가 없다").toEqual(["gmm", 0, true]);
+  await expect(blk.locator(".pg-rw-kv").first().locator("dd")).toHaveText([r2.requested_name, r2.used_name!, `${r2.h_hold}개월`]);
+  await expect(blk.locator(".pg-rw-fallback")).toHaveCount(0);
+  await expect(blk.locator(".pg-rw-blocked"), "짝 — 막히지 않았으면 차단 줄이 없다").toHaveCount(0);
+  expect(r2.dropped_notes, "고정물 전제 — 뺀 국면이 없다").toEqual([]);
+  await expect(blk.locator(".pg-rw-dropped"), "짝 — 뺀 국면이 없으면 그 문장도 없다").toHaveCount(0);
+  await expect(blk.locator(".pg-rw-dist thead th")).toHaveText(["국면", "시작 분포", "보유 기간 평균"]);
+  for (const r of RW_ORDER) {
+    await expect(blk.locator(`.pg-rw-dist tbody tr[data-key="${r}"] td`), r).toHaveText([RW_KO[r], pct1(r2.pi0?.[r]), pct1(r2.pi_bar?.[r])]);
+  }
+  const skill = blk.locator(".pg-rw-skill");
+  await expect(skill.locator(".pg-rw-h5")).toHaveText(`같은 경로의 워크포워드 점수 ${sk.k}개월 앞 · 평가 시점 ${sk.n_eval}개`);
+  await expect(skill.locator("dt")).toHaveText(["적중", "브라이어", `‘${sk.baseline!.name}’ 대비`, "순차 증거 최고"]);
+  const fx = { hit_rate: sk.hit_rate, brier: sk.brier, gain: sk.gain, evidence: sk.evidence } as unknown as SkillC;
+  await expect(skill.locator("dd")).toHaveText([`${sk.hits}/${sk.n_eval}회 · ${skillFmt.hit(fx)}`, skillFmt.brier(fx), skillFmt.gain(fx), skillFmt.ev(fx)]);
+  await expect(skill.locator(".pg-rw-pass"), "기준을 넘지 않았으면 '*' 줄이 없다").toHaveCount(sk.evidence?.passed ? 1 : 0);
+  await expect(skill.locator(".pg-note", { hasText: sk.note })).toHaveCount(1);
+  const st = r2.stability!, rb = r2.robustness!;
+  await expect(blk.locator(".pg-rw-stab dd")).toHaveText([
+    `${st.seeds}개 가운데 ${st.agree}개가 ‘${RW_KO[st.modal]}’${st.stable ? "" : " · 과반 미만"}`,
+    `${rb.resamples}번 가운데 ${rb.agree}번 ‘${RW_KO[rb.label]}’`,
+  ]);
+  await rwAudit("GMM");
+  // 판 폭 셋(344 · 392 · 300px)에 든다 — 절의 오른쪽 끝이 판 안쪽을 넘지 않고 숫자 칸은 한 줄
+  const resize = page.locator(".pg-side-resize");
+  for (const step2 of [{ keys: [] as string[], w: 344 }, { keys: ["ArrowLeft", "ArrowLeft", "ArrowLeft"], w: 392 }, { keys: ["Home"], w: 300 }]) {
+    for (const k of step2.keys) { await resize.focus(); await page.keyboard.press(k); }
+    expect(Number(await resize.getAttribute("aria-valuenow"))).toBe(step2.w);
+    const g = await blk.evaluate((sec) => {
+      const box = (sec.parentElement as HTMLElement).getBoundingClientRect();
+      let over = 0;
+      for (const el of Array.from(sec.querySelectorAll("*"))) over = Math.max(over, el.getBoundingClientRect().right - box.right);
+      const wrapped = Array.from(sec.querySelectorAll(".pg-td-num")).filter((td) => {
+        const r = document.createRange(); r.selectNodeContents(td);
+        return new Set(Array.from(r.getClientRects()).map((x) => Math.round(x.top))).size > 1;
+      }).map((td) => td.textContent);
+      return { over, wrapped };
+    });
+    expect(g.over, `${step2.w}px: 판 안쪽을 넘은 길이(px)`).toBeLessThanOrEqual(0.5);
+    expect(g.wrapped, `${step2.w}px: 두 줄로 감긴 숫자`).toEqual([]);
+  }
+
+  // ③ 조건부 추정을 아예 만들지 못한 응답 — 서버 사유만(쓴 방식 · 분포 · 점수를 지어내지 않는다). 고정물의 그 칸만 덮어쓴다.
+  const why = "성장·물가 축이 둘 다 산출된 달이 없어 국면 경로가 비었습니다 — 무조건부 추정으로 계산했습니다.";
+  await patchRun(page, (b) => {
+    const opt = b.nodes.optimizer as unknown as { view: { belief: unknown } };
+    opt.view.belief = { ...structuredClone(RW_FIXTURE.belief),
+      regime: { ...structuredClone(RW_FIXTURE.belief.regime), available: false, applied: false, used: null, used_name: null, reason: why } };
+  });
+  await run(page);
+  await detail(page, "optimizer");
+  await expect(blk.locator(".pg-rw-unavailable")).toHaveText(`경기 국면 조건부 추정을 쓰지 못해 과거 표본 기준으로 산출했습니다. ${why}`);
+  await expect(blk.locator(".pg-rw-kv, .pg-rw-dist, .pg-rw-skill, .pg-rw-stab"), "못 만든 추정에는 방식 · 분포 · 점수 칸이 없다").toHaveCount(0);
+
+  // ④ 다시 뽑기를 재지 못한 GMM 응답 — 그 칸에 서버 사유(관측 값을 지어내지 않는다) · 시드 줄은 그대로
+  const rbWhy = "다시 뽑기 20회가 모두 실패했습니다.";
+  await patchRun(page, (b) => {
+    const opt = b.nodes.optimizer as unknown as { view: { belief: unknown } };
+    opt.view.belief = { ...structuredClone(RW_FIXTURE.belief),
+      regime: { ...structuredClone(RW_FIXTURE.belief.regime), robustness: { available: false, method: "bootstrap_months", reason: rbWhy } } };
+  });
+  await run(page);
+  await detail(page, "optimizer");
+  await expect(blk.locator(".pg-rw-stab dt")).toHaveText(["난수 시드", "다시 뽑기"]);
+  await expect(blk.locator(".pg-rw-stab dd").last()).toHaveText(rbWhy);
+  await expect(blk.locator(".pg-rw-stab dd").last().locator(".pg-rw-why")).toHaveCount(1);
+
+  // ⑤ 관문이 막은 응답(★실제 서버★ — 추정 설정의 '확인된 국면 판정만 쓰기' · 개발 자료의 판정은 미검증): 계산은 했으나 비중에 쓰지
+  //    않았다 — 결과 판은 차단 줄 + 계산한 것 · 이야기는 서버의 차단 줄 하나(쓰지 않은 방식을 '국면 가중 방식' 사실로 · 대체 줄로 적지 않는다)
+  await page.unroute("**/api/v1/allocation/graph/run**");
+  await node(page, "estimate").click();
+  await tab(page, "settings");
+  await page.locator(".pg-mode input").check();
+  await page.locator(".pg-inspector .pg-field", { hasText: "확인된 국면 판정만 쓰기" }).locator("select").selectOption("true");
+  await page.locator(".pg-mode input").uncheck();
+  const b5 = await run(page);
+  const o5 = b5.nodes.optimizer as unknown as { view: { belief: { blocked: boolean; regime: RwBlock } }; explain: RwExplain };
+  const r5 = o5.view.belief.regime;
+  expect([o5.view.belief.blocked, r5.available, r5.applied], "막혔다 · 계산은 했다 · 쓰지 않았다").toEqual([true, true, false]);
+  await detail(page, "optimizer");
+  await expect(blk.locator(".pg-rw-blocked")).toHaveText("경기 국면 반영이 차단돼 이 추정은 비중에 쓰이지 않았습니다.");
+  await expect(blk.locator(".pg-rw-kv").first().locator("dd")).toHaveText([r5.requested_name, r5.used_name!, `${r5.h_hold}개월`]);
+  await tab(page, "story");
+  await expect(step.locator(".pg-step-p", { hasText: "국면 가중 방식:" }), "쓰지 않은 방식을 사실로 적지 않는다").toHaveCount(0);
+  await expect(step.locator(".pg-trust-a").filter({ hasText: "경기 국면 반영이 차단돼 과거 표본 기준으로 산출했습니다" })).toHaveCount(1);
+  await expect(step.locator(".pg-trust-a").filter({ hasText: /’[을를] 쓰지 못해/ }), "차단이면 대체 줄도 없다").toHaveCount(0);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+});
+
 test("타이밍 시뮬레이션: 노출 계단선 = 직접 SVG · 읽는 줄의 처음 자리 = 마지막 시점 · ← 로 앞 시점 · 표 쌍둥이 = 전부 · recharts 0", async ({ page }) => {
   await openCanvas(page);
   const doc = await exportDoc(page);

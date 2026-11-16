@@ -31,7 +31,7 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
-from src.api.allocation_graph_explain import EXPLAINERS, MODEL_PLAIN
+from src.api.allocation_graph_explain import EXPLAINERS, MODEL_PLAIN, WEIGHTING_PLAIN, weighting_fallback_sentence
 from src.api.allocation_pipeline import build_belief
 from src.api.allocation_routes import (
     AllocationView,
@@ -153,8 +153,12 @@ EstimateParams = _subset("EstimateParams", AnalyzeRequest,
     "conditional": _ui("경기 국면 반영", question="경기 국면 반영 여부",
                        help="켜면 현재 국면과 유사한 과거 구간으로 기대수익률을 추정합니다."),
     "require_verified_macro": _ui("확인된 국면 판정만 쓰기", "advanced"),
-    "regime_weighting": _ui("국면 가중 방식", "advanced",
-                            options={"hard": "확정 국면", "probabilistic": "확률 가중"}),
+    # M3 — 이름은 국면 예측 비교(M2)의 후보 이름과 같은 말(`allocation_graph_explain.WEIGHTING_PLAIN` · 용어집 §3.16).
+    "regime_weighting": _ui("국면 가중 방식", "advanced", options=dict(WEIGHTING_PLAIN),
+                            help="오늘 국면 유지 — 오늘 국면이 보유 기간 내내 이어진다고 가정합니다. "
+                                 "전이 예측 — 오늘 국면에서 출발해 과거 경로의 전이행렬로 보유 기간의 국면 분포를 잡습니다. "
+                                 "GMM 시작 분포 × 전이 — GMM 이 판정한 지금의 국면 분포에서 출발합니다. 같은 경로의 "
+                                 "워크포워드 점수가 없으면 전이 예측으로 산출하고 그 사유를 포트폴리오 최적화 결과에 적습니다."),
     "regime_mode": _ui("국면 모드", "advanced", options={"live": "오늘 기준", "backtest": "과거 기준"}),
     "rebalance": _ui("보유 기간", "advanced", options={"M": "한 달", "Q": "한 분기"}),
 })
@@ -265,14 +269,63 @@ def _views(inputs: dict, p) -> pg.NodeOutput:
                          view={"n_views": len(views), "views": views})
 
 
+#: 추정 설정의 고르는 칸 → 선택지 이름(스키마의 `x-ui.options` 그대로 — 결과 판이 코드 대신 이름을 보인다).
+_ESTIMATE_OPTIONS = {k: ((f.json_schema_extra or {}).get("x-ui") or {}).get("options")
+                     for k, f in EstimateParams.model_fields.items()}
+
+
 def _estimate(inputs: dict, p) -> pg.NodeOutput:
     settings = p.model_dump()
+    value_labels = {k: opts[settings[k]] for k, opts in _ESTIMATE_OPTIONS.items()
+                    if opts and settings.get(k) in opts}
     note = ("조건부 μ/Σ 를 요청했습니다 — 옵티마이저가 자체 모형으로 산출하고, 검증 "
             "관문이 차단하면 표본 추정으로 산출하며 그 사유를 옵티마이저 결과에 기록합니다."
             if p.conditional else
             "표본(trailing) μ/Σ — 조건부 추정을 요청하지 않았습니다.")
     return pg.NodeOutput(values={"belief": settings},
-                         view={"settings": settings, "note": note})
+                         view={"settings": settings, "value_labels": value_labels, "note": note})
+
+
+def _regime_block(req, belief) -> dict | None:
+    """국면 가중 블록 (M3) — 요청한 방식 · 쓴 방식 · 출처 · 보유 기간의 국면 분포 · 점수 · 시드 안정성 · 부트스트랩 안정성 · 열화 사유.
+
+    조건부를 요청하지 않았으면 `None` 이다(묻지 않은 것을 지어내지 않는다). `used` 는 실제로 쓴 방식이고, 조건부 추정을 아예 만들지
+    못했으면 `None` + `reason` 이다. 열화 사유는 두 겹일 수 있다 — GMM 을 세우지 못해 전이 예측으로, 전이 예측도 못 해 오늘 국면으로.
+    """
+    if not req.conditional or belief.meta is None:
+        return None
+    meta, cond, path = belief.meta, belief.cond or {}, belief.path or {}
+    requested = req.regime_weighting
+    available = bool(cond.get("available"))
+    used = meta.get("regime_weighting") if available else None
+    src = meta.get("probability_source") or {}
+    # 열화 걸음(코드 · 코드 · 사유) — 파이프라인의 순서 그대로: GMM 을 못 세우면 전이 예측을, 전이 예측도 못 하면 오늘 국면을 쓴다.
+    hops: list[tuple[str, str, str]] = []
+    if meta.get("gmm_fallback"):
+        hops.append(("gmm", "probabilistic", str(meta["gmm_fallback"])))
+    if available and used == "hard" and requested != "hard" and meta.get("mixture_note"):
+        hops.append(("probabilistic", "hard", str(meta["mixture_note"])))
+    fallbacks = [weighting_fallback_sentence(a, b, why, final=(b == used)) for a, b, why in hops]
+    # ★혼합이 빼고 재정규화한 국면★ — 분포에서 사라진 국면을 0 으로 읽지 않게 서버가 그 국면 · 사유 · 뺀 질량을 문장으로 적는다.
+    from src.api.allocation_graph_nodes_macro import _REGIME_PLAIN
+    dropped = dict(meta.get("dropped_regimes") or {}) if used in ("probabilistic", "gmm") else {}
+    mass = cond.get("dropped_mass_max")
+    dropped_notes = [
+        f"‘{_REGIME_PLAIN.get(r, r)}’ 국면은 조건부 적률을 추정하지 못해 혼합에서 빼고 남은 국면으로 재정규화했습니다"
+        + (f"(뺀 확률 질량 최대 {float(mass):.1%})" if isinstance(mass, (int, float)) else "") + f". {why}"
+        for r, why in dropped.items()]
+    return {
+        "available": available, "applied": available and not belief.blocked,
+        "reason": None if available else (path.get("reason") or cond.get("reason") or "사유 미상"),
+        "requested": requested, "requested_name": WEIGHTING_PLAIN.get(requested, requested),
+        "used": used, "used_name": WEIGHTING_PLAIN.get(used) if used else None,
+        "source": src.get("source") if used in ("probabilistic", "gmm") else None,
+        "h_hold": meta.get("h_hold"), "pi_bar": meta.get("pi_bar"),
+        "pi0": src.get("pi0"), "label": src.get("label"), "skill": src.get("skill"),
+        "stability": src.get("stability"), "robustness": src.get("robustness"),
+        "fallbacks": fallbacks, "dropped_regimes": dropped, "dropped_notes": dropped_notes,
+        "path_source": path.get("path_source"),
+    }
 
 
 def _fallback_texts(fallbacks: list[dict], model: str, constraints_report: dict | None) -> list[dict]:
@@ -354,6 +407,9 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
     except EPUnavailable as e:
         raise pg.NodeFailure(str(e)) from e
     constraints_report = _apply_constraints(req, names, R, opt, r["bench"])
+    # M3 — 조건부를 요청한 실행에만 키가 있다. 묻지 않은 실행의 출력은 M3 전과 한 바이트도 다르지 않다
+    # (`regime: None` 도 모양이 바뀐 것이다 — CF3 골든 `tests/golden/cf3_weights.json` 이 건다).
+    regime = _regime_block(req, belief)
     weights = np.asarray(opt["weights"], dtype=float)
     value = weights_value(names, weights, sigma_annual=opt["sigma_annual"],
                           sigma_source=opt.get("sigma_source", "trailing"), req=req, opt=opt,
@@ -372,7 +428,8 @@ def _optimizer(inputs: dict, p) -> pg.NodeOutput:
         "ep": opt.get("ep"), "constraints_report": constraints_report,
         "company_views_used": opt.get("company_views_used"),
         "belief": {"conditional": req.conditional, "blocked": belief.blocked,
-                   "blocked_reason": belief.blocked_reason},
+                   "blocked_reason": belief.blocked_reason,
+                   **({"regime": regime} if regime is not None else {})},
         # ── 관측 (CF3 — 계산 불변) ─────────────────────────────────────────────
         **({"fallbacks": _fallback_texts(opt["fallbacks"], req.model, constraints_report)}
            if opt.get("fallbacks") else {}),

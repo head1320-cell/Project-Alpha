@@ -45,6 +45,8 @@ import {
   CapacityResult, CashResult, CounterfactualResult, ImpactResult, ImplementResult, PairResult, RebalanceResult,
 } from "./AllocExtraResults";
 import { AccountResult, ClientProfileResult, GoalResult, HoldingsCheckResult } from "./ClientResults";
+import { RegimeWeightingBlock } from "./RegimeWeightingBlock";
+import type { RegimeBlock } from "@/entities/portfolio-graph/regimeWeighting";
 
 type Dict = Record<string, unknown>;
 const STATUS_TEXT = { ok: "완료", blocked: "막힘", failed: "실패" } as const;
@@ -182,6 +184,7 @@ function Optimizer({ v }: { v: Dict }) {
       {cr && <ConstraintReport cr={cr as unknown as ConstraintsReport} />}
       <EngineEvidence v={v} />
       {belief?.blocked && <p className="pg-warn">조건부 μ/Σ 를 산출하지 못해 표본 추정으로 계산했습니다 — {String(belief.blocked_reason)}</p>}
+      <RegimeWeightingBlock reg={belief?.regime as RegimeBlock | null | undefined} />
       {cap.length > 0 && <p className="pg-note">시가총액 미상 종목 {cap.length}개 — 시장 균형 가중은 그 종목에 대해 가정입니다.</p>}
       {((v.skipped_views as unknown[]) ?? []).length > 0 && (
         <p className="pg-warn">건너뛴 뷰: {JSON.stringify(v.skipped_views)}</p>
@@ -377,6 +380,8 @@ const ESTIMATE_KEYS: Record<string, string> = {
 
 function EstimateResult({ v }: { v: Dict }) {
   const settings = (v.settings as Record<string, unknown> | undefined) ?? {};
+  // 고르는 칸은 서버가 준 선택지 이름으로(M3 — 코드 'gmm' 대신 'GMM 시작 분포 × 전이'). 이름이 없으면 코드 그대로.
+  const labels = (v.value_labels as Record<string, string> | undefined) ?? {};
   const show = (x: unknown) => (x === true ? "켬" : x === false ? "끔" : x == null ? "모름" : String(x));
   return (
     <>
@@ -385,7 +390,7 @@ function EstimateResult({ v }: { v: Dict }) {
         <tbody>
           {Object.entries(settings).map(([k, x]) => (
             <tr key={k}><td className="pg-td-name">{ESTIMATE_KEYS[k] ?? <span className="pg-code">{k}</span>}</td>
-              <td className="pg-td-num">{typeof x === "string" ? <span className="pg-code">{x}</span> : show(x)}</td></tr>
+              <td className="pg-td-num">{labels[k] ?? (typeof x === "string" ? <span className="pg-code">{x}</span> : show(x))}</td></tr>
           ))}
         </tbody>
       </table>

@@ -4683,6 +4683,26 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   .pg-skill th { font-size: 11.5px; }
   .pg-skill th + th, .pg-skill td + td { padding-left: 6px; }
 }
+/* 국면 가중(M3) — 최적화 결과 판의 절 하나. 요청한 방식 · 산출한 방식은 판의 KV(.pg-kv) 그대로, 열화 사유는 가정 색의 글로
+   (읽을 글자로 말한다 — 색만으로 말하지 않는다), 국면 분포 · 점수 · 안정성은 같은 판의 표 · KV 문법. 방식을 칠해 권하는 규칙은 없다. */
+.pg-rw { margin-top: 4px; }
+.pg-rw-kv { margin-top: 2px; }
+.pg-rw-fallbacks { margin: 8px 0 0; }
+.pg-rw-fallback { color: var(--pg-assume); line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.pg-rw-fallback + .pg-rw-fallback { margin-top: 4px; }
+.pg-rw-dist { margin-top: 10px; }
+.pg-rw-dist th { vertical-align: bottom; word-break: keep-all; font-weight: 600; color: var(--pg-mute); text-align: right; }
+.pg-rw-dist th:first-child { text-align: left; }
+.pg-rw-dist th + th, .pg-rw-dist td + td { padding-left: 10px; }
+.pg-rw-dist .pg-td-num { white-space: nowrap; }
+.pg-rw-cap { caption-side: top; text-align: left; padding-bottom: 4px; font-size: 13px; font-weight: 700; color: var(--pg-ink); }
+.pg-rw-skill, .pg-rw-stab { margin-top: 12px; }
+.pg-rw-h5 { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--pg-ink); }
+.pg-rw-sub { margin-left: 6px; font-weight: 500; color: var(--pg-mute); }
+.pg-rw-why { font-weight: 500; color: var(--pg-body); text-align: right; word-break: keep-all; }
+.pg-rw-kv .pg-td-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-rw-dist .pg-rw-na { color: var(--pg-assume); font-weight: 600; }
+.pg-rw-dropped { margin-top: 6px; color: var(--pg-assume); word-break: keep-all; overflow-wrap: anywhere; }
 .pg-dot-point { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: 1px; background: var(--pg-assume); border-radius: 50%; }
 .pg-casebox { position: relative; }
 .pg-casebox > summary { list-style: none; }

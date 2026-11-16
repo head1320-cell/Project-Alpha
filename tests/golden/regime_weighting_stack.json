@@ -1,0 +1,4119 @@
+{
+ "hard_M_bl": {
+  "cond": {
+   "available": true,
+   "degenerate": false,
+   "diagnostics": {
+    "avg_correlation": 0.906,
+    "breakdown_detected": true,
+    "max_correlation": 0.942,
+    "max_eigenvalue_ratio": 0.929,
+    "n_assets": 4,
+    "single_factor_dominance": true
+   },
+   "method": "ledoit_wolf",
+   "min_obs_required": 12,
+   "mu": [
+    0.5392970061349693,
+    0.44942731288343557,
+    0.3037241595092025,
+    0.3015728834355828
+   ],
+   "n_months": 15,
+   "n_months_by_regime": {
+    "Disinflation": 14,
+    "Goldilocks": 15,
+    "Reflation": 19,
+    "Stagflation": 12
+   },
+   "n_obs": 326,
+   "n_obs_by_regime": {
+    "Disinflation": 303,
+    "Goldilocks": 326,
+    "Reflation": 419,
+    "Stagflation": 257
+   },
+   "names": [
+    "005930",
+    "000660",
+    "035420",
+    "051910"
+   ],
+   "note": "'Goldilocks' 국면으로 분류된 15개월(326영업일)의 표본만으로 추정했습니다. 독립적인 거시 관측은 영업일 수가 아니라 **개월 수**입니다.",
+   "reason": null,
+   "regime": "Goldilocks",
+   "shrinkage_lambda": 0.0077,
+   "sigma": [
+    [
+     0.08030118056573467,
+     0.06329008878390832,
+     0.05173228129456755,
+     0.040278440332468704
+    ],
+    [
+     0.06329008878390832,
+     0.05684110077667928,
+     0.04272145028330883,
+     0.03289312455189563
+    ],
+    [
+     0.05173228129456755,
+     0.04272145028330883,
+     0.039709486349544,
+     0.027436168164889075
+    ],
+    [
+     0.040278440332468704,
+     0.03289312455189563,
+     0.027436168164889075,
+     0.02519169307784835
+    ]
+   ],
+   "unlabeled_obs": 0
+  },
+  "extra_views": [
+   {
+    "assets": [
+     "005930"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 53.929700613496934,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "000660"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 44.94273128834356,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "035420"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 30.37241595092025,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "051910"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 30.15728834355828,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   }
+  ],
+  "meta": {
+   "A_contribution_pct": null,
+   "confidence_model": {
+    "kind": "legacy_scalar",
+    "note": "수축 강도만으로 정한 스칼라 신뢰도입니다 — Ω 를 분해해 계산한 값이 아니므로 승격 근거로 쓰지 마십시오(계획 §1.5.3)."
+   },
+   "dropped_regimes": null,
+   "h_hold": null,
+   "mixture_note": null,
+   "mode": "live",
+   "pi_bar": null,
+   "pi_path": null,
+   "pit": {
+    "look_ahead_free": true,
+    "mode": "live",
+    "note": "세 속성은 서로 독립입니다. 4개 계열(KOSPI, KR_CPI, KR_IP, KR_LEADING_CYCLE)은 제공자가 개정 이력을 주지 않아 **영구히** 개정 편향이 남습니다; 나머지 1개는 소스에 빈티지가 있으나 수집 경로가 현재값을 가져옵니다(고칠 수 있음). 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다.",
+    "publication_lag": "unspecified",
+    "revision_bias": "unmanaged",
+    "revision_detail": {
+     "blocked_by_path": [
+      "T10YIE"
+     ],
+     "blocked_permanently": [
+      "KOSPI",
+      "KR_CPI",
+      "KR_IP",
+      "KR_LEADING_CYCLE"
+     ],
+     "market": "kr",
+     "path_uses_vintage": false,
+     "series": [
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_LEADING_CYCLE",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.4
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_IP",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KOSPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "source",
+       "key": "KR_CPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.7
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "path",
+       "key": "T10YIE",
+       "provider": "FRED",
+       "registered": true,
+       "source_has_vintage": true,
+       "weight": 0.3
+      }
+     ]
+    }
+   },
+   "probability_source": null,
+   "regime_weighting": "hard",
+   "sharpness": null
+  },
+  "path": {
+   "path_note": null,
+   "path_source": "mes",
+   "points": [
+    {
+     "growth": -0.508571,
+     "inflation": 0.620392,
+     "regime": "Stagflation",
+     "t": "2020-11"
+    },
+    {
+     "growth": -0.735173,
+     "inflation": -0.168172,
+     "regime": "Disinflation",
+     "t": "2020-12"
+    },
+    {
+     "growth": 0.148128,
+     "inflation": -0.08554,
+     "regime": "Goldilocks",
+     "t": "2021-01"
+    },
+    {
+     "growth": 0.912492,
+     "inflation": -0.860544,
+     "regime": "Goldilocks",
+     "t": "2021-02"
+    },
+    {
+     "growth": -1.983714,
+     "inflation": -0.140829,
+     "regime": "Disinflation",
+     "t": "2021-03"
+    },
+    {
+     "growth": -1.883001,
+     "inflation": 0.794339,
+     "regime": "Stagflation",
+     "t": "2021-04"
+    },
+    {
+     "growth": -0.343562,
+     "inflation": -0.061219,
+     "regime": "Disinflation",
+     "t": "2021-05"
+    },
+    {
+     "growth": 0.863081,
+     "inflation": -2.057039,
+     "regime": "Goldilocks",
+     "t": "2021-06"
+    },
+    {
+     "growth": -0.504633,
+     "inflation": -1.09848,
+     "regime": "Disinflation",
+     "t": "2021-07"
+    },
+    {
+     "growth": -0.816734,
+     "inflation": 0.662701,
+     "regime": "Stagflation",
+     "t": "2021-08"
+    },
+    {
+     "growth": 0.01055,
+     "inflation": 0.040069,
+     "regime": "Reflation",
+     "t": "2021-09"
+    },
+    {
+     "growth": 0.289864,
+     "inflation": 0.313843,
+     "regime": "Reflation",
+     "t": "2021-10"
+    },
+    {
+     "growth": 1.539622,
+     "inflation": -0.077357,
+     "regime": "Goldilocks",
+     "t": "2021-11"
+    },
+    {
+     "growth": 0.092826,
+     "inflation": 0.04044,
+     "regime": "Reflation",
+     "t": "2021-12"
+    },
+    {
+     "growth": 1.062683,
+     "inflation": -1.088185,
+     "regime": "Goldilocks",
+     "t": "2022-01"
+    },
+    {
+     "growth": -0.016029,
+     "inflation": -0.975632,
+     "regime": "Disinflation",
+     "t": "2022-02"
+    },
+    {
+     "growth": 0.248811,
+     "inflation": 1.518473,
+     "regime": "Reflation",
+     "t": "2022-03"
+    },
+    {
+     "growth": 1.442468,
+     "inflation": 0.119825,
+     "regime": "Reflation",
+     "t": "2022-04"
+    },
+    {
+     "growth": 0.556771,
+     "inflation": 0.634914,
+     "regime": "Reflation",
+     "t": "2022-05"
+    },
+    {
+     "growth": 0.482191,
+     "inflation": -1.110756,
+     "regime": "Goldilocks",
+     "t": "2022-06"
+    },
+    {
+     "growth": -1.615441,
+     "inflation": -0.757784,
+     "regime": "Disinflation",
+     "t": "2022-07"
+    },
+    {
+     "growth": 0.857191,
+     "inflation": 0.166511,
+     "regime": "Reflation",
+     "t": "2022-08"
+    },
+    {
+     "growth": 0.937453,
+     "inflation": 1.076103,
+     "regime": "Reflation",
+     "t": "2022-09"
+    },
+    {
+     "growth": 0.421069,
+     "inflation": 0.577237,
+     "regime": "Reflation",
+     "t": "2022-10"
+    },
+    {
+     "growth": -1.360959,
+     "inflation": 0.696765,
+     "regime": "Stagflation",
+     "t": "2022-11"
+    },
+    {
+     "growth": 0.09862,
+     "inflation": 1.339233,
+     "regime": "Reflation",
+     "t": "2022-12"
+    },
+    {
+     "growth": -1.05114,
+     "inflation": 0.180942,
+     "regime": "Stagflation",
+     "t": "2023-01"
+    },
+    {
+     "growth": -0.939223,
+     "inflation": 0.743965,
+     "regime": "Stagflation",
+     "t": "2023-02"
+    },
+    {
+     "growth": -0.155672,
+     "inflation": -0.863042,
+     "regime": "Disinflation",
+     "t": "2023-03"
+    },
+    {
+     "growth": -0.281029,
+     "inflation": -0.193844,
+     "regime": "Disinflation",
+     "t": "2023-04"
+    },
+    {
+     "growth": 0.050098,
+     "inflation": 1.488714,
+     "regime": "Reflation",
+     "t": "2023-05"
+    },
+    {
+     "growth": 0.227362,
+     "inflation": 2.126545,
+     "regime": "Reflation",
+     "t": "2023-06"
+    },
+    {
+     "growth": -0.077937,
+     "inflation": -0.741669,
+     "regime": "Disinflation",
+     "t": "2023-07"
+    },
+    {
+     "growth": 0.803285,
+     "inflation": 0.040797,
+     "regime": "Reflation",
+     "t": "2023-08"
+    },
+    {
+     "growth": 0.991057,
+     "inflation": 1.042101,
+     "regime": "Reflation",
+     "t": "2023-09"
+    },
+    {
+     "growth": -0.509706,
+     "inflation": 0.707416,
+     "regime": "Stagflation",
+     "t": "2023-10"
+    },
+    {
+     "growth": -0.170499,
+     "inflation": -1.684733,
+     "regime": "Disinflation",
+     "t": "2023-11"
+    },
+    {
+     "growth": -0.152293,
+     "inflation": 0.835575,
+     "regime": "Stagflation",
+     "t": "2023-12"
+    },
+    {
+     "growth": 0.6795,
+     "inflation": -0.91376,
+     "regime": "Goldilocks",
+     "t": "2024-01"
+    },
+    {
+     "growth": 1.229724,
+     "inflation": 0.014993,
+     "regime": "Reflation",
+     "t": "2024-02"
+    },
+    {
+     "growth": -0.53161,
+     "inflation": 0.667398,
+     "regime": "Stagflation",
+     "t": "2024-03"
+    },
+    {
+     "growth": 1.41721,
+     "inflation": 0.417152,
+     "regime": "Reflation",
+     "t": "2024-04"
+    },
+    {
+     "growth": 0.711588,
+     "inflation": 0.953002,
+     "regime": "Reflation",
+     "t": "2024-05"
+    },
+    {
+     "growth": 0.596889,
+     "inflation": -0.414738,
+     "regime": "Goldilocks",
+     "t": "2024-06"
+    },
+    {
+     "growth": 0.715524,
+     "inflation": -0.123489,
+     "regime": "Goldilocks",
+     "t": "2024-07"
+    },
+    {
+     "growth": 0.483072,
+     "inflation": -0.382879,
+     "regime": "Goldilocks",
+     "t": "2024-08"
+    },
+    {
+     "growth": -0.597895,
+     "inflation": -0.709336,
+     "regime": "Disinflation",
+     "t": "2024-09"
+    },
+    {
+     "growth": 0.379169,
+     "inflation": -1.732421,
+     "regime": "Goldilocks",
+     "t": "2024-10"
+    },
+    {
+     "growth": 0.197407,
+     "inflation": -0.99078,
+     "regime": "Goldilocks",
+     "t": "2024-11"
+    },
+    {
+     "growth": -0.222833,
+     "inflation": 0.430208,
+     "regime": "Stagflation",
+     "t": "2024-12"
+    },
+    {
+     "growth": 0.056056,
+     "inflation": -0.456583,
+     "regime": "Goldilocks",
+     "t": "2025-01"
+    },
+    {
+     "growth": 0.087715,
+     "inflation": -0.30834,
+     "regime": "Goldilocks",
+     "t": "2025-02"
+    },
+    {
+     "growth": -0.373056,
+     "inflation": 1.393379,
+     "regime": "Stagflation",
+     "t": "2025-03"
+    },
+    {
+     "growth": 1.285079,
+     "inflation": 0.688349,
+     "regime": "Reflation",
+     "t": "2025-04"
+    },
+    {
+     "growth": -0.071232,
+     "inflation": -0.498131,
+     "regime": "Disinflation",
+     "t": "2025-05"
+    },
+    {
+     "growth": -0.005307,
+     "inflation": 0.08609,
+     "regime": "Stagflation",
+     "t": "2025-06"
+    },
+    {
+     "growth": -1.758702,
+     "inflation": -0.525015,
+     "regime": "Disinflation",
+     "t": "2025-07"
+    },
+    {
+     "growth": -0.674044,
+     "inflation": -1.779977,
+     "regime": "Disinflation",
+     "t": "2025-08"
+    },
+    {
+     "growth": 0.888229,
+     "inflation": 0.290645,
+     "regime": "Reflation",
+     "t": "2025-09"
+    },
+    {
+     "growth": 0.067742,
+     "inflation": -0.3214,
+     "regime": "Goldilocks",
+     "t": "2025-10"
+    }
+   ],
+   "reason": null
+  },
+  "s_override": [
+   [
+    0.08030118056573467,
+    0.06329008878390832,
+    0.05173228129456755,
+    0.040278440332468704
+   ],
+   [
+    0.06329008878390832,
+    0.05684110077667928,
+    0.04272145028330883,
+    0.03289312455189563
+   ],
+   [
+    0.05173228129456755,
+    0.04272145028330883,
+    0.039709486349544,
+    0.027436168164889075
+   ],
+   [
+    0.040278440332468704,
+    0.03289312455189563,
+    0.027436168164889075,
+    0.02519169307784835
+   ]
+  ],
+  "view_conf": 49.61
+ },
+ "hard_Q_bl": {
+  "cond": {
+   "available": true,
+   "degenerate": false,
+   "diagnostics": {
+    "avg_correlation": 0.906,
+    "breakdown_detected": true,
+    "max_correlation": 0.942,
+    "max_eigenvalue_ratio": 0.929,
+    "n_assets": 4,
+    "single_factor_dominance": true
+   },
+   "method": "ledoit_wolf",
+   "min_obs_required": 12,
+   "mu": [
+    0.5392970061349693,
+    0.44942731288343557,
+    0.3037241595092025,
+    0.3015728834355828
+   ],
+   "n_months": 15,
+   "n_months_by_regime": {
+    "Disinflation": 14,
+    "Goldilocks": 15,
+    "Reflation": 19,
+    "Stagflation": 12
+   },
+   "n_obs": 326,
+   "n_obs_by_regime": {
+    "Disinflation": 303,
+    "Goldilocks": 326,
+    "Reflation": 419,
+    "Stagflation": 257
+   },
+   "names": [
+    "005930",
+    "000660",
+    "035420",
+    "051910"
+   ],
+   "note": "'Goldilocks' 국면으로 분류된 15개월(326영업일)의 표본만으로 추정했습니다. 독립적인 거시 관측은 영업일 수가 아니라 **개월 수**입니다.",
+   "reason": null,
+   "regime": "Goldilocks",
+   "shrinkage_lambda": 0.0077,
+   "sigma": [
+    [
+     0.08030118056573467,
+     0.06329008878390832,
+     0.05173228129456755,
+     0.040278440332468704
+    ],
+    [
+     0.06329008878390832,
+     0.05684110077667928,
+     0.04272145028330883,
+     0.03289312455189563
+    ],
+    [
+     0.05173228129456755,
+     0.04272145028330883,
+     0.039709486349544,
+     0.027436168164889075
+    ],
+    [
+     0.040278440332468704,
+     0.03289312455189563,
+     0.027436168164889075,
+     0.02519169307784835
+    ]
+   ],
+   "unlabeled_obs": 0
+  },
+  "extra_views": [
+   {
+    "assets": [
+     "005930"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 53.929700613496934,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "000660"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 44.94273128834356,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "035420"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 30.37241595092025,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "051910"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 30.15728834355828,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   }
+  ],
+  "meta": {
+   "A_contribution_pct": null,
+   "confidence_model": {
+    "kind": "legacy_scalar",
+    "note": "수축 강도만으로 정한 스칼라 신뢰도입니다 — Ω 를 분해해 계산한 값이 아니므로 승격 근거로 쓰지 마십시오(계획 §1.5.3)."
+   },
+   "dropped_regimes": null,
+   "h_hold": null,
+   "mixture_note": null,
+   "mode": "live",
+   "pi_bar": null,
+   "pi_path": null,
+   "pit": {
+    "look_ahead_free": true,
+    "mode": "live",
+    "note": "세 속성은 서로 독립입니다. 4개 계열(KOSPI, KR_CPI, KR_IP, KR_LEADING_CYCLE)은 제공자가 개정 이력을 주지 않아 **영구히** 개정 편향이 남습니다; 나머지 1개는 소스에 빈티지가 있으나 수집 경로가 현재값을 가져옵니다(고칠 수 있음). 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다.",
+    "publication_lag": "unspecified",
+    "revision_bias": "unmanaged",
+    "revision_detail": {
+     "blocked_by_path": [
+      "T10YIE"
+     ],
+     "blocked_permanently": [
+      "KOSPI",
+      "KR_CPI",
+      "KR_IP",
+      "KR_LEADING_CYCLE"
+     ],
+     "market": "kr",
+     "path_uses_vintage": false,
+     "series": [
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_LEADING_CYCLE",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.4
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_IP",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KOSPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "source",
+       "key": "KR_CPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.7
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "path",
+       "key": "T10YIE",
+       "provider": "FRED",
+       "registered": true,
+       "source_has_vintage": true,
+       "weight": 0.3
+      }
+     ]
+    }
+   },
+   "probability_source": null,
+   "regime_weighting": "hard",
+   "sharpness": null
+  },
+  "path": {
+   "path_note": null,
+   "path_source": "mes",
+   "points": [
+    {
+     "growth": -0.508571,
+     "inflation": 0.620392,
+     "regime": "Stagflation",
+     "t": "2020-11"
+    },
+    {
+     "growth": -0.735173,
+     "inflation": -0.168172,
+     "regime": "Disinflation",
+     "t": "2020-12"
+    },
+    {
+     "growth": 0.148128,
+     "inflation": -0.08554,
+     "regime": "Goldilocks",
+     "t": "2021-01"
+    },
+    {
+     "growth": 0.912492,
+     "inflation": -0.860544,
+     "regime": "Goldilocks",
+     "t": "2021-02"
+    },
+    {
+     "growth": -1.983714,
+     "inflation": -0.140829,
+     "regime": "Disinflation",
+     "t": "2021-03"
+    },
+    {
+     "growth": -1.883001,
+     "inflation": 0.794339,
+     "regime": "Stagflation",
+     "t": "2021-04"
+    },
+    {
+     "growth": -0.343562,
+     "inflation": -0.061219,
+     "regime": "Disinflation",
+     "t": "2021-05"
+    },
+    {
+     "growth": 0.863081,
+     "inflation": -2.057039,
+     "regime": "Goldilocks",
+     "t": "2021-06"
+    },
+    {
+     "growth": -0.504633,
+     "inflation": -1.09848,
+     "regime": "Disinflation",
+     "t": "2021-07"
+    },
+    {
+     "growth": -0.816734,
+     "inflation": 0.662701,
+     "regime": "Stagflation",
+     "t": "2021-08"
+    },
+    {
+     "growth": 0.01055,
+     "inflation": 0.040069,
+     "regime": "Reflation",
+     "t": "2021-09"
+    },
+    {
+     "growth": 0.289864,
+     "inflation": 0.313843,
+     "regime": "Reflation",
+     "t": "2021-10"
+    },
+    {
+     "growth": 1.539622,
+     "inflation": -0.077357,
+     "regime": "Goldilocks",
+     "t": "2021-11"
+    },
+    {
+     "growth": 0.092826,
+     "inflation": 0.04044,
+     "regime": "Reflation",
+     "t": "2021-12"
+    },
+    {
+     "growth": 1.062683,
+     "inflation": -1.088185,
+     "regime": "Goldilocks",
+     "t": "2022-01"
+    },
+    {
+     "growth": -0.016029,
+     "inflation": -0.975632,
+     "regime": "Disinflation",
+     "t": "2022-02"
+    },
+    {
+     "growth": 0.248811,
+     "inflation": 1.518473,
+     "regime": "Reflation",
+     "t": "2022-03"
+    },
+    {
+     "growth": 1.442468,
+     "inflation": 0.119825,
+     "regime": "Reflation",
+     "t": "2022-04"
+    },
+    {
+     "growth": 0.556771,
+     "inflation": 0.634914,
+     "regime": "Reflation",
+     "t": "2022-05"
+    },
+    {
+     "growth": 0.482191,
+     "inflation": -1.110756,
+     "regime": "Goldilocks",
+     "t": "2022-06"
+    },
+    {
+     "growth": -1.615441,
+     "inflation": -0.757784,
+     "regime": "Disinflation",
+     "t": "2022-07"
+    },
+    {
+     "growth": 0.857191,
+     "inflation": 0.166511,
+     "regime": "Reflation",
+     "t": "2022-08"
+    },
+    {
+     "growth": 0.937453,
+     "inflation": 1.076103,
+     "regime": "Reflation",
+     "t": "2022-09"
+    },
+    {
+     "growth": 0.421069,
+     "inflation": 0.577237,
+     "regime": "Reflation",
+     "t": "2022-10"
+    },
+    {
+     "growth": -1.360959,
+     "inflation": 0.696765,
+     "regime": "Stagflation",
+     "t": "2022-11"
+    },
+    {
+     "growth": 0.09862,
+     "inflation": 1.339233,
+     "regime": "Reflation",
+     "t": "2022-12"
+    },
+    {
+     "growth": -1.05114,
+     "inflation": 0.180942,
+     "regime": "Stagflation",
+     "t": "2023-01"
+    },
+    {
+     "growth": -0.939223,
+     "inflation": 0.743965,
+     "regime": "Stagflation",
+     "t": "2023-02"
+    },
+    {
+     "growth": -0.155672,
+     "inflation": -0.863042,
+     "regime": "Disinflation",
+     "t": "2023-03"
+    },
+    {
+     "growth": -0.281029,
+     "inflation": -0.193844,
+     "regime": "Disinflation",
+     "t": "2023-04"
+    },
+    {
+     "growth": 0.050098,
+     "inflation": 1.488714,
+     "regime": "Reflation",
+     "t": "2023-05"
+    },
+    {
+     "growth": 0.227362,
+     "inflation": 2.126545,
+     "regime": "Reflation",
+     "t": "2023-06"
+    },
+    {
+     "growth": -0.077937,
+     "inflation": -0.741669,
+     "regime": "Disinflation",
+     "t": "2023-07"
+    },
+    {
+     "growth": 0.803285,
+     "inflation": 0.040797,
+     "regime": "Reflation",
+     "t": "2023-08"
+    },
+    {
+     "growth": 0.991057,
+     "inflation": 1.042101,
+     "regime": "Reflation",
+     "t": "2023-09"
+    },
+    {
+     "growth": -0.509706,
+     "inflation": 0.707416,
+     "regime": "Stagflation",
+     "t": "2023-10"
+    },
+    {
+     "growth": -0.170499,
+     "inflation": -1.684733,
+     "regime": "Disinflation",
+     "t": "2023-11"
+    },
+    {
+     "growth": -0.152293,
+     "inflation": 0.835575,
+     "regime": "Stagflation",
+     "t": "2023-12"
+    },
+    {
+     "growth": 0.6795,
+     "inflation": -0.91376,
+     "regime": "Goldilocks",
+     "t": "2024-01"
+    },
+    {
+     "growth": 1.229724,
+     "inflation": 0.014993,
+     "regime": "Reflation",
+     "t": "2024-02"
+    },
+    {
+     "growth": -0.53161,
+     "inflation": 0.667398,
+     "regime": "Stagflation",
+     "t": "2024-03"
+    },
+    {
+     "growth": 1.41721,
+     "inflation": 0.417152,
+     "regime": "Reflation",
+     "t": "2024-04"
+    },
+    {
+     "growth": 0.711588,
+     "inflation": 0.953002,
+     "regime": "Reflation",
+     "t": "2024-05"
+    },
+    {
+     "growth": 0.596889,
+     "inflation": -0.414738,
+     "regime": "Goldilocks",
+     "t": "2024-06"
+    },
+    {
+     "growth": 0.715524,
+     "inflation": -0.123489,
+     "regime": "Goldilocks",
+     "t": "2024-07"
+    },
+    {
+     "growth": 0.483072,
+     "inflation": -0.382879,
+     "regime": "Goldilocks",
+     "t": "2024-08"
+    },
+    {
+     "growth": -0.597895,
+     "inflation": -0.709336,
+     "regime": "Disinflation",
+     "t": "2024-09"
+    },
+    {
+     "growth": 0.379169,
+     "inflation": -1.732421,
+     "regime": "Goldilocks",
+     "t": "2024-10"
+    },
+    {
+     "growth": 0.197407,
+     "inflation": -0.99078,
+     "regime": "Goldilocks",
+     "t": "2024-11"
+    },
+    {
+     "growth": -0.222833,
+     "inflation": 0.430208,
+     "regime": "Stagflation",
+     "t": "2024-12"
+    },
+    {
+     "growth": 0.056056,
+     "inflation": -0.456583,
+     "regime": "Goldilocks",
+     "t": "2025-01"
+    },
+    {
+     "growth": 0.087715,
+     "inflation": -0.30834,
+     "regime": "Goldilocks",
+     "t": "2025-02"
+    },
+    {
+     "growth": -0.373056,
+     "inflation": 1.393379,
+     "regime": "Stagflation",
+     "t": "2025-03"
+    },
+    {
+     "growth": 1.285079,
+     "inflation": 0.688349,
+     "regime": "Reflation",
+     "t": "2025-04"
+    },
+    {
+     "growth": -0.071232,
+     "inflation": -0.498131,
+     "regime": "Disinflation",
+     "t": "2025-05"
+    },
+    {
+     "growth": -0.005307,
+     "inflation": 0.08609,
+     "regime": "Stagflation",
+     "t": "2025-06"
+    },
+    {
+     "growth": -1.758702,
+     "inflation": -0.525015,
+     "regime": "Disinflation",
+     "t": "2025-07"
+    },
+    {
+     "growth": -0.674044,
+     "inflation": -1.779977,
+     "regime": "Disinflation",
+     "t": "2025-08"
+    },
+    {
+     "growth": 0.888229,
+     "inflation": 0.290645,
+     "regime": "Reflation",
+     "t": "2025-09"
+    },
+    {
+     "growth": 0.067742,
+     "inflation": -0.3214,
+     "regime": "Goldilocks",
+     "t": "2025-10"
+    }
+   ],
+   "reason": null
+  },
+  "s_override": [
+   [
+    0.08030118056573467,
+    0.06329008878390832,
+    0.05173228129456755,
+    0.040278440332468704
+   ],
+   [
+    0.06329008878390832,
+    0.05684110077667928,
+    0.04272145028330883,
+    0.03289312455189563
+   ],
+   [
+    0.05173228129456755,
+    0.04272145028330883,
+    0.039709486349544,
+    0.027436168164889075
+   ],
+   [
+    0.040278440332468704,
+    0.03289312455189563,
+    0.027436168164889075,
+    0.02519169307784835
+   ]
+  ],
+  "view_conf": 49.61
+ },
+ "probabilistic_M_bl": {
+  "cond": {
+   "A_contribution_pct": 8.5125,
+   "A_h": [
+    [
+     0.0005652845068986475,
+     0.00045654314244493194,
+     0.0002385137272732068,
+     0.0002614003062175506
+    ],
+    [
+     0.00045654314244493194,
+     0.00037408922120277396,
+     0.00019610867384809078,
+     0.00021836443620697066
+    ],
+    [
+     0.0002385137272732068,
+     0.00019610867384809073,
+     0.00010295578854816107,
+     0.00011539480367166174
+    ],
+    [
+     0.0002614003062175506,
+     0.00021836443620697066,
+     0.00011539480367166174,
+     0.0001331359124797217
+    ]
+   ],
+   "W_h": [
+    [
+     0.0050574504977746555,
+     0.0038866884509844548,
+     0.0031325999840031075,
+     0.0023845197131398383
+    ],
+    [
+     0.0038866884509844548,
+     0.0035493359527173666,
+     0.0025856934585959434,
+     0.001941913362169341
+    ],
+    [
+     0.0031325999840031075,
+     0.0025856934585959434,
+     0.002466926168183085,
+     0.0016021949439435884
+    ],
+    [
+     0.0023845197131398383,
+     0.001941913362169341,
+     0.0016021949439435884,
+     0.0015595685821607015
+    ]
+   ],
+   "available": true,
+   "confidence_model": {
+    "implied_confidence": [
+     2.5648,
+     2.558,
+     2.4876,
+     2.5363
+    ],
+    "kind": "decomposed_omega",
+    "n_months": 12,
+    "note": "잔여 모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 **안 잰 것이 확신을 높이므로**, 실제로 측정된 항 중 최대값을 보수적 하한으로 씁니다. 이것은 추정이 아니라 선언된 가정이며, 워크포워드로 실현 뷰 오차를 재면 이 값을 대체합니다.",
+    "omega_diag": [
+     0.1281622260293755,
+     0.08967313351965009,
+     0.06044169749897198,
+     0.039027276921613493
+    ],
+    "residual_policy": "conservative_floor",
+    "residual_risk": "unmeasured",
+    "terms": {
+     "estimation": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ],
+     "regime": [
+      0.00678341408278377,
+      0.0044890706544332875,
+      0.0012354694625779329,
+      0.0015976309497566605
+     ],
+     "residual": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ]
+    },
+    "version": 1
+   },
+   "degenerate": false,
+   "dropped_mass_max": 0.0,
+   "dropped_regimes": {},
+   "h_hold": 1,
+   "method": "regime_mixture",
+   "min_eigenvalue": 0.0040430473448776465,
+   "mu": [
+    0.23319356735631513,
+    0.1954129421317172,
+    0.1712555179303415,
+    0.15745660239188286
+   ],
+   "n_months_by_regime": {
+    "Disinflation": 14,
+    "Goldilocks": 15,
+    "Reflation": 19,
+    "Stagflation": 12
+   },
+   "n_obs_by_regime": {
+    "Disinflation": 303,
+    "Goldilocks": 326,
+    "Reflation": 419,
+    "Stagflation": 257
+   },
+   "names": [
+    "005930",
+    "000660",
+    "035420",
+    "051910"
+   ],
+   "note": "4개 국면의 조건부 적률을 1개월 홀딩 기간의 국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 8.51% 를 차지합니다 — 국면을 모를수록 이 값이 커지며, 그것이 리스크로 정직하게 이전된 부분입니다.",
+   "pi_bar": {
+    "Disinflation": 0.28571428571428575,
+    "Goldilocks": 0.42857142857142855,
+    "Reflation": 0.14285714285714288,
+    "Stagflation": 0.14285714285714288
+   },
+   "pi_path": [
+    {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    }
+   ],
+   "reason": null,
+   "regime": "Goldilocks",
+   "shrinkage_lambda": 0.975123605106667,
+   "shrinkage_lambda_aggregate": "pi_weighted_mean",
+   "shrinkage_lambda_by_regime": {
+    "Disinflation": 0.0115,
+    "Goldilocks": 0.0077,
+    "Reflation": 0.0073,
+    "Stagflation": 0.0119
+   },
+   "sigma": [
+    [
+     0.06747282005607963,
+     0.05211877912115264,
+     0.04045336453531577,
+     0.03175104023228867
+    ],
+    [
+     0.05211877912115264,
+     0.04708110208704169,
+     0.033381625589328404,
+     0.02592333358051574
+    ],
+    [
+     0.04045336453531577,
+     0.033381625589328404,
+     0.03083858348077495,
+     0.020611076971383
+    ],
+    [
+     0.03175104023228867,
+     0.02592333358051574,
+     0.020611076971383,
+     0.02031245393568508
+    ]
+   ]
+  },
+  "extra_views": [
+   {
+    "assets": [
+     "005930"
+    ],
+    "confidence": 1.24,
+    "direction": 1,
+    "magnitude_pct": 23.319356735631512,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "000660"
+    ],
+    "confidence": 1.24,
+    "direction": 1,
+    "magnitude_pct": 19.54129421317172,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "035420"
+    ],
+    "confidence": 1.24,
+    "direction": 1,
+    "magnitude_pct": 17.12555179303415,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "051910"
+    ],
+    "confidence": 1.24,
+    "direction": 1,
+    "magnitude_pct": 15.745660239188286,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   }
+  ],
+  "meta": {
+   "A_contribution_pct": 8.5125,
+   "confidence_model": {
+    "implied_confidence": [
+     2.5648,
+     2.558,
+     2.4876,
+     2.5363
+    ],
+    "kind": "decomposed_omega",
+    "n_months": 12,
+    "note": "잔여 모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 **안 잰 것이 확신을 높이므로**, 실제로 측정된 항 중 최대값을 보수적 하한으로 씁니다. 이것은 추정이 아니라 선언된 가정이며, 워크포워드로 실현 뷰 오차를 재면 이 값을 대체합니다.",
+    "omega_diag": [
+     0.1281622260293755,
+     0.08967313351965009,
+     0.06044169749897198,
+     0.039027276921613493
+    ],
+    "residual_policy": "conservative_floor",
+    "residual_risk": "unmeasured",
+    "terms": {
+     "estimation": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ],
+     "regime": [
+      0.00678341408278377,
+      0.0044890706544332875,
+      0.0012354694625779329,
+      0.0015976309497566605
+     ],
+     "residual": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ]
+    },
+    "version": 1
+   },
+   "dropped_regimes": {},
+   "h_hold": 1,
+   "mixture_note": "4개 국면의 조건부 적률을 1개월 홀딩 기간의 국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 8.51% 를 차지합니다 — 국면을 모를수록 이 값이 커지며, 그것이 리스크로 정직하게 이전된 부분입니다.",
+   "mode": "live",
+   "pi_bar": {
+    "Disinflation": 0.28571428571428575,
+    "Goldilocks": 0.42857142857142855,
+    "Reflation": 0.14285714285714288,
+    "Stagflation": 0.14285714285714288
+   },
+   "pi_path": [
+    {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    }
+   ],
+   "pit": {
+    "look_ahead_free": true,
+    "mode": "live",
+    "note": "세 속성은 서로 독립입니다. 4개 계열(KOSPI, KR_CPI, KR_IP, KR_LEADING_CYCLE)은 제공자가 개정 이력을 주지 않아 **영구히** 개정 편향이 남습니다; 나머지 1개는 소스에 빈티지가 있으나 수집 경로가 현재값을 가져옵니다(고칠 수 있음). 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다.",
+    "publication_lag": "unspecified",
+    "revision_bias": "unmanaged",
+    "revision_detail": {
+     "blocked_by_path": [
+      "T10YIE"
+     ],
+     "blocked_permanently": [
+      "KOSPI",
+      "KR_CPI",
+      "KR_IP",
+      "KR_LEADING_CYCLE"
+     ],
+     "market": "kr",
+     "path_uses_vintage": false,
+     "series": [
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_LEADING_CYCLE",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.4
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_IP",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KOSPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "source",
+       "key": "KR_CPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.7
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "path",
+       "key": "T10YIE",
+       "provider": "FRED",
+       "registered": true,
+       "source_has_vintage": true,
+       "weight": 0.3
+      }
+     ]
+    }
+   },
+   "probability_source": {
+    "mode": "live",
+    "probs": {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    },
+    "sampled_forecast": {
+     "ci90": {
+      "Disinflation": [
+       0.1389,
+       0.4536
+      ],
+      "Goldilocks": [
+       0.2597,
+       0.6042
+      ],
+      "Reflation": [
+       0.0426,
+       0.2825
+      ],
+      "Stagflation": [
+       0.0416,
+       0.2857
+      ]
+     },
+     "note": "1개월 뒤 분포 — 전이행렬을 사후분포에서 4000회 뽑아 거듭제곱한 사후예측입니다. 얇은 행의 불확실성이 여기까지 전달됩니다.",
+     "probs": {
+      "Disinflation": 0.28687,
+      "Goldilocks": 0.428086,
+      "Reflation": 0.141491,
+      "Stagflation": 0.143553
+     }
+    },
+    "sharpness": 0.07881450341144558,
+    "source": "k_step_forecast_mean",
+    "step_months": 1,
+    "uncertainty_note": "Σ̄ 는 사후평균 전이행렬로 계산했습니다 — π 와 P 가 같은 사슬에서 나와야 국면 간 항이 공분산이 되기 때문입니다. 전이행렬 **파라미터**의 불확실성(위 `sampled_forecast` 의 구간)은 Σ̄ 에 전파되지 않았고, 잔여 모델리스크로 남습니다.",
+    "usage": "portfolio"
+   },
+   "regime_weighting": "probabilistic",
+   "sharpness": 0.07881450341144558
+  },
+  "path": {
+   "path_note": null,
+   "path_source": "mes",
+   "points": [
+    {
+     "growth": -0.508571,
+     "inflation": 0.620392,
+     "regime": "Stagflation",
+     "t": "2020-11"
+    },
+    {
+     "growth": -0.735173,
+     "inflation": -0.168172,
+     "regime": "Disinflation",
+     "t": "2020-12"
+    },
+    {
+     "growth": 0.148128,
+     "inflation": -0.08554,
+     "regime": "Goldilocks",
+     "t": "2021-01"
+    },
+    {
+     "growth": 0.912492,
+     "inflation": -0.860544,
+     "regime": "Goldilocks",
+     "t": "2021-02"
+    },
+    {
+     "growth": -1.983714,
+     "inflation": -0.140829,
+     "regime": "Disinflation",
+     "t": "2021-03"
+    },
+    {
+     "growth": -1.883001,
+     "inflation": 0.794339,
+     "regime": "Stagflation",
+     "t": "2021-04"
+    },
+    {
+     "growth": -0.343562,
+     "inflation": -0.061219,
+     "regime": "Disinflation",
+     "t": "2021-05"
+    },
+    {
+     "growth": 0.863081,
+     "inflation": -2.057039,
+     "regime": "Goldilocks",
+     "t": "2021-06"
+    },
+    {
+     "growth": -0.504633,
+     "inflation": -1.09848,
+     "regime": "Disinflation",
+     "t": "2021-07"
+    },
+    {
+     "growth": -0.816734,
+     "inflation": 0.662701,
+     "regime": "Stagflation",
+     "t": "2021-08"
+    },
+    {
+     "growth": 0.01055,
+     "inflation": 0.040069,
+     "regime": "Reflation",
+     "t": "2021-09"
+    },
+    {
+     "growth": 0.289864,
+     "inflation": 0.313843,
+     "regime": "Reflation",
+     "t": "2021-10"
+    },
+    {
+     "growth": 1.539622,
+     "inflation": -0.077357,
+     "regime": "Goldilocks",
+     "t": "2021-11"
+    },
+    {
+     "growth": 0.092826,
+     "inflation": 0.04044,
+     "regime": "Reflation",
+     "t": "2021-12"
+    },
+    {
+     "growth": 1.062683,
+     "inflation": -1.088185,
+     "regime": "Goldilocks",
+     "t": "2022-01"
+    },
+    {
+     "growth": -0.016029,
+     "inflation": -0.975632,
+     "regime": "Disinflation",
+     "t": "2022-02"
+    },
+    {
+     "growth": 0.248811,
+     "inflation": 1.518473,
+     "regime": "Reflation",
+     "t": "2022-03"
+    },
+    {
+     "growth": 1.442468,
+     "inflation": 0.119825,
+     "regime": "Reflation",
+     "t": "2022-04"
+    },
+    {
+     "growth": 0.556771,
+     "inflation": 0.634914,
+     "regime": "Reflation",
+     "t": "2022-05"
+    },
+    {
+     "growth": 0.482191,
+     "inflation": -1.110756,
+     "regime": "Goldilocks",
+     "t": "2022-06"
+    },
+    {
+     "growth": -1.615441,
+     "inflation": -0.757784,
+     "regime": "Disinflation",
+     "t": "2022-07"
+    },
+    {
+     "growth": 0.857191,
+     "inflation": 0.166511,
+     "regime": "Reflation",
+     "t": "2022-08"
+    },
+    {
+     "growth": 0.937453,
+     "inflation": 1.076103,
+     "regime": "Reflation",
+     "t": "2022-09"
+    },
+    {
+     "growth": 0.421069,
+     "inflation": 0.577237,
+     "regime": "Reflation",
+     "t": "2022-10"
+    },
+    {
+     "growth": -1.360959,
+     "inflation": 0.696765,
+     "regime": "Stagflation",
+     "t": "2022-11"
+    },
+    {
+     "growth": 0.09862,
+     "inflation": 1.339233,
+     "regime": "Reflation",
+     "t": "2022-12"
+    },
+    {
+     "growth": -1.05114,
+     "inflation": 0.180942,
+     "regime": "Stagflation",
+     "t": "2023-01"
+    },
+    {
+     "growth": -0.939223,
+     "inflation": 0.743965,
+     "regime": "Stagflation",
+     "t": "2023-02"
+    },
+    {
+     "growth": -0.155672,
+     "inflation": -0.863042,
+     "regime": "Disinflation",
+     "t": "2023-03"
+    },
+    {
+     "growth": -0.281029,
+     "inflation": -0.193844,
+     "regime": "Disinflation",
+     "t": "2023-04"
+    },
+    {
+     "growth": 0.050098,
+     "inflation": 1.488714,
+     "regime": "Reflation",
+     "t": "2023-05"
+    },
+    {
+     "growth": 0.227362,
+     "inflation": 2.126545,
+     "regime": "Reflation",
+     "t": "2023-06"
+    },
+    {
+     "growth": -0.077937,
+     "inflation": -0.741669,
+     "regime": "Disinflation",
+     "t": "2023-07"
+    },
+    {
+     "growth": 0.803285,
+     "inflation": 0.040797,
+     "regime": "Reflation",
+     "t": "2023-08"
+    },
+    {
+     "growth": 0.991057,
+     "inflation": 1.042101,
+     "regime": "Reflation",
+     "t": "2023-09"
+    },
+    {
+     "growth": -0.509706,
+     "inflation": 0.707416,
+     "regime": "Stagflation",
+     "t": "2023-10"
+    },
+    {
+     "growth": -0.170499,
+     "inflation": -1.684733,
+     "regime": "Disinflation",
+     "t": "2023-11"
+    },
+    {
+     "growth": -0.152293,
+     "inflation": 0.835575,
+     "regime": "Stagflation",
+     "t": "2023-12"
+    },
+    {
+     "growth": 0.6795,
+     "inflation": -0.91376,
+     "regime": "Goldilocks",
+     "t": "2024-01"
+    },
+    {
+     "growth": 1.229724,
+     "inflation": 0.014993,
+     "regime": "Reflation",
+     "t": "2024-02"
+    },
+    {
+     "growth": -0.53161,
+     "inflation": 0.667398,
+     "regime": "Stagflation",
+     "t": "2024-03"
+    },
+    {
+     "growth": 1.41721,
+     "inflation": 0.417152,
+     "regime": "Reflation",
+     "t": "2024-04"
+    },
+    {
+     "growth": 0.711588,
+     "inflation": 0.953002,
+     "regime": "Reflation",
+     "t": "2024-05"
+    },
+    {
+     "growth": 0.596889,
+     "inflation": -0.414738,
+     "regime": "Goldilocks",
+     "t": "2024-06"
+    },
+    {
+     "growth": 0.715524,
+     "inflation": -0.123489,
+     "regime": "Goldilocks",
+     "t": "2024-07"
+    },
+    {
+     "growth": 0.483072,
+     "inflation": -0.382879,
+     "regime": "Goldilocks",
+     "t": "2024-08"
+    },
+    {
+     "growth": -0.597895,
+     "inflation": -0.709336,
+     "regime": "Disinflation",
+     "t": "2024-09"
+    },
+    {
+     "growth": 0.379169,
+     "inflation": -1.732421,
+     "regime": "Goldilocks",
+     "t": "2024-10"
+    },
+    {
+     "growth": 0.197407,
+     "inflation": -0.99078,
+     "regime": "Goldilocks",
+     "t": "2024-11"
+    },
+    {
+     "growth": -0.222833,
+     "inflation": 0.430208,
+     "regime": "Stagflation",
+     "t": "2024-12"
+    },
+    {
+     "growth": 0.056056,
+     "inflation": -0.456583,
+     "regime": "Goldilocks",
+     "t": "2025-01"
+    },
+    {
+     "growth": 0.087715,
+     "inflation": -0.30834,
+     "regime": "Goldilocks",
+     "t": "2025-02"
+    },
+    {
+     "growth": -0.373056,
+     "inflation": 1.393379,
+     "regime": "Stagflation",
+     "t": "2025-03"
+    },
+    {
+     "growth": 1.285079,
+     "inflation": 0.688349,
+     "regime": "Reflation",
+     "t": "2025-04"
+    },
+    {
+     "growth": -0.071232,
+     "inflation": -0.498131,
+     "regime": "Disinflation",
+     "t": "2025-05"
+    },
+    {
+     "growth": -0.005307,
+     "inflation": 0.08609,
+     "regime": "Stagflation",
+     "t": "2025-06"
+    },
+    {
+     "growth": -1.758702,
+     "inflation": -0.525015,
+     "regime": "Disinflation",
+     "t": "2025-07"
+    },
+    {
+     "growth": -0.674044,
+     "inflation": -1.779977,
+     "regime": "Disinflation",
+     "t": "2025-08"
+    },
+    {
+     "growth": 0.888229,
+     "inflation": 0.290645,
+     "regime": "Reflation",
+     "t": "2025-09"
+    },
+    {
+     "growth": 0.067742,
+     "inflation": -0.3214,
+     "regime": "Goldilocks",
+     "t": "2025-10"
+    }
+   ],
+   "reason": null
+  },
+  "s_override": [
+   [
+    0.06747282005607963,
+    0.05211877912115264,
+    0.04045336453531577,
+    0.03175104023228867
+   ],
+   [
+    0.05211877912115264,
+    0.04708110208704169,
+    0.033381625589328404,
+    0.02592333358051574
+   ],
+   [
+    0.04045336453531577,
+    0.033381625589328404,
+    0.03083858348077495,
+    0.020611076971383
+   ],
+   [
+    0.03175104023228867,
+    0.02592333358051574,
+    0.020611076971383,
+    0.02031245393568508
+   ]
+  ],
+  "view_conf": 1.24
+ },
+ "probabilistic_M_forecast_fails": {
+  "cond": {
+   "available": true,
+   "degenerate": false,
+   "diagnostics": {
+    "avg_correlation": 0.906,
+    "breakdown_detected": true,
+    "max_correlation": 0.942,
+    "max_eigenvalue_ratio": 0.929,
+    "n_assets": 4,
+    "single_factor_dominance": true
+   },
+   "method": "ledoit_wolf",
+   "min_obs_required": 12,
+   "mu": [
+    0.5392970061349693,
+    0.44942731288343557,
+    0.3037241595092025,
+    0.3015728834355828
+   ],
+   "n_months": 15,
+   "n_months_by_regime": {
+    "Disinflation": 14,
+    "Goldilocks": 15,
+    "Reflation": 19,
+    "Stagflation": 12
+   },
+   "n_obs": 326,
+   "n_obs_by_regime": {
+    "Disinflation": 303,
+    "Goldilocks": 326,
+    "Reflation": 419,
+    "Stagflation": 257
+   },
+   "names": [
+    "005930",
+    "000660",
+    "035420",
+    "051910"
+   ],
+   "note": "'Goldilocks' 국면으로 분류된 15개월(326영업일)의 표본만으로 추정했습니다. 독립적인 거시 관측은 영업일 수가 아니라 **개월 수**입니다.",
+   "reason": null,
+   "regime": "Goldilocks",
+   "shrinkage_lambda": 0.0077,
+   "sigma": [
+    [
+     0.08030118056573467,
+     0.06329008878390832,
+     0.05173228129456755,
+     0.040278440332468704
+    ],
+    [
+     0.06329008878390832,
+     0.05684110077667928,
+     0.04272145028330883,
+     0.03289312455189563
+    ],
+    [
+     0.05173228129456755,
+     0.04272145028330883,
+     0.039709486349544,
+     0.027436168164889075
+    ],
+    [
+     0.040278440332468704,
+     0.03289312455189563,
+     0.027436168164889075,
+     0.02519169307784835
+    ]
+   ],
+   "unlabeled_obs": 0
+  },
+  "extra_views": [
+   {
+    "assets": [
+     "005930"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 53.929700613496934,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "000660"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 44.94273128834356,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "035420"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 30.37241595092025,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "051910"
+    ],
+    "confidence": 49.61,
+    "direction": 1,
+    "magnitude_pct": 30.15728834355828,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   }
+  ],
+  "meta": {
+   "A_contribution_pct": null,
+   "confidence_model": {
+    "kind": "legacy_scalar",
+    "note": "수축 강도만으로 정한 스칼라 신뢰도입니다 — Ω 를 분해해 계산한 값이 아니므로 승격 근거로 쓰지 마십시오(계획 §1.5.3)."
+   },
+   "dropped_regimes": null,
+   "h_hold": null,
+   "mixture_note": "국면 예측을 만들지 못해 하드 라벨로 계산했습니다 (ValueError: 골든: 예측 불가).",
+   "mode": "live",
+   "pi_bar": null,
+   "pi_path": null,
+   "pit": {
+    "look_ahead_free": true,
+    "mode": "live",
+    "note": "세 속성은 서로 독립입니다. 4개 계열(KOSPI, KR_CPI, KR_IP, KR_LEADING_CYCLE)은 제공자가 개정 이력을 주지 않아 **영구히** 개정 편향이 남습니다; 나머지 1개는 소스에 빈티지가 있으나 수집 경로가 현재값을 가져옵니다(고칠 수 있음). 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다.",
+    "publication_lag": "unspecified",
+    "revision_bias": "unmanaged",
+    "revision_detail": {
+     "blocked_by_path": [
+      "T10YIE"
+     ],
+     "blocked_permanently": [
+      "KOSPI",
+      "KR_CPI",
+      "KR_IP",
+      "KR_LEADING_CYCLE"
+     ],
+     "market": "kr",
+     "path_uses_vintage": false,
+     "series": [
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_LEADING_CYCLE",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.4
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_IP",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KOSPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "source",
+       "key": "KR_CPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.7
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "path",
+       "key": "T10YIE",
+       "provider": "FRED",
+       "registered": true,
+       "source_has_vintage": true,
+       "weight": 0.3
+      }
+     ]
+    }
+   },
+   "probability_source": null,
+   "regime_weighting": "hard",
+   "sharpness": null
+  },
+  "path": {
+   "path_note": null,
+   "path_source": "mes",
+   "points": [
+    {
+     "growth": -0.508571,
+     "inflation": 0.620392,
+     "regime": "Stagflation",
+     "t": "2020-11"
+    },
+    {
+     "growth": -0.735173,
+     "inflation": -0.168172,
+     "regime": "Disinflation",
+     "t": "2020-12"
+    },
+    {
+     "growth": 0.148128,
+     "inflation": -0.08554,
+     "regime": "Goldilocks",
+     "t": "2021-01"
+    },
+    {
+     "growth": 0.912492,
+     "inflation": -0.860544,
+     "regime": "Goldilocks",
+     "t": "2021-02"
+    },
+    {
+     "growth": -1.983714,
+     "inflation": -0.140829,
+     "regime": "Disinflation",
+     "t": "2021-03"
+    },
+    {
+     "growth": -1.883001,
+     "inflation": 0.794339,
+     "regime": "Stagflation",
+     "t": "2021-04"
+    },
+    {
+     "growth": -0.343562,
+     "inflation": -0.061219,
+     "regime": "Disinflation",
+     "t": "2021-05"
+    },
+    {
+     "growth": 0.863081,
+     "inflation": -2.057039,
+     "regime": "Goldilocks",
+     "t": "2021-06"
+    },
+    {
+     "growth": -0.504633,
+     "inflation": -1.09848,
+     "regime": "Disinflation",
+     "t": "2021-07"
+    },
+    {
+     "growth": -0.816734,
+     "inflation": 0.662701,
+     "regime": "Stagflation",
+     "t": "2021-08"
+    },
+    {
+     "growth": 0.01055,
+     "inflation": 0.040069,
+     "regime": "Reflation",
+     "t": "2021-09"
+    },
+    {
+     "growth": 0.289864,
+     "inflation": 0.313843,
+     "regime": "Reflation",
+     "t": "2021-10"
+    },
+    {
+     "growth": 1.539622,
+     "inflation": -0.077357,
+     "regime": "Goldilocks",
+     "t": "2021-11"
+    },
+    {
+     "growth": 0.092826,
+     "inflation": 0.04044,
+     "regime": "Reflation",
+     "t": "2021-12"
+    },
+    {
+     "growth": 1.062683,
+     "inflation": -1.088185,
+     "regime": "Goldilocks",
+     "t": "2022-01"
+    },
+    {
+     "growth": -0.016029,
+     "inflation": -0.975632,
+     "regime": "Disinflation",
+     "t": "2022-02"
+    },
+    {
+     "growth": 0.248811,
+     "inflation": 1.518473,
+     "regime": "Reflation",
+     "t": "2022-03"
+    },
+    {
+     "growth": 1.442468,
+     "inflation": 0.119825,
+     "regime": "Reflation",
+     "t": "2022-04"
+    },
+    {
+     "growth": 0.556771,
+     "inflation": 0.634914,
+     "regime": "Reflation",
+     "t": "2022-05"
+    },
+    {
+     "growth": 0.482191,
+     "inflation": -1.110756,
+     "regime": "Goldilocks",
+     "t": "2022-06"
+    },
+    {
+     "growth": -1.615441,
+     "inflation": -0.757784,
+     "regime": "Disinflation",
+     "t": "2022-07"
+    },
+    {
+     "growth": 0.857191,
+     "inflation": 0.166511,
+     "regime": "Reflation",
+     "t": "2022-08"
+    },
+    {
+     "growth": 0.937453,
+     "inflation": 1.076103,
+     "regime": "Reflation",
+     "t": "2022-09"
+    },
+    {
+     "growth": 0.421069,
+     "inflation": 0.577237,
+     "regime": "Reflation",
+     "t": "2022-10"
+    },
+    {
+     "growth": -1.360959,
+     "inflation": 0.696765,
+     "regime": "Stagflation",
+     "t": "2022-11"
+    },
+    {
+     "growth": 0.09862,
+     "inflation": 1.339233,
+     "regime": "Reflation",
+     "t": "2022-12"
+    },
+    {
+     "growth": -1.05114,
+     "inflation": 0.180942,
+     "regime": "Stagflation",
+     "t": "2023-01"
+    },
+    {
+     "growth": -0.939223,
+     "inflation": 0.743965,
+     "regime": "Stagflation",
+     "t": "2023-02"
+    },
+    {
+     "growth": -0.155672,
+     "inflation": -0.863042,
+     "regime": "Disinflation",
+     "t": "2023-03"
+    },
+    {
+     "growth": -0.281029,
+     "inflation": -0.193844,
+     "regime": "Disinflation",
+     "t": "2023-04"
+    },
+    {
+     "growth": 0.050098,
+     "inflation": 1.488714,
+     "regime": "Reflation",
+     "t": "2023-05"
+    },
+    {
+     "growth": 0.227362,
+     "inflation": 2.126545,
+     "regime": "Reflation",
+     "t": "2023-06"
+    },
+    {
+     "growth": -0.077937,
+     "inflation": -0.741669,
+     "regime": "Disinflation",
+     "t": "2023-07"
+    },
+    {
+     "growth": 0.803285,
+     "inflation": 0.040797,
+     "regime": "Reflation",
+     "t": "2023-08"
+    },
+    {
+     "growth": 0.991057,
+     "inflation": 1.042101,
+     "regime": "Reflation",
+     "t": "2023-09"
+    },
+    {
+     "growth": -0.509706,
+     "inflation": 0.707416,
+     "regime": "Stagflation",
+     "t": "2023-10"
+    },
+    {
+     "growth": -0.170499,
+     "inflation": -1.684733,
+     "regime": "Disinflation",
+     "t": "2023-11"
+    },
+    {
+     "growth": -0.152293,
+     "inflation": 0.835575,
+     "regime": "Stagflation",
+     "t": "2023-12"
+    },
+    {
+     "growth": 0.6795,
+     "inflation": -0.91376,
+     "regime": "Goldilocks",
+     "t": "2024-01"
+    },
+    {
+     "growth": 1.229724,
+     "inflation": 0.014993,
+     "regime": "Reflation",
+     "t": "2024-02"
+    },
+    {
+     "growth": -0.53161,
+     "inflation": 0.667398,
+     "regime": "Stagflation",
+     "t": "2024-03"
+    },
+    {
+     "growth": 1.41721,
+     "inflation": 0.417152,
+     "regime": "Reflation",
+     "t": "2024-04"
+    },
+    {
+     "growth": 0.711588,
+     "inflation": 0.953002,
+     "regime": "Reflation",
+     "t": "2024-05"
+    },
+    {
+     "growth": 0.596889,
+     "inflation": -0.414738,
+     "regime": "Goldilocks",
+     "t": "2024-06"
+    },
+    {
+     "growth": 0.715524,
+     "inflation": -0.123489,
+     "regime": "Goldilocks",
+     "t": "2024-07"
+    },
+    {
+     "growth": 0.483072,
+     "inflation": -0.382879,
+     "regime": "Goldilocks",
+     "t": "2024-08"
+    },
+    {
+     "growth": -0.597895,
+     "inflation": -0.709336,
+     "regime": "Disinflation",
+     "t": "2024-09"
+    },
+    {
+     "growth": 0.379169,
+     "inflation": -1.732421,
+     "regime": "Goldilocks",
+     "t": "2024-10"
+    },
+    {
+     "growth": 0.197407,
+     "inflation": -0.99078,
+     "regime": "Goldilocks",
+     "t": "2024-11"
+    },
+    {
+     "growth": -0.222833,
+     "inflation": 0.430208,
+     "regime": "Stagflation",
+     "t": "2024-12"
+    },
+    {
+     "growth": 0.056056,
+     "inflation": -0.456583,
+     "regime": "Goldilocks",
+     "t": "2025-01"
+    },
+    {
+     "growth": 0.087715,
+     "inflation": -0.30834,
+     "regime": "Goldilocks",
+     "t": "2025-02"
+    },
+    {
+     "growth": -0.373056,
+     "inflation": 1.393379,
+     "regime": "Stagflation",
+     "t": "2025-03"
+    },
+    {
+     "growth": 1.285079,
+     "inflation": 0.688349,
+     "regime": "Reflation",
+     "t": "2025-04"
+    },
+    {
+     "growth": -0.071232,
+     "inflation": -0.498131,
+     "regime": "Disinflation",
+     "t": "2025-05"
+    },
+    {
+     "growth": -0.005307,
+     "inflation": 0.08609,
+     "regime": "Stagflation",
+     "t": "2025-06"
+    },
+    {
+     "growth": -1.758702,
+     "inflation": -0.525015,
+     "regime": "Disinflation",
+     "t": "2025-07"
+    },
+    {
+     "growth": -0.674044,
+     "inflation": -1.779977,
+     "regime": "Disinflation",
+     "t": "2025-08"
+    },
+    {
+     "growth": 0.888229,
+     "inflation": 0.290645,
+     "regime": "Reflation",
+     "t": "2025-09"
+    },
+    {
+     "growth": 0.067742,
+     "inflation": -0.3214,
+     "regime": "Goldilocks",
+     "t": "2025-10"
+    }
+   ],
+   "reason": null
+  },
+  "s_override": [
+   [
+    0.08030118056573467,
+    0.06329008878390832,
+    0.05173228129456755,
+    0.040278440332468704
+   ],
+   [
+    0.06329008878390832,
+    0.05684110077667928,
+    0.04272145028330883,
+    0.03289312455189563
+   ],
+   [
+    0.05173228129456755,
+    0.04272145028330883,
+    0.039709486349544,
+    0.027436168164889075
+   ],
+   [
+    0.040278440332468704,
+    0.03289312455189563,
+    0.027436168164889075,
+    0.02519169307784835
+   ]
+  ],
+  "view_conf": 49.61
+ },
+ "probabilistic_M_min_var": {
+  "cond": {
+   "A_contribution_pct": 8.5125,
+   "A_h": [
+    [
+     0.0005652845068986475,
+     0.00045654314244493194,
+     0.0002385137272732068,
+     0.0002614003062175506
+    ],
+    [
+     0.00045654314244493194,
+     0.00037408922120277396,
+     0.00019610867384809078,
+     0.00021836443620697066
+    ],
+    [
+     0.0002385137272732068,
+     0.00019610867384809073,
+     0.00010295578854816107,
+     0.00011539480367166174
+    ],
+    [
+     0.0002614003062175506,
+     0.00021836443620697066,
+     0.00011539480367166174,
+     0.0001331359124797217
+    ]
+   ],
+   "W_h": [
+    [
+     0.0050574504977746555,
+     0.0038866884509844548,
+     0.0031325999840031075,
+     0.0023845197131398383
+    ],
+    [
+     0.0038866884509844548,
+     0.0035493359527173666,
+     0.0025856934585959434,
+     0.001941913362169341
+    ],
+    [
+     0.0031325999840031075,
+     0.0025856934585959434,
+     0.002466926168183085,
+     0.0016021949439435884
+    ],
+    [
+     0.0023845197131398383,
+     0.001941913362169341,
+     0.0016021949439435884,
+     0.0015595685821607015
+    ]
+   ],
+   "available": true,
+   "confidence_model": {
+    "implied_confidence": [
+     2.5648,
+     2.558,
+     2.4876,
+     2.5363
+    ],
+    "kind": "decomposed_omega",
+    "n_months": 12,
+    "note": "잔여 모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 **안 잰 것이 확신을 높이므로**, 실제로 측정된 항 중 최대값을 보수적 하한으로 씁니다. 이것은 추정이 아니라 선언된 가정이며, 워크포워드로 실현 뷰 오차를 재면 이 값을 대체합니다.",
+    "omega_diag": [
+     0.1281622260293755,
+     0.08967313351965009,
+     0.06044169749897198,
+     0.039027276921613493
+    ],
+    "residual_policy": "conservative_floor",
+    "residual_risk": "unmeasured",
+    "terms": {
+     "estimation": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ],
+     "regime": [
+      0.00678341408278377,
+      0.0044890706544332875,
+      0.0012354694625779329,
+      0.0015976309497566605
+     ],
+     "residual": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ]
+    },
+    "version": 1
+   },
+   "degenerate": false,
+   "dropped_mass_max": 0.0,
+   "dropped_regimes": {},
+   "h_hold": 1,
+   "method": "regime_mixture",
+   "min_eigenvalue": 0.0040430473448776465,
+   "mu": [
+    0.23319356735631513,
+    0.1954129421317172,
+    0.1712555179303415,
+    0.15745660239188286
+   ],
+   "n_months_by_regime": {
+    "Disinflation": 14,
+    "Goldilocks": 15,
+    "Reflation": 19,
+    "Stagflation": 12
+   },
+   "n_obs_by_regime": {
+    "Disinflation": 303,
+    "Goldilocks": 326,
+    "Reflation": 419,
+    "Stagflation": 257
+   },
+   "names": [
+    "005930",
+    "000660",
+    "035420",
+    "051910"
+   ],
+   "note": "4개 국면의 조건부 적률을 1개월 홀딩 기간의 국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 8.51% 를 차지합니다 — 국면을 모를수록 이 값이 커지며, 그것이 리스크로 정직하게 이전된 부분입니다.",
+   "pi_bar": {
+    "Disinflation": 0.28571428571428575,
+    "Goldilocks": 0.42857142857142855,
+    "Reflation": 0.14285714285714288,
+    "Stagflation": 0.14285714285714288
+   },
+   "pi_path": [
+    {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    }
+   ],
+   "reason": null,
+   "regime": "Goldilocks",
+   "shrinkage_lambda": 0.975123605106667,
+   "shrinkage_lambda_aggregate": "pi_weighted_mean",
+   "shrinkage_lambda_by_regime": {
+    "Disinflation": 0.0115,
+    "Goldilocks": 0.0077,
+    "Reflation": 0.0073,
+    "Stagflation": 0.0119
+   },
+   "sigma": [
+    [
+     0.06747282005607963,
+     0.05211877912115264,
+     0.04045336453531577,
+     0.03175104023228867
+    ],
+    [
+     0.05211877912115264,
+     0.04708110208704169,
+     0.033381625589328404,
+     0.02592333358051574
+    ],
+    [
+     0.04045336453531577,
+     0.033381625589328404,
+     0.03083858348077495,
+     0.020611076971383
+    ],
+    [
+     0.03175104023228867,
+     0.02592333358051574,
+     0.020611076971383,
+     0.02031245393568508
+    ]
+   ]
+  },
+  "extra_views": null,
+  "meta": {
+   "A_contribution_pct": 8.5125,
+   "confidence_model": {
+    "implied_confidence": [
+     2.5648,
+     2.558,
+     2.4876,
+     2.5363
+    ],
+    "kind": "decomposed_omega",
+    "n_months": 12,
+    "note": "잔여 모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 **안 잰 것이 확신을 높이므로**, 실제로 측정된 항 중 최대값을 보수적 하한으로 씁니다. 이것은 추정이 아니라 선언된 가정이며, 워크포워드로 실현 뷰 오차를 재면 이 값을 대체합니다.",
+    "omega_diag": [
+     0.1281622260293755,
+     0.08967313351965009,
+     0.06044169749897198,
+     0.039027276921613493
+    ],
+    "residual_policy": "conservative_floor",
+    "residual_risk": "unmeasured",
+    "terms": {
+     "estimation": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ],
+     "regime": [
+      0.00678341408278377,
+      0.0044890706544332875,
+      0.0012354694625779329,
+      0.0015976309497566605
+     ],
+     "residual": [
+      0.06068940597329586,
+      0.042592031432608396,
+      0.02960311401819702,
+      0.018714822985928418
+     ]
+    },
+    "version": 1
+   },
+   "dropped_regimes": {},
+   "h_hold": 1,
+   "mixture_note": "4개 국면의 조건부 적률을 1개월 홀딩 기간의 국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 8.51% 를 차지합니다 — 국면을 모를수록 이 값이 커지며, 그것이 리스크로 정직하게 이전된 부분입니다.",
+   "mode": "live",
+   "pi_bar": {
+    "Disinflation": 0.28571428571428575,
+    "Goldilocks": 0.42857142857142855,
+    "Reflation": 0.14285714285714288,
+    "Stagflation": 0.14285714285714288
+   },
+   "pi_path": [
+    {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    }
+   ],
+   "pit": {
+    "look_ahead_free": true,
+    "mode": "live",
+    "note": "세 속성은 서로 독립입니다. 4개 계열(KOSPI, KR_CPI, KR_IP, KR_LEADING_CYCLE)은 제공자가 개정 이력을 주지 않아 **영구히** 개정 편향이 남습니다; 나머지 1개는 소스에 빈티지가 있으나 수집 경로가 현재값을 가져옵니다(고칠 수 있음). 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다.",
+    "publication_lag": "unspecified",
+    "revision_bias": "unmanaged",
+    "revision_detail": {
+     "blocked_by_path": [
+      "T10YIE"
+     ],
+     "blocked_permanently": [
+      "KOSPI",
+      "KR_CPI",
+      "KR_IP",
+      "KR_LEADING_CYCLE"
+     ],
+     "market": "kr",
+     "path_uses_vintage": false,
+     "series": [
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_LEADING_CYCLE",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.4
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_IP",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KOSPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "source",
+       "key": "KR_CPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.7
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "path",
+       "key": "T10YIE",
+       "provider": "FRED",
+       "registered": true,
+       "source_has_vintage": true,
+       "weight": 0.3
+      }
+     ]
+    }
+   },
+   "probability_source": {
+    "mode": "live",
+    "probs": {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    },
+    "sampled_forecast": {
+     "ci90": {
+      "Disinflation": [
+       0.1389,
+       0.4536
+      ],
+      "Goldilocks": [
+       0.2597,
+       0.6042
+      ],
+      "Reflation": [
+       0.0426,
+       0.2825
+      ],
+      "Stagflation": [
+       0.0416,
+       0.2857
+      ]
+     },
+     "note": "1개월 뒤 분포 — 전이행렬을 사후분포에서 4000회 뽑아 거듭제곱한 사후예측입니다. 얇은 행의 불확실성이 여기까지 전달됩니다.",
+     "probs": {
+      "Disinflation": 0.28687,
+      "Goldilocks": 0.428086,
+      "Reflation": 0.141491,
+      "Stagflation": 0.143553
+     }
+    },
+    "sharpness": 0.07881450341144558,
+    "source": "k_step_forecast_mean",
+    "step_months": 1,
+    "uncertainty_note": "Σ̄ 는 사후평균 전이행렬로 계산했습니다 — π 와 P 가 같은 사슬에서 나와야 국면 간 항이 공분산이 되기 때문입니다. 전이행렬 **파라미터**의 불확실성(위 `sampled_forecast` 의 구간)은 Σ̄ 에 전파되지 않았고, 잔여 모델리스크로 남습니다.",
+    "usage": "portfolio"
+   },
+   "regime_weighting": "probabilistic",
+   "sharpness": 0.07881450341144558
+  },
+  "path": {
+   "path_note": null,
+   "path_source": "mes",
+   "points": [
+    {
+     "growth": -0.508571,
+     "inflation": 0.620392,
+     "regime": "Stagflation",
+     "t": "2020-11"
+    },
+    {
+     "growth": -0.735173,
+     "inflation": -0.168172,
+     "regime": "Disinflation",
+     "t": "2020-12"
+    },
+    {
+     "growth": 0.148128,
+     "inflation": -0.08554,
+     "regime": "Goldilocks",
+     "t": "2021-01"
+    },
+    {
+     "growth": 0.912492,
+     "inflation": -0.860544,
+     "regime": "Goldilocks",
+     "t": "2021-02"
+    },
+    {
+     "growth": -1.983714,
+     "inflation": -0.140829,
+     "regime": "Disinflation",
+     "t": "2021-03"
+    },
+    {
+     "growth": -1.883001,
+     "inflation": 0.794339,
+     "regime": "Stagflation",
+     "t": "2021-04"
+    },
+    {
+     "growth": -0.343562,
+     "inflation": -0.061219,
+     "regime": "Disinflation",
+     "t": "2021-05"
+    },
+    {
+     "growth": 0.863081,
+     "inflation": -2.057039,
+     "regime": "Goldilocks",
+     "t": "2021-06"
+    },
+    {
+     "growth": -0.504633,
+     "inflation": -1.09848,
+     "regime": "Disinflation",
+     "t": "2021-07"
+    },
+    {
+     "growth": -0.816734,
+     "inflation": 0.662701,
+     "regime": "Stagflation",
+     "t": "2021-08"
+    },
+    {
+     "growth": 0.01055,
+     "inflation": 0.040069,
+     "regime": "Reflation",
+     "t": "2021-09"
+    },
+    {
+     "growth": 0.289864,
+     "inflation": 0.313843,
+     "regime": "Reflation",
+     "t": "2021-10"
+    },
+    {
+     "growth": 1.539622,
+     "inflation": -0.077357,
+     "regime": "Goldilocks",
+     "t": "2021-11"
+    },
+    {
+     "growth": 0.092826,
+     "inflation": 0.04044,
+     "regime": "Reflation",
+     "t": "2021-12"
+    },
+    {
+     "growth": 1.062683,
+     "inflation": -1.088185,
+     "regime": "Goldilocks",
+     "t": "2022-01"
+    },
+    {
+     "growth": -0.016029,
+     "inflation": -0.975632,
+     "regime": "Disinflation",
+     "t": "2022-02"
+    },
+    {
+     "growth": 0.248811,
+     "inflation": 1.518473,
+     "regime": "Reflation",
+     "t": "2022-03"
+    },
+    {
+     "growth": 1.442468,
+     "inflation": 0.119825,
+     "regime": "Reflation",
+     "t": "2022-04"
+    },
+    {
+     "growth": 0.556771,
+     "inflation": 0.634914,
+     "regime": "Reflation",
+     "t": "2022-05"
+    },
+    {
+     "growth": 0.482191,
+     "inflation": -1.110756,
+     "regime": "Goldilocks",
+     "t": "2022-06"
+    },
+    {
+     "growth": -1.615441,
+     "inflation": -0.757784,
+     "regime": "Disinflation",
+     "t": "2022-07"
+    },
+    {
+     "growth": 0.857191,
+     "inflation": 0.166511,
+     "regime": "Reflation",
+     "t": "2022-08"
+    },
+    {
+     "growth": 0.937453,
+     "inflation": 1.076103,
+     "regime": "Reflation",
+     "t": "2022-09"
+    },
+    {
+     "growth": 0.421069,
+     "inflation": 0.577237,
+     "regime": "Reflation",
+     "t": "2022-10"
+    },
+    {
+     "growth": -1.360959,
+     "inflation": 0.696765,
+     "regime": "Stagflation",
+     "t": "2022-11"
+    },
+    {
+     "growth": 0.09862,
+     "inflation": 1.339233,
+     "regime": "Reflation",
+     "t": "2022-12"
+    },
+    {
+     "growth": -1.05114,
+     "inflation": 0.180942,
+     "regime": "Stagflation",
+     "t": "2023-01"
+    },
+    {
+     "growth": -0.939223,
+     "inflation": 0.743965,
+     "regime": "Stagflation",
+     "t": "2023-02"
+    },
+    {
+     "growth": -0.155672,
+     "inflation": -0.863042,
+     "regime": "Disinflation",
+     "t": "2023-03"
+    },
+    {
+     "growth": -0.281029,
+     "inflation": -0.193844,
+     "regime": "Disinflation",
+     "t": "2023-04"
+    },
+    {
+     "growth": 0.050098,
+     "inflation": 1.488714,
+     "regime": "Reflation",
+     "t": "2023-05"
+    },
+    {
+     "growth": 0.227362,
+     "inflation": 2.126545,
+     "regime": "Reflation",
+     "t": "2023-06"
+    },
+    {
+     "growth": -0.077937,
+     "inflation": -0.741669,
+     "regime": "Disinflation",
+     "t": "2023-07"
+    },
+    {
+     "growth": 0.803285,
+     "inflation": 0.040797,
+     "regime": "Reflation",
+     "t": "2023-08"
+    },
+    {
+     "growth": 0.991057,
+     "inflation": 1.042101,
+     "regime": "Reflation",
+     "t": "2023-09"
+    },
+    {
+     "growth": -0.509706,
+     "inflation": 0.707416,
+     "regime": "Stagflation",
+     "t": "2023-10"
+    },
+    {
+     "growth": -0.170499,
+     "inflation": -1.684733,
+     "regime": "Disinflation",
+     "t": "2023-11"
+    },
+    {
+     "growth": -0.152293,
+     "inflation": 0.835575,
+     "regime": "Stagflation",
+     "t": "2023-12"
+    },
+    {
+     "growth": 0.6795,
+     "inflation": -0.91376,
+     "regime": "Goldilocks",
+     "t": "2024-01"
+    },
+    {
+     "growth": 1.229724,
+     "inflation": 0.014993,
+     "regime": "Reflation",
+     "t": "2024-02"
+    },
+    {
+     "growth": -0.53161,
+     "inflation": 0.667398,
+     "regime": "Stagflation",
+     "t": "2024-03"
+    },
+    {
+     "growth": 1.41721,
+     "inflation": 0.417152,
+     "regime": "Reflation",
+     "t": "2024-04"
+    },
+    {
+     "growth": 0.711588,
+     "inflation": 0.953002,
+     "regime": "Reflation",
+     "t": "2024-05"
+    },
+    {
+     "growth": 0.596889,
+     "inflation": -0.414738,
+     "regime": "Goldilocks",
+     "t": "2024-06"
+    },
+    {
+     "growth": 0.715524,
+     "inflation": -0.123489,
+     "regime": "Goldilocks",
+     "t": "2024-07"
+    },
+    {
+     "growth": 0.483072,
+     "inflation": -0.382879,
+     "regime": "Goldilocks",
+     "t": "2024-08"
+    },
+    {
+     "growth": -0.597895,
+     "inflation": -0.709336,
+     "regime": "Disinflation",
+     "t": "2024-09"
+    },
+    {
+     "growth": 0.379169,
+     "inflation": -1.732421,
+     "regime": "Goldilocks",
+     "t": "2024-10"
+    },
+    {
+     "growth": 0.197407,
+     "inflation": -0.99078,
+     "regime": "Goldilocks",
+     "t": "2024-11"
+    },
+    {
+     "growth": -0.222833,
+     "inflation": 0.430208,
+     "regime": "Stagflation",
+     "t": "2024-12"
+    },
+    {
+     "growth": 0.056056,
+     "inflation": -0.456583,
+     "regime": "Goldilocks",
+     "t": "2025-01"
+    },
+    {
+     "growth": 0.087715,
+     "inflation": -0.30834,
+     "regime": "Goldilocks",
+     "t": "2025-02"
+    },
+    {
+     "growth": -0.373056,
+     "inflation": 1.393379,
+     "regime": "Stagflation",
+     "t": "2025-03"
+    },
+    {
+     "growth": 1.285079,
+     "inflation": 0.688349,
+     "regime": "Reflation",
+     "t": "2025-04"
+    },
+    {
+     "growth": -0.071232,
+     "inflation": -0.498131,
+     "regime": "Disinflation",
+     "t": "2025-05"
+    },
+    {
+     "growth": -0.005307,
+     "inflation": 0.08609,
+     "regime": "Stagflation",
+     "t": "2025-06"
+    },
+    {
+     "growth": -1.758702,
+     "inflation": -0.525015,
+     "regime": "Disinflation",
+     "t": "2025-07"
+    },
+    {
+     "growth": -0.674044,
+     "inflation": -1.779977,
+     "regime": "Disinflation",
+     "t": "2025-08"
+    },
+    {
+     "growth": 0.888229,
+     "inflation": 0.290645,
+     "regime": "Reflation",
+     "t": "2025-09"
+    },
+    {
+     "growth": 0.067742,
+     "inflation": -0.3214,
+     "regime": "Goldilocks",
+     "t": "2025-10"
+    }
+   ],
+   "reason": null
+  },
+  "s_override": [
+   [
+    0.06747282005607963,
+    0.05211877912115264,
+    0.04045336453531577,
+    0.03175104023228867
+   ],
+   [
+    0.05211877912115264,
+    0.04708110208704169,
+    0.033381625589328404,
+    0.02592333358051574
+   ],
+   [
+    0.04045336453531577,
+    0.033381625589328404,
+    0.03083858348077495,
+    0.020611076971383
+   ],
+   [
+    0.03175104023228867,
+    0.02592333358051574,
+    0.020611076971383,
+    0.02031245393568508
+   ]
+  ],
+  "view_conf": null
+ },
+ "probabilistic_Q_bl": {
+  "cond": {
+   "A_contribution_pct": 10.9694,
+   "A_h": [
+    [
+     0.0021038396413428475,
+     0.0017088317388885483,
+     0.000896778496235942,
+     0.001003049556077346
+    ],
+    [
+     0.0017088317388885487,
+     0.001417167861953813,
+     0.0007470499009270069,
+     0.0008526080524380847
+    ],
+    [
+     0.000896778496235942,
+     0.0007470499009270069,
+     0.0003943822737165802,
+     0.0004530282496805352
+    ],
+    [
+     0.0010030495560773458,
+     0.0008526080524380848,
+     0.0004530282496805352,
+     0.0005350681201575897
+    ]
+   ],
+   "W_h": [
+    [
+     0.014473835691229288,
+     0.011090807918231149,
+     0.008889177760175808,
+     0.006724885067540785
+    ],
+    [
+     0.011090807918231149,
+     0.010176287411564457,
+     0.007347687434050644,
+     0.005497064504410282
+    ],
+    [
+     0.008889177760175808,
+     0.007347687434050644,
+     0.007027416653958212,
+     0.004503192248432129
+    ],
+    [
+     0.006724885067540785,
+     0.005497064504410282,
+     0.004503192248432129,
+     0.004443631717805378
+    ]
+   ],
+   "available": true,
+   "confidence_model": {
+    "implied_confidence": [
+     2.6,
+     2.5937,
+     2.5039,
+     2.574
+    ],
+    "kind": "decomposed_omega",
+    "n_months": 12,
+    "note": "잔여 모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 **안 잰 것이 확신을 높이므로**, 실제로 측정된 항 중 최대값을 보수적 하한으로 씁니다. 이것은 추정이 아니라 선언된 가정이며, 워크포워드로 실현 뷰 오차를 재면 이 값을 대체합니다.",
+    "omega_diag": [
+     0.12420604409520569,
+     0.08707897074033091,
+     0.057796862326532014,
+     0.03768932622307338
+    ],
+    "residual_policy": "conservative_floor",
+    "residual_risk": "unmeasured",
+    "terms": {
+     "estimation": [
+      0.05789534276491715,
+      0.04070514964625783,
+      0.02810966661583285,
+      0.01777452687122151
+     ],
+     "regime": [
+      0.00841535856537139,
+      0.005668671447815252,
+      0.0015775290948663208,
+      0.002140272480630359
+     ],
+     "residual": [
+      0.05789534276491715,
+      0.04070514964625783,
+      0.02810966661583285,
+      0.01777452687122151
+     ]
+    },
+    "version": 1
+   },
+   "degenerate": false,
+   "dropped_mass_max": 0.0,
+   "dropped_regimes": {},
+   "h_hold": 3,
+   "method": "regime_mixture",
+   "min_eigenvalue": 0.00413852344900106,
+   "mu": [
+    0.18194172176959053,
+    0.14800461206686694,
+    0.14562331468198117,
+    0.12495540634693603
+   ],
+   "n_months_by_regime": {
+    "Disinflation": 14,
+    "Goldilocks": 15,
+    "Reflation": 19,
+    "Stagflation": 12
+   },
+   "n_obs_by_regime": {
+    "Disinflation": 303,
+    "Goldilocks": 326,
+    "Reflation": 419,
+    "Stagflation": 257
+   },
+   "names": [
+    "005930",
+    "000660",
+    "035420",
+    "051910"
+   ],
+   "note": "4개 국면의 조건부 적률을 3개월 홀딩 기간의 국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 10.97% 를 차지합니다 — 국면을 모를수록 이 값이 커지며, 그것이 리스크로 정직하게 이전된 부분입니다.",
+   "pi_bar": {
+    "Disinflation": 0.26699465030553876,
+    "Goldilocks": 0.3287239736858497,
+    "Reflation": 0.22398276670527117,
+    "Stagflation": 0.1802986093033405
+   },
+   "pi_path": [
+    {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    },
+    {
+     "Disinflation": 0.265677918367347,
+     "Goldilocks": 0.2936186666666667,
+     "Reflation": 0.24638514285714289,
+     "Stagflation": 0.19431827210884356
+    },
+    {
+     "Disinflation": 0.2495917468349835,
+     "Goldilocks": 0.26398182581945384,
+     "Reflation": 0.28270601440152776,
+     "Stagflation": 0.20372041294403498
+    }
+   ],
+   "reason": null,
+   "regime": "Goldilocks",
+   "shrinkage_lambda": 0.9749607087598686,
+   "shrinkage_lambda_aggregate": "pi_weighted_mean",
+   "shrinkage_lambda_by_regime": {
+    "Disinflation": 0.0115,
+    "Goldilocks": 0.0077,
+    "Reflation": 0.0073,
+    "Stagflation": 0.0119
+   },
+   "sigma": [
+    [
+     0.06631070133028855,
+     0.05119855862847879,
+     0.039143825025647,
+     0.030911738494472527
+    ],
+    [
+     0.05119855862847879,
+     0.04637382109407308,
+     0.032378949339910604,
+     0.025398690227393467
+    ],
+    [
+     0.039143825025647,
+     0.032378949339910604,
+     0.02968719571069917,
+     0.019824881992450655
+    ],
+    [
+     0.030911738494472527,
+     0.025398690227393467,
+     0.019824881992450655,
+     0.01991479935185187
+    ]
+   ]
+  },
+  "extra_views": [
+   {
+    "assets": [
+     "005930"
+    ],
+    "confidence": 1.25,
+    "direction": 1,
+    "magnitude_pct": 18.194172176959054,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "000660"
+    ],
+    "confidence": 1.25,
+    "direction": 1,
+    "magnitude_pct": 14.800461206686693,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "035420"
+    ],
+    "confidence": 1.25,
+    "direction": 1,
+    "magnitude_pct": 14.562331468198117,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   },
+   {
+    "assets": [
+     "051910"
+    ],
+    "confidence": 1.25,
+    "direction": 1,
+    "magnitude_pct": 12.495540634693603,
+    "regime": "Goldilocks",
+    "source": "conditional"
+   }
+  ],
+  "meta": {
+   "A_contribution_pct": 10.9694,
+   "confidence_model": {
+    "implied_confidence": [
+     2.6,
+     2.5937,
+     2.5039,
+     2.574
+    ],
+    "kind": "decomposed_omega",
+    "n_months": 12,
+    "note": "잔여 모델리스크를 아직 측정하지 않았습니다. 0 으로 두면 **안 잰 것이 확신을 높이므로**, 실제로 측정된 항 중 최대값을 보수적 하한으로 씁니다. 이것은 추정이 아니라 선언된 가정이며, 워크포워드로 실현 뷰 오차를 재면 이 값을 대체합니다.",
+    "omega_diag": [
+     0.12420604409520569,
+     0.08707897074033091,
+     0.057796862326532014,
+     0.03768932622307338
+    ],
+    "residual_policy": "conservative_floor",
+    "residual_risk": "unmeasured",
+    "terms": {
+     "estimation": [
+      0.05789534276491715,
+      0.04070514964625783,
+      0.02810966661583285,
+      0.01777452687122151
+     ],
+     "regime": [
+      0.00841535856537139,
+      0.005668671447815252,
+      0.0015775290948663208,
+      0.002140272480630359
+     ],
+     "residual": [
+      0.05789534276491715,
+      0.04070514964625783,
+      0.02810966661583285,
+      0.01777452687122151
+     ]
+    },
+    "version": 1
+   },
+   "dropped_regimes": {},
+   "h_hold": 3,
+   "mixture_note": "4개 국면의 조건부 적률을 3개월 홀딩 기간의 국면확률 경로로 혼합했습니다. 국면 간 산포가 공분산의 10.97% 를 차지합니다 — 국면을 모를수록 이 값이 커지며, 그것이 리스크로 정직하게 이전된 부분입니다.",
+   "mode": "live",
+   "pi_bar": {
+    "Disinflation": 0.26699465030553876,
+    "Goldilocks": 0.3287239736858497,
+    "Reflation": 0.22398276670527117,
+    "Stagflation": 0.1802986093033405
+   },
+   "pi_path": [
+    {
+     "Disinflation": 0.28571428571428575,
+     "Goldilocks": 0.42857142857142855,
+     "Reflation": 0.14285714285714288,
+     "Stagflation": 0.14285714285714288
+    },
+    {
+     "Disinflation": 0.265677918367347,
+     "Goldilocks": 0.2936186666666667,
+     "Reflation": 0.24638514285714289,
+     "Stagflation": 0.19431827210884356
+    },
+    {
+     "Disinflation": 0.2495917468349835,
+     "Goldilocks": 0.26398182581945384,
+     "Reflation": 0.28270601440152776,
+     "Stagflation": 0.20372041294403498
+    }
+   ],
+   "pit": {
+    "look_ahead_free": true,
+    "mode": "live",
+    "note": "세 속성은 서로 독립입니다. 4개 계열(KOSPI, KR_CPI, KR_IP, KR_LEADING_CYCLE)은 제공자가 개정 이력을 주지 않아 **영구히** 개정 편향이 남습니다; 나머지 1개는 소스에 빈티지가 있으나 수집 경로가 현재값을 가져옵니다(고칠 수 있음). 공표지연을 선언해도 개정 편향은 해소되지 않습니다 — 값 자체가 사후 수정본이기 때문입니다.",
+    "publication_lag": "unspecified",
+    "revision_bias": "unmanaged",
+    "revision_detail": {
+     "blocked_by_path": [
+      "T10YIE"
+     ],
+     "blocked_permanently": [
+      "KOSPI",
+      "KR_CPI",
+      "KR_IP",
+      "KR_LEADING_CYCLE"
+     ],
+     "market": "kr",
+     "path_uses_vintage": false,
+     "series": [
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_LEADING_CYCLE",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.4
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KR_IP",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "growth",
+       "blocked_by": "source",
+       "key": "KOSPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.3
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "source",
+       "key": "KR_CPI",
+       "provider": "ECOS",
+       "registered": true,
+       "source_has_vintage": false,
+       "weight": 0.7
+      },
+      {
+       "axis": "inflation",
+       "blocked_by": "path",
+       "key": "T10YIE",
+       "provider": "FRED",
+       "registered": true,
+       "source_has_vintage": true,
+       "weight": 0.3
+      }
+     ]
+    }
+   },
+   "probability_source": {
+    "mode": "live",
+    "probs": {
+     "Disinflation": 0.2495917468349835,
+     "Goldilocks": 0.26398182581945384,
+     "Reflation": 0.28270601440152776,
+     "Stagflation": 0.20372041294403498
+    },
+    "sampled_forecast": {
+     "ci90": {
+      "Disinflation": [
+       0.1692,
+       0.3357
+      ],
+      "Goldilocks": [
+       0.1736,
+       0.3874
+      ],
+      "Reflation": [
+       0.1835,
+       0.386
+      ],
+      "Stagflation": [
+       0.1276,
+       0.2832
+      ]
+     },
+     "note": "3개월 뒤 분포 — 전이행렬을 사후분포에서 4000회 뽑아 거듭제곱한 사후예측입니다. 얇은 행의 불확실성이 여기까지 전달됩니다.",
+     "probs": {
+      "Disinflation": 0.248672,
+      "Goldilocks": 0.270913,
+      "Reflation": 0.279616,
+      "Stagflation": 0.200799
+     }
+    },
+    "sharpness": 0.017316983807741382,
+    "source": "k_step_forecast_mean",
+    "step_months": 3,
+    "uncertainty_note": "Σ̄ 는 사후평균 전이행렬로 계산했습니다 — π 와 P 가 같은 사슬에서 나와야 국면 간 항이 공분산이 되기 때문입니다. 전이행렬 **파라미터**의 불확실성(위 `sampled_forecast` 의 구간)은 Σ̄ 에 전파되지 않았고, 잔여 모델리스크로 남습니다.",
+    "usage": "portfolio"
+   },
+   "regime_weighting": "probabilistic",
+   "sharpness": 0.017316983807741382
+  },
+  "path": {
+   "path_note": null,
+   "path_source": "mes",
+   "points": [
+    {
+     "growth": -0.508571,
+     "inflation": 0.620392,
+     "regime": "Stagflation",
+     "t": "2020-11"
+    },
+    {
+     "growth": -0.735173,
+     "inflation": -0.168172,
+     "regime": "Disinflation",
+     "t": "2020-12"
+    },
+    {
+     "growth": 0.148128,
+     "inflation": -0.08554,
+     "regime": "Goldilocks",
+     "t": "2021-01"
+    },
+    {
+     "growth": 0.912492,
+     "inflation": -0.860544,
+     "regime": "Goldilocks",
+     "t": "2021-02"
+    },
+    {
+     "growth": -1.983714,
+     "inflation": -0.140829,
+     "regime": "Disinflation",
+     "t": "2021-03"
+    },
+    {
+     "growth": -1.883001,
+     "inflation": 0.794339,
+     "regime": "Stagflation",
+     "t": "2021-04"
+    },
+    {
+     "growth": -0.343562,
+     "inflation": -0.061219,
+     "regime": "Disinflation",
+     "t": "2021-05"
+    },
+    {
+     "growth": 0.863081,
+     "inflation": -2.057039,
+     "regime": "Goldilocks",
+     "t": "2021-06"
+    },
+    {
+     "growth": -0.504633,
+     "inflation": -1.09848,
+     "regime": "Disinflation",
+     "t": "2021-07"
+    },
+    {
+     "growth": -0.816734,
+     "inflation": 0.662701,
+     "regime": "Stagflation",
+     "t": "2021-08"
+    },
+    {
+     "growth": 0.01055,
+     "inflation": 0.040069,
+     "regime": "Reflation",
+     "t": "2021-09"
+    },
+    {
+     "growth": 0.289864,
+     "inflation": 0.313843,
+     "regime": "Reflation",
+     "t": "2021-10"
+    },
+    {
+     "growth": 1.539622,
+     "inflation": -0.077357,
+     "regime": "Goldilocks",
+     "t": "2021-11"
+    },
+    {
+     "growth": 0.092826,
+     "inflation": 0.04044,
+     "regime": "Reflation",
+     "t": "2021-12"
+    },
+    {
+     "growth": 1.062683,
+     "inflation": -1.088185,
+     "regime": "Goldilocks",
+     "t": "2022-01"
+    },
+    {
+     "growth": -0.016029,
+     "inflation": -0.975632,
+     "regime": "Disinflation",
+     "t": "2022-02"
+    },
+    {
+     "growth": 0.248811,
+     "inflation": 1.518473,
+     "regime": "Reflation",
+     "t": "2022-03"
+    },
+    {
+     "growth": 1.442468,
+     "inflation": 0.119825,
+     "regime": "Reflation",
+     "t": "2022-04"
+    },
+    {
+     "growth": 0.556771,
+     "inflation": 0.634914,
+     "regime": "Reflation",
+     "t": "2022-05"
+    },
+    {
+     "growth": 0.482191,
+     "inflation": -1.110756,
+     "regime": "Goldilocks",
+     "t": "2022-06"
+    },
+    {
+     "growth": -1.615441,
+     "inflation": -0.757784,
+     "regime": "Disinflation",
+     "t": "2022-07"
+    },
+    {
+     "growth": 0.857191,
+     "inflation": 0.166511,
+     "regime": "Reflation",
+     "t": "2022-08"
+    },
+    {
+     "growth": 0.937453,
+     "inflation": 1.076103,
+     "regime": "Reflation",
+     "t": "2022-09"
+    },
+    {
+     "growth": 0.421069,
+     "inflation": 0.577237,
+     "regime": "Reflation",
+     "t": "2022-10"
+    },
+    {
+     "growth": -1.360959,
+     "inflation": 0.696765,
+     "regime": "Stagflation",
+     "t": "2022-11"
+    },
+    {
+     "growth": 0.09862,
+     "inflation": 1.339233,
+     "regime": "Reflation",
+     "t": "2022-12"
+    },
+    {
+     "growth": -1.05114,
+     "inflation": 0.180942,
+     "regime": "Stagflation",
+     "t": "2023-01"
+    },
+    {
+     "growth": -0.939223,
+     "inflation": 0.743965,
+     "regime": "Stagflation",
+     "t": "2023-02"
+    },
+    {
+     "growth": -0.155672,
+     "inflation": -0.863042,
+     "regime": "Disinflation",
+     "t": "2023-03"
+    },
+    {
+     "growth": -0.281029,
+     "inflation": -0.193844,
+     "regime": "Disinflation",
+     "t": "2023-04"
+    },
+    {
+     "growth": 0.050098,
+     "inflation": 1.488714,
+     "regime": "Reflation",
+     "t": "2023-05"
+    },
+    {
+     "growth": 0.227362,
+     "inflation": 2.126545,
+     "regime": "Reflation",
+     "t": "2023-06"
+    },
+    {
+     "growth": -0.077937,
+     "inflation": -0.741669,
+     "regime": "Disinflation",
+     "t": "2023-07"
+    },
+    {
+     "growth": 0.803285,
+     "inflation": 0.040797,
+     "regime": "Reflation",
+     "t": "2023-08"
+    },
+    {
+     "growth": 0.991057,
+     "inflation": 1.042101,
+     "regime": "Reflation",
+     "t": "2023-09"
+    },
+    {
+     "growth": -0.509706,
+     "inflation": 0.707416,
+     "regime": "Stagflation",
+     "t": "2023-10"
+    },
+    {
+     "growth": -0.170499,
+     "inflation": -1.684733,
+     "regime": "Disinflation",
+     "t": "2023-11"
+    },
+    {
+     "growth": -0.152293,
+     "inflation": 0.835575,
+     "regime": "Stagflation",
+     "t": "2023-12"
+    },
+    {
+     "growth": 0.6795,
+     "inflation": -0.91376,
+     "regime": "Goldilocks",
+     "t": "2024-01"
+    },
+    {
+     "growth": 1.229724,
+     "inflation": 0.014993,
+     "regime": "Reflation",
+     "t": "2024-02"
+    },
+    {
+     "growth": -0.53161,
+     "inflation": 0.667398,
+     "regime": "Stagflation",
+     "t": "2024-03"
+    },
+    {
+     "growth": 1.41721,
+     "inflation": 0.417152,
+     "regime": "Reflation",
+     "t": "2024-04"
+    },
+    {
+     "growth": 0.711588,
+     "inflation": 0.953002,
+     "regime": "Reflation",
+     "t": "2024-05"
+    },
+    {
+     "growth": 0.596889,
+     "inflation": -0.414738,
+     "regime": "Goldilocks",
+     "t": "2024-06"
+    },
+    {
+     "growth": 0.715524,
+     "inflation": -0.123489,
+     "regime": "Goldilocks",
+     "t": "2024-07"
+    },
+    {
+     "growth": 0.483072,
+     "inflation": -0.382879,
+     "regime": "Goldilocks",
+     "t": "2024-08"
+    },
+    {
+     "growth": -0.597895,
+     "inflation": -0.709336,
+     "regime": "Disinflation",
+     "t": "2024-09"
+    },
+    {
+     "growth": 0.379169,
+     "inflation": -1.732421,
+     "regime": "Goldilocks",
+     "t": "2024-10"
+    },
+    {
+     "growth": 0.197407,
+     "inflation": -0.99078,
+     "regime": "Goldilocks",
+     "t": "2024-11"
+    },
+    {
+     "growth": -0.222833,
+     "inflation": 0.430208,
+     "regime": "Stagflation",
+     "t": "2024-12"
+    },
+    {
+     "growth": 0.056056,
+     "inflation": -0.456583,
+     "regime": "Goldilocks",
+     "t": "2025-01"
+    },
+    {
+     "growth": 0.087715,
+     "inflation": -0.30834,
+     "regime": "Goldilocks",
+     "t": "2025-02"
+    },
+    {
+     "growth": -0.373056,
+     "inflation": 1.393379,
+     "regime": "Stagflation",
+     "t": "2025-03"
+    },
+    {
+     "growth": 1.285079,
+     "inflation": 0.688349,
+     "regime": "Reflation",
+     "t": "2025-04"
+    },
+    {
+     "growth": -0.071232,
+     "inflation": -0.498131,
+     "regime": "Disinflation",
+     "t": "2025-05"
+    },
+    {
+     "growth": -0.005307,
+     "inflation": 0.08609,
+     "regime": "Stagflation",
+     "t": "2025-06"
+    },
+    {
+     "growth": -1.758702,
+     "inflation": -0.525015,
+     "regime": "Disinflation",
+     "t": "2025-07"
+    },
+    {
+     "growth": -0.674044,
+     "inflation": -1.779977,
+     "regime": "Disinflation",
+     "t": "2025-08"
+    },
+    {
+     "growth": 0.888229,
+     "inflation": 0.290645,
+     "regime": "Reflation",
+     "t": "2025-09"
+    },
+    {
+     "growth": 0.067742,
+     "inflation": -0.3214,
+     "regime": "Goldilocks",
+     "t": "2025-10"
+    }
+   ],
+   "reason": null
+  },
+  "s_override": [
+   [
+    0.06631070133028855,
+    0.05119855862847879,
+    0.039143825025647,
+    0.030911738494472527
+   ],
+   [
+    0.05119855862847879,
+    0.04637382109407308,
+    0.032378949339910604,
+    0.025398690227393467
+   ],
+   [
+    0.039143825025647,
+    0.032378949339910604,
+    0.02968719571069917,
+    0.019824881992450655
+   ],
+   [
+    0.030911738494472527,
+    0.025398690227393467,
+    0.019824881992450655,
+    0.01991479935185187
+   ]
+  ],
+  "view_conf": 1.25
+ }
+}

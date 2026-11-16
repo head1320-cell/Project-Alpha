@@ -187,8 +187,11 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
 #   B0  regime=None            국면 배선 없음(사다리의 바닥)
 #   B1  weighting="hard"       오늘 라벨 하나 = 확률 1 (현행 프로덕션)
 #   N   weighting="probabilistic"  π_1..π_h 혼합 (MS1-a)
+#   G   weighting="gmm"        GMM 시작 분포 × 전이 (M3) — 달마다 그 달까지 자른 경로로 π₀ · 점수를 다시 낸다.
+#                              그 달에 세우지 못하면 ★그 달만★ 전이 예측(N 과 같은 셈) + 감사의 `gmm_fallback` 사유.
 
-_REGIME_ARMS = ("hard", "probabilistic")
+_REGIME_ARMS = ("hard", "probabilistic", "gmm")
+_ARM_LABELS = {"hard": "B1", "probabilistic": "N", "gmm": "G"}
 
 
 def _month_of(d) -> str:
@@ -286,6 +289,9 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
              "h_hold": None, "pi_bar": None, "a_contribution_pct": None,
              "confidence": None, "confidence_model": None,
              "prob_source": None, "prob_usage": None, "prob_note": None}
+    if regime.get("weighting") == "gmm":
+        # 팔 G 의 줄에만 있다(B1 · N 의 감사는 한 바이트도 바뀌지 않는다 — 골든). 세운 달은 `gmm`, 열화한 달은 `gmm_fallback`.
+        audit.update({"gmm": None, "gmm_fallback": None})
     pts = _truncated_points(regime.get("points") or [], month)
     audit["path_len"] = len(pts)
     audit["last_path_month"] = _month_of_point(pts[-1]) if pts else ""
@@ -318,20 +324,22 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
         )
         h_hold = int(regime.get("h_hold") or 1)
         audit["h_hold"] = h_hold
-        try:
-            rows = transition_posterior(count_transitions(pts))
-            probs, P = from_posterior_mean_path(rows, current, h_hold,
-                                                list(REGIMES), mode="backtest")
-            for pr in probs:
-                require_portfolio_source(pr)
-            # ★검사를 통과한 뒤에 적는다★ 먼저 적으면 통과 여부와 무관한 선언이 된다.
-            audit["prob_source"] = SOURCE_FORECAST_MEAN
-            audit["prob_usage"] = USAGE_PORTFOLIO
-            cond = regime_mixture_moments(df, by_month, [p.probs for p in probs],
-                                          P, list(REGIMES), h_hold=h_hold)
-        except Exception as e:                            # noqa: BLE001
-            audit["reason"] = f"{type(e).__name__}: {e}"
-            return None, None, audit
+        cond = _gmm_cond_at(pts, h_hold, df, by_month, audit) if weighting == "gmm" else None
+        if cond is None:
+            try:
+                rows = transition_posterior(count_transitions(pts))
+                probs, P = from_posterior_mean_path(rows, current, h_hold,
+                                                    list(REGIMES), mode="backtest")
+                for pr in probs:
+                    require_portfolio_source(pr)
+                # ★검사를 통과한 뒤에 적는다★ 먼저 적으면 통과 여부와 무관한 선언이 된다.
+                audit["prob_source"] = SOURCE_FORECAST_MEAN
+                audit["prob_usage"] = USAGE_PORTFOLIO
+                cond = regime_mixture_moments(df, by_month, [p.probs for p in probs],
+                                              P, list(REGIMES), h_hold=h_hold)
+            except Exception as e:                            # noqa: BLE001
+                audit["reason"] = f"{type(e).__name__}: {e}"
+                return None, None, audit
 
     if not cond.get("available"):
         audit["reason"] = cond.get("reason")
@@ -356,6 +364,44 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
             for nm, m in zip(names, cond["mu"], strict=False) if float(m) != 0.0
         ] or None
     return cond["sigma"], extra_views, audit
+
+
+def _gmm_cond_at(pts: list[dict], h_hold: int, df, by_month: dict, audit: dict) -> dict | None:
+    """팔 G 의 한 리밸런싱 — ★그 달까지 자른 경로로★ π₀ · 점수를 다시 내 혼합한다(앞보기 0).
+
+    세우지 못하거나 혼합하지 못하면 `None` 이고 `audit["gmm_fallback"]` 에 그 달의 사유를 적는다 — 부르는 쪽이 그 달만
+    전이 예측으로 계산한다. 다시 뽑기(부트스트랩)는 달마다 돌리지 않는다(라이브 경로에서만 잰다 · 계획 §3.3).
+    """
+    from src.engine import regime_gmm_start as gs
+    from src.engine.conditional_market import regime_mixture_moments
+    from src.engine.regime_probability import (
+        SOURCE_GMM_START,
+        USAGE_PORTFOLIO,
+        require_portfolio_source,
+    )
+    from src.engine.regime_transitions import REGIMES
+
+    got = gs.gmm_start_path(pts, h_hold, mode="backtest", with_robustness=False)
+    if not got.get("available"):
+        audit["gmm_fallback"] = got.get("reason") or "GMM 시작 분포를 세우지 못했습니다(사유 미상)."
+        return None
+    try:
+        probs = [require_portfolio_source(p) for p in got["probs"]]
+        cond = regime_mixture_moments(df, by_month, [p.probs for p in probs], got["P"],
+                                      list(REGIMES), h_hold=h_hold)
+    except Exception as e:                                # noqa: BLE001
+        why = str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
+        audit["gmm_fallback"] = f"GMM 시작 분포를 쓰지 못했습니다. {why}"
+        return None
+    if not cond.get("available"):
+        audit["gmm_fallback"] = gs._why("GMM 시작 분포로 혼합하지 못했습니다", cond.get("reason") or "사유 미상")
+        return None
+    audit["prob_source"] = SOURCE_GMM_START
+    audit["prob_usage"] = USAGE_PORTFOLIO
+    sk = got["skill"]
+    audit["gmm"] = {"pi0": got["pi0"], "label": got["label"],
+                    "skill": {k: sk.get(k) for k in ("k", "n_eval", "hits", "hit_rate", "brier", "gain")}}
+    return cond
 
 
 def _month_of_point(p: dict) -> str:
@@ -450,7 +496,7 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
             return {"error": True,
                     "message": (f"'{ckind}' 은 지원하는 신뢰도 방식이 아닙니다 — "
                                 "decomposed 또는 legacy 만 됩니다.")}
-        arm = "B1" if weighting == "hard" else "N"
+        arm = _ARM_LABELS[weighting]
     regime_detail: list[dict] = []
 
     rb = _rebalance_indices(list(dates), rebalance, min_train)
@@ -738,6 +784,10 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             "weights_infeasible": len(plan.infeasible),
             "infeasible_detail": plan.infeasible[:20],
             "detail": plan.regime_detail,
+            # 팔 G 만 — GMM 시작 분포를 세운 달 · 전이 예측으로 열화한 달(사유는 `detail[*].gmm_fallback`).
+            **({"gmm_months": sum(1 for d in plan.regime_detail if d.get("gmm") is not None),
+                "gmm_fallback_months": sum(1 for d in plan.regime_detail if d.get("gmm_fallback"))}
+               if plan.arm == "G" else {}),
         },
         "turnover_avg_pct": round(float(np.mean(turnovers)), 2) if turnovers else 0.0,
         "impact": impact_block,

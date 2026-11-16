@@ -71,14 +71,17 @@ function Field({ f, value, onChange }: { f: FieldSpec; value: unknown; onChange:
           <option value="false">끄기</option>
         </select>
       );
-    case "enum":
+    case "enum": {
+      // 보이는 글은 서버가 준 선택지 이름(`x-ui.options`) · 고른 값은 코드 그대로(M3 — 'gmm' 대신 'GMM 시작 분포 × 전이'). 이름이 없으면 코드.
+      const name = (o: string) => f.ui.options?.[o] ?? o;
       return (
         <select className="pg-field-input" value={show(value)}
                 onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}>
-          <option value="">기본값{f.defaultValue !== undefined ? ` (${String(f.defaultValue)})` : ""}</option>
-          {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+          <option value="">기본값{f.defaultValue !== undefined ? ` (${name(String(f.defaultValue))})` : ""}</option>
+          {(f.options ?? []).map((o) => <option key={o} value={o}>{name(o)}</option>)}
         </select>
       );
+    }
     case "number":
     case "integer":
       return (

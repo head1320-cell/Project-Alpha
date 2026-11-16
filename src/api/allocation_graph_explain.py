@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.engine.allocation_evidence import LOOKAHEAD_AXIS_LABELS
+from src.engine.regime_skill import CANDIDATE_NAMES as _SKILL_NAMES
 
 CONFIRMED, ASSUMED, UNKNOWN, FAILED = "confirmed", "assumed", "unknown", "failed"
 
@@ -37,6 +38,13 @@ MODEL_PLAIN = {
     "mv_utility": "평균-분산 효용",
 }
 
+#: 국면 가중 방식(`AnalyzeRequest.regime_weighting`) → 화면 이름 — 국면 예측 비교(M2)의 후보 이름과 같은 말(M3 · 용어집 §3.16).
+#: 캔버스 선택지 · 해설 · 결과 판이 이 이름을 쓴다(`MODEL_PLAIN` 과 같은 자리 · 이름의 출처는 `regime_skill.CANDIDATE_NAMES` 한 곳).
+WEIGHTING_PLAIN: dict[str, str] = {
+    "hard": _SKILL_NAMES["persistence"],
+    "probabilistic": _SKILL_NAMES["transition"],
+    "gmm": _SKILL_NAMES["gmm_start"],
+}
 _PRACTICE = "합성 데이터입니다 — 실제 시세가 아니므로 실제 성과를 나타내지 않습니다."
 
 
@@ -62,6 +70,25 @@ def _josa(word: str, with_batchim: str, without: str) -> str:
     if "가" <= ch <= "힣":
         return with_batchim if (ord(ch) - 0xAC00) % 28 else without
     return without
+
+
+def _ro(word: str) -> str:
+    """'으로/로' — 받침이 없거나 ㄹ 받침이면 '로'(`allocation_graph_nodes_macro` 의 국면 판정 줄과 같은 규칙)."""
+    ch = word[-1:] if word else ""
+    if "가" <= ch <= "힣" and (ord(ch) - 0xAC00) % 28 not in (0, 8):
+        return "으로"
+    return "로"
+
+
+def weighting_fallback_sentence(frm: str, to: str, why: str, *, final: bool) -> str:
+    """국면 가중의 열화 한 걸음(`frm` → `to` · 코드) → 서버 문장 — 결과 판의 사유 줄과 해설의 대체 줄이 ★같은 글★이다.
+
+    걸음마다 그 걸음의 두 방식을 적는다: GMM → 전이 예측 → 오늘 국면 유지 처럼 두 걸음이면 가운데 걸음이 글에서 사라지지 않게
+    앞 걸음은 '넘어갔습니다', 실제로 산출한 방식에 닿은 걸음만 '산출했습니다'.
+    """
+    a, b = WEIGHTING_PLAIN.get(frm, frm), WEIGHTING_PLAIN.get(to, to)
+    verb = "산출했습니다" if final else "넘어갔습니다"
+    return f"‘{a}’{_josa(a, '을', '를')} 쓰지 못해 ‘{b}’{_ro(b)} {verb}. {why}"
 
 
 def _pct(v: float, digits: int = 1) -> str:
@@ -165,12 +192,27 @@ def _constraints_approx_text(cr: dict) -> str:
     return " ".join(parts) or "제약을 모두 충족하지 못해 근사 비중을 산출했습니다."
 
 
+def _weighting_assumption(key: str) -> str:
+    """국면 가중 방식마다의 가정 — ★고른 방식의 가정을 말한다★(M3 전에는 무엇을 골라도 '현재 국면이 지속된다'였다)."""
+    N = WEIGHTING_PLAIN
+    if key == "probabilistic":
+        return (f"보유 기간의 국면을 ‘{N['probabilistic']}’{_ro(N['probabilistic'])} 잡는다고 가정합니다"
+                "(오늘 국면에서 출발 · 과거 경로의 전이행렬 사후평균).")
+    if key == "gmm":
+        return (f"보유 기간의 국면을 ‘{N['gmm']}’{_ro(N['gmm'])} 잡는다고 가정합니다(지금 점의 GMM 소속 확률에서 출발 · 같은 전이행렬). "
+                f"같은 경로의 워크포워드 점수가 없으면 {N['probabilistic']}{_ro(N['probabilistic'])} 계산하고 "
+                "그 사유를 포트폴리오 최적화 결과에 적습니다.")
+    return "현재 국면이 보유 기간 내내 지속된다고 가정합니다."
+
+
 def explain_estimate(view: dict, prov: dict, params: Any) -> dict:
     s = view.get("settings") or {}
     if s.get("conditional"):
+        key = str(s.get("regime_weighting") or "hard")
         return {"title": "경기 국면 조건부로 기대수익률을 추정하도록 설정했습니다",
-                "facts": ["실제 반영 여부는 포트폴리오 최적화 단계에서 표시합니다.", _ESTIMATE_INPUT_UNUSED],
-                "trust": [_t(ASSUMED, "현재 국면이 지속된다고 가정합니다.")]}
+                "facts": [f"국면 가중 방식: {WEIGHTING_PLAIN.get(key, key)}",
+                          "실제 반영 여부는 포트폴리오 최적화 단계에서 표시합니다.", _ESTIMATE_INPUT_UNUSED],
+                "trust": [_t(ASSUMED, _weighting_assumption(key))]}
     return {"title": "과거 수익률 기준으로 기대수익률을 추정했습니다",
             "facts": ["경기 국면은 반영하지 않았습니다.", _ESTIMATE_INPUT_UNUSED],
             "trust": [_t(ASSUMED, "과거 평균이 향후에도 유지된다고 가정합니다.")]}
@@ -215,9 +257,10 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
     if belief.get("blocked"):
         trust.append(_t(ASSUMED, "경기 국면 반영이 차단돼 과거 표본 기준으로 산출했습니다 — "
                                  + str(belief.get("blocked_reason") or "")))
+    regime_facts, unmeasured = _regime_lines(belief.get("regime"), trust)
     if view.get("skipped_views"):
         trust.append(_t(UNKNOWN, f"입력한 투자 뷰 중 {len(view['skipped_views'])}개는 사용할 수 없어 제외했습니다."))
-    facts = [f"계산 방식: {MODEL_PLAIN.get(model, model)}"]
+    facts = [f"계산 방식: {MODEL_PLAIN.get(model, model)}", *regime_facts]
     ra = view.get("risk_aversion") or None
     if ra:
         # BO O1 — 쓴 λ 와 그 출처. 비워 두었으면 관례값이라는 사실을 **가정**으로 밝힌다.
@@ -236,7 +279,61 @@ def explain_optimizer(view: dict, prov: dict, params: Any) -> dict:
         # K1 — 생각을 넣은 비중을 못 만들어 시가총액 비중을 썼으면 그렇게 말한다(`views_applied` 는 그때 거짓이다).
         facts.append("투자 뷰를 반영한 비중을 산출하지 못해 시가총액 비중을 적용했습니다." if market
                      else "투자 뷰를 반영했습니다." if view.get("views_applied") else "반영된 투자 뷰가 없습니다.")
-    return {"title": "비중 산출 결과입니다", "headline": headline, "facts": facts, "trust": trust}
+    out = {"title": "비중 산출 결과입니다", "headline": headline, "facts": facts, "trust": trust}
+    if unmeasured:
+        out["unmeasured"] = unmeasured
+    return out
+
+
+def _regime_lines(reg: dict | None, trust: list[dict]) -> tuple[list[str], list[str]]:
+    """최적화 노드의 국면 가중 블록(M3) → (사실 줄, 재지 않은 것) · 가정 · 대체 줄은 `trust` 에 더한다.
+
+    ★쓰지 않은 방식을 쓴 것처럼 적지 않는다★ 조건부 추정을 못 만들었으면 그 사유만, 관문이 막았으면(차단 줄이 이미 있다) 아무것도.
+    점수 · 시드 안정성 · 부트스트랩은 ★사실★(잰 값)이다 — 예측력의 증거라고 쓰지 않는다(합성 자료면 장치의 동작만 보인다).
+    """
+    if not reg:
+        return [], []
+    if not reg.get("available"):
+        trust.append(_t(ASSUMED, "경기 국면 조건부 추정을 쓰지 못해 과거 표본 기준으로 산출했습니다. "
+                                 + str(reg.get("reason") or "사유 미상")))
+        return [], []
+    if not reg.get("applied"):
+        return [], []
+    from src.api.allocation_graph_nodes_macro import _REGIME_PLAIN
+
+    used, req_name, used_name = reg.get("used"), str(reg.get("requested_name")), str(reg.get("used_name"))
+    facts = [f"국면 가중 방식: {used_name}" + (f"(요청: {req_name})" if reg.get("requested") != used else "")]
+    # 열화 걸음마다 서버 문장 하나(`weighting_fallback_sentence` — 블록이 지었다) · 결과 판의 사유 줄과 같은 글
+    trust += [{"state": ASSUMED, "kind": FALLBACK, "text": str(text)} for text in reg.get("fallbacks") or []]
+    trust += [_t(ASSUMED, str(n)) for n in reg.get("dropped_notes") or []]
+    if used == "hard":
+        trust.append(_t(ASSUMED, "오늘 국면이 보유 기간 내내 지속된다고 가정했습니다 — 국면이 바뀔 가능성은 비중에 들어가지 않았습니다."))
+    else:
+        trust.append(_t(ASSUMED, "전이행렬 파라미터의 불확실성은 공분산에 전파되지 않았습니다 — 그 구간은 표집 예측이 따로 보고합니다."))
+    if used == "gmm":
+        sk = reg.get("skill") or {}
+        if sk.get("available"):
+            line = (f"같은 경로의 워크포워드 점수({sk.get('k')}개월 앞 · 평가 시점 {sk.get('n_eval')}개) — "
+                    f"적중 {sk.get('hits')}/{sk.get('n_eval')}회 · 브라이어 {float(sk.get('brier')):.3f} · "
+                    f"‘{(sk.get('baseline') or {}).get('name') or '오늘 국면 유지'}’ 대비 {float(sk.get('gain')):+.3f}")
+            ev = sk.get("evidence")
+            if ev:
+                line += f" · 순차 증거 최고 {float(ev['peak']):.2f}" + (" (기준 넘음)" if ev.get("passed") else "")
+            facts.append(line)
+        st = reg.get("stability") or {}
+        if st.get("seeds"):
+            text = (f"지금 점의 GMM 최다 국면: 난수 시드 {st['seeds']}개 가운데 {st['agree']}개가 "
+                    f"‘{_REGIME_PLAIN.get(st.get('modal'), st.get('modal'))}’입니다.")
+            facts.append(text)
+            if not st.get("stable"):
+                trust.append(_t(UNKNOWN, "지금 점의 GMM 국면이 난수 시드에 따라 갈립니다 — 시작 분포는 시드 평균입니다."))
+        rb = reg.get("robustness") or {}
+        if rb.get("available"):
+            facts.append(f"달을 다시 뽑아 적합한 {rb['resamples']}번 가운데 {rb['agree']}번 같은 국면"
+                         f"(‘{_REGIME_PLAIN.get(rb.get('label'), rb.get('label'))}’)이었습니다 — 관측이며 시작 분포를 바꾸지 않습니다.")
+        elif rb:
+            trust.append(_t(UNKNOWN, f"자료를 다시 뽑아 본 안정성은 재지 못했습니다. {rb.get('reason') or '사유 미상'}"))
+    return facts, ["국면 가중 방식이 배분의 수익 · 위험을 바꾸는지(경제적 가치)"]
 
 
 def explain_risk(view: dict, prov: dict, params: Any) -> dict:

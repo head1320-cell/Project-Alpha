@@ -206,7 +206,9 @@ class AnalyzeRequest(BaseModel):
     #   조건부 μ/Σ 를 적용하지 않는다. 조용히 떨어지지 않고 사유를 남긴다.
     require_verified_macro: bool = False
     # ★기본값이 "hard" 인 것이 계약이다★ 보내지 않으면 현행 경로·현행 신뢰도 그대로.
-    regime_weighting: str = Field("hard", pattern="^(hard|probabilistic)$")
+    # "gmm"(M3) — GMM 시작 분포 × 전이. 같은 경로의 워크포워드 점수가 없으면 전이 예측으로 ★명시적으로★ 열화한다
+    # (`conditional.requested_weighting` · `regime_weighting`(쓴 것) · `gmm_fallback`(사유)).
+    regime_weighting: str = Field("hard", pattern="^(hard|probabilistic|gmm)$")
     # 라이브(오늘 스냅샷) vs 백테스트(as_of 절단). 백테스트는 아직 열려 있지 않다 —
     # ECOS revision 정책 문서가 선행조건이다(계획 §1.6.2).
     regime_mode: str = Field("live", pattern="^(live|backtest)$")
