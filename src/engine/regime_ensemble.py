@@ -223,6 +223,11 @@ def _stability(picks: list[str]) -> dict:
     `modal` 은 가장 많이 나온 국면(동수면 `REGIMES` 순서의 앞 — `max` 는 동수에서 앞의 것을 돌려준다) ·
     `agree` 는 그 수 · `shares` 는 국면별 비율 · `stable` 은 ★엄격한 과반★(`agree × 2 > seeds` — 10개 중
     5개는 과반이 아니다).
+
+    ★재는 것은 난수 시드에 대한 민감도뿐이다★ — 자료가 조금 달라질 때(측정 오차 · 개정) 같은 답이 나오는지는
+    재지 않는다. 답을 반올림이 정하는 자료(원 위의 점 + 가운데 점)를 1e-12 만큼 흔든 30개에서 '과반'이 GMM 10개 ·
+    k-평균 14개였고, 흔들지 않은 원 하나는 BLAS 커널에 따라 4/10 과 6/10 으로 갈렸다(M1c · 잰 값 ·
+    `tests/test_regime_seed_stability.py` 가 그 한계를 건다). 캔버스 해설은 이것을 '재지 않은 것'으로 적는다.
     """
     seeds = len(picks)
     counts = {r: picks.count(r) for r in REGIMES}

@@ -215,8 +215,12 @@ def _explain_ensemble(view: dict, prov: dict, params: Any) -> dict:
              "방법마다 다른 국면을 가리킵니다" if picks else "국면을 판정할 수 있는 방법이 없었습니다")
     if agree and unstable_arms(tools):
         title = f"{title} — {UNSTABLE_QUALIFIER}"
+    unmeasured = ["국면 판정의 향후 수익률 예측력"]
+    if seed_facts:
+        # 시드 과반은 난수 시드만 바꿔 본 값이다 — 1e-12 만큼 흔든 자료에서 '과반'과 '과반 미만'이 오간다(M1c · 시험이 건다).
+        unmeasured.append("자료가 조금 달라져도 같은 국면이 나오는지(시드 과반은 난수 시드만 바꿔 본 값)")
     return {"title": title, "facts": facts + seed_facts + ["방법끼리 평균하지 않습니다 — 불일치 자체가 정보입니다."],
-            "trust": trust, "unmeasured": ["국면 판정의 향후 수익률 예측력"]}
+            "trust": trust, "unmeasured": unmeasured}
 
 
 def _regime_explain(inputs: dict, p: ExplainParams) -> pg.NodeOutput:

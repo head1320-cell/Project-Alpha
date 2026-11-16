@@ -13,12 +13,15 @@
    다른 경우를 일부러 넣는다).
 2. ★과반은 엄격하다★ — 5:5 는 과반이 아니다(`≥` 로 바꾸는 변이를 죽인다) · 동수의 최다 답은 `REGIMES` 순서의 앞.
 3. k-평균 팔의 값은 ★확률이 아니라 시드 비율★이다 — `probs_kind` 와 주석이 그렇게 말한다(짝: GMM 팔은 확률).
-4. 실제 추정기: 뚜렷이 뭉친 자료에서는 안정 ↔ 원 위에 고르게 놓인 자료의 가운데 점은 시드에 따라 갈린다.
+4. 실제 추정기: 뚜렷이 뭉친 자료에서는 안정 ↔ 답을 흔들기가 정하는 자료(원 위의 점 + 가운데 점을 1e-12 만큼 흔든
+   30개)에서는 시드가 갈린다 · ★시드 과반 ≠ 자료에 대한 강건성★ — 판정('과반' / '과반 미만')이 흔들기만으로 오간다
+   (M1c · 한계를 건다 — 해설의 '재지 않은 것'이 그 한계를 말한다).
 5. 합의는 넷을 센다 · 군집 두 방법이 독립이 아니라는 사실을 말한다(짝: 하나가 빠지면 말하지 않는다).
 6. 캔버스 해설이 넷째 팔과 안정성을 말한다.
 """
 from __future__ import annotations
 
+import functools
 import math
 import sys
 
@@ -299,15 +302,56 @@ def test_clearly_clustered_data_gives_every_seed_the_same_answer(arm):
     assert out["stability"]["agree"] == SEEDS and out["stability"]["stable"] is True
 
 
+#: 원 자료를 흔드는 크기(소수 열두째 자리)와 사본 수. ★흔들지 않은 원은 답을 기계의 반올림이 정한다★ —
+#: GMM 의 최다 답이 OpenBLAS 의 AVX512 커널에서 4/10('과반 미만'), Haswell · Zen · Prescott 커널에서 6/10('과반')이다
+#: (잰 것 · 2026-11-16 M1 PR 실행의 Backend 실패가 이것 — 그 실행의 값과 소수점까지 같다). 1e-12 는 반올림보다 네 자리쯤
+#: 커서 사본마다의 답을 기계가 아니라 흔들기가 정한다(잰 것: 네 커널에서 30개 사본의 답이 두 팔 모두 같다).
+RING_JITTER = 1e-12
+RING_COPIES = 30
+
+
+def _jittered_rings() -> list[tuple[list[float], list[float]]]:
+    g, i = _ring()
+    base = np.column_stack([g, i])
+    out = []
+    for s in range(RING_COPIES):
+        X = base + np.random.default_rng(s).normal(0.0, RING_JITTER, base.shape)
+        out.append((X[:, 0].tolist(), X[:, 1].tolist()))
+    return out
+
+
+@functools.cache
+def _ring_stability(arm: str) -> tuple[dict, ...]:
+    """흔든 원 30개에 그 팔을 돌린 시드 안정성 — 아래 두 시험이 같은 계산을 나눠 쓴다(GMM 약 5초)."""
+    outs = [getattr(re_mod, arm)(g, i) for g, i in _jittered_rings()]
+    assert all(o["available"] for o in outs), [o.get("reason") for o in outs if not o["available"]]
+    return tuple(o["stability"] for o in outs)
+
+
 @pytest.mark.parametrize("arm", ["_cluster_probs", "_kmeans_probs"])
-def test_seed_sensitive_data_is_reported_unstable(arm):
-    """★시드 하나만 돌렸다면 이 답을 단정했을 것이다★ — 같은 자료 · 같은 설정에서 답이 갈린다."""
-    out = getattr(re_mod, arm)(*_ring())
-    assert out["available"] is True, out.get("reason")
-    st = out["stability"]
-    assert st["stable"] is False, st
-    assert st["agree"] * 2 <= SEEDS
-    assert sum(1 for v in st["shares"].values() if v > 0) >= 3, "갈린다는 것이 공허하지 않다 — 세 국면 이상에 흩어진다"
+def test_seed_sensitive_data_splits_the_seeds(arm):
+    """★시드 하나만 돌렸다면 그 답을 단정했을 것이다★ — 같은 자료 · 같은 설정에서 시드마다 답이 갈린다.
+
+    한 자료의 수('10개 중 5개 이하')를 걸지 않는다 — 그 수는 기계마다 다르다(위 `RING_JITTER` 주석).
+    흔든 원 30개 전체에서 기계와 무관하게 성립하는 것만 건다.
+    """
+    sts = _ring_stability(arm)
+    # ① 과반 미만이라고 말하는 사본이 있다 — 시드를 하나로 묶으면(변이) 30개 모두 10/10 '과반'이다
+    assert any(st["stable"] is False for st in sts)
+    # ② 갈린다는 것이 공허하지 않다 — 시드마다의 답이 네 국면 모두에 흩어진다
+    pooled = {r: sum(st["shares"][r] for st in sts) for r in REGIMES}
+    assert all(v > 0 for v in pooled.values()), pooled
+
+
+@pytest.mark.parametrize("arm", ["_cluster_probs", "_kmeans_probs"])
+def test_a_seed_majority_is_not_robustness_to_the_data(arm):
+    """★한계를 건다★ 시드 과반은 '난수 시드를 바꿔도 같은 답인가'만 잰다 — '자료가 조금 달라도 같은 답인가'는 재지 않는다.
+
+    답을 흔들기가 정하는 자료에서 판정이 1e-12 의 차이만으로 '과반'과 '과반 미만'을 오간다
+    (잰 것: 흔든 원 30개 중 '과반' — GMM 10개 · k-평균 14개 · OpenBLAS 커널 넷에서 같다).
+    이 시험이 깨지면 — 판정이 자료 흔들기에도 견고해지면 — 캔버스 해설의 '재지 않은 것'과 엔진 머리말도 함께 고친다.
+    """
+    assert {st["stable"] for st in _ring_stability(arm)} == {True, False}
 
 
 # ══ 4. 앙상블 — 넷을 나란히 · 합치지 않는다 ════════════════════════════════════
@@ -507,6 +551,26 @@ def test_the_canvas_explain_is_silent_when_the_answer_is_the_seed_majority():
     ex = _explain_ensemble(_view(_seeded("Reflation", "cluster", 6, "probability"),
                                  _seeded("Reflation", "kmeans", 10, "seed_share")), {}, None)
     assert not any("최다 답(" in t["text"] for t in ex["trust"])
+
+
+#: 해설의 '재지 않은 것' — 시드 과반이 무엇을 재지 않는지(M1c · 위 `test_a_seed_majority_is_not_robustness_to_the_data`).
+DATA_ROBUSTNESS_UNMEASURED = "자료가 조금 달라져도 같은 국면이 나오는지(시드 과반은 난수 시드만 바꿔 본 값)"
+
+
+def test_the_canvas_explain_says_a_seed_majority_does_not_measure_the_data():
+    """시드 줄('과반' / '과반 미만')이 있으면 '재지 않은 것'에 자료 흔들기를 적는다 — '과반'이 견고함으로 읽히지 않게."""
+    _explain_ensemble = _canvas()[0]._explain_ensemble
+    ex = _explain_ensemble(_view(_seeded("Reflation", "cluster", 9, "probability"),
+                                 _seeded("Reflation", "kmeans", 10, "seed_share")), {}, None)
+    assert ex["unmeasured"] == ["국면 판정의 향후 수익률 예측력", DATA_ROBUSTNESS_UNMEASURED]
+
+
+def test_the_canvas_explain_is_silent_about_seeds_when_no_arm_was_reseeded():
+    """짝 — 군집 두 팔이 모두 계산되지 않아 시드 줄이 없으면 그 문장도 없다(말할 '과반'이 없다)."""
+    _explain_ensemble = _canvas()[0]._explain_ensemble
+    ex = _explain_ensemble(_view(_arm(None, "cluster"), _arm(None, "kmeans")), {}, None)
+    assert not any("난수 시드" in f for f in ex["facts"])
+    assert ex["unmeasured"] == ["국면 판정의 향후 수익률 예측력"]
 
 
 def test_the_canvas_explain_title_qualifies_unanimity_on_an_unstable_arm():
