@@ -324,6 +324,9 @@ test("판정: 관문 일곱의 상태와 사유는 서버 값 그대로 · 표�
   await expect(page.locator('.itd-mult [data-k="days"] dd')).toHaveText("10일");
   await expect(page.locator('.itd-mult [data-k="psr"] dd')).toHaveText("N/A");
   await expect(page.locator(".itd-mult-why")).toHaveText("거래일이 10일뿐입니다. 60일 이상이어야 확률을 산출합니다.");
+  // 하루 최대 손실을 정하지 않았다 — 순차 증거(e-값)는 값 없이 사유만 사실 줄에 선다(1 이나 0 으로 내지 않는다).
+  await expect(gate(page, "multiplicity").locator(".itd-gate-facts li").filter({ hasText: "순차 증거" })).toHaveText([
+    "하루 최대 손실을 정하지 않아 순차 증거(e-값)를 계산하지 않았습니다. 하루 손실의 상한이 없으면 유한한 표본으로는 수익의 증거를 낼 수 없습니다."]);
 
   // 같은 판정을 다시 보면 표본외 구간을 본 횟수가 늘고, 두 번째부터는 표본외가 아니라고 말한다.
   const views = Number(/([\d,]+)번째/.exec(await page.locator(".itd-oos-views").innerText())![1].replace(/,/g, ""));
@@ -331,6 +334,23 @@ test("판정: 관문 일곱의 상태와 사유는 서버 값 그대로 · 표�
   await expect(page.locator(".itd-oos-views")).toHaveAttribute("data-views", String(views + 1));
   await expect(page.locator(".itd-oos-views")).toContainText("두 번째부터는 표본외가 아닙니다.");
   await expect(gate(page, "out_of_sample").locator(".itd-gate-facts")).toContainText("번째");
+});
+
+test("판정: 하루 최대 손실을 넣으면 순차 증거(e-값)가 사실 줄에 선다 · 관문의 상태는 그대로", async ({ page }) => {
+  // 손 계산의 열흘 — 날마다 비용 뒤 −319.47원. 상한 = 하루 최대 손실 10,000원 × 2. e-값 = 평균_f (1 − f × 319.47 ÷ 20,000)^10 ≈ 0.92.
+  await open(page);
+  await setHand(page);
+  await field(page, "daily_loss_limit").fill("10000");
+  await run(page);
+  const req = await judge(page);
+  expect(req.postDataJSON().position.daily_loss_limit).toBe(10000);
+  const facts = gate(page, "multiplicity").locator(".itd-gate-facts li").filter({ hasText: "순차 증거" });
+  await expect(facts).toHaveCount(2);
+  await expect(facts.nth(0)).toHaveText(/^순차 증거\(e-값\)의 최고값이 기준에 못 미칩니다\. 최고 1\.00 · 현재 0\.92 · 기준 [\d,]+\(시행 [\d,]+회 × 20\)\. 이 기준은 기간을 늘려 가며 다시 봐도 유효합니다\.$/);
+  await expect(facts.nth(1)).toHaveText("순차 증거는 하루 손실이 하루 최대 손실의 2배(20,000원)를 넘지 않는다는 가정 아래의 값입니다. "
+    + "배수는 이 도구의 설정값이며 표본에서 가장 큰 하루 손실은 319원입니다.");
+  await expect(gate(page, "multiplicity")).toHaveAttribute("data-state", "unknown");          // 상태는 확률(60일 미만 — 미상)이 정한다
+  await expect(gate(page, "multiplicity").locator(".itd-gate-reason")).toHaveText("거래일이 10일뿐입니다. 60일 이상이어야 확률을 산출합니다.");
 });
 
 test("워크포워드: 미리 선언한 격자만 돌린다 · 고른 칸과 이어 붙인 결과 · 어긋난 격자는 보내지 않는다", async ({ page }) => {

@@ -191,10 +191,17 @@ export type OutOfSample = {
   } | null;
   in_sample: Brief | null; out_of_sample: Brief | null; reason: string | null; views: number | null;
 };
+/** 순차 증거(e-값) — 다중 비교 관문의 ★사실 줄★로만 읽힌다(관문의 상태는 확률이 정한다). 값이 없으면 `reason`. */
+export type Sequential = {
+  method: string; alpha: number; trials: number; threshold: number; cap: number | null; days: number | null;
+  e_value: number | null; peak: number | null; saturated: boolean | null; exceeded_days: number | null; worst: number | null;
+  passed: boolean | null; reason: string | null; assumption: string | null; loss_limit: number | null; cap_multiple: number;
+};
 export type Multiplicity = {
   n: number; days: number | null; sharpe_per_day: number | null; psr0: number | null; dsr: number | null;
   dsr_effective: number | null; n_effective: number | null; n_effective_reason: string | null;
   corrected: boolean; unscored: number; value: number | null; threshold: number; reason: string | null; note: string;
+  sequential: Sequential;
 };
 export type WalkStep = {
   choose: { from: string; to: string }; apply: { from: string; to: string };
