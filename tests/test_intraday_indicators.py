@@ -144,7 +144,7 @@ def test_minute_is_the_clock_of_the_bar_label():
 
 # ── 등록부와 매개변수 ──────────────────────────────────────────────────────────────────
 def test_an_unknown_indicator_or_parameter_is_refused_with_a_reason():
-    for name, params, code in (("macd", {}, "unknown_indicator"), ("sma", {"window": 3}, "unknown_param"),
+    for name, params, code in (("stochastic", {}, "unknown_indicator"), ("sma", {"window": 3}, "unknown_param"),
                                ("sma", {"n": 0}, "param_out_of_range"), ("sma", {"n": 2.5}, "param_not_integer"),
                                ("bb_upper", {"n": 3, "k": 99}, "param_out_of_range"), ("sma", {"n": True}, "param_not_integer")):
         with pytest.raises(ind.IndicatorError) as err:
@@ -158,6 +158,73 @@ def test_missing_parameters_take_the_registered_default():
 
 def test_the_registry_says_which_indicators_need_the_previous_day():
     assert {n for n, spec in ind.INDICATORS.items() if spec.needs_prev} == {"prev_close", "prev_high", "prev_low"}
+
+
+# ── 지표 보탬(자유 조건식 f4) — 지수이동평균 · MACD · ATR · 당일 고가 · 당일 저가 ────────────────────────
+#   종가 101 102 103 100  99 104 105 102 103 106 · 고가 102 103 104 103 101 105 106 105 103 107 · 저가 99 100 101 100 98 99 103 102 101 103
+EMA3 = [NAN, NAN, 102, 101, 100, 102, 103.5, 102.75, 102.875, 104.4375]     # 씨앗 = 처음 셋의 평균 · 계수 2/(3+1) = 0.5
+
+
+def test_ema_starts_from_the_simple_average_of_its_first_window_and_then_leans_toward_each_new_close():
+    assert same(ind.compute(S, "ema", {"n": 3}), EMA3)
+    assert same(ind.compute(S, "ema", {"n": 1}), S.close)                  # 기간 1 = 종가 그 자체
+    two = ind.compute(S, "ema", {"n": 2})
+    assert same(two[:3], [NAN, 101.5, 102.5])                               # 계수 2/3: 101.5 + (103 − 101.5) × 2/3
+    assert np.isnan(ind.compute(S, "ema", {"n": 11})).all()                 # 봉이 모자라면 끝까지 미상이다(짧은 평균으로 때우지 않는다)
+    assert np.isnan(ind.compute(S, "ema", {"n": 10})[:9]).all() and ind.compute(S, "ema", {"n": 10})[9] == S.close.mean()
+
+
+def test_macd_is_the_short_average_minus_the_long_one_and_is_unknown_until_both_exist():
+    line = ind.compute(S, "macd", {"fast": 1, "slow": 3})                   # 단기 1 = 종가 → 종가 − 지수이동평균(3)
+    assert same(line, [NAN, NAN, 1, -1, -1, 2, 1.5, -0.75, 0.125, 1.5625])
+    fast, slow = ind.compute(S, "ema", {"n": 2}), ind.compute(S, "ema", {"n": 3})
+    assert same(ind.compute(S, "macd", {"fast": 2, "slow": 3}), fast - slow)
+    assert same(ind.compute(S, "macd", {"fast": 3, "slow": 2}), slow - fast)    # 단기가 더 길어도 정의는 그대로다(부호가 뒤집힌다)
+
+
+def test_macd_signal_averages_the_macd_line_from_its_first_value_and_the_oscillator_is_their_gap():
+    p = {"fast": 1, "slow": 3, "signal": 2}
+    line, signal, hist = ind.compute(S, "macd", {"fast": 1, "slow": 3}), ind.compute(S, "macd_signal", p), ind.compute(S, "macd_hist", p)
+    # MACD 는 셋째 봉부터 난다 → 신호(2)는 넷째 봉에서 (1 + −1)/2 = 0 으로 시작하고 계수는 2/3 다
+    assert same(signal[:8], [NAN, NAN, NAN, 0, -2 / 3, 10 / 9, 37 / 27, -7 / 162])
+    for i in range(4, 10):
+        assert np.isclose(signal[i], signal[i - 1] + (line[i] - signal[i - 1]) * 2 / 3)
+    assert same(hist, line - signal) and np.isnan(hist[:3]).all() and hist[3] == -1.0
+    assert same(ind.compute(S, "macd_signal", {"fast": 1, "slow": 3, "signal": 1}), line)     # 신호 1 = MACD 그 자체
+
+
+def test_atr_is_wilders_average_of_the_true_range_and_its_first_bar_has_only_its_own_range():
+    # 진폭: 3 3 3 3 3 6 3 3 2 4 (앞 봉 종가와의 거리가 더 큰 봉은 여기에 없다 — 아래 시험이 그 경우를 본다)
+    assert same(ind.compute(S, "atr", {"n": 3}), [NAN, NAN, 3, 3, 3, 4, 11 / 3, 31 / 9, 80 / 27, 268 / 81])
+    one = ind.compute(S, "atr", {"n": 1})                                   # 기간 1 = 진폭 그 자체
+    assert same(one, [3, 3, 3, 3, 3, 6, 3, 3, 2, 4])
+    assert one[0] == 3.0                                                    # ★전일 종가(98)를 쓰지 않는다★ — 썼다면 4 다
+
+
+def test_the_true_range_reaches_back_to_the_previous_bars_close_when_a_bar_gaps():
+    gap = session([("090000", 100, 101, 99, 100, 1), ("090100", 110, 111, 109, 110, 1), ("090200", 100, 101, 99, 100, 1)])
+    assert same(ind.compute(gap, "atr", {"n": 1}), [2, 11, 11])             # 위로 뜀: |111 − 100| · 아래로 뜀: |99 − 110|
+
+
+def test_day_high_and_low_are_the_running_extremes_and_include_the_bar_itself():
+    assert same(ind.compute(S, "day_high"), [102, 103, 104, 104, 104, 105, 106, 106, 106, 107])
+    assert same(ind.compute(S, "day_low"), [99, 99, 99, 99, 98, 98, 98, 98, 98, 98])
+    assert (ind.compute(S, "day_high") >= S.high).all() and (ind.compute(S, "day_low") <= S.low).all()
+
+
+def test_the_registry_says_which_indicators_carry_the_value_of_the_bar_before():
+    """앞 봉의 값을 이어 쓰는 지표 — 그날 첫 봉부터 다시 계산하므로 여러 날을 이은 차트의 값과 하루 내내 다르다(규칙의 주석이 말한다)."""
+    assert {n for n, spec in ind.INDICATORS.items() if spec.carries} == {"ema", "macd", "macd_signal", "macd_hist", "atr", "rsi"}
+
+
+def test_the_new_indicators_have_no_value_on_an_empty_or_one_bar_day():
+    one = session([("090000", 100, 102, 99, 101, 10)])
+    empty = Session(one.ticker, one.date, one.time[:0], one.open[:0], one.high[:0], one.low[:0], one.close[:0], one.volume[:0], "kis", None)
+    for name in ("ema", "macd", "macd_signal", "macd_hist", "atr", "day_high", "day_low"):
+        assert len(ind.compute(empty, name)) == 0, name
+    for name in ("ema", "macd", "macd_signal", "macd_hist", "atr"):
+        assert np.isnan(ind.compute(one, name)).all(), name                 # 기본 기간에는 봉 하나로 값이 없다(0 이 아니다)
+    assert same(ind.compute(one, "day_high"), [102]) and same(ind.compute(one, "day_low"), [99])
 
 
 # ── 성질: 앞보기 0 ─────────────────────────────────────────────────────────────────────

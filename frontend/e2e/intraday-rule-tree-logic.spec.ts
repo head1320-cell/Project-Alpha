@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import {
-  EMPTY, append, arithmetic, compare, conditional, constant, fromParams, group, heldBefore, indicator, issuesOf, negate, removeAt,
+  EMPTY, ago, append, arithmetic, compare, conditional, constant, fromParams, group, heldBefore, indicator, issuesOf, negate, removeAt,
   setAt, sizeOf, timeWindow, toParams, type Drafts,
 } from "../src/features/intraday-rule-editor/tree";
 import type { Grammar, Tree } from "../src/entities/intraday/types";
@@ -26,7 +26,9 @@ const G: Grammar = {
                { key: "k", label: "표준편차 배수", type: "float", min: 0.5, max: 4, default: 2, unit: "배" }] },
   ],
   ops: [{ name: "held_before", label: "직전 봉 동안 계속", symbol: null, gives: "bool", args: ["bool"], variadic: null,
-          extra: [{ key: "bars", label: "직전 봉 수", type: "int", min: 1, max: 240, unit: "봉" }] }],
+          extra: [{ key: "bars", label: "직전 봉 수", type: "int", min: 1, max: 240, unit: "봉" }] },
+        { name: "ago", label: "N봉 전 값", symbol: null, gives: "number", args: ["number"], variadic: null,
+          extra: [{ key: "bars", label: "봉 수", type: "int", min: 1, max: 240, unit: "봉" }] }],
   units: {}, limits: { nodes: 64, depth: 12 },
 };
 
@@ -46,6 +48,8 @@ test("새 마디 — 지표는 서버가 준 출발값, 상수 · 연산 · 봉 
   expect(negate(above())).toEqual({ op: "not", args: [above()] });
   expect(arithmetic("mul", close())).toEqual({ op: "mul", args: [close(), null] });   // 앞의 값을 왼쪽 항으로 넘긴다
   expect(conditional(close())).toEqual({ op: "where", args: [null, close()] });
+  expect(ago(close())).toEqual({ op: "ago", bars: null, args: [close()] });            // 앞의 값을 감싼다 · 봉 수는 비어서 시작한다(1 로 지어 넣지 않는다)
+  expect(ago()).toEqual({ op: "ago", bars: null, args: [null] });
 });
 
 test("자리의 뿌리에 더하기 — 빈 자리면 그것이 뿌리 · 조건 하나에 더하면 '모두 충족'으로 묶인다 · 묶음에는 줄이 이어진다", () => {
@@ -115,6 +119,24 @@ test("빈 칸 찾기 — 묶음의 줄 수 · 매개변수의 범위 · 직전 �
     expect(issuesOf(only(heldBeforeBars(above(), bars)), G), String(bars)).toEqual(["진입 조건: 직전 봉 수는 1~240봉 범위로 입력하십시오."]);
   }
   expect(issuesOf(only(heldBeforeBars(above(), 240)), G)).toEqual([]);
+  // 'N봉 전 값'의 봉 수 — 범위는 문법 표의 그 연산에서 읽는다(화면에 따로 두지 않는다)
+  const back = (bars: number | null, value: Tree | null = close()): Tree => ({ op: "gt", args: [close(), { op: "ago", bars, args: [value] }] });
+  for (const bars of [null, 0, 241, 1.5]) {
+    expect(issuesOf(only(back(bars)), G), `ago ${bars}`).toEqual(["진입 조건: 봉 수는 1~240봉 범위로 입력하십시오."]);
+  }
+  expect(issuesOf(only(back(1)), G)).toEqual([]);
+  expect(issuesOf(only(back(240)), G)).toEqual([]);
+  expect(issuesOf(only(back(3, null)), G)).toEqual(["진입 조건: 비어 있는 칸이 1곳 있습니다."]);                            // 감싼 안쪽의 빈 칸도 센다
+  expect(issuesOf(only(back(3, { ind: "sma", n: 500 })), G)).toEqual(["진입 조건: 이동평균 기간은 1~240봉 범위로 입력하십시오."]);
+  // 문법 표에 봉 수의 칸이 없으면(열화) 범위를 지어내지 않는다 — 1 이상의 정수인지만 보고 이름표는 연산마다 다르다
+  const bare: typeof G = { ...G, ops: G.ops.map((o) => ({ ...o, extra: [] })) };
+  for (const bars of [null, 0, 1.5]) {
+    expect(issuesOf(only(back(bars)), bare), `bare ago ${bars}`).toEqual(["진입 조건: 봉 수는 1~ 범위로 입력하십시오."]);
+    expect(issuesOf(only(heldBeforeBars(above(), bars)), bare), `bare held ${bars}`).toEqual(["진입 조건: 직전 봉 수는 1~ 범위로 입력하십시오."]);
+  }
+  expect(issuesOf(only(back(241)), bare)).toEqual([]);                                                                  // 상한을 모르면 막지 않는다(판정은 서버가 한다)
+  expect(issuesOf(only(heldBeforeBars(above(), 241)), bare)).toEqual([]);
+  expect(sizeOf(back(3))).toEqual({ nodes: 4, depth: 3 });                                                              // 감싼 것도 마디다(서버와 같은 법)
   for (const [from, to] of [["", ""], ["0930", ""], ["1500", "0900"], ["2460", "2500"], ["0960", "1000"], ["0900", "0961"], ["2400", "2400"]]) {   // 분은 59 까지 · 시는 23 까지
     expect(issuesOf(only(group(above(), window(from, to))), G), `${from}~${to}`).toEqual(["진입 조건: 시각 창의 시작과 종료를 확인하십시오."]);
   }

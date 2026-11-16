@@ -351,6 +351,8 @@ test("전일 값을 쓰는 조건이면 그렇게 말한다 · 범위 밖 매개
   await entry.getByLabel("진입 조건: 오른쪽 값", { exact: true }).selectOption("ind:sma");
   const period = entry.getByLabel("이동평균 기간", { exact: true });
   await expect(period).toHaveValue("20");                                             // 서버가 준 출발값
+  await expect(entry.locator(".ire-param")).toHaveCount(1);
+  await expect(entry.locator(".ire-param-label")).toHaveCount(0);                     // 매개변수가 하나인 지표에는 칸의 이름을 따로 적지 않는다(짝)
   await expect(text(page)).toHaveText("진입 조건: 종가 > 이동평균(20봉)");
   await expect(page.locator(".itd-needs-prev")).toHaveCount(0);                       // 짝 — 전일 지표를 빼면 사라진다(검사가 끝난 뒤에 본다)
   await expect(page.locator(".itd-notes")).not.toContainText("전일 값은 원주가입니다.");
@@ -392,6 +394,67 @@ test("전일 값을 쓰는 조건이면 그렇게 말한다 · 범위 밖 매개
   fail = false;
   await check(page, "fail").getByRole("button").click();
   await expect(text(page)).toHaveText("진입 조건: 종가 > 이동평균(22봉)");
+});
+
+test("지표 보탬: 당일 고가와 'N봉 전 값'으로 지은 조건 — 서버의 글 · 주석 · 화면의 값 = 손 계산 · 빈 봉 수는 그 칸과 문제 목록이 말한다 · MACD 의 칸 셋", async ({ page }) => {
+  const NEW_HIGH = "진입 조건: 종가 > 1봉 전 당일 고가";
+  await openEditor(page);
+  await setHand(page);
+  const entry = slot(page, "entry");
+  await entry.locator('.ire-add[data-add="compare"]').click();
+  await fillRow(entry, "close", "gt", "day_high");
+  await expect(text(page)).toHaveText("진입 조건: 종가 > 당일 고가");
+  await expect(page.locator(".itd-notes")).toContainText("당일 고가와 당일 저가는 그 봉을 포함합니다. 직전 봉까지의 값은 ‘N봉 전 값’으로 얻습니다.");   // 서버 주석
+
+  // 'N봉 전 값'으로 감싼다 — 앞에 고른 값이 안쪽으로 간다 · 봉 수는 비어서 시작한다(1 로 지어 넣지 않는다)
+  await entry.getByLabel("진입 조건: 오른쪽 값", { exact: true }).selectOption("ago");
+  const bars = entry.getByLabel("진입 조건: 오른쪽 값 N봉 전의 봉 수", { exact: true });
+  await expect(bars).toHaveValue("");
+  await expect(bars).toHaveAttribute("aria-invalid", "true");
+  await expect(entry.getByLabel("진입 조건: 오른쪽 값 N봉 전의 값", { exact: true })).toHaveValue("ind:day_high");
+  await expect(page.locator(".itd-problems li")).toHaveText(["진입 조건: 봉 수는 1~240봉 범위로 입력하십시오."]);
+  await expect(page.locator(".itd-run")).toBeDisabled();
+  await expect(check(page, "idle")).toBeVisible();                                    // 봉 수가 빈 조건은 서버에 묻지 않는다
+  await expect(entry.locator(".ire-ago > .ire-sym")).toHaveText("봉 전");              // 읽는 순서: [봉 수] 봉 전 [값]
+  expect(await entry.locator(".ire-ago").evaluate((el) => [...el.children].map((c) => c.className.split(" ")[0]))).toEqual(["ire-input", "ire-sym", "ire-num"]);
+  for (const bad of ["241", "0", "1.5"]) {                                            // 범위는 서버의 문법 표에서 온다(1~240의 정수)
+    await bars.fill(bad);
+    await expect(bars, bad).toHaveAttribute("aria-invalid", "true");
+    await expect(page.locator(".itd-run"), bad).toBeDisabled();
+  }
+  await bars.fill("1");
+  await expect(bars).toHaveAttribute("aria-invalid", "false");
+  await expect(text(page)).toHaveText(NEW_HIGH);
+  // 감싼 안쪽의 값도 그 자리에서 고친다(바깥의 봉 수는 그대로다)
+  const inner = entry.getByLabel("진입 조건: 오른쪽 값 N봉 전의 값", { exact: true });
+  await inner.selectOption("ind:high");
+  await expect(text(page)).toHaveText("진입 조건: 종가 > 1봉 전 고가");
+  await expect(bars).toHaveValue("1");
+  await inner.selectOption("ind:day_high");
+  await expect(text(page)).toHaveText(NEW_HIGH);
+
+  const req = await run(page);
+  expect(req.postDataJSON().rule).toEqual({ kind: "custom", params: { entry: { op: "gt", args: [{ ind: "close" }, { op: "ago", bars: 1, args: [{ ind: "day_high" }] }] } } });
+  await expect(page.locator(".itd-result .tx-answer-s")).toContainText("시뮬레이션 거래 10건");
+  await expect(sum(page, "total", "gross")).toHaveText("+19,800원");              // 09:01 에 처음 충족(10,060 > 10,020) → 손 계산의 규칙과 같은 체결
+
+  // 이어 쓰는 지표의 주석은 쓰는 규칙에만(짝) · MACD 의 매개변수 칸 셋은 서버가 준 출발값이다
+  await expect(page.locator(".itd-notes")).not.toContainText("그날의 첫 봉부터 다시 계산합니다");
+  const exit = slot(page, "exit");
+  await exit.locator('.ire-add[data-add="compare"]').click();
+  await fillRow(exit, "macd", "cross_down", "macd_signal");
+  await expect(exit.getByLabel("MACD 단기 기간", { exact: true })).toHaveValue("12");
+  await expect(exit.getByLabel("MACD 장기 기간", { exact: true })).toHaveValue("26");
+  await expect(exit.getByLabel("MACD 신호선 단기 기간", { exact: true })).toHaveValue("12");
+  await expect(exit.getByLabel("MACD 신호선 장기 기간", { exact: true })).toHaveValue("26");
+  await expect(exit.getByLabel("MACD 신호선 신호 기간", { exact: true })).toHaveValue("9");
+  // 매개변수가 여럿인 지표는 칸마다 이름을 보인다(단위가 같은 칸 셋을 순서로 짐작하지 않게) — 이름은 서버의 문법 표가 준 것이다
+  await expect(exit.locator('.ire-num[data-kind="ind:macd_signal"] .ire-param-label')).toHaveText(["단기 기간", "장기 기간", "신호 기간"]);
+  await expect(exit.locator('.ire-num[data-kind="ind:macd"] .ire-param-label')).toHaveText(["단기 기간", "장기 기간"]);
+  await expect(text(page)).toHaveText(`${NEW_HIGH} · 청산 조건: MACD(12봉, 26봉) 하향 돌파 MACD 신호선(12봉, 26봉, 9봉)`);
+  await expect(page.locator(".itd-notes")).toContainText("지수이동평균, MACD, ATR, RSI 는 그날의 첫 봉부터 다시 계산합니다. 여러 날을 이어 계산한 차트의 값과 다를 수 있습니다.");
+  await exit.getByLabel("MACD 신호선 신호 기간", { exact: true }).fill("61");
+  await expect(page.locator(".itd-problems li")).toHaveText(["청산 조건: MACD 신호선 신호 기간은 1~60봉 범위로 입력하십시오."]);
 });
 
 test("내 시행에서 불러오기: 규칙만 실린다 — 종목과 기간은 건드리지 않는다", async ({ page }) => {

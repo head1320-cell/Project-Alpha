@@ -175,11 +175,15 @@ TEMPLATES: dict[str, Template] = {
 
 
 # ── 직접 구성(custom) — 매개변수가 나무 셋 ─────────────────────────────────────────────────
-_OP_EXTRA = {"held_before": ("bars",), "time_between": ("from", "to")}
+_OP_EXTRA = {"held_before": ("bars",), "ago": ("bars",), "time_between": ("from", "to")}
 _TRIAL_NOTE = ("조건을 변경해 실행할 때마다 시행으로 기록됩니다. 시행 횟수가 늘수록 시행 횟수 보정 관문은 엄격해집니다. "
                "검사는 시행으로 기록되지 않습니다.")
 _WARMUP_NOTE = "지표는 그날의 봉으로만 계산합니다. 창이 N봉인 지표는 처음 N봉 동안 값이 없으며, 값이 없는 조건은 충족으로 보지 않습니다."
 _HELD_NOTE = "‘직전 M봉 동안 계속’은 그 봉을 포함하지 않습니다. 앞선 M개 봉에서 모두 충족했는지 봅니다."
+_CARRY_NOTE = "지수이동평균, MACD, ATR, RSI 는 그날의 첫 봉부터 다시 계산합니다. 여러 날을 이어 계산한 차트의 값과 다를 수 있습니다."
+_DAY_NOTE = "당일 고가와 당일 저가는 그 봉을 포함합니다. 직전 봉까지의 값은 ‘N봉 전 값’으로 얻습니다."
+#: 그 봉까지의 값을 내는 지표(그 봉 포함) — 그대로 견주면 '고가 > 당일 고가'는 늘 거짓이다.
+_RUNNING = ("day_high", "day_low")
 _ENTRY_RULE = "진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다."
 RULE_TEXT_UNREADABLE = "이 설정의 규칙을 지금의 문법으로 읽지 못했습니다."
 
@@ -302,6 +306,7 @@ def grammar() -> dict:
                                    "max": r.high, "default": r.default, "unit": r.unit} for key, r in spec.params.items()]})
     fields = {"held_before": [{"key": "bars", "label": "직전 봉 수", "type": "int", "min": expr.HELD_BARS[0],
                                "max": expr.HELD_BARS[1], "unit": "봉"}],
+              "ago": [{"key": "bars", "label": "봉 수", "type": "int", "min": expr.AGO_BARS[0], "max": expr.AGO_BARS[1], "unit": "봉"}],
               "time_between": [{"key": "from", "label": "시작 시각", "type": "time"}, {"key": "to", "label": "종료 시각", "type": "time"}]}
     ops = []
     for name, (wants, low, high, gives) in expr.shapes().items():
@@ -329,6 +334,8 @@ def _number_text(node: dict, top: bool = False) -> str:
         shown = ", ".join(f"{_fmt(params[key])}{r.unit}" for key, r in spec.params.items())
         return f"{spec.label}({shown})" if shown else spec.label
     name, args = node["op"], node["args"]
+    if name == "ago":                                            # 'N봉 전' 은 바로 뒤의 수 하나에 붙는다 — 안쪽이 계산이면 그것이 괄호를 갖는다
+        return f"{node['bars']}봉 전 {_number_text(args[0])}"
     if name == "where":
         body = f"{_judge_text(args[0], inner=True)} 충족 시 {_number_text(args[1])}"
     else:
@@ -366,12 +373,23 @@ def _uses_op(tree: Any, name: str) -> bool:
     return isinstance(tree, dict) and (tree.get("op") == name or any(_uses_op(arg, name) for arg in tree.get("args", [])))
 
 
+def _indicators_in(tree: Any) -> set[str]:
+    """나무에 쓰인 지표의 이름(읽기만 — 평가하지 않는다)."""
+    if not isinstance(tree, dict):
+        return set()
+    found = {tree["ind"]} if "ind" in tree else set()
+    return found.union(*(_indicators_in(arg) for arg in tree.get("args", [])))
+
+
 def notes_of(spec: RuleSpec) -> list[str]:
-    """그 나무들이 알아야 할 것 — 덥혀지지 않은 지표(늘) · 전일 값(쓰는 지표가 있을 때) · '직전 M봉 동안'이 보는 봉(쓸 때)."""
+    """그 나무들이 알아야 할 것 — 덥혀지지 않은 지표(늘) · 전일 값 · '직전 M봉 동안'이 보는 봉 · 이어 쓰는 지표 · 당일 고가와 저가(쓸 때만)."""
     trees = [tree for tree in (spec.entry, spec.entry_stop, spec.exit) if tree is not None]
     uses_prev = any(expr.uses_prev(tree) for tree in trees)
     held = any(_uses_op(tree, "held_before") for tree in trees)
-    return [_WARMUP_NOTE, *([_PREV_NOTE] if uses_prev else []), *([_HELD_NOTE] if held else [])]
+    used = set().union(*(_indicators_in(tree) for tree in trees))
+    carried = any(indicators.INDICATORS[name].carries for name in used if name in indicators.INDICATORS)
+    return [_WARMUP_NOTE, *([_PREV_NOTE] if uses_prev else []), *([_HELD_NOTE] if held else []),
+            *([_CARRY_NOTE] if carried else []), *([_DAY_NOTE] if used.intersection(_RUNNING) else [])]
 
 
 def rule_text(rule: Any) -> dict:

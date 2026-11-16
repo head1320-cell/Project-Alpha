@@ -43,6 +43,30 @@ def bools(tree, s=S):
     return [bool(x) for x in expr.evaluate(tree, s)]
 
 
+# ── N봉 전 값(자유 조건식 f4) ───────────────────────────────────────────────────────────
+def test_ago_gives_the_value_n_bars_back_and_nothing_where_there_is_no_such_bar():
+    out = expr.evaluate(op("ago", I("close"), bars=2), S)                   # 종가 100 101 103 102 99 104
+    assert np.array_equal(out, [np.nan, np.nan, 100, 101, 103, 102], equal_nan=True)
+    assert np.array_equal(expr.evaluate(op("ago", I("close"), bars=5), S), [np.nan] * 5 + [100], equal_nan=True)
+    assert np.isnan(expr.evaluate(op("ago", I("close"), bars=6), S)).all()   # 봉이 여섯인 하루에 6봉 전은 없다
+    calc = expr.evaluate(op("ago", op("sub", I("close"), C(100)), bars=1), S)    # 계산한 값도 민다
+    assert np.array_equal(calc, [np.nan, 0, 1, 3, 2, -1], equal_nan=True)
+    assert expr.validate(op("ago", I("close"), bars=1)) == expr.validate(op("ago", I("close"), bars=240)) == "number"
+
+
+def test_a_comparison_with_a_bar_that_does_not_exist_is_not_true_either_way():
+    before = op("ago", I("close"), bars=1)
+    assert bools(op("gt", I("close"), before)) == [False, True, True, False, False, True]
+    assert bools(op("le", I("close"), before)) == [False, False, False, True, True, False]     # 첫 봉은 어느 쪽도 참이 아니다
+    assert bools(op("not", op("gt", I("close"), before)))[0] is False       # 뒤집어도 모름은 모름이다
+
+
+def test_ago_of_the_running_high_is_the_high_before_this_bar():
+    """당일 고가는 그 봉을 포함한다 — 그대로 견주면 '고가 > 당일 고가'는 늘 거짓이다. 직전까지의 고가는 한 봉 민 값이다."""
+    assert not any(bools(op("gt", I("high"), I("day_high"))))               # 고가 101 102 104 103 100 105
+    assert bools(op("gt", I("high"), op("ago", I("day_high"), bars=1))) == [False, True, True, False, False, True]
+
+
 # ── 비교 ─────────────────────────────────────────────────────────────────────────────
 def test_comparisons_have_both_outcomes():
     assert bools(op("gt", I("close"), C(101))) == [False, False, True, True, False, True]
@@ -135,7 +159,7 @@ def test_where_gives_the_value_only_while_the_condition_holds():
 @pytest.mark.parametrize("tree, code", [
     ("close", "not_a_node"),
     ({"op": "xor", "args": [C(1), C(2)]}, "unknown_op"),
-    ({"ind": "macd"}, "unknown_indicator"),
+    ({"ind": "stochastic"}, "unknown_indicator"),
     ({"ind": "sma", "n": 0}, "param_out_of_range"),
     (op("gt", I("close")), "wrong_arity"),
     (op("and", op("gt", I("close"), C(1))), "wrong_arity"),
@@ -148,6 +172,13 @@ def test_where_gives_the_value_only_while_the_condition_holds():
     ({"op": "time_between", "from": "9시", "to": "0930"}, "bad_time"),
     ({"op": "time_between", "from": "0930", "to": "0900"}, "bad_time"),
     (op("held_before", op("gt", I("close"), C(1)), bars=0), "bad_bars"),
+    (op("ago", I("close"), bars=0), "bad_bars"),
+    (op("ago", I("close"), bars=241), "bad_bars"),
+    (op("ago", I("close"), bars=1.5), "bad_bars"),
+    (op("ago", I("close"), bars=True), "bad_bars"),
+    (op("ago", I("close")), "bad_bars"),                                 # 봉 수가 없다 — 1 로 지어 넣지 않는다
+    (op("ago", op("gt", I("close"), C(1)), bars=1), "wrong_kind"),       # 판단의 'N봉 전'은 없다
+    (op("ago", I("close"), I("close"), bars=1), "wrong_arity"),
     ({"ind": "close", "const": 1}, "not_a_node"),
 ])
 def test_a_malformed_tree_is_refused_with_a_reason(tree, code):
@@ -200,6 +231,11 @@ TREES = [
     op("or", op("cross_down", I("rsi", n=5), C(70)), op("not", op("ge", I("close"), I("bb_lower", n=5, k=2.0)))),
     op("where", {"op": "time_between", "from": "0905", "to": "0950"}, op("add", I("day_open"), op("mul", C(0.5), op("sub", I("prev_high"), I("prev_low"))))),
     op("cross_up", I("close"), I("highest_close", bars=4)),
+    op("gt", I("high"), op("ago", I("day_high"), bars=1)),                # 새 당일 고가
+    op("cross_up", I("macd", fast=3, slow=6), I("macd_signal", fast=3, slow=6, signal=4)),
+    op("gt", op("sub", I("close"), op("ago", I("close"), bars=3)), op("mul", C(0.5), I("atr", n=5))),
+    op("lt", I("low"), op("ago", I("day_low"), bars=2)),
+    op("where", op("gt", I("ema", n=4), op("ago", I("ema", n=4), bars=1)), op("add", I("day_low"), I("macd_hist", fast=2, slow=5, signal=3))),
 ]
 
 

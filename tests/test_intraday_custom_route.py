@@ -150,7 +150,7 @@ def test_running_the_same_rule_is_what_makes_a_trial(client, auth, monkeypatch):
     ({"kind": "custom", "params": {"entry": {"ind": "close"}}}, "entry_not_a_condition", "entry"),
     ({"kind": "custom", "params": {"entry_stop": ABOVE}}, "entry_stop_not_a_price", "entry_stop"),
     ({"kind": "custom", "params": {"entry": ABOVE, "exit": {"const": 1}}}, "exit_not_a_condition", "exit"),
-    ({"kind": "custom", "params": {"entry": {"op": "gt", "args": [{"ind": "macd"}, {"const": 0}]}}}, "unknown_indicator", "entry"),
+    ({"kind": "custom", "params": {"entry": {"op": "gt", "args": [{"ind": "stochastic"}, {"const": 0}]}}}, "unknown_indicator", "entry"),
     ({"kind": "custom", "params": {"entry": {"op": "gt", "args": [{"ind": "sma", "n": 500}, {"const": 0}]}}}, "param_out_of_range", "entry"),
     ({"kind": "custom", "params": {"entry": ABOVE, "exit": {**BELOW, "memo": "x"}}}, "unknown_key", "exit"),
     ({"kind": "custom", "params": {"entry": {"op": "and", "args": [ABOVE, {"ind": "close"}]}}}, "wrong_kind", "entry"),
@@ -237,6 +237,18 @@ def test_the_same_tree_is_one_trial_however_it_is_spelled_and_a_reordered_one_is
     assert (swapped["new"], swapped["family_n"]) == (True, 2)
 
 
+def test_a_new_day_high_rule_built_from_the_added_pieces_trades_like_the_hand_rule(client, auth, monkeypatch):
+    """지표 보탬(f4) — `종가 > 1봉 전 당일 고가`: 손으로 만든 하루에서 09:01 에 처음 충족한다(10,060 > 10,020) → 손 계산의 규칙과 같은 체결.
+    짝: 당일 고가는 그 봉을 포함하므로 `고가 > 당일 고가` 는 한 번도 충족하지 않는다(거래 0)."""
+    hand_days(monkeypatch)
+    before = {"op": "ago", "bars": 1, "args": [{"ind": "day_high"}]}
+    new_high = {"kind": "custom", "params": {"entry": {"op": "gt", "args": [{"ind": "close"}, before]}}}
+    body = client.post(VAL, json={**BODY, "rule": new_high}, headers=auth).json()
+    assert body["summary"]["trades"] == 10 and body["summary"]["gross_total"] == 19_800
+    never = {"kind": "custom", "params": {"entry": {"op": "gt", "args": [{"ind": "high"}, {"ind": "day_high"}]}}}
+    assert client.post(VAL, json={**BODY, "rule": never}, headers=auth).json()["summary"]["trades"] == 0
+
+
 def test_validate_judges_a_custom_rule_with_the_hand_computed_numbers(client, auth, monkeypatch):
     hand_days(monkeypatch)
     body = client.post(VAL, json={**BODY, "rule": CUSTOM}, headers=auth).json()
@@ -291,7 +303,23 @@ def test_the_listing_has_the_custom_kind_and_the_grammar(client, auth):
     assert [t["custom"] for t in body["templates"]] == [False] * 7 + [True]
     g = body["grammar"]
     assert g == json.loads(json.dumps(rules.grammar()))                      # 문은 엔진의 표를 그대로 싣는다
-    assert len(g["indicators"]) == 21 and len(g["ops"]) == 15 and g["limits"] == {"nodes": 64, "depth": 12}
+    assert len(g["indicators"]) == 28 and len(g["ops"]) == 16 and g["limits"] == {"nodes": 64, "depth": 12}
+
+
+def test_checking_a_condition_built_from_the_added_indicators_gives_its_text_and_notes(client, auth):
+    """지표 보탬(f4) — 새 지표와 'N봉 전 값'으로 지은 조건도 같은 문이 검사하고 같은 글을 낸다(계산하지 않는다)."""
+    new_high = {"op": "gt", "args": [{"ind": "high"}, {"op": "ago", "bars": 1, "args": [{"ind": "day_high"}]}]}
+    body = client.post(EXPAND, json={"rule": {"kind": "custom", "params": {"entry": new_high, "exit": {
+        "op": "cross_down", "args": [{"ind": "macd"}, {"ind": "macd_signal"}]}}}}, headers=auth)
+    assert body.status_code == 200, body.text
+    said = body.json()
+    assert said["text"] == "진입 조건: 고가 > 1봉 전 당일 고가 · 청산 조건: MACD(12봉, 26봉) 하향 돌파 MACD 신호선(12봉, 26봉, 9봉)"
+    assert said["rule"]["params"]["entry"]["args"][1] == {"op": "ago", "args": [{"ind": "day_high"}], "bars": 1}
+    assert (said["nodes"], said["depth"], said["needs_prev"]) == (7, 3, False)
+    assert sum("그 봉을 포함합니다" in n for n in said["notes"]) == 1 and sum("다시 계산합니다" in n for n in said["notes"]) == 1
+    bad = client.post(EXPAND, json={"rule": {"kind": "custom", "params": {"entry": {
+        "op": "gt", "args": [{"ind": "close"}, {"op": "ago", "args": [{"ind": "close"}]}]}}}}, headers=auth)
+    assert bad.status_code == 400 and bad.json()["detail"]["code"] == "bad_bars" and bad.json()["detail"]["slot"] == "entry"
 
 
 # ── 목록의 글 ─────────────────────────────────────────────────────────────────────────

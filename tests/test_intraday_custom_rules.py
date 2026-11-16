@@ -112,9 +112,11 @@ def _rand_number(rng: random.Random, depth: int) -> dict:
     roll = rng.random()
     if depth <= 0 or roll < 0.4:
         return _rand_ind(rng) if rng.random() < 0.75 else C(rng.choice(_CONSTS))
-    if roll < 0.85:
+    if roll < 0.75:
         return op(rng.choice(["add", "sub", "mul"]), _rand_number(rng, depth - 1), _rand_number(rng, depth - 1))
-    return op("where", _rand_bool(rng, depth - 1), _rand_number(rng, depth - 1))
+    if roll < 0.88:
+        return op("where", _rand_bool(rng, depth - 1), _rand_number(rng, depth - 1))
+    return op("ago", _rand_number(rng, depth - 1), bars=rng.randint(1, 4))
 
 
 def _rand_bool(rng: random.Random, depth: int) -> dict:
@@ -164,8 +166,8 @@ def test_the_random_trees_cover_the_whole_grammar():
     for tree in TREES:
         ops |= _names(tree, "op")
         inds |= _names(tree, "ind")
-    assert ops == set(expr.OP_LABELS) and len(ops) == 15
-    assert inds == set(indicators.INDICATORS) and len(inds) == 21
+    assert ops == set(expr.OP_LABELS) and len(ops) == 16
+    assert inds == set(indicators.INDICATORS) and len(inds) == 28
     assert len({expr.canonical(t) for t in TREES}) == len(TREES) == 300
 
 
@@ -255,7 +257,7 @@ def _deep(levels: int) -> dict:
     ({"entry": I("close")}, "entry_not_a_condition", "entry"),
     ({"entry_stop": ABOVE}, "entry_stop_not_a_price", "entry_stop"),
     ({"entry": ABOVE, "exit": C(1)}, "exit_not_a_condition", "exit"),
-    ({"entry": op("gt", I("macd"), C(0))}, "unknown_indicator", "entry"),
+    ({"entry": op("gt", I("stochastic"), C(0))}, "unknown_indicator", "entry"),
     ({"entry": op("gt", I("sma", n=500), C(0))}, "param_out_of_range", "entry"),
     ({"entry": op("gt", I("sma", window=5), C(0))}, "unknown_param", "entry"),
     ({"entry": {**ABOVE, "note": "x"}}, "unknown_key", "entry"),
@@ -299,11 +301,11 @@ def test_size_counts_like_the_validator():
 def test_every_indicator_parameter_and_operator_has_a_label_and_the_labels_differ():
     """화면은 이름을 지어내지 않는다 — 등록부에 있는 것은 전부 이름표가 있다(새 지표를 더하면 여기서 걸린다)."""
     labels = [spec.label for spec in indicators.INDICATORS.values()]
-    assert all(labels) and len(set(labels)) == len(labels) == 21
+    assert all(labels) and len(set(labels)) == len(labels) == 28
     for name, spec in indicators.INDICATORS.items():
         assert spec.unit in indicators.UNITS, name
         assert all(r.label and r.unit for r in spec.params.values()), name
-    assert set(expr.OP_LABELS) == set(expr.shapes()) and len(set(expr.OP_LABELS.values())) == 15
+    assert set(expr.OP_LABELS) == set(expr.shapes()) and len(set(expr.OP_LABELS.values())) == 16
     assert set(expr.OP_SYMBOLS) == {"add", "sub", "mul", "gt", "ge", "lt", "le"}
     assert all("—" not in text for text in (*labels, *expr.OP_LABELS.values(), *indicators.UNITS.values()))
 
@@ -321,7 +323,14 @@ def test_the_grammar_is_read_from_the_registries_not_copied():
             assert p["type"] == ("int" if r.integer else "float")
     assert {i["name"] for i in g["indicators"] if i["needs_prev"]} == {"prev_close", "prev_high", "prev_low"}
     by_name = {o["name"]: o for o in g["ops"]}
-    assert list(by_name) == list(expr.shapes()) and len(by_name) == 15
+    assert list(by_name) == list(expr.shapes()) and len(by_name) == 16
+    assert by_name["ago"] == {"name": "ago", "label": "N봉 전 값", "symbol": None, "gives": "number", "args": ["number"], "variadic": None,
+                              "extra": [{"key": "bars", "label": "봉 수", "type": "int", "min": 1, "max": 240, "unit": "봉"}]}
+    macd = next(i for i in g["indicators"] if i["name"] == "macd_signal")
+    assert (macd["label"], macd["unit"]) == ("MACD 신호선", "price")
+    assert [(p["key"], p["label"], p["default"]) for p in macd["params"]] == [("fast", "단기 기간", 12), ("slow", "장기 기간", 26), ("signal", "신호 기간", 9)]
+    assert {i["name"]: i["label"] for i in g["indicators"]}.items() >= {
+        "ema": "지수이동평균", "macd": "MACD", "macd_hist": "MACD 오실레이터", "atr": "ATR", "day_high": "당일 고가", "day_low": "당일 저가"}.items()
     assert by_name["gt"] == {"name": "gt", "label": "초과", "symbol": ">", "gives": "bool", "args": ["number", "number"],
                              "variadic": None, "extra": []}
     assert by_name["where"]["args"] == ["bool", "number"] and by_name["where"]["gives"] == "number"
@@ -378,6 +387,52 @@ def test_different_trees_never_share_a_text():
         assert "—" not in text
         assert seen.setdefault(text, expr.canonical(form)) == expr.canonical(form), text
     assert len(seen) > 290
+
+
+def test_n_bars_back_reads_as_a_phrase_and_brackets_a_calculation():
+    spec = rules.build("custom", {"entry": op("gt", I("high"), op("ago", I("day_high"), bars=1)),
+                                  "entry_stop": op("ago", op("sub", I("close"), I("open")), bars=3),
+                                  "exit": op("cross_down", I("macd"), I("macd_signal"))})
+    assert rules.text_of(spec) == ("진입 조건: 고가 > 1봉 전 당일 고가 · 미리 건 매수 가격: 3봉 전 (종가 − 시가) · "
+                                   "청산 조건: MACD(12봉, 26봉) 하향 돌파 MACD 신호선(12봉, 26봉, 9봉)")
+    # 어디에 '전'이 붙었는지에 따라 글이 다르다
+    a = rules.text_of(rules.build("custom", {"entry_stop": op("add", op("ago", I("close"), bars=1), C(10))}))
+    b = rules.text_of(rules.build("custom", {"entry_stop": op("ago", op("add", I("close"), C(10)), bars=1)}))
+    assert (a, b) == ("미리 건 매수 가격: 1봉 전 종가 + 10", "미리 건 매수 가격: 1봉 전 (종가 + 10)")
+
+
+def test_n_bars_back_keeps_its_bars_in_the_one_form_and_refuses_what_it_does_not_know():
+    out = rules.resolve("custom", {"entry": op("gt", I("close"), op("ago", I("ema"), bars=2))})["entry"]
+    assert out["args"][1] == {"op": "ago", "args": [{"ind": "ema", "n": 20}], "bars": 2}
+    assert rules.resolve("custom", {"entry": out}) == {"entry": out}        # 한 번 더 풀어도 같다
+    two = rules.resolve("custom", {"entry": op("gt", I("close"), op("ago", I("ema"), bars=3))})["entry"]
+    assert expr.canonical(two) != expr.canonical(out)                       # 봉 수가 다르면 다른 설정(다른 시행)이다
+    assert refused({"entry": op("gt", I("close"), op("ago", I("close"), bars=2, shift=1))}).code == "unknown_key"
+    err = refused({"exit": op("gt", I("close"), op("ago", I("close"), bars=0)), "entry": ABOVE})
+    assert (err.code, err.slot) == ("bad_bars", "exit")
+
+
+def test_the_notes_say_that_carried_indicators_restart_each_day__only_when_one_is_used():
+    """앞 봉의 값을 이어 쓰는 지표는 그날 첫 봉부터 다시 계산한다 — 차트 도구의 값과 다르다는 것을 쓰는 규칙에만 말한다(짝)."""
+    said = "그날의 첫 봉부터 다시 계산합니다"
+    assert not any(said in n for n in rules.notes_of(rules.build("custom", {"entry": ABOVE})))
+    for name in ("ema", "macd", "macd_signal", "macd_hist", "atr", "rsi"):
+        notes = rules.notes_of(rules.build("custom", {"entry": op("gt", I("close"), I(name))}))
+        assert sum(said in n for n in notes) == 1, name
+    deep = rules.build("custom", {"entry": ABOVE, "exit": op("lt", I("close"), op("ago", op("add", I("ema"), C(1)), bars=1))})
+    assert any(said in n for n in rules.notes_of(deep))                     # 깊이 묻혀도 · 어느 자리든
+    by_kind = {kind: any(said in n for n in rules.notes_of(rules.build(kind, None))) for kind in rules.TEMPLATES}
+    assert [kind for kind, has in by_kind.items() if has] == ["rsi_reversal"]    # 틀 가운데는 RSI 를 쓰는 것 하나뿐이다
+    assert all(n.endswith("니다.") and "—" not in n for n in rules.notes_of(deep))
+
+
+def test_the_notes_say_that_the_days_high_and_low_include_the_bar__only_when_one_is_used():
+    said = "당일 고가와 당일 저가는 그 봉을 포함합니다"
+    assert not any(said in n for n in rules.notes_of(rules.build("custom", {"entry": ABOVE})))
+    for name in ("day_high", "day_low"):
+        notes = rules.notes_of(rules.build("custom", {"entry": op("gt", I("close"), op("ago", I(name), bars=1))}))
+        assert sum(said in n for n in notes) == 1 and all(n.endswith("니다.") and "—" not in n for n in notes), name
+    assert not any(said in n for n in rules.notes_of(rules.build("custom", {"entry": op("gt", I("close"), I("day_open"))})))
 
 
 def test_the_notes_say_what_the_trees_need():

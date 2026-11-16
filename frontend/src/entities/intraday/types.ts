@@ -57,7 +57,7 @@ export type Templates = {
 /** 지표 잎 — 매개변수는 같은 층에 놓인다(`{"ind": "sma", "n": 20}`). 편집 중의 빈 칸은 `null`. */
 export type IndNode = { ind: string } & { [param: string]: number | string | null };
 export type ConstNode = { const: number | null };
-/** 연산 마디. `op` 가 빈 글자면 아직 고르지 않은 것이다(편집 중에만). `bars` 는 '직전 M봉 동안', `from`·`to` 는 시각 창(HHMM). */
+/** 연산 마디. `op` 가 빈 글자면 아직 고르지 않은 것이다(편집 중에만). `bars` 는 '직전 M봉 동안' · 'N봉 전 값'의 봉 수, `from`·`to` 는 시각 창(HHMM). */
 export type OpNode = { op: string; args: (Tree | null)[]; bars?: number | null; from?: string; to?: string };
 export type Tree = IndNode | ConstNode | OpNode;
 

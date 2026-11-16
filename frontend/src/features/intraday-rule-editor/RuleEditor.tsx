@@ -11,7 +11,7 @@
 import { useState } from "react";
 import type { Grammar, OpNode, Tree } from "@/entities/intraday";
 import {
-  ARITH, COMPARES, GROUPS, WRAPS, append, arithmetic, compare, conditional, constant, group, heldBefore, indicator, isConst, isInd, isOp,
+  ARITH, COMPARES, GROUPS, WRAPS, ago, append, arithmetic, compare, conditional, constant, group, heldBefore, indicator, isConst, isInd, isOp,
   negate, removeAt, setAt, timeWindow, type Draft, type Drafts, type Path,
 } from "./tree";
 
@@ -20,8 +20,8 @@ type Ctx = { g: Grammar; root: Draft; put: (next: Draft) => void };
 
 const opLabel = (g: Grammar, name: string): string => g.ops.find((o) => o.name === name)?.label ?? name;
 const opSymbol = (g: Grammar, name: string): string => g.ops.find((o) => o.name === name)?.symbol ?? opLabel(g, name);
-/** '직전 M봉 동안'의 봉 수 범위 — 서버의 문법 표가 준 것이다(없으면 범위를 지어내지 않는다 — 판정은 서버가 한다). */
-const barsOf = (g: Grammar) => g.ops.find((o) => o.name === "held_before")?.extra.find((e) => e.key === "bars");
+/** 봉 수를 받는 연산('직전 M봉 동안' · 'N봉 전 값')의 범위 — 서버의 문법 표가 준 것이다(없으면 범위를 지어내지 않는다 — 판정은 서버가 한다). */
+const barsOf = (g: Grammar, op: string) => g.ops.find((o) => o.name === op)?.extra.find((e) => e.key === "bars");
 const parse = (raw: string): number | null => (/^-?\d+(\.\d+)?$/.test(raw.trim()) ? Number(raw.trim()) : null);
 const toClock = (hhmm: string | undefined): string => (hhmm && /^\d{4}$/.test(hhmm) ? `${hhmm.slice(0, 2)}:${hhmm.slice(2)}` : "");
 const fromClock = (clock: string): string => clock.replace(":", "");
@@ -51,7 +51,7 @@ function AddRow({ onAdd, label }: { onAdd: (node: Tree) => void; label: string }
   );
 }
 
-/** 수 하나 — 지표 · 상수 · 계산 · 조건부 값. `optional` 이면 비워 둘 수 있는 자리다(쓰지 않는 자리 — 빈 칸으로 표시하지 않는다). */
+/** 수 하나 — 지표 · 상수 · 계산 · 조건부 값 · N봉 전 값. `optional` 이면 비워 둘 수 있는 자리다(쓰지 않는 자리 — 빈 칸으로 표시하지 않는다). */
 function Num({ node, path, ctx, label, optional }: { node: Draft; path: Path; ctx: Ctx; label: string; optional?: boolean }) {
   const { g } = ctx;
   const set = (next: Draft) => ctx.put(setAt(ctx.root, path, next));
@@ -61,6 +61,7 @@ function Num({ node, path, ctx, label, optional }: { node: Draft; path: Path; ct
     if (v.startsWith("ind:")) return set(indicator(g, v.slice(4)));
     if (v === "const") return set(constant());
     if (v === "where") return set(node && isOp(node) && node.op === "where" ? node : conditional(node));
+    if (v === "ago") return set(ago(node));                                                    // 앞에 있던 값을 감싼다(다시 고르지 않게)
     return set(node && isOp(node) && ARITH.includes(node.op) ? { ...node, op: v } : arithmetic(v, node));
   };
   const spec = node && isInd(node) ? g.indicators.find((i) => i.name === node.ind) : undefined;
@@ -75,12 +76,15 @@ function Num({ node, path, ctx, label, optional }: { node: Draft; path: Path; ct
           <option value="const">상수</option>
           {ARITH.map((name) => <option key={name} value={name}>{opLabel(g, name)}</option>)}
           <option value="where">{opLabel(g, "where")}</option>
+          <option value="ago">{opLabel(g, "ago")}</option>
         </optgroup>
       </select>
       {node && isInd(node) && spec ? spec.params.map((p) => {
         const raw = node[p.key];
         return (
           <span key={p.key} className="ire-param" data-param={p.key}>
+            {/* 매개변수가 여럿이면 칸마다 이름을 보인다 — 단위가 같은 칸(MACD 의 봉 셋)을 순서로 짐작하지 않게. 이름은 서버의 문법 표가 준 것이다. */}
+            {spec.params.length > 1 ? <span className="ire-param-label">{p.label}</span> : null}
             <NumInput label={`${spec.label} ${p.label}`} integer={p.type === "int"} min={p.min} max={p.max}
                       value={typeof raw === "number" ? raw : null} onChange={(v) => set({ ...node, [p.key]: v })} />
             <span className="ire-unit">{p.unit}</span>
@@ -95,6 +99,14 @@ function Num({ node, path, ctx, label, optional }: { node: Draft; path: Path; ct
           <span className="ire-sym">{opSymbol(g, node.op)}</span>
           <Num node={node.args[1] ?? null} path={[...path, 1]} ctx={ctx} label={`${label} 계산의 오른쪽 값`} />
           <span className="ire-paren" aria-hidden="true">)</span>
+        </span>
+      ) : null}
+      {node && isOp(node) && node.op === "ago" ? (
+        <span className="ire-calc ire-ago">
+          <NumInput label={`${label} N봉 전의 봉 수`} integer min={barsOf(g, "ago")?.min} max={barsOf(g, "ago")?.max}
+                    value={node.bars ?? null} onChange={(v) => set({ ...node, bars: v })} />
+          <span className="ire-sym">봉 전</span>
+          <Num node={node.args[0] ?? null} path={[...path, 0]} ctx={ctx} label={`${label} N봉 전의 값`} />
         </span>
       ) : null}
       {node && isOp(node) && node.op === "where" ? (
@@ -136,7 +148,7 @@ function Cond({ node, path, ctx, label }: { node: Draft; path: Path; ctx: Ctx; l
         ) : (
           <span key={w.path.join(".") || "root"} className="ire-wrap" data-wrap="held_before">
             <span>직전</span>
-            <NumInput label={`${label}: 직전 봉 수`} integer min={barsOf(g)?.min} max={barsOf(g)?.max} value={w.node.bars ?? null} onChange={(v) => put(w.path, { ...w.node, bars: v })} />
+            <NumInput label={`${label}: 직전 봉 수`} integer min={barsOf(g, "held_before")?.min} max={barsOf(g, "held_before")?.max} value={w.node.bars ?? null} onChange={(v) => put(w.path, { ...w.node, bars: v })} />
             <span>봉 동안 계속</span>
             <button type="button" className="ire-x" aria-label={`${label}: 직전 봉 동안 해제`} onClick={() => put(w.path, w.node.args[0] ?? null)}>×</button>
           </span>

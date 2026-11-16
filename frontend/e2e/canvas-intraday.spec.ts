@@ -335,6 +335,38 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
+test("직접 구성: 새 지표와 'N봉 전 값'이 실린 문서 — 편집기가 그대로 보이고 좁은 설정 판에서도 넘치지 않는다 · 계산의 글 = 검사의 글", async ({ page }) => {
+  test.setTimeout(120_000);
+  const sink = trackErrors(page);
+  const TEXT = "진입 조건: 종가 > 1봉 전 당일 고가 · 청산 조건: MACD(12봉, 26봉) 하향 돌파 MACD 신호선(12봉, 26봉, 9봉)";
+  const rule = { entry: { op: "gt", args: [{ ind: "close" }, { op: "ago", bars: 1, args: [{ ind: "day_high" }] }] },
+                 exit: { op: "cross_down", args: [{ ind: "macd", fast: 12, slow: 26 }, { ind: "macd_signal", fast: 12, slow: 26, signal: 9 }] } };
+  await login(page);
+  await openCanvas(page);
+  await importDoc(page, [setup({ ...HAND, rule: "custom", custom_rule: rule })]);
+  await node(page, "is").click();
+  await tab(page, "settings");
+  const field = page.locator('.pg-side .pg-basic-field[data-field="custom_rule"]');
+  await expect(field.locator(".ire-ago")).toHaveCount(1);
+  await expect(field.getByLabel("진입 조건: 오른쪽 값 N봉 전의 봉 수", { exact: true })).toHaveValue("1");
+  await expect(field.getByLabel("진입 조건: 오른쪽 값 N봉 전의 값", { exact: true })).toHaveValue("ind:day_high");
+  await expect(field.getByLabel("MACD 신호선 신호 기간", { exact: true })).toHaveValue("9");
+  await expect(field.locator(".itd-rule-text")).toHaveText(TEXT);
+  const over = await page.evaluate(() => {
+    const side = document.querySelector(".pg-side")!; const right = side.getBoundingClientRect().right + 1;
+    return [...side.querySelectorAll(".pg-itd-rule *")].filter((el) => el.getClientRects().length && el.getBoundingClientRect().right > right).map((el) => el.className);
+  });
+  expect(over, "설정 판 밖으로 넘친 것").toEqual([]);
+  const out = await run(page);
+  expect(out.nodes.is.status, out.nodes.is.reason).toBe("ok");
+  expect(out.nodes.is.view.rule_text).toBe(TEXT);
+  expect(out.nodes.is.view.request.rule.params.entry.args[1]).toEqual({ op: "ago", args: [{ ind: "day_high" }], bars: 1 });
+  expect(uniq(sink.api404), "404").toEqual([]);
+  expect(uniq(sink.apiOther4xx5xx), "4xx/5xx").toEqual([]);
+  expect(uniq(sink.pageErrors), "page errors").toEqual([]);
+  expect(uniq(sink.consoleErrors), "console errors").toEqual([]);
+});
+
 test("합성 분봉 위의 결과는 판 맨 위에 그렇게 적는다 · 고르기 목록에도 표식", async ({ page }) => {
   test.setTimeout(180_000);
   await login(page);

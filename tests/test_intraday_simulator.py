@@ -439,7 +439,7 @@ def test_the_order_of_the_ticker_dict_does_not_change_the_result():
     ({"rule": RuleSpec(entry=I("close"))}, "entry_not_a_condition"),
     ({"rule": RuleSpec(entry_stop=ENTRY)}, "entry_stop_not_a_price"),
     ({"rule": RuleSpec(entry=ENTRY, exit=I("close"))}, "exit_not_a_condition"),
-    ({"rule": RuleSpec(entry=op("gt", I("macd"), C(1)))}, "unknown_indicator"),
+    ({"rule": RuleSpec(entry=op("gt", I("stochastic"), C(1)))}, "unknown_indicator"),
     ({"position": PositionRules(amount=0)}, "bad_amount"),
     ({"position": PositionRules(amount=1_000_000, stop_pct=0)}, "bad_percent"),
     ({"position": PositionRules(amount=1_000_000, trail_pct=100)}, "bad_percent"),

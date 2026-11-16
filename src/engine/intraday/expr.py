@@ -2,6 +2,7 @@
 
     잎    {"ind": "sma", "n": 20}   {"const": 30}
     수    {"op": "add" | "sub" | "mul", "args": [수, 수]}     {"op": "where", "args": [참거짓, 수]}
+          {"op": "ago", "bars": N, "args": [수]}               (N봉 전 값 — 앞에 N 개 봉이 없으면 모름)
     판단  {"op": "gt" | "ge" | "lt" | "le", "args": [수, 수]}      {"op": "cross_up" | "cross_down", "args": [수, 수]}
           {"op": "and" | "or", "args": [판단, 판단, …]}            {"op": "not", "args": [판단]}
           {"op": "held_before", "bars": M, "args": [판단]}          {"op": "time_between", "from": "0900", "to": "1500"}
@@ -14,7 +15,7 @@
 (아는 쪽만으로 답이 정해진다), 그 밖에 모름이 끼면 모름이다. 모름을 거짓으로 바꾸는 자리는 ★끝★뿐이다(`evaluate` · `where` · `held_before`). 그러지 않으면 `not(종가 > 평균)` 이
 평균이 아직 없는 첫 봉들에서 참이 되어 진입 신호가 난다.
 
-인과성: 잎은 인과 지표이고(`indicators`), `cross_*` 는 앞 봉과 이 봉만, `held_before` 는 앞 봉들만 본다 — 나무 전체가 인과다.
+인과성: 잎은 인과 지표이고(`indicators`), `cross_*` 는 앞 봉과 이 봉만, `held_before` 와 `ago` 는 앞 봉들만 본다 — 나무 전체가 인과다.
 """
 from __future__ import annotations
 
@@ -31,6 +32,10 @@ MAX_DEPTH = 12
 MAX_NODES = 64
 #: 'M봉 동안'의 M 이 될 수 있는 범위(양끝 포함).
 HELD_BARS = (1, 240)
+#: 'N봉 전 값'의 N 이 될 수 있는 범위(양끝 포함).
+AGO_BARS = (1, 240)
+#: 봉 수를 받는 연산 → 그 범위. 없거나 정수가 아니거나 범위 밖이면 거절한다(1 로 지어 넣지 않는다).
+_BARS = {"held_before": HELD_BARS, "ago": AGO_BARS}
 
 _ARITH = {"add": np.add, "sub": np.subtract, "mul": np.multiply}
 _COMPARE = {"gt": np.greater, "ge": np.greater_equal, "lt": np.less, "le": np.less_equal}
@@ -44,12 +49,13 @@ _SHAPES: dict[str, tuple[tuple[str, ...] | str, int, int, str]] = {
     "not": ("bool", 1, 1, "bool"),
     "held_before": ("bool", 1, 1, "bool"),
     "where": (("bool", "number"), 2, 2, "number"),
+    "ago": ("number", 1, 1, "number"),
     "time_between": ("number", 0, 0, "bool"),
 }
 
 #: 연산의 이름표 — 화면이 조건을 짓는 데 쓴다(자유 조건식 설계 §4). ★연산마다 하나씩 있어야 한다★(시험이 건다).
 OP_LABELS = {
-    "add": "더하기", "sub": "빼기", "mul": "곱하기", "where": "조건부 값",
+    "add": "더하기", "sub": "빼기", "mul": "곱하기", "where": "조건부 값", "ago": "N봉 전 값",
     "gt": "초과", "ge": "이상", "lt": "미만", "le": "이하", "cross_up": "상향 돌파", "cross_down": "하향 돌파",
     "and": "모두 충족", "or": "하나 이상 충족", "not": "아님", "held_before": "직전 봉 동안 계속", "time_between": "시각 창",
 }
@@ -102,9 +108,9 @@ def _check(node: Any, depth: int, count: list[int]) -> str:
     expected = [wants] * len(args) if isinstance(wants, str) else list(wants)
     if kinds != expected:
         raise ExprError("wrong_kind", f"{name}: {kinds} (필요: {expected})")
-    if name == "held_before":
+    if name in _BARS:
         bars = node.get("bars")
-        if isinstance(bars, bool) or not isinstance(bars, int) or not HELD_BARS[0] <= bars <= HELD_BARS[1]:
+        if isinstance(bars, bool) or not isinstance(bars, int) or not _BARS[name][0] <= bars <= _BARS[name][1]:
             raise ExprError("bad_bars", repr(bars))
     if name == "time_between" and not _hhmm(node.get("from")) <= _hhmm(node.get("to")):
         raise ExprError("bad_time", f"{node.get('from')} > {node.get('to')}")
@@ -154,6 +160,11 @@ def _number(node: dict, s: Session, cache: dict) -> np.ndarray:
     if name == "where":
         value, known = _judge(args[0], s, cache)
         return np.where(value & known, _number(args[1], s, cache), np.nan)
+    if name == "ago":                                           # 봉 i 의 값 = 안쪽의 봉 i−N 의 값. 앞에 N 개 봉이 없으면 모름
+        inner, bars = _number(args[0], s, cache), node["bars"]
+        out = np.full(len(inner), np.nan)
+        out[bars:] = inner[:-bars]                              # 봉 수가 봉보다 많으면 두 조각이 모두 비어 전부 모름으로 남는다
+        return out
     return _ARITH[name](_number(args[0], s, cache), _number(args[1], s, cache))
 
 

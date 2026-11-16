@@ -42,6 +42,10 @@ export const heldBefore = (child: Draft): OpNode => ({ op: "held_before", bars: 
 export const arithmetic = (op: string, left: Draft = null): OpNode => ({ op, args: [left, null] });
 /** 조건부 값 — 조건이 충족된 봉에만 값이 있다. 앞에 있던 값이 그 값이 된다. */
 export const conditional = (value: Draft = null): OpNode => ({ op: "where", args: [null, value] });
+/** N봉 전 값 — 앞에 있던 값을 감싼다. 봉 수는 비어서 시작한다(1 로 지어 넣지 않는다). */
+export const ago = (value: Draft = null): OpNode => ({ op: "ago", bars: null, args: [value] });
+/** 봉 수를 받는 연산 → 문법 표에 그 칸이 없을 때 쓰는 이름표(범위는 지어내지 않는다 — 1 이상의 정수인지만 본다 · 판정은 서버가 한다). */
+export const BARS_OPS: Record<string, string> = { held_before: "직전 봉 수", ago: "봉 수" };
 
 // ── 길을 따라 고치기(원본은 건드리지 않는다) ────────────────────────────────
 
@@ -124,8 +128,8 @@ function walk(node: Draft, g: Grammar, out: Found): void {
   }
   if (node.op === "") out.holes += 1;
   if (GROUPS.includes(node.op) && node.args.length < 2) out.groups = true;
-  if (node.op === "held_before") {
-    const bars = g.ops.find((o) => o.name === "held_before")?.extra.find((e) => e.key === "bars") ?? { key: "bars", label: "직전 봉 수", type: "int" as const, min: 1 };
+  if (node.op in BARS_OPS) {                                    // 직전 M봉 동안 · N봉 전 값 — 범위는 문법 표의 그 연산에서 읽는다
+    const bars = g.ops.find((o) => o.name === node.op)?.extra.find((e) => e.key === "bars") ?? { key: "bars", label: BARS_OPS[node.op], type: "int" as const, min: 1 };
     if (!inRange(node.bars, bars)) out.ranges.push(`${topic(bars.label)} ${rangeOf(bars)} 범위로 입력하십시오.`);
   }
   if (node.op === "time_between" && !(hhmm(node.from) && hhmm(node.to) && node.from! <= node.to!)) out.times = true;

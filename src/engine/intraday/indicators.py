@@ -8,6 +8,8 @@
 - 시가 범위의 창은 ★그날 첫 봉의 시각★부터 잰다(장 운영 시각을 가정하지 않는다 — 봉 시각의 뜻이 미상이어도 성립한다).
 - 이름표(`label`)와 단위(`unit`)는 화면이 조건을 짓는 데 쓴다(자유 조건식 설계 §4) — ★등록부의 지표는 전부 이름표가 있어야 한다★
   (`tests/test_intraday_custom_rules.py`). 화면이 이름을 지어내지 않는다.
+- 앞 봉의 값을 이어 쓰는 지표(`carries` — 지수이동평균 · MACD · ATR · RSI)는 ★그날 첫 봉부터 다시 계산한다★. 여러 날을 이어 계산하는
+  차트 도구의 값과 하루 내내 다르다 — 규칙의 주석이 그렇게 말한다(`rules.notes_of`).
 """
 from __future__ import annotations
 
@@ -47,6 +49,7 @@ class Indicator:
     needs_prev: bool = False        # 전일 값이 없으면 전부 NaN 이 되는 지표
     label: str = ""                 # 화면의 이름표
     unit: str = ""                  # 값의 단위 — `UNITS` 의 열쇠
+    carries: bool = False           # 앞 봉의 값을 이어 쓰는 지표 — 그날 첫 봉의 영향이 하루 내내 남는다
 
 
 #: 지표 값의 단위 → 이름표. 화면이 "가격과 거래량을 견주고 있다" 같은 것을 알려 줄 때 쓴다(막지는 않는다).
@@ -135,10 +138,60 @@ def _prev(s: Session, field: str) -> np.ndarray:
     return np.full(len(s.close), getattr(s.prev, field) if s.prev is not None else np.nan, dtype=float)
 
 
+def _smooth(a: np.ndarray, n: int, alpha: float) -> np.ndarray:
+    """이어 쓰는 평균 — 첫 값은 값 n 개가 쌓인 봉에서 그 n 개의 단순평균, 그 뒤 `앞 값 + (값 − 앞 값) × alpha`.
+
+    지수이동평균은 alpha = 2/(n+1), Wilder 평활은 alpha = 1/n 이다. 앞머리의 미상은 건너뛰고 ★값이 처음 난 봉부터★ 센다
+    (MACD 신호선이 MACD 가 처음 난 봉부터 세도록). 값이 n 개에 못 미치면 끝까지 미상이다 — 짧은 평균으로 때우지 않는다."""
+    a = np.asarray(a, dtype=float)
+    out = np.full(len(a), np.nan)
+    known = np.flatnonzero(~np.isnan(a))
+    if not len(known) or len(a) - known[0] < n:
+        return out
+    start = int(known[0])
+    value = a[start:start + n].mean()
+    out[start + n - 1] = value
+    for i in range(start + n, len(a)):
+        value = value + (a[i] - value) * alpha
+        out[i] = value
+    return out
+
+
+def _ema(a: np.ndarray, n: int) -> np.ndarray:
+    return _smooth(a, n, 2.0 / (n + 1))
+
+
+def _macd(s: Session, fast: int, slow: int) -> np.ndarray:
+    """단기 지수이동평균 − 장기 지수이동평균 — 둘 다 있는 봉부터 난다. 단기가 더 길어도 정의는 그대로다(부호가 뒤집힌다)."""
+    return _ema(s.close, fast) - _ema(s.close, slow)
+
+
+def _macd_signal(s: Session, fast: int, slow: int, signal: int) -> np.ndarray:
+    return _ema(_macd(s, fast, slow), signal)
+
+
+def _macd_hist(s: Session, fast: int, slow: int, signal: int) -> np.ndarray:
+    line = _macd(s, fast, slow)
+    return line - _ema(line, signal)
+
+
+def _true_range(s: Session) -> np.ndarray:
+    """진폭 = max(고가 − 저가, |고가 − 앞 봉 종가|, |저가 − 앞 봉 종가|). ★첫 봉은 앞 봉이 없어 고가 − 저가다★ — 전일 종가를 쓰지 않는다
+    (지표는 그날 봉으로만 계산한다 · 전일 값은 원주가라 권리락이 있던 날에 틀릴 수 있다)."""
+    spread = (s.high - s.low).astype(float)
+    if len(spread) > 1:
+        before = s.close[:-1]
+        spread[1:] = np.maximum(spread[1:], np.maximum(np.abs(s.high[1:] - before), np.abs(s.low[1:] - before)))
+    return spread
+
+
 _N = Range(1, 240, 20, label="기간", unit="봉")
 _K = Range(0.5, 4.0, 2.0, integer=False, label="표준편차 배수", unit="배")
 _OR = Range(1, 120, 30, label="범위를 재는 시간", unit="분")
 _BARS = Range(1, 240, 20, label="직전 봉 수", unit="봉")
+_FAST = Range(1, 240, 12, label="단기 기간", unit="봉")
+_SLOW = Range(1, 240, 26, label="장기 기간", unit="봉")
+_SIGNAL = Range(1, 60, 9, label="신호 기간", unit="봉")
 
 INDICATORS: dict[str, Indicator] = {
     "open": Indicator(lambda s: s.open.astype(float), {}, label="시가", unit="price"),
@@ -149,15 +202,24 @@ INDICATORS: dict[str, Indicator] = {
     "minute": Indicator(lambda s: minutes_of(s.time), {}, label="봉 시각", unit="minute"),
     "day_open": Indicator(lambda s: np.full(len(s.close), s.open[0] if len(s.open) else np.nan, dtype=float), {},
                           label="당일 시가", unit="price"),
+    # 당일 고가 · 저가는 ★그 봉을 포함한다★(그 봉까지의 값) — 직전까지의 값은 연산 'N봉 전 값'으로 얻는다.
+    "day_high": Indicator(lambda s: np.maximum.accumulate(s.high.astype(float)), {}, label="당일 고가", unit="price"),
+    "day_low": Indicator(lambda s: np.minimum.accumulate(s.low.astype(float)), {}, label="당일 저가", unit="price"),
     "vwap": Indicator(_vwap, {}, label="VWAP", unit="price"),
     "or_high": Indicator(lambda s, minutes: _opening_range(s, minutes)[0], {"minutes": _OR}, label="시가 범위 고가", unit="price"),
     "or_low": Indicator(lambda s, minutes: _opening_range(s, minutes)[1], {"minutes": _OR}, label="시가 범위 저가", unit="price"),
     "or_done": Indicator(lambda s, minutes: _opening_range(s, minutes)[2], {"minutes": _OR}, label="시가 범위 종료", unit="flag"),
     "sma": Indicator(lambda s, n: _rolling(s.close, n, np.mean), {"n": _N}, label="이동평균", unit="price"),
+    "ema": Indicator(lambda s, n: _ema(s.close, n), {"n": _N}, label="지수이동평균", unit="price", carries=True),
     "bb_mid": Indicator(lambda s, n, k: _rolling(s.close, n, np.mean), {"n": _N, "k": _K}, label="볼린저 중심선", unit="price"),
     "bb_upper": Indicator(lambda s, n, k: _band(s, n, k, +1), {"n": _N, "k": _K}, label="볼린저 상단", unit="price"),
     "bb_lower": Indicator(lambda s, n, k: _band(s, n, k, -1), {"n": _N, "k": _K}, label="볼린저 하단", unit="price"),
-    "rsi": Indicator(_rsi, {"n": Range(2, 60, 14, label="기간", unit="봉")}, label="RSI", unit="index"),
+    "rsi": Indicator(_rsi, {"n": Range(2, 60, 14, label="기간", unit="봉")}, label="RSI", unit="index", carries=True),
+    "macd": Indicator(_macd, {"fast": _FAST, "slow": _SLOW}, label="MACD", unit="price", carries=True),
+    "macd_signal": Indicator(_macd_signal, {"fast": _FAST, "slow": _SLOW, "signal": _SIGNAL}, label="MACD 신호선", unit="price", carries=True),
+    "macd_hist": Indicator(_macd_hist, {"fast": _FAST, "slow": _SLOW, "signal": _SIGNAL}, label="MACD 오실레이터", unit="price", carries=True),
+    "atr": Indicator(lambda s, n: _smooth(_true_range(s), n, 1.0 / n), {"n": Range(1, 240, 14, label="기간", unit="봉")},
+                     label="ATR", unit="price", carries=True),
     "vol_avg": Indicator(lambda s, bars: _before(s.volume, bars, np.mean), {"bars": _BARS}, label="직전 평균 거래량", unit="volume"),
     "highest_close": Indicator(lambda s, bars: _before(s.close, bars, np.max), {"bars": _BARS}, label="직전 최고 종가", unit="price"),
     "prev_close": Indicator(lambda s: _prev(s, "close"), {}, needs_prev=True, label="전일 종가", unit="price"),

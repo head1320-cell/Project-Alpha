@@ -10595,7 +10595,7 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .ire-select:focus-visible, .ire-input:focus-visible, .ire-tool:focus-visible, .ire-add:focus-visible, .ire-x:focus-visible,
 .itd-load-row:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 1px; }
 .ire-select[aria-invalid="true"], .ire-input[aria-invalid="true"] { border-color: var(--tx-danger); background: var(--tx-danger-soft); }
-.ire-unit, .ire-paren { font-size: 13.5px; color: var(--tx-sub); }
+.ire-unit, .ire-paren, .ire-param-label { font-size: 13.5px; color: var(--tx-sub); }
 .ire-sym { font-size: 13.5px; font-weight: 600; color: var(--tx-ink); }
 .ire-wrap { padding: 3px 4px 3px 10px; border-radius: 8px; background: var(--tx-blue-soft); color: var(--tx-cta); font-size: 13px; font-weight: 600; }
 .ire-wrap .ire-input { width: 56px; height: 30px; }
