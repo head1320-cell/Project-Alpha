@@ -353,6 +353,91 @@ def test_trials_that_saw_different_days_are_counted_but_their_likeness_is_not_me
     assert same["n"] == 3 and same["n_effective_reason"] == v.REASONS["different_days"]      # 열흘짜리 시행이 여전히 가족에 있다
 
 
+# ── 순차 증거(e-값) — 문이 설정의 하루 최대 손실을 상한으로 넘긴다 (묶음 G · G1) ───────────────────────
+#   손 계산의 열흘: 날마다 비용 전 +1,980원(슬리피지 1틱) → 비용 뒤 −319.473원
+#       수수료 (997,920 + 999,900) × 1.5bp = 299.673 · 매도세 999,900 × 20bp = 1,999.8
+#   슬리피지 0틱이면 비용 전 +3,960원 → 비용 뒤 +1,658.547원
+#       수수료 (996,930 + 1,000,890) × 1.5bp = 299.673 · 매도세 1,000,890 × 20bp = 2,001.78
+#   e-값 = 평균_f (1 + f·r)^10,  f ∈ {0.05 … 0.95},  r = 하루 손익 ÷ (하루 최대 손실 × 2)
+LOSS_PER_DAY, GAIN_PER_DAY = 1_980 - 299.673 - 1_999.8, 3_960 - 299.673 - 2_001.78
+
+
+def by_hand(per_day: float, cap: float, days: int = 10) -> float:
+    return sum((1 + (k / 20) * per_day / cap) ** days for k in range(1, 20)) / 19
+
+
+def limited(limit, **costs) -> dict:
+    return {**BODY, "position": {"amount": 1_000_000, "daily_loss_limit": limit}, "costs": {**BODY["costs"], **costs}}
+
+
+def seq_facts(body) -> list[str]:
+    return [f for f in gate(body, "multiplicity")["facts"] if "순차 증거" in f]
+
+
+def test_the_route_hands_the_loss_limit_of_the_setting_to_the_sequential_evidence(client, auth, monkeypatch):
+    with_days(monkeypatch, made_days())
+    body = client.post(VAL, json=limited(10_000), headers=auth).json()
+    seq = body["multiplicity"]["sequential"]
+    assert (seq["loss_limit"], seq["cap"], seq["days"], seq["trials"], seq["threshold"]) == (10_000, 20_000, 10, 1, 20)
+    assert seq["e_value"] == pytest.approx(by_hand(LOSS_PER_DAY, 20_000), rel=1e-6) and seq["e_value"] < 1
+    assert seq["peak"] == pytest.approx(1.0) and seq["passed"] is False and seq["exceeded_days"] == 0
+    assert seq["worst"] == pytest.approx(LOSS_PER_DAY, abs=0.01)
+    facts = seq_facts(body)
+    assert facts[0].startswith("순차 증거(e-값)의 최고값이 기준에 못 미칩니다. 최고 1.00 · 현재 0.92 · 기준 20(시행 1회 × 20).")
+    assert "2배(20,000원)" in facts[1] and "가장 큰 하루 손실은 319원" in facts[1]
+
+
+def test_without_a_loss_limit_in_the_setting_the_route_says_so_and_gives_no_value(client, auth, monkeypatch):
+    from src.engine.intraday import validate as v
+    with_days(monkeypatch, made_days())
+    body = client.post(VAL, json=BODY, headers=auth).json()
+    seq = body["multiplicity"]["sequential"]
+    assert seq["e_value"] is None and seq["cap"] is None and seq["reason"] == v.REASONS["no_loss_limit"]
+    assert seq_facts(body) == [v.REASONS["no_loss_limit"]]
+
+
+def test_the_sequential_evidence_can_pass_while_the_gate_stays_where_the_probability_left_it(client, auth, monkeypatch):
+    """열흘 — 확률(PSR)은 60일이 안 돼 미상이다. 순차 증거가 기준을 넘어도 ★관문은 미상 그대로★(사실 줄로만 선다)."""
+    with_days(monkeypatch, made_days())
+    body = client.post(VAL, json=limited(1_000, slippage_ticks=0), headers=auth).json()
+    seq = body["multiplicity"]["sequential"]
+    assert seq["cap"] == 2_000 and seq["peak"] == seq["e_value"] == pytest.approx(by_hand(GAIN_PER_DAY, 2_000), rel=1e-6)
+    assert seq["e_value"] > 20 and seq["passed"] is True and seq["exceeded_days"] == 0
+    found = gate(body, "multiplicity")
+    assert found["state"] == AXIS_UNKNOWN and "60일" in found["reason"] and body["multiplicity"]["value"] is None
+    assert seq_facts(body)[0].startswith("순차 증거(e-값)의 최고값이 기준 이상입니다.")
+    assert "손실이 난 날이 없어" in seq_facts(body)[1]                # 열흘 모두 번 표본 — 상한 가정을 표본으로 확인하지 못했다
+    assert body["gates"]["counts"]["ok"] == 3                         # 데이터 · 거래비용 · 비용 강건성(0틱의 두 배는 0틱 — 수수료만 두 배)
+
+
+def test_another_trial_raises_the_sequential_threshold_and_the_same_flow_stops_passing(client, auth, monkeypatch):
+    with_days(monkeypatch, made_days())
+    first = client.post(VAL, json=limited(1_000, slippage_ticks=0), headers=auth).json()["multiplicity"]["sequential"]
+    for stop in (1.0, 2.0, 3.0):                                      # 설정을 바꿔 세 번 더 본다
+        client.post(VAL, json={**limited(1_000, slippage_ticks=0),
+                               "position": {"amount": 1_000_000, "daily_loss_limit": 1_000, "stop_pct": stop}}, headers=auth)
+    again = client.post(VAL, json=limited(1_000, slippage_ticks=0), headers=auth).json()["multiplicity"]["sequential"]
+    assert first["passed"] is True and first["threshold"] == 20
+    assert again["trials"] == 4 and again["threshold"] == 80 and again["e_value"] == pytest.approx(first["e_value"])
+    assert 20 < again["e_value"] < 80 and again["passed"] is False    # 같은 흐름 · 같은 값 — 기준만 올랐다
+
+
+def test_days_that_lost_more_than_the_cap_are_counted_by_the_route(client, auth, monkeypatch):
+    with_days(monkeypatch, made_days())
+    body = client.post(VAL, json=limited(100), headers=auth).json()   # 상한 200원 — 날마다 319원을 잃는다
+    seq = body["multiplicity"]["sequential"]
+    assert seq["cap"] == 200 and seq["exceeded_days"] == 10 and seq["passed"] is False and seq["reason"]
+    assert seq_facts(body)[0] == ("하루 손실이 가정한 상한을 넘은 날이 10일 있어 순차 증거(e-값)를 증거로 읽지 않습니다. "
+                                  "상한 200원 · 가장 큰 하루 손실 319원입니다.")
+
+
+def test_when_the_trial_store_fails_there_is_no_sequential_evidence_either(client, auth, monkeypatch):
+    with_days(monkeypatch, made_days())
+    break_store(monkeypatch)
+    body = client.post(VAL, json=limited(1_000, slippage_ticks=0), headers=auth).json()
+    assert body["multiplicity"] is None and seq_facts(body) == []     # 시행 수를 모르면 기준도 모른다 — 1회로 꾸미지 않는다
+
+
 # ── 시장 구분을 모르는 종목 ───────────────────────────────────────────────────────────
 ASSUMED = {"commission_bp": 1.5, "slippage_ticks": 1, "unknown_market": "KOSPI", "unknown_instrument": "stock"}
 

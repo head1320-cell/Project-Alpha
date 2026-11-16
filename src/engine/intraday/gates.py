@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.engine import evalue
 from src.engine.run_evidence import AXIS_DEGRADED, AXIS_OK, AXIS_UNKNOWN
 from src.engine.trade_journal.metrics import SMALL_SAMPLE
 
@@ -94,17 +95,45 @@ def _robust(stress: dict | None) -> dict:
     return _gate("cost_robustness", AXIS_DEGRADED, "비용을 두 배로 놓으면 거래당 기대값이 0 이하입니다.", how, zero)
 
 
+def _e(value: float) -> str:
+    """e-값을 적는 꼴 — 천장에 닿은 값은 수가 아니라 하한으로 적는다."""
+    if value >= evalue.SATURATION:
+        return "1조 이상"
+    return f"{value:,.0f}" if value >= 1_000 else f"{value:.2f}"
+
+
+def _sequential(s: dict | None) -> tuple[str, ...]:
+    """순차 증거(e-값)의 사실 줄 — ★관문의 상태를 정하지 않는다★(상태는 확률이 정한다). 값이 없으면 그 사유가 사실이다."""
+    if not s:
+        return ()
+    if s.get("e_value") is None:
+        return (s.get("reason") or "순차 증거(e-값)를 계산하지 못했습니다.",)
+    cap, worst = f"{s['cap']:,.0f}원", s["worst"]
+    seen = (f"표본에서 가장 큰 하루 손실은 {-worst:,.0f}원입니다." if worst < 0
+            else "표본에 손실이 난 날이 없어 이 가정을 표본으로 확인하지 못했습니다.")
+    assumed = (f"순차 증거는 하루 손실이 하루 최대 손실의 {s['cap_multiple']:g}배({cap})를 넘지 않는다는 가정 아래의 값입니다. "
+               f"배수는 이 도구의 설정값이며 {seen}")
+    if s["exceeded_days"]:
+        return (f"하루 손실이 가정한 상한을 넘은 날이 {s['exceeded_days']}일 있어 순차 증거(e-값)를 증거로 읽지 않습니다. "
+                f"상한 {cap} · 가장 큰 하루 손실 {-worst:,.0f}원입니다.", assumed)
+    verdict = "기준 이상입니다" if s["passed"] else "기준에 못 미칩니다"
+    return (f"순차 증거(e-값)의 최고값이 {verdict}. 최고 {_e(s['peak'])} · 현재 {_e(s['e_value'])} · "
+            f"기준 {s['threshold']:,.0f}(시행 {s['trials']}회 × {1 / s['alpha']:,.0f}). "
+            "이 기준은 기간을 늘려 가며 다시 봐도 유효합니다.", assumed)
+
+
 def _multiplicity(m: dict | None, trial_error: str | None) -> dict:
     if not m:
         return _gate("multiplicity", AXIS_UNKNOWN, trial_error or "시행 횟수를 세지 못해 보정하지 않았습니다.")
     rule = f"기준 {m['threshold']} 는 관례 기준입니다."
     count = (f"이 종목과 기간에서 기록된 시행은 {m['n']}회입니다." if m.get("corrected")
              else f"기록된 시행이 {m['n']}회라 보정할 것이 없어 보정 전 확률을 봤습니다.")
+    facts = (count, rule, m.get("note", ""), *_sequential(m.get("sequential")))
     if m["value"] is None:
-        return _gate("multiplicity", AXIS_UNKNOWN, m.get("reason") or "확률을 계산하지 못했습니다.", count, rule, m.get("note", ""))
+        return _gate("multiplicity", AXIS_UNKNOWN, m.get("reason") or "확률을 계산하지 못했습니다.", *facts)
     if m["value"] >= m["threshold"]:
-        return _gate("multiplicity", AXIS_OK, "시행 횟수를 감안한 확률이 기준 이상입니다.", count, rule, m.get("note", ""))
-    return _gate("multiplicity", AXIS_DEGRADED, "시행 횟수를 감안한 확률이 기준에 못 미칩니다.", count, rule, m.get("note", ""))
+        return _gate("multiplicity", AXIS_OK, "시행 횟수를 감안한 확률이 기준 이상입니다.", *facts)
+    return _gate("multiplicity", AXIS_DEGRADED, "시행 횟수를 감안한 확률이 기준에 못 미칩니다.", *facts)
 
 
 def build(*, origin: dict, sessions: int, skipped: int, bar_label_known: bool, summary: dict, slippage_ticks: int,

@@ -673,8 +673,9 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
             return kept["values"] if kept and kept.get("basis") == "net" else None
 
         same_days = all(t["daily"].get("dates") == dates for t in rest if flow(t) is not None)
+        # 순차 증거의 손실 상한은 ★이 설정의★ 하루 최대 손실에서 온다(없으면 값 없음 + 사유 — 표본을 보고 상한을 지어내지 않는다)
         multiplicity = validation.multiplicity(daily["values"] if daily["basis"] == "net" else None, [flow(t) for t in rest],
-                                               same_days=same_days)
+                                               same_days=same_days, loss_limit=position.daily_loss_limit)
         if split:
             views = trials.views_of(family["trials"], split["out_of_sample_from"], split["out_of_sample_to"])
 

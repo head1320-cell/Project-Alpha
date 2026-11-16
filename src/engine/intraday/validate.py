@@ -14,13 +14,17 @@ import math
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from src.engine import deflated_sharpe
+from src.engine import deflated_sharpe, evalue
 from src.engine.trade_journal import analyze
 
 #: 표본내에 두는 거래일의 비율(앞쪽). 관례값이며 재 본 값이 아니다 — 답에 함께 싣는다.
 IS_FRACTION = 0.7
 #: 다중 비교 관문의 기준 — 관례 기준(Bailey · López de Prado)이다. 답에 관례라고 적는다.
 DSR_THRESHOLD = 0.95
+#: 순차 증거(e-값)의 손실 상한 = 하루 최대 손실 × 이 배수. ★설정값★이다(재 본 값이 아니다) — 답과 문장에 함께 싣는다.
+#: 시뮬레이터의 하루 최대 손실은 ★비용 전 실현손익이 닿으면 새 진입을 막는 것★이지 그날 손실의 상한이 아니다
+#: (그때 들고 있던 포지션과 비용만큼 더 잃을 수 있다). 그래서 1 이 아니고, 넘은 날은 세어서 보인다.
+LOSS_CAP_MULTIPLE = 2.0
 
 REASONS = {
     "too_few_days": "거래일이 모자라 구간으로 가를 수 없습니다.",
@@ -29,6 +33,8 @@ REASONS = {
     "net_unknown": "수수료율을 넣지 않았거나 시장 구분을 모르는 종목이 있어 비용 뒤 손익이 없습니다. 비용 전 손익으로 대신 계산하지 않았습니다.",
     "different_days": "기간이 다른 시행이 섞여 있어 시행끼리 얼마나 닮았는지는 재지 않았습니다.",
     "no_choice": "고르는 구간에 거래가 있는 칸이 없어 다음 구간에 적용할 것을 고르지 못했습니다.",
+    "no_loss_limit": "하루 최대 손실을 정하지 않아 순차 증거(e-값)를 계산하지 않았습니다. "
+                     "하루 손실의 상한이 없으면 유한한 표본으로는 수익의 증거를 낼 수 없습니다.",
 }
 
 NOTE_LOWER_BOUND = "시행 횟수는 이 도구에 기록된 것만 센 하한입니다. 기록 밖에서 해 본 시도는 세지 못해 그만큼 보정이 약합니다."
@@ -99,8 +105,23 @@ def breakeven_cost(journal: dict) -> dict[str, Any]:
     return out
 
 
-def multiplicity(current: list[float] | None, family: list[list[float] | None], *, same_days: bool = True) -> dict[str, Any]:
+def sequential(current: list[float] | None, trials: int, loss_limit: float | None) -> dict[str, Any]:
+    """같은 일별 흐름의 순차 증거(e-값) — 기간을 늘려 가며 다시 봐도 유효한 기준(`evalue`). 기준은 시행 횟수만큼 올라간다.
+
+    손실 상한은 설정의 하루 최대 손실 × `LOSS_CAP_MULTIPLE` 이다. 한도를 정하지 않았으면 ★값을 내지 않는다★ —
+    상한을 도구가 지어내면(예: 표본의 가장 큰 손실) 그 값은 표본을 보고 정한 가정이 되어 보장이 사라진다."""
+    limit = float(loss_limit) if loss_limit is not None and math.isfinite(loss_limit) and loss_limit > 0 else None
+    out = evalue.evidence(current, cap=None if limit is None else limit * LOSS_CAP_MULTIPLE, trials=trials)
+    if current is not None and limit is None:
+        out["reason"] = REASONS["no_loss_limit"]
+    return {**out, "loss_limit": limit, "cap_multiple": LOSS_CAP_MULTIPLE}
+
+
+def multiplicity(current: list[float] | None, family: list[list[float] | None], *, same_days: bool = True,
+                 loss_limit: float | None = None) -> dict[str, Any]:
     """이 시행의 일별 흐름과, 같은 가족의 다른 시행들의 흐름 → PSR(0) 과 시행 횟수로 보정한 DSR.
+
+    `sequential` 은 같은 흐름의 순차 증거다(`loss_limit` — 설정의 하루 최대 손실). ★관문이 보는 값이 아니다★ — 곁에 싣는 사실이다.
 
     `value` 는 관문이 보는 값이다 — 시행이 하나면 보정할 것이 없어 PSR(0), 둘 이상이면 DSR.
     흐름이 `None` 인 시행(비용 뒤 손익이 없다)도 ★시행 횟수에는 든다★ — 해 본 것은 해 본 것이다. 샤프의 흩어짐에만 들지 않는다.
@@ -109,7 +130,8 @@ def multiplicity(current: list[float] | None, family: list[list[float] | None], 
     unscored = sum(r is None for r in family)
     blank = {"n": n, "days": None, "sharpe_per_day": None, "psr0": None, "dsr": None, "dsr_effective": None,
              "n_effective": None, "n_effective_reason": None, "corrected": n >= 2, "unscored": unscored, "value": None,
-             "threshold": DSR_THRESHOLD, "reason": REASONS["net_unknown"], "note": NOTE_LOWER_BOUND}
+             "threshold": DSR_THRESHOLD, "reason": REASONS["net_unknown"], "note": NOTE_LOWER_BOUND,
+             "sequential": sequential(current, n, loss_limit)}
     if current is None:
         return blank
     table = deflated_sharpe.compare([{"label": "current", "returns": current},

@@ -164,6 +164,84 @@ def test_a_trial_that_could_not_be_recorded_leaves_multiplicity_unknown_and_neve
     assert gate["state"] == UNKNOWN and gate["reason"] == "시행 기록을 남기지 못했습니다."
 
 
+# ── 순차 증거(e-값) — 다중 비교 관문의 ★사실 줄★이다. 관문의 상태는 확률(DSR)이 정한다 (묶음 G · G1) ──────────────
+def seq(**changes) -> dict:
+    base = {"method": "capped_betting_mixture", "alpha": 0.05, "trials": 3, "threshold": 60.0, "cap": 4_000.0, "days": 80,
+            "e_value": 12.3456, "peak": 71.25, "saturated": False, "exceeded_days": 0, "worst": -1_530.4, "passed": True,
+            "reason": None, "assumption": "가정입니다.", "loss_limit": 2_000.0, "cap_multiple": 2.0}
+    return {**base, **changes}
+
+
+def mult_gate(sequential, value=0.97):
+    m = {"n": 3, "value": value, "threshold": 0.95, "corrected": True, "reason": None if value is not None else "흐름이 짧습니다.",
+         "days": 80, "note": "하한입니다.", "sequential": sequential}
+    return next(g for g in gates.build(**good(multiplicity=m))["gates"] if g["key"] == "multiplicity")
+
+
+def seq_facts(gate) -> list[str]:
+    return [f for f in gate["facts"] if "순차 증거" in f]
+
+
+def test_the_sequential_evidence_is_read_out_with_its_peak_its_value_and_its_threshold():
+    facts = seq_facts(mult_gate(seq()))
+    assert facts[0] == ("순차 증거(e-값)의 최고값이 기준 이상입니다. 최고 71.25 · 현재 12.35 · 기준 60(시행 3회 × 20). "
+                        "이 기준은 기간을 늘려 가며 다시 봐도 유효합니다.")
+    below = seq_facts(mult_gate(seq(peak=59.99, e_value=3.0, passed=False)))
+    assert below[0].startswith("순차 증거(e-값)의 최고값이 기준에 못 미칩니다. 최고 59.99 · 현재 3.00 · 기준 60(시행 3회 × 20).")
+
+
+def test_the_assumption_is_always_read_out_with_the_cap_and_the_worst_day_seen():
+    facts = seq_facts(mult_gate(seq()))
+    assert facts[1] == ("순차 증거는 하루 손실이 하루 최대 손실의 2배(4,000원)를 넘지 않는다는 가정 아래의 값입니다. "
+                        "배수는 이 도구의 설정값이며 표본에서 가장 큰 하루 손실은 1,530원입니다.")
+    never_lost = seq_facts(mult_gate(seq(worst=250.0)))
+    assert never_lost[1].endswith("배수는 이 도구의 설정값이며 표본에 손실이 난 날이 없어 이 가정을 표본으로 확인하지 못했습니다.")
+    assert len(facts) == len(never_lost) == 2
+
+
+def test_a_cap_that_was_exceeded_is_said_first_and_the_evidence_is_not_read():
+    facts = seq_facts(mult_gate(seq(exceeded_days=3, worst=-9_120.0, passed=False, reason="넘었습니다.")))
+    assert facts[0] == ("하루 손실이 가정한 상한을 넘은 날이 3일 있어 순차 증거(e-값)를 증거로 읽지 않습니다. "
+                        "상한 4,000원 · 가장 큰 하루 손실 9,120원입니다.")
+    assert not any("기준 이상" in f for f in facts)                                    # 숫자가 기준을 넘었어도 그렇게 적지 않는다
+    assert any("가정 아래의 값" in f for f in facts)
+
+
+def test_a_huge_value_is_written_as_a_bound_not_as_a_number():
+    facts = seq_facts(mult_gate(seq(peak=1e12, e_value=1e12, saturated=True)))
+    assert "최고 1조 이상 · 현재 1조 이상" in facts[0]
+
+
+def test_without_a_value_the_reason_is_the_fact_and_nothing_is_invented():
+    why = "하루 최대 손실을 정하지 않아 순차 증거(e-값)를 계산하지 않았습니다."
+    none = seq(e_value=None, peak=None, passed=None, cap=None, days=None, exceeded_days=None, worst=None, saturated=None,
+               assumption=None, reason=why, loss_limit=None)
+    gate = mult_gate(none)
+    assert seq_facts(gate) == [why]
+    assert not any("최고" in f or "기준 이상" in f or "못 미칩니다" in f for f in seq_facts(gate))
+
+
+@pytest.mark.parametrize("value, want", [(0.97, OK), (0.90, BAD), (None, UNKNOWN)])
+@pytest.mark.parametrize("sequential", [seq(), seq(passed=False, peak=1.0, e_value=0.2),
+                                        seq(exceeded_days=2, passed=False, reason="넘었습니다."), None])
+def test_the_state_of_the_gate_is_the_probability_s_alone(value, want, sequential):
+    """★e-값은 사실 줄이다★ — 통과해도 미달을 통과로 바꾸지 않고, 못 미쳐도 통과를 미달로 바꾸지 않는다."""
+    gate = mult_gate(sequential, value=value)
+    assert gate["state"] == want
+    assert bool(seq_facts(gate)) == (sequential is not None)
+    assert "순차" not in gate["reason"]                                               # 관문의 사유는 확률의 것이다
+
+
+def test_the_sequential_lines_keep_the_voice_and_the_banned_words_out():
+    banned = ("검증됨", "입증", "견고", "프로덕션", "투자 우위", "더 나은 전략")
+    for sequential in (seq(), seq(passed=False, peak=1.0, e_value=0.2), seq(exceeded_days=2, passed=False, worst=-9_000.0),
+                       seq(worst=10.0), seq(peak=1e12, e_value=1e12, saturated=True),
+                       seq(e_value=None, peak=None, passed=None, reason="값이 없습니다.", assumption=None)):
+        for text in mult_gate(sequential)["facts"]:
+            assert text.endswith("니다.") and "—" not in text and "–" not in text, text
+            assert not any(word in text for word in banned), text
+
+
 # ── 경제적 가치 ───────────────────────────────────────────────────────────────────────
 def test_economic_value_is_never_measured_here():
     for changes in ({}, {"summary": brief(net=1e9)}, {"multiplicity": {"n": 1, "value": 1.0, "threshold": 0.95, "corrected": False, "reason": None, "days": 250, "note": ""}}):

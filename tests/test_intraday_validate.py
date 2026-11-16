@@ -186,6 +186,64 @@ def test_similarity_is_only_measured_when_every_trial_covers_the_same_days():
     assert mixed["dsr"] == same["dsr"]                              # 시행 횟수로 한 보정은 그대로다
 
 
+# ── 순차 증거(e-값) — 다중 비교의 답에 함께 싣는다 (묶음 G · G1) ─────────────────────────────
+#   상한 = 하루 최대 손실 × 2(설정값).  한도 2,000원 → 상한 4,000원.  이틀 [+1,000 · −2,000] → r = [0.25 · −0.5]
+#   E₂ = 1 + 0.5(0.25 − 0.5) + 0.325 × 0.25 × (−0.5) = 0.834375   (격자의 평균 0.5 · 제곱 평균 0.325)
+def test_the_sequential_evidence_is_the_evalue_of_the_same_flow_under_twice_the_loss_limit():
+    seq = v.multiplicity([1_000.0, -2_000.0], [], loss_limit=2_000.0)["sequential"]
+    assert math.isclose(v.LOSS_CAP_MULTIPLE, 2.0) and seq["cap_multiple"] == v.LOSS_CAP_MULTIPLE
+    assert seq["loss_limit"] == 2_000.0 and seq["cap"] == 4_000.0 and seq["days"] == 2
+    assert seq["e_value"] == pytest.approx(0.834375) and seq["peak"] == pytest.approx(1.125)        # 첫날 1 + 0.5 × 0.25
+    assert seq["passed"] is False and seq["exceeded_days"] == 0 and seq["worst"] == -2_000.0 and seq["reason"] is None
+
+
+def test_the_sequential_evidence_does_not_wait_for_sixty_days_but_the_probability_still_does():
+    out = v.multiplicity([1_000.0, -2_000.0], [], loss_limit=2_000.0)
+    assert out["psr0"] is None and out["value"] is None and "60일" in out["reason"]      # 확률 쪽은 그대로 모자라다
+    assert out["sequential"]["e_value"] is not None                                      # 순차 증거는 첫날부터 정의된다
+
+
+def test_the_sequential_threshold_counts_every_trial_including_the_ones_without_a_flow():
+    flow = series(1, 300.0)
+    assert v.multiplicity(flow, [], loss_limit=5_000.0)["sequential"]["threshold"] == pytest.approx(20.0)
+    three = v.multiplicity(flow, [series(2, 0.0), None], loss_limit=5_000.0)["sequential"]
+    assert three["trials"] == 3 and three["threshold"] == pytest.approx(60.0)             # 흐름을 모르는 시행도 '해 본 것'이다
+
+
+@pytest.mark.parametrize("limit", [None, 0, 0.0, -1_000.0, float("nan")])
+def test_without_a_loss_limit_there_is_no_sequential_evidence_and_the_reason_names_the_setting(limit):
+    seq = v.multiplicity(series(1, 300.0), [], loss_limit=limit)["sequential"]
+    assert seq["e_value"] is None and seq["peak"] is None and seq["passed"] is None and seq["cap"] is None
+    assert seq["reason"] == v.REASONS["no_loss_limit"] and "하루 최대 손실" in seq["reason"]
+    assert seq["threshold"] == pytest.approx(20.0)
+
+
+def test_without_a_net_flow_there_is_no_sequential_evidence_even_with_a_loss_limit():
+    from src.engine import evalue
+    out = v.multiplicity(None, [series(2, 0.0)], loss_limit=2_000.0)
+    seq = out["sequential"]
+    assert seq["e_value"] is None and seq["reason"] == evalue.REASONS["no_values"] and seq["trials"] == 2
+    assert out["value"] is None and out["reason"] == v.REASONS["net_unknown"]             # 확률 쪽의 답은 그대로다
+
+
+def test_a_day_beyond_the_cap_is_counted_and_the_evidence_does_not_pass():
+    flow = [3_000.0] * 30 + [-9_000.0]                     # 상한 4,000원 — 마지막 날이 넘는다
+    seq = v.multiplicity(flow, [], loss_limit=2_000.0)["sequential"]
+    assert seq["peak"] >= seq["threshold"] and seq["exceeded_days"] == 1 and seq["passed"] is False and seq["reason"]
+    clean = v.multiplicity(flow[:-1], [], loss_limit=2_000.0)["sequential"]
+    assert clean["passed"] is True and clean["exceeded_days"] == 0                       # 짝: 넘은 날이 없으면 같은 흐름이 통과다
+
+
+def test_the_sequential_evidence_changes_nothing_on_the_probability_side():
+    """★DSR · PSR · 관문이 보는 값은 한 글자도 바뀌지 않는다★ — 한도를 주든 안 주든, 흐름이 통과하든 못 하든."""
+    current, family = series(1, 300.0), [series(s, 0.0) for s in (2, 3, 4)]
+    plain = v.multiplicity(current, family)
+    for limit in (None, 500.0, 50_000.0):
+        out = v.multiplicity(current, family, loss_limit=limit)
+        assert {k: val for k, val in out.items() if k != "sequential"} == {k: val for k, val in plain.items() if k != "sequential"}
+    assert "sequential" in plain and plain["sequential"]["e_value"] is None              # 한도 없이 불러도 블록은 있다(값 없음 + 사유)
+
+
 # ── 워크포워드 ────────────────────────────────────────────────────────────────────────
 #   여드레를 넷으로: [D0 D1] [D2 D3] [D4 D5] [D6 D7].  칸 A 와 칸 B 의 날마다 손익(원):
 #       A   100  100 | −50  −50 | 200  200 | −100 −100
