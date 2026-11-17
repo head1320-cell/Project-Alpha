@@ -75,12 +75,12 @@ def test_days_without_trades_still_count_as_days():
 def test_the_daily_series_has_every_day_and_zero_on_days_without_trades():
     journal = analyze(day_fills(DATES[0], 100) + day_fills(DATES[2], -40), {"commission_bp": 0})
     out = v.daily_values(journal, DATES[:4])
-    assert out == {"basis": "net", "values": [100.0, 0.0, -40.0, 0.0]}
+    assert out == {"basis": "net", "values": [100.0, 0.0, -40.0, 0.0], "trades": [1, 0, 1, 0], "wins": [1, 0, 0, 0]}
 
 
 def test_the_daily_series_says_when_it_is_before_costs():
     journal = analyze(day_fills(DATES[0], 100), {"commission_bp": None})
-    assert v.daily_values(journal, DATES[:2]) == {"basis": "gross", "values": [100.0, 0.0]}
+    assert v.daily_values(journal, DATES[:2]) == {"basis": "gross", "values": [100.0, 0.0], "trades": [1, 0], "wins": [1, 0]}
 
 
 # ── 손익분기 비용 ─────────────────────────────────────────────────────────────────────

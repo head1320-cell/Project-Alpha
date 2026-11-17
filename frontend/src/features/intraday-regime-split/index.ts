@@ -1,0 +1,1 @@
+export { RegimeSplitTable } from "./RegimeSplitTable";

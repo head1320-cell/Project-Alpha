@@ -475,7 +475,8 @@ def _family(user: str, out: dict, tickers: list[str], body: SimulateBody) -> dic
 def _trial_view(made: dict | None, family: dict | None) -> dict:
     """화면에 싣는 시행 기록의 답. 하나라도 실패했으면 그 수는 `None` 이고 사유가 붙는다 — 1 이 아니다."""
     failed = made is None or family is None
-    return {"recorded": made is not None, "new": made["new"] if made else None, "runs": made["runs"] if made else None,
+    return {"recorded": made is not None, "trial_key": made["trial_key"] if made else None,   # 국면별 나눔(K2)이 이 열쇠로 묻는다
+            "new": made["new"] if made else None, "runs": made["runs"] if made else None,
             "family_n": None if failed else len(family["trials"]), "user_total": None if failed else family["user_total"],
             "reason": "store_unavailable" if failed else None,
             "message": trials.REASONS["store_unavailable"] if failed else None}

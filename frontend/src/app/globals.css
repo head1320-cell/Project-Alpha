@@ -10811,3 +10811,28 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-mr-bic dd { display: flex; flex-wrap: wrap; gap: 2px 12px; }
 .itd-mr-bic-k { white-space: nowrap; }
 .itd-mr-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+
+/* ════ 국면별 성과 나눔(.itd-rs) — 시행의 일별 손익을 시장 국면별로 (K2a · 2026-11-17 · `e2e/intraday-regime-split.spec.ts`) ════
+   국면 색은 시장 국면 절의 밝기 단계(--itd-mr-s*)를 그대로 쓴다 — 번호의 표지일 뿐 순위가 아니다. 이긴 국면을 칠하지 않는다. */
+.itd-rs { display: flex; flex-direction: column; gap: 14px; }
+.itd-rs-form { display: flex; flex-direction: column; gap: 12px; }
+.itd-rs-result { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.itd-rs-head { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.itd-rs-range { white-space: nowrap; }                                  /* 기간(날짜 ~ 날짜)은 줄을 가르지 않는다 */
+.itd-rs-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.itd-rs-tablebox { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.itd-rs-cap { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
+.itd-rs-scroll { max-width: 100%; overflow-x: auto; border-radius: 6px; }
+.itd-rs-scroll:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 2px; }
+.itd-rs-table th, .itd-rs-table td { white-space: nowrap; }
+.itd-rs-table th + th, .itd-rs-table td + td { padding-left: 16px; }
+.itd-rs-table tfoot th, .itd-rs-table tfoot td { font-weight: 700; border-top: 1px solid var(--tx-line); }
+.itd-rs-table tfoot th { padding: 3px 0; font-size: 13px; color: var(--pg-ink); }     /* 합계 머리 칸은 열 머리(12px · 흐린 색)가 아니라 그 줄의 칸과 같은 글꼴 · 여백 */
+.itd-rs-chip { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: none; margin-right: 6px; vertical-align: -1px; }
+.itd-rs-chip--unknown { background: repeating-linear-gradient(45deg, var(--tx-mute) 0 1.5px, transparent 1.5px 5px); }
+.itd-rs-unknown { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-sub); }
+.itd-rs-lines { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 16px; margin: 0; }
+.itd-rs-lines > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.itd-rs-lines dt { font-size: 12px; color: var(--tx-mute); word-break: keep-all; }
+.itd-rs-lines dd { margin: 0; font-size: 14px; color: var(--tx-ink); font-variant-numeric: tabular-nums; word-break: keep-all; }
+.itd-rs-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }

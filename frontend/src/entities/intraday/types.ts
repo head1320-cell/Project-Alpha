@@ -106,7 +106,10 @@ export type Assumption = { key: string; label: string; count: number };
 export type Breakeven = { bp: number | null; turnover: number | null; spent_bp: number | null; reason: string | null };
 /** 시행 기록의 답 — 기록하지 못했으면 수가 `null` 이고 사유가 붙는다(1 이 아니다). */
 export type Trial = {
-  recorded: boolean; new: boolean | null; runs: number | null; family_n: number | null; user_total: number | null;
+  recorded: boolean;
+  /** 이 실행이 남은 시행의 열쇠 — 국면별 나눔(K2)이 이것으로 묻는다. 기록하지 못했으면 `null`. */
+  trial_key?: string | null;
+  new: boolean | null; runs: number | null; family_n: number | null; user_total: number | null;
   reason: string | null; message: string | null;
 };
 /** 규칙이 쓴 하루 유형 모형 하나의 사실 줄(`src/api/intraday_context.facts`) — 문장은 서버의 것을 그대로 싣는다. 쓰지 않는 규칙이면 목록이 비어 있다. */
@@ -290,3 +293,30 @@ export interface MarketRegimeAnswer {
   empty: { reason: string; message: string } | null;
 }
 export type MarketRegimeRefusal = { code: string; reason: string; limit?: number; days?: number };
+
+// ── 국면별 성과 나눔 — K2a (`GET /intraday/trials/{trial_key}/regime-split` · `src/engine/regime_split`) ───────────
+/** 국면 하나의 몫 — 그 국면이 가장 컸던 날들의 합. 거래 수를 남기지 않은 옛 시행이면 거래 · 이긴 거래 · 승률이 `null`(0 이 아니다). */
+export type RegimeSplitState = {
+  state: number; days: number; low_conf_days: number;
+  trades: number | null; wins: number | null; win_rate: number | null; pnl: number;
+};
+export type RegimeSplitBlock = {
+  basis: "net" | "gross" | null;
+  states: RegimeSplitState[];
+  /** 국면을 알 수 없던 날 — 사유별 날 수(서버 글 그대로) */
+  unknown: { days: number; trades: number | null; wins: number | null; win_rate: number | null; pnl: number; reasons: { reason: string; days: number }[] };
+  /** 합계 — 0.5 미만 날 수는 국면들의 합(미상은 확률이 없어 세지 않는다) · 승률은 서버 값(화면이 셈하지 않는다) */
+  total: { days: number; low_conf_days: number; trades: number | null; wins: number | null; win_rate: number | null; pnl: number };
+  transitions: number;
+  trades_known: boolean;
+  trades_reason: string | null;
+};
+export interface RegimeSplitAnswer {
+  trial_key: string; index: MarketIndex; name: string; k: number; from: string; to: string; mock: boolean;
+  trial_grade: "E0" | "E3" | null; regime_grade: "E0" | "E3" | null; regime_grade_reason: string | null; source: string | null;
+  coverage: { ok: boolean | null; reason: string | null } | null;
+  split: RegimeSplitBlock | null;
+  notes: string[];
+  /** 나누지 않은 까닭 — no_flow · flow_mismatch · bad_flow · state_out_of_range · synthetic_trial_in_production · (국면) not_loaded · synthetic_in_production · bad_dates · store_error */
+  empty: { reason: string; message: string } | null;
+}

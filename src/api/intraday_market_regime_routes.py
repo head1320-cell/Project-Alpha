@@ -88,6 +88,12 @@ def market_regime(index: Literal["KOSPI", "KOSDAQ"] = Query(...),
                   from_: date = Query(..., alias="from"),
                   to: date = Query(...),
                   user: str = Depends(require_login)) -> dict[str, Any]:
+    return regime_answer(index, k, from_, to)
+
+
+def regime_answer(index: str, k: int, from_: date, to: date) -> dict[str, Any]:
+    """국면 답 하나 — 이 문과 국면별 성과 나눔(K2 · `intraday_regime_split_routes`)이 ★같은 함수★를 쓴다:
+    같은 기간 규칙(어기면 400) · 같은 읽기(판정 시작일의 `HISTORY_CALENDAR_DAYS` 앞부터) · 같은 등급 · 같은 빈 값 사유(운영 합성 거절 · 장애 ≠ 없음)."""
     if from_ > to:
         raise _refuse("bad_range")
     span = (to - from_).days + 1

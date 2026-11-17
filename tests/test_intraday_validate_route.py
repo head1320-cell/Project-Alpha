@@ -160,6 +160,8 @@ def test_without_a_login_nothing_is_read_computed_or_recorded(client, monkeypatc
 def test_a_run_is_recorded_and_running_it_again_is_not_a_new_trial(client, auth, monkeypatch):
     with_days(monkeypatch, made_days())
     first = client.post(SIM, json=BODY, headers=auth).json()["trial"]
+    key = first.pop("trial_key")
+    assert isinstance(key, str) and len(key) >= 16                         # 국면별 나눔(K2)이 이 열쇠로 묻는다
     assert first == {"recorded": True, "new": True, "runs": 1, "family_n": 1, "user_total": 1, "reason": None, "message": None}
     again = client.post(SIM, json=BODY, headers=auth).json()["trial"]
     assert (again["new"], again["runs"], again["family_n"], again["user_total"]) == (False, 2, 1, 1)
@@ -199,7 +201,7 @@ def test_when_the_trial_cannot_be_recorded_the_run_still_answers_and_says_so(cli
     break_store(monkeypatch)
     body = client.post(SIM, json=BODY, headers=auth).json()
     assert body["journal"]["summary"]["gross"]["total"] == 19_800           # 계산은 그대로 답한다
-    assert body["trial"] == {"recorded": False, "new": None, "runs": None, "family_n": None, "user_total": None,
+    assert body["trial"] == {"recorded": False, "trial_key": None, "new": None, "runs": None, "family_n": None, "user_total": None,
                              "reason": "store_unavailable", "message": trials.REASONS["store_unavailable"]}
 
 

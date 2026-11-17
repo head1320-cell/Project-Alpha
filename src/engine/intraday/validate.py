@@ -84,9 +84,16 @@ def out_of_sample(fills: list[dict], dates: Iterable[str], *, commission_bp: flo
 
 
 def daily_values(journal: dict, dates: Iterable[str]) -> dict[str, Any]:
-    """기간 안 ★모든 거래일★의 일별 손익 — 거래가 없던 날은 0. `basis` 는 그 값이 비용 뒤인지 전인지."""
-    by_day = {row["key"]: float(row["total"]) for row in journal["breakdowns"]["daily"]}
-    return {"basis": journal["breakdowns"]["basis"], "values": [by_day.get(d, 0.0) for d in sorted(set(dates))]}
+    """기간 안 ★모든 거래일★의 일별 손익 — 거래가 없던 날은 0. `basis` 는 그 값이 비용 뒤인지 전인지.
+
+    `trades` · `wins` 는 날마다의 거래 · 이긴 거래(같은 순서 · 거래 없는 날 0) — 국면별 나눔(K2)이 시행 줄에서 읽는다.
+    다중 비교 · 같은 날 검사는 `values` · `dates` 만 본다(이 둘을 더해도 그 뜻은 그대로다)."""
+    rows = {row["key"]: row for row in journal["breakdowns"]["daily"]}
+    days = sorted(set(dates))
+    return {"basis": journal["breakdowns"]["basis"],
+            "values": [float(rows[d]["total"]) if d in rows else 0.0 for d in days],
+            "trades": [int(rows[d]["n"]) if d in rows else 0 for d in days],
+            "wins": [int(rows[d]["wins"]) if d in rows else 0 for d in days]}
 
 
 def breakeven_cost(journal: dict) -> dict[str, Any]:

@@ -30,6 +30,7 @@
       { "label": "분봉 백테스트: 적재된 분봉의 범위·출처·품질 조회 · 규칙 실행과 판정 · 실제 체결과 견주기(계산만 · 시행 횟수 기록 · 올린 체결은 저장하지 않음)", "routes": ["GET /api/v1/intraday/coverage", "GET /api/v1/intraday/templates", "POST /api/v1/intraday/simulate", "POST /api/v1/intraday/rules/expand", "POST /api/v1/intraday/validate", "POST /api/v1/intraday/divergence", "GET /api/v1/intraday/trials", "GET /api/v1/intraday/results"] },
       { "label": "분봉 하루 유형 모형: 장 시작 구간의 경로로 학습 · 내 모형 목록과 한 모형(본인 것만 · 지우는 경로 없음)", "routes": ["POST /api/v1/intraday/day-types", "GET /api/v1/intraday/day-types", "GET /api/v1/intraday/day-types/{key}"] },
       { "label": "시장 국면: 지수(코스피 · 코스닥)의 국면 소속 확률 계산과 그 상한(읽기만 · 저장 없음)", "routes": ["GET /api/v1/intraday/market-regime", "GET /api/v1/intraday/market-regime/limits"] },
+      { "label": "국면별 성과 나눔: 내 시행의 일별 손익을 시장 국면별로 나눠 보기(본인 것만 · 읽기만 · 시행 수 불변)", "routes": ["GET /api/v1/intraday/trials/{trial_key}/regime-split"] },
       { "label": "내 비밀번호 바꾸기", "routes": ["POST /api/v1/auth/password"] },
       { "label": "포트폴리오 설계의 AI 추천", "routes": ["POST /api/v1/assist/canvas/suggest"] },
       { "label": "포트폴리오 설계의 AI 풀어 쓰기", "routes": ["POST /api/v1/assist/canvas/narrate"] },

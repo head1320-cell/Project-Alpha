@@ -16,6 +16,7 @@ import { ContextFacts } from "@/features/intraday-day-types";
 import { TrialLine, bp1, originChip } from "@/features/intraday-verdict";
 import { UNKNOWN_TEXT, num, pct } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type Chip } from "@/shared/ui/tx";
+import { RegimeSplitSection } from "./RegimeSplitSection";
 
 const BREAKEVEN_WHY: Record<string, string> = {
   loses_before_costs: "비용 전에도 손실이라 산출하지 않았습니다.",
@@ -73,6 +74,7 @@ export function IntradayResult({ sim }: { sim: Sim }) {
             {b && b.bp !== null && b.spent_bp === null ? <p className="tj-note">수수료율이나 매도세를 알 수 없어 실제로 든 비용은 산출하지 않았습니다.</p> : null}
           </Section>
           <Buckets j={j} />
+          <RegimeSplitSection key={sim.trial?.trial_key ?? "no-trial"} trialKey={sim.trial?.trial_key} />
           <AfterLoss j={j} />
           <Extremes j={j} />
           <Trades j={j} />

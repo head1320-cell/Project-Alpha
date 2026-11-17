@@ -215,6 +215,27 @@ def trial_of(user: str, trial_key: str) -> dict[str, Any] | None:
             "to": r[5], "runs": int(r[6] or 0), "updated_at": r[7]}
 
 
+def daily_of(user: str, trial_key: str) -> dict[str, Any] | None:
+    """내 시행의 일별 흐름 → `trial_of` 의 답 + `daily` · 없거나 남의 것이면 `{found: False}` · 읽지 못하면 `None`.
+
+    국면별 나눔(K2)이 읽는다 — ★읽기만★(실행 횟수가 늘지 않는다). 남의 시행과 없는 시행은 같은 답이다.
+    흐름이 비었거나 깨져 읽히지 않으면 `daily` 는 `None` 이다(부르는 쪽이 사유를 단다 — 0 으로 채우지 않는다)."""
+    try:
+        engine = _engine()
+        _ensure(engine)
+        from sqlalchemy import text
+        with engine.connect() as c:
+            r = c.execute(text(f"SELECT {_TRIAL_HEAD}, daily FROM {_TABLE} WHERE trial_key = :key AND username = :user"),
+                          {"key": trial_key, "user": user}).fetchone()
+    except Exception as err:                                    # noqa: BLE001 — 실패는 '모른다'로 올린다
+        logger.warning("intraday trial 흐름 읽기 실패: %s", err)
+        return None
+    if r is None:
+        return {"found": False}
+    return {"found": True, "trial_key": r[0], "grade": r[1], "setting": _load(r[2]), "tickers": _load(r[3]) or [], "from": r[4],
+            "to": r[5], "runs": int(r[6] or 0), "updated_at": r[7], "daily": _load(r[8]) or None}
+
+
 # ── 결과 요약 ──────────────────────────────────────────────────────────────────────────
 def _results_ready(engine) -> bool:
     _ensure(engine)

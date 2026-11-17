@@ -6,7 +6,7 @@ import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase"
 import { call, type Result } from "@/shared/api/result";
 import type {
   Coverage, DayTypeAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest, Divergence, DivergenceRequest, Expanded,
-  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, ResultList,
+  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, RegimeSplitAnswer, ResultList,
   SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
 } from "./types";
 
@@ -66,6 +66,19 @@ export const getDayType = (key: string): Promise<Result<DayTypeAnswer>> =>
 // ── 시장 국면(일) — K1 ───────────────────────────────────────────────────────────────────
 export const getMarketRegimeLimits = (): Promise<Result<MarketRegimeLimits>> =>
   call<MarketRegimeLimits>(getWithAuth(`${BASE}/market-regime/limits`));
+/** 국면별 성과 나눔 — 내 시행의 일별 흐름을 국면별로(읽기만 · 시행 수 불변). 남의 시행 · 없는 시행은 같은 404 · 기록을 못 읽으면 503 — 사유는 서버 글. */
+export type SplitResult = { ok: true; value: RegimeSplitAnswer } | { ok: false; status: number; error: string };
+export async function getRegimeSplit(trialKey: string, q: { index: MarketIndex; k: number }): Promise<SplitResult> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k) });
+  try {
+    const r = await getWithAuth(`${BASE}/trials/${encodeURIComponent(trialKey)}/regime-split?${params.toString()}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`) };
+    return { ok: true, value: js as RegimeSplitAnswer };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패" };
+  }
+}
 export type RegimeResult = { ok: true; value: MarketRegimeAnswer } | { ok: false; status: number; error: string; refusal: MarketRegimeRefusal | null };
 /** 판정 기간의 거래일마다 국면 확률 — 읽기만(쓰기 0). 거절(기간 상한 · 날짜 순서)은 서버 사유 그대로. */
 export async function getMarketRegime(q: { index: MarketIndex; k: number; from: string; to: string }): Promise<RegimeResult> {

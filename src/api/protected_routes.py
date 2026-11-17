@@ -136,6 +136,9 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "시장 국면 — 지수(코스피 · 코스닥)의 국면 소속 확률을 계산만 한다(쓰기 0 · 계산 비용이 있어 로그인)"),
     ("GET", "/api/v1/intraday/market-regime/limits"):
         (REQUIRE_LOGIN, "시장 국면의 상한 — 국면 수 · 기간 · 지수 목록 상수(외부 호출 0)"),
+    # ── 국면별 성과 나눔(K2) — 읽기만 · 쓰기 0 · 시행을 남기지 않는다 ──
+    ("GET", "/api/v1/intraday/trials/{trial_key}/regime-split"):
+        (REQUIRE_LOGIN, "국면별 성과 나눔 — 내 시행의 일별 흐름을 시장 국면별로 나눈다(본인 것만 · 남의 것은 없는 것과 같은 404 · 시행 수 불변)"),
     ("GET", "/api/v1/intraday/arm-requests"):
         (REQUIRE_LOGIN, "내가 남긴 가동 요청의 목록 — 본인 것만. 요청은 가동이 아니다(읽기만)"),
     ("DELETE", "/api/v1/intraday/arm-requests/{request_id}"):
