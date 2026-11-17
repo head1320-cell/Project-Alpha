@@ -221,10 +221,11 @@ RAW_DIGITS = 10
 SHOW = 20
 
 
-def _close(a: float, b: float) -> bool:
+def _close(a: float, b: float, raw_rel: float = RAW_REL) -> bool:
     """값 종류별 허용 오차. ① 두 값을 최단 표기(`repr`)로 읽어 ★더 엄격한★ 마지막 자리 1단위 안이면 같다
-    (`scripts/golden_compare.py::_unit_of` — 반올림 경계의 끝자리 하나) ② 둘 다 원값(유효숫자 10+)이면 상대 1e-7 까지 같다.
-    우연히 짧은 원값(0.25)이 바뀌면 바뀐 쪽 표기가 길어져 ①이 엄격해지고 ②도 걸리지 않는다."""
+    (`scripts/golden_compare.py::_unit_of` — 반올림 경계의 끝자리 하나) ② 둘 다 원값(유효숫자 10+)이면 상대 `raw_rel`
+    (기본 1e-7) 까지 같다. 우연히 짧은 원값(0.25)이 바뀌면 바뀐 쪽 표기가 길어져 ①이 엄격해지고 ②도 걸리지 않는다.
+    `raw_rel` 을 넓히는 골든은 그 값을 ★실측한 커널 퍼짐★과 함께 적는다(예: `test_regime_weighting_golden.ARMS_RAW_REL`)."""
     if math.isnan(a) or math.isnan(b):
         return math.isnan(a) and math.isnan(b)
     if math.isinf(a) or math.isinf(b):
@@ -234,26 +235,26 @@ def _close(a: float, b: float) -> bool:
     if unit < 1 and abs(da - db) <= unit:
         return True
     raw = min(len(da.as_tuple().digits), len(db.as_tuple().digits)) >= RAW_DIGITS
-    return raw and math.isclose(a, b, rel_tol=RAW_REL, abs_tol=1e-12)
+    return raw and math.isclose(a, b, rel_tol=raw_rel, abs_tol=1e-12)
 
 
-def _diffs(a, b, path: str, out: list[str], exact: bool) -> None:
+def _diffs(a, b, path: str, out: list[str], exact: bool, raw_rel: float = RAW_REL) -> None:
     if isinstance(a, dict) and isinstance(b, dict):
         if set(a) != set(b):
             out.append(f"{path}: 키 {sorted(set(a) ^ set(b))}")
             return
         for k in a:
-            _diffs(a[k], b[k], f"{path}.{k}", out, exact)
+            _diffs(a[k], b[k], f"{path}.{k}", out, exact, raw_rel)
         return
     if isinstance(a, list) and isinstance(b, list):
         if len(a) != len(b):
             out.append(f"{path}: 길이 {len(a)} ≠ {len(b)}")
             return
         for i, (x, y) in enumerate(zip(a, b, strict=True)):
-            _diffs(x, y, f"{path}[{i}]", out, exact)
+            _diffs(x, y, f"{path}[{i}]", out, exact, raw_rel)
         return
     if isinstance(a, float) and isinstance(b, float) and not exact:
-        if not _close(a, b):
+        if not _close(a, b, raw_rel):
             out.append(f"{path}: {a!r} ≠ {b!r}")
         return
     if a != b:
@@ -330,6 +331,26 @@ def test_raw_optimizer_values_allow_solver_noise_but_not_a_real_change():
     w = 0.4218052785731531
     assert not _close(w * (1 + 1e-6), w)
     assert not _close(w * (1 + 2e-7), w)
+
+
+def test_a_widened_raw_allowance_reaches_every_depth_and_the_default_stays_strict():
+    """`raw_rel` 을 넓히는 골든(팔 워크포워드)은 사전 · 목록 어느 깊이의 원값에도 같은 허용을 받는다 ↔ 넘기지 않으면 공용 1e-7.
+    반올림한 값은 허용을 넓혀도 그대로 마지막 자리 1단위다(짝)."""
+    w = 0.1804379615499052
+    noisy = w * (1 + 9e-7)                                       # 실측 최대 커널 퍼짐(9.3e-7) 수준
+    nested = lambda v: {"rebalances": [{"weights": {"a": v}}], "summary": {"sharpe": v}}   # noqa: E731
+    for raw_rel, same in ((1e-5, True), (RAW_REL, False)):
+        out: list[str] = []
+        _diffs(nested(noisy), nested(w), "$", out, False, raw_rel)
+        assert (out == []) is same, (raw_rel, out)
+        if not same:
+            assert {d.split(":")[0] for d in out} == {"$.rebalances[0].weights.a", "$.summary.sharpe"}
+    out = []
+    _diffs(nested(noisy), nested(w), "$", out, False)            # 기본값 = 공용 허용
+    assert len(out) == 2
+    out = []
+    _diffs({"x": [40.1494]}, {"x": [40.1492]}, "$", out, False, 1e-5)
+    assert out == ["$.x[0]: 40.1494 ≠ 40.1492"]                   # 반올림 값은 넓은 허용을 빌리지 않는다
 
 
 def test_a_short_raw_value_does_not_borrow_a_coarse_last_place():

@@ -12,6 +12,7 @@ M3 가 이 함수에 'GMM 시작 분포' 분기를 더하기 **전**(HEAD `65b39
 
 ★백테스트의 기존 팔(B0 · B1 · N)도 같다★ — M3 가 `allocation_backtest` 에 팔 G 를 더하기 전에 84개월 패널의 워크포워드
 (리밸런싱 · 국면 감사 · 요약)를 `tests/golden/regime_arms_walk_forward.json` 에 얼렸다. 얼리기: `UPDATE_REGIME_ARMS_GOLDEN=1`.
+팔의 반올림하지 않은 원값은 ★실측한 커널 퍼짐★에 맞춘 허용 오차(`ARMS_RAW_REL`)로 견준다 — 아래 상수의 주석.
 """
 from __future__ import annotations
 
@@ -170,6 +171,21 @@ ARMS = {
 }
 ARM_KEYS = ("rebalances", "n_rebalances", "regime_audit", "summary", "turnover_avg_pct")
 
+#: 팔 워크포워드의 ★반올림하지 않은 원값★ 허용(상대). 84개월 동안 달마다 풀이기의 답이 쌓여 BLAS 커널 · 스레드 수에 따라 퍼진다.
+#: 실측(2026-11-16 · 얼린 값 대비 상대 차의 최댓값): 커널 5종(기본 SkylakeX · Haswell · Zen · Sandybridge · Prescott) × 스레드 3종
+#: (자동 · 1 · 2)에서 다른 원값은 `summary.sharpe_ratio_full` 하나 — 최대 9.3e-7(Sandybridge · 1스레드) · CI 의 PR 러너 2.6e-7
+#: (그 실행이 `test_the_existing_arms_equal_the_frozen_ones` 셋을 깼다 — 공용 허용 1e-7 은 CF3 사례로 잰 값이다).
+#: 실제 변화의 가장 작은 쪽: 1,827일 × 4종목 가운데 한 종목의 하루 수익률 1bp → 1.1e-4 ~ 1.4e-4. 1e-5 는 그 사이(잡음의 약 11배 ·
+#: 그 변화의 약 1/11)다. 반올림한 값은 그대로 마지막 자리 1단위 · 같은 호스트의 정확 비교는 `REGIME_WEIGHTING_GOLDEN_EXACT=1`.
+ARMS_RAW_REL = 1e-5
+
+
+def _arm_diffs(got: dict, want: dict, exact: bool) -> list[str]:
+    """팔 하나의 차이 전부 — 팔 시험 · 짝 시험 · 커널 시험이 ★같은 비교★를 쓴다(한 곳만 바뀌면 다른 시험이 잡는다)."""
+    out: list[str] = []
+    _diffs(got, want, "$", out, exact, ARMS_RAW_REL)
+    return out
+
 
 def arm_panel() -> tuple[list[dict], pd.DataFrame]:
     """84개월(2018-11 ~ 2025-10) — 팔 G 의 시험도 같은 패널을 쓴다(뒤쪽 달에서 점수가 선다)."""
@@ -204,10 +220,59 @@ def test_the_existing_arms_equal_the_frozen_ones(name, frozen_arms):
         GOLDEN_ARMS.write_text(json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         return
     assert name in frozen_arms, f"골든에 {name} 이 없습니다 — UPDATE_REGIME_ARMS_GOLDEN=1 로 먼저 얼립니다."
-    out: list[str] = []
-    _diffs(got, frozen_arms[name], "$", out, EXACT)
+    out = _arm_diffs(got, frozen_arms[name], EXACT)
     more = f"\n… 외 {len(out) - SHOW}곳" if len(out) > SHOW else ""
     assert not out, f"{len(out)}곳 다름:\n" + "\n".join(out[:SHOW]) + more
+
+
+def _walk_with(name: str, returns: np.ndarray) -> dict:
+    from src.engine.allocation_backtest import walk_forward
+
+    regime, rebalance = ARMS[name]
+    path, df = arm_panel()
+    out = walk_forward(list(df.columns), returns, list(df.index), model="bl", rebalance=rebalance, cost_bps=10.0,
+                       regime={"points": [dict(p) for p in path], **regime})
+    return _jsonable({k: out[k] for k in ARM_KEYS})
+
+
+@pytest.mark.parametrize("name", ["B1_M", "N_M", "N_Q"])
+def test_the_arm_tolerance_still_sees_a_one_day_one_bp_change(name, frozen_arms):
+    """짝 — 원값 허용을 넓혀도 실제 변화는 잡힌다: 한 종목의 끝에서 다섯째 날 수익률에 1bp 를 더하면 요약의 샤프 원값이
+    허용 밖으로 움직인다(실측 1.1e-4 ~ 1.4e-4). 그 날은 마지막 리밸런싱 뒤라 비중 · 국면 감사는 그대로다 — 원값만이 잡는다."""
+    if UPDATE_ARMS:
+        pytest.skip("얼리는 중")
+    _, df = arm_panel()
+    bumped = df.to_numpy().copy()
+    bumped[len(df) - 5, 0] += 1e-4
+    out = _arm_diffs(_walk_with(name, bumped), frozen_arms[name], False)
+    assert [d.split(":")[0] for d in out] == ["$.summary.sharpe_ratio_full"], out
+
+
+_KERNEL_PROBE = """
+import json
+from tests.test_regime_weighting_golden import ARMS, GOLDEN_ARMS, _arm_diffs, _walk
+frozen = json.loads(GOLDEN_ARMS.read_text(encoding="utf-8"))
+out = []
+for name in ARMS:
+    out += _arm_diffs(_walk(name), frozen[name], False)
+print(json.dumps(out, ensure_ascii=False))
+"""
+
+
+@pytest.mark.parametrize("core", ["Sandybridge", "Prescott"])
+def test_the_arm_golden_holds_under_other_blas_kernels(core):
+    """CI 러너마다 CPU 가 달라 OpenBLAS 가 다른 커널을 고른다 — 실측에서 가장 멀었던 두 커널 · 1스레드로 팔 다섯을 다시 돌려도
+    골든과 같다(같은 허용). 커널은 적재 때 정해지므로 새 프로세스로 돈다."""
+    import subprocess
+    import sys
+
+    if UPDATE_ARMS:
+        pytest.skip("얼리는 중")
+    root = Path(__file__).resolve().parent.parent
+    env = {**os.environ, "OPENBLAS_CORETYPE": core, "OPENBLAS_NUM_THREADS": "1", "KIS_USE_MOCK": "1"}
+    r = subprocess.run([sys.executable, "-c", _KERNEL_PROBE], cwd=root, env=env, capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert json.loads(r.stdout.strip().splitlines()[-1]) == []
 
 
 def test_the_arm_cases_are_not_vacuous():
