@@ -320,3 +320,38 @@ export interface RegimeSplitAnswer {
   /** 나누지 않은 까닭 — no_flow · flow_mismatch · bad_flow · state_out_of_range · synthetic_trial_in_production · (국면) not_loaded · synthetic_in_production · bad_dates · store_error */
   empty: { reason: string; message: string } | null;
 }
+
+// ── 하루 유형 비율 × 국면 — K2b ──────────────────────────────────────────────────────────────
+/** 한 칸 — 그 묶음(국면 · 미상 · 합계)에서 그 유형으로 배정된 표본 수 · 그 가운데 모형의 학습 날 표본 수 · 비율(분류된 표본이 0 이면 `null` — 0% 가 아니다). */
+export type RegimeDayTypesCell = { type: number; n: number; in_sample: number; share: number | null };
+/** 한 묶음 — 표본 · 유형을 정한 표본 · 표본 안 분류 · 유형별 칸 · 뺀 표본(사유 코드 → 수 · 서버 순서). */
+export type RegimeDayTypesGroup = {
+  samples: number; classified: number; in_sample: number; types: RegimeDayTypesCell[]; excluded: Record<string, number>;
+};
+export type RegimeDayTypesBlock = {
+  k: number; types_k: number;
+  states: (RegimeDayTypesGroup & { state: number })[];
+  /** 국면을 알 수 없던 날의 표본 — 사유별 날 수 · 표본 수(서버 글 그대로) */
+  unknown: RegimeDayTypesGroup & { reasons: { reason: string; days: number; samples: number }[] };
+  /** 합계 — 국면들 + 미상(서버가 맞춘다 · 화면은 셈하지 않는다) */
+  total: RegimeDayTypesGroup;
+};
+/** 쓴 모형의 사실 — 사실 줄(`facts`)은 서버 문장 그대로. 모형 기록을 읽지 못했으면 `overlap_days` 는 `null`. */
+export type RegimeDayTypesModel = {
+  key: string; minutes: number; k: number; first_day: string; last_day: string; tickers: string[]; same_tickers: boolean;
+  overlap_days: number | null; grade: "E0" | "E3" | null; synthetic: boolean; facts: string[];
+};
+export interface RegimeDayTypesAnswer {
+  trial_key: string; index: MarketIndex; name: string; k: number; from: string; to: string; mock: boolean;
+  trial_grade: "E0" | "E3" | null; model: RegimeDayTypesModel;
+  regime_grade: "E0" | "E3" | null; regime_grade_reason: string | null; source: string | null;
+  coverage: { ok: boolean | null; reason: string | null } | null;
+  /** 지금 다시 읽은 표본(봉)의 등급 — 시행 등급과 따로다. 표본이 없으면 `null` + 사유 */
+  samples_grade: "E0" | "E3" | null; samples_grade_reason: string | null; sources: Record<string, number> | null;
+  /** 뺀 사유 코드 → 서버 문장(하루 유형 학습 문과 같은 문장 · 모르는 사유는 `null`) */
+  excluded_messages: Record<string, string | null>;
+  table: RegimeDayTypesBlock | null;
+  notes: string[];
+  /** 세지 않은 까닭 — not_loaded · model_unreadable · state_out_of_range · bad_samples · synthetic_trial_in_production · synthetic_samples_in_production · (국면) 사유 그대로 */
+  empty: { reason: string; message: string } | null;
+}

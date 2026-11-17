@@ -10836,3 +10836,27 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-rs-lines dt { font-size: 12px; color: var(--tx-mute); word-break: keep-all; }
 .itd-rs-lines dd { margin: 0; font-size: 14px; color: var(--tx-ink); font-variant-numeric: tabular-nums; word-break: keep-all; }
 .itd-rs-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+
+/* ════ 하루 유형 비율 × 국면(.itd-rdt) — 국면별 성과 나눔 절 안의 하위 절 (K2b · 2026-11-17 · `e2e/intraday-regime-day-types.spec.ts`) ════
+   행 = 유형 · 열 = 국면 · 미상 · 합계. 칸은 비율(굵게) 아래 수(흐리게) 두 줄 — 각 줄은 쪼개지 않는다. 국면 표지는 `.itd-rs-chip` 을 함께 쓴다. */
+.itd-rdt { display: flex; flex-direction: column; gap: 14px; }
+.itd-rdt-form { display: flex; flex-direction: column; gap: 12px; }
+.itd-rdt-fields { grid-template-columns: minmax(0, 480px); }        /* 모형 칸 하나 — 이름이 다 보이는 폭(좁은 폭에서는 가득) */
+.itd-rdt-result { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.itd-rdt-head { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.itd-rdt-range { white-space: nowrap; }
+.itd-rdt-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.itd-rdt-tablebox { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.itd-rdt-cap { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
+.itd-rdt-scroll { max-width: 100%; overflow-x: auto; border-radius: 6px; }
+.itd-rdt-scroll:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 2px; }
+.itd-rdt-table th, .itd-rdt-table td { white-space: nowrap; }
+.itd-rdt-table th + th, .itd-rdt-table td + td { padding-left: 16px; }
+.itd-rdt-table tbody th { padding: 3px 0; font-size: 13px; font-weight: 600; color: var(--pg-ink); text-align: left; }
+.itd-rdt-table tfoot th, .itd-rdt-table tfoot td { border-top: 1px solid var(--tx-line); }
+.itd-rdt-table tfoot th { padding: 3px 0; font-size: 13px; font-weight: 600; color: var(--pg-ink); text-align: left; }
+.itd-rdt-share { display: block; font-weight: 700; color: var(--pg-ink); font-variant-numeric: tabular-nums; }
+.itd-rdt-n { display: block; font-size: 12px; color: var(--tx-sub); font-variant-numeric: tabular-nums; }
+.itd-rdt-facts { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-ink); word-break: keep-all; }
+.itd-rdt-excluded, .itd-rdt-unknown { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-sub); }
+.itd-rdt-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }

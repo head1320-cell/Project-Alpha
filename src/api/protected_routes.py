@@ -139,6 +139,9 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     # ── 국면별 성과 나눔(K2) — 읽기만 · 쓰기 0 · 시행을 남기지 않는다 ──
     ("GET", "/api/v1/intraday/trials/{trial_key}/regime-split"):
         (REQUIRE_LOGIN, "국면별 성과 나눔 — 내 시행의 일별 흐름을 시장 국면별로 나눈다(본인 것만 · 남의 것은 없는 것과 같은 404 · 시행 수 불변)"),
+    ("GET", "/api/v1/intraday/trials/{trial_key}/regime-day-types"):
+        (REQUIRE_LOGIN, "하루 유형 비율 × 국면 — 내 시행의 (날, 종목) 표본을 내 하루 유형 모형으로 배정해 국면별로 센다"
+                        "(시행 · 모형 본인 것만 · 남의 것은 없는 것과 같은 404 · 읽기만 · 시행 수 불변)"),
     ("GET", "/api/v1/intraday/arm-requests"):
         (REQUIRE_LOGIN, "내가 남긴 가동 요청의 목록 — 본인 것만. 요청은 가동이 아니다(읽기만)"),
     ("DELETE", "/api/v1/intraday/arm-requests/{request_id}"):

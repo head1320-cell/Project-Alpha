@@ -6,7 +6,7 @@ import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase"
 import { call, type Result } from "@/shared/api/result";
 import type {
   Coverage, DayTypeAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest, Divergence, DivergenceRequest, Expanded,
-  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, RegimeSplitAnswer, ResultList,
+  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, RegimeDayTypesAnswer, RegimeSplitAnswer, ResultList,
   SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
 } from "./types";
 
@@ -75,6 +75,19 @@ export async function getRegimeSplit(trialKey: string, q: { index: MarketIndex; 
     const js: unknown = await r.json().catch(() => null);
     if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`) };
     return { ok: true, value: js as RegimeSplitAnswer };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패" };
+  }
+}
+/** 하루 유형 비율 × 국면 — 내 시행의 표본을 내 모형으로 배정해 국면별로(읽기만 · 시행 수 불변). 남의 시행 · 남의 모형 · 없는 것은 같은 404 · 기록을 못 읽으면 503 — 사유는 서버 글. */
+export type DayTypesByRegimeResult = { ok: true; value: RegimeDayTypesAnswer } | { ok: false; status: number; error: string };
+export async function getRegimeDayTypes(trialKey: string, q: { index: MarketIndex; k: number; model: string }): Promise<DayTypesByRegimeResult> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k), model: q.model });
+  try {
+    const r = await getWithAuth(`${BASE}/trials/${encodeURIComponent(trialKey)}/regime-day-types?${params.toString()}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`) };
+    return { ok: true, value: js as RegimeDayTypesAnswer };
   } catch {
     return { ok: false, status: 0, error: "서버 연결 실패" };
   }

@@ -5,16 +5,16 @@
  * ★읽기만이다★ — 서버는 시행 줄을 읽고 국면을 계산할 뿐 시행을 남기지 않는다(시행 수 불변). 국면 수는 비어서 시작하고 비어 있으면 보내지 않는다.
  * 지수 목록 · 국면 수 범위는 시장 국면의 상한 문으로만 그린다(화면이 상수를 따로 두지 않는다). 거절 · 없음은 서버 사유 그대로, 실패는 재시도.
  * 시행을 기록하지 못한 실행이면 물을 열쇠가 없다 — 그렇게 적고 묻지 않는다.
+ * 아래에 '하루 유형 비율'(K2b)을 둔다 — 같은 지수 · 국면 수 칸을 쓰고, 그 칸이 바뀌면 그 답도 지운다(다른 물음의 답을 남기지 않는다).
  */
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { useState } from "react";
 import { getMarketRegimeLimits, getRegimeSplit, type MarketIndex, type MarketRegimeLimits, type RegimeSplitAnswer } from "@/entities/intraday";
 import { RegimeSplitTable } from "@/features/intraday-regime-split";
-import { loginHref } from "@/shared/lib/nextPath";
-import { Notice, RetryFail, Section } from "@/shared/ui/tx";
+import { RetryFail, Section } from "@/shared/ui/tx";
+import { RegimeDayTypesPart } from "./RegimeDayTypesPart";
+import { RegimeRequestFailure } from "./RegimeRequestFailure";
 
-const HERE = "/backtest/intraday";
 const SUB = "이 시행의 일별 손익을 그날 시가 전에 알던 시장 국면(가장 큰 확률)별로 나눕니다. "
   + "시행을 새로 남기지 않습니다. 관측이며 국면 조건을 넣으면 나아진다는 뜻이 아닙니다.";
 
@@ -44,6 +44,7 @@ function RegimeSplitForm({ trialKey }: { trialKey: string }) {
   }, staleTime: Infinity, retry: false });
   const [form, setForm] = useState<RsForm>({ index: "KOSPI", k: "" });
   const [view, setView] = useState<View>({ kind: "idle" });
+  const [model, setModel] = useState("");                       // 하루 유형 비율(K2b)의 모형 — 비어서 시작(도구가 고르지 않는다)
   const set = (patch: Partial<RsForm>) => { setForm({ ...form, ...patch }); setView({ kind: "idle" }); };
 
   const run = async () => {
@@ -60,8 +61,11 @@ function RegimeSplitForm({ trialKey }: { trialKey: string }) {
         <RetryFail title="상한 불러오기 실패" onRetry={() => void limits.refetch()}><span data-server>{limits.error.message}</span></RetryFail>
       ) : null}
       {limits.data ? <Fields lim={limits.data} form={form} set={set} pending={view.kind === "pending"} onRun={() => void run()} /> : null}
-      {view.kind === "fail" ? <Failure v={view} /> : null}
+      {view.kind === "fail" ? <RegimeRequestFailure status={view.status} error={view.error} again={view.again} /> : null}
       {view.kind === "done" ? <RegimeSplitTable a={view.value} /> : null}
+      {limits.data ? (
+        <RegimeDayTypesPart key={`${form.index}:${form.k}`} trialKey={trialKey} index={form.index} k={form.k} model={model} setModel={setModel} />
+      ) : null}
     </>
   );
 }
@@ -95,12 +99,3 @@ function Fields({ lim, form, set, pending, onRun }: {
   );
 }
 
-function Failure({ v }: { v: Extract<View, { kind: "fail" }> }) {
-  if (v.status === 401) {
-    return <Notice tone="danger" title="로그인 세션이 만료됐습니다.">다시 로그인하십시오. <Link href={loginHref(HERE)} className="tj-link">로그인</Link></Notice>;
-  }
-  if (v.status === 400 || v.status === 404 || v.status === 422) {
-    return <Notice tone="danger" title="요청 거절"><span data-server>{v.error}</span></Notice>;
-  }
-  return <RetryFail title="요청 실패" onRetry={v.again}><span data-server>{v.error}</span></RetryFail>;
-}
