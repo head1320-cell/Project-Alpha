@@ -54,7 +54,7 @@ export function RegimeFacts({ a }: { a: MarketRegimeAnswer }) {
         </div>
         <div className="itd-mr-fit">
           <dt>적합</dt>
-          <dd>{a.fit ? `달마다 ${a.fit.refits.toLocaleString("ko-KR")}번 · 창 ${a.fit.window_days.toLocaleString("ko-KR")}거래일 · 시드 ${a.fit.seeds}개`
+          <dd>{a.fit ? `${a.fit.refits.toLocaleString("ko-KR")}번(달마다 한 번) · 창 ${a.fit.window_days.toLocaleString("ko-KR")}거래일 · 시드 ${a.fit.seeds}개`
             + (a.fit.failed ? ` · 수렴하지 않은 시드 ${a.fit.failed}개` : "") : UNKNOWN_TEXT}</dd>
         </div>
       </dl>

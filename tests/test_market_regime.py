@@ -81,6 +81,19 @@ def test_two_volatility_levels_are_recovered_and_numbered_low_to_high():
     assert vols == sorted(vols)                                           # 번호 1 = 변동성이 가장 낮다
 
 
+def test_the_table_volatility_can_leave_the_numbering_order_without_regimes():
+    """화면의 한계 문장('국면별 통계의 실현 변동성은 … 번호 순서와 다를 수 있다')의 근거(K1b) — 번호는 적합 창에서 성분의 σ20 평균 순이고,
+    표의 실현 변동성은 그 기간 그 국면으로 센 날들의 일 수익으로 잰 값이다. 국면이 없는 걸음(변동성 일정)에서는 두 순서가 어긋난다 ↔
+    짝: 두 단계 자료에서는 같은 순서다(바로 위 `test_two_volatility_levels_are_recovered_and_numbered_low_to_high`).
+    번호를 그 기간의 결과로 다시 매기는 구현(앞보기)도 이 시험이 잡는다.
+    잰 값(커밋한 엔진 · 걸음 씨앗 0 ~ 9): 어긋난 걸음 국면 2 에서 7개 · 국면 3 에서 8개 — 국면 3 의 씨앗 5 는 19.1% · 17.1% · 15.5%(번호와 거꾸로)."""
+    closes = walk(1440, 0.0125, seed=5)
+    dates = bdays(len(closes))
+    vols = [s["realized_vol"] for s in mr.regime_days(dates, closes, k=3, start=dates[1000], end=dates[-1])["states"]]
+    assert all(v is not None for v in vols)
+    assert vols != sorted(vols)                                           # 번호 1 이 표에서 가장 낮은 변동성이라는 보장은 없다
+
+
 def test_a_constant_volatility_walk_gives_states_without_a_volatility_gap():
     """짝 — 국면이 없는 자료에서도 k 개를 내지만, 국면 사이 변동성 차이가 두 단계 자료보다 훨씬 작다(말할 것이 없다)."""
     closes = walk(1440, 0.0125, seed=7)

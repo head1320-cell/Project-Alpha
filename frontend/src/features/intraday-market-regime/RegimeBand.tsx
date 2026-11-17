@@ -78,7 +78,7 @@ export function RegimeBand({ days, k }: { days: MarketRegimeDay[]; k: number }) 
         ))}
         {anyUnknown ? <li><i className="itd-mr-legend-unknown" aria-hidden="true" />미상</li> : null}
       </ul>
-      <p className="itd-mr-axis">막대 하나가 하루입니다. 아래부터 국면 1 이며 번호는 변동성이 낮은 것부터 매겼습니다. 막대의 칸 높이가 그 국면의 소속 확률입니다.</p>
+      <p className="itd-mr-axis">막대 하나가 하루입니다. 아래부터 국면 1 이며 번호는 적합 창에서 20거래일 실현 변동성의 평균이 낮은 국면부터 매겼습니다. 막대의 칸 높이가 그 국면의 소속 확률입니다.</p>
       <ReadLine row={idx >= 0 ? rows[idx] ?? null : null} />
       <TableTwin headLabel="날짜" rows={rows} />
     </div>

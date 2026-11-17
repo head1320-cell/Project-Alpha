@@ -163,6 +163,16 @@ def test_the_mock_gate_answers_synthetic_closes_as_e0_with_the_engine_answer(cli
     assert js["notes"] == list(routes.NOTES)
 
 
+def test_the_numbering_note_says_which_volatility_orders_the_numbers_and_that_the_table_may_differ():
+    """K1b — '변동성이 낮은 것부터'만으로는 어느 변동성인지 모른다. 화면의 국면별 통계도 '실현 변동성'이라 그 순서로 읽히는데,
+    번호는 적합 창에서 성분의 σ20 평균 순이고 표는 그 기간의 일 수익이라 어긋날 수 있다(엔진 시험
+    `test_the_table_volatility_can_leave_the_numbering_order_without_regimes` 가 어긋나는 자료를 보인다)."""
+    note = [n for n in routes.NOTES if n.startswith("국면 번호")]
+    assert len(note) == 1
+    assert "적합 창에서 20거래일 실현 변동성의 평균이 낮은 국면부터 매겼습니다" in note[0]
+    assert "국면별 통계의 실현 변동성은 이 기간에 그 국면으로 센 날들의 일 수익으로 잰 값이라 번호 순서와 다를 수 있습니다" in note[0]
+
+
 def test_the_answer_equals_the_engine_on_the_same_closes(client, auth, monkeypatch):
     """문은 계산하지 않는다 — 같은 종가를 엔진에 넣은 값과 같다."""
     dates, closes = two_level("2021-01-01", "2026-03-31")

@@ -104,6 +104,10 @@ test("띠 · 읽는 줄 · 표 쌍둥이 · 통계 · BIC · 일치도 · 한계
     .toEqual(days.map((d) => [d.date, d.top === null ? "unknown" : String(d.top)]));
   // 범례 = 그린 것만 — 값이 다 있는 날들이라 '미상' 줄이 없다(짝: 아래 코스닥 시험의 심은 미상 날)
   await expect(page.locator(".itd-mr-legend li")).toHaveText(["국면 1", "국면 2", "국면 3"]);
+  // 번호의 근거는 어느 변동성인지까지 — '변동성이 낮은 것부터'만으로는 아래 표의 실현 변동성(그 기간의 일 수익) 순서로 읽힌다(K1b)
+  await expect(page.locator(".itd-mr-axis")).toHaveText(
+    "막대 하나가 하루입니다. 아래부터 국면 1 이며 번호는 적합 창에서 20거래일 실현 변동성의 평균이 낮은 국면부터 매겼습니다. "
+    + "막대의 칸 높이가 그 국면의 소속 확률입니다.");
   // 읽는 줄 — 처음은 마지막 날 · Home · End · ←
   const fig = page.locator(".itd-mr-fig");
   const read = page.locator(".itd-mr-result .cr-read");
@@ -139,7 +143,10 @@ test("띠 · 읽는 줄 · 표 쌍둥이 · 통계 · BIC · 일치도 · 한계
   await expect(page.locator(".itd-mr-agree")).toContainText(`최소 ${num(js.agreement.min, 3)}`);
   await expect(page.locator(".itd-mr-agree")).toContainText(`평균 ${num(js.agreement.mean, 3)}`);
   await expect(page.locator(".itd-mr-trans")).toContainText(`${js.transitions}번`);
-  await expect(page.locator(".itd-mr-fit")).toContainText(`${js.fit.refits}번`);
+  // 적합 횟수는 '3번(달마다 한 번)' — '달마다 3번'은 한 달에 세 번으로 읽힌다(K1b)
+  await expect(page.locator(".itd-mr-fit dd")).toHaveText(
+    `${js.fit.refits}번(달마다 한 번) · 창 ${js.fit.window_days.toLocaleString("ko-KR")}거래일 · 시드 ${js.fit.seeds}개`
+    + (js.fit.failed ? ` · 수렴하지 않은 시드 ${js.fit.failed}개` : ""));
   await expect(page.locator(".itd-mr-notes li")).toHaveText(js.notes as string[]);
 });
 
