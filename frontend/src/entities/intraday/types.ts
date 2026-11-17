@@ -61,13 +61,19 @@ export type ConstNode = { const: number | null };
 export type OpNode = { op: string; args: (Tree | null)[]; bars?: number | null; from?: string; to?: string };
 export type Tree = IndNode | ConstNode | OpNode;
 
-/** 수 칸 — 범위 · 출발값 · 단위는 서버의 문법 표의 것이다. */
-export type GrammarNumberParam = { key: string; label: string; type: "int" | "float"; min: number; max: number; default: number; unit: string };
+/** 수 칸 — 범위 · 출발값 · 단위는 서버의 문법 표의 것이다. 출발값이 `null` 이면 사용자가 정하는 칸이다(국면 수 · 국면 번호 — 비어서 시작). */
+export type GrammarNumberParam = { key: string; label: string; type: "int" | "float"; min: number; max: number; default: number | null; unit: string };
 /** 모형 칸 — 값은 내 모형의 열쇠(64자리 16진)다. 출발값이 없다(도구는 모형을 고르지 않는다). `kind` 는 어느 모형인지(지금은 `day_type`). */
 export type GrammarModelParam = { key: string; label: string; type: "model"; kind: string };
-export type GrammarParam = GrammarNumberParam | GrammarModelParam;
-/** `context` 는 그 지표가 세션 밖에서 받아야 하는 것(`day_types` — 하루 유형 모형) · 다른 지표는 `null`. */
-export type GrammarIndicator = { name: string; label: string; unit: string; needs_prev: boolean; params: GrammarParam[]; context: string | null };
+/** 고르기 칸 — 보기 가운데 하나(지수 · K3). 출발값이 없다(도구는 지수를 고르지 않는다 — 비어서 시작). */
+export type GrammarPickParam = { key: string; label: string; type: "pick"; choices: { value: string; label: string }[]; default: null };
+export type GrammarParam = GrammarNumberParam | GrammarModelParam | GrammarPickParam;
+/** `context` 는 그 지표가 세션 밖에서 받아야 하는 것(`day_types` — 하루 유형 모형 · `regimes` — 시장 국면) · 다른 지표는 `null`.
+ *  `slots` 는 그 지표를 쓸 수 있는 규칙의 자리(시장 국면 확률은 진입 조건만) · `null`(옛 서버의 답이면 없음)이면 어디나. */
+export type GrammarIndicator = {
+  name: string; label: string; unit: string; needs_prev: boolean; params: GrammarParam[]; context: string | null;
+  slots?: ("entry" | "entry_stop" | "exit")[] | null;
+};
 export type GrammarOp = {
   name: string; label: string; symbol: string | null; gives: "bool" | "number"; args: ("bool" | "number")[];
   variadic: { kind: "bool" | "number"; min: number; max: number } | null;
@@ -112,10 +118,21 @@ export type Trial = {
   new: boolean | null; runs: number | null; family_n: number | null; user_total: number | null;
   reason: string | null; message: string | null;
 };
-/** 규칙이 쓴 하루 유형 모형 하나의 사실 줄(`src/api/intraday_context.facts`) — 문장은 서버의 것을 그대로 싣는다. 쓰지 않는 규칙이면 목록이 비어 있다. */
-export type ContextFact = {
-  key: string; minutes: number; k: number; first_day: string; last_day: string; tickers: string[];
+/** 규칙이 쓴 하루 유형 모형 하나의 사실 줄(`src/api/intraday_context.facts`) — 문장은 서버의 것을 그대로 싣는다. 쓰지 않는 규칙이면 목록이 비어 있다.
+ *  `kind` 가 없는 줄은 K3 전에 남긴 결과의 하루 유형 줄이다. */
+export type DayTypeFact = {
+  kind?: "day_type"; key: string; minutes: number; k: number; first_day: string; last_day: string; tickers: string[];
   grade: "E0" | "E3" | null; same_tickers: boolean; sentences: string[];
+};
+/** 규칙이 쓴 시장 국면 하나의 사실 줄(K3) — 아는 날 · 모르는 날 · 사유별 날 수 · 등급. 문장은 서버의 것 그대로. */
+export type RegimeFact = {
+  kind: "regime"; key: string; index: MarketIndex; name: string; k: number; states: number[]; grade: "E0" | "E3" | null;
+  days: { loaded: number; known: number; unknown: number }; unknown_reasons: { reason: string; days: number }[]; sentences: string[];
+};
+export type ContextFact = DayTypeFact | RegimeFact;
+/** 판정의 짝 비교(K3) — 같은 날 · 같은 포지션 · 같은 비용으로 국면 조건을 뺀 판. 시행으로 세지 않는다(판정의 일부). */
+export type RegimePair = {
+  known: boolean; reason: string | null; with: Brief | null; without: Brief | null; rule_text: string | null; note: string;
 };
 type Shared = {
   request: SimulateRequest & { walk_forward?: Grid };
@@ -233,6 +250,8 @@ export type Validation = Shared & {
   walk_forward: WalkForward | null;
   multiplicity: Multiplicity | null;
   gates: GateTable | null;
+  /** 국면 조건을 쓴 규칙만 — 아니면 `null`(K3 전의 남긴 결과에는 칸이 없다). */
+  regime_pair?: RegimePair | null;
 };
 
 // ── 하루 유형 모형(T1 · 2026-11-16) — 장 시작 구간의 경로를 e-means 로 묶은 것. 서버 `intraday_day_type_routes` 의 답 그대로 ──

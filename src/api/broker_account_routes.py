@@ -315,10 +315,12 @@ def _day_of(username: str, tickers: list[str], rule, day: dt.date):
     같은 규칙 맥락). 규칙이 하루 유형을 쓰면 그 사용자의 모형을 ★봉을 읽기 전에★ 읽는다 — 학습이 그날 전에 끝나지 않았으면
     사유와 함께 거절한다(`intraday_context`).
 
-    → `(Day, session)` · 그 날짜가 적재돼 있지 않으면 `None`."""
-    loaded = intraday_context.load(username, rule, day)
+    → `(Day, session)` · 그 날짜가 적재돼 있지 않으면 `None`. 규칙이 시장 국면을 쓰면 그날 시가 전에 알던 확률을 싣는다 —
+    그날 확률을 모르면(지수 일봉이 아직 없거나 적합 창이 덜 찼으면) 사유와 함께 거절한다(가동하지 않는다)."""
     feed = intraday_routes.minute_feed
-    if not feed.plan(day, day).dates:
+    planned = feed.plan(day, day).dates
+    loaded = intraday_context.load(username, rule, day, end=day, dates=planned)
+    if not planned:
         return None
     session = intraday_routes.session_rules()
     days = feed.build_days(tickers, day, day, rules=session, master=intraday_routes.master_lookup(),

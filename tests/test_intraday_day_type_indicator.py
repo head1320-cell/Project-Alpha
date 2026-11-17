@@ -237,5 +237,6 @@ def test_the_grammar_offers_a_model_field_and_a_type_number():
     assert found["label"] == "하루 유형" and found["unit"] == "flag" and found["context"] == "day_types"
     assert found["params"] == [{"key": "model", "label": "모형", "type": "model", "kind": "day_type"},
                                {"key": "type", "label": "유형 번호", "type": "int", "min": 1, "max": dt.MAX_K, "default": 1, "unit": "번"}]
-    others = [i for i in rules.grammar()["indicators"] if i["name"] != "day_type_is"]
+    others = [i for i in rules.grammar()["indicators"] if i["name"] not in ("day_type_is", "regime_prob")]
     assert all(i["context"] is None for i in others)                                  # 짝 — 다른 지표는 맥락이 필요 없다
+    assert next(i for i in rules.grammar()["indicators"] if i["name"] == "regime_prob")["context"] == "regimes"   # K3 — 시장 국면은 제 칸

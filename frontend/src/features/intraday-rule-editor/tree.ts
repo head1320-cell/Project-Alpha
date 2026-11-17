@@ -6,7 +6,7 @@
  * ★출발값을 지어 넣지 않는다★ — 지표의 매개변수는 서버의 문법 표가 준 값이고, 상수 · 연산 · 봉 수 · 시각은 비어서 시작한다.
  * 여기의 검사(`issuesOf`)는 보내기 전에 어느 자리에 빈 칸이 있는지 말해 주려는 것이다. 판정은 서버가 한다(`rules/expand`).
  */
-import type { ConstNode, Grammar, IndNode, OpNode, Tree } from "@/entities/intraday";
+import type { ConstNode, Grammar, GrammarIndicator, IndNode, OpNode, Tree } from "@/entities/intraday";
 
 export type Slot = "entry" | "entry_stop" | "exit";
 /** 편집 중의 마디 — `null` 은 아직 놓지 않은 칸이다. */
@@ -27,7 +27,8 @@ export const isOp = (n: Tree): n is OpNode => !isInd(n) && typeof (n as { op?: u
 
 // ── 새 마디 ─────────────────────────────────────────────────────────────────
 
-/** 지표 잎 — 매개변수는 서버가 준 출발값(문법 표의 `default`)이다. 모형 칸은 출발값이 없다 — 비어서 시작한다(도구는 모형을 고르지 않는다). */
+/** 지표 잎 — 매개변수는 서버가 준 출발값(문법 표의 `default`)이다. 모형 칸 · 고르기 칸 · 출발값이 `null` 인 수 칸은 비어서 시작한다
+ *  (도구는 모형 · 지수 · 국면 수를 고르지 않는다). */
 export const indicator = (g: Grammar, name: string): IndNode =>
   ({ ind: name, ...Object.fromEntries((g.indicators.find((i) => i.name === name)?.params ?? []).map((p) => [p.key, p.type === "model" ? null : p.default])) });
 export const constant = (): ConstNode => ({ const: null });
@@ -46,6 +47,24 @@ export const conditional = (value: Draft = null): OpNode => ({ op: "where", args
 export const ago = (value: Draft = null): OpNode => ({ op: "ago", bars: null, args: [value] });
 /** 봉 수를 받는 연산 → 문법 표에 그 칸이 없을 때 쓰는 이름표(범위는 지어내지 않는다 — 1 이상의 정수인지만 본다 · 판정은 서버가 한다). */
 export const BARS_OPS: Record<string, string> = { held_before: "직전 봉 수", ago: "봉 수" };
+
+// ── 국면 조건(K3) ─────────────────────────────────────────────────────────────
+
+/** 시장 국면 확률을 읽는 지표(문법 표의 `context === "regimes"`) — 없으면 `null`(그 지표가 없는 서버). */
+export const regimeIndicator = (g: Grammar): GrammarIndicator | null => g.indicators.find((i) => i.context === "regimes") ?? null;
+/** 그 자리에서 쓸 수 있는 지표인가 — 문법 표의 `slots`(없으면 어디나 · 시장 국면 확률은 진입 조건만). */
+export const usableIn = (i: GrammarIndicator, slot: Slot): boolean => !i.slots || i.slots.includes(slot);
+/** 국면 조건 한 줄 — `[국면 확률] [연산] [상수]`. 지수 · 국면 수 · 국면 번호 · 연산 · 상수는 비어서 시작한다(도구가 고르지 않는다). */
+export const regimeCondition = (g: Grammar, name: string): OpNode => ({ op: "", args: [indicator(g, name), constant()] });
+/**
+ * 진입 조건 전체와 '모두 충족'으로 잇는다 — 비었으면 그것이 뿌리 · 뿌리가 '모두 충족'이면 그 줄에 · 아니면 뿌리와 함께 새 '모두 충족'으로 묶는다.
+ * `append` 와 다른 점: 뿌리가 '하나 이상 충족'이어도 그 안에 넣지 않는다(국면 조건은 진입 조건 전체에 걸린다 — 틀의 뜻을 바꾸지 않는다).
+ */
+export function andWith(root: Draft, node: Tree): Tree {
+  if (root === null) return node;
+  if (isOp(root) && root.op === "and") return { ...root, args: [...root.args, node] };
+  return group(root, node);
+}
 
 // ── 길을 따라 고치기(원본은 건드리지 않는다) ────────────────────────────────
 
@@ -109,6 +128,11 @@ const topic = (word: string): string => {
   const code = word.charCodeAt(word.length - 1) - 0xac00;
   return `${word}${code >= 0 && code <= 11171 && code % 28 === 0 ? "는" : "은"}`;
 };
+/** 목적어 조사 — 받침이 있으면 '을', 없으면 '를'. */
+const object = (word: string): string => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return `${word}${code >= 0 && code <= 11171 && code % 28 === 0 ? "를" : "을"}`;
+};
 
 type Found = { holes: number; groups: boolean; times: boolean; ranges: string[]; models: string[] };
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -122,6 +146,11 @@ function walk(node: Draft, g: Grammar, out: Found): void {
       if (p.type === "model") {                                   // 모형 칸 — 열쇠의 모양만 본다(내 모형인지 · 학습 기간은 서버가 판정한다)
         const v = node[p.key];
         if (!(typeof v === "string" && HEX64.test(v))) out.models.push(`${spec.label} ${p.label}을 고르십시오.`);
+        continue;
+      }
+      if (p.type === "pick") {                                    // 고르기 칸 — 보기 가운데 하나여야 한다(비어서 시작)
+        const v = node[p.key];
+        if (!(typeof v === "string" && p.choices.some((c) => c.value === v))) out.models.push(`${spec.label} ${object(p.label)} 고르십시오.`);
         continue;
       }
       if (!inRange(node[p.key], p)) out.ranges.push(`${topic(`${spec.label} ${p.label}`)} ${rangeOf(p)} 범위로 입력하십시오.`);

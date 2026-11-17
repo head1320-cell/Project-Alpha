@@ -18,7 +18,7 @@ import pytest
 from src.engine import intraday
 from src.engine.intraday import day_types as dt
 from src.engine.intraday import expr, indicators, rules, simulator
-from src.engine.intraday.types import DayTypeRef, PrevDay, RuleContext, Session
+from src.engine.intraday.types import DayTypeRef, PrevDay, RegimeRef, RuleContext, Session
 from tests.test_intraday_golden import GOLDEN, SETUPS, _days
 from tests.test_intraday_golden import RULES as SESSION_RULES
 
@@ -82,9 +82,13 @@ def test_a_custom_rule_passes_the_simulator_s_own_check():
 
 # ── ⑵ 성질: 문법에서 뽑은 어떤 나무도 앞을 보지 않는다 ───────────────────────────────────────
 #: 맥락을 읽는 지표(하루 유형 · T2)가 쓸 모형 — 무작위 중심 넷 · 창 10분. 무작위 하루마다 같은 맥락을 싣는다.
+#: 시장 국면(K3)은 두 지수 × 국면 수 2 ~ 4 의 그날 확률(무작위 · 합 1) — 무작위 하루의 날짜(2026-03-04)에 값이 있다.
 MODEL, MODEL_K = "cd" * 32, 4
+_P = np.random.default_rng(13)
 CTX = RuleContext(day_types={MODEL: DayTypeRef(
-    centroids=dt.order_centroids(np.random.default_rng(11).normal(0, 60, size=(MODEL_K, 10))), minutes=10, k=MODEL_K)})
+    centroids=dt.order_centroids(np.random.default_rng(11).normal(0, 60, size=(MODEL_K, 10))), minutes=10, k=MODEL_K)},
+    regimes={(index, k): RegimeRef(index=index, k=k, probs={"2026-03-04": tuple(float(x) for x in _P.dirichlet(np.ones(k)))})
+             for index in ("KOSPI", "KOSDAQ") for k in (2, 3, 4)})
 
 
 def _session(seed: int, n: int = 70) -> Session:
@@ -114,8 +118,12 @@ def _rand_ind(rng: random.Random) -> dict:
     for key, r in indicators.INDICATORS[name].params.items():
         if isinstance(r, indicators.Key):                        # 모형 열쇠 — 기본값이 없다(맥락의 모형 하나)
             node[key] = MODEL
-        elif rng.random() < 0.8:                                 # 작은 창 — 70봉짜리 하루에서 덥혀지게. 나머지는 기본값에 맡긴다
+        elif isinstance(r, indicators.Pick):                     # 고르기(지수) — 기본값이 없다(보기 가운데 하나)
+            node[key] = rng.choice(r.values)
+        elif r.default is None or rng.random() < 0.8:            # 작은 창 — 70봉짜리 하루에서 덥혀지게. 나머지는 기본값에 맡긴다(기본값 없는 칸은 늘 채운다)
             node[key] = rng.randint(int(r.low), min(int(r.high), cap)) if r.integer else round(rng.uniform(r.low, r.high), 2)
+    if name == "regime_prob":                                    # 국면 번호는 그 국면 수까지(매개변수끼리의 검사)
+        node["state"] = rng.randint(1, node["k"])
     return node
 
 
@@ -178,7 +186,7 @@ def test_the_random_trees_cover_the_whole_grammar():
         ops |= _names(tree, "op")
         inds |= _names(tree, "ind")
     assert ops == set(expr.OP_LABELS) and len(ops) == 16
-    assert inds == set(indicators.INDICATORS) and len(inds) == 29
+    assert inds == set(indicators.INDICATORS) and len(inds) == 30
     assert len({expr.canonical(t) for t in TREES}) == len(TREES) == 300
 
 
@@ -241,10 +249,29 @@ def test_every_node_has_the_same_shape_and_nothing_extra():
     assert set(held) == {"op", "args", "bars"} and held["bars"] == 3
 
 
+def _as_rule(tree: dict) -> dict | None:
+    """무작위 나무 → `custom` 의 매개변수. 국면 조건의 꼴(K3 — 진입 조건 · '모두 충족' 사슬 · 국면 확률과 상수만의 비교)을 어긴 나무는
+    `None` — 문법(`expr`)의 나무이지만 규칙은 아니다. 거절 사유는 그 셋 가운데 하나여야 한다(다른 예외로 새지 않는다)."""
+    slot = "entry" if expr.validate(tree) == "bool" else "entry_stop"
+    try:
+        return rules.resolve("custom", {slot: tree})
+    except rules.RuleError as err:
+        assert err.code in ("regime_outside_entry", "regime_not_in_and", "regime_not_plain"), err.code
+        return None
+
+
+RULE_TREES = [r for r in (_as_rule(t) for t in TREES) if r is not None]
+
+
+def test_the_rule_trees_keep_most_of_the_grammar_trees_and_refuse_only_bad_regime_shapes():
+    """공허하지 않다 — 규칙이 되는 나무가 대부분이고, 거절된 것은 시장 국면 확률을 쓴 나무뿐이다."""
+    refused = [t for t, r in zip(TREES, (_as_rule(t) for t in TREES), strict=True) if r is None]
+    assert 200 < len(RULE_TREES) < len(TREES) and refused
+    assert all("regime_prob" in _names(t, "ind") for t in refused)
+
+
 def test_resolving_twice_changes_nothing():
-    for tree in TREES[:60]:
-        slot = "entry" if expr.validate(tree) == "bool" else "entry_stop"
-        once = rules.resolve("custom", {slot: tree})
+    for once in RULE_TREES[:60]:
         assert rules.resolve("custom", once) == once
 
 
@@ -312,10 +339,10 @@ def test_size_counts_like_the_validator():
 def test_every_indicator_parameter_and_operator_has_a_label_and_the_labels_differ():
     """화면은 이름을 지어내지 않는다 — 등록부에 있는 것은 전부 이름표가 있다(새 지표를 더하면 여기서 걸린다)."""
     labels = [spec.label for spec in indicators.INDICATORS.values()]
-    assert all(labels) and len(set(labels)) == len(labels) == 29              # T2 — '하루 유형'
+    assert all(labels) and len(set(labels)) == len(labels) == 30              # T2 — '하루 유형' · K3 — '시장 국면 확률'
     for name, spec in indicators.INDICATORS.items():
         assert spec.unit in indicators.UNITS, name
-        assert all(r.label and (isinstance(r, indicators.Key) or r.unit) for r in spec.params.values()), name   # 모형 열쇠는 단위가 없다
+        assert all(r.label and (isinstance(r, (indicators.Key, indicators.Pick)) or r.unit) for r in spec.params.values()), name   # 모형 열쇠 · 고르기는 단위가 없다
     assert set(expr.OP_LABELS) == set(expr.shapes()) and len(set(expr.OP_LABELS.values())) == 16
     assert set(expr.OP_SYMBOLS) == {"add", "sub", "mul", "gt", "ge", "lt", "le"}
     assert all("—" not in text for text in (*labels, *expr.OP_LABELS.values(), *indicators.UNITS.values()))
@@ -332,6 +359,10 @@ def test_the_grammar_is_read_from_the_registries_not_copied():
             r = spec.params[p["key"]]
             if isinstance(r, indicators.Key):                    # 모형 열쇠 — 범위 · 출발값이 없다(사용자가 고른다)
                 assert p == {"key": p["key"], "label": r.label, "type": "model", "kind": r.kind}
+                continue
+            if isinstance(r, indicators.Pick):                   # 고르기 — 보기들 · 출발값이 없다(사용자가 고른다)
+                assert p == {"key": p["key"], "label": r.label, "type": "pick", "default": None,
+                             "choices": [{"value": v, "label": name} for v, name in r.choices]}
                 continue
             assert (p["min"], p["max"], p["default"], p["label"], p["unit"]) == (r.low, r.high, r.default, r.label, r.unit)
             assert p["type"] == ("int" if r.integer else "float")
@@ -394,13 +425,11 @@ def test_nested_groups_and_conditional_values_are_bracketed():
 
 def test_different_trees_never_share_a_text():
     seen: dict[str, str] = {}
-    for tree in TREES:
-        slot = "entry" if expr.validate(tree) == "bool" else "entry_stop"
-        form = rules.resolve("custom", {slot: tree})
+    for form in RULE_TREES:
         text = rules.text_of(rules.build("custom", form))
         assert "—" not in text
         assert seen.setdefault(text, expr.canonical(form)) == expr.canonical(form), text
-    assert len(seen) > 290
+    assert len(seen) > len(RULE_TREES) - 10
 
 
 def test_n_bars_back_reads_as_a_phrase_and_brackets_a_calculation():

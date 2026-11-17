@@ -185,6 +185,10 @@ _DAY_NOTE = "당일 고가와 당일 저가는 그 봉을 포함합니다. 직�
 #: 하루 유형을 쓰는 규칙의 주석(T2) — 문 층 시험과 화면이 같은 문장을 본다.
 DAY_TYPE_NOTE = ("하루 유형은 장 시작 N분의 창이 끝난 봉부터 값이 있습니다. 창이 어긋난 날은 값이 없어 조건을 충족하지 않습니다. "
                  "모형의 학습 기간이 끝난 뒤의 날에만 씁니다.")
+REGIME_NOTE = ("시장 국면 확률은 0 에서 1 사이의 값이며 그날 시가 전에 알던 값(전 거래일 종가까지의 지수 일봉)이라 하루 내내 같습니다. "
+               "적합 창이 덜 찬 달이나 지수 일봉이 없는 날은 값이 없어 조건을 충족하지 않습니다. 국면은 이름표이며 다음 날 국면을 맞힌다는 뜻이 아닙니다.")
+REGIME_STOP_NOTE = ("미리 건 매수 가격은 국면 조건과 따로 체결됩니다. 국면 조건은 진입 조건만 거르며, "
+                    "국면 조건이 서지 않은 날에도 미리 건 매수는 체결될 수 있습니다.")
 #: 그 봉까지의 값을 내는 지표(그 봉 포함) — 그대로 견주면 '고가 > 당일 고가'는 늘 거짓이다.
 _RUNNING = ("day_high", "day_low")
 _ENTRY_RULE = "진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다."
@@ -236,7 +240,98 @@ def _resolve_custom(params: dict | None) -> dict:
         raise RuleError("no_entry")
     if nodes > expr.MAX_NODES:
         raise RuleError("too_many_nodes", f"{nodes} > {expr.MAX_NODES}")
+    _check_regime(out)
     return out
+
+
+# ── 국면 조건(K3) — 꼴 · 쓰인 국면 · 국면 조건을 뺀 판 ─────────────────────────────────────────────
+#: 시장 국면을 읽는 지표들 — 등록부에서 읽는다(맥락 칸 이름이 `regimes` 인 것).
+_REGIME_INDICATORS = frozenset(name for name, spec in indicators.INDICATORS.items() if spec.context == "regimes")
+_REGIME_COMPARES = ("gt", "ge", "lt", "le")
+_REGIME_ARITH = ("add", "sub", "mul")
+
+
+def _has_regime(tree: Any) -> bool:
+    return bool(_indicators_in(tree) & _REGIME_INDICATORS)
+
+
+def _plain_regime_side(node: dict) -> bool:
+    """수 마디가 시장 국면 확률 · 상수 · 그 둘의 더하기 · 빼기 · 곱하기로만 되어 있는가."""
+    if "const" in node:
+        return True
+    if "ind" in node:
+        return node["ind"] in _REGIME_INDICATORS
+    return node.get("op") in _REGIME_ARITH and all(_plain_regime_side(arg) for arg in node.get("args", []))
+
+
+def _check_regime(out: dict) -> None:
+    """국면 조건의 꼴 — 국면 조건 = 초과 · 이상 · 미만 · 이하 비교이고 양변이 국면 확률 · 상수 · 그 둘의 셈으로만 된 것.
+    국면 확률은 국면 조건 안에만 · 국면 조건은 진입 조건에만 · 진입 조건의 뿌리이거나 '모두 충족'만 거쳐 닿는 자리에만 둔다.
+
+    까닭: 국면 조건을 뺀 판(판정의 짝 비교)이 하나로 정해져야 한다 — '하나 이상 충족' · '아님' 안의 조건을 빼는 뜻은 하나가 아니다."""
+    for key in ("entry_stop", "exit"):
+        if key in out and _has_regime(out[key]):
+            raise RuleError("regime_outside_entry", slot=key)
+
+    def walk(node: dict) -> None:
+        if not _has_regime(node):
+            return
+        name = node.get("op")
+        if name == "and":
+            for arg in node["args"]:
+                walk(arg)
+            return
+        if name in ("or", "not", "held_before"):
+            raise RuleError("regime_not_in_and", slot="entry")
+        if not (name in _REGIME_COMPARES and all(_plain_regime_side(arg) for arg in node["args"])):
+            raise RuleError("regime_not_plain", slot="entry")
+
+    if "entry" in out:
+        walk(out["entry"])
+
+
+def uses_regime(spec: RuleSpec) -> bool:
+    """규칙의 나무 셋 어디엔가 시장 국면 확률이 있는가(읽기만)."""
+    return any(_has_regime(tree) for tree in (spec.entry, spec.entry_stop, spec.exit) if tree is not None)
+
+
+def regime_uses(spec: RuleSpec) -> dict[tuple[str, int], set[int]]:
+    """(지수, 국면 수) → 쓰인 국면 번호들(읽기만 · 평가하지 않는다). 검사를 지난 나무에만 쓴다 — 문 층이 이것으로 맥락을 싣는다."""
+    found: dict[tuple[str, int], set[int]] = {}
+
+    def walk(node: Any) -> None:
+        if not isinstance(node, dict):
+            return
+        if node.get("ind") in _REGIME_INDICATORS:
+            params = indicators.resolve(node["ind"], {k: v for k, v in node.items() if k != "ind"})
+            found.setdefault((params["index"], params["k"]), set()).add(int(params["state"]))
+        for arg in node.get("args", []):
+            walk(arg)
+
+    for tree in (spec.entry, spec.entry_stop, spec.exit):
+        walk(tree)
+    return found
+
+
+def _strip_regime(node: dict | None) -> dict | None:
+    if node is None or not _has_regime(node):
+        return node
+    if node.get("op") == "and":
+        kept = [rest for rest in (_strip_regime(arg) for arg in node["args"]) if rest is not None]
+        if not kept:
+            return None
+        return kept[0] if len(kept) == 1 else {**node, "args": kept}
+    return None                                                  # 국면 조건 그 자체('모두 충족' 사슬의 끝 — 꼴 검사가 보장한다)
+
+
+def without_regime(spec: RuleSpec) -> RuleSpec | None:
+    """국면 조건을 뺀 판(판정의 짝 비교) — 진입 조건의 '모두 충족' 사슬에서 국면 조건을 뺀다. 한 줄만 남은 묶음은 그 줄,
+    아무것도 남지 않으면 진입 조건 없음. 진입 조건도 미리 건 매수 가격도 남지 않으면 `None`(그 판은 지을 수 없다).
+    국면 조건이 없는 규칙은 같은 나무 그대로다. 꼴 검사를 지난 나무에만 쓴다."""
+    entry = _strip_regime(spec.entry)
+    if entry is None and spec.entry_stop is None:
+        return None
+    return RuleSpec(entry=entry, entry_stop=spec.entry_stop, exit=spec.exit)
 
 
 def as_custom(spec: RuleSpec) -> dict:
@@ -300,10 +395,14 @@ def describe() -> list[dict]:
     return out
 
 
-def _param_view(key: str, r: indicators.Range | indicators.Key) -> dict:
-    """지표 매개변수 하나의 문법 — 수는 범위 · 출발값 · 단위, 모형 열쇠는 어느 모형인지(출발값이 없다 — 사용자가 고른다)."""
+def _param_view(key: str, r: indicators.Range | indicators.Key | indicators.Pick) -> dict:
+    """지표 매개변수 하나의 문법 — 수는 범위 · 출발값 · 단위, 모형 열쇠는 어느 모형인지, 고르기는 보기들(출발값이 없다 — 사용자가 고른다).
+    출발값이 `None` 인 수 칸도 사용자가 정한다(국면 수 · 국면 번호)."""
     if isinstance(r, indicators.Key):
         return {"key": key, "label": r.label, "type": "model", "kind": r.kind}
+    if isinstance(r, indicators.Pick):
+        return {"key": key, "label": r.label, "type": "pick", "default": None,
+                "choices": [{"value": value, "label": name} for value, name in r.choices]}
     return {"key": key, "label": r.label, "type": "int" if r.integer else "float", "min": r.low, "max": r.high,
             "default": r.default, "unit": r.unit}
 
@@ -313,6 +412,7 @@ def grammar() -> dict:
     listed = []
     for name, spec in indicators.INDICATORS.items():
         listed.append({"name": name, "label": spec.label, "unit": spec.unit, "needs_prev": spec.needs_prev, "context": spec.context,
+                       "slots": list(spec.slots) if spec.slots is not None else None,
                        "params": [_param_view(key, r) for key, r in spec.params.items()]})
     fields = {"held_before": [{"key": "bars", "label": "직전 봉 수", "type": "int", "min": expr.HELD_BARS[0],
                                "max": expr.HELD_BARS[1], "unit": "봉"}],
@@ -341,8 +441,11 @@ def _number_text(node: dict, top: bool = False) -> str:
     if "ind" in node:
         spec = indicators.INDICATORS[node["ind"]]
         params = indicators.resolve(node["ind"], {k: v for k, v in node.items() if k != "ind"})
+        if spec.text is not None:                                # 지표가 제 글을 가진다 — '코스피 국면 2 확률(국면 3개)'
+            return spec.text(params)
         models = [f"모형 {params[key][:8]}" for key, r in spec.params.items() if isinstance(r, indicators.Key)]
-        shown = ", ".join(f"{_fmt(params[key])}{r.unit}" for key, r in spec.params.items() if not isinstance(r, indicators.Key))
+        shown = ", ".join(f"{_fmt(params[key])}{r.unit}" for key, r in spec.params.items()
+                          if not isinstance(r, (indicators.Key, indicators.Pick)))
         if models:                                               # 모형을 쓰는 지표 — '하루 유형 3번(모형 1a2b3c4d)'
             return f"{spec.label} {shown}({', '.join(models)})"
         return f"{spec.label}({shown})" if shown else spec.label
@@ -402,9 +505,11 @@ def notes_of(spec: RuleSpec) -> list[str]:
     used = set().union(*(_indicators_in(tree) for tree in trees))
     carried = any(indicators.INDICATORS[name].carries for name in used if name in indicators.INDICATORS)
     typed = any(indicators.INDICATORS[name].context == "day_types" for name in used if name in indicators.INDICATORS)
+    regime = bool(used & _REGIME_INDICATORS)
     return [_WARMUP_NOTE, *([_PREV_NOTE] if uses_prev else []), *([_HELD_NOTE] if held else []),
             *([_CARRY_NOTE] if carried else []), *([_DAY_NOTE] if used.intersection(_RUNNING) else []),
-            *([DAY_TYPE_NOTE] if typed else [])]
+            *([DAY_TYPE_NOTE] if typed else []), *([REGIME_NOTE] if regime else []),
+            *([REGIME_STOP_NOTE] if regime and spec.entry_stop is not None else [])]
 
 
 def rule_text(rule: Any) -> dict:

@@ -10865,3 +10865,24 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-rdt-facts { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-ink); word-break: keep-all; }
 .itd-rdt-excluded, .itd-rdt-unknown { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-sub); }
 .itd-rdt-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+
+/* ════ 국면 조건(K3 · 구현 계획 2026-11-16 §7.4) — 편집기의 고르기 칸(.ire-pick) · '국면 조건 추가'(.ire-regime-add) ·
+   규칙이 쓴 시장 국면의 사실 줄(.itd-rctx) · 판정의 짝 비교(.itd-rpair) ════
+   고르기 칸은 편집기의 다른 칸과 같은 높이 · 테두리(.ire-select 그대로). 사실 줄은 하루 유형 줄(.itd-ctx)과 같은 꼴의 다른 묶음 — 사유 줄이 길어
+   낱말 단위로 꺾는다. 짝 비교 표는 판정의 다른 표와 같은 꼴(.tj-table)이고 두 줄을 칠하지 않는다(어느 쪽이 낫다고 말하지 않는다). */
+.ire-pick { min-width: 0; max-width: 100%; }
+.ire-regime-add { align-self: flex-start; }                   /* 자리(세로 flex)의 폭 전체로 늘지 않게 — 다른 '추가' 단추와 같은 꼴 */
+.itd-rctx { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 14px 16px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); min-width: 0; }
+.itd-rctx-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.itd-rctx-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.itd-rctx-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.itd-rctx-item + .itd-rctx-item { padding-top: 10px; border-top: 1px solid var(--tx-line); }
+.itd-rctx-line { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; overflow-wrap: anywhere; }
+.itd-rctx-line:first-child { color: var(--tx-ink); }
+.itd-rpair { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.itd-rpair-table th { white-space: nowrap; }
+.itd-rpair-rule, .itd-rpair-note, .itd-rpair-none { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .itd-rctx { padding: 12px; }
+}

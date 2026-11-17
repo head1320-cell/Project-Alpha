@@ -8,7 +8,7 @@
  * 숫자와 사유 문장은 전부 서버 값이다.
  * 화면(백테스트 › 분봉 규칙)과 캔버스의 '분봉 결과 조회' 판이 같이 쓴다 — 그래서 feature 에 둔다(위젯끼리 서로 참조하지 않는다).
  */
-import type { Brief, GateState, Multiplicity, Validation, Value, WalkForward } from "@/entities/intraday";
+import type { Brief, GateState, Multiplicity, RegimePair, Validation, Value, WalkForward } from "@/entities/intraday";
 import { UNKNOWN_TEXT, num, pct, signedWon } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type ChipTone } from "@/shared/ui/tx";
 import { TrialLine, bp1, originChip } from "./parts";
@@ -65,11 +65,40 @@ export function Verdict({ v, labels }: { v: Validation; labels: Record<string, s
         </ol>
       </Section>
 
+      {v.regime_pair ? <RegimePairSection p={v.regime_pair} /> : null}
       <OutOfSample v={v} />
       <Sensitivity v={v} />
       {v.walk_forward ? <Walk w={v.walk_forward} labels={labels} /> : null}
       <Trials m={v.multiplicity} v={v} />
     </div>
+  );
+}
+
+/**
+ * 국면 조건을 뺀 판과 견줌(K3) — 같은 날 · 같은 포지션 · 같은 비용으로 국면 조건만 뺀 같은 규칙. ★시행으로 세지 않은 견줌이다★ —
+ * 어느 쪽이 낫다고 말하지 않고(칠하지 않는다) 두 줄을 나란히 둔다. 숫자 · 뺀 판의 글 · 한계 문장은 서버 값 그대로.
+ */
+function RegimePairSection({ p }: { p: RegimePair }) {
+  return (
+    <Section title="국면 조건을 뺀 판과 견줌" sub="같은 기간 · 같은 종목 · 같은 비용으로 국면 조건만 뺀 같은 규칙을 한 번 더 돌린 결과입니다.">
+      <div className="itd-rpair" data-known={String(p.known)}>
+        {p.known ? (
+          <>
+            <div className="tj-scroll-x" role="region" aria-label="국면 조건을 넣은 판과 뺀 판" tabIndex={0}>
+              <table className="tj-table itd-rpair-table">
+                <thead><tr><th scope="col">판</th>{BRIEF_HEAD}</tr></thead>
+                <tbody>
+                  <tr data-k="with"><th scope="row">국면 조건을 넣은 판(이 규칙)</th><BriefCells b={p.with} /></tr>
+                  <tr data-k="without"><th scope="row">국면 조건을 뺀 판</th><BriefCells b={p.without} /></tr>
+                </tbody>
+              </table>
+            </div>
+            {p.rule_text ? <p className="tj-note itd-rpair-rule"><span>뺀 판의 규칙: </span><span data-server>{p.rule_text}</span></p> : null}
+          </>
+        ) : <p className="tj-note itd-rpair-none" data-server>{p.reason}</p>}
+        <p className="tj-note itd-rpair-note" data-server>{p.note}</p>
+      </div>
+    </Section>
   );
 }
 

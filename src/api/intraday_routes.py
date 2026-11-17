@@ -126,10 +126,23 @@ REASONS = {
     "unknown_indicator": "모르는 지표입니다.",
     "bad_model_key": "하루 유형 모형을 고르지 않았거나 모형 열쇠의 모양이 맞지 않습니다.",
     "day_type_out_of_range": intraday_context.REASONS["day_type_out_of_range"],
-    "rule_context_missing": "규칙이 쓰는 하루 유형 모형이 계산에 실리지 않았습니다. 서버의 결함이라 계산하지 않았습니다.",
+    "rule_context_missing": "규칙이 쓰는 맥락(하루 유형 모형 · 시장 국면)이 계산에 실리지 않았습니다. 서버의 결함이라 계산하지 않았습니다.",
+    # 기본값이 없는 칸 · 시장 국면 조건(K3)
+    "param_missing": "정하지 않은 매개변수가 있습니다. 모형 · 지수 · 국면 수 · 국면 번호처럼 도구가 정하지 않는 칸은 직접 고릅니다.",
+    "regime_state_out_of_range": "국면 번호가 국면 수보다 큽니다.",
+    "regime_outside_entry": "시장 국면 확률은 진입 조건에서만 쓸 수 있습니다. 청산 조건과 미리 건 매수 가격에는 쓸 수 없습니다.",
+    "regime_not_plain": ("시장 국면 확률은 상수나 다른 시장 국면 확률과 초과 · 이상 · 미만 · 이하로 견주는 조건으로만 씁니다. "
+                         "하루 내내 같은 값이라 돌파는 일어나지 않습니다."),
+    "regime_not_in_and": ("시장 국면 조건은 진입 조건에 ‘모두 충족’으로만 잇습니다. "
+                          "‘하나 이상 충족’ · ‘아님’ · ‘직전 봉 동안 계속’ 안에는 둘 수 없습니다."),
     "unknown_key": "조건에 알 수 없는 항목이 있습니다.",
     "grid_rule_axis_custom": "직접 구성한 규칙에는 규칙 매개변수의 격자를 사용할 수 없습니다. 포지션 설정의 격자만 사용할 수 있습니다.",
 }
+
+#: 판정의 짝 비교(K3) — 국면 조건을 뺀 같은 규칙. 시행으로 세지 않는다(판정의 일부).
+REGIME_PAIR_NOTE = ("국면 조건을 뺀 판은 이 판정 안의 견줌이라 시행으로 세지 않았습니다. 같은 기간 · 같은 종목의 관측이며 "
+                    "국면 조건이 성과를 낫게 한다는 증거가 아닙니다. 이 견줌을 보고 국면 조건을 넣거나 빼서 다시 실행하면 그 실행도 시행으로 기록됩니다.")
+REGIME_PAIR_NO_ENTRY = "진입 조건이 국면 조건뿐이고 미리 건 매수 가격이 없어 국면 조건을 뺀 판을 지을 수 없습니다."
 
 #: 출처 등급 — 시뮬레이터가 매기는 이름(`intraday._origin`): 실제 분봉만이면 E3 · 합성이 섞였으면 E0.
 GRADE_REAL, GRADE_SYNTHETIC = "E3", "E0"
@@ -485,8 +498,8 @@ def _trial_view(made: dict | None, family: dict | None) -> dict:
 @router.post("/simulate")
 def simulate(body: SimulateBody, user=Depends(require_login)) -> dict:
     tickers, spec, params, position, costs = _setting(body)
-    loaded = intraday_context.load(user.username, spec, body.from_)     # 규칙 맥락 — ★봉을 읽기 전에★ 거절할 것을 거절한다
     plan = _plan(body, tickers)
+    loaded = intraday_context.load(user.username, spec, body.from_, end=body.to, dates=plan.dates)   # 규칙 맥락 — ★봉을 읽기 전에★
     session = session_rules()
     master = master_lookup()
     shared = _shared(body, tickers, params, session, intraday_context.facts(loaded, tickers))
@@ -593,13 +606,16 @@ def prepare(body: ValidateBody, username: str) -> Prepared:
 
     문(`validate`)과 캔버스의 '분봉 백테스트 설정' 노드가 같이 쓴다 — 노드가 통과시킨 요청을 실행 단추가 거절하는 일이 없게."""
     tickers, spec, params, position, costs = _setting(body)
-    loaded = intraday_context.load(username, spec, body.from_)          # 규칙 맥락 — 남의 모형 · 학습 날 겹침은 여기서 거절
     base_setting = _trial_setting(body.rule.kind, params, body.position.model_dump(), body.costs.model_dump())
-    cells = _cells(body, base_setting, costs)
+    cells = _cells(body, base_setting, costs)                           # 격자의 거절은 ★아무것도 읽기 전에★(날짜 목록도 읽지 않는다)
     base_ticks, doubled_ticks = costs.slippage_ticks, costs.slippage_ticks * 2
     ticks = sorted({*SENSITIVITY_TICKS, base_ticks, base_ticks + 1})
-    simulations = len({*ticks, doubled_ticks}) + sum(not c["is_base"] for c in cells)
     plan = _plan(body, tickers)
+    # 규칙 맥락 — 남의 모형 · 학습 날 겹침 · 쓸 수 없는 시장 국면은 여기서 거절(국면은 분봉이 적재된 날로 아는 날을 센다)
+    loaded = intraday_context.load(username, spec, body.from_, end=body.to, dates=plan.dates)
+    # 국면 조건을 뺀 판(짝 비교)을 지을 수 있으면 한 번 더 돌린다 — 계산량에 센다(시행으로는 세지 않는다)
+    pair = int(rules.uses_regime(spec) and rules.without_regime(spec) is not None)
+    simulations = len({*ticks, doubled_ticks}) + sum(not c["is_base"] for c in cells) + pair
     ticker_days = len(tickers) * len(plan.dates)
     if ticker_days * simulations > MAX_VALIDATE_WORK:
         raise _refuse("too_much_work", limit=MAX_VALIDATE_WORK, work=ticker_days * simulations, ticker_days=ticker_days,
@@ -630,7 +646,7 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
         shared["request"]["walk_forward"] = {"folds": wf.folds, "rule": {k: list(dict.fromkeys(v)) for k, v in wf.rule.items()},
                                              "position": {k: list(dict.fromkeys(v)) for k, v in wf.position.items()}}
     nothing = {"origin": None, "summary": None, "out_of_sample": None, "slippage": [], "stress": None, "walk_forward": None,
-               "multiplicity": None, "trial": None, "gates": None, "breakeven": None, "assumptions": []}
+               "multiplicity": None, "trial": None, "gates": None, "breakeven": None, "assumptions": [], "regime_pair": None}
     if not plan.dates:
         logger.info("intraday validate: tickers=%s days=0", len(tickers))
         return {**shared, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}, "data": dict(_NO_DATA), **nothing}, None
@@ -660,6 +676,7 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
     doubled_fee = None if fee is None else fee * 2
     stress = {"double": validation.result(at[doubled_ticks]["fills"], commission_bp=doubled_fee, assume=assume, master=master),
               "commission_bp": doubled_fee, "slippage_ticks": doubled_ticks}
+    regime_pair = _regime_pair(spec, summary, days, position, replace(costs, slippage_ticks=base_ticks), session, master)
 
     # ④ 선언한 격자의 칸을 한 번씩 돌린다(기본 설정과 같은 칸은 다시 돌리지 않는다)
     cell_runs = [base if c["is_base"] else intraday.run(days, c["spec"], c["position_rules"], costs, rules=session, master=master)
@@ -719,7 +736,23 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
         "gates": table,
         "breakeven": validation.breakeven_cost(base["journal"]),
         "assumptions": [{"key": key, "label": ASSUMPTIONS[key], "count": count} for key, count in base["assumptions"].items()],
+        "regime_pair": regime_pair,
     }, made
+
+
+def _regime_pair(spec: RuleSpec, summary: dict, days: list, position: PositionRules, costs: CostAssumptions, session: dict,
+                 master) -> dict | None:
+    """판정의 짝 비교(K3) — 같은 날 · 같은 포지션 · 같은 비용(기본 슬리피지)으로 국면 조건을 뺀 판을 한 번 더 돌린 요약.
+    ★시행으로 세지 않는다★(기록 · 다중 비교 · 관문에 넣지 않는다). 국면 조건이 없는 규칙이면 `None`."""
+    if not rules.uses_regime(spec):
+        return None
+    bare = rules.without_regime(spec)
+    if bare is None:
+        return {"known": False, "reason": REGIME_PAIR_NO_ENTRY, "with": summary, "without": None, "rule_text": None,
+                "note": REGIME_PAIR_NOTE}
+    alone = intraday.run(days, bare, position, costs, rules=session, master=master)
+    return {"known": True, "reason": None, "with": summary, "without": validation.brief(alone["journal"]),
+            "rule_text": rules.text_of(bare), "note": REGIME_PAIR_NOTE}
 
 
 # ── 캔버스에서 실행한 결과의 목록 (캔버스 분봉 노드 설계 §7.1) ────────────────────────────────────
@@ -769,8 +802,8 @@ def divergence_report(body: DivergenceBody, user=Depends(require_login)) -> dict
         raise HTTPException(400, {"code": "too_many_rows", "limit": MAX_FILLS, "rows": rows,
                                   "reason": f"체결 줄이 {rows:,}건으로 상한 {MAX_FILLS:,}건을 넘습니다. 기간을 나눠 올려 주십시오(앞부분만 잘라서 계산하지 않습니다)."})
     tickers, spec, params, position, costs = _setting(body)
-    loaded = intraday_context.load(user.username, spec, body.from_)     # 규칙 맥락 — 봉을 읽기 전에
     plan = _plan(body, tickers)
+    loaded = intraday_context.load(user.username, spec, body.from_, end=body.to, dates=plan.dates)   # 규칙 맥락 — 봉을 읽기 전에
     session = session_rules()
     master = master_lookup()
     shared = _shared(body, tickers, params, session, intraday_context.facts(loaded, tickers))

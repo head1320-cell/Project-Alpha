@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import {
-  EMPTY, ago, append, arithmetic, compare, conditional, constant, fromParams, group, heldBefore, indicator, issuesOf, negate, removeAt,
-  setAt, sizeOf, timeWindow, toParams, type Drafts,
+  EMPTY, ago, andWith, append, arithmetic, compare, conditional, constant, fromParams, group, heldBefore, indicator, issuesOf, negate,
+  regimeCondition, regimeIndicator, removeAt, setAt, sizeOf, timeWindow, toParams, usableIn, type Drafts,
 } from "../src/features/intraday-rule-editor/tree";
 import type { Grammar, Tree } from "../src/entities/intraday/types";
 
@@ -182,4 +182,54 @@ test("서버로 보내는 꼴 — 빈 자리는 싣지 않는다 · 서버가 �
   expect(fromParams(fromServer)).toEqual({ entry: fromServer.entry, entry_stop: null, exit: fromServer.exit });
   expect(toParams(fromParams(fromServer))).toEqual(fromServer);
   expect(fromParams({ entry: above(), stop: below() } as Record<string, Tree>)).toEqual(only(above()));               // 모르는 자리는 싣지 않는다
+});
+
+// ── 국면 조건(K3) — 고르기 칸 · 출발값 없는 수 칸 · 쓸 수 있는 자리 · '모두 충족'으로 잇기 ─────────────────────────────
+const REGIME = {
+  name: "regime_prob", label: "시장 국면 확률", unit: "prob", needs_prev: false, context: "regimes", slots: ["entry" as const],
+  params: [
+    { key: "index", label: "지수", type: "pick" as const, default: null,
+      choices: [{ value: "KOSPI", label: "코스피" }, { value: "KOSDAQ", label: "코스닥" }] },
+    { key: "k", label: "국면 수", type: "int" as const, min: 2, max: 4, default: null, unit: "개" },
+    { key: "state", label: "국면 번호", type: "int" as const, min: 1, max: 4, default: null, unit: "번" },
+  ],
+};
+const GR: Grammar = { ...G, indicators: [...G.indicators, REGIME] };
+const regimeOk = (): Tree => ({ op: "gt", args: [{ ind: "regime_prob", index: "KOSPI", k: 3, state: 2 }, { const: 0.6 }] });
+
+test("국면 조건 — 지수 · 국면 수 · 국면 번호 · 연산 · 상수는 비어서 시작한다(도구가 고르지 않는다)", () => {
+  expect(indicator(GR, "regime_prob")).toEqual({ ind: "regime_prob", index: null, k: null, state: null });
+  expect(regimeCondition(GR, "regime_prob")).toEqual({ op: "", args: [{ ind: "regime_prob", index: null, k: null, state: null }, { const: null }] });
+  expect(regimeIndicator(GR)?.name).toBe("regime_prob");
+  expect(regimeIndicator(G)).toBeNull();                                                       // 짝 — 그 지표가 없는 문법 표에는 단추를 내지 않는다
+});
+
+test("국면 조건 — 빈 고르기 칸 · 빈 수 칸은 그 자리가 말하고, 다 고르면 말하지 않는다(짝)", () => {
+  const blank: Tree = { op: "gt", args: [indicator(GR, "regime_prob"), { const: 0.6 }] };
+  expect(issuesOf(only(blank), GR)).toEqual([
+    "진입 조건: 시장 국면 확률 지수를 고르십시오.",
+    "진입 조건: 시장 국면 확률 국면 수는 2~4개 범위로 입력하십시오.",
+    "진입 조건: 시장 국면 확률 국면 번호는 1~4번 범위로 입력하십시오.",
+  ]);
+  const bad: Tree = { op: "gt", args: [{ ind: "regime_prob", index: "KOSPI200", k: 3, state: 2 }, { const: 0.6 }] };
+  expect(issuesOf(only(bad), GR)).toEqual(["진입 조건: 시장 국면 확률 지수를 고르십시오."]);   // 보기에 없는 값도 고른 것이 아니다
+  expect(issuesOf(only(regimeOk()), GR)).toEqual([]);
+});
+
+test("국면 조건 — 지표 목록은 쓸 수 있는 자리에서만(진입 조건) · 다른 지표는 어디서나", () => {
+  expect(usableIn(REGIME, "entry")).toBe(true);
+  expect(usableIn(REGIME, "exit")).toBe(false);
+  expect(usableIn(REGIME, "entry_stop")).toBe(false);
+  expect(G.indicators.every((i) => usableIn(i, "exit") && usableIn(i, "entry_stop"))).toBe(true);   // 짝 — `slots` 가 없으면 어디나
+});
+
+test("국면 조건 — '모두 충족'으로 잇는다: 빈 자리면 그것 · '모두 충족' 뿌리면 그 줄에 · '하나 이상 충족' 뿌리는 그 안이 아니라 함께 묶는다", () => {
+  const r = regimeOk();
+  expect(andWith(null, r)).toEqual(r);
+  expect(andWith(group(above(), below()), r)).toEqual(group(above(), below(), r));
+  const either: Tree = { op: "or", args: [above(), below()] };
+  expect(andWith(either, r)).toEqual(group(either, r));                                       // 틀의 '하나 이상 충족'을 그대로 두고 전체에 건다
+  expect(append(either, r)).toEqual({ op: "or", args: [above(), below(), r] });              // 짝 — 보통의 '조건 추가'는 묶음 안에 더한다
+  expect(andWith(above(), r)).toEqual(group(above(), r));
+  expect(andWith(negate(above()), r)).toEqual(group(negate(above()), r));
 });

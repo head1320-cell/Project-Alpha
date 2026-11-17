@@ -7,17 +7,19 @@
  * 상수 · 연산 · 봉 수 · 시각은 비어서 시작한다. 빈 칸은 그 칸에 표시한다(`aria-invalid`) — 몇 곳인지는 `issuesOf` 가 말한다.
  * 한 줄 = `[수] [연산] [수]`. 줄 앞의 '아님' · '직전 M봉 동안'은 그 줄(또는 묶음)을 감싼다. 감싼 순서가 뜻이다(바깥이 앞에 온다).
  * 화면(백테스트 › 분봉 규칙)과 캔버스의 분봉 설정 노드가 이 부품을 함께 쓴다.
+ * 지표 목록은 그 자리에서 쓸 수 있는 것만 보인다(문법 표의 `slots` — 시장 국면 확률은 진입 조건만 · 지금 놓인 지표는 남긴다).
+ * 진입 조건 자리의 '국면 조건 추가'는 국면 조건을 진입 조건 ★전체★와 '모두 충족'으로 잇는다(뿌리가 '하나 이상 충족'이어도 그 안에 넣지 않는다 — K3).
  */
 import { useState } from "react";
 import type { Grammar, OpNode, Tree } from "@/entities/intraday";
 import { ModelParams } from "./ModelParams";
 import {
-  ARITH, COMPARES, GROUPS, WRAPS, ago, append, arithmetic, compare, conditional, constant, group, heldBefore, indicator, isConst, isInd, isOp,
-  negate, removeAt, setAt, timeWindow, type Draft, type Drafts, type Path,
+  ARITH, COMPARES, GROUPS, WRAPS, ago, andWith, append, arithmetic, compare, conditional, constant, group, heldBefore, indicator, isConst, isInd,
+  isOp, negate, regimeCondition, regimeIndicator, removeAt, setAt, timeWindow, usableIn, type Draft, type Drafts, type Path, type Slot,
 } from "./tree";
 
-/** 자리 하나의 편집 맥락 — 뿌리와 그것을 바꾸는 길. */
-type Ctx = { g: Grammar; root: Draft; put: (next: Draft) => void };
+/** 자리 하나의 편집 맥락 — 자리 · 뿌리와 그것을 바꾸는 길. */
+type Ctx = { g: Grammar; slot: Slot; root: Draft; put: (next: Draft) => void };
 
 const opLabel = (g: Grammar, name: string): string => g.ops.find((o) => o.name === name)?.label ?? name;
 const opSymbol = (g: Grammar, name: string): string => g.ops.find((o) => o.name === name)?.symbol ?? opLabel(g, name);
@@ -71,7 +73,8 @@ function Num({ node, path, ctx, label, optional }: { node: Draft; path: Path; ct
       <select className="ire-select ire-num-kind" aria-label={label} aria-invalid={node === null && !optional} value={kind} onChange={(e) => pick(e.target.value)}>
         <option value="">값 선택</option>
         <optgroup label="지표">
-          {g.indicators.map((i) => <option key={i.name} value={`ind:${i.name}`}>{i.label}</option>)}
+          {g.indicators.filter((i) => usableIn(i, ctx.slot) || (node !== null && isInd(node) && node.ind === i.name))
+            .map((i) => <option key={i.name} value={`ind:${i.name}`}>{i.label}</option>)}
         </optgroup>
         <optgroup label="값과 계산">
           <option value="const">상수</option>
@@ -85,6 +88,19 @@ function Num({ node, path, ctx, label, optional }: { node: Draft; path: Path; ct
       {node && isInd(node) && spec && !spec.params.some((p) => p.type === "model") ? spec.params.map((p) => {
         if (p.type === "model") return null;
         const raw = node[p.key];
+        if (p.type === "pick") {                                  // 고르기 칸(지수 · K3) — 비어서 시작한다(도구가 고르지 않는다)
+          return (
+            <span key={p.key} className="ire-param" data-param={p.key}>
+              {spec.params.length > 1 ? <span className="ire-param-label">{p.label}</span> : null}
+              <select className="ire-select ire-pick" aria-label={`${spec.label} ${p.label}`}
+                      aria-invalid={!p.choices.some((c) => c.value === raw)} value={typeof raw === "string" ? raw : ""}
+                      onChange={(e) => set({ ...node, [p.key]: e.target.value || null })}>
+                <option value="">고르십시오</option>
+                {p.choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </span>
+          );
+        }
         return (
           <span key={p.key} className="ire-param" data-param={p.key}>
             {/* 매개변수가 여럿이면 칸마다 이름을 보인다 — 단위가 같은 칸(MACD 의 봉 셋)을 순서로 짐작하지 않게. 이름은 서버의 문법 표가 준 것이다. */}
@@ -211,8 +227,9 @@ export function RuleEditor({ grammar, value, onChange }: { grammar: Grammar; val
       {grammar.slots.map((slot) => {
         const root = value[slot.key];
         const put = (next: Draft) => onChange({ ...value, [slot.key]: next });
-        const ctx: Ctx = { g: grammar, root, put };
+        const ctx: Ctx = { g: grammar, slot: slot.key, root, put };
         const rootIsGroup = root !== null && isOp(root) && GROUPS.includes(root.op);
+        const regime = slot.key === "entry" ? regimeIndicator(grammar) : null;
         return (
           <section key={slot.key} className="ire-slot" data-slot={slot.key} data-used={root !== null} aria-label={slot.label}>
             <h3 className="ire-slot-title">{slot.label}</h3>
@@ -221,6 +238,11 @@ export function RuleEditor({ grammar, value, onChange }: { grammar: Grammar; val
                 {root === null ? <p className="ire-empty">조건 없음</p> : <Cond node={root} path={[]} ctx={ctx} label={slot.label} />}
                 {/* 뿌리가 묶음이면 묶음의 단추가 줄을 잇는다. 그 밖에는 여기서 더한다 — 조건 하나에 더하면 '모두 충족'으로 묶인다. */}
                 {rootIsGroup ? null : <AddRow label={slot.label} onAdd={(n) => put(append(root, n))} />}
+                {regime ? (
+                  <button type="button" className="ire-add ire-regime-add" data-add="regime"
+                          aria-label={`${slot.label} 전체에 국면 조건 추가(모두 충족으로 잇기)`}
+                          onClick={() => put(andWith(root, regimeCondition(grammar, regime.name)))}>국면 조건 추가</button>
+                ) : null}
               </>
             ) : (
               <div className="ire-line">

@@ -30,12 +30,25 @@ class DayTypeRef:
 
 
 @dataclass(frozen=True, eq=False)
+class RegimeRef:
+    """규칙이 쓰는 시장 국면 하나(K3) — 지수 · 국면 수 · 날짜 → 그날 ★시가 전에 알던★ 소속 확률(국면 번호 순 · 모르면 `None`).
+
+    값은 문 층이 시장 국면 문과 같은 함수(`intraday_market_regime_routes.regime_answer`)로 지어 싣는다 — 전 거래일 종가까지의 값이다.
+    지수에 없는 날은 열쇠가 없다(그날도 모르는 날이다)."""
+
+    index: str
+    k: int
+    probs: Mapping[str, tuple[float, ...] | None]
+
+
+@dataclass(frozen=True, eq=False)
 class RuleContext:
     """규칙 맥락 — 그 규칙의 지표가 세션 밖에서 읽어야 하는 것(읽기 전용). 문 층이 사용자의 것만 골라 싣는다.
 
     ★맥락이 필요한 지표가 맥락 없이 불리면 명시적으로 실패한다★ — 미상으로 두면 그 조건을 쓴 규칙이 조용히 거래 0 이 된다."""
 
     day_types: Mapping[str, DayTypeRef] = field(default_factory=dict)      # 모형 열쇠 → 모형
+    regimes: Mapping[tuple[str, int], RegimeRef] = field(default_factory=dict)   # (지수, 국면 수) → 날짜별 확률
 
 
 @dataclass(frozen=True)

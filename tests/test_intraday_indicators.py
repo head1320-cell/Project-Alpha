@@ -16,7 +16,7 @@ import pytest
 
 from src.engine.intraday import day_types as dt
 from src.engine.intraday import indicators as ind
-from src.engine.intraday.types import DayTypeRef, PrevDay, RuleContext, Session
+from src.engine.intraday.types import DayTypeRef, PrevDay, RegimeRef, RuleContext, Session
 
 
 def session(rows, prev=None, ticker="005930", date="2026-03-04") -> Session:
@@ -267,9 +267,18 @@ MODEL_K = 4
 
 
 def _context_for(name: str, seed: int) -> tuple[RuleContext | None, dict]:
-    """그 지표가 맥락을 읽으면 (맥락, 모형 열쇠 매개변수), 아니면 (None, {})."""
-    if ind.INDICATORS[name].context is None:
+    """그 지표가 맥락을 읽으면 (맥락, 기본값이 없는 매개변수), 아니면 (None, {}).
+
+    하루 유형 = 모형 열쇠 · 시장 국면(K3) = 지수 · 국면 수 · 번호 — 국면 수 2 ~ 4 마다 그 하루의 확률(무작위 · 합 1)을 싣는다."""
+    kind = ind.INDICATORS[name].context
+    if kind is None:
         return None, {}
+    if kind == "regimes":
+        rng = np.random.default_rng(200 + seed)
+        date = _random_session(seed).date
+        refs = {("KOSPI", k): RegimeRef(index="KOSPI", k=k, probs={date: tuple(float(x) for x in rng.dirichlet(np.ones(k)))})
+                for k in (2, 3, 4)}
+        return RuleContext(regimes=refs), {"index": "KOSPI", "k": 3, "state": 2}
     centroids = dt.order_centroids(np.random.default_rng(100 + seed).normal(0, 30, size=(MODEL_K, 10)))
     return RuleContext(day_types={MODEL: DayTypeRef(centroids=centroids, minutes=10, k=MODEL_K)}), {"model": MODEL}
 

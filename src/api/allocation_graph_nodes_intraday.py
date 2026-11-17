@@ -179,6 +179,22 @@ def _body(inputs: dict, p: Any) -> tuple[routes.ValidateBody, str, int]:
     return body, ("universe" if linked is not None else "typed"), (len(typed) if linked is not None else 0)
 
 
+#: 맥락의 종류(사실 줄의 `kind` — 옛 결과의 줄에는 없다 = 하루 유형) → 설정 노드가 검사했다고 말하는 문장.
+CONTEXT_TRUST = {
+    "day_type": "하루 유형 모형이 본인의 것이고 학습이 판정 시작일 전에 끝났는지 검사했습니다.",
+    "regime": "시장 국면 확률이 그날 시가 전에 알던 값(전 거래일 종가까지)인지와 분봉이 적재된 날 가운데 확률을 아는 날이 있는지 검사했습니다.",
+}
+
+
+def _context_kinds(view: dict) -> list[str]:
+    seen: list[str] = []
+    for fact in view.get("context") or []:
+        kind = fact.get("kind") or "day_type"
+        if kind in CONTEXT_TRUST and kind not in seen:
+            seen.append(kind)
+    return seen
+
+
 def _setup(inputs: dict, p: Any, actor: Any) -> pg.NodeOutput:
     user = graph_actor.require(actor, _WHO)
     body, source, ignored = _body(inputs, p)
@@ -226,15 +242,15 @@ def _explain_setup(view: dict, prov: dict, params: Any) -> dict:
     custom = view.get("rule_kind") == rules.CUSTOM
     if custom:                                                   # 이름표('직접 구성')는 조건을 말하지 않는다 — 글로 적는다
         facts.append(f"직접 구성한 조건 — {view.get('rule_text') or view.get('rule_text_reason')}")
-    for fact in view.get("context") or []:                       # 규칙이 쓴 하루 유형 모형(T2) — 서버 문장 그대로
+    for fact in view.get("context") or []:                       # 규칙이 쓴 하루 유형 모형(T2) · 시장 국면(K3) — 서버 문장 그대로
         facts.extend(fact.get("sentences") or [])
     trust = [_t(CONFIRMED, "판정 문과 같은 규칙으로 요청과 계산량을 검사했습니다."),
              _t(ASSUMED, "종목은 지금 정한 묶음입니다 — 과거 구간에서는 사후 선택입니다."),
              _t(ASSUMED, "실행은 계산하지 않고 ‘분봉 백테스트 실행’을 눌러야 시작하며, 실행마다 시행으로 기록됩니다.")]
     if custom:
         trust.append(_t(ASSUMED, "조건은 사용자가 직접 구성했습니다 — 도구는 조건을 추천하지 않습니다. 조건을 고쳐 실행할 때마다 시행 횟수가 늘어납니다."))
-    if view.get("context"):
-        trust.append(_t(CONFIRMED, "하루 유형 모형이 본인의 것이고 학습이 판정 시작일 전에 끝났는지 검사했습니다."))
+    for kind in _context_kinds(view):                            # 맥락의 종류마다 그 검사를 말한다(국면만 쓴 규칙에 모형 검사를 말하지 않는다)
+        trust.append(_t(CONFIRMED, CONTEXT_TRUST[kind]))
     if view.get("mock"):
         trust.append(_t(ASSUMED, "모의 모드입니다 — 적재된 분봉이 합성일 수 있으며 출처는 실행할 때 정해집니다."))
     return {"title": f"‘{view.get('rule_label')}’ 분봉 백테스트 실행 준비를 마쳤습니다", "facts": facts, "trust": trust,
@@ -282,6 +298,13 @@ def _explain_load(view: dict, prov: dict, params: Any) -> dict:
              f"실행 {when} · 같은 설정 실행 {view.get('runs')}회 — 시행 횟수는 그때의 값입니다"]
     for fact in view.get("context") or []:
         facts.extend(fact.get("sentences") or [])
+    pair = view.get("regime_pair") or {}
+    if pair.get("known") and isinstance(pair.get("without"), dict):   # 판정의 짝 비교(K3) — 시행으로 세지 않은 견줌
+        bare, bare_net = pair["without"], pair["without"].get("net_total")
+        facts.append(f"국면 조건을 뺀 같은 규칙: 거래 {bare.get('trades')}건 · 비용 후 실현손익 "
+                     f"{'미상' if bare_net is None else _won(float(bare_net))}(시행으로 세지 않았습니다)")
+    elif pair:
+        facts.append(f"국면 조건을 뺀 판: {pair.get('reason')}")
     if net is None:
         facts.insert(0, "비용 후 실현손익은 미상입니다 — 수수료율을 지정하지 않았거나 매도세를 산출하지 못했습니다.")
     trust = [_t(CONFIRMED, "실행할 때 남긴 요약을 그대로 읽었습니다 — 다시 계산하지 않았습니다.")]

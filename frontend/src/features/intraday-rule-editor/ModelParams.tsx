@@ -46,7 +46,7 @@ export function ModelParams({ spec, node, set }: { spec: GrammarIndicator; node:
           {(models ?? []).map((m) => <option key={m.key} value={m.key}>{modelLabel(m)}</option>)}
         </select>
       </span>
-      {spec.params.map((p) => (p.type === "model" ? null : (
+      {spec.params.map((p) => (p.type !== "int" && p.type !== "float" ? null : (
         <span key={p.key} className="ire-param" data-param={p.key}>
           <span className="ire-param-label">{p.label}</span>
           <NumberInput label={`${spec.label} ${p.label}`} min={p.min} max={known ? Math.min(p.max, known.k) : p.max}
