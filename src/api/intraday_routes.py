@@ -358,18 +358,24 @@ def templates(_user=Depends(require_login)) -> dict:
     }
 
 
-def _setting(body: SimulateBody) -> tuple[list[str], RuleSpec, dict, PositionRules, CostAssumptions]:
-    """받은 설정을 엔진의 값으로 — 어긋나면 엔진의 사유 그대로 거절한다. ★파일을 읽기 전에★ 끝낸다."""
-    tickers = list(dict.fromkeys(t.strip() for t in body.tickers if t.strip()))
+def checked_scope(raw_tickers: list[str], start: date, end: date) -> list[str]:
+    """종목과 기간의 상한 — ★파일을 읽기 전에★ 본다(중복을 뺀 종목을 돌려준다). 하루 유형의 학습 문도 같은 상한을 쓴다."""
+    tickers = list(dict.fromkeys(t.strip() for t in raw_tickers if t.strip()))
     if not tickers:
         raise _refuse("no_tickers")
     if len(tickers) > MAX_DETAIL_TICKERS:
         raise _refuse("too_many_tickers", limit=MAX_DETAIL_TICKERS, tickers=len(tickers))
-    if body.from_ > body.to:
+    if start > end:
         raise _refuse("bad_range")
-    span = (body.to - body.from_).days + 1
+    span = (end - start).days + 1
     if span > MAX_RANGE_DAYS:
         raise _refuse("range_too_long", limit=MAX_RANGE_DAYS, days=span)
+    return tickers
+
+
+def _setting(body: SimulateBody) -> tuple[list[str], RuleSpec, dict, PositionRules, CostAssumptions]:
+    """받은 설정을 엔진의 값으로 — 어긋나면 엔진의 사유 그대로 거절한다. ★파일을 읽기 전에★ 끝낸다."""
+    tickers = checked_scope(body.tickers, body.from_, body.to)
     position = PositionRules(**body.position.model_dump())
     costs = CostAssumptions(**body.costs.model_dump())
     try:
@@ -400,8 +406,12 @@ def expand_rule(body: ExpandBody, _user=Depends(require_login)) -> dict:
 
 
 def _plan(body: SimulateBody, tickers: list[str]) -> minute_feed.Plan:
-    """읽을 날과 크기 — ★읽기 전에★ 상한을 본다."""
-    plan = minute_feed.plan(body.from_, body.to)
+    return planned(body.from_, body.to, tickers)
+
+
+def planned(start: date, end: date, tickers: list[str]) -> minute_feed.Plan:
+    """읽을 날과 크기 — ★읽기 전에★ 상한을 본다. 하루 유형의 학습 문도 같은 상한을 쓴다."""
+    plan = minute_feed.plan(start, end)
     if len(tickers) * len(plan.dates) > MAX_TICKER_DAYS:
         raise _refuse("too_many_ticker_days", limit=MAX_TICKER_DAYS, ticker_days=len(tickers) * len(plan.dates),
                       tickers=len(tickers), days=len(plan.dates))

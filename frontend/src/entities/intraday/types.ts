@@ -220,3 +220,36 @@ export type Validation = Shared & {
   multiplicity: Multiplicity | null;
   gates: GateTable | null;
 };
+
+// ── 하루 유형 모형(T1 · 2026-11-16) — 장 시작 구간의 경로를 e-means 로 묶은 것. 서버 `intraday_day_type_routes` 의 답 그대로 ──
+/** 유형 하나 — 번호는 구간 마지막 분의 값(bp)이 낮은 것부터. 흩어짐은 날이 없으면 `null`(미상). */
+export type DayType = { type: number; samples: number; share: number; path: number[]; end: number; low: number; high: number; spread: number | null };
+/** 같은 자료의 Lloyd 손실과 e-means 손실 — 보이는 글자와 문장은 서버가 짓는다(다시 반올림하지 않는다). */
+export type DayTypeLoss = { emeans: number; lloyd: number; lloyd_starts: number; shown: { emeans: string; lloyd: string }; note: string };
+/** 난수 시드 다섯의 배정 일치도(조정 랜드 지수) — 첫 시드가 모형, 나머지 넷과 견준다. */
+export type DayTypeAgreement = { seeds: number[]; ari: number[]; shown: string[]; min: number; mean: number; same: boolean; note: string };
+export type DayTypeExcluded = { total: number; by_reason: Record<string, number>; messages: Record<string, string | null>; rows: Skipped[] };
+export type DayTypeSummary = {
+  key: string; created_at: number | null; method: string; version: number; seed: number; minutes: number; k: number;
+  grade: string; tickers: string[]; first_day: string; last_day: string; samples: number; synthetic: boolean;
+};
+export type DayTypeModel = DayTypeSummary & {
+  grade_reason: string | null;
+  request: { tickers: string[]; from: string; to: string; minutes: number; k: number };
+  types: DayType[]; loss: DayTypeLoss; agreement: DayTypeAgreement;
+  members: { date: string; ticker: string; type: number; start: string }[];
+  days: string[]; starts: { start: string; samples: number }[]; excluded: DayTypeExcluded;
+};
+export type DayTypeLimits = {
+  tickers: number; ticker_days: number; range_days: number; bytes: number; minutes: [number, number]; k: [number, number]; min_samples_per_type: number;
+};
+export type DayTypeAnswer = {
+  model: DayTypeModel; created: boolean; stored: boolean; store_reason: string | null; notes: string[]; gate: { mock: boolean }; limits: DayTypeLimits;
+};
+export type DayTypeList = {
+  available: boolean; reason: string | null; models: DayTypeSummary[]; hidden_synthetic: number | null; hidden_reason: string | null;
+  gate: { mock: boolean }; limits: DayTypeLimits;
+};
+export type DayTypeRequest = { tickers: string[]; from: string; to: string; minutes: number; k: number };
+/** 학습 거절의 세부 — 날이 모자라면 몇 날이 있었고 몇 날이 필요했는지 · 표본을 뺀 사유(서버 값 그대로). */
+export type DayTypeRefusal = { code: string; reason: string; samples?: number; needed?: number; k?: number; excluded?: DayTypeExcluded };

@@ -80,6 +80,8 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.trade_journal_routes",
     # 분봉 백테스트(W4) — 적재 범위 보고부터(로그인 · 파일만 읽는다).
     "src.api.intraday_routes",
+    # 하루 유형 모형(T1) — 장 시작 N분의 경로로 학습 · 내 모형(로그인 · 분봉 파일만 읽는다 · 주문 경로 없음).
+    "src.api.intraday_day_type_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —

@@ -20,6 +20,8 @@ pandas==3.1.1
 numpy==2.5.4
 scipy==1.18.1
 scikit-learn==1.9.1
+# e-means(하루 유형 모형 · 2026-11-16 결정 D2) — 메타 FAIR 의 기준 구현(MIT). 학습할 때만 들인다.
+faiss-cpu==1.16.0
 
 # ─── 정량 모델 (VaR / GARCH / 파생) ───
 arch>=6.0.0

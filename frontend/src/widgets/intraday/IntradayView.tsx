@@ -19,6 +19,7 @@ import { Verdict } from "@/features/intraday-verdict";
 import { BACKTEST_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
 import { ModeSwitch, Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
+import { DayTypeSection } from "./DayTypeSection";
 import { build, buildGrid, initialForm, parseTickers, recentPeriod, templateOf, type Form } from "./form";
 import { IntradayResult, type Sim } from "./IntradayResult";
 import type { Move } from "./RuleSection";
@@ -183,6 +184,9 @@ function Workbench() {
         </Section>
       ) : null}
       {check.kind === "done" ? <Verdict v={check.value} labels={labels} /> : null}
+
+      {/* 하루 유형(T1) — 규칙 실행 · 판정과 따로 돈다(학습은 시행이 아니다). 처음 값만 규칙 설정에서 받는다. */}
+      <DayTypeSection tickers={form.tickers} from={form.from} to={form.to} />
     </>
   );
 }

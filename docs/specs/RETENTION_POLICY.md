@@ -104,7 +104,7 @@
 `investment_decision_legs` · `target_portfolio_versions` · `execution_plans` ·
 `company_snapshots` · `regime_snapshots` · `scenario_packs` ·
 `scenario_pack_versions` · `timing_rule_sets` · `timing_rule_set_versions` ·
-`risk_snapshots` · `model_monitor_runs` · `intraday_trials` ·
+`risk_snapshots` · `model_monitor_runs` · `intraday_trials` · `intraday_day_types` ·
 `rule_arm_requests` · `rule_runs` · `rule_run_fills`
 
 재생성은 되지만 ★그때의 입력으로는 안 된다★ — 빈티지가 그 사이 늘었고 매크로는
@@ -119,6 +119,9 @@
 
 규칙 가동의 기록 셋(`rule_arm_requests` · `rule_runs` · `rule_run_fills` — `src/data/rule_runs.py`)에도 지우는 경로가 없다.
 가동 번호가 주문 줄과 감사 줄을 가동에 잇기 때문이다. `rule_run_fills` 는 ★가상 체결★이다 — 증권사가 알려 준 체결(`live_fills`)이 아니다.
+
+하루 유형 모형(`intraday_day_types` — `src/data/intraday_day_types.py` · 2026-11-16)에도 지우는 경로가 없다. 분봉 규칙이 열쇠로 모형을 조건에 쓰므로(T2)
+지우면 지난 시행이 무엇을 조건으로 썼는지, 그 모형을 어느 날로 학습했는지를 설명할 수 없다.
 
 ### 크기 기준 정리의 후보 — ★수치는 아직 미상★
 

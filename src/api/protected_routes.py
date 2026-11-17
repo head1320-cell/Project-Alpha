@@ -124,6 +124,13 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "괴리 보고 — 올린 체결을 같은 규칙의 분봉 백테스트와 견준다. 체결 내역을 받고 시행 기록을 쓴다(체결은 저장하지 않는다)"),
     ("GET", "/api/v1/intraday/results"):
         (REQUIRE_LOGIN, "캔버스에서 실행한 분봉 백테스트 결과의 목록 — 본인 것만. 무엇을 시험했는지가 드러난다"),
+    # ── 하루 유형 모형(T1) — 본인 것만 · 지우는 경로 없음. 무엇을 학습했는지(종목 · 기간)가 드러난다 ──
+    ("POST", "/api/v1/intraday/day-types"):
+        (REQUIRE_LOGIN, "하루 유형 모형 학습 — 고른 종목 · 기간의 분봉을 읽어 사용자별로 남긴다(같은 입력은 같은 모형)"),
+    ("GET", "/api/v1/intraday/day-types"):
+        (REQUIRE_LOGIN, "내 하루 유형 모형의 목록 — 본인 것만. 운영에서는 합성 분봉으로 학습한 모형을 빼고 그 수를 알린다"),
+    ("GET", "/api/v1/intraday/day-types/{key}"):
+        (REQUIRE_LOGIN, "내 하루 유형 모형 하나 — 본인 것만(남의 것은 없는 것과 같은 404). 중심 경로 · 학습한 날을 싣는다"),
     ("GET", "/api/v1/intraday/arm-requests"):
         (REQUIRE_LOGIN, "내가 남긴 가동 요청의 목록 — 본인 것만. 요청은 가동이 아니다(읽기만)"),
     ("DELETE", "/api/v1/intraday/arm-requests/{request_id}"):
