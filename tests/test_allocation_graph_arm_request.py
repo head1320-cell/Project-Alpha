@@ -69,7 +69,10 @@ def test_the_result_node_hands_its_run_only_to_the_request_node():
     assert [(p.name, p.type, p.required) for p in arm.inputs] == [("run", "IntradayRun", True)] and arm.outputs == ()
     takers = sorted(c["type"] for c in REGISTRY.catalog() if any(p["type"] == "IntradayRun" for p in c["inputs"]))
     givers = sorted(c["type"] for c in REGISTRY.catalog() if any(p["type"] == "IntradayRun" for p in c["outputs"]))
-    assert takers == [ARM] and givers == ["intraday_load"]        # 비교 · 순위 · 비중 노드는 이 종류를 받지 않는다
+    # 비교 · 순위 · 비중 노드는 이 종류를 받지 않는다. 받는 것은 가동 요청과 매매 몫 결합(K4 — 받은 결정: 위성 입력)뿐이고
+    # ★둘 다 출력이 없다★ — 분봉 결과가 그 너머(비교 · 순위 · 비중 · 주문)로 가는 길이 구조에 없다.
+    assert takers == ["core_satellite_mix", ARM] and givers == ["intraday_load"]
+    assert all(REGISTRY.get(t).outputs == () for t in takers)
     assert REGISTRY.get("intraday_setup").outputs == ()
     assert "IntradayRun" in gn.PORT_TYPES and gn.PORT_PLAIN["IntradayRun"]
 

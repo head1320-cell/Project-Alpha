@@ -7,6 +7,8 @@
       09:02  시 10,070  고 10,100  저 10,060  종 10,090
       09:03  시 10,090  고 10,120  저 10,080  종 10,110
     출처 열은 `kis` 로 적는다 — 화면의 '실제 분봉' 경로(알림 없음 · 데이터 무결성 통과)를 보기 위한 것이고, 제공자에게서 받은 값이 아니다.
+  · 앞선 닷새(2026-02-23 ~ 02-27 · 035720 · 같은 봉 넷) — 손 계산 열흘의 앞에 붙여 ★두 달에 걸친★ 시행(02-23 ~ 03-06)을 만든다
+    (매매 몫 결합 · K4 — 몫을 정하는 날이 둘). 다른 스펙은 03-02 부터의 기간만 읽어 이 날들을 보지 않는다.
   · 합성 12일(2026-04-01 ~ 04-16 · 005930 · 000660) — 모의 게이트의 수집기가 만든다(출처 열 `synthetic`).
     화면의 '합성 분봉' 알림과 데이터 무결성 미달을 보기 위한 것이다.
 
@@ -43,7 +45,8 @@ def weekdays(start: date, n: int) -> list[str]:
 
 
 hand, synthetic = weekdays(date(2026, 3, 2), 10), weekdays(date(2026, 4, 1), 12)
-for day in hand:
+before = weekdays(date(2026, 2, 23), 5)
+for day in before + hand:
     mb._write_day_file(pd.DataFrame([("035720", *row, "kis") for row in WIN], columns=COLS), day)
 for day in synthetic:
     mb.collect_day(["005930", "000660"], day)

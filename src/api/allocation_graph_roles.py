@@ -66,6 +66,8 @@ ROLES: dict[tuple[str, str], str] = {
     ("backtest_attribution", "run"): "수익을 매크로 흐름별로 나눠 볼 백테스트 실행입니다.",
     ("backtest_compare", "a"): "비교할 첫째 백테스트 실행입니다.",
     ("backtest_compare", "b"): "비교할 둘째 백테스트 실행입니다.",
+    ("core_satellite_mix", "core"): "핵심입니다. 이 백테스트의 비용 후 곡선을 날마다의 수익으로 씁니다.",
+    ("core_satellite_mix", "run"): "위성입니다. 이 분봉 백테스트가 남긴 비용 후 일별 손익을 매매 몫 자본으로 나눠 씁니다.",
     ("var_es", "returns"): "드문 날의 손실을 재는 과거 수익률입니다.",
     ("mc_var", "returns"): "모의 경로를 만드는 변동성을 재는 데 씁니다.",
     ("vol_models", "returns"): "지금의 변동성과 앞으로의 흐름을 추정하는 데 씁니다.",
@@ -108,7 +110,9 @@ GIVES: dict[tuple[str, str], tuple[pg.Gives, ...]] = {
 #: 과거를 시뮬레이션하거나 그 기록을 읽는 노드. ★새로 생기면 사람이 판단해 더한다★(트립와이어가 목록을 고정).
 HISTORY = ("backtest", "strategy_backtest", "backtest_setup", "backtest_load", "backtest_compare",
            "backtest_attribution", "timing_simulation", "counterfactual", "record_robustness",
-           "intraday_setup", "intraday_load")
+           "intraday_setup", "intraday_load",
+           # K4 — 두 백테스트의 기록을 읽어 합친 과거를 시뮬레이션한다(2026-11-17 · 사람이 판단해 더함).
+           "core_satellite_mix")
 
 
 def register(registry: pg.Registry) -> None:

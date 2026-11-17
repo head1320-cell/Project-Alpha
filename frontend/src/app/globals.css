@@ -10886,3 +10886,27 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 @media (max-width: 640px) {
   .itd-rctx { padding: 12px; }
 }
+
+/* ════ 매매 몫 결합(K4 · 구현 계획 2026-11-16 §7.5) — 캔버스 결과 판(.pg-csm) ════
+   두 판 표(.pg-csm-panels)와 몫의 길 표(.pg-csm-months)는 캔버스의 다른 표(.pg-table)와 같은 꼴이고 어느 줄도 칠하지 않는다(이긴 쪽이 없다).
+   판이 좁아(300px) 표는 넘김 상자(.tj-scroll-x) 안에서만 가로로 넘친다. 서버 한계 문장(.pg-csm-notes)은 낱말 단위로 꺾는다. */
+.pg-csm { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pg-csm-scroll { min-width: 0; max-width: 100%; }
+.pg-csm-panels th, .pg-csm-months th { white-space: nowrap; text-align: left; font-weight: 600; }
+.pg-csm-panels td, .pg-csm-months td { white-space: nowrap; }
+.pg-csm-fixed, .pg-csm-none { word-break: keep-all; overflow-wrap: anywhere; }
+.pg-csm-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 12.5px; line-height: 1.55; color: var(--pg-mute); word-break: keep-all; overflow-wrap: anywhere; }
+.pg-csm-notes li + li { margin-top: 2px; }
+/* 머리 줄 — 긴 값(기간 · 자본 · 비용 가정)이 이름 칸을 한 글자 폭으로 누르지 않게(300px 판에서 '기/간'으로 쪼개졌다 · E2E 에서 찾음).
+   공용 .pg-kv 는 다른 판들이 쓰므로 이 판 안에서만. 값은 낱말 단위로 꺾는다. */
+.pg-csm .pg-kv dt { flex-shrink: 0; white-space: nowrap; }
+.pg-csm .pg-kv dd { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; }
+/* 낙폭 구간 표 둘(A · B)은 위아래로 — 공용 규칙은 화면 폭 900px 이상에서 나란히 두는데, 캔버스 판은 화면이 넓어도 300px 안팎이라
+   칸마다 절반 폭에서 넘기게 된다. */
+.pg-csm .pf-cmp-eps { grid-template-columns: 1fr; }
+/* 몫의 길 표(여섯 칸)는 300px 판보다 넓어 남는 폭이 없고, 공용 .pg-table 의 칸 여백은 좌우 0 이라 칸 글자가 서로 붙었다("29.8%24.04%" ·
+   스크린샷 검수에서 찾음 · 잰 간격 0px). 칸 사이 6px — 기본 판(392px)에서는 표 폭 346px 로 상자(350px) 안에 든다(잰 값 · 10px 이면 넘긴다).
+   두 판 표는 300px 판에서 남는 폭이 3px 뿐이라 여백을 주면 오히려 넘긴다 — 그대로 둔다. */
+.pg-csm-months tr > * + * { padding-left: 6px; }
+/* 이 판의 설명 줄(.pg-note)도 낱말 단위로 꺾는다 — 300px 판에서 "…대비입니 / 다." · "1 / 로" 로 꺾였다(스크린샷 검수에서 찾음). */
+.pg-csm .pg-note { word-break: keep-all; overflow-wrap: anywhere; }

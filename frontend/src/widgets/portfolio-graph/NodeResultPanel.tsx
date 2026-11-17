@@ -27,6 +27,7 @@ import {
   BacktestAttributionResult, BacktestCompareResult, BacktestLoadResult, BacktestSetupResult, RunProgress,
 } from "./BacktestResults";
 import { IntradayArmResult, IntradayLoadResult, IntradaySetupResult } from "./IntradayResults";
+import { CoreSatelliteResult } from "./CoreSatelliteResults";
 import {
   ConsensusResult, CoverageResult, LongRunResult, MacroDashboardResult, SkillResult, StudioResult, YieldCurveResult,
 } from "./MacroW2Results";
@@ -402,7 +403,8 @@ function Generic({ v }: { v: Dict }) {
   return <pre className="pg-raw">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate", "backtest_load", "counterfactual", "backtest"]);
+const OWN_PERF_LABEL = new Set(["scenario_stress", "strategy_backtest", "alpha_validate", "backtest_load", "counterfactual", "backtest",
+  "core_satellite_mix"]);                                       // K4 — 결과 판이 두 판 위에 직접 그린다(여기서 또 그리면 두 번)
 
 /** 노드 종류 → 결과 그림. 없는 종류는 원자료 JSON(Generic) — 지어낸 요약을 그리지 않는다. */
 const RENDERERS: Record<string, (p: { v: Dict; prov: Dict; explain?: NodeExplain | null }) => ReactNode> = {
@@ -452,6 +454,7 @@ const RENDERERS: Record<string, (p: { v: Dict; prov: Dict; explain?: NodeExplain
   intraday_setup: ({ v }) => <IntradaySetupResult v={v} />,
   intraday_load: ({ v }) => <IntradayLoadResult v={v} />,
   intraday_arm_request: ({ v }) => <IntradayArmResult v={v} />,
+  core_satellite_mix: ({ v }) => <CoreSatelliteResult v={v} />,
   yield_curve: ({ v }) => <YieldCurveResult v={v} />,
   macro_dashboard: ({ v }) => <MacroDashboardResult v={v} />,
   regime_consensus: ({ v }) => <ConsensusResult v={v} />,

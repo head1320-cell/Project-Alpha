@@ -14,7 +14,8 @@ from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field, StrictBool, ValidationError, field_validator
 
 from src.api import allocation_graph_routes as graph_routes
-from src.api.allocation_graph_nodes_intraday import NOT_OFFERED
+from src.api.allocation_graph_nodes_core_satellite import NOT_OFFERED as MIX_NOT_OFFERED
+from src.api.allocation_graph_nodes_intraday import NOT_OFFERED as INTRADAY_NOT_OFFERED
 from src.api.auth import derived_key, require_login
 from src.data import stock_master
 from src.domain import fact_seal
@@ -32,9 +33,12 @@ MAX_PREV_ANSWER = 1200
 
 router = APIRouter(prefix="/api/v1/assist/canvas", tags=["canvas-assist"])
 
+#: AI 가 새로 붙이자고 하지 않는 종류 — 분봉 백테스트(규칙 · 종목) · 매매 몫 결합(국면별 몫 · 자본). 도구는 그것을 고르지 않는다.
+NOT_OFFERED = INTRADAY_NOT_OFFERED + MIX_NOT_OFFERED
+
 
 def offered_kinds() -> dict[str, dict]:
-    """AI 가 ★새로 붙이자고 할 수 있는★ 종류 표 — 도구가 규칙·종목을 추천하지 않는 노드(분봉 백테스트)는 뺀다.
+    """AI 가 ★새로 붙이자고 할 수 있는★ 종류 표 — 도구가 규칙·종목 · 국면별 몫을 추천하지 않는 노드(분봉 백테스트 · 매매 몫 결합)는 뺀다.
     설명 · 묻기 · 길잡이는 온전한 표(`_kinds`)를 쓴다 — 이미 놓인 노드를 설명하는 일은 추천이 아니다."""
     return {t: k for t, k in graph_routes._kinds().items() if t not in NOT_OFFERED}
 
