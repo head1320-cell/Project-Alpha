@@ -65,8 +65,32 @@ test.describe("라이트 계산 스타일 골든(BS5)", () => {
           await r.fulfill({ response: res, json: body });
         });
       }
+      // /macro 의 추천 도넛(`circle.tx-donut-arc`)은 추천 1위 전략의 보유 줄 수만큼 범주 색(--mc-c-1 부터 칸 순서대로)을 쓴다. 1위는 같은
+      // 가격 창의 12개월 수익으로도 정해져 날짜가 바뀌면 달라진다 — 잰 값(백엔드 날짜만 faketime 으로 바꿈): 2026-11-10 ~ 11-16 은 vaa 두 줄 ·
+      // 11-17 은 kelly 다섯 줄 · 11-18 은 여섯 줄. 골든은 두 줄인 날에 떴으므로 줄이 늘면 골든에 없던 범주 색이 '라이트가 바뀌었다'로 잘못
+      // 읽혔다(CI 11-17). 그래서 보유 줄을 앞의 둘까지만 남긴다(값을 지어내지 않고 줄만 던다). 그리고 도넛이 그 수만큼 그려진 것을 확인한 뒤에
+      // 잰다 — 고정이 먹었는지(가로챈 경로가 맞는지) 보고, 추천은 이 화면의 코어 자료라(`app/macro/page.tsx` 의 loading) 응답이 늦으면
+      // 화면 전체가 '조회 중'인 채로 재어 실패하던 것을 기다린다(잰 값: 응답을 12초 늦추면 이 확인이 있는 판은 통과 · 뺀 판은 실패).
+      const pinDonut = route === "/macro";
+      let donutN = -1;
+      if (pinDonut) {
+        await page.route("**/api/v1/macro/recommend**", async (r) => {
+          const res = await r.fetch();
+          const body = await res.json();
+          const hs = body?.top?.holdings_final;
+          if (Array.isArray(hs)) {
+            body.top.holdings_final = hs.slice(0, 2);
+            donutN = body.top.holdings_final.length;
+          }
+          await r.fulfill({ response: res, json: body });
+        });
+      }
       await openModule(page, route);
       if (pinUp) await expect(page.locator(".ci-chg").first(), "가격 고정이 먹지 않았다").toHaveAttribute("data-dir", "up");
+      if (pinDonut) {
+        await expect.poll(() => donutN, { message: "추천 응답이 오지 않았다 — 도넛을 비교할 수 없다", timeout: 20_000 }).toBeGreaterThan(0);
+        await expect(page.locator(".terminal-main circle.tx-donut-arc"), "추천 도넛 고정이 먹지 않았다").toHaveCount(donutN);
+      }
       const got = await styleSet(page);
       expect(Object.keys(got).length, "잰 요소 종류가 너무 적다").toBeGreaterThan(10);
       if (process.env.UPDATE_LIGHT_GOLDEN === "1") {
