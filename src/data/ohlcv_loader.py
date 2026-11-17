@@ -467,6 +467,76 @@ def load_ohlcv_unified(ticker: str, start_date: str, end_date: str,
     return empty
 
 
+#: 지수 일봉의 종목 코드 — KRX 적재(`krx_ingest.backfill_index`)가 `daily_prices` 에 쓰는 이름 그대로.
+INDEX_CODES = ("KOSPI", "KOSDAQ")
+
+_INDEX_SQL = (
+    'SELECT trade_date, "open", high, low, close, volume FROM daily_prices '
+    "WHERE ticker = :ticker AND trade_date BETWEEN :start AND :end ORDER BY trade_date ASC"
+)
+
+
+def _db_index_rows(code: str, start_date: str, end_date: str):
+    """저장소의 지수 행 — ★오류를 삼키지 않는다★(`kis_backtest_engine.load_ohlcv` 는 질의 오류를 빈 프레임으로 삼킨다).
+
+    엔진이 없으면(설정 없음) 그것도 '못 읽음'이다 — 빈 프레임으로 '없음'과 섞지 않는다.
+    """
+    import pandas as pd
+    from sqlalchemy import text
+
+    from src.kis_backtest_engine import _get_sync_engine
+    engine = _get_sync_engine()
+    if engine is None:
+        raise OhlcvStoreError("가격 저장소 엔진이 없습니다")
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text(_INDEX_SQL), {"ticker": code, "start": start_date, "end": end_date}).fetchall()
+    except Exception as e:                      # noqa: BLE001 — 종류를 가리지 않고 '못 읽음'으로 올린다(사유에 글을 싣는다)
+        raise OhlcvStoreError(str(e)) from e
+    df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
+    if df.empty:
+        return df
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date")
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+def load_index_daily(index: str, start_date: str, end_date: str):
+    """지수(KOSPI · KOSDAQ) 일봉 — ★운영은 KRX 적재분(저장소)만 읽고 증권사를 부르지 않는다★.
+
+    왜 `load_ohlcv_unified` 가 아닌가: 그 함수의 증권사 경로(`kis_client.get_daily_ohlcv`)는 국내주식 기간별시세
+    (TR FHKST03010100 · 시장 코드 J)라 지수를 주지 않는다 — 적재가 요청 구간을 덮지 못할 때마다 지수 코드로 증권사를
+    부르고 실패하게 된다(시장 국면 K1 감사 · 2026-11-17).
+
+    - mock 게이트: 기존 길 그대로(`prefer="auto"` — 저장소 → 합성 걸음 · 증권사 경로는 mock 게이트에서 열리지 않는다).
+    - 운영: 저장소만. 장애는 빈 프레임 + `db_error`(못 읽음) · 적재 전은 빈 프레임 + 사유(없음) — 둘을 가른다.
+      덮음(`coverage_ok` · `coverage_reason`)은 `load_ohlcv_unified` 와 같은 판정(`_coverage`)으로 싣는다. 합성은 만들지 않는다.
+    지수 값은 기업행위로 고쳐지지 않으므로 원값(`close`) 그대로 쓴다 — 출처 · 수정 상태 태그는 다른 가격과 같은 `_tag` 가 붙인다.
+    """
+    import pandas as pd
+
+    from src.data.mock_gate import mock_allowed
+    if index not in INDEX_CODES:
+        raise ValueError(f"지수는 {', '.join(INDEX_CODES)} 가운데 하나입니다: {index!r}")
+    if mock_allowed():
+        return load_ohlcv_unified(index, start_date, end_date, prefer="auto")
+    try:
+        df = _db_index_rows(index, start_date, end_date)
+    except OhlcvStoreError as e:
+        logger.warning(f"지수 일봉 저장소 조회 실패 ({index}): {e}")
+        empty = pd.DataFrame()
+        _tag(empty, index, "db")
+        empty.attrs.update(coverage_ok=False, coverage_reason="가격 저장소를 읽지 못했습니다.", db_error=str(e))
+        return empty
+    _tag(df, index, "db")
+    ok, why = _coverage(df, start_date, end_date)
+    df.attrs["coverage_ok"] = ok
+    df.attrs["coverage_reason"] = why
+    return df
+
+
 #: ★스키마 확인은 프로세스당 1회면 된다★
 #: `ensure_table` 은 `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN` × 4 를
 #: **각각 별도 트랜잭션**으로 실행한다(`krx_ingest._MIGRATE_COLUMNS`). 그것을 종목마다

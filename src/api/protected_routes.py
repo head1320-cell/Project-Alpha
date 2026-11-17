@@ -131,6 +131,11 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "내 하루 유형 모형의 목록 — 본인 것만. 운영에서는 합성 분봉으로 학습한 모형을 빼고 그 수를 알린다"),
     ("GET", "/api/v1/intraday/day-types/{key}"):
         (REQUIRE_LOGIN, "내 하루 유형 모형 하나 — 본인 것만(남의 것은 없는 것과 같은 404). 중심 경로 · 학습한 날을 싣는다"),
+    # ── 시장 국면(K1) — 읽기만 · 쓰기 0. 지수 일봉(운영은 KRX 적재분)으로 국면 소속 확률을 계산한다 ──
+    ("GET", "/api/v1/intraday/market-regime"):
+        (REQUIRE_LOGIN, "시장 국면 — 지수(코스피 · 코스닥)의 국면 소속 확률을 계산만 한다(쓰기 0 · 계산 비용이 있어 로그인)"),
+    ("GET", "/api/v1/intraday/market-regime/limits"):
+        (REQUIRE_LOGIN, "시장 국면의 상한 — 국면 수 · 기간 · 지수 목록 상수(외부 호출 0)"),
     ("GET", "/api/v1/intraday/arm-requests"):
         (REQUIRE_LOGIN, "내가 남긴 가동 요청의 목록 — 본인 것만. 요청은 가동이 아니다(읽기만)"),
     ("DELETE", "/api/v1/intraday/arm-requests/{request_id}"):

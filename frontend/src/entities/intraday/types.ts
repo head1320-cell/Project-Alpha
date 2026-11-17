@@ -264,3 +264,29 @@ export type DayTypeList = {
 export type DayTypeRequest = { tickers: string[]; from: string; to: string; minutes: number; k: number };
 /** 학습 거절의 세부 — 날이 모자라면 몇 날이 있었고 몇 날이 필요했는지 · 표본을 뺀 사유(서버 값 그대로). */
 export type DayTypeRefusal = { code: string; reason: string; samples?: number; needed?: number; k?: number; excluded?: DayTypeExcluded };
+
+
+// ── 시장 국면(일) — K1 (구현 계획 §7.1) ─────────────────────────────────────────────────
+export type MarketIndex = "KOSPI" | "KOSDAQ";
+/** 상한 — 서버의 상수 그대로(화면이 따로 두지 않는다). 국면 수 [하한, 상한] · 지수 목록. */
+export interface MarketRegimeLimits {
+  range_days: number; k: [number, number]; fit_days: number; window: number; seeds: number; history_calendar_days: number;
+  indexes: { code: MarketIndex; name: string }[];
+}
+/** 그날 — 값이 없으면 `probs`·`top` 이 null 이고 `reason` 이 서버 문장이다(0 이 아니다). */
+export interface MarketRegimeDay { date: string; probs: number[] | null; top: number | null; top_prob: number | null; reason: string | null }
+export interface MarketRegimeState { state: number; days: number; share: number | null; mean_return: number | null; realized_vol: number | null }
+export interface MarketRegimeAnswer {
+  index: MarketIndex; name: string; k: number; from: string; to: string; mock: boolean;
+  coverage: { ok: boolean | null; reason: string | null };
+  notes: string[]; limits: MarketRegimeLimits;
+  days: MarketRegimeDay[]; states: MarketRegimeState[]; transitions: number | null;
+  /** 같은 자료의 BIC — 국면 수 "2" · "3" · "4" (고르지 않는다) */
+  bic: Record<string, number | null> | null;
+  agreement: { min: number; mean: number; seeds: number } | null;
+  fit: { window_days: number; refits: number; seeds: number; failed: number } | null;
+  grade: "E0" | "E3" | null; grade_reason: string | null; source: string | null;
+  /** 계산하지 않은 까닭 — not_loaded · synthetic_in_production · bad_dates · store_error */
+  empty: { reason: string; message: string } | null;
+}
+export type MarketRegimeRefusal = { code: string; reason: string; limit?: number; days?: number };

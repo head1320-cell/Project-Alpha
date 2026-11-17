@@ -5,7 +5,8 @@
 import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
 import { call, type Result } from "@/shared/api/result";
 import type {
-  Coverage, DayTypeAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest, Divergence, DivergenceRequest, Expanded, ResultList,
+  Coverage, DayTypeAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest, Divergence, DivergenceRequest, Expanded,
+  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, ResultList,
   SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
 } from "./types";
 
@@ -61,3 +62,25 @@ export const listDayTypes = (): Promise<Result<DayTypeList>> => call<DayTypeList
 /** 내 모형 하나 — 남의 것 · 없는 것은 같은 404. */
 export const getDayType = (key: string): Promise<Result<DayTypeAnswer>> =>
   call<DayTypeAnswer>(getWithAuth(`${BASE}/day-types/${encodeURIComponent(key)}`));
+
+// ── 시장 국면(일) — K1 ───────────────────────────────────────────────────────────────────
+export const getMarketRegimeLimits = (): Promise<Result<MarketRegimeLimits>> =>
+  call<MarketRegimeLimits>(getWithAuth(`${BASE}/market-regime/limits`));
+export type RegimeResult = { ok: true; value: MarketRegimeAnswer } | { ok: false; status: number; error: string; refusal: MarketRegimeRefusal | null };
+/** 판정 기간의 거래일마다 국면 확률 — 읽기만(쓰기 0). 거절(기간 상한 · 날짜 순서)은 서버 사유 그대로. */
+export async function getMarketRegime(q: { index: MarketIndex; k: number; from: string; to: string }): Promise<RegimeResult> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k), from: q.from, to: q.to });
+  try {
+    const r = await getWithAuth(`${BASE}/market-regime?${params.toString()}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) {
+      const detail = (js as { detail?: unknown } | null)?.detail;
+      const refusal = detail && typeof detail === "object" && !Array.isArray(detail) && typeof (detail as { code?: unknown }).code === "string"
+        ? detail as MarketRegimeRefusal : null;
+      return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`), refusal };
+    }
+    return { ok: true, value: js as MarketRegimeAnswer };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패", refusal: null };
+  }
+}

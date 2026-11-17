@@ -82,6 +82,8 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.intraday_routes",
     # 하루 유형 모형(T1) — 장 시작 N분의 경로로 학습 · 내 모형(로그인 · 분봉 파일만 읽는다 · 주문 경로 없음).
     "src.api.intraday_day_type_routes",
+    # 시장 국면(K1) — 지수 일봉의 국면 소속 확률(로그인 · 읽기만 · 운영은 지수 적재분만 · 증권사 호출 0).
+    "src.api.intraday_market_regime_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —

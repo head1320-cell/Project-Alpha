@@ -12,7 +12,7 @@
 `fill_price`·`pit_store`·`execution_assumption`·`price_quality` 뿐이다.
 그 사실은 `EXCLUDED_SITES` 에 **사유와 함께** 적어 둔다.
 
-결정에 닿는 누출은 `LEAKAGE_SITES` 의 여섯이고, ★그중 넷은 이미 자기 누출을 알고
+결정에 닿는 누출은 처음 훑었을 때(2026-09-14) `LEAKAGE_SITES` 의 여섯이었고, ★그중 넷은 이미 자기 누출을 알고
 산문으로 적어 뒀다★(`path_source:"recomputed"` · `revision_bias` · `as_of_honored`).
 없는 것은 누출 자체가 아니라 **어휘·판정·롤업·기록**이었다 — 여섯 방언이라 기계가
 셀 수 없고, 화면이 비교할 수 없고, 실행 기록에 남지 않는다.
@@ -121,6 +121,15 @@ LEAKAGE_SITES: tuple[EstimatorFit, ...] = (
         note=("계수에는 룩어헤드가 없지만 **어느 대리계열을 쓸지**를 오늘까지의 "
               "관측 수로 고른다. `truncate_to_window` 기본값이 `False` 이고, "
               "라우트가 이미 그 사실을 `reason` 에 길게 적어 두었다."),
+    ),
+    # 2026-11-17 K1 — 새 추정 자리(처음부터 잘린 창으로 지었다). 지금은 백테스트 › 분봉 규칙 화면이 보이기만 하고,
+    # 분봉 규칙의 국면 조건(K3 · 아직 없음)이 이 값을 쓸 자리라 consumer 를 backtest 로 둔다.
+    EstimatorFit(
+        site="src/engine/market_regime.py:regime_days",
+        window=WINDOW_BOUNDED, vintage=VINTAGE_AS_OF, consumer="backtest",
+        note=("시장 국면 GMM 을 달마다 그달 첫 거래일 **전**의 750거래일로 다시 적합하고(표준화도 그 창 안의 "
+              "평균 · 표준편차) 그날의 입력은 직전 거래일의 특징이다 — 그날 종가와 그 뒤를 보지 않는다. "
+              "창이 다 차지 않은 달은 미상 + 사유다. 지수 종가는 고쳐지지 않아 빈티지는 as_of 다."),
     ),
 )
 

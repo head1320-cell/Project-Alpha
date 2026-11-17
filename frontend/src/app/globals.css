@@ -10768,3 +10768,46 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .ire-model-pick { max-width: 100%; flex: 1 1 100%; }
   .itd-ctx { padding: 12px; }
 }
+
+
+/* ════ 시장 국면(.itd-mr) — 지수의 국면 소속 확률 (K1 · 2026-11-17 · `e2e/intraday-market-regime.spec.ts`) ════
+   국면 번호는 변동성이 낮은 것부터라 한 색상(보라 · OKLCH 290°)의 밝기 7단 — 국면 수 2 · 3 · 4 에 1·7 / 1·4·7 / 1·3·5·7 단.
+   dataviz 순서형 검사 통과(라이트 #ffffff · 다크 #1a2029 · 세 경우). 빨강 · 파랑은 등락색이라 쓰지 않는다. 색만으로 말하지 않는다(범례 번호 · 읽는 줄 · 표). */
+:root {
+  --itd-mr-s1: #b6a8ff; --itd-mr-s2: #a394ef; --itd-mr-s3: #9081da; --itd-mr-s4: #7d6ec4; --itd-mr-s5: #6b5bb0; --itd-mr-s6: #5a489b; --itd-mr-s7: #493687;
+}
+.dark {
+  --itd-mr-s1: #5c4a9e; --itd-mr-s2: #6d5db2; --itd-mr-s3: #8071c8; --itd-mr-s4: #9384dd; --itd-mr-s5: #a799f3; --itd-mr-s6: #bbadff; --itd-mr-s7: #d0c2ff;
+}
+.itd-mr { display: flex; flex-direction: column; gap: 16px; }
+.itd-mr-form { display: flex; flex-direction: column; gap: 12px; }
+.itd-mr-result { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.itd-mr-head { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.itd-mr-range { white-space: nowrap; }                                  /* 기간(날짜 ~ 날짜)은 줄을 가르지 않는다 */
+.itd-mr-fig { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.itd-mr-fig:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 4px; border-radius: 8px; }
+.itd-mr-svg { display: block; max-width: 100%; touch-action: pan-y; }   /* 세로로 밀면 화면이 내려가고 가로로 밀면 날을 옮긴다(.itd-dt-svg 와 같음) */
+.itd-mr-hatch-line { stroke: var(--tx-mute); stroke-width: 1.5; }
+.itd-mr-cursor { fill: none; stroke: var(--tx-ink); stroke-width: 1.5; }
+.itd-mr-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--tx-sub); }
+.itd-mr-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.itd-mr-legend i, .itd-mr-chip { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.itd-mr-legend-unknown { background: repeating-linear-gradient(45deg, var(--tx-mute) 0 1.5px, transparent 1.5px 5px); }
+.itd-mr-chip { margin-right: 6px; vertical-align: -1px; }
+.itd-mr-axis { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
+.itd-mr-facts { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.itd-mr-tablebox { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.itd-mr-scroll { max-width: 100%; overflow-x: auto; border-radius: 6px; }
+.itd-mr-scroll:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 2px; }
+.itd-mr-cap { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
+/* 칸 글자는 줄을 바꾸지 않는다 — 좁은 폭에서는 표가 상자 안에서 옆으로 넘는다(.itd-dt-table 과 같은 꼴) */
+.itd-mr-states th, .itd-mr-states td { white-space: nowrap; }
+.itd-mr-states th + th, .itd-mr-states td + td { padding-left: 16px; }
+.itd-mr-lines { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 16px; margin: 0; }
+.itd-mr-lines > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.itd-mr-lines dt { font-size: 12px; color: var(--tx-mute); word-break: keep-all; }
+.itd-mr-lines dd { margin: 0; font-size: 14px; color: var(--tx-ink); font-variant-numeric: tabular-nums; word-break: keep-all; }
+/* BIC 값 셋은 칸 안에서 접힌다(값 하나는 쪼개지 않는다) — 옆 칸을 덮거나 좁은 폭에서 잘리지 않게 */
+.itd-mr-bic dd { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.itd-mr-bic-k { white-space: nowrap; }
+.itd-mr-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
