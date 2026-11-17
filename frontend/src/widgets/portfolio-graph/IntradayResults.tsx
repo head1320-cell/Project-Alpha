@@ -10,6 +10,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Breakeven, Brief, Validation } from "@/entities/intraday";
+import { ContextFacts, factsOf } from "@/features/intraday-day-types";
 import { Verdict, bp1 } from "@/features/intraday-verdict";
 import { UNKNOWN_TEXT, num, signedWon } from "@/shared/lib/krFormat";
 import { Notice } from "@/shared/ui/tx";
@@ -45,6 +46,7 @@ export function IntradaySetupResult({ v }: { v: Dict }) {
         ["수수료율(편도)", typeof fee === "number" ? bp1(fee) : "미상"],
         ["계산량", `${count(work.total, "")} · 상한 ${count(work.limit, "")}`],
       ]} />
+      <ContextFacts facts={factsOf(v.context)} />
       {days.loaded === 0 ? <p className="pg-note pg-itd-none">이 기간에 적재된 분봉이 없습니다. 실행하면 결과 없이 사유만 남습니다.</p> : null}
       <p className="pg-note">아직 실행하지 않았습니다. 설정 탭의 ‘분봉 백테스트 실행’을 누르면 계산하고, 실행마다 시행으로 기록합니다.</p>
     </div>
@@ -84,6 +86,7 @@ export function IntradayLoadResult({ v }: { v: Dict }) {
         ["건너뛴 종목·일", skipped === null ? UNKNOWN_TEXT : `${num(skipped)}건`],
         ["실행", <span key="t" className="pg-itd-when">{stamp(view.result_at)} · 같은 설정 {count(view.runs, "회째")}</span>],
       ]} />
+      <ContextFacts facts={factsOf(v.context)} />
       <p className="pg-note">실행할 때 남긴 요약입니다. 다시 계산하지 않았고, 시행 횟수는 그때의 값입니다. 거래 목록과 손익 곡선은 ‘백테스트 › 분봉 규칙’ 화면에서 확인합니다.</p>
       <p className="pg-itd-h">이 실행의 관문 일곱</p>
       <Verdict v={view} labels={{}} />

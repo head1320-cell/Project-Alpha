@@ -423,6 +423,23 @@ def test_a_day_that_is_no_longer_loaded_leaves_the_comparison_unknown(client, mo
     assert m["pnl"]["gross"] == 1_980.0                                   # 손익은 가상 체결에서 — 봉이 없어도 읽힌다
 
 
+def test_a_day_that_cannot_be_rebuilt_says_its_own_reason_not_not_loaded(client, monkeypatch):
+    """규칙 맥락(하루 유형 모형)을 읽지 못한 날 — '적재되지 않음'으로 접지 않고 그 사유 그대로(T2). 짝: 위의 적재되지 않은 날."""
+    import src.api.broker_account_routes as bar
+    acc = _connect(client)
+    run_id = _run(client, acc, _backtest(client)[0])
+    said = "하루 유형 모형을 찾지 못했습니다. 내가 학습한 모형만 쓸 수 있습니다."
+
+    def refuse(*_a, **_k):
+        raise monitor.DayUnavailable(said)
+
+    monkeypatch.setattr(bar, "_monitor_day", refuse)
+    m = _monitor(client, acc, run_id)
+    assert m["backtest"] == {"state": "unknown", "reason": said, "run_fills": 2, "backtest_fills": None}
+    assert m["backtest"]["reason"] != monitor.BACKTEST["not_loaded"]
+    assert m["pnl"]["gross"] == 1_980.0                                   # 손익은 가상 체결에서 — 그날을 못 지어도 읽힌다
+
+
 def test_a_backtest_with_a_different_number_of_fills_also_differs(client, monkeypatch):
     acc = _connect(client)
     run_id = _run(client, acc, _backtest(client)[0])

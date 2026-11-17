@@ -397,3 +397,71 @@ T2(지표 · 겹침 거절 · 캔버스) · 유형 수를 고르는 자동 탐�
   (e-means 가 26.3% 높다) · ARI 최소 0.59 · 유형별 표본 2 · 4 · 9 · 9. 묶을 모양이 없는 자료에서 e-means 가 불리하고 시드에 기대는 사실이 손실 줄과 일치도 줄에 그대로 드러난다(§5.0 과 같은 방향).
 - **변이**: 엔진 27(앞 조각) · 문 28 — 처음 23 죽음 · 살아남은 5(열쇠 모양 · 필요 표본 경계 · 표본 첫 봉 시각 4자리 · 뺀 행 상한 · 목록 상한)는 시험을 더해 죽였다 ·
   화면 19 — 결과는 HISTORY. 화면 변이를 위해 E2E 에 더한 것: 모든 판의 기준선 높이 · 눈금 글자가 같다 · 합성 모형의 일치도 표지 `false` · 학습 기간의 처음 값 · 학습 뒤 목록 다시 읽기.
+
+## 6. T2 — 지표 '하루 유형' (직접 구성의 조건)
+
+> 설계 §3 T2(승인됨) · 받은 결정 D3 사용자별. 이 절은 T1 을 커밋한 뒤 쓴다(2026-11-17). 그 뒤의 결합 묶음 K 가 이 절의 '규칙 맥락' 장치를 그대로 쓴다(K3 국면 조건).
+
+### 6.0 감사에서 본 것 (읽기 전용)
+
+- 지표는 `(Session, **params)` 의 순수 함수이고 매개변수는 수만 받는다(`indicators.Range` · `resolve`). 나무 잎의 매개변수 검사는 `expr._check` → `indicators.resolve` 한 곳이다.
+- 시뮬레이터는 세션마다 `expr.evaluate(tree, session)` 를 부른다 — 세션 밖의 값을 볼 길이 없다. 걸음 엔진 `stepper._upto` 는 `Session(...)` 을 칸마다 옮겨 새로 짓는다(새 칸이 생기면 잃는다).
+- 규칙을 돌리는 길은 다섯이다: `simulate` · `run_validation`(문 + 캔버스 실행 단추) · `prepare`(문 + 캔버스 설정 노드의 읽기 전 검사 — 사용자를 받지 않는다) · `divergence_report` · 규칙 가동(`broker_account_routes._day_of` — 시작과 관제).
+- 하루 유형 모형의 몸통에는 중심이 따로 없고 `types[j].path`(유형 j+1 의 중심 · float64 를 JSON 으로 — 되읽으면 같은 수) · `minutes` · `k` · `days`(학습한 날) · `first_day` · `last_day` 가 있다(`intraday_day_types.model_of`).
+- 등록부 전체의 앞보기 시험(`test_intraday_indicators.py::test_no_indicator_looks_ahead`)은 매개변수의 `low` · `high` 로 값을 짓고 맥락 없는 무작위 세션을 쓴다 — 새 지표에는 맥락이 있어야 한다.
+- 편집기는 지표 매개변수를 숫자 칸으로만 그린다(`RuleEditor.Num` · `tree.inRange`).
+
+### 6.1 계약
+
+- **지표** `day_type_is` — 매개변수 `model`(모형 열쇠 · 64자리 소문자 16진) · `type`(유형 번호 1 ~ 16 · 그 모형의 k 이하인지는 맥락에서 본다) · 단위 `flag` · 이름표 "하루 유형".
+  값: 세션의 첫 봉부터 N(모형의 분 수)개의 봉이 1분마다 있고 가격이 유효하면(`day_types.window` 그대로) ★창의 마지막 봉부터★ 하루 끝까지 `1.0`(가장 가까운 중심 = `type` · `day_types.assign` 그대로) 또는 `0.0`, 그 앞 봉은 `NaN`.
+  창이 어긋난 날(빠진 분 · 0 이하 가격)은 하루 내내 `NaN` — 조건은 충족으로 보지 않는다. 결정 시각 = 창의 마지막 봉이 닫힌 때(시뮬레이터는 그 봉에서 판단해 다음 봉 시가에 체결한다).
+  ★지표가 세션 자신의 첫 N 봉으로 센다★ — 미리 세어 싣지 않으므로 잘린 세션(걸음 엔진)에서도 인과다.
+- **규칙 맥락** `Session.context: RuleContext | None`(기본 `None`) — `RuleContext(day_types: Mapping[str, DayTypeRef])` · `DayTypeRef(centroids (k × N) float64, minutes, k)`.
+  ★맥락이 없거나 그 모형이 맥락에 없으면 명시적 실패(`IndicatorError("rule_context_missing")`)★ — 미상으로 두면 규칙이 조용히 거래 0 이 된다. 걸음 엔진 `_upto` 는 `dataclasses.replace` 로 맥락을 잇는다.
+  `Indicator.context: str | None`(어느 맥락이 필요한가) — 등록부 전체 시험이 그 지표에 맞는 맥락을 지어 준다(맥락 없이 공허하게 통과시키지 않는다).
+- **문 층** `src/api/intraday_context.py`(새)
+  - `uses(spec) → dict[열쇠, set[유형 번호]]` — 나무 셋에서 `day_type_is` 의 모형 열쇠와 쓰인 번호(읽기만 · 평가하지 않는다).
+  - `load(username, spec, start) → Loaded(context, models)` — ★봉을 읽기 전에★ 부른다. 모형마다 `store.model_of`: 저장소 실패 = 503 · 없는 것 · 남의 것 · 운영의 합성 모형 = 같은 거절(`day_type_model_missing`) · 쓰인 번호 > k = `day_type_out_of_range` ·
+    ★`last_day ≥ start` 이면 `day_type_model_overlaps`★(학습은 판정 시작일 전에 끝나야 한다 — 겹침과 뒤의 모형 모두). 하루 유형을 쓰지 않는 규칙은 `Loaded(None, [])`(저장소를 읽지 않는다).
+  - `attach(days, loaded) → list[Day]` — 세션마다 같은 맥락 객체를 싣는다. 맥락이 없으면 받은 목록 그대로(기존 경로 · 골든 바이트 불변).
+  - `facts(loaded, tickers) → list[dict]` — 응답의 `context` 블록: 모형마다 `{key, minutes, k, first_day, last_day, tickers, grade, same_tickers, sentences}`.
+    문장 "하루 유형 모형 1a2b3c4d의 학습 기간은 2026-05-04~2026-05-19이며 종목 2개로 학습했습니다. 학습은 판정 시작일 전에 끝났습니다." +
+    "판정 종목과 같은 종목으로 학습했습니다." 또는 "판정 종목과 학습 종목이 같지 않습니다." + (합성 모형이면) "모의 모드에서 만든 합성 분봉으로 학습한 모형입니다. 장치를 확인하는 용도입니다."
+- **다섯 길**: `_setting` 뒤 `load` → `build_days` 뒤 `attach`. `prepare(body, username)` 이 사용자를 받는다(캔버스 설정 노드는 실행자에서). 가동은 `_day_of(username, …)` — 시작 · 관제가 같은 함수를 지난다.
+- **시행**: 모형 열쇠가 나무에 있어 ★모형이 다르면 다른 시행★(`expr.canonical` 그대로 — 새 코드 없음).
+- **글 · 주석 · 문법 표**: 글 `하루 유형 3번(모형 1a2b3c4d)` · `notes_of` 에 "하루 유형은 장 시작 N분의 창이 끝난 봉부터 값이 있습니다. 창이 어긋난 날은 값이 없어 조건을 충족하지 않습니다. 모형의 학습 기간이 끝난 뒤의 날에만 씁니다." ·
+  문법 표의 매개변수 `{"key": "model", "label": "모형", "type": "model", "kind": "day_type"}` · `{"key": "type", "label": "유형 번호", "type": "int", "min": 1, "max": 16, "unit": "번"}` · 지표의 `context: "day_types"`(다른 지표는 `null`).
+- **응답 · 캔버스**: simulate · validate · divergence 응답에 `context`(사실 줄 목록 · 쓰지 않는 규칙이면 빈 목록). 캔버스 설정 노드의 보기에도 같은 사실 줄, 설명(explain)의 사실에 그 문장.
+  실행 단추가 남기는 결과 요약에 `context` 가 그대로 실린다 → 결과 조회 노드도 같은 줄을 보인다(T2 전에 남긴 요약에는 없다 — 없으면 줄을 그리지 않는다).
+- **화면**: 편집기의 모형 칸(`ModelParams` — 내 모형 목록 · 처음에는 비어 있다 · 번호 칸의 상한 = 고른 모형의 k) · 결과 · 매매일지의 견주기 · 캔버스 판 둘에 사실 줄(`features/intraday-day-types/ContextFacts` · 서버 문장 그대로).
+
+### 6.2 닿는 곳
+
+- 엔진: `types.py`(맥락 둘) · `indicators.py`(매개변수 종류 `Key` · `day_type_is` · `resolve` 의 문자열) · `rules.py`(글 · 주석 · 문법 표) · `stepper.py`(`_upto`) — `day_types.py` · `simulator.py` · `expr.py` 0줄(된다면).
+- 문: `intraday_context.py`(새) · `intraday_routes.py` · `allocation_graph_nodes_intraday.py`(`prepare` 에 사용자) · `broker_account_routes.py`(`_day_of`).
+- 화면: `entities/intraday/types.ts`(매개변수 `type: "model"` · `ContextFact` · 응답의 `context`) · `features/intraday-rule-editor`(모형 고르기 — 내 모형 목록은 모형 칸을 그릴 때와 그 칸에 들어갈 때마다 읽는다 · 고른 모형의 k 가 번호 칸의 상한 · `issuesOf` 의 모형 칸) ·
+  `features/intraday-day-types/ContextFacts` · `widgets/intraday/IntradayResult` · `widgets/trade-journal/CompareSection` · `widgets/portfolio-graph/IntradayResults` · 새 클래스 `ire-model*` · `itd-ctx*`.
+- 문서: 용어집 §3.17 에 넷 — '하루 유형 조건' · '모형 선택' · '판정 시작일 전' · '규칙이 쓴 하루 유형 모형'.
+
+### 6.3 시험 (빨강 먼저)
+
+1. 손 계산 하루: 심은 네 유형 모형 + 유형 3 의 경로를 따르는 새 날 → 창의 마지막 봉부터 `type=3` 은 1 · 다른 번호는 0 · 앞 봉은 NaN.
+2. 앞보기 0(접두 성질): 잘린 세션(봉 L 개)의 값 = 전체 값의 앞 L 개(L = 1 … 끝) — 무작위 하루 여럿 + 등록부 전체 시험에 맥락.
+3. 창 어긋남(창 안의 빠진 분 · 0 가격)은 하루 내내 NaN ↔ 창 뒤의 빠진 분은 상관없다(짝).
+4. 맥락 없음 · 그 모형 없음 → 명시적 실패 ↔ 다른 지표만 쓰는 나무는 맥락 없이 그대로(기존 골든 바이트 불변).
+5. 문 층: 학습 마지막 날 = 판정 시작일 → 거절 ↔ 하루 앞이면 통과 · 뒤의 모형 거절 · 남의 · 없는 · 운영의 합성 모형 = 같은 거절 · 번호 > k 거절 · 저장소 실패 503 · ★봉을 읽기 전에★ 거절(읽기 함수를 막아 둔 채).
+6. 다섯 길이 모두 맥락을 싣는다 — 각 길에서 그 조건으로만 진입이 생긴다(동작으로 건다 · 맥락이 빠지면 실패).
+7. 걸음 엔진: 하루 유형 조건 규칙의 걸음마다 낸 체결 이어 붙임 = 한 번에 돌린 체결.
+8. 시행: 같은 나무 · 다른 모형 → 시행 둘 ↔ 같은 모형 → 하나.
+9. 글 · 주석 · 문법 표 · 판정 사실 줄(같은 종목 ↔ 다른 종목).
+10. 화면 E2E: 모형 고르기 → 조건 '하루 유형 3 > 0.5' → 판정 → 사실 줄 · 체결이 손 계산 날에만 · 겹치는 기간은 서버 거절 문장 · 캔버스 설정 노드도 같은 부품 · 모형이 없으면 안내.
+
+### 6.4 변이
+
+창 앞에도 값을 냄 · 창 끝을 한 봉 늦춤 · 같은 거리 큰 번호 · 맥락 없음을 NaN 으로 · 겹침 검사 빼기 · `≥` → `>`(학습 마지막 날 = 시작일 통과) · 주인 검사 빼기 · 운영 합성 숨김 빼기 · 번호 상한 빼기 ·
+`_upto` 가 맥락을 버림 · 한 길(divergence)에서 attach 빼기 · 편집기가 모형 열쇠를 싣지 않음 · 번호 칸 상한을 16 으로.
+
+### 6.5 하지 않는 것
+
+그날 전체 경로로 유형을 다시 셈(앞보기) · 모형 자동 고르기 · 남의 모형 · 학습 날과 겹친 판정을 '표본 안'으로 돌리기(거절한다) · 시뮬레이터 · 체결 규칙 · 주문 경로 · 시행 열쇠의 뜻.

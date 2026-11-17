@@ -12,6 +12,7 @@ import type { Journal } from "@/entities/trade-journal";
 import {
   AfterLoss, Basis, Buckets, Costs, Extremes, PNL_KO, PnlCurve, SummaryTable, Trades, costChips, ratio2, signedWon,
 } from "@/features/journal-result";
+import { ContextFacts } from "@/features/intraday-day-types";
 import { TrialLine, bp1, originChip } from "@/features/intraday-verdict";
 import { UNKNOWN_TEXT, num, pct } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type Chip } from "@/shared/ui/tx";
@@ -31,6 +32,7 @@ export function IntradayResult({ sim }: { sim: Sim }) {
     return (
       <div className="tj-result itd-result" data-empty={sim.empty?.reason ?? "no_journal"}>
         <Notice tone="warn" title="결과 없음"><span data-server>{sim.empty?.message ?? "계산한 결과가 없습니다."}</span></Notice>
+        <ContextFacts facts={sim.context} />
         {d.skipped_total > 0 ? <Used sim={sim} /> : null}
       </div>
     );
@@ -51,6 +53,7 @@ export function IntradayResult({ sim }: { sim: Sim }) {
                 { label: "손익분기 비용(편도)", value: bp1(b?.bp) },
               ]}
               chips={chips} />
+      <ContextFacts facts={sim.context} />
       <Used sim={sim} />
       {closed === 0 ? (
         <Notice tone="warn" title="이 기간에 규칙이 만든 거래가 없습니다.">진입 조건이 한 번도 충족되지 않았거나, 충족된 진입이 아래 ‘체결 가정에서 센 것’의 사유로 막혔습니다.</Notice>

@@ -15,6 +15,8 @@
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from .simulator import CostAssumptions, Day, PositionRules, RuleSpec, simulate, validate
@@ -34,9 +36,9 @@ class StepError(ValueError):
 
 
 def _upto(s: Session, label: str) -> Session:
+    """그 시각까지의 봉 — 봉 칸만 자르고 나머지(전일 값 · 시장 · 상품 · 이름 · ★규칙 맥락★)는 그대로 잇는다."""
     k = int(np.searchsorted(np.asarray(s.time, dtype=str), label, side="right"))
-    return Session(s.ticker, s.date, s.time[:k], s.open[:k], s.high[:k], s.low[:k], s.close[:k], s.volume[:k], s.source,
-                   s.prev, s.market, s.instrument, s.name)
+    return replace(s, time=s.time[:k], open=s.open[:k], high=s.high[:k], low=s.low[:k], close=s.close[:k], volume=s.volume[:k])
 
 
 class Stepper:

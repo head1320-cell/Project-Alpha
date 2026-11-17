@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import random
@@ -15,8 +16,9 @@ import numpy as np
 import pytest
 
 from src.engine import intraday
+from src.engine.intraday import day_types as dt
 from src.engine.intraday import expr, indicators, rules, simulator
-from src.engine.intraday.types import PrevDay, Session
+from src.engine.intraday.types import DayTypeRef, PrevDay, RuleContext, Session
 from tests.test_intraday_golden import GOLDEN, SETUPS, _days
 from tests.test_intraday_golden import RULES as SESSION_RULES
 
@@ -79,6 +81,12 @@ def test_a_custom_rule_passes_the_simulator_s_own_check():
 
 
 # ── ⑵ 성질: 문법에서 뽑은 어떤 나무도 앞을 보지 않는다 ───────────────────────────────────────
+#: 맥락을 읽는 지표(하루 유형 · T2)가 쓸 모형 — 무작위 중심 넷 · 창 10분. 무작위 하루마다 같은 맥락을 싣는다.
+MODEL, MODEL_K = "cd" * 32, 4
+CTX = RuleContext(day_types={MODEL: DayTypeRef(
+    centroids=dt.order_centroids(np.random.default_rng(11).normal(0, 60, size=(MODEL_K, 10))), minutes=10, k=MODEL_K)})
+
+
 def _session(seed: int, n: int = 70) -> Session:
     rng = np.random.default_rng(seed)
     close = 10_000 + np.cumsum(rng.integers(-8, 9, n)) * 10.0
@@ -88,12 +96,12 @@ def _session(seed: int, n: int = 70) -> Session:
     volume = rng.integers(0, 3_000, n).astype(float)
     time = np.array([f"{9 + m // 60:02d}{m % 60:02d}00" for m in range(n)])
     prev = PrevDay(close=float(open_[0] - 300), high=float(open_[0] - 100), low=float(open_[0] - 400), basis="minute")
-    return Session("005930", "2026-03-04", time, open_, high, low, close, volume, "kis", prev, "KOSPI", "stock", None)
+    return Session("005930", "2026-03-04", time, open_, high, low, close, volume, "kis", prev, "KOSPI", "stock", None, context=CTX)
 
 
 def _cut(s: Session, k: int) -> Session:
-    return Session(s.ticker, s.date, s.time[:k], s.open[:k], s.high[:k], s.low[:k], s.close[:k], s.volume[:k], s.source,
-                   s.prev, s.market, s.instrument, s.name)
+    """앞 k 봉 — 봉 칸만 자르고 나머지(전일 값 · 시장 · 규칙 맥락)는 그대로."""
+    return dataclasses.replace(s, **{f: getattr(s, f)[:k] for f in ("time", "open", "high", "low", "close", "volume")})
 
 
 _CONSTS = (0, 0.5, 1, 30, 50, 70, 1_500, 9_950, 10_000, 10_050)
@@ -102,9 +110,12 @@ _CONSTS = (0, 0.5, 1, 30, 50, 70, 1_500, 9_950, 10_000, 10_050)
 def _rand_ind(rng: random.Random) -> dict:
     name = rng.choice(list(indicators.INDICATORS))
     node = {"ind": name}
+    cap = MODEL_K if indicators.INDICATORS[name].context else 12  # 유형 번호는 맥락의 모형이 가진 유형 수까지
     for key, r in indicators.INDICATORS[name].params.items():
-        if rng.random() < 0.8:                                   # 작은 창 — 70봉짜리 하루에서 덥혀지게. 나머지는 기본값에 맡긴다
-            node[key] = rng.randint(int(r.low), min(int(r.high), 12)) if r.integer else round(rng.uniform(r.low, r.high), 2)
+        if isinstance(r, indicators.Key):                        # 모형 열쇠 — 기본값이 없다(맥락의 모형 하나)
+            node[key] = MODEL
+        elif rng.random() < 0.8:                                 # 작은 창 — 70봉짜리 하루에서 덥혀지게. 나머지는 기본값에 맡긴다
+            node[key] = rng.randint(int(r.low), min(int(r.high), cap)) if r.integer else round(rng.uniform(r.low, r.high), 2)
     return node
 
 
@@ -167,7 +178,7 @@ def test_the_random_trees_cover_the_whole_grammar():
         ops |= _names(tree, "op")
         inds |= _names(tree, "ind")
     assert ops == set(expr.OP_LABELS) and len(ops) == 16
-    assert inds == set(indicators.INDICATORS) and len(inds) == 28
+    assert inds == set(indicators.INDICATORS) and len(inds) == 29
     assert len({expr.canonical(t) for t in TREES}) == len(TREES) == 300
 
 
@@ -301,10 +312,10 @@ def test_size_counts_like_the_validator():
 def test_every_indicator_parameter_and_operator_has_a_label_and_the_labels_differ():
     """화면은 이름을 지어내지 않는다 — 등록부에 있는 것은 전부 이름표가 있다(새 지표를 더하면 여기서 걸린다)."""
     labels = [spec.label for spec in indicators.INDICATORS.values()]
-    assert all(labels) and len(set(labels)) == len(labels) == 28
+    assert all(labels) and len(set(labels)) == len(labels) == 29              # T2 — '하루 유형'
     for name, spec in indicators.INDICATORS.items():
         assert spec.unit in indicators.UNITS, name
-        assert all(r.label and r.unit for r in spec.params.values()), name
+        assert all(r.label and (isinstance(r, indicators.Key) or r.unit) for r in spec.params.values()), name   # 모형 열쇠는 단위가 없다
     assert set(expr.OP_LABELS) == set(expr.shapes()) and len(set(expr.OP_LABELS.values())) == 16
     assert set(expr.OP_SYMBOLS) == {"add", "sub", "mul", "gt", "ge", "lt", "le"}
     assert all("—" not in text for text in (*labels, *expr.OP_LABELS.values(), *indicators.UNITS.values()))
@@ -315,10 +326,13 @@ def test_the_grammar_is_read_from_the_registries_not_copied():
     assert [i["name"] for i in g["indicators"]] == list(indicators.INDICATORS)
     for i in g["indicators"]:
         spec = indicators.INDICATORS[i["name"]]
-        assert (i["label"], i["unit"], i["needs_prev"]) == (spec.label, spec.unit, spec.needs_prev)
+        assert (i["label"], i["unit"], i["needs_prev"], i["context"]) == (spec.label, spec.unit, spec.needs_prev, spec.context)
         assert [p["key"] for p in i["params"]] == list(spec.params)
         for p in i["params"]:
             r = spec.params[p["key"]]
+            if isinstance(r, indicators.Key):                    # 모형 열쇠 — 범위 · 출발값이 없다(사용자가 고른다)
+                assert p == {"key": p["key"], "label": r.label, "type": "model", "kind": r.kind}
+                continue
             assert (p["min"], p["max"], p["default"], p["label"], p["unit"]) == (r.low, r.high, r.default, r.label, r.unit)
             assert p["type"] == ("int" if r.integer else "float")
     assert {i["name"] for i in g["indicators"] if i["needs_prev"]} == {"prev_close", "prev_high", "prev_low"}

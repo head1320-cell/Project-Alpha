@@ -28,7 +28,7 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError, create_model
 
-from src.api import graph_actor
+from src.api import graph_actor, intraday_context
 from src.api import intraday_routes as routes
 from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _practice, _t
 from src.api.allocation_graph_nodes import _FORBID, _pydantic_reason, _ui
@@ -180,10 +180,10 @@ def _body(inputs: dict, p: Any) -> tuple[routes.ValidateBody, str, int]:
 
 
 def _setup(inputs: dict, p: Any, actor: Any) -> pg.NodeOutput:
-    graph_actor.require(actor, _WHO)
+    user = graph_actor.require(actor, _WHO)
     body, source, ignored = _body(inputs, p)
     try:
-        ready = routes.prepare(body)                             # 문과 같은 읽기 전 검사 — 봉을 읽지 않는다
+        ready = routes.prepare(body, user)                       # 문과 같은 읽기 전 검사(규칙 맥락 포함) — 봉을 읽지 않는다
     except HTTPException as e:
         raise pg.NodeFailure(_refusal(e)) from e
     view = {"request": routes.request_view(body, ready.tickers, ready.params),
@@ -192,7 +192,7 @@ def _setup(inputs: dict, p: Any, actor: Any) -> pg.NodeOutput:
             "days": {"calendar": (body.to - body.from_).days + 1, "loaded": len(ready.plan.dates)},
             "work": {"ticker_days": ready.ticker_days, "simulations": ready.simulations,
                      "total": ready.ticker_days * ready.simulations, "limit": routes.MAX_VALIDATE_WORK},
-            "mock": mock_allowed()}
+            "mock": mock_allowed(), "context": intraday_context.facts(ready.context, ready.tickers)}
     return pg.NodeOutput(values={}, view=view)
 
 
@@ -226,11 +226,15 @@ def _explain_setup(view: dict, prov: dict, params: Any) -> dict:
     custom = view.get("rule_kind") == rules.CUSTOM
     if custom:                                                   # 이름표('직접 구성')는 조건을 말하지 않는다 — 글로 적는다
         facts.append(f"직접 구성한 조건 — {view.get('rule_text') or view.get('rule_text_reason')}")
+    for fact in view.get("context") or []:                       # 규칙이 쓴 하루 유형 모형(T2) — 서버 문장 그대로
+        facts.extend(fact.get("sentences") or [])
     trust = [_t(CONFIRMED, "판정 문과 같은 규칙으로 요청과 계산량을 검사했습니다."),
              _t(ASSUMED, "종목은 지금 정한 묶음입니다 — 과거 구간에서는 사후 선택입니다."),
              _t(ASSUMED, "실행은 계산하지 않고 ‘분봉 백테스트 실행’을 눌러야 시작하며, 실행마다 시행으로 기록됩니다.")]
     if custom:
         trust.append(_t(ASSUMED, "조건은 사용자가 직접 구성했습니다 — 도구는 조건을 추천하지 않습니다. 조건을 고쳐 실행할 때마다 시행 횟수가 늘어납니다."))
+    if view.get("context"):
+        trust.append(_t(CONFIRMED, "하루 유형 모형이 본인의 것이고 학습이 판정 시작일 전에 끝났는지 검사했습니다."))
     if view.get("mock"):
         trust.append(_t(ASSUMED, "모의 모드입니다 — 적재된 분봉이 합성일 수 있으며 출처는 실행할 때 정해집니다."))
     return {"title": f"‘{view.get('rule_label')}’ 분봉 백테스트 실행 준비를 마쳤습니다", "facts": facts, "trust": trust,
@@ -276,6 +280,8 @@ def _explain_load(view: dict, prov: dict, params: Any) -> dict:
     facts = [f"거래 {s.get('trades')}건 · 비용 전 실현손익 {_won(float(gross))}" if gross is not None else f"거래 {s.get('trades')}건",
              f"이 실행의 관문 일곱: 통과 {counts.get('ok', 0)} · 미달 {counts.get('degraded', 0)} · 미상 {counts.get('unknown', 0)}",
              f"실행 {when} · 같은 설정 실행 {view.get('runs')}회 — 시행 횟수는 그때의 값입니다"]
+    for fact in view.get("context") or []:
+        facts.extend(fact.get("sentences") or [])
     if net is None:
         facts.insert(0, "비용 후 실현손익은 미상입니다 — 수수료율을 지정하지 않았거나 매도세를 산출하지 못했습니다.")
     trust = [_t(CONFIRMED, "실행할 때 남긴 요약을 그대로 읽었습니다 — 다시 계산하지 않았습니다.")]

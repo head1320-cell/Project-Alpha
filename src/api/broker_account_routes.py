@@ -23,7 +23,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
-from src.api import intraday_routes
+from src.api import intraday_context, intraday_routes
 from src.api.auth import require_login
 from src.api.stage13_routes import SignalRequest
 from src.data.mock_gate import mock_allowed
@@ -310,23 +310,36 @@ def _run_context(account_id: str) -> dict:
             "gate": {"mock": mock_allowed()}}
 
 
-def _day_of(tickers: list[str], rule, day: dt.date):
-    """그 종목들의 하루의 봉 — ★분봉 백테스트와 같은 준비★(같은 함수 · 같은 종목 마스터 · 같은 장 운영 규칙 · 같은 전일 값 판정).
+def _day_of(username: str, tickers: list[str], rule, day: dt.date):
+    """그 종목들의 하루의 봉 — ★분봉 백테스트와 같은 준비★(같은 함수 · 같은 종목 마스터 · 같은 장 운영 규칙 · 같은 전일 값 판정 ·
+    같은 규칙 맥락). 규칙이 하루 유형을 쓰면 그 사용자의 모형을 ★봉을 읽기 전에★ 읽는다 — 학습이 그날 전에 끝나지 않았으면
+    사유와 함께 거절한다(`intraday_context`).
 
     → `(Day, session)` · 그 날짜가 적재돼 있지 않으면 `None`."""
+    loaded = intraday_context.load(username, rule, day)
     feed = intraday_routes.minute_feed
     if not feed.plan(day, day).dates:
         return None
     session = intraday_routes.session_rules()
     days = feed.build_days(tickers, day, day, rules=session, master=intraday_routes.master_lookup(),
                            need_prev=intraday_routes._needs_prev(rule))
+    days = intraday_context.attach(days, loaded)
     return (days[0], session) if days else None
+
+
+def _monitor_day(username: str, tickers: list[str], rule, day: str):
+    """관제가 그날의 백테스트를 다시 지을 때 — 맥락을 읽지 못한 사유는 '적재되지 않음'이 아니라 그 사유로 넘긴다."""
+    try:
+        return _day_of(username, tickers, rule, dt.date.fromisoformat(day))
+    except HTTPException as err:
+        detail = err.detail if isinstance(err.detail, dict) else {}
+        raise rule_monitor.DayUnavailable(str(detail.get("reason") or err.detail)) from None
 
 
 def _day_for_run(username: str, trial_key: str, day: dt.date):
     """가동할 하루의 봉 — 시행의 종목 · 시행의 규칙으로 짓는다. 적재돼 있지 않으면 사유와 함께 거절."""
     setting = rule_runner.setting_of(username, trial_key)
-    built = _day_of(list(setting.tickers), setting.rule, day)
+    built = _day_of(username, list(setting.tickers), setting.rule, day)
     if built is None:
         raise HTTPException(400, detail={"code": "not_loaded", "reason": _DAY_NOT_LOADED})
     return built
@@ -370,7 +383,7 @@ def monitor_rule_run(account_id: str, run_id: int, _acc: dict = Depends(_own_acc
     ctx = _run_context(account_id)
     try:
         seen = rule_monitor.view(p.username, account_id, run_id, master=intraday_routes.master_lookup(),
-                                 day_of=lambda tickers, rule, day: _day_of(tickers, rule, dt.date.fromisoformat(day)))
+                                 day_of=lambda tickers, rule, day: _monitor_day(p.username, tickers, rule, day))
     except rule_runner.RunRefused as err:
         raise _run_refused(err) from None
     return {**ctx, **seen}

@@ -17,13 +17,17 @@ const G: Grammar = {
           { key: "exit", label: "청산 조건", kind: "bool" }],
   entry_rule: "진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다.",
   indicators: [
-    { name: "close", label: "종가", unit: "price", needs_prev: false, params: [] },
-    { name: "vwap", label: "VWAP", unit: "price", needs_prev: false, params: [] },
-    { name: "sma", label: "이동평균", unit: "price", needs_prev: false,
+    { name: "close", label: "종가", unit: "price", needs_prev: false, params: [], context: null },
+    { name: "vwap", label: "VWAP", unit: "price", needs_prev: false, params: [], context: null },
+    { name: "sma", label: "이동평균", unit: "price", needs_prev: false, context: null,
       params: [{ key: "n", label: "기간", type: "int", min: 1, max: 240, default: 20, unit: "봉" }] },
-    { name: "bb_lower", label: "볼린저 하단", unit: "price", needs_prev: false,
+    { name: "bb_lower", label: "볼린저 하단", unit: "price", needs_prev: false, context: null,
       params: [{ key: "n", label: "기간", type: "int", min: 1, max: 240, default: 20, unit: "봉" },
                { key: "k", label: "표준편차 배수", type: "float", min: 0.5, max: 4, default: 2, unit: "배" }] },
+    // 모형을 쓰는 지표(T2) — 모형 칸은 출발값이 없다(`type: "model"`) · 번호 칸은 수 칸이다
+    { name: "day_type_is", label: "하루 유형", unit: "flag", needs_prev: false, context: "day_types",
+      params: [{ key: "model", label: "모형", type: "model", kind: "day_type" },
+               { key: "type", label: "유형 번호", type: "int", min: 1, max: 16, default: 1, unit: "번" }] },
   ],
   ops: [{ name: "held_before", label: "직전 봉 동안 계속", symbol: null, gives: "bool", args: ["bool"], variadic: null,
           extra: [{ key: "bars", label: "직전 봉 수", type: "int", min: 1, max: 240, unit: "봉" }] },
@@ -141,6 +145,25 @@ test("빈 칸 찾기 — 묶음의 줄 수 · 매개변수의 범위 · 직전 �
     expect(issuesOf(only(group(above(), window(from, to))), G), `${from}~${to}`).toEqual(["진입 조건: 시각 창의 시작과 종료를 확인하십시오."]);
   }
   expect(issuesOf(only(group(above(), window("0900", "0900"))), G)).toEqual([]);                                     // 같은 시각은 된다(끝 포함)
+});
+
+test("모형을 쓰는 지표(하루 유형) — 모형 칸은 비어서 시작하고 번호 칸은 출발값 · 모형을 고르지 않으면 그 자리가 말한다 · 모양이 맞는 열쇠면 말하지 않는다(짝)", () => {
+  const typed = indicator(G, "day_type_is");
+  expect(typed).toEqual({ ind: "day_type_is", model: null, type: 1 });                                   // 도구는 모형을 고르지 않는다
+  const row = (node: Tree): Drafts => only({ op: "gt", args: [node, { const: 0.5 }] });
+  const pick = "진입 조건: 하루 유형 모형을 고르십시오.";
+  expect(issuesOf(row(typed), G)).toEqual([pick]);
+  for (const bad of ["A".repeat(64), "ab".repeat(31), "ab".repeat(32) + "a", "g".repeat(64), 7]) {         // 대문자 · 짧음 · 긺 · 16진 밖 · 수
+    expect(issuesOf(row({ ...typed, model: bad } as Tree), G), String(bad)).toEqual([pick]);
+  }
+  expect(issuesOf(row({ ...typed, model: "ab".repeat(32) } as Tree), G)).toEqual([]);                       // 짝 — 모양만 본다(내 모형인지 · 학습 기간은 서버가)
+  expect(issuesOf(row({ ...typed, model: "ab".repeat(32), type: 17 } as Tree), G)).toEqual(["진입 조건: 하루 유형 유형 번호는 1~16번 범위로 입력하십시오."]);
+  expect(issuesOf(row({ ...typed, model: "ab".repeat(32), type: 5 } as Tree), G)).toEqual([]);              // 그 모형의 유형 수는 목록이 모른다 — 칸과 서버가 말한다
+  // 같은 자리에 두 번 써도 문장은 한 번 · 다른 자리면 자리마다
+  expect(issuesOf(only(group(row(typed).entry as Tree, row(typed).entry as Tree)), G)).toEqual([pick]);
+  expect(issuesOf(only(row(typed).entry, { exit: row(typed).entry }), G)).toEqual([pick, "청산 조건: 하루 유형 모형을 고르십시오."]);
+  expect(toParams(row({ ...typed, model: "ab".repeat(32), type: 3 } as Tree)).entry)
+    .toEqual({ op: "gt", args: [{ ind: "day_type_is", model: "ab".repeat(32), type: 3 }, { const: 0.5 }] });  // 보내는 꼴에 열쇠가 그대로
 });
 
 test("마디 수 — 자리 셋을 합쳐 세고 상한을 넘으면 말한다 (짝: 딱 상한이면 된다)", () => {

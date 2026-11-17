@@ -10,9 +10,12 @@
   (`tests/test_intraday_custom_rules.py`). 화면이 이름을 지어내지 않는다.
 - 앞 봉의 값을 이어 쓰는 지표(`carries` — 지수이동평균 · MACD · ATR · RSI)는 ★그날 첫 봉부터 다시 계산한다★. 여러 날을 이어 계산하는
   차트 도구의 값과 하루 내내 다르다 — 규칙의 주석이 그렇게 말한다(`rules.notes_of`).
+- 세션 밖의 것을 읽는 지표(`context` — 하루 유형)는 ★규칙 맥락★(`Session.context`)에서 읽는다. 맥락은 문 층이 사용자의 것만 골라 싣고,
+  맥락이 없으면 명시적으로 실패한다(미상으로 두면 그 조건을 쓴 규칙이 조용히 거래 0 이 된다). 맥락의 값도 봉 i 까지만 쓴다(같은 성질).
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -43,13 +46,28 @@ class Range:
 
 
 @dataclass(frozen=True)
+class Key:
+    """모형 열쇠를 받는 매개변수 — 수가 아니다(64자리 소문자 16진). 열쇠가 가리키는 모형은 규칙 맥락에서 읽는다.
+
+    기본값이 없다 — 비었으면 거절한다(아무 모형이나 지어 넣지 않는다)."""
+
+    kind: str                       # 어느 모형인가(`day_type`) — 화면이 고르기 목록을 정하는 데 쓴다
+    label: str = ""
+
+
+#: 모형 열쇠의 꼴 — 하루 유형 모형의 열쇠(`day_types.model_key` · sha256 16진)와 같다.
+MODEL_KEY = re.compile(r"[0-9a-f]{64}")
+
+
+@dataclass(frozen=True)
 class Indicator:
     fn: Callable[..., np.ndarray]
-    params: dict[str, Range]
+    params: dict[str, Range | Key]
     needs_prev: bool = False        # 전일 값이 없으면 전부 NaN 이 되는 지표
     label: str = ""                 # 화면의 이름표
     unit: str = ""                  # 값의 단위 — `UNITS` 의 열쇠
     carries: bool = False           # 앞 봉의 값을 이어 쓰는 지표 — 그날 첫 봉의 영향이 하루 내내 남는다
+    context: str | None = None      # 규칙 맥락에서 읽는 것(`RuleContext` 의 칸 이름) — 없으면 세션의 봉만 본다
 
 
 #: 지표 값의 단위 → 이름표. 화면이 "가격과 거래량을 견주고 있다" 같은 것을 알려 줄 때 쓴다(막지는 않는다).
@@ -185,6 +203,26 @@ def _true_range(s: Session) -> np.ndarray:
     return spread
 
 
+def _day_type_is(s: Session, model: str, type: int) -> np.ndarray:    # 매개변수 이름 = 나무 잎의 열쇠(`type`)
+    """그날의 장 초반 유형이 `type` 인가 — 맥락의 모형으로 ★세션 자신의 첫 N 봉★을 센다(T1 의 특징 · 배정 그대로).
+
+    창의 마지막 봉(첫 봉 + N − 1)부터 하루 끝까지 1 또는 0, 그 앞 봉은 NaN(아직 모른다). 창이 어긋난 날(빠진 분 · 0 이하 가격 ·
+    봉이 N 개 미만)은 하루 내내 NaN 이다. 창 뒤의 봉은 읽지 않는다 — 잘린 세션도 같은 앞부분을 낸다."""
+    from . import day_types  # 꾸러미가 다 읽힌 뒤에 부른다(day_types → simulator → expr → 이 모듈)
+
+    ref = s.context.day_types.get(model) if s.context is not None else None
+    if ref is None:
+        raise IndicatorError("rule_context_missing", f"day_type_is: {model[:8]}")
+    if type > ref.k:
+        raise IndicatorError("day_type_out_of_range", f"day_type_is.type={type} > {ref.k}")
+    out = np.full(len(s.close), np.nan)
+    vec, _reason = day_types.window(s, ref.minutes)
+    if vec is not None:
+        label = int(day_types.assign(ref.centroids, vec[None, :])[0])       # 0 부터 — 유형 번호는 1 부터
+        out[ref.minutes - 1:] = 1.0 if label == type - 1 else 0.0
+    return out
+
+
 _N = Range(1, 240, 20, label="기간", unit="봉")
 _K = Range(0.5, 4.0, 2.0, integer=False, label="표준편차 배수", unit="배")
 _OR = Range(1, 120, 30, label="범위를 재는 시간", unit="분")
@@ -225,6 +263,10 @@ INDICATORS: dict[str, Indicator] = {
     "prev_close": Indicator(lambda s: _prev(s, "close"), {}, needs_prev=True, label="전일 종가", unit="price"),
     "prev_high": Indicator(lambda s: _prev(s, "high"), {}, needs_prev=True, label="전일 고가", unit="price"),
     "prev_low": Indicator(lambda s: _prev(s, "low"), {}, needs_prev=True, label="전일 저가", unit="price"),
+    # 하루 유형(T2) — 유형 번호의 상한 16 은 `day_types.MAX_K` 와 같다(시험이 건다 · 이 모듈은 그 모듈을 미리 들이지 않는다).
+    "day_type_is": Indicator(_day_type_is, {"model": Key("day_type", label="모형"),
+                                            "type": Range(1, 16, 1, label="유형 번호", unit="번")},
+                             label="하루 유형", unit="flag", context="day_types"),
 }
 
 
@@ -239,6 +281,12 @@ def resolve(name: str, params: dict | None = None) -> dict:
         raise IndicatorError("unknown_param", f"{name}: {sorted(extra)}")
     out = {}
     for key, rng in spec.params.items():
+        if isinstance(rng, Key):                                # 모형 열쇠 — 기본값이 없다(비었으면 거절)
+            value = given.get(key)
+            if not (isinstance(value, str) and MODEL_KEY.fullmatch(value)):
+                raise IndicatorError("bad_model_key", f"{name}.{key}={value!r}"[:120])
+            out[key] = value
+            continue
         value = given.get(key, rng.default)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise IndicatorError("param_not_integer" if rng.integer else "param_not_number", f"{name}.{key}={value!r}")

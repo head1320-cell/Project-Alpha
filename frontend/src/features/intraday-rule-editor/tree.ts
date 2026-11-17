@@ -27,9 +27,9 @@ export const isOp = (n: Tree): n is OpNode => !isInd(n) && typeof (n as { op?: u
 
 // ── 새 마디 ─────────────────────────────────────────────────────────────────
 
-/** 지표 잎 — 매개변수는 서버가 준 출발값(문법 표의 `default`)이다. */
+/** 지표 잎 — 매개변수는 서버가 준 출발값(문법 표의 `default`)이다. 모형 칸은 출발값이 없다 — 비어서 시작한다(도구는 모형을 고르지 않는다). */
 export const indicator = (g: Grammar, name: string): IndNode =>
-  ({ ind: name, ...Object.fromEntries((g.indicators.find((i) => i.name === name)?.params ?? []).map((p) => [p.key, p.default])) });
+  ({ ind: name, ...Object.fromEntries((g.indicators.find((i) => i.name === name)?.params ?? []).map((p) => [p.key, p.type === "model" ? null : p.default])) });
 export const constant = (): ConstNode => ({ const: null });
 /** 비교 · 돌파 한 줄 — 연산은 고르지 않은 채로 시작한다. */
 export const compare = (): OpNode => ({ op: "", args: [null, null] });
@@ -110,7 +110,8 @@ const topic = (word: string): string => {
   return `${word}${code >= 0 && code <= 11171 && code % 28 === 0 ? "는" : "은"}`;
 };
 
-type Found = { holes: number; groups: boolean; times: boolean; ranges: string[] };
+type Found = { holes: number; groups: boolean; times: boolean; ranges: string[]; models: string[] };
+const HEX64 = /^[0-9a-f]{64}$/;
 
 function walk(node: Draft, g: Grammar, out: Found): void {
   if (node === null) { out.holes += 1; return; }
@@ -118,6 +119,11 @@ function walk(node: Draft, g: Grammar, out: Found): void {
     const spec = g.indicators.find((i) => i.name === node.ind);
     if (!spec) { out.holes += 1; return; }
     for (const p of spec.params) {
+      if (p.type === "model") {                                   // 모형 칸 — 열쇠의 모양만 본다(내 모형인지 · 학습 기간은 서버가 판정한다)
+        const v = node[p.key];
+        if (!(typeof v === "string" && HEX64.test(v))) out.models.push(`${spec.label} ${p.label}을 고르십시오.`);
+        continue;
+      }
       if (!inRange(node[p.key], p)) out.ranges.push(`${topic(`${spec.label} ${p.label}`)} ${rangeOf(p)} 범위로 입력하십시오.`);
     }
     return;
@@ -145,11 +151,12 @@ export function issuesOf(drafts: Drafts, g: Grammar): string[] {
     const root = drafts[slot.key];
     if (root === null) continue;                                 // 쓰지 않는 자리
     nodes += sizeOf(root).nodes;
-    const found: Found = { holes: 0, groups: false, times: false, ranges: [] };
+    const found: Found = { holes: 0, groups: false, times: false, ranges: [], models: [] };
     walk(root, g, found);
     if (found.holes) out.push(`${slot.label}: 비어 있는 칸이 ${found.holes}곳 있습니다.`);
     if (found.groups) out.push(`${slot.label}: 묶음에는 조건이 둘 이상 있어야 합니다.`);
     if (found.times) out.push(`${slot.label}: 시각 창의 시작과 종료를 확인하십시오.`);
+    for (const text of [...new Set(found.models)]) out.push(`${slot.label}: ${text}`);
     for (const text of [...new Set(found.ranges)]) out.push(`${slot.label}: ${text}`);
   }
   if (nodes > g.limits.nodes) out.push(`조건의 마디 수가 상한 ${g.limits.nodes}개를 넘었습니다(지금 ${nodes}개).`);

@@ -8,13 +8,15 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import numpy as np
 import pytest
 
+from src.engine.intraday import day_types as dt
 from src.engine.intraday import indicators as ind
-from src.engine.intraday.types import PrevDay, Session
+from src.engine.intraday.types import DayTypeRef, PrevDay, RuleContext, Session
 
 
 def session(rows, prev=None, ticker="005930", date="2026-03-04") -> Session:
@@ -228,7 +230,8 @@ def test_the_new_indicators_have_no_value_on_an_empty_or_one_bar_day():
 
 
 # ── 성질: 앞보기 0 ─────────────────────────────────────────────────────────────────────
-def _random_session(seed: int, n: int = 60) -> Session:
+def _random_session(seed: int, n: int = 60, *, every_minute: bool = False) -> Session:
+    """무작위 하루. 기본은 군데군데 빈 분이 있다 — `every_minute` 면 1분마다(하루 유형의 창이 서는 하루)."""
     rng = np.random.default_rng(seed)
     close = 10_000 + np.cumsum(rng.integers(-30, 31, n)) * 10.0
     open_ = close + rng.integers(-2, 3, n) * 10.0
@@ -236,14 +239,16 @@ def _random_session(seed: int, n: int = 60) -> Session:
     low = np.minimum(open_, close) - rng.integers(0, 4, n) * 10.0
     volume = rng.integers(0, 500, n).astype(float)
     volume[rng.integers(0, n, 5)] = 0.0
-    minutes = np.cumsum(rng.integers(1, 3, n)) + 9 * 60       # 군데군데 빈 분이 있다
+    steps = rng.integers(1, 3, n)                             # 군데군데 빈 분이 있다
+    minutes = (np.arange(n) if every_minute else np.cumsum(steps)) + 9 * 60
     time = np.array([f"{m // 60:02d}{m % 60:02d}00" for m in minutes])
     return Session(ticker="000001", date="2026-03-04", time=time, open=open_, high=high, low=low, close=close,
                    volume=volume, source="kis", prev=PrevDay(close=9_990.0, high=10_100.0, low=9_900.0, basis="minute"))
 
 
 def _cut(s: Session, k: int) -> Session:
-    return Session(s.ticker, s.date, s.time[:k], s.open[:k], s.high[:k], s.low[:k], s.close[:k], s.volume[:k], s.source, s.prev)
+    """앞 k 봉 — 봉 칸만 자르고 나머지(전일 값 · 규칙 맥락)는 그대로."""
+    return dataclasses.replace(s, **{f: getattr(s, f)[:k] for f in ("time", "open", "high", "low", "close", "volume")})
 
 
 def _poison(s: Session, k: int) -> Session:
@@ -252,21 +257,42 @@ def _poison(s: Session, k: int) -> Session:
         out = a.copy()
         out[k:] = value
         return out
-    return Session(s.ticker, s.date, s.time, bad(s.open, 1.0), bad(s.high, 9e9), bad(s.low, 1e-9), bad(s.close, 5e8),
-                   bad(s.volume, 7e12), s.source, s.prev)
+    return dataclasses.replace(s, open=bad(s.open, 1.0), high=bad(s.high, 9e9), low=bad(s.low, 1e-9), close=bad(s.close, 5e8),
+                               volume=bad(s.volume, 7e12))
+
+
+#: 맥락이 필요한 지표(하루 유형)에 줄 모형 — 무작위 중심 넷 · 창 10분.
+MODEL = "ab" * 32
+MODEL_K = 4
+
+
+def _context_for(name: str, seed: int) -> tuple[RuleContext | None, dict]:
+    """그 지표가 맥락을 읽으면 (맥락, 모형 열쇠 매개변수), 아니면 (None, {})."""
+    if ind.INDICATORS[name].context is None:
+        return None, {}
+    centroids = dt.order_centroids(np.random.default_rng(100 + seed).normal(0, 30, size=(MODEL_K, 10)))
+    return RuleContext(day_types={MODEL: DayTypeRef(centroids=centroids, minutes=10, k=MODEL_K)}), {"model": MODEL}
 
 
 @pytest.mark.parametrize("name", sorted(ind.INDICATORS))
 def test_no_indicator_looks_ahead(name):
     spec = ind.INDICATORS[name]
+    numbers = {p: r for p, r in spec.params.items() if isinstance(r, ind.Range)}
     for seed in range(4):
-        full_session = _random_session(seed)
-        for params in ({}, {p: r.low for p, r in spec.params.items()}, {p: min(r.high, 15) for p, r in spec.params.items()}):
+        ctx, keys = _context_for(name, seed)
+        full_session = dataclasses.replace(_random_session(seed, every_minute=ctx is not None), context=ctx)
+        cap = MODEL_K if ctx is not None else 15                   # 유형 번호는 그 모형의 유형 수까지
+        known = 0
+        for params in (dict(keys), {**keys, **{p: r.low for p, r in numbers.items()}},
+                       {**keys, **{p: min(r.high, cap) for p, r in numbers.items()}}):
             full = ind.compute(full_session, name, params)
+            known += int((~np.isnan(full)).sum())
             assert len(full) == len(full_session.time)
             for k in (1, 2, 7, 23, 41, 59):
                 assert same(ind.compute(_cut(full_session, k), name, params), full[:k]), (name, params, seed, k, "지움")
                 assert same(ind.compute(_poison(full_session, k), name, params)[:k], full[:k]), (name, params, seed, k, "바꿈")
+        if ctx is not None:                                        # 공허하지 않다 — 맥락을 준 지표가 실제로 값을 냈다
+            assert known > 0, (name, seed)
 
 
 def test_the_property_test_would_catch_a_looking_ahead_indicator(monkeypatch):
@@ -275,6 +301,21 @@ def test_the_property_test_would_catch_a_looking_ahead_indicator(monkeypatch):
     monkeypatch.setitem(ind.INDICATORS, "cheat", cheat)
     with pytest.raises(AssertionError):
         test_no_indicator_looks_ahead("cheat")
+
+
+def test_the_property_test_would_catch_a_context_indicator_that_looks_ahead(monkeypatch):
+    """짝 — 맥락을 읽는 지표의 갈래도 공허하지 않다: 그날 ★마지막★ 봉들로 유형을 세는 지표를 심으면 걸린다."""
+    def last_bars(s, model, type):                                 # 창을 하루의 끝에서 잰다 — 앞보기
+        ref = s.context.day_types[model]
+        out = np.zeros(len(s.close))
+        if len(s.close) >= ref.minutes:
+            vec = (s.close[-ref.minutes:] / s.open[0] - 1.0) * 1e4
+            out[:] = 1.0 if int(dt.assign(ref.centroids, vec[None, :])[0]) == type - 1 else 0.0
+        return out
+    cheat = ind.Indicator(last_bars, dict(ind.INDICATORS["day_type_is"].params), context="day_types")
+    monkeypatch.setitem(ind.INDICATORS, "cheat_day_type", cheat)
+    with pytest.raises(AssertionError):
+        test_no_indicator_looks_ahead("cheat_day_type")
 
 
 def test_a_time_that_is_not_four_digits_is_an_error_not_a_zero():

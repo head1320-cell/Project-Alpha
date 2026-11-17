@@ -61,8 +61,13 @@ export type ConstNode = { const: number | null };
 export type OpNode = { op: string; args: (Tree | null)[]; bars?: number | null; from?: string; to?: string };
 export type Tree = IndNode | ConstNode | OpNode;
 
-export type GrammarParam = { key: string; label: string; type: "int" | "float"; min: number; max: number; default: number; unit: string };
-export type GrammarIndicator = { name: string; label: string; unit: string; needs_prev: boolean; params: GrammarParam[] };
+/** 수 칸 — 범위 · 출발값 · 단위는 서버의 문법 표의 것이다. */
+export type GrammarNumberParam = { key: string; label: string; type: "int" | "float"; min: number; max: number; default: number; unit: string };
+/** 모형 칸 — 값은 내 모형의 열쇠(64자리 16진)다. 출발값이 없다(도구는 모형을 고르지 않는다). `kind` 는 어느 모형인지(지금은 `day_type`). */
+export type GrammarModelParam = { key: string; label: string; type: "model"; kind: string };
+export type GrammarParam = GrammarNumberParam | GrammarModelParam;
+/** `context` 는 그 지표가 세션 밖에서 받아야 하는 것(`day_types` — 하루 유형 모형) · 다른 지표는 `null`. */
+export type GrammarIndicator = { name: string; label: string; unit: string; needs_prev: boolean; params: GrammarParam[]; context: string | null };
 export type GrammarOp = {
   name: string; label: string; symbol: string | null; gives: "bool" | "number"; args: ("bool" | "number")[];
   variadic: { kind: "bool" | "number"; min: number; max: number } | null;
@@ -104,11 +109,17 @@ export type Trial = {
   recorded: boolean; new: boolean | null; runs: number | null; family_n: number | null; user_total: number | null;
   reason: string | null; message: string | null;
 };
+/** 규칙이 쓴 하루 유형 모형 하나의 사실 줄(`src/api/intraday_context.facts`) — 문장은 서버의 것을 그대로 싣는다. 쓰지 않는 규칙이면 목록이 비어 있다. */
+export type ContextFact = {
+  key: string; minutes: number; k: number; first_day: string; last_day: string; tickers: string[];
+  grade: "E0" | "E3" | null; same_tickers: boolean; sentences: string[];
+};
 type Shared = {
   request: SimulateRequest & { walk_forward?: Grid };
   template: Template; session_rules: SessionRules; unknowns: UnknownNote[]; gate: { mock: boolean };
   empty: { reason: string; message: string } | null;
   data: DataBlock; origin: Origin | null; assumptions: Assumption[]; breakeven: Breakeven | null; trial: Trial | null;
+  context: ContextFact[];
 };
 /** 캔버스에서 실행해 남긴 결과의 목록 한 줄(`GET /intraday/results`) — 요약 자체는 노드가 읽는다. */
 export type ResultRow = {
@@ -161,7 +172,7 @@ export type PnlGap = {
 export type Divergence = {
   request: SimulateRequest; template: Template; gate: { mock: boolean };
   empty: { reason: string; message: string } | null;
-  data: DataBlock; origin: Origin | null; trial: Trial | null;
+  data: DataBlock; origin: Origin | null; trial: Trial | null; context: ContextFact[];
   divergence: DivergenceReport | null; pnl: PnlGap | null;
 };
 /** 내가 돌린 분봉 백테스트의 설정 한 줄(`GET /intraday/trials`) — `request` 는 그대로 다시 보낼 수 있는 요청이다. */

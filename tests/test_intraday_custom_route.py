@@ -303,7 +303,7 @@ def test_the_listing_has_the_custom_kind_and_the_grammar(client, auth):
     assert [t["custom"] for t in body["templates"]] == [False] * 7 + [True]
     g = body["grammar"]
     assert g == json.loads(json.dumps(rules.grammar()))                      # 문은 엔진의 표를 그대로 싣는다
-    assert len(g["indicators"]) == 28 and len(g["ops"]) == 16 and g["limits"] == {"nodes": 64, "depth": 12}
+    assert len(g["indicators"]) == 29 and len(g["ops"]) == 16 and g["limits"] == {"nodes": 64, "depth": 12}
 
 
 def test_checking_a_condition_built_from_the_added_indicators_gives_its_text_and_notes(client, auth):

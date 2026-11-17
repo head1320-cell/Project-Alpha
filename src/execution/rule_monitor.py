@@ -59,6 +59,16 @@ BACKTEST = {
 }
 
 _FILL_KEYS = ("executed_at", "symbol", "side", "quantity", "price")
+
+
+class DayUnavailable(Exception):
+    """그날의 봉을 지을 수 없다 — 사유 문장과 함께(문 층의 `day_of` 가 던진다 · 예: 규칙 맥락의 모형을 읽지 못함).
+
+    '적재되지 않음'과 다른 사유를 '적재되지 않음'으로 말하지 않으려고 둔다 — 관제는 그 문장을 그대로 싣는다."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 _CLASS_KEYS = ("market", "instrument")
 
 
@@ -178,7 +188,10 @@ def _backtest(run: dict, fills: list[dict], parts, day_of) -> dict:
     if parts is None:
         return {"state": "unknown", "reason": REASONS["bad_setting"], **out}
     rule, position, costs = parts
-    built = day_of(list(run["tickers"]), rule, run["day"]) if day_of is not None else None
+    try:
+        built = day_of(list(run["tickers"]), rule, run["day"]) if day_of is not None else None
+    except DayUnavailable as err:                               # 적재와 다른 사유 — 그 문장 그대로
+        return {"state": "unknown", "reason": err.reason, **out}
     if built is None:
         return {"state": "unknown", "reason": BACKTEST["not_loaded"], **out}
     day, session = built

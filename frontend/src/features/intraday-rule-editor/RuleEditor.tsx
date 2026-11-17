@@ -10,6 +10,7 @@
  */
 import { useState } from "react";
 import type { Grammar, OpNode, Tree } from "@/entities/intraday";
+import { ModelParams } from "./ModelParams";
 import {
   ARITH, COMPARES, GROUPS, WRAPS, ago, append, arithmetic, compare, conditional, constant, group, heldBefore, indicator, isConst, isInd, isOp,
   negate, removeAt, setAt, timeWindow, type Draft, type Drafts, type Path,
@@ -79,7 +80,10 @@ function Num({ node, path, ctx, label, optional }: { node: Draft; path: Path; ct
           <option value="ago">{opLabel(g, "ago")}</option>
         </optgroup>
       </select>
-      {node && isInd(node) && spec ? spec.params.map((p) => {
+      {/* 모형을 쓰는 지표(하루 유형) — 모형 고르기와 유형 번호를 한 부품이 그린다(번호의 상한이 고른 모형에 달렸다). */}
+      {node && isInd(node) && spec && spec.params.some((p) => p.type === "model") ? <ModelParams spec={spec} node={node} set={set} /> : null}
+      {node && isInd(node) && spec && !spec.params.some((p) => p.type === "model") ? spec.params.map((p) => {
+        if (p.type === "model") return null;
         const raw = node[p.key];
         return (
           <span key={p.key} className="ire-param" data-param={p.key}>

@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { divergence, listTrials, type Divergence, type TrialRow } from "@/entities/intraday";
 import type { FillRow } from "@/entities/trade-journal";
 import { DivergenceResult } from "@/features/divergence-result";
+import { ContextFacts } from "@/features/intraday-day-types";
 import { Notice, RetryFail, Section } from "@/shared/ui/tx";
 
 const WINDOWS = [1, 5, 15] as const;
@@ -102,7 +103,8 @@ export function CompareSection({ fills }: { fills: FillRow[] }) {
         ) : null}
       </div>
     </Section>
-    {run.kind === "done" ? <DivergenceResult r={run.r} /> : null}
+    {/* 견준 규칙이 하루 유형을 쓰면 그 모형의 학습 기간 · 종목 — 서버 문장 그대로(쓰지 않으면 그리지 않는다) */}
+    {run.kind === "done" ? <><ContextFacts facts={run.r.context} /><DivergenceResult r={run.r} /></> : null}
     </div>
   );
 }

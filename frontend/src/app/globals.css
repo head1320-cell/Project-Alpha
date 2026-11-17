@@ -10749,3 +10749,22 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
   .ire-tools { margin-left: 0; }
   .ire-group { padding-left: 10px; }
 }
+
+/* ════ 하루 유형 조건(T2 · 구현 계획 2026-11-16 §6) — 편집기의 모형 칸(.ire-model) · 규칙이 쓴 모형의 사실 줄(.itd-ctx) ════
+   모형 칸은 편집기의 다른 칸과 같은 높이 · 같은 테두리다(.ire-select · .ire-input 그대로). 고르기 목록의 글(열쇠 앞 여덟 자리 · 학습 기간 · 유형 수)이
+   길어 좁은 폭에서는 칸이 줄 전체를 쓴다. 사실 줄은 결과 · 견주기 · 캔버스 판에서 같은 클래스 — 서버 문장 그대로라 줄 바꿈은 낱말 단위다. */
+.ire-model { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.ire-model-pick { min-width: 0; max-width: min(100%, 360px); }
+.ire-model-note { flex: 0 0 100%; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; overflow-wrap: anywhere; }
+.itd-ctx { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 14px 16px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-row);
+  background: var(--tx-surface); min-width: 0; }
+.itd-ctx-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--tx-ink); }
+.itd-ctx-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.itd-ctx-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.itd-ctx-item + .itd-ctx-item { padding-top: 10px; border-top: 1px solid var(--tx-line); }
+.itd-ctx-line { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; overflow-wrap: anywhere; }
+.itd-ctx-line:first-child { color: var(--tx-ink); }
+@media (max-width: 640px) {
+  .ire-model-pick { max-width: 100%; flex: 1 1 100%; }
+  .itd-ctx { padding: 12px; }
+}

@@ -182,6 +182,9 @@ _WARMUP_NOTE = "지표는 그날의 봉으로만 계산합니다. 창이 N봉인
 _HELD_NOTE = "‘직전 M봉 동안 계속’은 그 봉을 포함하지 않습니다. 앞선 M개 봉에서 모두 충족했는지 봅니다."
 _CARRY_NOTE = "지수이동평균, MACD, ATR, RSI 는 그날의 첫 봉부터 다시 계산합니다. 여러 날을 이어 계산한 차트의 값과 다를 수 있습니다."
 _DAY_NOTE = "당일 고가와 당일 저가는 그 봉을 포함합니다. 직전 봉까지의 값은 ‘N봉 전 값’으로 얻습니다."
+#: 하루 유형을 쓰는 규칙의 주석(T2) — 문 층 시험과 화면이 같은 문장을 본다.
+DAY_TYPE_NOTE = ("하루 유형은 장 시작 N분의 창이 끝난 봉부터 값이 있습니다. 창이 어긋난 날은 값이 없어 조건을 충족하지 않습니다. "
+                 "모형의 학습 기간이 끝난 뒤의 날에만 씁니다.")
 #: 그 봉까지의 값을 내는 지표(그 봉 포함) — 그대로 견주면 '고가 > 당일 고가'는 늘 거짓이다.
 _RUNNING = ("day_high", "day_low")
 _ENTRY_RULE = "진입 조건과 미리 건 매수 가격 가운데 하나는 있어야 합니다."
@@ -297,13 +300,20 @@ def describe() -> list[dict]:
     return out
 
 
+def _param_view(key: str, r: indicators.Range | indicators.Key) -> dict:
+    """지표 매개변수 하나의 문법 — 수는 범위 · 출발값 · 단위, 모형 열쇠는 어느 모형인지(출발값이 없다 — 사용자가 고른다)."""
+    if isinstance(r, indicators.Key):
+        return {"key": key, "label": r.label, "type": "model", "kind": r.kind}
+    return {"key": key, "label": r.label, "type": "int" if r.integer else "float", "min": r.low, "max": r.high,
+            "default": r.default, "unit": r.unit}
+
+
 def grammar() -> dict:
     """화면이 조건을 짓는 데 필요한 것 전부 — 자리 · 지표 · 연산 · 단위 · 상한. ★등록부에서 읽는다★(사본을 두지 않는다)."""
     listed = []
     for name, spec in indicators.INDICATORS.items():
-        listed.append({"name": name, "label": spec.label, "unit": spec.unit, "needs_prev": spec.needs_prev,
-                       "params": [{"key": key, "label": r.label, "type": "int" if r.integer else "float", "min": r.low,
-                                   "max": r.high, "default": r.default, "unit": r.unit} for key, r in spec.params.items()]})
+        listed.append({"name": name, "label": spec.label, "unit": spec.unit, "needs_prev": spec.needs_prev, "context": spec.context,
+                       "params": [_param_view(key, r) for key, r in spec.params.items()]})
     fields = {"held_before": [{"key": "bars", "label": "직전 봉 수", "type": "int", "min": expr.HELD_BARS[0],
                                "max": expr.HELD_BARS[1], "unit": "봉"}],
               "ago": [{"key": "bars", "label": "봉 수", "type": "int", "min": expr.AGO_BARS[0], "max": expr.AGO_BARS[1], "unit": "봉"}],
@@ -331,7 +341,10 @@ def _number_text(node: dict, top: bool = False) -> str:
     if "ind" in node:
         spec = indicators.INDICATORS[node["ind"]]
         params = indicators.resolve(node["ind"], {k: v for k, v in node.items() if k != "ind"})
-        shown = ", ".join(f"{_fmt(params[key])}{r.unit}" for key, r in spec.params.items())
+        models = [f"모형 {params[key][:8]}" for key, r in spec.params.items() if isinstance(r, indicators.Key)]
+        shown = ", ".join(f"{_fmt(params[key])}{r.unit}" for key, r in spec.params.items() if not isinstance(r, indicators.Key))
+        if models:                                               # 모형을 쓰는 지표 — '하루 유형 3번(모형 1a2b3c4d)'
+            return f"{spec.label} {shown}({', '.join(models)})"
         return f"{spec.label}({shown})" if shown else spec.label
     name, args = node["op"], node["args"]
     if name == "ago":                                            # 'N봉 전' 은 바로 뒤의 수 하나에 붙는다 — 안쪽이 계산이면 그것이 괄호를 갖는다
@@ -388,8 +401,10 @@ def notes_of(spec: RuleSpec) -> list[str]:
     held = any(_uses_op(tree, "held_before") for tree in trees)
     used = set().union(*(_indicators_in(tree) for tree in trees))
     carried = any(indicators.INDICATORS[name].carries for name in used if name in indicators.INDICATORS)
+    typed = any(indicators.INDICATORS[name].context == "day_types" for name in used if name in indicators.INDICATORS)
     return [_WARMUP_NOTE, *([_PREV_NOTE] if uses_prev else []), *([_HELD_NOTE] if held else []),
-            *([_CARRY_NOTE] if carried else []), *([_DAY_NOTE] if used.intersection(_RUNNING) else [])]
+            *([_CARRY_NOTE] if carried else []), *([_DAY_NOTE] if used.intersection(_RUNNING) else []),
+            *([DAY_TYPE_NOTE] if typed else [])]
 
 
 def rule_text(rule: Any) -> dict:

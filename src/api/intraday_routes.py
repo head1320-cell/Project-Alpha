@@ -33,6 +33,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import src.data.minute_bars as minute_bars
+from src.api import intraday_context
 from src.api.auth import require_login
 from src.api.trade_journal_routes import MAX_FILLS, master_lookup
 from src.data import intraday_trials as trials
@@ -123,6 +124,9 @@ REASONS = {
     "wrong_kind": "연산에 넘긴 항의 종류가 맞지 않습니다.",
     "bad_bars": "봉 수는 1 이상 240 이하의 정수여야 합니다.",
     "unknown_indicator": "모르는 지표입니다.",
+    "bad_model_key": "하루 유형 모형을 고르지 않았거나 모형 열쇠의 모양이 맞지 않습니다.",
+    "day_type_out_of_range": intraday_context.REASONS["day_type_out_of_range"],
+    "rule_context_missing": "규칙이 쓰는 하루 유형 모형이 계산에 실리지 않았습니다. 서버의 결함이라 계산하지 않았습니다.",
     "unknown_key": "조건에 알 수 없는 항목이 있습니다.",
     "grid_rule_axis_custom": "직접 구성한 규칙에는 규칙 매개변수의 격자를 사용할 수 없습니다. 포지션 설정의 격자만 사용할 수 있습니다.",
 }
@@ -427,9 +431,9 @@ def request_view(body: SimulateBody, tickers: list[str], params: dict) -> dict:
             "position": body.position.model_dump(), "costs": body.costs.model_dump()}
 
 
-def _shared(body: SimulateBody, tickers: list[str], params: dict, session: dict) -> dict:
+def _shared(body: SimulateBody, tickers: list[str], params: dict, session: dict, facts: list[dict] | None = None) -> dict:
     request = request_view(body, tickers, params)
-    return {"request": request, "template": next(t for t in rules.describe() if t["kind"] == body.rule.kind),
+    return {"request": request, "context": facts or [], "template": next(t for t in rules.describe() if t["kind"] == body.rule.kind),
             "session_rules": _session_view(session), "unknowns": [dict(u) for u in UNKNOWNS], "gate": {"mock": mock_allowed()},
             "limits": {"tickers": MAX_DETAIL_TICKERS, "ticker_days": MAX_TICKER_DAYS}}
 
@@ -480,16 +484,18 @@ def _trial_view(made: dict | None, family: dict | None) -> dict:
 @router.post("/simulate")
 def simulate(body: SimulateBody, user=Depends(require_login)) -> dict:
     tickers, spec, params, position, costs = _setting(body)
+    loaded = intraday_context.load(user.username, spec, body.from_)     # 규칙 맥락 — ★봉을 읽기 전에★ 거절할 것을 거절한다
     plan = _plan(body, tickers)
     session = session_rules()
     master = master_lookup()
-    shared = _shared(body, tickers, params, session)
+    shared = _shared(body, tickers, params, session, intraday_context.facts(loaded, tickers))
     if not plan.dates:
         logger.info("intraday simulate: tickers=%s days=0 fills=0", len(tickers))
         return {**shared, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}, "data": dict(_NO_DATA),
                 "origin": None, "journal": None, "assumptions": [], "events_by_kind": {}, "breakeven": None, "trial": None}
 
-    days = minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master, need_prev=_needs_prev(spec))
+    days = intraday_context.attach(minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master,
+                                                          need_prev=_needs_prev(spec)), loaded)
     out = intraday.run(days, spec, position, costs, rules=session, master=master)
     usable = out["counts"]["sessions"] > 0
     trial = None
@@ -574,17 +580,19 @@ class Prepared:
     ticks: list[int]
     simulations: int
     plan: minute_feed.Plan
+    context: intraday_context.Loaded = intraday_context.Loaded(None, ())   # 규칙 맥락(하루 유형 모형) — 쓰지 않으면 비어 있다
 
     @property
     def ticker_days(self) -> int:
         return len(self.tickers) * len(self.plan.dates)
 
 
-def prepare(body: ValidateBody) -> Prepared:
+def prepare(body: ValidateBody, username: str) -> Prepared:
     """판정의 ★읽기 전 검사 전부★ — 설정 · 격자 · 읽을 날의 크기 · 계산량. 어긋나면 사유와 함께 거절한다. 봉을 읽지 않는다.
 
     문(`validate`)과 캔버스의 '분봉 백테스트 설정' 노드가 같이 쓴다 — 노드가 통과시킨 요청을 실행 단추가 거절하는 일이 없게."""
     tickers, spec, params, position, costs = _setting(body)
+    loaded = intraday_context.load(username, spec, body.from_)          # 규칙 맥락 — 남의 모형 · 학습 날 겹침은 여기서 거절
     base_setting = _trial_setting(body.rule.kind, params, body.position.model_dump(), body.costs.model_dump())
     cells = _cells(body, base_setting, costs)
     base_ticks, doubled_ticks = costs.slippage_ticks, costs.slippage_ticks * 2
@@ -596,7 +604,7 @@ def prepare(body: ValidateBody) -> Prepared:
         raise _refuse("too_much_work", limit=MAX_VALIDATE_WORK, work=ticker_days * simulations, ticker_days=ticker_days,
                       simulations=simulations)
     return Prepared(tickers, spec, params, position, costs, base_setting, cells, base_ticks, doubled_ticks, ticks,
-                    simulations, plan)
+                    simulations, plan, context=loaded)
 
 
 @router.post("/validate")
@@ -608,14 +616,14 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
     """판정의 본체 → (응답, 시행 기록의 답 `{trial_key, new, runs}` — 본 것이 없거나 기록하지 못했으면 `None`).
 
     문과 캔버스의 '분봉 백테스트 실행' 단추가 같이 쓴다 — ★실행은 이 길 하나만 지난다★(모든 실행이 시행으로 세어진다)."""
-    ready = prepare(body)
+    ready = prepare(body, username)
     tickers, spec, params, position, costs = ready.tickers, ready.spec, ready.params, ready.position, ready.costs
     base_setting, cells, plan, simulations = ready.base_setting, ready.cells, ready.plan, ready.simulations
     base_ticks, doubled_ticks, ticks = ready.base_ticks, ready.doubled_ticks, ready.ticks
 
     session = session_rules()
     master = master_lookup()
-    shared = _shared(body, tickers, params, session)
+    shared = _shared(body, tickers, params, session, intraday_context.facts(ready.context, tickers))
     wf = body.walk_forward
     if wf is not None:
         shared["request"]["walk_forward"] = {"folds": wf.folds, "rule": {k: list(dict.fromkeys(v)) for k, v in wf.rule.items()},
@@ -626,8 +634,9 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
         logger.info("intraday validate: tickers=%s days=0", len(tickers))
         return {**shared, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}, "data": dict(_NO_DATA), **nothing}, None
 
-    days = minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master,
-                                  need_prev=_needs_prev(spec, *(c["spec"] for c in cells)))
+    days = intraday_context.attach(minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master,
+                                                          need_prev=_needs_prev(spec, *(c["spec"] for c in cells))),
+                                   ready.context)
 
     def run_at(slippage: int) -> dict:
         return intraday.run(days, spec, position, replace(costs, slippage_ticks=slippage), rules=session, master=master)
@@ -759,17 +768,19 @@ def divergence_report(body: DivergenceBody, user=Depends(require_login)) -> dict
         raise HTTPException(400, {"code": "too_many_rows", "limit": MAX_FILLS, "rows": rows,
                                   "reason": f"체결 줄이 {rows:,}건으로 상한 {MAX_FILLS:,}건을 넘습니다. 기간을 나눠 올려 주십시오(앞부분만 잘라서 계산하지 않습니다)."})
     tickers, spec, params, position, costs = _setting(body)
+    loaded = intraday_context.load(user.username, spec, body.from_)     # 규칙 맥락 — 봉을 읽기 전에
     plan = _plan(body, tickers)
     session = session_rules()
     master = master_lookup()
-    shared = _shared(body, tickers, params, session)
+    shared = _shared(body, tickers, params, session, intraday_context.facts(loaded, tickers))
     shared = {**shared, "limits": {**shared["limits"], "fills": MAX_FILLS}}
     nothing = {"data": dict(_NO_DATA), "origin": None, "trial": None, "divergence": None, "pnl": None}
     if not plan.dates:
         logger.info("intraday divergence: tickers=%s days=0 rows=%s", len(tickers), rows)
         return {**shared, **nothing, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}}
 
-    days = minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master, need_prev=_needs_prev(spec))
+    days = intraday_context.attach(minute_feed.build_days(tickers, body.from_, body.to, rules=session, master=master,
+                                                          need_prev=_needs_prev(spec)), loaded)
     out = intraday.run(days, spec, position, costs, rules=session, master=master)
     if out["counts"]["sessions"] == 0:                           # 본 것이 없으면 견줄 것도 해 본 것도 없다
         return {**shared, **nothing, "data": _data(days, out), "origin": out["origin"],
