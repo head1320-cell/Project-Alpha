@@ -1,18 +1,19 @@
 "use client";
 /**
- * '시장 국면별로 나눠 보기' 절 안의 '하루 유형 비율' — 방금 남은 시행의 표본을 내 하루 유형 모형으로 배정해 국면별로 센다 (구현 계획 §7.3 · K2b)
+ * '시장 국면별로 나눠 보기' 절 안의 '하루 유형 비율' — 방금 남은 시행의 표본을 내 하루 유형 모형으로 배정해 국면별로 센다 (구현 계획 §7.3 · K2b · K2c)
  * ==========================================================================
  * ★읽기만이다★ — 서버는 시행 줄 · 모형 줄 · 적재된 분봉을 읽고 국면을 계산할 뿐 시행을 남기지 않는다(시행 수 불변).
  * 지수 · 국면 수는 이 절 위의 칸(국면별 성과 나눔과 같은 칸)을 쓴다 — 바뀌면 부모가 이 부품을 새로 그려 앞의 답을 지운다.
  * ★모형은 비어서 시작한다★ — 도구는 모형을 고르지 않는다. 목록은 내 모형만(서버가 거른다 · 운영에서는 합성 모형이 빠지고 그 수와 사유가 온다)이고
  * 칸에 들어갈 때마다 다시 읽는다(같은 화면의 '하루 유형' 절에서 막 학습한 모형이 바로 보이게). 읽지 못하면 빈 목록이 아니라 그 사유를 보인다.
- * 국면 수나 모형이 비면 묻지 않는다 · 거절 · 없음은 서버 사유 그대로 · 실패는 재시도.
+ * 국면 수나 모형이 비면 묻지 않는다 · 거절 · 없음은 서버 사유 그대로 · 실패는 재시도. 분봉 결과 화면과 캔버스 판이 같이 쓴다(`level` = 이 절 머리의 단계).
+ * 좁은 자리(`narrow` — 캔버스 판)에서는 칸의 글이 잘릴 수 있어 고른 모형의 이름 전체를 칸 아래 줄로 다시 적는다(줄을 바꿔 판 안에 든다 ·
+ * 칸이 이미 읽어 주므로 화면 읽기 프로그램에는 감춘다). 넓은 화면의 칸은 이름이 다 보여 그 줄을 두지 않는다.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getRegimeDayTypes, listDayTypes, type DayTypeSummary, type MarketIndex, type RegimeDayTypesAnswer } from "@/entities/intraday";
-import { RegimeDayTypesTable } from "@/features/intraday-regime-day-types";
-import { modelLabel, NO_MODELS } from "@/features/intraday-rule-editor";
+import { useState } from "react";
+import { getRegimeDayTypes, modelLabel, NO_MODELS, useDayTypeModels, type MarketIndex, type RegimeDayTypesAnswer } from "@/entities/intraday";
 import { Section } from "@/shared/ui/tx";
+import { RegimeDayTypesTable } from "./RegimeDayTypesTable";
 import { RegimeRequestFailure } from "./RegimeRequestFailure";
 
 const SUB = "이 시행의 종목과 기간의 표본(종목 하나의 하루)을 내 하루 유형 모형으로 배정해 그날 시가 전에 알던 국면별로 셉니다. "
@@ -22,31 +23,11 @@ type View =
   | { kind: "idle" } | { kind: "pending" }
   | { kind: "fail"; status: number; error: string; again: () => void }
   | { kind: "done"; value: RegimeDayTypesAnswer };
-type Listed = { models: DayTypeSummary[] | null; note: string | null };
 
-function useMyModels(): Listed & { reload: () => void } {
-  const [state, setState] = useState<Listed>({ models: null, note: null });
-  const alive = useRef(true);
-  const reload = useCallback(() => {
-    void listDayTypes().then((r) => {
-      if (!alive.current) return;
-      if (!r.ok) return setState({ models: null, note: r.error });
-      if (!r.value.available) return setState({ models: null, note: r.value.reason });
-      setState({ models: r.value.models, note: r.value.hidden_synthetic ? r.value.hidden_reason : null });
-    });
-  }, []);
-  useEffect(() => {
-    alive.current = true;
-    reload();
-    return () => { alive.current = false; };
-  }, [reload]);
-  return { ...state, reload };
-}
-
-export function RegimeDayTypesPart({ trialKey, index, k, model, setModel }: {
-  trialKey: string; index: MarketIndex; k: string; model: string; setModel: (key: string) => void;
+export function RegimeDayTypesPart({ trialKey, index, k, model, setModel, level, narrow }: {
+  trialKey: string; index: MarketIndex; k: string; model: string; setModel: (key: string) => void; level: 3 | 4; narrow: boolean;
 }) {
-  const { models, note, reload } = useMyModels();
+  const { models, note, reload } = useDayTypeModels();
   const [view, setView] = useState<View>({ kind: "idle" });
   const problems = [...(k ? [] : ["국면 수를 고르십시오."]), ...(model ? [] : ["하루 유형 모형을 고르십시오."])];
   const known = models?.find((m) => m.key === model) ?? null;
@@ -59,7 +40,7 @@ export function RegimeDayTypesPart({ trialKey, index, k, model, setModel }: {
   };
 
   return (
-    <Section title="하루 유형 비율" sub={SUB} level={3}>
+    <Section title="하루 유형 비율" sub={SUB} level={level}>
       <div className="itd-rdt">
         <div className="itd-rdt-form">
           {/* 칸 하나 — 모형 이름(열쇠 · 학습 기간 · 유형 수 · 분 수)이 다 보이게 넓게(`.tj-fields` 의 180px 칸이면 잘린다) */}
@@ -74,6 +55,9 @@ export function RegimeDayTypesPart({ trialKey, index, k, model, setModel }: {
               </select>
             </label>
           </div>
+          {narrow && model ? (
+            <p className="itd-rdt-model-full" aria-hidden="true">{known ? modelLabel(known) : model.slice(0, 8)}</p>
+          ) : null}
           {note ? <p className="itd-why itd-rdt-list-note" role="status"><span data-server>{note}</span></p> : null}
           {models !== null && models.length === 0 ? <p className="itd-why itd-rdt-no-models" role="status">{NO_MODELS}</p> : null}
           <div className="tj-run-row">

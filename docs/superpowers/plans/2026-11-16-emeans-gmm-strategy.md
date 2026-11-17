@@ -620,6 +620,55 @@ E2E — 모형 고르기 → 표 = 서버(칸마다 다른 심은 답) · 모형
 **K2b 변이**: 유형 번호 밀기 · 미상을 국면 1 로 · 표본 안 표기 빼기 · 비율 분모를 전체로 · 0 분모를 0% 로 · 남의 모형 읽기 · 운영 합성 모형 허용 · 운영 합성 표본 허용 · 문이 시행을 남김 ·
 창 길이를 모형과 다르게 · 학습 날을 마지막 날 하나로 · 모형 모양 검사 빼기 · 등급 하나로 · 뺀 표본을 버림.
 
+**K2c 감사(읽기 전용 · 관측 · 2026-11-17)**
+- 캔버스의 '분봉 결과 조회' 노드(`intraday_load`) 판은 `widgets/portfolio-graph/IntradayResults.tsx::IntradayLoadResult` 이고 답에 노드의 `trial_key` 가 있다
+  (서버가 본인 시행만 읽는다). 판의 폭은 `--pg-right-w` 392px(안쪽 352px)이고 머리 단계는 판 제목 `h2` · 판 안의 소제목 `h4`(`pg-h4`)다.
+  ★잰 값(초록 판에서 고침)★: 1280px 화면에서 판은 344px 이고 300px 까지 좁아진다 — 판 안의 글 폭은 약 300px 이다(392px 는 넓은 화면의 값).
+- 선례: 같은 판이 화면의 판정 부품(`features/intraday-verdict` — 안에 `Section`)을 그대로 쓰고 캔버스 쪽 CSS 가 `.pg-itd .itd-verdict .tx-sec` 로 모양만 바꾼다.
+- K2a · K2b 의 폼(지수 · 국면 수 · 나누기 단추 · 모형 칸 · 실패 화면)은 `widgets/intraday` 세 파일에, 표 둘은 `features/intraday-regime-split` · `features/intraday-regime-day-types` 에 있다.
+- ★FSD(eslint `import/no-restricted-paths`)★: widgets 끼리 · features 끼리 들일 수 없다 → 캔버스 판(widgets/portfolio-graph)이 같은 폼을 쓰려면 폼이 feature 에 있어야 하고,
+  그 feature 는 `features/intraday-rule-editor` 의 `modelLabel` · `NO_MODELS` 를 들일 수 없다.
+- 모형 목록 훅이 두 벌이다 — `ModelParams.useDayTypeModels` 와 `RegimeDayTypesPart.useMyModels` 가 줄 단위로 같다(K2b 에서 베꼈다).
+- entities 에 훅을 두는 선례가 있다(`entities/session/session.ts` · `entities/backtest/strategy.ts` · `entities/pb-client/SheetAsk.tsx`).
+- 캔버스 규칙 6(계산은 쓰지 않는다 · 시작은 단추): K2 의 두 문은 GET · 읽기만 · 단추로만 묻는다 → 규칙 안이다. 그래프 실행(`/graph/run`)에는 들지 않는다(노드의 답 · 골든 불변).
+- ★실패 화면의 로그인 링크가 돌아올 곳을 `/backtest/intraday` 로 박아 두었다★(`RegimeRequestFailure` 의 `HERE`) — 캔버스에 그대로 실으면 로그인 뒤 캔버스가 아니라 분봉 화면으로 간다.
+  그리고 이 401 갈래는 K2a · K2b E2E 어디에도 시험이 없다(관측 — 공허한 분기).
+- react-query 공급자는 앱 전체(`widgets/layout/Providers.tsx`)라 캔버스에서도 상한 문을 같은 열쇠로 묻는다(한 번 읽으면 화면과 캔버스가 같이 쓴다).
+
+**K2c 계약**
+- 옮김(★동작 · 글자 · 클래스 불변★ — K2a · K2b E2E 18 과 T2 의 모형 칸 E2E 가 건다):
+  - `entities/intraday/dayTypeModels.ts`(새) — `useDayTypeModels()`(내 모형 목록 · 못 읽으면 사유 · 숨긴 합성 수와 사유 · `reload`) · `modelLabel` · `NO_MODELS`.
+    `features/intraday-rule-editor/ModelParams.tsx` 와 하루 유형 비율 칸이 이것 하나를 쓴다(두 벌 → 한 벌). rule-editor index 의 다시 내보내기를 걷는다.
+  - `features/intraday-regime-split/` 하나에 표 둘(`RegimeSplitTable` · `RegimeDayTypesTable` ← `features/intraday-regime-day-types` 를 합치고 그 slice 를 지움) +
+    부품 `RegimeSplitBlock({ trialKey, level, missing, narrow })` — ★절 머리(`Section`)까지★ 부품에 넣는다(처음 적은 `RegimeSplitPanel` 은 머리 밖이었다 —
+    머리 단계 · 시행이 없을 때의 문장이 화면과 판에서 같은 길을 지나게 바꿨다). 안은 지금의 `RegimeSplitForm` · `Fields` · `RegimeDayTypesPart` · `RegimeRequestFailure` 그대로.
+    `level` = 절 머리의 단계(화면 2 · 캔버스 판 3 — 하위 절 '하루 유형 비율'은 한 단계 아래) · `missing` = 물을 시행이 없을 때 부르는 쪽이 준 문장 · `narrow` = 좁은 판.
+  - `widgets/intraday/RegimeSplitSection.tsx` = `RegimeSplitBlock level={2}` + 시행 없음 문장 — 얇은 감싸개.
+- 캔버스: `IntradayLoadResult` 의 관문 일곱 아래 상자(`.pg-itd-rs`)에 `RegimeSplitBlock level={3} narrow` — 같은 부품 · 같은 문 · 노드의 `trial_key`.
+  실패 화면의 로그인 링크는 지금 주소로 돌아온다(`usePathname` — 화면은 `/backtest/intraday` · 캔버스는 `/allocation`).
+  열쇠가 없으면 그렇게 적고 묻지 않는다. 다른 결과 노드를 고르면 앞의 답 · 고른 칸을 지운다(`key={trial_key}`). 국면 수 · 모형은 비어서 시작한다(도구가 고르지 않는다).
+  판에서 표는 옆으로 넘는 상자(키보드로 닿는 `region`) 안에서만 넘고 판은 넘지 않는다.
+  ★모형 이름(초록 판에서 고침)★: 판의 칸은 좁아(필요 329px · 있음 300px — 잰 값) 이름이 잘린다 — 칸을 넓힐 수 없으므로 `narrow` 일 때 고른 모형의 이름 전체를
+  칸 아래 줄(`.itd-rdt-model-full` · 줄을 바꿔 판 안에 든다 · 어절에서 꺾는다(keep-all) · 화면 읽기 프로그램에는 감춘다 — 칸이 이미 읽어 준다)로 다시 적는다. 넓은 화면에는 그 줄이 없다(짝).
+  새 클래스만(`.pg-itd-rs` 상자 · `.itd-rs-no-trial` · `.itd-rdt-model-full`).
+- 하지 않는 것: 캔버스에 새 노드 종류(나눔을 그래프 실행에 넣으면 '계산은 쓰지 않는다'는 지키지만 노드 답이 커지고 골든이 바뀐다 — 판에서 단추로 묻는 것으로 충분) ·
+  나눔 답의 저장 · 결과 노드의 출력 포트.
+
+**K2c 시험(빨강 먼저)**
+- E2E `canvas-intraday-regime.spec.ts`(새) — 실제 서버 · 결과 조회 노드(판정 날 넷 × 두 종목의 시행 — K2b 스펙과 같은 자료):
+  ① 판에 절이 있고 국면 수 · 모형이 비어서 시작하며 단추가 꺼져 있고 묻지 않는다 · 그래프 실행은 두 문을 부르지 않는다
+  ② 고르고 누르면 GET regime-split 한 번 · 요청의 열쇠 = 노드의 열쇠 · 표 = 서버(실제 답 · 둘 이상의 국면에 날이 있다는 전제)
+  ③ 하루 유형 비율: 모형 칸이 비면 묻지 않음 → 고르면 GET regime-day-types(열쇠 · 지수 · 국면 수 · 모형) · 합계 열 = 손 계산(표본 8 · 유형마다 2 · 25.0%) ·
+  고른 모형의 이름 전체가 판 안에 보인다(칸 아래 줄 — 짝: 넓은 화면에는 그 줄이 없다) ④ 다른 결과 노드를 고르면 답과 고른 칸이 사라지고 그 노드의 열쇠로 묻는다
+  ⑤ 열쇠 없는 결과면 묻지 않는다 · 거절(404)엔 재시도 없음 · 실패(500)엔 재시도 · 로그인 만료(401)의 링크는 `/login?next=%2Fallocation`
+  (짝 — 분봉 화면의 같은 갈래는 `next=%2Fbacktest%2Fintraday` · K2a · K2b 스펙에 401 시험을 보탠다) ⑥ 판 넘침 0 · 표의 상자만 넘음(키보드로 닿음)
+  ⑦ 라이트 · 다크 대비 AA · 문체. 칸마다 다른 심은 답은 화면 스펙 둘이 같은 부품에 건다(캔버스 스펙은 실은 길을 건다).
+- 기존: K2a · K2b E2E 18 · 캔버스 분봉 15 · 직접 구성(T2 모형 칸) 그대로 통과 · eslint 의 FSD 0 · tsc 0.
+- **K2c 변이(화면)**: 판의 열쇠를 다른 값으로 · 절 빼기 · `key` 빼기(노드를 바꿔도 답이 남음) · 단추 없이 저절로 묻기(국면 수를 고르면 · 모형을 고르면) · 옮긴 훅의 `reload` 빼기(칸에 들어갈 때 다시 읽지 않음) ·
+  `NO_MODELS` 글 바꾸기 · 로그인 링크의 돌아올 곳을 고정(401 갈래 빼기 포함) · 머리 단계를 고정(절 · 하위 절) · 국면 수를 미리 채우기 · 열쇠 없음에도 묻기 · 표 상자의 넘김 빼기 ·
+  (구현하며 보탠 것) 좁은 자리 알림 빼기 · 이름 줄이 열쇠만 · 이름 줄이 판 밖으로 · 이름 줄이 어절에서 꺾이지 않음 · 이름 줄이 넓은 화면에도 · 못 읽은 목록을 빈 목록으로(답이 온 `available: false` · 문 실패 둘) · 이름표가 학습 기간을 빼먹음.
+  캔버스 판의 변이는 캔버스 스펙으로, 옮긴 부품의 변이는 화면 스펙(국면별 나눔 · 하루 유형 비율 · 직접 구성의 하루 유형)으로 돈다.
+
 ### 7.4 K3 ~ K5 (조각을 시작할 때 감사 · 계약 · 시험을 이 절에 더한다)
 
 - K3 국면 조건 `regime_prob` · K4 캔버스 '매매 몫 결합' · K5 하루 유형 비율을 국면 입력으로 — 설계 §4 ~ §6.

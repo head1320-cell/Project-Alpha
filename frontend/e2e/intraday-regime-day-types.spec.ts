@@ -115,6 +115,10 @@ test("모형은 비어서 시작하고 국면 수 · 모형이 비면 묻지 않
   const asked: string[] = [];
   page.on("request", (r) => { if (IS_RDT(r.url())) asked.push(r.url()); });
   const { key, model } = await runJudge(page);
+  // 머리 단계(짝): 화면의 절은 h2 · 하위 절은 h3 — 캔버스 판에서는 같은 부품이 h3 · h4(`canvas-intraday-regime.spec.ts`)
+  const section = page.locator(".itd-rs").locator("xpath=ancestor::section[1]");
+  await expect(section.locator("h2.tx-sec-t")).toHaveText("시장 국면별로 나눠 보기");
+  await expect(section.locator("h3.tx-sec-t")).toHaveText("하루 유형 비율");
   await expect(page.locator(".itd-rdt-model")).toHaveValue("");
   await expect(page.locator(".itd-rdt-run")).toBeDisabled();
   await expect(page.locator(".itd-rdt-problems li")).toHaveText(["국면 수를 고르십시오.", "하루 유형 모형을 고르십시오."]);
@@ -141,13 +145,17 @@ test("모형은 비어서 시작하고 국면 수 · 모형이 비면 묻지 않
     probe.remove();
     return { need: Math.ceil(need), have: s.clientWidth, label };
   });
-  expect(fit.label, "전제 — 모형의 이름이 다 적혔다").toContain("유형 4개 · 5분");
+  expect(fit.label, "모형 이름 = 열쇠 앞 여덟 자리 · 학습 기간 · 유형 수 · 분 수(편집기의 모형 칸과 같은 글)").toBe(`${model.slice(0, 8)} · ${TRAIN.from}~${TRAIN.to} · 유형 4개 · 5분`);
   expect(fit.have, `모형 이름이 칸에 다 보인다: ${fit.label}`).toBeGreaterThanOrEqual(fit.need);
+  // 짝: 칸에 이름이 다 보이는 넓은 화면에는 이름을 다시 적는 줄이 없다(좁은 캔버스 판에만 — `canvas-intraday-regime.spec.ts`)
+  await expect(page.locator(".itd-rdt-model-full")).toHaveCount(0);
   await expect(page.locator(".itd-rdt-problems")).toHaveCount(0);
   // 국면 수를 바꾸면 앞의 답을 지운다(다른 물음의 답을 남기지 않는다) — 고른 모형은 그대로
   await page.locator(".itd-rs-k").selectOption("3");
   await expect(res).toHaveCount(0);
   await expect(page.locator(".itd-rdt-model")).toHaveValue(model);
+  // 단추 한 번에 한 번 — 칸을 고르거나 바꾸는 것만으로는 묻지 않는다(모형을 고를 때도 · 국면 수를 바꾼 뒤에도)
+  expect(asked).toHaveLength(1);
 });
 
 test("표 · 요약 줄 · 모형 사실 줄 · 한계 문장 = 서버 값 — 합계 열은 손 계산(표본 8 · 유형마다 2 · 25.0% · 표본 안 0)", async ({ page }) => {
@@ -275,7 +283,20 @@ test("세지 않은 까닭은 서버 사유 그대로 · 거절도 서버 사유
   await expect(page.locator(".itd-rdt-result")).toBeVisible({ timeout: 60_000 });
 });
 
-test("모형이 없으면 안내 · 목록을 못 읽으면 서버 사유 · 운영에서 숨긴 합성 모형은 그 수의 사유", async ({ page }) => {
+test("로그인 만료(401)는 로그인 링크 — 돌아올 곳은 이 화면이고 재시도는 없다", async ({ page }) => {
+  const { model } = await runJudge(page);
+  await page.route((u) => IS_RDT(u.toString()), (route) => route.fulfill({ status: 401, json: { detail: "로그인이 필요합니다." } }));
+  await page.locator(".itd-rs-k").selectOption("2");
+  await page.locator(".itd-rdt-model").selectOption(model);
+  await page.locator(".itd-rdt-run").click();
+  const note = page.locator(".itd-rdt .tx-notice").filter({ hasText: "로그인 세션이 만료됐습니다." });
+  // 짝: 캔버스의 같은 판은 `/allocation` 으로 돌아온다(`canvas-intraday-regime.spec.ts`)
+  await expect(note.locator("a")).toHaveAttribute("href", "/login?next=%2Fbacktest%2Fintraday");
+  await expect(page.locator(".itd-rdt").getByRole("button", { name: "재시도" })).toHaveCount(0);
+  await expect(page.locator(".itd-rdt-result")).toHaveCount(0);
+});
+
+test("모형이 없으면 안내 · 목록을 못 읽으면(저장소 장애 · 문 실패) 서버 사유 · 운영에서 숨긴 합성 모형은 그 수의 사유", async ({ page }) => {
   await runJudge(page);
   const hidden = "심은 사유: 운영에서는 합성 분봉으로 학습한 모형을 보이지 않습니다.";
   await page.route((u) => IS_LIST(u.toString()) , (route) => route.fulfill({ json: {
@@ -294,6 +315,14 @@ test("모형이 없으면 안내 · 목록을 못 읽으면 서버 사유 · 운
   await page.locator(".itd-rdt-model").focus();
   await expect(page.locator(".itd-rdt-list-note")).toHaveText(down);
   await expect(page.locator(".itd-rdt-no-models")).toHaveCount(0);                // 못 읽은 것은 '없다'가 아니다
+  // 목록 문 자체가 실패해도(503 · 서버 사유) 빈 목록이 아니라 그 사유다 — 같은 훅의 다른 갈래(위는 답이 온 `available: false`)
+  await page.unroute((u) => IS_LIST(u.toString()));
+  const failed = "심은 장애: 하루 유형 모형 목록을 읽지 못했습니다.";
+  await page.route((u) => IS_LIST(u.toString()), (route) => route.fulfill({ status: 503, json: { detail: failed } }));
+  await page.locator(".itd-rs-k").focus();
+  await page.locator(".itd-rdt-model").focus();
+  await expect(page.locator(".itd-rdt-list-note")).toHaveText(failed);
+  await expect(page.locator(".itd-rdt-no-models")).toHaveCount(0);
 });
 
 for (const theme of ["light", "dark"] as const) {

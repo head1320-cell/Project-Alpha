@@ -4349,6 +4349,10 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-itd .itd-verdict .tx-sec { padding: 14px 0 0; border-radius: 0; background: none; border-top: 1px solid var(--pg-line); }
 .pg-itd .itd-verdict .tx-sec-t { font-size: 14px; }
 .pg-itd .itd-verdict .tj-table { font-size: 12.5px; }
+/* 캔버스 '분봉 결과 조회' 판 안의 국면 나눔(K2c) — 화면의 절 부품을 판의 모양으로(바로 위 판정 부품과 같은 방식 · 새 클래스만) */
+.pg-itd-rs .tx-sec { padding: 14px 0 0; border-radius: 0; background: none; border-top: 1px solid var(--pg-line); }
+.pg-itd-rs .tx-sec-t { font-size: 14px; }
+.pg-itd-rs .itd-rs-head, .pg-itd-rs .itd-rdt-head { font-size: 14px; }
 .pg-kv, .pf-mkv { display: grid; gap: 4px; margin: 0; font-size: 13.5px; }
 .pg-kv > div, .pf-mkv > div { display: flex; justify-content: space-between; gap: 8px; }
 .pg-kv dt, .pf-mkv dt { color: var(--pg-mute); } .pg-kv dd, .pf-mkv dd { margin: 0; font-weight: 600; text-align: right; color: var(--pg-ink); }
@@ -10842,6 +10846,7 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-rdt { display: flex; flex-direction: column; gap: 14px; }
 .itd-rdt-form { display: flex; flex-direction: column; gap: 12px; }
 .itd-rdt-fields { grid-template-columns: minmax(0, 480px); }        /* 모형 칸 하나 — 이름이 다 보이는 폭(좁은 폭에서는 가득) */
+.itd-rdt-model-full { margin: -6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; overflow-wrap: anywhere; }   /* 좁은 판에서 칸이 자른 모형 이름 전체(K2c) · 어절에서 꺾는다 */
 .itd-rdt-result { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .itd-rdt-head { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
 .itd-rdt-range { white-space: nowrap; }

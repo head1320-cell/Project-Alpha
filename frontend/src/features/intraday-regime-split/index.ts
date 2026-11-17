@@ -1,1 +1,1 @@
-export { RegimeSplitTable } from "./RegimeSplitTable";
+export { RegimeSplitBlock } from "./RegimeSplitBlock";

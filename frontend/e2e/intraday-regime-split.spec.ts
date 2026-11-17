@@ -280,6 +280,18 @@ test("나누지 않은 까닭은 서버 사유 그대로 · 거절도 서버 사
   await expect(page.locator(".itd-rs-result")).toBeVisible();
 });
 
+test("로그인 만료(401)는 로그인 링크 — 돌아올 곳은 이 화면이고 재시도는 없다", async ({ page }) => {
+  await simulateHand(page);
+  await page.route((u) => IS_SPLIT(u.toString()), (route) => route.fulfill({ status: 401, json: { detail: "로그인이 필요합니다." } }));
+  await page.locator(".itd-rs-k").selectOption("2");
+  await page.locator(".itd-rs-run").click();
+  const note = page.locator(".itd-rs .tx-notice").filter({ hasText: "로그인 세션이 만료됐습니다." });
+  // 짝: 캔버스의 같은 판은 `/allocation` 으로 돌아온다(`canvas-intraday-regime.spec.ts`) — 돌아올 곳을 한 화면에 박으면 둘 중 하나가 깨진다
+  await expect(note.locator("a")).toHaveAttribute("href", "/login?next=%2Fbacktest%2Fintraday");
+  await expect(page.locator(".itd-rs").getByRole("button", { name: "재시도" })).toHaveCount(0);
+  await expect(page.locator(".itd-rs-result")).toHaveCount(0);
+});
+
 test("시행을 기록하지 못한 실행이면 물을 열쇠가 없어 묻지 않는다", async ({ page }) => {
   const asked: string[] = [];
   page.on("request", (r) => { if (IS_SPLIT(r.url())) asked.push(r.url()); });

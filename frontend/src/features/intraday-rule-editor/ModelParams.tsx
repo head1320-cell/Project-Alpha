@@ -7,39 +7,11 @@
  * ★처음에는 비어 있다★ — 도구는 모형을 고르지 않는다. 고른 모형의 유형 수가 번호 칸의 상한이다.
  * 학습 기간이 판정 시작일 뒤인지 · 남의 모형인지는 서버가 판정해 거절한다(이 부품은 판정하지 않는다).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { listDayTypes, type DayTypeSummary, type GrammarIndicator, type GrammarModelParam, type IndNode } from "@/entities/intraday";
-
-/** 모형이 하나도 없을 때의 안내 — 모형은 백테스트 › 분봉 규칙의 '하루 유형' 절에서 학습한다(캔버스에서도 같은 문장). */
-export const NO_MODELS = "학습한 하루 유형 모형이 없습니다. 백테스트 › 분봉 규칙의 ‘하루 유형’에서 먼저 학습합니다.";
+import { useState } from "react";
+import { modelLabel, NO_MODELS, useDayTypeModels, type GrammarIndicator, type GrammarModelParam, type IndNode } from "@/entities/intraday";
 
 const HEX64 = /^[0-9a-f]{64}$/;
 export const isModelKey = (v: unknown): v is string => typeof v === "string" && HEX64.test(v);
-
-/** 고르기 목록의 한 줄 — 열쇠 앞 여덟 자리 · 학습 기간 · 유형 수 · 분 수(합성이면 그렇다고). 글자는 서버 값 그대로다. */
-export const modelLabel = (m: DayTypeSummary): string =>
-  `${m.key.slice(0, 8)} · ${m.first_day}~${m.last_day} · 유형 ${m.k}개 · ${m.minutes}분${m.synthetic ? " · 합성" : ""}`;
-
-type Listed = { models: DayTypeSummary[] | null; note: string | null };
-
-function useDayTypeModels(): Listed & { reload: () => void } {
-  const [state, setState] = useState<Listed>({ models: null, note: null });
-  const alive = useRef(true);
-  const reload = useCallback(() => {
-    void listDayTypes().then((r) => {
-      if (!alive.current) return;
-      if (!r.ok) return setState({ models: null, note: r.error });
-      if (!r.value.available) return setState({ models: null, note: r.value.reason });
-      setState({ models: r.value.models, note: r.value.hidden_synthetic ? r.value.hidden_reason : null });
-    });
-  }, []);
-  useEffect(() => {
-    alive.current = true;
-    reload();
-    return () => { alive.current = false; };
-  }, [reload]);
-  return { ...state, reload };
-}
 
 function NumberInput({ label, value, onChange, min, max }: {
   label: string; value: number | null; onChange: (v: number | null) => void; min: number; max: number;

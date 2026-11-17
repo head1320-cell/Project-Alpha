@@ -11,6 +11,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Breakeven, Brief, Validation } from "@/entities/intraday";
 import { ContextFacts, factsOf } from "@/features/intraday-day-types";
+import { RegimeSplitBlock } from "@/features/intraday-regime-split";
 import { Verdict, bp1 } from "@/features/intraday-verdict";
 import { UNKNOWN_TEXT, num, signedWon } from "@/shared/lib/krFormat";
 import { Notice } from "@/shared/ui/tx";
@@ -60,8 +61,11 @@ const stamp = (sec: unknown): string =>
     ? new Date(sec * 1000).toLocaleString("ko-KR", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : UNKNOWN_TEXT);
 
+/** 결과 조회 판에서 묻는 국면 나눔(K2c) — 화면의 절과 같은 부품 · 같은 문 · 이 노드의 시행 열쇠. 열쇠가 없는 답이면 이 문장을 보이고 묻지 않는다. */
+const NO_TRIAL_KEY = "이 결과가 어느 시행의 것인지 적혀 있지 않아 국면별로 나눌 수 없습니다.";
+
 export function IntradayLoadResult({ v }: { v: Dict }) {
-  const view = v as unknown as Validation & { trial_key: string; result_at: number; runs: number };
+  const view = v as unknown as Validation & { trial_key?: string | null; result_at: number; runs: number };
   const s: Brief | null = view.summary ?? null;
   const b: Breakeven | null = view.breakeven ?? null;
   const r = dict(v.request), data = dict(v.data);
@@ -90,6 +94,10 @@ export function IntradayLoadResult({ v }: { v: Dict }) {
       <p className="pg-note">실행할 때 남긴 요약입니다. 다시 계산하지 않았고, 시행 횟수는 그때의 값입니다. 거래 목록과 손익 곡선은 ‘백테스트 › 분봉 규칙’ 화면에서 확인합니다.</p>
       <p className="pg-itd-h">이 실행의 관문 일곱</p>
       <Verdict v={view} labels={{}} />
+      {/* ★단추로만 묻는다★(캔버스 규칙 6 — 그래프 계산은 이 문을 부르지 않는다) · 다른 결과 노드를 고르면 `key` 가 앞의 답과 고른 칸을 지운다 */}
+      <div className="pg-itd-rs">
+        <RegimeSplitBlock key={view.trial_key ?? "no-trial"} trialKey={view.trial_key} level={3} missing={NO_TRIAL_KEY} narrow />
+      </div>
     </div>
   );
 }

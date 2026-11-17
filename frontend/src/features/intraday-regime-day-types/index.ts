@@ -1,1 +1,0 @@
-export { RegimeDayTypesTable } from "./RegimeDayTypesTable";

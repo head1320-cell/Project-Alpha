@@ -173,12 +173,14 @@ test("학습 기간과 겹치는 판정은 서버가 거절한다(문장 그대�
   await expect(page.locator(`.itd-result .itd-ctx-item[data-key="${key}"] .itd-ctx-line`)).toHaveText(facts(key));
 });
 
-test("모형 목록: 없으면 어디서 학습하는지 안내 · 못 읽으면 빈 목록이 아니라 서버 사유 · 칸에 들어갈 때마다 다시 읽는다", async ({ page }) => {
-  let mode: "none" | "down" | "real" = "none";
+test("모형 목록: 없으면 어디서 학습하는지 안내 · 못 읽으면(저장소 장애 · 문 실패) 빈 목록이 아니라 서버 사유 · 칸에 들어갈 때마다 다시 읽는다", async ({ page }) => {
+  let mode: "none" | "down" | "fail" | "real" = "none";
   let listed = 0;
+  const FAIL = "심은 장애: 하루 유형 모형 목록을 읽지 못했습니다.";
   await page.route(LIST, async (route) => {
     if (route.request().method() !== "GET") return route.continue();
     listed += 1;
+    if (mode === "fail") return route.fulfill({ status: 503, json: { detail: FAIL } });   // 목록 문 자체가 실패(서버 사유)
     const real = await route.fetch();
     const body = await real.json();
     if (mode === "real") return route.fulfill({ response: real, json: body });
@@ -199,6 +201,13 @@ test("모형 목록: 없으면 어디서 학습하는지 안내 · 못 읽으면
   await expect.poll(() => listed).toBeGreaterThan(before);
   await expect(note).toHaveText(DOWN);                                              // 못 읽음 ≠ 없음
   await expect(note).not.toHaveText(NO_MODELS);
+
+  mode = "fail";                                                                     // 같은 훅의 다른 갈래 — 답이 오지 않은 실패도 없음이 아니다
+  await page.locator(".itd-tickers").focus();
+  before = listed;
+  await pick(page).focus();
+  await expect.poll(() => listed).toBeGreaterThan(before);
+  await expect(note).toHaveText(FAIL);
 
   mode = "real";
   await page.locator(".itd-tickers").focus();
