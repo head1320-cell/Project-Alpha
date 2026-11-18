@@ -86,6 +86,8 @@ ROUTER_MODULES: tuple[str, ...] = (
     "src.api.intraday_market_regime_routes",
     # 국면별 성과 나눔(K2) — 내 시행의 일별 흐름을 시장 국면별로(로그인 · 본인 것만 · 읽기만 · 시행을 남기지 않음).
     "src.api.intraday_regime_split_routes",
+    # 하루 유형 비중을 더한 시장 국면(K5) — 내 모형으로 바구니의 하루 유형을 세어 남기기 · 두 국면을 나란히(로그인 · 본인 모형만 · 시행을 남기지 않음).
+    "src.api.intraday_regime_share_routes",
 )
 
 #: 로컬 개발 기본 출처. ★`"*"` 는 없다★(P-1 완료 판정) —

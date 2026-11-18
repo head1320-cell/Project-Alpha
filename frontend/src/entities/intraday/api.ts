@@ -5,9 +5,10 @@
 import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
 import { call, type Result } from "@/shared/api/result";
 import type {
-  Coverage, DayTypeAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest, Divergence, DivergenceRequest, Expanded,
+  Coverage, DayTypeAnswer, DayTypeCountsAnswer, DayTypeCountsRequest, DayTypeInputAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest,
+  Divergence, DivergenceRequest, Expanded,
   MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, RegimeDayTypesAnswer, RegimeSplitAnswer, ResultList,
-  SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
+  ShareRefusal, SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
 } from "./types";
 
 const BASE = "/api/v1/intraday";
@@ -109,4 +110,37 @@ export async function getMarketRegime(q: { index: MarketIndex; k: number; from: 
   } catch {
     return { ok: false, status: 0, error: "서버 연결 실패", refusal: null };
   }
+}
+
+// ── 하루 유형 비중을 더한 시장 국면 — K5 ─────────────────────────────────────────────────
+/** 실패는 상태 · 서버 문장 · (거절이면) 코드와 문장 — 화면은 거절(400 · 404)과 실패(503 · 연결)를 다르게 보인다. */
+export type ShareResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string; refusal: ShareRefusal | null };
+
+async function shareCall<T>(res: Promise<Response>): Promise<ShareResult<T>> {
+  try {
+    const r = await res;
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) {
+      const detail = (js as { detail?: unknown } | null)?.detail;
+      const refusal = detail && typeof detail === "object" && !Array.isArray(detail) && typeof (detail as { code?: unknown }).code === "string"
+        && typeof (detail as { reason?: unknown }).reason === "string" ? detail as ShareRefusal : null;
+      return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`), refusal };
+    }
+    return { ok: true, value: js as T };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패", refusal: null };
+  }
+}
+
+/** 비중 세기 — 내 모형으로 바구니의 날마다 하루 유형을 세어 남긴다(쓰기 · 한 부름의 예산 안에서 날짜 순 · 남으면 다음 부름이 잇는다). */
+export const countDayTypeShare = (body: DayTypeCountsRequest): Promise<ShareResult<DayTypeCountsAnswer>> =>
+  shareCall<DayTypeCountsAnswer>(postJson(`${BASE}/market-regime/day-type-counts`, body));
+
+/** 지수만의 국면과 하루 유형 비중을 더한 국면을 나란히 — 읽기만(쓰기 0 · 시행 수 불변). 유형 · 종목은 이름을 되풀이한 인자로 보낸다. */
+export function getDayTypeInput(q: { index: MarketIndex; k: number; from: string; to: string; model: string; types: number[]; tickers: string[] }):
+  Promise<ShareResult<DayTypeInputAnswer>> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k), from: q.from, to: q.to, model: q.model });
+  for (const t of q.types) params.append("types", String(t));
+  for (const t of q.tickers) params.append("tickers", t);
+  return shareCall<DayTypeInputAnswer>(getWithAuth(`${BASE}/market-regime/day-type-input?${params.toString()}`));
 }

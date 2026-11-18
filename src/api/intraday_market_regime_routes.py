@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Literal
 
@@ -91,45 +93,86 @@ def market_regime(index: Literal["KOSPI", "KOSDAQ"] = Query(...),
     return regime_answer(index, k, from_, to)
 
 
-def regime_answer(index: str, k: int, from_: date, to: date) -> dict[str, Any]:
-    """국면 답 하나 — 이 문과 국면별 성과 나눔(K2 · `intraday_regime_split_routes`)이 ★같은 함수★를 쓴다:
-    같은 기간 규칙(어기면 400) · 같은 읽기(판정 시작일의 `HISTORY_CALENDAR_DAYS` 앞부터) · 같은 등급 · 같은 빈 값 사유(운영 합성 거절 · 장애 ≠ 없음)."""
+@dataclass(frozen=True)
+class IndexRead:
+    """지수 일봉 읽기 하나 — 날짜 · 종가(오름차순 · 판정 시작일의 `HISTORY_CALENDAR_DAYS` 앞부터) · 출처와 등급 · 덮음 · 빈 값 사유(있으면 날짜는 비어 있다)."""
+
+    dates: list[str]
+    closes: np.ndarray | None
+    source: str | None
+    grade: str | None
+    grade_reason: str | None
+    coverage: dict[str, Any]
+    empty: dict[str, str] | None
+
+
+def check_period(from_: date, to: date) -> None:
+    """국면의 기간 규칙(어기면 400) — 이 문 · K5 의 비중 세기와 비중을 더한 국면이 같은 규칙을 쓴다. ★읽기 전에★ 본다."""
     if from_ > to:
         raise _refuse("bad_range")
     span = (to - from_).days + 1
     if span > MAX_RANGE_DAYS:
         raise _refuse("range_too_long", limit=MAX_RANGE_DAYS, days=span)
 
+
+def read_index(index: str, from_: date, to: date) -> IndexRead:
+    """지수 일봉을 한 길로 읽는다 — 같은 읽기 구간 · 같은 등급 · 같은 빈 값 사유(장애 ≠ 없음 · 운영 합성 거절 · 날짜 겹침 · 기간 안 적재 없음)."""
     mock = mock_allowed()
     start, end = from_.isoformat(), to.isoformat()
     df = load_index_daily(index, (from_ - timedelta(days=HISTORY_CALENDAR_DAYS)).isoformat(), end)
     attrs = dict(getattr(df, "attrs", {}) or {})
     source = attrs.get("source")
     grade, grade_reason = _grade(source)
-    shared: dict[str, Any] = {
-        "index": index, "name": INDEXES[index], "k": k, "from": start, "to": end, "mock": mock,
-        "coverage": {"ok": attrs.get("coverage_ok"), "reason": attrs.get("coverage_reason")},
-        "notes": list(NOTES), "limits": _limits(),
-    }
-    nothing = {"days": [], "states": [], "transitions": None, "bic": None, "agreement": None, "fit": None,
-               "grade": None, "grade_reason": None, "source": source}
+    coverage = {"ok": attrs.get("coverage_ok"), "reason": attrs.get("coverage_reason")}
+
+    def empty(code: str) -> IndexRead:
+        message = EMPTY[code].format(name=INDEXES[index]) if code == "not_loaded" else EMPTY[code]
+        return IndexRead([], None, source, grade, grade_reason, coverage, {"reason": code, "message": message})
 
     if attrs.get("db_error"):
         logger.warning("지수 일봉 저장소 조회 실패 — 국면을 내지 않는다(%s)", index)
-        return {**shared, **nothing, "empty": {"reason": "store_error", "message": EMPTY["store_error"]}}
+        return empty("store_error")
     if source == "mock" and not mock:
         logger.warning("운영에서 합성 지수 일봉이 문까지 왔다 — 국면을 내지 않는다(%s)", index)
-        return {**shared, **nothing, "empty": {"reason": "synthetic_in_production", "message": EMPTY["synthetic_in_production"]}}
+        return empty("synthetic_in_production")
     if df is None or df.empty or "close" not in df.columns:
-        return {**shared, **nothing, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"].format(name=INDEXES[index])}}
+        return empty("not_loaded")
 
     df = df.sort_index()
     dates = [d.strftime("%Y-%m-%d") for d in df.index]
     if len(set(dates)) != len(dates):
-        return {**shared, **nothing, "empty": {"reason": "bad_dates", "message": EMPTY["bad_dates"]}}
+        return empty("bad_dates")
     if not any(start <= d <= end for d in dates):
-        return {**shared, **nothing, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"].format(name=INDEXES[index])}}
+        return empty("not_loaded")
+    return IndexRead(dates, df["close"].to_numpy(dtype=float, na_value=np.nan), source, grade, grade_reason, coverage, None)
 
-    closes = df["close"].to_numpy(dtype=float, na_value=np.nan)
-    out = mr.regime_days(dates, closes, k=k, start=start, end=end)
-    return {**shared, **out, "grade": grade, "grade_reason": grade_reason, "source": source, "empty": None}
+
+#: 셋째 특징을 짓는 부름 — 지수 거래일(읽기 구간 전체 · 오름차순) → (날마다의 값 · 모르면 NaN, 모르는 날의 사유 문장 또는 None).
+Extra = Callable[[list[str]], tuple[Sequence[float], list[str | None]]]
+
+
+def regime_answer(index: str, k: int, from_: date, to: date, extra: Extra | None = None) -> dict[str, Any]:
+    """국면 답 하나 — 이 문과 국면별 성과 나눔(K2 · `intraday_regime_split_routes`)이 ★같은 함수★를 쓴다:
+    같은 기간 규칙(어기면 400) · 같은 읽기(판정 시작일의 `HISTORY_CALENDAR_DAYS` 앞부터) · 같은 등급 · 같은 빈 값 사유(운영 합성 거절 · 장애 ≠ 없음).
+
+    `extra`(선택 · K5) — 읽은 지수 거래일을 받아 셋째 특징(하루 유형 비중)과 모르는 날의 사유를 돌려주는 부름. 없으면 지금과 같은 답이다
+    (엔진도 같은 인자로 부른다). 빈 값이면 부르지 않는다(지수가 없으면 비중도 쓸 데가 없다)."""
+    check_period(from_, to)
+    mock = mock_allowed()
+    start, end = from_.isoformat(), to.isoformat()
+    got = read_index(index, from_, to)
+    shared: dict[str, Any] = {
+        "index": index, "name": INDEXES[index], "k": k, "from": start, "to": end, "mock": mock,
+        "coverage": got.coverage, "notes": list(NOTES), "limits": _limits(),
+    }
+    if got.empty is not None:
+        nothing = {"days": [], "states": [], "transitions": None, "bic": None, "agreement": None, "fit": None,
+                   "grade": None, "grade_reason": None, "source": got.source}
+        return {**shared, **nothing, "empty": got.empty}
+
+    if extra is None:
+        out = mr.regime_days(got.dates, got.closes, k=k, start=start, end=end)
+    else:
+        values, reasons = extra(list(got.dates))
+        out = mr.regime_days(got.dates, got.closes, k=k, start=start, end=end, extra=values, extra_reasons=reasons)
+    return {**shared, **out, "grade": got.grade, "grade_reason": got.grade_reason, "source": got.source, "empty": None}

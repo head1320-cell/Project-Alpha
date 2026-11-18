@@ -297,3 +297,191 @@ def test_a_days_probability_is_the_mean_of_the_seeds_fitted_independently():
     want = np.mean(per_seed, axis=0)
     assert np.allclose(day["probs"], want, atol=1e-9)
     assert not np.allclose(day["probs"], per_seed[0], atol=1e-3)                  # 짝 — 시드 0 하나의 답이 아니다
+
+
+# ── K5: 셋째 특징(하루 유형 비중) — 구현 계획 §7.6 ──────────────────────────────────────────────
+def share_steps(n: int, size: int = 10, lo: float = 0.2, hi: float = 0.6, noise: float = 0.02, seed: int = 0) -> np.ndarray:
+    """비중에만 두 수준을 심은 열 — `size` 거래일마다 lo ↔ hi(지수 특징에는 아무 흔적이 없다)."""
+    rng = np.random.default_rng(seed)
+    level = np.where((np.arange(n) // size) % 2 == 0, lo, hi)
+    return np.clip(level + rng.normal(0.0, noise, n), 0.0, 1.0)
+
+
+def month_agreement(days: list[dict], truth: list[int | None]) -> float:
+    """달마다 번호를 바꿔 맞춰 본 일치율(국면 2) — 번호는 σ20 순이라 비중으로 갈린 두 성분은 달마다 번호가 바뀔 수 있다(그 진단은 따로 건다)."""
+    by_month: dict[str, list[tuple[int, int]]] = {}
+    for d, t in zip(days, truth):
+        if d["top"] is not None and t is not None:
+            by_month.setdefault(d["date"][:7], []).append((d["top"], t))
+    hit = total = 0
+    for pairs in by_month.values():
+        same = sum(a == b for a, b in pairs)
+        hit += max(same, len(pairs) - same)
+        total += len(pairs)
+    return hit / total
+
+
+def test_the_extra_column_and_its_reasons_must_match_the_dates():
+    closes, dates = walk(300, 0.01), bdays(300)
+    with pytest.raises(mr.RegimeError):
+        mr.regime_days(dates, closes, k=2, start=dates[-1], end=dates[-1], extra=np.zeros(299))
+    with pytest.raises(mr.RegimeError):
+        mr.regime_days(dates, closes, k=2, start=dates[-1], end=dates[-1], extra=np.zeros(300), extra_reasons=[None] * 10)
+
+
+def test_with_a_share_a_days_probability_does_not_see_that_days_share():
+    """거래일 d 의 확률은 d−1 의 비중까지 — d 의 비중(그날 표본이 든 창)을 바꿔도 d 는 같다 ↔ d+1 은 바뀐다(셋째 열이 실제로 쓰인다)."""
+    n = 1100
+    closes, dates = walk(n, 0.01, seed=3), bdays(n)
+    extra = share_steps(n, seed=1)
+
+    def run(e):
+        return {d["date"]: d["probs"] for d in mr.regime_days(dates, closes, k=2, start=dates[880], end=dates[-1], extra=e)["days"]}
+
+    base = run(extra)
+    for cut in (900, 1010):
+        moved = extra.copy()
+        moved[cut] = 0.6 if moved[cut] < 0.4 else 0.2                    # 다른 수준으로 — 다음 날의 국면이 실제로 바뀌게
+        again = run(moved)
+        for day in dates[880:cut + 1]:
+            assert again[day] == base[day], (cut, day)
+        assert again[dates[cut + 1]] != base[dates[cut + 1]], cut
+
+
+def test_a_split_only_in_the_share_is_found_with_it_and_not_without_it():
+    """비중에만 심은 두 수준(열흘마다 바뀜)을 셋째 특징을 더한 답은 가르고, 지수 특징만의 답(K1)은 못 가른다 — 셋째 열이 공허하지 않다는 것.
+    국면을 맞힌다는 뜻이 아니다(자료에 심은 것을 되찾았을 뿐 — 관측)."""
+    n = 1440
+    closes, dates = walk(n, 0.0125, seed=7), bdays(n)
+    extra = share_steps(n, seed=2)
+    truth = [None] + [int(((i - 1) // 10) % 2) + 1 for i in range(1, n)]   # 거래일 i 는 i−1 의 비중을 본다
+    with_share = mr.regime_days(dates, closes, k=2, start=dates[1000], end=dates[-1], extra=extra)
+    index_only = mr.regime_days(dates, closes, k=2, start=dates[1000], end=dates[-1])
+    assert month_agreement(with_share["days"], truth[1000:]) > 0.95
+    assert month_agreement(index_only["days"], truth[1000:]) < 0.8
+
+
+class FakeMixture:
+    """성분 평균과 가능도 하한만 가진 적합 — 시드 맞춤을 GMM 의 국소해와 떼어 놓고 건다."""
+
+    def __init__(self, means, lower_bound: float):
+        self.means_ = np.asarray(means, dtype=float)
+        self.lower_bound_ = lower_bound
+
+
+def test_seeds_are_matched_to_the_best_seed_before_averaging():
+    """비중으로 갈린 두 성분은 σ20 평균이 거의 같아 시드마다 σ20 순 번호가 뒤바뀐다 — 시드 평균 전에 성분을 평균의 거리로 맞춘다.
+    기준은 가능도가 가장 큰 시드(둘째)이고 번호는 그 시드의 σ20 순: 국면 1 = σ20 0.09 · 비중 +1 성분.
+    잡는 구현 셋: 시드마다 따로 σ20 순(첫 시드의 국면 1 이 비중 −1) · 첫 시드를 기준으로(국면 1 이 비중 −1) · 맞춘 뒤 번호를 다시 시드 것으로."""
+    a = [[0.0, 0.10, -1.0], [0.0, 0.11, 1.0]]
+    b = [[0.0, 0.12, -1.0], [0.0, 0.09, 1.0]]                            # 같은 두 성분 — σ20 순으로는 a 와 번호가 뒤바뀐다
+    c = [[0.0, 0.11, 1.0], [0.0, 0.10, -1.0]]
+    out = mr._matched([(FakeMixture(a, -2.0), None), (FakeMixture(b, -1.0), None), (FakeMixture(c, -3.0), None)])
+    assert out[0][0].lower_bound_ == -1.0                                # 기준이 맨 앞(성분 평균은 기준의 것을 읽는다)
+    for g, order in out:
+        assert g.means_[order[0]][2] == 1.0 and g.means_[order[1]][2] == -1.0
+
+
+def test_with_a_share_the_seed_average_keeps_a_share_split_sharp():
+    """통합 — 비중 계단 자료에서 대부분의 날은 한 국면에 확률이 몰린다. 잰 값(맞춤 기준 = 가능도 최대): 가장 큰 확률의 중앙값 0.906 ·
+    번호가 앞 달과 이어지지 않은 달 4 / 적합 21. 시드 열 가운데 셋(0 · 6 · 7)은 비중이 아닌 다른 해(가능도 하한 −4.20 ~ −4.23 ↔ 비중 해 −2.63)에
+    수렴해 그 몫만큼 덜 날카롭다 — 시드 평균의 성질이지 맞춤의 결함이 아니다(K1 도 모든 시드를 평균한다). 문턱 0.85 는 잰 값에서 여유를 둔 것."""
+    n = 1440
+    closes, dates = walk(n, 0.0125, seed=7), bdays(n)
+    out = mr.regime_days(dates, closes, k=2, start=dates[1000], end=dates[-1], extra=share_steps(n, seed=2))
+    tops = [d["top_prob"] for d in out["days"] if d["top_prob"] is not None]
+    assert len(tops) > 400 and float(np.median(tops)) > 0.85
+
+
+def test_with_a_share_the_numbering_is_still_by_volatility_and_the_centers_are_reported():
+    """번호는 K1 과 같이 적합 창에서 성분의 σ20 평균 순 — 변동성 두 단계 지수에 잡음 비중을 더해도 국면 1 이 변동성이 낮다 ·
+    K1 의 답과 거의 같은 날을 고른다. 마지막 적합의 성분 평균(원래 단위)을 함께 싣는다(무엇이 국면을 가르는지 보이게)."""
+    closes = two_level()
+    dates = bdays(len(closes))
+    noise = np.clip(0.4 + np.random.default_rng(5).normal(0.0, 0.05, len(closes)), 0.0, 1.0)
+    with_share = mr.regime_days(dates, closes, k=2, start=dates[1000], end=dates[-1], extra=noise)
+    index_only = mr.regime_days(dates, closes, k=2, start=dates[1000], end=dates[-1])
+    vols = [s["realized_vol"] for s in with_share["states"]]
+    assert vols == sorted(vols)
+    pairs = [(a["top"], b["top"]) for a, b in zip(with_share["days"], index_only["days"]) if a["top"] and b["top"]]
+    assert len(pairs) > 300 and sum(a == b for a, b in pairs) / len(pairs) > 0.9
+    centers = with_share["centers"]
+    assert [c["state"] for c in centers] == [1, 2] and set(centers[0]) == {"state", "r20", "sigma20", "share"}
+    assert centers[0]["sigma20"] < centers[1]["sigma20"]
+    assert all(0.3 < c["share"] < 0.5 for c in centers)                # 잡음 비중(평균 0.4)은 두 성분에서 비슷하다
+    assert "centers" not in index_only and "renumbered" not in index_only["fit"]   # K1 답의 모양은 그대로
+
+
+def test_the_centers_show_a_share_split():
+    n = 1440
+    closes, dates = walk(n, 0.0125, seed=7), bdays(n)
+    centers = mr.regime_days(dates, closes, k=2, start=dates[1000], end=dates[-1], extra=share_steps(n, seed=2))["centers"]
+    assert sorted(round(c["share"], 1) for c in centers) == [0.2, 0.6]
+
+
+def test_numbering_follows_when_the_matched_components_keep_their_order():
+    """달 사이 번호가 이어지는지 — 앞 달 성분과 이번 달 성분을 평균의 거리(이번 창의 표준편차로 나눈)로 맞춰 번호가 그대로면 이어진다.
+    σ20 이 거의 같은 두 성분은 달마다 번호가 뒤바뀔 수 있다(띠의 색이 달 경계에서 바뀌는 것은 국면이 바뀐 것이 아니다) — 그 달을 센다."""
+    scale = np.array([0.02, 0.05, 0.1])
+    prev = np.array([[0.0, 0.10, 0.2], [0.0, 0.11, 0.6]])
+    assert mr.numbering_follows(prev, prev + 0.001, scale)
+    assert not mr.numbering_follows(prev, np.array([[0.0, 0.10, 0.6], [0.0, 0.11, 0.2]]), scale)
+
+
+def test_the_answer_counts_the_months_whose_numbering_did_not_follow():
+    n = 1440
+    closes, dates = walk(n, 0.0125, seed=7), bdays(n)
+    out = mr.regime_days(dates, closes, k=2, start=dates[1000], end=dates[-1], extra=share_steps(n, seed=2))
+    fit = out["fit"]
+    assert 0 <= fit["renumbered"] <= fit["refits"] - 1
+    assert len(fit["renumbered_months"]) == fit["renumbered"]
+    assert all(m[:4].isdigit() and m[4] == "-" for m in fit["renumbered_months"])
+
+
+def test_a_share_that_never_varies_is_flat_share_not_a_split():
+    n = 1100
+    closes, dates = walk(n, 0.01, seed=3), bdays(n)
+    out = mr.regime_days(dates, closes, k=2, start=dates[900], end=dates[-1], extra=np.full(n, 0.3))
+    assert all(d["probs"] is None and d["reason"] == mr.REASONS["flat_share"] for d in out["days"])
+    plain = mr.regime_days(dates, closes, k=2, start=dates[900], end=dates[-1])
+    assert all(d["probs"] is not None for d in plain["days"])            # 짝 — 지수 특징만으로는 값이 있다(평평한 것은 비중이다)
+
+
+def test_an_unknown_share_day_carries_the_share_reason_and_a_bad_close_keeps_the_index_reason():
+    n, fit_days = 520, 200
+    closes = walk(n, np.where((np.arange(n) // 60) % 2 == 0, 0.006, 0.02), seed=4)
+    closes[450] = 0.0
+    dates = bdays(n)
+    extra = share_steps(n, seed=3)
+    reasons: list[str | None] = [None] * n
+    for i in (420, 421):
+        extra[i] = np.nan
+        reasons[i] = "창 안에 아직 세지 않은 날이 있습니다."
+    out = mr.regime_days(dates, closes, k=2, start=dates[400], end=dates[-1], fit_days=fit_days, extra=extra, extra_reasons=reasons)
+    by = {d["date"]: d for d in out["days"]}
+    assert by[dates[421]]["probs"] is None and by[dates[421]]["reason"] == "창 안에 아직 세지 않은 날이 있습니다."
+    assert by[dates[422]]["probs"] is None and by[dates[423]]["probs"] is not None
+    assert by[dates[460]]["reason"] == mr.REASONS["no_feature"]          # 나쁜 종가 뒤는 K1 의 사유 그대로
+    bare = mr.regime_days(dates, closes, k=2, start=dates[400], end=dates[-1], fit_days=fit_days, extra=extra)
+    assert {d["date"]: d["reason"] for d in bare["days"]}[dates[421]] == mr.REASONS["no_share"]   # 사유 문장이 없으면 일반 문장
+
+
+def test_with_a_share_the_fit_window_is_the_last_days_whose_three_features_are_all_known():
+    """적합 창 = 그달 첫 거래일 전에 세 특징이 모두 있는 마지막 `fit_days` 날 — 비중을 모르는 날은 창에서 빠지고 창이 그만큼 앞으로 늘어난다.
+    더한 답의 한계 문장('세 특징이 모두 있는 마지막 750거래일')의 근거다(K5 구현 뒤에 쓴 특성 시험 — 변이 둘로 공허하지 않음을 본다).
+    지수 특징이 있는 날이 창 + 2 개일 때: 비중을 모르는 날 둘 → 앞쪽 날로 채워 값이 있다 ↔ 셋 → 미상이고 '있는 날'은 세 특징이 모두 있는 날만 센다."""
+    dates_all = bdays(400, start="2020-01-01")
+    s = [i for i in range(1, 400) if dates_all[i][:7] != dates_all[i - 1][:7] and i >= 250][0]   # 어느 달의 첫 거래일
+    fit_days = 200
+    closes_all = walk(400, np.where((np.arange(400) // 40) % 2 == 0, 0.006, 0.02), seed=5)
+    cut = s - (fit_days + 2 + 20)                                         # 지수 특징이 있는 날이 s 앞에 fit_days + 2 개
+    dates, closes, start = dates_all[cut:], closes_all[cut:], s - cut
+    for holes, known in ((2, True), (3, False)):
+        extra = share_steps(len(dates), seed=4)
+        for h in range(holes):
+            extra[start - 30 - 7 * h] = np.nan                            # 창 한가운데 — 그달 첫날이 보는 전날과는 먼 자리
+        out = mr.regime_days(dates, closes, k=2, start=dates[start], end=dates[start + 3], fit_days=fit_days, extra=extra)
+        first = out["days"][0]
+        assert (first["probs"] is not None) is known, holes
+        if not known:
+            assert first["reason"] == mr.REASONS["too_little_history"].format(need=fit_days, have=fit_days - 1)

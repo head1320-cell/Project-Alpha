@@ -374,3 +374,45 @@ export interface RegimeDayTypesAnswer {
   /** 세지 않은 까닭 — not_loaded · model_unreadable · state_out_of_range · bad_samples · synthetic_trial_in_production · synthetic_samples_in_production · (국면) 사유 그대로 */
   empty: { reason: string; message: string } | null;
 }
+
+// ── 하루 유형 비중을 더한 시장 국면 — K5 (`POST /intraday/market-regime/day-type-counts` · `GET …/day-type-input`) ───────────
+/** 비중 세기의 요청 — 위의 국면 칸(지수 · 기간)과 이 절의 모형 · 바구니. 유형은 세기에 들지 않는다(센 값은 모든 유형의 이름표다). */
+export interface DayTypeCountsRequest { model: string; tickers: string[]; index: MarketIndex; from: string; to: string }
+/** 한 번의 세기 부름이 남긴 진행 — 센 날 = 바구니 전부를 지금 서명으로 센 날 · 낡은 날 = 일파일 · 장 시각 · 게이트가 바뀌어 다시 셀 날. */
+export interface DayTypeCountsAnswer {
+  model: string; index: MarketIndex; from: string; to: string; tickers: string[];
+  needed_days: number; counted_days: number; remaining_days: number; stale_days: number; done: boolean;
+  first_day: string | null; last_day: string | null; next_day: string | null;
+  this_request: { days: number; rows: number; stale_rows: number; bytes: number; seconds: number; stopped: "budget" | "bytes" | null };
+  excluded_by_reason: Record<string, number>; excluded_messages: Record<string, string | null>;
+  grade: "E0" | "E3" | null; grade_reason: string; gate: { mock: boolean };
+  limits: { budget_sec: number; bytes: number; tickers: number; window: number; history_calendar_days: number };
+}
+/** 판정 기간의 날마다 그날 국면이 쓴 비중(전 거래일까지 20거래일) — 모르면 `value` 가 null 이고 `reason` · `message` 가 서버 코드와 문장이다(0 이 아니다). */
+export interface ShareDay { date: string; value: number | null; samples: number; reason: string | null; message: string | null }
+/** 비중을 더한 답의 국면별 중심(마지막 적합) — 20거래일 로그 수익 · 실현 변동성(연율) · 하루 유형 비중. */
+export interface RegimeCenter { state: number; r20: number; sigma20: number; share: number }
+export type MarketRegimeShareAnswer = MarketRegimeAnswer & {
+  centers?: RegimeCenter[] | null;
+  fit: (NonNullable<MarketRegimeAnswer["fit"]> & { renumbered?: number; renumbered_months?: string[] }) | null;
+};
+export interface DayTypeInputAnswer {
+  index: MarketIndex; name: string; k: number; from: string; to: string; mock: boolean;
+  model: { key: string; minutes: number; k: number; first_day: string; last_day: string; tickers: string[]; grade: "E0" | "E3" | null; synthetic: boolean };
+  types: number[]; tickers: string[]; window: number;
+  /** 지수만의 국면 — 시장 국면 문의 답 그대로 */
+  index_only: MarketRegimeAnswer;
+  /** 지수 + 하루 유형 비중(셋째 특징)의 국면 — 한계 문장은 셋째 특징을 넣은 문장이다 */
+  with_share: MarketRegimeShareAnswer;
+  /** 지수가 비어 비중을 쓸 데가 없었으면 null(두 답의 `empty` 가 사유를 말한다) */
+  share: {
+    days: ShareDay[]; unknown_by_reason: { reason: string; days: number; message: string }[];
+    classified: number; in_sample: { samples: number; days: number }; partial_days: number;
+    excluded_by_reason: Record<string, number>; excluded_messages: Record<string, string | null>;
+    grade: "E0" | "E3" | null; grade_reason: string;
+  } | null;
+  counts: { needed_days: number; counted_days: number; remaining_days: number; stale_days: number; first_day: string | null; last_day: string | null } | null;
+  compare: { both_days: number; differ_days: number } | null;
+  facts: string[]; notes: string[];
+}
+export type ShareRefusal = { code: string; reason: string };

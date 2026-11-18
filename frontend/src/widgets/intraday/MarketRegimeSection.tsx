@@ -6,6 +6,7 @@
  * 비어 있으면 보내지 않는다. 국면 수 · 지수 · 상한은 서버의 상한 문(`/market-regime/limits`)으로만 그린다(화면이 상수를 따로 두지 않는다).
  * 기간의 처음 값은 규칙 설정 기간 그대로다 — 같은 날들의 국면을 본다. 거절은 서버 사유 그대로, 실패는 재시도.
  * 국면은 이름표다 — 예측이 아니고 뜻을 붙인 이름도 없다(번호와 통계만). 합성 지수(mock)면 맨 위에 서버 사유와 함께 알린다.
+ * 절 끝에 선택 하위 절 '하루 유형 비중 더하기'(K5 · `DayTypeShareSection`)가 같은 칸(지수 · 국면 수 · 기간)을 그대로 쓴다.
  */
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -16,6 +17,7 @@ import {
 import { RegimeBand, RegimeFacts } from "@/features/intraday-market-regime";
 import { loginHref } from "@/shared/lib/nextPath";
 import { Notice, RetryFail, Section } from "@/shared/ui/tx";
+import { DayTypeShareSection } from "./DayTypeShareSection";
 
 const HERE = "/backtest/intraday";
 const SUB = "지수의 20거래일 수익과 실현 변동성이 닮은 날끼리 GMM 으로 묶어 날마다 각 국면에 속할 확률을 보입니다. "
@@ -28,12 +30,15 @@ type View =
   | { kind: "fail"; status: number; error: string; refusal: MarketRegimeRefusal | null; again: () => void }
   | { kind: "done"; value: MarketRegimeAnswer };
 
+/** 기간의 문제 — 비중 세기는 국면 수 없이도 된다(센 값은 국면 수와 무관하다). */
+function periodProblemsOf(f: MrForm): string[] {
+  if (!ISO.test(f.from) || !ISO.test(f.to)) return ["기간의 시작일과 종료일을 넣으십시오."];
+  if (f.from > f.to) return ["시작일이 종료일보다 늦습니다."];
+  return [];
+}
+
 function problemsOf(f: MrForm): string[] {
-  const out: string[] = [];
-  if (!f.k) out.push("국면 수를 고르십시오.");
-  if (!ISO.test(f.from) || !ISO.test(f.to)) out.push("기간의 시작일과 종료일을 넣으십시오.");
-  else if (f.from > f.to) out.push("시작일이 종료일보다 늦습니다.");
-  return out;
+  return [...(f.k ? [] : ["국면 수를 고르십시오."]), ...periodProblemsOf(f)];
 }
 
 export function MarketRegimeSection({ from, to }: { from: string; to: string }) {
@@ -64,6 +69,10 @@ export function MarketRegimeSection({ from, to }: { from: string; to: string }) 
         {limits.data ? <MrForm lim={limits.data} form={form} set={set} problems={problems} pending={view.kind === "pending"} onRun={() => void run()} /> : null}
         {view.kind === "fail" ? <Failure v={view} /> : null}
         {view.kind === "done" ? <MrResult a={view.value} /> : null}
+        {limits.data ? (
+          <DayTypeShareSection index={form.index} k={form.k} from={form.from} to={form.to} periodProblems={periodProblemsOf(form)}
+                               historyDays={limits.data.history_calendar_days} />
+        ) : null}
       </div>
     </Section>
   );

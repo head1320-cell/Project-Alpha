@@ -5,8 +5,9 @@
  * 국면 번호는 ★변동성이 낮은 것부터★ 매긴 순서라 한 색상의 밝기 단계로 칠한다(`--itd-mr-s1..s7` · 국면 수에 따라 단을 고른다).
  * 바탕에 가장 가까운 단이 국면 1 이다(라이트에서 가장 옅고 다크에서 가장 어둡다). 색만으로 말하지 않는다 — 범례의 번호 · 읽는 줄 · 표 쌍둥이.
  * 값이 없는 날은 0 이 아니라 빗금 막대 + '국면 미상 · 사유'(서버 문장 그대로). 툴팁 0 — ←→ Home End · 포인터로 날을 옮긴다.
+ * 빗금 무늬의 id 는 그림마다 따로다 — 한 화면에 띠가 둘(지수만 · 하루 유형 비중을 더한 답 · K5)이어도 겹치지 않는다.
  */
-import { useMemo, useRef, type PointerEvent } from "react";
+import { useId, useMemo, useRef, type PointerEvent } from "react";
 import type { MarketRegimeDay } from "@/entities/intraday";
 import { ReadLine, TableTwin, useReadout, type ReadRow } from "@/shared/ui/chart/ChartReadout";
 import { useMeasuredWidth } from "@/shared/ui/perf/useMeasuredWidth";
@@ -17,6 +18,7 @@ const L = 4, R = 4, TOP = 6, BOTTOM = 20;
 
 export function RegimeBand({ days, k }: { days: MarketRegimeDay[]; k: number }) {
   const wrap = useRef<HTMLDivElement>(null);
+  const hatch = `itd-mr-hatch-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const width = useMeasuredWidth(wrap, 640);
   const n = days.length;
   const { idx, setIdx, onKeyDown } = useReadout(n, n - 1);
@@ -44,7 +46,7 @@ export function RegimeBand({ days, k }: { days: MarketRegimeDay[]; k: number }) 
     <div className="itd-mr-fig" ref={wrap} role="group" tabIndex={0} aria-label={aria} onKeyDown={onKeyDown} data-chart="market-regime">
       <svg className="itd-mr-svg" width={width} height={H} aria-hidden="true" onPointerMove={pick} onPointerDown={pick}>
         <defs>
-          <pattern id="itd-mr-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <pattern id={hatch} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" className="itd-mr-hatch-line" />
           </pattern>
         </defs>
@@ -53,7 +55,7 @@ export function RegimeBand({ days, k }: { days: MarketRegimeDay[]; k: number }) 
           if (!d.probs) {
             return (
               <g key={d.date} className="itd-mr-day" data-day={d.date} data-top="unknown">
-                <rect x={x} y={TOP} width={w} height={plotH} fill="url(#itd-mr-hatch)" className="itd-mr-unknown" />
+                <rect x={x} y={TOP} width={w} height={plotH} fill={`url(#${hatch})`} className="itd-mr-unknown" />
               </g>
             );
           }

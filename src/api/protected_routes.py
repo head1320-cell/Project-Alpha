@@ -136,6 +136,13 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
         (REQUIRE_LOGIN, "시장 국면 — 지수(코스피 · 코스닥)의 국면 소속 확률을 계산만 한다(쓰기 0 · 계산 비용이 있어 로그인)"),
     ("GET", "/api/v1/intraday/market-regime/limits"):
         (REQUIRE_LOGIN, "시장 국면의 상한 — 국면 수 · 기간 · 지수 목록 상수(외부 호출 0)"),
+    # ── 하루 유형 비중을 더한 시장 국면(K5) — 본인 모형만 · 시행을 남기지 않는다. 무엇을 셌는지(모형 · 바구니)가 드러난다 ──
+    ("POST", "/api/v1/intraday/market-regime/day-type-counts"):
+        (REQUIRE_LOGIN, "하루 유형 비중 세기 — 내 하루 유형 모형으로 바구니 종목의 분봉을 날마다 세어 사용자별로 남긴다"
+                        "(본인 모형만 · 남의 것은 없는 것과 같은 404 · 예산 안에서 이어 센다 · 시행 수 불변)"),
+    ("GET", "/api/v1/intraday/market-regime/day-type-input"):
+        (REQUIRE_LOGIN, "하루 유형 비중을 더한 시장 국면 — 지수만의 국면과 나란히 계산만 한다"
+                        "(본인 모형만 · 읽기만 · 쓰기 0 · 시행 수 불변)"),
     # ── 국면별 성과 나눔(K2) — 읽기만 · 쓰기 0 · 시행을 남기지 않는다 ──
     ("GET", "/api/v1/intraday/trials/{trial_key}/regime-split"):
         (REQUIRE_LOGIN, "국면별 성과 나눔 — 내 시행의 일별 흐름을 시장 국면별로 나눈다(본인 것만 · 남의 것은 없는 것과 같은 404 · 시행 수 불변)"),

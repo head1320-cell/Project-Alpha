@@ -17,6 +17,12 @@
 - 적합 줄 `fit`: `window_days`(창 길이) · `refits`(다시 적합한 달 수) · `seeds`(적합마다 쓰려 한 시드 수) · `failed`(수렴하지 못해 뺀 시드 — 모든 적합의 합).
   확률은 수렴한 시드만으로 평균한다. 한 달의 시드가 모두 실패하면 그달은 미상 + 사유.
 
+- ★셋째 특징(K5 · 선택)★: `extra`(날짜마다 하루 유형 비중 — `src.engine.day_type_share`)를 주면 특징 = [r20, σ20, extra] 이고
+  거래일 d 는 역시 d−1 의 값을 쓴다. `extra` 가 없으면 이 모듈의 답은 K5 전과 같다(K1 · K2 · K3 · K4 가 쓰는 길).
+  셋째 특징이 있으면 성분이 비중 축으로 갈릴 수 있어 σ20 평균이 거의 같은 두 성분의 번호가 시드마다 뒤바뀐다 — 그대로 평균하면 확률이 뭉개진다.
+  그래서 ★시드끼리 성분을 평균의 거리로 맞춘 뒤★(헝가리안 배정 · 첫 시드가 기준) 첫 시드의 σ20 평균 순으로 번호를 붙인다(번호 규칙은 K1 과 같다).
+  달 사이에도 같은 일이 생길 수 있어(띠의 색이 달 경계에서 바뀌어 보인다) 앞 달 성분과 번호가 이어지지 않은 달을 세어 싣고, 마지막 적합의 성분 평균을 싣는다.
+
 ★이 모듈이 말하지 않는 것★: 국면은 이름표다(번호와 통계뿐 · 뜻을 붙인 이름 없음). 다음 날 국면을 맞힌다는 말이 아니다(P).
 BIC 는 같은 자료의 k = 2 · 3 · 4 를 나란히 적을 뿐 고르지 않는다 — 국면 수는 사용자가 정한다.
 """
@@ -45,6 +51,8 @@ REASONS = {
     "too_little_history": "적합에 쓸 날이 모자랍니다. 필요 {need}일 · 있는 날 {have}일.",
     "fit_failed": "모든 난수 시드에서 적합이 수렴하지 않았습니다.",
     "flat_window": "적합 창의 특징(20거래일 수익 · 실현 변동성)이 변하지 않아 국면을 나누지 않았습니다.",
+    "no_share": "직전 거래일의 하루 유형 비중이 없습니다.",
+    "flat_share": "적합 창의 하루 유형 비중이 변하지 않아 국면을 나누지 않았습니다.",
 }
 
 
@@ -87,7 +95,13 @@ class _Fit:
         return [float(v) for v in p]
 
 
-def _fit(Xh: np.ndarray, k: int, seeds: int) -> _Fit:
+    def centers(self) -> np.ndarray:
+        """번호 순 성분 평균(원래 단위) — 맨 앞 시드의 것(셋째 특징이 있으면 맞춤의 기준 시드). 행 = 국면 1 … k."""
+        g, order = self.models[0]
+        return g.means_[order] * self.sd + self.mu
+
+
+def _fit(Xh: np.ndarray, k: int, seeds: int, *, match: bool = False) -> _Fit:
     from sklearn.mixture import GaussianMixture
     from threadpoolctl import threadpool_limits
 
@@ -107,7 +121,38 @@ def _fit(Xh: np.ndarray, k: int, seeds: int) -> _Fit:
                 out.failed += 1
                 continue
             out.models.append((g, np.argsort(g.means_[:, 1], kind="stable")))
+    if match and out.models:
+        out.models = _matched(out.models)
     return out
+
+
+def _assignment(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """a 의 성분 r 에 맞는 b 의 성분 번호(평균 사이 제곱 거리의 합이 가장 작은 짝 — 헝가리안 배정)."""
+    from scipy.optimize import linear_sum_assignment
+
+    cost = ((a[:, None, :] - b[None, :, :]) ** 2).sum(axis=2)
+    rows, cols = linear_sum_assignment(cost)
+    return cols[np.argsort(rows)]
+
+
+def _matched(models: list) -> list:
+    """셋째 특징이 있을 때의 시드 맞춤 — 기준 시드의 성분에 다른 시드의 성분을 평균의 거리(표준화된 공간)로 맞추고,
+    기준의 σ20 평균 순으로 번호를 붙인다. 비중으로 갈린 성분은 σ20 평균이 거의 같아(잰 값: 표준화 단위 ±0.01), 시드마다 조금 다른 해에
+    수렴하면 시드마다 따로 붙인 σ20 순이 뒤바뀔 수 있다 — 같은 해로 수렴한 시드끼리는 평균이 같아 뒤바뀌지 않는다.
+    ★기준 = 가능도(하한)가 가장 큰 시드★ — 첫 시드로 두면 그 시드가 다른 국소해에 수렴했을 때 나머지가 엉뚱한 성분에 맞춰진다
+    (잰 값: 비중 계단 자료에서 시드 열 가운데 셋이 비중이 아닌 해에 수렴했다 — 시드 0 이 그중 하나). 같으면 앞 시드.
+    다른 해에 수렴한 시드도 평균에 든다(K1 과 같다 — 그 몫만큼 확률이 덜 날카롭다)."""
+    best = max(range(len(models)), key=lambda i: (float(models[i][0].lower_bound_), -i))
+    ref = models[best][0].means_
+    ref_order = np.argsort(ref[:, 1], kind="stable")
+    matched = [(g, _assignment(ref, g.means_)[ref_order]) for g, _ in models]
+    return [matched[best]] + matched[:best] + matched[best + 1:]   # 기준을 맨 앞에(성분 평균 · 달 사이 비교가 기준의 것을 읽는다)
+
+
+def numbering_follows(prev: np.ndarray, cur: np.ndarray, scale: np.ndarray) -> bool:
+    """앞 적합과 이번 적합의 번호가 이어지는가 — 번호 순 성분 평균(원래 단위)을 이번 창의 표준편차로 나눠 맞춘 짝이 같은 번호끼리면 참."""
+    a, b = np.asarray(prev, dtype=float) / scale, np.asarray(cur, dtype=float) / scale
+    return bool(np.array_equal(_assignment(a, b), np.arange(len(a))))
 
 
 def _bic(Z: np.ndarray, seeds: int) -> dict[str, float | None]:
@@ -141,8 +186,11 @@ def _agreement(fit: _Fit) -> dict[str, float | int] | None:
 
 
 def regime_days(dates: list[str], closes: Any, *, k: int, start: str, end: str,
-                fit_days: int = FIT_DAYS, seeds: int = SEEDS) -> dict[str, Any]:
-    """판정 기간 [start, end] 의 거래일마다 국면 확률. `dates` 는 오름차순 ISO 날짜(자료 전체 — 판정 기간 앞의 이력 포함)."""
+                fit_days: int = FIT_DAYS, seeds: int = SEEDS,
+                extra: Any = None, extra_reasons: list[str | None] | None = None) -> dict[str, Any]:
+    """판정 기간 [start, end] 의 거래일마다 국면 확률. `dates` 는 오름차순 ISO 날짜(자료 전체 — 판정 기간 앞의 이력 포함).
+
+    `extra`(선택 · K5) = 날짜마다 셋째 특징(하루 유형 비중 · 모르면 NaN) · `extra_reasons` = 모르는 날의 사유 문장(없으면 일반 문장)."""
     if not (K_RANGE[0] <= k <= K_RANGE[1]):
         raise RegimeError(f"국면 수는 {K_RANGE[0]} ~ {K_RANGE[1]} 입니다")
     dates = list(dates)
@@ -150,8 +198,17 @@ def regime_days(dates: list[str], closes: Any, *, k: int, start: str, end: str,
     if len(dates) != len(c) or any(a >= b for a, b in zip(dates, dates[1:])):
         raise RegimeError("날짜는 겹치지 않는 오름차순이고 종가와 길이가 같아야 합니다")
     r20, s20 = features(c)
-    X = np.column_stack([r20, s20])
+    if extra is None:
+        if extra_reasons is not None:
+            raise RegimeError("셋째 특징 없이 그 사유만 줄 수 없습니다")
+        X = np.column_stack([r20, s20])
+    else:
+        e = np.asarray(extra, dtype=float)
+        if len(e) != len(c) or (extra_reasons is not None and len(extra_reasons) != len(c)):
+            raise RegimeError("셋째 특징과 그 사유는 날짜와 길이가 같아야 합니다")
+        X = np.column_stack([r20, s20, e])
     known = np.isfinite(X).all(axis=1)
+    index_known = np.isfinite(r20) & np.isfinite(s20)
     lc = np.where(np.isfinite(c) & (c > 0), np.log(np.where(c > 0, c, 1.0)), np.nan)
     first_of: dict[str, int] = {}
     for i, d in enumerate(dates):
@@ -168,10 +225,10 @@ def regime_days(dates: list[str], closes: Any, *, k: int, start: str, end: str,
             hist = np.flatnonzero(known[:first_of[month]])[-fit_days:]
             if len(hist) < fit_days:
                 fits[month] = ("too_little_history", len(hist))
-            elif bool((X[hist].std(axis=0) < MIN_FEATURE_SD).any()):
-                fits[month] = ("flat_window", len(hist))
+            elif bool((flat := X[hist].std(axis=0) < MIN_FEATURE_SD).any()):
+                fits[month] = ("flat_window" if bool(flat[:2].any()) else "flat_share", len(hist))
             else:
-                f = _fit(X[hist], k, seeds)
+                f = _fit(X[hist], k, seeds, match=extra is not None)
                 failed += f.failed
                 fits[month] = f if f.models else ("fit_failed", len(hist))
         row: dict[str, Any] = {"date": d, "probs": None, "top": None, "top_prob": None, "reason": None}
@@ -181,8 +238,10 @@ def regime_days(dates: list[str], closes: Any, *, k: int, start: str, end: str,
             row["reason"] = REASONS[code].format(need=fit_days, have=have)
         elif i == 0:
             row["reason"] = REASONS["first_day"]
-        elif not known[i - 1]:
+        elif not index_known[i - 1]:
             row["reason"] = REASONS["no_feature"]
+        elif not known[i - 1]:                               # 지수 특징은 있고 셋째 특징(비중)을 모른다
+            row["reason"] = (extra_reasons[i - 1] if extra_reasons is not None and extra_reasons[i - 1] else REASONS["no_share"])
         else:
             p = f.probs(X[i - 1])
             top = int(np.argmax(p))
@@ -202,8 +261,16 @@ def regime_days(dates: list[str], closes: Any, *, k: int, start: str, end: str,
     last = next((f for f in reversed(list(fits.values())) if isinstance(f, _Fit)), None)
     for r in days:
         r.pop("ret")
-    return {"days": days, "states": states, "transitions": transitions,
-            "bic": _bic(last.Z, seeds) if last is not None else None,
-            "agreement": _agreement(last) if last is not None else None,
-            "fit": {"window_days": fit_days, "refits": sum(isinstance(f, _Fit) for f in fits.values()),
-                    "seeds": seeds, "failed": failed}}
+    out = {"days": days, "states": states, "transitions": transitions,
+           "bic": _bic(last.Z, seeds) if last is not None else None,
+           "agreement": _agreement(last) if last is not None else None,
+           "fit": {"window_days": fit_days, "refits": sum(isinstance(f, _Fit) for f in fits.values()),
+                   "seeds": seeds, "failed": failed}}
+    if extra is None:
+        return out                                          # K1 의 답 모양 그대로
+    fitted = [(m, f) for m, f in fits.items() if isinstance(f, _Fit)]
+    renumbered = [m for (_, a), (m, b) in zip(fitted, fitted[1:]) if not numbering_follows(a.centers(), b.centers(), b.sd)]
+    out["fit"].update(renumbered=len(renumbered), renumbered_months=renumbered)
+    out["centers"] = ([{"state": s + 1, "r20": float(row[0]), "sigma20": float(row[1]), "share": float(row[2])}
+                       for s, row in enumerate(last.centers())] if last is not None else None)
+    return out

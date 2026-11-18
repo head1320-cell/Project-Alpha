@@ -10816,6 +10816,44 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-mr-bic-k { white-space: nowrap; }
 .itd-mr-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
 
+/* ════ 하루 유형 비중 더하기(.itd-mrs) — '시장 국면' 절 안의 선택 하위 절 (K5 · 2026-11-18 · `e2e/intraday-regime-share.spec.ts`) ════
+   두 띠는 같은 부품(.itd-mr-fig)이라 같은 꼴 · 같은 국면 색이다. 비중 그림은 한 색(--tx-blue)이다 — 비중은 국면이 아니라 국면 색과 섞지 않는다.
+   진행 줄의 수는 서버의 답 그대로이고, 두 띠를 칠해 어느 쪽이 낫다고 말하지 않는다. */
+.itd-mrs { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-top: 16px; border-top: 1px solid var(--tx-line); }
+.itd-mrs-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.itd-mrs-sub { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+.itd-mrs-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.itd-mrs-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }   /* 모형 이름(열쇠 · 학습 기간 · 유형 수 · 분 수)이 다 보이는 폭 */
+.itd-mrs-typeset { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.itd-mrs-types { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.itd-mrs-type-label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--tx-ink); cursor: pointer; }
+.itd-mrs-type { width: 16px; height: 16px; accent-color: var(--tx-cta); }
+.itd-mrs-all { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tx-danger); word-break: keep-all; }
+.itd-mrs-limits { margin: 0; word-break: keep-all; }
+.itd-mrs-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; line-height: 1.5; color: var(--tx-sub); }
+.itd-mrs-bar { width: min(100%, 240px); height: 8px; accent-color: var(--tx-cta); }
+.itd-mrs-progress-text { color: var(--tx-ink); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.itd-mrs-progress-state, .itd-mrs-progress-stale { word-break: keep-all; }
+.itd-mrs-result { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.itd-mrs-head { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); word-break: keep-all; }
+.itd-mrs-bands { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.itd-mrs-band { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; }
+.itd-mrs-band-cap { font-size: 13px; font-weight: 700; color: var(--tx-ink); }
+.itd-mrs-sharebox { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.itd-mrs-share { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.itd-mrs-share:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 4px; border-radius: 8px; }
+.itd-mrs-share-svg { display: block; max-width: 100%; touch-action: pan-y; }   /* 세로로 밀면 화면이 내려가고 가로로 밀면 날을 옮긴다(.itd-mr-svg 와 같음) */
+.itd-mrs-share-bar { fill: var(--tx-blue); }
+.itd-mrs-share-base { stroke: var(--tx-line); stroke-width: 1; }
+.itd-mrs-share-axis { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
+.itd-mrs-facts { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-ink); word-break: keep-all; }
+.itd-mrs-centers td { white-space: nowrap; }
+.itd-mrs-centers th { white-space: normal; word-break: keep-all; vertical-align: bottom; }   /* 머리글만 줄을 바꿔 390px 에서도 네 칸이 다 보인다(값은 한 줄) */
+.itd-mrs-centers th + th, .itd-mrs-centers td + td { padding-left: 16px; }
+.itd-mrs-wsfacts { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.itd-mrs-wsfacts-cap { margin: 0; font-size: 13px; font-weight: 700; color: var(--tx-ink); }
+.itd-mrs-notes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.55; color: var(--tx-sub); word-break: keep-all; }
+
 /* ════ 국면별 성과 나눔(.itd-rs) — 시행의 일별 손익을 시장 국면별로 (K2a · 2026-11-17 · `e2e/intraday-regime-split.spec.ts`) ════
    국면 색은 시장 국면 절의 밝기 단계(--itd-mr-s*)를 그대로 쓴다 — 번호의 표지일 뿐 순위가 아니다. 이긴 국면을 칠하지 않는다. */
 .itd-rs { display: flex; flex-direction: column; gap: 14px; }
