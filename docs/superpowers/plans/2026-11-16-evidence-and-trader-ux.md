@@ -540,3 +540,116 @@ d01 다시 · 기준 보지 않기 다시(결과는 HISTORY).
 
 ### 6.5 주장의 범위
 `structural` — 배치를 바꾼 것이고 어떤 숫자의 뜻도 바꾸지 않는다. 쓰임이 나아졌다는 것은 이 환경에서 잰 폭 · 높이와 E2E 의 동작까지이며 사용자 시험(실제 트레이더의 작업 시간)은 재지 않았다.
+
+## 7. G7 — 경계 가드(LLM 은 계산 · 결정 계층에 없다) · 시계열용 등각 (2026-11-19 · G7 을 시작하며 더한 절 — ③ 비용 표기는 C1 이 했다)
+
+받은 말 · 방식은 G4 · G5 와 같다("… 전문가 여러명이 토론하고 추합하여 내린 결론으로 …") — 감사(7.0) → ★패널 결론 표★(7.1) → 구현 전에 정한 것(7.2 · 7.2a) → 파일(7.3) →
+시험 · 변이(7.4) → 하지 않는 것(7.5) → 주장의 범위(7.6). 우선순위: CLAUDE.md 불변식 > 데이터 무결성(출처 · 시점) > 통계 타당성(시행 수 · 앞보기) > 트레이더의 쓰임 > 표현.
+답하는 물음: ① 이 저장소의 숫자(배분 · 백테스트 · 판정 · 주문)에 LLM 의 답이 섞여 들 수 있는가 — 섞이지 않는다는 것을 ★시험으로★ 거는가 ② 등각 구간이 기대는 가정(교환가능성)이
+깨질 때 무엇을 말할 수 있는가. 둘 다 ★배관 · 표기의 물음★이다 — 예측력 · 경제적 가치를 재지 않는다.
+
+### 7.0 감사에서 본 것(읽기 전용 · 관측) — ★조사 문서의 문장 하나가 틀렸고, 엔진의 'AI 서술'은 한 번도 돈 적 없는 길이었다★
+
+- 조사 문서(`docs/specs/2026-11-16-oss-and-literature-survey.md`) 표의 'LLM — `claude_client.py` · `canvas_assist/service.py` 두 곳에서만 · 계산 · 결정 계층에는 없다'는 ★틀렸다★.
+  LLM 모듈(`anthropic` · `services.narrative` · `services.canvas_assist` · `services.screener_copilot` — 17 모듈)을 직접 들이는 모듈은 그 밖에 여덟이다(AST · 관측 14:53 UTC):
+  api.canvas_assist_routes(캔버스 AI 보조 문) · api.macro_routes(전략 AI 심층분석 글 — `ClaudeClient.get_default` · `NarrativeRequest`) · api.narrative_routes(서술 문) ·
+  api.pb_client_routes(PB 한 장 묻기 — `assist.ask_sheet`) · api.screener_routes(코파일럿 문 셋 — 함수 안 늦은 import) · ★engine.macro_recommender★(추천 전략의 근거 글) ·
+  services.pb_links(공유 링크 묻기 · 한도기) · services.pb_sheets(LLM 을 부르지 않는다 — narrate 의 순수 함수 `flow_order` 와 안내 문장 `NOTICE` 만 · narrate 는 클라이언트를 들이지 않음).
+- ★엔진 `macro_recommender._ai_narrative` 의 LLM 길은 죽은 길이다★: 키가 있으면 `from src.services.narrative.claude_client import get_client` 를 늦은 import 하는데
+  그 함수는 그 모듈에 ★한 번도 있었던 적이 없고★(git 기록 · `-S 'def get_client'` 0건) `ClaudeClient` 에는 `complete` 도 없다 → ImportError 를 `except Exception` 이 삼켜
+  debug 로그만 남기고 늘 규칙 글(`narrative_source = "rule"`)을 낸다(파이썬으로 import 를 직접 돌려 확인). 그런데 머리말은 "ANTHROPIC_API_KEY 있으면 Claude로 근거 설명"이라 적고
+  ★매크로 화면은 "규칙 기반 해설입니다 · AI 해설은 관리자가 키를 등록하면 활성화됩니다"라고 약속한다★(`MacroCockpit.tabs.strategy.tsx:214` — 키를 등록해도 바뀌지 않는다).
+  순위 · 맨 위 전략 · 표시 배분 · 매크로 임베딩 배분은 그 글과 무관하게 먼저 계산된다(코드 읽기).
+- import 그래프(모듈 머리 + 함수 안 늦은 import 모두 길로 셈 · 읽기 전용 스크립트): src 모듈 481 · 계산 · 결정 계층(engine · domain · execution · data) 279 가운데 7 이 LLM 모듈에 닿는다 —
+  뿌리 길 둘: ① engine.macro_recommender → services.narrative.claude_client(위의 죽은 길) ② engine.strategy_registry → api.screener_routes(`register` 가 재실행 재료
+  `_backtest_kwargs` · `ScreenToBacktestRequest` · `_effective_strategy` · `_factor_weights` 를 늦은 import 로 빌림 · 그 모듈의 코파일럿 import 는 코파일럿 문 함수 안에만).
+  나머지 다섯(strategy_profiles · strategy_backtest_map · multi_strategy_backtest · counterfactual_analyzer · realism_engine)은 이 둘을 지난다. ②는 엔진 → 문 역방향 의존이고
+  스크리너 영역이라 고치지 않는다(3-레이어 · 리팩터링 대상 아님).
+- 반대 방향(LLM 쪽 25 모듈 → 주문을 낼 수 있는 모듈): 모듈 단위로는 6 이 닿는다 — 모두 시세 적재기를 지나 `execution.kis_client → execution.broker_accounts →
+  execution.account_executors`(시세 클라이언트가 계좌 등록부를 들인다) 또는 multi_strategy_backtest → order_netting. ★모듈 단위 그래프로는 '주문을 낼 수 없다'를 증명하지 못한다.★
+- LLM 경계를 거는 시험은 없다(AST 로 LLM import 를 보는 시험 0). 선례: 분봉 모듈의 주문 경로 import 금지(`tests/test_intraday_simulate_route.py:300` · 심은 파일로 검사기 자체를 시험) ·
+  캔버스 실행 묶음의 주문 경로 import 금지 · 합성값 등록부(`src/data/synthetic_registry.py` 표 · `tests/synthetic_scan.py` 검사기 · `tests/test_synthetic_registry.py`).
+- 등각: `src/engine/conformal.py` 는 split conformal(교환가능성 가정 · 유한표본 보장)이고 소비자는 배분 워크포워드의 `_conformal_block` 하나다(리밸런스 예측 vs 실현 · 일평균 단위 ·
+  앞 70% 보정 · 뒤 30% 실측 적중률 · note 에 이미 '교환가능성만 가정'). 화면은 캔버스 결과 판 `NodeResultPanel` 의 `<Conformal>`(`.pg-bt-cf` · E2E `portfolio-graph.spec.ts:2509`).
+  국면 예측(`regime_forecast.py`)은 등각이 아니라 베이지안 예측집합이고 워크포워드 실측 적중률을 이미 잰다. CF3 골든은 이 블록을 담고(`bl_backtest/b/view/conformal`)
+  새 관측 키는 `NEW_KEYS` 로 빼며 그 값은 다른 시험이 건다(C1 선례).
+
+### 7.1 패널 결론 (재무 · DB · 퀀트 · 수학 · 금융 시장 · 웹디자인)
+
+| 쟁점 | 갈린 의견 | 결론(근거 · 버린 안) |
+|---|---|---|
+| 무엇을 '계산 · 결정 계층'으로 | DB: 디렉터리 단위 — 새 파일이 저절로 들어온다 / 퀀트: 문 층의 배분 결정 문도 / 재무: 글을 내는 문은 계층이 다르다 | 디렉터리 넷(`src/engine` · `src/domain` · `src/execution` · `src/data`)은 ★LLM 모듈을 직접 들이지 않는다(예외 0)★ + 문 · 서비스 층에서 LLM 을 직접 들이는 모듈은 ★등록부에만★(새 모듈은 사유를 적어야 통과 · 낡은 줄도 실패). 버린 안: 결정 문 목록을 손으로 고름(빠뜨림이 조용히 생긴다) |
+| 엔진의 죽은 'AI 서술' | 금융: 등록하고 남겨 두면 언젠가 고쳐 켜는 순간 엔진이 LLM 을 부른다 / 재무: 지금 사용자가 보는 글은 늘 규칙 글이다 / 웹: 화면이 지키지 못할 약속을 한다 | ★걷어 낸다★ — 키가 있든 없든 응답은 바이트까지 그대로(규칙 글 · `narrative_source: "rule"` — 시험이 건다) · 머리말 정정 · 화면의 '키를 등록하면 활성화' 약속을 지운다(사실만: 규칙 기반 해설). LLM 서술이 필요하면 문 층(전략 AI 심층분석 문처럼)에서 · 엔진이 아니라. 버린 안: 예외로 등록(거짓 주석이 남는다) · 고쳐 켜기(엔진에 LLM 을 들인다 — 이 조각의 물음과 반대) |
+| 직접만 볼까 길까지 볼까 | DB: 직접만이면 한 단계 건너 들이면 샌다 / 수학: 모듈 단위 길은 넘치게 잡는다 | 둘 다 — 직접 금지 + ★길 래칫★: 계산 계층에서 LLM 모듈까지의 길은 등록한 간선(이제 하나 · 사유)을 끊으면 0 · 새 길이 생기면 길 전체를 글로 보이며 실패 · 등록 간선이 실제 그래프에 없거나 끊을 길이 없으면(공허) 실패 |
+| 등록 간선의 사유가 참인가 | 퀀트: 사유는 글이다 — 거짓이어도 통과한다 | ★동작 시험★: 새 프로세스에서 그 간선으로 빌리는 이름들을 불러와도 `screener_copilot` · `anthropic` 이 `sys.modules` 에 없다 ↔ 짝: 코파일럿 모듈을 직접 불러오면 있다(검사가 볼 수 있음) + 빌리는 함수 넷의 몸에 코파일럿 이름이 없다(AST) |
+| 주문 방향 | 금융(실거래 안전 최우선): 증명하라 / DB: 모듈 그래프로는 못 한다(관측) | LLM 모듈 · LLM 을 직접 들이는 모듈은 주문 모듈(trading_engine · order_executor · account_executors · rule_runner · kis_order_executor · trading_routes · risk_gateway)을 ★직접★ 들이지 않는다 + 길은 증명하지 못한다고 한계로 적는다(주문은 기존 가드 — 캔버스 실행 묶음의 주문 경로 import 금지 · TradingEngine 6중 안전장치 · OrderExecutor 정적 강제 — 가 지킨다) |
+| 늦은 import · 문자열 import | 수학: 함수 안 import · `importlib.import_module("…")` 를 놓치면 공허 | 검사기는 `ast.walk` 로 모든 깊이의 Import · ImportFrom(상대 포함) · 글자 상수를 받는 `import_module` · `__import__` 를 본다 · ★심은 파일★(머리 · 함수 안 · from-import · importlib · `__import__` · 상대 import)으로 검사기 자체를 시험 ↔ 짝: 주석 · 글자 속 이름은 잡지 않는다 |
+| 앞보기(지식 시점) | 퀀트 · 금융: LLM 의 학습 자료가 평가 구간을 덮으면 앞보기(ChronoGPT 근거) / 재무: 지금은 글만이다 | 제품 규칙 한 줄(§3-2 새): LLM 의 답은 계산 · 결정 계층에 들지 않는다 · 들이려면 그 모델의 지식 시점(학습 자료의 끝)이 평가 시작일보다 앞이고 그 시점을 출처와 함께 적는다 — 모르면 들이지 않는다. 가드가 앞부분을 건다 |
+| 조사 문서의 틀린 문장 | — | 그 줄을 관측으로 바로잡고 정정 날짜 · 까닭을 적는다(지우지 않음) |
+| 시계열용 등각을 어디에 | 수학: 리밸런스 쌍(수십 개)에서는 ACI 의 보장 상한이 1 을 넘는다(공허) / 퀀트: 일별 쌍은 새 대상을 지어낸다(구간 평균 예측의 되풀이) / 재무: 일별 띠는 기존 VaR · CVaR 와 겹친다 / 금융: 트레이더가 보는 것은 다음 구간의 구간 | ★같은 쌍에 나란히★ — split(교환가능성 가정) 옆에 ACI(가정 없음 · 장기 평균 오차율 보장)를 같은 순서의 쌍으로 · ★그 길이에서의 보장 상한을 계산해 함께★ · 상한이 자명한 상한 max(α, 1 − α) 이상이면 '이 길이로는 보장이 서지 않습니다' · 새 대상 0. 버린 안: 일별 띠(새 계약 · VaR 와 겹침) |
+| ACI 의 걸음 γ | 수학: γ 는 자유 손잡이 — 결과를 보고 고르면 숨은 시행 / 웹: 칸을 늘리지 말 것 | γ = 0.005(원 논문 실험값 — 검색 요약으로 확인 · 본문 미독) · 상수 · 사용자 칸 없음 · 결과를 보고 고르지 않는다(바꾸려면 코드와 HISTORY). 짧은 열에서는 α_t 가 거의 움직이지 않아 split 과 비슷하고 그 사실을 상한이 말한다 |
+| 무한 · 빈 구간 | 수학: α_t ≤ 0 이면 실수 전체 · α_t ≥ 1 이면 빈 집합 — 조용히 자르면 보장이 깨진다 | 그대로 둔다 — 무한 구간은 덮음 · 빈 집합은 놓침으로 세고 그 횟수를 함께 적는다 · 너비 평균은 유한한 구간만(그 수와 함께) · 다음 구간이 무한이면 값 대신 그렇다고 |
+| 화면 | 웹: 결과 판의 등각 상자에 묶음 하나 / 재무: 두 적중률을 같은 줄에 두면 직접 견준다고 읽힌다(홀드아웃 vs 온라인 — 정의가 다르다) | 상자 안에 하위 묶음 '시계열용(교환가능성 가정 없음)': 다음 구간 · 온라인 적중률(무한 구간 수 포함) · 보장 상한 · 서버 문장 — 적중률의 정의를 줄마다 적는다 · 새 클래스만 · 크게 보기에도 같은 부품 |
+| 결정 불변 | 퀀트: 등각 블록을 읽는 결정 경로가 있으면 ACI 가 배분을 바꾼다 | 등각 블록을 읽는 곳은 화면과 시험뿐(정적 시험) · 기존 키는 바이트 그대로(CF3 골든 · 등각 시험) · 새 키는 `NEW_KEYS` + 손 계산 시험 |
+
+### 7.2 구현 전에 정한 것
+- `src/domain/llm_boundary.py`(새 · 순수 표): `LLM_MODULES`(접두 다섯) · `CORE_PACKAGES`(넷) · `ORDER_MODULES`(일곱) · `DIRECT_USERS`(모듈 → 사유 · 일곱 — 매크로 추천은 걷어 내 빠진다) ·
+  `CORE_EDGES`((출발, 도착) → 사유 · 하나). 코드가 읽지 않는 표다(시험만 읽는다 — 문서 노릇).
+- `tests/import_graph.py`(새 · 검사기 — 파일을 읽어 그래프를 짓는 함수와 그래프에서 위반을 찾는 순수 함수를 나눠, 짝 시험이 지어낸 그래프를 넣을 수 있게) · `tests/test_llm_boundary.py`(새).
+- `src/engine/macro_recommender.py`: `_ai_narrative` → 규칙 글만(이름 `_rule_narrative`) · LLM import 0 · 머리말 ③ 정정 · 출력 바이트 불변.
+  화면 `MacroCockpit.tabs.strategy.tsx:214` 의 꼬리 문장: "규칙 기반 해설입니다 · 국면 적합도와 최근 12개월 성과로 지은 글입니다"(지키지 못할 약속 삭제) · 형의 `"claude"` 는 그대로 둔다(옛 응답 호환 — 쓰지 않음).
+- `src/engine/conformal.py`: `adaptive_conformal(actual, pred, test_pred, *, alpha, gamma)` 새 함수 · 기존 넷 바이트 그대로.
+- `allocation_backtest._conformal_block`: 같은 쌍으로 `adaptive` 하위 블록(성공 · 실패 모두 같은 키 꼴) · 기존 키 불변 · CF3 `NEW_KEYS` 에 `adaptive`.
+- 화면 `<Conformal>`: 하위 묶음(`.pg-bt-cf-aci`) · 서버 문장 그대로 · 용어집 §3.29.
+- 제품 규칙 §3-2 · 조사 문서 정정 · HISTORY.
+
+### 7.2a ACI 보장의 유도(논문 본문은 이 환경에서 열리지 않았다 — ar5iv DNS 실패 · 검색 요약으로 갱신식 · 실험 γ = 0.005 만 확인 · 아래는 직접 유도하고 시험이 건다)
+- 갱신: α_{t+1} = α_t + γ(α − err_t), err_t ∈ {0, 1} · 약속: α_t ≤ 0 이면 구간은 실수 전체(err_t = 0) · α_t ≥ 1 이면 빈 집합(err_t = 1) — 유한표본 순위 ⌈(m+1)(1 − α_t)⌉ 가
+  m(앞 점수 수)을 넘으면 무한 구간(덮음) · 0 이하이면 빈 집합(놓침)으로 같은 약속이 선다.
+- 보조 정리: α_1 ∈ [0, 1] 이면 모든 t 에서 α_t ∈ [−γ, 1 + γ] — α_t ∈ [0, 1] 이면 한 걸음은 [−γ(1 − α), +γα] 안 · α_t < 0 이면 err_t = 0 이라 오르기만(γα 미만) ·
+  α_t > 1 이면 err_t = 1 이라 내리기만(1 − γ(1 − α) 초과).
+- 망원 합: α_{T+1} − α_1 = γ Σ_{t≤T}(α − err_t) → (1/T) Σ err_t − α = (α_1 − α_{T+1}) / (γT) → |…| ≤ (max(α_1, 1 − α_1) + γ) / (γT).
+  ★어떤 수열에서도 결정적으로★ 성립한다(교환가능성 · 정상성 가정 없음). 대가: 장기 평균 오차율만 보장한다(조건부 · 구간별 보장 아님) · T 가 짧으면 상한이 자명한 값을 넘어 공허하다.
+- 크기(손 계산 · α = α_1 = 0.1): 상한 = (0.9 + γ)/(γT). γ = 0.005 · T = 36 → 5.03 / T = 80 → 2.26 / T = 1,810 → 0.1. → 리밸런스 쌍(수십 개)에서는 보장이 서지 않는다 — 화면이 상한 값으로 그렇게 말한다.
+
+### 7.2b 구현하며 바꾼 것 (2026-11-19 · 까닭과 함께)
+- ACI 의 조각을 공개 함수로 나눴다 — `aci_rank(m, α_t)`(유한표본 순위 하나가 유한 · 무한 · 빈 구간을 가른다) · `aci_steps(scores, α, γ)`(걸음마다의 기록) ·
+  `aci_bound(n, α, γ)` · `adaptive_conformal(...)`(요약). 손 계산 시험이 걸음마다의 α_t · 순위 · 반폭 · 놓침을 직접 보게 하려고.
+- 블록 시험은 ★엿보기★로 바꿨다 — 리밸런스 줄에 예측이 실려 있지 않아 쌍을 출력에서 다시 지을 수 없다(출력에 키를 더하면 CF3 골든이 바뀐다).
+  split 이 받은 쌍과 ACI 가 받은 쌍이 같은 배열 · 같은 순서인지를 건다.
+- 기존 동작의 사진 `tests/golden/conformal_split_g7.json` — split 함수 넷과 블록의 기존 키를 바꾸기 전에 떠서(같은 입력), 바꾼 뒤 상대 1e-12 로 대조한다.
+- 정적 가드 둘을 더했다 — src 안에서 등각 블록을 ★읽는★ 곳 0(AST: `x["conformal"]` · `x.get("conformal")` · 짝: 쓰기는 읽기가 아니다) ·
+  `src.engine.conformal` 을 들이는 모듈은 `allocation_backtest` 하나.
+- 서버 문장: 숫자 바로 뒤에 조사를 붙이지 않는다('상한 3.23가' 같은 어긋남 — 읽는 소리에 따라 이/가가 갈린다) → '상한은 3.23입니다'.
+  구간의 이름은 `무한 구간(실수 전체)` · `빈 구간` 으로 맞췄다(용어집 §3.29).
+- 화면: 무한 · 빈 구간 수를 적중률 칸의 꼬리에 붙였더니 판 폭 350px 에서 줄 머리에 '·' 가 걸려 꺾였다(스크린샷 검수) → 따로 한 줄 `그중 무한 구간 · 빈 구간`.
+  분할 등각의 적중률 줄 이름에도 정의를 붙였다 — `실측 적중률(보정에 쓰지 않은 뒤쪽 쌍에서 셈)`(패널 결론: 적중률마다 정의).
+- 매크로 꼬리표는 서버가 '규칙'이라 할 때만 단다(짝 시험: 응답을 `claude` 로 덮으면 꼬리표가 없다) — 형의 `"claude"` 는 그대로 두었으므로 화면이 출처를 지어내지 않게.
+- 등록부 사유('pb_sheets 는 클라이언트를 들이지 않는다 — 시험이 새 프로세스에서 확인한다')를 거는 탐침 시험을 더했다(짝: `canvas_assist.service` 를 직접 불러오면 보인다).
+
+### 7.3 파일
+새: `src/domain/llm_boundary.py` · `tests/import_graph.py` · `tests/test_llm_boundary.py` · `tests/test_conformal_adaptive.py`.
+고침: `src/engine/macro_recommender.py` · `src/engine/conformal.py` · `src/engine/allocation_backtest.py`(`_conformal_block` 만) · `tests/test_backtest_conformal.py`(+) · `tests/test_cf3_golden.py`(`NEW_KEYS`) ·
+`tests/test_tactical_allocations.py`(근거 글의 출처는 'rule' 만) · `frontend/src/widgets/portfolio-graph/NodeResultPanel.tsx`(`<Conformal>`) · `frontend/src/widgets/macro/MacroCockpit.tabs.strategy.tsx`(꼬리 문장) ·
+`frontend/src/app/globals.css`(새 클래스) · `frontend/e2e/portfolio-graph.spec.ts`(등각 시험에 하위 묶음) · 문서 넷(제품 규칙 · 조사 문서 · 용어집 · 이 절) · HISTORY.
+
+### 7.4 시험(빨강 먼저) · 변이
+- 경계: ① 검사기 — 심은 파일 여섯 꼴을 잡고 주석 · 글자 속 이름은 잡지 않는다 ② 계산 계층의 직접 LLM import 0(빨강: 매크로 추천) ③ 직접 사용자 = 등록부(새 · 낡은 줄 모두 실패 — 지어낸 그래프로 짝)
+  ④ 길 래칫(등록 간선 하나로 끊김 · 지어낸 새 길은 길 전체 글로 실패 · 등록 간선이 그래프에 없거나 끊을 길이 없으면 실패) ⑤ LLM 쪽은 주문 모듈을 직접 들이지 않는다(짝: 심은 import 는 잡힘)
+  ⑥ 동작: 새 프로세스에서 등록 간선의 이름들을 불러와도 LLM 모듈이 메모리에 없다 ↔ 코파일럿을 불러오면 있다 ⑦ 매크로 추천: 키가 있든 없든(가짜 키) 응답 JSON 이 같고 근거 글의 출처는 'rule'.
+- 등각: 손 계산(점수 다섯 · α = 0.2 · γ = 0.1 — 걸음마다 α_t · 순위 · 구간 · 오차) · 무한 구간(처음 몇 걸음) · 빈 집합(α_t ≥ 1 로 몰아가는 수열) · ★보장 상한이 모든 접두 T 에서 선다★(무작위 · 교대 ·
+  적대적 수열 — 점수를 늘 직전 분위수 바로 위로 두는 수열 포함) · 상한이 자명한 값 이상이면 보장 없음 문장 ↔ 짧은 수열과 긴 수열의 짝 · 입력 검사(길이 · α · γ 범위 · 음수 점수 → 값 없음 + 사유) ·
+  기존 split 함수 넷 바이트 불변. 블록: `adaptive` 가 같은 쌍 · 같은 순서 · 기존 키 불변(시험 + CF3 골든) · 쌍이 모자라면 기존처럼 블록 전체가 사유.
+- 화면 E2E: 하위 묶음이 서버 값 그대로(다음 구간 · 적중률 분수 · 무한 구간 수 · 상한) · 무한 다음 구간은 값 대신 문장 · 블록이 없으면 그리지 않음(짝) · 매크로 꼬리 문장에서 약속이 사라짐.
+- 변이(돌린 뒤 HISTORY): 검사기(함수 안 import 무시 · 상대 import 무시 · importlib 무시) · 등록부 대조를 한쪽만 · 간선 끊기 무시 · 주문 직접 검사 빼기 · ACI(갱신 부호 · γ 곱 빼기 · 무한을 최대 점수로 자름 ·
+  빈 집합을 덮음으로 · 상한 식의 max 를 α 로 · 걸음마다 순위의 m+1 을 m 으로 · 다음 구간을 α_T 로) · 블록(adaptive 를 다른 쌍으로 · 기존 키 바꾸기) · 화면(하위 묶음 빼기 · 무한 문장 빼기).
+
+### 7.5 하지 않는 것
+LLM 을 쓰는 문 · 서비스의 동작(캔버스 AI 보조 · 서술 문 · 전략 AI 심층분석 · 코파일럿 · PB 묻기) · 엔진에 LLM 서술 다시 켜기 · `strategy_registry → screener_routes` 역방향 의존 고치기(스크리너 영역) ·
+모듈 단위 그래프로 주문 경로 증명 · `regime_forecast` 에 ACI(범주 예측집합 — 대상이 다르다) · 일별 수익 띠 · γ 칸 · 등각 결과를 결정 경로에 · 최적화기 · 배분 결정 · `constrained_opt.py` 0줄 ·
+시뮬레이터 · 체결 규칙 · 주문 경로 0줄.
+
+### 7.6 주장의 범위
+`structural` — ① 가드는 '지금 저장소의 import 그래프와 동작 시험이 말하는 것'이다: 계산 계층은 LLM 모듈을 들이지 않고 등록된 간선은 LLM 을 메모리에 올리지 않는다. 모듈 단위 그래프로는
+'LLM 이 주문에 닿지 않는다'를 증명하지 못한다(시세 클라이언트가 계좌 등록부를 들인다 — 관측). `getattr` 로 돌려 부르기 · 별칭 · 실행 중에 지은 이름은 검사기가 보지 못한다.
+② ACI 의 보장은 어떤 수열에서도 서는 장기 평균 오차율의 상한이며, 리밸런스 쌍 수십 개에서는 그 상한이 공허하다 — 그 사실을 보이는 것이 이 조각의 쓰임이다. 둘 다 예측력 · 경제적 가치를 말하지 않는다.

@@ -254,13 +254,49 @@ function Conformal({ cf }: { cf: Dict | null | undefined }) {
           <KV rows={[
             [`일평균 수익률 ${Math.round((1 - (num(cf.alpha) ?? 0.1)) * 100)}% 구간`, `${p3(np.lower)} ~ ${p3(np.upper)}`],
             ["점추정", p3(np.point)], ["보정 쌍", String(cf.n_pairs ?? "—")],
-            ["실측 적중률", mc?.available && num(mc.coverage) !== null && num(mc.hits) !== null && num(mc.n) !== null
+            /* 적중률마다 정의를 적는다(G7 ②) — 홀드아웃 적중률과 아래 온라인 적중률은 정의가 달라 곧바로 견주는 값이 아니다. */
+            ["실측 적중률(보정에 쓰지 않은 뒤쪽 쌍에서 셈)", mc?.available && num(mc.coverage) !== null && num(mc.hits) !== null && num(mc.n) !== null
               ? `${((mc.coverage as number) * 100).toFixed(1)}% (${String(mc.hits)}/${String(mc.n)})`
               : <span className="pg-bt-cf-na">{String(mc?.reason ?? "적중률 측정 표본 없음")}</span>],
           ]} />
         </>
       ) : <p className="pg-warn pg-bt-cf-na">{String(cf.reason ?? "구간 계산 불가")}</p>}
       {cf.note ? <p className="pg-note">{String(cf.note).replace(/\*\*/g, "")}</p> : null}
+      <ConformalAci ad={cf.adaptive as Dict | null | undefined} p3={p3} />
+    </div>
+  );
+}
+
+/**
+ * 시계열용 등각(ACI · G7 ② · 2026-11-19) — 분할 등각과 같은 쌍 · 같은 '다음 구간'. 서버 값과 서버 문장을 그대로 옮긴다:
+ * 다음 구간(무한 · 빈 구간이면 값 대신 문장) · 온라인 적중률(무한 · 빈 구간 수와 함께) · 보장 상한과 그 문장. 하위 블록이 없는 옛 응답에는 그리지 않는다.
+ */
+function ConformalAci({ ad, p3 }: { ad: Dict | null | undefined; p3: (x: unknown) => string }) {
+  if (!ad) return null;
+  const on = ad.online as Dict | undefined;
+  const nx = ad.next as Dict | undefined;
+  const bd = ad.bound as Dict | undefined;
+  const ok = ad.available === true && !!on && !!nx && !!bd;
+  const level = Math.round((1 - (num(ad.alpha) ?? 0.1)) * 100);
+  const p1 = (x: unknown) => (num(x) === null ? "—" : `${((x as number) * 100).toFixed(1)}%`);
+  return (
+    <div className="pg-bt-cf-aci">
+      <h5 className="pg-bt-cf-aci-h">시계열용 (교환가능성 가정 없음)</h5>
+      {ok ? (
+        <>
+          <KV rows={[
+            [`일평균 수익률 ${level}% 구간(적응형)`, nx.kind === "finite"
+              ? <span className="pg-bt-cf-aci-next">{`${p3(nx.lower)} ~ ${p3(nx.upper)}`}</span>
+              : <span className="pg-bt-cf-aci-na">{String(nx.sentence ?? "구간을 만들지 못했습니다.")}</span>],
+            ["온라인 적중률(걸음마다 앞의 점수로 지은 구간)", `${p1(on.coverage)} (${String(on.hits)}/${String(on.n)})`],
+            /* 무한 구간은 늘 덮고 빈 구간은 늘 놓친다 — 그 수를 보지 않으면 적중률을 잘못 읽는다(바로 아래 줄) */
+            ["그중 무한 구간 · 빈 구간", `${String(on.n_infinite)}개 · ${String(on.n_empty)}개`],
+            ["보장 상한(놓친 비율의 장기 평균)", num(bd.value) === null ? "—" : `±${(bd.value as number).toFixed(2)}`],
+          ]} />
+          <p className="pg-note pg-bt-cf-aci-bound">{String(bd.sentence ?? "")}</p>
+          {ad.note ? <p className="pg-note pg-bt-cf-aci-note">{String(ad.note)}</p> : null}
+        </>
+      ) : <p className="pg-warn pg-bt-cf-aci-na">{String(ad.reason ?? "계산하지 못했습니다.")}</p>}
     </div>
   );
 }

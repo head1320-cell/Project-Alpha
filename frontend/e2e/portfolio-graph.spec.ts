@@ -2543,6 +2543,85 @@ test("룩어헤드·예측 구간(BL4): 배지는 응답이 말한 상태만 —
   await expect(cf).not.toContainText("~");
 });
 
+// G7 ② (2026-11-19) — 같은 쌍에 나란히 선 시계열용 등각(ACI). 화면은 서버 값과 서버 문장을 그대로 옮기고, 적중률마다 그 정의를 적는다
+// (홀드아웃 적중률과 온라인 적중률은 정의가 달라 곧바로 견주는 값이 아니다). 실제 서버 경로 한 번 + 손으로 덮은 응답 넷(유한 · 무한 · 계산 못 함 · 옛 응답).
+test("시계열용 등각(G7 ②): 등각 상자 안 하위 묶음 — 서버 값 그대로 · 무한 다음 구간은 문장 · 못 셈은 사유 · 옛 응답에는 그리지 않는다(짝)", async ({ page }) => {
+  await openCanvas(page);
+  const body = await run(page);
+  const real = (body.nodes.backtest.view as Record<string, unknown>).conformal as Record<string, any> | undefined;
+  expect(real?.available, "기본 흐름의 백테스트에 등각 블록이 있다").toBe(true);
+  const ad = real!.adaptive as Record<string, any>;
+  expect(ad?.available, "등각 블록 안에 시계열용 하위 블록이 있다").toBe(true);
+  expect(ad.n).toBe(real!.n_pairs);
+  await detail(page, "backtest");
+  const aci = page.locator(".pg-side .pg-bt-cf .pg-bt-cf-aci");
+  await expect(aci).toHaveCount(1);
+  await expect(aci.locator(".pg-bt-cf-aci-h")).toHaveText("시계열용 (교환가능성 가정 없음)");
+  await expect(aci).toContainText(`${(ad.online.coverage * 100).toFixed(1)}% (${ad.online.hits}/${ad.online.n})`);
+  const row = (label: string) => aci.locator(".pg-kv > div", { has: page.locator("dt", { hasText: label }) }).locator("dd");
+  await expect(row("그중 무한 구간 · 빈 구간")).toHaveText(`${ad.online.n_infinite}개 · ${ad.online.n_empty}개`);
+  await expect(aci).toContainText(`±${ad.bound.value.toFixed(2)}`);
+  await expect(aci.locator(".pg-bt-cf-aci-bound")).toHaveText(ad.bound.sentence);
+  await expect(aci.locator(".pg-bt-cf-aci-note")).toHaveText(ad.note);
+  // 리밸런스 쌍 수십 개 — 이 길이로는 보장이 서지 않는다고 서버가 말하고 화면이 그대로 옮긴다
+  expect(ad.bound.informative).toBe(false);
+  await expect(aci.locator(".pg-bt-cf-aci-bound")).toContainText("보장이 서지 않습니다");
+
+  // ① 유한한 다음 구간 — 하한 ~ 상한(서버 값 · 같은 서식) · 적중률마다 정의
+  const fin = { available: true, method: "aci", alpha: 0.1, gamma: 0.005, n: 56, alpha_next: 0.0987,
+    online: { n: 56, hits: 51, misses: 5, coverage: 51 / 56, n_infinite: 9, n_empty: 0, n_finite: 47, mean_width: 0.0081 },
+    bound: { value: 3.2321428571, trivial: 0.9, informative: false,
+      sentence: "놓친 비율이 목표 10%에서 벗어나는 폭의 상한은 3.23입니다. 어떤 결과로도 넘을 수 없는 폭 0.90 이상이라 이 길이(56쌍)로는 보장이 서지 않습니다." },
+    next: { kind: "finite", point: 0.00058, lower: -0.0031, upper: 0.00426, half_width: 0.00368, rank: 52, m: 56, sentence: null },
+    note: "교환가능성을 가정하지 않는 적응형 등각(ACI)입니다." };
+  const withAdaptive = (a: unknown) => (b: RunBody) => {
+    const v = b.nodes.backtest.view as Record<string, unknown>;
+    v.conformal = { ...(v.conformal as Record<string, unknown>), adaptive: a };
+  };
+  await patchRun(page, withAdaptive(fin));
+  await run(page);
+  await detail(page, "backtest");
+  await expect(aci.locator(".pg-bt-cf-aci-next")).toHaveText("-0.310% ~ 0.426%");
+  await expect(aci).toContainText("91.1% (51/56)");
+  await expect(row("그중 무한 구간 · 빈 구간")).toHaveText("9개 · 0개");
+  await expect(row("온라인 적중률")).toHaveText("91.1% (51/56)");
+  await expect(aci).toContainText("±3.23");
+  await expect(aci).toContainText("온라인 적중률(걸음마다 앞의 점수로 지은 구간)");
+  await expect(page.locator(".pg-side .pg-bt-cf")).toContainText("실측 적중률(보정에 쓰지 않은 뒤쪽 쌍에서 셈)");
+  await expect(aci.locator(".pg-bt-cf-aci-na")).toHaveCount(0);
+
+  // ② 무한 다음 구간 — 값 대신 서버 문장(짝: 하한 ~ 상한 칸이 없다)
+  const inf = { ...fin, next: { kind: "infinite", point: 0.00058, lower: null, upper: null, half_width: null, rank: 58, m: 56,
+    sentence: "다음 구간은 무한 구간(실수 전체)입니다. 지금까지의 점수로는 목표 적중률을 지키는 유한한 구간을 만들 수 없습니다." } };
+  await patchRun(page, withAdaptive(inf));
+  await run(page);
+  await detail(page, "backtest");
+  await expect(aci.locator(".pg-bt-cf-aci-na")).toHaveText(inf.next.sentence);
+  await expect(aci.locator(".pg-bt-cf-aci-next")).toHaveCount(0);
+
+  // ③ 계산하지 못함 — 사유만(숫자 없음)
+  const bad = { available: false, method: "aci", alpha: 0.1, gamma: 0.005, n: 56,
+    reason: "실측 · 예측에 유한하지 않은 값이 1개 있습니다. 시간 순서를 지키려고 빼지 않고 계산하지 않습니다." };
+  await patchRun(page, withAdaptive(bad));
+  await run(page);
+  await detail(page, "backtest");
+  await expect(aci.locator(".pg-bt-cf-aci-na")).toHaveText(bad.reason);
+  await expect(aci).not.toContainText("±");
+  await expect(aci).not.toContainText("온라인 적중률");
+
+  // ④ 옛 응답(하위 블록 없음) — 등각 상자는 그대로 · 하위 묶음은 그리지 않는다
+  await patchRun(page, (b) => {
+    const v = b.nodes.backtest.view as Record<string, unknown>;
+    const c = { ...(v.conformal as Record<string, unknown>) };
+    delete c.adaptive;
+    v.conformal = c;
+  });
+  await run(page);
+  await detail(page, "backtest");
+  await expect(page.locator(".pg-side .pg-bt-cf")).toHaveCount(1);
+  await expect(aci).toHaveCount(0);
+});
+
 test("현재 비중 대 목표(BL4): '현재 비중' 노드를 충격에 이으면 두 충격이 나란히 · 현재 비중을 안 적으면 균등으로 바꾸지 않고 사유(짝)", async ({ page }) => {
   await openCanvas(page);
   const doc = await exportDoc(page);

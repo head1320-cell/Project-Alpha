@@ -46,7 +46,11 @@ NEW_KEYS = {"alignment", "fallbacks", "view_legs_dropped", "sigma_missing", "dro
             # 비용 전 · 비용 후 나란히(C1 · 2026-11-19 받은 결정) — 워크포워드 요약에 더한 비용 후 넷과 키마다의 비용 기준표. 기존 요약 키는
             # 한 자리도 안 바뀌고(아래 비교가 건다) 새 값은 `tests/test_walk_forward_cost_basis.py`(손 계산) · 국면 팔 골든(84개월)이 건다.
             "volatility_after_cost_pct", "sharpe_ratio_after_cost", "sortino_ratio_after_cost", "calmar_ratio_after_cost",
-            "cost_basis"}
+            "cost_basis",
+            # 시계열용 등각(G7 ② · 2026-11-19) — 등각 블록 안의 ACI 하위 블록(같은 쌍 · 같은 순서). 기존 등각 키는 한 자리도 안 바뀌고
+            # (아래 비교 · `tests/golden/conformal_split_g7.json`) 새 값은 `tests/test_conformal_adaptive.py`(손 계산 · 모든 접두의 상한) ·
+            # `tests/test_backtest_conformal.py`(split 이 받은 쌍과 같은지 엿보기)가 건다.
+            "adaptive"}
 
 T5 = ["005930", "000660", "035420", "051910", "068270"]
 LATE, HOLEY = "068270", "051910"

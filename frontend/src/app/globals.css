@@ -4865,6 +4865,10 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .pg-ls-blocked { padding: 10px 12px; border: 1px solid var(--pg-assume); border-radius: 10px; background: var(--pg-assume-soft); }
 .pg-ls-blocked .pg-list, .pg-ls-blocked .pg-warn { color: var(--pg-ink); }
 .pg-la-unmeasured { font-size: 12px; color: var(--pg-mute); }
+/* G7 ② · 시계열용 등각(ACI) 하위 묶음 — 분할 등각 상자 안의 조용한 자리. '이 길이로는 보장이 서지 않는다'는 길이의 사실이라 경고색을 쓰지 않는다. */
+.pg-bt-cf-aci { display: grid; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--pg-line); }
+.pg-bt-cf-aci-h { margin: 0; font-size: 12px; font-weight: 700; color: var(--pg-body); }
+.pg-bt-cf-aci-next { font-variant-numeric: tabular-nums; }
 /* CF 3부 P1 · 제약이 어떻게 적용됐나 — 결론을 바꾸는 줄(적용 안 됨 · 어긋남)만 경고색, 나머지는 조용히. */
 .pg-cons { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--pg-line); border-radius: 10px; }
 .pg-cons-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0; font-size: 13px; color: var(--pg-body); }

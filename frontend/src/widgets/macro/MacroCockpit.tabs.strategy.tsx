@@ -211,7 +211,8 @@ export function RecommendTab({ recommend, market, setMarket, loading, failed, on
           </div>
         </div>
         <div className="mc-card span2">
-          <div className="mc-card-h">추천한 까닭 <span className="mc-card-sub">{recommend.narrative_source === "claude" ? "AI가 국면과 성과를 바탕으로 작성한 해설입니다" : "규칙 기반 해설입니다 · AI 해설은 관리자가 키를 등록하면 활성화됩니다"}</span></div>
+          {/* G7 ①: 엔진의 해설은 늘 규칙 글이다(엔진은 LLM 을 부르지 않는다). 서버가 '규칙'이라 할 때만 그렇게 적는다 — 출처를 지어내지 않는다. */}
+          <div className="mc-card-h">추천한 까닭 {recommend.narrative_source === "rule" && <span className="mc-card-sub">규칙 기반 해설입니다 · 국면 적합도와 최근 12개월 성과로 지은 글입니다</span>}</div>
           <p className="mc-narr" data-server>{recommend.narrative}</p>
         </div>
         <div className="mc-card span2">

@@ -158,3 +158,92 @@ def test_an_errored_backtest_has_no_conformal_claim():
     out = walk_forward(NAMES, R, dates, model="mvo", rebalance="M")
     assert out.get("error") is True
     assert "conformal" not in out, "실패한 백테스트가 예측 구간을 냈다"
+
+
+# ── 6. 시계열용 등각(ACI) 하위 블록 — 같은 쌍 · 같은 순서 (G7 ② · 2026-11-19) ─────────────
+
+def test_the_adaptive_block_uses_the_same_pairs_in_the_same_order(monkeypatch):
+    """ACI 는 split 이 받은 바로 그 쌍(실현 · 예측)을 같은 순서로 받고, 같은 '다음 구간'의 예측에 씌운다 — 엿보기로 건다."""
+    import src.engine.conformal as cfm
+    seen: dict = {}
+    real_split, real_aci = cfm.split_conformal, cfm.adaptive_conformal
+
+    def spy_split(a, p, tp, alpha=0.1):
+        seen["split"] = (np.asarray(a, dtype=float).copy(), np.asarray(p, dtype=float).copy(), np.asarray(tp, dtype=float).copy())
+        return real_split(a, p, tp, alpha=alpha)
+
+    def spy_aci(a, p, tp, *, alpha, gamma):
+        seen["aci"] = (np.asarray(a, dtype=float).copy(), np.asarray(p, dtype=float).copy(), tp, alpha, gamma)
+        return real_aci(a, p, tp, alpha=alpha, gamma=gamma)
+
+    monkeypatch.setattr(cfm, "split_conformal", spy_split)
+    monkeypatch.setattr(cfm, "adaptive_conformal", spy_aci)
+    c = _run(1300)["conformal"]
+    assert c["available"], c.get("reason")
+    sa, sp, stp = seen["split"]
+    aa, ap, atp, alpha, gamma = seen["aci"]
+    assert np.array_equal(aa, sa) and np.array_equal(ap, sp) and aa.size == c["n_pairs"]
+    assert atp == float(stp[0]) == c["next_period"]["point"]
+    assert alpha == c["alpha"] and gamma == cfm.ACI_GAMMA == 0.005
+    ad = c["adaptive"]
+    assert ad["available"] is True and ad["method"] == "aci" and ad["n"] == c["n_pairs"]
+    assert ad == real_aci(sa, sp, float(stp[0]), alpha=alpha, gamma=gamma)
+    # 짝: 같은 쌍이라도 순서를 뒤집으면 온라인 결과가 달라진다 — 순서가 뜻을 갖는다(교환가능성을 가정하지 않는 까닭)
+    assert ad["online"] != real_aci(sa[::-1], sp[::-1], float(stp[0]), alpha=alpha, gamma=gamma)["online"]
+
+
+def test_the_adaptive_block_says_when_its_length_cannot_carry_the_guarantee():
+    """리밸런스 쌍 수십 개 — 상한이 자명한 폭 이상이라 보장이 서지 않는다고 문장으로 말한다."""
+    c = _run(1300)["conformal"]
+    b = c["adaptive"]["bound"]
+    assert c["n_pairs"] < 202
+    assert b["informative"] is False and b["value"] >= b["trivial"]
+    assert "보장이 서지 않습니다" in b["sentence"] and f"{c['n_pairs']}쌍" in b["sentence"]
+
+
+def test_a_short_backtest_has_no_adaptive_claim_either():
+    c = _run(SHORT_DAYS)["conformal"]
+    assert c["available"] is False and "adaptive" not in c
+
+
+# ── 7. ★결정 경로는 등각 블록을 읽지 않는다★ (정적 · 짝) ─────────────────────────────
+
+def _reads_of_key(source: str, key: str) -> list[int]:
+    """`x["key"]` · `x.get("key")` 처럼 키를 ★읽는★ 줄 번호(dict 글자 `{"key": …}` 로 쓰는 것은 읽기가 아니다)."""
+    import ast
+    lines = []
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Constant) and n.slice.value == key \
+                and isinstance(n.ctx, ast.Load):
+            lines.append(n.lineno)
+        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in ("get", "pop") \
+                and n.args and isinstance(n.args[0], ast.Constant) and n.args[0].value == key:
+            lines.append(n.lineno)
+    return lines
+
+
+def test_nothing_in_src_reads_the_conformal_block():
+    """등각 블록(분할 · 시계열용 모두)을 읽는 곳은 화면과 시험뿐이다 — 배분 · 최적화 · 국면 결정이 구간을 쓰지 않는다."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    hits = {}
+    for p in sorted((root / "src").rglob("*.py")):
+        got = _reads_of_key(p.read_text(encoding="utf-8"), "conformal")
+        if got:
+            hits[str(p.relative_to(root))] = got
+    assert hits == {}, f"등각 블록을 읽는 제품 코드: {hits}"
+
+
+def test_the_key_read_scanner_sees_reads_and_ignores_writes():
+    planted = ('def f(bt):\n    a = bt["conformal"]\n    b = bt.get("conformal")\n'
+               '    out = {"conformal": 1}\n    bt["conformal"] = 2\n    return "conformal"\n')
+    assert _reads_of_key(planted, "conformal") == [2, 3]
+
+
+def test_only_the_backtest_imports_the_conformal_module():
+    import sys as _sys
+    from pathlib import Path
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from import_graph import build_graph
+    graph = build_graph()
+    assert {m for m, ts in graph.items() if "src.engine.conformal" in ts} == {"src.engine.allocation_backtest"}

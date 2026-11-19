@@ -24,6 +24,8 @@
 | 서버(통계) | `deflated_sharpe.py`(PSR · DSR) · `domain/multiplicity.py`(다중검정) · `conformal.py`(split conformal — 교환가능성 가정) · `research_preregistration.py` · `research_power.py` · `capability.py`(능력 사다리) · `causal_graph.py`(Granger — 구조적 인과가 아니라고 적는다) | 순차(언제든 유효한) 검정 |
 | LLM | `services/narrative/claude_client.py` · `services/canvas_assist/service.py` 두 곳에서만 | 계산 · 결정 계층에는 없다(그 사실을 거는 시험은 아직 없다 — G7) |
 
+★정정 (2026-11-19 · G7 ① 감사 — 관측)★ 위 LLM 줄은 틀렸다. LLM 모듈(`anthropic` · `openai` · `services/narrative` · `services/canvas_assist` · `services/screener_copilot`)을 직접 들이는 모듈은 둘이 아니라 여덟이었고, 그 가운데 하나가 ★계산 계층★인 `engine/macro_recommender.py` 였다(키가 있으면 `claude_client.get_client` 를 늦은 import — 그런 이름이 없어 늘 규칙 글로 떨어지던 죽은 길 · 매크로 화면은 '키를 등록하면 AI 해설'이라고 약속했다). G7 에서 그 길을 걷어 냈고(응답은 키가 있든 없든 바이트까지 같다) 남은 일곱은 `src/domain/llm_boundary.py` 에 사유와 함께 적었다. 계산 · 결정 계층의 직접 LLM import 는 이제 0 이고 `tests/test_llm_boundary.py` 가 건다(제품 규칙 `2026-09-12-ra-product-rules.md` §3-2). 옛 문장은 지우지 않고 둔다 — 조사 때 이름으로 훑어 본 것(관측의 범위)과 import 그래프로 잰 것의 차이가 이 정정의 요지다.
+
 ## 2. 금융 저장소
 
 ### 2.1 도입 후보로 본 것

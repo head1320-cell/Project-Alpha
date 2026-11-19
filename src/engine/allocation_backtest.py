@@ -107,8 +107,15 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
     ★적중률은 주장하지 않고 잰다★
     이론 하한 `1-α` 를 그대로 적으면 유한표본에서 거짓이 될 수 있다. 앞 70% 로 보정하고
     뒤 30% 로 **실제 적중률을 세어** 함께 낸다. 잴 표본이 모자라면 숫자 대신 사유다.
+
+    ★시계열용(교환가능성 가정 없음) 하위 블록 `adaptive`★ (G7 ② · 2026-11-19)
+    split 이 받은 바로 그 쌍을 같은 시간 순서로 ACI(`conformal.adaptive_conformal` · γ = `ACI_GAMMA`)에 넣어
+    온라인 적중 · 그 길이에서의 보장 상한 · 같은 '다음 구간'의 구간을 나란히 낸다. 새 대상은 없다 · 기존 키는 그대로 ·
+    쌍이 모자라 블록 전체가 사유일 때는 이 하위 블록도 없다. 이 블록을 읽는 결정 경로는 없다(시험이 건다).
     """
     from src.engine.conformal import (
+        ACI_GAMMA,
+        adaptive_conformal,
         conformal_quantile,
         measure_coverage,
         required_calibration_size,
@@ -159,6 +166,9 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
             if cov.get("available"):
                 cov["n_calibration"] = k
 
+    # ★같은 쌍 · 같은 순서 · 같은 다음 구간★ — split 옆에 나란히(교환가능성을 가정하지 않는 쪽).
+    adaptive = adaptive_conformal(cal_a, cal_p, float(preds[-1]), alpha=alpha, gamma=ACI_GAMMA)
+
     return {
         "available": True,
         "alpha": alpha,
@@ -169,6 +179,7 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
                         "upper": nxt["upper"][0], "half_width": nxt["q"]},
         # ★이론 하한이 아니라 실측 적중률★ 없으면 없다고 적는다.
         "measured_coverage": cov,
+        "adaptive": adaptive,
         "note": ("다음 리밸런스 구간의 **일평균** 포트폴리오 수익률 구간입니다. "
                  "교환가능성만 가정하며 분포 가정은 없습니다. 실현값은 구간 말 회전율 "
                  "비용을 반영한 값이라, 비용을 모르는 예측 대비 구간이 다소 넓게 잡힙니다."),

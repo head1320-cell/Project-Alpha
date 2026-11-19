@@ -63,5 +63,5 @@ def test_recommend_structure():
     assert r["regime"]["quadrant"] in ("Goldilocks", "Reflation", "Stagflation", "Disinflation")
     assert len(r["ranking"]) == 22
     assert r["ranking"][0]["id"] == r["top"]["id"]
-    assert r["narrative"] and r["narrative_source"] in ("rule", "claude")
+    assert r["narrative"] and r["narrative_source"] == "rule"   # G7 ①: 엔진은 LLM 을 부르지 않는다
     assert r["top"]["holdings"] and r["top"]["fit_score"] is not None
