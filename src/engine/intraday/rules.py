@@ -368,6 +368,33 @@ def resolve(kind: str, params: dict | None = None) -> dict:
     return out
 
 
+def free_values(kind: str, params: dict | None = None) -> dict:
+    """이 자료로 고를 수 있었던 규칙의 값(G3 자유도 공시) → `{count, names}`.
+
+    틀 = 그 틀이 선언한 매개변수(수 · 고르기) 전부 — 기본값으로 둔 값도 고를 수 있었던 값이다.
+    직접 구성 = 나무 셋의 상수 · 지표 매개변수(`resolve` 가 기본값을 채운 하나의 꼴에서) · 연산 덧칸(봉 수 · 시각).
+    같은 규칙은 늘 같은 수다. 검사를 지나지 못한 규칙은 세지 않는다(`RuleError` 그대로)."""
+    resolved = resolve(kind, params)
+    if kind != CUSTOM:
+        return {"count": len(resolved), "names": list(resolved)}
+    names: list[str] = []
+
+    def walk(node: dict, slot: str) -> None:
+        if "const" in node:
+            names.append(f"{slot}:const")
+        elif "ind" in node:
+            names.extend(f"{slot}:{node['ind']}.{key}" for key in node if key != "ind")
+        else:
+            names.extend(f"{slot}:{node['op']}.{key}" for key in _OP_EXTRA.get(node["op"], ()))
+            for arg in node.get("args", []):
+                walk(arg, slot)
+
+    for key, *_ in SLOTS:
+        if key in resolved:
+            walk(resolved[key], key)
+    return {"count": len(names), "names": names}
+
+
 def build(kind: str, params: dict | None = None) -> RuleSpec:
     """틀과 매개변수 → 나무 셋. `custom` 이면 받은 나무 셋(하나의 꼴)이 그대로 규칙이다."""
     if kind == CUSTOM:

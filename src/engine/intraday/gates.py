@@ -120,13 +120,16 @@ def _sequential(s: dict | None) -> tuple[str, ...]:
             "이 기준은 기간을 늘려 가며 다시 봐도 유효합니다.", assumed)
 
 
-def _multiplicity(m: dict | None, trial_error: str | None) -> dict:
+def _multiplicity(m: dict | None, trial_error: str | None, freedom: dict | None = None) -> dict:
+    # 자유도 공시(G3)는 ★마지막 사실 줄★이다 — 상태 · 사유는 확률(DSR)이 정한다(값 하나당 거래 수에 기준을 지어내지 않는다).
+    # 시행을 세지 못해 관문이 미상이어도 싣는다: 공시는 시행 기록과 무관한 셈이다.
+    told = (freedom["message"],) if freedom else ()
     if not m:
-        return _gate("multiplicity", AXIS_UNKNOWN, trial_error or "시행 횟수를 세지 못해 보정하지 않았습니다.")
+        return _gate("multiplicity", AXIS_UNKNOWN, trial_error or "시행 횟수를 세지 못해 보정하지 않았습니다.", *told)
     rule = f"기준 {m['threshold']} 는 관례 기준입니다."
     count = (f"이 종목과 기간에서 기록된 시행은 {m['n']}회입니다." if m.get("corrected")
              else f"기록된 시행이 {m['n']}회라 보정할 것이 없어 보정 전 확률을 봤습니다.")
-    facts = (count, rule, m.get("note", ""), *_sequential(m.get("sequential")))
+    facts = (count, rule, m.get("note", ""), *_sequential(m.get("sequential")), *told)
     if m["value"] is None:
         return _gate("multiplicity", AXIS_UNKNOWN, m.get("reason") or "확률을 계산하지 못했습니다.", *facts)
     if m["value"] >= m["threshold"]:
@@ -136,7 +139,7 @@ def _multiplicity(m: dict | None, trial_error: str | None) -> dict:
 
 def build(*, origin: dict, sessions: int, skipped: int, bar_label_known: bool, summary: dict, slippage_ticks: int,
           oos: dict | None, oos_views: int | None, stress: dict | None, multiplicity: dict | None,
-          trial_error: str | None = None) -> dict[str, Any]:
+          trial_error: str | None = None, freedom: dict | None = None) -> dict[str, Any]:
     """일곱 관문과 그 개수. 입력은 전부 다른 모듈이 이미 계산한 것이다 — 여기서는 판정만 한다."""
     table = [
         _data(origin, sessions, skipped),
@@ -144,7 +147,7 @@ def build(*, origin: dict, sessions: int, skipped: int, bar_label_known: bool, s
         _costs(summary, slippage_ticks),
         _oos(oos, oos_views),
         _robust(stress),
-        _multiplicity(multiplicity, trial_error),
+        _multiplicity(multiplicity, trial_error, freedom),
         _gate("economic_value", AXIS_UNKNOWN, "이 도구는 실제 계좌에서의 경제적 가치와 모의·실계좌 검증을 재지 않습니다.",
               "앞의 관문을 지난 규칙도 이 관문은 지나지 않았습니다."),
     ]

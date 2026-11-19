@@ -277,3 +277,66 @@ KIS 공식 저장소 조사(고르지 않으셨다) · 관문의 뜻 바꾸기(e
 ### 3.5 주장의 범위
 오류율은 도구의 통계 성질이다(Ville · 모의 — `synthetic_mechanism`). "가정보다 불리한 체결이 잦다는 증거"는 ★그 기록 · 그 규칙 · 그 허용 시간의 짝★에 대한 것이고 앞으로의 체결 품질이나 규칙의 가치를 말하지 않는다.
 짝짓기가 시각만 보므로, 허용 시간 안의 값 움직임(늦게 체결된 만큼의 가격 변화)도 불리 · 유리에 든다 — 그 몫을 따로 가르지 않는다. 실제 증권사 파일로는 미검증.
+
+## 4. G3 — 자유도 공시 + 실행 전 가설 (2026-11-19 · G3 를 시작하며 더한 절)
+
+### 4.0 감사에서 본 것(읽기 전용 · 관측)
+- 판정 관문 일곱(`src/engine/intraday/gates.py::GATES`) — 관문 하나 = `_gate(key, state, reason, *facts)` · 사실 줄은 서버 문장. G1 의 순차 증거는 다중 비교 관문의 사실 줄이다(상태는 DSR).
+- 판정 문 `POST /validate` → `run_validation`(문과 캔버스의 '분봉 백테스트 실행' 단추가 같이 쓴다) · 읽기 전 검사 `prepare`(캔버스의 '분봉 백테스트 설정' 노드도 같이 쓴다).
+- ★실행(`POST /simulate`)도 시행을 남긴다★ — 같은 설정이면 판정과 같은 열쇠다(`_trial_setting` · `trials.record`). 화면(백테스트 › 분봉 규칙)의 '판정' 절은 실행 결과가 나온 뒤에만 열린다 → ★화면의 판정은 늘 그 설정의 2회째 이상이다.★
+- 시행 저장소 `intraday_trials` — 칸 덧붙이기 관용구 `schema_add_columns.add_columns`(결과 요약 칸이 선례 · 못 붙으면 그 기능만 미상) · 열쇠 `_key(user, grade, setting, tickers, start, end)`.
+- 규칙의 값: 틀 = `Template.params`(틀 일곱) · 직접 구성 = 나무 셋의 상수 · 지표 매개변수(기본값 채움) · 연산 덧칸(`_OP_EXTRA` — `held_before` · `ago` 의 봉 수 · `time_between` 의 시각).
+  포지션 칸 열하나(`PositionBody`) · 비용 칸(`CostsBody`)은 가정이다(비용 민감도 관문이 따로 본다).
+- 개인정보 모양 검사 `src/domain/pii_guard.pii_reason(text, label, max_len)` — 전화 · 이메일 · 주민번호 · 긴 숫자열(날짜는 걷고 본다).
+- 시행 목록 `GET /trials` 의 화면 소비자는 하나다(내 계좌 › 매매일지 '백테스트와 견주기'의 시행 고르기 `widgets/trade-journal/CompareSection.tsx`). 캔버스 결과 판은 판정 부품(`features/intraday-verdict`)을 같이 쓴다.
+
+### 4.1 구현 전에 정한 것 — ★뼈대의 글과 달라진다★
+1. **가설은 실행(`/simulate`)도 받는다.** 뼈대는 "`/validate` 에 선택 칸"이었다. 화면에서 판정은 늘 실행 뒤에 오므로 판정에서만 받으면 '결과를 보기 전에 적은 가설'이 화면에서 생길 수 없다(감사에서 찾음).
+   → 새 본문 `RunBody(SimulateBody)` 에 `hypothesis` · `ValidateBody(RunBody)` · 실행 문은 `RunBody` · ★괴리 보고(`DivergenceBody`)는 받지 않는다★(모르는 칸 422 — 조용히 버리지 않는다).
+2. **'결과를 보기 전'은 적을 때의 실행 횟수로만 가른다** — 그 설정의 `runs` 를 가설과 함께 남긴다(`hypothesis_run`). 1 = 첫 실행과 함께(결과를 보기 전) · n > 1 = "n−1회 실행한 뒤에 처음 적은 가설입니다. 앞선 실행의 결과를 본 뒤에 적었습니다." ·
+   칸이 비면 '알 수 없음'(미상 ≠ 1 · ≠ 0). 도구는 글의 뜻(기제인지 · 그럴듯한지)을 판단하지 않는다. 다른 설정의 결과를 먼저 봤는지는 시행 횟수(다중 비교)가 따로 센다.
+3. **처음 것만 남는다** — `UPDATE … WHERE hypothesis IS NULL`. 다시 보내면 남은 것을 돌려주고, 보낸 글이 남은 것과 ★다를 때만★ "처음 적은 가설이 남아 있어 이번에 보낸 글은 저장하지 않았습니다"를 붙인다
+   (같은 글이면 잃은 것이 없다 — 칸을 채운 채 다시 돌리는 흔한 경우). 고치거나 지우는 길은 없다(가설 찍어내기의 정직 라벨이 그것으로 선다).
+4. **열쇠에 들지 않는다** — 적어도 같은 설정은 같은 시행이다(실행 횟수만 는다). 응답의 `request` · 시행 목록의 다시 보낼 요청에도 들지 않는다.
+5. **거절은 ★맨 앞★** — 앞뒤 공백을 걷고, 500자 넘음(`hypothesis_too_long` · 상한 · 길이) · 개인정보 모양(`hypothesis_pii` · `pii_reason` 의 사유)은 설정 검사보다 먼저 400(읽기 · 계산 · 저장 0). 빈 글 = 가설 없음.
+   상한은 틀 목록의 `limits.hypothesis_chars`(화면이 500 을 지어내지 않는다 — 칸의 `maxlength`).
+6. **남기지 못하면 실행은 그대로 답한다** — 칸을 붙이지 못한 DB · 저장소 장애면 가설 줄은 `None`(없음)이 아니라 "가설을 저장하지 못했습니다 …"(보냈을 때) · "실행 전 가설을 읽지 못했습니다 …"(안 보냈을 때). 시행 세기는 그대로 돈다.
+7. **자유도 공시** `src/engine/intraday/freedom.disclose(kind, params, position, trades=)` → `{rule, rule_names, position, position_names, count, trades, per_value, question, message, basis, limit}`.
+   셈: 규칙 = `rules.free_values`(틀의 매개변수 전부 · 직접 구성의 상수 · 지표 매개변수(기본값 포함) · 연산 덧칸) · 포지션 = 정한 칸(None 이 아닌 칸 · 기본값 그대로도 센다 · 진입 금액 제외 — 크기일 뿐 신호의 모양을 바꾸지 않는다) · 비용 가정 제외.
+   ★기술이며 기준이 아니다★ — 값 하나당 거래가 몇 건이면 넉넉한지 정하지 않는다(그 경계는 자료 · 규칙마다 다르다 — 이중하강 · '복잡성의 미덕' 논쟁, 조사 문서) · 관문의 상태를 바꾸지 않는다 · 거래 0 이면 나누지 않는다 · 거래 수를 모르면 그렇게 적는다.
+   자리: 판정 응답의 `freedom` + 다중 비교 관문의 ★마지막 사실 줄★(`message` — 시행을 세지 못해 관문이 미상이어도 싣는다) + 화면의 '시행 횟수와 다중 비교' 절(물음 · 답 · 셈 · 한계). 캔버스 결과 판은 같은 부품 · 같은 관문 표다. 실행 응답에는 싣지 않는다(판정의 사실이다).
+8. **화면** — 설정의 '실행 전 가설' 절(선택 · 실행 단추 바로 위) · ★설정이 아니라 `Form` 밖에 둔다★(바꿔도 결과를 지우지 않는다) · 빈 칸은 보내지 않는다 · 실행 결과 · 판정 · 시행 고르기에 같은 가설 상자
+   ('가설 | 적은 때' — 판정의 순차 증거 · 자유도 공시와 같은 '열쇠 | 값' 두 칸) · 시행 고르기 줄 끝에 `가설: 결과를 보기 전 / 결과를 본 뒤 / 적은 때 미상`. 캔버스에 가설 칸은 넣지 않는다(하지 않는 것).
+
+### 4.2 파일
+| 파일 | 일 |
+|---|---|
+| `src/engine/intraday/rules.py` | `free_values(kind, params)` → `{count, names}`(규칙 검사를 지나지 못하면 `RuleError` 그대로) |
+| `src/engine/intraday/freedom.py`(새) | `disclose` · `POSITION_KNOBS` · `QUESTION` · `BASIS` · `LIMIT` |
+| `src/data/intraday_trials.py` | 칸 셋(`hypothesis` · `hypothesis_run` · `hypothesis_at`) 덧붙이기(못 붙으면 가설만 미상) · `keep_hypothesis` · `hypotheses_of` · 빈 실행 횟수는 `None` |
+| `src/api/intraday_routes.py` | `RunBody` · `HYPOTHESIS_MAX` · `HYPOTHESIS_MESSAGES` · 거절(`_hypothesis_text` — 실행 문 맨 앞 · `prepare` 맨 앞) · 실행 · 판정의 시행 줄 `hypothesis` · 판정의 `freedom` · 목록의 `hypothesis` · 틀 목록의 `limits.hypothesis_chars` |
+| `src/engine/intraday/gates.py` | `build(…, freedom=None)` — 다중 비교 관문의 마지막 사실 줄 |
+| `frontend/src/entities/intraday/types.ts` · `api.ts` | 형 `Hypothesis` · `FreedomDisclosure` · `RunRequest` · `Limits.hypothesis_chars` · 실행 요청은 `RunRequest` |
+| `widgets/intraday/SetupForm.tsx` · `IntradayView.tsx` | '실행 전 가설' 절 · 실행 · 판정에 함께 보냄(빈 글은 보내지 않음) |
+| `features/intraday-verdict/parts.tsx` · `Verdict.tsx` · `widgets/intraday/IntradayResult.tsx` | 가설 상자 `HypothesisLine`(실행 결과 · 판정) · 판정의 자유도 공시 상자 |
+| `widgets/trade-journal/CompareSection.tsx` | 시행 고르기 줄의 '적은 때' 표기 · 고른 시행의 가설 상자 |
+| `frontend/src/app/globals.css` | 새 클래스 `.itd-hypo*` · `.itd-free*` · `.itd-hypothesis` |
+| `docs/specs/2026-11-11-ui-terminology.md` | §3.26 '실행 전 가설 · 자유도 공시' |
+| 시험 | `tests/test_intraday_freedom.py` · `tests/test_intraday_hypothesis.py` · `tests/test_intraday_hypothesis_route.py` · `tests/test_intraday_gates.py` · `tests/test_intraday_validate_route.py`(실행의 시행 줄 기대값 둘 — 의도한 변화) · `frontend/e2e/intraday-hypothesis.spec.ts` |
+
+### 4.3 시험(빨강 먼저) · 변이
+- 셈: 틀 일곱의 값 수 · 직접 구성(상수 · 지표 매개변수 · 덧칸) · 기본값을 쓰든 안 쓰든 같은 수 · 진입 금액 · 비운 칸은 세지 않음 ↔ 칸 하나를 정하면 하나 는다 · 거래 0 · 값 0 · 거래 미상 · 판정 낱말 없음 · 물음.
+- 저장소: 처음 것만(다시 보내도 그대로) · 적을 때의 실행 횟수(1 ↔ 2) · 남의 시행 = 없는 시행(쓰지 않음) · 열쇠 불변 · 칸을 못 붙이면 미상(시행 세기는 돈다) · 장애 = 미상 · 빈 실행 횟수 = `None`.
+- 문: 첫 실행과 함께 → 결과를 보기 전 · 다시 보내면 처음 것 + 문장(다른 글) ↔ 같은 글이면 문장 없음 · 두 번 뒤에 처음 → 결과를 본 뒤 · ★2회째에 처음 → 결과를 본 뒤(경계 — 변이에서 찾아 더함)★ ·
+  열쇠 불변 · 개인정보 · 501자 ↔ 500자 · 빈 글 · 목록(남의 것 안 보임) · 남기지 못함 · 읽지 못함(없음과 다름) · 실행이 가설을 받고 판정이 보인다 · 괴리 보고는 422 · 공시 = `disclose` 그대로 ·
+  관문의 마지막 사실 줄 · 틀 목록의 상한 · 캔버스의 남긴 요약에 공시(= 문의 답).
+- 관문: 공시를 넘기면 마지막 사실 줄 ↔ 안 넘기면 없음 · 상태 · 사유 · 개수 · 다른 관문 불변(통과 · 미달 · 시행 미상 셋).
+- 화면(E2E): 상한 = 서버 값 · 받은 글 그대로 보냄 · 결과를 보기 전 · 판정의 같은 글 · 고쳐 보내면 처음 것 + 문장 · 가설 칸은 결과를 지우지 않음 ↔ 설정 칸은 지움 · 두 번 뒤 · 빈 칸 안 보냄 · 개인정보 거절 ·
+  공시 = 서버 문장(물음 · 답 · 셈 · 한계) · 관문의 마지막 사실 줄 · 칸 하나 더 → 하나 는다 · 시행 고르기의 표기 · 고른 시행의 가설 · 괴리 요청에 가설 없음 · 라이트/다크 AA · 문체 · 390px 쌓임.
+- 변이: 서버 44(셈 12 · 저장소 6 · 문 21 · 관문 4 · 캔버스 1) · 화면 20 + 캔버스 판 2 — 결과와 처음에 살아남은 하나(경계 시험을 더해 죽임)는 HISTORY 의 G3 항목.
+
+### 4.4 하지 않는 것
+가설의 뜻 판단 · 가설 고치기 · 지우기 · 캔버스의 가설 칸 · 값 하나당 거래 수의 기준 · 관문 상태 바꾸기 · 비용 가정을 손잡이로 세기 · 시행 열쇠 · 시뮬레이터 · 체결 규칙 · 주문 경로.
+
+### 4.5 주장의 범위
+`structural`. 자유도 공시는 셈이며 과적합의 판정이 아니다(값 하나당 거래 수의 경계는 자료 · 규칙마다 다르다). '결과를 보기 전'은 ★그 설정의★ 첫 실행과 함께 적었다는 기록이며, 다른 설정의 결과를 먼저 봤는지 · 글이 기제인지는 말하지 않는다.

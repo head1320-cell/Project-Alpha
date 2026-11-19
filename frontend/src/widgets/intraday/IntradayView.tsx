@@ -83,6 +83,9 @@ function Workbench() {
   const [run, setRun] = useState<Run<Sim>>({ kind: "idle" });
   const [check, setCheck] = useState<Run<Validation>>({ kind: "idle" });
   const [stale, setStale] = useState(false);
+  // 실행 전 가설(G3) — 설정 밖에 둔다(시행 열쇠에 들지 않는다 · 바꿔도 결과를 지우지 않는다). 빈 글은 보내지 않는다(서버도 가설이 없는 것으로 본다).
+  const [hypothesis, setHypothesis] = useState("");
+  const withHypothesis = <T extends object>(body: T): T & { hypothesis?: string } => (hypothesis.trim() ? { ...body, hypothesis } : body);
 
   const t = templates.data ?? null;
   const start0 = useMemo(() => (t ? initialForm(t, recentPeriod(COVERAGE_DAYS)) : null), [t]);
@@ -133,13 +136,13 @@ function Workbench() {
     setRun({ kind: "pending" });
     setCheck({ kind: "idle" });
     setStale(false);
-    const r = await simulate(built.request);
+    const r = await simulate(withHypothesis(built.request));
     setRun(r.ok ? { kind: "done", value: r.value as Sim } : { kind: "fail", status: r.status, error: r.error });
   };
   const judge = async () => {
     if (problems.length || grid.problems.length) return;
     setCheck({ kind: "pending" });
-    const r = await validate(grid.grid ? { ...built.request, walk_forward: grid.grid } : built.request);
+    const r = await validate(withHypothesis(grid.grid ? { ...built.request, walk_forward: grid.grid } : built.request));
     setCheck(r.ok ? { kind: "done", value: r.value } : { kind: "fail", status: r.status, error: r.error });
   };
 
@@ -164,7 +167,8 @@ function Workbench() {
 
       <SetupForm templates={t} form={form} onChange={change} coverage={coverage} onCoverage={() => void askCoverage()}
                  problems={problems} pending={run.kind === "pending"} stale={stale} onRun={() => void start()}
-                 ruleReady={built.ruleReady} check={ruleCheck} move={move} onToCustom={(rule) => void toCustom(rule)} />
+                 ruleReady={built.ruleReady} check={ruleCheck} move={move} onToCustom={(rule) => void toCustom(rule)}
+                 hypothesis={hypothesis} onHypothesis={setHypothesis} />
 
       {run.kind === "fail" ? <div className="tj-run-fail itd-run-fail">{fail(run, "실행 요청", () => void start())}</div> : null}
       {run.kind === "done" ? <IntradayResult sim={run.value} /> : null}

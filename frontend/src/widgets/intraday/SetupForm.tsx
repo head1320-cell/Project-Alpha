@@ -84,11 +84,14 @@ function CoverageView({ c, asked }: { c: Coverage; asked: string[] }) {
   );
 }
 
-export function SetupForm({ templates: t, form, onChange, coverage, onCoverage, problems, pending, stale, onRun, ruleReady, check, move, onToCustom }: {
+/** `hypothesis` — 실행 전 가설(G3). ★설정이 아니다★(시행 열쇠에 들지 않는다) — 그래서 `Form` 밖에 두고, 바꿔도 결과를 낡았다고 하지 않는다. */
+export function SetupForm({ templates: t, form, onChange, coverage, onCoverage, problems, pending, stale, onRun, ruleReady, check, move, onToCustom,
+                            hypothesis, onHypothesis }: {
   templates: Templates; form: Form; onChange: (next: Form) => void;
   coverage: CoverageState; onCoverage: () => void;
   problems: string[]; pending: boolean; stale: boolean; onRun: () => void;
   ruleReady: boolean; check: RuleCheck; move: Move; onToCustom: (rule: SimulateRequest["rule"] | null) => void;
+  hypothesis: string; onHypothesis: (next: string) => void;
 }) {
   const template = templateOf(t, form.kind);
   const tickers = parseTickers(form.tickers);
@@ -146,6 +149,18 @@ export function SetupForm({ templates: t, form, onChange, coverage, onCoverage, 
             <li>참여율 상한은 그 봉 거래량 대비 체결 수량의 한도입니다. 시장충격과 호가 잔량은 반영하지 않습니다.</li>
           </ul>
         </div>
+      </Section>
+
+      <Section title="실행 전 가설" sub="선택입니다. 이 규칙이 왜 통한다고 보는지 적습니다. 실행이 시행으로 기록될 때 함께 남기며, 처음 남은 글은 결과를 본 뒤에 고쳐 보내도 바뀌지 않습니다.">
+        <label className="tj-field itd-hypo-field">
+          <span className="tj-label">가설</span>
+          <textarea className="tj-input itd-hypothesis" rows={3} maxLength={t.limits.hypothesis_chars} value={hypothesis}
+                    placeholder="누가 왜 그 시각에 그렇게 사고판다고 보는지 적습니다." aria-describedby="itd-hypothesis-note"
+                    onChange={(e) => onHypothesis(e.target.value)} />
+          <span className="itd-hint" id="itd-hypothesis-note">
+            설정이 아니라서 바꿔도 다시 계산하지 않습니다 · 실명·연락처·계좌번호는 적지 않습니다 · {num(hypothesis.length)}/{num(t.limits.hypothesis_chars)}자
+          </span>
+        </label>
       </Section>
 
       <div className="tj-run-row itd-run-row">

@@ -46,6 +46,8 @@ export type Template = {
 export type Limits = {
   tickers: number; ticker_days: number; range_days: number; bytes: number;
   grid_cells: number; validate_work: number; folds_min: number; folds_max: number;
+  /** 실행 전 가설(G3)의 글자 수 상한 — 서버의 것(화면이 지어내지 않는다). */
+  hypothesis_chars: number;
 };
 export type Templates = {
   templates: Template[]; grammar: Grammar; position: FieldDef[]; costs: FieldDef[]; limits: Limits;
@@ -100,7 +102,9 @@ export type SimulateRequest = {
   costs: Record<string, Value>;
 };
 export type Grid = { folds: number; rule: Record<string, Value[]>; position: Record<string, Value[]> };
-export type ValidateRequest = SimulateRequest & { walk_forward?: Grid };
+/** 실행 · 판정의 요청 — 실행 전 가설(G3)을 함께 보낼 수 있다(설정이 아니다 · 시행 열쇠에 들지 않는다). 괴리 보고의 요청은 받지 않는다. */
+export type RunRequest = SimulateRequest & { hypothesis?: string };
+export type ValidateRequest = RunRequest & { walk_forward?: Grid };
 
 export type Origin = { kind: string; sessions: SourceCounts; grade: "E0" | "E3" | null; grade_reason: string };
 export type Skipped = { date: string; ticker: string; reason: string; message: string | null };
@@ -110,6 +114,9 @@ export type DataBlock = {
 };
 export type Assumption = { key: string; label: string; count: number };
 export type Breakeven = { bp: number | null; turnover: number | null; spent_bp: number | null; reason: string | null };
+/** 실행 전 가설(G3) — 시행 줄에 처음 적은 것만 남는다. `at_run` 은 적을 때의 실행 횟수(1 = 첫 실행과 함께 · 결과를 보기 전).
+ *  남기거나 읽지 못했으면 `text` · `at_run` · `before_results` 가 `null` 이고 `message` 가 그렇다고 말한다(가설이 없으면 줄 자체가 `null`). */
+export type Hypothesis = { text: string | null; at_run: number | null; before_results: boolean | null; kept_now: boolean; message: string };
 /** 시행 기록의 답 — 기록하지 못했으면 수가 `null` 이고 사유가 붙는다(1 이 아니다). */
 export type Trial = {
   recorded: boolean;
@@ -117,6 +124,8 @@ export type Trial = {
   trial_key?: string | null;
   new: boolean | null; runs: number | null; family_n: number | null; user_total: number | null;
   reason: string | null; message: string | null;
+  /** 실행 전 가설(G3) — 실행 · 판정의 시행 줄에만 있다(괴리 보고의 시행 줄 · G3 전에 남긴 결과에는 칸이 없다). */
+  hypothesis?: Hypothesis | null;
 };
 /** 규칙이 쓴 하루 유형 모형 하나의 사실 줄(`src/api/intraday_context.facts`) — 문장은 서버의 것을 그대로 싣는다. 쓰지 않는 규칙이면 목록이 비어 있다.
  *  `kind` 가 없는 줄은 K3 전에 남긴 결과의 하루 유형 줄이다. */
@@ -207,6 +216,8 @@ export type Divergence = {
 export type TrialRow = {
   trial_key: string; rule_label: string | null; rule_text: string | null; rule_text_reason: string | null;
   runs: number; updated_at: number; request: SimulateRequest;
+  /** 실행 전 가설(G3) — 없으면 `null` · 읽지 못했으면 글이 `null` 인 줄(없음으로 꾸미지 않는다). 다시 보낼 `request` 에는 들지 않는다. */
+  hypothesis: Hypothesis | null;
 };
 /** 못 읽으면 빈 목록이 아니라 `available: false` + 사유다. `unreadable` 은 설정이 깨져 싣지 못한 줄 수. */
 export type TrialList = { available: boolean; reason: string | null; trials: TrialRow[]; unreadable: number };
@@ -260,6 +271,14 @@ export type Validation = Shared & {
   gates: GateTable | null;
   /** 국면 조건을 쓴 규칙만 — 아니면 `null`(K3 전의 남긴 결과에는 칸이 없다). */
   regime_pair?: RegimePair | null;
+  /** 자유도 공시(G3) — 빈 결과면 `null` · G3 전에 남긴 결과(캔버스)에는 칸이 없다. */
+  freedom?: FreedomDisclosure | null;
+};
+/** 자유도 공시(G3 · `src/engine/intraday/freedom.disclose`) — 조정 가능한 값의 수와 이 실행의 거래 수. ★기술이며 기준이 아니다★(관문의 상태를 바꾸지 않는다).
+ *  `per_value` 는 거래가 없거나 값이 없으면 `null`(나누지 않는다) · 문장은 서버의 것 그대로. */
+export type FreedomDisclosure = {
+  rule: number; rule_names: string[]; position: number; position_names: string[]; count: number;
+  trades: number | null; per_value: number | null; question: string; message: string; basis: string; limit: string;
 };
 
 // ── 하루 유형 모형(T1 · 2026-11-16) — 장 시작 구간의 경로를 e-means 로 묶은 것. 서버 `intraday_day_type_routes` 의 답 그대로 ──

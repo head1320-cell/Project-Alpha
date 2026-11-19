@@ -312,8 +312,9 @@ def test_the_button_records_one_trial_and_keeps_the_verdict_of_the_route(client,
     kept = trials.result_of("alice", key)["result"]
     said = client.post(VAL, json=BODY, headers=login(client, "bob")).json()     # 같은 요청을 다른 사람이 문으로 — 그의 첫 시행
     for part in ("request", "origin", "summary", "out_of_sample", "slippage", "stress", "multiplicity", "gates",
-                 "breakeven", "assumptions"):
+                 "breakeven", "assumptions", "freedom"):                      # 자유도 공시(G3)도 문의 것 그대로 — 결과 판이 같은 부품으로 그린다
         assert kept[part] == said[part], part
+    assert kept["freedom"]["message"] == next(g for g in kept["gates"]["gates"] if g["key"] == "multiplicity")["facts"][-1]
     # 시행 답은 열쇠만 다르다 — 열쇠는 사람마다 다르고(K2 의 나눔이 이것으로 묻는다) 남긴 결과의 열쇠는 그 시행 자신의 것이다
     assert {k: v for k, v in kept["trial"].items() if k != "trial_key"} == {k: v for k, v in said["trial"].items() if k != "trial_key"}
     assert kept["trial"]["trial_key"] == key and said["trial"]["trial_key"] not in (None, key)

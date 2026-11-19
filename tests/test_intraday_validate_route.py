@@ -162,7 +162,8 @@ def test_a_run_is_recorded_and_running_it_again_is_not_a_new_trial(client, auth,
     first = client.post(SIM, json=BODY, headers=auth).json()["trial"]
     key = first.pop("trial_key")
     assert isinstance(key, str) and len(key) >= 16                         # 국면별 나눔(K2)이 이 열쇠로 묻는다
-    assert first == {"recorded": True, "new": True, "runs": 1, "family_n": 1, "user_total": 1, "reason": None, "message": None}
+    assert first == {"recorded": True, "new": True, "runs": 1, "family_n": 1, "user_total": 1, "reason": None, "message": None,
+                     "hypothesis": None}                                  # 실행 전 가설(G3) — 보내지 않았고 남은 것도 없다
     again = client.post(SIM, json=BODY, headers=auth).json()["trial"]
     assert (again["new"], again["runs"], again["family_n"], again["user_total"]) == (False, 2, 1, 1)
     other = client.post(SIM, json={**BODY, "position": {"amount": 1_000_000, "stop_pct": 1.0}}, headers=auth).json()["trial"]
@@ -202,7 +203,10 @@ def test_when_the_trial_cannot_be_recorded_the_run_still_answers_and_says_so(cli
     body = client.post(SIM, json=BODY, headers=auth).json()
     assert body["journal"]["summary"]["gross"]["total"] == 19_800           # 계산은 그대로 답한다
     assert body["trial"] == {"recorded": False, "trial_key": None, "new": None, "runs": None, "family_n": None, "user_total": None,
-                             "reason": "store_unavailable", "message": trials.REASONS["store_unavailable"]}
+                             "reason": "store_unavailable", "message": trials.REASONS["store_unavailable"],
+                             # 실행 전 가설(G3) — 시행을 남기지 못했으면 가설도 읽지 못했다(없음 `None` 이 아니다)
+                             "hypothesis": {"text": None, "at_run": None, "before_results": None, "kept_now": False,
+                                            "message": "실행 전 가설을 읽지 못했습니다. 시행 기록에 가설 칸이 없거나 읽지 못했습니다."}}
 
 
 def test_runs_on_synthetic_bars_do_not_count_toward_runs_on_real_bars(client, auth, monkeypatch):

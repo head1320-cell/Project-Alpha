@@ -8,10 +8,10 @@
  * 숫자와 사유 문장은 전부 서버 값이다.
  * 화면(백테스트 › 분봉 규칙)과 캔버스의 '분봉 결과 조회' 판이 같이 쓴다 — 그래서 feature 에 둔다(위젯끼리 서로 참조하지 않는다).
  */
-import type { Brief, GateState, Multiplicity, RegimePair, Validation, Value, WalkForward } from "@/entities/intraday";
+import type { Brief, FreedomDisclosure, GateState, Multiplicity, RegimePair, Validation, Value, WalkForward } from "@/entities/intraday";
 import { UNKNOWN_TEXT, num, pct, signedWon } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type ChipTone } from "@/shared/ui/tx";
-import { TrialLine, bp1, originChip } from "./parts";
+import { HypothesisLine, TrialLine, bp1, originChip } from "./parts";
 
 const STATE_KO: Record<GateState, string> = { ok: "통과", degraded: "미달", unknown: "미상" };
 const STATE_TONE: Record<GateState, ChipTone> = { ok: "ok", degraded: "assumed", unknown: "unknown" };
@@ -215,8 +215,23 @@ function Trials({ m, v }: { m: Multiplicity | null; v: Validation }) {
             <p className="tj-note">기준 {m.threshold} 는 관례 기준입니다. 확률은 일별 손익 흐름의 샤프가 0(보정 시 우연히 기대되는 최댓값)을 넘을 확률이며 수익의 크기를 뜻하지 않습니다.</p>
           </>
         ) : <p className="tj-note itd-mult-none">시행 횟수를 세지 못해 보정하지 않았습니다.</p>}
+        {v.freedom ? <Freedom f={v.freedom} /> : null}
         <TrialLine trial={v.trial} />
+        <HypothesisLine h={v.trial?.hypothesis} />
       </div>
     </Section>
+  );
+}
+
+/** 자유도 공시(G3) — 서버의 물음 · 답 · 셈 · 한계를 그대로 싣는다. 기술이며 기준이 아니다(관문의 상태를 바꾸지 않는다 — 한계 문장이 그렇게 적는다).
+ *  꼴은 질문 띠(`shared/ui/perf/QuestionStrip`)와 같은 '열쇠 | 값' 두 칸 — 어떤 물음에 답했는지 먼저 밝힌다(CLAUDE.md §2).
+ *  G3 전에 남긴 결과(캔버스)에는 칸이 없다 — 그때는 그리지 않는다. */
+function Freedom({ f }: { f: FreedomDisclosure }) {
+  return (
+    <div className="itd-free" role="group" aria-label="자유도 공시" data-count={f.count}>
+      <p className="itd-free-row"><span className="itd-free-k">물음</span><span className="itd-free-question" data-server>{f.question}</span></p>
+      <p className="itd-free-row"><span className="itd-free-k">답</span><span className="itd-free-answer" data-server>{f.message}</span></p>
+      <p className="tj-note itd-free-note"><span data-server>{f.basis}</span> <span data-server>{f.limit}</span></p>
+    </div>
   );
 }

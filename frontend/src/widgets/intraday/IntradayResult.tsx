@@ -13,7 +13,7 @@ import {
   AfterLoss, Basis, Buckets, Costs, Extremes, PNL_KO, PnlCurve, SummaryTable, Trades, costChips, ratio2, signedWon,
 } from "@/features/journal-result";
 import { ContextFacts } from "@/features/intraday-day-types";
-import { TrialLine, bp1, originChip } from "@/features/intraday-verdict";
+import { HypothesisLine, TrialLine, bp1, originChip } from "@/features/intraday-verdict";
 import { UNKNOWN_TEXT, num, pct } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type Chip } from "@/shared/ui/tx";
 import { RegimeSplitSection } from "./RegimeSplitSection";
@@ -87,6 +87,7 @@ export function IntradayResult({ sim }: { sim: Sim }) {
           </ul>
         ) : <p className="tj-note">센 것 없음</p>}
         <TrialLine trial={sim.trial} />
+        <HypothesisLine h={sim.trial?.hypothesis} />
       </Section>
       <Basis j={j} sub="이 결과는 과거 분봉 위에서 규칙을 돌려 만든 시뮬레이션 체결을 집계한 것입니다. 향후 성과를 뜻하지 않습니다." />
       <Section title="실제 체결과 견주기" sub="이 규칙의 시뮬레이션 체결을 내 실제 체결 내역과 견줍니다. 체결가 차이, 놓친 신호, 규칙 밖 매매를 셉니다.">

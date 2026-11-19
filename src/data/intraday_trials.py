@@ -41,6 +41,9 @@ _ready_for: str | None = None
 #: 결과 요약 열을 쓸 수 있는 DB. 붙이지 못했으면 `None` — 결과 기능만 '모른다'가 되고 시행 세기는 그대로 돈다.
 _results_for: str | None = None
 _RESULT_COLS = [("result", "TEXT"), ("result_at", "DOUBLE PRECISION")]
+#: 실행 전 가설 열을 쓸 수 있는 DB(G3). 붙이지 못했으면 `None` — 가설만 '모른다'가 되고 시행 세기는 그대로 돈다.
+_hypotheses_for: str | None = None
+_HYPOTHESIS_COLS = [("hypothesis", "TEXT"), ("hypothesis_run", "INTEGER"), ("hypothesis_at", "DOUBLE PRECISION")]
 
 REASONS = {
     "store_unavailable": "시행 기록을 읽거나 쓰지 못했습니다. 시행 횟수를 알 수 없어 보정하지 않았습니다.",
@@ -56,7 +59,7 @@ def _engine():
 
 
 def _ensure(engine) -> None:
-    global _ready_for, _results_for
+    global _ready_for, _results_for, _hypotheses_for
     url = str(engine.url)
     if _ready_for == url:
         return
@@ -72,6 +75,8 @@ def _ensure(engine) -> None:
         c.execute(text(f"CREATE INDEX IF NOT EXISTS ix_itr_user ON {_TABLE} (username, grade, period_from, period_to)"))
     # 결과 요약 열 — 먼저 만들어진 표(W4d)에도 덧붙인다. 붙었는지는 도우미가 SELECT 로 확인한다.
     _results_for = url if schema_add_columns.add_columns(engine, _TABLE, _RESULT_COLS, label="분봉 시행의 결과 요약") else None
+    _hypotheses_for = (url if schema_add_columns.add_columns(engine, _TABLE, _HYPOTHESIS_COLS, label="분봉 시행의 실행 전 가설")
+                       else None)
     _ready_for = url
 
 
@@ -234,6 +239,57 @@ def daily_of(user: str, trial_key: str) -> dict[str, Any] | None:
         return {"found": False}
     return {"found": True, "trial_key": r[0], "grade": r[1], "setting": _load(r[2]), "tickers": _load(r[3]) or [], "from": r[4],
             "to": r[5], "runs": int(r[6] or 0), "updated_at": r[7], "daily": _load(r[8]) or None}
+
+
+# ── 실행 전 가설(G3) ──────────────────────────────────────────────────────────────────
+def _hypotheses_ready(engine) -> bool:
+    _ensure(engine)
+    return _hypotheses_for == str(engine.url)
+
+
+def keep_hypothesis(user: str, trial_key: str, text_: str) -> dict[str, Any] | None:
+    """내 시행 줄에 가설을 남긴다 — ★처음 적은 것만★(이미 있으면 덮지 않는다) · 적을 때의 실행 횟수를 함께.
+
+    → `{found: True, kept, hypothesis, at_run}`(남아 있는 것 — 방금 남겼든 앞서 남았든) · 내 시행이 아니거나 없으면 `{found: False}`
+    (있는지를 알려 주지 않는다) · 칸이 없거나 실패하면 `None`. 가설은 시행 열쇠에 들지 않는다(이 함수는 열쇠 · 실행 횟수를 바꾸지 않는다)."""
+    try:
+        engine = _engine()
+        if not _hypotheses_ready(engine):
+            return None
+        from sqlalchemy import text
+        with engine.begin() as c:
+            kept = c.execute(text(f"UPDATE {_TABLE} SET hypothesis = :h, hypothesis_run = runs, hypothesis_at = :now "
+                                  "WHERE trial_key = :key AND username = :user AND hypothesis IS NULL"),
+                             {"h": text_, "now": time.time(), "key": trial_key, "user": user}).rowcount
+            row = c.execute(text(f"SELECT hypothesis, hypothesis_run FROM {_TABLE} WHERE trial_key = :key AND username = :user"),
+                            {"key": trial_key, "user": user}).fetchone()
+    except Exception as err:                                    # noqa: BLE001
+        logger.warning("intraday trial 가설 기록 실패: %s", err)
+        return None
+    if row is None:
+        return {"found": False}
+    return {"found": True, "kept": bool(kept), "hypothesis": row[0], "at_run": _run_or_none(row[1])}
+
+
+def hypotheses_of(user: str) -> dict[str, dict[str, Any]] | None:
+    """내 시행 가운데 가설이 있는 것 → `{trial_key: {hypothesis, at_run}}` · 칸이 없거나 읽지 못하면 `None`(빈 사전으로 꾸미지 않는다)."""
+    try:
+        engine = _engine()
+        if not _hypotheses_ready(engine):
+            return None
+        from sqlalchemy import text
+        with engine.connect() as c:
+            rows = c.execute(text(f"SELECT trial_key, hypothesis, hypothesis_run FROM {_TABLE} "
+                                  "WHERE username = :user AND hypothesis IS NOT NULL"), {"user": user}).fetchall()
+    except Exception as err:                                    # noqa: BLE001
+        logger.warning("intraday trial 가설 읽기 실패: %s", err)
+        return None
+    return {r[0]: {"hypothesis": r[1], "at_run": _run_or_none(r[2])} for r in rows}
+
+
+def _run_or_none(value: Any) -> int | None:
+    """가설을 적을 때의 실행 횟수 — 칸이 비어 있으면 0 이 아니라 `None`(모른다 · 미상 ≠ 0)."""
+    return None if value is None else int(value)
 
 
 # ── 결과 요약 ──────────────────────────────────────────────────────────────────────────

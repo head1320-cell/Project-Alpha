@@ -242,6 +242,30 @@ def test_the_sequential_lines_keep_the_voice_and_the_banned_words_out():
             assert not any(word in text for word in banned), text
 
 
+# ── 자유도 공시(G3) — 다중 비교 관문의 ★사실 줄★이다. 상태 · 사유는 확률(DSR)이 정한다 ─────────────────────────
+FREE = {"rule": 1, "rule_names": ["minutes"], "position": 1, "position_names": ["max_entries_per_ticker"], "count": 2,
+        "trades": 10, "per_value": 5.0, "question": "물음", "basis": "근거입니다.", "limit": "한계입니다.",
+        "message": "조정 가능한 값 2개(규칙 1 · 포지션 1) · 거래 10건 · 값 하나당 거래 5.0건입니다."}
+
+
+def mult_of(out: dict) -> dict:
+    return next(g for g in out["gates"] if g["key"] == "multiplicity")
+
+
+@pytest.mark.parametrize("m", [good()["multiplicity"], {**good()["multiplicity"], "value": 0.5}, None])
+def test_the_freedom_disclosure_is_a_fact_of_the_multiplicity_gate_and_never_its_state(m):
+    """짝: 공시를 넘기지 않으면 그 줄이 없다 ↔ 넘기면 다중 비교 관문의 마지막 사실 줄이다. 상태 · 사유 · 개수 · 다른 관문은 그대로다
+    (값 하나당 거래 수에 기준을 지어내지 않는다). 시행을 세지 못해 관문이 미상이어도 싣는다(공시는 시행 기록과 무관한 셈이다)."""
+    trial_error = None if m else "시행 기록을 남기지 못했습니다."
+    bare = gates.build(**good(multiplicity=m, trial_error=trial_error))
+    told = gates.build(**good(multiplicity=m, trial_error=trial_error), freedom=FREE)
+    assert (mult_of(told)["state"], mult_of(told)["reason"]) == (mult_of(bare)["state"], mult_of(bare)["reason"])
+    assert mult_of(told)["facts"] == [*mult_of(bare)["facts"], FREE["message"]]
+    assert not any(FREE["message"] in f for f in mult_of(bare)["facts"])
+    assert (told["counts"], told["sentence"]) == (bare["counts"], bare["sentence"])
+    assert [g for g in told["gates"] if g["key"] != "multiplicity"] == [g for g in bare["gates"] if g["key"] != "multiplicity"]
+
+
 # ── 경제적 가치 ───────────────────────────────────────────────────────────────────────
 def test_economic_value_is_never_measured_here():
     for changes in ({}, {"summary": brief(net=1e9)}, {"multiplicity": {"n": 1, "value": 1.0, "threshold": 0.95, "corrected": False, "reason": None, "days": 250, "note": ""}}):

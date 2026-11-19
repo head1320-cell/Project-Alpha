@@ -10674,6 +10674,19 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-run-row { padding: 16px 20px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-surface); }
 .itd-trial { padding-top: 10px; border-top: 1px dashed var(--tx-line); }
 .itd-trial[data-recorded="false"] { color: var(--tx-warn); }
+/* 실행 전 가설 · 자유도 공시(G3) — 순차 증거(.dv-seq)와 같은 '열쇠 | 값' 두 칸의 사실 상자(같은 여백 · 반지름 · 글자 · 색 토큰).
+   열쇠 칸은 '적은 때'가 한 줄에 드는 너비다. 가설 글은 사용자가 적은 줄바꿈을 지킨다(pre-line) · 좁은 창(560px 이하)에서는 한 칸으로 쌓는다.
+   흐름 상자(.itd-trials · .dv-compare)에서는 그 간격을 따르고, 실행 결과의 시행 줄 아래에서만 위 여백을 둔다. */
+.itd-hypo, .itd-free { padding: 10px 12px; border-radius: 10px; background: var(--tx-soft); display: flex; flex-direction: column; gap: 6px;
+  font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); }
+.itd-hypo > p, .itd-free > p { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.itd-hypo-row, .itd-free-row { display: grid; grid-template-columns: 56px 1fr; gap: 8px; align-items: baseline; }
+.itd-hypo-k, .itd-free-k { font-weight: 700; color: var(--tx-ink); }
+.itd-hypo-text { white-space: pre-line; color: var(--tx-ink); }
+.itd-free > .itd-free-note { margin-top: 2px; }
+.itd-result .itd-trial + .itd-hypo { margin-top: 10px; }
+@media (max-width: 560px) { .itd-hypo-row, .itd-free-row { grid-template-columns: 1fr; gap: 2px; } }
+.itd-hypothesis { height: auto; min-height: 76px; padding: 9px 10px; line-height: 1.5; resize: vertical; font-size: 13.5px; }
 .itd-verdict > * + * { margin-top: 12px; }
 .itd-gates { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 .itd-gate { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--tx-line); }

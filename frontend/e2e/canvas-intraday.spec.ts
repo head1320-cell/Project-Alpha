@@ -145,6 +145,11 @@ test("설정 → 실행 → 결과 조회: 계산은 실행하지 않고 · 단�
   await expect(panel.locator(".tx-chip", { hasText: "종합 점수 없음" })).toBeVisible();
   await expect(panel.locator(".itd-slippage tr[data-ticks='0']")).toContainText("+39,600원");
   await expect(panel.locator(".itd-trial")).toHaveAttribute("data-recorded", "true");
+  // 자유도 공시(G3) — 같은 판정 부품이라 결과 판에도 같은 상자 · 다중 비교 관문의 마지막 사실 줄(남긴 요약의 서버 문장 그대로)
+  const told = String(second.nodes[lid].view.freedom.message);
+  await expect(panel.locator(".itd-free .itd-free-answer")).toHaveText(told);
+  await expect(gate(page, "multiplicity").locator(".itd-gate-facts li").last()).toHaveText(told);
+  await expect(panel.locator(".itd-hypo")).toHaveCount(0);                          // 캔버스에는 가설 칸이 없다 — 남은 가설이 없으면 상자도 없다
   // 카드 — 머리 수는 원 단위 정수를 천 단위로 끊어 그린다
   await expect(loader.locator(".pg-node-v")).toContainText("-3,195");
   await expect(loader.locator(".pg-node-v")).toContainText("비용 후 실현손익");

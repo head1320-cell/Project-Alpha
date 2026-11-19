@@ -16,6 +16,7 @@ import { divergence, listTrials, type Divergence, type TrialRow } from "@/entiti
 import type { FillRow } from "@/entities/trade-journal";
 import { DivergenceResult } from "@/features/divergence-result";
 import { ContextFacts } from "@/features/intraday-day-types";
+import { HypothesisLine } from "@/features/intraday-verdict";
 import { Notice, RetryFail, Section } from "@/shared/ui/tx";
 
 const WINDOWS = [1, 5, 15] as const;
@@ -27,8 +28,14 @@ const unwrap = <T,>(fn: () => Promise<{ ok: true; value: T } | { ok: false; stat
 };
 type Run = { kind: "idle" } | { kind: "pending" } | { kind: "fail"; status: number; error: string } | { kind: "done"; r: Divergence };
 
+/** 실행 전 가설(G3)이 남은 시행은 고르기 줄에 '적은 때'를 짧게 붙인다(글은 고른 뒤 아래 줄에 — 서버 문장 그대로). 없거나 읽지 못했으면 붙이지 않는다. */
+const hypothesisMark = (t: TrialRow): string => {
+  const h = t.hypothesis;
+  if (!h || h.text === null) return "";
+  return h.before_results === true ? " · 가설: 결과를 보기 전" : h.before_results === false ? " · 가설: 결과를 본 뒤" : " · 가설: 적은 때 미상";
+};
 const label = (t: TrialRow) =>
-  `${t.rule_label ?? t.request.rule.kind} · ${t.request.tickers.slice(0, 3).join(", ")}${t.request.tickers.length > 3 ? ` 외 ${t.request.tickers.length - 3}종목` : ""} · ${t.request.from} ~ ${t.request.to} · ${t.runs.toLocaleString("ko-KR")}회 실행`;
+  `${t.rule_label ?? t.request.rule.kind} · ${t.request.tickers.slice(0, 3).join(", ")}${t.request.tickers.length > 3 ? ` 외 ${t.request.tickers.length - 3}종목` : ""} · ${t.request.from} ~ ${t.request.to} · ${t.runs.toLocaleString("ko-KR")}회 실행${hypothesisMark(t)}`;
 
 export function CompareSection({ fills }: { fills: FillRow[] }) {
   const list = useQuery({ queryKey: ["intraday", "trials"], queryFn: unwrap(listTrials), staleTime: 0, retry: false });
@@ -84,6 +91,7 @@ export function CompareSection({ fills }: { fills: FillRow[] }) {
                 <span className="dv-rule-text" data-server>{cur.rule_text ?? cur.rule_text_reason}</span>
               </p>
             ) : null}
+            <HypothesisLine h={cur.hypothesis} />{/* 고른 시행의 실행 전 가설(G3) — 없으면 줄이 없다 */}
             <ul className="tj-plain-list dv-notes">
               <li>허용 시간은 선언한 가정입니다. 결과에 1분·5분·15분에서의 건수를 함께 적습니다.</li>
               <li>비용은 고른 백테스트의 비용 가정으로 계산합니다. 파일에 수수료·세금 열을 지정했으면 그 값을 먼저 씁니다.</li>

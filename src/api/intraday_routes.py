@@ -41,8 +41,9 @@ from src.data import minute_feed, rule_runs
 from src.data.market_rules import session_rules
 from src.data.minute_quality import DEFECTS, check_day
 from src.data.mock_gate import mock_allowed
+from src.domain.pii_guard import pii_reason
 from src.engine import intraday
-from src.engine.intraday import divergence, expr, rules, simulator
+from src.engine.intraday import divergence, expr, freedom, rules, simulator
 from src.engine.intraday import gates as gate_table
 from src.engine.intraday import validate as validation
 from src.engine.intraday.simulator import ASSUMPTIONS, SKIP_REASONS, CostAssumptions, PositionRules, RuleSpec, SimError
@@ -81,6 +82,17 @@ MAX_VALIDATE_WORK = 6_000
 #: 슬리피지 민감도를 보는 틱. 여기에 기본 가정과 그보다 한 틱 불리한 값을 더해 본다.
 SENSITIVITY_TICKS = (0, 1, 2)
 WALK_FORWARD_NOTE = "격자의 칸은 받은 그대로이며 넓히거나 고르지 않았습니다. 칸마다 한 시행으로 세었습니다."
+#: 실행 전 가설(G3)의 길이 상한 — 기제를 짧게 적는 칸이지 보고서를 싣는 칸이 아니다.
+HYPOTHESIS_MAX = 500
+#: 실행 전 가설의 서버 문장(G3 · 구현 계획 §4). '결과를 보기 전'인지는 ★적을 때의 실행 횟수★로만 가른다(도구는 글의 뜻을 판단하지 않는다).
+HYPOTHESIS_MESSAGES = {
+    "first": "이 설정의 첫 실행과 함께 적은 가설입니다. 결과를 보기 전에 적었습니다.",
+    "late": "{seen}회 실행한 뒤에 처음 적은 가설입니다. 앞선 실행의 결과를 본 뒤에 적었습니다.",
+    "run_unknown": "가설을 적은 때의 실행 횟수를 알 수 없습니다. 결과를 보기 전에 적었는지 알 수 없습니다.",
+    "not_replaced": "처음 적은 가설이 남아 있어 이번에 보낸 글은 저장하지 않았습니다.",
+    "not_kept": "가설을 저장하지 못했습니다. 시행 기록에 가설 칸이 없거나 읽고 쓰지 못했습니다.",
+    "unreadable": "실행 전 가설을 읽지 못했습니다. 시행 기록에 가설 칸이 없거나 읽지 못했습니다.",
+}
 
 REASONS = {
     "not_checked_yet": "한 번에 확인할 수 있는 시간을 넘겨 이 날짜는 아직 확인하지 않았습니다. 다시 불러오면 이어서 확인합니다.",
@@ -346,7 +358,14 @@ class WalkForwardBody(_Strict):
     position: dict[str, list] = Field(default_factory=dict)      # 포지션 설정 → 볼 값들
 
 
-class ValidateBody(SimulateBody):
+class RunBody(SimulateBody):
+    """규칙을 돌려 시행으로 세는 요청(실행 · 판정) — 실행 전 가설을 함께 받는다(G3). 화면에서는 판정이 늘 실행 뒤에 오므로
+    가설을 판정에서만 받으면 '결과를 보기 전에 적은 가설'이 생길 수 없다. 괴리 보고(`DivergenceBody`)는 받지 않는다."""
+    #: 실행 전 가설(선택) — 왜 통한다고 보는가. 처음 적은 것만 시행 줄에 남고 ★시행 열쇠에 들지 않는다★(적어도 같은 설정은 같은 시행).
+    hypothesis: str | None = None
+
+
+class ValidateBody(RunBody):
     walk_forward: WalkForwardBody | None = None
 
 
@@ -368,7 +387,7 @@ def templates(_user=Depends(require_login)) -> dict:
         "costs": [dict(f) for f in COST_FIELDS],
         "limits": {"tickers": MAX_DETAIL_TICKERS, "ticker_days": MAX_TICKER_DAYS, "range_days": MAX_RANGE_DAYS,
                    "bytes": MAX_LOAD_BYTES, "grid_cells": MAX_GRID_CELLS, "validate_work": MAX_VALIDATE_WORK,
-                   "folds_min": MIN_FOLDS, "folds_max": MAX_FOLDS},
+                   "folds_min": MIN_FOLDS, "folds_max": MAX_FOLDS, "hypothesis_chars": HYPOTHESIS_MAX},
         "session_rules": _session_view(session_rules()),
         "unknowns": [dict(u) for u in UNKNOWNS],
         "gate": {"mock": mock_allowed()},
@@ -495,8 +514,65 @@ def _trial_view(made: dict | None, family: dict | None) -> dict:
             "message": trials.REASONS["store_unavailable"] if failed else None}
 
 
+# ── 실행 전 가설 (G3 · 구현 계획 §4) ─────────────────────────────────────────────────────────
+def _hypothesis_text(raw: str | None) -> str | None:
+    """받은 가설 → 앞뒤 공백을 걷은 글(빈 글은 가설이 없는 것 = `None`). 길거나 개인정보 모양이면 ★아무것도 읽기 전에★ 400 + 사유."""
+    text_ = (raw or "").strip()
+    if not text_:
+        return None
+    if len(text_) > HYPOTHESIS_MAX:
+        raise HTTPException(status_code=400, detail={
+            "code": "hypothesis_too_long", "limit": HYPOTHESIS_MAX, "length": len(text_),
+            "reason": f"가설은 {HYPOTHESIS_MAX}자까지입니다({len(text_)}자). 기제를 짧게 적어 주십시오."})
+    why = pii_reason(text_, label="가설", max_len=HYPOTHESIS_MAX)
+    if why:
+        raise HTTPException(status_code=400, detail={"code": "hypothesis_pii", "reason": why})
+    return text_
+
+
+def _hypothesis_row(text_: str, at_run: int | None, *, kept_now: bool, sent: str | None = None) -> dict:
+    """시행 줄의 가설 → 화면의 꼴. '결과를 보기 전'은 ★적을 때의 실행 횟수가 1★ 일 때뿐이다(횟수를 모르면 모른다고 적는다).
+    `sent` 는 이번에 보낸 글 — 남은 것과 다르면 저장하지 않았다고 덧붙인다(같은 글이면 잃은 것이 없다)."""
+    if at_run is None or at_run < 1:
+        before, message = None, HYPOTHESIS_MESSAGES["run_unknown"]
+    elif at_run == 1:
+        before, message = True, HYPOTHESIS_MESSAGES["first"]
+    else:
+        before, message = False, HYPOTHESIS_MESSAGES["late"].format(seen=at_run - 1)
+    if sent is not None and not kept_now and sent != text_:
+        message = f"{message} {HYPOTHESIS_MESSAGES['not_replaced']}"
+    return {"text": text_, "at_run": at_run, "before_results": before, "kept_now": kept_now, "message": message}
+
+
+def _hypothesis_unknown(key: str) -> dict:
+    """가설을 남기거나 읽지 못한 줄 — `None`(가설이 없다)과 가른다. 없는 것과 모르는 것을 섞지 않는다."""
+    return {"text": None, "at_run": None, "before_results": None, "kept_now": False, "message": HYPOTHESIS_MESSAGES[key]}
+
+
+def _listed_hypothesis(stored: dict | None, trial_key: str) -> dict | None:
+    """읽어 둔 가설들(`trials.hypotheses_of` 의 답) 가운데 그 시행의 것 → 화면의 꼴 · 없으면 `None` · 읽지 못했으면 그렇다는 줄."""
+    if stored is None:
+        return _hypothesis_unknown("unreadable")
+    row = stored.get(trial_key)
+    return None if row is None else _hypothesis_row(row["hypothesis"], row["at_run"], kept_now=False)
+
+
+def _hypothesis_of(user: str, made: dict | None, sent: str | None) -> dict | None:
+    """이 실행의 시행 줄에 붙은 가설. 보낸 가설이 있으면 ★처음 적은 것일 때만★ 남긴다(덮지 않는다). 시행을 남기지 못했으면
+    가설도 남기지 못했고(보냈으면) 읽지도 못했다(안 보냈으면) — 실행은 그대로 답하고 그렇다고 적는다."""
+    if made is None:
+        return _hypothesis_unknown("not_kept" if sent else "unreadable")
+    if sent is None:
+        return _listed_hypothesis(trials.hypotheses_of(user), made["trial_key"])
+    kept = trials.keep_hypothesis(user, made["trial_key"], sent)
+    if not kept or not kept.get("found"):
+        return _hypothesis_unknown("not_kept")
+    return _hypothesis_row(kept["hypothesis"], kept["at_run"], kept_now=kept["kept"], sent=sent)
+
+
 @router.post("/simulate")
-def simulate(body: SimulateBody, user=Depends(require_login)) -> dict:
+def simulate(body: RunBody, user=Depends(require_login)) -> dict:
+    hypothesis = _hypothesis_text(body.hypothesis)               # 실행 전 가설의 거절은 ★맨 앞★(G3 — 판정의 `prepare` 와 같은 자리)
     tickers, spec, params, position, costs = _setting(body)
     plan = _plan(body, tickers)
     loaded = intraday_context.load(user.username, spec, body.from_, end=body.to, dates=plan.dates)   # 규칙 맥락 — ★봉을 읽기 전에★
@@ -516,7 +592,8 @@ def simulate(body: SimulateBody, user=Depends(require_login)) -> dict:
     if usable:                                                  # 본 것이 없으면 해 본 것도 아니다
         made = _record(user.username, out, _trial_setting(body.rule.kind, params, body.position.model_dump(),
                                                           body.costs.model_dump()), tickers, body)
-        trial = _trial_view(made, _family(user.username, out, tickers, body) if made else None)
+        trial = {**_trial_view(made, _family(user.username, out, tickers, body) if made else None),
+                 "hypothesis": _hypothesis_of(user.username, made, hypothesis)}
     logger.info("intraday simulate: tickers=%s days=%s sessions=%s fills=%s skipped=%s", len(tickers), len(days),
                 out["counts"]["sessions"], len(out["fills"]), len(out["skipped"]))
     return {
@@ -595,6 +672,7 @@ class Prepared:
     simulations: int
     plan: minute_feed.Plan
     context: intraday_context.Loaded = intraday_context.Loaded(None, ())   # 규칙 맥락(하루 유형 모형) — 쓰지 않으면 비어 있다
+    hypothesis: str | None = None            # 실행 전 가설(G3) — 검사를 지난 글 · 없으면 `None`
 
     @property
     def ticker_days(self) -> int:
@@ -605,6 +683,7 @@ def prepare(body: ValidateBody, username: str) -> Prepared:
     """판정의 ★읽기 전 검사 전부★ — 설정 · 격자 · 읽을 날의 크기 · 계산량. 어긋나면 사유와 함께 거절한다. 봉을 읽지 않는다.
 
     문(`validate`)과 캔버스의 '분봉 백테스트 설정' 노드가 같이 쓴다 — 노드가 통과시킨 요청을 실행 단추가 거절하는 일이 없게."""
+    hypothesis = _hypothesis_text(body.hypothesis)                      # 실행 전 가설의 거절도 ★맨 앞★(G3 — 설정보다 먼저)
     tickers, spec, params, position, costs = _setting(body)
     base_setting = _trial_setting(body.rule.kind, params, body.position.model_dump(), body.costs.model_dump())
     cells = _cells(body, base_setting, costs)                           # 격자의 거절은 ★아무것도 읽기 전에★(날짜 목록도 읽지 않는다)
@@ -621,7 +700,7 @@ def prepare(body: ValidateBody, username: str) -> Prepared:
         raise _refuse("too_much_work", limit=MAX_VALIDATE_WORK, work=ticker_days * simulations, ticker_days=ticker_days,
                       simulations=simulations)
     return Prepared(tickers, spec, params, position, costs, base_setting, cells, base_ticks, doubled_ticks, ticks,
-                    simulations, plan, context=loaded)
+                    simulations, plan, context=loaded, hypothesis=hypothesis)
 
 
 @router.post("/validate")
@@ -646,7 +725,8 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
         shared["request"]["walk_forward"] = {"folds": wf.folds, "rule": {k: list(dict.fromkeys(v)) for k, v in wf.rule.items()},
                                              "position": {k: list(dict.fromkeys(v)) for k, v in wf.position.items()}}
     nothing = {"origin": None, "summary": None, "out_of_sample": None, "slippage": [], "stress": None, "walk_forward": None,
-               "multiplicity": None, "trial": None, "gates": None, "breakeven": None, "assumptions": [], "regime_pair": None}
+               "multiplicity": None, "trial": None, "gates": None, "breakeven": None, "assumptions": [], "regime_pair": None,
+               "freedom": None}
     if not plan.dates:
         logger.info("intraday validate: tickers=%s days=0", len(tickers))
         return {**shared, "empty": {"reason": "not_loaded", "message": EMPTY["not_loaded"]}, "data": dict(_NO_DATA), **nothing}, None
@@ -698,7 +778,7 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
     if made and split:
         trials.mark_oos(who, made["trial_key"], split["out_of_sample_from"], split["out_of_sample_to"])
     family = _family(who, base, tickers, body) if made and all(others_made) else None
-    trial = _trial_view(made, family)
+    trial = {**_trial_view(made, family), "hypothesis": _hypothesis_of(who, made, ready.hypothesis)}
     multiplicity, views, trial_error = None, None, trials.REASONS["store_unavailable"]
     if family is not None:
         trial_error = None
@@ -716,9 +796,11 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
         if split:
             views = trials.views_of(family["trials"], split["out_of_sample_from"], split["out_of_sample_to"])
 
+    # 자유도 공시(G3) — 받은 규칙 · 포지션의 손잡이 수와 이 실행의 거래 수. 기술이며 관문의 상태를 바꾸지 않는다(관문 표의 사실 줄로만)
+    told = freedom.disclose(body.rule.kind, body.rule.params, body.position.model_dump(), trades=summary["trades"])
     table = gate_table.build(origin=base["origin"], sessions=base["counts"]["sessions"], skipped=len(base["skipped"]),
                              bar_label_known=False, summary=summary, slippage_ticks=base_ticks, oos=oos, oos_views=views,
-                             stress=stress, multiplicity=multiplicity, trial_error=trial_error)
+                             stress=stress, multiplicity=multiplicity, trial_error=trial_error, freedom=told)
     logger.info("intraday validate: tickers=%s days=%s sessions=%s simulations=%s cells=%s", len(tickers), len(days),
                 base["counts"]["sessions"], simulations, len(cells))
     return {
@@ -737,6 +819,7 @@ def run_validation(body: ValidateBody, username: str) -> tuple[dict, dict | None
         "breakeven": validation.breakeven_cost(base["journal"]),
         "assumptions": [{"key": key, "label": ASSUMPTIONS[key], "count": count} for key, count in base["assumptions"].items()],
         "regime_pair": regime_pair,
+        "freedom": told,
     }, made
 
 
@@ -766,6 +849,7 @@ def my_trials(limit: int = Query(50, ge=1, le=200), user=Depends(require_login))
     if rows is None:
         return {"available": False, "reason": trials.REASONS["store_unavailable"], "trials": [], "unreadable": 0}
     labels = {t["kind"]: t["label"] for t in rules.describe()}
+    stored = trials.hypotheses_of(user.username)                  # 실행 전 가설(G3) — 못 읽으면 줄마다 그렇다고 적는다(없음으로 꾸미지 않는다)
     out, unreadable = [], 0
     for r in rows:
         setting = r["setting"] if isinstance(r["setting"], dict) else {}
@@ -776,6 +860,7 @@ def my_trials(limit: int = Query(50, ge=1, le=200), user=Depends(require_login))
         out.append({"trial_key": r["trial_key"], "rule_label": labels.get(rule.get("kind")) or rule.get("kind"),
                     **rules.rule_text(rule),                     # 직접 구성은 이름표만으로는 구별되지 않는다 — 조건의 글을 함께 싣는다
                     "runs": r["runs"], "updated_at": r["updated_at"],
+                    "hypothesis": _listed_hypothesis(stored, r["trial_key"]),
                     "request": {"tickers": r["tickers"], "from": r["from"], "to": r["to"], "rule": rule, "position": position,
                                 "costs": costs}})
     return {"available": True, "reason": None, "trials": out, "unreadable": unreadable}
