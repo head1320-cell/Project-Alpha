@@ -137,6 +137,24 @@ def test_long_lists_are_cut_for_the_screen_but_the_counts_are_whole(client, auth
     assert d["price_gap"]["n"] == 20                                                     # 잘린 것은 목록뿐이다
 
 
+
+def test_the_sequential_evidence_is_the_hand_computed_value_for_twenty_worse_fills(client, auth, ten_days):
+    """G2 — 짝 스물이 모두 한 틱 불리하면 순차 증거(부호)는 평균_f (1 + f)^20 = 79,817.56(통과 · 기준 20)."""
+    s = post(client, auth, fills(10_090, 10_090, buy_at="09:02:40", sell_at="09:03:20")).json()["divergence"]["price_gap"]["sequential"]
+    assert (s["pairs"], s["adverse"], s["favorable"], s["even"]) == (20, 20, 0, 0)
+    assert s["e_value"] == pytest.approx(79_817.5647952744, rel=1e-9) and s["peak"] == pytest.approx(s["e_value"])
+    assert s["passed"] is True and s["threshold"] == pytest.approx(20.0) and "최고 79,818 · 현재 79,818 · 기준 20" in s["message"]
+
+
+def test_the_sequential_block_counts_every_pair_not_the_list_cut_for_the_screen(client, auth, ten_days, monkeypatch):
+    """목록을 셋으로 잘라도 순차 증거는 짝 스물 전부로 센다(잘린 셋이면 3.71 — 짝: 그 값이 아니다)."""
+    import src.api.intraday_routes as mod
+    monkeypatch.setattr(mod, "DIVERGENCE_ROWS_LIMIT", 3)
+    d = post(client, auth, fills(10_090, 10_090, buy_at="09:02:40", sell_at="09:03:20")).json()["divergence"]
+    s = d["price_gap"]["sequential"]
+    assert len(d["matched"]) == 3 and s["pairs"] == 20
+    assert s["e_value"] == pytest.approx(79_817.5647952744, rel=1e-9) and s["e_value"] != pytest.approx(3.7125)
+
 # ── 저장하지 않는다 · 시행은 같은 길 ────────────────────────────────────
 def test_uploaded_fills_are_not_stored(client, auth, ten_days):
     post(client, auth, hand_sim())                                                       # 표를 만들고 시행 한 줄을 남긴다

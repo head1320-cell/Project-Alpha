@@ -10625,6 +10625,16 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .dv-none { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); }
 .dv-none b { color: var(--tx-ink); font-weight: 600; }
 .dv-split, .dv-time { margin-top: 10px; }
+/* 순차 증거(부호 · G2) — 체결가 차이 절 끝의 사실 상자. 판정은 서버 문장이 말한다(통과해도 색을 바꾸지 않는다).
+   위 형제 사실 상자(.tj-read)와 같은 여백 · 반지름 · 간격이라 글자의 왼쪽 끝이 한 세로줄이다. 안에 배경 있는 상자를 또 넣지 않는다.
+   꼴은 질문 띠(.pf-q-row)와 같은 '열쇠 | 값' 두 칸 · 좁은 창(560px 이하)에서는 한 칸으로 쌓는다. */
+.dv-seq { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--tx-soft); display: flex; flex-direction: column; gap: 6px;
+  font-size: 13.5px; line-height: 1.55; color: var(--tx-sub); }
+.dv-seq > p { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.dv-seq-row { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: baseline; }
+.dv-seq-k { font-weight: 700; color: var(--tx-ink); }
+.dv-seq > .dv-seq-note { margin-top: 2px; }
+@media (max-width: 560px) { .dv-seq-row { grid-template-columns: 1fr; gap: 2px; } }
 .dv-list { padding: 10px 0; border-top: 1px solid var(--tx-line); }
 .dv-list:first-of-type { border-top: 0; padding-top: 0; }
 .dv-list > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--tx-ink); }

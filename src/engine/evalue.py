@@ -19,6 +19,11 @@
 
 대칭 · 정규 근사 위의 e-과정은 쓰지 않는다 — 자주 조금 벌고 드물게 크게 잃는 손익에서 거짓 통과가 22~25% 였다(구현 계획 §2.0 의 재 본 값).
 
+부호(G2 · 괴리 보고 — 구현 계획 §3)
+    짝마다 s_i ∈ {−1, 0, +1} 는 그 자체로 [−1, 1] 에 갇혀 상한 가정이 필요 없다 → 같은 식에 c = 1 을 넣은 것이다(`sign_evidence`).
+    가설 H0: "그때까지를 알고도 +1 일 확률이 −1 일 확률보다 크지 않다"(E[s | 앞] ≤ 0) — 같은 Ville 의 부등식이 선다.
+    ★크기를 보지 않는다★ — 크기의 평균에 대한 증거는 반대쪽에 상한 가정이 있어야 선다(위 '상한이 계약이다').
+
 ★이 값은 도구의 통계 성질이다.★ 어떤 규칙이 앞으로 수익을 낸다는 주장이 아니고, 합성 봉 위의 값은 실제 시장의 증거가 아니다.
 """
 from __future__ import annotations
@@ -36,8 +41,10 @@ FRACTIONS: tuple[float, ...] = tuple(k / 20 for k in range(1, 20))
 #: 답에 싣는 값의 천장. 그 위는 이 수로 적고 `saturated` 로 표시한다(JSON 에 inf 를 싣지 않는다).
 SATURATION = 1e12
 METHOD = "capped_betting_mixture"
+SIGN_METHOD = "sign_betting_mixture"
 
 REASONS = {
+    "no_signs": "견줄 부호가 하나도 없어 순차 증거를 계산하지 않았습니다.",
     "no_values": "비용 뒤 일별 손익이 없어 순차 증거를 계산하지 않았습니다.",
     "no_days": "거래일이 없어 순차 증거를 계산하지 않았습니다.",
     "no_cap": "하루 손실의 상한이 없어 순차 증거를 계산하지 않았습니다. 상한이 없으면 유한한 표본으로는 수익의 증거를 낼 수 없습니다.",
@@ -63,6 +70,38 @@ def log_path(values: Sequence[float], cap: float) -> list[float]:
 
 def _shown(log_e: float) -> float:
     return SATURATION if log_e >= _LOG_SATURATION else math.exp(log_e)
+
+
+def as_text(value: float) -> str:
+    """e-값을 글로 적는 꼴(판정 사실 줄 · 괴리 보고가 같이 쓴다) — 천장에 닿은 값은 수가 아니라 하한으로 적는다."""
+    if value >= SATURATION:
+        return "1조 이상"
+    return f"{value:,.0f}" if value >= 1_000 else f"{value:.2f}"
+
+
+def sign_evidence(signs: Sequence[int], *, alpha: float = ALPHA) -> dict[str, Any]:
+    """짝마다의 부호(+1 · 0 · −1) → 순차 증거. `log_path(signs, 1)` 그대로다(부호는 이미 상한 안에 있다).
+
+    기준은 1/α — 시행 수를 곱하지 않는다(무엇을 몇 번 다시 봤는지는 부르는 쪽이 안다).
+    `e_value` 는 마지막 값, `peak` 는 지나온 최고값(시작값 1 포함)이고 판정은 ★최고값★으로 한다.
+    0 은 곱에 1 이다(정보가 없다). 부호가 없으면 값은 `None` + `reason`(1 로 내지 않는다).
+    부호가 아닌 값(크기 · nan · None)이나 (0, 1) 밖의 유의수준은 부르는 쪽의 결함이다 — 고쳐서 계산하지 않고 `ValueError`."""
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha={alpha!r}")
+    bad = [s for s in signs if s not in (-1, 0, 1)]
+    if bad:
+        raise ValueError(f"부호가 아닌 값: {bad[:3]!r}")
+    adverse = sum(1 for s in signs if s == 1)
+    favorable = sum(1 for s in signs if s == -1)
+    out: dict[str, Any] = {"method": SIGN_METHOD, "alpha": alpha, "threshold": 1 / alpha, "pairs": len(signs),
+                           "adverse": adverse, "favorable": favorable, "even": len(signs) - adverse - favorable,
+                           "e_value": None, "peak": None, "saturated": None, "passed": None, "reason": None}
+    if not len(signs):
+        return {**out, "reason": REASONS["no_signs"]}
+    path = log_path([float(s) for s in signs], 1.0)
+    last, top = path[-1], max(0.0, max(path))
+    return {**out, "e_value": _shown(last), "peak": _shown(top), "saturated": top >= _LOG_SATURATION,
+            "passed": top >= math.log(1 / alpha)}
 
 
 def evidence(values: Sequence[float] | None, *, cap: float | None, trials: int = 1, alpha: float = ALPHA) -> dict[str, Any]:

@@ -8,8 +8,9 @@
  * ★미상은 0 이 아니다★ — 짝이 없으면 차이는 N/A + 사유, 한쪽의 비용을 모르면 비용 후 차이도 N/A + 사유다.
  * 허용 시간은 사용자의 선언(가정)이라, 창을 바꿨을 때의 건수를 늘 함께 보인다.
  * 합성 분봉 위의 시뮬레이션이면 판 맨 위에 적는다. 따로 뺀 줄(기간 밖 · 다른 종목 · 시각 없음 · 읽지 못함)은 세어 적는다.
+ * 순차 증거(부호 · G2)는 체결가 차이 절 끝의 사실 줄이다 — ★판정과 숫자는 서버 문장 그대로★(화면이 통과를 지어내지 않는다 · 색으로 말하지 않는다).
  */
-import type { Divergence, DivergenceAlone, DivergencePair, DivergenceReport, PnlGap, PriceGap, Side } from "@/entities/intraday";
+import type { Divergence, DivergenceAlone, DivergencePair, DivergenceReport, PnlGap, PriceGap, Side, SignEvidence } from "@/entities/intraday";
 import { UNKNOWN_TEXT, num, signedWon } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type Chip } from "@/shared/ui/tx";
 
@@ -100,9 +101,23 @@ function PriceGapTable({ g, d }: { g: PriceGap; d: DivergenceReport }) {
             {" · "}가장 불리한 체결: <span data-mono>{g.worst.symbol}</span> {stamp(g.worst.sim_at)} {SIDE_KO[g.worst.side]}</p>
           {d.time_gap ? <p className="tj-read dv-time">시각 차이: 평균 {d.time_gap.mean_minutes.toFixed(1)}분 · 중앙값 {d.time_gap.median_minutes.toFixed(1)}분 · 최대 {n0(d.time_gap.max_minutes)}분</p> : null}
           {d.quantity_gap.differs > 0 ? <p className="tj-note dv-qty">수량이 다른 짝 {n0(d.quantity_gap.differs)}건: 시뮬레이션의 수량은 진입 금액과 참여율 상한으로 정한 값입니다.</p> : null}
+          <Sequential s={g.sequential} />
         </>
       )}
     </Section>
+  );
+}
+
+/** 순차 증거(부호) — 서버의 물음 · 판정 문장 · 잰 방식 · 한계를 그대로 싣는다. 짝이 없으면 이 줄이 없다(위의 N/A 가 말한다).
+ *  꼴은 질문 띠(`shared/ui/perf/QuestionStrip`)와 같은 '열쇠 | 값' 두 칸 — 어떤 물음에 답했는지 먼저 밝힌다(CLAUDE.md §2).
+ *  이름표는 따로 달지 않는다: 판정 문장이 '순차 증거(부호)의 …'로 시작해 이름표를 달면 같은 말이 겹친다(이름은 묶음의 접근 이름으로). */
+function Sequential({ s }: { s: SignEvidence }) {
+  return (
+    <div className="dv-seq" role="group" aria-label="순차 증거(부호)" data-passed={s.passed ? "" : undefined}>
+      <p className="dv-seq-row"><span className="dv-seq-k">물음</span><span className="dv-seq-question" data-server>{s.question}</span></p>
+      <p className="dv-seq-row"><span className="dv-seq-k">판정</span><span className="dv-seq-verdict" data-server>{s.message}</span></p>
+      <p className="tj-note dv-seq-note"><span data-server>{s.basis}</span> <span data-server>{s.limit}</span></p>
+    </div>
   );
 }
 

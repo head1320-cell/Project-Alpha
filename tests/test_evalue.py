@@ -204,3 +204,123 @@ def test_when_losses_break_the_cap_the_number_inflates_but_the_days_are_counted_
     rate, clean = crossing_rate(X, 3.0)
     assert rate > 0.5                                                       # 가정이 틀리면 오류율 보장은 없다
     assert clean <= evalue.ALPHA                                           # 상한을 넘은 날이 보인 경로는 통과가 아니다
+
+
+# ── 부호(G2 · 괴리 보고) — 짝마다 +1 · −1 · 0 의 순차 증거 ──────────────────────────
+# 계약(구현 계획 §3): s_i ∈ {−1, 0, +1} 은 그 자체로 [−1, 1] 에 갇혀 상한 가정이 필요 없다 → E_n = 평균_f ∏(1 + f·s_i)(같은 격자).
+# 가설 "짝마다 그때까지를 알고도 E[s | 과거] ≤ 0"(불리할 확률이 유리할 확률보다 크지 않다) 아래 어느 짝에서 멈춰도 E ≥ 1/α 일 확률 ≤ α.
+
+def test_signs_run_on_the_same_engine_as_capped_values_with_cap_one():
+    """새 엔진을 만들지 않는다 — `log_path(signs, 1)` 그대로다."""
+    signs = [1, -1, 0, 1, 1, -1, 0, 1]
+    out = evalue.sign_evidence(signs)
+    assert math.log(out["e_value"]) == pytest.approx(evalue.log_path(signs, 1.0)[-1])
+    assert out["method"] == evalue.SIGN_METHOD and out["method"] != evalue.METHOD
+
+
+@pytest.mark.parametrize("signs,e,peak", [
+    ([1], 1.5, 1.5),                    # 1 + 평균 f
+    ([-1], 0.5, 1.0),                   # 1 − 평균 f · 최고값은 시작값 1
+    ([0], 1.0, 1.0),                    # 같은 체결은 곱에 1 — 정보가 없다
+    ([1, 1], 2.325, 2.325),             # 1 + 2·0.5 + 0.325
+    ([1, -1], 0.675, 1.5),              # 1 − 평균 f² = 1 − 0.325
+    ([1, -1, 1], 0.9375, 1.5),          # 1 + 0.5 − 0.325 − 평균 f³(0.2375)
+])
+def test_hand_computed_signs(signs, e, peak):
+    out = evalue.sign_evidence(signs)
+    assert out["e_value"] == pytest.approx(e) and out["peak"] == pytest.approx(peak)
+    assert out["pairs"] == len(signs) and out["reason"] is None
+
+
+def test_the_counts_are_the_signs_and_even_pairs_change_nothing():
+    """같은 체결(0)은 곱에 1 이다 — 붙여도 값이 그대로다(짝: 같은 자리에 +1 을 붙이면 값이 오른다)."""
+    plain, padded = evalue.sign_evidence([1, -1, 1]), evalue.sign_evidence([1, 0, -1, 0, 0, 1])
+    assert padded["e_value"] == pytest.approx(plain["e_value"]) and padded["peak"] == pytest.approx(plain["peak"])
+    assert (padded["adverse"], padded["favorable"], padded["even"], padded["pairs"]) == (2, 1, 3, 6)
+    assert evalue.sign_evidence([1, 1, -1, 1])["e_value"] > plain["e_value"]
+
+
+def test_the_threshold_is_one_over_alpha_at_the_boundary():
+    """불리 여섯 = 17.43(미달) ↔ 일곱 = 30.25(통과) — 기준이 20 이다(두 배면 일곱도 미달)."""
+    six, seven = evalue.sign_evidence([1] * 6), evalue.sign_evidence([1] * 7)
+    assert six["threshold"] == pytest.approx(20.0) and six["alpha"] == evalue.ALPHA
+    assert six["peak"] == pytest.approx(17.428, abs=1e-3) and six["passed"] is False
+    assert seven["peak"] == pytest.approx(30.2546, abs=1e-3) and seven["passed"] is True
+    assert evalue.sign_evidence([1] * 7, alpha=0.025)["passed"] is False           # 기준 40
+
+
+def test_crossing_once_is_kept_even_when_later_pairs_bring_the_value_down():
+    """판정은 최고값으로 한다 — '어느 짝에서든 넘을 확률'이 α 이하라 넘은 사실은 그 뒤에 내려와도 남는다."""
+    out = evalue.sign_evidence([1] * 7 + [-1] * 7)
+    assert out["e_value"] < 1.0 and out["peak"] == pytest.approx(30.2546, abs=1e-3) and out["passed"] is True
+
+
+def test_the_order_of_pairs_is_the_evidence__reversed_it_does_not_cross():
+    """곱은 순서와 무관하지만 지나온 길(최고값)은 순서를 탄다 — 짝은 시각 순이어야 한다."""
+    forward, backward = evalue.sign_evidence([1] * 7 + [-1] * 7), evalue.sign_evidence([-1] * 7 + [1] * 7)
+    assert forward["e_value"] == pytest.approx(backward["e_value"])
+    assert forward["passed"] is True and backward["passed"] is False and backward["peak"] == pytest.approx(1.0)
+
+
+def test_a_huge_sign_value_is_finite_and_marked():
+    out = evalue.sign_evidence([1] * 400)
+    assert out["saturated"] is True and out["e_value"] == evalue.SATURATION
+    json.dumps(out, allow_nan=False)
+    assert evalue.sign_evidence([1] * 7)["saturated"] is False
+
+
+def test_no_signs_is_absent_with_a_reason_not_one():
+    out = evalue.sign_evidence([])
+    assert out["e_value"] is None and out["peak"] is None and out["passed"] is None
+    assert out["reason"] == evalue.REASONS["no_signs"] and out["pairs"] == 0 and out["threshold"] == pytest.approx(20.0)
+
+
+@pytest.mark.parametrize("bad", [[2], [1, 0.5], [float("nan")], [-3, 1], [1, None]])
+def test_a_value_that_is_not_a_sign_is_the_callers_defect(bad):
+    """크기를 부호로 몰래 바꾸지 않는다 — 부르는 쪽이 부호를 넘겨야 한다."""
+    with pytest.raises(ValueError):
+        evalue.sign_evidence(bad)
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, float("nan"), -0.1])
+def test_a_meaningless_level_is_an_error(alpha):
+    with pytest.raises(ValueError):
+        evalue.sign_evidence([1, -1], alpha=alpha)
+
+
+PAIRS = 300
+
+
+def sign_crossing_rate(S: np.ndarray) -> float:
+    return sum(bool(evalue.sign_evidence(row.tolist())["passed"]) for row in S) / len(S)
+
+
+def sign_nulls(rng) -> dict[str, np.ndarray]:
+    """불리할 확률이 유리할 확률보다 크지 않은 세계 넷(★조건부★ — 앞 짝에 기대는 꼴 하나 포함)."""
+    shape = (PATHS, PAIRS)
+    u = rng.random(shape)
+    markov = np.zeros(shape, dtype=int)
+    for t in range(PAIRS):
+        prev_even = markov[:, t - 1] == 0 if t else np.ones(PATHS, dtype=bool)
+        moving = np.where(prev_even, rng.random(PATHS) < 0.2, rng.random(PATHS) < 0.9)     # 같은 체결이 몰려 온다
+        markov[:, t] = np.where(moving, np.where(rng.random(PATHS) < 0.5, 1, -1), 0)       # 움직이면 반반 — 조건부 평균 0
+    return {
+        "반반": np.where(u < 0.5, 1, -1),
+        "같은 체결이 30% 섞인 반반": np.where(u < 0.3, 0, np.where(u < 0.65, 1, -1)),
+        "유리가 잦다(0.4 · 0.6)": np.where(u < 0.4, 1, -1),
+        "같은 체결이 몰려 오는 의존": markov,
+    }
+
+
+def test_signs_under_no_systematic_disadvantage_rarely_ever_cross():
+    rng = np.random.default_rng(20261119)
+    for name, S in sign_nulls(rng).items():
+        rate = sign_crossing_rate(S)
+        assert rate <= evalue.ALPHA + SLACK, f"{name}: {rate:.3%}"
+
+
+def test_signs_with_a_real_disadvantage_do_cross():
+    """짝 — 늘 거부하는 장치가 아니다: 불리할 확률 0.65 면 200짝 안에 대부분 넘는다(모의 2026-11-19 · 94%)."""
+    rng = np.random.default_rng(5)
+    S = np.where(rng.random((400, 200)) < 0.65, 1, -1)
+    assert sign_crossing_rate(S) >= 0.85

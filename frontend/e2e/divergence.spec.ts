@@ -24,6 +24,9 @@ import { contrastAudit, voiceAudit, type AuditResult, type VoiceResult } from ".
 //  · 합성 분봉 위의 시뮬레이션이면 판 맨 위에 그렇게 적는다 ↔ 제공자 출처의 분봉이면 적지 않는다
 //  · 시행을 기록하지 못하면 기록했다고 적지 않는다 · 색은 손익 칸에만(불리함 칸 · N/A 칸에는 없다)
 //  · 목록에서 다른 백테스트를 고르면 그 설정으로 견준다
+//  · ★순차 증거(부호 · G2)★ — 서버 문장 그대로: 불리 스물 = 평균_f (1 + f)^20 = 79,817.6(기준 20 이상) ↔ 불리 · 유리가 번갈면
+//    최고 1.50 · 현재 0.26(못 미침 · "가정이 맞다는 뜻은 아닙니다") · 같은 체결뿐이면 e-값 1 · 짝이 없으면 줄이 없다
+//    줄은 '물음 · 판정' 두 칸(질문 띠와 같은 꼴 · 어떤 물음에 답했는지 밝힌다) — 글자 왼쪽 끝이 위 사실 상자와 같은 세로줄이고, 390px 에서는 한 칸으로 쌓인다
 // ══════════════════════════════════════════════════════════════════════════
 
 const API = "/api/backend/api/v1";
@@ -104,6 +107,20 @@ async function compare(page: Page): Promise<Request> {
 
 const figure = (page: Page, label: string) => page.locator(".dv-result .tx-answer").getByText(label, { exact: true }).locator("xpath=..");
 const windowRow = (page: Page, minutes: number) => page.locator(`.dv-windows tr[data-minutes="${minutes}"] > *`).allTextContents();
+/** 순차 증거 줄의 글자 왼쪽 끝(px) — 열쇠 둘(물음 · 판정) · 값 둘 · 각주, 그리고 위 형제 사실 상자(`.dv-split`)의 글자 왼쪽 끝.
+ *  상자 안에 안쪽 여백이 있는 상자가 또 들어가면 그 줄만 들여 쓰인다(스크린샷 검수에서 찾은 결함 — 이 값이 그것을 잡는다). */
+const seqEdges = (page: Page) => page.evaluate(() => {
+  const left = (el: Element) => Math.round(el.getBoundingClientRect().left);
+  const split = document.querySelector(".dv-split")!;
+  return {
+    keys: [...document.querySelectorAll(".dv-seq .dv-seq-k")].map(left),
+    question: left(document.querySelector(".dv-seq-question")!),
+    verdict: left(document.querySelector(".dv-seq-verdict")!),
+    note: left(document.querySelector(".dv-seq-note [data-server]")!),
+    sibling: Math.round(split.getBoundingClientRect().left + parseFloat(getComputedStyle(split).paddingLeft)),
+    overflow: (() => { const b = document.querySelector(".dv-seq")!; return b.scrollWidth - b.clientWidth; })(),
+  };
+});
 
 test("분봉 결과에서 매매일지로 가는 길이 있고, 견준 값이 손 계산과 같다", async ({ page }) => {
   const token = await login(page);
@@ -149,6 +166,23 @@ test("분봉 결과에서 매매일지로 가는 길이 있고, 견준 값이 �
   await expect(page.locator(".dv-gap-gross")).toHaveText(`${MINUS}19,800원`);
   await expect(page.locator(".dv-sim-net")).toHaveText(`${MINUS}3,195원`);
   await expect(page.locator(".dv-pairs tbody tr")).toHaveCount(20);
+  // ★순차 증거(부호) = 손 계산★ — 짝 스물이 모두 불리: 평균_f (1 + f)^20 = 79,817.6 → 기준 20 이상(서버 문장 그대로)
+  await expect(page.locator(".dv-seq")).toHaveAttribute("data-passed", "");
+  await expect(page.locator(".dv-seq-question")).toHaveText("가정한 체결보다 불리한 체결이 유리한 체결보다 체계적으로 잦은가");
+  await expect(page.locator(".dv-seq-verdict")).toHaveText("순차 증거(부호)의 최고값이 기준 이상입니다. 최고 79,818 · 현재 79,818 · 기준 20(유의수준 5%). 가정한 체결보다 불리한 체결이 유리한 체결보다 체계적으로 잦다는 증거입니다.");
+  await expect(page.locator(".dv-seq .dv-seq-k")).toHaveText(["물음", "판정"]);
+  await expect(page.getByRole("group", { name: "순차 증거(부호)" })).toBeVisible();   // 이름표를 따로 달지 않는 대신 묶음의 접근 이름
+  await expect(page.locator(".dv-seq [data-server]")).toHaveCount(4);              // 물음 · 판정 · 잰 방식 · 한계 — 넷 다 서버 글
+  await expect(page.locator(".dv-seq")).toContainText("크기가 아니라 방향만 봅니다.");
+  await expect(page.locator(".dv-seq")).toContainText("허용 시간을 바꿔 다시 본 횟수와 다른 파일을 올려 본 횟수는 세지 않습니다.");
+  await expect(page.locator(".dv-seq")).not.toContainText("순차 증거(부호) 순차 증거(부호)");    // 이름표와 서버 문장이 같은 말로 겹치지 않는다
+  // 글자의 세로줄: 열쇠 둘 = 각주 = 위 사실 상자의 글자 · 값 둘은 한 세로줄이고 열쇠 오른쪽(넓은 창은 두 칸)
+  const wide = await seqEdges(page);
+  expect(wide.keys).toEqual([wide.sibling, wide.sibling]);
+  expect(wide.note).toBe(wide.sibling);
+  expect(wide.verdict).toBe(wide.question);
+  expect(wide.question).toBeGreaterThan(wide.sibling);
+  expect(wide.overflow).toBeLessThanOrEqual(0);
   // 손으로 만든 열흘은 출처가 제공자(kis)로 적힌 분봉이다 → 합성이라는 말이 붙지 않는다(짝: 아래의 합성 분봉 시험)
   await expect(page.locator(".dv-synthetic")).toHaveCount(0);
   await expect(page.locator(".dv-result .tx-answer")).not.toContainText("합성 분봉");
@@ -228,6 +262,32 @@ test("평균 · 중앙값 · 가장 불리한 체결은 서로 다른 값이다"
   await expect(figure(page, "비용 전 손익 차이")).toContainText(`${MINUS}23,760원`);
 });
 
+test("순차 증거는 방향만 센다 — 불리와 유리가 번갈면 기준에 못 미치고 그렇다고 적는다", async ({ page }) => {
+  await login(page);
+  await runHandBacktest(page);
+  await page.goto(JOURNAL, { waitUntil: "domcontentloaded" });
+  // 날마다 매수는 한 틱 불리(10,090 ↔ 10,080) · 매도는 한 틱 유리(10,110 ↔ 10,100) → 부호 +1, −1 이 열 번 번갈아 온다
+  //   최고 = 첫 짝 뒤의 1 + 평균 f = 1.50 · 현재 = 평균_f (1 − f²)^10 = 0.26 → 기준 20 에 못 미친다
+  await analyze(page, fillsCsv({ buy: 10090, sell: 10110 }));
+  await compare(page);
+  await expect(page.locator(".dv-n-adverse")).toHaveText("10건");
+  await expect(page.locator(".dv-n-favorable")).toHaveText("10건");
+  await expect(page.locator(".dv-seq")).toBeVisible();
+  await expect(page.locator(".dv-seq")).not.toHaveAttribute("data-passed", /.*/);
+  await expect(page.locator(".dv-seq-verdict")).toHaveText("순차 증거(부호)의 최고값이 기준에 못 미칩니다. 최고 1.50 · 현재 0.26 · 기준 20(유의수준 5%). 가정이 맞다는 뜻은 아닙니다. 증거가 아직 모자랄 수 있습니다.");
+  await expect(page.locator(".dv-seq-question")).toHaveText("가정한 체결보다 불리한 체결이 유리한 체결보다 체계적으로 잦은가");
+  // 평균 불리함은 0 원이다 — 크기의 평균과 방향의 증거는 다른 물음에 답한다
+  await expect(page.locator(".dv-mean-won")).toHaveText("0원");
+  // 390px: 두 칸이 한 칸으로 쌓인다 — 열쇠 · 값 · 각주가 모두 위 사실 상자의 글자와 같은 세로줄 · 옆으로 넘치지 않는다
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => (await seqEdges(page)).question).toBe((await seqEdges(page)).sibling);
+  const narrow = await seqEdges(page);
+  expect(narrow.keys).toEqual([narrow.sibling, narrow.sibling]);
+  expect([narrow.question, narrow.verdict, narrow.note]).toEqual([narrow.sibling, narrow.sibling, narrow.sibling]);
+  expect(narrow.overflow).toBeLessThanOrEqual(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+});
+
 test("짝이 하나도 없으면 체결가 차이는 0 이 아니라 N/A 와 사유다", async ({ page }) => {
   await login(page);
   await runHandBacktest(page);
@@ -242,6 +302,7 @@ test("짝이 하나도 없으면 체결가 차이는 0 이 아니라 N/A 와 사
   await expect(page.locator(".dv-none")).toContainText("짝지은 체결이 없어 체결가 차이를 계산하지 못했습니다.");
   await expect(page.locator(".dv-gap")).toHaveCount(0);
   await expect(page.locator(".dv-time")).toHaveCount(0);
+  await expect(page.locator(".dv-seq")).toHaveCount(0);                // 짝이 없으면 순차 증거 줄도 없다(1 이나 0 으로 적지 않는다)
   expect(await windowRow(page, 15)).toEqual(["15분", "0건", "20건", "20건"]);
   // 손익은 짝과 무관하게 양쪽을 따로 집계한다
   await expect(page.locator(".dv-gap-gross")).toHaveText(`${MINUS}19,800원`);
@@ -266,6 +327,9 @@ test("체결 시각이 없는 파일은 하루 단위로 견주고 그렇다고 
   await expect(page.locator(".dv-aside-untimed")).toHaveCount(0);
   await expect(figure(page, "짝지은 체결")).toContainText("20건");
   await expect(page.locator(".dv-mean-won")).toHaveText("+10원");
+  // 하루 단위로 견줘도 순차 증거는 날짜 순의 짝으로 쌓는다(스물 모두 불리 — 기준 이상)
+  await expect(page.locator(".dv-seq")).toHaveAttribute("data-passed", "");
+  await expect(page.locator(".dv-seq-verdict")).toContainText("최고 79,818 · 현재 79,818 · 기준 20(유의수준 5%)");
 });
 
 test("합성 분봉 위의 시뮬레이션이면 판 맨 위에 그렇게 적는다", async ({ page }) => {
@@ -335,6 +399,8 @@ test("견주지 않은 줄은 세어 적고, 시장 가정이 없으면 비용 �
   await expect(figure(page, "짝지은 체결")).toContainText("20건");
   await expect(page.locator(".dv-mean-ticks")).toHaveText("0.0틱");
   await expect(page.locator(".dv-result .tx-answer")).toContainText("평균이 같았습니다");
+  // 같은 체결뿐이면 순차 증거가 쌓이지 않는다(e-값 1 — 빈칸이나 0 이 아니다)
+  await expect(page.locator(".dv-seq-verdict")).toHaveText("불리하거나 유리한 짝이 없어 순차 증거가 쌓이지 않았습니다(같은 체결 20건 · e-값 1). 가정이 맞다는 뜻은 아닙니다.");
   await expect(page.locator(".dv-aside-other")).toContainText("2줄");
   await expect(page.locator(".dv-aside-other")).toContainText("000660");
   await expect(page.locator(".dv-aside-outside")).toContainText("1줄");

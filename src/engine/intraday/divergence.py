@@ -19,6 +19,13 @@
 
 허용 창은 사용자의 선언이다(근거가 있는 것은 "봉 주기 1분보다 가는 차이는 구분할 수 없다"뿐). 그래서 창 셋(1 · 5 · 15분)의
 건수를 늘 함께 낸다.
+
+## 순차 증거(부호 · 구현 계획 §3 — G2)
+`price_gap.sequential` 이 답하는 물음은 하나다: **가정한 체결보다 불리한 체결이 유리한 체결보다 체계적으로 잦은가.**
+시뮬레이션 체결가가 백테스트의 체결 가정 그 자체라(시장가 · 손절은 슬리피지 k 틱을 품는다) 불리함 > 0 은 "실제가 가정보다 나빴다"이다.
+짝마다 부호(불리 +1 · 유리 −1 · 같음 0 — 갈래 건수와 같은 경계)를 시뮬레이션 시각 순으로 `evalue.sign_evidence` 에 넣는다.
+★크기를 보지 않는다★ — 몇 틱 불리한가는 평균 · 중앙이 기술한다(크기의 평균에 대한 증거는 유리한 쪽에 상한 가정이 있어야 선다).
+짝짓기는 시각만 본다(가격을 보지 않는다) · 짝은 (종목 · 방향 · 날짜) 안에서만 맺어져 뒤의 날을 더 올려도 앞날의 부호가 바뀌지 않는다.
 """
 from __future__ import annotations
 
@@ -29,6 +36,7 @@ from datetime import datetime
 from statistics import mean, median
 
 from src.data.market_rules import tick_size
+from src.engine import evalue
 from src.engine.trade_journal.fills import Fill, normalize
 
 WINDOWS = (1, 5, 15)
@@ -42,6 +50,12 @@ REASONS: dict[str, str] = {
     "cost_unknown": "한쪽의 비용을 알 수 없어 비용 후 차이를 계산하지 못했습니다.",
     "bad_window": "짝짓기 허용 시간은 1분 이상 60분 이하의 정수여야 합니다.",
 }
+
+SEQ_QUESTION = "가정한 체결보다 불리한 체결이 유리한 체결보다 체계적으로 잦은가"
+SEQ_BASIS = ("크기가 아니라 방향만 봅니다. 짝마다 불리하면 +1, 유리하면 −1, 같으면 0 으로 놓고 시뮬레이션 시각 순으로 쌓습니다. "
+             "몇 틱 불리했는지는 체결가 차이 표가 기술합니다.")
+SEQ_LIMIT = ("기준은 고른 허용 시간의 짝에서만 셉니다. 허용 시간을 바꿔 다시 본 횟수와 다른 파일을 올려 본 횟수는 세지 않습니다. "
+             "같은 기록에 날을 더해 다시 올려 보는 것은 기준의 뜻을 바꾸지 않습니다.")
 
 
 class DivergenceError(ValueError):
@@ -138,6 +152,26 @@ def _alone(x: _Lump, daily: bool) -> dict:
             "parts": x.parts}
 
 
+def _sign(adverse: float) -> int:
+    """불리 +1 · 유리 −1 · 같음 0 — 갈래 건수(`_price_gap`)와 같은 경계(부동소수점 찌꺼기는 같음)."""
+    return 1 if adverse > _EVEN else -1 if adverse < -_EVEN else 0
+
+
+def _sequential(rows: list[dict]) -> dict:
+    """짝의 부호로 쌓은 순차 증거 — `rows` 는 시뮬레이션 시각 순이다(`compare` 가 정렬한 `matched` · 자르기 전 전부)."""
+    s = evalue.sign_evidence([_sign(r["adverse"]) for r in rows])
+    if s["adverse"] + s["favorable"] == 0:
+        message = (f"불리하거나 유리한 짝이 없어 순차 증거가 쌓이지 않았습니다(같은 체결 {s['even']:,}건 · e-값 1). "
+                   "가정이 맞다는 뜻은 아닙니다.")
+    else:
+        values = (f"최고 {evalue.as_text(s['peak'])} · 현재 {evalue.as_text(s['e_value'])} · "
+                  f"기준 {s['threshold']:,.0f}(유의수준 {s['alpha']:.0%})")
+        message = (f"순차 증거(부호)의 최고값이 기준 이상입니다. {values}. 가정한 체결보다 불리한 체결이 유리한 체결보다 체계적으로 잦다는 증거입니다."
+                   if s["passed"] else
+                   f"순차 증거(부호)의 최고값이 기준에 못 미칩니다. {values}. 가정이 맞다는 뜻은 아닙니다. 증거가 아직 모자랄 수 있습니다.")
+    return {**s, "question": SEQ_QUESTION, "message": message, "basis": SEQ_BASIS, "limit": SEQ_LIMIT}
+
+
 def _price_gap(rows: list[dict]) -> dict:
     if not rows:
         return {"n": 0, "reason": "no_pairs", "message": REASONS["no_pairs"]}
@@ -151,6 +185,7 @@ def _price_gap(rows: list[dict]) -> dict:
         "adverse": sum(1 for r in rows if r["adverse"] > _EVEN),
         "favorable": sum(1 for r in rows if r["adverse"] < -_EVEN),
         "even": sum(1 for r in rows if abs(r["adverse"]) <= _EVEN),
+        "sequential": _sequential(rows),
     }
 
 

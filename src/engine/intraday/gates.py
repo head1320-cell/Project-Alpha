@@ -96,10 +96,8 @@ def _robust(stress: dict | None) -> dict:
 
 
 def _e(value: float) -> str:
-    """e-값을 적는 꼴 — 천장에 닿은 값은 수가 아니라 하한으로 적는다."""
-    if value >= evalue.SATURATION:
-        return "1조 이상"
-    return f"{value:,.0f}" if value >= 1_000 else f"{value:.2f}"
+    """e-값을 적는 꼴 — 괴리 보고와 같은 꼴(`evalue.as_text` 한 곳)."""
+    return evalue.as_text(value)
 
 
 def _sequential(s: dict | None) -> tuple[str, ...]:

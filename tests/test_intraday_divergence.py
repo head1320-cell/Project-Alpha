@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import pytest
 
+from src.engine import evalue
 from src.engine.intraday import divergence as dv
 
 DAY = "2026-03-02"
@@ -291,3 +292,138 @@ def test_every_sentence_the_engine_can_say_only_observes():
 def test_the_advice_check_catches_a_recommendation():
     assert _advice_in("슬리피지 가정을 2틱으로 올리십시오.") == ["십시오"]
     assert _advice_in("이 규칙을 추천합니다.") == ["추천"]
+
+
+# ── 순차 증거(부호 · G2) — 가정보다 불리한 체결이 유리한 체결보다 체계적으로 잦은가 ──────────────────
+# 계약(구현 계획 §3): 짝마다 부호 s = 불리 +1 · 유리 −1 · 같음 0(체결가 차이의 갈래와 같은 경계) — ★크기가 아니라 방향★.
+# 짝의 순서는 시뮬레이션 시각 순(`matched` 의 순서). 기준 1/α(관례 α 0.05 · 고른 허용 시간의 짝에서만). 짝이 없으면 블록 없음.
+
+WEEK = ["2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-09", "2026-03-10", "2026-03-11"]
+
+
+def week_sim(days: list[str]) -> list[dict]:
+    """날마다 09:02 매수 10주 @10,050 · 09:10 매도 10주 @10,100(위 손 계산 표본을 여러 날로)."""
+    return [r for d in days for r in (row("09:02:00", "buy", 10, 10_050, day=d), row("09:10:00", "sell", 10, 10_100, day=d))]
+
+
+def week_actual(days: list[str], buy: dict[str, float], sell: dict[str, float]) -> list[dict]:
+    return [r for d in days for r in (row("09:02:30", "buy", 10, buy[d], day=d), row("09:10:30", "sell", 10, sell[d], day=d))]
+
+
+def week(days: list[str], *, worse: set[str], better: set[str] = frozenset()) -> dict:
+    """`worse` 의 날은 두 짝 모두 한 틱 불리 · `better` 의 날은 두 짝 모두 한 틱 유리 · 나머지 날은 같은 체결."""
+    buy = {d: 10_060 if d in worse else 10_040 if d in better else 10_050 for d in days}
+    sell = {d: 10_090 if d in worse else 10_110 if d in better else 10_100 for d in days}
+    return dv.compare(week_sim(days), week_actual(days, buy, sell), tickers=["005930"], start=days[0], end=days[-1])
+
+
+def test_the_block_rides_on_the_price_gap_and_counts_the_same_signs():
+    out = compare([row("09:03:20", "buy", 10, 10_060), row("09:10:45", "sell", 10, 10_090)])
+    gap, s = out["price_gap"], out["price_gap"]["sequential"]
+    assert (s["adverse"], s["favorable"], s["even"], s["pairs"]) == (gap["adverse"], gap["favorable"], gap["even"], gap["n"]) == (2, 0, 0, 2)
+    assert s["e_value"] == pytest.approx(2.325) and s["peak"] == pytest.approx(2.325)             # 1 + 2·0.5 + 0.325
+    assert s["threshold"] == pytest.approx(20.0) and s["passed"] is False
+
+
+def test_the_other_price_gap_values_are_unchanged__one_key_is_added():
+    out = compare([row("09:03:20", "buy", 10, 10_060), row("09:10:45", "sell", 10, 10_090)])
+    assert set(out["price_gap"]) == {"n", "mean", "median", "worst", "adverse", "favorable", "even", "sequential"}
+
+
+def test_no_pairs_carries_no_block__the_reason_is_the_existing_one():
+    out = compare([])
+    assert out["price_gap"] == {"n": 0, "reason": "no_pairs", "message": dv.REASONS["no_pairs"]}
+
+
+def test_size_does_not_matter_only_direction():
+    """한 틱 불리 ↔ 백 틱 불리 — e-값은 같다(짝: 방향을 뒤집으면 달라진다)."""
+    one = compare([row("09:03:20", "buy", 10, 10_060), row("09:10:45", "sell", 10, 10_090)])["price_gap"]["sequential"]
+    hundred = compare([row("09:03:20", "buy", 10, 11_050), row("09:10:45", "sell", 10, 9_100)])["price_gap"]["sequential"]
+    flipped = compare([row("09:03:20", "buy", 10, 10_040), row("09:10:45", "sell", 10, 10_110)])["price_gap"]["sequential"]
+    assert hundred["e_value"] == pytest.approx(one["e_value"]) and hundred["peak"] == pytest.approx(one["peak"])
+    assert flipped["e_value"] == pytest.approx(1 - 2 * 0.5 + 0.325) and flipped["favorable"] == 2      # 0.325
+
+
+def test_even_pairs_add_no_evidence():
+    """같은 체결은 곱에 1 — 같은 체결의 날을 더해도 값은 그대로이고 '같음'만 는다(짝: 불리한 날을 더하면 오른다)."""
+    base = week(WEEK[:2], worse={WEEK[0]})["price_gap"]["sequential"]
+    padded = week(WEEK[:4], worse={WEEK[0]})["price_gap"]["sequential"]
+    more = week(WEEK[:4], worse={WEEK[0], WEEK[3]})["price_gap"]["sequential"]
+    assert padded["e_value"] == pytest.approx(base["e_value"]) and padded["even"] == base["even"] + 4
+    assert more["e_value"] > padded["e_value"]
+
+
+def test_pairs_are_taken_in_simulation_time_order__early_disadvantage_crosses():
+    """앞 나흘 불리 · 뒤 나흘 유리 → 불리 여덟 뒤 최고 53.2(통과) ↔ 날을 바꾸면 최고 1(미달). 마지막 값은 같다(곱은 순서와 무관)."""
+    early = week(WEEK, worse=set(WEEK[:4]), better=set(WEEK[4:]))["price_gap"]["sequential"]
+    late = week(WEEK, worse=set(WEEK[4:]), better=set(WEEK[:4]))["price_gap"]["sequential"]
+    assert early["peak"] == pytest.approx(53.2256, abs=1e-3) and early["passed"] is True
+    assert late["peak"] == pytest.approx(1.0) and late["passed"] is False
+    assert early["e_value"] == pytest.approx(late["e_value"]) and early["e_value"] < 1.0
+
+
+def test_pairs_stack_on_the_simulation_clock_not_the_actual_one():
+    """짝은 실제 체결 시각이 아니라 ★시뮬레이션 시각★ 순으로 쌓는다(서버의 잰 방식 문장이 그렇게 말한다 — 변이 d12).
+    시뮬레이션 09:02 매수 · 09:03 매도 ↔ 실제 매도 09:03:10(한 틱 유리) · 매수 09:06:30(한 틱 불리 · 허용 5분 안):
+    시뮬레이션 순 (+1, −1) = 최고 1.5 ↔ 실제 시각 순 (−1, +1) 이면 최고 1(시작값). 마지막 값은 둘 다 0.675(곱은 순서와 무관)."""
+    sim = [row("09:02:00", "buy", 10, 10_050), row("09:03:00", "sell", 10, 10_100)]
+    out = compare([row("09:06:30", "buy", 10, 10_060), row("09:03:10", "sell", 10, 10_110)], sim=sim)
+    assert [p["side"] for p in out["matched"]] == ["buy", "sell"]                     # 목록도 시뮬레이션 시각 순
+    s = out["price_gap"]["sequential"]
+    assert (s["adverse"], s["favorable"]) == (1, 1)
+    assert s["peak"] == pytest.approx(1.5) and s["e_value"] == pytest.approx(0.675)
+
+
+def test_uploading_more_days_does_not_rewrite_the_earlier_evidence():
+    """날을 늘려 올려도 앞날의 짝 · 순서는 그대로다 → 앞 k 날의 값 = 전체 짝 부호의 앞부분으로 계산한 값(앞보기 0)."""
+    worse, better = {WEEK[0], WEEK[2], WEEK[3], WEEK[6]}, {WEEK[1], WEEK[5]}
+    whole = week(WEEK, worse=worse, better=better)
+    signs = [1 if p["adverse"] > 0 else -1 if p["adverse"] < 0 else 0 for p in whole["matched"]]
+    for k in range(1, len(WEEK) + 1):
+        part = week(WEEK[:k], worse=worse & set(WEEK[:k]), better=better & set(WEEK[:k]))["price_gap"]["sequential"]
+        ref = evalue.sign_evidence(signs[: 2 * k])
+        assert part["e_value"] == pytest.approx(ref["e_value"]) and part["peak"] == pytest.approx(ref["peak"])
+
+
+def test_the_server_sentence_says_what_was_crossed_and_what_it_does_not_mean():
+    crossed = week(WEEK, worse=set(WEEK))["price_gap"]["sequential"]
+    short = compare([row("09:03:20", "buy", 10, 10_060), row("09:10:45", "sell", 10, 10_090)])["price_gap"]["sequential"]
+    even = compare([row("09:02:00", "buy", 10, 10_050), row("09:10:00", "sell", 10, 10_100)])["price_gap"]["sequential"]
+    assert crossed["passed"] is True and "기준 이상입니다" in crossed["message"] and "체계적으로 잦다는 증거입니다" in crossed["message"]
+    assert f"최고 {evalue.as_text(crossed['peak'])} · 현재 {evalue.as_text(crossed['e_value'])} · 기준 20" in crossed["message"]
+    assert evalue.as_text(crossed["peak"]) == "6,506"                                             # 불리 열여섯: 평균_f (1 + f)^16 = 6,505.9
+    assert short["passed"] is False and "기준에 못 미칩니다" in short["message"] and "가정이 맞다는 뜻은 아닙니다" in short["message"]
+    assert even["passed"] is False and even["e_value"] == pytest.approx(1.0) and "불리하거나 유리한 짝이 없어" in even["message"]
+    for s in (crossed, short, even):
+        assert s["basis"] == dv.SEQ_BASIS and s["limit"] == dv.SEQ_LIMIT and s["question"] == dv.SEQ_QUESTION
+        assert all(t.rstrip().endswith("니다.") for t in (s["message"], s["basis"], s["limit"]))
+
+
+def test_the_sentence_names_the_peak_and_the_current_value_apart():
+    """최고값 ≠ 현재값인 기록에서 문장의 두 수가 제자리에 있다(둘이 같은 기록만으로는 두 수가 뒤바뀐 문장을 가리지 못한다 — 변이 d08).
+    번갈음(날마다 매수 한 틱 불리 · 매도 한 틱 유리) = 최고 1.50 · 현재 평균_f (1 − f²)^8 = 0.28899(미달) ↔
+    앞 나흘 불리 · 뒤 나흘 유리 = 최고 53.23 · 현재 같은 0.28899(통과 — 곱은 순서와 무관하고 판정은 최고값으로 한다)."""
+    alternating = dv.compare(week_sim(WEEK), week_actual(WEEK, {d: 10_060 for d in WEEK}, {d: 10_110 for d in WEEK}),
+                             tickers=["005930"], start=WEEK[0], end=WEEK[-1])["price_gap"]["sequential"]
+    early = week(WEEK, worse=set(WEEK[:4]), better=set(WEEK[4:]))["price_gap"]["sequential"]
+    assert (alternating["adverse"], alternating["favorable"]) == (8, 8) and alternating["passed"] is False
+    assert alternating["e_value"] == pytest.approx(0.28898775802879345) == early["e_value"]
+    assert alternating["peak"] == pytest.approx(1.5) and early["peak"] == pytest.approx(53.2256, abs=1e-3)
+    assert "최고 1.50 · 현재 0.29 · 기준 20(유의수준 5%). 가정이 맞다는 뜻은 아닙니다." in alternating["message"]
+    assert "최고 53.23 · 현재 0.29 · 기준 20(유의수준 5%). 가정한 체결보다" in early["message"]
+
+
+def test_the_daily_mode_also_carries_the_block():
+    out = compare([row("", "buy", 10, 10_060), row("", "sell", 10, 10_090)])
+    assert out["mode"] == "daily" and out["price_gap"]["sequential"]["pairs"] == out["price_gap"]["n"]
+
+
+def test_a_rounding_residue_is_even_not_adverse__the_same_boundary_as_the_counts():
+    """매수 3주 @10,050.7 + 7주 @10,049.7 = 10,050 + 1.8e-12(부동소수점 찌꺼기) — 갈래는 '같음'이고 부호도 0 이다(짝: 한 틱이면 +1)."""
+    out = compare([row("09:02:10", "buy", 3, 10_050.7), row("09:02:40", "buy", 7, 10_049.7), row("09:10:00", "sell", 10, 10_100)])
+    gap = out["price_gap"]
+    assert 0 < gap["worst"]["adverse"] < 1e-9 and gap["even"] == 2 and gap["adverse"] == 0
+    s = gap["sequential"]
+    assert (s["adverse"], s["favorable"], s["even"]) == (0, 0, 2) and s["e_value"] == pytest.approx(1.0)
+    one_tick = compare([row("09:02:10", "buy", 10, 10_060), row("09:10:00", "sell", 10, 10_100)])["price_gap"]["sequential"]
+    assert (one_tick["adverse"], one_tick["even"]) == (1, 1) and one_tick["e_value"] == pytest.approx(1.5)

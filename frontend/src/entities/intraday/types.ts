@@ -163,10 +163,18 @@ export type DivergencePair = {
 };
 export type DivergenceAlone = { symbol: string; side: Side; at: string; price: number; quantity: number; parts: number };
 export type DivergenceStat = { won: number; ticks: number; bp: number };
-/** 짝이 없으면 차이는 0 이 아니라 사유다. */
+/** 순차 증거(부호 · G2) — 짝마다 불리 +1 · 유리 −1 · 같음 0 을 시뮬레이션 시각 순으로 쌓은 e-값(서버 `evalue.sign_evidence`).
+ *  판정과 숫자의 글은 서버 문장(`message` · `basis` · `limit`)이다 — 화면은 고르기만 한다. 부호가 없으면 값은 `null` + `reason`. */
+export type SignEvidence = {
+  method: string; alpha: number; threshold: number; pairs: number; adverse: number; favorable: number; even: number;
+  e_value: number | null; peak: number | null; saturated: boolean | null; passed: boolean | null; reason: string | null;
+  question: string; message: string; basis: string; limit: string;
+};
+/** 짝이 없으면 차이는 0 이 아니라 사유다(순차 증거 블록도 없다). */
 export type PriceGap =
   | { n: 0; reason: string; message: string }
-  | { n: number; mean: DivergenceStat; median: DivergenceStat; worst: DivergencePair; adverse: number; favorable: number; even: number };
+  | { n: number; mean: DivergenceStat; median: DivergenceStat; worst: DivergencePair; adverse: number; favorable: number; even: number;
+      sequential: SignEvidence };
 export type WindowRow = { minutes: number; matched: number; sim_only: number; actual_only: number; chosen: boolean };
 export type DivergenceReport = {
   mode: "timed" | "daily"; degraded: { reason: string; message: string } | null; window_minutes: number;
