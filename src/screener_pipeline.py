@@ -12,7 +12,8 @@ Data sources — ★운영에서는 합성 스냅샷을 만들지 않는다★ (
   - mock(`mock_gate.mock_allowed()`): 난수 고정 합성 행(주식 28 · FICC 267) — 출처 라벨 `is_mock: True` 가 붙는다.
   - 운영 · 주식: `MARKET_PIPELINE_USE_YFINANCE` 를 켰을 때 ★받은 행만★. 꺼져 있거나 하나도 못 받으면 빈 결과 + 사유(합성 대체 없음).
   - 운영 · FICC: 실데이터 원천이 코드에 없다 → 늘 빈 결과 + 사유.
-  빈 결과는 표를 ★비운다★(예전 버전이 써 둔 합성 행이 남지 않게). 읽는 쪽(레거시 라우트)은 `snapshot_origin()` 한 곳에 묻는다.
+  빈 결과는 표를 ★비운다★(예전 버전이 써 둔 합성 행이 남지 않게). 읽는 쪽(레거시 라우트)은 `snapshot_origin()` 한 곳에 묻는다
+  (행을 그대로 돌려주던 `POST /screener` 는 S2 · 2026-11-19 에 걷어 냈다 — 남은 소비자는 `GET /screener/status` · `POST /screener/refresh`).
 """
 
 import asyncio

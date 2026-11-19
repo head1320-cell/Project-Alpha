@@ -202,3 +202,16 @@ KIS 공식 저장소 조사(고르지 않으셨다) · 관문의 뜻 바꾸기(e
   사유 숨기기 · 매도세 절 숨기기 · 세율 단위 · 미상 성분을 서버 수로 · 옛 실행 문장 빼기 · 캔버스 판 빼기 · 결과 카드 빼기 …).
 - **주장의 범위**: `structural` — 세율은 보도 근거(T1) 추론값이고 법령 원문과 대조하지 않았다. mock 의 종목 마스터는 시장을 모르는 종목이 많아 켠 실행의 다수가 미상으로 나온다(관측해 적는다).
   매도세를 켠 결과가 '더 현실적'이라는 증거는 아니다 — 세율 하나를 거래일별로 바꿨을 뿐이고 체결 · 수수료 · 충격의 가정은 그대로다.
+
+## S2. 레거시 `POST /screener` 하나만 걷어 냄 (2026-11-19 · 받은 결정)
+
+- **받은 결정**(2026-11-19): 레거시 `POST /screener` = ★그 문 하나만 걷어 낸다★ — 같은 파일의 다른 문 넷 · 스크리너 3-레이어 0줄.
+- **감사(읽기 전용 · 관측)**: 문은 `src/api/screener_legacy_routes.py:19`(`run_screener` — 스냅샷 표 둘을 조건으로 걸러 행을 그대로 돌려준다 · 출처 게이트 `snapshot_origin`).
+  화면 호출 0(`frontend/src/shared/api/legacyApi.ts` 의 `runScreener` 정의만 · 부르는 곳 0) · E2E 0 · 보호 목록 · 접근 지도에 없음 ·
+  pytest 아홉(함수 여섯 · 매개변수 포함 — `tests/test_market_snapshot_gate.py` ② 절: ★행을 내지 않는다는 읽기 겹 일곱을 이 문으로 걸었다★ · 잘못된 요청의 400 둘). 이 문만 쓰는 것: 요청 모형 `ScreenerRequest` · `screener_sql.build_screener_sql`.
+  같은 파일에 남는 문 넷: `GET /screener/factors` · `POST /screener/refresh` · `GET /screener/status` · `GET /api/v1/screener/stocks`. 판정 `snapshot_origin` 의 남은 소비자는 status · refresh.
+- **계약**: ① 문 · 요청 모형 · 화면 정의를 지운다(쓰지 않게 된 가져오기도). ② 그 문을 걸던 시험은 ★같은 판정을 싣는 남은 문(`GET /screener/status`)★으로 옮긴다 —
+  남은 합성 행 · 기본 갱신 뒤 · 받은 실데이터(짝) · mock 합성 표시(짝) · mock 이 쓴 기록을 운영이 보증하지 않음. ★덜 거는 시험이 되지 않았는지★ 판정 변이 넷을 옮긴 시험만으로 돌린다.
+  ③ 라우트 표(`tests/route_walk.py::flat_routes`)에 `POST /screener` 가 없다 ↔ 짝: 문 넷은 있다. ④ `build_screener_sql` 은 지우지 않고 보고한다 — 남아 있는 동안 검증 시험은 함수 단위로.
+- **하지 않는 것**: 문 넷 · 스냅샷 파이프라인 · `screener_sql` 지우기 · 스크리너 3-레이어 · `ValuationScreener` · 화면.
+- **주장의 범위**: 관측(정적 · 라우트 표) — 운영의 직접 호출처는 미상(접근 기록 없음). 걷어 낸 뒤 그 문을 부르는 곳은 404 를 받는다.

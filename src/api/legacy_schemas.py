@@ -347,13 +347,6 @@ class RollingStatsRequest(BaseModel):
     start_date: str = "2015-01-01"
     end_date: str = str(date.today())
 
-class ScreenerRequest(BaseModel):
-    universe: str  # "equity" or "ficc"
-    conditions: dict  # {"A": {"field": "per", "operator": "<", "value": 15}, ...}
-    logic_expression: str
-    sort_by: str = None
-    limit: int = 100
-
 class PITBacktestRequest(BaseModel):
     ticker: str
     confidence_level: float = 0.99

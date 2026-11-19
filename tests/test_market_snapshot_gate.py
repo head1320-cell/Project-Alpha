@@ -7,11 +7,12 @@
 고친 뒤의 계약 — 판정은 `src/data/mock_gate.py::mock_allowed()` 하나, 겹은 둘이다:
   ① 쓰기: 운영은 합성 행을 만들지 않는다. 주식 표는 야후를 켰을 때 ★받은 것만★, FICC 표는 원천이 없어 비운다. 빈 결과는 표를 비운다
      (예전 버전이 써 둔 합성 행이 남지 않게).
-  ② 읽기: 레거시 라우트는 ★이 프로세스가 실데이터로 써넣은 표만★ 낸다. 아니면 0건 + 사유(표에 행이 남아 있어도).
+  ② 읽기: 판정(`snapshot_origin`)은 ★이 프로세스가 실데이터로 써넣은 표만★ '낼 수 있음'이라 한다. 아니면 없음 + 사유(표에 행이 남아 있어도).
+     행을 그대로 돌려주던 `POST /screener` 는 S2(2026-11-19)에 걷어 냈고, 그 문을 걸던 시험은 같은 판정을 싣는 `GET /screener/status` 로 옮겼다.
   mock 은 예전과 같은 합성 행을 만들고 응답에 합성 표시(`is_mock`)를 싣는다.
 
 ★이 파일이 말하지 않는 것★ — 야후가 답하는 값의 품질(없는 값을 `0`·`50`·`"Unknown"` 으로 채우는 자리가 그대로 있다 — 감사 문서 §7) ·
-운영 DB·운영 호출처(미상) · 레거시 경로를 걷어 낼지(감사 '다' — 따로 결정).
+운영 DB·운영 호출처(미상) · 남은 레거시 문 넷을 걷어 낼지(S2 는 `POST /screener` 하나만 — 받은 결정).
 """
 from __future__ import annotations
 
@@ -21,7 +22,6 @@ import pandas as pd
 import pytest
 
 EQUITY_Q = {"universe": "equity", "conditions": {"A": {"field": "per", "operator": "<", "value": 1e9}}, "logic_expression": "A", "limit": 500}
-FICC_Q = {"universe": "ficc", "conditions": {"A": {"field": "price", "operator": "<", "value": 1e9}}, "logic_expression": "A", "limit": 500}
 #: 사유 문장은 응답에 그대로 실린다 — 개발자 낱말·환경변수 이름·제공자 라이브러리 이름을 싣지 않는다(용어집 §6).
 FORBIDDEN_IN_MESSAGE = ("mock", "Mock", "KIS_USE_MOCK", "MARKET_PIPELINE", "yfinance", "Yahoo", "yahoo")
 
@@ -284,71 +284,82 @@ def test_the_reasons_are_sentences_a_reader_can_be_shown(monkeypatch, engine, ya
         assert msg.endswith("니다.") and not any(w in msg for w in FORBIDDEN_IN_MESSAGE), msg
 
 
-# ── ② 읽기 — 레거시 라우트 ──────────────────────────────────────────────────────
+# ── ② 읽기 — 남은 소비자(`GET /screener/status`)가 같은 판정을 싣는다 ─────────────────────────
+# S2(2026-11-19 받은 결정 '그 문 하나만 걷어 낸다'): 표의 행을 그대로 돌려주던 `POST /screener` 를 걷어 냈다(화면 호출 0 · 감사 문서 §3).
+# 그 문을 걸던 시험은 같은 판정(`snapshot_origin`)을 싣는 남은 문으로 옮긴다 — 표에 행이 남아 있어도 '이 프로세스가 실데이터로 써넣지
+# 않았다'를 말해야 한다(덜 거는 시험이 되지 않게 · 판정을 늘 '낼 수 있음'으로 바꾸는 변이로 확인했다).
 
-@pytest.mark.parametrize("query", [EQUITY_Q, FICC_Q])
-def test_prod_route_serves_nothing_this_process_did_not_write(monkeypatch, engine, query):
-    """★읽기 겹★ — 표에 예전 합성 행이 남아 있고 갱신이 아직(또는 실패해) 없어도 운영은 내지 않는다."""
+@pytest.mark.parametrize(("universe", "n"), [("equity", 28), ("ficc", 267)])
+def test_prod_status_does_not_vouch_for_rows_this_process_did_not_write(monkeypatch, engine, universe, n):
+    """★읽기 겹★ — 표에 예전 합성 행이 남아 있고 갱신이 아직(또는 실패해) 없으면 운영의 판정은 '낼 수 없음 · 갱신 전'이다(행 수는 표를 그대로 센다)."""
     _seed_leftovers(monkeypatch, engine)
     _mode(monkeypatch, "0")
-    r = _client().post("/screener", json=query)
-    body = r.json()
-    assert r.status_code == 200 and body["count"] == 0 and body["results"] == [] and body["universe"] == query["universe"]
-    _unavailable(body["snapshot"], "not_refreshed")
+    body = _client().get("/screener/status").json()
+    assert body[f"{universe}_rows"] == n
+    _unavailable(body["snapshot"][universe], "not_refreshed")
 
 
-def test_prod_route_after_a_default_refresh_is_empty_with_the_reason(monkeypatch, engine):
+def test_prod_status_after_a_default_refresh_is_empty_with_the_reason(monkeypatch, engine):
     _seed_leftovers(monkeypatch, engine)
     _mode(monkeypatch, "0")
     _refresh(engine)
-    c = _client()
-    eq, fi = c.post("/screener", json=EQUITY_Q).json(), c.post("/screener", json=FICC_Q).json()
-    assert (eq["count"], fi["count"]) == (0, 0)
-    _unavailable(eq["snapshot"], "feed_off")
-    _unavailable(fi["snapshot"], "no_feed")
+    body = _client().get("/screener/status").json()
+    assert (body["equity_rows"], body["ficc_rows"]) == (0, 0)
+    _unavailable(body["snapshot"]["equity"], "feed_off")
+    _unavailable(body["snapshot"]["ficc"], "no_feed")
 
 
-def test_prod_route_serves_downloaded_rows_with_a_real_label(monkeypatch, engine, yahoo):
-    """★짝★ — 실데이터로 써넣은 표는 낸다(늘 0건인 구현을 배제). FICC 는 그때도 0건 + 사유."""
+def test_prod_status_vouches_for_downloaded_rows_with_a_real_label(monkeypatch, engine, yahoo):
+    """★짝★ — 실데이터로 써넣은 표는 '낼 수 있음 · 실제 원천'이다(늘 '없음'인 판정을 배제). FICC 는 그때도 없음 + 사유."""
     sp = _sp()
     _mode(monkeypatch, "0")
     monkeypatch.setattr(sp, "USE_YFINANCE", True)
     monkeypatch.setattr(sp, "EQUITY_TICKERS", ["AAPL", "MSFT"])
     _refresh(engine)
-    c = _client()
-    eq, fi = c.post("/screener", json=EQUITY_Q).json(), c.post("/screener", json=FICC_Q).json()
-    assert eq["count"] == 2 and sorted(r["ticker"] for r in eq["results"]) == ["AAPL", "MSFT"]
-    assert eq["snapshot"]["available"] is True and eq["snapshot"]["source"] == "yahoo" and eq["snapshot"]["is_mock"] is False
-    assert fi["count"] == 0
-    _unavailable(fi["snapshot"], "no_feed")
+    body = _client().get("/screener/status").json()
+    assert body["equity_rows"] == 2
+    eq = body["snapshot"]["equity"]
+    assert eq["available"] is True and eq["source"] == "yahoo" and eq["is_mock"] is False
+    _unavailable(body["snapshot"]["ficc"], "no_feed")
 
 
-@pytest.mark.parametrize(("query", "n"), [(EQUITY_Q, 28), (FICC_Q, 267)])
-def test_mock_route_serves_rows_labelled_synthetic(monkeypatch, engine, query, n):
-    """★짝★ — mock 은 예전처럼 내되 응답에 합성 표시가 붙는다."""
+def test_mock_status_labels_the_rows_synthetic(monkeypatch, engine):
+    """★짝★ — mock 은 예전처럼 쓰되 판정에 합성 표시가 붙는다."""
     _mode(monkeypatch, "1")
     _refresh(engine)
-    body = _client().post("/screener", json=query).json()
-    assert body["count"] == n and len(body["results"]) == n
-    assert body["snapshot"]["is_mock"] is True and body["snapshot"]["source"] == "synthetic" and body["snapshot"]["message"]
+    body = _client().get("/screener/status").json()
+    assert (body["equity_rows"], body["ficc_rows"]) == (28, 267)
+    for universe in ("equity", "ficc"):
+        s = body["snapshot"][universe]
+        assert s["available"] is True and s["is_mock"] is True and s["source"] == "synthetic" and s["message"]
 
 
-def test_prod_does_not_serve_what_a_mock_refresh_wrote(monkeypatch, engine):
-    """합성으로 써넣은 기록은 운영 판정에서 '낼 수 있음'이 아니다 — 읽기 겹은 기록의 출처까지 본다."""
+def test_prod_does_not_vouch_for_what_a_mock_refresh_wrote(monkeypatch, engine):
+    """합성으로 써넣은 기록은 운영 판정에서 '낼 수 있음'이 아니다 — 판정은 기록의 출처까지 본다."""
     _mode(monkeypatch, "1")
     _refresh(engine)
     _mode(monkeypatch, "0")
-    body = _client().post("/screener", json=EQUITY_Q).json()
-    assert body["count"] == 0 and body["snapshot"]["available"] is False and body["snapshot"]["is_mock"] is False
+    s = _client().get("/screener/status").json()["snapshot"]["equity"]
+    assert s["available"] is False and s["is_mock"] is False
 
 
-@pytest.mark.parametrize("mode", ["0", "1"])
-def test_a_bad_request_is_still_a_400(monkeypatch, engine, mode):
-    """입력 검증이 먼저다 — 게이트가 잘못된 요청을 '0건'으로 삼키지 않는다."""
-    _mode(monkeypatch, mode)
-    c = _client()
-    assert c.post("/screener", json={**EQUITY_Q, "universe": "crypto"}).status_code == 400
-    assert c.post("/screener", json={**EQUITY_Q, "conditions": {"A": {"field": "name", "operator": "<", "value": 1}}}).status_code == 400
+def test_the_sql_builder_still_refuses_a_bad_query():
+    """`build_screener_sql` 은 쓰는 문이 없어졌지만 지우지 않았다(S2 — 보고만). 남아 있는 동안 검증은 그대로다 — 잘못된 요청은 ValueError."""
+    from src.screener_sql import build_screener_sql
+    with pytest.raises(ValueError):
+        build_screener_sql(universe="crypto", conditions=EQUITY_Q["conditions"], logic_expression="A")
+    with pytest.raises(ValueError):
+        build_screener_sql(universe="equity", conditions={"A": {"field": "name", "operator": "<", "value": 1}}, logic_expression="A")
+
+
+def test_the_legacy_post_screener_door_is_gone_and_its_siblings_remain():
+    """S2 — `POST /screener` 는 앱의 라우트 표에 없다(`flat_routes` 로 훑는다). ★짝★ 같은 파일의 다른 문 넷은 그대로다(파일째 지운 구현을 배제)."""
+    from src.app_factory import create_app
+    from tests.route_walk import flat_routes
+    have = {(m, r.path) for r in flat_routes(create_app()) for m in (getattr(r, "methods", None) or ())}
+    assert ("POST", "/screener") not in have
+    for key in (("GET", "/screener/status"), ("GET", "/screener/factors"), ("POST", "/screener/refresh"), ("GET", "/api/v1/screener/stocks")):
+        assert key in have, key
 
 
 def test_status_says_where_each_table_came_from(monkeypatch, engine):

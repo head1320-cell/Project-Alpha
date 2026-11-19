@@ -43,13 +43,6 @@ export const api = {
   // Screener
   screenerFactors: () => get<{ equity: string[]; ficc: string[] }>("/screener/factors"),
   screenerStatus:  () => get<{ equity_rows: number; ficc_rows: number; equity_updated_at: string | null }>("/screener/status"),
-  runScreener: (body: {
-    universe: string;
-    conditions: Record<string, { field: string; operator: string; value: number }>;
-    logic_expression: string;
-    sort_by?: string;
-    limit?: number;
-  }) => post<{ count: number; results: Record<string, unknown>[]; sql: string }>("/screener", body),
 
   // KIS Strategies
   strategyList: () =>
