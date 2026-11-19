@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import { contrastAudit, voiceAudit, type AuditResult, type VoiceResult } from "./helpers";
 import { CANDLE_AXIS, CANDLE_MIN_SLOT, CANDLE_PAD, barAtStrip, candleLayout, niceStep, overviewLayout, overviewWindow, timeStep, visibleRange } from "../src/shared/ui/chart/candleGeo";
 
