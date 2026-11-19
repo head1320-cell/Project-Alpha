@@ -486,6 +486,28 @@ def _needs_prev(*specs: RuleSpec) -> bool:
     return any(expr.uses_prev(t) for spec in specs for t in (spec.entry, spec.entry_stop, spec.exit) if t is not None)
 
 
+def prepared_day(username: str, tickers: list[str], rule: RuleSpec, day: date, *,
+                 loaded: intraday_context.Loaded | None = None):
+    """그 종목들의 하루의 봉 — ★분봉 백테스트와 같은 준비★(같은 함수 · 같은 종목 마스터 · 같은 장 운영 규칙 · 같은 전일 값 판정 ·
+    같은 규칙 맥락). 규칙 가동 · 관제(`broker_account_routes._day_of`)와 분봉 하루 보기(G4)가 이 한 길로 짓는다.
+
+    규칙이 하루 유형을 쓰면 그 사용자의 모형을 ★봉을 읽기 전에★ 읽는다 — 학습이 그날 전에 끝나지 않았으면 사유와 함께 거절한다(`intraday_context`).
+    → `(Day, session)` · 그 날짜가 적재돼 있지 않으면 `None`. 규칙이 시장 국면을 쓰면 그날 시가 전에 알던 확률을 싣는다 —
+    그날 확률을 모르면(지수 일봉이 아직 없거나 적합 창이 덜 찼으면) 사유와 함께 거절한다(가동 · 관제 — 그 확률 없이 가동하지 않는다).
+
+    `loaded`(분봉 하루 보기) — 부르는 쪽이 ★실행 문과 같은 부름★(시행의 기간 · 그 기간의 적재된 날)으로 먼저 읽어 둔 규칙 맥락.
+    그때는 국면의 거절 · 아는 날 · 모르는 날이 실행 때와 같은 규칙이다(모르는 날은 실행처럼 국면 조건을 충족하지 않은 날로 계산된다)."""
+    planned = minute_feed.plan(day, day).dates
+    if loaded is None:
+        loaded = intraday_context.load(username, rule, day, end=day, dates=planned)
+    if not planned:
+        return None
+    session = session_rules()
+    days = minute_feed.build_days(tickers, day, day, rules=session, master=master_lookup(), need_prev=_needs_prev(rule))
+    days = intraday_context.attach(days, loaded)
+    return (days[0], session) if days else None
+
+
 # ── 시행 기록 ──────────────────────────────────────────────────────────────────────────
 def _trial_setting(kind: str, params: dict, position: dict, costs: dict) -> dict:
     """시행을 가르는 설정 — 받은 꼴이 아니라 ★정해진 꼴★(기본값을 채운 매개변수 · 검증을 지난 포지션과 비용)."""

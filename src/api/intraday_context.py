@@ -82,6 +82,8 @@ class Loaded:
     context: RuleContext | None
     models: tuple[dict, ...] | list[dict]
     regimes: tuple[dict, ...] | list[dict] = ()
+    #: (지수, 국면 수) → 분봉이 적재된 날 가운데 확률을 모르는 날 → 그 사유(분봉 하루 보기의 사실 줄 · 실행 응답에는 싣지 않는다)
+    unknown: Any = MappingProxyType({})
 
 
 def _refuse(code: str, status: int = 400, **extra) -> HTTPException:
@@ -134,18 +136,22 @@ def load(username: str, spec: RuleSpec, start: date, *, end: date | None = None,
                        "last_day": row["last_day"], "tickers": list(row["tickers"]), "grade": row["grade"]})
     regime_refs: dict[tuple[str, int], RegimeRef] = {}
     regime_facts: list[dict] = []
+    unknown: dict[tuple[str, int], Any] = {}
     if regimes_wanted:
         if end is None or dates is None:
             raise ValueError("국면 조건을 쓴 규칙은 판정 기간(end)과 분봉이 적재된 날(dates)이 있어야 맥락을 싣는다")
         for index, k in sorted(regimes_wanted):
-            ref, fact = _regime(index, k, sorted(regimes_wanted[(index, k)]), start, end, list(dates))
+            ref, fact, why = _regime(index, k, sorted(regimes_wanted[(index, k)]), start, end, list(dates))
             regime_refs[(index, k)] = ref
             regime_facts.append(fact)
-    return Loaded(RuleContext(day_types=refs, regimes=regime_refs), models, regime_facts)
+            unknown[(index, k)] = MappingProxyType(why)
+    return Loaded(RuleContext(day_types=refs, regimes=regime_refs), models, regime_facts, MappingProxyType(unknown))
 
 
-def _regime(index: str, k: int, states: list[int], start: date, end: date, dates: list[str]) -> tuple[RegimeRef, dict]:
-    """(지수, 국면 수) 하나 — 시장 국면 문과 같은 함수의 답 → 날짜별 확률 · 사실 줄. 쓸 수 없으면 거절한다."""
+def _regime(index: str, k: int, states: list[int], start: date, end: date,
+            dates: list[str]) -> tuple[RegimeRef, dict, dict[str, str]]:
+    """(지수, 국면 수) 하나 — 시장 국면 문과 같은 함수의 답 → 날짜별 확률 · 사실 줄 · 분봉이 적재된 날 가운데 확률을 모르는 날의 사유.
+    쓸 수 없으면 거절한다."""
     answer = regime_answer(index, k, start, end)
     empty = answer.get("empty")
     if empty:
@@ -162,9 +168,10 @@ def _regime(index: str, k: int, states: list[int], start: date, end: date, dates
             why[row["date"]] = str(row.get("reason") or "")
     known = [d for d in dates if probs.get(d) is not None]
     counted: dict[str, list] = {}                                 # 사유 → [날 수, 처음 난 날] — 많은 것부터 · 같으면 먼저 난 것부터
+    day_why: dict[str, str] = {}
     for d in sorted(dates):
         if probs.get(d) is None:
-            reason = why.get(d) or NO_INDEX_DAY
+            reason = day_why[d] = why.get(d) or NO_INDEX_DAY
             counted.setdefault(reason, [0, d])[0] += 1
     unknown = [{"reason": r, "days": n} for r, (n, _first) in sorted(counted.items(), key=lambda item: (-item[1][0], item[1][1]))]
     if dates and not known:
@@ -185,7 +192,7 @@ def _regime(index: str, k: int, states: list[int], start: date, end: date, dates
     fact = {"kind": "regime", "key": f"{index}:{k}", "index": index, "name": name, "k": k, "states": states, "grade": grade,
             "days": {"loaded": len(dates), "known": len(known), "unknown": len(dates) - len(known)},
             "unknown_reasons": unknown, "sentences": sentences}
-    return RegimeRef(index=index, k=k, probs=MappingProxyType(probs)), fact
+    return RegimeRef(index=index, k=k, probs=MappingProxyType(probs)), fact, day_why
 
 
 def attach(days: list[Day], loaded: Loaded) -> list[Day]:

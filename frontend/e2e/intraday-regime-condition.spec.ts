@@ -240,6 +240,32 @@ test("실행의 사실 줄 = 서버 문장 · 판정의 짝 비교: 뺀 판 = �
   expect(after.filter((k) => !before.includes(k))).toHaveLength(1);                        // 실행과 판정이 같은 시행 하나 — 뺀 판은 시행이 아니다
 });
 
+test("봉과 체결: 국면 조건 시행의 하루 보기는 사실 줄 끝에 그날 국면 확률 한 줄을 서버 글 그대로 보이고 그 값은 시장 국면 문의 그날 값이다", async ({ page }) => {
+  const token = await open(page);
+  await buildRegimeRule(page);
+  const viewed = page.waitForResponse((r) => /\/intraday\/trials\/[^/?]+\/day/.test(r.url()) && r.request().method() === "GET");
+  await run(page);
+  const res = await viewed;
+  expect(res.ok(), await res.text()).toBe(true);
+  const day = (await res.json()) as { facts: string[]; date: string; empty: unknown; fills: unknown[] };
+  expect(day.empty).toBeNull();
+  expect(day.fills.length, "기본 날은 시행 줄에서 거래가 있는 첫 날이다").toBeGreaterThan(0);
+  const lines = day.facts.filter((f) => f.startsWith("그날 코스피 시장 국면(국면 2개)의 확률은 "));
+  expect(lines).toHaveLength(1);
+  expect(day.facts[day.facts.length - 1]).toBe(lines[0]);                                    // 늘 싣는 사실 줄 끝에 한 줄
+  // 그날 확률 = 같은 서버의 시장 국면 문이 시행의 기간으로 낸 그날 값(화면은 두 자리)
+  const q = new URLSearchParams({ index: "KOSPI", k: "2", from: HAND.from, to: HAND.to });
+  const mr = await page.request.get(`${API}/intraday/market-regime?${q}`, { headers: { Authorization: `Bearer ${token}` } });
+  expect(mr.ok(), await mr.text()).toBe(true);
+  const probs = ((await mr.json()).days as { date: string; probs: number[] | null }[]).find((d) => d.date === day.date)?.probs;
+  expect(probs, "들어간 날의 국면 확률은 안다").toBeTruthy();
+  const shown = [...lines[0].matchAll(/국면 (\d) (\d\.\d\d)/g)].map((m) => [Number(m[1]), Number(m[2])] as const);
+  expect(shown.map(([i]) => i)).toEqual([1, 2]);
+  for (const [i, p] of shown) expect(Math.abs(p - (probs as number[])[i - 1])).toBeLessThanOrEqual(0.005 + 1e-9);
+  expect((probs as number[])[0]).toBeGreaterThan(0.5);                                       // 그래서 그날 들어갔다(조건 '국면 1 > 0.5')
+  await expect(page.locator(".itd-day-facts li")).toHaveText(day.facts);                    // 화면 = 서버 글 그대로(순서까지)
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`대비(${theme}) AA · 문체 · 390px 에서 국면 사실 줄과 짝 비교가 넘치지 않는다`, async ({ page }) => {
     await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);

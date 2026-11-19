@@ -463,8 +463,9 @@ test("내 시행에서 불러오기: 규칙만 실린다 — 종목과 기간은
   await crossing(page);
   await run(page);                                                                    // 방금 돌린 직접 구성이 목록의 맨 위다
 
+  // 시행 ★목록★ 문만 센다 — 결과 절 '봉과 체결'의 하루 보기(`/intraday/trials/{trial_key}/day`)는 다른 문이고, 앞 화면에서 늦게 나간 그 요청이 이 창에 잡힐 수 있다
   const listed: string[] = [];
-  page.on("request", (r) => { if (r.url().includes("/intraday/trials")) listed.push(r.url()); });
+  page.on("request", (r) => { if (new URL(r.url()).pathname.endsWith("/intraday/trials")) listed.push(r.url()); });
   await page.goto(HERE, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".itd-tickers")).toBeVisible();
   await kind(page, "직접 구성").click();

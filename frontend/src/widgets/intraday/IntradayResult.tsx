@@ -16,6 +16,7 @@ import { ContextFacts } from "@/features/intraday-day-types";
 import { HypothesisLine, TrialLine, bp1, originChip } from "@/features/intraday-verdict";
 import { UNKNOWN_TEXT, num, pct } from "@/shared/lib/krFormat";
 import { Answer, Notice, Section, type Chip } from "@/shared/ui/tx";
+import { BarsSection } from "./BarsSection";
 import { RegimeSplitSection } from "./RegimeSplitSection";
 
 const BREAKEVEN_WHY: Record<string, string> = {
@@ -64,6 +65,7 @@ export function IntradayResult({ sim }: { sim: Sim }) {
           <Section title="누적 실현손익" sub="청산 순서대로 쌓은 실현손익과 고점 대비 하락(원)입니다. 진입 금액이 고정이라 수익률(%)과 MDD(%)는 산출하지 않습니다.">
             <PnlCurve points={j.curve.points} trades={j.trades} basis={j.curve.basis} maxDrawdown={j.curve.max_drawdown} maxDrawdownAt={j.curve.max_drawdown_at} />
           </Section>
+          <BarsSection key={`bars-${sim.trial?.trial_key ?? "no-trial"}`} trialKey={sim.trial?.trial_key} />
           <Costs j={j} />
           <Section title="손익분기 비용" sub="비용 전 총손익을 총 거래 대금으로 나눈 값입니다. 편도 비용이 이만큼이면 손익이 0 이 됩니다.">
             <dl className="tj-cost-figs itd-breakeven">

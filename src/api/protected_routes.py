@@ -143,6 +143,10 @@ PROTECTED: dict[tuple[str, str], tuple[str, str]] = {
     ("GET", "/api/v1/intraday/market-regime/day-type-input"):
         (REQUIRE_LOGIN, "하루 유형 비중을 더한 시장 국면 — 지수만의 국면과 나란히 계산만 한다"
                         "(본인 모형만 · 읽기만 · 쓰기 0 · 시행 수 불변)"),
+    # ── 분봉 하루 보기(G4) — 읽기만 · 쓰기 0 · 시행을 남기지 않는다 ──
+    ("GET", "/api/v1/intraday/trials/{trial_key}/day"):
+        (REQUIRE_LOGIN, "분봉 하루 보기 — 내 시행 하나의 하루를 시행 줄의 설정으로 다시 계산해 본 봉과 그 체결을 함께 준다"
+                        "(본인 것만 · 남의 것은 없는 것과 같은 404 · 시행 수 불변)"),
     # ── 국면별 성과 나눔(K2) — 읽기만 · 쓰기 0 · 시행을 남기지 않는다 ──
     ("GET", "/api/v1/intraday/trials/{trial_key}/regime-split"):
         (REQUIRE_LOGIN, "국면별 성과 나눔 — 내 시행의 일별 흐름을 시장 국면별로 나눈다(본인 것만 · 남의 것은 없는 것과 같은 404 · 시행 수 불변)"),

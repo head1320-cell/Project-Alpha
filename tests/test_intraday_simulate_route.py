@@ -300,7 +300,8 @@ def test_the_bar_files_are_not_touched(client, auth, tmp_path):
 def test_the_intraday_modules_never_import_the_order_path():
     """정적 시험 — 분봉 백테스트의 문·봉 준비·엔진은 주문 경로와 증권사 클라이언트를 들이지 않는다."""
     banned = ("trading_engine", "order_executor", "kis_client", "execution")
-    files = [ROOT / "src/api/intraday_routes.py", ROOT / "src/data/minute_feed.py", ROOT / "src/data/minute_quality.py",
+    files = [ROOT / "src/api/intraday_routes.py", ROOT / "src/api/intraday_trial_day_routes.py",            # 하루 보기(G4)도
+             ROOT / "src/data/minute_feed.py", ROOT / "src/data/minute_quality.py",
              ROOT / "src/data/intraday_trials.py", *sorted((ROOT / "src/engine/intraday").glob("*.py"))]
     assert len(files) >= 12
     for path in files:

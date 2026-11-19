@@ -23,7 +23,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
-from src.api import intraday_context, intraday_routes
+from src.api import intraday_routes
 from src.api.auth import require_login
 from src.api.stage13_routes import SignalRequest
 from src.data.mock_gate import mock_allowed
@@ -317,16 +317,7 @@ def _day_of(username: str, tickers: list[str], rule, day: dt.date):
 
     → `(Day, session)` · 그 날짜가 적재돼 있지 않으면 `None`. 규칙이 시장 국면을 쓰면 그날 시가 전에 알던 확률을 싣는다 —
     그날 확률을 모르면(지수 일봉이 아직 없거나 적합 창이 덜 찼으면) 사유와 함께 거절한다(가동하지 않는다)."""
-    feed = intraday_routes.minute_feed
-    planned = feed.plan(day, day).dates
-    loaded = intraday_context.load(username, rule, day, end=day, dates=planned)
-    if not planned:
-        return None
-    session = intraday_routes.session_rules()
-    days = feed.build_days(tickers, day, day, rules=session, master=intraday_routes.master_lookup(),
-                           need_prev=intraday_routes._needs_prev(rule))
-    days = intraday_context.attach(days, loaded)
-    return (days[0], session) if days else None
+    return intraday_routes.prepared_day(username, tickers, rule, day)       # 몸은 그쪽 한 곳(G4 의 하루 보기도 같은 길)
 
 
 def _monitor_day(username: str, tickers: list[str], rule, day: str):

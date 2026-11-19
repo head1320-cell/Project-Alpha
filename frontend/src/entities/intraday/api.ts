@@ -7,7 +7,7 @@ import { call, type Result } from "@/shared/api/result";
 import type {
   Coverage, DayTypeAnswer, DayTypeCountsAnswer, DayTypeCountsRequest, DayTypeInputAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest,
   Divergence, DivergenceRequest, Expanded,
-  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, RegimeDayTypesAnswer, RegimeSplitAnswer, ResultList,
+  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, RegimeDayTypesAnswer, RegimeSplitAnswer, ResultList, TrialDay,
   RunRequest, ShareRefusal, SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
 } from "./types";
 
@@ -143,4 +143,22 @@ export function getDayTypeInput(q: { index: MarketIndex; k: number; from: string
   for (const t of q.types) params.append("types", String(t));
   for (const t of q.tickers) params.append("tickers", t);
   return shareCall<DayTypeInputAnswer>(getWithAuth(`${BASE}/market-regime/day-type-input?${params.toString()}`));
+}
+
+/** 분봉 하루 보기(G4) — 내 시행 하나의 하루를 시행 설정으로 다시 계산한 봉과 체결(읽기만 · 시행 수 불변). 날짜 · 종목을 비우면 서버가 첫 거래일 ·
+ *  그날 첫 체결 종목을 고른다. 남의 시행 · 없는 시행은 같은 404 · 기록을 못 읽으면 503 · 기간 밖 날짜 · 시행에 없는 종목은 422 — 사유는 서버 글. */
+export type TrialDayResult<T = unknown> = { ok: true; value: TrialDay<T> } | { ok: false; status: number; error: string };
+export async function getTrialDay<T = unknown>(trialKey: string, q: { date?: string | null; ticker?: string | null } = {}): Promise<TrialDayResult<T>> {
+  const params = new URLSearchParams();
+  if (q.date) params.set("date", q.date);
+  if (q.ticker) params.set("ticker", q.ticker);
+  const tail = params.toString();
+  try {
+    const r = await getWithAuth(`${BASE}/trials/${encodeURIComponent(trialKey)}/day${tail ? `?${tail}` : ""}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`) };
+    return { ok: true, value: js as TrialDay<T> };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패" };
+  }
 }

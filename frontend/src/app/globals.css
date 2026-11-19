@@ -11003,3 +11003,60 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pg-csm-months tr > * + * { padding-left: 6px; }
 /* 이 판의 설명 줄(.pg-note)도 낱말 단위로 꺾는다 — 300px 판에서 "…대비입니 / 다." · "1 / 로" 로 꺾였다(스크린샷 검수에서 찾음). */
 .pg-csm .pg-note { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* ── 봉과 체결 (G4 · 구현 계획 §5) — 손그림 SVG 봉 그림(.cdl-*) · 분봉 결과의 절(.itd-day-*) ─────────────────────
+   등락은 색만으로 말하지 않는다: 양봉 = 빈 몸통(테두리 --tx-up) · 음봉 = 채운 몸통(--tx-down) · 보합 = 가로선(--tx-mute).
+   체결은 매수 ▲ · 매도 ▼ 의 모양으로 가르고 색은 덧붙인다. 색은 토큰만 쓴다(다크 값은 토큰이 갖는다 — 생성기 대상이 아니다).
+   봉이 많으면 그림이 틀보다 넓어진다 — .cdl-scroll 안에서만 옆으로 넘기고 페이지는 넘치지 않는다. */
+.cdl-fig { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cdl-fig:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 4px; border-radius: 8px; }
+.cdl-plotrow { display: flex; min-width: 0; }                     /* 넘기지 않는 가격 축 + 넘기는 봉 그림 */
+.cdl-axis { flex: none; display: block; }
+.cdl-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; max-width: 100%; overscroll-behavior-x: contain; }
+.cdl { display: block; touch-action: pan-y; }
+.cdl-grid, .cdl-vol-base { stroke: var(--tx-line); stroke-width: 1; }
+.cdl-plabel, .cdl-tlabel { font-size: 12px; fill: var(--tx-sub); font-variant-numeric: tabular-nums; }
+.cdl-wick { stroke-width: 1; }
+.cdl-up .cdl-wick { stroke: var(--tx-up); }
+.cdl-up .cdl-body { fill: var(--tx-surface); stroke: var(--tx-up); stroke-width: 1.25; }
+.cdl-down .cdl-wick { stroke: var(--tx-down); }
+.cdl-down .cdl-body { fill: var(--tx-down); stroke: var(--tx-down); stroke-width: 1; }
+.cdl-flat .cdl-wick, .cdl-flat-line { stroke: var(--tx-mute); }
+.cdl-flat-line { stroke-width: 1.5; }
+.cdl-vol { fill: var(--tx-mute); opacity: 0.35; }
+.cdl-cross { stroke: var(--tx-mute); stroke-width: 1; stroke-dasharray: 3 3; }
+.cdl-tick { stroke-width: 2; }                                     /* 체결가 눈금 — 몸통 밖 · 방향 색(매수 왼쪽 · 매도 오른쪽) */
+.cdl-mark-buy .cdl-tick { stroke: var(--tx-up); }
+.cdl-mark-sell .cdl-tick { stroke: var(--tx-down); }
+.cdl-mark-buy .cdl-tri { fill: var(--tx-up); stroke: var(--tx-surface); stroke-width: 1; }
+.cdl-mark-sell .cdl-tri { fill: var(--tx-down); stroke: var(--tx-surface); stroke-width: 1; }
+.cdl-count { font-size: 11px; fill: var(--tx-ink); font-variant-numeric: tabular-nums; }
+/* 범례 — 그림과 같은 클래스의 글리프(범례의 색 = 그림의 색) · 하루 전체 띠(64px = CANDLE_AXIS · 그림 밑에 맞춘다) · 보이는 구간 글 */
+.cdl-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--tx-sub); }
+.cdl-legend li { display: inline-flex; align-items: center; gap: 6px; word-break: keep-all; }
+.cdl-glyph { flex: none; overflow: visible; }
+.cdl-glyph-box { fill: none; stroke: var(--tx-mute); stroke-width: 1; }
+.cdl-overview { display: block; margin-left: 64px; cursor: pointer; touch-action: none; }
+.cdl-ov-bg { fill: none; stroke: var(--tx-line); stroke-width: 1; }
+.cdl-ov-line { fill: none; stroke: var(--tx-sub); stroke-width: 1.25; stroke-linejoin: round; }
+.cdl-ov-tick { stroke-width: 2; }
+.cdl-ov-buy { stroke: var(--tx-up); }
+.cdl-ov-sell { stroke: var(--tx-down); }
+.cdl-ov-window { fill: var(--tx-cta); fill-opacity: 0.12; stroke: var(--tx-cta); stroke-width: 1.5; }
+.cdl-range { margin: 0 0 0 64px; font-size: 12px; color: var(--tx-sub); font-variant-numeric: tabular-nums; word-break: keep-all; }
+.cdl-range span { white-space: nowrap; }                          /* 시각 범위 하나는 꺾지 않는다 — 두 범위 사이에서만 줄을 바꾼다 */
+.cdl-fig .cr-item { word-break: keep-all; }                       /* 이 그림의 읽는 줄: 이름표('체결')를 글자 단위로 꺾지 않는다 */
+
+.itd-day, .itd-day-view { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.itd-day-view[aria-busy="true"] { opacity: 0.6; }
+.itd-day-pick { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.itd-day-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--tx-sub); min-width: 0; max-width: 100%; }
+.itd-day-label .tj-input { min-width: 180px; max-width: 100%; }
+.itd-day-origin { font-size: 12px; color: var(--tx-sub); padding: 2px 8px; border: 1px solid var(--tx-line); border-radius: 999px; }
+.itd-day-checkrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.itd-day-chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--tx-line); color: var(--tx-ink); }
+.itd-day-checkrow[data-status="different"] .itd-day-chip { border-color: var(--tx-down); color: var(--tx-down-ink); }
+.itd-day-check { margin: 0; font-size: 13px; color: var(--tx-ink); min-width: 0; flex: 1 1 240px; }
+.itd-day-counts, .itd-day-facts { margin: 0; padding-left: 18px; font-size: 13px; color: var(--tx-sub); display: grid; gap: 4px; }
+.itd-day-unplaced { font-variant-numeric: tabular-nums; color: var(--tx-ink); }
+.itd-day-loading, .itd-day-missing { margin: 0; }

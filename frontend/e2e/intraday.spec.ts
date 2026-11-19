@@ -565,19 +565,27 @@ for (const theme of ["light", "dark"] as const) {
     });
     expect(over).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
-    // ★잘림★ — 제 상자 안에서 스크롤하는 것(`.tj-scroll` · `.tj-scroll-x` · 탭 줄)을 빼면 전부 절의 안쪽 폭에 들어와야 한다.
+    // ★잘림★ — 제 상자 안에서 스크롤하는 것(`.tj-scroll` · `.tj-scroll-x` · 탭 줄 · 표 쌍둥이의 `.cr-scroll` · 봉 그림의 `.cdl-scroll`)을 빼면
+    // 전부 절의 안쪽 폭에 들어와야 한다. 뺀 넘김 상자는 ★상자 자체★가 절 안에 드는지 따로 본다(넘김 상자로 숨기지 못하게).
     const clipped = await page.evaluate(() => {
       const out: string[] = [];
+      const own = ".tj-scroll, .tj-scroll-x, .tj-bucket-list, .tx-tablist, .tx-sr, .tx-seg, .cr-scroll, .cdl-scroll";
       for (const sec of document.querySelectorAll<HTMLElement>(".itd .tx-sec, .itd .tx-answer")) {
         const cs = getComputedStyle(sec);
         const right = sec.getBoundingClientRect().right - parseFloat(cs.paddingRight) + 1;
         for (const el of sec.querySelectorAll<HTMLElement>("table, ul, ol, dl, p, svg, li, td, th, span, b, label, input, select, textarea, button")) {
-          if (!el.getClientRects().length || el.closest(".tj-scroll, .tj-scroll-x, .tj-bucket-list, .tx-tablist, .tx-sr, .tx-seg")) continue;
+          if (!el.getClientRects().length || el.closest(own)) continue;
           if (el.getBoundingClientRect().right > right) out.push(`${el.tagName}.${el.className} :: ${(el.textContent ?? "").trim().slice(0, 24)}`);
+        }
+        for (const box of sec.querySelectorAll<HTMLElement>(".cr-scroll, .cdl-scroll")) {
+          if (box.getClientRects().length && box.getBoundingClientRect().right > right) out.push(`넘김 상자 ${box.className}`);
         }
       }
       return [...new Set(out)].slice(0, 12);
     });
     expect(clipped, `${theme} · 390px 에서 절 밖으로 나간 것`).toEqual([]);
+    // 봉 그림은 그 틀 안에서 옆으로 넘긴다(390px 에 하루치 봉이 다 들어가지 않는다 — 예외로 뺀 것이 실제로 넘김 상자로 쓰인다)
+    const strip = await page.locator(".itd-day .cdl-scroll").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+    expect(strip.sw).toBeGreaterThan(strip.cw);
   });
 }

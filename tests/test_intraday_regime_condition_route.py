@@ -289,6 +289,69 @@ def test_the_rule_run_day_carries_the_regime_and_refuses_an_unknown_day(planted)
     assert gone.value.reason.startswith(ctxmod.REASONS["regime_unknown_all"])
 
 
+# ── 분봉 하루 보기(G4) — 실행과 같은 부름 · 모르는 날도 실행처럼 계산한다 ─────────────────────────────────
+def day_view(client, headers, key: str, day: str, ticker: str | None = None) -> dict:
+    q = {"date": day, **({"ticker": ticker} if ticker else {})}
+    r = client.get(f"/api/v1/intraday/trials/{key}/day", params=q, headers=headers)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def regime_lines(js: dict) -> list[str]:
+    return [f for f in js["facts"] if f.startswith("그날 코스피 시장 국면")]
+
+
+def test_the_day_view_reads_the_regime_with_the_same_call_as_the_run(client, auth, planted):
+    """하루 보기는 규칙 맥락을 ★실행 문과 같은 부름★(시행의 기간)으로 싣는다 — 가동처럼 그날 하나로 읽지 않는다.
+    그래서 국면의 거절 · 아는 날 · 모르는 날이 실행 때와 같은 규칙이다(짝: 가동의 하루는 그날 하나로 읽는다 — 위 시험)."""
+    run = client.post("/api/v1/intraday/simulate", json=request(), headers=auth).json()
+    by_run = list(planted)
+    assert by_run == [("KOSPI", 2, date(2026, 6, 1), date(2026, 6, 4))]
+    planted.clear()
+    for d in DAYS:
+        day_view(client, auth, run["trial"]["trial_key"], d)
+    assert planted == by_run * len(DAYS)
+
+
+def test_a_day_whose_regime_was_unknown_is_computed_like_the_run_and_the_view_says_why(client, auth, planted):
+    """실행은 국면 확률을 모르는 날을 '국면 조건을 충족하지 않은 날'로 계산했다(06-03 적합 창이 덜 참 · 06-04 지수 일봉 없음).
+    하루 보기도 그날을 ★거절하지 않고★ 같은 규칙으로 다시 계산하고 그날의 사유를 사실 줄에 적는다 — 가동은 같은 날을 거절한다(위 시험).
+    이 시행의 기준은 비용 전이고(종목 마스터가 시장을 모른다) 그날만 다시 돌리면 거래 0 이라 비용 뒤다 — 기준이 달라도 같은 날이다."""
+    from src.api import intraday_trial_day_routes as route
+    run = client.post("/api/v1/intraday/simulate", json=request(), headers=auth).json()
+    assert {opened_at[:10] for _t, opened_at in opened(run)} == {DAYS[0]}
+    key = run["trial"]["trial_key"]
+    for d, why in ((DAYS[2], SHORT), (DAYS[3], ctxmod.NO_INDEX_DAY)):
+        for t in TICKERS:
+            js = day_view(client, auth, key, d, t)
+            assert js["empty"] is None and js["bars"] is not None and js["skipped"] is None
+            assert js["fills"] == [] and js["others"]["fills"] == 0                 # 실행도 그날 거래 0
+            assert js["check"]["status"] == "same", js["check"]
+            assert js["check"]["stored"]["basis"] == "gross"
+            assert regime_lines(js) == [route.DAY_REGIME_UNKNOWN.format(name="코스피", k=2, why=why)]
+
+
+def test_a_known_regime_day_shows_the_probabilities_the_rule_saw_and_the_runs_fills(client, auth, planted):
+    """아는 날은 규칙이 본 그날 확률(그날 시가 전에 알던 값)을 적고, 체결은 실행의 그날 체결과 같다 — 06-01 은 국면 1 이 0.8 이라 들어갔고
+    06-02 는 0.3 이라 들어가지 않았다(짝). 거래가 없는 06-02 도 시행 줄의 기준(비용 전)으로 견줘 '같음'이다."""
+    from src.api import intraday_trial_day_routes as route
+    run = client.post("/api/v1/intraday/simulate", json=request(), headers=auth).json()
+    key = run["trial"]["trial_key"]
+    seen = set()
+    for t in TICKERS:
+        js = day_view(client, auth, key, DAYS[0], t)
+        line = route.DAY_REGIME_KNOWN.format(name="코스피", k=2, shares="국면 1 0.80 · 국면 2 0.20")
+        assert js["facts"] == [*route.FACTS, line]                         # 늘 싣는 사실 줄 끝에 한 줄
+        assert js["check"]["status"] == "same", js["check"]
+        seen |= {(t, f"{DAYS[0]}T{f['time']}") for f in js["fills"] if f["side"] == "buy"}
+    assert seen == opened(run)
+    quiet = day_view(client, auth, key, DAYS[1], TICKERS[0])
+    assert regime_lines(quiet) == [route.DAY_REGIME_KNOWN.format(name="코스피", k=2, shares="국면 1 0.30 · 국면 2 0.70")]
+    assert quiet["fills"] == [] and quiet["others"]["fills"] == 0
+    assert quiet["check"]["status"] == "same", quiet["check"]
+    assert quiet["check"]["stored"]["basis"] == quiet["check"]["recomputed"]["basis"] == "gross"
+
+
 # ── 같은 함수 · 앞보기 ──────────────────────────────────────────────────────────────────────────
 def two_level_frame(poison_from: str | None = None, poison_day: str | None = None) -> pd.DataFrame:
     dates = [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2021-01-01", "2026-06-30")]

@@ -40,8 +40,9 @@ import src.data.rule_runs as rule_runs
 import src.execution.broker_accounts as broker_accounts
 from src.data.mock_gate import mock_allowed
 from src.engine import intraday
-from src.engine.intraday import expr, rules
-from src.engine.intraday.simulator import CostAssumptions, Day, PositionRules, RuleSpec, SimError, validate
+from src.engine.intraday import rules
+from src.engine.intraday import setting as setting_parts
+from src.engine.intraday.simulator import CostAssumptions, Day, PositionRules, RuleSpec
 from src.engine.intraday.stepper import REASONS as STEP_REASONS
 from src.engine.intraday.stepper import StepError, Stepper
 from src.execution.account_executors import get_account_executor
@@ -135,15 +136,12 @@ _lock = threading.Lock()
 def parts_of(setting: dict) -> tuple[RuleSpec, PositionRules, CostAssumptions]:
     """설정 사본(시행 줄의 설정 · 가동 줄의 `request`) → 규칙 · 포지션 · 비용. 지금의 틀로 읽히지 않으면 `bad_setting`.
 
-    관제(`rule_monitor`)도 이 함수로 ★그때 돌린 설정★을 다시 짓는다 — 읽는 길이 둘로 갈리지 않는다."""
+    관제(`rule_monitor`)도 이 함수로 ★그때 돌린 설정★을 다시 짓는다 — 읽는 길이 둘로 갈리지 않는다.
+    몸은 `src.engine.intraday.setting.parts_of` 에 있다(분봉 하루 보기도 같은 함수로 읽는다 · G4) — 여기는 사유를 가동기의 것으로 바꿀 뿐이다."""
     try:
-        rule = rules.build(setting["rule"]["kind"], setting["rule"]["params"])
-        position = PositionRules(**setting["position"])
-        costs = CostAssumptions(**setting["costs"])
-        validate(rule, position, costs)
-    except (rules.RuleError, SimError, expr.ExprError, KeyError, TypeError):
+        return setting_parts.parts_of(setting)
+    except setting_parts.SettingUnreadable:
         raise RunRefused("bad_setting") from None
-    return rule, position, costs
 
 
 def setting_of(username: str, trial_key: str) -> Setting:

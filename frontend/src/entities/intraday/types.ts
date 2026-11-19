@@ -443,3 +443,23 @@ export interface DayTypeInputAnswer {
   facts: string[]; notes: string[];
 }
 export type ShareRefusal = { code: string; reason: string };
+
+// ── 분봉 하루 보기 — G4 (`GET /intraday/trials/{trial_key}/day` · 구현 계획 §5) ───────────
+// 시행 줄의 설정으로 그 하루를 다시 계산한 답 — 시뮬레이터가 본 봉(정규장만)과 그 체결. 읽기만 · 시행으로 세지 않는다.
+// 거래 줄의 모양은 매매일지 엔진의 것이라 부르는 쪽이 정한다(`T` — entities 끼리 서로 들이지 않는다).
+export type TrialDayFill = { time: string; side: "buy" | "sell"; quantity: number; price: number; kind: string; kind_label: string | null };
+export type TrialDayBars = { time: string[]; open: number[]; high: number[]; low: number[]; close: number[]; volume: number[] };
+export type TrialDayValue = { basis: string | null; total: number; trades: number | null; wins: number | null };
+export type TrialDayCheck = { status: "same" | "different" | "unknown"; message: string; stored: TrialDayValue | null; recomputed: TrialDayValue };
+export type TrialDay<T = unknown> = {
+  trial_key: string; from: string; to: string; mock: boolean; trial_grade: "E0" | "E3" | null;
+  choices: { dates: { date: string; trades: number | null }[]; tickers: string[] };
+  facts: string[];
+  date: string | null; ticker: string | null; name: string | null;
+  bars: TrialDayBars | null;
+  origin: { grade: "E0" | "E3" | null; source: string } | null;
+  fills: TrialDayFill[]; trades: T[]; others: { fills: number };
+  skipped: { reason: string; message: string } | null;
+  check: TrialDayCheck | null;
+  empty: { reason: string; message: string } | null;
+};
