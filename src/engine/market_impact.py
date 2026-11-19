@@ -437,6 +437,9 @@ class ImpactAssumptions:
         2)` 가 비용 5~100bps 를 통째로 눈멀게 한 전례가 있으므로, 해상도가 효과
         (규모 간 차이 8.5bp)의 1/850 이라 여기서는 문제가 아니라는 논증이
         **리포트 안에서** 확인 가능해야 한다.
+        (정정 2026-11-19 · C1: 그 '전례'의 첫째 까닭은 반올림이 아니라 요약 Sharpe 가 비용 전
+        일별 수익에서 계산된 것이었다 — `quant_metrics.risk_adjusted_ratios` 의 정정 줄. 해상도를
+        신고하는 이 계약은 그대로 옳다.)
         """
         return {
             "portfolio_krw": float(self.portfolio_krw),

@@ -334,3 +334,93 @@ test("(k) 전략 그룹 — 같은 문법(서버 모양 픽스처) · 낙폭은 
   await expect(side(page).locator(".pg-tag--unknown", { hasText: "측정하지 않았습니다" })).toHaveCount(4);
   await expect(side(page).locator(".pg-src li")).toHaveCount(2);
 });
+
+// ── (l) 비용 기준 — 비용 전 · 비용 후 나란히(C1 · 2026-11-19 받은 결정) ────────────────────────────────────
+//  서버 `summary.cost_basis` 가 키마다 기준(비용 전 · 비용 후 · 혼합)을 말한다. 화면은 그 표가 이름을 댄 칸에만 꼬리표를 달고
+//  (이름표 글자 · 기존 클래스는 그대로), 비용 후 샤프 · 지표 묶음의 비용 후 줄은 서버 값 그대로다. 짝: 표가 없으면 꼬리표 0 ·
+//  표를 바꾸면 꼬리표가 바뀐다(화면이 기준을 정하지 않는다) · 비용 후 값이 없으면 산출 불가 + 서버 사유.
+type CostBasis = { after_cost: string[]; before_cost: string[]; mixed: string[]; note: string; reasons: Record<string, string>;
+                   metrics: { after_cost: string[]; before_cost: string[]; mixed: string[] } };
+const basisIn = (t: { after_cost: string[]; before_cost: string[]; mixed: string[] }, k: string) =>
+  (t.after_cost.includes(k) ? "after" : t.before_cost.includes(k) ? "before" : t.mixed.includes(k) ? "mixed" : null);
+const BASIS_KO = { after: "비용 후", before: "비용 전", mixed: "혼합" } as const;
+const figOf = (page: Page, label: string, basis: string) =>
+  side(page).locator(`.pf-kv > div[data-basis="${basis}"]`).filter({ has: page.locator("dt", { hasText: label }) });
+
+test("(l) 비용 기준 — 서버 표가 이름을 댄 칸에만 꼬리표 · 비용 후 샤프 = 서버 값 · 지표 묶음의 비용 전 · 비용 후 두 줄 · 서버 문장 그대로", async ({ page }) => {
+  await openCanvas(page);
+  const body = await run(page);
+  await detail(page, "backtest");
+  const s = body.nodes.backtest.view!.summary as Record<string, unknown>;
+  const cb = s.cost_basis as CostBasis;
+  expect(cb && Array.isArray(cb.after_cost), "서버가 기준표를 준다(전제)").toBe(true);
+  expect(typeof s.sharpe_ratio_after_cost, "비용 후 샤프가 값이다(전제 — 산출 불가끼리 같아서 통과하지 않게)").toBe("number");
+  // 머리 숫자 — 샤프지수 둘(비용 후 · 비용 전), 값은 서버 그대로 · 꼬리표는 서버 표의 기준
+  await expect(figOf(page, "샤프지수", "after").locator("dd")).toHaveText((s.sharpe_ratio_after_cost as number).toFixed(2));
+  await expect(figOf(page, "샤프지수", "before").locator("dd")).toHaveText((s.sharpe_ratio as number).toFixed(2));
+  for (const [label, key] of [["총수익률", "total_return_pct"], ["MDD(최대낙폭)", "max_drawdown_pct"], ["샤프지수", "sharpe_ratio"],
+                              ["샤프지수", "sharpe_ratio_after_cost"]] as const) {
+    const b = basisIn(cb, key)!;
+    expect(b, `${key} 는 서버 표에 있다(전제)`).not.toBeNull();
+    await expect(figOf(page, label, b).locator(".pf-basis"), key).toHaveText(BASIS_KO[b]);
+  }
+  await expect(side(page).locator(".pf-kv dt", { hasText: "샤프지수" })).toHaveCount(2);
+  // 전체 지표 — 변동성 · 샤프 · 소르티노 · 칼마가 기준마다 한 줄(값 = 서버 · 같은 기준 같은 이름표는 앞의 키 하나만)
+  await side(page).locator("details.pf-metrics summary").click();
+  const m = side(page).locator("details.pf-metrics");
+  const rows: [string, "pct" | "num"][] = [["volatility_pct", "pct"], ["volatility_after_cost_pct", "pct"], ["sharpe_ratio", "num"],
+    ["sharpe_ratio_after_cost", "num"], ["sortino_ratio", "num"], ["sortino_ratio_after_cost", "num"], ["calmar_ratio", "num"], ["calmar_ratio_after_cost", "num"]];
+  for (const [key, fmt] of rows) {
+    const row = m.locator(`[data-key="${key}"]`);
+    const b = basisIn(cb, key)!;
+    await expect(row, key).toHaveAttribute("data-basis", b);
+    await expect(row.locator(".pf-basis"), key).toHaveText(BASIS_KO[b]);
+    const v = s[key] as number;
+    await expect(row.locator("dd"), key).toHaveText(fmt === "pct" ? `${v.toFixed(2)}%` : v.toFixed(2));
+  }
+  await expect(m.locator('[data-key="calmar_ratio"] .pf-basis'), "칼마는 혼합(비용 전 연율 ÷ 비용 후 낙폭)").toHaveText("혼합");
+  await expect(m.locator('[data-key="sharpe_ratio_full"]'), "같은 기준의 같은 이름표는 앞의 키만").toHaveCount(0);
+  // 지표 묶음에만 있는 키는 그 묶음의 표에서 — VaR 은 비용 전 · Ulcer 는 비용 후(자본곡선)
+  await expect(m.locator('[data-key="var_pct"]')).toHaveAttribute("data-basis", basisIn(cb.metrics, "var_pct")!);
+  await expect(m.locator('[data-key="ulcer_index"]')).toHaveAttribute("data-basis", basisIn(cb.metrics, "ulcer_index")!);
+  await expect(m.locator(".pf-basis-note")).toHaveText(`비용 기준: ${cb.note}`);
+  await expect(m.locator(".pf-basis-why"), "비용 후 값이 다 있으면 사유 줄이 없다").toHaveCount(0);
+});
+
+test("(l2) 짝 — 서버가 기준표를 주지 않으면(예전 결과) 꼬리표 0 · 비용 후 샤프 칸 없음 · 샤프지수 한 칸 그대로", async ({ page }) => {
+  await openCanvas(page);
+  await patchRun(page, (b) => {
+    const s = (b.nodes.backtest.view as { summary: Record<string, unknown> }).summary;
+    for (const k of ["cost_basis", "volatility_after_cost_pct", "sharpe_ratio_after_cost", "sortino_ratio_after_cost", "calmar_ratio_after_cost"]) delete s[k];
+  });
+  await run(page);
+  await detail(page, "backtest");
+  await expect(side(page).locator(".pf-kv")).toContainText("총수익률");
+  await expect(side(page).locator(".pf-kv dt", { hasText: "샤프지수" })).toHaveCount(1);
+  await side(page).locator("details.pf-metrics summary").click();
+  await expect(side(page).locator(".pf-basis, .pf-basis-note, .pf-basis-why, [data-basis]")).toHaveCount(0);
+});
+
+test("(l3) 짝 — 표의 기준을 바꾸면 꼬리표가 바뀐다 · 비용 후 값이 없으면 산출 불가 + 서버 사유(0 이 아니다)", async ({ page }) => {
+  await openCanvas(page);
+  const why = "관측이 1개뿐입니다. 2개 미만이면 산출되지 않습니다";
+  await patchRun(page, (b) => {
+    const s = (b.nodes.backtest.view as { summary: Record<string, unknown> }).summary;
+    const cb = s.cost_basis as CostBasis;
+    [cb.after_cost, cb.before_cost] = [cb.before_cost, cb.after_cost];                // 기준을 맞바꾼다 — 화면이 이 표를 읽는지
+    s.sortino_ratio_after_cost = null;
+    cb.reasons = { sortino_ratio_after_cost: why };
+    s.sharpe_ratio = 0.22; s.sharpe_ratio_after_cost = 0.11;                         // 두 값을 갈라 둔다 — 같으면 어느 칸인지 가리지 못한다
+  });
+  const body = await run(page);
+  await detail(page, "backtest");
+  expect(body.nodes.backtest.view!.summary).toMatchObject({ sharpe_ratio: 0.22, sharpe_ratio_after_cost: 0.11 });   // 고친 응답이 왔다(전제)
+  await expect(figOf(page, "총수익률", "before").locator(".pf-basis")).toHaveText("비용 전");
+  await expect(figOf(page, "샤프지수", "after").locator("dd"), "맞바꾼 표에서는 sharpe_ratio 가 비용 후 칸이다").toHaveText("0.22");
+  await expect(figOf(page, "샤프지수", "before").locator("dd")).toHaveText("0.11");
+  await side(page).locator("details.pf-metrics summary").click();
+  const m = side(page).locator("details.pf-metrics");
+  await expect(m.locator('[data-key="sortino_ratio_after_cost"] dd')).toHaveText("산출 불가");
+  await expect(m.locator('[data-key="sortino_ratio_after_cost"]')).toHaveAttribute("data-basis", "before");
+  await expect(m.locator(".pf-basis-why")).toHaveText(`비용 후 값을 산출하지 못한 사유: ${why}`);
+});

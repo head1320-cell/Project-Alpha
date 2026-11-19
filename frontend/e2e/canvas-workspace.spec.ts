@@ -2074,11 +2074,14 @@ async function branchWithModel(page: Page, model: string) {
 }
 
 // ── 대안 비교 넓히기(2026-11-13 · 설계 `2026-11-13-canvas-bypass-compare-design.md` §2) ─────────────────────
-type BtView = { summary?: Record<string, number | null>; turnover_avg_pct?: number; config?: { cost_bps?: number }; dates?: string[]; equity_curve?: number[] };
+type BtView = { summary?: Record<string, number | null> & { cost_basis?: { after_cost: string[]; before_cost: string[]; mixed: string[] } };
+                turnover_avg_pct?: number; config?: { cost_bps?: number }; dates?: string[]; equity_curve?: number[] };
 /** 성과 행의 계약 — 열쇠 · 단위 · 서버 view 의 어디서 읽는가. (연환산 수익률은 이 노드의 헤드라인이라 '결과' 행에 이미 있다.) */
 const BRANCH_PERF: [string, string, (v: BtView) => unknown][] = [
   ["total_return_pct", "%", (v) => v.summary?.total_return_pct], ["max_drawdown_pct", "%", (v) => v.summary?.max_drawdown_pct],
   ["volatility_pct", "%", (v) => v.summary?.volatility_pct], ["sharpe_ratio", "", (v) => v.summary?.sharpe_ratio],
+  // 비용 전 · 비용 후 나란히(C1) — 비용 후 두 줄. 기준 꼬리표는 서버 표(`summary.cost_basis`)가 말한다.
+  ["volatility_after_cost_pct", "%", (v) => v.summary?.volatility_after_cost_pct], ["sharpe_ratio_after_cost", "", (v) => v.summary?.sharpe_ratio_after_cost],
   ["turnover_avg_pct", "%", (v) => v.turnover_avg_pct], ["cost_bps", "bp", (v) => v.config?.cost_bps],
 ];
 const perfCell = (n: unknown, unit: string) => (typeof n === "number" && Number.isFinite(n) ? `${Number.isInteger(n) ? n : n.toFixed(2)}${unit}` : "—");
@@ -2098,13 +2101,26 @@ test("대안 비교 — 성과 행: 값 = 서버 view 그대로 · 다른 값만
   await page.locator('.pg-tab[data-tab="branches"]').click();
   const view = (id: string) => (body.nodes[id] as unknown as { view: BtView }).view;
   let shown = 0;
+  let tagged = 0;
   for (const [key, unit, get] of BRANCH_PERF) {
     const a = perfCell(get(view(orig)), unit), c = perfCell(get(view(copy)), unit);
     const row = page.locator(`.pg-branch-row--perf[data-row="perf:${orig}:${key}"]`);
     if (a === c) { await expect(row, `${key} 는 같아서 보이지 않는다`).toHaveCount(0); continue; }
     shown += 1;
     await expect(row.locator("td"), key).toHaveText([a, c]);
+    // 꼬리표 — 서버 표가 이름을 댄 칸만(회전율 · 비용 가정은 표에 없다 → 꼬리표 없음)
+    const cb = view(orig).summary?.cost_basis;
+    const want = !cb ? null : cb.after_cost.includes(key) ? "after" : cb.before_cost.includes(key) ? "before" : cb.mixed.includes(key) ? "mixed" : null;
+    if (want) {
+      tagged += 1;
+      await expect(row.locator("th"), key).toHaveAttribute("data-basis", want);
+      await expect(row.locator("th .pg-branch-basis"), key).toHaveText(want === "after" ? "비용 후" : want === "before" ? "비용 전" : "혼합");
+    } else {
+      await expect(row.locator("th .pg-branch-basis"), key).toHaveCount(0);
+    }
   }
+  expect(view(orig).summary?.cost_basis, "서버가 기준표를 준다(전제 — 꼬리표 검사가 공허하지 않게)").toBeTruthy();
+  expect(tagged, "보이는 성과 행 가운데 꼬리표가 달린 행이 있다(공허 방지)").toBeGreaterThan(0);
   expect(shown, "방식을 바꿨으니 성과 행이 적어도 하나는 다르다(빈 표로 통과하지 않게)").toBeGreaterThan(0);
   expect((await page.locator(".pg-branch-compare").textContent()) ?? "").not.toMatch(/추천|가장 좋은|최고|우월|더 나은|1위/);
   // ★짝★ — 화면이 값을 지어내지 않는다: 응답의 한 값을 바꾸면 그 칸이 바뀐다
@@ -2112,10 +2128,15 @@ test("대안 비교 — 성과 행: 값 = 서버 view 그대로 · 다른 값만
     const r = await route.fetch();
     const j = await r.json();
     j.nodes[copy].view.summary.max_drawdown_pct = -77.77;
+    j.nodes[copy].view.summary.sharpe_ratio_after_cost = -9.99;                    // 비용 후 줄도 서버 값 그대로(C1) — 값이 다르게 만들어 그 줄이 반드시 나온다
     await route.fulfill({ response: r, json: j });
   });
   await run(page);
   await expect(page.locator(`.pg-branch-row--perf[data-row="perf:${orig}:max_drawdown_pct"] td`).nth(1)).toHaveText("-77.77%");
+  const after = page.locator(`.pg-branch-row--perf[data-row="perf:${orig}:sharpe_ratio_after_cost"]`);
+  await expect(after.locator("td").nth(1)).toHaveText("-9.99");
+  await expect(after.locator("th")).toHaveAttribute("data-basis", "after");
+  await expect(after.locator("th .pg-branch-basis")).toHaveText("비용 후");
 });
 
 test("대안 비교 — 곡선 겹쳐 보기: 계산 전에는 사유(짝) · 서버에 보낸 두 곡선 = 원본·대안의 백테스트 결과 · 그림은 서버가 맞춘 것", async ({ page }) => {

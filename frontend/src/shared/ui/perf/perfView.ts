@@ -28,7 +28,43 @@ export interface DdEpisode {
   peak_date: string; trough_date: string; recovery_date: string | null; depth_pct: number;
   days_to_trough: number; days_to_recover: number | null;
 }
-export interface PerfFigure { key: string; label: string; text: string; tone?: "up" | "down" | null }
+/** 비용 기준 — 거래비용을 빼기 전 수익(`before`) · 뺀 자본곡선(`after`) · 비용 전 연율 수익 ÷ 비용 후 최대 낙폭(`mixed`, 칼마). */
+export type PerfBasis = "before" | "after" | "mixed";
+export const BASIS_TEXT: Record<PerfBasis, string> = { before: "비용 전", after: "비용 후", mixed: "혼합" };
+/**
+ * 서버 `summary.cost_basis`(배분 워크포워드 · C1 2026-11-19) — 요약 · 지표 묶음의 키마다 비용 기준과 서버 문장.
+ * ★화면은 기준을 정하지 않는다★ 표에 이름이 있는 키에만 꼬리표를 단다. 표가 없는 결과(불러오기 · 전략 묶음)는 꼬리표가 없다.
+ */
+export interface CostBasisTable {
+  after_cost: string[]; before_cost: string[]; mixed: string[];
+  metrics: { after_cost: string[]; before_cost: string[]; mixed: string[]; not_measured?: string[] } | null;
+  note: string | null;
+  /** 비용 후 값을 산출하지 못한 키 → 서버 사유. */
+  reasons: Record<string, string>;
+}
+export interface PerfFigure { key: string; label: string; text: string; tone?: "up" | "down" | null; basis?: PerfBasis | null }
+
+const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+/** 서버 표를 읽기만 한다 — 모양이 아니면 null(지어내지 않는다). */
+export function costBasisOf(summary: Dict): CostBasisTable | null {
+  const b = summary.cost_basis as Dict | null | undefined;
+  if (!b || typeof b !== "object" || !Array.isArray(b.after_cost) || !Array.isArray(b.before_cost)) return null;
+  const m = b.metrics as Dict | null | undefined;
+  const reasons: Record<string, string> = {};
+  for (const [k, v] of Object.entries((b.reasons as Dict | null | undefined) ?? {})) if (typeof v === "string" && v) reasons[k] = v;
+  return {
+    after_cost: strs(b.after_cost), before_cost: strs(b.before_cost), mixed: strs(b.mixed),
+    metrics: m && typeof m === "object"
+      ? { after_cost: strs(m.after_cost), before_cost: strs(m.before_cost), mixed: strs(m.mixed), not_measured: strs(m.not_measured) } : null,
+    note: typeof b.note === "string" && b.note ? b.note : null, reasons,
+  };
+}
+/** 키 하나의 기준 — 요약에 있는 키는 요약의 표, 지표 묶음에만 있는 키는 그 표. 표에 없으면 null(꼬리표 없음). */
+export function basisOf(t: CostBasisTable | null, key: string, block: "summary" | "metrics"): PerfBasis | null {
+  const g = block === "summary" ? t : t?.metrics ?? null;
+  if (!g) return null;
+  return g.after_cost.includes(key) ? "after" : g.before_cost.includes(key) ? "before" : g.mixed.includes(key) ? "mixed" : null;
+}
 
 export interface PerfView {
   /** 세로축 단위 — 7번은 "처음을 1로"(×), 불러오기·전략 묶음은 원. 서버 뷰가 정한 대로. */
@@ -56,6 +92,8 @@ export interface PerfView {
   figures: PerfFigure[];
   summary: Dict;
   metrics: Dict | null;
+  /** 키마다의 비용 기준(서버 표) — 배분 워크포워드만 준다. 없으면(다른 결과 · 예전 결과) 꼬리표를 달지 않는다. */
+  costBasis?: CostBasisTable | null;
   cost: { bps: number | null; impact: Dict | null; nRebalances: number | null; turnoverAvg: number | null };
   explain: PerfExplain | null;
 }
@@ -119,11 +157,19 @@ export function perfViewOfBacktest(v: Dict, prov: Dict, explain: PerfExplain | n
   const dates = Array.isArray(v.dates) ? (v.dates as string[]).map(String) : [];
   const bench = pts(v.bench_curve);
   const active = num(s.active_return_pct);
+  const cb = costBasisOf(s);
+  const b = (key: string) => basisOf(cb, key, "summary");
+  // ★비용 후 샤프는 서버가 기준표와 함께 준 결과에서만★ — 표가 없으면(예전 결과) 기존 한 칸 그대로(꼬리표 없음).
+  const sharpeAfter: PerfFigure[] = cb && "sharpe_ratio_after_cost" in s
+    ? [{ key: "sharpe_after", label: "샤프지수", basis: b("sharpe_ratio_after_cost"),
+         text: num(s.sharpe_ratio_after_cost) === null ? "산출 불가" : fmtNum(num(s.sharpe_ratio_after_cost)) }] : [];
   const figures: PerfFigure[] = [
-    { key: "total", label: "총수익률", text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
-    { key: "mdd", label: "MDD(최대낙폭)", text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
-    { key: "sharpe", label: "샤프지수", text: fmtNum(num(s.sharpe_ratio)) },
-    ...(bench ? [{ key: "active", label: `${str(v.benchmark_label) ?? "벤치마크"} 대비 초과수익률(연환산)`, text: fmtSignedPct(active), tone: tone(active) }] : []),
+    { key: "total", label: "총수익률", basis: b("total_return_pct"), text: fmtSignedPct(num(s.total_return_pct)), tone: tone(num(s.total_return_pct)) },
+    { key: "mdd", label: "MDD(최대낙폭)", basis: b("max_drawdown_pct"), text: fmtPct(num(s.max_drawdown_pct)), tone: num(s.max_drawdown_pct) === null ? null : "down" },
+    ...sharpeAfter,
+    { key: "sharpe", label: "샤프지수", basis: b("sharpe_ratio"), text: fmtNum(num(s.sharpe_ratio)) },
+    ...(bench ? [{ key: "active", label: `${str(v.benchmark_label) ?? "벤치마크"} 대비 초과수익률(연환산)`, basis: b("active_return_pct"),
+                   text: fmtSignedPct(active), tone: tone(active) }] : []),
   ];
   const learnFrom = str(cov.start);
   return {
@@ -137,7 +183,7 @@ export function perfViewOfBacktest(v: Dict, prov: Dict, explain: PerfExplain | n
     learnFrom: learnFrom && dates[0] && learnFrom < dates[0] ? learnFrom : null,
     asOf: str(cov.as_of_effective), practice: practiceOf(pl), perfLabel: pl,
     periods: periodsOf(v.periods), drawdowns: Array.isArray(v.drawdowns) ? (v.drawdowns as DdEpisode[]) : null,
-    figures, summary: s, metrics: (v.metrics as Dict | null) ?? null,
+    figures, summary: s, metrics: (v.metrics as Dict | null) ?? null, costBasis: cb,
     cost: { bps: num(cfg.cost_bps), impact: (v.impact as Dict | null) ?? null, nRebalances: num(v.n_rebalances), turnoverAvg: num(v.turnover_avg_pct) },
     explain: explain ?? null,
   };
@@ -164,7 +210,7 @@ export function perfViewOfLoad(v: Dict, prov: Dict, explain: PerfExplain | null 
     rebalances: [], question: "저장된 조건식 백테스트의 과거 성과",
     learnFrom: null, asOf: null, practice: practiceOf(pl), perfLabel: pl,
     periods: periodsOf(v.periods), drawdowns: Array.isArray(v.drawdowns) ? (v.drawdowns as DdEpisode[]) : null,
-    figures, summary: s, metrics: null,
+    figures, summary: s, metrics: null, costBasis: null,
     cost: { bps: null, impact: null, nRebalances: null, turnoverAvg: null },
     explain: explain ?? null,
   };
@@ -188,7 +234,7 @@ export function perfViewOfStrategy(v: Dict, explain: PerfExplain | null | undefi
     rebalances: [], question: "등록 전략을 단일 계좌로 배분했을 때의 과거 성과",
     learnFrom: null, asOf: null, practice: practiceOf(pl), perfLabel: pl,
     periods: periodsOf(v.periods), drawdowns: Array.isArray(v.drawdowns) ? (v.drawdowns as DdEpisode[]) : null,
-    figures, summary: s, metrics: null,
+    figures, summary: s, metrics: null, costBasis: null,
     cost: { bps: null, impact: null, nRebalances: num(s.n_rebalances), turnoverAvg: null },
     explain: explain ?? null,
   };
@@ -259,6 +305,6 @@ export function perfViewOfStress(r: Dict, prov: Dict): PerfView {
     question: "현재 비중을 해당 기간에 고정했을 때의 성과", learnFrom: null, asOf: null,
     practice: practiceOf(pl), perfLabel: pl, periods: null,
     drawdowns: Array.isArray(r.drawdowns) ? (r.drawdowns as DdEpisode[]) : null,
-    figures: [], summary: {}, metrics: null, cost: { bps: null, impact: null, nRebalances: null, turnoverAvg: null }, explain: null,
+    figures: [], summary: {}, metrics: null, costBasis: null, cost: { bps: null, impact: null, nRebalances: null, turnoverAvg: null }, explain: null,
   };
 }

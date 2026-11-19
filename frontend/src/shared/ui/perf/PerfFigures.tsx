@@ -5,7 +5,7 @@
  */
 import type { ReactNode } from "react";
 import { PerfLabel } from "@/shared/ui/PerfLabel";
-import type { PerfView } from "./perfView";
+import { BASIS_TEXT, type PerfView } from "./perfView";
 
 export function PerfFigures({ view, fallbackTitle, action, noTitle = false }: {
   view: PerfView; fallbackTitle: string;
@@ -31,8 +31,12 @@ export function PerfFigures({ view, fallbackTitle, action, noTitle = false }: {
       )}
       {view.perfLabel ? <div className="pg-perf"><PerfLabel value={view.perfLabel} /></div> : null}
       <dl className="pg-kv pf-kv">
+        {/* 비용 기준 꼬리표는 서버 표(`summary.cost_basis`)가 이름을 댄 칸에만 — 이름표 글자는 그대로 두고 따로 단다(C1). */}
         {view.figures.map((f) => (
-          <div key={f.key}><dt>{f.label}</dt><dd className={f.tone ? `pf-delta--${f.tone}` : undefined}>{f.text}</dd></div>
+          <div key={f.key} data-basis={f.basis ?? undefined}>
+            <dt>{f.label}{f.basis ? <> <span className="pf-basis">{BASIS_TEXT[f.basis]}</span></> : null}</dt>
+            <dd className={f.tone ? `pf-delta--${f.tone}` : undefined}>{f.text}</dd>
+          </div>
         ))}
       </dl>
     </div>

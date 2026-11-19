@@ -10372,6 +10372,13 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .pf-metrics > summary, .pf-table > summary, .cr-table > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--pf-ink); }
 .pf-mgroup { margin-top: 6px; }
 .pf-na { color: var(--pf-unknown); font-weight: 500; }
+/* 비용 기준 꼬리표(C1 · 2026-11-19) — 성과 숫자 이름표 뒤의 작은 표지 `비용 전` · `비용 후` · `혼합`. 서버 표(`summary.cost_basis`)가 이름을 댄 칸에만 달린다.
+   글자가 기준을 말한다(색으로 가르지 않는다 · 테두리만) · 이름표와 한 줄에서 꺾이지 않는다 · 앞의 빈칸이 간격을 주므로 바깥 여백은 작다. */
+.pf-basis, .pg-branch-basis { display: inline-block; margin-left: 2px; padding: 0 5px; font-size: 11px; font-weight: 600; line-height: 16px;
+  white-space: nowrap; vertical-align: 1px; border-radius: 4px; }
+.pf-basis { color: var(--pf-body); border: 1px solid var(--pf-line); }
+.pg-branch-basis { color: var(--pg-body); border: 1px solid var(--pg-line); }
+.pf-basis-why, .pf-basis-note { margin-top: 6px; }
 .pf-table-scroll, .cr-scroll { max-height: 220px; overflow: auto; margin-top: 8px; border: 1px solid var(--pf-line); border-radius: 8px; }
 .pf-table-scroll table, .cr-scroll table { font-variant-numeric: tabular-nums; }
 .pf-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--pf-mute); padding: 4px 0; }

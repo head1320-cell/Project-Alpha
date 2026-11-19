@@ -26,7 +26,7 @@ import {
 } from "@/entities/portfolio-graph";
 import { perfApi } from "@/entities/perf/api";
 import { PerfCompare } from "@/shared/ui/perf/PerfCompare";
-import { compareViewOf, type CompareResponse } from "@/shared/ui/perf/perfView";
+import { BASIS_TEXT, basisOf, compareViewOf, costBasisOf, type CompareResponse, type PerfBasis } from "@/shared/ui/perf/perfView";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 import { usePortfolioGraph } from "./store";
 
@@ -118,8 +118,11 @@ const dict = (v: unknown): Dict => (v && typeof v === "object" && !Array.isArray
 const PERF_ROWS: { key: string; label: string; unit: string; get: (v: Dict) => unknown }[] = [
   { key: "total_return_pct", label: "총수익률", unit: "%", get: (v) => dict(v.summary).total_return_pct },
   { key: "max_drawdown_pct", label: "MDD(최대낙폭)", unit: "%", get: (v) => dict(v.summary).max_drawdown_pct },
+  // 비용 전 · 비용 후 나란히(C1 · 2026-11-19) — 회전율이 큰 대안은 비용 전 값에서 유리하게 보인다. 기준은 서버 표가 말한다(행 이름의 꼬리표).
   { key: "volatility_pct", label: "변동성", unit: "%", get: (v) => dict(v.summary).volatility_pct },
+  { key: "volatility_after_cost_pct", label: "변동성", unit: "%", get: (v) => dict(v.summary).volatility_after_cost_pct },
   { key: "sharpe_ratio", label: "샤프지수", unit: "", get: (v) => dict(v.summary).sharpe_ratio },
+  { key: "sharpe_ratio_after_cost", label: "샤프지수", unit: "", get: (v) => dict(v.summary).sharpe_ratio_after_cost },
   { key: "turnover_avg_pct", label: "평균 회전율", unit: "%", get: (v) => v.turnover_avg_pct },
   { key: "cost_bps", label: "거래비용 가정", unit: "bp", get: (v) => dict(v.config).cost_bps },
 ];
@@ -271,7 +274,7 @@ export function BranchCompare({ branches, nodes, edges, catalog, results, staleI
         const node = (id: string | undefined) => nodes.find((n) => n.id === id);
         const res = (id: string | undefined) => (id && results && !staleIds.has(id) ? results[id] : undefined);
         const stale = [root, ...origIds, ...bs.flatMap((b) => Object.keys(b.map))].some((id) => staleIds.has(id));
-        type Row = { key: string; kind: "set" | "out" | "perf"; name: string; cells: string[] };
+        type Row = { key: string; kind: "set" | "out" | "perf"; name: string; cells: string[]; basis?: PerfBasis | null };
         const rows: Row[] = [];
         // 단계의 유무 — 원본과 다른 대안이 하나라도 있을 때만 행을 낸다("다른 값만").
         for (const orig of origIds) {
@@ -307,9 +310,15 @@ export function BranchCompare({ branches, nodes, edges, catalog, results, staleI
         const btName = (id: string) => catalog.find((c) => c.type === node(id)?.data.kind)?.plain_label ?? id;
         // 성과 행 — 서버 view 의 값 그대로 · ★값이 다른 행만★.
         for (const orig of btests) {
+          const ids = [orig, ...bs.map((b) => copyOf(b, orig))];
+          // 비용 기준은 서버 표에서 — 계산된 쪽 가운데 표를 준 첫 결과(같은 노드 종류라 표는 같다). 표가 없으면 꼬리표 없음.
+          const table = ids.map((id) => okView(id)).map((v) => (v ? costBasisOf(dict(v.summary)) : null)).find(Boolean) ?? null;
           for (const p of PERF_ROWS) {
-            const cells = [orig, ...bs.map((b) => copyOf(b, orig))].map((id) => { const v = okView(id); return v ? perfCell(p.get(v), p.unit) : "—"; });
-            if (new Set(cells).size > 1) rows.push({ key: `perf:${orig}:${p.key}`, kind: "perf", name: `${btName(orig)} · ${p.label}`, cells });
+            const cells = ids.map((id) => { const v = okView(id); return v ? perfCell(p.get(v), p.unit) : "—"; });
+            if (new Set(cells).size > 1) {
+              rows.push({ key: `perf:${orig}:${p.key}`, kind: "perf", name: `${btName(orig)} · ${p.label}`, cells,
+                          basis: basisOf(table, p.key, "summary") });          // 회전율 · 비용 가정은 표에 없어 꼬리표가 없다
+            }
           }
         }
         const sideOf = (label: string, id: string | undefined): CurveSide => {
@@ -355,7 +364,10 @@ export function BranchCompare({ branches, nodes, edges, catalog, results, staleI
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.key} className={`pg-branch-row--${r.kind}`} data-row={r.key}>
-                      <th scope="row">{r.kind === "set" ? "설정 · " : r.kind === "perf" ? "성과 · " : "결과 · "}{r.name}</th>
+                      <th scope="row" data-basis={r.basis ?? undefined}>
+                        {r.kind === "set" ? "설정 · " : r.kind === "perf" ? "성과 · " : "결과 · "}{r.name}
+                        {r.basis ? <> <span className="pg-branch-basis">{BASIS_TEXT[r.basis]}</span></> : null}
+                      </th>
                       {r.cells.map((c, i) => <td key={i} className={`pg-td-num${i > 0 && c !== r.cells[0] ? " pg-branch-diff" : ""}`}>{c}</td>)}
                     </tr>
                   ))}

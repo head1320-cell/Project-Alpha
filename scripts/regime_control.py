@@ -264,6 +264,11 @@ def evaluate(plan, *, cost_bps: float, impact=None,
         #   0.6706→0.6087 로 움직인다). 그 값을 쓰면 사전등록의 "비용 3수준 전부"
         #   절이 **무의미**해진다 — 통계가 비용을 볼 수 없기 때문이다.
         #   두 값은 정의도 다르므로(요약 0.42 vs 일수익 0.67) 하나만 쓴다.
+        #   ★정정(2026-11-19 · C1 에서 잼)★ 요약 값이 비용을 못 본 첫째 까닭은 반올림이 아니라
+        #   기준이다 — 요약의 Sharpe 는 비용 전 일별 수익에서 계산해 전정밀도(`sharpe_ratio_full`)도
+        #   비용 5 → 200bp 에서 그대로다. 여기서 쓰는 일수익은 ★비용 후★ 자본곡선에서 되짚으므로
+        #   비용을 본다(이 선택이 옳은 까닭이 하나 더 있다). 요약에 나란히 실은 비용 후 값은 보이기만 하고
+        #   이 관문은 읽지 않는다(`tests/test_walk_forward_cost_basis.py` 의 정적 시험).
         "sharpe": _sharpe(daily),
         "sharpe_summary_rounded": s["sharpe_ratio"],
         "cagr_pct": s["cagr_pct"],

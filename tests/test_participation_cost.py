@@ -145,7 +145,8 @@ def test_the_assumptions_travel_with_the_output():
     assert c["alpha"] == 0.7
     assert c["law"] == "almgren_chriss_sqrt"
     # ★해상도를 신고한다★ 효과(8.5bp)의 1/850 이라 통계를 눈멀게 하지 않는다는
-    # 논증이 성립하려면 그 수가 리포트에 있어야 한다(P1 의 `round(sharpe,2)` 교훈).
+    # 논증이 성립하려면 그 수가 리포트에 있어야 한다(P1 의 `round(sharpe,2)` 교훈 — 그 고정의 첫째 까닭은
+    # 비용 전 수익에서 계산한 기준이었다는 정정은 `quant_metrics.risk_adjusted_ratios` · 2026-11-19 C1).
     assert c["impact_bps_resolution"] == 0.01
 
 

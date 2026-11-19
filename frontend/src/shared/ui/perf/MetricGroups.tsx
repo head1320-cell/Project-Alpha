@@ -4,7 +4,7 @@
  * ★서버 `summary`·`metrics` 그대로★ 못 잰 칸은 "산출 불가" 와 사유(표본 부족·0 분모 — `quant_metrics` 가 None 을 내는 조건) ·
  * 영어 약어는 처음 한 번 풀어 쓴다. 있는 칸만 그린다 — 뷰에 없는 묶음은 통째로 빠진다(지어내지 않는다).
  */
-import { fmtNum, fmtPct, fmtSignedPct, type PerfView } from "./perfView";
+import { BASIS_TEXT, basisOf, fmtNum, fmtPct, fmtSignedPct, type PerfBasis, type PerfView } from "./perfView";
 
 type Fmt = "spct" | "pct" | "num" | "int" | "bool" | "days";
 type Row = [key: string, label: string, fmt: Fmt];
@@ -12,14 +12,18 @@ type Row = [key: string, label: string, fmt: Fmt];
 // 세 노드의 서버 키가 조금씩 다르다(7번 `cagr_pct` · 불러오기 `cagr` · 전략 묶음 `annualized_return_pct`·`sharpe_ratio_full`) — 같은 뜻의
 // 키를 같은 라벨로 적되 ★있는 키만★ 그린다. 한 뷰에 같은 뜻의 키가 둘 오면(7번은 `sharpe_ratio`(반올림)와 `sharpe_ratio_full`(전정밀도)을
 // 함께 싣는다) 같은 라벨은 ★앞의 키만★ 그린다 — 같은 값이 두 줄로 보이지 않게.
+// 비용 기준(C1 · 2026-11-19): 서버 표(`summary.cost_basis`)가 있으면 같은 라벨이라도 ★기준이 다르면 다른 줄★이다(비용 전 · 비용 후 나란히).
+// `*_after_cost` 키는 그 표를 주는 7번에만 있다 — 다른 뷰에는 없으니 그리지 않는다.
 const GROUPS: [title: string, rows: Row[]][] = [
   ["수익", [["total_return_pct", "총수익률", "spct"], ["cagr_pct", "연환산 수익률", "spct"], ["cagr", "연환산 수익률", "spct"], ["annualized_return_pct", "연환산 수익률", "spct"],
     ["active_return_pct", "벤치마크 대비 초과수익률(연환산)", "spct"], ["best_period_pct", "일간 최대 수익률", "spct"], ["worst_period_pct", "일간 최대 손실률", "spct"]]],
-  ["위험", [["volatility_pct", "연환산 변동성", "pct"], ["downside_deviation_pct", "하방 변동성", "pct"], ["max_drawdown_pct", "MDD(최대낙폭)", "pct"],
+  ["위험", [["volatility_pct", "연환산 변동성", "pct"], ["volatility_after_cost_pct", "연환산 변동성", "pct"],
+    ["downside_deviation_pct", "하방 변동성", "pct"], ["max_drawdown_pct", "MDD(최대낙폭)", "pct"],
     ["avg_drawdown_pct", "평균 낙폭", "pct"], ["max_drawdown_days", "최장 낙폭 기간", "days"], ["ulcer_index", "Ulcer Index(낙폭의 깊이·기간)", "num"],
     ["var_pct", "VaR(1일·95%)", "pct"], ["cvar_pct", "CVaR(VaR 초과 시 평균 손실)", "pct"]]],
-  ["위험조정수익", [["sharpe_ratio", "샤프지수", "num"], ["sharpe_ratio_full", "샤프지수", "num"],
-    ["sortino_ratio", "소르티노지수", "num"], ["calmar_ratio", "칼마지수", "num"],
+  ["위험조정수익", [["sharpe_ratio", "샤프지수", "num"], ["sharpe_ratio_full", "샤프지수", "num"], ["sharpe_ratio_after_cost", "샤프지수", "num"],
+    ["sortino_ratio", "소르티노지수", "num"], ["sortino_ratio_after_cost", "소르티노지수", "num"],
+    ["calmar_ratio", "칼마지수", "num"], ["calmar_ratio_after_cost", "칼마지수", "num"],
     ["information_ratio", "정보비율(IR)", "num"], ["omega", "오메가지수", "num"], ["gain_to_pain", "Gain-to-Pain 비율", "num"]]],
   ["분포", [["skew", "왜도", "num"], ["kurtosis", "첨도", "num"], ["tail_ratio", "테일 비율", "num"], ["recovery_factor", "회복계수", "num"]]],
   ["거래·회전", [["n_rebalances", "리밸런싱 횟수", "int"], ["turnover_avg_pct", "평균 회전율(리밸런싱당)", "pct"],
@@ -47,10 +51,16 @@ export function MetricGroups({ view, open = false, grid = false }: {
   const src: Record<string, unknown> = { ...(view.metrics ?? {}), ...view.summary };
   if (view.cost.nRebalances !== null) src.n_rebalances = view.cost.nRebalances;
   if (view.cost.turnoverAvg !== null) src.turnover_avg_pct = view.cost.turnoverAvg;
+  // 요약과 지표 묶음이 같은 키를 주면 요약 값이 보인다(위 펼침 순서) — 기준도 그 값이 나온 쪽의 표에서 읽는다.
+  const basis = (key: string): PerfBasis | null =>
+    basisOf(view.costBasis ?? null, key, key in view.summary ? "summary" : "metrics");
   const groups = GROUPS.map(([title, rows]) => {
     const seen = new Set<string>();
     const kept: Row[] = [];
-    for (const r of rows) { if (r[0] in src && !seen.has(r[1])) { seen.add(r[1]); kept.push(r); } }
+    for (const r of rows) {
+      const id = `${r[1]}|${basis(r[0]) ?? ""}`;
+      if (r[0] in src && !seen.has(id)) { seen.add(id); kept.push(r); }
+    }
     return [title, kept] as [string, Row[]];
   }).filter(([, rows]) => rows.length);
   const cost: Row[] = [];
@@ -70,6 +80,9 @@ export function MetricGroups({ view, open = false, grid = false }: {
   if (!all.length) return null;
   const naCount = all.reduce((acc, [, rows, s]) => acc + rows.filter(([k, , f]) => cell(s[k], f).na).length, 0);
   const convention = typeof view.summary.convention === "string" ? view.summary.convention : null;
+  const cb = view.costBasis ?? null;
+  // 비용 후 값을 산출하지 못한 사유 — 서버 문장 그대로, 같은 문장은 한 번(넷이 같은 까닭으로 비는 일이 흔하다).
+  const afterWhy = cb ? [...new Set(Object.values(cb.reasons))] : [];
   return (
     <details className={`pf-metrics${grid ? " pf-metrics--grid" : ""}`} open={open || undefined}>
       <summary>전체 지표{naCount ? ` (산출 불가 ${naCount}개)` : ""}</summary>
@@ -81,13 +94,21 @@ export function MetricGroups({ view, open = false, grid = false }: {
             <dl className="pf-mkv">
               {rows.map(([k, label, f]) => {
                 const c = cell(s[k], f);
-                return <div key={k}><dt>{label}</dt><dd className={c.na ? "pf-na" : undefined}>{c.text}</dd></div>;
+                const b = s === src ? basis(k) : null;
+                return (
+                  <div key={k} data-key={k} data-basis={b ?? undefined}>
+                    <dt>{label}{b ? <> <span className="pf-basis">{BASIS_TEXT[b]}</span></> : null}</dt>
+                    <dd className={c.na ? "pf-na" : undefined}>{c.text}</dd>
+                  </div>
+                );
               })}
             </dl>
           </section>
         ))}
       </div>
       {naCount > 0 && <p className="pg-note">‘산출 불가’는 표본이 부족하거나 분모가 0 이어서 서버가 값을 산출하지 않은 칸입니다 — 0 이 아닙니다.</p>}
+      {afterWhy.length > 0 && <p className="pg-note pf-basis-why">비용 후 값을 산출하지 못한 사유: {afterWhy.join(" · ")}</p>}
+      {cb?.note && <p className="pg-note pf-basis-note">비용 기준: {cb.note}</p>}
       {convention && <p className="pg-note">위험조정수익의 관례: {convention}</p>}
     </details>
   );

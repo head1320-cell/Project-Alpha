@@ -1071,6 +1071,7 @@
    "active_return_pct": null,
    "cagr_pct": 5.11,
    "calmar_ratio": 0.16,
+   "calmar_ratio_after_cost": 0.16,
    "convention": {
     "annualization": "arithmetic",
     "ddof": 1,
@@ -1079,12 +1080,76 @@
     "risk_free": 0.035,
     "starting_equity": null
    },
+   "cost_basis": {
+    "after_cost": [
+     "total_return_pct",
+     "cagr_pct",
+     "max_drawdown_pct",
+     "volatility_after_cost_pct",
+     "sharpe_ratio_after_cost",
+     "sortino_ratio_after_cost",
+     "calmar_ratio_after_cost"
+    ],
+    "before_cost": [
+     "volatility_pct",
+     "sharpe_ratio",
+     "sortino_ratio",
+     "sharpe_ratio_full",
+     "active_return_pct",
+     "information_ratio"
+    ],
+    "metrics": {
+     "after_cost": [
+      "max_drawdown",
+      "max_drawdown_days",
+      "avg_drawdown_pct",
+      "ulcer_index",
+      "recovery_factor"
+     ],
+     "before_cost": [
+      "volatility_pct",
+      "downside_deviation_pct",
+      "var_pct",
+      "cvar_pct",
+      "omega",
+      "gain_to_pain",
+      "tail_ratio",
+      "skew",
+      "kurtosis",
+      "best_period_pct",
+      "worst_period_pct",
+      "information_ratio",
+      "sharpe_ratio",
+      "sortino_ratio",
+      "annualized_return",
+      "annualized_volatility"
+     ],
+     "mixed": [
+      "calmar_ratio"
+     ],
+     "not_measured": [
+      "payoff_ratio",
+      "avg_win",
+      "avg_loss",
+      "expectancy",
+      "kelly_pct"
+     ]
+    },
+    "mixed": [
+     "calmar_ratio"
+    ],
+    "note": "총수익률 · 연환산 수익률(CAGR) · 최대 낙폭은 거래비용을 뺀 자본곡선에서 계산합니다. 변동성 · 샤프 · 소르티노 · 초과수익 · 정보비율과 VaR 등 분포 지표는 거래비용을 빼기 전 일별 수익에서 계산하고, 칼마는 비용 전 연율 수익을 비용 후 최대 낙폭으로 나눈 값입니다. 비용 후 변동성 · 샤프 · 소르티노 · 칼마는 같은 관례(무위험 연 3.5% · 표본 표준편차 · 산술 연율화)로 비용 후 일별 수익에서 다시 계산한 값입니다.",
+    "reasons": {}
+   },
    "information_ratio": null,
    "max_drawdown_pct": -40.14,
    "sharpe_ratio": 0.17,
+   "sharpe_ratio_after_cost": 0.17,
    "sharpe_ratio_full": 0.17311515451306406,
    "sortino_ratio": 0.29,
+   "sortino_ratio_after_cost": 0.28,
    "total_return_pct": 41.66,
+   "volatility_after_cost_pct": 17.29,
    "volatility_pct": 17.29
   },
   "turnover_avg_pct": 1.43
@@ -3540,6 +3605,7 @@
    "active_return_pct": null,
    "cagr_pct": 5.21,
    "calmar_ratio": 0.17,
+   "calmar_ratio_after_cost": 0.17,
    "convention": {
     "annualization": "arithmetic",
     "ddof": 1,
@@ -3548,12 +3614,76 @@
     "risk_free": 0.035,
     "starting_equity": null
    },
+   "cost_basis": {
+    "after_cost": [
+     "total_return_pct",
+     "cagr_pct",
+     "max_drawdown_pct",
+     "volatility_after_cost_pct",
+     "sharpe_ratio_after_cost",
+     "sortino_ratio_after_cost",
+     "calmar_ratio_after_cost"
+    ],
+    "before_cost": [
+     "volatility_pct",
+     "sharpe_ratio",
+     "sortino_ratio",
+     "sharpe_ratio_full",
+     "active_return_pct",
+     "information_ratio"
+    ],
+    "metrics": {
+     "after_cost": [
+      "max_drawdown",
+      "max_drawdown_days",
+      "avg_drawdown_pct",
+      "ulcer_index",
+      "recovery_factor"
+     ],
+     "before_cost": [
+      "volatility_pct",
+      "downside_deviation_pct",
+      "var_pct",
+      "cvar_pct",
+      "omega",
+      "gain_to_pain",
+      "tail_ratio",
+      "skew",
+      "kurtosis",
+      "best_period_pct",
+      "worst_period_pct",
+      "information_ratio",
+      "sharpe_ratio",
+      "sortino_ratio",
+      "annualized_return",
+      "annualized_volatility"
+     ],
+     "mixed": [
+      "calmar_ratio"
+     ],
+     "not_measured": [
+      "payoff_ratio",
+      "avg_win",
+      "avg_loss",
+      "expectancy",
+      "kelly_pct"
+     ]
+    },
+    "mixed": [
+     "calmar_ratio"
+    ],
+    "note": "총수익률 · 연환산 수익률(CAGR) · 최대 낙폭은 거래비용을 뺀 자본곡선에서 계산합니다. 변동성 · 샤프 · 소르티노 · 초과수익 · 정보비율과 VaR 등 분포 지표는 거래비용을 빼기 전 일별 수익에서 계산하고, 칼마는 비용 전 연율 수익을 비용 후 최대 낙폭으로 나눈 값입니다. 비용 후 변동성 · 샤프 · 소르티노 · 칼마는 같은 관례(무위험 연 3.5% · 표본 표준편차 · 산술 연율화)로 비용 후 일별 수익에서 다시 계산한 값입니다.",
+    "reasons": {}
+   },
    "information_ratio": null,
    "max_drawdown_pct": -39.71,
    "sharpe_ratio": 0.18,
+   "sharpe_ratio_after_cost": 0.18,
    "sharpe_ratio_full": 0.1804379615499052,
    "sortino_ratio": 0.3,
+   "sortino_ratio_after_cost": 0.29,
    "total_return_pct": 42.62,
+   "volatility_after_cost_pct": 17.24,
    "volatility_pct": 17.24
   },
   "turnover_avg_pct": 3.99
@@ -6402,6 +6532,7 @@
    "active_return_pct": null,
    "cagr_pct": 5.2,
    "calmar_ratio": 0.17,
+   "calmar_ratio_after_cost": 0.17,
    "convention": {
     "annualization": "arithmetic",
     "ddof": 1,
@@ -6410,12 +6541,76 @@
     "risk_free": 0.035,
     "starting_equity": null
    },
+   "cost_basis": {
+    "after_cost": [
+     "total_return_pct",
+     "cagr_pct",
+     "max_drawdown_pct",
+     "volatility_after_cost_pct",
+     "sharpe_ratio_after_cost",
+     "sortino_ratio_after_cost",
+     "calmar_ratio_after_cost"
+    ],
+    "before_cost": [
+     "volatility_pct",
+     "sharpe_ratio",
+     "sortino_ratio",
+     "sharpe_ratio_full",
+     "active_return_pct",
+     "information_ratio"
+    ],
+    "metrics": {
+     "after_cost": [
+      "max_drawdown",
+      "max_drawdown_days",
+      "avg_drawdown_pct",
+      "ulcer_index",
+      "recovery_factor"
+     ],
+     "before_cost": [
+      "volatility_pct",
+      "downside_deviation_pct",
+      "var_pct",
+      "cvar_pct",
+      "omega",
+      "gain_to_pain",
+      "tail_ratio",
+      "skew",
+      "kurtosis",
+      "best_period_pct",
+      "worst_period_pct",
+      "information_ratio",
+      "sharpe_ratio",
+      "sortino_ratio",
+      "annualized_return",
+      "annualized_volatility"
+     ],
+     "mixed": [
+      "calmar_ratio"
+     ],
+     "not_measured": [
+      "payoff_ratio",
+      "avg_win",
+      "avg_loss",
+      "expectancy",
+      "kelly_pct"
+     ]
+    },
+    "mixed": [
+     "calmar_ratio"
+    ],
+    "note": "총수익률 · 연환산 수익률(CAGR) · 최대 낙폭은 거래비용을 뺀 자본곡선에서 계산합니다. 변동성 · 샤프 · 소르티노 · 초과수익 · 정보비율과 VaR 등 분포 지표는 거래비용을 빼기 전 일별 수익에서 계산하고, 칼마는 비용 전 연율 수익을 비용 후 최대 낙폭으로 나눈 값입니다. 비용 후 변동성 · 샤프 · 소르티노 · 칼마는 같은 관례(무위험 연 3.5% · 표본 표준편차 · 산술 연율화)로 비용 후 일별 수익에서 다시 계산한 값입니다.",
+    "reasons": {}
+   },
    "information_ratio": null,
    "max_drawdown_pct": -39.63,
    "sharpe_ratio": 0.18,
+   "sharpe_ratio_after_cost": 0.18,
    "sharpe_ratio_full": 0.1785078272487149,
    "sortino_ratio": 0.3,
+   "sortino_ratio_after_cost": 0.29,
    "total_return_pct": 42.54,
+   "volatility_after_cost_pct": 17.2,
    "volatility_pct": 17.2
   },
   "turnover_avg_pct": 1.73
@@ -9184,6 +9379,7 @@
    "active_return_pct": null,
    "cagr_pct": 8.33,
    "calmar_ratio": 0.3,
+   "calmar_ratio_after_cost": 0.29,
    "convention": {
     "annualization": "arithmetic",
     "ddof": 1,
@@ -9192,12 +9388,76 @@
     "risk_free": 0.035,
     "starting_equity": null
    },
+   "cost_basis": {
+    "after_cost": [
+     "total_return_pct",
+     "cagr_pct",
+     "max_drawdown_pct",
+     "volatility_after_cost_pct",
+     "sharpe_ratio_after_cost",
+     "sortino_ratio_after_cost",
+     "calmar_ratio_after_cost"
+    ],
+    "before_cost": [
+     "volatility_pct",
+     "sharpe_ratio",
+     "sortino_ratio",
+     "sharpe_ratio_full",
+     "active_return_pct",
+     "information_ratio"
+    ],
+    "metrics": {
+     "after_cost": [
+      "max_drawdown",
+      "max_drawdown_days",
+      "avg_drawdown_pct",
+      "ulcer_index",
+      "recovery_factor"
+     ],
+     "before_cost": [
+      "volatility_pct",
+      "downside_deviation_pct",
+      "var_pct",
+      "cvar_pct",
+      "omega",
+      "gain_to_pain",
+      "tail_ratio",
+      "skew",
+      "kurtosis",
+      "best_period_pct",
+      "worst_period_pct",
+      "information_ratio",
+      "sharpe_ratio",
+      "sortino_ratio",
+      "annualized_return",
+      "annualized_volatility"
+     ],
+     "mixed": [
+      "calmar_ratio"
+     ],
+     "not_measured": [
+      "payoff_ratio",
+      "avg_win",
+      "avg_loss",
+      "expectancy",
+      "kelly_pct"
+     ]
+    },
+    "mixed": [
+     "calmar_ratio"
+    ],
+    "note": "총수익률 · 연환산 수익률(CAGR) · 최대 낙폭은 거래비용을 뺀 자본곡선에서 계산합니다. 변동성 · 샤프 · 소르티노 · 초과수익 · 정보비율과 VaR 등 분포 지표는 거래비용을 빼기 전 일별 수익에서 계산하고, 칼마는 비용 전 연율 수익을 비용 후 최대 낙폭으로 나눈 값입니다. 비용 후 변동성 · 샤프 · 소르티노 · 칼마는 같은 관례(무위험 연 3.5% · 표본 표준편차 · 산술 연율화)로 비용 후 일별 수익에서 다시 계산한 값입니다.",
+    "reasons": {}
+   },
    "information_ratio": null,
    "max_drawdown_pct": -32.47,
    "sharpe_ratio": 0.38,
+   "sharpe_ratio_after_cost": 0.36,
    "sharpe_ratio_full": 0.3825450225062047,
    "sortino_ratio": 0.64,
+   "sortino_ratio_after_cost": 0.6,
    "total_return_pct": 74.9,
+   "volatility_after_cost_pct": 16.26,
    "volatility_pct": 16.26
   },
   "turnover_avg_pct": 34.28
@@ -10166,6 +10426,7 @@
    "active_return_pct": null,
    "cagr_pct": 4.76,
    "calmar_ratio": 0.16,
+   "calmar_ratio_after_cost": 0.16,
    "convention": {
     "annualization": "arithmetic",
     "ddof": 1,
@@ -10174,12 +10435,76 @@
     "risk_free": 0.035,
     "starting_equity": null
    },
+   "cost_basis": {
+    "after_cost": [
+     "total_return_pct",
+     "cagr_pct",
+     "max_drawdown_pct",
+     "volatility_after_cost_pct",
+     "sharpe_ratio_after_cost",
+     "sortino_ratio_after_cost",
+     "calmar_ratio_after_cost"
+    ],
+    "before_cost": [
+     "volatility_pct",
+     "sharpe_ratio",
+     "sortino_ratio",
+     "sharpe_ratio_full",
+     "active_return_pct",
+     "information_ratio"
+    ],
+    "metrics": {
+     "after_cost": [
+      "max_drawdown",
+      "max_drawdown_days",
+      "avg_drawdown_pct",
+      "ulcer_index",
+      "recovery_factor"
+     ],
+     "before_cost": [
+      "volatility_pct",
+      "downside_deviation_pct",
+      "var_pct",
+      "cvar_pct",
+      "omega",
+      "gain_to_pain",
+      "tail_ratio",
+      "skew",
+      "kurtosis",
+      "best_period_pct",
+      "worst_period_pct",
+      "information_ratio",
+      "sharpe_ratio",
+      "sortino_ratio",
+      "annualized_return",
+      "annualized_volatility"
+     ],
+     "mixed": [
+      "calmar_ratio"
+     ],
+     "not_measured": [
+      "payoff_ratio",
+      "avg_win",
+      "avg_loss",
+      "expectancy",
+      "kelly_pct"
+     ]
+    },
+    "mixed": [
+     "calmar_ratio"
+    ],
+    "note": "총수익률 · 연환산 수익률(CAGR) · 최대 낙폭은 거래비용을 뺀 자본곡선에서 계산합니다. 변동성 · 샤프 · 소르티노 · 초과수익 · 정보비율과 VaR 등 분포 지표는 거래비용을 빼기 전 일별 수익에서 계산하고, 칼마는 비용 전 연율 수익을 비용 후 최대 낙폭으로 나눈 값입니다. 비용 후 변동성 · 샤프 · 소르티노 · 칼마는 같은 관례(무위험 연 3.5% · 표본 표준편차 · 산술 연율화)로 비용 후 일별 수익에서 다시 계산한 값입니다.",
+    "reasons": {}
+   },
    "information_ratio": null,
    "max_drawdown_pct": -39.48,
    "sharpe_ratio": 0.15,
+   "sharpe_ratio_after_cost": 0.15,
    "sharpe_ratio_full": 0.15382741102852351,
    "sortino_ratio": 0.25,
+   "sortino_ratio_after_cost": 0.25,
    "total_return_pct": 37.39,
+   "volatility_after_cost_pct": 17.28,
    "volatility_pct": 17.28
   },
   "turnover_avg_pct": 3.19

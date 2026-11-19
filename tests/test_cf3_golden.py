@@ -42,7 +42,11 @@ NEW_KEYS = {"alignment", "fallbacks", "view_legs_dropped", "sigma_missing", "dro
             "unapplied",
             # 성과 그림 문법(2026-11-09) — 백테스트가 같은 곡선에서 옮긴 해마다·달마다 수익과 큰 낙폭 사건. 곡선·지표는 한 자리도
             # 안 바뀌고(아래 비교가 건다) 이 둘의 값은 `tests/test_perf_periods_wiring.py` 가 곡선에서 다시 계산해 건다.
-            "periods", "drawdowns"}
+            "periods", "drawdowns",
+            # 비용 전 · 비용 후 나란히(C1 · 2026-11-19 받은 결정) — 워크포워드 요약에 더한 비용 후 넷과 키마다의 비용 기준표. 기존 요약 키는
+            # 한 자리도 안 바뀌고(아래 비교가 건다) 새 값은 `tests/test_walk_forward_cost_basis.py`(손 계산) · 국면 팔 골든(84개월)이 건다.
+            "volatility_after_cost_pct", "sharpe_ratio_after_cost", "sortino_ratio_after_cost", "calmar_ratio_after_cost",
+            "cost_basis"}
 
 T5 = ["005930", "000660", "035420", "051910", "068270"]
 LATE, HOLEY = "068270", "051910"

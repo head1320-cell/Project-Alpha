@@ -630,6 +630,59 @@ def _lambda_used(risk_aversion: float | None) -> dict:
             else {"value": float(risk_aversion), "source": "user"})
 
 
+#: 요약 · 지표 묶음의 키마다 비용 기준(C1 · 2026-11-19 받은 결정 '비용 전 · 뒤 나란히' · CLAUDE.md §3 의 별도 승인).
+#: 비용 전 = 거래비용을 빼기 전 일별 수익(`plan.port_daily`) · 비용 후 = 비용을 뺀 자본곡선 또는 거기서 되짚은 일별 수익 ·
+#: 혼합 = 칼마(비용 전 산술 연율 수익 ÷ 비용 후 최대 낙폭). 화면은 이 표를 이름표에 그대로 붙인다 — 키를 더하면 여기에도 적는다(시험이 빠진 키를 잡는다).
+_COST_BASIS: dict[str, Any] = {
+    "after_cost": ["total_return_pct", "cagr_pct", "max_drawdown_pct", "volatility_after_cost_pct",
+                   "sharpe_ratio_after_cost", "sortino_ratio_after_cost", "calmar_ratio_after_cost"],
+    "before_cost": ["volatility_pct", "sharpe_ratio", "sortino_ratio", "sharpe_ratio_full",
+                    "active_return_pct", "information_ratio"],
+    "mixed": ["calmar_ratio"],
+    "metrics": {
+        "after_cost": ["max_drawdown", "max_drawdown_days", "avg_drawdown_pct", "ulcer_index", "recovery_factor"],
+        "before_cost": ["volatility_pct", "downside_deviation_pct", "var_pct", "cvar_pct", "omega", "gain_to_pain",
+                        "tail_ratio", "skew", "kurtosis", "best_period_pct", "worst_period_pct", "information_ratio",
+                        "sharpe_ratio", "sortino_ratio", "annualized_return", "annualized_volatility"],
+        "mixed": ["calmar_ratio"],
+        # 거래 단위 손익을 넘기지 않아 값이 없는 칸(None) — 기준이 없다.
+        "not_measured": ["payoff_ratio", "avg_win", "avg_loss", "expectancy", "kelly_pct"],
+    },
+    "note": ("총수익률 · 연환산 수익률(CAGR) · 최대 낙폭은 거래비용을 뺀 자본곡선에서 계산합니다. "
+             "변동성 · 샤프 · 소르티노 · 초과수익 · 정보비율과 VaR 등 분포 지표는 거래비용을 빼기 전 일별 수익에서 계산하고, "
+             "칼마는 비용 전 연율 수익을 비용 후 최대 낙폭으로 나눈 값입니다. 비용 후 변동성 · 샤프 · 소르티노 · 칼마는 "
+             "같은 관례(무위험 연 3.5% · 표본 표준편차 · 산술 연율화)로 비용 후 일별 수익에서 다시 계산한 값입니다."),
+}
+_AFTER_COST_KEYS = (("volatility_after_cost_pct", "annualized_volatility", 100.0),
+                    ("sharpe_ratio_after_cost", "sharpe_ratio", 1.0),
+                    ("sortino_ratio_after_cost", "sortino_ratio", 1.0),
+                    ("calmar_ratio_after_cost", "calmar_ratio", 1.0))
+
+
+def _after_cost_ratios(eq: np.ndarray) -> tuple[dict[str, float | None], dict[str, str]]:
+    """비용 후 변동성 · 샤프 · 소르티노 · 칼마 — 반올림 전 자본곡선에서 비용 후 일별 수익을 되짚어 ★같은 관례★로 (C1).
+
+    리밸런싱 날은 비용을 그날 수익보다 먼저 물렸으므로 eq[i] ÷ eq[i−1] − 1 이 그날의 비용 후 수익이고, 첫날의 앞 값은
+    시작 자본 1.0 이다. 곡선이 0 이하로 내려간 날이 있으면 되짚지 않는다(0 으로 나누지 않는다 — 미상 + 사유).
+    어떤 결정도 이 값을 읽지 않는다(보이기만 한다 · 시험이 정적으로 건다).
+    """
+    from src.engine.quant_metrics import risk_adjusted_ratios
+    if eq.size and bool(np.any(eq <= 0)):
+        why = "자본곡선이 0 이하로 내려간 날이 있어 비용 후 일별 수익을 되짚지 않았습니다"
+        return {k: None for k, _, _ in _AFTER_COST_KEYS}, {k: why for k, _, _ in _AFTER_COST_KEYS}
+    prev = np.concatenate(([1.0], eq[:-1]))
+    rar = risk_adjusted_ratios(eq / prev - 1.0, eq, periods_per_year=252, risk_free=_RF)
+    vals: dict[str, float | None] = {}
+    why: dict[str, str] = {}
+    for key, src, scale in _AFTER_COST_KEYS:
+        v = rar.get(src)
+        vals[key] = None if v is None else round(float(v) * scale, 2)
+        if v is None:
+            # 사유는 단일 출처의 문장 그대로 — 화면에 그대로 뜨므로 문장 사이 줄표만 마침표로 바꾼다(뜻은 그대로).
+            why[key] = str(rar["reasons"].get(src) or "산출되지 않았습니다").replace(" — ", ". ")
+    return vals, why
+
+
 def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
                           impact: ImpactAssumptions | None = None) -> dict:
     """계획에 비용을 물려 자본곡선과 지표를 낸다 — ★O(T) 스칼라 루프★ (P7).
@@ -703,6 +756,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
     sharpe = metrics["sharpe_ratio"] or 0.0
     sortino = metrics["sortino_ratio"] or 0.0
     calmar = metrics["calmar_ratio"] or 0.0
+    after, after_why = _after_cost_ratios(eq)
     active_ret = None
     info_ratio = None
     if bench_aligned is not None and bench_aligned.size > 1:
@@ -822,6 +876,9 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             "sharpe_ratio_full": metrics.get("sharpe_ratio"),
             "active_return_pct": round(active_ret * 100, 2) if active_ret is not None else None,
             "information_ratio": round(info_ratio, 2) if info_ratio is not None else None,
+            # ★비용 후 넷 — 위 비용 전 값과 나란히(C1)★ 위의 키는 한 바이트도 바꾸지 않는다. 미상은 None(옛 0.0 계약이 없는 새 키다).
+            **after,
+            "cost_basis": {**_COST_BASIS, "reasons": after_why},
         },
         "config": {
             "model": plan.model, "rebalance": plan.rebalance,
