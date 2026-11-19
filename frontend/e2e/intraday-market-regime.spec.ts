@@ -55,6 +55,36 @@ async function run(page: Page, f: { index?: string; k: string; from: string; to:
   return { params: Object.fromEntries(url.searchParams), js };
 }
 
+/**
+ * 국면별 통계 표의 머리글이 ★낱말 가운데서★ 꺾인 자리 — 없어야 한다(keep-all 을 빼면 "평 / 균" · "변 / 동" · "연 / 율" — 잰 값 2026-11-19).
+ * 글자마다 상자(Range)를 재어 앞 글자 상자의 아래보다 아래에서 시작하면 새 줄이다. 그 사이에 빈칸이 없고 새 줄이 여는 괄호로 시작하지 않으면 낱말 가운데다.
+ * 짝: 실제로 줄이 바뀐 머리글이 있어야 한다(`wrapped` — 한 줄짜리만 보면 공허하다).
+ */
+const headerBreaks = (page: Page) => page.locator(".itd-mr-facts .itd-mr-states th").evaluateAll((els) => {
+  const breaks: string[] = [];
+  let wrapped = 0;
+  for (const el of els) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let prev: { ch: string; bottom: number } | null = null, space = false, lines = 1;
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const s = n.textContent ?? "";
+      for (let i = 0; i < s.length; i++) {
+        if (/\s/.test(s[i])) { space = true; continue; }
+        const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1);
+        const box = r.getClientRects()[0];
+        if (!box) continue;
+        if (prev && box.top >= prev.bottom - 2) {
+          lines += 1;
+          if (!space && s[i] !== "(") breaks.push(`${prev.ch}|${s[i]} · ${el.textContent ?? ""}`);
+        }
+        prev = { ch: s[i], bottom: box.bottom }; space = false;
+      }
+    }
+    if (lines > 1) wrapped += 1;
+  }
+  return { breaks, wrapped };
+});
+
 /** BIC 값 셋(국면 2 · 3 · 4)이 BIC 칸의 오른쪽 끝을 넘지 않는다 — 넘으면 옆 칸을 덮거나(넓은 폭) 잘린다(좁은 폭). */
 async function bicInside(page: Page) {
   const cell = await page.locator(".itd-mr-bic").boundingBox();
@@ -232,8 +262,16 @@ for (const theme of ["light", "dark"] as const) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     await bicInside(page);
     expect(await rowH(), "좁은 폭에서 통계 표의 칸 글자가 줄을 바꿨다").toEqual(wide);
-    const scroll = page.locator(".itd-mr-scroll");
-    expect(await scroll.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);   // 좁은 폭에서는 표가 옆으로 넘는다
+    // 390px 에서는 머리글만 줄을 바꿔 다섯 칸이 가로 스크롤 없이 다 보인다(2026-11-19 받은 결정 — 그 전에는 351px 표가 270px 칸에서 옆으로 넘어 오른쪽 칸이 가려졌다 · 잰 값).
+    const scroll = page.locator(".itd-mr-facts .itd-mr-scroll");
+    expect(await scroll.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), "390px 에서 국면별 통계 표가 옆으로 넘는다").toBe(true);
+    const heads = await headerBreaks(page);
+    expect(heads.breaks, "통계 표 머리글이 낱말 가운데서 꺾인 자리").toEqual([]);
+    expect(heads.wrapped, "390px 에서 줄이 바뀐 머리글이 없다(공허한 검사)").toBeGreaterThan(0);
+    // 더 좁은 폭(320px)에서는 여전히 옆으로 넘고(값 칸은 줄을 바꾸지 않는다), 넘는 상자는 키보드(Tab → ←→)로도 닿는다.
+    await page.setViewportSize({ width: 320, height: 844 });
+    expect(await rowH(), "320px 에서 통계 표의 칸 글자가 줄을 바꿨다").toEqual(wide);
+    expect(await scroll.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
     await scroll.focus();
     await page.keyboard.press("ArrowRight");
     await expect.poll(() => scroll.evaluate((e) => e.scrollLeft)).toBeGreaterThan(0);

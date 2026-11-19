@@ -10804,8 +10804,10 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-mr-scroll { max-width: 100%; overflow-x: auto; border-radius: 6px; }
 .itd-mr-scroll:focus-visible { outline: 2px solid var(--tx-cta); outline-offset: 2px; }
 .itd-mr-cap { margin: 0; font-size: 13px; line-height: 1.5; color: var(--tx-sub); word-break: keep-all; }
-/* 칸 글자는 줄을 바꾸지 않는다 — 좁은 폭에서는 표가 상자 안에서 옆으로 넘는다(.itd-dt-table 과 같은 꼴) */
-.itd-mr-states th, .itd-mr-states td { white-space: nowrap; }
+/* 값 칸은 줄을 바꾸지 않고 머리글만 낱말 단위로 줄을 바꾼다 — 390px 에서도 다섯 칸이 가로 스크롤 없이 다 보인다(2026-11-19 · 국면별 중심 표와 같은 꼴).
+   더 좁으면(320px) 표가 상자 안에서 옆으로 넘고 그 상자는 키보드로도 닿는다. */
+.itd-mr-states td { white-space: nowrap; }
+.itd-mr-states th { white-space: normal; word-break: keep-all; vertical-align: bottom; }
 .itd-mr-states th + th, .itd-mr-states td + td { padding-left: 16px; }
 .itd-mr-lines { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 16px; margin: 0; }
 .itd-mr-lines > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

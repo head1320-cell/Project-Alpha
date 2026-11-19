@@ -344,5 +344,9 @@ for (const theme of ["light", "dark"] as const) {
     const centersBox = page.locator(".itd-mrs-centersbox .itd-mr-scroll");
     await expect(centersBox).toBeVisible();
     expect(await centersBox.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    // 더한 답의 국면별 통계 표(시장 국면 절과 같은 부품)도 390px 에서 다섯 칸이 다 보인다(2026-11-19 · K1 표와 같은 고침).
+    const statsBox = page.locator(".itd-mrs .itd-mr-facts .itd-mr-scroll");   // 중심 표 상자도 itd-mr-tablebox 라 사실 묶음으로 좁힌다
+    await expect(statsBox).toBeVisible();
+    expect(await statsBox.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), "390px 에서 더한 답의 국면별 통계 표가 옆으로 넘는다").toBe(true);
   });
 }

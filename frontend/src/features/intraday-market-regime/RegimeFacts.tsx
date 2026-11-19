@@ -15,7 +15,7 @@ export function RegimeFacts({ a }: { a: MarketRegimeAnswer }) {
     <div className="itd-mr-facts">
       <div className="itd-mr-tablebox">
       <p className="itd-mr-cap" id={capId}>국면별 통계(그날 가장 큰 국면으로 센 날 · 값이 있는 날 {valued.toLocaleString("ko-KR")}일 · 관측이며 결정에 쓰지 않습니다)</p>
-      {/* 좁은 폭에서는 칸 글자를 쪼개지 않고 표를 옆으로 넘긴다 — 넘는 상자는 키보드(Tab → ←→)로도 닿는다 */}
+      {/* 머리글만 낱말 단위로 줄을 바꿔 390px 에서도 다섯 칸이 다 보인다(값 칸은 쪼개지 않는다) — 더 좁으면 표가 옆으로 넘고, 넘는 상자는 키보드(Tab → ←→)로도 닿는다 */}
       <div className="itd-mr-scroll" role="region" tabIndex={0} aria-labelledby={capId}>
       <table className="pg-table itd-mr-states" aria-labelledby={capId}>
         <thead>
