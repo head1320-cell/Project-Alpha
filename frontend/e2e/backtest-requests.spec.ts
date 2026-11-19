@@ -21,6 +21,15 @@ const act = (page: Page, a: string) => page.locator(`[data-act="${a}"]`);
 
 type Runs = { bodies: string[] };
 
+/** 서버가 그린 '실행' 단추는 수화 전에도 보인다 — 수화 전에 채운 글자 · 누른 클릭은 사라진다(a97ca10 푸시 실행의 간헐 실패:
+ *  빈 이름을 채웠는데 기본값 '내 전략'이 실렸다 · 스크립트 청크를 늦추면 5/5 재현 · 2026-11-19). 머리 줄 동그라미는 서버가 `loading`
+ *  으로 그리고 클라이언트 효과가 세션을 정한다 — 그 뒤에 만진다(`login.spec` · `profile.spec` 과 같은 신호). 레이아웃과 이 화면 사이에
+ *  Suspense · Activity 경계가 없어(next.config 에 cacheComponents 없음 · loading.tsx 없음) 한 번에 수화된다. */
+async function ready(page: Page) {
+  await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".terminal-header .pf-avatar").first()).not.toHaveAttribute("data-state", "loading", { timeout: 20_000 });
+}
+
 async function setup(page: Page, seed?: (p: Page) => Promise<void>): Promise<Runs> {
   await page.clock.setFixedTime(NOW);
   const runs: Runs = { bodies: [] };
@@ -34,7 +43,7 @@ async function setup(page: Page, seed?: (p: Page) => Promise<void>): Promise<Run
   await page.route("**/api/v1/backtest/runs/bu3-golden**", (route) => route.fulfill({ status: 404, json: { detail: "golden" } }));
   await page.goto("/backtest", { waitUntil: "domcontentloaded" });
   if (seed) { await seed(page); await page.reload({ waitUntil: "domcontentloaded" }); }
-  await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
+  await ready(page);
   return runs;
 }
 
@@ -48,7 +57,7 @@ async function runOnce(page: Page, runs: Runs): Promise<string> {
 
 async function back(page: Page) {
   await page.goto("/backtest", { waitUntil: "domcontentloaded" });
-  await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
+  await ready(page);
 }
 
 /** 돈·기간·비용 칸이 있는 단계로 — BU3 부터 ④(`step-capital`), 그 전에는 매수 단계에 있었다(골든 자료는 같다). */
@@ -165,7 +174,7 @@ test("백테스트 요청 골든: 스크리너·매크로에서 넘어온 설정
     } }));
   });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(act(page, "run")).toBeVisible({ timeout: 20_000 });
+  await ready(page);
   out["09 매크로 넘김"] = await runOnce(page, runs);
 
   const key = "handoff";
