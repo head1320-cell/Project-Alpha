@@ -4,18 +4,19 @@
  * ==========================================================================
  * 확대 표시 · 고른 노드 막대 · 열린 메뉴 닫기 · 정렬 메뉴 · 확대율 · 보기 메뉴 · 이름 + 목표 칩 · 단계 레인 · 오른쪽 창 폭 손잡이.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { ControlButton, NodeToolbar, Position, ViewportPortal, useStore, useStoreApi } from "@xyflow/react";
 import { AlignStartVertical, Check, Eye, Target } from "lucide-react";
 import { GOALS, nodeHeight, type GoalKey, type WorkflowStage } from "@/entities/portfolio-graph";
 import { laneLayout } from "@/entities/portfolio-graph/lanes";
+import { Splitter } from "@/shared/ui/split/Splitter";
 import { SELBAR_ROOM, SELBAR_W, SNAP, zoomLevel } from "./canvasGeometry";
 import { PG_BRANCH_TYPE } from "./Branches";
 import { STAGE_VAR } from "./GraphNode";
 import { PG_GROUP_TYPE } from "./GroupFrame";
 import { ALIGN_ITEMS, type AlignKind } from "./guides";
 import { pgZRule } from "./zoomVar";
-import { RIGHT_W, clampW, floatCorner, floatInsets } from "./panels";
+import { RIGHT_W, floatCorner, floatInsets } from "./panels";
 import { usePortfolioGraph } from "./store";
 import { measuredH, measuredW } from "./toolbarPlace";
 import { WIRE_SHAPES, type WireShape } from "./wirePath";
@@ -298,29 +299,11 @@ export function StageLanes({ stages }: { stages: WorkflowStage[] }) {
   );
 }
 
-/** 오른쪽 창 폭 손잡이(BQ Q1) — 끌거나, 초점을 두고 ←(넓게)·→(좁게)·Home·End. 300~600px. 끝났을 때만 이 브라우저에 남긴다. */
+/**
+ * 오른쪽 창 폭 손잡이(BQ Q1) — 끌거나, 초점을 두고 ←(넓게)·→(좁게)·Home·End. 300~600px. 끝났을 때만 이 브라우저에 남긴다.
+ * 동작은 공용 구분선(`shared/ui/split` — 분봉 화면의 설정 칸과 같은 부품 · G5)이 갖고, 여기서는 이 판의 범위 · 이름 · 클래스만 준다(그려지는 DOM 은 예전 그대로).
+ */
 export function SideResize({ width, onChange }: { width: number; onChange: (w: number, done: boolean) => void }) {
-  const drag = useRef<{ x: number; w: number } | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const onKey = (e: ReactKeyboardEvent) => {
-    const next = e.key === "ArrowLeft" ? width + RIGHT_W.step : e.key === "ArrowRight" ? width - RIGHT_W.step
-      : e.key === "Home" ? RIGHT_W.min : e.key === "End" ? RIGHT_W.max : null;
-    if (next === null) return;
-    e.preventDefault();
-    onChange(clampW(next), true);
-  };
-  const move = (e: ReactPointerEvent) => { if (drag.current) onChange(clampW(drag.current.w + (drag.current.x - e.clientX)), false); };
-  const end = (e: ReactPointerEvent) => {
-    if (!drag.current) return;
-    onChange(clampW(drag.current.w + (drag.current.x - e.clientX)), true);
-    drag.current = null;
-    setDragging(false);
-  };
-  return (
-    <div className="pg-side-resize" role="separator" aria-orientation="vertical" aria-label="오른쪽 창 폭"
-         aria-valuemin={RIGHT_W.min} aria-valuemax={RIGHT_W.max} aria-valuenow={width} tabIndex={0}
-         data-drag={dragging || undefined} onKeyDown={onKey}
-         onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, w: width }; setDragging(true); }}
-         onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
-  );
+  return <Splitter className="pg-side-resize" label="오른쪽 창 폭" side="end" value={width}
+                   min={RIGHT_W.min} max={RIGHT_W.max} step={RIGHT_W.step} onChange={onChange} />;
 }

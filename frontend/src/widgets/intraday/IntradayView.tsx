@@ -8,16 +8,21 @@
  * ★합성 분봉이면 화면 맨 위에 그렇게 적는다★ — 적재 범위나 결과에 합성이 한 줄이라도 섞이면 알림이 고정된다.
  * ★낡은 결과를 남기지 않는다★ — 설정을 바꾸면 앞의 결과와 판정을 지우고 재계산이 필요하다고 말한다.
  * 로그인이 필요한 까닭: 무엇을 시험하는지가 드러나고, 시행 횟수를 사용자별로 기록한다.
+ * ★넓고 높은 화면에서는 두 칸(G5)★ — 왼쪽 설정 · 오른쪽 결과와 분석이 각자 구르고 실행 줄은 설정 칸 바닥에 붙는다(계획 문서 §6). 언제 나누는지는
+ * `splitPane.ts` 의 SPLIT_QUERY 하나 · 그 밖은 지금과 같은 한 열(같은 DOM 순서 · 같은 간격). 배치만 바꾼다 — 계산 · 시행 기록 · 서버 0줄.
  */
 import { useQuery } from "@tanstack/react-query";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { expandRule, getCoverage, getTemplates, simulate, validate, type Coverage, type SimulateRequest, type Validation } from "@/entities/intraday";
 import { useSession } from "@/entities/session";
 import { fromParams, useRuleCheck } from "@/features/intraday-rule-editor";
 import { Verdict } from "@/features/intraday-verdict";
 import { BACKTEST_MODES } from "@/shared/lib/modes";
 import { loginHref } from "@/shared/lib/nextPath";
+import { useMediaQuery } from "@/shared/lib/useMediaQuery";
+import { Splitter } from "@/shared/ui/split/Splitter";
 import { ModeSwitch, Notice, PageHead, RetryFail, Section } from "@/shared/ui/tx";
 import { DayTypeSection } from "./DayTypeSection";
 import { MarketRegimeSection } from "./MarketRegimeSection";
@@ -25,6 +30,8 @@ import { build, buildGrid, initialForm, parseTickers, recentPeriod, templateOf, 
 import { IntradayResult, type Sim } from "./IntradayResult";
 import type { Move } from "./RuleSection";
 import { GridForm, SetupForm, type CoverageState } from "./SetupForm";
+import { SET_MIN, SET_STEP, SPLIT_QUERY } from "./splitPane";
+import { useSplitPane } from "./useSplitPane";
 
 const TITLE = "백테스트";
 const LEDE = "정한 규칙을 과거 분봉에서 돌려 시뮬레이션 체결의 승률·손익비·비용을 집계하고, 그 숫자를 어디까지 읽을 수 있는지 관문으로 점검합니다. 규칙이나 종목을 권하지 않으며 주문을 내지 않습니다.";
@@ -33,10 +40,20 @@ const COVERAGE_DAYS = 31;
 
 type Run<T> = { kind: "idle" } | { kind: "pending" } | { kind: "fail"; status: number; error: string } | { kind: "done"; value: T };
 
+/** 두 칸일 때 결과 칸 맨 위의 문장 — 결과가 아직 없는 까닭. 실패는 실패 알림이 따로 말한다. */
+const EMPTY_TEXT = {
+  idle: "실행 결과가 이 자리에 나옵니다. 설정을 정하고 실행하십시오.",
+  stale: "설정이 변경돼 앞의 결과를 지웠습니다. 다시 실행하십시오.",
+  pending: "계산 중입니다.",
+} as const;
+
 export function IntradayView() {
   const { session, retry } = useSession();
+  const wide = useMediaQuery(SPLIT_QUERY);
+  const working = session.kind !== "loading" && session.kind !== "unknown" && session.kind !== "signed_out" && !session.mustChange;
+  const split = working && wide;
   return (
-    <div className="tx-page tj itd">
+    <div className="tx-page tj itd" data-split={split ? "" : undefined}>
       <PageHead title={TITLE} lede={LEDE} />
       <ModeSwitch label="백테스트 모드" modes={BACKTEST_MODES} current={HERE} />
       {session.kind === "loading" ? (
@@ -56,7 +73,7 @@ export function IntradayView() {
           <Link href="/settings#password" className="tx-btn tx-btn--main">비밀번호 바꾸러 가기</Link>
         </section>
       ) : (
-        <Workbench />
+        <Workbench split={split} />
       )}
     </div>
   );
@@ -74,7 +91,12 @@ const unwrap = <T,>(fn: () => Promise<{ ok: true; value: T } | { ok: false; stat
 const failOf = (e: unknown): { status: number; error: string } =>
   e instanceof Refused ? { status: e.status, error: e.message } : { status: 0, error: "서버 연결 실패" };
 
-function Workbench() {
+function Workbench({ split }: { split: boolean }) {
+  // 두 칸(G5): 설정 칸 폭 · 접힘은 이 브라우저에 남는다 · 실행하면 결과 칸을 맨 위로 · Enter 로 접으면 초점은 펴는 단추로.
+  // 훅의 답은 풀어 받는다 — 묶음째 들고 그 한 칸을 `ref` 에 넘기면 React 컴파일러 린트가 묶음 전체를 ref 로 보아 렌더 중 읽기를 막는다(잰 값 · 경고 7건).
+  const { pref, set: setSplit, measure, width: paneW, max: paneMaxW } = useSplitPane();
+  const outRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   // 틀 목록과 '최근 한 달의 적재 범위'는 화면을 열 때 한 번 읽는다(기간을 주지 않으면 서버가 최근 한 달을 답한다).
   const templates = useQuery({ queryKey: ["intraday", "templates"], queryFn: unwrap(getTemplates), staleTime: 0, retry: false });
   const recent = useQuery({ queryKey: ["intraday", "coverage", "recent"], queryFn: unwrap(() => getCoverage()), staleTime: 0, retry: false });
@@ -97,6 +119,8 @@ function Workbench() {
   const toCheck = custom && built?.ruleReady ? built.request.rule : null;
   const ruleCheck = useRuleCheck(toCheck);
   const [move, setMove] = useState<Move>({ kind: "idle" });
+  // 실행을 시작하면 결과 칸을 맨 위로(두 칸에서 앞 결과를 아래까지 읽던 자리에 새 결과가 묻히지 않게) · 한 열에서는 구르지 않는 칸이라 아무 일도 없다.
+  useEffect(() => { if (run.kind === "pending") outRef.current?.scrollTo?.({ top: 0 }); }, [run.kind]);
 
   if (templates.isPending) return <p className="tx-sec-sub" aria-busy="true">설정 칸 불러오는 중</p>;
   if (templates.isError) {
@@ -154,6 +178,14 @@ function Workbench() {
       : r.status === 400 || r.status === 422 ? <Notice tone="danger" title={`${title} 거절`}><span data-server>{r.error}</span></Notice>
       : <RetryFail title={`${title} 실패`} onRetry={again}><span data-server>{r.error}</span></RetryFail>
   );
+  // 두 칸에서 결과 칸이 빈 까닭(실행 전 · 설정을 바꿔 지운 뒤 · 계산 중). 실패와 결과는 그 자체가 말한다 · 한 열에서는 지금처럼 아무것도 두지 않는다.
+  const empty = run.kind === "pending" ? "pending" : run.kind === "idle" ? (stale ? "stale" : "idle") : null;
+  const open = pref.open;
+  /** 구분선에서 Enter — 설정 칸을 접고(구분선도 숨는다) 초점을 펴는 단추로 옮긴다(숨은 요소에 초점이 남지 않게). */
+  const collapse = () => {
+    setSplit({ ...pref, open: false }, true);
+    requestAnimationFrame(() => toggleRef.current?.focus());
+  };
 
   return (
     <>
@@ -165,36 +197,58 @@ function Workbench() {
         </div>
       ) : null}
 
-      <SetupForm templates={t} form={form} onChange={change} coverage={coverage} onCoverage={() => void askCoverage()}
-                 problems={problems} pending={run.kind === "pending"} stale={stale} onRun={() => void start()}
-                 ruleReady={built.ruleReady} check={ruleCheck} move={move} onToCustom={(rule) => void toCustom(rule)}
-                 hypothesis={hypothesis} onHypothesis={setHypothesis} />
-
-      {run.kind === "fail" ? <div className="tj-run-fail itd-run-fail">{fail(run, "실행 요청", () => void start())}</div> : null}
-      {run.kind === "done" ? <IntradayResult sim={run.value} /> : null}
-
-      {run.kind === "done" && !run.value.empty ? (
-        <Section title="판정" sub="같은 규칙을 표본외 구간 · 두 배의 비용 · 다른 슬리피지 가정 · 시행 횟수로 다시 봅니다. 판정을 볼 때마다 표본외 구간을 본 횟수가 기록됩니다.">
-          <div className="tj-map itd-judge">
-            <GridForm templates={t} form={form} onChange={(next) => { setForm(next); if (check.kind !== "idle") setCheck({ kind: "idle" }); }} cells={grid.cells} />
-            <div className="tj-run-row">
-              <button type="button" className="tx-btn tx-btn--main tj-run itd-judge-btn" disabled={grid.problems.length > 0 || check.kind === "pending"} onClick={() => void judge()}>
-                {check.kind === "pending" ? "계산 중" : "판정"}
+      {/* 작업 칸 — 한 열에서는 설정 다음에 결과가 같은 간격으로 이어지고, 두 칸에서는 [설정 | 구분선 | 결과와 분석]. 자리(null 포함)가 고정이라 창 크기를 넘나들어도 절들이 다시 생기지 않는다. */}
+      <div className="itd-work" ref={measure} data-set={split ? (open ? "open" : "closed") : undefined}
+           style={split ? ({ "--itd-set-w": `${paneW}px` } as CSSProperties) : undefined}>
+        <div className="itd-set" id="itd-set" role="region" aria-label="설정">
+          <SetupForm templates={t} form={form} onChange={change} coverage={coverage} onCoverage={() => void askCoverage()}
+                     problems={problems} pending={run.kind === "pending"} stale={stale} onRun={() => void start()}
+                     ruleReady={built.ruleReady} check={ruleCheck} move={move} onToCustom={(rule) => void toCustom(rule)}
+                     hypothesis={hypothesis} onHypothesis={setHypothesis} />
+        </div>
+        {split ? (
+          <Splitter className="itd-split-bar" label="설정 창 폭" side="start" value={paneW} min={SET_MIN} max={paneMaxW} step={SET_STEP}
+                    controls="itd-set" onChange={(w, done) => setSplit({ ...pref, w }, done)} onEnter={collapse} />
+        ) : null}
+        <div className="itd-out" ref={outRef} role="region" aria-label="결과와 분석">
+          {split ? (
+            <div className="itd-out-bar">
+              <button ref={toggleRef} type="button" className="tx-btn tx-btn--sub itd-set-toggle" aria-expanded={open} aria-controls="itd-set"
+                      onClick={() => setSplit({ ...pref, open: !open }, true)}>
+                {open ? <PanelLeftClose size={16} aria-hidden /> : <PanelLeftOpen size={16} aria-hidden />}
+                {open ? "설정 접기" : "설정 펴기"}
               </button>
-              {grid.problems.length ? <ul className="tj-map-miss itd-grid-problems">{grid.problems.map((p) => <li key={p}>{p}</li>)}</ul>
-                : <p className="tj-note">판정은 설정을 여러 번 다시 돌립니다. 종목 수 × 거래일 수 × 계산 횟수가 {t.limits.validate_work.toLocaleString("ko-KR")}을 넘으면 거절합니다.</p>}
             </div>
-            {check.kind === "fail" ? <div className="itd-judge-fail">{fail(check, "판정 요청", () => void judge())}</div> : null}
-          </div>
-        </Section>
-      ) : null}
-      {check.kind === "done" ? <Verdict v={check.value} labels={labels} /> : null}
+          ) : null}
+          {split && empty ? <p className="itd-out-empty" role="status" data-state={empty}>{EMPTY_TEXT[empty]}</p> : null}
 
-      {/* 하루 유형(T1) — 규칙 실행 · 판정과 따로 돈다(학습은 시행이 아니다). 처음 값만 규칙 설정에서 받는다. */}
-      <DayTypeSection tickers={form.tickers} from={form.from} to={form.to} />
+          {run.kind === "fail" ? <div className="tj-run-fail itd-run-fail">{fail(run, "실행 요청", () => void start())}</div> : null}
+          {run.kind === "done" ? <IntradayResult sim={run.value} /> : null}
 
-      {/* 시장 국면(K1) — 지수 일봉의 국면 소속 확률. 규칙 실행 · 판정과 따로 돈다(계산만 · 저장 없음). 처음 기간만 규칙 설정에서 받는다. */}
-      <MarketRegimeSection from={form.from} to={form.to} />
+          {run.kind === "done" && !run.value.empty ? (
+            <Section title="판정" sub="같은 규칙을 표본외 구간 · 두 배의 비용 · 다른 슬리피지 가정 · 시행 횟수로 다시 봅니다. 판정을 볼 때마다 표본외 구간을 본 횟수가 기록됩니다.">
+              <div className="tj-map itd-judge">
+                <GridForm templates={t} form={form} onChange={(next) => { setForm(next); if (check.kind !== "idle") setCheck({ kind: "idle" }); }} cells={grid.cells} />
+                <div className="tj-run-row">
+                  <button type="button" className="tx-btn tx-btn--main tj-run itd-judge-btn" disabled={grid.problems.length > 0 || check.kind === "pending"} onClick={() => void judge()}>
+                    {check.kind === "pending" ? "계산 중" : "판정"}
+                  </button>
+                  {grid.problems.length ? <ul className="tj-map-miss itd-grid-problems">{grid.problems.map((p) => <li key={p}>{p}</li>)}</ul>
+                    : <p className="tj-note">판정은 설정을 여러 번 다시 돌립니다. 종목 수 × 거래일 수 × 계산 횟수가 {t.limits.validate_work.toLocaleString("ko-KR")}을 넘으면 거절합니다.</p>}
+                </div>
+                {check.kind === "fail" ? <div className="itd-judge-fail">{fail(check, "판정 요청", () => void judge())}</div> : null}
+              </div>
+            </Section>
+          ) : null}
+          {check.kind === "done" ? <Verdict v={check.value} labels={labels} /> : null}
+
+          {/* 하루 유형(T1) — 규칙 실행 · 판정과 따로 돈다(학습은 시행이 아니다). 처음 값만 규칙 설정에서 받는다. */}
+          <DayTypeSection tickers={form.tickers} from={form.from} to={form.to} />
+
+          {/* 시장 국면(K1) — 지수 일봉의 국면 소속 확률. 규칙 실행 · 판정과 따로 돈다(계산만 · 저장 없음). 처음 기간만 규칙 설정에서 받는다. */}
+          <MarketRegimeSection from={form.from} to={form.to} />
+        </div>
+      </div>
     </>
   );
 }

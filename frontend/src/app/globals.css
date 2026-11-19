@@ -10658,6 +10658,32 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
    색은 --tx-* 토큰만(다크 짝 자동). 관문의 상태는 색만으로 말하지 않는다 — 글자(통과 · 미달 · 미상)와 차례 번호가 함께 간다. */
 .itd-banner { position: sticky; top: 8px; z-index: 5; }
 .itd-banner .tx-notice { box-shadow: 0 0 0 1px var(--tx-line), 0 6px 18px rgb(25 31 40 / 8%); }
+/* G5 분할 창(작업 공간 1단계 · 계획 문서 §6) — '설정 | 결과와 분석'. 두 칸은 [data-split] 일 때만(가로 1280px · 세로 800px 이상 — splitPane.ts 의 SPLIT_QUERY 하나).
+   한 열은 지금과 같다: 묶음 상자 셋은 블록이고 안쪽 간격은 `.tj > * + *` 와 같은 12px. 두 칸에서는 페이지를 본문 높이에 맞추고(머리줄 64 · 위아래 여백 80)
+   두 칸이 각자 구른다 · 실행 줄은 설정 칸 바닥에 붙는다. 색은 --tx-* 토큰만(다크 짝이 있다 · 생성기 대상 아님). */
+.itd-work > * + *, .itd-set > * + *, .itd-out > * + * { margin-top: 12px; }
+.itd[data-split] { max-width: none; height: calc(100vh - var(--t-header-h) - 80px); display: flex; flex-direction: column; }
+/* 줄어드는 것은 작업 칸 하나 — 모드 전환 줄은 스크롤 칸(overflow-x)이라 flex 의 자동 최소 높이가 0 으로 풀려 눌려 없어졌다(잰 값 42 → 10px). */
+.itd[data-split] > :not(.itd-work) { flex: none; }
+.itd[data-split] > .itd-work { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--itd-set-w, 480px) 16px minmax(0, 1fr); }
+.itd[data-split] .itd-work > * { margin-top: 0; min-height: 0; }
+.itd[data-split] .itd-set { grid-column: 1; overflow-y: auto; overscroll-behavior: contain; }
+.itd[data-split] .itd-out { grid-column: 3; overflow-y: auto; overscroll-behavior: contain; }
+.itd[data-split] .itd-work[data-set="closed"] { grid-template-columns: minmax(0, 1fr); }
+.itd[data-split] .itd-work[data-set="closed"] > .itd-set, .itd[data-split] .itd-work[data-set="closed"] > .itd-split-bar { display: none; }
+.itd[data-split] .itd-work[data-set="closed"] > .itd-out { grid-column: 1; }
+.itd[data-split] .itd-set > .itd-run-row { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 0 0 1px var(--tx-line), 0 -10px 20px -16px rgb(25 31 40 / 40%); }
+.itd-split-bar { grid-column: 2; position: relative; cursor: col-resize; touch-action: none; }
+.itd-split-bar::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; margin-left: -0.5px; background: var(--tx-line); }
+.itd-split-bar::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 44px; margin: -22px 0 0 -2px; border-radius: 2px;
+  background: var(--tx-mute); transition: background-color .15s; }
+.itd-split-bar:hover::after, .itd-split-bar:focus-visible::after, .itd-split-bar[data-drag]::after { background: var(--tx-blue); }
+.itd-split-bar:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; border-radius: 4px; }
+.itd-out-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding-bottom: 4px; background: var(--tx-bg); }
+.itd-set-toggle { height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; background: var(--tx-surface); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.itd-set-toggle:hover { background: var(--tx-soft); }
+.itd-out-empty { padding: 18px 24px; border-radius: var(--tx-r-sec); background: var(--tx-surface); color: var(--tx-sub); font-size: 14px; line-height: 1.55; word-break: keep-all; }
+@media (prefers-reduced-motion: reduce) { .itd-split-bar::after { transition: none; } }
 .itd-hint { font-size: 12px; line-height: 1.4; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
 .itd-tickers, .itd-dt-tickers { height: auto; min-height: 64px; padding: 9px 10px; line-height: 1.5; resize: vertical; font-family: var(--t-mono); font-size: 13.5px; }
 .itd select.tj-input { appearance: auto; padding-right: 6px; }
