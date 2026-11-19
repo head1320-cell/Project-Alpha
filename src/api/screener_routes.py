@@ -1441,6 +1441,8 @@ class ScreenToBacktestRequest(BaseModel):
     # 전부 0★ 이었다 — 실행 준비실(`execution_plan`)은 셋 다 계산하는데도.
     # 켜면 `market_rules` 의 **같은 요율**을 쓴다. 기본을 켜지 않는 이유는 켜는
     # 순간 저장된 모든 실행과 골든의 뜻이 바뀌기 때문이다.
+    # ★매도세는 예외(S1 · 2026-11-19)★ — 켜면 고정 18bp 가 아니라 매도마다 그 거래일 · 시장 · 상품의 세율이고
+    # (`market_rules.sell_tax_bp_on`), 종목 마스터가 시장 · 상품을 모르면 그 매도의 세금은 미상이다.
     charge_sell_tax: bool = False
     charge_spread: bool = False
     charge_market_impact: bool = False

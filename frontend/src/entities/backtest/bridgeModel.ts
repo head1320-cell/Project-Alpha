@@ -73,6 +73,77 @@ export interface MonthlyReturn {
   return_pct: number;
 }
 
+/** 비용 성분 하나의 상태 — 부과 · 끔(선택) · 미상(켰는데 못 잼) · 엔진에 없음. ★`off` 와 `unmeasurable` 은 같은 0 원이 아니다★ */
+export type CostState = "charged" | "off" | "unmeasurable" | "unsupported";
+export type CostPart = "commission" | "slippage" | "tax" | "spread" | "impact";
+
+/**
+ * 거래일별 매도세의 셈 (S1 · 2026-11-19) — ★매도세를 켠 실행에만 실린다★(꺼진 실행의 블록은 예전 그대로).
+ * 매도마다 그 체결일 · 시장 · 상품의 세율(세율표 · 보도 근거 T1)이고, 종목 마스터가 시장 · 상품을 모르거나 세율표 밖의 날이면
+ * 그 매도의 세금은 부과하지 않고 ★미상으로 센다★(사유별 건수 · 0 원이 아니다).
+ */
+export interface SellTaxBlock {
+  basis: "trade_date";
+  /** 근거 표지 — 세율표로 산출한 값이라 `추론`(용어집 §3.17). */
+  label: string;
+  /** 부과에 쓴 세율표 줄의 근거 등급(예: T1). 부과한 매도가 없으면 빈 목록. */
+  grades: string[];
+  note: string;
+  n_sells: number;
+  n_charged: number;
+  n_unmeasured: number;
+  /** 부과한 세율(bp)별 매도 수 — 합 = `n_charged`. */
+  rates_bp: { bp: number; n: number }[];
+  /** 미상 사유별 매도 수 — 합 = `n_unmeasured`. */
+  unmeasured: { code: string; n: number; message: string }[];
+  round_trip_note: string;
+}
+
+/**
+ * ★이 실행이 무엇을 부과했고 무엇을 **못 쟀나**★ (AK)
+ *
+ * 성분 다섯이 **언제나** 실린다 — 빠진 성분은 0 이 아니라 부재이고, 부재는
+ * 화면에서 보이지 않는다.
+ *
+ * ★`off` 와 `unmeasurable` 을 같은 0원으로 읽지 말 것★ — 앞은 사용자가
+ * **끈 것**(선택)이고 뒤는 켰는데 **못 잰 것**(예: 거래대금이 없어 참여율을
+ * 구하지 못함)이다. 뒤쪽은 *"비용이 실제보다 싸게 나왔다"* 는 경고이고,
+ * `n_unmeasured_trades` 가 몇 건이 그랬는지 센다.
+ */
+export interface CostModelBlock {
+  components: Record<CostPart, { state: CostState; bps: number; krw: number; reason: string | null }>;
+  total_krw: number;
+  /** ★실행 단위 블록에서는 늘 0 이다★(거래대금 대비로 셈하지 않는다 · 성분의 `bps` 도 같다 · 2026-11-19 관측) — 화면은 쓰지 않는다. */
+  total_bps: number;
+  /** 미상인 성분의 수 — ★2026-11-19 전에 저장된 실행은 늘 0 이었다★(서버 결함 · S1 에서 고침). 화면은 성분의 상태로 읽는다. */
+  n_unmeasurable: number;
+  /** 일부 비용을 재지 못한 거래 수(참여율을 못 구한 시장충격 · 세율을 모르는 매도세). ★0 원이 아니라 미상이다★ */
+  n_unmeasured_trades: number;
+  /** 이 실행이 쓴 요율. `impact_coeff` 는 ★측정치가 아니라 설정값★ 이다. 거래일별 매도세면 `tax_bps` 는 null 이고 `tax_schedule` 이 있다. */
+  policy: {
+    commission_bps: number; slippage_bps: number;
+    charge_tax: boolean; tax_bps: number | null;
+    charge_spread: boolean; spread_bps: number | null;
+    charge_impact: boolean; impact_coeff: number | null;
+    impact_coeff_note: string;
+    tax_schedule?: "trade_date";
+    tax_schedule_note?: string;
+  };
+  /** 같은 금액을 한 번 사고 한 번 팔면 몇 bp인가(충격 제외 · 거래일별 매도세도 제외) — 모델 비교용 자. */
+  round_trip_bps: number;
+  /**
+   * ★비용 **설정**의 판본★ (AM5) — `CostPolicy` 에서 결정론적으로 파생된다.
+   *
+   * 같은 값이면 같은 비용 설정으로 돈 실행이다. ★코드 버전이 아니다★ —
+   * 설정이 그대로면 엔진 코드가 바뀌어도 이 값은 그대로다. 두 실행을
+   * 비교할 때 "비용 가정이 같았나" 만 말해 주고, "같은 코드였나" 는
+   * 말하지 않는다.
+   */
+  version: string;
+  /** 거래일별 매도세의 셈 — 매도세를 켠 실행에만. */
+  sell_tax?: SellTaxBlock;
+}
+
 export interface ScreenToBacktestResult {
   error?: boolean;
   message?: string;
@@ -308,37 +379,7 @@ export interface ScreenToBacktestResult {
    * 구하지 못함)이다. 뒤쪽은 *"비용이 실제보다 싸게 나왔다"* 는 경고이고,
    * `n_unmeasured_trades` 가 몇 건이 그랬는지 센다.
    */
-  cost_model?: {
-    components: Record<
-      "commission" | "slippage" | "tax" | "spread" | "impact",
-      { state: "charged" | "off" | "unmeasurable" | "unsupported";
-        bps: number; krw: number; reason: string | null }
-    >;
-    total_krw: number;
-    total_bps: number;
-    n_unmeasurable: number;
-    /** 참여율을 못 구해 시장충격을 못 잰 거래 수. ★0 원이 아니라 미상이다★ */
-    n_unmeasured_trades: number;
-    /** 이 실행이 쓴 요율. `impact_coeff` 는 ★측정치가 아니라 설정값★ 이다. */
-    policy: {
-      commission_bps: number; slippage_bps: number;
-      charge_tax: boolean; tax_bps: number | null;
-      charge_spread: boolean; spread_bps: number | null;
-      charge_impact: boolean; impact_coeff: number | null;
-      impact_coeff_note: string;
-    };
-    /** 같은 금액을 한 번 사고 한 번 팔면 몇 bp인가(충격 제외) — 모델 비교용 자. */
-    round_trip_bps: number;
-    /**
-     * ★비용 **설정**의 판본★ (AM5) — `CostPolicy` 에서 결정론적으로 파생된다.
-     *
-     * 같은 값이면 같은 비용 설정으로 돈 실행이다. ★코드 버전이 아니다★ —
-     * 설정이 그대로면 엔진 코드가 바뀌어도 이 값은 그대로다. 두 실행을
-     * 비교할 때 "비용 가정이 같았나" 만 말해 주고, "같은 코드였나" 는
-     * 말하지 않는다.
-     */
-    version: string;
-  } | null;
+  cost_model?: CostModelBlock | null;
   /**
    * ★체결 규칙 — 비용이 아니라 체결 가능성★ (BC)
    *

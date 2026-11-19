@@ -81,7 +81,8 @@ class SetupParams(BaseModel):
     commission_rate: float = Field(0.0015, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("수수료율", "advanced")})
     slippage_rate: float = Field(0.0005, ge=0, le=0.05, json_schema_extra={"x-ui": _ui("슬리피지율", "advanced")})
     charge_sell_tax: bool = Field(False, json_schema_extra={"x-ui": _ui(
-        "매도세 부과", "advanced", help="켜면 실행 준비실과 같은 증권거래세율을 부과합니다(기본 미사용).")})
+        "매도세 부과", "advanced", help=("켜면 매도마다 그 거래일 · 시장 · 상품의 증권거래세와 농어촌특별세를 부과합니다(기본 미사용). "
+                                         "종목 마스터가 시장 · 상품을 모르는 종목은 부과하지 않고 미상으로 셉니다."))})
     stop_loss_pct: float | None = Field(None, gt=0, le=90, json_schema_extra={"x-ui": _ui("손절 %", "advanced")})
     take_profit_pct: float | None = Field(None, gt=0, le=500, json_schema_extra={"x-ui": _ui("익절 %", "advanced")})
 
@@ -182,7 +183,9 @@ def _load(inputs: dict, p: LoadParams) -> pg.NodeOutput:
             "drawdowns": drawdown_episodes(bt.get("equity_dates") or [], bt.get("equity_curve") or [], top=3),
             "benchmark": bt.get("benchmark"), "screened_count": result.get("screened_count"),
             "input": r.get("input_snapshot") or {}, "execution_assumption": r.get("execution_assumption"),
-            "is_mock_data": r.get("is_mock_data"), "is_pit_verified": r.get("is_pit_verified")}
+            "is_mock_data": r.get("is_mock_data"), "is_pit_verified": r.get("is_pit_verified"),
+            # 이 실행이 무엇을 부과했고 무엇을 못 쟀나(S1 · 2026-11-19) — 저장된 블록 그대로 · 없는 옛 실행은 None(0 원으로 짓지 않는다).
+            "cost_model": result.get("cost_model")}
     practice = r.get("is_mock_data") is not False                  # 미상은 연습용 쪽으로(넘치게 말한다)
     return pg.NodeOutput(values={"run": {"run_id": p.run_id, "run": r}}, view=view,
                          provenance={"perf_label": r.get("perf_label")},

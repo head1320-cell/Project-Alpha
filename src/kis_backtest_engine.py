@@ -28,7 +28,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from src.domain.cost_model import COMPONENTS as COST_COMPONENTS
-from src.domain.cost_model import CostPolicy, trade_cost
+from src.domain.cost_model import TAX_SCHEDULE_TRADE_DATE, CostPolicy, SellTaxRate, trade_cost
 from src.domain.execution_assumption import (
     SIGNAL_LAG_DEFAULT,
     ExecutionAssumption,
@@ -448,6 +448,16 @@ class _EngineCost(NamedTuple):
         return self.tax + self.spread + self.impact
 
 
+def _master_flags() -> dict:
+    """매도세의 시장 · 상품을 가르는 종목 마스터 플래그 — 매매일지 · 분봉 백테스트와 같은 원천(`stock_master`).
+
+    판정은 매매일지의 `market_and_instrument` 그대로다(마스터가 ★아는 것만★ · 모르면 `None`). 문 층
+    (`trade_journal_routes`)은 들여오지 않는다 — 엔진은 데이터 층을 직접 읽는다.
+    """
+    from src.data import stock_master as sm
+    return sm.load_master_flags() or {}
+
+
 def policy_from_config(cfg) -> CostPolicy:
     """`BacktestConfig` → `CostPolicy`. ★요율을 읽는 유일한 자리★ (AK4)
 
@@ -459,13 +469,18 @@ def policy_from_config(cfg) -> CostPolicy:
     from src.data import market_rules as mr
     from src.domain.cost_model import CostPolicy
 
+    tax_on = bool(getattr(cfg, "charge_sell_tax", False))
     return CostPolicy(
         commission_bps=float(cfg.commission_rate) * 1e4,
         slippage_bps=float(cfg.slippage_rate) * 1e4,
-        charge_tax=bool(getattr(cfg, "charge_sell_tax", False)),
+        charge_tax=tax_on,
         charge_spread=bool(getattr(cfg, "charge_spread", False)),
         charge_impact=bool(getattr(cfg, "charge_market_impact", False)),
-        tax_bps=mr.sell_tax_bp() if getattr(cfg, "charge_sell_tax", False) else None,
+        # ★켜면 거래일별 세율★(S1 · 2026-11-19 받은 결정) — 정책에 세율 하나를 두지 않고 매도마다 그 체결일 ·
+        # 시장 · 상품의 세율을 세율표(`mr.sell_tax_bp_on`)에서 읽는다(`_sell_tax_for`). 고정 18bp(`mr.sell_tax_bp()`)는
+        # 실행 준비실만 쓴다. 꺼지면 예전 정책 그대로다(새 필드는 기본값 — 판본 불변).
+        tax_bps=None,
+        tax_schedule=TAX_SCHEDULE_TRADE_DATE if tax_on else None,
         spread_bps=(mr.spread_bp_default()
                     if getattr(cfg, "charge_spread", False) else None),
         impact_coeff=(mr.impact_coeff()
@@ -669,6 +684,9 @@ class BacktestEngine:
         self._cost_reasons: dict[str, str | None] = {}
         # ★못 잰 거래를 센다★ — 0 으로 부과하면 "충격이 없었다" 는 관측이 된다.
         self._cost_unmeasured_trades = 0
+        # S1 — 거래일별 매도세의 셈(켰을 때만 쓰인다 · 꺼지면 결과에 싣지 않는다 — 바이트 불변).
+        self._sell_tax_flags: dict | None = None
+        self._sell_tax_stats: dict = {"n_sells": 0, "n_charged": 0, "rates": {}, "grades": set(), "unmeasured": {}}
         self._adv_cache: dict[str, dict] = {}
         # ── BC: 체결 규칙 계수 — ★꺼져 있으면 전부 0 이고 가격도 불변★ ──
         self._fill_counts = {"n_rejected_by_limit": 0, "n_limit_unknown": 0,
@@ -714,8 +732,14 @@ class BacktestEngine:
             adv = self._adv_for(ticker, date_str)
             if adv:
                 participation = float(value) / adv
-        bd = trade_cost(value, side, self._cost_policy, participation=participation)
+        sell_tax = None
+        if (self._cost_policy.charge_tax and self._cost_policy.tax_schedule == TAX_SCHEDULE_TRADE_DATE
+                and side == "sell"):
+            sell_tax = self._sell_tax_for(ticker, date_str)
+        bd = trade_cost(value, side, self._cost_policy, participation=participation, sell_tax=sell_tax)
         by = {c.name: c for c in bd.components}
+        if sell_tax is not None:
+            self._count_sell_tax(sell_tax, by["tax"])
         for name, comp in by.items():
             self._cost_krw[name] += comp.krw
             self._cost_states[name] = comp.state
@@ -726,6 +750,56 @@ class BacktestEngine:
             commission=by["commission"].krw, slippage=by["slippage"].krw,
             tax=by["tax"].krw, spread=by["spread"].krw, impact=by["impact"].krw)
 
+    def _sell_tax_for(self, ticker: str | None, date_str: str | None) -> SellTaxRate:
+        """매도 하나의 세율 — 그 체결일 · 시장 · 상품의 세율표 값. ★모르면 0 이 아니라 미상 + 사유★ (S1)
+
+        시장 · 상품은 매매일지와 같은 판정(마스터가 아는 것만)이다. 마스터가 모르면 세율표를 묻지 않는다 —
+        가까운 시장 · 상품으로 어림하지 않는다. 세율표가 답하지 못하면(표 밖 날짜 · 등급 미달) 그 문장을 그대로 쓴다.
+        """
+        from src.data import market_rules as mr
+        from src.engine.trade_journal.costs import TAX_UNKNOWN_MESSAGES, market_and_instrument
+        if self._sell_tax_flags is None:
+            self._sell_tax_flags = _master_flags()
+        market, instrument = market_and_instrument(str(ticker or "").strip().upper(), self._sell_tax_flags.get)
+        if market is None or instrument is None:
+            code = "unknown_market_or_instrument"
+            return SellTaxRate(bp=None, reason=TAX_UNKNOWN_MESSAGES[code], code=code)
+        r = mr.sell_tax_bp_on(date_str, market, instrument)
+        if not r["available"]:
+            return SellTaxRate(bp=None, reason=r["message"], code=r["reason"], grade=r.get("grade"))
+        return SellTaxRate(bp=float(r["bp"]), grade=r["grade"])
+
+    def _count_sell_tax(self, rate: SellTaxRate, comp) -> None:
+        """거래일별 매도세의 셈 — 부과 · 미상을 세율 · 사유별로. 결과의 `cost_model.sell_tax` 가 이것을 낸다."""
+        from src.domain.cost_model import STATE_CHARGED
+        st = self._sell_tax_stats
+        st["n_sells"] += 1
+        if comp.state == STATE_CHARGED:
+            st["n_charged"] += 1
+            st["rates"][comp.bps] = st["rates"].get(comp.bps, 0) + 1
+            if rate.grade:
+                st["grades"].add(rate.grade)
+            return
+        code = rate.code or "no_rate"
+        n, _ = st["unmeasured"].get(code, (0, None))
+        st["unmeasured"][code] = (n + 1, comp.reason)
+
+    def _sell_tax_block(self) -> dict:
+        st = self._sell_tax_stats
+        return {
+            "basis": TAX_SCHEDULE_TRADE_DATE,
+            "label": "추론",
+            "grades": sorted(st["grades"]),
+            "note": ("매도마다 그 거래일(체결일) · 시장 · 상품의 증권거래세와 농어촌특별세를 세율표(보도 · 안내 자료 요약)로 "
+                     "부과했습니다. 법령 원문과 대조하지 않은 추론값입니다."),
+            "n_sells": st["n_sells"],
+            "n_charged": st["n_charged"],
+            "n_unmeasured": st["n_sells"] - st["n_charged"],
+            "rates_bp": [{"bp": bp, "n": n} for bp, n in sorted(st["rates"].items())],
+            "unmeasured": [{"code": code, "n": n, "message": msg} for code, (n, msg) in sorted(st["unmeasured"].items())],
+            "round_trip_note": "왕복 bp 에는 매도세를 넣지 않았습니다. 매도세는 거래일 · 시장 · 상품마다 다릅니다.",
+        }
+
     def _cost_model_block(self) -> dict:
         """이 실행이 **무엇을 부과했고 무엇을 못 쟀나**. (AK5)
 
@@ -733,7 +807,9 @@ class BacktestEngine:
         뒤는 *"비용이 실제보다 싸게 나왔다"* 는 경고다.
         """
         from src.domain.cost_model import (
+            STATE_CHARGED,
             STATE_OFF,
+            STATE_UNMEASURABLE,
             CostBreakdown,
             CostComponent,
             cost_label,
@@ -741,13 +817,30 @@ class BacktestEngine:
             policy_version,
             round_trip_bps,
         )
+        states, reasons = dict(self._cost_states), dict(self._cost_reasons)
+        trade_date_tax = (self._cost_policy.charge_tax
+                          and self._cost_policy.tax_schedule == TAX_SCHEDULE_TRADE_DATE)
+        if trade_date_tax:
+            # ★거래일별이면 세금 성분의 상태는 마지막 거래가 아니라 모든 매도로 정한다★ — 한 건이라도 세율을
+            # 몰랐으면 비용이 실제보다 싸게 나온 것이다(미상 ≠ 0).
+            st = self._sell_tax_stats
+            n_unm = st["n_sells"] - st["n_charged"]
+            if n_unm:
+                states["tax"] = STATE_UNMEASURABLE
+                reasons["tax"] = (f"매도 {st['n_sells']}건 가운데 {n_unm}건은 세율을 몰라 부과하지 않았습니다. "
+                                  "0 원이 아니라 미상입니다.")
+            elif st["n_sells"]:
+                # 모든 매도에 그날의 세율이 있었다 — 성분의 사유를 마지막 거래(매수일 수 있다)의 문장으로 두지 않는다.
+                states["tax"], reasons["tax"] = STATE_CHARGED, None
         comps = tuple(
-            CostComponent(name=n, state=self._cost_states.get(n, STATE_OFF),
+            CostComponent(name=n, state=states.get(n, STATE_OFF),
                           krw=self._cost_krw[n],
-                          reason=self._cost_reasons.get(n))
+                          reason=reasons.get(n))
             for n in COST_COMPONENTS)
         total = sum(c.krw for c in comps)
-        label = cost_label(CostBreakdown(components=comps, total_krw=total))
+        # ★못 잰 성분의 수를 센다★(S1 · 2026-11-19 찾음) — 옛 블록은 이 칸을 기본값 0 으로 실어 세금 · 충격이 미상인 실행도 '0' 이었다.
+        n_unmeasurable = sum(1 for c in comps if c.state == STATE_UNMEASURABLE)
+        label = cost_label(CostBreakdown(components=comps, total_krw=total, n_unmeasurable=n_unmeasurable))
         from src.domain.cost_provenance import rate_provenance
         return {**label,
                 # ★적용된 요율이 **어디서 왔는가**★ (AZ) — 값은 안 바꾸고
@@ -764,7 +857,9 @@ class BacktestEngine:
                 # 축이다 — 설정이 그대로면 코드가 바뀌어도 그대로다.
                 "version": policy_version(self._cost_policy),
                 "round_trip_bps": round_trip_bps(self._cost_policy)["round_trip_bps"],
-                "n_unmeasured_trades": self._cost_unmeasured_trades}
+                "n_unmeasured_trades": self._cost_unmeasured_trades,
+                # 거래일별 매도세의 셈 — ★켰을 때만 싣는다★(꺼진 실행의 블록은 바이트까지 그대로).
+                **({"sell_tax": self._sell_tax_block()} if trade_date_tax else {})}
 
     def _prev_close(self, ticker: str, date_str: str) -> float | None:
         """그날 **이전** 마지막 종가. ★없으면 `None` — 0 이 아니다★"""

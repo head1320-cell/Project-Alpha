@@ -174,6 +174,20 @@ def test_a_loaded_run_ships_its_drawdown_in_percent_and_period_returns_from_the_
     assert view["drawdowns"] == drawdown_episodes(bt["equity_dates"], bt["equity_curve"], top=3)
 
 
+def test_a_loaded_run_ships_its_cost_breakdown_as_stored(runs):
+    """S1(2026-11-19) — 켠 매도세의 미상 건수가 캔버스 결과 판에서도 보이게, 불러온 실행의 `cost_model` 을 그대로 싣는다
+    (화면이 새 수를 만들지 않는다). ★짝★ 그 블록이 없는 옛 실행은 None 이다 — 비용 0 원으로 지어내지 않는다."""
+    from src.api.backtest_run_routes import run_full
+    r = _run(_g([_load("run_ok")]))["nodes"]["l"]
+    assert r["status"] == "ok", r["reason"]
+    want = run_full("run_ok")["result"]["cost_model"]
+    assert want and set(want["components"]) == {"commission", "slippage", "tax", "spread", "impact"}
+    assert r["view"]["cost_model"] == want
+    del runs["store"]["run_ok2"]["result"]["cost_model"]
+    old = _run(_g([_load("run_ok2")]))["nodes"]["l"]
+    assert old["status"] == "ok" and old["view"]["cost_model"] is None
+
+
 @pytest.mark.parametrize("rid,words", [
     ("run_busy", ("아직", "45%")),
     ("run_bad", ("실패", "오류가 발생")),

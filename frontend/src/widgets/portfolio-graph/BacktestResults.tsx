@@ -7,7 +7,9 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { backtestRunApi, STAGE_LABELS, TERMINAL, type RunStatusLite } from "@/entities/backtest-run";
+import type { CostModelBlock } from "@/entities/backtest/bridgeModel";
 import type { NodeExplain } from "@/entities/portfolio-graph";
+import { CostBreakdown } from "@/features/cost-breakdown";
 import { PerfPanel } from "./perf/PerfPanel";
 import { compareViewOf, perfViewOfLoad, type CompareCurves, type DdEpisode, type YearDiffRow } from "@/shared/ui/perf/perfView";
 import { PerfCompare } from "@/shared/ui/perf/PerfCompare";
@@ -93,7 +95,12 @@ export function RunProgress({ runId, onReload }: { runId: string; onReload: () =
 export function BacktestLoadResult({ v, prov, explain }: { v: Dict; prov: Dict; explain?: NodeExplain | null }) {
   return (
     <PerfPanel view={perfViewOfLoad(v, prov, explain)} fallbackTitle="저장된 백테스트 결과"
-               after={<p className="pg-note">실행 {String(v.run_id)} · 조건 통과 {String(v.screened_count ?? "—")}종목</p>} />
+               after={<>
+                 <p className="pg-note">실행 {String(v.run_id)} · 조건 통과 {String(v.screened_count ?? "—")}종목</p>
+                 {/* 비용 분해(S1 · 2026-11-19) — 저장된 실행의 `cost_model` 그대로(서버 뷰가 옮김). 결과 화면과 같은 부품. */}
+                 <h4 className="pg-h4">비용 분해</h4>
+                 <CostBreakdown block={v.cost_model as CostModelBlock | null | undefined} />
+               </>} />
   );
 }
 

@@ -1,0 +1,202 @@
+{
+ "cost_model": {
+  "components": {
+   "commission": {
+    "bps": 0.0,
+    "krw": 15397.5222,
+    "reason": null,
+    "state": "charged"
+   },
+   "impact": {
+    "bps": 0.0,
+    "krw": 0.0,
+    "reason": "이 실행에서 껐습니다 — 부과하지 않기로 **선택**한 것이지 비용이 없다는 뜻이 아닙니다.",
+    "state": "off"
+   },
+   "slippage": {
+    "bps": 0.0,
+    "krw": 5132.5074,
+    "reason": null,
+    "state": "charged"
+   },
+   "spread": {
+    "bps": 0.0,
+    "krw": 0.0,
+    "reason": "이 실행에서 껐습니다 — 부과하지 않기로 **선택**한 것이지 비용이 없다는 뜻이 아닙니다.",
+    "state": "off"
+   },
+   "tax": {
+    "bps": 0.0,
+    "krw": 0.0,
+    "reason": "이 실행에서 껐습니다 — 부과하지 않기로 **선택**한 것이지 비용이 없다는 뜻이 아닙니다.",
+    "state": "off"
+   }
+  },
+  "n_unmeasurable": 0,
+  "n_unmeasured_trades": 0,
+  "policy": {
+   "charge_impact": false,
+   "charge_spread": false,
+   "charge_tax": false,
+   "commission_bps": 15.0,
+   "impact_coeff": null,
+   "impact_coeff_note": "시장충격 계수는 ★측정치가 아니라 설정값★ 입니다 — `impact_bp = k·√참여율` 은 문헌 근사이고 k 는 관측된 적이 없습니다.",
+   "slippage_bps": 5.0,
+   "spread_bps": null,
+   "tax_bps": null
+  },
+  "rate_provenance": {
+   "commission": {
+    "basis": "never_measured",
+    "basis_reason": "이 요율을 이 저장소가 재본 적이 없습니다 — docs/specs/cost-rate-evidence.json 의 관측이 비어 있습니다. 통일은 그 파일이 C2 이상으로 채워진 뒤의 일입니다.",
+    "bps": 15.0,
+    "door": null,
+    "origin": "unknown",
+    "reason": "이 실행 경로는 요청이 요율을 명시했는지를 실어 나르지 않습니다 — 요청이 준 값인지 문의 기본값인지 ★알 수 없습니다★. 기본값이라고 단정하지 않습니다."
+   },
+   "min_grade_to_unify": "C2",
+   "note": "이 블록은 요율이 ★어디서 왔는가★만 말합니다 — 그 요율이 옳은지는 말하지 않습니다. 실측(2026-09-22): 요청이 요율을 안 실으면 문이 정하고, 왕복 비용이 screener 계열 40.0bp 와 stage11 계열 13.0bp 로 갈립니다. ★두 값 모두 이 저장소가 재본 적이 없어 통일하지 않았습니다★ — 안 재본 값으로 수렴시키면 불일치가 거짓 합의가 됩니다.",
+   "slippage": {
+    "basis": "never_measured",
+    "basis_reason": "이 요율을 이 저장소가 재본 적이 없습니다 — docs/specs/cost-rate-evidence.json 의 관측이 비어 있습니다. 통일은 그 파일이 C2 이상으로 채워진 뒤의 일입니다.",
+    "bps": 5.0,
+    "door": null,
+    "origin": "unknown",
+    "reason": "이 실행 경로는 요청이 요율을 명시했는지를 실어 나르지 않습니다 — 요청이 준 값인지 문의 기본값인지 ★알 수 없습니다★. 기본값이라고 단정하지 않습니다."
+   }
+  },
+  "round_trip_bps": 40.0,
+  "total_bps": 0.0,
+  "total_krw": 20530.03,
+  "version": "103927a44d5b"
+ },
+ "statistics": {
+  "annualized_return": 0.36647601673878283,
+  "annualized_volatility": 0.14023728835171728,
+  "avg_drawdown_pct": -3.68,
+  "avg_loss": 232139.44,
+  "avg_trade_return": 1.2717,
+  "avg_win": 654731.57,
+  "best_period_pct": 0.95,
+  "cagr": 39.53,
+  "calmar_ratio": 6.258,
+  "convention": {
+   "annualization": "arithmetic",
+   "ddof": 1,
+   "declared": true,
+   "periods_per_year": 252,
+   "risk_free": 0.035,
+   "starting_equity": null
+  },
+  "cvar_pct": -0.97,
+  "downside_deviation_pct": 1.41,
+  "eod_liquidated": 0,
+  "expectancy": 211296.07,
+  "gain_to_pain": 0.403,
+  "information_ratio": -2.296,
+  "kelly_pct": 32.27,
+  "kurtosis": -1.9257,
+  "max_drawdown": -631632.0,
+  "max_drawdown_days": 8,
+  "max_drawdown_pct": 6.32,
+  "num_trades": 2,
+  "omega": 1.403,
+  "payoff_ratio": 2.8204,
+  "profit_factor": 2.82,
+  "reasons": {},
+  "recovery_factor": 0.409,
+  "sharpe_ratio": 2.364,
+  "skew": -0.235,
+  "sortino_ratio": 23.52,
+  "tail_ratio": 1.06,
+  "total_commission": 15398.0,
+  "total_impact": 0.0,
+  "total_return": 254335.0,
+  "total_return_pct": 2.54,
+  "total_slippage": 5133.0,
+  "total_spread": 0.0,
+  "total_tax": 0.0,
+  "ulcer_index": 2.643,
+  "var_pct": -0.89,
+  "volatility_pct": 14.02,
+  "win_rate": 50.0,
+  "worst_period_pct": -0.97
+ },
+ "trades": [
+  {
+   "commission": 2849.92425,
+   "date": "2024-04-01",
+   "impact": 0.0,
+   "pnl": null,
+   "price": 100.05,
+   "quantity": 18990,
+   "reason": "매수 조건 충족",
+   "side": "buy",
+   "slippage": 949.97475,
+   "spread": 0.0,
+   "tax": 0.0,
+   "ticker": "000111",
+   "value": 1899949.5
+  },
+  {
+   "commission": 3843.552262500001,
+   "date": "2024-04-18",
+   "impact": 0.0,
+   "pnl": 654731.5704750003,
+   "price": 134.9325,
+   "quantity": 18990,
+   "reason": "Trailing-stop triggered",
+   "side": "sell",
+   "slippage": 1281.1840875000003,
+   "spread": 0.0,
+   "tax": 0.0,
+   "ticker": "000111",
+   "value": 2562368.1750000003
+  },
+  {
+   "commission": 3036.7901362499997,
+   "date": "2024-04-18",
+   "impact": 0.0,
+   "pnl": null,
+   "price": 135.0675,
+   "quantity": 14989,
+   "reason": "매수 조건 충족",
+   "side": "buy",
+   "slippage": 1012.26337875,
+   "spread": 0.0,
+   "tax": 0.0,
+   "ticker": "000111",
+   "value": 2024526.7574999998
+  },
+  {
+   "commission": 2696.67099,
+   "date": "2024-04-23",
+   "impact": 0.0,
+   "pnl": -232139.4394799997,
+   "price": 119.94000000000001,
+   "quantity": 14989,
+   "reason": "Trailing-stop triggered",
+   "side": "sell",
+   "slippage": 898.8903300000001,
+   "spread": 0.0,
+   "tax": 0.0,
+   "ticker": "000111",
+   "value": 1797780.6600000001
+  },
+  {
+   "commission": 2970.5845499999996,
+   "date": "2024-04-23",
+   "impact": 0.0,
+   "pnl": null,
+   "price": 120.05999999999999,
+   "quantity": 16495,
+   "reason": "매수 조건 충족",
+   "side": "buy",
+   "slippage": 990.1948499999999,
+   "spread": 0.0,
+   "tax": 0.0,
+   "ticker": "000111",
+   "value": 1980389.6999999997
+  }
+ ]
+}

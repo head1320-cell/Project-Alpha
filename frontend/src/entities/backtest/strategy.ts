@@ -118,7 +118,7 @@ export interface BacktestStrategy {
   // 전부 0★ 이었다 — 실행 준비실(`execution_plan`)은 셋 다 계산하는데도.
   // 켜면 백엔드가 `market_rules` 의 **같은 요율**을 쓴다. 기본을 켜지 않는 이유는
   // 켜는 순간 저장된 모든 실행과 골든의 뜻이 바뀌기 때문이다.
-  chargeSellTax: boolean;        // 매도 증권거래세+농특세 (기본 18bp)
+  chargeSellTax: boolean;        // 매도 증권거래세+농특세 — 켜면 거래일 · 시장 · 상품별 세율(S1 · 고정 18bp 아님)
   chargeSpread: boolean;         // 호가 스프레드 프록시 (편도 절반)
   chargeMarketImpact: boolean;   // k·√참여율 — 거래대금을 모르면 ★미상★ (0 아님)
   evalCap: number;         // 평가 종목 상한 (4000=전체) — 전종목 유니버스 존중

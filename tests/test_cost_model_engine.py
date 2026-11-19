@@ -54,6 +54,20 @@ def loader(monkeypatch):
     return df
 
 
+@pytest.fixture()
+def master(monkeypatch):
+    """S1(2026-11-19) — 켠 매도세는 종목 마스터가 시장 · 상품을 아는 종목에만 붙는다(모르면 미상).
+    이 파일의 시험 종목을 코스피 주식으로 아는 고정물(세율 판정만 겨눈다)."""
+    import src.kis_backtest_engine as kbe
+    monkeypatch.setattr(kbe, "_master_flags", lambda: {"000111": {"market": "KOSPI", "group_code": "ST"}})
+
+
+def _rate_bp(day: str) -> float:
+    """그 거래일의 코스피 주식 매도세(bp) — 세율표(`sell_tax_bp_on`) 그대로."""
+    import src.data.market_rules as mr
+    return mr.sell_tax_bp_on(day, "KOSPI", "stock")["bp"]
+
+
 def _cfg(**over) -> BacktestConfig:
     base = dict(
         symbols=["000111"], strategy_name="Condition",
@@ -103,25 +117,28 @@ def test_the_new_totals_are_zero_by_default(loader):
 # ═══════════════════════════════════════════════════════════════════════════
 # ⑥⑦ 증권거래세 — ★켜야 붙고, 매도에만★
 # ═══════════════════════════════════════════════════════════════════════════
+# S1(2026-11-19 받은 결정 · 의도한 변화): 켜면 고정 18bp 가 아니라 ★그 거래일 · 시장 · 상품의 세율★이다.
+# 이 파일의 매도는 2024 년이라 세율은 여전히 18bp(코스피 3 + 15)지만, 기대값을 세율표에서 읽어 날짜가 바뀌어도 뜻이 같게 했다.
+# 종목 마스터가 모르는 종목의 매도세는 미상이다(`test_sell_tax_trade_date.py`).
 
-def test_switching_the_sell_tax_on_charges_sells_only(loader):
+def test_switching_the_sell_tax_on_charges_sells_only(loader, master):
     eng, st, _ = _run(charge_sell_tax=True)
     sells = [t for t in eng.trades if t.side == "sell"]
     buys = [t for t in eng.trades if t.side == "buy"]
     assert sells, "매도가 없으면 이 검사가 공허하다"
-    assert all(t.tax == pytest.approx(t.value * 0.0018) for t in sells)
+    assert all(t.tax == pytest.approx(t.value * _rate_bp(t.date) / 1e4) for t in sells)
     assert all(t.tax == 0.0 for t in buys)
     assert st["total_tax"] > 0
 
 
-def test_switching_the_sell_tax_on_lowers_the_return(loader):
+def test_switching_the_sell_tax_on_lowers_the_return(loader, master):
     """★짝★ 켜도 아무것도 안 변하는 구현을 배제한다."""
     _, base, _ = _run()
     _, taxed, _ = _run(charge_sell_tax=True)
     assert taxed["total_return_pct"] < base["total_return_pct"]
 
 
-def test_the_commission_rate_is_untouched_when_the_tax_is_on(loader):
+def test_the_commission_rate_is_untouched_when_the_tax_is_on(loader, master):
     """★새 성분이 기존 성분의 **요율**을 건드리지 않는다★
 
     ★총액은 같지 않다 — 그리고 그것이 옳다.★ 세금이 현금을 줄이면 이후 매수
@@ -189,17 +206,35 @@ def test_an_unmeasured_impact_is_not_the_same_as_switched_off(loader, monkeypatc
 # ⑨⑩ ★요율은 `market_rules` 한 곳에서★
 # ═══════════════════════════════════════════════════════════════════════════
 
-def test_the_rates_come_from_market_rules(loader, monkeypatch):
-    """★엔진이 18·5.0 을 재하드코딩하면 이 검사가 죽는다★"""
+def test_the_rates_come_from_market_rules(loader, master, monkeypatch, tmp_path):
+    """★엔진이 세율을 재하드코딩하면 이 검사가 죽는다★ — S1 부터 매도세는 세율표(증거 파일)에서 읽는다.
+
+    증거 파일을 덮어써(`SELL_TAX_EVIDENCE_PATH`) 2024 년 코스피 주식 세율을 두 배로 바꾸면 매도세도 두 배가 된다.
+    (옛 판: `mr.sell_tax_bp` 를 36 으로 바꿔 0.0036 을 기대했다 — 그 고정 함수는 이제 실행 준비실만 쓴다.)
+    """
+    import json
+
     import src.data.market_rules as mr
-    monkeypatch.setattr(mr, "sell_tax_bp", lambda: 36.0)
+    doc = json.loads(mr.SELL_TAX_EVIDENCE_PATH.read_text(encoding="utf-8"))
+    for row in doc["schedule"]:
+        if (row["market"], row["instrument"], row["from"]) == ("KOSPI", "stock", "2024-01-01"):
+            row["transaction_tax_bp"] *= 2
+            row["rural_special_tax_bp"] *= 2
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("SELL_TAX_EVIDENCE_PATH", str(path))
     eng, _, _ = _run(charge_sell_tax=True)
     sells = [t for t in eng.trades if t.side == "sell"]
-    assert sells and all(t.tax == pytest.approx(t.value * 0.0036) for t in sells)
+    assert sells and all(t.date.startswith("2024") for t in sells), "2024 년 매도가 있어야 이 검사가 뜻이 있다"
+    assert all(t.tax == pytest.approx(t.value * 0.0036) for t in sells)
 
 
-def test_all_three_on_matches_the_execution_desk_round_trip(loader):
-    """⑩ 셋 다 켜면 실행 준비실과 **같은 단일 출처**를 쓴다는 증거."""
+def test_all_three_on_round_trip_leaves_the_trade_date_tax_out_and_says_so(loader):
+    """⑩ 셋 다 켜면 수수료 · 스프레드는 실행 준비실과 ★같은 단일 출처★(`market_rules`)다.
+
+    S1(의도한 변화): 매도세는 거래일 · 시장 · 상품마다 달라 왕복 bp 에 넣지 않고 그 사실을 함께 낸다(옛 판은
+    매도 1.5 + 18 + 2.5 = 22 를 기대했다). 실행 준비실은 여전히 고정 18bp 를 쓴다(받은 결정 — 한계로 적는다).
+    """
     import src.data.market_rules as mr
     from src.domain.cost_model import round_trip_bps
     from src.kis_backtest_engine import policy_from_config
@@ -207,9 +242,11 @@ def test_all_three_on_matches_the_execution_desk_round_trip(loader):
     cfg = _cfg(commission_rate=mr.commission_bp() / 1e4, slippage_rate=0.0,
                charge_sell_tax=True, charge_spread=True, charge_market_impact=True)
     rt = round_trip_bps(policy_from_config(cfg))
-    # 매수 1.5 + 2.5 = 4 · 매도 1.5 + 18 + 2.5 = 22
+    # 매수 1.5 + 2.5 = 4 · 매도 1.5 + 2.5 = 4 (매도세는 빠짐 — 그 사실이 함께 실린다)
     assert rt["buy_bps"] == pytest.approx(4.0)
-    assert rt["sell_bps"] == pytest.approx(22.0)
+    assert rt["sell_bps"] == pytest.approx(4.0)
+    assert rt["tax_excluded"] is True and rt["tax_reason"]
+    assert mr.sell_tax_bp() == 18.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -226,10 +263,11 @@ def test_the_result_declares_the_cost_policy(loader):
     assert block["round_trip_bps"] == pytest.approx(40.0)
 
 
-def test_the_declared_totals_match_the_trades(loader):
+def test_the_declared_totals_match_the_trades(loader, master):
     """★선언이 거래와 어긋나면 그 선언은 증거가 아니다★"""
     eng, _, res = _run(charge_sell_tax=True, charge_spread=True)
     comps = res["cost_model"]["components"]
+    assert comps["tax"]["krw"] > 0, "세금이 0 이면 대조가 공허하다(마스터가 종목을 알아야 붙는다)"
     assert comps["tax"]["krw"] == pytest.approx(sum(t.tax for t in eng.trades))
     assert comps["spread"]["krw"] == pytest.approx(sum(t.spread for t in eng.trades))
     assert comps["commission"]["krw"] == pytest.approx(

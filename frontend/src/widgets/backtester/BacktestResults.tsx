@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // BacktestResults — 백테스트 결과 (스펙 §5, 고정 URL·새로고침 가능) · BU4 토스화
 //   답 한 문장(서버 값) + 이 수치가 무엇인지(PerfLabel) + 근거 → 자산곡선 → 낙폭 → 핵심 지표 6 → 지표 모두 보기 →
-//   월별 → 기여도 → 종목별 → 거래 기록 → 데이터와 한계.
+//   비용 분해(S1 · 2026-11-19) → 월별 → 기여도 → 종목별 → 거래 기록 → 데이터와 한계.
 //   엔진이 반환한 지표를 그린다. 없는 지표는 생략하되, **사유를 데이터로 증명할 수 있는 결측**(벤치마크 미지정 ·
 //   체결 0건)은 '산출 불가' 로 보인다 — absentReason(). ★산출 불가는 접지 않는다★ 핵심 지표 바로 아래에 둔다.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/car
 import { PerfLabel } from "@/shared/ui/PerfLabel";
 import { Notice, PageHead } from "@/shared/ui/tx";
 
+import { CostBreakdown } from "@/features/cost-breakdown";
 import { RegisterAsStrategy } from "./RegisterAsStrategy";
 import { DrawdownEpisodes } from "@/shared/ui/perf/DrawdownEpisodes";
 import { MonthGrid } from "@/shared/ui/perf/MonthGrid";
@@ -548,6 +549,17 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
             </details>
           )}
           {stats.eod_liquidated ? <p className="brun-note rs-foot">기간 끝에 {stats.eod_liquidated}종목을 마지막 거래일 종가로 정리했습니다.</p> : null}
+        </CardContent>
+      </Card>
+
+      {/* 비용 분해 — 서버 `cost_model` 그대로(S1 · 2026-11-19). 편집기 안내("결과의 비용 분해에 항목별로 표시됩니다")가 약속한 절이다.
+          켠 매도세의 미상(마스터가 모르는 종목 · 세율표 밖의 날)이 여기서 보인다. 블록이 없으면 없다고 말한다(0 원 표 아님). */}
+      <Card className="brun-card brun-cost">
+        <CardHeader className="rs-card-h">
+          <CardTitle as="h2" className="brun-card-t">비용 분해<span className="brun-note">이 실행이 부과한 비용과 재지 못한 비용</span></CardTitle>
+        </CardHeader>
+        <CardContent className="rs-card-b">
+          <CostBreakdown block={res.cost_model} />
         </CardContent>
       </Card>
 

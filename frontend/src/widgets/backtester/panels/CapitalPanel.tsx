@@ -48,10 +48,12 @@ export default function CapitalPanel({ s, set }: {
           <QuickStepper value={s.slippagePct} onChange={(v) => set((x) => ({ ...x, slippagePct: v }))} unit="%" min={0} />
         </Field>
         {/* ── 누락 비용 옵트인 셋 (AK) ★전부 기본 꺼짐★ — 켜면 백엔드가 `market_rules` 의 같은 요율을 쓴다.
-            기본을 켜지 않는 이유는 켜는 순간 저장된 실행들의 뜻이 바뀌기 때문이다. */}
+            기본을 켜지 않는 이유는 켜는 순간 저장된 실행들의 뜻이 바뀌기 때문이다.
+            ★매도세는 예외(S1 · 2026-11-19)★ — 고정 0.18% 가 아니라 매도마다 거래일 · 시장 · 상품별 세율이다. 이름은 용어집의
+            '매도세'(증권거래세 + 농어촌특별세 · 한 낱말)로 고쳤다. 모르는 종목의 매도세는 결과의 비용 분해에 미상으로 나온다. */}
         <div className="bte-col">
           <p className="bte-sub-h">추가 비용 — 기본값은 꺼짐</p>
-          <SubToggle tone="sell" act="sell-tax" label="증권거래세" hint="매도 시 1회 0.18% · 수수료보다 큽니다"
+          <SubToggle tone="sell" act="sell-tax" label="매도세" hint="증권거래세 + 농어촌특별세 · 매도마다 그날의 시장 · 상품별 세율 · ETF 면제"
             on={s.chargeSellTax} onChange={(v) => set((x) => ({ ...x, chargeSellTax: v }))} />
           <SubToggle tone="sell" label="호가 스프레드" hint="거래 1회당 0.025% (스프레드의 절반)"
             on={s.chargeSpread} onChange={(v) => set((x) => ({ ...x, chargeSpread: v }))} />
@@ -59,7 +61,7 @@ export default function CapitalPanel({ s, set }: {
             on={s.chargeMarketImpact} onChange={(v) => set((x) => ({ ...x, chargeMarketImpact: v }))} />
           <p className="bte-note">
             {(s.chargeSellTax || s.chargeSpread || s.chargeMarketImpact)
-              ? "활성화한 비용은 실행 준비실과 동일한 요율을 사용합니다. 결과의 비용 분해에 항목별로 표시됩니다."
+              ? "스프레드 · 시장충격은 실행 준비실과 같은 요율을, 매도세는 거래일 · 시장 · 상품별 세율을 씁니다. 결과의 비용 분해에 항목별로 표시됩니다."
               : "끄면 수수료·슬리피지만 반영합니다. 0원이 아니라 미측정이라는 뜻이며, 결과에 그 사실을 표시합니다."}
           </p>
           {s.chargeMarketImpact && (
