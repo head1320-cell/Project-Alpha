@@ -1,11 +1,13 @@
 import { test, expect } from "./fixtures";
 import {
-  activate, areaName, checkName, close, colSplit, colWidths, defaultLayout, eul, exportFile, fits, fold, importFile, move, readLayout, readSaved,
+  activate, areaName, checkName, close, colSplit, colWidths, defaultLayout, eul, exportFile, fits, fold, importFile, move, needWidth, readLayout, readSaved,
   removeNamed, renameNamed, reopen, ro, rowByDrag, rowByKey, saveNamed, strictLayout,
   type Area, type Col, type Layout, type ScreenSpec,
 } from "../src/shared/ui/workspace/layout";
 import { dropAt, type Geometry } from "../src/shared/ui/workspace/dnd";
 import { INTRADAY_WS } from "../src/widgets/intraday/workspaceSpec";
+import { SPLIT_QUERY } from "../src/widgets/intraday/splitPane";
+import { ACCOUNT_QUERY, ACCOUNT_WS } from "../src/widgets/my-account/workspaceSpec";
 
 /**
  * 판 배치의 순수 규칙(브라우저 없이) — 설계 §5 · 계획 §9.2
@@ -439,5 +441,62 @@ test.describe("분봉 화면의 판 · 처음 배치(INTRADAY_WS)", () => {
     // 2560 × 1440 에서 위 칸에 차트 틀(300px)이 다 보이는 가장 큰 걸음이다(0.5 는 1920 × 1080 위 칸에 차트 64px)
     const chart = INTRADAY_WS.presets.find((p) => p.id === "chart");
     expect(chart?.layout.cols[1].rows.map((r) => r.h ?? null)).toEqual([null, 0.4]);
+  });
+});
+
+test.describe("내 계좌의 판 · 처음 배치(ACCOUNT_WS · G6 2a-2 · 계획 §10)", () => {
+  test("판 넷 · 이름 = 판 안 절 제목 · 넷 모두 titled · 닫을 수 없는 판은 주문 제출 하나 · 잰 최소 폭 · 새 열 520", () => {
+    expect(ACCOUNT_WS.screen).toBe("account");
+    expect(ACCOUNT_WS.panels.map((p) => [p.id, p.name])).toEqual([["order", "주문 제출"], ["orders", "최근 주문"], ["balance", "잔고"], ["arming", "규칙 가동"]]);
+    expect(ACCOUNT_WS.panels.filter((p) => !p.closable).map((p) => p.id)).toEqual(["order"]);
+    expect(ACCOUNT_WS.panels.every((p) => p.titled === true)).toBe(true);
+    // 잰 값(2026-11-20 · 1920 × 1080 · 가장 넓은 상태 · 계획 §10.2a) — 자리표가 남지 않았음을 건다
+    expect(Object.fromEntries(ACCOUNT_WS.panels.map((p) => [p.id, p.min]))).toEqual({ order: 112, orders: 96, balance: 144, arming: 304 });
+    expect(ACCOUNT_WS.colNew).toBe(520);
+  });
+
+  test("처음 배치 둘이 사유 없이 읽힌다 · 처음 켤 때는 '주문'(주문 제출은 오른쪽 열 — 기본 배치와 같은 쪽) · '관제'의 꼴", () => {
+    expect(ACCOUNT_WS.presets.map((p) => [p.id, p.name])).toEqual([["order", "주문"], ["monitor", "관제"]]);
+    for (const p of ACCOUNT_WS.presets) {
+      const r = readLayout(p.layout, ACCOUNT_WS);
+      expect(r.notes, p.name).toEqual([]);
+      expect(r.layout, p.name).toEqual(p.layout);
+    }
+    expect(defaultLayout(ACCOUNT_WS)).toEqual(ACCOUNT_WS.presets[0].layout);
+    const shape = (l: Layout) => l.cols.map((c) => c.rows.map((r) => r.tabs));
+    expect(shape(ACCOUNT_WS.presets[0].layout)).toEqual([[["orders", "balance", "arming"]], [["order"]]]);
+    expect(ACCOUNT_WS.presets[0].layout.cols.map((c) => c.w)).toEqual([null, 520]);
+    expect(shape(ACCOUNT_WS.presets[1].layout)).toEqual([[["arming"]], [["orders"], ["order", "balance"]]]);
+    expect(ACCOUNT_WS.presets[1].layout.cols.map((c) => c.w)).toEqual([null, 520]);
+  });
+
+  test("탭 보기 문턱은 분봉과 같은 값(위젯끼리 가져오지 않으려고 따로 둔 값)", () => {
+    expect(ACCOUNT_QUERY).toBe(SPLIT_QUERY);
+  });
+
+  test("판 넷의 최소 폭으로는 어떤 배치(열 셋까지 · 닫기 포함)도 가장 좁은 탭 보기의 본문 폭(1280 창 → 1144)에 들어간다 — 그래서 끈 화면은 판 폭을 재지 않는다", () => {
+    // 1144 = 1280 − 왼쪽 막대 56 − 본문 패딩 40 × 2(잰 값 · 계획 §10.0). 이 시험이 깨지면(최소 폭을 키웠으면) 끈 화면의 '배치' 메뉴에 판이 받을 폭을 재어 넘겨야 한다.
+    const ids = ACCOUNT_WS.panels.map((p) => p.id);
+    let worst = 0;
+    let n = 0;
+    for (let code = 0; code < 4 ** ids.length; code++) {
+      const at = ids.map((_, i) => Math.floor(code / 4 ** i) % 4);           // 0 · 1 · 2 = 그 열 · 3 = 닫음
+      if (at[ids.indexOf("order")] === 3) continue;                            // 주문 제출은 닫지 못한다
+      const cols = [0, 1, 2].map((c) => ids.filter((_, i) => at[i] === c)).filter((tabs) => tabs.length > 0);
+      if (cols.some((tabs, i) => tabs.length === 0 || (i > 0 && cols[i - 1].length === 0))) continue;
+      const l: Layout = { v: 1, screen: "account", closed: ids.filter((_, i) => at[i] === 3),
+        cols: cols.map((tabs, i) => ({ w: i === 0 ? null : 520, rows: [{ tabs, active: tabs[0] }] })) };
+      expect(readLayout(l, ACCOUNT_WS).notes, JSON.stringify(l)).toEqual([]);
+      worst = Math.max(worst, needWidth(l, ACCOUNT_WS));
+      n++;
+    }
+    expect(n).toBeGreaterThan(50);
+    expect(worst).toBe(304 + 144 + 112 + 32);
+    expect(worst).toBeLessThanOrEqual(1280 - 56 - 80);
+    // 짝: 최소 폭이 그 폭을 넘으면 이 기준이 잡는다(판 셋을 큰 값으로 바꾼 사본)
+    const big: ScreenSpec = { ...ACCOUNT_WS, panels: ACCOUNT_WS.panels.map((p) => ({ ...p, min: 400 })) };
+    const three: Layout = { v: 1, screen: "account", closed: ["balance"], cols: [
+      { w: null, rows: [{ tabs: ["arming"], active: "arming" }] }, { w: 520, rows: [{ tabs: ["orders"], active: "orders" }] }, { w: 520, rows: [{ tabs: ["order"], active: "order" }] }] };
+    expect(needWidth(three, big)).toBeGreaterThan(1280 - 56 - 80);
   });
 });

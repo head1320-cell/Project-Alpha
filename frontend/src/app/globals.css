@@ -10807,6 +10807,20 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd[data-ws="tabs"] > .ws { flex: 1 1 auto; min-height: 0; }
 .itd .ws[data-mode="tabs"] .ws-panel[data-panel="setup"] > .itd-run-row { position: sticky; bottom: 0; z-index: 1;
   box-shadow: 0 0 0 1px var(--tx-line), 0 -10px 20px -16px rgb(25 31 40 / 40%); }
+/* ════ G6 2a-2 내 계좌의 판 배치(계획 §10 · `e2e/workspace-account.spec.ts`) ════
+   판 넷(주문 제출 · 최근 주문 · 잔고 · 규칙 가동)은 위 .ws-* 그대로. 문장 띠(비상 정지 단추 · 모드 문장 · 칩)와 주문 전송 경로는 판 밖(.ma-wsf 의 앞 자식들)이다.
+   ★탭 보기에서는 문장 띠만 창 위에 붙는다(.ma-stick · sticky)★ — 정지 결과 줄 · 경로는 판 위에서 페이지와 함께 구른다(고정 띠 496px 는 1440 × 900 의 판을 62px 로 만들었다 — 잰 값).
+   작업 공간 높이 = 본문 높이(100vh − 머리줄) − 본문 아래 패딩 40 − 붙은 띠(--ma-stick-h · 잰 높이) → 끝까지 굴리면 판이 띠 바로 아래부터 본문 바닥까지 채운다.
+   top −40px = 본문(.terminal-main) 패딩 — sticky 는 스크롤 상자의 패딩 안쪽에서 재므로 패딩만큼 올려야 띠가 본문 맨 위에 닿는다(틈으로 굴러간 내용이 비치지 않게).
+   띠 위아래는 바탕색 여백 · 쌓기에서는 붙이지 않는다(기본 배치와 같음). 기존 규칙 0줄 · 색은 --tx-* 토큰만. */
+.ma .tx-head-act > .ws-open { align-self: flex-end; }
+.ma[data-ws="tabs"] { max-width: none; }
+.ma-wsf > * + * { margin-top: 12px; }
+.ma[data-ws="tabs"] .ma-stick { position: sticky; top: -40px; z-index: 3; margin-top: -16px; padding: 16px 0 12px; background: var(--tx-bg); }
+/* 붙은 문장 띠는 한 줄 격자 — 문장(남는 폭 · 줄을 바꿔 줄어든다) | 숫자 셋 | 칩 | 비상 정지(늘 오른쪽 끝). 감싸 두 줄이 되면 단추만 아래 줄에 홀로 서던 것(1280 × 800 · 띠 184px)을 막는다 */
+.ma[data-ws="tabs"] .ma-stick > .tx-answer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; column-gap: 28px; }
+.ma[data-ws="tabs"] .ma-stick > .tx-answer > .tx-answer-act { grid-column: 4; }
+.ma[data-ws="tabs"] .ma-wsf > .ws { height: calc(100vh - var(--t-header-h) - 40px - var(--ma-stick-h, 150px)); }
 .itd-hint { font-size: 12px; line-height: 1.4; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
 .itd-tickers, .itd-dt-tickers { height: auto; min-height: 64px; padding: 9px 10px; line-height: 1.5; resize: vertical; font-family: var(--t-mono); font-size: 13.5px; }
 .itd select.tj-input { appearance: auto; padding-right: 6px; }
