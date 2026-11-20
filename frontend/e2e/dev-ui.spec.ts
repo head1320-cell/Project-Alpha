@@ -9,7 +9,7 @@ import { trackErrors, uniq } from "./helpers";
 // 지금까지는 소비 화면의 스펙이 우연히 걸러 주기를 기대하는 구조였다.
 //
 // 이 스펙은 데이터 없이 렌더되는 갤러리에서 다음 세 가지를 본다:
-//   1) shared/ui 의 컴포넌트 export 46개(BU0 tx 10 포함)가 전부 표본으로 마운트되었는가(제외 없음)
+//   1) 표본으로 선언한 부품 23개(kit 7 · States 5 · evidence 1 · tx 10)가 전부 마운트되었는가
 //   2) 각 프리미티브가 내보내는 **클래스 계약**이 그대로인가
 //   3) 순수 프레젠테이션 화면인데 uncaught error / 네트워크 호출이 없는가
 //
@@ -23,21 +23,16 @@ import { trackErrors, uniq } from "./helpers";
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // 갤러리가 선언한 표본 이름 — page.tsx 의 <Specimen name=…> 과 1:1 이어야 한다.
+// ★제품이 쓰는 부품만 남았다(U0-e · 2026-11-20)★ — primitives · feedback · MiniViz · SectionHead · EvidenceDrawer 는 가져다 쓰는 제품 파일이
+// 하나도 없어 부품과 표본을 함께 걷었다(ADR 007 결정 D7). 쓰이지 않는 부품의 클래스 계약을 지키는 시험은 제품의 어떤 화면도 지키지 않는다.
 const SPECIMENS = [
-  // primitives (11)
-  "PageHeader", "PageContent", "StatCard", "Tabs", "Spinner", "Badge",
-  "Section", "FormRow", "Field", "ErrorMsg", "Empty",
-  // kit (7) — Section·Field 는 primitives 와 이름이 겹치는 별개 구현
+  // kit (7)
   "GroupedSelect", "Toggle", "Section", "SubToggle", "Field", "QuickStepper", "Segmented",
   // States (5) — UnavailableState·AsyncState 는 P2 에서 추가됐다.
   "LoadingState", "EmptyState", "ErrorState", "UnavailableState", "AsyncState",
-  // evidence (2)
-  "EvidenceBadge", "EvidenceDrawer",
-  // feedback (7)
-  "Skeleton", "SkeletonText", "SkeletonCard", "SkeletonTable", "TickValue", "MetricCard", "Sparkline",
-  // MiniViz (3) + SectionHead (1)
-  "MiniViz", "StatGrid", "Stat", "SectionHead",
-  // tx (10) — BU0 토스식 공용 부품(ADR-003). Section·Stat·Segmented·Tabs 는 위와 이름이 겹치는 별개 구현.
+  // evidence (1)
+  "EvidenceBadge",
+  // tx (10) — BU0 토스식 공용 부품. Section·Segmented 는 kit 과 이름이 겹치는 별개 구현.
   "PageHead", "Answer", "Chips", "Section", "ListRow", "Stat", "Segmented", "Tabs", "Notice", "Unknown",
 ];
 
@@ -63,55 +58,6 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
 
     const body = await page.locator("body").innerText();
     expect(body, "한글이 깨지지 않아야 한다").not.toMatch(/�/);
-  });
-
-  test("primitives 의 클래스 계약이 유지된다", async ({ page }) => {
-    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
-    const g = page.locator(".devui");   // 셸 마크업과 격리
-
-    // PageHeader — 갤러리 크롬은 .devui-* 만 쓰므로 이 클래스는 표본에서만 나온다.
-    await expect(g.locator(".pv-page-header")).toHaveCount(1);
-    await expect(g.locator(".pv-page-header .pv-page-title")).toHaveText("페이지 제목");
-    await expect(g.locator(".pv-page-header .pv-page-subtitle")).toBeVisible();
-    await expect(g.locator(".pv-page-header .pv-breadcrumb a")).toHaveCount(1);
-
-    // PageContent + PageHeader 가 공통으로 쓰는 폭 컨테이너
-    await expect(g.locator(".container-pv").first()).toBeVisible();
-
-    // StatCard ×3 (up / down / sm)
-    const statCards = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^StatCard$/ }) });
-    await expect(statCards.locator(".card.card-md")).toHaveCount(3);
-    await expect(statCards.locator(".card.card-md .label").first()).toHaveText("누적수익률");
-    await expect(statCards.locator(".card.card-md .num").first()).toHaveText("+18.4%");
-
-    // Tabs — .pv-tabs / .pv-tab / active 는 실제 앱 스펙들이 의존하는 계약이다.
-    await expect(g.locator(".pv-tabs")).toHaveCount(1);
-    await expect(g.locator(".pv-tabs .pv-tab")).toHaveCount(3);
-    await expect(g.locator(".pv-tabs .pv-tab.active")).toHaveCount(1);
-    await expect(g.locator(".pv-tabs .pv-tab.active")).toHaveText("개요");
-
-    // Badge — 4개 variant 가 각각 다른 클래스로 나가야 한다.
-    // Badge 표본 안으로 범위를 좁힌다: Badge 는 PageHeader 의 actions 슬롯과 primitives
-    // Section 의 action 슬롯에서도 채움용으로 쓰이므로 전역 카운트는 1이 아니다.
-    // 카운트를 2/1/1/2 로 박으면 그 채움이 바뀔 때마다 깨진다 — 범위 한정이 옳다.
-    const badges = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^Badge$/ }) });
-    for (const cls of ["badge-success", "badge-danger", "badge-warning", "badge-info"]) {
-      await expect(badges.locator(`.badge.${cls}`)).toHaveCount(1);
-    }
-  });
-
-  test("Tabs 표본이 실제로 상호작용한다(active 가 옮겨감)", async ({ page }) => {
-    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
-    const g = page.locator(".devui");   // 셸 마크업과 격리
-
-    const tabs = g.locator(".pv-tabs .pv-tab");
-    await expect(tabs.nth(0)).toHaveClass(/active/);
-
-    await tabs.nth(2).click();
-    await expect(tabs.nth(2)).toHaveClass(/active/);
-    await expect(tabs.nth(0)).not.toHaveClass(/active/);
-    // active 는 항상 정확히 하나
-    await expect(g.locator(".pv-tabs .pv-tab.active")).toHaveCount(1);
   });
 
   test("States 의 .tstate-* 계약과 접근성 속성이 유지된다", async ({ page }) => {
@@ -187,70 +133,6 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     expect(await g.locator(".tev[title]").count(), "배지는 title= 로 사유를 숨기지 않는다").toBe(0);
   });
 
-  test("EvidenceDrawer 는 포털되고, 키보드로 열리고 닫히고, 포커스가 돌아온다", async ({ page }) => {
-    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
-    const g = page.locator(".devui");
-    const trigger = g.locator(".tev-drawer-t");
-
-    await expect(trigger).toHaveCount(1);
-    // 닫혀 있을 때는 내용이 DOM 에 없다 — "닫힌 서랍은 존재하지 않는다" 를 그대로 확인한다.
-    await expect(page.locator(".tev-drawer")).toHaveCount(0);
-
-    await trigger.click();
-    // ★Radix 는 document.body 로 포털한다★ .devui 로 범위를 좁히면 못 찾는다.
-    // 그 사실 자체를 단언한다 — 나중에 누가 스코프를 좁히면 여기서 걸린다.
-    await expect(page.locator(".tev-drawer")).toBeVisible();
-    expect(await g.locator(".tev-drawer").count(), "포털이므로 갤러리 루트 안에는 없다").toBe(0);
-
-    // 행 계약: dt/dd 쌍 3개, 식별자 행은 등폭
-    await expect(page.locator(".tev-drawer-r")).toHaveCount(3);
-    await expect(page.locator(".tev-drawer-r dd.num").first()).toBeVisible();
-    await expect(page.locator(".tev-drawer-h")).toContainText("재현 좌표");
-
-    // Escape 로 닫히고, 포커스가 트리거로 돌아온다(next/dynamic 뒤 Radix 포커스 복원 함정).
-    await page.keyboard.press("Escape");
-    await expect(page.locator(".tev-drawer")).toHaveCount(0);
-    await expect(trigger).toBeFocused();
-  });
-
-  test("MiniViz / StatGrid / Stat / SectionHead 의 클래스 계약이 유지된다", async ({ page }) => {
-    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
-    const g = page.locator(".devui");   // 셸 마크업과 격리
-
-    // MiniViz kind 5종 — 기본 className 이 .t-miniviz
-    await expect(g.locator(".t-miniviz")).toHaveCount(5);
-
-    // StatGrid 1개 안에 Stat 3개 + 단독 Stat 표본 2개 = .tstat 5개
-    await expect(g.locator(".tstat-grid")).toHaveCount(1);
-    await expect(g.locator(".tstat-grid .tstat")).toHaveCount(3);
-    await expect(g.locator(".tstat")).toHaveCount(5);
-    await expect(g.locator(".tstat .tstat-key").first()).toHaveText("CAGR");
-    await expect(g.locator(".tstat .tstat-val").first()).toHaveText("14.2%");
-
-    // SectionHead — index 있음/없음
-    await expect(g.locator(".tpage-section-head")).toHaveCount(2);
-    await expect(g.locator(".tpage-section-head .sh-label").first()).toHaveText("유동성 게이트");
-    await expect(g.locator(".tpage-section-head .sh-index")).toHaveCount(1); // index 를 넘긴 쪽만
-  });
-
-  test("feedback 의 .skeleton / .sparkline 계약이 유지된다", async ({ page }) => {
-    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
-    const g = page.locator(".devui");   // 셸 마크업과 격리
-
-    // Skeleton 1 + SkeletonText(3+5) + SkeletonCard(3) + SkeletonTable(3행×3) +
-    // MetricCard loading=true → SkeletonCard(3) = 1+8+3+9+3 = 24
-    await expect(g.locator(".skeleton")).toHaveCount(24);
-
-    // Sparkline: data 2개 이상인 것만 svg 를 그린다(1개짜리는 빈 span)
-    await expect(g.locator(".sparkline")).toHaveCount(2);
-    await expect(g.locator(".sparkline svg polyline")).toHaveCount(2);
-
-    // MetricCard — value=null 은 대시로 정직하게 표시
-    const metric = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^MetricCard$/ }) });
-    await expect(metric).toContainText("—");
-  });
-
-  // BU3 — kit 에 `kit-*` 클래스가 생겼지만(모습 전용) 계약은 여전히 role·태그 구조로 본다.
   test("kit 은 클래스가 없으므로 role·태그 구조로 검증한다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const g = page.locator(".devui");   // 셸 마크업과 격리
@@ -271,7 +153,9 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     await expect(firstSwitch).toHaveAttribute("aria-checked", "false");
 
     // kit/Section — 토글을 끄면 자식이 사라지는 계약
-    const kSection = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^Section$/ }) }).nth(1);
+    const kSection = page.locator(".devui-item", { has: page.locator(".devui-item-name", { hasText: /^Section$/ }) })
+      .filter({ has: page.locator(".devui-item-from", { hasText: /^kit$/ }) });
+    await expect(kSection, "kit 의 Section 표본은 하나다(tx 에 같은 이름의 표본이 있어 출처로 가른다)").toHaveCount(1);
     await expect(kSection).toContainText("유동성 게이트");
     await expect(kSection).toContainText("자식 노드는");
     await kSection.locator('[role="switch"]').click();
@@ -292,7 +176,7 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
 
   // ── shadcn 섹션 (Phase 5) ───────────────────────────────────────────────
   // ★기존 .devui-item 단언을 건드리지 않는다★ — shadcn 표본은 .devui-sitem 이라는
-  // 별개 클래스를 쓰므로 위의 "표본 36개" 계약은 그대로 유효하다.
+  // 별개 클래스를 쓰므로 위의 표본 수 계약은 그대로 유효하다.
   test("shadcn 섹션이 기존 갤러리 계약을 깨지 않고 함께 렌더된다", async ({ page }) => {
     await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
     const g = page.locator(".devui");
@@ -300,19 +184,10 @@ test.describe("/dev/ui — shared/ui 격리 갤러리", () => {
     // 기존 계약 불변
     await expect(g.locator(".devui-item")).toHaveCount(SPECIMENS.length);
 
-    // 새 섹션은 별개 클래스로 3개
+    // 새 섹션은 별개 클래스로 2개 — 제품이 쓰는 벤더링본만(Button · Input · Slider · Progress · Table 은 U0-e 에서 걷었다)
     await expect(g.locator(".devui-shadcn")).toHaveCount(1);
     const names = await g.locator(".devui-sitem .devui-sitem-name").allInnerTexts();
-    expect(names).toEqual(["Button", "Badge", "Dialog"]);
-  });
-
-  test("shadcn Button 의 variant 가 실제로 다른 클래스를 낸다", async ({ page }) => {
-    await page.goto("/dev/ui", { waitUntil: "domcontentloaded" });
-    const row = page.locator(".devui-sitem", { hasText: "Button" }).locator(".devui-variants");
-    // cn()/twMerge 가 동작하면 variant 별로 배경 유틸리티가 달라진다
-    const cls = await row.locator("button").first().getAttribute("class");
-    expect(cls).toContain("var(--primary)");
-    await expect(row.locator("button:disabled")).toHaveCount(1);
+    expect(names).toEqual(["Badge", "Dialog"]);
   });
 
   // ★Radix 포털 위험을 명시적으로 고정한다★
@@ -404,20 +279,6 @@ test("★concentration() 이 숏을 버리지 않는다 — /dev/ui 표본으로
   await expect(page.locator(".devui-ls-legs")).toContainText("gross 180.0");
   await expect(page.locator(".devui-ls-legs")).toContainText("net 100.0");
   await expect(page.locator(".devui-ls-legs")).toContainText("short -40.0");
-});
-
-test("★AllocationMap 이 숏을 두 번째 스트립으로 그린다 — 버리지 않는다★", async ({ page }) => {
-  await page.goto("/dev/ui", { waitUntil: "networkidle" });
-  const map = page.locator(".devui-ls-map");
-
-  // 롱 스트립 + 숏 스트립 = 2 (예전에는 filter(w>0) 라 1개였고 숏은 사라졌다)
-  await expect(map.locator(".aas-map")).toHaveCount(2);
-  await expect(map.locator(".as-ls-map-short")).toBeVisible();
-
-  // 범례는 5종목 전부 — 숏 2개가 음수 값으로 남는다
-  await expect(map.locator(".aas-legend-i")).toHaveCount(5);
-  await expect(map.locator(".as-ls-neg")).toHaveCount(2);
-  await expect(map.locator(".aas-legend-i", { hasText: "LG화학" })).toContainText("-25.0%");
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

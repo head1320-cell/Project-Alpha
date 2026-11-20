@@ -76,6 +76,4 @@ export const eok = (n: number) => {
   return `${Math.round(n).toLocaleString()}억`;
 };
 export const pct = (n: number, d = 1) => `${n > 0 ? "+" : ""}${n.toFixed(d)}%`;
-export const toneColor = (t: VerdictTone) => t === "bull" ? "var(--color-bull)" : t === "bear" ? "var(--color-bear)" : t === "caution" ? "var(--color-caution)" : "var(--t-muted)";
 export const verdictTone = (v: string): VerdictTone => v.includes("저평가") ? "bull" : v.includes("고평가") ? "bear" : "neutral";
-export const pctColor = (p: number) => p >= 66 ? "var(--color-bull)" : p <= 33 ? "var(--color-bear)" : "var(--color-caution)";

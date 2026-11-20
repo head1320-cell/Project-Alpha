@@ -1,63 +1,40 @@
 "use client";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// /dev/ui — shared/ui 프리미티브 격리 갤러리
+// /dev/ui — shared/ui 부품 격리 갤러리
 //
-// 목적: shared/ui 의 컴포넌트 export **46개 전부**(BU0 tx 10 포함)를 데이터 없이 한 화면에서 렌더한다.
-//   · 에이전트가 "이 프리미티브가 어떻게 생겼나"를 알려고 소비 화면을 뒤지지 않아도 된다.
-//   · Playwright(e2e/dev-ui.spec.ts)가 여기서 **클래스 계약을 회귀 검사**한다.
-//     프리미티브가 내보내는 클래스명(.pv-* · .tstate-* · .tstat-* · .skeleton …)이
-//     E2E 계약인데, 지금까지 그것을 직접 검증하는 테스트가 없었다.
+// 목적: 제품이 쓰는 shared/ui 부품(kit · States · evidence · tx)과 서식 함수 · 단과 밀도 토큰을 데이터 없이 한 화면에서 그린다.
+//   · 에이전트가 "이 부품이 어떻게 생겼나"를 알려고 소비 화면을 뒤지지 않아도 된다.
+//   · Playwright(e2e/dev-ui.spec.ts · e2e/density.spec.ts)가 여기서 **클래스 계약과 동작을 회귀 검사**한다.
 //
-// Storybook 을 쓰지 않은 이유: 패키지 40~60개와 두 번째 빌드 파이프라인이 붙고,
-// "순수 CSS 유지 · UI 프레임워크 이전 금지"(CLAUDE.md) 와 충돌한다. 이 라우트는
+// ★제품이 쓰지 않는 부품은 여기에 두지 않는다(U0-e · ADR 007 결정 D7)★ — primitives · feedback · MiniViz · SectionHead ·
+// AllocationMap · EvidenceDrawer 와 shadcn 의 Button · Input · Slider · Progress · Table · Popover 는 가져다 쓰는 제품 파일이
+// 하나도 없어 부품 · 표본 · 그 CSS 를 함께 걷었다. 카탈로그에만 사는 부품은 '있는 것처럼 보이는 부채'다.
+//
+// Storybook 을 쓰지 않은 이유: 패키지 40~60개와 두 번째 빌드 파이프라인이 붙는다. 이 라우트는
 // 앱 자체의 빌드/CSS/E2E 를 그대로 쓴다 — 새 의존성 0개.
 //
 // 갤러리 자체는 네트워크 호출 0(모든 표본이 하드코딩 props). 셸(TerminalShell) 머리 줄의 프로필은
 // 로그인 토큰이 있을 때만 /auth/me 를 한 번 부른다(토큰이 없으면 0).
 // nav 에 링크되지 않은 내부 라우트다.
-//
-// 제외 없음. 처음엔 CommandPalette / CommandHint 두 개를 뺐었는데, 그 둘은 도달 불가
-// 코드로 확인되어 같은 브랜치에서 삭제했다(TopNav 포함). 지금은 shared/ui 의 컴포넌트
-// export 와 이 갤러리의 표본이 1:1 로 맞는다 — 스펙이 그 일치를 강제한다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { Activity } from "lucide-react";
 
-import {
-  PageHeader, PageContent, StatCard, Tabs, Spinner, Badge,
-  Section as PSection, FormRow, Field as PField, ErrorMsg, Empty,
-} from "@/shared/ui/primitives";
 import {
   GroupedSelect, Toggle, Section as KSection, SubToggle,
   Field as KField, QuickStepper, Segmented,
 } from "@/shared/ui/kit";
 import { LoadingState, EmptyState, ErrorState, UnavailableState, AsyncState } from "@/shared/ui/States";
 import { EvidenceBadge } from "@/shared/ui/evidence";
-import { EvidenceDrawer } from "@/shared/ui/EvidenceDrawer";
 // shadcn 벤더링본 — .devui-item 계약을 건드리지 않도록 **별도 섹션**에서만 쓴다(아래 주석 참조).
-import { Button } from "@/shared/ui/shadcn/button";
 import { Badge as ShadBadge } from "@/shared/ui/shadcn/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/shared/ui/shadcn/card";
-import { Input } from "@/shared/ui/shadcn/input";
-import { Slider } from "@/shared/ui/shadcn/slider";
-import { Progress } from "@/shared/ui/shadcn/progress";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/shared/ui/shadcn/table";
 import {
   Dialog, DialogTrigger, DialogContent, DialogHeader,
   DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from "@/shared/ui/shadcn/dialog";
-import {
-  Skeleton, SkeletonText, SkeletonCard, SkeletonTable,
-  TickValue, MetricCard, Sparkline,
-} from "@/shared/ui/feedback";
-import { MiniViz, StatGrid, Stat, type MiniVizKind } from "@/shared/ui/MiniViz";
-import SectionHead from "@/shared/ui/SectionHead";
-// §68 롱숏 표본 — 숏이 든 비중을 화면 경로로 만들 UI 가 없어 여기서만 잴 수 있다.
-import { AllocationMap } from "@/shared/ui/AllocationMap";
+// §68 롱숏 표본 — 숏이 든 비중을 화면 경로로 만들 UI 가 없어 여기서만 잴 수 있다(집중도 · 노출 네 축의 식).
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 // BU0 — 토스식 공용 부품 + 한국식 숫자 표기. 서식 표의 출력은 실제 함수의 반환값이다(손으로 적지 않는다).
 import * as Tx from "@/shared/ui/tx";
@@ -67,7 +44,7 @@ import { DensitySpecimen } from "../DensitySpecimen";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────
 // 페이지 자체 크롬은 .devui-* 만 쓴다. 앱 클래스(.pv-* 등)는 표본 안에서만 나타나야
-// 하므로(그래야 스펙이 "PageHeader 표본 1개" 를 셀 수 있다) 여기서는 쓰지 않는다.
+// 하므로(그래야 스펙이 표본 수를 셀 수 있다) 여기서는 쓰지 않는다.
 
 function Specimen({ name, from, note, children }: {
   name: string; from: string; note?: string; children: React.ReactNode;
@@ -94,11 +71,6 @@ function Variant({ label, children }: { label: string; children: React.ReactNode
 }
 
 // ── 상태가 필요한 표본용 래퍼 ────────────────────────────────────────────────
-
-function LiveTabs() {
-  const [i, setI] = useState(0);
-  return <Tabs tabs={["개요", "재무", "리스크"]} active={i} onChange={setI} />;
-}
 
 function LiveToggle({ tone }: { tone?: "buy" | "sell" | "neutral" }) {
   const [on, setOn] = useState(true);
@@ -156,31 +128,6 @@ function LiveSelect() {
   );
 }
 
-/** A3 — 숫자 입력과 슬라이더가 한 값을 공유하는 표본. */
-function LiveWeight() {
-  const [w, setW] = useState(35);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <Input type="number" min={0} max={100} step={0.5} value={w} aria-label="예시 비중 (%)"
-        onChange={(e) => setW(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))} />
-      <Slider value={[w]} min={0} max={100} step={0.5} aria-label="예시 비중 슬라이더 (%)"
-        onValueChange={([v]) => setW(v)} />
-    </div>
-  );
-}
-
-function LivePSection() {
-  return (
-    <PSection title="섹션 제목" action={<Badge variant="blue">action 슬롯</Badge>}>
-      <span className="devui-inline-note">본문</span>
-    </PSection>
-  );
-}
-
-const SPARK_UP = [10, 12, 11, 14, 13, 17, 19, 18, 22];
-const SPARK_DOWN = [22, 20, 21, 17, 15, 16, 12, 11, 9];
-const MINIVIZ_KINDS: MiniVizKind[] = ["bars", "line", "heat", "rows", "gauge"];
-
 const LS_ITEMS = [
   { code: "005930", name: "삼성전자", weight: 60 },
   { code: "000660", name: "SK하이닉스", weight: 50 },
@@ -229,79 +176,9 @@ export default function DevUiPage() {
           <code>e2e/dev-ui.spec.ts</code> 가 여기서 클래스 계약을 회귀 검사합니다.
         </p>
         <p className="devui-sub devui-omit">
-          shared/ui 의 컴포넌트 export 36개를 빠짐없이 렌더합니다 — 스펙이 이 1:1 대응을 강제합니다.
+          제품이 쓰는 shared/ui 부품의 표본 23개를 렌더합니다. 스펙이 표본의 이름과 수를 강제합니다.
         </p>
       </header>
-
-      {/* ── shared/ui/primitives ───────────────────────────────────────────── */}
-      <section className="devui-group">
-        <h2 className="devui-group-title">shared/ui/primitives</h2>
-
-        <Specimen name="PageHeader" from="primitives" note="브레드크럼·부제·actions 슬롯 모두 옵션.">
-          <PageHeader
-            title="페이지 제목"
-            subtitle="부제목 — 옵션"
-            breadcrumb={[{ label: "홈", href: "/dashboard" }, { label: "현재 위치" }]}
-            actions={<Badge variant="green">actions</Badge>}
-          />
-        </Specimen>
-
-        <Specimen name="PageContent" from="primitives" note="container-pv 폭 제한 + 상하 패딩만 담당.">
-          <PageContent><span className="devui-inline-note">본문 래퍼</span></PageContent>
-        </Specimen>
-
-        <Specimen name="StatCard" from="primitives">
-          <Variant label="trend=up / size=md"><StatCard label="누적수익률" value="+18.4%" sub="2020-01 ~ 2025-12" trend="up" /></Variant>
-          <Variant label="trend=down"><StatCard label="MDD" value="-24.1%" trend="down" /></Variant>
-          <Variant label="trend=neutral / size=sm"><StatCard label="거래횟수" value={412} trend="neutral" size="sm" /></Variant>
-        </Specimen>
-
-        <Specimen name="Tabs" from="primitives" note="클릭하면 active 가 바뀝니다(상호작용 표본).">
-          <LiveTabs />
-        </Specimen>
-
-        <Specimen name="Spinner" from="primitives">
-          <Variant label="size=16"><Spinner /></Variant>
-          <Variant label="size=28"><Spinner size={28} /></Variant>
-        </Specimen>
-
-        <Specimen name="Badge" from="primitives">
-          <Variant label="4개 variant 전부">
-            <span className="devui-row">
-              <Badge variant="green">green</Badge>
-              <Badge variant="red">red</Badge>
-              <Badge variant="amber">amber</Badge>
-              <Badge variant="blue">blue</Badge>
-            </span>
-          </Variant>
-        </Specimen>
-
-        <Specimen name="Section" from="primitives" note="kit 의 Section 과 이름만 같고 별개 구현입니다(합치지 않았습니다).">
-          <LivePSection />
-        </Specimen>
-
-        <Specimen name="FormRow" from="primitives" note="cols 를 Tailwind grid-cols-* 로 매핑합니다.">
-          <FormRow cols={3}>
-            <PField label="시작일"><input className="bs-numbox" defaultValue="2020-01-01" /></PField>
-            <PField label="종료일"><input className="bs-numbox" defaultValue="2025-12-31" /></PField>
-            <PField label="수수료" hint="bps"><input className="bs-numbox" defaultValue="15" /></PField>
-          </FormRow>
-        </Specimen>
-
-        <Specimen name="Field" from="primitives" note="kit 의 Field 와 이름만 같고 별개 구현입니다.">
-          <Variant label="hint 있음"><PField label="라벨" hint="힌트 문구"><input className="bs-numbox" defaultValue="42" /></PField></Variant>
-          <Variant label="hint 없음"><PField label="라벨만"><input className="bs-numbox" defaultValue="7" /></PField></Variant>
-        </Specimen>
-
-        <Specimen name="ErrorMsg" from="primitives">
-          <ErrorMsg msg="종목 조회에 실패했습니다 (HTTP 500)" />
-        </Specimen>
-
-        <Specimen name="Empty" from="primitives">
-          <Variant label="기본 문구"><Empty /></Variant>
-          <Variant label="문구 지정"><Empty msg="조건에 맞는 종목이 없습니다" /></Variant>
-        </Specimen>
-      </section>
 
       {/* ── shared/ui/kit ──────────────────────────────────────────────────── */}
       <section className="devui-group">
@@ -376,80 +253,6 @@ export default function DevUiPage() {
           <Variant label="unavailable"><EvidenceBadge kind="unavailable" reason="데이터 출처가 없습니다.">없음</EvidenceBadge></Variant>
         </Specimen>
 
-        <Specimen name="EvidenceDrawer" from="EvidenceDrawer"
-          note="정상 상태의 부연만 담습니다. 경고는 닫힌 서랍 안에서 존재하지 않는 것과 같으므로 넣지 않습니다. Radix Popover — 내용은 document.body 로 포털됩니다.">
-          <EvidenceDrawer title="재현 좌표" rows={[
-            { label: "스냅샷", value: "rgs_20260601_a91f", mono: true, note: "이 국면 판정의 기준시점 — 값은 고정되어 있습니다." },
-            { label: "룰셋", value: "tr_momentum v4", mono: true },
-            { label: "엔진", value: "dev", mono: true, note: "서버가 스탬프한 코드 버전." },
-          ]} />
-        </Specimen>
-      </section>
-
-      {/* ── shared/ui/feedback ─────────────────────────────────────────────── */}
-      <section className="devui-group">
-        <h2 className="devui-group-title">shared/ui/feedback</h2>
-
-        <Specimen name="Skeleton" from="feedback" note=".skeleton 이 클래스 계약. 높이·폭은 호출자가 지정.">
-          <Skeleton className="h-3" style={{ width: "60%" }} />
-        </Specimen>
-        <Specimen name="SkeletonText" from="feedback">
-          <Variant label="lines=3 (기본)"><SkeletonText /></Variant>
-          <Variant label="lines=5"><SkeletonText lines={5} /></Variant>
-        </Specimen>
-        <Specimen name="SkeletonCard" from="feedback"><SkeletonCard /></Specimen>
-        <Specimen name="SkeletonTable" from="feedback">
-          <Variant label="rows=3"><SkeletonTable rows={3} /></Variant>
-        </Specimen>
-
-        <Specimen name="TickValue" from="feedback" note="값이 바뀌면 0.6초 flash. 여기서는 정적 표본.">
-          <Variant label="number"><TickValue value={1234.5678} /></Variant>
-          <Variant label="currency"><TickValue value={98_450_000} format="currency" /></Variant>
-          <Variant label="percent"><TickValue value={12.345} format="percent" /></Variant>
-          <Variant label="null → 대시"><TickValue value={null} /></Variant>
-        </Specimen>
-
-        <Specimen name="MetricCard" from="feedback" note="loading=true 면 SkeletonCard 로 대체됩니다.">
-          <Variant label="delta 양수 + icon"><MetricCard label="샤프" value={1.42} delta={3.1} sublabel="전월 대비" icon={Activity} /></Variant>
-          <Variant label="delta 음수"><MetricCard label="변동성" value={18.7} unit="%" delta={-2.4} color="#dc2626" /></Variant>
-          <Variant label="value=null"><MetricCard label="미집계" value={null} /></Variant>
-          <Variant label="loading=true"><MetricCard label="로딩" value={0} loading /></Variant>
-        </Specimen>
-
-        <Specimen name="Sparkline" from="feedback" note="data.length < 2 면 같은 크기의 빈 span 을 반환합니다.">
-          <Variant label="상승"><Sparkline data={SPARK_UP} color="auto" /></Variant>
-          <Variant label="하락"><Sparkline data={SPARK_DOWN} color="auto" /></Variant>
-          <Variant label="데이터 1개 → 빈 자리"><Sparkline data={[1]} /></Variant>
-        </Specimen>
-      </section>
-
-      {/* ── shared/ui/MiniViz + SectionHead ────────────────────────────────── */}
-      <section className="devui-group">
-        <h2 className="devui-group-title">shared/ui/MiniViz · SectionHead</h2>
-
-        <Specimen name="MiniViz" from="MiniViz" note="kind 5종. 데이터를 받지 않는 순수 플레이스홀더 그래픽입니다.">
-          {MINIVIZ_KINDS.map((k) => (
-            <Variant key={k} label={`kind=${k}`}><MiniViz kind={k} /></Variant>
-          ))}
-        </Specimen>
-
-        <Specimen name="StatGrid" from="MiniViz" note="Stat 들을 담는 그리드(.tstat-grid).">
-          <StatGrid>
-            <Stat k="CAGR" v="14.2%" sub="2020~2025" />
-            <Stat k="MDD" v="-24.1%" sub="2022-09" />
-            <Stat k="샤프" v="1.42" />
-          </StatGrid>
-        </Specimen>
-
-        <Specimen name="Stat" from="MiniViz" note="valueColor 는 값 텍스트에만 적용됩니다.">
-          <Variant label="valueColor 없음"><Stat k="거래횟수" v={412} /></Variant>
-          <Variant label="valueColor 지정"><Stat k="승률" v="58.3%" sub="412건 중" valueColor="var(--color-bull)" /></Variant>
-        </Specimen>
-
-        <Specimen name="SectionHead" from="SectionHead" note="default export. index 는 옵션.">
-          <Variant label="index 있음"><SectionHead label="유동성 게이트" index="01" /></Variant>
-          <Variant label="index 없음"><SectionHead label="후처리" /></Variant>
-        </Specimen>
       </section>
 
       {/* ── shared/ui/tx (BU0) — 토스식 공용 부품. 평범한 props 만 받는다(서버 응답을 문장으로 바꾸는 일은 위젯이 한다). ── */}
@@ -592,58 +395,11 @@ export default function DevUiPage() {
           </Card>
         </div>
 
-        {/* A3 — Input · Slider · Progress · Table */}
-        <h2 className="devui-h">Input · Slider · Progress · Table (A3)</h2>
-        <div className="devui-s1grid">
-          <Card className="devui-s1card">
-            <CardHeader><CardTitle as="h3">Input + Slider</CardTitle></CardHeader>
-            <CardContent>
-              <LiveWeight />
-              <p className="devui-s1why">두 컨트롤이 한 값을 공유한다 — 로컬 state 가 없어서 어긋날 자리가 없다.</p>
-            </CardContent>
-          </Card>
-          <Card className="devui-s1card">
-            <CardHeader><CardTitle as="h3">Progress</CardTitle></CardHeader>
-            <CardContent>
-              <Progress value={72} label="예시 진행률" />
-              <div style={{ height: 8 }} />
-              <Progress value={118} label="목표 초과 예시" tone="warn" />
-              <div style={{ height: 8 }} />
-              {/* value=null 은 0 이 아니다 — 바를 그리지 않고 aria-valuenow 도 안 붙인다. */}
-              <Progress value={null} label="미계산 예시" />
-              <p className="devui-s1why">value=null 이면 바도 aria-valuenow 도 없다. 0% 라고 말하지 않는다.</p>
-            </CardContent>
-          </Card>
-          <Card className="devui-s1card">
-            <CardHeader><CardTitle as="h3">Table</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">자산</TableHead>
-                    <TableHead scope="col" className="text-right">비중</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableHead scope="row">삼성전자</TableHead>
-                    <TableCell className="text-right"><span className="num">32.5</span></TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableHead scope="row">SK하이닉스</TableHead>
-                    <TableCell className="text-right"><span className="num">18.0</span></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-              <p className="devui-s1why">TableHead 는 scope 를 타입으로 강제한다 — 상류와 다른 유일한 지점.</p>
-            </CardContent>
-          </Card>
-        </div>
       </section>
 
       {/* ── shadcn/ui 벤더링본 (Phase 5 스캐폴드) ─────────────────────────────
           ★위 갤러리와 클래스를 공유하지 않는다★
-          e2e/dev-ui.spec.ts 는 .devui-item 개수 === SPECIMENS.length(32) 를 단언하고
+          e2e/dev-ui.spec.ts 는 .devui-item 개수 === SPECIMENS.length 를 단언하고
           이름 목록까지 대조한다. shadcn 표본을 같은 클래스로 넣으면 그 계약이 깨진다.
           그래서 .devui-shadcn / .devui-sitem 이라는 **별개 클래스**를 쓴다 —
           기존 단언은 그대로 유효하고, 새 섹션은 자체 단언으로 검증한다.
@@ -661,18 +417,6 @@ export default function DevUiPage() {
         </p>
 
         <div className="devui-sitem">
-          <code className="devui-sitem-name">Button</code>
-          <div className="devui-variants">
-            {(["default", "secondary", "outline", "ghost", "destructive", "link"] as const).map((v) => (
-              <Button key={v} variant={v}>{v}</Button>
-            ))}
-            <Button size="sm">sm</Button>
-            <Button size="lg">lg</Button>
-            <Button disabled>disabled</Button>
-          </div>
-        </div>
-
-        <div className="devui-sitem">
           <code className="devui-sitem-name">Badge</code>
           <div className="devui-variants">
             {(["default", "secondary", "outline", "destructive"] as const).map((v) => (
@@ -686,7 +430,7 @@ export default function DevUiPage() {
           <div className="devui-variants">
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" className="devui-dialog-open">Dialog 열기</Button>
+                <button type="button" className="devui-btn devui-dialog-open">Dialog 열기</button>
               </DialogTrigger>
               <DialogContent className="devui-dialog-content">
                 <DialogHeader>
@@ -696,7 +440,7 @@ export default function DevUiPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                  <DialogClose asChild><Button variant="secondary">닫기</Button></DialogClose>
+                  <DialogClose asChild><button type="button" className="devui-btn">닫기</button></DialogClose>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -706,7 +450,7 @@ export default function DevUiPage() {
 
       {/* ═══════════════════════════════════════════════════════════════════
           §68 롱숏 표본 (P3) — 숏이 있는 비중을 화면 경로로 만들 UI 가 없어서,
-          `concentration()`·`exposureLegs()`·`AllocationMap` 이 숏을 어떻게 다루는지
+          `concentration()`·`exposureLegs()` 가 숏을 어떻게 다루는지
           잴 곳이 여기밖에 없다. 격리 라우트에 표본을 두고 E2E 가 그것을 읽는
           방식은 이 저장소가 Step 3b 에서 세운 관례다.
           ★값을 손으로 적지 않는다★ 아래 숫자는 전부 실제 함수의 반환값이다.
@@ -734,10 +478,6 @@ export default function DevUiPage() {
             gross {LS_LEGS.gross.toFixed(1)} / net {LS_LEGS.net.toFixed(1)} /
             long {LS_LEGS.long.toFixed(1)} / short {LS_LEGS.short.toFixed(1)}
           </span>
-        </div>
-
-        <div className="devui-ls-map">
-          <AllocationMap items={LS_ITEMS} />
         </div>
       </section>
     </div>

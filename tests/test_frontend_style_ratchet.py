@@ -40,10 +40,10 @@ GLOBALS_CSS = SRC / "app" / "globals.css"
 
 #: 선언 수. 화면 조각이 옮길 때마다 내린다.
 BASELINE_COUNTS: dict[str, int] = {
-    "척도 밖 글자 크기": 586,
-    "척도 밖 반경": 382,
-    "날 z-index": 80,
-    "토큰 정의 밖 hex": 240,
+    "척도 밖 글자 크기": 580,
+    "척도 밖 반경": 375,
+    "날 z-index": 79,
+    "토큰 정의 밖 hex": 229,
 }
 
 #: 척도(480 · 640 · 900 · 1280 · 1600 과 그 −1) 밖의 폭 조건 — 서로 다른 조건 글.
@@ -72,7 +72,6 @@ BASELINE_TRANSITION_ALL: tuple[str, ...] = (
     ".brun-btn",
     ".mc-ind",
     ".mc-tab",
-    ".pv-tab",
     ".tbt-mode",
     ".tbt-saved-del",
     ".tscreener-handoff-clear",
@@ -131,7 +130,6 @@ BASELINE_TITLE_ATTRS: dict[str, int] = {
     "frontend/src/features/case-bar/CaseBar.tsx": 1,
     "frontend/src/features/portfolio-graph-io/GraphFileIO.tsx": 2,
     "frontend/src/features/profile/ProfileMenu.tsx": 1,
-    "frontend/src/shared/ui/AllocationMap.tsx": 2,
     "frontend/src/shared/ui/PerfLabel.tsx": 1,
     "frontend/src/widgets/portfolio-graph/BacktestResults.tsx": 2,
     "frontend/src/widgets/portfolio-graph/Branches.tsx": 4,
@@ -181,7 +179,6 @@ RAW_TABLE_FILES: tuple[str, ...] = (
     "frontend/src/shared/ui/perf/PerfCompare.tsx",
     "frontend/src/shared/ui/perf/PerfTableView.tsx",
     "frontend/src/shared/ui/perf/RebalanceTable.tsx",
-    "frontend/src/shared/ui/shadcn/table.tsx",
     "frontend/src/widgets/admin/DbStatusPanel.tsx",
     "frontend/src/widgets/backtester/BacktestCompare.tsx",
     "frontend/src/widgets/backtester/BacktestResults.tsx",

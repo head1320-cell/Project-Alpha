@@ -11,93 +11,93 @@
    재정의돼 순서가 바뀌면 조용히 렌더가 달라진다. 그래서 한 파일로 유지하고
    인덱스만 둔다. 규칙 추가는 해당 섹션 안에, 새 섹션은 맨 끝에.
    (BU10b 에서 다시 셌다 — 절 = 굵은 구분 주석(═) 사이, 접두는 그 절에서 많이 쓴 것 넷까지.)
+   (U0-e 에서 줄 범위만 다시 맞췄다 — 시작 줄 = 제목이 적힌 줄. 접두 칸은 다시 세지 않았고, 이 인덱스 뒤에 생긴 절은 아직 실려 있지 않다.)
 
      L  104-215   .bs-*                          Portfolio Visualizer Design System
-     L  216-428   .pv-* .badge-* .container-* .card-* Bootstrap-style utility classes (PV uses Boot…
-     L  429-467   .card-*                        Legacy variable aliases — for pages still ref…
-     L  468-493   .animate-* .tabular-*          Phase 5 — Premium Design System Additions
-     L  494-615   .terminal-* .tx-* .tcrumb-* .rail-* Variant "Institutional Terminal" Shell — 좌측 사…
-     L  616-640   .trisk-* .tbt-* .tsurvival-*   Terminal Backtester — Variant 백테스터 스타일
-     L  641-698   .tbt-* .tscreener-*            Backtester 모드 전환기 (전략 실행 / 전략 설계)
-     L  699-767   .tbt-* .t-* .tstat-* .tpage-*  Terminal Page Chrome — 랜딩(lp-*) 모티프를 셸(--t-* …
-     L  768-882   .ca-* .tbt-* .tscreener-*      Backtester v2 — Modernized "Institutional Ter…
-     L  883-987   .ca-*                          후보 C — Cockpit (ca-cp)
-     L  988-1010                                 Landing motion — "부팅하는 정밀 계기" (가산적·온브랜드).
-     L 1011-1055  .tstate-* .tpage-*             Tool-page cohesion — 대시보드+5툴 공용 정돈 (절제·차분). 추…
-     L 1056-1114  .terminal-* .tpage-* .trisk-* .ca-* Tool-page cohesion — 2차 패스: 섹션헤더 액센트 · 테이블 행 …
-     L 1115-1565  .mc-* .ca-* .sm-* .mca-*       Macro Allocation Cockpit (components/macro/*)…
-     L 1566-1649  .as-* .aas-*                   Allocation Studio (.as-*) — 3-존 콕핏, Instituti…
-     L 1650-1681  .as-* .aas-*                   Multi-Stage Wizard — 게이트 · 진행 트래커 · 인텐트 · 고급 …
-     L 1682-1756  .tfm-* .as-*                   Allocation Studio 신규 툴 (팩터 빌더 · 타이밍 · 상관국면 · …
-     L 1757-1773                                 Execution Readiness Room (Full Expansion P4) …
-     L 1774-1786  .as-*                          Attribution · Decision Journal · Strategy Hea…
-     L 1787-1790                                 AutoAlpha 실험실 (Full Expansion P6 — Experiment…
-     L 1791-1794                                 Neutralize · Sleeve Studio (Full Expansion P3…
-     L 1795-1885  .brun-*                        BacktestRun — 로딩 잡 모니터 + 결과 워크스페이스 (Backtest …
-     L 1886-1915  .devui-*                       30. .devui-*  —  /dev/ui  shared/ui 프리미티브 격리 …
-     L 1916-1932  .mc-*                          31. Macro Phase 스냅샷 — 0M 스테이지(.as-macro-*) · …
-     L 1933-1961  .as-*                          32. 리서치 컨텍스트 스트립 확장 (Phase 4b) — 스펙 §4 의 9개 요…
-     L 1962-2026  .shad-* .devui-*               34. shadcn/ui 토큰 브릿지 (ADR 001 §2.1 · Phase 5)
-     L 2027-2039                                 §35 3자 비교 (as-3w-*) — 기준 vs 타이밍만 vs 타이밍+매크로, …
-     L 2040-2126  .tfm-* .t-*                    §36 카탈로그 셸 — 프리셋 + 초안/적용본 비교 (스펙 §8.1 요구 11·1…
-     L 2127-2147  .tev-*                         38. 증거 배지 .tev-* (UI/UX 현대화 P2)
-     L 2148-2170  .tev-* .shad-*                 39. 증거 서랍 .tev-drawer-* / .shad-popover (UI/U…
-     L 2171-2182                                 40. 컨텍스트 스트립 경고 행 .as-ctx-warns (UI/UX 현대화 P3)
-     L 2183-2198                                 41. 리서치 워크스페이스 셸 (UI/UX 현대화 P3.5)
-     L 2199-2210                                 42. 연구 색인 .as-ri-* (UI/UX 현대화 P4)
-     L 2211-2224  .brun-*                        43. 엔진 진행률 표기 · 단계 목록 (UI/UX 현대화 P8)
-     L 2225-2233                                 44. 저널 재현 사슬 .as-dj-chain (UI/UX 현대화 P9)
-     L 2234-2284  .as-*                          45. 반응형 — 신원은 어느 폭에서도 사라지지 않는다 (UI/UX 현대화 P10)
-     L 2285-2306                                 46. 랜딩 스크롤 연동 모션 (L1)
-     L 2307-2402  .devui-*                       47. 다크 토큰 계층 (S1f · 범위 한정)
-     L 2403-2442  .brun-*                        48. 백테스트 결과 표면 — Card 로 감싼 뒤의 정리 (S1b-2)
-     L 2443-2483  .aas-*                         49. Allocation Studio — 스티키 파이프라인 스테퍼 + 신선도 배…
-     L 2484-2543                                 50. 목표 게이트 — 온보딩 위저드 (A2)
-     L 2544-2669  .aas-* .as-*                   51. 01 CONSTRUCT — 컨트롤 패널 + 결과 패널 (A3)
-     L 2670-2777  .aas-*                         52. A4-X — 횡단 결함 3건 (계산 중 디밍 · 다크 스코프 · 차트 툴팁)
-     L 2778-2792                                 53. A4-V — 00 OVERVIEW (연구 색인 + KPI + 12열 분석 …
-     L 2793-2842  .tfm-* .aas-*                  54. A4-L — 02 ALPHA LAB (표현식 · 레지스트리 · 검증 리포트…
-     L 2843-2915                                 55. A5 — 공통 구조: 레일 폭 스케일 · 라이트 대비 · 타입 하한
-     L 2916-3047  .aas-* .as-*                   §56 — 06 STRESS · 07 ATTRIBUTION · 08 EXECUTI…
-     L 3048-3128                                 §59 — A9: 01 CONSTRUCT 컴포넌트 품질 (스테퍼 폭 · 배지 수렴…
-     L 3129-3208  .as-*                          §60 — A10 그래픽 패스: 모듈러 스케일 · 4px 리듬 · 무게 위계 · …
-     L 3209-3268                                 §61 — Phase 1 잔여 색 토큰 (승인됨): 액센트 램프 · Seconda…
-     L 3269-3337  .as-*                          §62 — 모션 파일럿 (01 CONSTRUCT 한정)
-     L 3338-3416  .terminal-*                    §63 — 모션 확장: 7개 코어 모듈 (A12)
-     L 3417-3424                                 57b. R0-B — 스트레스 기준 대조 밴드 (.as-rob-basis*)
-     L 3425-3443                                 64. P1 — 재현 결과 (.as-rr-repro*)
-     L 3444-3632  .ms-* .as-* .tstate-*          65. M1-U — 연구 케이스 컨텍스트 바 (.as-case*)
-     L 3633-3663                                 66. P2 — 알파 포트폴리오 (.as-ap*)
-     L 3664-3676                                 §67 — M2: 기대수익 엔진 근거 · 분포 무가정 예측 구간
-     L 3677-3708  .as-*                          §68 롱숏 (P3) — 숏을 조용히 버리지 않기 위해 필요한 최소한의 것만
-     L 3709-3806  .mx-*                          §69 — P4 매크로 지능 패널 (소스 커버리지 · 장기관계 · 예측 적중률 ·…
-     L 3807-3838  .tev-*                         70. 증거 배지·서랍의 타입 하한 — 포털이 감사 루트 밖에 있었다 (P4 부채…
-     L 3839-3880  .perf-* .brun-* .sm-*          §58. 성과 상태 라벨 `.perf-label` — ★"이 수치가 무엇인가"★ …
-     L 3881-3909  .login-* .live-*               §59. 로그인 화면 `.login-*` — ★인증이 들어오는 자리★ (AC7 /…
-     L 3910-4930  .pg-* .react-* .terminal-*     AAS 포트폴리오 설계 캔버스 (BI3 → BJ2·BJ3 · ADR 002 · 스…
-     L 4931-5031  .pg-*                          BQ Q1 · 떠 있는 판 — 캔버스가 몸통 전체, 왼쪽 목록·오른쪽 창은 그 위…
-     L 5032-5059  .pg-*                          BQ Q2 · 진행상황 알약 — 관문 레일이 캔버스 위 가운데 떠 있는 알약으로.…
-     L 5060-5170  .pg-* .pf-*                    BQ 마감 — 마지막 스크린샷 점검에서 찾은 것
-     L 5171-5257  .set-* .pf-*                   설정 (BS1) — 계정 · 비밀번호 · 화면 · (관리자) 계정 관리. 프로필 …
-     L 5258-5861  .ca-* .mc-* .bsc-* .tbt-*      BS5 — 레거시 모듈 다크 (대시보드·스크리너·백테스터·매크로·기업·위험·데이터…
-     L 5862-6022  .pg-* .react-*                 BT2 · 절차 탭 — 여섯 단계가 한 줄 척추로 이어진다(관문 레일과 같은 말:…
-     L 6023-6700  .bsc-* .bte-* .tx-* .scr-*     BU0 · 토스식 시각 언어 — 앱 전체 토큰 (ADR-003 · 스펙 2026-…
-     L 6701-6868  .tfm-* .wg-* .fp-* .as-*       BU3c · 팩터 고르기 창(.tfm — CatalogueShell 의 소비자는 …
-     L 6869-7002  .brun-* .rs-* .tx-* .perf-*    BU4 · 실행·결과·비교(.rs — 진행 RunMonitor · 결과 Backt…
-     L 7003-7037  .mc-* .ms-* .tx-*              BU5a · 경제 흐름 /macro — 머리(답 한 문장) · 탭 한국어 · 스튜…
-     L 7038-7106  .rv-*                          BU5a+ · 국면 그림 — 도넛 2(네 국면) + 스트레스 반원 (`widget…
-     L 7107-7348  .mc-* .mv-* .mca-* .shad-*     BU5b-1 · 매크로 분석 탭 안 카드 — 개요·지표·국면·가치 (계획 "BU5…
-     L 7349-7517  .mc-* .sm-* .mca-* .shad-*     BU5b-2 · 매크로 분석 전략·추천·상관·타이밍 탭 + 전략 창 (계획 "BU…
-     L 7518-7672  .ms-* .mx-*                    BU5c · 매크로 분석 스튜디오 다섯 + 매크로 지능 패널 (계획 "BU5c 상…
-     L 7673-7897  .ca-* .ci-* .tx-*              BU6a · 기업 분석 한 흐름 + 붙는 목차 (계획 "BU6 상세", 사용자 결…
-     L 7898-8069  .ci-*                          BU6a+ — 기업 분석: 붙는 미니 머리 · 오른쪽 레일(≥1280) · 모형 …
-     L 8070-8218  .ci-* .ca-*                    BU6b — 기업 분석: 돈 버는 힘(이야기 그림 · 요약 카드 · 표는 펼침) …
-     L 8219-8300  .rk-* .trisk-* .tstat-* .tx-*  BU7a — 위험 점검(`.rk`): 네 충격 한눈에 · 종목 × 충격 칸 지도 …
-     L 8301-8439  .dsx-* .t-* .trisk-* .tx-*     BU7b — 데이터 상태(`.dsx`): 답 · 원천별 연구 등급 · 연결된 원천…
-     L 8440-8508  .dv-* .tx-*                    BU7c — 파생상품 계산기(`.dv`): 탭 다섯(옵션 · 채권 · 선물 헤지 …
-     L 8509-8872  .ld-*                          BU8a — 첫 화면(`.ld`, 셸 밖). 띠 넷: 히어로(서버가 지금 내는 답…
-     L 8873-8967  .lg-*                          BU8b — 로그인(`.lg`, 셸 밖 단독 한 화면). 왼쪽 폼(토스식: 라벨 …
-     L 8968-9431  .ma-* .lv-* .lvs-* .rl-*       BV8 · 설정 "내 증권 계좌" (features/settings/BrokerA…
+     L  216-356   .pv-* .badge-* .container-* .card-* Bootstrap-style utility classes (PV uses Boot…
+     L  357-387   .card-*                        Legacy variable aliases — for pages still ref…
+     L  388-405   .animate-* .tabular-*          Phase 5 — Premium Design System Additions
+     L  406-527   .terminal-* .tx-* .tcrumb-* .rail-* Variant "Institutional Terminal" Shell — 좌측 사…
+     L  528-552   .trisk-* .tbt-* .tsurvival-*   Terminal Backtester — Variant 백테스터 스타일
+     L  553-610   .tbt-* .tscreener-*            Backtester 모드 전환기 (전략 실행 / 전략 설계)
+     L  611-668   .tbt-* .t-* .tstat-* .tpage-*  Terminal Page Chrome — 랜딩(lp-*) 모티프를 셸(--t-* …
+     L  669-779   .ca-* .tbt-* .tscreener-*      Backtester v2 — Modernized "Institutional Ter…
+     L  780-885   .ca-*                          후보 C — Cockpit (ca-cp)
+     L  886-908                                  Landing motion — "부팅하는 정밀 계기" (가산적·온브랜드).
+     L  909-952   .tstate-* .tpage-*             Tool-page cohesion — 대시보드+5툴 공용 정돈 (절제·차분). 추…
+     L  953-1005  .terminal-* .tpage-* .trisk-* .ca-* Tool-page cohesion — 2차 패스: 섹션헤더 액센트 · 테이블 행 …
+     L 1006-1456  .mc-* .ca-* .sm-* .mca-*       Macro Allocation Cockpit (components/macro/*)…
+     L 1457-1534  .as-* .aas-*                   Allocation Studio (.as-*) — 3-존 콕핏, Instituti…
+     L 1535-1566  .as-* .aas-*                   Multi-Stage Wizard — 게이트 · 진행 트래커 · 인텐트 · 고급 …
+     L 1567-1642  .tfm-* .as-*                   Allocation Studio 신규 툴 (팩터 빌더 · 타이밍 · 상관국면 · …
+     L 1643-1659                                 Execution Readiness Room (Full Expansion P4) …
+     L 1660-1672  .as-*                          Attribution · Decision Journal · Strategy Hea…
+     L 1673-1676                                 AutoAlpha 실험실 (Full Expansion P6 — Experiment…
+     L 1677-1680                                 Neutralize · Sleeve Studio (Full Expansion P3…
+     L 1681-1771  .brun-*                        BacktestRun — 로딩 잡 모니터 + 결과 워크스페이스 (Backtest …
+     L 1772-1801  .devui-*                       30. .devui-*  —  /dev/ui  shared/ui 프리미티브 격리 …
+     L 1802-1818  .mc-*                          31. Macro Phase 스냅샷 — 0M 스테이지(.as-macro-*) · …
+     L 1819-1847  .as-*                          32. 리서치 컨텍스트 스트립 확장 (Phase 4b) — 스펙 §4 의 9개 요…
+     L 1848-1912  .shad-* .devui-*               34. shadcn/ui 토큰 브릿지 (ADR 001 §2.1 · Phase 5)
+     L 1913-1925                                 §35 3자 비교 (as-3w-*) — 기준 vs 타이밍만 vs 타이밍+매크로, …
+     L 1926-2012  .tfm-* .t-*                    §36 카탈로그 셸 — 프리셋 + 초안/적용본 비교 (스펙 §8.1 요구 11·1…
+     L 2013-2033  .tev-*                         38. 증거 배지 .tev-* (UI/UX 현대화 P2)
+     L 2034-2045                                 40. 컨텍스트 스트립 경고 행 .as-ctx-warns (UI/UX 현대화 P3)
+     L 2046-2061                                 41. 리서치 워크스페이스 셸 (UI/UX 현대화 P3.5)
+     L 2062-2073                                 42. 연구 색인 .as-ri-* (UI/UX 현대화 P4)
+     L 2074-2087  .brun-*                        43. 엔진 진행률 표기 · 단계 목록 (UI/UX 현대화 P8)
+     L 2088-2096                                 44. 저널 재현 사슬 .as-dj-chain (UI/UX 현대화 P9)
+     L 2097-2147  .as-*                          45. 반응형 — 신원은 어느 폭에서도 사라지지 않는다 (UI/UX 현대화 P10)
+     L 2148-2169                                 46. 랜딩 스크롤 연동 모션 (L1)
+     L 2170-2265  .devui-*                       47. 다크 토큰 계층 (S1f · 범위 한정)
+     L 2266-2305  .brun-*                        48. 백테스트 결과 표면 — Card 로 감싼 뒤의 정리 (S1b-2)
+     L 2306-2346  .aas-*                         49. Allocation Studio — 스티키 파이프라인 스테퍼 + 신선도 배…
+     L 2347-2406                                 50. 목표 게이트 — 온보딩 위저드 (A2)
+     L 2407-2502  .aas-* .as-*                   51. 01 CONSTRUCT — 컨트롤 패널 + 결과 패널 (A3)
+     L 2503-2610  .aas-*                         52. A4-X — 횡단 결함 3건 (계산 중 디밍 · 다크 스코프 · 차트 툴팁)
+     L 2611-2625                                 53. A4-V — 00 OVERVIEW (연구 색인 + KPI + 12열 분석 …
+     L 2626-2674  .tfm-* .aas-*                  54. A4-L — 02 ALPHA LAB (표현식 · 레지스트리 · 검증 리포트…
+     L 2675-2747                                 55. A5 — 공통 구조: 레일 폭 스케일 · 라이트 대비 · 타입 하한
+     L 2748-2879  .aas-* .as-*                   §56 — 06 STRESS · 07 ATTRIBUTION · 08 EXECUTI…
+     L 2880-2960                                 §59 — A9: 01 CONSTRUCT 컴포넌트 품질 (스테퍼 폭 · 배지 수렴…
+     L 2961-3040  .as-*                          §60 — A10 그래픽 패스: 모듈러 스케일 · 4px 리듬 · 무게 위계 · …
+     L 3041-3100                                 §61 — Phase 1 잔여 색 토큰 (승인됨): 액센트 램프 · Seconda…
+     L 3101-3163  .as-*                          §62 — 모션 파일럿 (01 CONSTRUCT 한정)
+     L 3164-3242  .terminal-*                    §63 — 모션 확장: 7개 코어 모듈 (A12)
+     L 3243-3250                                 57b. R0-B — 스트레스 기준 대조 밴드 (.as-rob-basis*)
+     L 3251-3269                                 64. P1 — 재현 결과 (.as-rr-repro*)
+     L 3270-3458  .ms-* .as-* .tstate-*          65. M1-U — 연구 케이스 컨텍스트 바 (.as-case*)
+     L 3459-3489                                 66. P2 — 알파 포트폴리오 (.as-ap*)
+     L 3490-3502                                 §67 — M2: 기대수익 엔진 근거 · 분포 무가정 예측 구간
+     L 3503-3518  .as-*                          §68 롱숏 (P3) — 숏을 조용히 버리지 않기 위해 필요한 최소한의 것만
+     L 3519-3616  .mx-*                          §69 — P4 매크로 지능 패널 (소스 커버리지 · 장기관계 · 예측 적중률 ·…
+     L 3617-3644  .tev-*                         70. 증거 배지·서랍의 타입 하한 — 포털이 감사 루트 밖에 있었다 (P4 부채…
+     L 3645-3687  .perf-* .brun-* .sm-*          §58. 성과 상태 라벨 `.perf-label` — ★"이 수치가 무엇인가"★ …
+     L 3688-3716  .login-* .live-*               §59. 로그인 화면 `.login-*` — ★인증이 들어오는 자리★ (AC7 /…
+     L 3717-5156  .pg-* .react-* .terminal-*     AAS 포트폴리오 설계 캔버스 (BI3 → BJ2·BJ3 · ADR 002 · 스…
+     L 5157-5266  .pg-*                          BQ Q1 · 떠 있는 판 — 캔버스가 몸통 전체, 왼쪽 목록·오른쪽 창은 그 위…
+     L 5267-5321  .pg-*                          BQ Q2 · 진행상황 알약 — 관문 레일이 캔버스 위 가운데 떠 있는 알약으로.…
+     L 5322-5433  .pg-* .pf-*                    BQ 마감 — 마지막 스크린샷 점검에서 찾은 것
+     L 5434-5520  .set-* .pf-*                   설정 (BS1) — 계정 · 비밀번호 · 화면 · (관리자) 계정 관리. 프로필 …
+     L 5521-5925  .ca-* .mc-* .bsc-* .tbt-*      BS5 — 레거시 모듈 다크 (대시보드·스크리너·백테스터·매크로·기업·위험·데이터…
+     L 5926-6209  .pg-* .react-*                 BT2 · 절차 탭 — 여섯 단계가 한 줄 척추로 이어진다(관문 레일과 같은 말:…
+     L 6210-6892  .bsc-* .bte-* .tx-* .scr-*     BU0 · 토스식 시각 언어 — 앱 전체 토큰 (ADR-003 · 스펙 2026-…
+     L 6893-7060  .tfm-* .wg-* .fp-* .as-*       BU3c · 팩터 고르기 창(.tfm — CatalogueShell 의 소비자는 …
+     L 7061-7214  .brun-* .rs-* .tx-* .perf-*    BU4 · 실행·결과·비교(.rs — 진행 RunMonitor · 결과 Backt…
+     L 7215-7249  .mc-* .ms-* .tx-*              BU5a · 경제 흐름 /macro — 머리(답 한 문장) · 탭 한국어 · 스튜…
+     L 7250-7318  .rv-*                          BU5a+ · 국면 그림 — 도넛 2(네 국면) + 스트레스 반원 (`widget…
+     L 7319-7560  .mc-* .mv-* .mca-* .shad-*     BU5b-1 · 매크로 분석 탭 안 카드 — 개요·지표·국면·가치 (계획 "BU5…
+     L 7561-7729  .mc-* .sm-* .mca-* .shad-*     BU5b-2 · 매크로 분석 전략·추천·상관·타이밍 탭 + 전략 창 (계획 "BU…
+     L 7730-7903  .ms-* .mx-*                    BU5c · 매크로 분석 스튜디오 다섯 + 매크로 지능 패널 (계획 "BU5c 상…
+     L 7904-8130  .ca-* .ci-* .tx-*              BU6a · 기업 분석 한 흐름 + 붙는 목차 (계획 "BU6 상세", 사용자 결…
+     L 8131-8302  .ci-*                          BU6a+ — 기업 분석: 붙는 미니 머리 · 오른쪽 레일(≥1280) · 모형 …
+     L 8303-8453  .ci-* .ca-*                    BU6b — 기업 분석: 돈 버는 힘(이야기 그림 · 요약 카드 · 표는 펼침) …
+     L 8454-8535  .rk-* .trisk-* .tstat-* .tx-*  BU7a — 위험 점검(`.rk`): 네 충격 한눈에 · 종목 × 충격 칸 지도 …
+     L 8536-8681  .dsx-* .t-* .trisk-* .tx-*     BU7b — 데이터 상태(`.dsx`): 답 · 원천별 연구 등급 · 연결된 원천…
+     L 8682-8750  .dv-* .tx-*                    BU7c — 파생상품 계산기(`.dv`): 탭 다섯(옵션 · 채권 · 선물 헤지 …
+     L 8751-9114  .ld-*                          BU8a — 첫 화면(`.ld`, 셸 밖). 띠 넷: 히어로(서버가 지금 내는 답…
+     L 9115-9209  .lg-*                          BU8b — 로그인(`.lg`, 셸 밖 단독 한 화면). 왼쪽 폼(토스식: 라벨 …
+     L 9210-10052 .ma-* .lv-* .lvs-* .rl-*       BV8 · 설정 "내 증권 계좌" (features/settings/BrokerA…
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -217,15 +217,6 @@ h6 { font-size: 1rem; }
    ═════════════════════════════════════════════════════════════════════════ */
 
 @layer utilities {
-  /* Container */
-  .container-pv {
-    width: 100%;
-    max-width: 1320px;
-    margin: 0 auto;
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
   /* Card — Bootstrap 5 .card */
   .card {
     position: relative;
@@ -237,7 +228,6 @@ h6 { font-size: 1rem; }
     border: 1px solid rgba(0, 0, 0, 0.175);
     border-radius: var(--bs-border-radius);
   }
-  .card-md { padding: 1rem; @apply card; }
 
   /* Buttons — PV style (electric blue primary) */
   .btn {
@@ -337,10 +327,6 @@ h6 { font-size: 1rem; }
     vertical-align: baseline;
     border-radius: var(--bs-border-radius);
   }
-  .badge-success  { background-color: #d1e7dd; color: #0a3622; }
-  .badge-danger     { background-color: #f8d7da; color: #58151c; }
-  .badge-warning  { background-color: #fff3cd; color: #664d03; }
-  .badge-info      { background-color: #cff4fc; color: #055160; }
 
   /* PV-specific accents */
 
@@ -366,64 +352,6 @@ h6 { font-size: 1rem; }
 /* .pv-navbar-* · .pv-dropdown-* 삭제 — 유일한 사용처였던 widgets/layout/TopNav 가
    렌더되는 곳이 없어(배럴에서만 참조) 함께 제거했다. 현재 상단/좌측 내비게이션은
    TerminalShell(.terminal-*)이 담당한다. */
-
-/* PV Page header */
-.pv-page-header {
-  background: var(--bs-tertiary-bg);
-  border-bottom: 1px solid var(--bs-border-color);
-  padding: 1.25rem 0;
-}
-.pv-page-title {
-  font-size: 1.5rem;
-  font-weight: 500;
-  color: var(--bs-body-color);
-  margin: 0;
-}
-.pv-page-subtitle {
-  font-size: 0.8125rem;
-  color: var(--bs-secondary-color);
-  margin-top: 0.125rem;
-}
-.pv-breadcrumb {
-  font-size: 0.75rem;
-  color: var(--bs-secondary-color);
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-.pv-breadcrumb a {
-  color: var(--bs-primary);
-  text-decoration: none;
-}
-
-/* Tabs (PV horizontal tabs with underline) */
-.pv-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--bs-border-color);
-  gap: 0;
-  margin-bottom: 1rem;
-}
-.pv-tab {
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--bs-secondary-color);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  margin-bottom: -1px;
-  transition: all 0.15s;
-}
-.pv-tab:hover {
-  color: var(--bs-primary);
-}
-.pv-tab.active {
-  color: var(--bs-primary);
-  border-bottom-color: var(--bs-primary);
-  font-weight: 600;
-}
 
 /* ═════════════════════════════════════════════════════════════════════════
    Legacy variable aliases — for pages still referencing old names
@@ -456,14 +384,6 @@ h6 { font-size: 1rem; }
   --bg-hero: var(--pv-hero-bg);
 }
 
-/* card utility classes used by pages */
-.card-md {
-  background: var(--bs-body-bg);
-  border: 1px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius);
-  padding: 1rem;
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════════
    Phase 5 — Premium Design System Additions
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -475,20 +395,12 @@ h6 { font-size: 1rem; }
   --cockpit-border: rgba(255,255,255,0.08); --cockpit-text: #e2e8f0;
   --cockpit-muted: #94a3b8; --cockpit-accent: #22c55e; --cockpit-glow: rgba(34,197,94,0.18);
 }
-.tabular-nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
-.skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; border-radius: 4px; animation: skeleton-shimmer 1.4s ease-in-out infinite; }
-@keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-@keyframes flash-bull { 0% { background-color: var(--color-bull-glow); } 100% { background-color: transparent; } }
-@keyframes flash-bear { 0% { background-color: var(--color-bear-glow); } 100% { background-color: transparent; } }
-.animate-flash-bull { animation: flash-bull 0.6s ease-out; }
-.animate-flash-bear { animation: flash-bear 0.6s ease-out; }
 @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 var(--glow-color, var(--cockpit-glow)); } 50% { box-shadow: 0 0 0 6px transparent; } }
 @keyframes fade-in-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .cockpit { background: radial-gradient(circle at 0% 0%, rgba(34,197,94,0.06) 0%, transparent 50%), radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--t-accent) 5%, transparent) 0%, transparent 50%), var(--cockpit-bg); color: var(--cockpit-text); min-height: 100vh; }
 /* .regime-border-* · .cmd-palette-* 삭제 — 유일한 사용처였던 TopNav / CommandPalette 가
    도달 불가 코드여서 함께 제거했다(같은 커밋). .animate-pulse-glow 는 RegimeBadge 가
    계속 쓰므로 남긴다. */
-.sparkline svg { vertical-align: middle; }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    Variant "Institutional Terminal" Shell — 좌측 사이드바 레이아웃
@@ -707,14 +619,6 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
   border: 1px solid var(--t-border); border-radius: 2px; padding: 3px 8px; color: var(--t-muted); }
 .t-mode-badge[data-real="1"] { color: #16a34a; border-color: #16a34a; }
 .t-mode-badge[data-real="0"] { color: #a16207; border-color: #a16207; }
-/* 인덱스 달린 구분선 섹션 헤드 — .lp-section-head 미러(패딩 내부) */
-.tpage-section-head { display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 0; margin: 28px 0 20px;
-  border-top: 1px solid var(--t-border); border-bottom: 1px solid var(--t-border); color: var(--t-muted); }
-.tpage-section-head .sh-label { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--t-ink); }
-.tpage-section-head .sh-index { font-family: var(--t-mono); font-size: 11px; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--t-muted); }
 /* 큰 모노 스탯 값 — .lp-stat-val / .lp-stat-key / .lp-stat-sub 미러 */
 .tstat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   border: 1px solid var(--t-border); border-radius: 2px; }
@@ -723,9 +627,6 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
   text-transform: uppercase; color: var(--t-muted); margin-bottom: 10px; display: block; }
 .tstat-val { font-family: var(--t-mono); font-size: 30px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; margin-bottom: 8px; color: var(--t-ink); }
-.tstat-sub { font-size: 11.5px; color: var(--t-muted); opacity: 0.85; line-height: 1.5; }
-/* 미니 비주얼 SVG 래퍼 (page.tsx Visual 5종 이식) */
-.t-miniviz { width: 100%; height: 38px; display: block; }
 
 /* (BU2) 옛 스크리너 `.bsc-*` 규칙(왼쪽 레일·액션 바·진행 줄·적재 안내 등)은 지웠다 — 종목 찾기는 토스식(`.scr-*`·`.tx-*`)이다.
    계약 클래스(`.bsc-add-btn`·`.bsc-rail-clear`·`.bsc-workspace`·`.bsc-table`·`.bsc-row`·`.bsc-fav`·`.bsc-chip-*`·`.bsc-expr*`·`.bsc-preset*`·
@@ -866,9 +767,6 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 /* scenarios */
 .ca-scen { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
 .ca-scen-card { border: 1px solid var(--t-border); border-radius: 2px; padding: 14px 16px; background: var(--t-surface); }
-.ca-scen-card.bull { border-top: 2px solid var(--color-bull); }
-.ca-scen-card.base { border-top: 2px solid var(--t-muted); }
-.ca-scen-card.bear { border-top: 2px solid var(--color-bear); }
 .ca-scen-head { font-family: var(--t-mono); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .ca-scen-val { font-family: var(--t-mono); font-size: 24px; font-weight: 700; color: var(--t-ink); margin: 6px 0 2px; }
 .ca-scen-gap { font-family: var(--t-mono); font-size: 13px; font-weight: 600; }
@@ -1049,19 +947,12 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* 모션 줄이기: 툴 페이지 폴백(정적) */
 @media (prefers-reduced-motion: reduce) {
   .tpage-fade { animation: none !important; }
-  .skeleton { animation: none !important; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tool-page cohesion — 2차 패스: 섹션헤더 액센트 · 테이블 행 · 인터랙션 통일 (절제).
    전부 CSS·기존 클래스 대상(later-source 오버라이드). 새 색·번잡한 모션 없음.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-/* 1) 섹션 헤더 — 라벨 앞 액센트 틱(활성 내비 3px 바 모티프 재사용) */
-.tpage-section-head .sh-label { display: inline-flex; align-items: center; gap: 8px; }
-.tpage-section-head .sh-label::before {
-  content: ""; width: 3px; height: 11px; border-radius: 1px; background: var(--t-accent); flex-shrink: 0;
-}
 
 /* 2) 데이터 테이블 — 일관된 행 하이라이트(액센트 좌측 틱 + 옅은 틴트) */
 .trisk-table tbody tr {
@@ -1641,11 +1532,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 
 /* 00 OVERVIEW — KPI + 12-col */
 
-/* 01 CONSTRUCT — 프리미티브 */
-.aas-map { display: flex; height: 72px; border-radius: 2px; overflow: hidden; gap: 1px; }
-.aas-map-b { display: flex; flex-direction: column; justify-content: center; padding: 0 8px; min-width: 0; }
-.aas-map-b span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
 /* ═══ Multi-Stage Wizard — 게이트 · 진행 트래커 · 인텐트 · 고급 접기 · 주 CTA ═══ */
 /* 헤더: 상시 RE-OPTIMIZE 대신 게이트 복귀 ghost 버튼 */
 
@@ -2145,29 +2031,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .tev-unavailable .tev-r { color: var(--t-text); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   39. 증거 서랍 .tev-drawer-* / .shad-popover (UI/UX 현대화 P2b)
-   ───────────────────────────────────────────────────────────────────────────
-   Radix Popover 는 document.body 로 포털되므로 앱 컨테이너 밖에서 스타일돼야 한다 —
-   §34 의 .shad-overlay/.shad-content 와 같은 이유로 클래스로 고정한다.
-
-   서랍에는 **정상 상태의 부연만** 들어간다. 경고는 닫힌 서랍 안에서 존재하지 않는 것과
-   같으므로 스트립에 그대로 남는다.
-   ═══════════════════════════════════════════════════════════════════════════ */
-.shad-popover { z-index: 60; max-width: 380px; background: var(--popover); color: var(--popover-foreground);
-  border: 1px solid var(--t-border); border-radius: 3px; box-shadow: 0 8px 24px rgba(0,0,0,.10); padding: 10px 12px; }
-.tev-drawer-t { font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .06em; cursor: pointer;
-  color: var(--t-muted); background: none; border: 1px solid var(--t-border); border-radius: 2px; padding: 2px 7px; }
-.tev-drawer-t:hover { border-color: var(--t-accent); color: var(--t-accent); }
-.tev-drawer-t:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 1px; }
-.tev-drawer-h { font-family: var(--t-mono); font-size: 9.5px; letter-spacing: .08em; color: var(--t-muted);
-  text-transform: uppercase; border-bottom: 1px solid var(--t-border); padding-bottom: 5px; margin-bottom: 7px; }
-.tev-drawer-l { margin: 0; display: flex; flex-direction: column; gap: 7px; }
-.tev-drawer-r { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: baseline; }
-.tev-drawer-r dt { font-size: 10px; color: var(--t-muted); }
-.tev-drawer-r dd { margin: 0; font-size: 11px; color: var(--t-ink); min-width: 0; overflow-wrap: anywhere; }
-.tev-drawer-n { display: block; font-size: 10px; color: var(--t-muted); line-height: 1.45; margin-top: 2px; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
    40. 컨텍스트 스트립 경고 행 .as-ctx-warns (UI/UX 현대화 P3)
    ───────────────────────────────────────────────────────────────────────────
    예전에는 이 사유들이 전부 title= 안에 있었다. 호버는 키보드·터치 사용자에게 존재하지
@@ -2392,10 +2255,10 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .devui-s1row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 12.5px; }
 .devui-s1row span { color: var(--muted-foreground); }
 .devui-s1why { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted-foreground); }
-.devui-darktoggle { margin-top: 8px; padding: 6px 12px; border: 1px solid var(--border);
+.devui-darktoggle, .devui-btn { margin-top: 8px; padding: 6px 12px; border: 1px solid var(--border);
   border-radius: var(--radius); background: var(--card); color: var(--foreground);
   font-family: var(--t-mono); font-size: 11px; cursor: pointer; }
-.devui-darktoggle:hover { border-color: var(--primary); }
+.devui-darktoggle:hover, .devui-btn:hover { border-color: var(--primary); }   /* `.devui-btn` — 카탈로그의 낱 단추(Dialog 열기 · 닫기). 겉만 같고 이름은 다르다: 스펙이 `.devui-darktoggle` 을 하나로 집는다. */
 /* 표본 섹션은 다크에서도 읽혀야 하므로 토큰만 쓴다 — 하드코딩 hex 금지. */
 .devui-s1 { background: var(--background); color: var(--foreground); }
 
@@ -2587,17 +2450,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
    패딩을 더하면서, 03 THESIS·04 TIMING 의 반원 게이지가 설계에 없던 세로 패딩 8px 을
    얻었다(position 은 속성별 캐스케이드라 살아남아 좌표는 안 깨졌고, 그래서 조용했다). */
 
-/* ── 배분 맵: 스트립 + 범례 + 도넛 ──────────────────────────────────────────── */
-
-.aas-mapwrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.aas-map { height: 26px; }             /* 글자를 뺐으므로 72px 이 필요 없다 */
-.aas-map-b { padding: 0; }
-.aas-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; }
-.aas-legend-i { display: flex; align-items: center; gap: 5px; font-size: 12px; min-width: 0; }
-.aas-legend-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
-.aas-legend-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 128px; }
-.aas-legend-i b { font-size: 12px; color: var(--foreground); }
-
 /* ── 비중 비교 표 ────────────────────────────────────────────────────────────
    `.aas-cmp-row`(:3505)의 3열 그리드는 더 이상 쓰지 않는다(진짜 <table> 로 갔다). */
 
@@ -2646,25 +2498,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .aas-root .as-empty { font-size: 12px; }
 
 /* 모드 전환 탭과 칩 — 둘 다 10.5px 이었다(:3281 .as-chip, .as-seg button). */
-
-/* ── 슬라이더 외형 (shadcn/shadcn/slider.tsx = 네이티브 range) ────────────────
-   ::-webkit-slider-thumb 같은 의사요소는 Tailwind 유틸리티로 표현할 수 없어서
-   컴포넌트가 아니라 여기서 칠한다. 손잡이는 시각적으로 14px 이지만 range 입력의
-   히트 영역은 트랙 전체라, 작은 아이콘 버튼과 달리 조준 문제가 없다. */
-.as-range { -webkit-appearance: none; appearance: none; width: 100%; height: 14px; background: transparent; cursor: pointer; }
-.as-range:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
-.as-range::-webkit-slider-runnable-track { height: 4px; border-radius: 9999px; background: var(--secondary); }
-.as-range::-moz-range-track { height: 4px; border-radius: 9999px; background: var(--secondary); }
-.as-range::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; margin-top: -5px;
-  width: 14px; height: 14px; border-radius: 9999px;
-  background: var(--background); border: 1px solid var(--primary);
-}
-.as-range::-moz-range-thumb {
-  width: 14px; height: 14px; border-radius: 9999px; border: 1px solid var(--primary);
-  background: var(--background);
-}
-.as-range:disabled { opacity: .5; cursor: default; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    52. A4-X — 횡단 결함 3건 (계산 중 디밍 · 다크 스코프 · 차트 툴팁)
@@ -2829,7 +2662,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 
 /* AutoAlphaLab(실험 샌드박스) · 인텐트 · 모델타입 배지 — 8~10.5px 이었다. */
 
-.aas-root .tev-drawer-t { font-size: 11px; }
         /* 8px 이었다 */
 
   /* 8px 이었다 */
@@ -3296,9 +3128,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
   .as-ws2 .as-center > .as-card:nth-of-type(2) { animation-delay: 40ms; }
   .as-ws2 .as-center > .as-card:nth-of-type(3) { animation-delay: 80ms; }
 
-  /* 인포그래픽 — 비중 바가 0 에서 자란다. 폭만 움직이므로 숫자는 처음부터 최종값이다. */
-  .as-ws2 .aas-map{ animation: a11-grow var(--dur-3) var(--ease-out) both; }
-
   /* 상태 전환 — transform/opacity/색만. width·height 는 건드리지 않는다. */
   .as-ws2 .as-card       { transition: box-shadow var(--dur-1) var(--ease-out); }
   
@@ -3310,8 +3139,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .as-ws2 .as-card:hover { box-shadow: var(--elev-2); }
 
 @keyframes a11-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes a11-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.as-ws2 .aas-map{ transform-origin: left center; }
 
 /* ★reduced-motion 이면 전부 끄고 opacity:1 로 고정한다.★
    막으려는 함정은 랜딩 §46 이 기록한 것과 같다 — `both` 로 채운 애니메이션이 **멈춘 채**
@@ -3325,8 +3152,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
    가드가 실제로 빨개지는 조건은 "애니메이션을 무조건 걸고 reduce 에서 `paused` 로 세우는"
    흔한 오작성이며, 그 형태로 프로브해 red 를 확인했다. 보험 두 줄은 비용이 0 이라 남긴다. */
 @media (prefers-reduced-motion: reduce) {
-  .as-ws2 .as-center > .as-card,
-  .as-ws2 .aas-map{
+  .as-ws2 .as-center > .as-card {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
@@ -3681,22 +3507,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
    `.as-*` 이름은 E2E 계약이라 개명하지 않는다.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* 숏 다리 스트립 — 롱 스트립과 같은 gross 스케일이라 길이를 그대로 비교한다. */
-.as-ls-map-short { margin-top: 4px; opacity: .92; }
-.as-ls-legrow { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; }
-.as-ls-legtag {
-  font-size: 10px; font-weight: 700; letter-spacing: .06em;
-  padding: 1px 5px; border-radius: 3px;
-  background: color-mix(in srgb, var(--color-bear) 16%, transparent);
-  color: var(--color-bear);
-}
-.as-ls-legnote { font-size: 11px; line-height: 1.5; color: var(--muted-foreground); }
-
-/* 음수 비중 — 부호를 색으로만 말하지 않는다(값에 이미 '-' 가 붙어 있다). */
-.as-ls-neg { color: var(--color-bear); }
-
-/* 도넛이 gross 기준임을 밝히는 줄. §56 하한(11px) 을 지킨다. */
-
 /* 노출 두 축을 넣은 표 행 — 현금 행과 같은 자리를 쓰되 이름이 다르다. */
 
 /* 실행 차단 — 죽은 버튼 대신 막힌 이유. 경고가 아니라 사실이라 톤을 낮춘다. */
@@ -3830,10 +3640,6 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
    ═══════════════════════════════════════════════════════════════════════════ */
 .tev { font-size: 11px; }                 /* 10px 이었다 → .tev-l 이 이걸 상속한다 */
 .tev-r { font-size: 11px; }               /* 10.5px 이었다 */
-.tev-drawer-t { font-size: 11px; }        /* 9.5px — .aas-root 밖에서는 그대로였다 */
-.tev-drawer-h { font-size: 11px; }        /* 9.5px — 포털이라 어느 스코프도 못 닿았다 */
-.tev-drawer-r dt { font-size: 11px; }     /* 10px — 같음 */
-.tev-drawer-n { font-size: 11px; }        /* 10px — 같음 */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §58. 성과 상태 라벨 `.perf-label` — ★"이 수치가 무엇인가"★ (Z3)
@@ -5762,50 +5568,23 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* BS5-GEN:BEGIN */
 /* ★생성 구역 — 손대지 마세요★ scripts/gen-dark-modules.mjs 가 이 파일의 나머지에서 만든다(BS5).
    레거시 모듈 규칙의 글자로 적힌 색에 대한 다크 짝 — 모두 .dark 아래라 라이트에는 적용되지 않는다.
-   규칙 104개 · 선언 132개 · 인라인 hex 토큰 8개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */
+   규칙 99개 · 선언 123개 · 인라인 hex 토큰 5개. 남는 결함은 아래 "BS5 손질" 절에서 고친다. */
 :root {
-    --hx-b-d4d4d8: #d4d4d8;
-    --hx-b-e4e4e7: #e4e4e7;
     --hx-t-0891b2: #0891b2;
     --hx-t-16a34a: #16a34a;
-    --hx-t-22c55e: #22c55e;
     --hx-t-7f1d1d: #7f1d1d;
     --hx-t-dc2626: #dc2626;
     --hx-t-f97316: #f97316
 }
 .dark {
-    --hx-b-d4d4d8: #2f2f35;
-    --hx-b-e4e4e7: #26262b;
     --hx-t-0891b2: #80e2f9;
     --hx-t-16a34a: #8aefaf;
-    --hx-t-22c55e: #8eebb0;
     --hx-t-7f1d1d: #e69393;
     --hx-t-dc2626: #ed8d8d;
     --hx-t-f97316: #fcb17e
 }
 :where(.dark) ::-webkit-scrollbar-thumb {
     background: #272f38
-}
-@layer utilities {
-    :where(.dark) .badge-success {
-        background-color: #23372e;
-        color: #8feac1
-    }
-    :where(.dark) .badge-danger {
-        background-color: #381b1e;
-        color: #e5949c
-    }
-    :where(.dark) .badge-warning {
-        background-color: #39321b;
-        color: #fbdc7e
-    }
-    :where(.dark) .badge-info {
-        background-color: #1b3439;
-        color: #81e5f8
-    }
-}
-:where(.dark) .skeleton {
-    background: linear-gradient(90deg, #25282d 25%, #212429 50%, #25282d 75%)
 }
 :where(.dark) .tbt-run {
     color: var(--on-accent)
@@ -8903,7 +8682,7 @@ details[open] > .rs-more { margin-bottom: 12px; }
    BU7c — 파생상품 계산기(`.dv`): 탭 다섯(옵션 · 채권 · 선물 헤지 · 신용 위험 · 아직 계산하지 않는 모형).
    칸은 라벨이 위 · 단위가 칸 안 오른쪽. 결과 = 한 줄 답 + 숫자마다 한 줄 풀이 + 그림(만기 손익 · 기대 노출).
    그림 선 = 중립 한 색(--tx-blue). 손익 곡선은 판단색을 쓰지 않는다(0 선과 손익분기 글자가 말한다).
-   옛 PV 부품(`.card-md`·`.btn-primary`)은 이 화면에서 걷었다 — 부품 자체는 /dev/ui 가 쓰므로 남는다.
+   옛 PV 부품(`.card-md`·`.btn-primary`)은 이 화면에서 걷었다 — 부품(`primitives`)과 `.card-md` 는 U0-e 에서 걷었다(가져다 쓰는 제품 파일이 없었다).
    `.input` 은 계약(`input.input` 순서)이라 클래스를 남기고 `.dv` 범위에서 모습만 덮는다.
    ═══════════════════════════════════════════════════════════════════════════════ */
 .dv { display: flex; flex-direction: column; gap: 12px; }
