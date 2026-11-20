@@ -13,6 +13,7 @@ import { loadCompanyCore } from "@/entities/company/data";
 import { allocationApi } from "@/entities/allocation/api";
 import { useSession } from "@/entities/session";
 import { ProfileMenu, useThemeSync } from "@/features/profile";
+import { useDensitySync } from "@/shared/ui/density";
 import {
   Building2, Database, Globe2, Home, LineChart, ListFilter, Radio, Settings, ShieldAlert, Sigma, Users, Wallet, Workflow,
   type LucideIcon,
@@ -92,6 +93,8 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
   const prefetchTab = usePrefetchers();
   // 화면 테마(BR R3) — 랜딩으로 나가도 다크가 남지 않게 셸이 조기 반환하기 전에 맞춘다.
   useThemeSync(pathname ?? "");
+  // 단 · 밀도(ADR 007 §7) — 경로 표에 없는 화면으로 가면 속성을 뗀다. 테마와 같은 까닭으로 조기 반환 앞에 둔다.
+  useDensitySync(pathname ?? "");
   const { session } = useSession();
   const admin = session.kind === "signed_in" && session.role === "admin";
   const screens = useMemo(() => [...MAIN, ...MORE, ...(admin ? ADMIN : [])].map(({ label, href }) => ({ label, href })), [admin]);

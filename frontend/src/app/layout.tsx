@@ -8,6 +8,7 @@ import "./globals.css";
 import { TerminalShell } from "@/widgets/layout/TerminalShell";
 import Providers from "@/widgets/layout/Providers";
 import { THEME_BOOT } from "@/shared/theme";
+import { DENSITY_BOOT } from "@/shared/ui/density";
 
 export const metadata: Metadata = {
   title: "Project Alpha | Quant Platform",
@@ -16,11 +17,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning — 아래 조각이 React 보다 먼저 `html` 에 `dark` 를 붙일 수 있다(저장한 테마 · 다크를 갖춘 화면).
+    // suppressHydrationWarning — 아래 조각들이 React 보다 먼저 `html` 에 `dark` 클래스와 `data-tier` · `data-density` 를 붙일 수 있다.
     <html lang="ko" suppressHydrationWarning>
       <head>
         {/* 첫 그림 전에 테마를 맞춘다 — 밝게 그렸다 어두워지는 깜빡임을 막는다(규칙은 shared/theme/theme.ts 와 같다). */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+        {/* 단 · 밀도(ADR 007 §7) — 경로 표에 있는 화면만 속성을 받는다. 제품 화면은 아직 표에 없다(shared/ui/density). */}
+        <script dangerouslySetInnerHTML={{ __html: DENSITY_BOOT }} />
       </head>
       <body>
         <Providers>

@@ -62,6 +62,8 @@ import { concentration, exposureLegs } from "@/shared/lib/exposure";
 // BU0 — 토스식 공용 부품 + 한국식 숫자 표기. 서식 표의 출력은 실제 함수의 반환값이다(손으로 적지 않는다).
 import * as Tx from "@/shared/ui/tx";
 import { direction, krUnit, num, pct, pp, priceWon, signedPct, won } from "@/shared/lib/krFormat";
+// U0(ADR 007) — 단 · 밀도 견본. 제품 부품이 아니라 토큰이 뜻대로 도는지 보는 자리다(e2e/density.spec.ts).
+import { DensitySpecimen } from "../DensitySpecimen";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────
 // 페이지 자체 크롬은 .devui-* 만 쓴다. 앱 클래스(.pv-* 등)는 표본 안에서만 나타나야
@@ -505,6 +507,39 @@ export default function DevUiPage() {
             ))}
           </tbody>
         </table>
+      </section>
+
+      {/* ── U0 · 단 · 밀도 견본 (ADR 007) ─────────────────────────────────────────
+          상자마다 `data-tier` · `data-density` 를 직접 달았다 — 토큰 블록의 선택자가 속성만이라 `html` 이 아니어도 걸린다.
+          다크 상자는 `dark` 클래스를 상자에 달았다(개발 화면은 늘 라이트 — 상자 안에서만 다크 토큰이 선다).
+          `.devui-item` 을 쓰지 않는다 — 그 수는 shared/ui 부품 표본과 1:1 인 계약이다(dev-ui.spec). */}
+      <section className="devui-group devui-dn" id="density">
+        <h2 className="devui-h">단 · 밀도 (ADR 007 · U0)</h2>
+        <p className="devui-note">
+          밀도는 줄 높이 · 칸 여백 · 글자 · 조작 높이 · 절 간격을 함께 바꿉니다. 단은 절과 행의 반경을 정하고, 단 안의 수는 본문 글꼴의 고정폭 숫자입니다.
+          강조(주 단추 · 초점 고리)는 잉크이고 파랑은 하락과 링크에만 남습니다. 제품 화면에는 아직 달지 않았습니다.
+        </p>
+        <h3 className="devui-dn-h">작업 단 · 밀도 셋</h3>
+        <div className="devui-dn-grid">
+          <DensitySpecimen tier="work" density="compact" />
+          <DensitySpecimen tier="work" density="regular" />
+          <DensitySpecimen tier="work" density="comfortable" />
+        </div>
+        <h3 className="devui-dn-h">작업 단 · 밀도 셋(다크)</h3>
+        <div className="devui-dn-grid">
+          <DensitySpecimen tier="work" density="compact" dark />
+          <DensitySpecimen tier="work" density="regular" dark />
+          <DensitySpecimen tier="work" density="comfortable" dark />
+        </div>
+        <h3 className="devui-dn-h">해석 단 · 설명 단 · 속성 없음</h3>
+        <div className="devui-dn-grid">
+          <DensitySpecimen tier="read" density="regular" />
+          <DensitySpecimen tier="present" density="comfortable" />
+          <DensitySpecimen bare caption="속성 없음(지금 화면과 같은 기본값)" />
+        </div>
+        <p className="devui-note">
+          단 밖의 수는 지금 그대로입니다: <span className="num devui-dn-out">1,234.5</span>
+        </p>
       </section>
 
       {/* ── S1: Card 표본 + 다크 토큰 확인 ────────────────────────────────────
