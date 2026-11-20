@@ -10660,7 +10660,14 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 /* ════ 분봉 백테스트(.itd) — `/intraday` (2026-11-14 · 설계 `docs/superpowers/specs/2026-11-14-intraday-minute-simulator-design.md` §7.2 · `e2e/intraday.spec.ts`) ════
    매매일지와 같은 부품(`.tj-*` — 클래스 이름 그대로)을 쓰고, 이 화면에만 있는 것(틀 고르기 · 적재 범위 · 관문 표 · 격자)만 여기에 둔다.
    색은 --tx-* 토큰만(다크 짝 자동). 관문의 상태는 색만으로 말하지 않는다 — 글자(통과 · 미달 · 미상)와 차례 번호가 함께 간다. */
-.itd-banner { position: sticky; top: 8px; z-index: 5; }
+/* 합성 알림 — ★구르는 칸(.terminal-main) 맨 위에서 --itd-banner-gap 아래★에 붙는다(설계 8px · 640px 이하 4px). Chrome 은 sticky 를 스크롤 칸의
+   패딩 안쪽에서 재므로 셸 윗 여백(:595 40px · 640px 이하 :6568 20px)을 뺀다 — 빼지 않으면 48px(24px) 아래에 붙고 그 투명한 띠로 굴러 올라간
+   입력 칸 · 절 상자가 알림 위에 비쳤다(1200 × 900 에서 칸 위 64 → 알림 위 112 — 잰 값). 띠와 둥근 귀퉁이 뒤는 ::before 하나가 페이지 바탕색으로
+   막고(z-index −1 — 알림의 면 · 테두리 · 그림자가 그 위) 눌림도 받는다(가려진 칸이 눌리지 않게). 상자 밖이라 고정 전 배치는 그대로이고, 띠는
+   전환 줄과의 고정 전 틈(블록 16 · flex 28px)보다 짧아 전환 줄을 덮지 않는다. 색은 --tx-* 토큰만(다크 짝 자동). 시험 `e2e/intraday-banner.spec.ts`. */
+.itd-banner { --itd-banner-gap: 8px; --itd-shell-pad-top: 40px;
+  position: sticky; top: calc(var(--itd-banner-gap) - var(--itd-shell-pad-top)); z-index: 5; }
+.itd-banner::before { content: ""; position: absolute; z-index: -1; inset: calc(-1 * var(--itd-banner-gap)) 0 0; background: var(--tx-bg); }
 .itd-banner .tx-notice { box-shadow: 0 0 0 1px var(--tx-line), 0 6px 18px rgb(25 31 40 / 8%); }
 /* G5 분할 창(작업 공간 1단계 · 계획 문서 §6) — '설정 | 결과와 분석'. 두 칸은 [data-split] 일 때만(가로 1280px · 세로 800px 이상 — splitPane.ts 의 SPLIT_QUERY 하나).
    한 열은 지금과 같다: 묶음 상자 셋은 블록이고 안쪽 간격은 `.tj > * + *` 와 같은 12px. 두 칸에서는 페이지를 본문 높이에 맞추고(머리줄 64 · 위아래 여백 80)
@@ -10870,7 +10877,7 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-grid-on { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--tx-ink); cursor: pointer; }
 .itd-grid-on input { width: 16px; height: 16px; accent-color: var(--tx-cta); }
 @media (max-width: 640px) {
-  .itd-banner { top: 4px; }
+  .itd-banner { --itd-banner-gap: 4px; --itd-shell-pad-top: 20px; }
   .itd-run-row { padding: 14px 16px; }
   .itd-gate { grid-template-columns: 24px minmax(0, 1fr); gap: 10px; }
   .itd-gate-no { width: 24px; height: 24px; font-size: 12px; }
