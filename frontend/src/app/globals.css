@@ -11041,6 +11041,22 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 /* 단 안의 수는 본문 글꼴의 고정폭 숫자(결정 D3 — 고정폭 글꼴은 식별자에만). 단 밖의 .num 은 지금 그대로다. */
 [data-tier] .num { font-family: var(--tx-font-num); font-variant-numeric: tabular-nums; }
 
+/* ── 건너뛰기 링크(접근성 P0-1 · ADR 007 결정 D4) — 셸의 첫 조작 요소(머리 줄 안). 초점이 갈 때만 화면 안으로 온다. ★전환 없음★(초점 표시는 즉시 — §6).
+   숨길 때 display:none 을 쓰지 않는다 — 탭 순서와 접근성 트리에 남아야 한다. 강조는 잉크(결정 D2). 깊이는 머리 줄의 겹침 맥락 안에서 센다. ── */
+.tx-skip { position: fixed; left: 8px; top: 8px; z-index: var(--tx-z-toast); transform: translateY(calc(-100% - 16px));
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: var(--tx-r-2);
+  background: var(--tx-accent); color: var(--tx-on-accent); font-family: var(--tx-font); font-size: 13px; font-weight: 600; line-height: 1; text-decoration: none; white-space: nowrap; }
+/* 셸의 전역 초점 규칙(.terminal-header a:focus-visible — 0,2,1)이 옛 강조색을 칠하므로 머리 줄 범위로 건다(0,3,0). 고리는 잉크. */
+.terminal-header .tx-skip:focus { transform: none; outline: 2px solid var(--tx-focus); outline-offset: 2px; }
+/* 전역 a:hover(0,1,1)가 링크색 · 밑줄을 입히지 않게 — 잉크 바탕 위의 글자색을 지킨다. */
+a.tx-skip:hover { color: var(--tx-on-accent); text-decoration: none; }
+/* 다크 — 잉크 채움은 다크에서 ★밝은 판★이 된다(다크 검사 `dark-modules.spec` 이 글자 있는 밝은 바탕을 결함으로 센다).
+   그래서 채우지 않고 잉크 글자 + 잉크 선으로 그린다(ADR 007 §4-3 '바탕 또는 글자 + 굵기 · 선'). */
+.dark .tx-skip { background: var(--tx-surface); color: var(--tx-ink); box-shadow: inset 0 0 0 1px var(--tx-ink); }
+.dark a.tx-skip:hover { color: var(--tx-ink); }
+/* 건너뛴 뒤의 초점 자리 — 본문은 조작 요소가 아니므로 본문 전체에 고리를 두르지 않는다. */
+.terminal-main:focus { outline: none; }
+
 /* ── 단 · 밀도 견본(카탈로그 /dev/ui · 개발 견본 경로 /dev/density) — 제품 CSS 가 아니다. 값은 모두 위 토큰에서 온다(공용 표는 U1) ── */
 .devui-dn-h { margin: 20px 0 8px; font-size: 13px; font-weight: 600; color: var(--tx-sub); }
 /* 견본 상자는 넉넉 표(칸 여백 16px)가 잘리지 않는 너비부터 — 좁은 화면에서는 한 줄에 하나로 내려간다. */

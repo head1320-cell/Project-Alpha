@@ -86,6 +86,14 @@ function usePrefetchers() {
   return (href: string) => prefetch[href]?.();
 }
 
+/** 건너뛰기 링크(접근성 P0-1) — 주소에 해시를 달지 않고 초점만 본문으로 옮긴다. 스크립트가 없으면 `href="#main"` 이 같은 일을 한다. */
+function skipToMain(e: React.MouseEvent<HTMLAnchorElement>) {
+  const main = document.getElementById("main");
+  if (!main) return;
+  e.preventDefault();
+  main.focus();
+}
+
 export function TerminalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // 터치/클릭 토글 — 호버가 없는 환경에서 사이드바를 고정으로 펼침
@@ -118,6 +126,9 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
     <div className="terminal-root">
       {/* ─── 머리 줄 ─── */}
       <header className="terminal-header">
+        {/* 건너뛰기 링크(접근성 P0-1 · ADR 007 결정 D4) — 셸의 첫 조작 요소. 초점이 갈 때만 보인다(자판으로 온 사람이 머리 줄 · 메뉴를 다시 지나지 않게).
+            ★머리 줄 안에 둔다★ — 머리 줄이 제 겹침 맥락(z-index 100)을 가져, 밖에 두면 깊이 토큰(가장 위가 50)으로는 머리 줄에 가린다. */}
+        <a className="tx-skip" href="#main" onClick={skipToMain}>본문으로 건너뛰기</a>
         <Link href="/" className="terminal-brand" aria-label="Project Alpha 첫 화면으로">
           <span className="logo-box" aria-hidden>
             <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
@@ -153,7 +164,7 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
         </aside>
         {pinned && <div className="sidebar-backdrop" onClick={() => setPinned(false)} />}
 
-        <main className="terminal-main">
+        <main id="main" tabIndex={-1} className="terminal-main">
           <div className="terminal-content">
             <Breadcrumb />
             {children}

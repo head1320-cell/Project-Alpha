@@ -261,6 +261,9 @@
   ],
   "main:a.dash-mod-stat.tx-row.tx-row--go": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/screener": {
@@ -673,6 +676,9 @@
   ],
   "main:div.tx-sheet-body": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/backtest": {
@@ -1102,6 +1108,9 @@
   "main:dd.": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro": {
@@ -1928,6 +1937,9 @@
   ],
   "main:span.mx-key-u": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/agentic-mcp": {
@@ -2193,6 +2205,9 @@
   ],
   "main:button.ms-vbtn.ms-vbtn-run": [
    "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/causal-deepm": {
@@ -2466,6 +2481,9 @@
   ],
   "main:span.num": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/neural-sde": {
@@ -2898,6 +2916,9 @@
   ],
   "main:span.ms-out-na": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/pinn-tail": {
@@ -3130,6 +3151,9 @@
   ],
   "main:section.ms-card.ms-card-sub": [
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/tsfm-latent": {
@@ -3555,6 +3579,9 @@
   ],
   "main:span.num": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/insights": {
@@ -4889,6 +4916,9 @@
   ],
   "main:a.ci-rail-go.tx-btn.tx-btn--main": [
    "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/risk-tools": {
@@ -5223,6 +5253,9 @@
   ],
   "main:span.rk-k": [
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/admin/data": {
@@ -5631,6 +5664,9 @@
   ],
   "main:button.tx-btn.tx-btn--sub": [
    "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/derivatives": {
@@ -5852,6 +5888,9 @@
   ],
   "main:button.dv-go.tx-btn.tx-btn--main": [
    "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  }
 }
