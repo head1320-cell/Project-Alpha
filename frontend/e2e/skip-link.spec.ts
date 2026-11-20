@@ -9,6 +9,9 @@ import { test, expect, type Page } from "./fixtures";
  *  · Enter → 초점이 본문(`main`)으로 · 주소는 그대로 · 다음 Tab 은 본문 안(짝: 링크를 쓰지 않으면 다음 Tab 은 셸 안)
  *  · 전환 없음(초점이 간 그 프레임에 제자리) · 누르는 크기 24px 이상 · 라이트/다크 글자 대비 AA · 390px 에서 화면 안
  *  · ★셸이 없는 화면(`/` · `/login` · `/c`)에는 없다★(짝: 셸이 있는 화면에는 하나)
+ *  · ★본문은 건너뛸 때만 초점을 받는다★(P0-1b) — 평소에는 `tabindex` 가 없어 본문의 빈 곳을 눌러도 초점은 `body` 다.
+ *    `tabindex` 를 늘 달아 두면 본문이 클릭 초점을 가로챈다: 초점이 `body` 일 때만 듣는 단축키(캔버스의 Ctrl+A)가 죽는다 — 첫 구현이 그랬고 CI 의 `canvas-select` 가 잡았다.
+ *    건너뛴 뒤에는 초점이 떠나거나(`blur`) 본문을 누르면(`pointerdown`) 다시 뗀다.
  * 한계: 자동 검사까지다 — 실제 낭독기로 듣지는 못했다.
  */
 
@@ -31,6 +34,26 @@ const rect = (page: Page) => page.locator(SKIP).evaluate((el) => {
 const active = (page: Page) => page.evaluate(() => {
   const a = document.activeElement as HTMLElement | null;
   return a ? { tag: a.tagName.toLowerCase(), cls: String(a.className), id: a.id, inMain: !!a.closest(".terminal-main"), inShell: !!a.closest(".terminal-header, .terminal-sidebar") } : null;
+});
+
+const MAIN = "main.terminal-main";
+const tabindex = (page: Page) => page.locator(MAIN).getAttribute("tabindex");
+
+/** 본문 안에서 조작 요소가 아닌 한 점 — 그 점의 요소부터 본문까지 올라가는 길에 초점을 받을 것이 하나도 없다(본문 자신은 따지지 않는다). */
+const blankPoint = (page: Page) => page.evaluate(() => {
+  const main = document.querySelector(".terminal-main")!;
+  const r = main.getBoundingClientRect();
+  const hot = "a[href], button, input, select, textarea, label, summary, [tabindex], [contenteditable], [role='button'], [draggable='true']";
+  for (let y = Math.max(r.top, 0) + 12; y < Math.min(r.bottom, window.innerHeight) - 4; y += 16) {
+    for (let x = r.left + 12; x < r.right - 4; x += 24) {
+      const el = document.elementFromPoint(x, y);
+      if (!el || el === main || !main.contains(el)) continue;
+      let ok = true;
+      for (let n: Element | null = el; n && n !== main; n = n.parentElement) if (n.matches(hot)) { ok = false; break; }
+      if (ok) return { x, y };
+    }
+  }
+  return null;
 });
 
 /** WCAG 상대 휘도 대비 — 링크의 글자색 ↔ 제 바탕색(불투명해야 한다). */
@@ -78,7 +101,9 @@ test("Enter → 초점이 본문으로 · 주소는 그대로 · 다음 Tab 은 
   expect(a?.cls).toContain("terminal-main");
   expect(page.url(), "주소에 해시를 달지 않는다").toBe(url);
   await page.keyboard.press("Tab");
-  expect((await active(page))?.inMain, "다음 Tab 은 본문 안의 첫 조작 요소").toBe(true);
+  const next = await active(page);
+  expect(next?.inMain, "다음 Tab 은 본문 안의 첫 조작 요소").toBe(true);
+  expect(next?.tag, "본문 자신에 머물지 않는다").not.toBe("main");
 
   // 짝 — 건너뛰지 않으면 두 번째 Tab 은 셸(머리 줄)이다. 위의 '본문 안'이 늘 참이 아니라는 것.
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -88,6 +113,49 @@ test("Enter → 초점이 본문으로 · 주소는 그대로 · 다음 Tab 은 
   const b = await active(page);
   expect(b?.inShell, "건너뛰지 않은 두 번째 Tab 은 셸 안").toBe(true);
   expect(b?.inMain).toBe(false);
+});
+
+// ── P0-1b: 본문은 건너뛸 때만 초점을 받는다 ───────────────────────────────────────────
+
+test("평소에는 본문이 초점을 가로채지 않는다 — 본문의 빈 곳을 눌러도 초점은 body 다(짝: 건너뛰면 본문이 초점을 받는다)", async ({ page }) => {
+  await open(page);
+  expect.soft(await tabindex(page), "평소에는 본문에 tabindex 가 없다").toBeNull();
+  const p = await blankPoint(page);
+  expect(p, "본문에 조작 요소가 아닌 점이 있다").not.toBeNull();
+  await page.mouse.click(p!.x, p!.y);
+  expect((await active(page))?.tag, "빈 곳을 누른 뒤의 초점").toBe("body");
+
+  // 짝 — 같은 화면에서 건너뛰면 초점은 본문이다(위의 body 가 '본문은 초점을 못 받는다'여서가 아니다).
+  await page.locator(SKIP).focus();
+  await page.keyboard.press("Enter");
+  expect((await active(page))?.tag, "건너뛰면 본문").toBe("main");
+  expect(await tabindex(page), "건너뛴 동안에만 달린다").toBe("-1");
+});
+
+test("건너뛴 뒤 초점이 본문을 떠나면 tabindex 를 뗀다 — 그 뒤로는 빈 곳을 눌러도 초점이 body 다", async ({ page }) => {
+  await open(page);
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  expect((await active(page))?.tag).toBe("main");
+  await page.keyboard.press("Tab");                       // 본문 안의 첫 조작 요소로 — 본문은 초점을 잃는다
+  expect((await active(page))?.tag).not.toBe("main");
+  expect(await tabindex(page), "초점이 떠나면 뗀다").toBeNull();
+  const p = await blankPoint(page);
+  expect(p).not.toBeNull();
+  await page.mouse.click(p!.x, p!.y);
+  expect((await active(page))?.tag, "그 뒤 빈 곳을 누른 초점").toBe("body");
+});
+
+test("건너뛴 직후 본문의 빈 곳을 누르면 초점이 본문에 남지 않는다(blur 가 오지 않는 길)", async ({ page }) => {
+  await open(page);
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  expect((await active(page))?.tag).toBe("main");
+  const p = await blankPoint(page);
+  expect(p).not.toBeNull();
+  await page.mouse.click(p!.x, p!.y);
+  expect((await active(page))?.tag, "건너뛴 직후 빈 곳을 누른 초점").toBe("body");
+  expect(await tabindex(page), "누르면 뗀다").toBeNull();
 });
 
 test("전환 · 움직임이 없다 — 초점이 간 그 프레임에 제자리다", async ({ page }) => {

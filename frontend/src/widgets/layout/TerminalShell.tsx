@@ -86,11 +86,21 @@ function usePrefetchers() {
   return (href: string) => prefetch[href]?.();
 }
 
-/** 건너뛰기 링크(접근성 P0-1) — 주소에 해시를 달지 않고 초점만 본문으로 옮긴다. 스크립트가 없으면 `href="#main"` 이 같은 일을 한다. */
+/** 건너뛰기 링크(접근성 P0-1) — 주소에 해시를 달지 않고 초점만 본문으로 옮긴다. 스크립트가 없으면 `href="#main"` 이 같은 일을 한다.
+ *  ★본문의 `tabindex` 는 건너뛸 때만 단다★(P0-1b) — 늘 달아 두면 본문이 클릭 초점을 가로챈다: 본문의 빈 곳을 누르면 초점이 `body` 가 아니라
+ *  `main` 으로 가서, 초점이 `body` 일 때만 듣는 단축키(캔버스의 Ctrl+A)가 죽는다. 초점이 떠나거나(blur) 본문을 누르면(pointerdown) 다시 뗀다. */
 function skipToMain(e: React.MouseEvent<HTMLAnchorElement>) {
   const main = document.getElementById("main");
   if (!main) return;
   e.preventDefault();
+  const release = () => {
+    main.removeAttribute("tabindex");
+    main.removeEventListener("blur", release);
+    main.removeEventListener("pointerdown", release, true);
+  };
+  main.setAttribute("tabindex", "-1");
+  main.addEventListener("blur", release);
+  main.addEventListener("pointerdown", release, true);   // 잡는 단계 — 누르기의 기본 동작이 초점을 정하기 전에 뗀다
   main.focus();
 }
 
@@ -164,7 +174,7 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
         </aside>
         {pinned && <div className="sidebar-backdrop" onClick={() => setPinned(false)} />}
 
-        <main id="main" tabIndex={-1} className="terminal-main">
+        <main id="main" className="terminal-main">
           <div className="terminal-content">
             <Breadcrumb />
             {children}
