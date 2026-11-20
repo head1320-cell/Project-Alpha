@@ -207,6 +207,24 @@ function skeleton(page: Page): Promise<string[]> {
 const BOXES = [".ma > .tx-head", ".ma > .tx-head .tx-head-main", ".ma > .tx-subnav", ".ma > .tx-answer", ".ma > .ma-path", ".ma > .ma-grid",
   ".ma-bal", "form.ma-order", ".ma-orders", ".ma-arm"];
 
+/** ★내용 크기 상자★ — 폭을 정한 규칙이 없는 플렉스 항목이라 폭이 그 안 글자의 폭이다(머리 칸 = 한 줄 설명의 폭). 글자 폭은 브라우저 빌드마다 조금 달라서
+ *  (2026-11-20 CI: 460 ↔ 골든을 뜬 로컬 456 — 0.9% · 같은 줄의 x · y · 높이는 같았다) 골든의 절대 px 와 견주면 '2a-2 전과 같은가'가 아니라 '골든을 뜬 기계와 같은가'를 묻게 된다.
+ *  그래서 폭만은 ★같은 화면에서 잰 내용 폭★과 견준다 — 눌리지도(줄바꿈 · 잘림) 늘어나지도 않았다는 같은 계약을, 어느 브라우저에서나. x · y · 높이는 골든 그대로. */
+const CONTENT_WIDE = new Set([".ma > .tx-head .tx-head-main"]);
+
+/** 그 상자의 자식들 가운데 가장 넓은 글(내용)의 폭 — 상자가 내용 크기라면 상자 폭과 같다. */
+function contentWidth(page: Page, sel: string): Promise<number> {
+  return page.locator(sel).first().evaluate((el) => {
+    let w = 0;
+    for (const c of Array.from(el.children)) {
+      const r = document.createRange();
+      r.selectNodeContents(c);
+      w = Math.max(w, r.getBoundingClientRect().width);
+    }
+    return w;
+  });
+}
+
 async function boxes(page: Page): Promise<Record<string, number[]>> {
   const out: Record<string, number[]> = {};
   for (const sel of BOXES) {
@@ -235,10 +253,20 @@ async function same(page: Page, name: string, withBoxes: boolean): Promise<void>
   const want = readGolden().states[name];
   expect(want, `골든에 ${name} 이 없습니다`).toBeTruthy();
   expect(got.skeleton.join("\n")).toBe(want.skeleton.join("\n"));
+  // 어긋난 상자를 한 번에 다 보인다(soft) — 첫 어긋남에서 멈추면 다른 환경(CI)에서 무엇이 더 다른지 한 실행으로 알 수 없다.
   for (const [sel, b] of Object.entries(want.boxes ?? {})) {
     const g = got.boxes?.[sel];
     expect(g, sel).toBeTruthy();
-    for (let i = 0; i < 4; i++) expect(Math.abs(g![i] - b[i]), `${sel}[${i}] ${JSON.stringify(g)} ↔ ${JSON.stringify(b)}`).toBeLessThanOrEqual(1);
+    for (let i = 0; i < 4; i++) {
+      if (i === 2 && CONTENT_WIDE.has(sel)) {
+        const inner = await contentWidth(page, sel);
+        const box = (await page.locator(sel).first().boundingBox())!.width;
+        expect.soft(inner, `${sel} — 안에 글이 없다`).toBeGreaterThan(0);
+        expect.soft(Math.abs(box - inner), `${sel} 폭 ${box} ↔ 그 안 글의 폭 ${inner} — 내용 크기 상자가 눌리거나 늘어났다`).toBeLessThanOrEqual(1);
+        continue;
+      }
+      expect.soft(Math.abs(g![i] - b[i]), `${sel}[${i}] ${JSON.stringify(g)} ↔ ${JSON.stringify(b)}`).toBeLessThanOrEqual(1);
+    }
   }
 }
 
