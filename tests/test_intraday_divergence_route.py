@@ -14,7 +14,9 @@
 """
 from __future__ import annotations
 
+import collections
 import logging
+import re
 
 import pytest
 from sqlalchemy import inspect, text
@@ -60,6 +62,37 @@ def table_rows() -> dict[str, int]:
     engine = dbmod.get_engine()
     with engine.connect() as c:
         return {t: int(c.execute(text(f'SELECT COUNT(*) FROM "{t}"')).scalar()) for t in inspect(engine).get_table_names()}
+
+
+#: 올린 체결가(10,123 · 10,077)가 ★값으로★ 남았는가 — 숫자의 경계에서만 본다. 글자로만 찾으면 시각 `16:15:51.110123` 의 마이크로초에 걸린다.
+LEAK = re.compile(r"(?<![\d.])(?:10123|10077)(?!\d)")
+Lines = dict[str, "collections.Counter[tuple[str, ...]]"]
+
+
+def table_lines() -> Lines:
+    """표마다 줄(값을 글자로 옮긴 튜플)의 묶음 — 올리기 전후를 견줘 ★새로 생기거나 바뀐 줄★을 고른다."""
+    engine = dbmod.get_engine()
+    with engine.connect() as c:
+        return {t: collections.Counter(tuple(str(v) for v in row) for row in c.execute(text(f'SELECT * FROM "{t}"')).fetchall())
+                for t in inspect(engine).get_table_names()}
+
+
+def touched(before: Lines, after: Lines) -> dict[str, list[tuple[str, ...]]]:
+    """올린 뒤 새로 생기거나 바뀐 줄(표별). 그대로인 줄은 올리기와 무관하다."""
+    out = {t: list((lines - before.get(t, collections.Counter())).elements()) for t, lines in after.items()}
+    return {t: rows for t, rows in out.items() if rows}
+
+
+def leaks(before: Lines, after: Lines) -> list[str]:
+    """올린 값이 값으로 남은 표의 이름."""
+    return sorted(t for t, rows in touched(before, after).items() if LEAK.search(" ".join(v for row in rows for v in row)))
+
+
+def plant_unrelated_clock() -> None:
+    """올리기와 무관한 줄 — 시각의 마이크로초가 올릴 값과 같은 글자를 품는다(2026-11-20 CI 에서 mock 시세 표가 실제로 그랬다)."""
+    with dbmod.get_engine().begin() as c:
+        c.execute(text('CREATE TABLE IF NOT EXISTS "_unrelated_clock" (id INTEGER PRIMARY KEY, created_at TEXT)'))
+        c.execute(text("INSERT INTO \"_unrelated_clock\" (created_at) VALUES ('2026-11-20 16:15:51.110123'), ('2026-11-20 16:15:51.110077')"))
 
 
 @pytest.fixture()
@@ -158,15 +191,30 @@ def test_the_sequential_block_counts_every_pair_not_the_list_cut_for_the_screen(
 # ── 저장하지 않는다 · 시행은 같은 길 ────────────────────────────────────
 def test_uploaded_fills_are_not_stored(client, auth, ten_days):
     post(client, auth, hand_sim())                                                       # 표를 만들고 시행 한 줄을 남긴다
-    before = table_rows()
+    plant_unrelated_clock()                                                              # 올리기와 무관한 줄 — 시각 속에 같은 글자
+    before, lines = table_rows(), table_lines()
     r = post(client, auth, fills(10_123, 10_077, buy_at="09:02:10", sell_at="09:03:50"))
     assert r.status_code == 200
     assert table_rows() == before                                                        # 같은 설정 — 행 수는 하나도 늘지 않는다
-    engine = dbmod.get_engine()
-    with engine.connect() as c:                                                          # 올린 값이 어느 표에도 없다
-        for table in inspect(engine).get_table_names():
-            blob = " ".join(str(v) for row in c.execute(text(f'SELECT * FROM "{table}"')).fetchall() for v in row)
-            assert "10123" not in blob and "10077" not in blob, table
+    after = table_lines()
+    # 올린 값이 어느 표에도 없다 — ★올린 뒤 새로 생기거나 바뀐 줄★에서 · ★숫자의 경계★로 찾는다.
+    # 표 전체에서 글자로 찾던 판은 올리기와 무관한 줄에 걸렸다: 2026-11-20 CI 에서 mock 시세 표의 시각 `16:15:51.110123` 이 "10123" 을 품었다
+    # (같은 커밋의 다른 실행은 통과 — 시계에 달린 실패). 위에서 심은 줄이 그 꼴을 늘 만든다.
+    assert touched(lines, after), "짝 — 올리기는 시행 줄(runs)을 바꾼다. 바뀐 줄이 없으면 아래 검사는 아무것도 보지 않는다"
+    assert "_unrelated_clock" not in touched(lines, after)
+    assert leaks(lines, after) == []
+
+
+def test_the_leak_probe_sees_a_stored_price_but_not_an_unrelated_clock():
+    """위 검사의 짝 — 탐지기가 죽어 있지 않다(값으로 남으면 잡는다) · 시각 속의 글자는 값이 아니다."""
+    clock = ("7", "2026-11-20 16:15:51.110123", "NVDA", "9904")
+    same = {"t": collections.Counter([clock])}
+    assert leaks(same, same) == []                                                       # 그대로인 줄은 보지 않는다
+    assert leaks({}, same) == []                                                         # 새 줄이어도 마이크로초는 값이 아니다
+    for stored in ("10123", "10123.0", '{"price": 10077, "qty": 99}', "buy@10123", "10077,99"):
+        assert leaks(same, {"t": collections.Counter([clock, ("8", stored)])}) == ["t"], stored    # 새 줄에 값으로 남으면 잡는다
+    assert leaks({"u": collections.Counter([("1", "runs=1")])}, {"u": collections.Counter([("1", "runs=2 last=10077")])}) == ["u"]   # 바뀐 줄도 본다
+    assert leaks(same, {"t": collections.Counter([clock, ("8", "110123"), ("9", "0.10123"), ("10", "101230")])}) == []   # 다른 수의 한 토막은 아니다
 
 
 def test_the_simulated_side_is_recorded_as_a_trial_through_the_same_path(client, auth, ten_days):
@@ -192,8 +240,8 @@ def test_the_log_carries_counts_not_fills(client, auth, ten_days, caplog):
         post(client, auth, fills(10_123, 10_077))
     mine = [r.getMessage() for r in caplog.records if r.name == "api.intraday"]
     assert any(m.startswith("intraday divergence:") and "rows=20" in m and "matched=" in m for m in mine), mine
-    everything = " ".join(r.getMessage() for r in caplog.records)                        # 어느 로거에도 값이 없다
-    assert "10123" not in everything and "10077" not in everything
+    everything = " ".join(r.getMessage() for r in caplog.records)                        # 어느 로거에도 값이 없다(숫자의 경계로 — 위와 같은 까닭)
+    assert not LEAK.search(everything)
 
 
 # ── 거절 ────────────────────────────────────────────────────────────────
