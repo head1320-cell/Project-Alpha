@@ -10688,6 +10688,125 @@ a.lg-chip:hover { color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-b
 .itd-set-toggle:hover { background: var(--tx-soft); }
 .itd-out-empty { padding: 18px 24px; border-radius: var(--tx-r-sec); background: var(--tx-surface); color: var(--tx-sub); font-size: 14px; line-height: 1.55; word-break: keep-all; }
 @media (prefers-reduced-motion: reduce) { .itd-split-bar::after { transition: none; } }
+/* ════ G6 2a-1 판 배치(작업 공간 2단계 · 설계 `docs/superpowers/specs/2026-11-19-workspace-panels-design.md` · 계획 §9 · 용어집 §3.30 · `e2e/workspace-intraday.spec.ts`) ════
+   공용 부품 `shared/ui/workspace` 의 .ws-* — ★판은 한 그리드 상자(.ws-grid)의 열쇠 있는 자식★이고 자리는 그리드 줄(인라인 grid-column/row)로만 정한다.
+   행 트랙 20등분 · 칸 = 행 구간 · 칸 머리(.ws-head)는 구간 위에 겹치고(높이 고정) 판은 그만큼 내려 둔다 · 아래 칸 위 16px 는 가로 구분선(.ws-row-bar)의 자리 ·
+   열 사이 16px 트랙은 세로 구분선(.ws-col-slot › G5 Splitter). 좁은 창은 같은 상자를 블록으로 쌓는다([data-mode="stack"]). 기존 규칙 0줄 · 색은 --tx-* 토큰만(다크 짝 자동). */
+.ws { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ws-bar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; }
+.ws-notes { flex: 1 1 320px; min-width: 0; display: grid; gap: 4px; }
+.ws-note { margin: 0; padding: 6px 12px; border-radius: 10px; background: var(--tx-surface); box-shadow: inset 0 0 0 1px var(--tx-line);
+  color: var(--tx-sub); font-size: 13px; line-height: 1.5; word-break: keep-all; }
+.ws-open { height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; background: var(--tx-surface); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.ws-open:hover { background: var(--tx-soft); }
+.ws-open[aria-expanded="true"] { background: var(--tx-blue-soft); box-shadow: inset 0 0 0 1px var(--tx-blue); }
+.itd-out-bar > .ws-open { margin-left: auto; }
+.ws-stage { position: relative; flex: 1 1 auto; min-height: 0; display: grid; }
+.ws-grid { --ws-head-h: 44px; position: relative; display: grid; grid-template-rows: repeat(20, minmax(0, 1fr)); min-width: 0; min-height: 0; }
+.ws-head { align-self: start; z-index: 1; display: flex; align-items: flex-end; gap: 4px; height: var(--ws-head-h); min-width: 0; padding-right: 2px;
+  border-bottom: 1px solid var(--tx-line); }
+.ws-head[data-row="1"] { margin-top: 16px; }
+.ws-head[hidden] { display: none; }
+.ws-tabs { display: flex; flex: 1 1 auto; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.ws-tab { flex: none; height: 38px; padding: 0 14px; border: 0; border-radius: 10px 10px 0 0; background: transparent; color: var(--tx-sub);
+  font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; user-select: none; }
+.ws-tab:hover { color: var(--tx-ink); background: var(--tx-soft); }
+.ws-tab[aria-selected="true"] { color: var(--tx-ink); background: var(--tx-surface); box-shadow: inset 0 -2px 0 var(--tx-ink); }
+.ws-tab:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; }
+.ws-menu-open { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; margin-bottom: 3px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--tx-sub); cursor: pointer; }
+.ws-menu-open:hover, .ws-menu-open[aria-expanded="true"] { background: var(--tx-soft); color: var(--tx-ink); }
+.ws-menu-open:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; }
+.ws-panel { min-width: 0; min-height: 0; margin-top: var(--ws-head-h); padding: 0 2px; overflow: auto; overscroll-behavior: contain; }
+/* 판 끝의 숨 — 패딩이 아니라 내용 끝의 빈 줄(바닥에 붙는 실행 줄 아래로 내용이 비치지 않게 · 구르는 판의 바닥은 판 끝이다) */
+.ws-panel::after { content: ""; display: block; height: 16px; }
+.ws-panel[data-row="1"] { margin-top: calc(16px + var(--ws-head-h)); }
+.ws-panel[hidden] { display: none; }
+.ws-panel > * + * { margin-top: 12px; }
+.ws-panel:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; border-radius: 4px; }
+.ws-panel-name { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.35; letter-spacing: -0.01em; color: var(--tx-ink); }
+.ws[data-mode="tabs"] .ws-panel-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* 판 안 첫 절이 판 이름을 제목으로 다는 판(PanelSpec.titled) — 같은 이름의 제목은 하나만: 탭에서는 절 제목(낭독용 판 이름을 뺀다 · 판 이름 바로 뒤에
+   절이 있을 때만 — 문장만 있는 판은 판 이름이 남는다) · 쌓기에서는 판 이름(아래 · 절 제목을 그리지 않고 부제는 남긴다). 판 안 구조는 그대로(다시 마운트 없음). */
+.ws[data-mode="tabs"] .ws-panel[data-titled] > .ws-panel-name:has(+ .tx-sec) { display: none; }
+.ws-col-slot { position: relative; min-height: 0; }
+.ws-col-slot[hidden] { display: none; }
+.ws-col-bar { position: absolute; inset: 0; cursor: col-resize; touch-action: none; }
+.ws-col-bar::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; margin-left: -0.5px; background: var(--tx-line); }
+.ws-col-bar::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 44px; margin: -22px 0 0 -2px; border-radius: 2px;
+  background: var(--tx-mute); transition: background-color .15s; }
+.ws-row-bar { align-self: start; z-index: 1; position: relative; height: 16px; cursor: row-resize; touch-action: none; }
+.ws-row-bar[hidden] { display: none; }
+.ws-row-bar::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; margin-top: -0.5px; background: var(--tx-line); }
+.ws-row-bar::after { content: ""; position: absolute; top: 50%; left: 50%; width: 44px; height: 4px; margin: -2px 0 0 -22px; border-radius: 2px;
+  background: var(--tx-mute); transition: background-color .15s; }
+.ws-col-bar:hover::after, .ws-col-bar:focus-visible::after, .ws-col-bar[data-drag]::after,
+.ws-row-bar:hover::after, .ws-row-bar:focus-visible::after, .ws-row-bar[data-drag]::after { background: var(--tx-blue); }
+.ws-col-bar:focus-visible, .ws-row-bar:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; border-radius: 4px; }
+.ws-drop { position: absolute; z-index: 3; pointer-events: none; border-radius: 10px; background: color-mix(in srgb, var(--tx-blue) 14%, transparent);
+  box-shadow: inset 0 0 0 2px var(--tx-blue); }
+.ws[data-dragging] { cursor: grabbing; user-select: none; }
+.ws-drag-chip { position: absolute; z-index: 4; pointer-events: none; max-width: 320px; padding: 5px 10px; border-radius: 8px; background: var(--tx-ink); color: var(--tx-surface);
+  font-size: 12.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 6px 16px rgb(25 31 40 / 22%); }
+.ws-drag-chip[data-ok="false"] { background: var(--tx-sub); }
+.ws-zoom-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 32px; padding: 0 4px 0 12px; border-radius: 10px;
+  background: var(--tx-blue-soft); color: var(--tx-ink); font-size: 13px; line-height: 1.4; word-break: keep-all; }
+.ws-unzoom { height: 28px; padding: 0 10px; font-size: 12.5px; background: var(--tx-surface); }
+.ws-empty { margin: 0; padding: 18px 24px; border-radius: var(--tx-r-sec); background: var(--tx-surface); color: var(--tx-sub); font-size: 14px; line-height: 1.55; word-break: keep-all; }
+.ws-elsewhere { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 20px;
+  border-radius: var(--tx-r-sec); background: var(--tx-surface); }
+.ws-elsewhere-text { margin: 0; color: var(--tx-sub); font-size: 14px; line-height: 1.5; word-break: keep-all; }
+.ws-elsewhere-go { height: 32px; padding: 0 12px; font-size: 13px; }
+/* 좁은 창 — 같은 상자를 블록으로: 판 이름이 머리로 서고 페이지가 구른다(머리 · 판 메뉴 · 구분선은 그리지 않는다) */
+.ws[data-mode="stack"] .ws-grid { display: block; }
+.ws[data-mode="stack"] .ws-panel { margin-top: 0; padding: 0; overflow: visible; }
+.ws[data-mode="stack"] .ws-panel + .ws-panel { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--tx-line); }
+.ws[data-mode="stack"] .ws-panel::after { display: none; }
+.ws[data-mode="stack"] .ws-panel[data-titled] > .ws-panel-name + .tx-sec > .tx-sec-head .tx-sec-t { display: none; }
+/* 메뉴(APG 메뉴 단추 · document.body 에 portal · position fixed — 칸의 넘침 상자에 잘리지 않는다 · 자리는 JS 가 창 안으로) */
+.ws-menu { position: fixed; z-index: 45; display: grid; min-width: 220px; max-width: min(380px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto;
+  padding: 6px; background: var(--tx-surface); border: 1px solid var(--tx-line); border-radius: 12px; box-shadow: 0 12px 32px rgb(25 31 40 / 16%);
+  font-family: var(--tx-font); color: var(--tx-ink); }
+.ws-menu-group { display: grid; }
+.ws-menu-group + .ws-menu-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--tx-line); }
+.ws-menu-h { margin: 0; padding: 6px 10px 2px 34px; font-size: 12px; font-weight: 600; color: var(--tx-mute); }
+.ws-menu-item { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 8px; align-items: center; min-height: 34px; padding: 6px 10px;
+  border: 0; border-radius: 8px; background: none; color: var(--tx-ink); font: inherit; font-size: 13.5px; font-weight: 600; text-align: left; cursor: pointer; }
+.ws-menu-item::before { content: ""; grid-column: 1; grid-row: 1; }
+.ws-menu-item[aria-checked="true"]::before { justify-self: center; width: 5px; height: 9px; margin-top: -3px; border: solid var(--tx-blue); border-width: 0 2px 2px 0;
+  transform: rotate(45deg); }
+.ws-menu-item:hover, .ws-menu-item:focus { background: var(--tx-soft); outline: none; }
+.ws-menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--tx-blue); }
+.ws-menu-item[aria-disabled="true"] { color: var(--tx-mute); cursor: not-allowed; }
+.ws-menu-label { grid-column: 2; grid-row: 1; }
+.ws-menu-why { grid-column: 2; grid-row: 2; font-size: 12px; font-weight: 500; line-height: 1.45; color: var(--tx-mute); word-break: keep-all; }
+.ws-menu-sep { height: 1px; margin: 4px 6px; background: var(--tx-line); }
+.ws-menu-group + .ws-menu-sep { margin-top: 6px; }
+/* 배치 관리 시트(기존 .tx-sheet 안) */
+.ws-sheet-sec { display: grid; gap: 8px; }
+.ws-sheet-sec + .ws-sheet-sec { padding-top: 14px; border-top: 1px solid var(--tx-line); }
+.ws-sheet-h { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 15px; font-weight: 700; color: var(--tx-ink); }
+.ws-sheet-count { font-size: 13px; font-weight: 600; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
+.ws-save-row, .ws-rename-row { display: flex; align-items: center; gap: 8px; }
+.ws-rename-row { flex: 1 1 100%; }
+.ws-save-row > .tj-input, .ws-rename-row > .tj-input { flex: 1 1 auto; min-width: 0; }
+.ws-saved { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ws-saved-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-radius: var(--tx-r-row); box-shadow: inset 0 0 0 1px var(--tx-line); }
+.ws-saved-name { flex: 1 1 auto; min-width: 0; font-weight: 600; color: var(--tx-ink); overflow-wrap: anywhere; }
+.ws-saved-shape { font-size: 12px; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
+.ws-sheet .tx-btn { flex: none; height: 34px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
+.ws-file-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ws-sheet-msg { margin: 0; padding: 10px 14px; border-radius: var(--tx-r-row); color: var(--tx-ink); font-size: 14px; line-height: 1.5; word-break: keep-all; }
+.ws-sheet-msg[data-tone="ok"] { background: var(--tx-ok-soft); }
+.ws-sheet-msg[data-tone="err"] { background: var(--tx-danger-soft); }
+.ws-sheet-reasons { margin: 6px 0 0; padding-left: 20px; color: var(--tx-sub); font-size: 13px; line-height: 1.5; word-break: keep-all; }
+@media (prefers-reduced-motion: reduce) { .ws-col-bar::after, .ws-row-bar::after { transition: none; } }
+/* 분봉 화면의 자리 — 판 배치를 켠 넓은 창은 G5 두 칸과 같이 페이지를 본문 높이에 맞추고 판이 각자 구른다 · 실행 줄은 설정 판 바닥에 붙는다 */
+.itd[data-ws="tabs"] { max-width: none; height: calc(100vh - var(--t-header-h) - 80px); display: flex; flex-direction: column; }
+.itd[data-ws="tabs"] > :not(.ws) { flex: none; }
+.itd[data-ws="tabs"] > .ws { flex: 1 1 auto; min-height: 0; }
+.itd .ws[data-mode="tabs"] .ws-panel[data-panel="setup"] > .itd-run-row { position: sticky; bottom: 0; z-index: 1;
+  box-shadow: 0 0 0 1px var(--tx-line), 0 -10px 20px -16px rgb(25 31 40 / 40%); }
 .itd-hint { font-size: 12px; line-height: 1.4; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
 .itd-tickers, .itd-dt-tickers { height: auto; min-height: 64px; padding: 9px 10px; line-height: 1.5; resize: vertical; font-family: var(--t-mono); font-size: 13.5px; }
 .itd select.tj-input { appearance: auto; padding-right: 6px; }

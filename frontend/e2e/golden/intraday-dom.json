@@ -1,0 +1,176 @@
+{
+ "note": "판 배치(G6 2a-1)를 끈 분봉 화면의 DOM 뼈대 — G6 코드를 쓰기 전 빌드(c9f8318)에서 UPDATE_WS_GOLDEN=1 로 떴다. 더한 것은 '배치' 단추(.ws-open) 하나뿐이어야 한다.",
+ "states": {
+  "1440-open": {
+   "skeleton": [
+    "div.tx-page.tj.itd [data-split=]",
+    "  header.tx-head",
+    "    div.tx-head-main",
+    "      h1.tx-h1",
+    "      p.tx-lede",
+    "  nav.tx-subnav [aria-label=백테스트 모드]",
+    "    a.tx-subnav-a",
+    "    a.tx-subnav-a [aria-current=page]",
+    "  div.itd-work [data-set=open style=--itd-set-w: 480px;]",
+    "    div.itd-set [aria-label=설정 id=itd-set role=region]",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      div.tj-run-row.itd-run-row",
+    "    div.itd-split-bar [aria-controls=itd-set aria-label=설정 창 폭 aria-orientation=vertical aria-valuemax=648 aria-valuemin=440 aria-valuenow=480 role=separator tabindex=0]",
+    "    div.itd-out [aria-label=결과와 분석 role=region]",
+    "      div.itd-out-bar",
+    "        button.tx-btn.tx-btn--sub.itd-set-toggle [aria-controls=itd-set aria-expanded=true type=button]",
+    "          svg.lucide.lucide-panel-left-close.lucide-sidebar-close [aria-hidden=true]",
+    "            rect",
+    "            path",
+    "            path",
+    "      p.itd-out-empty [data-state=idle role=status]",
+    "      section.tx-sec",
+    "      section.tx-sec"
+   ],
+   "boxes": {
+    ".itd-work": [
+     96,
+     277,
+     1304,
+     583
+    ],
+    ".itd-set": [
+     96,
+     277,
+     480,
+     583
+    ],
+    ".itd-split-bar": [
+     576,
+     277,
+     16,
+     583
+    ],
+    ".itd-out": [
+     592,
+     277,
+     808,
+     583
+    ],
+    ".itd-out-bar": [
+     592,
+     277,
+     808,
+     36
+    ],
+    ".itd-set-toggle": [
+     592,
+     277,
+     94,
+     32
+    ],
+    ".itd-out-empty": [
+     592,
+     325,
+     808,
+     58
+    ]
+   }
+  },
+  "1440-run": {
+   "skeleton": [
+    "div.tx-page.tj.itd [data-split=]",
+    "  header.tx-head",
+    "    div.tx-head-main",
+    "      h1.tx-h1",
+    "      p.tx-lede",
+    "  nav.tx-subnav [aria-label=백테스트 모드]",
+    "    a.tx-subnav-a",
+    "    a.tx-subnav-a [aria-current=page]",
+    "  div.itd-banner",
+    "    div.tx-notice [data-tone=practice role=note]",
+    "      svg.lucide.lucide-flask-conical.tx-notice-i [aria-hidden=true]",
+    "      div",
+    "  div.itd-work [data-set=open style=--itd-set-w: 480px;]",
+    "    div.itd-set [aria-label=설정 id=itd-set role=region]",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      div.tj-run-row.itd-run-row",
+    "    div.itd-split-bar [aria-controls=itd-set aria-label=설정 창 폭 aria-orientation=vertical aria-valuemax=648 aria-valuemin=440 aria-valuenow=480 role=separator tabindex=0]",
+    "    div.itd-out [aria-label=결과와 분석 role=region]",
+    "      div.itd-out-bar",
+    "        button.tx-btn.tx-btn--sub.itd-set-toggle [aria-controls=itd-set aria-expanded=true type=button]",
+    "          svg.lucide.lucide-panel-left-close.lucide-sidebar-close [aria-hidden=true]",
+    "            rect",
+    "            path",
+    "            path",
+    "      div.tj-result.itd-result",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec"
+   ]
+  },
+  "1440-judge": {
+   "skeleton": [
+    "div.tx-page.tj.itd [data-split=]",
+    "  header.tx-head",
+    "    div.tx-head-main",
+    "      h1.tx-h1",
+    "      p.tx-lede",
+    "  nav.tx-subnav [aria-label=백테스트 모드]",
+    "    a.tx-subnav-a",
+    "    a.tx-subnav-a [aria-current=page]",
+    "  div.itd-banner",
+    "    div.tx-notice [data-tone=practice role=note]",
+    "      svg.lucide.lucide-flask-conical.tx-notice-i [aria-hidden=true]",
+    "      div",
+    "  div.itd-work [data-set=open style=--itd-set-w: 480px;]",
+    "    div.itd-set [aria-label=설정 id=itd-set role=region]",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      div.tj-run-row.itd-run-row",
+    "    div.itd-split-bar [aria-controls=itd-set aria-label=설정 창 폭 aria-orientation=vertical aria-valuemax=648 aria-valuemin=440 aria-valuenow=480 role=separator tabindex=0]",
+    "    div.itd-out [aria-label=결과와 분석 role=region]",
+    "      div.itd-out-bar",
+    "        button.tx-btn.tx-btn--sub.itd-set-toggle [aria-controls=itd-set aria-expanded=true type=button]",
+    "          svg.lucide.lucide-panel-left-close.lucide-sidebar-close [aria-hidden=true]",
+    "            rect",
+    "            path",
+    "            path",
+    "      div.tj-result.itd-result",
+    "      section.tx-sec",
+    "      div.itd-verdict",
+    "      section.tx-sec",
+    "      section.tx-sec"
+   ]
+  },
+  "390-open": {
+   "skeleton": [
+    "div.tx-page.tj.itd",
+    "  header.tx-head",
+    "    div.tx-head-main",
+    "      h1.tx-h1",
+    "      p.tx-lede",
+    "  nav.tx-subnav [aria-label=백테스트 모드]",
+    "    a.tx-subnav-a",
+    "    a.tx-subnav-a [aria-current=page]",
+    "  div.itd-work",
+    "    div.itd-set [aria-label=설정 id=itd-set role=region]",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      section.tx-sec",
+    "      div.tj-run-row.itd-run-row",
+    "    div.itd-out [aria-label=결과와 분석 role=region]",
+    "      section.tx-sec",
+    "      section.tx-sec"
+   ]
+  }
+ }
+}

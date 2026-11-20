@@ -7,6 +7,7 @@
  * ★모든 숫자는 서버 값이다★ — 여기서는 고르고 서식만 입힌다. 미상은 N/A + 서버 사유. 권고·예측 문장을 만들지 않는다.
  */
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { Simulation } from "@/entities/intraday";
 import type { Journal } from "@/entities/trade-journal";
 import {
@@ -26,7 +27,11 @@ const BREAKEVEN_WHY: Record<string, string> = {
 
 export type Sim = Simulation<Journal>;
 
-export function IntradayResult({ sim }: { sim: Sim }) {
+/**
+ * `barsSlot` — '봉과 체결' 절의 자리에 대신 둘 것(G6 판 배치: 봉과 체결은 제 판에 있으므로 그 판을 가리키는 한 줄 · 계획 §9.1).
+ * 주지 않으면(undefined) 지금 그대로 이 자리에 `BarsSection` 을 그린다.
+ */
+export function IntradayResult({ sim, barsSlot }: { sim: Sim; barsSlot?: ReactNode }) {
   const j = sim.journal;
   const d = sim.data;
   const slippage = sim.request.costs.slippage_ticks;
@@ -65,7 +70,7 @@ export function IntradayResult({ sim }: { sim: Sim }) {
           <Section title="누적 실현손익" sub="청산 순서대로 쌓은 실현손익과 고점 대비 하락(원)입니다. 진입 금액이 고정이라 수익률(%)과 MDD(%)는 산출하지 않습니다.">
             <PnlCurve points={j.curve.points} trades={j.trades} basis={j.curve.basis} maxDrawdown={j.curve.max_drawdown} maxDrawdownAt={j.curve.max_drawdown_at} />
           </Section>
-          <BarsSection key={`bars-${sim.trial?.trial_key ?? "no-trial"}`} trialKey={sim.trial?.trial_key} />
+          {barsSlot !== undefined ? barsSlot : <BarsSection key={`bars-${sim.trial?.trial_key ?? "no-trial"}`} trialKey={sim.trial?.trial_key} />}
           <Costs j={j} />
           <Section title="손익분기 비용" sub="비용 전 총손익을 총 거래 대금으로 나눈 값입니다. 편도 비용이 이만큼이면 손익이 0 이 됩니다.">
             <dl className="tj-cost-figs itd-breakeven">

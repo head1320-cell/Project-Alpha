@@ -138,10 +138,10 @@ export function Stat({ label, value, delta }: {
 
 // ── 고르기: 분할 단추 · 탭 ──────────────────────────────────────────────────
 
-type Opt<T extends string> = { value: T; label: string };
+export type Opt<T extends string> = { value: T; label: string };
 
-/** 화살표·Home·End 로 다음 항목에 초점을 옮기고 고른다(로빙 tabindex — 묶음 하나가 Tab 한 번). */
-function rove<T extends string>(e: KeyboardEvent, opts: Opt<T>[], cur: T, pick: (v: T) => void, refs: (HTMLButtonElement | null)[]) {
+/** 화살표·Home·End 로 다음 항목에 초점을 옮기고 고른다(로빙 tabindex — 묶음 하나가 Tab 한 번). 판 배치의 칸 머리 탭도 같은 키를 쓴다(G6). */
+export function rove<T extends string>(e: KeyboardEvent, opts: Opt<T>[], cur: T, pick: (v: T) => void, refs: (HTMLButtonElement | null)[]) {
   const i = opts.findIndex((o) => o.value === cur);
   const n = opts.length;
   const to = e.key === "ArrowRight" || e.key === "ArrowDown" ? (i + 1) % n
