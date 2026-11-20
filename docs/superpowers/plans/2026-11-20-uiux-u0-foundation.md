@@ -204,7 +204,8 @@
 - [x] `skill-creator` 로 꼴을 맞춰 `.claude/skills/alpha-ui/SKILL.md` — 규칙의 요약 + 원천(ADR 007 · 가드 시험)을 가리킴 → 커밋(다음 세션의 목록에 뜨는지는 미확인으로 적는다)
 
 ### U0 끝 게이트
-- [ ] 격리 worktree: ruff · 전체 pytest 한 번 · tsc · eslint(FSD) · 다크 `--check` · 빌드 · ★전체 E2E★ · 문서 시험 · `golden-diff` 로 13 라우트 변화 0 → HISTORY → 푸시 → CI
+- [x] 격리 worktree: ruff · 전체 pytest 한 번 · tsc · eslint(FSD) · 다크 `--check` · 빌드 · ★전체 E2E★ · 문서 시험 · `golden-diff` 로 13 라우트 변화 0 → HISTORY → 푸시 → CI
+  - 결과(2026-11-20): 전체 E2E 1,714 통과 · 4 건너뜀 · 실패 0(`a2f0402`) · 전체 pytest 11,844 통과 · 11 건너뜀 · 실패 0(`6a3dec2` · 격리 worktree) · 골든 파일은 U0 앞과 같다(다시 얼리지 않았다)
 
 ### 접근성 P0 넷 (각각 빨강 → 초록 → 변이 → 커밋)
 - [ ] **P0-1 건너뛰기 링크** — 셸의 첫 요소 `본문으로 건너뛰기`(초점이 갈 때만 보임 · 전환 없음) → 본문으로 초점. 스펙: 첫 Tab 에 보인다 · Enter 뒤 초점이 본문 · 본문 첫 조작 요소까지 2걸음 이하 ·
