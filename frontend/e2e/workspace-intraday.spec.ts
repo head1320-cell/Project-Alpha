@@ -12,6 +12,7 @@ import { contrastAudit, voiceAudit, type AuditResult, type VoiceResult } from ".
 // 더한 것은 넓은 창의 '배치' 단추(`.ws-open`) 하나뿐이어야 한다. 깊은 내용은 기존 분봉 스펙 16 이 건다(한 줄도 고치지 않는다).
 // 둘째 묶음부터는 판 배치를 켠 화면 — 판 여섯 · 탭 · 판 메뉴(키보드만) · 끌어 놓기(같은 함수) · ★배치 조작이 시행을 늘리지 않고 절을 다시 마운트하지
 // 않는다★(POST 수 · GET /trials 의 runs 합 · DOM 노드 표식 · 절 안 입력) · 저장 · 깨진 저장 · 이름 붙인 배치 · 파일 · 좁은 창 쌓기 · 합쳐 보임 · 끄기.
+// 마지막 묶음은 메뉴 단추(`MenuButton`)와 구르기 — ★단추를 옮긴 구르기만 메뉴를 닫는다★(화면 밖 '배치' 단추를 누르면 열자마자 닫히던 것 · 2026-11-20).
 // 데이터는 다른 분봉 스펙과 같은 고정물(seed_bars.py) — 손 계산 열흘 035720 · 합성 사흘 005930 · 000660.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -855,5 +856,189 @@ test.describe("판 배치를 켠 화면", () => {
     await page.setViewportSize(PHONE);
     await expect(page.locator(".itd")).toHaveAttribute("data-ws", "stack");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// 메뉴 단추와 구르기 — ★단추를 옮긴 구르기만 메뉴를 닫는다★ (`shared/ui/workspace/MenuButton.tsx` · 2026-11-20)
+// ────────────────────────────────────────────────────────────────────────────
+// 화면 밖 단추를 누르면 브라우저가 단추를 화면 안으로 굴리고 다음 그림 전에 누른다(Playwright 의 누르기 · 낭독기의 '누르기'도 그럴 것 — 추론).
+// 구르기 알림은 다음 그림에 나가므로 메뉴가 열려 듣기를 단 뒤에 오고, 구르기마다 닫던 메뉴는 열자마자 닫혔다(다음 항목 누르기가 'detached').
+// 재현 자리는 쌓기(좁은 창 · 판 배치 켬)뿐이다 — 페이지가 구르고 '배치' 단추가 붙어 있지 않다. 두 칸에서는 단추가 붙은 막대에 있고(.itd-out-bar sticky)
+// 탭 보기에서는 페이지가 구르지 않으며 판 메뉴 단추는 판 밖 머리에 있다(판이 굴러도 움직이지 않는다 — 셋째 시험).
+// ★'열린 채'는 재시도하는 단언이 아니라 그림 둘 뒤의 개수로 본다★ — 구르기 알림이 부른 닫기는 다음 차례에 그려지므로, 재시도하는 단언은 닫히기 전에 통과한다.
+// 구르기 알림이 메뉴가 열린 동안 왔다는 것(probe)과 단추가 실제로 굴렀다 · 움직였다 · 그대로였다는 것을 함께 건다(공허하게 통과하지 않게).
+// ════════════════════════════════════════════════════════════════════════════
+
+test.describe("메뉴와 구르기 — 단추를 옮긴 구르기만 메뉴를 닫는다(MenuButton)", () => {
+  test.skip(WRITE, "골든을 뜨는 돌림");
+  const NARROW = { width: 1200, height: 900 };
+  const menu = (page: Page) => page.locator(".ws-menu");
+  const main = (page: Page) => page.locator(".terminal-main");
+  /** 지금 메뉴 수(재시도 없이) — '열린 채'는 이것으로 본다. */
+  const now = (page: Page) => menu(page).count();
+  const scrollTop = (page: Page) => main(page).evaluate((el) => el.scrollTop);
+  /** 그림 둘 — 밀린 구르기 알림이 나가고, 그 알림이 부른 닫기(다음 차례)까지 그려진 뒤. */
+  const frames = (page: Page) => page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+
+  /** 늦게 서는 절(내 모형 · 상한 · 적재 범위)과 글꼴이 다 선 뒤 — 그동안 높이가 바뀌면 구르기 앵커가 페이지를 굴려 단추가 움직인다(그때 닫는 것은 맞다). */
+  async function settle(page: Page): Promise<void> {
+    await expect(page.locator('.itd [aria-busy="true"]')).toHaveCount(0);
+    await expect(page.locator(".itd-coverage-btn")).not.toHaveText("조회 중");
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await frames(page);
+  }
+
+  /** 쌓기(1200 × 900 · 판 배치 켬) — 좁은 창의 기본 배치에는 '배치' 단추가 없어 켬을 심고 다시 연다. */
+  async function openStack(page: Page): Promise<void> {
+    await open(page, NARROW);
+    await seed(page, { [K.on]: "1" });
+    await expect(page.locator(".itd")).toHaveAttribute("data-ws", "stack");
+    await settle(page);
+  }
+
+  /** 페이지를 맨 아래로 — '배치' 단추가 화면 밖에 있다(전제). */
+  async function toBottom(page: Page): Promise<void> {
+    await main(page).evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    await frames(page);
+    await expect(page.locator(".ws-open")).not.toBeInViewport();
+  }
+
+  /** 구르기 알림이 올 때 메뉴가 있었는지 적는다 — capture 이고 메뉴의 듣기보다 먼저 단다(메뉴가 닫아도 그 그림은 다음 차례라 지금은 있다). */
+  async function probe(page: Page, sel: string): Promise<void> {
+    await page.evaluate((s) => {
+      const w = window as unknown as { __wsScroll: boolean[] };
+      w.__wsScroll = [];
+      window.addEventListener("scroll", (e) => {
+        if (e.target instanceof Element && e.target.matches(s)) w.__wsScroll.push(document.querySelector(".ws-menu") !== null);
+      }, true);
+    }, sel);
+  }
+  const probed = (page: Page) => page.evaluate(() => (window as unknown as { __wsScroll?: boolean[] }).__wsScroll ?? []);
+
+  test("재현: 화면 밖 '배치' 단추를 누르면(누르며 페이지가 굴러 온다) 메뉴가 열린 채 · 같은 차례에 굴러 와 눌려도(구르기 알림이 메뉴가 열린 뒤에 온다) 열린 채 · 항목을 고른다 — 쌓기 1200 × 900", async ({ page }) => {
+    await openStack(page);
+    const btn = page.locator(".ws-open");
+    // ① 사용자의 길(Playwright 누르기 — 굴리고 같은 그림 안에서 누른다). 굴리기와 누르기 사이에 그림이 끼면 경합이 없어 고치기 전에도 통과할 수 있다 — 세 번
+    for (let i = 1; i <= 3; i++) {
+      await toBottom(page);
+      const y0 = await scrollTop(page);
+      await btn.click();
+      await frames(page);
+      expect(await scrollTop(page), "누르며 페이지가 굴렀다(전제)").toBeLessThan(y0);
+      await expect(btn).toBeInViewport();
+      expect(await now(page), `${i}번째 누르기: 메뉴가 열린 채`).toBe(1);
+      await expect(btn).toHaveAttribute("aria-expanded", "true");
+      await expect(radio(page, "기본 배치")).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(menu(page)).toHaveCount(0);
+      await expect(btn).toBeFocused();
+    }
+    // ② 한 차례(한 작업) 안에서 굴리고 누른다 — 구르기 알림은 다음 그림에 나가므로 반드시 메뉴가 열린 뒤에 온다(Playwright 의 시간에 기대지 않는다)
+    await toBottom(page);
+    await probe(page, ".terminal-main");
+    const r = await page.evaluate(() => {
+      const m = document.querySelector(".terminal-main")!;
+      const b = document.querySelector<HTMLElement>(".ws-bar .ws-open")!;
+      const y0 = m.scrollTop;
+      const hidden = b.getBoundingClientRect().bottom <= m.getBoundingClientRect().top;
+      b.scrollIntoView({ block: "center" });
+      const y1 = m.scrollTop;
+      b.click();
+      return { y0, y1, hidden };
+    });
+    expect(r.hidden, "단추가 화면 밖에 있었다(전제)").toBe(true);
+    expect(r.y1, "굴렀다(전제)").toBeLessThan(r.y0);
+    await frames(page);
+    expect(await probed(page), "구르기 알림이 메뉴가 열린 동안 왔다(전제)").toContain(true);
+    expect(await now(page), "한 차례에 굴러 와 눌려도 메뉴가 열린 채").toBe(1);
+    await expect(btn).toHaveAttribute("aria-expanded", "true");
+    // 고른다 — '판 배치'는 이 화면의 지금 방식이라 바꾸는 항목인 '기본 배치'를 누른다(좁은 창의 기본 배치에는 '배치' 단추가 없다)
+    await radio(page, "기본 배치").click();
+    await expect(page.locator(".itd")).not.toHaveAttribute("data-ws", /.*/);
+    await expect(page.locator(".ws-open")).toHaveCount(0);
+    expect(await page.evaluate((k) => localStorage.getItem(k), K.on)).toBeNull();
+  });
+
+  test("짝: 메뉴를 연 채 페이지를 굴려 단추가 움직이면 닫는다 · 1px 도 — 쌓기 1200 × 900", async ({ page }) => {
+    await openStack(page);
+    const btn = page.locator(".ws-open");
+    await expect(btn).toBeInViewport();                                            // 페이지 맨 위 — 누르기가 굴리지 않는다
+    await btn.click();
+    await frames(page);
+    expect(await now(page)).toBe(1);
+    const b0 = (await btn.boundingBox())!;
+    const vp = page.viewportSize()!;
+    const at = { x: vp.width - 20, y: vp.height - 20 };                           // 본문 칸 오른쪽 아래 — 메뉴 밖
+    expect(await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return !!el && !el.closest(".ws-menu") && !!el.closest(".terminal-main");
+    }, at), "바퀴를 굴릴 자리는 본문 칸 · 메뉴 밖(전제)").toBe(true);
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => scrollTop(page)).toBeGreaterThan(0);
+    await expect(menu(page)).toHaveCount(0);
+    await expect(btn).toHaveAttribute("aria-expanded", "false");
+    expect((await btn.boundingBox())!.y, "단추가 움직였다(전제)").toBeLessThan(b0.y - 1);
+    // 1px — 정수 화소 한 칸도 움직임이다(메뉴는 정수 px 에 놓는다)
+    await main(page).evaluate((el) => el.scrollTo(0, 0));
+    await frames(page);
+    await btn.click();
+    await frames(page);
+    expect(await now(page)).toBe(1);
+    await main(page).evaluate((el) => el.scrollBy(0, 1));
+    await expect(menu(page)).toHaveCount(0);
+    expect(await scrollTop(page)).toBe(1);
+  });
+
+  test("판 메뉴: 판 안을 굴려도(머리의 단추는 그 자리) 메뉴가 열린 채 · Escape 는 단추로 ↔ 바깥을 누르거나 창 크기가 바뀌면 닫는다 — 판 배치 1440 × 900", async ({ page }) => {
+    await open(page);
+    await wsOn(page);
+    await settle(page);
+    const set = panel(page, "setup");
+    expect(await set.evaluate((el) => el.scrollHeight - el.clientHeight), "설정 판이 구른다(전제)").toBeGreaterThan(100);
+    const btn = head(page, "0:0").locator(".ws-menu-open");
+    await btn.evaluate((el) => { (el as unknown as { __ws: number }).__ws = 9; });
+    await probe(page, '.ws-panel[data-panel="setup"]');
+    await btn.click();
+    await frames(page);
+    expect(await now(page)).toBe(1);
+    const b0 = (await btn.boundingBox())!;
+    const p = (await set.boundingBox())!;
+    const at = { x: p.x + 40, y: p.y + p.height / 2 };                            // 설정 판 왼쪽 — 메뉴는 단추(칸 머리 오른쪽 끝)에서 오른쪽으로 선다
+    expect(await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return !!el && !el.closest(".ws-menu") && el.closest(".ws-panel")?.getAttribute("data-panel") === "setup";
+    }, at), "바퀴를 굴릴 자리는 설정 판 · 메뉴 밖(전제)").toBe(true);
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => set.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    await frames(page);
+    expect(await probed(page), "구르기 알림이 메뉴가 열린 동안 왔다(전제)").toContain(true);
+    expect(await now(page), "판 안을 굴려도 메뉴가 열린 채").toBe(1);
+    await expect(btn).toHaveAttribute("aria-expanded", "true");
+    expect(await btn.boundingBox(), "단추는 그 자리").toEqual(b0);
+    // Escape → 닫고 단추로 초점(APG · 그대로)
+    await page.keyboard.press("Escape");
+    await expect(menu(page)).toHaveCount(0);
+    await expect(btn).toBeFocused();
+    // 바깥 누르기 → 닫는다(누를 것이 없는 자리 — 작업 공간 위 막대의 빈 오른쪽 끝)
+    await btn.click();
+    await frames(page);
+    expect(await now(page)).toBe(1);
+    const bar = (await page.locator(".ws-bar").boundingBox())!;
+    const out = { x: bar.x + bar.width - 8, y: bar.y + bar.height / 2 };
+    expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.classList.contains("ws-bar") ?? false, out), "누를 자리는 막대 자신(전제)").toBe(true);
+    await page.mouse.click(out.x, out.y);
+    await expect(menu(page)).toHaveCount(0);
+    await expect(btn).toHaveAttribute("aria-expanded", "false");
+    // 창 크기 → 닫는다(높이만 바꿔 탭 보기 그대로 — 단추가 다시 그려지지 않았으니 닫기는 창 크기의 일이다)
+    await btn.click();
+    await frames(page);
+    expect(await now(page)).toBe(1);
+    await page.setViewportSize({ width: WIDE.width, height: 860 });
+    await expect(menu(page)).toHaveCount(0);
+    expect(await btn.evaluate((el) => (el as unknown as { __ws?: number }).__ws), "단추는 다시 그려지지 않았다").toBe(9);
+    await expect(page.locator(".itd")).toHaveAttribute("data-ws", "tabs");
   });
 });
