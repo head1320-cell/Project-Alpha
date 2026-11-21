@@ -6,6 +6,9 @@
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
@@ -75,7 +78,7 @@
   "shell:a.active.nav-item": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-house.nav-icon": [
+  "shell:svg.lucide.lucide-home.lucide-house.nav-icon": [
    "rgb(27, 100, 218)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(27, 100, 218)|"
   ],
   "shell:span.nav-meta": [
@@ -92,22 +95,25 @@
   "shell:svg.lucide.lucide-list-filter.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-chart-line.nav-icon": [
+  "shell:svg.lucide.lucide-chart-line.lucide-line-chart.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-earth.nav-icon": [
+  "shell:svg.lucide.lucide-earth.lucide-globe-2.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-building2.nav-icon": [
+  "shell:svg.lucide.lucide-building-2.lucide-building-complex.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-shield-alert.nav-icon": [
+  "shell:svg.lucide.lucide-shield-alert.lucide-shield-exclamation-point.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-workflow.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-users.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-wallet.nav-icon": [
@@ -261,9 +267,6 @@
   ],
   "main:a.dash-mod-stat.tx-row.tx-row--go": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/screener": {
@@ -740,6 +743,9 @@
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
@@ -809,7 +815,7 @@
   "shell:a.nav-item": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-house.nav-icon": [
+  "shell:svg.lucide.lucide-home.lucide-house.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:span.nav-meta": [
@@ -826,22 +832,25 @@
   "shell:a.active.nav-item": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-chart-line.nav-icon": [
+  "shell:svg.lucide.lucide-chart-line.lucide-line-chart.nav-icon": [
    "rgb(27, 100, 218)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(27, 100, 218)|"
   ],
-  "shell:svg.lucide.lucide-earth.nav-icon": [
+  "shell:svg.lucide.lucide-earth.lucide-globe-2.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-building2.nav-icon": [
+  "shell:svg.lucide.lucide-building-2.lucide-building-complex.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-shield-alert.nav-icon": [
+  "shell:svg.lucide.lucide-shield-alert.lucide-shield-exclamation-point.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-workflow.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-users.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-wallet.nav-icon": [
@@ -882,6 +891,13 @@
   ],
   "main:p.tx-lede": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:nav.tx-subnav": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:a.tx-subnav-a": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|",
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgba(0, 0, 0, 0)|rgb(0, 0, 0)|none|"
   ],
   "main:div.bte-grid.tbt-config-row": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -1053,7 +1069,10 @@
   "main:button.cfe-btn": [
    "rgb(95, 107, 122)|rgb(242, 244, 246)|rgb(95, 107, 122)|rgb(95, 107, 122)|rgb(0, 0, 0)|none|"
   ],
-  "main:svg.lucide.lucide-sparkles": [
+  "main:svg.lucide.lucide-sparkles.lucide-stars": [
+   "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(95, 107, 122)|"
+  ],
+  "main:circle.": [
    "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(95, 107, 122)|"
   ],
   "main:div.kit-sub": [
@@ -1160,9 +1179,6 @@
   "main:dd.": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|",
    "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro": {
@@ -1171,6 +1187,9 @@
   ],
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -1854,7 +1873,7 @@
   "main:p.mx-verdict-s": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:span.mx-ok": [
+  "main:span.mx-split": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:b.num": [
@@ -1896,6 +1915,12 @@
   ],
   "main:p.mx-cov-cap": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.mx-card.mx-skill-card": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:button.mx-skill-run": [
+   "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
   ],
   "main:dl.mx-dl": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -1972,6 +1997,9 @@
   "main:span.mx-fwd": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:span.mx-ok": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:h4.mx-sub": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
@@ -1989,9 +2017,6 @@
   ],
   "main:span.mx-key-u": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/agentic-mcp": {
@@ -2000,6 +2025,9 @@
   ],
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -2071,7 +2099,7 @@
   "shell:a.nav-item": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-house.nav-icon": [
+  "shell:svg.lucide.lucide-home.lucide-house.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:span.nav-meta": [
@@ -2085,25 +2113,28 @@
   "shell:svg.lucide.lucide-list-filter.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-chart-line.nav-icon": [
+  "shell:svg.lucide.lucide-chart-line.lucide-line-chart.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:a.active.nav-item": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-earth.nav-icon": [
+  "shell:svg.lucide.lucide-earth.lucide-globe-2.nav-icon": [
    "rgb(27, 100, 218)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(27, 100, 218)|"
   ],
-  "shell:svg.lucide.lucide-building2.nav-icon": [
+  "shell:svg.lucide.lucide-building-2.lucide-building-complex.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-shield-alert.nav-icon": [
+  "shell:svg.lucide.lucide-shield-alert.lucide-shield-exclamation-point.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-workflow.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-users.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-wallet.nav-icon": [
@@ -2257,9 +2288,6 @@
   ],
   "main:button.ms-vbtn.ms-vbtn-run": [
    "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/macro/causal-deepm": {
@@ -3676,6 +3704,9 @@
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
   ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
@@ -5001,9 +5032,6 @@
   ],
   "main:a.ci-rail-go.tx-btn.tx-btn--main": [
    "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/risk-tools": {
@@ -5012,6 +5040,9 @@
   ],
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -5082,7 +5113,7 @@
   "shell:a.nav-item": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-house.nav-icon": [
+  "shell:svg.lucide.lucide-home.lucide-house.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:span.nav-meta": [
@@ -5096,25 +5127,28 @@
   "shell:svg.lucide.lucide-list-filter.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-chart-line.nav-icon": [
+  "shell:svg.lucide.lucide-chart-line.lucide-line-chart.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-earth.nav-icon": [
+  "shell:svg.lucide.lucide-earth.lucide-globe-2.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-building2.nav-icon": [
+  "shell:svg.lucide.lucide-building-2.lucide-building-complex.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:a.active.nav-item": [
    "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-shield-alert.nav-icon": [
+  "shell:svg.lucide.lucide-shield-alert.lucide-shield-exclamation-point.nav-icon": [
    "rgb(27, 100, 218)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(27, 100, 218)|"
   ],
   "shell:svg.lucide.lucide-workflow.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-users.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-wallet.nav-icon": [
@@ -5338,9 +5372,6 @@
   ],
   "main:span.rk-k": [
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/admin/data": {
@@ -5349,6 +5380,9 @@
   ],
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -5419,7 +5453,7 @@
   "shell:a.nav-item": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-house.nav-icon": [
+  "shell:svg.lucide.lucide-home.lucide-house.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:span.nav-meta": [
@@ -5433,22 +5467,25 @@
   "shell:svg.lucide.lucide-list-filter.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-chart-line.nav-icon": [
+  "shell:svg.lucide.lucide-chart-line.lucide-line-chart.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-earth.nav-icon": [
+  "shell:svg.lucide.lucide-earth.lucide-globe-2.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-building2.nav-icon": [
+  "shell:svg.lucide.lucide-building-2.lucide-building-complex.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-shield-alert.nav-icon": [
+  "shell:svg.lucide.lucide-shield-alert.lucide-shield-exclamation-point.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-workflow.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-users.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-wallet.nav-icon": [
@@ -5586,11 +5623,23 @@
   "main:span.t-honesty-use.u-unavailable": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:section.dsx-keys.tx-sec": [
+  "main:section.dsx-minute.tx-sec": [
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h2.tx-sec-t": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.dsx-reason": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:p.dsx-minute-go": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:a.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:section.dsx-keys.tx-sec": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:ul.dsx-keylist": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -5674,9 +5723,6 @@
   "main:section.dsx-uni.tx-sec": [
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "main:p.dsx-reason": [
-   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
   "main:section.dsx-reg.tx-sec": [
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
@@ -5749,9 +5795,6 @@
   ],
   "main:button.tx-btn.tx-btn--sub": [
    "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  },
  "/derivatives": {
@@ -5760,6 +5803,9 @@
   ],
   "shell:header.terminal-header": [
    "rgb(17, 17, 17)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 232, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "shell:a.tx-skip": [
+   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "shell:a.terminal-brand": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -5830,7 +5876,7 @@
   "shell:a.nav-item": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
-  "shell:svg.lucide.lucide-house.nav-icon": [
+  "shell:svg.lucide.lucide-home.lucide-house.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:span.nav-meta": [
@@ -5844,22 +5890,25 @@
   "shell:svg.lucide.lucide-list-filter.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-chart-line.nav-icon": [
+  "shell:svg.lucide.lucide-chart-line.lucide-line-chart.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-earth.nav-icon": [
+  "shell:svg.lucide.lucide-earth.lucide-globe-2.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-building2.nav-icon": [
+  "shell:svg.lucide.lucide-building-2.lucide-building-complex.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
-  "shell:svg.lucide.lucide-shield-alert.nav-icon": [
+  "shell:svg.lucide.lucide-shield-alert.lucide-shield-exclamation-point.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-workflow.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:rect.": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
+  ],
+  "shell:svg.lucide.lucide-users.nav-icon": [
    "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|none|rgb(78, 89, 104)|"
   ],
   "shell:svg.lucide.lucide-wallet.nav-icon": [
@@ -5973,9 +6022,6 @@
   ],
   "main:button.dv-go.tx-btn.tx-btn--main": [
    "rgb(255, 255, 255)|rgb(27, 100, 218)|rgb(255, 255, 255)|rgb(255, 255, 255)|rgb(0, 0, 0)|none|"
-  ],
-  "shell:a.tx-skip": [
-   "rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ]
  }
 }
