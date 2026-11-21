@@ -591,3 +591,16 @@ def test_the_narrative_prompt_says_the_price_is_unknown():
     _, user2 = stock_analysis_prompt({**base, "current_price": 70_000.0, "gap_pct": -30.0, "composite_score": 70.25,
                                       "gap_score": 80.0}, {})
     assert "현재가: 70,000원" in user2 and "괴리율: -30.00%" in user2 and "종합 점수: 70.2점" in user2
+
+
+def test_the_evaluation_cache_does_not_keep_a_price_the_close_has_moved_from(world):
+    """같은 스크리너(라우트는 싱글턴 · 평가 캐시 1시간)가 다시 돌 때 — 그 사이 종가가 적재되면 새 가격으로 평가한다.
+    캐시 열쇠에 바탕 가격이 없으면 '가격 없이' 평가한 캐시가 남아, 종가 라벨이 붙은 행이 가격 없이 나간다(라벨과 값이 갈라진다)."""
+    sc = ValuationScreener(dart_client=_FakeDart())
+    first = sc.run(universe=["005930"], limit=5, liquidity_floor="off").items[0]
+    assert first.current_price is None
+    world.closes = {"005930": _close(70_000.0)}
+    world.mem.clear()                                          # 복원 경로가 아니라 평가 캐시를 본다
+    second = sc.run(universe=["005930"], limit=5, liquidity_floor="off").items[0]
+    assert second.current_price == 70_000.0 and second.price_source["kind"] == "daily_close"
+    assert second.gap_pct == _eval(70_000.0).gap_pct
