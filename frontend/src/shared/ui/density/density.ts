@@ -10,6 +10,7 @@
  * 첫 그림 전에 도는 조각(`DENSITY_BOOT`)과 셸의 맞춤 훅(`useDensitySync`)은 이 파일의 같은 표 · 같은 차례에서 나온다
  * (`e2e/density-logic.spec.ts` 가 격자로 둘의 답을 견준다).
  *
+ * 사용자 전환은 `DensityPicker`(자동 · 촘촘 · 보통 · 넉넉 — 저장값을 쓰고 그 자리에서 속성을 다시 단다 · U1-e).
  * 이 파일은 React 를 들이지 않는다 — 순수 스펙이 브라우저 없이 가져온다. 모양은 `shared/theme/theme.ts` 와 같다.
  */
 
@@ -72,6 +73,24 @@ export function readDensityPref(): DensityPref {
     return parsePref(window.localStorage.getItem(DENSITY_KEY));
   } catch {
     return "auto";
+  }
+}
+
+/** 같은 창에서 저장값이 바뀌었음을 알리는 사건(다른 창은 `storage` 사건으로 안다) — 고르기 부품(`DensityPicker`)이 듣는다. */
+export const DENSITY_EVENT = "alpha-density";
+
+/** 저장값을 쓴다 — 자동이면 지운다(단의 기본값을 따른다). 저장이 막힌 브라우저에서는 남지 않는다(속성은 부르는 쪽이 단다). */
+export function writeDensityPref(pref: DensityPref): void {
+  try {
+    if (pref === "auto") window.localStorage.removeItem(DENSITY_KEY);
+    else window.localStorage.setItem(DENSITY_KEY, pref);
+  } catch {
+    /* 저장이 막힌 브라우저 */
+  }
+  try {
+    window.dispatchEvent(new Event(DENSITY_EVENT));
+  } catch {
+    /* noop */
   }
 }
 

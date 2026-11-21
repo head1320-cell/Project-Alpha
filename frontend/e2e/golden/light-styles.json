@@ -586,6 +586,21 @@
   "main:div.scr-tools": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:div.tx-density": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:span.tx-density-k": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.tx-seg": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:button.tx-seg-opt.tx-seg-opt--on": [
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:button.tx-seg-opt": [
+   "rgb(78, 89, 104)|rgba(0, 0, 0, 0)|rgb(78, 89, 104)|rgb(78, 89, 104)|rgb(0, 0, 0)|none|"
+  ],
   "main:button.scr-tool.tx-btn.tx-btn--sub": [
    "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],

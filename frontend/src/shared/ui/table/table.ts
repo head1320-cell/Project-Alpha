@@ -40,6 +40,16 @@ export function ariaSort(sortable: boolean, col: string, sort: SortState | null)
   return sort.dir === "asc" ? "ascending" : "descending";
 }
 
+/**
+ * 저장해 둔 정렬을 되살린다 — 꼴이 맞고(열 이름 · 방향) ★지금 표에서 정렬할 수 있는 열★일 때만. 아니면 기본 정렬.
+ * 모르는 열 · 지금 표에 없는 열(표시 열에서 뺐다 · 값이 전부 없어 숨겼다)로 정렬하지 않는다 — 보이지 않는 열의 순서를 지어내지 않는다.
+ */
+export function restoreSort(raw: unknown, cols: readonly string[], fallback: SortState): SortState {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fallback;
+  const { col, dir } = raw as Record<string, unknown>;
+  return typeof col === "string" && cols.includes(col) && (dir === "asc" || dir === "desc") ? { col, dir } : fallback;
+}
+
 /** 쪽의 수 — 줄이 없어도 한 쪽이다. */
 export function pageCount(total: number, size: number): number {
   return Math.max(1, Math.ceil(total / size));

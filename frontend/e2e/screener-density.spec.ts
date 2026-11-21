@@ -12,6 +12,8 @@ import { contrastAudit, type AuditResult } from "./helpers";
  *  · 표 이름 · ★모든★ 정렬 머리의 `aria-sort` · 단위는 머리에 · 값 없는 칸은 N/A + 표 아래 사유(표의 설명) ↔ 값이 다 있으면 사유 줄이 없다
  *  · 줄 하나만 탭 순서 · 화살표로 줄 이동 · Enter 로 상세 · 막대는 종합점수 열에만
  *  · 좁은 화면: 쪽이 가로로 밀리지 않고 표는 제 상자 안에서 끝 칸까지 민다 · 넓으면 종목 열이 붙는다(좁으면 붙지 않는다)
+ *  · 밀도 고르기(U1-e): 결과 도구 줄 · 그 자리에서 바뀌고 남는다 · 자동은 저장값을 지운다 · 다시 열어도 첫 그림부터 · 손가락 화면은 고정이라고 적는다 ·
+ *    자판(라디오 묶음) · 고른 칸은 테로도 · 24px · 대비 · 요청 0
  */
 
 type Item = Record<string, unknown> & { stock_code: string; corp_name: string; current_price: number | null };
@@ -284,3 +286,95 @@ test("넓은 화면: 열이 많아 가로로 밀어도 종목 열이 붙어 남�
   expect(price, "짝 — 붙지 않는 칸(현재가)은 밀려 종목 칸 밑으로 들어간다").toBeLessThan(await nameCell.evaluate((t) => t.getBoundingClientRect().right));
   await expect(nameCell.locator(".bsc-name")).toBeVisible();
 });
+
+// ── 밀도 고르기 (U1-e · shared/ui/density 의 DensityPicker · ADR 007 §7 의 2026-11-21 정정) ──
+const picker = (p: Page) => p.getByRole("radiogroup", { name: "밀도" });
+const rowH = (p: Page) => rows(p).first().evaluate((e) => Math.round(e.getBoundingClientRect().height));
+
+test("밀도 고르기: 결과 도구 줄에 있다 · 고르면 그 자리에서 html 의 밀도와 줄 높이가 바뀌고 이 브라우저에 남는다 · 자동은 저장값을 지운다(짝)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page);
+  const g = picker(page);
+  await expect(page.locator(".scr-tools").getByRole("radiogroup", { name: "밀도" }), "결과 도구 줄에 하나").toHaveCount(1);
+  expect(await g.getByRole("radio").allInnerTexts()).toEqual(["자동", "촘촘", "보통", "넉넉"]);
+  await expect(g.getByRole("radio", { name: "자동" })).toHaveAttribute("aria-checked", "true");
+  expect(await attrs(page)).toEqual(["work", "compact"]);
+  expect(await rowH(page)).toBe(28);
+
+  const sent: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("/api/v1/screener/")) sent.push(r.url()); });
+  await g.getByRole("radio", { name: "보통" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-density", "regular");
+  await expect(g.getByRole("radio", { name: "보통" })).toHaveAttribute("aria-checked", "true");
+  await expect(g.getByRole("radio", { name: "자동" })).toHaveAttribute("aria-checked", "false");
+  expect(await page.evaluate(() => localStorage.getItem("alpha_density"))).toBe("regular");
+  await expect.poll(() => rowH(page), "줄 높이가 그 자리에서 바뀐다(화면을 다시 열지 않는다)").toBe(34);
+  await g.getByRole("radio", { name: "넉넉" }).click();
+  await expect.poll(() => rowH(page)).toBe(44);
+
+  await g.getByRole("radio", { name: "자동" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
+  expect(await page.evaluate(() => localStorage.getItem("alpha_density")), "자동은 저장값을 지운다(단의 기본값을 따른다)").toBeNull();
+  await expect.poll(() => rowH(page)).toBe(28);
+  await page.waitForTimeout(600);
+  expect(sent, "밀도를 바꿔도 스크리너로 요청이 나가지 않는다(겉모습만 바꾼다)").toEqual([]);
+});
+
+test("고른 밀도는 다시 열어도 첫 그림부터 그대로 · 다른 화면(경로 표 밖)에는 걸리지 않는다", async ({ page }) => {
+  await open(page);
+  await picker(page).getByRole("radio", { name: "넉넉" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-density", "comfortable");
+  await page.goto("/screener", { waitUntil: "domcontentloaded" });
+  expect(await attrs(page), "수화 전부터(첫 그림 전 조각이 저장값을 읽는다)").toEqual(["work", "comfortable"]);
+  await expect(rows(page).first()).toBeVisible({ timeout: 30_000 });
+  await expect(picker(page).getByRole("radio", { name: "넉넉" }), "수화 뒤 고르기 칸도 저장값을 보인다").toHaveAttribute("aria-checked", "true");
+  await page.locator(".terminal-nav a.nav-item", { hasText: "홈" }).first().click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect.poll(() => attrs(page)).toEqual([null, null]);
+  await expect(picker(page), "경로 표 밖의 화면에는 고르기가 없다").toHaveCount(0);
+});
+
+test("손가락 화면: 고르는 칸 대신 '고정합니다' 글자 · 밀도는 넉넉(저장값이 촘촘이어도) ↔ 마우스 화면에는 고르는 칸(짝)", async ({ browser, page }) => {
+  const p = await touchPage(browser, 820, 1180);
+  await open(p);
+  expect(await p.evaluate(() => matchMedia("(pointer: coarse)").matches), "이 맥락이 손가락 화면이어야 시험이 뜻이 있다").toBe(true);
+  expect(await attrs(p)).toEqual(["work", "comfortable"]);
+  await expect(picker(p)).toHaveCount(0);
+  await expect(p.locator(".scr-tools .tx-density--fixed")).toHaveText("밀도 넉넉 · 손가락 화면은 고정합니다");
+  await p.context().close();
+  await open(page);
+  await expect(picker(page)).toBeVisible();
+  await expect(page.locator(".scr-tools .tx-density--fixed")).toHaveCount(0);
+});
+
+test("자판: 화살표로 옮겨 고른다(라디오 묶음 · 탭 정지 하나) · 고른 칸은 잉크 테로도 가른다 · 초점 고리는 잉크 2px", async ({ page }) => {
+  await open(page);
+  const g = picker(page);
+  await g.getByRole("radio", { name: "자동" }).focus();
+  expect(await g.getByRole("radio").evaluateAll((els) => els.map((e) => e.getAttribute("tabindex"))), "탭 정지는 고른 것 하나").toEqual(["0", "-1", "-1", "-1"]);
+  await page.keyboard.press("ArrowRight");
+  await expect(g.getByRole("radio", { name: "촘촘" })).toBeFocused();
+  await expect(g.getByRole("radio", { name: "촘촘" })).toHaveAttribute("aria-checked", "true");
+  expect(await page.evaluate(() => localStorage.getItem("alpha_density"))).toBe("compact");
+  const on = g.getByRole("radio", { name: "촘촘" });
+  const look = await on.evaluate((e) => { const s = getComputedStyle(e); return { shadow: s.boxShadow, outline: `${s.outlineStyle} ${s.outlineWidth}`, color: s.outlineColor }; });
+  expect(look.shadow, "고른 칸은 테로도 가른다(색만으로 말하지 않는다)").not.toBe("none");
+  expect(look.outline).toBe("solid 2px");
+  const focus = await page.evaluate(() => { const s = document.createElement("span"); s.style.color = "var(--tx-focus)"; document.body.appendChild(s); const c = getComputedStyle(s).color; s.remove(); return c; });
+  expect(look.color).toBe(focus);
+  expect(await g.getByRole("radio", { name: "보통" }).evaluate((e) => getComputedStyle(e).boxShadow), "짝 — 고르지 않은 칸에는 테가 없다").toBe("none");
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`밀도 고르기 — 누르는 것 24px 이상 · 대비 AA · 다크에 밝은 판 없음 (${theme})`, async ({ page }) => {
+    await page.addInitScript((t) => { try { localStorage.setItem("alpha_theme", t); } catch { /* */ } }, theme);
+    await open(page);
+    if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+    const small = await picker(page).getByRole("radio").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent, Math.round(r.width), Math.round(r.height)] as const; }).filter(([, w, h]) => w < 24 || h < 24));
+    expect(small).toEqual([]);
+    const r = await page.evaluate<AuditResult>(contrastAudit(".scr-tools"));
+    expect(r.checked).toBeGreaterThan(4);
+    expect(r.low, JSON.stringify(r.low.slice(0, 8))).toEqual([]);
+    if (theme === "dark") expect(r.bright).toEqual([]);
+  });
+}

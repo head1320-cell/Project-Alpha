@@ -19,7 +19,10 @@ import { test, expect, type Page, type Route } from "./fixtures";
  *  · 정렬을 누른 그 순간에 첫 쪽이다(옮기기 전에는 한 그림 동안 다른 쪽의 줄이 비쳤다)
  *  · 관심 별: 누르면 켜지고 이 브라우저에 남는다 · 별을 눌러도 줄이 골라지지 않는다
  *  · 표시 열: 고른 열이 머리에 서고 이 브라우저에 남는다 ↔ 값이 전부 없는 열은 숨긴다
- *  · 내려받은 CSV: 머리 줄의 앞 일곱 칸 · 줄 수 = 통과한 종목 수 · 줄의 순서 = 화면의 정렬
+ *  · 내려받은 CSV: 머리 줄의 앞 칸 · 줄 수 = 통과한 종목 수 · 줄의 순서 = 화면의 정렬
+ *  · CSV 의 출처 열 다섯(U1-e): 데이터 출처 = 화면의 합성 표시와 같은 서버 게이트(꺼짐 · 읽지 못함의 짝) · 자료 기준 시각 N/A + 사유 ·
+ *    계산 시각 = 서버 값 그대로 · ★유니버스 · 조건식은 그 결과를 만든 요청의 것★(새 결과가 오기 전에 내려받아도) · 값 없는 수 칸은 빈칸
+ *  · 정렬은 이 브라우저에 남는다(U1-e) ↔ 모르는 열 · 틀린 꼴이면 기본 정렬
  */
 
 type Item = Record<string, unknown> & { stock_code: string; corp_name: string; current_price: number | null; composite_score: number; verdict: string };
@@ -229,20 +232,153 @@ test("표시 열: 고른 열이 머리에 서고 이 브라우저에 남는다 �
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("alpha_screener_cols") ?? "[]")), "고른 것은 지우지 않는다").toEqual([pick!.id]);
 });
 
-test("내려받은 CSV: 머리 줄의 앞 일곱 칸 · 줄 수 = 통과한 종목 수 · 줄의 순서 = 화면의 정렬", async ({ page }) => {
+/** 내려받은 CSV — 표지(BOM)를 확인하고 머리 줄과 줄로 읽는다(따옴표 · 쉼표 · 줄바꿈을 RFC 4180 대로 푼다). */
+function parseCsv(text: string): string[][] {
+  const out: string[][] = [];
+  let row: string[] = [], cell = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') quoted = false; else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\r" && text[i + 1] === "\n") { row.push(cell); out.push(row); row = []; cell = ""; i++; }
+    else cell += ch;
+  }
+  row.push(cell); out.push(row);
+  return out;
+}
+async function downloadCsv(page: Page): Promise<{ header: string[]; rows: string[][]; name: string }> {
+  const dl = page.waitForEvent("download");
+  await page.getByRole("button", { name: "CSV 내려받기" }).click();
+  const d = await dl;
+  const text = fs.readFileSync(await d.path(), "utf8");
+  expect(text.charCodeAt(0), "엑셀이 한글을 읽게 하는 표지(BOM)").toBe(0xfeff);
+  expect(text.charCodeAt(1), "표지는 한 번만").not.toBe(0xfeff);
+  const [header, ...rows] = parseCsv(text.slice(1));
+  return { header, rows, name: d.suggestedFilename() };
+}
+const PROV = ["데이터 출처", "자료 기준 시각", "계산 시각(서버 · 시간대 표기 없음)", "유니버스", "조건식"];
+const prov = (header: string[], row: string[], name: string) => row[header.indexOf(name)];
+
+test("내려받은 CSV: 머리 줄의 앞 칸 · 줄 수 = 통과한 종목 수 · 줄의 순서 = 화면의 정렬 · ★줄마다 출처 열 다섯★", async ({ page }) => {
   const s = await watchStream(page);
   await open(page);
   await head(page, /^현재가/).click();                                   // 화면의 정렬을 바꾼 뒤에 내려받는다
   const want = ordered(s.last().items, "current_price", "desc");
-  const dl = page.waitForEvent("download");
-  await page.getByRole("button", { name: "CSV 내려받기" }).click();
-  const file = await (await dl).path();
-  const text = fs.readFileSync(file, "utf8");
-  expect(text.charCodeAt(0), "엑셀이 한글을 읽게 하는 표지(BOM)").toBe(0xfeff);
-  const lines = text.slice(1).split("\r\n");
-  expect(lines[0].split(",").slice(0, 5), "머리 줄의 앞 칸").toEqual(["순위", "종목코드", "종목명", "섹터", "현재가"]);
-  expect(lines[0].split(","), "머리 줄에 종합점수 · 판정이 있다").toEqual(expect.arrayContaining(["종합점수", "판정"]));
-  expect(lines.length - 1, "줄 수 = 결과 전체(쪽과 무관)").toBe(s.last().items.length);
-  expect(lines.slice(1).map((l) => l.split(",")[1]), "줄의 순서 = 화면의 정렬").toEqual(want);
-  expect(lines[1].split(",")[0]).toBe("1");
+  const { header, rows, name } = await downloadCsv(page);
+  expect(header.slice(0, 5), "머리 줄의 앞 칸 — 자리는 그대로").toEqual(["순위", "종목코드", "종목명", "섹터", "현재가"]);
+  expect(header, "머리 줄에 종합점수 · 판정이 있다").toEqual(expect.arrayContaining(["종합점수", "판정"]));
+  expect(header.slice(-5), "출처 열은 결과 열 뒤에 — 앞 열의 자리를 바꾸지 않는다").toEqual(PROV);
+  expect(rows.length, "줄 수 = 결과 전체(쪽과 무관)").toBe(s.last().items.length);
+  expect(rows.map((r) => r[1]), "줄의 순서 = 화면의 정렬").toEqual(want);
+  expect(rows[0][0]).toBe("1");
+  expect(rows.every((r) => r.length === header.length), "모든 줄의 칸 수 = 머리의 칸 수").toBe(true);
+  const ts = (s.last() as unknown as { timestamp?: unknown }).timestamp;
+  expect(typeof ts === "string" && ts.length > 0, "짝 — 서버가 계산 시각을 준다(빈 값을 견주는 공허한 시험이 아니다)").toBe(true);
+  for (const r of rows) {
+    expect(r.slice(-5)).toEqual(["합성 시세", "N/A(응답에 자료 기준 시각이 없습니다)", ts, "코스피 200(kospi200)", "조건 없음 · 유동성 게이트 끔"]);
+  }
+  expect(name, "파일 이름의 유니버스도 그 결과의 것").toMatch(/^screener_kospi200_\d+\.csv$/);
+});
+
+test("CSV 의 출처 칸은 그 결과를 만든 요청의 것 — 조건을 넣으면 조건식이 따라 바뀐다 · 시각은 서버 값 그대로(짝)", async ({ page }) => {
+  const s = await watchStream(page, (r) => { (r as unknown as { timestamp: string }).timestamp = "2001-02-03T04:05:06.789"; });
+  await open(page);
+  await page.locator('[data-act="universe"]').selectOption("kosdaq150");
+  await page.locator('[data-act="add-factor"]').first().click();
+  await page.getByPlaceholder("조건을 단어로 입력하십시오").fill("PER");
+  await page.locator(".tfm-row").filter({ has: page.locator('.tfm-row-d:text-is("{PER}")') }).first().click();
+  await page.getByRole("button", { name: "입력", exact: true }).click();
+  await page.locator('[data-act="cond-op"]').first().selectOption("lte");
+  await page.locator('[data-act="cond-val"]').first().fill("12.5");
+  await page.locator('[data-act="expert"] summary').click();
+  await page.locator('[data-act="gate"]').check();
+  // 새 결과가 다 온 뒤에 내려받는다(마지막 요청의 본문에 이 조건이 실렸다)
+  await expect.poll(async () => {
+    const { header, rows } = await downloadCsv(page);
+    return rows.length ? prov(header, rows[0], "조건식") : "";
+  }, { timeout: 30_000 }).toMatch(/≤ 12\.5 · 유동성 게이트 켬$/);
+  const { header, rows } = await downloadCsv(page);
+  const cond = prov(header, rows[0], "조건식");
+  expect(cond, "필드는 이름(식별자) · 값은 보낸 값 그대로").toMatch(/^PER\([a-z_0-9]+\) ≤ 12\.5 · 유동성 게이트 켬$/);
+  expect(prov(header, rows[0], "유니버스")).toBe("코스닥 150(kosdaq150)");
+  expect(prov(header, rows[0], "계산 시각(서버 · 시간대 표기 없음)"), "서버가 준 글자 그대로(바꾸거나 시간대를 붙이지 않는다)").toBe("2001-02-03T04:05:06.789");
+});
+
+test("★새 결과가 오기 전에 내려받으면 지금 보이는 결과의 요청을 적는다★ — 화면에서 고치는 중인 조건을 앞 결과에 붙이지 않는다", async ({ page }) => {
+  let release: () => void = () => undefined;
+  let calls = 0, holding = 0;
+  await page.route(STREAM, async (route: Route) => {
+    calls += 1;
+    if (calls > 1) await new Promise<void>((res) => { release = res; holding += 1; });   // 둘째 요청부터는 풀어 줄 때까지 붙든다
+    const res = await route.fetch();
+    await route.fulfill({ response: res, body: await res.text() });
+  });
+  await open(page);
+  const before = await downloadCsv(page);
+  expect(prov(before.header, before.rows[0], "유니버스")).toBe("코스피 200(kospi200)");
+
+  await page.locator('[data-act="universe"]').selectOption("kosdaq150");
+  await expect.poll(() => holding, { timeout: 10_000 }).toBe(1);              // 새 요청이 떠났고 아직 답이 없다
+  await expect(rows(page).first(), "앞 결과가 아직 보인다").toBeVisible();
+  const during = await downloadCsv(page);
+  expect(during.rows.length, "같은 결과").toBe(before.rows.length);
+  expect(prov(during.header, during.rows[0], "유니버스"), "보이는 결과를 만든 요청 — 지금 고른 유니버스가 아니다").toBe("코스피 200(kospi200)");
+  expect(during.name).toMatch(/^screener_kospi200_/);
+
+  release();                                                                    // 짝 — 새 결과가 오면 새 요청을 적는다
+  await expect.poll(async () => { const d = await downloadCsv(page); return prov(d.header, d.rows[0], "유니버스"); }, { timeout: 30_000 }).toBe("코스닥 150(kosdaq150)");
+});
+
+test("CSV 의 데이터 출처 = 화면의 합성 표시와 같은 서버 게이트 — 꺼지면 '합성 아님 · 등급 미상' · 읽지 못하면 N/A + 사유(짝)", async ({ page }) => {
+  await page.route("**/api/v1/macro/connection-status", (r) => r.fulfill({ json: { mock_allowed: false, real_mode: true, bok_configured: true, fred_configured: true } }));
+  await open(page);
+  await expect(page.locator('.scr-answer .tx-chip[data-tone="practice"]'), "화면도 합성 표시를 하지 않는다").toHaveCount(0);
+  let d = await downloadCsv(page);
+  expect(new Set(d.rows.map((r) => prov(d.header, r, "데이터 출처")))).toEqual(new Set(["합성 아님 · 등급 미상"]));
+
+  await page.unroute("**/api/v1/macro/connection-status");
+  await page.route("**/api/v1/macro/connection-status", (r) => r.fulfill({ status: 500, json: { detail: "down" } }));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(rows(page).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.scr-answer .tx-chip[data-tone="unknown"]'), "화면이 확인 실패를 말한 뒤에").toHaveText("데이터 출처 확인 실패", { timeout: 15_000 });
+  d = await downloadCsv(page);
+  expect(prov(d.header, d.rows[0], "데이터 출처")).toBe("N/A(출처 확인 실패)");
+});
+
+test("CSV 의 값 없는 수 칸은 빈칸 — 0 · N/A 가 아니다(도구가 결측으로 읽는다) ↔ 값이 있으면 그 수(짝)", async ({ page }) => {
+  const s = await watchStream(page, (r) => { r.items[0].current_price = null; });
+  await open(page);
+  const { header, rows } = await downloadCsv(page);
+  const iPrice = header.indexOf("현재가");
+  const gone = s.last().items[0].stock_code;
+  expect(rows.find((r) => r[1] === gone)![iPrice]).toBe("");
+  const other = rows.find((r) => r[1] !== gone)!;
+  expect(Number(other[iPrice])).toBe(s.last().items.find((it) => it.stock_code === other[1])!.current_price);
+});
+
+test("정렬은 이 브라우저에 남는다 — 다시 열면 그 열 · 그 방향 · 그 순서 ↔ 처음은 종합점수 ↓ 이고 저장값이 없다(짝)", async ({ page }) => {
+  const s = await watchStream(page);
+  await open(page);
+  expect(await page.evaluate(() => localStorage.getItem("alpha_screener_sort"))).toBeNull();
+  await expect(page.locator('.bsc-table thead th[aria-sort="descending"]')).toContainText("종합점수");
+  await head(page, /^현재가/).click();
+  await head(page, /^현재가/).click();                                   // 현재가 ↓ → ↑
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem("alpha_screener_sort") ?? "null"))).toEqual({ col: "current_price", dir: "asc" });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(rows(page).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.bsc-table thead th[aria-sort="ascending"]')).toContainText("현재가");
+  await expect.poll(() => codes(page)).toEqual(ordered(s.last().items, "current_price", "asc").slice(0, 100));
+});
+
+test("저장된 정렬이 모르는 열 · 틀린 방향 · 틀린 꼴이면 기본 정렬(종합점수 ↓) — 보이지 않는 열의 순서를 지어내지 않는다", async ({ page }) => {
+  const s = await watchStream(page);
+  for (const raw of ['{"col":"no_such_col","dir":"asc"}', '{"col":"current_price","dir":"sideways"}', "not json", '["current_price","asc"]']) {
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.evaluate((v) => localStorage.setItem("alpha_screener_sort", v), raw);
+    await open(page);
+    await expect(page.locator('.bsc-table thead th[aria-sort="descending"]'), raw).toContainText("종합점수");
+    await expect.poll(() => codes(page), raw).toEqual(ordered(s.last().items, "composite_score", "desc").slice(0, 100));
+  }
 });

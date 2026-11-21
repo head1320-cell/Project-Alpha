@@ -321,7 +321,7 @@ export default function DevUiPage() {
         <h2 className="devui-h">단 · 밀도 (ADR 007 · U0)</h2>
         <p className="devui-note">
           밀도는 줄 높이 · 칸 여백 · 글자 · 조작 높이 · 절 간격을 함께 바꿉니다. 단은 절과 행의 반경을 정하고, 단 안의 수는 본문 글꼴의 고정폭 숫자입니다.
-          강조(주 단추 · 초점 고리)는 잉크이고 파랑은 하락과 링크에만 남습니다. 제품 화면에는 아직 달지 않았습니다.
+          강조(주 단추 · 초점 고리)는 잉크이고 파랑은 하락과 링크에만 남습니다. 제품 화면은 종목 찾기가 처음 올랐습니다(작업 단).
         </p>
         <h3 className="devui-dn-h">작업 단 · 밀도 셋</h3>
         <div className="devui-dn-grid">

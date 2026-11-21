@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import {
-  ariaSort, clampPage, nextSort, pageCount, pageNumbers, pageSlice, rowByKey, sortNumber, sortRows, toCsv, type SortState,
+  ariaSort, clampPage, nextSort, pageCount, pageNumbers, pageSlice, restoreSort, rowByKey, sortNumber, sortRows, toCsv, type SortState,
 } from "../src/shared/ui/table/table";
 
 /**
@@ -98,4 +98,19 @@ test("내보내기: 값 없음은 빈칸(★0 이 아니다★ — 짝: 수 0 �
 test("내보내기: 식으로 읽힐 글자(= + - @ 로 시작하는 글)는 글로 못 박는다 ↔ 음수인 수는 그대로(짝)", () => {
   const lines = toCsv(["글", "수"], [["=1+1", -3.2], ["+합", 5], ["-빼기", -0], ["@name", 1], ["보통 = 글", 2]]).slice(1).split("\r\n");
   expect(lines.slice(1)).toEqual(["'=1+1,-3.2", "'+합,5", "'-빼기,0", "'@name,1", "보통 = 글,2"]);
+});
+
+test("저장한 정렬 되살리기: 꼴이 맞고 지금 정렬할 수 있는 열만 ↔ 모르는 열 · 없는 열 · 틀린 방향 · 꼴이 아닌 값은 기본(짝)", () => {
+  const cols = ["current_price", "composite_score", "per"] as const;
+  const def: SortState = { col: "composite_score", dir: "desc" };
+  expect(restoreSort({ col: "current_price", dir: "asc" }, cols, def)).toEqual({ col: "current_price", dir: "asc" });
+  expect(restoreSort({ col: "per", dir: "desc" }, cols, def)).toEqual({ col: "per", dir: "desc" });
+  expect(restoreSort({ col: "roe", dir: "asc" }, cols, def), "지금 표에 없는 열").toEqual(def);
+  expect(restoreSort({ col: "current_price", dir: "up" }, cols, def), "모르는 방향").toEqual(def);
+  expect(restoreSort({ col: "current_price" }, cols, def), "방향이 없다").toEqual(def);
+  expect(restoreSort({ col: 3, dir: "asc" }, cols, def)).toEqual(def);
+  for (const raw of [null, undefined, "current_price", 1, true, [], ["current_price", "asc"]]) expect(restoreSort(raw, cols, def), JSON.stringify(raw) ?? "undefined").toEqual(def);
+  const got = restoreSort({ col: "current_price", dir: "asc", extra: 1 }, cols, def);
+  expect(got, "더 붙은 값은 버린다(되살린 값은 열과 방향 둘뿐)").toEqual({ col: "current_price", dir: "asc" });
+  expect(restoreSort({ col: "per", dir: "asc" }, [], def), "정렬할 열이 아직 없으면(결과 전) 기본").toEqual(def);
 });

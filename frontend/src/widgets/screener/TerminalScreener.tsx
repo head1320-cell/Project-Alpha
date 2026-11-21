@@ -13,6 +13,9 @@
 //     옛 클래스(`bsc-table` · `bsc-row` · `bsc-fav` …)는 같은 요소에 갈고리로 남는다(E2E 계약 · 재는 스크립트).
 //   · 고른 줄의 상세는 넓은 창(1280px 이상)에서 ★표 옆 판★(비모달 — 표가 살아 있고 ↑ ↓ 로 줄을 넘기면 판이 따라온다 · U1-c), 그보다 좁으면 시트다.
 //     본문은 `ScreenerDetail` 하나 — 한 번에 한 그릇만 그린다. 판의 폭은 공용 구분선으로 정하고 이 브라우저에 남긴다.
+//   · 내려받은 CSV 는 줄마다 출처 열 다섯(데이터 출처 · 자료 기준 시각 · 계산 시각 · 유니버스 · 조건식 — `screenerCsv.ts` · U1-e).
+//     ★유니버스 · 조건식은 그 결과를 만든 요청의 것★ — 새 요청이 도는 동안에도 앞 결과가 보이므로, 결과를 받을 때 요청을 함께 든다.
+//   · 정렬(열 · 방향)은 이 브라우저에 남는다 — 되살릴 때 그 열이 지금 표에 없으면 기본 정렬(종합점수 ↓). 밀도 고르기는 결과 도구 줄에(U1-e).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
@@ -29,7 +32,8 @@ import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { LoadingState } from "@/shared/ui/States";
 import { Splitter } from "@/shared/ui/split/Splitter";
 import { clampSplit } from "@/shared/ui/split/split";
-import { BarValue, DataTable, Na, Pager, clampPage, nextSort, pageCount, pageSlice, sortRows, type Column, type SortState } from "@/shared/ui/table";
+import { BarValue, DataTable, Na, Pager, clampPage, nextSort, pageCount, pageSlice, restoreSort, sortRows, toCsv, type Column, type SortState } from "@/shared/ui/table";
+import { DensityPicker } from "@/shared/ui/density";
 import { Answer, Notice, PageHead, Sheet, type Chip, type Figure } from "@/shared/ui/tx";
 import { setScreenerHandoff } from "@/shared/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/shared/lib/screenerPresets";
@@ -38,6 +42,7 @@ import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
 import { ScreenerDetail } from "./ScreenerDetail";
+import { PROVENANCE_HEADER, provenanceCells, type RunRequest } from "./screenerCsv";
 // ★기본이 '닫힘' 인 창은 첫 로드에 있을 이유가 없다★ 팩터 창이 CatalogueShell 로 옮겨가며
 // shadcn/Radix ToggleGroup 을 끌고 오는데, 정적 import 로 두면 그 무게가 이 라우트의 첫
 // 로드에 그대로 실린다(실측: +17 kB). ADR 001 은 설명되지 않는 4 kB 증가를 되돌리라고 한다 —
@@ -64,6 +69,9 @@ const SIDE_QUERY = "(min-width: 1280px)";
 const SIDE_MIN = 320, SIDE_MAX = 560, SIDE_DEFAULT = 360, SIDE_STEP = 16, SIDE_KEY = "alpha_screener_side_w";
 /** 조건 영역을 접었는지 — 이 브라우저에만 남긴다(값이 없으면 펼침). */
 const CONDS_KEY = "alpha_screener_conds";
+/** 정렬을 남기는 열쇠 — 값은 { col, dir }. 되살릴 때 그 열이 지금 표에 있어야 쓴다(`restoreSort`). */
+const SORT_KEY = "alpha_screener_sort";
+const DEFAULT_SORT: SortState = { col: "composite_score", dir: "desc" };
 const TOP_BRIDGE = 10;   // "상위 n종목 설계에 넣기" — 표의 지금 정렬 그대로 위 n개(캔버스 종목 고르기 노드 상한 30 안)
 /** 고를 수 있는 유니버스 — id 는 서버 프리셋 id 그대로(요청 골든이 건다). */
 const UNIVERSES = [
@@ -147,7 +155,8 @@ export default function TerminalScreener() {
   const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
   const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);   // 팩터별 단독 통과 수
   const [focusedChip, setFocusedChip] = useState<number | null>(null);
-  const [sort, setSortState] = useState<SortState>({ col: "composite_score", dir: "desc" });
+  const [sortPick, setSortPick] = useState<unknown>(null);                // 고른(되살린) 정렬 — 쓰기 전에 지금 표의 열로 검사한다
+  const [resultsReq, setResultsReq] = useState<RunRequest | null>(null);   // 지금 보이는 결과를 만든 요청(CSV 의 출처 칸)
   const [selected, setSelected] = useState<string | null>(null);
   const wide = useMediaQuery(SIDE_QUERY);
   const [condsOpen, setCondsOpen] = useState(true);
@@ -187,6 +196,7 @@ export default function TerminalScreener() {
     try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
     try { const c = localStorage.getItem("alpha_screener_cols"); if (c) setDisplayCols(JSON.parse(c)); } catch { /* noop */ }
     try { if (localStorage.getItem(CONDS_KEY) === "closed") setCondsOpen(false); } catch { /* noop */ }
+    try { const v = localStorage.getItem(SORT_KEY); if (v) setSortPick(JSON.parse(v)); } catch { /* 글이 깨졌으면 기본 정렬 */ }
     // 판의 폭 — 범위 밖의 저장값은 가장 가까운 끝으로, 수가 아니면 처음 값(지어내지 않는다).
     try { const w = localStorage.getItem(SIDE_KEY); if (w !== null) { const n = Number(w); setSideW(Number.isFinite(n) ? clampSplit(n, SIDE_MIN, SIDE_MAX) : SIDE_DEFAULT); } } catch { /* noop */ }
     setPresets(listPresets());
@@ -265,11 +275,15 @@ export default function TerminalScreener() {
           { universe, filter_ast: effectiveAst, sort_by: "composite_score", ascending: false, limit: 4000, liquidity_floor: gateOn ? "relaxed" : "off" },
           (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); }, ctrl.signal,
         );
-        if (!cancelled) setResults(r);
+        if (!cancelled) {
+          setResults(r);
+          setResultsReq({ universe, universeLabel: UNIVERSES.find((u) => u.id === universe)?.label ?? universe, ast: effectiveAst, gateOn });
+        }
       } catch (e) {
         // 중단(조건이 바뀌어 새 실행이 시작됨)만 조용히 넘긴다. 그 밖의 실패는 옛 결과를 지우고 말한다.
         if (!cancelled && !ctrl.signal.aborted) {
           setResults(null);
+          setResultsReq(null);
           setRunError(e instanceof Error ? e.message : String(e));
         }
       }
@@ -366,8 +380,6 @@ export default function TerminalScreener() {
     setFavs((s) => { const n = new Set(s); if (n.has(code)) n.delete(code); else n.add(code);
       try { localStorage.setItem("alpha_screener_favs", JSON.stringify([...n])); } catch { /* noop */ } return n; });
   };
-  // 정렬과 쪽을 한 손잡이에서 함께 바꾼다 — 효과로 쪽을 되돌리면 한 그림 동안 다른 쪽의 줄이 새 순서로 비친다(U1-0 이 찾음).
-  const setSort = (col: string) => { setSortState((s) => nextSort(s, col)); setPage(0); };
   const sendToBacktester = () => { if (!group.conditions.length) return; setScreenerHandoff({ filterAst: effectiveAst, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() }); router.push("/backtest"); };
   const handleSave = () => { if (!group.conditions.length || !presetName.trim()) return; savePreset(presetName.trim(), group, universe); setPresets(listPresets()); setPresetName(""); setShowSave(false); };
   const handleLoad = (p: ScreenerPreset) => {
@@ -389,45 +401,56 @@ export default function TerminalScreener() {
     return cols;
   }, [group, displayCols, fieldLabel]);
 
-  const sortedItems = useMemo(
-    () => (results ? sortRows(results.items, (it) => (it as Record<string, unknown>)[sort.col], sort.dir) : []),
-    [results, sort]);
-
   // 열마다의 값 범위 — 종합점수의 막대 길이와, 값 열의 소수 자리(같은 열은 같은 자리 — ADR 007 §5)를 정한다
   const colRanges = useMemo(() => {
     const r: Record<string, [number, number]> = {};
     ["composite_score", ...dataCols.map((c) => c.id)].forEach((id) => {
-      const vals = sortedItems.map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      const vals = (results?.items ?? []).map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
       if (vals.length) r[id] = [Math.min(...vals), Math.max(...vals)];
     });
     return r;
-  }, [sortedItems, dataCols]);
+  }, [results, dataCols]);
 
   // ── 값이 전부 빈 컬럼 자동 숨김 (mock 시총 등). 필터 컬럼은 유지 ──
   const emptyCols = useMemo(() => {
     const s = new Set<string>();
-    if (!sortedItems.length) return s;
-    const allNull = (id: string) => sortedItems.every((it) => { const v = (it as Record<string, unknown>)[id]; return v == null || (typeof v === "number" && !Number.isFinite(v)); });
+    const items = results?.items ?? [];
+    if (!items.length) return s;
+    const allNull = (id: string) => items.every((it) => { const v = (it as Record<string, unknown>)[id]; return v == null || (typeof v === "number" && !Number.isFinite(v)); });
     if (allNull("market_cap_억")) s.add("market_cap_억");
     dataCols.forEach((c) => { if (!c.filtered && allNull(c.id)) s.add(c.id); });
     return s;
-  }, [sortedItems, dataCols]);
+  }, [results, dataCols]);
   const shownCols = useMemo(() => dataCols.filter((c) => c.filtered || !emptyCols.has(c.id)), [dataCols, emptyCols]);
   const showMcap = !emptyCols.has("market_cap_억");
+
+  // ── 정렬 — 고른 것(이 브라우저에 남긴 것)은 ★지금 정렬할 수 있는 열★일 때만 쓴다. 모르는 열 · 지금 없는 열이면 기본(종합점수 ↓).
+  //    열의 목록은 아래 표의 정렬 머리와 같다(현재가 · 시가총액 · 값 열 · 종합점수).
+  const sortableIds = useMemo(() => ["current_price", ...(showMcap ? ["market_cap_억"] : []), ...shownCols.map((c) => c.id), "composite_score"], [showMcap, shownCols]);
+  const sort = restoreSort(sortPick, sortableIds, DEFAULT_SORT);
+  const sortedItems = useMemo(
+    () => (results ? sortRows(results.items, (it) => (it as Record<string, unknown>)[sort.col], sort.dir) : []),
+    [results, sort.col, sort.dir]);
+  // 정렬과 쪽을 한 손잡이에서 함께 바꾼다 — 효과로 쪽을 되돌리면 한 그림 동안 다른 쪽의 줄이 새 순서로 비친다(U1-0 이 찾음).
+  const setSort = (col: string) => {
+    const next = nextSort(sort, col);
+    setSortPick(next);
+    try { localStorage.setItem(SORT_KEY, JSON.stringify(next)); } catch { /* noop */ }
+    setPage(0);
+  };
 
   const sampleVals = useCallback((id: string) => sampleItems.map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)), [sampleItems]);
 
   const exportCsv = () => {
-    if (!sortedItems.length) return;
-    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", ...(showMcap ? ["시총(억)"] : []), ...shownCols.map((c) => c.label), "종합점수", "판정"];
-    const rows = sortedItems.map((it, i) => [i + 1, it.stock_code, it.corp_name, it.sector ?? "",
-      typeof it.current_price === "number" ? it.current_price : "", ...(showMcap ? [it.market_cap_억 ?? ""] : []),
-      ...shownCols.map((c) => { const v = (it as Record<string, unknown>)[c.id]; return typeof v === "number" ? v : ""; }), it.composite_score, it.verdict]);
-    const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const csv = [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    if (!sortedItems.length || !results || !resultsReq) return;
+    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", ...(showMcap ? ["시총(억)"] : []), ...shownCols.map((c) => c.label), "종합점수", "판정", ...PROVENANCE_HEADER];
+    const prov = provenanceCells({ source: { error: cs.isError, mockAllowed: cs.data?.mock_allowed }, timestamp: results.timestamp, capped: !!results.capped, req: resultsReq, label: fieldLabel });
+    const num0 = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);   // 값 없음은 빈칸(0 이 아니다)
+    const rows = sortedItems.map((it, i) => [i + 1, it.stock_code, it.corp_name, it.sector ?? null, num0(it.current_price),
+      ...(showMcap ? [num0(it.market_cap_억)] : []), ...shownCols.map((c) => num0((it as Record<string, unknown>)[c.id])), num0(it.composite_score), it.verdict, ...prov]);
+    const blob = new Blob([toCsv(header, rows)], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = `screener_${universe}_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    a.href = url; a.download = `screener_${resultsReq.universe}_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
 
   const total = results?.total_passed ?? null;
@@ -735,6 +758,7 @@ export default function TerminalScreener() {
               <p className="tx-sec-sub">종목을 누르면 상세 정보를 표시합니다.</p>
             </div>
             <div className="scr-tools">
+              <DensityPicker />
               <button type="button" className="tx-btn tx-btn--sub scr-tool" aria-expanded={showColPicker} onClick={() => setShowColPicker((v) => !v)}>표시 열{displayCols.length ? ` ${displayCols.length}개` : ""}</button>
               <button type="button" className="tx-btn tx-btn--sub scr-tool" onClick={exportCsv}>CSV 내려받기</button>
             </div>

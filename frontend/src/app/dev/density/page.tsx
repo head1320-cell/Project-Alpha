@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { DensitySpecimen, densityLabel } from "../DensitySpecimen";
+import { DensityPicker } from "@/shared/ui/density";
 import type { Density, Tier } from "@/shared/ui/density";
 
 export default function DensityDevPage() {
@@ -30,13 +31,14 @@ export default function DensityDevPage() {
       <header className="devui-head">
         <h1 className="devui-title">단 · 밀도 (개발 견본 경로)</h1>
         <p className="devui-sub">
-          이 화면만 경로 표에 있습니다(작업 단). 밀도는 이 브라우저의 저장값 <code>alpha_density</code> 를 따르고, 없으면 단의 기본값입니다.
-          손가락으로 누르는 화면에서는 늘 넉넉입니다. 제품 화면에는 아직 달지 않았습니다.
+          경로 표에 든 화면은 이 견본과 종목 찾기입니다(둘 다 작업 단). 밀도는 이 브라우저의 저장값 <code>alpha_density</code> 를 따르고, 없으면 단의 기본값입니다.
+          손가락으로 누르는 화면에서는 늘 넉넉입니다. 아래 고르기는 종목 찾기의 결과 도구 줄에 있는 것과 같은 부품입니다.
         </p>
         <p className="devui-sub">
           지금 걸린 값: <strong className="devui-dn-state" data-ready={state ? "1" : "0"}>{state ? densityLabel(state.tier, state.density) : "확인 중"}</strong>
         </p>
       </header>
+      <div className="devui-dn-pick"><DensityPicker /></div>
       <DensitySpecimen caption="경로가 정한 단과 밀도" />
     </div>
   );
