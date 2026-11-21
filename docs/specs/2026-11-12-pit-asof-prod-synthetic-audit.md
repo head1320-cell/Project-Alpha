@@ -5,6 +5,8 @@
 >
 > **상태 (2026-11-13)** — 사용자가 §7 의 A안을 고르셨고 고쳤다(§10). ★고침: F1 · F2 · F2b · F4 · F5★ / ★남음: F3 · F6 · F7★(§9 에 F4~F7 관측).
 > **덧붙임 (2026-11-13 · §11)** — F6 을 재다가 ★§10 의 고침이 끝단에서 깨져 있던 것★을 찾아 고쳤다(F6a — '붙이기'가 시점 재무를 오늘 값으로 덮어썼다). F6 의 나머지는 사용자가 ★막는다★를 고르셨고 고쳤다(§12 — 조건·정렬 차단 · 유동성 게이트는 적용하지 않고 표시 · 공시에 없는 칸은 미상).
+> **덧붙임 (2026-11-21 · §13)** — F3(바탕 가격)를 고쳤다. 사용자 결정 3 → 1: 실시세 → 적재 일봉 종가(출처 라벨) → 없으면 행은 남기고 가격 파생 칸은 미상 + 사유.
+> ★남음: F7(재무가 없는 항목의 종합 점수) · F3b(`data_source.market_data` 가 환경으로 '실시세'라 말함) · F3c(가격 밖 미상의 정렬 None→0)★.
 > §0~§8 은 고치기 전의 기록이라 그대로 둔다 — 파일:줄 번호는 2026-11-12 시점의 것이다.
 >
 > **CLAUDE.md §6** — *"`mock_allowed()` 가 유일한 판정 기준이며 `KIS_USE_MOCK` 이 정확히 `"1"` 일 때만 mock.
@@ -243,3 +245,68 @@ A안만 고쳤다면 F4 때문에 ★적재된 종목 대부분에서 고침이 
 - 가격 팩터(수익률·모멘텀·변동성)는 그 시점까지의 봉으로 다시 계산할 수 있다 — '시점 가능'으로 옮기는 일은 하지 않았다(지금은 막힌다).
 - 운영 데이터로 영향 규모를 재지 않았다. F7(재무가 없는 항목의 종합 점수)은 그대로다.
 
+
+## 13. F3 — 현재 스크리닝의 바탕 가격 (2026-11-21 · ★고침★ · 사용자 결정 넷)
+
+질문은 **① 정보 표현력**(표에 실린 가격이 무엇에서 왔다고 말할 수 있는가)이다. 예측 스킬·경제적 가치에 대한 답이 아니다.
+
+### 13.1 고치기 전 (코드로 읽음 · 2026-11-21)
+
+- 운영(`KIS_USE_MOCK≠"1"`)의 기본 `price_provider` 가 `_mock_price` → `ohlcv_loader.mock_price_level`(고정 표 · 표 밖은 `10,000 + (해시×137) % 200,000`)이었다.
+  `get_screener()`(라우트) · `ingest_universe`(적재) · `trading_routes` · `company_analytics` 모두 공급자를 넘기지 않았다.
+- 그 가격이 `ValuationEngine.evaluate` 로 들어가 괴리율 · 판정 · PER · PBR · 배당수익률(`compute_ratios` 의 dps/가격)을 만들고, `_compute_scores` 가
+  괴리 점수 · 종합 점수를 만들었다. 적정가 · 모델 · 재무(ROE · 부채 · FCF)는 가격과 무관했다(스크리너는 시총을 넘기지 않는다).
+- 실시세로 덮는 곳은 `_enrich_kis_quotes` 하나 — 다섯 경우가 합성을 남겼다: ① 키 없음(`KISCredentialsMissing` 이 새어 `run()` 이 디버그 한 줄로 삼켰다)
+  ② 시세 예외 ③ 0 이하 시세 ④ 실시세 상한 밖(적재 배치 `no_cap` 에서만 닿는다) ⑤ 복원(`item:`) 행 — 다시 부르지 않는데 재적재가 다시 저장해
+  ★첫 평가의 가격이 끝없이 살아남았다★. 실시세로 덮은 행도 ★배당수익률은 합성 가격의 값★이었다(다시 내지 않았다).
+- `_get_price_safe` 는 공급자 예외를 `_mock_price` 로 메웠다. 합성 등록부(`synthetic_registry`)는 난수만 훑어 해시 바탕값을 보지 못했다.
+
+### 13.2 받은 결정 (2026-11-21)
+
+1. **3 → 1** — 실시세 → 적재 일봉 종가(라벨) → 없으면 행은 남기고 가격 파생 칸은 미상 + 사유. 복원 행은 매 요청 적재 종가로 다시 매긴다.
+2. **가격 기준** — 행의 `price_basis`(원주가 · 수정주가 · 미상)를 바꾸지 않고 싣는다(as-of 경로와 같은 정책).
+3. **`data_source`** — 행 기준 수(`price_sources`)를 덧붙이기만 한다. `market_data` · `fully_real` 의 뜻은 그대로(→ F3b).
+4. **프론트** — 타입과 가드만(새 화면 · CSS 없음).
+
+### 13.3 고침
+
+- **바탕 가격**(`ValuationScreener._base_price_detail` · 운영만): 주입 공급자(`provider`) 또는 `universe_select.close_asof(코드, 오늘)` — §10 의 그 함수 그대로
+  (같은 사유 `not_loaded` · `stale` · `store_error` · 같은 10일 낡음 한도). 없으면 ★가격 없이 평가★한다. `_mock_price` 는 운영에서 `None`.
+- **엔진**(`ValuationEngine.evaluate(current_price=None)`): 가격 파생 값만 미상(판정 `시세 없음`) · 적정가 0 의 괴리율 0 은 그대로 · 숫자 가격은 한 자리도 같다.
+- **행 라벨**(운영만 · mock 응답 모양 그대로): `price_source = {kind: kis_live|daily_close|provider, …}` 또는 `price_unavailable = {live, close}`.
+  실시세 사유: `kis_credentials_missing` · `kis_mock_client` · `kis_error` · `kis_nonpositive` · `over_live_cap` · `restored_not_requoted` · `not_attempted`.
+- **점수**: 괴리율이 미상이면 괴리 · 종합 점수도 미상(예전 `or 0` 은 '적정 50점'을 지었다). ROE · 안정성 점수는 그대로.
+- **복원 행**: 매번 적재 종가로 다시 매긴다(실시세는 부르지 않는다 — KIS 호출량 그대로). 고치기 전 저장된 행은 PER · PBR · 배당수익률도 미상.
+- **정렬 · 필터**: 가격이 없는 행의 가격 파생 키는 방향과 무관하게 맨 뒤. 예전 괴리율 필터는 미상을 통과시키지 않는다(전에는 `TypeError` → 500).
+- **요약**: `ScreenerResult.prices = {by_source, unavailable:{count, by_reason:{live, close}, sample≤20}}` → `/run` · `/run-advanced`(운영만).
+- **하류**: screen-to-trade 사유 문자열 · 서술 프롬프트가 `None` 을 0 으로 적지 않는다(둘 다 전에는 500). 주문 수량은 `TradingEngine` 이 자기 시세로 정한다(확인).
+- **프론트**: 타입 4칸 `number | null` · `/insights` 는 현재가가 필요한 질의를 묻지 않고(예전 422) `N/A · 시세 없음` 을 적는다.
+
+### 13.4 고친 뒤 관측 (로컬 · 운영 게이트 · 키 없음 · 임시 sqlite · 외부 연결 차단 · 고정 재무)
+
+| 종목 | 적재 봉 | 1회(새 평가) | 2회(복원) |
+|---|---|---|---|
+| 005930 | 어제 · krx · raw · 70,000 | 70,000 · `daily_close` · live `kis_credentials_missing` | 70,000 · live `restored_not_requoted` |
+| 000660 | 그제 · kis · adjusted · 90,000 | 90,000 · `price_basis: adjusted` 그대로 | 같음 |
+| 035420 | 15일 전 | 미상 · close `stale` · 판정 `시세 없음` · 종합 점수 None | 같음 |
+| 123456 | 없음 | 미상 · close `not_loaded` | 같음 |
+
+`failures` 0 · 외부 연결 시도 0 · `close_asof` 400회 0.032초(이 기계 · sqlite · 한 번 잰 값 — 퍼짐 미측정).
+
+### 13.5 시험 · 변이
+
+`tests/test_screener_prod_price.py` 36 · `tests/test_valuation_none_price.py` 7 · `tests/test_screener_mock_golden.py` 2(고치기 전에 얼린 mock 골든) ·
+`frontend/e2e/insights-no-price.spec.ts` 2. 고치기 전 코드에서 빨강: 스크리너 25/29 · 엔진 2/7 · 라우트·하류 4/5 · E2E 1/2(나머지는 짝).
+변이 30 모두 죽음 — 처음에 하나(평가 캐시 열쇠의 바탕 가격)가 살아남아 시험을 보강했다.
+
+### 13.6 남은 것 · 미검증
+
+- **F3b** — `data_source.market_data` 는 환경(키가 있음)으로 `kis_real` 이라 말한다. 실시세가 0 행이어도 그렇다(시험이 그 사실을 적어 둔다).
+  `fully_real` 이 백테스트 `perf_label` · 저장되는 `is_mock_data` 로 가므로 뜻을 바꾸는 일은 따로 승인받는다.
+- **F3c** — 가격 밖의 미상(예: 적자 종목의 PER None)은 정렬에서 여전히 0 으로 센다(오름차순에서 앞에 선다).
+- **F7** — 재무가 없는 항목(적정가 0)의 괴리율 0 · 종합 점수 38.0 은 그대로다.
+- 미상을 기본값으로 메우는 후처리 셋(`stress_test_analyzer` 의 `or 50` · `allocation_stress_routes` · `vector_store` 의 `norm(None)→0`) ·
+  팩터 가중 백테스트의 `float(composite or 0)` 은 고치지 않았다(미상 행이 0 · 50 으로 들어간다).
+- 붙이기 세 곳의 실시세 상한 검사(`ffl:{code} not in store._cache`)가 캐시 열쇠의 모드 접두사 때문에 늘 참이다 — 고치지 않았다(관측만).
+- 복원 행은 실시세였어도 적재 종가로 내려간다(실시세를 다시 부르지 않으므로). 고친 뒤 저장된 행의 PER · PBR · 배당수익률은 저장 당시 가격 기준이다.
+- 수정주가 봉의 마지막 종가가 그 날 체결가와 같은지는 ★미검증★이다(라벨로만 드러낸다). 운영 DB 로 영향 규모(가격이 없는 종목 수)를 재지 않았다.
