@@ -277,8 +277,9 @@ test.describe("개발 견본 경로 /dev/density — 첫 그림 전 조각과 �
     await open(page);
     expect(await htmlAttrs(page)).toEqual(["work", "compact"]);
     await page.evaluate(() => { (window as unknown as { __noReload: number }).__noReload = 1; });
-    await page.locator('.terminal-nav a[href="/screener"]').click();
-    await expect(page).toHaveURL(/\/screener$/);
+    // 경로 표에 없는 제품 화면으로 간다(종목 찾기는 U1-b 에서 작업 단에 올랐다 — 그쪽은 `screener-density.spec.ts`).
+    await page.locator('.terminal-nav a[href="/dashboard"]').click();
+    await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.locator(".terminal-main")).toBeVisible();
     await expect.poll(() => htmlAttrs(page)).toEqual([null, null]);
     expect(await page.evaluate(() => (window as unknown as { __noReload?: number }).__noReload), "문서를 다시 받지 않았다(화면 안 이동)").toBe(1);
@@ -292,7 +293,8 @@ test.describe("개발 견본 경로 /dev/density — 첫 그림 전 조각과 �
 test("★끄면 그대로 — 제품 경로는 저장값이 있어도 속성이 없다★ (첫 그림 전 · 수화 뒤 모두)", async ({ page }) => {
   test.setTimeout(240_000);
   await page.addInitScript(() => localStorage.setItem("alpha_density", "compact"));
-  const paths = ["/", "/login", "/c", "/dashboard", "/screener", "/backtest", "/backtest/intraday", "/macro", "/insights", "/risk-tools", "/derivatives",
+  // 종목 찾기(`/screener`)는 U1-b 에서 작업 단에 올랐다 — 그 화면의 속성은 `screener-density.spec.ts` 가 건다.
+  const paths = ["/", "/login", "/c", "/dashboard", "/backtest", "/backtest/intraday", "/macro", "/insights", "/risk-tools", "/derivatives",
     "/allocation", "/my-account", "/my-account/journal", "/clients", "/settings", "/admin/data", "/admin/live-trading", "/dev/ui"];
   const seen: Record<string, unknown> = {};
   for (const p of paths) {

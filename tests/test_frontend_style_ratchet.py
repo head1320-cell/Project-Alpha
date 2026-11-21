@@ -40,9 +40,9 @@ GLOBALS_CSS = SRC / "app" / "globals.css"
 
 #: 선언 수. 화면 조각이 옮길 때마다 내린다.
 BASELINE_COUNTS: dict[str, int] = {
-    "척도 밖 글자 크기": 580,
+    "척도 밖 글자 크기": 577,
     "척도 밖 반경": 375,
-    "날 z-index": 79,
+    "날 z-index": 78,
     "토큰 정의 밖 hex": 229,
 }
 
@@ -214,7 +214,6 @@ RAW_TABLE_FILES: tuple[str, ...] = (
     "frontend/src/widgets/portfolio-graph/StrategyResults.tsx",
     "frontend/src/widgets/portfolio-graph/WirePanel.tsx",
     "frontend/src/widgets/risk/StressCheck.tsx",
-    "frontend/src/widgets/screener/TerminalScreener.tsx",
     "frontend/src/widgets/trade-journal/MapStep.tsx",
 )
 

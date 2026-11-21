@@ -161,9 +161,9 @@ test("조각의 글: 내보낸 상수 = 실제 표로 지은 글 · 저장 열�
 
 // ── ★끄면 그대로 — 제품 경로는 표에 없다★ ─────────────────────────────────────────────────────────
 // 화면 조각이 제 화면을 표에 넣을 때 이 두 목록을 같은 커밋에서 고친다(그 커밋이 그 화면의 골든을 다시 뜬다).
-const ALLOWED_ROUTES = ["^\\/dev\\/density\\/?$"];                    // 개발 견본 하나 — 제품 화면이 아니다
+const ALLOWED_ROUTES = ["^\\/dev\\/density\\/?$", "^\\/screener\\/?$"];   // 개발 견본 + 종목 찾기(U1-b — 작업 단에 오른 첫 제품 화면)
 const PRODUCT_PATHS = [
-  "/", "/login", "/c", "/dashboard", "/screener", "/backtest", "/backtest/intraday", "/backtest/runs/abc/results", "/backtest/runs/abc/loading",
+  "/", "/login", "/c", "/dashboard", "/screener/x", "/backtest", "/backtest/intraday", "/backtest/runs/abc/results", "/backtest/runs/abc/loading",
   "/backtest/runs/abc/compare", "/macro", "/macro/causal", "/insights", "/risk-tools", "/derivatives", "/allocation", "/my-account", "/my-account/journal",
   "/clients", "/clients/1", "/settings", "/admin/data", "/admin/live-trading", "/admin/realism", "/dev/ui", "/dev", "/dev/density/x",
 ];
@@ -179,4 +179,9 @@ test("★경로 표의 줄은 허용 목록과 같다 · 제품 경로는 어떤
   }
   expect(resolveDensity("/dev/density", "auto", false)).toEqual({ tier: "work", density: "compact" });
   expect(resolveDensity("/dev/density/", "regular", false)).toEqual({ tier: "work", density: "regular" });
+  // 종목 찾기(U1-b): 작업 단 · 기본은 촘촘 · 저장값을 따른다 · 손가락 화면은 넉넉. 첫 그림 전의 조각도 같은 답.
+  expect(resolveDensity("/screener", "auto", false)).toEqual({ tier: "work", density: "compact" });
+  expect(resolveDensity("/screener/", "comfortable", false)).toEqual({ tier: "work", density: "comfortable" });
+  expect(resolveDensity("/screener", "compact", true), "손가락 화면은 저장값보다 앞선다").toEqual({ tier: "work", density: "comfortable" });
+  expect(asState(runBoot(DENSITY_BOOT, { path: "/screener", stored: "regular", coarse: false }).attrs)).toEqual({ tier: "work", density: "regular" });
 });

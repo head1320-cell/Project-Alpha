@@ -30,7 +30,7 @@ async function session(route, steps, prep) {
 }
 const click = (sel, nth = 0) => async (p) => { await p.locator(sel).nth(nth).click({ timeout: 8000 }); };
 await session("/screener", [
-  ["표 머리 눌러 정렬(시가총액)", click(".bsc-table th.sortable button", 1)], ["정렬 뒤집기", click(".bsc-table th.sortable button", 1)],
+  ["표 머리 눌러 정렬(시가총액)", click(".bsc-table thead th button", 1)], ["정렬 뒤집기", click(".bsc-table thead th button", 1)],
   ["다음 쪽", async (p) => { await p.locator(".bsc-pager button").last().click({ timeout: 8000 }); }], ["줄 고르기", click(".bsc-table tbody tr", 3)],
   ["찾기 열기(/)", async (p) => { await p.keyboard.press("Escape"); await p.locator("body").click({ position: { x: 700, y: 5 } }).catch(() => {}); await p.keyboard.press("/"); }],
   ["찾기에 글자", async (p) => { await p.keyboard.type("삼성", { delay: 30 }); }], ["찾기 닫기", async (p) => { await p.keyboard.press("Escape"); }],

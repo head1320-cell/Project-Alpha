@@ -13,7 +13,7 @@
  *  · 클래스: 새 구조는 `tx-table*`. 화면이 스펙과 맺은 옛 클래스는 `className` · `rowClassName` · 열의 `className` 으로 같은 요소에 남긴다.
  *  · 붙는 열(`sticky`)은 앞에서부터 이어진 열만 · 마지막 붙는 열을 뺀 열은 `width`(px)를 준다(왼쪽 자리 = 앞 열 폭의 합).
  */
-import { useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { UNKNOWN_TEXT, num } from "@/shared/lib/krFormat";
 import { ariaSort, pageNumbers, rowByKey, type SortState } from "./table";
 
@@ -52,6 +52,8 @@ export interface DataTableProps<T> {
   note?: ReactNode;
   className?: string;
   wrapClassName?: string;
+  /** 구르는 상자 — 쪽을 넘긴 뒤 맨 위로 올릴 때 쓴다. */
+  wrapRef?: Ref<HTMLDivElement>;
   rowClassName?: string;
   rowAttrs?: (row: T) => Record<string, string>;
 }
@@ -76,7 +78,7 @@ function stickyStyles<T>(columns: Column<T>[]): (CSSProperties | undefined)[] {
 }
 
 export function DataTable<T>({
-  label, columns, rows, rowKey, sort = null, onSort, selectedKey = null, onSelect, note, className, wrapClassName, rowClassName, rowAttrs,
+  label, columns, rows, rowKey, sort = null, onSort, selectedKey = null, onSelect, note, className, wrapClassName, wrapRef, rowClassName, rowAttrs,
 }: DataTableProps<T>) {
   const noteId = useId();
   const body = useRef<HTMLTableSectionElement>(null);
@@ -98,7 +100,7 @@ export function DataTable<T>({
 
   return (
     <>
-      <div className={`tx-table-wrap${wrapClassName ? ` ${wrapClassName}` : ""}`}>
+      <div ref={wrapRef} className={`tx-table-wrap${wrapClassName ? ` ${wrapClassName}` : ""}`}>
         <table className={`tx-table${className ? ` ${className}` : ""}`} aria-label={label} aria-describedby={note ? noteId : undefined}>
           <thead>
             <tr>

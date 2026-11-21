@@ -6,7 +6,7 @@ import { test, expect, type Page, type Route } from "./fixtures";
  * ─────────────────────────────────────────────────────────────────
  * U1 은 이 표를 공용 표(`shared/ui/table`)로 옮기고 촘촘하게 그린다. ★겉모습을 옮기는 일이 표의 동작을 바꾸면 안 된다★ —
  * 그래서 옮기기 전의 표에서 초록인 것을 먼저 건다(특성 시험). 옮긴 뒤에도 그대로 초록이어야 하고, 의도한 변화는 그 조각이
- * 이 파일의 기대를 빨강으로 본 뒤에 고친다(계획 문서에 적은 것만: 값 없는 줄의 자리 · 내보낸 파일의 열).
+ * 이 파일의 기대를 빨강으로 본 뒤에 고친다(계획 문서에 적은 것만: 값 없는 줄의 자리(U1-b 에서 고침) · 내보낸 파일의 열(U1-e)).
  *
  * 기대값은 화면에서 긁지 않는다 — 가로챈 서버 결과(스트림의 result 사건)에서 ★따로 계산한다★.
  * 순서는 ★다시 읽으며★ 견준다(`expect.poll`) — 정렬을 누른 직후 한 번 읽으면, 쪽이 첫 쪽으로 돌아오기 전의 그림(둘째 쪽의 새 순서)을 읽을 수 있다.
@@ -15,7 +15,8 @@ import { test, expect, type Page, type Route } from "./fixtures";
  *  · 줄의 순서 = 서버 결과를 그 열로 정렬한 순서(기본 종합점수 ↓ · 현재가 ↓ ↑ · 종합점수 ↑) · 같은 값은 서버 순서 그대로
  *  · 쪽 크기 100 — 다음 쪽은 101번째부터 · 정렬을 바꾸면 첫 쪽으로 돌아온다
  *  · 줄의 값 = 서버 값(현재가 · 종합점수 소수 한 자리 · 판정 · 종목 코드) ↔ 서버 값을 고치면 그 줄이 따라 바뀐다
- *  · 값이 없는 줄: 내림차순에서는 끝 · ★오름차순에서는 맨 앞(지금의 동작 — U1-b 가 '어느 방향에서도 끝'으로 바꾼다)★
+ *  · 값이 없는 줄: ★어느 방향에서도 끝★(U1-b 가 바꿨다 — 옮기기 전에는 오름차순에서 맨 앞이었다: 미상을 가장 작은 값처럼 읽게 했다)
+ *  · 정렬을 누른 그 순간에 첫 쪽이다(옮기기 전에는 한 그림 동안 다른 쪽의 줄이 비쳤다)
  *  · 관심 별: 누르면 켜지고 이 브라우저에 남는다 · 별을 눌러도 줄이 골라지지 않는다
  *  · 표시 열: 고른 열이 머리에 서고 이 브라우저에 남는다 ↔ 값이 전부 없는 열은 숨긴다
  *  · 내려받은 CSV: 머리 줄의 앞 일곱 칸 · 줄 수 = 통과한 종목 수 · 줄의 순서 = 화면의 정렬
@@ -55,11 +56,14 @@ async function open(page: Page) {
   await expect(rows(page).first()).toBeVisible();
 }
 
-/** 따로 계산한 순서 — 수가 아닌 값은 −∞(지금 화면의 규칙) · 같은 값은 서버 순서 그대로(안정 정렬). */
+/** 따로 계산한 순서 — ★값이 없는 줄(유한한 수가 아닌 값)은 어느 방향에서도 끝★ · 같은 값은 서버 순서 그대로(안정 정렬). */
 function ordered(items: Item[], col: string, dir: "asc" | "desc"): string[] {
-  const k = (it: Item) => { const v = it[col]; return typeof v === "number" && Number.isFinite(v) ? v : -Infinity; };
-  return items.map((it, i) => ({ it, i }))
-    .sort((a, b) => { const d = dir === "desc" ? k(b.it) - k(a.it) : k(a.it) - k(b.it); return (Number.isNaN(d) ? 0 : d) || a.i - b.i; })
+  const k = (it: Item) => { const v = it[col]; return typeof v === "number" && Number.isFinite(v) ? v : null; };
+  return items.map((it, i) => ({ it, i, v: k(it) }))
+    .sort((a, b) => {
+      if (a.v === null || b.v === null) return a.v === null && b.v === null ? a.i - b.i : a.v === null ? 1 : -1;
+      return (dir === "desc" ? b.v - a.v : a.v - b.v) || a.i - b.i;
+    })
     .map((x) => x.it.stock_code);
 }
 /** 머리 글자로 열의 자리(1부터)를 찾는다 — 표의 구조와 무관하게 그 열의 칸을 집는다. */
@@ -132,7 +136,7 @@ test("줄의 값 = 서버 값(현재가 · 종합점수 소수 한 자리 · 판
   await expect(cell(page, bent.stock_code, nScore)).toHaveText("99.9");
 });
 
-test("값이 없는 줄: 내림차순에서는 끝 · ★오름차순에서는 맨 앞(지금의 동작)★ — 0 으로 그리지 않는다", async ({ page }) => {
+test("값이 없는 줄: ★어느 방향에서도 끝★(미상은 가장 작은 값이 아니다) — 0 으로 그리지 않는다", async ({ page }) => {
   const s = await watchStream(page, (r) => { r.items[3].current_price = null; r.items[7].current_price = null; });
   await open(page);
   const items = s.last().items;
@@ -141,13 +145,39 @@ test("값이 없는 줄: 내림차순에서는 끝 · ★오름차순에서는 �
   await expect(cell(page, missing[0], nPrice), "값 없음은 0 이 아니다").toHaveText("N/A");
 
   await head(page, /^현재가/).click();                                   // ↓
-  const down = ordered(items, "current_price", "desc");
-  expect(down.slice(-2), "따로 계산한 순서에서도 값 없는 둘이 끝").toEqual(missing);
+  expect(ordered(items, "current_price", "desc").slice(-2), "따로 계산한 순서에서도 값 없는 둘이 끝").toEqual(missing);
   await pager(page).getByRole("button", { name: "다음" }).click();
   await expect.poll(async () => (await codes(page)).slice(-2), "내림차순: 끝").toEqual(missing);
 
-  await head(page, /^현재가/).click();                                   // ↑
-  await expect.poll(async () => (await codes(page)).slice(0, 2), "오름차순: 맨 앞(지금의 동작 — U1-b 가 끝으로 옮긴다)").toEqual(missing);
+  await head(page, /^현재가/).click();                                   // ↑ — 첫 쪽으로 돌아온다
+  await expect(pager(page).locator('[aria-current="page"]')).toHaveText("1");
+  const up = ordered(items, "current_price", "asc");
+  await expect.poll(() => codes(page), "오름차순의 첫 쪽: 값이 있는 줄부터(값 없는 줄이 앞으로 오지 않는다)").toEqual(up.slice(0, 100));
+  expect((await codes(page)).filter((c) => missing.includes(c)), "첫 쪽에 값 없는 줄이 없다").toEqual([]);
+  await pager(page).getByRole("button", { name: "다음" }).click();
+  await expect.poll(async () => (await codes(page)).slice(-2), "오름차순: 여전히 끝").toEqual(missing);
+});
+
+test("정렬을 누른 그 순간에 첫 쪽이다 — 다른 쪽의 줄이 한 그림도 비치지 않는다", async ({ page }) => {
+  const s = await watchStream(page);
+  await open(page);
+  await pager(page).getByRole("button", { name: "다음" }).click();
+  await expect(pager(page).locator('[aria-current="page"]')).toHaveText("2");
+  // 누른 뒤 표의 몸이 바뀔 때마다 그 그림의 줄을 적는다 — 한 번이라도 다른 쪽의 줄이 그려졌으면 잡힌다(마지막 그림만 보면 놓친다).
+  const shots = await page.evaluate(async () => {
+    const body = document.querySelector(".bsc-table tbody")!;
+    const read = () => [...body.querySelectorAll("tr.bsc-row")].map((tr) => tr.getAttribute("data-code") ?? "");
+    const seen: string[][] = [];
+    const mo = new MutationObserver(() => { seen.push(read()); });
+    mo.observe(body, { childList: true, subtree: true, attributes: true, characterData: true });
+    [...document.querySelectorAll<HTMLButtonElement>(".bsc-table thead button")].find((b) => (b.textContent ?? "").startsWith("현재가"))!.click();
+    await new Promise((r) => setTimeout(r, 400));
+    mo.disconnect();
+    return seen;
+  });
+  const want = ordered(s.last().items, "current_price", "desc").slice(0, 100);
+  expect(shots.length, "짝 — 누른 뒤 표가 실제로 다시 그려졌다").toBeGreaterThan(0);
+  expect(shots.filter((x) => JSON.stringify(x) !== JSON.stringify(want)).map((x) => `${x.length}줄 · 첫 줄 ${x[0]}`), "새 정렬의 첫 쪽이 아닌 그림").toEqual([]);
 });
 
 test("관심 별: 누르면 켜지고 이 브라우저에 남는다 · 별을 눌러도 줄이 골라지지 않는다", async ({ page }) => {

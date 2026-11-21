@@ -6386,7 +6386,7 @@ button.pg-proc-name:focus-visible { outline: 2px solid var(--pg-blue); outline-o
 a.tx-btn:hover, a.tx-row:hover { text-decoration: none; }
 a.tx-btn--main:hover { color: var(--tx-on-cta); }
 a.tx-btn--sub:hover, a.tx-row:hover { color: var(--tx-ink); }
-.scr-notice, .scr-answer-wrap, .scr-results { margin-top: 12px; }
+.scr-notice, .scr-answer-wrap, .scr-results { margin-top: var(--tx-gap-sec); }
 .scr-answer-wrap > .tstate-loading { background: var(--tx-surface); border-radius: var(--tx-r-sec); padding: 24px; color: var(--tx-sub); }
 .scr-hint { align-self: center; font-size: 13px; color: var(--tx-mute); word-break: keep-all; }
 .scr-retry { margin-top: 10px; }
@@ -6526,10 +6526,13 @@ a.tx-btn--sub:hover, a.tx-row:hover { color: var(--tx-ink); }
 :where(.bsc-preset-save, .bsc-preset-confirm, .bsc-preset-chip-name, .bsc-preset-chip-del):focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 1px; }
 
 /* 결과 — 표는 절 가장자리까지(가로로 넘치면 제 상자 안에서만 민다) */
-.scr-results { padding: 20px 0 12px; }
-.scr-results > .tx-sec-head { flex-wrap: wrap; padding: 0 24px; margin-bottom: 12px; }
+.scr-results { padding: 6px 0 4px; }
+.scr-results > .tx-sec-head { flex-wrap: wrap; align-items: center; padding: 0 var(--tx-pad-sec); margin-bottom: 4px; }
+.scr-results .tx-sec-head > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.scr-results .tx-sec-t { font-size: 14px; }
+.scr-results .tx-sec-sub { margin: 0; font-size: 12px; }
 .scr-tools { display: flex; flex-wrap: wrap; gap: 6px; }
-.scr-tool { height: 36px; padding: 0 12px; font-size: 14px; }
+.scr-tool { height: var(--tx-ctl-h); padding: 0 var(--tx-cell-x); font-size: var(--tx-fs-table); }
 .bsc-colpicker { margin: 0 24px 12px; padding: 14px; border: 0; border-radius: var(--tx-r-row); background: var(--tx-soft); }
 .bsc-colpicker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .bsc-colpicker-head > span { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
@@ -6540,49 +6543,15 @@ a.tx-btn--sub:hover, a.tx-row:hover { color: var(--tx-ink); }
   color: var(--tx-sub); font-size: 13px; cursor: pointer; }
 .bsc-colpicker-item.on { background: var(--tx-blue-soft); color: var(--tx-cta); font-weight: 600; }
 .bsc-colpicker-item input { margin: 0; accent-color: var(--tx-blue); }
-.bsc-table-wrap { position: relative; max-height: calc(100vh - 200px); overflow: auto; border: 0; border-radius: 0; }
-.bsc-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 15px; color: var(--tx-ink); }
-.bsc-table th { position: sticky; top: 0; z-index: 1; height: 40px; padding: 0 12px; background: var(--tx-surface); border-bottom: 1px solid var(--tx-line);
-  font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; text-align: left; white-space: nowrap; color: var(--tx-mute); }
-.bsc-table th.num { text-align: right; }
-.bsc-table th.sortable button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
-.bsc-table th.sortable button:hover { color: var(--tx-ink); }
-.bsc-table th.sortable button:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; border-radius: 4px; }
-.bsc-table th[aria-sort] { color: var(--tx-ink); }
-.bsc-table th.viewcol { color: var(--tx-mute); }
-.bsc-table td { height: 56px; padding: 0 12px; border-bottom: 0; white-space: nowrap; }
-.bsc-table :is(th, td):first-child { padding-left: 24px; }
-.bsc-table :is(th, td):last-child { padding-right: 24px; }
-.bsc-table td.num { font-family: inherit; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; color: var(--tx-ink); }
-.bsc-table tbody tr.bsc-row { height: auto; cursor: pointer; }
-.bsc-table tbody tr.bsc-row td { height: 56px; padding-top: 0; padding-bottom: 0; }
-.bsc-table tbody tr.bsc-row:hover { background: var(--tx-soft); }
-.bsc-table tbody tr.bsc-row.selected { background: var(--tx-blue-soft); }
-.bsc-table tbody tr.bsc-row:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: -2px; }
-.bsc-table td.bsc-rank, .bsc-table th.bsc-rank { width: 40px; font-family: inherit; font-size: 13px; text-align: right; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
-.bsc-table td.scr-fav-cell { width: 36px; padding: 0 2px; text-align: center; }
-.bsc-fav { width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--tx-mute); font-size: 18px; line-height: 1; cursor: pointer; }
-.bsc-fav:hover { background: var(--tx-line); }
-.bsc-fav.on { color: var(--tx-warn); }
-.bsc-fav:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 1px; }
-.bsc-table td.scr-name-cell { min-width: 150px; white-space: normal; }
-.bsc-name { display: block; font-size: 15px; font-weight: 600; color: var(--tx-ink); word-break: keep-all; }
-.scr-name-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--tx-mute); }
+/* 결과 표 — 공용 표(`.tx-table` · 파일 끝)가 그린다(U1-b). 아래의 옛 클래스는 같은 요소에 남은 갈고리이고, 여기에는 이 화면만의 것(칸의 폭 · 이름 칸)을 둔다.
+   좁거나 낮은 창에서는 표가 제 상자 안에서 구른다(넓고 높은 창의 배치는 아래 '작업 단의 배치'). */
+.bsc-table-wrap { max-height: calc(100vh - 200px); }
+.scr .bsc-table .bsc-rank { padding: 0 4px; color: var(--tx-mute); }
+.scr .bsc-table .scr-fav-cell { padding: 0; text-align: center; }
+.scr .bsc-table th.viewcol { font-weight: 400; }
+.bsc-name { font-weight: 600; color: var(--tx-ink); }
+.scr-name-sub { margin-left: 6px; font-size: var(--tx-fs-th); color: var(--tx-mute); }
 .scr-code { font-family: var(--t-mono); font-size: 12px; }
-.bsc-cell { position: relative; }
-.bsc-cell-fill { position: absolute; right: 12px; bottom: 11px; height: 4px; border-radius: 2px;
-  background: color-mix(in srgb, var(--tx-blue) 40%, transparent); }
-.bsc-table td.bsc-cell:last-child .bsc-cell-fill { right: 24px; }
-.bsc-cell-val { position: relative; }
-.bsc-table .tx-chip { display: inline-block; padding: 6px 8px; font-size: 13px; }
-.bsc-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; padding: 14px 24px 4px; font-family: inherit; font-size: 14px; }
-.bsc-pager button { min-width: 36px; height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--tx-sub);
-  font: inherit; font-weight: 600; cursor: pointer; }
-.bsc-pager button:hover { background: var(--tx-soft); color: var(--tx-ink); }
-.bsc-pager button.on { background: var(--tx-blue-soft); color: var(--tx-cta); box-shadow: inset 0 0 0 1.5px var(--tx-blue); }
-.bsc-pager button:disabled { opacity: .4; cursor: default; background: transparent; }
-.bsc-pager button:focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 2px; }
-.bsc-pager .bsc-pager-range { margin-left: 8px; color: var(--tx-mute); font-variant-numeric: tabular-nums; }
 
 /* 자세히(시트) */
 .scr-sheet-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; margin: 0; }
@@ -6603,10 +6572,7 @@ a.tx-btn--sub:hover, a.tx-row:hover { color: var(--tx-ink); }
   .scr-line { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .scr-line--top > .scr-line-k { padding-top: 0; }
   .scr-cond-count { min-width: 0; }
-  .scr-results > .tx-sec-head { padding: 0 16px; }
   .bsc-colpicker { margin: 0 16px 12px; }
-  .bsc-table :is(th, td):first-child { padding-left: 16px; }
-  .bsc-table :is(th, td):last-child { padding-right: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .scr-switch, .scr-switch::before { transition: none; } }
 
@@ -11151,3 +11117,36 @@ a.tx-skip:hover { color: var(--tx-on-accent); text-decoration: none; }
 .devui-tb-chip { flex: none; padding: 4px 6px; border-radius: var(--tx-r-2); background: var(--tx-warn-soft); color: var(--tx-warn); font-size: 11px; font-weight: 600; line-height: 1; }
 .devui-tb-code { margin-left: 6px; color: var(--tx-mute); font-family: var(--t-mono); font-size: var(--tx-fs-th); }
 .devui-tb-picked { margin: 8px 0 0; color: var(--tx-sub); font-size: 12px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   U1-b · 종목 찾기 — 작업 단(ADR 007 §2 · 경로 표 shared/ui/density). 이 화면의 범위(.scr) 안에서만 건다 — 단 전체에 거는 규칙은 두지 않는다.
+   · 한 바탕 + 1px 선 · 반경은 단이 정한 값(--tx-r-sec · --tx-r-row) · 여백과 높이는 밀도 토큰.
+   · 강조는 잉크(--tx-accent): 주 단추 · 초점 고리. 다크의 주 단추는 잉크 선 + 굵은 잉크 글자(잉크 채움은 다크에서 밝은 판이 된다 — 계획 문서 §0).
+   · 등장 모션 없음(작업 단 — ADR 007 §6).
+   · 조건 절의 안쪽(.scr-conds 의 줄 · 알약 · 입력)은 U1-d 가 옮긴다.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.tpage-fade:has(> .scr) { animation: none; }
+.scr .tx-head { margin: 0 0 var(--tx-gap-sec); }
+.scr .tx-head-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.scr .tx-h1 { font-size: 18px; }
+.scr .tx-lede { margin: 0; font-size: 13px; }
+.scr :is(.tx-sec, .tx-answer), .scr .scr-answer-wrap > .tstate-loading { box-shadow: inset 0 0 0 1px var(--tx-line); }
+.scr .tx-answer { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px var(--tx-pad-sec); }
+.scr .tx-answer-s { max-width: none; font-size: 14px; }
+.scr .tx-answer .tx-chip { padding: 4px 6px; border-radius: var(--tx-r-row); font-size: 11px; }
+.scr .tx-answer-act { align-items: center; gap: 6px; }
+.scr .tx-btn { height: var(--tx-ctl-h); padding: 0 var(--tx-cell-x); border-radius: var(--tx-r-row); font-size: var(--tx-fs-table); }
+.scr .tx-btn--main, .scr a.tx-btn--main:hover { background: var(--tx-accent); color: var(--tx-on-accent); }
+.dark .scr .tx-btn--main, .dark .scr a.tx-btn--main:hover { background: var(--tx-surface); color: var(--tx-ink); box-shadow: inset 0 0 0 1px var(--tx-ink); font-weight: 700; }
+.scr .scr-hint { font-size: 12px; }
+/* 셸의 전역 초점 규칙(옛 강조색)을 이 화면에서 같은 꼴로 덮는다 — 고리는 잉크. */
+.terminal-main .tx-page.scr :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline-color: var(--tx-focus); }
+/* 작업 단의 배치 — 넓고 높은 창: 화면이 창을 채우고 결과 표가 남은 높이를 먹는다(표가 제 안에서 구른다 · 쪽 넘김은 바닥). 조건이 길어 자리가 모자라면 쪽이 구른다. */
+@media (min-width: 900px) and (min-height: 600px) {
+  .terminal-main:has(.scr) { padding: 12px 16px; }
+  .terminal-main:has(.scr) :is(.terminal-content, .tpage-fade) { height: 100%; }
+  .scr { display: flex; flex-direction: column; height: 100%; }
+  .scr > * { flex: none; }
+  /* 결과 절이 남은 높이를 먹고, 그 안의 표 상자는 넘치는 만큼 줄어 제 안에서 구른다(구르는 상자는 기본으로 줄어든다 — 따로 적지 않는다: 변이로 확인). */
+  .scr > .scr-results { flex: 1 1 320px; min-height: 320px; display: flex; flex-direction: column; }
+}

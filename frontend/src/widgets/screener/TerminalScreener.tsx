@@ -8,6 +8,9 @@
 //   · ★실패는 실패로★ 스트림이 실패하면(중단 제외) 옛 결과를 지우고 alert + 다시 시도 — 낡은 결과를 새 결과처럼 두지 않는다.
 //   · 한 화면 한 일: 조건식·유동성 게이트·저장한 조건·계산 통계는 "전문가 설정"에 접는다(기능은 그대로, 게이트 기본 꺼짐 그대로).
 //   · "설계에 넣기" → `/allocation?tickers=`(캔버스가 stock_master 로 확인한 코드만 싣는다 — `tickerBridge.ts`).
+//   · 결과 표는 공용 표(`shared/ui/table` · U1-b)다 — 정렬 · 쪽 · 줄 초점의 규칙은 그쪽 순수 모듈에 있고, 이 화면은 상태(정렬 · 쪽 · 고른 줄)와 열만 든다.
+//     ★값이 없는 줄은 어느 방향에서도 끝★ · 값이 없는 칸은 `N/A` + 표 아래 사유 한 줄 · 단위는 머리에 · 막대는 종합점수 열에만(다른 값 열은 방향이 값의 크기와 어긋난다).
+//     옛 클래스(`bsc-table` · `bsc-row` · `bsc-fav` …)는 같은 요소에 갈고리로 남는다(E2E 계약 · 재는 스크립트).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
@@ -21,6 +24,7 @@ import { type ScreenerResponse, type TechnicalIndicatorCatalog } from "@/entitie
 import type { FieldsCatalog, FilterConditionNode, FilterGroupNode, ScreenerItem } from "@/shared/model/domain";
 import { num, priceWon } from "@/shared/lib/krFormat";
 import { LoadingState } from "@/shared/ui/States";
+import { BarValue, DataTable, Na, Pager, clampPage, nextSort, pageCount, pageSlice, sortRows, type Column, type SortState } from "@/shared/ui/table";
 import { Answer, Chips, Notice, PageHead, Sheet, type Chip, type Figure } from "@/shared/ui/tx";
 import { setScreenerHandoff } from "@/shared/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/shared/lib/screenerPresets";
@@ -131,8 +135,7 @@ export default function TerminalScreener() {
   const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
   const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);   // 팩터별 단독 통과 수
   const [focusedChip, setFocusedChip] = useState<number | null>(null);
-  const [sortCol, setSortCol] = useState("composite_score");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sort, setSortState] = useState<SortState>({ col: "composite_score", dir: "desc" });
   const [selected, setSelected] = useState<string | null>(null);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
@@ -340,8 +343,8 @@ export default function TerminalScreener() {
     setFavs((s) => { const n = new Set(s); if (n.has(code)) n.delete(code); else n.add(code);
       try { localStorage.setItem("alpha_screener_favs", JSON.stringify([...n])); } catch { /* noop */ } return n; });
   };
-  const setSort = (col: string) => { if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc")); else { setSortCol(col); setSortDir("desc"); } };
-  const sortArrow = (col: string) => (sortCol === col ? (sortDir === "desc" ? " ▼" : " ▲") : "");
+  // 정렬과 쪽을 한 손잡이에서 함께 바꾼다 — 효과로 쪽을 되돌리면 한 그림 동안 다른 쪽의 줄이 새 순서로 비친다(U1-0 이 찾음).
+  const setSort = (col: string) => { setSortState((s) => nextSort(s, col)); setPage(0); };
   const sendToBacktester = () => { if (!group.conditions.length) return; setScreenerHandoff({ filterAst: effectiveAst, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() }); router.push("/backtest"); };
   const handleSave = () => { if (!group.conditions.length || !presetName.trim()) return; savePreset(presetName.trim(), group, universe); setPresets(listPresets()); setPresetName(""); setShowSave(false); };
   const handleLoad = (p: ScreenerPreset) => {
@@ -363,17 +366,11 @@ export default function TerminalScreener() {
     return cols;
   }, [group, displayCols, fieldLabel]);
 
-  const sortedItems = useMemo(() => {
-    if (!results) return [];
-    return [...results.items].sort((a, b) => {
-      const av = (a as Record<string, unknown>)[sortCol], bv = (b as Record<string, unknown>)[sortCol];
-      const an = typeof av === "number" && Number.isFinite(av) ? av : -Infinity;
-      const bn = typeof bv === "number" && Number.isFinite(bv) ? bv : -Infinity;
-      return sortDir === "desc" ? bn - an : an - bn;
-    });
-  }, [results, sortCol, sortDir]);
+  const sortedItems = useMemo(
+    () => (results ? sortRows(results.items, (it) => (it as Record<string, unknown>)[sort.col], sort.dir) : []),
+    [results, sort]);
 
-  // 셀 퍼센타일 히트맵용 컬럼 min/max
+  // 열마다의 값 범위 — 종합점수의 막대 길이와, 값 열의 소수 자리(같은 열은 같은 자리 — ADR 007 §5)를 정한다
   const colRanges = useMemo(() => {
     const r: Record<string, [number, number]> = {};
     ["composite_score", ...dataCols.map((c) => c.id)].forEach((id) => {
@@ -414,23 +411,15 @@ export default function TerminalScreener() {
   const uniTotal = results?.universe_size || universeSizes[universe] || results?.total_evaluated || 0;
   const selectedItem = selected ? sortedItems.find((it) => it.stock_code === selected) ?? null : null;
 
-  // 페이지네이션 계산 — 정렬/새 결과 시 1페이지로 리셋
-  const pageCount = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
-  const curPage = Math.min(page, pageCount - 1);
-  const pageItems = sortedItems.slice(curPage * PAGE_SIZE, (curPage + 1) * PAGE_SIZE);
-  useEffect(() => { setPage(0); }, [results, sortCol, sortDir]);
+  // 쪽 — 새 결과가 오면 첫 쪽으로(정렬은 손잡이가 함께 되돌린다)
+  const pages = pageCount(sortedItems.length, PAGE_SIZE);
+  const curPage = clampPage(page, sortedItems.length, PAGE_SIZE);
+  const pageItems = pageSlice(sortedItems, curPage, PAGE_SIZE);
+  useEffect(() => { setPage(0); }, [results]);
   const gotoPage = (p: number) => {
-    setPage(Math.max(0, Math.min(pageCount - 1, p)));
+    setPage(clampPage(p, sortedItems.length, PAGE_SIZE));
     tableWrapRef.current?.scrollTo({ top: 0 });
   };
-  const pageNums = useMemo(() => {
-    const out: (number | "…")[] = [];
-    for (let i = 0; i < pageCount; i++) {
-      if (i === 0 || i === pageCount - 1 || Math.abs(i - curPage) <= 2) out.push(i);
-      else if (out[out.length - 1] !== "…") out.push("…");
-    }
-    return out;
-  }, [pageCount, curPage]);
 
   // 0개 진단 — 가장 제한적인(단독 통과 최소) 조건
   const diagnostic = useMemo(() => {
@@ -441,46 +430,43 @@ export default function TerminalScreener() {
     return { label: fieldLabel(group.conditions[minI].field), count: minC };
   }, [total, group, chipCounts, fieldLabel]);
 
-  /** 값 칸의 막대 — 판단을 색으로 말하지 않는다(BU2): 한 색, "좋은 쪽"으로 길다(방향을 모르면 값 순서대로). 72px 한 자 안에서.
-   *  종합점수는 시트·홈과 같은 소수 한 자리(같은 값을 화면마다 다르게 쓰지 않는다). */
-  const heatCell = (id: string, v: unknown) => {
-    const range = colRanges[id];
-    const pct = range && typeof v === "number" && Number.isFinite(v) && range[1] > range[0] ? (v - range[0]) / (range[1] - range[0]) : 0;
-    const hb = id === "composite_score" ? true : metaById.get(id)?.higher_better;
-    const width = hb === false ? 1 - pct : pct;
-    return (
-      <td className="num bsc-cell" key={id}>
-        <span className="bsc-cell-fill" style={{ width: `${Math.round(width * 72)}px` }} />
-        <span className="bsc-cell-val">{id === "composite_score" && typeof v === "number" ? num(v, 1) : fmtVal(v)}</span>
-      </td>
-    );
-  };
-
-  const renderRow = (it: ScreenerItem, i: number) => {
-    const isSel = selected === it.stock_code;
-    const fav = favs.has(it.stock_code);
-    return (
-      <tr key={it.stock_code} className={`bsc-row${isSel ? " selected" : ""}`} data-code={it.stock_code} tabIndex={0}
-          onClick={() => setSelected(it.stock_code)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(it.stock_code); } }}>
-        <td className="bsc-rank">{i + 1}</td>
-        <td className="scr-fav-cell">
-          <button type="button" className={`bsc-fav${fav ? " on" : ""}`} aria-pressed={fav}
-                  aria-label={fav ? `${it.corp_name} 관심 종목에서 빼기` : `${it.corp_name} 관심 종목에 넣기`}
-                  onClick={(e) => toggleFav(it.stock_code, e)}>{fav ? "★" : "☆"}</button>
-        </td>
-        <td className="scr-name-cell">
-          <span className="bsc-name">{it.corp_name}</span>
-          <span className="scr-name-sub"><span className="scr-code">{it.stock_code}</span>{it.sector ? <> · {it.sector}</> : null}</span>
-        </td>
-        <td className="num">{priceWon(typeof it.current_price === "number" ? it.current_price : null)}</td>
-        {showMcap && <td className="num">{it.market_cap_억 != null ? `${num(Math.round(it.market_cap_억))}억` : "N/A"}</td>}
-        {shownCols.map((c) => heatCell(c.id, (it as Record<string, unknown>)[c.id]))}
-        {heatCell("composite_score", it.composite_score)}
-        <td><span className="tx-chip" data-tone="plain">{it.verdict || "판정 없음"}</span></td>
-      </tr>
-    );
-  };
+  // ── 결과 표의 열 ──
+  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+  /** 값 열의 소수 자리 — 그 열에서 가장 큰 값의 크기로 정한다(같은 열은 같은 자리). */
+  const digitsOf = (id: string) => { const r = colRanges[id]; const m = r ? Math.max(Math.abs(r[0]), Math.abs(r[1])) : 0; return m >= 1000 ? 0 : m >= 100 ? 1 : 2; };
+  const numCell = (v: unknown, digits: number) => (finite(v) ? num(v, digits) : <Na />);
+  const scoreRange = colRanges.composite_score;
+  const rankBase = curPage * PAGE_SIZE;
+  const columns: Column<ScreenerItem>[] = [
+    { id: "rank", header: "순위", num: true, sticky: true, width: 48, className: "bsc-rank", cell: (_it, i) => rankBase + i + 1 },
+    { id: "fav", header: "관심", headerHidden: true, sticky: true, width: 32, className: "scr-fav-cell", cell: (it) => {
+      const fav = favs.has(it.stock_code);
+      return (
+        <button type="button" className={`tx-td-btn bsc-fav${fav ? " on" : ""}`} aria-pressed={fav}
+                aria-label={fav ? `${it.corp_name} 관심 종목에서 빼기` : `${it.corp_name} 관심 종목에 넣기`}
+                onClick={(e) => toggleFav(it.stock_code, e)}>{fav ? "★" : "☆"}</button>
+      );
+    } },
+    { id: "name", header: "종목", sticky: true, className: "scr-name-cell", cell: (it) => (
+      <>
+        <span className="bsc-name">{it.corp_name}</span>
+        <span className="scr-name-sub"><span className="scr-code">{it.stock_code}</span>{it.sector ? <> · {it.sector}</> : null}</span>
+      </>
+    ) },
+    { id: "current_price", header: "현재가(원)", num: true, sortable: true, cell: (it) => numCell(it.current_price, 0) },
+    ...(showMcap ? [{ id: "market_cap_억", header: "시가총액(억)", num: true, sortable: true,
+      cell: (it: ScreenerItem) => numCell(finite(it.market_cap_억) ? Math.round(it.market_cap_억) : null, 0) }] : []),
+    ...shownCols.map((c) => ({ id: c.id, header: c.label, num: true, sortable: true, className: c.filtered ? undefined : "viewcol",
+      cell: (it: ScreenerItem) => numCell((it as Record<string, unknown>)[c.id], digitsOf(c.id)) })),
+    // 막대는 이 열에만 — 방향이 분명하다(높을수록 좋다). 길이는 이 결과 안에서의 자리다. 시트 · 홈과 같은 소수 한 자리.
+    { id: "composite_score", header: "종합점수", num: true, sortable: true, className: "bsc-cell", cell: (it) => (finite(it.composite_score)
+      ? <BarValue ratio={scoreRange && scoreRange[1] > scoreRange[0] ? (it.composite_score - scoreRange[0]) / (scoreRange[1] - scoreRange[0]) : null}>{num(it.composite_score, 1)}</BarValue>
+      : <Na />) },
+    { id: "verdict", header: "판정", fill: true, cell: (it) => <span className="tx-chip" data-tone="plain">{it.verdict || "판정 없음"}</span> },
+  ];
+  /** 이 쪽에 값 없는 칸이 있는가 — 있으면 표 아래에 사유 한 줄을 적는다(칸마다 되풀이하지 않는다). */
+  const pageHasNa = pageItems.some((it) => !finite(it.current_price) || !finite(it.composite_score) || (showMcap && !finite(it.market_cap_억))
+    || shownCols.some((c) => !finite((it as Record<string, unknown>)[c.id])));
 
   // ── 답(서버 값만) ──
   const chips: Chip[] = [];
@@ -724,40 +710,13 @@ export default function TerminalScreener() {
             </div>
           )}
 
-          <div className="bsc-table-wrap" ref={tableWrapRef}>
-            <table className="bsc-table">
-              <thead>
-                <tr>
-                  <th className="bsc-rank">순위</th>
-                  <th><span className="tx-sr">관심</span></th>
-                  <th>종목</th>
-                  <th className="num sortable" aria-sort={sortCol === "current_price" ? (sortDir === "desc" ? "descending" : "ascending") : undefined}>
-                    <button type="button" onClick={() => setSort("current_price")}>현재가{sortArrow("current_price")}</button></th>
-                  {showMcap && <th className="num sortable"><button type="button" onClick={() => setSort("market_cap_억")}>시가총액{sortArrow("market_cap_억")}</button></th>}
-                  {shownCols.map((c) => (
-                    <th key={c.id} className={`num sortable${c.filtered ? "" : " viewcol"}`}>
-                      <button type="button" onClick={() => setSort(c.id)}>{c.label}{sortArrow(c.id)}</button></th>
-                  ))}
-                  <th className="num sortable"><button type="button" onClick={() => setSort("composite_score")}>종합점수{sortArrow("composite_score")}</button></th>
-                  <th>판정</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((it, vi) => renderRow(it, curPage * PAGE_SIZE + vi))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="종목 찾기 결과" columns={columns} rows={pageItems} rowKey={(it) => it.stock_code}
+                     sort={sort} onSort={setSort} selectedKey={selected} onSelect={(code) => setSelected(code)}
+                     note={pageHasNa ? "N/A 는 응답에 값이 없는 칸입니다(0 이 아닙니다)." : undefined}
+                     className="bsc-table" wrapClassName="bsc-table-wrap" wrapRef={tableWrapRef} rowClassName="bsc-row"
+                     rowAttrs={(it) => ({ "data-code": it.stock_code })} />
 
-          {pageCount > 1 && (
-            <nav className="bsc-pager" aria-label="결과 쪽">
-              <button type="button" onClick={() => gotoPage(curPage - 1)} disabled={curPage === 0}>이전</button>
-              {pageNums.map((pn, i) => pn === "…"
-                ? <span key={`e${i}`}>…</span>
-                : <button type="button" key={pn} className={pn === curPage ? "on" : ""} aria-current={pn === curPage ? "page" : undefined} onClick={() => gotoPage(pn)}>{pn + 1}</button>)}
-              <button type="button" onClick={() => gotoPage(curPage + 1)} disabled={curPage >= pageCount - 1}>다음</button>
-              <span className="bsc-pager-range">{num(curPage * PAGE_SIZE + 1)}–{num(Math.min(sortedItems.length, (curPage + 1) * PAGE_SIZE))} / {num(sortedItems.length)}</span>
-            </nav>
-          )}
+          {pages > 1 && <Pager className="bsc-pager" label="결과 쪽" page={curPage} count={pages} total={sortedItems.length} size={PAGE_SIZE} onPage={gotoPage} />}
         </section>
       )}
 

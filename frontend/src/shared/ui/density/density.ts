@@ -28,12 +28,14 @@ export const DENSITIES: [Density, string][] = [["compact", "촘촘"], ["regular"
 export const TIER_DEFAULT: Record<Tier, Density> = { work: "compact", read: "regular", present: "comfortable" };
 
 /**
- * 단을 받는 화면. ★제품 화면은 아직 없다(U0)★ — 화면 조각이 제 화면을 옮길 때 한 줄씩 더하고, 그 커밋이 그 화면의 골든을 다시 뜬다.
- * 지금 있는 한 줄은 개발 견본이다: 조각 → 훅 → 화면 사이 이동을 실제 브라우저에서 돌려 보는 자리(`e2e/density.spec.ts`).
+ * 단을 받는 화면. 화면 조각이 제 화면을 옮길 때 한 줄씩 더하고, 그 커밋이 그 화면의 골든을 다시 뜬다.
+ *  · `/dev/density` — 개발 견본: 조각 → 훅 → 화면 사이 이동을 실제 브라우저에서 돌려 보는 자리(`e2e/density.spec.ts`).
+ *  · `/screener` — 종목 찾기(U1-b · 작업 단에 오른 첫 제품 화면 · `e2e/screener-density.spec.ts`).
  * 줄을 더하면 `e2e/density-logic.spec.ts` 의 허용 목록이 실패한다 — 같은 커밋에서 함께 고친다.
  */
 export const TIER_ROUTES: TierRoute[] = [
   { pattern: /^\/dev\/density\/?$/, tier: "work", label: "개발 견본 · 단과 밀도" },
+  { pattern: /^\/screener\/?$/, tier: "work", label: "종목 찾기" },
 ];
 
 /** 저장된 글자 → 저장값. 없는 값 · 모르는 값은 자동(지어내지 않는다 — 단의 기본값으로 그린다). */
