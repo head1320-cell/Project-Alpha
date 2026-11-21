@@ -153,6 +153,9 @@ BASELINE_TITLE_ATTRS: dict[str, int] = {
     "frontend/src/widgets/portfolio-graph/TickerInput.tsx": 1,
 }
 
+#: 공용 표 자신(U1-a) — 낱 `<table>` 을 그려도 되는 ★단 하나★의 파일. 아래 목록과 따로 둔다: 목록은 '옮길 것'이고 이것은 '옮겨 갈 곳'이다.
+SHARED_TABLE_FILE = "frontend/src/shared/ui/table/DataTable.tsx"
+
 #: 낱 `<table>` 을 그리는 파일. 공용 표(U1)로 옮기면 목록에서 뺀다. 새 표는 공용 표로.
 RAW_TABLE_FILES: tuple[str, ...] = (
     "frontend/src/app/dev/DensitySpecimen.tsx",
@@ -511,8 +514,17 @@ def test_요소의_title_이_기준선과_같다(tsx_files):
 
 
 def test_낱_table_을_그리는_파일이_목록과_같다(tsx_files):
-    got = {f for f, src in tsx_files.items() if scan.has_raw_table(src)}
+    got = {f for f, src in tsx_files.items() if scan.has_raw_table(src)} - {SHARED_TABLE_FILE}
     new = sorted(got - set(RAW_TABLE_FILES))
     gone = sorted(set(RAW_TABLE_FILES) - got)
     assert not new, f"낱 `<table>` 을 그리는 새 파일 — 공용 표를 쓴다(U1): {new}"
     assert not gone, f"표를 걷은 파일이 목록에 남았다 — `RAW_TABLE_FILES` 에서 뺀다: {gone}"
+
+
+def test_공용_표_파일만_따로_허용한다(tsx_files):
+    """허용이 공허하지 않다 — 그 파일이 있고 정말 표를 그린다. 그리고 허용은 그 파일 하나다(목록과 겹치지 않는다)."""
+    assert SHARED_TABLE_FILE in tsx_files, f"공용 표 파일이 없다: {SHARED_TABLE_FILE}"
+    assert scan.has_raw_table(tsx_files[SHARED_TABLE_FILE]), "공용 표가 낱 `<table>` 을 그리지 않는다 — 허용할 까닭이 없다"
+    assert SHARED_TABLE_FILE not in RAW_TABLE_FILES, "공용 표는 '옮길 것'의 목록에 넣지 않는다"
+    others = [f for f in tsx_files if f.startswith("frontend/src/shared/ui/table/") and f != SHARED_TABLE_FILE and scan.has_raw_table(tsx_files[f])]
+    assert not others, f"공용 표 폴더의 다른 파일이 표를 그린다 — 허용은 한 파일이다: {others}"

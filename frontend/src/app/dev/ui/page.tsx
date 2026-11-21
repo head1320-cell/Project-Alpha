@@ -41,6 +41,7 @@ import * as Tx from "@/shared/ui/tx";
 import { direction, krUnit, num, pct, pp, priceWon, signedPct, won } from "@/shared/lib/krFormat";
 // U0(ADR 007) — 단 · 밀도 견본. 제품 부품이 아니라 토큰이 뜻대로 도는지 보는 자리다(e2e/density.spec.ts).
 import { DensitySpecimen } from "../DensitySpecimen";
+import { TableSpecimen } from "../TableSpecimen";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────
 // 페이지 자체 크롬은 .devui-* 만 쓴다. 앱 클래스(.pv-* 등)는 표본 안에서만 나타나야
@@ -343,6 +344,24 @@ export default function DevUiPage() {
         <p className="devui-note">
           단 밖의 수는 지금 그대로입니다: <span className="num devui-dn-out">1,234.5</span>
         </p>
+      </section>
+
+      {/* ── U1 · 공용 표 견본 (shared/ui/table) ─────────────────────────────────────
+          제품(종목 찾기)이 쓰는 표 부품을 밀도 셋 · 두 테마에서 본다. 상자마다 `data-tier` · `data-density` 를 직접 달았다.
+          `.devui-item` 을 쓰지 않는다 — 그 수는 shared/ui 부품 표본과 1:1 인 계약이다(dev-ui.spec). 스펙: `e2e/data-table.spec.ts`. */}
+      <section className="devui-group devui-tb" id="table">
+        <h2 className="devui-h">공용 표 (shared/ui/table · U1)</h2>
+        <p className="devui-note">
+          줄 높이 · 칸 여백 · 글자는 밀도 토큰에서 옵니다. 값이 없는 칸은 N/A 이고 정렬하면 어느 방향에서도 끝에 섭니다.
+          줄 하나만 탭 순서에 있고 화살표 키로 줄을 옮깁니다. 견본의 값은 손으로 적은 합성 값입니다.
+        </p>
+        <div className="devui-tb-grid">
+          <TableSpecimen tier="work" density="compact" />
+          <TableSpecimen tier="work" density="regular" />
+          <TableSpecimen tier="work" density="comfortable" />
+          <TableSpecimen tier="work" density="compact" dark />
+          <TableSpecimen />
+        </div>
       </section>
 
       {/* ── S1: Card 표본 + 다크 토큰 확인 ────────────────────────────────────

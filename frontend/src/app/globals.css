@@ -11091,3 +11091,63 @@ a.tx-skip:hover { color: var(--tx-on-accent); text-decoration: none; }
 /* 등락색은 수 칸에만(ADR 007 §4-1) — 칸의 잉크 규칙(.devui-dn-table td)보다 특이도가 높아야 색이 선다(스펙이 처음 돌 때 잉크로 그려진 것을 잡았다). */
 .devui-dn-table .devui-dn-up { color: var(--tx-up-ink); }
 .devui-dn-table .devui-dn-down { color: var(--tx-down-ink); }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   U1 · 공용 표 (shared/ui/table · ADR 007 §5) — ★밀도 토큰만 읽는다★(줄 높이 · 칸 여백 · 글자). 속성이 없는 자리에서는 넉넉(기본값)이다.
+   · 머리는 붙는다 · 줄은 1px 선(줄무늬 없음) · 수 칸은 오른쪽 + 고정폭 숫자 · 고른 줄은 줄 전체의 바탕 + 위아래 잉크 선(옆줄 강조는 쓰지 않는다).
+   · 바탕은 칸에 칠한다(줄이 아니라) — 붙는 칸 밑으로 구르는 글자가 비치지 않게.
+   · 붙는 열은 640px 부터(좁은 화면에서는 이름 열이 폭의 절반을 먹는다). 왼쪽 자리는 부품이 --tx-col-left 로 준다.
+   · 화면의 계약 클래스(.bsc-table 등)는 같은 요소에 함께 붙는다 — 겉모습은 여기서만 정한다.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.tx-table-wrap { position: relative; overflow: auto; }
+.tx-table { width: 100%; border-collapse: separate; border-spacing: 0; color: var(--tx-ink); font-family: var(--tx-font); font-size: var(--tx-fs-table); }
+.tx-table :is(th, td) { height: var(--tx-row-h); padding: 0 var(--tx-cell-x); border-bottom: 1px solid var(--tx-line); background: var(--tx-surface);
+  font-weight: 400; text-align: left; white-space: nowrap; }
+.tx-table thead th { position: sticky; top: 0; z-index: var(--tx-z-sticky); color: var(--tx-sub); font-size: var(--tx-fs-th); font-weight: 600; }
+.tx-table :is(th, td).num { text-align: right; font-family: var(--tx-font-num); font-variant-numeric: tabular-nums; }
+.tx-table :is(th, td).tx-col-fill { width: 100%; }
+@media (min-width: 640px) {
+  .tx-table .tx-col-sticky { left: var(--tx-col-left, 0); }
+  .tx-table tbody td.tx-col-sticky { position: sticky; z-index: var(--tx-z-base); }
+  .tx-table thead th.tx-col-sticky { z-index: var(--tx-z-raised); }
+}
+.tx-table tbody tr[tabindex] { cursor: pointer; }
+.tx-table tbody tr[tabindex]:hover > td, .tx-table tbody tr[aria-current="true"] > td { background: var(--tx-soft); }
+.tx-table tbody tr[aria-current="true"] > td { box-shadow: inset 0 1px 0 var(--tx-accent), inset 0 -1px 0 var(--tx-accent); }
+.tx-table tbody tr[tabindex]:focus-visible { outline: 2px solid var(--tx-focus); outline-offset: -2px; }
+.tx-th-sort { display: inline-flex; align-items: center; gap: 4px; min-width: 24px; min-height: 24px; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; cursor: pointer; }
+.tx-table th.num .tx-th-sort { justify-content: flex-end; }
+.tx-th-sort:hover, .tx-table th:is([aria-sort="ascending"], [aria-sort="descending"]) { color: var(--tx-ink); }
+.tx-td-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--tx-r-row);
+  background: none; color: var(--tx-mute); font: inherit; line-height: 1; cursor: pointer; }
+.tx-td-btn:hover { background: var(--tx-line); color: var(--tx-ink); }
+.tx-td-btn[aria-pressed="true"] { color: var(--tx-ink); }
+.tx-table :is(.tx-th-sort, .tx-td-btn):focus-visible, .tx-pager button:focus-visible { outline: 2px solid var(--tx-focus); outline-offset: 1px; }
+.tx-na { color: var(--tx-sub); }
+/* 칸 안의 칩 — 줄 높이 안에 들어가게 낮춘다(촘촘 28px 줄에서 공용 칩의 여백 7px 은 줄을 넘는다 — 스크린샷 검수에서 봄). */
+.tx-table .tx-chip { display: inline-block; padding: 3px 6px; border-radius: var(--tx-r-row); font-size: var(--tx-fs-th); }
+.tx-table tbody tr:is([tabindex]:hover, [aria-current="true"]) .tx-chip[data-tone="plain"] { box-shadow: inset 0 0 0 1px var(--tx-line); }   /* 줄의 바탕과 같은 값이 되는 칩에 테를 준다 */
+/* 값 아래의 가는 막대 — 같은 열 안에서의 자리(한 색). 글자가 아니라서 옅은 잉크로 섞는다. */
+.tx-bar { position: relative; display: inline-block; min-width: 48px; }
+.tx-bar-fill { position: absolute; right: 0; bottom: -3px; max-width: 100%; height: 2px; border-radius: var(--tx-r-1); background: color-mix(in srgb, var(--tx-ink) 40%, transparent); }
+.tx-table-note { margin: 4px 0 0; padding: 0 var(--tx-cell-x); color: var(--tx-sub); font-family: var(--tx-font); font-size: var(--tx-fs-table); line-height: 1.5; word-break: keep-all; }
+.tx-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; padding: 4px var(--tx-cell-x); color: var(--tx-sub);
+  font-family: var(--tx-font); font-size: var(--tx-fs-table); }
+.tx-pager button { min-width: var(--tx-ctl-h); height: var(--tx-ctl-h); padding: 0 var(--tx-cell-x); border: 0; border-radius: var(--tx-r-row); background: transparent;
+  color: var(--tx-sub); font: inherit; font-weight: 600; cursor: pointer; }
+.tx-pager button:hover:not(:disabled) { background: var(--tx-soft); color: var(--tx-ink); }
+.tx-pager button[aria-current="page"] { color: var(--tx-ink); box-shadow: inset 0 0 0 1px var(--tx-accent); }
+.tx-pager button:disabled { color: var(--tx-mute); cursor: default; }
+.tx-pager-range { margin-left: 8px; font-variant-numeric: tabular-nums; }
+/* 셸의 전역 초점 규칙(.terminal-main .tx-page :is(…):focus-visible — 옛 강조색)을 같은 꼴로 덮는다 — 공용 표와 쪽 넘김의 고리는 잉크다(ADR 007 §4-3). */
+.terminal-main .tx-page :is(.tx-table, .tx-pager) :is(button, a, [tabindex]):focus-visible { outline-color: var(--tx-focus); }
+
+/* ── 공용 표 견본(/dev/ui · app/dev/TableSpecimen.tsx) — 견본 전용 클래스. 제품 화면에 쓰지 않는다. ── */
+.devui-tb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(560px, 100%), 1fr)); gap: 16px; align-items: start; }
+.devui-tb-box { min-width: 0; padding: 12px; border: 1px solid var(--tx-line); border-radius: var(--tx-r-3); background: var(--tx-surface); color: var(--tx-ink); font-family: var(--tx-font); }
+.devui-tb-cap { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.devui-tb-cap-t { font-size: 12px; font-weight: 600; color: var(--tx-sub); }
+.devui-tb-chip { flex: none; padding: 4px 6px; border-radius: var(--tx-r-2); background: var(--tx-warn-soft); color: var(--tx-warn); font-size: 11px; font-weight: 600; line-height: 1; }
+.devui-tb-code { margin-left: 6px; color: var(--tx-mute); font-family: var(--t-mono); font-size: var(--tx-fs-th); }
+.devui-tb-picked { margin: 8px 0 0; color: var(--tx-sub); font-size: 12px; }

@@ -61,11 +61,12 @@
 - [x] 변이 9/9 죽음(오름차순 무시 · 쪽 크기 50 · 값 없음을 0 으로 · 관심 별 저장 안 함 · CSV 를 서버 순서로 · 빈 열을 숨기지 않음 · 정렬해도 쪽 그대로 · 점수 두 자리 · 표시 열 저장 안 함) → 커밋 · 푸시.
 
 ### U1-a 공용 표 부품 — 제품 화면 0줄(견본만)
-- [ ] `frontend/src/shared/ui/table/table.ts`(순수 — 정렬(값 없는 줄은 끝) · 쪽 · 줄 초점 이동 · `aria-sort` · CSV 짓기) + 순수 스펙 `e2e/table-logic.spec.ts`.
-- [ ] `DataTable.tsx` — 낱 `<table>` · 표 이름 · `<th scope>` · 머리 고정 · 첫 열 고정 · 수 칸 오른쪽 + 고정폭 숫자 · 고른 줄은 줄 전체의 바탕 · 줄 초점은 ★한 줄만 탭 순서★ + ↑ ↓ Home End PageUp PageDown · Enter/Space · 쪽 넘김 · 계약 클래스를 받는 `className` · `rowClassName`.
-- [ ] CSS `.tx-table*`(`globals.css` 끝 · 밀도 토큰만 읽음 · 초점 고리는 잉크 2px 즉시) → 다크 구역은 생성기로.
-- [ ] `/dev/ui` 표본(밀도 셋 × 라이트 · 다크) + 스펙 `e2e/data-table.spec.ts`(이름 · 정렬 표시 · 자판 · 줄 높이 = 토큰 · 24px 목표 · `N/A` 칸).
-- [ ] 래칫: 공용 표 파일 하나만 낱 `<table>` 목록에서 따로 허용(짝: 그 파일이 정말 표를 그린다) → 변이 → 커밋 · 푸시.
+- [x] `frontend/src/shared/ui/table/table.ts`(순수 — 정렬(값 없는 줄은 끝) · 쪽 · 줄 초점 이동 · `aria-sort` · CSV 짓기) + 순수 스펙 `e2e/table-logic.spec.ts`(10).
+- [x] `DataTable.tsx`(+ `Pager` · `Na` · `BarValue`) — 낱 `<table>` · 표 이름 · `<th scope>` · 머리 고정 · 붙는 열 · 수 칸 오른쪽 + 고정폭 숫자 · 고른 줄은 줄 전체의 바탕 · 줄 초점은 ★한 줄만 탭 순서★ + ↑ ↓ Home End PageUp PageDown · Enter/Space · 계약 클래스를 받는 `className` · `rowClassName`.
+- [x] CSS `.tx-table*`(`globals.css` 끝 · 밀도 토큰만 읽음 · 초점 고리는 잉크 2px 즉시) — 다크 생성 구역은 그대로(`--check` 통과).
+- [x] `/dev/ui` 표본(밀도 셋 · 다크 · 속성 없음) + 스펙 `e2e/data-table.spec.ts`(14).
+- [x] 래칫: 공용 표 파일 하나만 따로 허용(`SHARED_TABLE_FILE` + 짝 시험) → 변이 39/39 죽음 → 커밋 · 푸시.
+- 구현하며 정한 것: ① 상세 판을 따라가는 옵션(`followFocus`)은 쓰는 조각(U1-c)에서 시험과 함께 넣는다(지금 넣으면 시험 없는 코드다). ② 고른 줄의 바탕은 `--tx-soft` + 위아래 잉크 선 — 선 색 토큰(`--tx-line`)을 바탕으로 쓰면 흐린 글자의 대비가 4.47:1 로 떨어진다(계산). ③ 붙는 열은 640px 부터(좁은 화면에서는 이름 열이 폭의 절반을 먹는다). ④ 내보내기에서 `=` `+` `-` `@` 로 시작하는 ★글★ 칸은 작은따옴표로 글임을 못 박는다(표 계산 프로그램이 식으로 읽는 것을 막는다 — 수 칸은 그대로).
 
 ### U1-b 스크리너 표를 공용 표로 · 작업 단에 올림 — ★화면이 처음 바뀐다★
 - [ ] `shared/ui/density/density.ts` 의 `TIER_ROUTES` 에 `/screener`(작업 단 · 촘촘) + `density-logic.spec.ts` · `density.spec.ts` 의 목록(같은 커밋).
