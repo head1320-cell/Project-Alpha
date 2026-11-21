@@ -55,9 +55,9 @@ export default function AssetAllocPanel({ s, set }: {
 
       <Field label="배분 비율">
         <span className="bte-sm">ETF</span>
-        <QuickStepper value={a.etfPct} onChange={(v) => patch({ etfPct: v })} chips={[5, 10, 30]} unit="%" min={0} max={100} />
+        <QuickStepper label="ETF 배분 비율 %" value={a.etfPct} onChange={(v) => patch({ etfPct: v })} chips={[5, 10, 30]} unit="%" min={0} max={100} />
         <span className="bte-sm">주식</span>
-        <QuickStepper value={a.stockPct} onChange={(v) => patch({ stockPct: v })} chips={[30, 60]} unit="%" min={0} max={100} />
+        <QuickStepper label="주식 배분 비율 %" value={a.stockPct} onChange={(v) => patch({ stockPct: v })} chips={[30, 60]} unit="%" min={0} max={100} />
         <span className={`bte-note${a.etfPct + a.stockPct > 100 ? " bte-note--bad" : ""}`}>
           현금 {cashPct}%{a.etfPct + a.stockPct > 100 ? " — 합이 100%를 넘습니다" : ""}
         </span>

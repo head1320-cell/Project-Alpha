@@ -46,7 +46,7 @@ export default function BuyConditionPanel({ s, set }: {
                   onChange={(d) => patchBuy({ breakthroughDirection: d })}
                   options={[{ id: "up", label: "위로" }, { id: "both", label: "양쪽" }]} />
                 <span className="bte-sm">기준가</span>
-                <GroupedSelect value={s.buy.breakthroughBaseType}
+                <GroupedSelect label="돌파 매수 기준가" value={s.buy.breakthroughBaseType}
                   onChange={(id) => patchBuy({ breakthroughBaseType: id })} groups={FILL_PRICE_GROUPS_NO_EXPR} />
               </div>
               <OffsetInput value={s.buy.breakthroughOffsetPct}
