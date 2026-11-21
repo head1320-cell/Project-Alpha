@@ -95,9 +95,10 @@
 - 새 스펙 `e2e/screener-csv-logic.spec.ts`(7) · `screener-table` 새 6 · `screener-density` 새 6 · `table-logic` +1 → 변이 37/37 죽음. 출처 칸은 ★그 결과를 만든 요청★의 것(결과를 받을 때 요청을 함께 든다).
 
 ### U1 게이트
-- [ ] tsc · eslint · FSD · 다크 `--check` · 빌드 · 래칫과 문서 시험 묶음 · ★전체 E2E★(공용 부품 · 경로 표를 건드린다) · 골든 diff.
-- [ ] 전후 다시 재기(`measure.mjs` · `interact.mjs` 여러 번) · 첫 화면 JS 전후 · 스크린샷 검수(라이트 · 다크 · 390 · 밀도 셋).
-- [ ] `docs/HISTORY.md` · `.claude/skills/alpha-ui/SKILL.md`(공용 표 쓰는 법) · PR #5 본문.
+- [x] tsc · eslint · FSD · 다크 `--check` · 빌드 · 래칫과 문서 시험 묶음 · ★전체 E2E★(공용 부품 · 경로 표를 건드린다) · 골든 diff.
+- [x] 전후 다시 재기(`measure.mjs` · `interact.mjs` 여러 번) · 첫 화면 JS 전후 · 스크린샷 검수(라이트 · 다크 · 390 · 밀도 셋).
+- [x] `docs/HISTORY.md` · `.claude/skills/alpha-ui/SKILL.md`(공용 표 쓰는 법) · PR #5 본문.
+- 결과: 전체 E2E 1,822 통과 · 4 건너뜀 · 실패 0 · 라이트 골든은 U1 전체로도 `/screener` 만 바뀜 · 1440 × 900 다 보이는 줄 2 → 18(걸친 줄 3 → 21) · 정렬 조작 40 → 64ms(느려짐 — 기록만).
 
 ## 3. 다시 쓰는 것 (새로 짓지 않는다)
 
