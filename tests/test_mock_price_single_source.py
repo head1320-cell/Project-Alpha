@@ -22,6 +22,8 @@
 3. **날짜 주소 가능성은 그대로** — 배율은 "오늘"이 아니라 고정 기준일로 정한다. 오늘에 맞추면 같은 날짜가 날마다 다른
    값이 된다(`tests/test_mock_is_date_addressable.py` 가 지키는 성질 · 프론트에서 걷은 배율을 서버로 옮기는 셈).
 4. **운영은 그대로** — `KIS_USE_MOCK≠1` 이면 두 함수 모두 고치기 전과 같은 값을 낸다(골든). 운영 동작 변경은 이번 범위가 아니다.
+   ★정정★ 두 함수 모두 뒤에 운영에서 합성을 걷었다 — 시점 가격은 2026-11-13(감사 §7 A안), 현재가는 2026-11-21(감사 F3).
+   옛 골든 자리에는 "옛 값이 더는 나오지 않는다"는 시험이 있다(§5).
 5. **가격은 원 단위다** — 현재가·시점 가격은 그 날 종가를 원 단위로 반올림한 값이다(`mock_price_asof`). 걸음의 종가는
    소수라서 그대로 내면 응답에 "198,671.081원"이 실린다(전체 E2E 가 잡았다 — 홈·스크리너의 "서버 값 그대로" 시험 둘).
    예전 고정 표는 늘 정수였고 KRX 가격도 원 단위다. ★일봉은 반올림하지 않는다★ — 반올림하면 수익률이 바뀐다.
@@ -205,10 +207,23 @@ class _Fixed(datetime):
         return cls(2026, 11, 11, 12, 0, 0)
 
 
-@pytest.mark.parametrize("code,want", [("005930", 71000), ("000660", 200000), ("123456", 52333.0), ("999999", 56854.0)])
-def test_in_real_mode_the_base_price_is_unchanged(monkeypatch, code, want):
+@pytest.mark.parametrize("code", ["005930", "000660", "123456", "999999"])
+def test_in_real_mode_the_base_price_is_no_longer_manufactured(monkeypatch, code):
+    """2026-11-11 에는 "운영 동작은 범위가 아니다"를 지키려고 운영의 바탕값(`mock_price_level` — 71,000 · 200,000 · 해시 52,333 ·
+    56,854)을 골든으로 얼려 두었다. 2026-11-21 에 운영에서 걷었다(감사 F3 · 사용자 결정 3 → 1) — 운영의 현재가는 실시세 · 적재 일봉
+    종가 · 없음(None) 가운데 하나다. 자세한 계약은 `tests/test_screener_prod_price.py`. 여기서는 옛 골든 값이 더는 나오지 않고
+    ★바탕값 함수를 부르지도 않는 것★만 건다."""
     monkeypatch.setenv("KIS_USE_MOCK", "0")
-    assert ValuationScreener._mock_price(code) == want
+    called = []
+    monkeypatch.setattr(ol, "mock_price_level", lambda t: called.append(t) or 1.0)
+    assert ValuationScreener._mock_price(code) is None
+    assert called == []
+
+
+def test_in_mock_mode_the_base_price_is_still_the_walk(mock_mode, monkeypatch):
+    """★짝★ mock 은 그대로다 — 위 시험만 걸면 '늘 None' 구현도 통과한다."""
+    day = _pin_today(monkeypatch, 2026, 11, 11)
+    assert ValuationScreener._mock_price("005930") == _won(float(_df("005930", day)["close"].iloc[-1]))
 
 
 def test_in_real_mode_the_as_of_price_is_no_longer_manufactured(monkeypatch):

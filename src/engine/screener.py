@@ -168,6 +168,16 @@ class ScreenerFilters:
     verdicts:            list[str] | None = None     # ["저평가", "극심한 저평가"]
 
 
+#: ★가격에서 나오는 항목 칸★(2026-11-21 · 감사 F3) — 운영에서 확인된 가격(실시세 · 적재 일봉 종가)이 없으면 이 칸들은 미상이다
+#: (판정은 문자열 "시세 없음"). `tests/test_screener_prod_price.py` 가 ★두 가격으로 평가해 달라지는 칸★이 정확히 이 집합인지 확인한다 —
+#: 가격에 기대는 칸이 새로 생기면 그 시험이 짚는다. 적정가가 없는(0) 종목의 괴리율·판정·점수는 가격과 무관한 정의라 미상으로 바꾸지 않는다.
+PRICE_DERIVED_FIELDS = ("current_price", "gap_pct", "verdict", "gap_score", "composite_score", "per", "pbr", "dividend_yield_pct")
+
+#: 운영 항목의 실시세 사유(`price_source.live` · `price_unavailable.live`) — 실시세로 덮지 못한 까닭.
+LIVE_NOT_ATTEMPTED = "not_attempted"          # 보강 단계에 닿지 않았다(보강이 도중에 실패 등)
+LIVE_RESTORED = "restored_not_requoted"       # 복원(`item:`) 행 — 실시세를 다시 부르지 않는다(KIS 호출량은 예전 그대로)
+
+
 @dataclass
 class ScreenerItem:
     """단일 종목 스크리닝 결과."""
@@ -175,13 +185,14 @@ class ScreenerItem:
     corp_name:         str
     sector:            str | None
 
-    current_price:     float
+    # 가격 파생 칸은 운영에서 확인된 가격이 없으면 None 이다(감사 F3 · `PRICE_DERIVED_FIELDS`).
+    current_price:     float | None
     intrinsic_value:   float
-    gap_pct:           float
+    gap_pct:           float | None
     verdict:           str
 
-    composite_score:   float
-    gap_score:         float
+    composite_score:   float | None
+    gap_score:         float | None
     roe_score:         float
     stability_score:   float
 
@@ -200,8 +211,9 @@ class ScreenerItem:
     dcf_value:         float | None = None
     ddm_value:         float | None = None
 
-    # 데이터 품질(정직) — price_is_mock 기본 True(증명 전엔 mock으로 간주): KIS_USE_MOCK=0 +
-    # 실 클라이언트로 _enrich_kis_quotes가 실제 시세 patch에 성공했을 때만 False.
+    # 데이터 품질(정직) — price_is_mock 기본 True(증명 전엔 mock으로 간주). ★운영(KIS_USE_MOCK≠1)의 항목은 늘 False★다
+    # (2026-11-21 · 감사 F3 — 운영에서는 합성 가격을 쓰지 않는다): 가격은 확인된 것이거나 없다(None). 어디서 왔는지는
+    # `price_source`, 왜 없는지는 `price_unavailable` 이 말한다(아래 to_dict). as_of 평가는 그 시점 종가로 평가했을 때 False.
     # fundamentals_is_mock은 ValuationEngine.evaluate()의 UnifiedValuation.is_mock 그대로 전파.
     price_is_mock:        bool = True
     fundamentals_is_mock: bool = False
@@ -215,6 +227,12 @@ class ScreenerItem:
             v = getattr(self, k, None)
             if v is not None:
                 d[k] = v
+        # 운영의 현재 가격 출처(감사 F3) — ★운영 항목에만★ 붙는다(mock 응답 모양은 그대로). 둘 중 하나만 값이 있다.
+        #   price_source      = {kind: "kis_live", fetched_at} · {kind: "daily_close", trade_date, source, price_basis, live} · {kind: "provider"}
+        #   price_unavailable = {live: 실시세 사유, close: 적재 종가 사유} — 가격 파생 칸이 미상인 까닭
+        for k in ("price_source", "price_unavailable"):
+            if k in self.__dict__:
+                d[k] = self.__dict__[k]
         # FFL: 동적 부착된 펀더멘털 팩터도 포함 (dataclass 필드 외 속성)
         try:
             from src.data.fundamentals_store import FACTOR_BY_ID
@@ -264,6 +282,9 @@ class ScreenerResult:
     # 과거 시점(as_of) 평가에서만: {"excluded": {count, by_reason, sample}, "financials_unavailable": {count, by_reason}}.
     # 그 시점 종가가 없어 뺀 종목과 공시 재무가 미상인 종목 — 조용히 줄어든 목록을 만들지 않는다. as_of 가 아니면 None.
     asof:               dict | None = None
+    # 운영의 현재 스크리닝에서만: 게이트를 지난 항목의 가격 출처별 수와 가격이 없는 항목의 사유(감사 F3 — `_price_summary`).
+    # 가격이 없는 항목도 목록에 남는다(가격 파생 칸만 미상) — 조용히 줄어든 목록을 만들지 않는다. mock · as_of 이면 None.
+    prices:             dict | None = None
     timestamp:          str = field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -291,6 +312,14 @@ def sort_screener_items(
         key=lambda x: getattr(x, sort_by, 0) or 0,
         reverse=not ascending,
     )
+    # ★가격이 없어 모르는 값은 맨 뒤로(방향과 무관)★ — 2026-11-21 · 감사 F3. 운영에서 확인된 가격이 없는 행(`price_unavailable`)의
+    #   가격 파생 키(`PRICE_DERIVED_FIELDS`)는 미상이다. 위의 `or 0` 은 그것을 0 으로 세어, 오름차순(괴리율·PER)에서는 '가장 싼 종목'처럼
+    #   앞에 세운다. 그런 행만 순서를 지킨 채 뒤로 옮긴다 — mock 에는 그런 행이 없어 순서가 그대로다. 다른 미상(None→0)은 예전 그대로다(F3c).
+    if sort_by in PRICE_DERIVED_FIELDS:
+        unknown = [x for x in items if getattr(x, sort_by, None) is None and getattr(x, "price_unavailable", None)]
+        if unknown:
+            moved = {id(x) for x in unknown}
+            items[:] = [x for x in items if id(x) not in moved] + unknown
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -385,6 +414,9 @@ class ValuationScreener:
     ):
         self.dart = dart_client or DARTClient()
         self.engine = valuation_engine or ValuationEngine(self.dart)
+        # 주입한 공급자는 부른 쪽이 보증한다(두 모드 모두 그대로 쓴다). 주입하지 않으면 mock 은 mock 종가, ★운영은 적재 일봉 종가★
+        # (`_base_price_detail` — 감사 F3). 운영 코드에 공급자를 주입하는 곳은 없다(2026-11-21 기준 — 시험만).
+        self._price_injected = price_provider is not None
         self.price_provider = price_provider or self._mock_price
         self.cache = _ValuationCache(ttl_seconds=cache_ttl)
         self.max_workers = max_workers
@@ -512,6 +544,13 @@ class ValuationScreener:
         # 항목이라, 읽으면 적재된 종목이 PIT 를 통째로 건너뛰고 오늘 가격·오늘 재무로 돌아온다(룩어헤드).
         cached_items = {} if as_of_date else self._load_cached_items(tickers)   # {code: ScreenerItem} — 즉시
         items: list[ScreenerItem] = list(cached_items.values())
+        # ★운영의 현재 스크리닝은 합성 바탕 가격을 쓰지 않는다(2026-11-21 · 감사 F3 · 사용자 결정 3 → 1)★ — 확인된 가격(실시세 →
+        #   적재 일봉 종가)이 없으면 항목은 남기고 가격 파생 칸만 미상 + 사유다. 복원 행은 저장된 가격을 믿지 않고 매번 적재 종가로
+        #   다시 매긴다(재적재가 복원 행을 다시 저장해 첫 평가의 가격이 끝없이 살아남았다 — 고치기 전에는 합성 가격도 그랬다).
+        from src.data.mock_gate import mock_allowed
+        prod_now = not as_of_date and not mock_allowed()
+        if prod_now and items:
+            self._reprice_restored(items)
         to_eval = [t for t in tickers if t not in cached_items]
         # 미적재 평가 상한 (대용량 폭주 방지). ingest 배치(no_cap)는 해제.
         capped = False
@@ -582,8 +621,8 @@ class ValuationScreener:
         if fresh_in_items:
             try:
                 self._enrich_kis_quotes(fresh_in_items)
-            except Exception as e:
-                logger.debug(f"KIS 시세 보강 실패 (mock 유지): {e}")
+            except Exception as e:  # noqa: BLE001 — 행마다의 실시세 사유는 'not_attempted' 로 남는다(가격은 적재 종가 또는 미상)
+                logger.warning(f"KIS 시세 보강 실패: {type(e).__name__}: {e}")
 
         # 펀더멘털·팩터 주입 + 저장:
         #   기본은 신규 평가분만. ingest 재적재(reattach_fundamentals=True)면 복원분 포함 전체 —
@@ -619,6 +658,9 @@ class ValuationScreener:
             if not as_of_date:
                 self._store_items(fund_targets)
 
+        # 운영의 가격 출처 요약 — 게이트를 지난 항목 전체(필터 前). 항목의 라벨에서 센다(인스턴스 상태를 두지 않는다).
+        prices = self._price_summary(items) if prod_now else None
+
         # 4. 필터 적용 — filter_ast(M1) 우선, 없으면 기존 ScreenerFilters (하위호환)
         if filter_ast is not None and not filter_ast.is_empty():
             from src.engine.filter_ast import apply_filter_ast
@@ -649,7 +691,30 @@ class ValuationScreener:
             evaluated_actual=evaluated_actual,
             capped=capped,
             asof=self._asof_summary() if as_of_date else None,
+            prices=prices,
         )
+
+    @staticmethod
+    def _price_summary(items: list) -> dict:
+        """운영의 현재 스크리닝 — 가격 출처별 수 · 가격이 없는 항목의 사유별 수 · 표본(≤20, 종목코드 순) (감사 F3)."""
+        by_source = {"kis_live": 0, "daily_close": 0, "provider": 0, "unavailable": 0}
+        live: dict = {}
+        close: dict = {}
+        missing: list = []
+        for it in items:
+            src = it.__dict__.get("price_source")
+            gone = it.__dict__.get("price_unavailable")
+            if isinstance(src, dict):
+                kind = src.get("kind") or "unknown"
+                by_source[kind] = by_source.get(kind, 0) + 1
+            elif isinstance(gone, dict):
+                by_source["unavailable"] += 1
+                live[gone.get("live")] = live.get(gone.get("live"), 0) + 1
+                close[gone.get("close")] = close.get(gone.get("close"), 0) + 1
+                missing.append({"code": it.stock_code, "live": gone.get("live"), "close": gone.get("close")})
+        return {"by_source": by_source,
+                "unavailable": {"count": len(missing), "by_reason": {"live": live, "close": close},
+                                "sample": sorted(missing, key=lambda m: m["code"])[:20]}}
 
     def _asof_summary(self) -> dict:
         """과거 시점 평가가 뺀 것·모르는 것 — 수 · 사유별 수 · 표본(≤20, 종목코드 순)."""
@@ -700,11 +765,20 @@ class ValuationScreener:
                 if asof_px is None:
                     self.__dict__.setdefault("_asof_excluded", {})[stock_code] = why or "price_unavailable"
                     return None
-            # cache_key에 as_of 포함 (PIT/현재 캐시 혼선 방지)
+            # ★운영의 현재 스크리닝 — 바탕 가격은 확인된 것만(2026-11-21 · 감사 F3)★: 적재 일봉 종가(출처를 싣는다) 또는 없음(None).
+            #   없으면 가격 없이 평가한다(적정가·재무는 그대로 · 가격 파생 칸은 미상). 실시세는 뒤의 `_enrich_kis_quotes` 가 덮는다.
+            from src.data.mock_gate import mock_allowed
+            prod_now = not asof and not mock_allowed()
+            base_px = base_src = base_why = None
+            if prod_now:
+                base_px, base_src, base_why = self._base_price_detail(stock_code)
+            # cache_key에 as_of 포함 (PIT/현재 캐시 혼선 방지). 운영은 바탕 가격도 넣는다 — 캐시의 평가와 그 가격의 라벨이 갈라지지 않게.
             cache_key = f"{stock_code}:{params.beta}:{params.projection_years}:{asof or 'now'}"
+            if prod_now:
+                cache_key += f":@{base_px}"
             uv = self.cache.get(cache_key)
             if uv is None:
-                price = asof_px if asof else self._get_price_safe(stock_code)
+                price = asof_px if asof else (base_px if prod_now else self._get_price_safe(stock_code))
                 bsns_year = None
                 if asof:
                     # RIM/DCF/DDM은 연간 재무 기준 — as_of 시점에 실제 공시됐을 연도로
@@ -731,6 +805,8 @@ class ValuationScreener:
                     item.price_is_mock = False
                     item.asof_price = asof_meta
                 item = self._apply_pit_financials(item, stock_code, asof)
+            elif prod_now and item is not None:
+                self._label_price(item, base_src, live=LIVE_NOT_ATTEMPTED, close=base_why)
             return item
         except Exception as e:
             logger.debug(f"평가 실패 ({stock_code}): {e}")
@@ -778,11 +854,108 @@ class ValuationScreener:
             item.fundamentals_is_mock = True
         return item
 
-    def _get_price_safe(self, stock_code: str) -> float:
+    def _get_price_safe(self, stock_code: str) -> float | None:
+        """공급자의 가격 — 예외면 `_mock_price`. ★운영에서 `_mock_price` 는 None 이다(합성으로 메우지 않는다 — 감사 F3)★.
+        현재 스크리닝의 운영 경로는 이것이 아니라 `_base_price_detail` 을 쓴다(사유까지 낸다). as_of 경로는 이 값을 mock 에서만 쓴다."""
         try:
             return self.price_provider(stock_code)
         except Exception:
             return self._mock_price(stock_code)
+
+    def _base_price_detail(self, stock_code: str) -> tuple[float | None, dict | None, str | None]:
+        """★운영(`KIS_USE_MOCK≠1`)의 현재 스크리닝★ 바탕 가격 — `(가격, 출처, 사유)` (2026-11-21 · 감사 F3).
+
+        - 공급자를 주입했으면 그 값 — 출처 `{"kind": "provider"}`(부른 쪽이 보증한다). 예외면 `provider_error`, 값이 없거나 0 이하면 `provider_empty`.
+        - 아니면 ★적재된 일봉 종가★ — `universe_select.close_asof(코드, 오늘)`(as_of 경로와 같은 읽기 · 같은 사유 · 10 달력일 낡음 한도).
+          출처 `{"kind": "daily_close", trade_date, source, price_basis}` — 가격 기준(원주가/수정주가)은 행의 것을 그대로 싣는다(바꾸지 않는다).
+        - 없으면 `(None, None, 사유)` — `not_loaded` · `stale` · `store_error`. ★합성으로 메우지 않는다★(예전에는 `mock_price_level`).
+        """
+        if getattr(self, "_price_injected", False):
+            try:
+                px = self.price_provider(stock_code)
+            except Exception as e:  # noqa: BLE001 — 실패를 합성으로 바꾸지 않고 사유로 낸다
+                logger.warning(f"가격 공급자 오류 ({stock_code}): {type(e).__name__}: {e}")
+                return None, None, "provider_error"
+            if px is None or not px > 0:
+                return None, None, "provider_empty"
+            return float(px), {"kind": "provider"}, None
+        import src.engine.universe_select as us
+        row, why = us.close_asof(stock_code, datetime.now().strftime("%Y-%m-%d"))
+        if row is None:
+            return None, None, why or "not_loaded"
+        return row["close"], {"kind": "daily_close", "trade_date": row["trade_date"],
+                              "source": row["source"], "price_basis": row["price_basis"]}, None
+
+    # ─────────────────────────────────────────────────────────────────────
+    # 운영의 가격 라벨 · 가격 적용 (감사 F3) — 실시세 보강 · 적재 종가 · 복원 행이 같은 산수와 같은 라벨을 쓴다
+    # ─────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _label_price(it, source: dict | None, *, live: str | None, close: str | None) -> None:
+        """운영 항목의 가격 라벨 — 가격이 있으면 출처(`price_source`), 없으면 사유 둘(`price_unavailable` = 실시세 · 적재 종가).
+        운영 항목에는 합성 가격이 없다 → `price_is_mock=False`(가격이 없어도 — 없는 것은 합성이 아니다)."""
+        it.price_is_mock = False
+        if it.current_price is not None and source is not None:
+            it.price_source = {**source, "live": live}
+            it.price_unavailable = None
+        else:
+            it.price_source = None
+            it.price_unavailable = {"live": live, "close": close}
+
+    @staticmethod
+    def _mark_live(items: list, reason: str) -> None:
+        """실시세로 덮지 못한 까닭을 라벨에 적는다 — 가격은 그대로(적재 종가 또는 미상). 라벨이 없는 항목(운영 경로 밖)은 건드리지 않는다."""
+        for it in items:
+            src = it.__dict__.get("price_source")
+            gone = it.__dict__.get("price_unavailable")
+            if isinstance(src, dict) and src.get("kind") != "kis_live":
+                src["live"] = reason
+            elif isinstance(gone, dict):
+                gone["live"] = reason
+
+    def _apply_price(self, it, cp: float) -> None:
+        """확인된 가격 하나로 가격 파생 '평가 값'(괴리율·판정·점수)을 다시 낸다 — 실시세 보강 · 복원 행의 재가격이 같은 산수를 쓴다.
+
+        적정가는 가격과 무관하다(이미 계산된 값을 그대로 둔다) — 추가 네트워크 호출 없는 순수 산술. 적정가가 없으면(0) 괴리율·판정·점수는
+        가격과 무관한 정의라 그대로 둔다(평가 때와 같다). PER·PBR·배당수익률은 여기서 다시 내지 않는다(주당 값이 항목에 없다) —
+        실시세의 PER·PBR 과 펀더멘털 저장소의 붙이기가 덮는다.
+        """
+        from src.engine.valuation.valuation_models import compute_gap_pct, gap_pct_to_verdict
+        it.current_price = cp
+        if it.intrinsic_value and it.intrinsic_value > 0:
+            it.gap_pct = round(compute_gap_pct(cp, it.intrinsic_value), 2)
+            it.verdict = gap_pct_to_verdict(it.gap_pct)
+            composite, gap, roe_s, stab = self._compute_scores(
+                it.gap_pct,
+                {"roe_pct": it.roe_pct, "debt_ratio_pct": it.debt_ratio_pct, "fcf_억": it.fcf_억},
+            )
+            it.composite_score, it.gap_score = composite, gap
+            it.roe_score, it.stability_score = roe_s, stab
+
+    @staticmethod
+    def _clear_price(it) -> None:
+        """확인된 가격이 없다 — 가격과 가격 파생 '평가 값'을 미상으로(적정가가 있을 때만 — 적정가 0 의 괴리율·판정·점수는 가격과 무관)."""
+        from src.engine.valuation.valuation_models import NO_PRICE_VERDICT
+        it.current_price = None
+        if it.intrinsic_value and it.intrinsic_value > 0:
+            it.gap_pct = it.gap_score = it.composite_score = None
+            it.verdict = NO_PRICE_VERDICT
+
+    def _reprice_restored(self, items: list) -> None:
+        """복원(`item:`) 행의 가격을 ★다시 매긴다★(운영) — 저장된 가격을 믿지 않는다. 실시세는 부르지 않는다(KIS 호출량 그대로).
+
+        고치기 전에 저장된 행(라벨 키가 없다)은 PER·PBR·배당수익률도 미상으로 둔다 — 그 값이 합성 바탕 가격에서 나오지 않았다고
+        말할 증거가 없다. 고친 뒤 저장된 행의 그 칸은 확인된 가격 · 실시세 · 저장소에서 나온 값이라 그대로 둔다(당시 가격 기준 — 남은 일).
+        """
+        for it in items:
+            if "price_source" not in it.__dict__ and "price_unavailable" not in it.__dict__:
+                it.per = it.pbr = it.dividend_yield_pct = None
+            px, src, why = self._base_price_detail(it.stock_code)
+            if px is not None:
+                self._apply_price(it, px)
+            else:
+                self._clear_price(it)
+            self._label_price(it, src, live=LIVE_RESTORED, close=why)
 
     # ─────────────────────────────────────────────────────────────────────
     # Composite Score (60/20/20)
@@ -805,7 +978,7 @@ class ValuationScreener:
         }
         return WEIGHTS.get(regime, (0.60, 0.20, 0.20))
 
-    def _compute_scores(self, gap_pct: float, fin: dict) -> tuple[float, float, float, float]:
+    def _compute_scores(self, gap_pct: float | None, fin: dict) -> tuple[float | None, float | None, float, float]:
         """
         (composite, gap_score, roe_score, stability_score)
         모두 0~100 스케일.
@@ -813,9 +986,15 @@ class ValuationScreener:
         gap_pct/fin을 UnifiedValuation 전체가 아니라 개별로 받는다 — 초기 평가(_to_item)와
         _enrich_kis_quotes(실시세 보강 후 재계산)가 동일 함수를 공유해 두 계산 경로가
         어긋나지 않도록 한다(uv 객체가 없는 재계산 시점에도 호출 가능).
+
+        ★괴리율이 미상(None — 운영에서 확인된 가격이 없다 · 감사 F3)이면 괴리 점수와 종합 점수도 미상★이다. 예전의 `gap_pct or 0` 은
+        미상을 '적정(50점)'으로 지어냈다. ROE·안정성 점수는 가격과 무관해 그대로 낸다. 괴리율 0(적정가 0 의 정의)은 예전 그대로(F7).
         """
         # 1. Gap Score: 저평가일수록 점수 高
         # gap_pct -50% → 100점, 0% → 50점, +50% → 0점
+        if gap_pct is None:
+            _, _, roe_s, stab = self._compute_scores(0.0, fin)
+            return None, None, roe_s, stab
         gap_pct = gap_pct or 0
         gap_score = max(0.0, min(100.0, 50 - gap_pct))
         # 포화(100) 시 gap_pct 깊이를 미세 반영 — 동일점수 붕괴 방지(mock에서도 종목 변별)
@@ -879,20 +1058,30 @@ class ValuationScreener:
             # 시세로 되돌리면 look-ahead bias가 재발한다. run() 호출 전 인스턴스는
             # _active_asof가 아예 없을 수 있어 getattr로 안전하게 조회.
             return 0
+        # ★키가 없으면 사유를 행마다 단다(2026-11-21 · 감사 F3)★ — 예전에는 `KISCredentialsMissing` 이 여기서 새어 나가 `run()` 이
+        #   디버그 한 줄("mock 유지")로 삼켰고, 합성 바탕 가격이 그대로 남았다. 이제 가격은 적재 종가 또는 미상이고 왜 실시세가 아닌지 적는다.
+        #   (`kis_client.try_kis_client` 와 같은 뜻 — 기존 시험의 가짜 `get_kis_client` 가 인자를 받지 않아 같은 예외를 여기서 직접 잡는다.)
         try:
-            from src.execution.kis_client import get_kis_client
+            from src.execution.kis_client import KISCredentialsMissing, get_kis_client
         except Exception:
+            self._mark_live(items, "kis_unavailable")
             return 0
-        client = get_kis_client()
+        try:
+            client = get_kis_client()
+        except KISCredentialsMissing:
+            self._mark_live(items, "kis_credentials_missing")
+            return 0
         # MockKISClient면 보강 의미 없음
         if type(client).__name__ == "MockKISClient":
+            self._mark_live(items, "kis_mock_client")
             return 0
 
-        from src.engine.valuation.valuation_models import compute_gap_pct, gap_pct_to_verdict
-
         # 대용량 유니버스(전종목) 보호: 실시세 보강은 요청당 상한까지만 (KIS 폭주 방지).
+        # 상한 밖의 행은 실시세로 덮지 않는다 — 그 사실을 행에 적는다(가격은 적재 종가 또는 미상 · 감사 F3).
         max_enrich = int(os.getenv("SCREENER_MAX_LIVE_COMPUTE", "400"))
         targets = items[:max_enrich]
+        self._mark_live(items[max_enrich:], "over_live_cap")
+        fetched_at = datetime.now().isoformat(timespec="seconds")
 
         def _one(it) -> bool:
             """종목 1개 보강 — 서로 다른 ScreenerItem만 건드리므로 스레드 간 데이터
@@ -904,17 +1093,12 @@ class ValuationScreener:
                 q = client.get_price(code)
                 cp = q.get("current_price")
                 if cp and cp > 0:
-                    it.current_price = cp
+                    self._apply_price(it, cp)
                     it.price_is_mock = False
-                    if it.intrinsic_value and it.intrinsic_value > 0:
-                        it.gap_pct = round(compute_gap_pct(cp, it.intrinsic_value), 2)
-                        it.verdict = gap_pct_to_verdict(it.gap_pct)
-                        composite, gap, roe_s, stab = self._compute_scores(
-                            it.gap_pct,
-                            {"roe_pct": it.roe_pct, "debt_ratio_pct": it.debt_ratio_pct, "fcf_억": it.fcf_억},
-                        )
-                        it.composite_score, it.gap_score = composite, gap
-                        it.roe_score, it.stability_score = roe_s, stab
+                    it.price_source = {"kind": "kis_live", "fetched_at": fetched_at}   # 실시세가 적재 종가보다 앞선다
+                    it.price_unavailable = None
+                else:
+                    self._mark_live([it], "kis_nonpositive")
                 mc = q.get("market_cap_억")
                 if mc and mc > 0:
                     it.market_cap_억 = mc
@@ -924,6 +1108,7 @@ class ValuationScreener:
                     it.pbr = q["pbr"]
                 return True
             except Exception:
+                self._mark_live([it], "kis_error")
                 return False
 
         # 순차 동기 호출(종목당 KIS API 1회)이 400종목 기준 40초~1분 지연을 유발하던
@@ -1020,10 +1205,10 @@ class ValuationScreener:
         if f.max_roe_pct is not None and (item.roe_pct or 999) > f.max_roe_pct:
             return False
 
-        # Gap
-        if f.min_gap_pct is not None and item.gap_pct < f.min_gap_pct:
+        # Gap — 미상(운영에서 가격이 없다 · 감사 F3)은 조건을 통과시키지 않는다(예전에는 None 비교로 TypeError → 500)
+        if f.min_gap_pct is not None and (item.gap_pct is None or item.gap_pct < f.min_gap_pct):
             return False
-        if f.max_gap_pct is not None and item.gap_pct > f.max_gap_pct:
+        if f.max_gap_pct is not None and (item.gap_pct is None or item.gap_pct > f.max_gap_pct):
             return False
 
         # PER
@@ -1096,20 +1281,24 @@ class ValuationScreener:
     # ─────────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _mock_price(stock_code: str) -> float:
-        """현재가 데이터 — 실제 운영 시 KIS API 또는 외부 시세 사용.
+    def _mock_price(stock_code: str) -> float | None:
+        """mock 현재가 — ★합성(mock)에서만 값이 있다★.
 
         ★합성(mock)에서는 시세 이력과 같은 걸음의 오늘 종가다(원 단위)★ — 예전에는 날짜와
         무관한 고정 표였고 일봉은 다른 걸음에서 나와, 같은 종목의 현재가(71,000)와
-        마지막 종가(56,512)가 어긋났다. 운영(`KIS_USE_MOCK≠1`)에서는 예전과 같은
-        바탕값(`mock_price_level`)을 낸다 — `_enrich_kis_quotes` 가 실시세로 덮어 쓴다.
+        마지막 종가(56,512)가 어긋났다.
+
+        ★운영(`KIS_USE_MOCK≠1`)에서는 None 이다(2026-11-21 · 감사 F3)★ — 예전에는 바탕값(`mock_price_level`: 고정 표 ·
+        표 밖은 `10,000 + (해시×137) % 200,000`)을 냈고, 실시세 보강이 실패·생략된 종목은 그 가격으로 괴리율·판정·종합 점수를
+        받았다. 운영의 현재 스크리닝 가격은 `_base_price_detail`(적재 일봉 종가)과 `_enrich_kis_quotes`(실시세)가 낸다.
         """
         from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
+            return None
         from src.data.ohlcv_loader import mock_price_asof, mock_price_level
-        if mock_allowed():
-            px = mock_price_asof(stock_code)
-            if px is not None:
-                return px
+        px = mock_price_asof(stock_code)
+        if px is not None:
+            return px
         return mock_price_level(stock_code)
 
     # ─────────────────────────────────────────────────────────────────────
