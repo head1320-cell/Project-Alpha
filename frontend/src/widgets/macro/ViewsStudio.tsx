@@ -20,6 +20,7 @@ import { Plus, X } from "lucide-react";
 import { LoadingState, UnavailableState } from "@/shared/ui/States";
 import { studiosApi, type StudioResult, type ViewSpec } from "@/entities/macro/studios";
 import { FrontierCard, ServerText, StudioFail, StudioHead, StudioOutcome, studioAnswer } from "./StudioPanel";
+import { useStudioSource } from "./useStudioSource";
 
 const DEFAULT_ASSETS = "069500,229200,148070,132030";
 
@@ -36,6 +37,8 @@ export function ViewsStudio() {
     staleTime: 60_000,
   });
   const d = listQ.data?.studios.find((s) => s.id === "agentic-mcp") ?? null;
+  // 입력 계열이 없으면(지금 서버) 게이트를 묻지 않고 표지도 없다 — 규칙은 스튜디오 이름이 아니라 서버의 입력 계열을 본다(U2-b).
+  const source = useStudioSource(d, res);
 
   const assets = assetsText.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
 
@@ -54,7 +57,7 @@ export function ViewsStudio() {
 
   return (
     <div className="ms-studio tx-page tx-page--wide tpage-fade">
-      <StudioHead id="agentic-mcp" d={d} answer={res?.available ? studioAnswer("agentic-mcp", res.outputs) : null} />
+      <StudioHead id="agentic-mcp" d={d} answer={res?.available ? studioAnswer("agentic-mcp", res.outputs) : null} source={source} />
 
       {listQ.isLoading && <LoadingState label="스튜디오 정보 조회 중" />}
       {listQ.isError && <StudioFail title="스튜디오 정보 조회 실패" onRetry={() => void listQ.refetch()} />}

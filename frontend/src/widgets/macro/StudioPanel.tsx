@@ -32,6 +32,8 @@ import { Spark as SparkLine } from "@/shared/ui/plot/Spark";
 import { IND_KR, STUDIO_OUT_KO, signed } from "./macroKo";
 import { ReasonWhy, RetryFail, ServerText } from "./studioBits";
 import { CausalGraphView } from "./cockpitParts";
+import { ProvenanceBadge, type ProvSource } from "@/shared/ui/provenance";
+import { useStudioSource } from "./useStudioSource";
 
 // 이 패널의 선 그림 셋 — recharts 는 차트 파일에서만 import 한다(ADR 004 · 2026-11-10). 화면이 뜬 뒤에 받는다(lazyChart) —
 // 예전에는 이 파일이 직접 import 해 스튜디오 네 페이지의 초기 script 에 실려 있었다. 패널이 붙자마자 불러 계산 결과와 같이 오게 한다.
@@ -335,8 +337,13 @@ export function FrontierCard({ d }: { d: StudioDescriptor }) {
   );
 }
 
-/** 머리 — 한국어 이름 · 서버 질문 · 입력 계열 칩 · 답 줄. */
-export function StudioHead({ id, d, answer }: { id: string; d: StudioDescriptor | null; answer: string | null }) {
+/**
+ * 머리 — 한국어 이름 · 서버 질문 · 입력 계열 칩 · 데이터 출처(U2-b) · 답 줄.
+ * 출처는 부르는 쪽이 `useStudioSource` 로 정해 넘긴다(계열을 쓰는 스튜디오만 — 합성 표시는 서버 게이트로만).
+ */
+export function StudioHead({ id, d, answer, source = null }: {
+  id: string; d: StudioDescriptor | null; answer: string | null; source?: ProvSource | null;
+}) {
   return (
     <header className="ms-head">
       <h1 className="ms-h1">{studioName(id)}</h1>
@@ -349,6 +356,7 @@ export function StudioHead({ id, d, answer }: { id: string; d: StudioDescriptor 
           </ul>
         </div>
       )}
+      {source && <ProvenanceBadge label="스튜디오 계산의 데이터 출처" source={source} />}
       {answer && <p className="ms-answer">{answer}</p>}
     </header>
   );
@@ -369,10 +377,11 @@ export function StudioPanel({ id, months = 60 }: { id: string; months?: number }
 
   const d = listQ.data?.studios.find((s) => s.id === id) ?? null;
   const answer = runQ.data?.available ? studioAnswer(id, runQ.data.outputs) : null;
+  const source = useStudioSource(d, runQ.data);
 
   return (
     <div className="ms-studio tx-page tx-page--wide tpage-fade">
-      <StudioHead id={id} d={d} answer={answer} />
+      <StudioHead id={id} d={d} answer={answer} source={source} />
 
       {listQ.isLoading && <LoadingState label="스튜디오 정보 조회 중" />}
       {listQ.isError && <StudioFail title="스튜디오 정보 조회 실패" onRetry={() => void listQ.refetch()} />}

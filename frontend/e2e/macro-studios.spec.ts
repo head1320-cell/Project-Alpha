@@ -448,3 +448,171 @@ test("읽는 줄 — 기간 구조(세 요인 · 기간프리미엄 대용): 툴
   await tp.locator(".cr-table summary").click();
   await expect(tp.locator(".cr-table tbody tr")).toHaveCount(m);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// U2-b — 스튜디오의 합성 표시 (설계 문서 §2.2 C13 · 계획 docs/superpowers/plans/2026-11-21-uiux-u2-provenance.md)
+// ─────────────────────────────────────────────────────────────────────────────
+// mock 에서 수집기는 값이 없거나 받지 못한 지표를 합성 무작위 걸음으로 채우고, 스튜디오는 계열마다의 출처를 버린다 →
+// 합성 계열에서 나온 수가 표시 없이 그려졌다. ★합성 표시는 서버 게이트(connection-status.mock_allowed)로만★
+// (매크로의 정해진 규칙 · 받은 결정 ③ — 서버 0줄). ★먼저 써서 U2-a 빌드(`2e8c31b`)에서 빨간 것을 봤다★ 지키는 것(짝으로):
+//   · 계열을 쓰는 스튜디오 넷: 게이트 참 → '합성 데이터'(경고색) / 거짓 → '출처 N/A(응답에 계열별 출처가 없습니다)'
+//     (한국은행 키가 있어도 실데이터라 단정하지 않는다) / 게이트 실패 → '출처 N/A(합성 여부를 확인하지 못했습니다)'
+//   · 뷰 만들기(입력 계열 없음): 표지 0 · 게이트를 묻지 않는다(짝: 서버가 입력 계열을 답하면 선다)
+//   · 스튜디오 정보를 못 받으면 계산 응답의 기간(span)이 증거 — 있으면 게이트대로(짝: 계산이 미가용이면 표지 0)
+//   · 요청: 계열 스튜디오에 connection-status 하나만 는다 · 뷰 만들기는 그대로
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DATA_STUDIOS = STUDIOS.filter(([s]) => s !== "agentic-mcp").map(([s]) => s);
+const PROV = '.ms-studio .ms-head ul.tx-chips.tx-prov[aria-label="스튜디오 계산의 데이터 출처"]';
+const GATE = "**/api/backend/api/v1/macro/connection-status";
+const LIST = /\/api\/backend\/api\/v1\/macro\/studios(\?.*)?$/;
+const GATE_OFF = { mock_allowed: false, real_mode: true, bok_configured: true, fred_configured: true };
+const stubGate = (page: Page, body: Record<string, unknown> | null) =>
+  page.route(GATE, (r) => (body ? r.fulfill({ json: body }) : r.fulfill(fail500)));
+
+/** 중립 칩(모름)의 바탕이 그 뒤의 바탕과 갈리는지 — 같으면 칩의 테가 사라져 본문 한 줄처럼 읽힌다(스크린샷 검수에서 찾음). */
+async function chipStandsOut(page: Page) {
+  const r = await page.locator(`${PROV} .tx-chip`).first().evaluate((el) => {
+    const bg = (e: Element) => getComputedStyle(e).backgroundColor;
+    const clear = (c: string) => c === "transparent" || /rgba\(.*,\s*0\)$/.test(c);
+    let n: Element | null = el.parentElement;
+    while (n && clear(bg(n))) n = n.parentElement;
+    return { chip: bg(el), behind: n ? bg(n) : "none", line: getComputedStyle(el).boxShadow };
+  });
+  expect(r.chip === r.behind && r.line === "none", `칩의 바탕 ${r.chip} · 뒤의 바탕 ${r.behind} · 테 ${r.line}`).toBe(false);
+}
+
+/** 합성 칩이 정말 보이는지 — 크기 · 투명도 · 보임 · 경고색(--tx-warn) · 가운데에 그려지는 것이 칩(잘리거나 덮이지 않음). */
+async function syntheticShown(page: Page, what: string) {
+  const chip = page.locator(`${PROV} .tx-chip[data-tone="practice"]`);
+  await expect(chip, what).toHaveCount(1, { timeout: 20_000 });
+  await expect(chip, what).toBeVisible();
+  const m = await chip.evaluate((el) => {
+    el.scrollIntoView({ block: "center" });
+    const r = el.getBoundingClientRect();
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    let op = 1;
+    for (let n: Element | null = el; n; n = n.parentElement) op *= Number(getComputedStyle(n).opacity);
+    const probe = document.createElement("span");
+    probe.style.color = "var(--tx-warn)";
+    el.parentElement!.appendChild(probe);
+    const warn = getComputedStyle(probe).color;
+    probe.remove();
+    return { w: r.width, h: r.height, op, color: getComputedStyle(el).color, warn, onTop: !!top && (top === el || el.contains(top)) };
+  });
+  expect(m.w, what).toBeGreaterThanOrEqual(40);
+  expect(m.h, what).toBeGreaterThanOrEqual(14);
+  expect(m.op, what).toBeGreaterThan(0.9);
+  expect(m.color, `${what} — 경고색`).toBe(m.warn);
+  expect(m.onTop, `${what} — 잘리거나 덮이지 않는다`).toBe(true);
+}
+
+test("U2-b 실제 mock 서버: 계열 스튜디오 넷 모두 머리에 '합성 데이터' 하나(경고색 · 근거의 종류 source)", async ({ page }) => {
+  for (const slug of DATA_STUDIOS) {
+    await openStudio(page, slug);
+    const chips = page.locator(`${PROV} .tx-chip`);
+    await expect(chips, slug).toHaveText(["합성 데이터"], { timeout: 20_000 });
+    await expect(chips.first(), slug).toHaveAttribute("data-ev", "source");
+    await syntheticShown(page, slug);
+  }
+});
+
+test("U2-b 게이트 거짓: 합성 칩 0 · '출처 N/A(응답에 계열별 출처가 없습니다)' — 한국은행 키가 있어도 실데이터라 적지 않는다(짝: 참이면 합성)", async ({ page }) => {
+  await stubGate(page, GATE_OFF);
+  await openStudio(page, "tsfm-latent");
+  const chips = page.locator(`${PROV} .tx-chip`);
+  await expect(chips).toHaveText(["출처 N/A(응답에 계열별 출처가 없습니다)"], { timeout: 20_000 });
+  await expect(chips.first()).toHaveAttribute("data-tone", "unknown");
+  await expect(chips.first()).toBeVisible();
+  await chipStandsOut(page);
+  await expect(page.locator('.ms-studio .ms-head .tx-chip[data-tone="practice"]')).toHaveCount(0);
+  expect(await page.locator(".ms-studio .ms-head").innerText()).not.toContain("실데이터");
+  // 짝: 게이트만 참으로 바꾸면 같은 화면이 합성이라 적는다
+  await page.unroute(GATE);
+  await stubGate(page, { ...GATE_OFF, mock_allowed: true, real_mode: false });
+  await openStudio(page, "tsfm-latent");
+  await expect(chips).toHaveText(["합성 데이터"], { timeout: 20_000 });
+});
+
+test("U2-b 게이트 실패(500): '출처 N/A(합성 여부를 확인하지 못했습니다)' — 합성도 실데이터도 단정하지 않는다", async ({ page }) => {
+  await stubGate(page, null);
+  await openStudio(page, "neural-sde");
+  const chips = page.locator(`${PROV} .tx-chip`);
+  await expect(chips).toHaveText(["출처 N/A(합성 여부를 확인하지 못했습니다)"], { timeout: 20_000 });
+  await expect(chips.first()).toHaveAttribute("data-tone", "unknown");
+  await expect(chips.first()).toBeVisible();
+  await chipStandsOut(page);
+  await expect(page.locator('.ms-studio .ms-head .tx-chip[data-tone="practice"]')).toHaveCount(0);
+  expect(await page.locator(".ms-studio .ms-head").innerText()).not.toContain("실데이터");
+});
+
+test("U2-b 뷰 만들기: 입력 계열이 없으면 표지 0 · 게이트를 묻지 않는다(짝: 서버가 입력 계열을 답하면 '합성 데이터')", async ({ page }) => {
+  const asked: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("/macro/connection-status")) asked.push(r.url()); });
+  await openStudio(page, "agentic-mcp");
+  await expect(page.locator(".ms-studio h1")).toHaveText("뷰 만들기", { timeout: 20_000 });
+  await page.waitForTimeout(500);
+  await expect(page.locator(PROV)).toHaveCount(0);
+  expect(asked, "입력 계열이 없으면 게이트를 묻지 않는다").toEqual([]);
+  // 화면 안 이동: 계열 스튜디오에서 받은 게이트가 같은 열쇠의 캐시에 남아 있어도 뷰 만들기에는 표지가 없다
+  await openStudio(page, "tsfm-latent");
+  await expect(page.locator(`${PROV} .tx-chip`)).toHaveText(["합성 데이터"], { timeout: 20_000 });
+  await page.locator('.ms-nav-item[href="/macro/agentic-mcp"]').click();
+  await page.waitForURL(/\/macro\/agentic-mcp$/, { timeout: 20_000 });
+  await expect(page.locator(".ms-studio h1")).toHaveText("뷰 만들기", { timeout: 20_000 });
+  await page.waitForTimeout(500);
+  await expect(page.locator(PROV), "캐시에 게이트가 있어도 입력 계열이 없으면 표지 0").toHaveCount(0);
+  // 짝: 서버가 이 스튜디오의 입력 계열을 답하면 선다(규칙은 스튜디오 이름이 아니라 서버의 입력 계열을 본다)
+  await page.route(LIST, async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    for (const s of body.studios) if (s.id === "agentic-mcp") s.inputs = ["KR_LEADING_CYCLE"];
+    await route.fulfill({ response: res, json: body });
+  });
+  await openStudio(page, "agentic-mcp");
+  await expect(page.locator(`${PROV} .tx-chip`)).toHaveText(["합성 데이터"], { timeout: 20_000 });
+});
+
+test("U2-b 스튜디오 정보를 못 받으면 계산 응답의 기간이 증거 — 기간이 있으면 '합성 데이터'(짝: 계산이 미가용이면 표지 0)", async ({ page }) => {
+  await page.route(LIST, (r) => r.fulfill(fail500));
+  await openStudio(page, "tsfm-latent");
+  await expect(page.locator('.ms-studio [role="alert"]').first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(`${PROV} .tx-chip`)).toHaveText(["합성 데이터"], { timeout: 20_000 });
+  // 짝: 계산도 미가용(기간 없음)이면 표지가 없다 — 화면에 수가 없고 실패 상자가 이미 그 사실을 말한다
+  await page.route(`${API}/tsfm-latent**`, (r) => r.fulfill({ json: { available: false, engine: null, reason: "표본이 모자랍니다" } }));
+  await openStudio(page, "tsfm-latent");
+  await expect(page.locator(".ms-studio .ms-card-sub .tstate-unavail").first()).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+  await expect(page.locator(PROV)).toHaveCount(0);
+});
+
+test("U2-b 요청: 계열 스튜디오는 connection-status 하나만 는다 · 뷰 만들기는 그대로", async ({ page }) => {
+  for (const slug of [...DATA_STUDIOS, "agentic-mcp"]) {
+    const seen: string[] = [];
+    const on = (r: { url(): string; method(): string }) => {
+      const u = new URL(r.url());
+      if (u.pathname.includes("/api/v1/")) seen.push(`${r.method()} ${u.pathname.replace(/^.*\/api\/v1/, "")}${u.search}`);
+    };
+    page.on("request", on);
+    await openStudio(page, slug);
+    await page.waitForTimeout(800);
+    page.off("request", on);
+    const want = slug === "agentic-mcp" ? ["GET /macro/studios"]
+      : ["GET /macro/connection-status", "GET /macro/studios", `GET /macro/studios/${slug}?months=60&target=KOSPI`];
+    expect([...seen].sort(), slug).toEqual([...want].sort());
+  }
+});
+
+test("U2-b 대비: 표지가 있는 머리 — 라이트 · 다크 AA 미달 0 · 다크에 밝은 판 0 · 합성 칩은 두 테마에서 보인다", async ({ page }) => {
+  await openStudio(page, "causal-deepm");
+  await syntheticShown(page, "라이트");
+  const light = await page.evaluate<AuditResult>(contrastAudit(".ms-studio .ms-head"));
+  expect(light.checked, "라이트: 검사한 노드 수").toBeGreaterThan(3);
+  expect(light.low, "라이트 AA 미달").toEqual([]);
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await page.waitForTimeout(200);
+  await syntheticShown(page, "다크");
+  const dark = await page.evaluate<AuditResult>(contrastAudit(".ms-studio .ms-head"));
+  expect(dark.low, "다크 AA 미달").toEqual([]);
+  expect(dark.bright, "다크인데 밝은 판").toEqual([]);
+});
