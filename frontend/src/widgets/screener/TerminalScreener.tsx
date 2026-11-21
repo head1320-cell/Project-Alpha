@@ -62,6 +62,8 @@ const PAGE_SIZE = 100;   // 결과 테이블 페이지당 행 수
 /** 상세의 옆 판 — 이 폭부터 판이고 그보다 좁으면 시트다(ADR 007 의 중단점 · G5 두 칸의 문턱과 같은 값). */
 const SIDE_QUERY = "(min-width: 1280px)";
 const SIDE_MIN = 320, SIDE_MAX = 560, SIDE_DEFAULT = 360, SIDE_STEP = 16, SIDE_KEY = "alpha_screener_side_w";
+/** 조건 영역을 접었는지 — 이 브라우저에만 남긴다(값이 없으면 펼침). */
+const CONDS_KEY = "alpha_screener_conds";
 const TOP_BRIDGE = 10;   // "상위 n종목 설계에 넣기" — 표의 지금 정렬 그대로 위 n개(캔버스 종목 고르기 노드 상한 30 안)
 /** 고를 수 있는 유니버스 — id 는 서버 프리셋 id 그대로(요청 골든이 건다). */
 const UNIVERSES = [
@@ -93,7 +95,7 @@ function passes(v: number, op: string | undefined, t: number): boolean {
   switch (op) { case "gt": return v > t; case "lte": return v <= t; case "lt": return v < t; case "eq": return v === t; default: return v >= t; }
 }
 
-// 임계값 설정 보조 — 팩터 분포 미니 히스토그램 (통과=파랑, 미통과=선 색, 잉크선=임계값 — 판단을 빨강/초록으로 말하지 않는다)
+// 임계값 설정 보조 — 팩터 분포 미니 히스토그램 (통과=짙은 회색, 미통과=선 색, 잉크선=임계값 — 판단을 빨강/초록으로 말하지 않는다 · 파랑은 하락의 색이라 쓰지 않는다)
 function MiniHistogram({ values, op, threshold }: { values: number[]; op?: string; threshold: number }) {
   const finite = values.filter((v) => Number.isFinite(v));
   if (finite.length < 4) return <span className="bsc-hist-empty">분포를 표시할 표본이 부족합니다</span>;
@@ -109,7 +111,7 @@ function MiniHistogram({ values, op, threshold }: { values: number[]; op?: strin
         {counts.map((c, i) => {
           const mid = min + ((i + 0.5) / BINS) * span;
           const h = (c / maxC) * 28;
-          return <rect key={i} x={(i / BINS) * 100} y={29 - h} width={100 / BINS - 0.5} height={h} fill={passes(mid, op, threshold) ? "var(--tx-blue)" : "var(--tx-line)"} />;
+          return <rect key={i} x={(i / BINS) * 100} y={29 - h} width={100 / BINS - 0.5} height={h} fill={passes(mid, op, threshold) ? "var(--tx-sub)" : "var(--tx-line)"} />;
         })}
         <line x1={tx * 100} y1={0} x2={tx * 100} y2={30} stroke="var(--tx-ink)" strokeWidth="0.8" />
       </svg>
@@ -148,6 +150,7 @@ export default function TerminalScreener() {
   const [sort, setSortState] = useState<SortState>({ col: "composite_score", dir: "desc" });
   const [selected, setSelected] = useState<string | null>(null);
   const wide = useMediaQuery(SIDE_QUERY);
+  const [condsOpen, setCondsOpen] = useState(true);
   const [sideW, setSideW] = useState(SIDE_DEFAULT);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
@@ -183,6 +186,7 @@ export default function TerminalScreener() {
   useEffect(() => {
     try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
     try { const c = localStorage.getItem("alpha_screener_cols"); if (c) setDisplayCols(JSON.parse(c)); } catch { /* noop */ }
+    try { if (localStorage.getItem(CONDS_KEY) === "closed") setCondsOpen(false); } catch { /* noop */ }
     // 판의 폭 — 범위 밖의 저장값은 가장 가까운 끝으로, 수가 아니면 처음 값(지어내지 않는다).
     try { const w = localStorage.getItem(SIDE_KEY); if (w !== null) { const n = Number(w); setSideW(Number.isFinite(n) ? clampSplit(n, SIDE_MIN, SIDE_MAX) : SIDE_DEFAULT); } } catch { /* noop */ }
     setPresets(listPresets());
@@ -346,6 +350,11 @@ export default function TerminalScreener() {
     return () => clearTimeout(t);
   }, [mcapRange, commitMcapNow]);
   const mcapActive = mcapRange[0] !== 0 || mcapRange[1] !== 100;
+  /** 접고 펴기 — 겉모습만 바꾼다(조건 · 요청은 그대로). 접은 것만 남기고 펴면 저장값을 지운다. */
+  const toggleConds = () => setCondsOpen((open) => {
+    try { if (open) localStorage.setItem(CONDS_KEY, "closed"); else localStorage.removeItem(CONDS_KEY); } catch { /* noop */ }
+    return !open;
+  });
   const toggleDisplayCol = (id: string) => setDisplayCols((cols) => {
     const next = cols.includes(id) ? cols.filter((c) => c !== id) : [...cols, id];
     try { localStorage.setItem("alpha_screener_cols", JSON.stringify(next)); } catch { /* noop */ }
@@ -510,8 +519,20 @@ export default function TerminalScreener() {
     <div className="tx-page tx-page--wide scr">
       <PageHead title="종목 찾기" lede="조건식으로 종목을 선별합니다." />
 
-      {/* ── 조건 ── */}
+      {/* ── 조건 ── 접으면 한 줄 요약만 남는다(본문은 `hidden` — 접힌 조작 요소는 초점을 받지 않는다). */}
       <section className="tx-sec bsc-workspace scr-conds" aria-label="조건">
+        <button type="button" className="scr-conds-toggle" data-act="conds-toggle" aria-expanded={condsOpen} aria-controls="scr-conds-body" onClick={toggleConds}>
+          {condsOpen ? "조건 접기" : "조건 펴기"}
+        </button>
+        {!condsOpen && (
+          <p className="scr-conds-sum">
+            유니버스 {UNIVERSES.find((u) => u.id === universe)?.label ?? universe}
+            {" · "}시가총액 {mcapActive ? `${mcapRange[0] === 0 ? "최소" : fmtMcapKo(sliderToMcap(mcapRange[0]))} ~ ${mcapRange[1] === 100 ? "최대" : fmtMcapKo(sliderToMcap(mcapRange[1]))}` : "전체"}
+            {" · "}{group.conditions.length ? `조건 ${group.conditions.length}개: ${group.conditions.map((c) => condText(c, fieldLabel)).join(" · ")}` : "조건 없음"}
+          </p>
+        )}
+        <div id="scr-conds-body" hidden={!condsOpen}>
+        <div className="scr-line-pair">
         <div className="scr-line">
           <label className="scr-line-k" htmlFor="scr-universe">유니버스</label>
           <select id="scr-universe" className="scr-select" data-act="universe" value={universe} onChange={(e) => setUniverse(e.target.value)}>
@@ -539,6 +560,7 @@ export default function TerminalScreener() {
               </div>
             </details>
           </div>
+        </div>
         </div>
         {mcapActive && results && !showMcap && (
           <p className="scr-note">현재 결과에는 시가총액 값이 없습니다 — 시가총액 조건은 해당 값이 있는 데이터에만 적용됩니다.</p>
@@ -671,6 +693,7 @@ export default function TerminalScreener() {
             </div>
           </div>
         </details>
+        </div>
       </section>
 
       {notice && <div className="scr-notice"><Notice tone="warn" title={notice} /></div>}

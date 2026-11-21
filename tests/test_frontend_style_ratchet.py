@@ -40,8 +40,8 @@ GLOBALS_CSS = SRC / "app" / "globals.css"
 
 #: 선언 수. 화면 조각이 옮길 때마다 내린다.
 BASELINE_COUNTS: dict[str, int] = {
-    "척도 밖 글자 크기": 577,
-    "척도 밖 반경": 375,
+    "척도 밖 글자 크기": 566,
+    "척도 밖 반경": 361,
     "날 z-index": 78,
     "토큰 정의 밖 hex": 229,
 }

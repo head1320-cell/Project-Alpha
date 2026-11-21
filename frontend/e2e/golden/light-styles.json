@@ -428,6 +428,15 @@
   "main:section.bsc-workspace.scr-conds.tx-sec": [
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:button.scr-conds-toggle": [
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
+  "main:div.scr-line-pair": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:div.scr-line": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
@@ -447,7 +456,7 @@
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:button.scr-pill.scr-pill--on": [
-   "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(27, 100, 218)|rgb(27, 100, 218)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:button.scr-pill": [
    "rgb(78, 89, 104)|rgb(242, 244, 246)|rgb(78, 89, 104)|rgb(78, 89, 104)|rgb(0, 0, 0)|none|"
@@ -466,7 +475,7 @@
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:div.bsc-range-fill": [
-   "rgb(25, 31, 40)|rgb(49, 130, 246)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:input.bsc-range-input": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -484,7 +493,7 @@
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:button.bsc-add-btn": [
-   "rgb(27, 100, 218)|rgb(232, 243, 255)|rgb(27, 100, 218)|rgb(27, 100, 218)|rgb(0, 0, 0)|none|"
+   "rgb(25, 31, 40)|rgb(242, 244, 246)|rgb(25, 31, 40)|rgb(25, 31, 40)|rgb(0, 0, 0)|none|"
   ],
   "main:details.scr-expert": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 232, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
@@ -566,9 +575,6 @@
    "rgb(25, 31, 40)|rgb(255, 255, 255)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:header.tx-sec-head": [
-   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
-  ],
-  "main:div.": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
   "main:h2.tx-sec-t": [

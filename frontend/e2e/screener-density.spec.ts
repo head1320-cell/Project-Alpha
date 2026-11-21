@@ -116,7 +116,7 @@ const fullRows = (page: Page) => page.evaluate(() => {
   return [...document.querySelectorAll(".bsc-table tbody tr.bsc-row")].filter((tr) => { const r = tr.getBoundingClientRect(); return r.top >= head.bottom - 0.5 && r.bottom <= bottom + 0.5; }).length;
 });
 
-test("스크롤 없이 다 보이는 줄: 1440 × 900 에서 촘촘 10줄 이상 · 보통 8줄 이상 · 넉넉 5줄 이상(옮기기 전 2줄) — 밀도가 낮을수록 줄이 준다(짝)", async ({ page }) => {
+test("스크롤 없이 다 보이는 줄: 1440 × 900 에서 촘촘 16줄 이상 · 보통 11줄 이상 · 넉넉 6줄 이상(옮기기 전 2줄 · 조건을 편 채로) — 밀도가 낮을수록 줄이 준다(짝)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const got: Record<string, number> = {};
   for (const density of ["compact", "regular", "comfortable"]) {
@@ -128,9 +128,9 @@ test("스크롤 없이 다 보이는 줄: 1440 × 900 에서 촘촘 10줄 이상
     await expect(page.getByRole("navigation", { name: "결과 쪽" }), `${density}: 쪽 넘김이 굴리지 않고 보인다(표가 남은 높이를 먹는다)`).toBeInViewport({ ratio: 1 });
     expect(await page.locator(".terminal-main").evaluate((m) => m.scrollHeight - m.clientHeight), `${density}: 쪽은 구르지 않는다 — 구르는 것은 표 하나`).toBeLessThanOrEqual(0);
   }
-  expect(got.compact, JSON.stringify(got)).toBeGreaterThanOrEqual(10);
-  expect(got.regular, JSON.stringify(got)).toBeGreaterThanOrEqual(8);
-  expect(got.comfortable, JSON.stringify(got)).toBeGreaterThanOrEqual(5);
+  expect(got.compact, JSON.stringify(got)).toBeGreaterThanOrEqual(16);   // 잰 값 18 · 13 · 8(U1-d 뒤 · 이 환경) 에서 둘씩 뺀 바닥
+  expect(got.regular, JSON.stringify(got)).toBeGreaterThanOrEqual(11);
+  expect(got.comfortable, JSON.stringify(got)).toBeGreaterThanOrEqual(6);
   expect(got.compact, "촘촘이 보통보다 많다").toBeGreaterThan(got.regular);
   expect(got.regular, "보통이 넉넉보다 많다").toBeGreaterThan(got.comfortable);
 });
