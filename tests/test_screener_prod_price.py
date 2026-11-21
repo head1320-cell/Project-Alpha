@@ -33,6 +33,7 @@ from src.engine.screener import (
     ValuationScreener,
     sort_screener_items,
 )
+from src.engine.universe_select import close_asof as REAL_CLOSE_ASOF  # 고정 전에 잡아 둔다(아래 끝단 시험)
 from src.engine.valuation.valuation_models import ValuationEngine, compute_gap_pct, gap_pct_to_verdict
 
 U = ["005930", "000660", "123456"]
@@ -469,4 +470,35 @@ def test_the_ingest_batch_stores_no_synthetic_price(world, monkeypatch):
     assert stored["005930"]["current_price"] == 70_000.0 and stored["005930"]["price_source"]["kind"] == "daily_close"
     assert stored["000660"]["current_price"] is None and stored["000660"]["price_unavailable"]["close"] == "not_loaded"
     assert all(v["price_is_mock"] is False for v in stored.values())
+    assert world.base_calls == []
+
+
+# ── 끝단: 진짜 `close_asof` · 임시 sqlite 의 `daily_prices`(제품의 스키마 함수로 만든다) ───────────────────────────
+def test_end_to_end_on_a_loaded_daily_prices_table(world, monkeypatch, tmp_path):
+    """가짜 없이 적재 표를 읽는다 — 어제 원주가 봉 · 수정주가 봉 · 낡은 봉(15일 전) · 봉 없음."""
+    from datetime import timedelta
+
+    from sqlalchemy import create_engine, text
+
+    import src.engine.universe_select as us
+    from src.data.krx_ingest import ensure_table
+    eng = create_engine(f"sqlite:///{tmp_path}/px.db")
+    ensure_table(eng)
+    day = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")   # noqa: E731
+    with eng.begin() as c:
+        for t, d, px, src, basis in (("005930", day(1), 70_000.0, "krx", "raw"), ("000660", day(2), 90_000.0, "kis", "adjusted"),
+                                     ("123456", day(15), 50_000.0, "krx", "raw")):
+            c.execute(text("INSERT INTO daily_prices (ticker, trade_date, close, source, price_basis) VALUES (:t, :d, :c, :s, :b)"),
+                      {"t": t, "d": d, "c": px, "s": src, "b": basis})
+    monkeypatch.setattr(us, "close_asof", REAL_CLOSE_ASOF)
+    monkeypatch.setattr("src.database.get_engine", lambda: eng)
+    r = _run(universe=["005930", "000660", "123456", "999999"])
+    rows = _by_code(r)
+    assert rows["005930"].current_price == 70_000.0
+    assert rows["005930"].price_source == {"kind": "daily_close", "trade_date": day(1), "source": "krx", "price_basis": "raw",
+                                           "live": "kis_credentials_missing"}
+    assert rows["000660"].current_price == 90_000.0 and rows["000660"].price_source["price_basis"] == "adjusted"
+    assert _unknown(rows["123456"]) and rows["123456"].price_unavailable["close"] == "stale"
+    assert _unknown(rows["999999"]) and rows["999999"].price_unavailable["close"] == "not_loaded"
+    assert r.prices["by_source"] == {"kis_live": 0, "daily_close": 2, "provider": 0, "unavailable": 2}
     assert world.base_calls == []
