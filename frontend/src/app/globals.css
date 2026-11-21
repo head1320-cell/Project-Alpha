@@ -11179,3 +11179,20 @@ a.tx-skip:hover { color: var(--tx-on-accent); text-decoration: none; }
 .tx-density .tx-seg-opt--on { background: var(--tx-surface); color: var(--tx-ink); box-shadow: inset 0 0 0 1px var(--tx-accent); }
 .tx-density .tx-seg-opt:focus-visible { outline: 2px solid var(--tx-focus); outline-offset: 1px; }
 .tx-density--fixed { margin: 0; font-size: 12px; color: var(--tx-sub); }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   U2 · 출처 표지 · 갱신 시각 (shared/ui/provenance · ADR 007 §5.4 · 설계 문서 §5.1)
+   · 출처 표지는 공용 근거 칩(.tx-chips · .tx-chip[data-tone])을 그대로 쓴다 — 색은 칩의 것(중립 · 합성은 경고색 + 낱말). 여기서는 크기만 밀도 토큰으로 준다.
+   · ★합성 칩을 숨기거나 흐리게 하는 규칙을 두지 않는다★(어떤 밀도 · 어떤 배치에서도 — e2e/provenance.spec.ts 가 밀도 셋 × 두 테마에서 건다).
+   · 칩 안의 글이 상자보다 길면 칩 안에서 줄을 바꾼다(줄 사이를 띄운다 — 공용 칩의 line-height 1 은 한 줄 전제).
+   · 갱신 시각 줄은 보이는 글자만이다(낭독 · 번쩍임 없음 — 부품). 단 밖의 화면에서는 :root 의 넉넉 값으로 그려진다.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.tx-chips.tx-prov { gap: 4px; }
+.tx-prov .tx-chip { padding: 4px calc(var(--tx-cell-x) / 2); border-radius: var(--tx-r-row); font-size: var(--tx-fs-th); line-height: 1.3; word-break: keep-all; }
+.tx-fresh { margin: 0; color: var(--tx-sub); font-size: var(--tx-fs-th); line-height: 1.5; font-variant-numeric: tabular-nums; }
+
+/* ── 출처 표지 · 갱신 시각 견본(/dev/ui · app/dev/ProvenanceSpecimen.tsx) — 견본 전용 클래스. 제품 화면에 쓰지 않는다. ── */
+.devui-pv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 16px; align-items: start; }
+.devui-pv-box { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid var(--tx-line);
+  border-radius: var(--tx-r-3); background: var(--tx-surface); color: var(--tx-ink); font-family: var(--tx-font); }
+.devui-pv-cap { margin: 0; font-size: 12px; font-weight: 600; color: var(--tx-sub); }

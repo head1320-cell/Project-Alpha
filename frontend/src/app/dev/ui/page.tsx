@@ -38,10 +38,11 @@ import {
 import { concentration, exposureLegs } from "@/shared/lib/exposure";
 // BU0 — 토스식 공용 부품 + 한국식 숫자 표기. 서식 표의 출력은 실제 함수의 반환값이다(손으로 적지 않는다).
 import * as Tx from "@/shared/ui/tx";
-import { direction, krUnit, num, pct, pp, priceWon, signedPct, won } from "@/shared/lib/krFormat";
+import { clockText, direction, krUnit, num, pct, pp, priceWon, signedPct, won } from "@/shared/lib/krFormat";
 // U0(ADR 007) — 단 · 밀도 견본. 제품 부품이 아니라 토큰이 뜻대로 도는지 보는 자리다(e2e/density.spec.ts).
 import { DensitySpecimen } from "../DensitySpecimen";
 import { TableSpecimen } from "../TableSpecimen";
+import { ProvenanceSpecimen } from "../ProvenanceSpecimen";
 
 // ── 갤러리 프레임 ────────────────────────────────────────────────────────────
 // 페이지 자체 크롬은 .devui-* 만 쓴다. 앱 클래스(.pv-* 등)는 표본 안에서만 나타나야
@@ -161,6 +162,8 @@ const KR_FMT: [string, string, string][] = [
   ["pp", "-0.03", pp(-0.03)], ["num", "null", num(null)], ["pct", "NaN", pct(NaN)], ["won", "Infinity", won(Infinity)],
   ["priceWon", "71200", priceWon(71_200)], ["priceWon", "undefined", priceWon(undefined)],
   ["direction", "0.1", direction(0.1)], ["direction", "-1", direction(-1)], ["direction", "0", direction(0)], ["direction", "null", direction(null)],
+  // U2 · 이 기기 시각 — 이 기기 시각의 칸으로 만든 값이라 시간대와 무관하다. 받은 적이 없으면 null(사유는 부르는 쪽이 붙인다).
+  ["clockText", "new Date(2026, 10, 21, 9, 30, 5)", String(clockText(new Date(2026, 10, 21, 9, 30, 5).getTime()))], ["clockText", "0", String(clockText(0))],
 ];
 
 const LO_CONC = concentration([40, 30, 20, 10]);
@@ -361,6 +364,28 @@ export default function DevUiPage() {
           <TableSpecimen tier="work" density="comfortable" />
           <TableSpecimen tier="work" density="compact" dark />
           <TableSpecimen />
+        </div>
+      </section>
+
+      {/* ── U2 · 출처 표지 · 갱신 시각 (shared/ui/provenance) ─────────────────────────
+          출처 → 시각들 → 시점 정합 → 덧붙임의 차례로 칩을 세우고, 주기 조회 화면의 '마지막 수신' 줄을 그린다. 상자마다 `data-tier` · `data-density` 를 직접 달았다.
+          `.devui-item` 을 쓰지 않는다 — 그 수는 shared/ui 부품 표본과 1:1 인 계약이다(dev-ui.spec). 스펙: `e2e/provenance.spec.ts` · `e2e/provenance-logic.spec.ts`. */}
+      <section className="devui-group devui-pv" id="provenance">
+        {/* 390 에서 '(shared/ui/provenance' 한 덩어리가 절보다 넓다 — 줄을 바꿀 자리를 준다(글자 · CSS 그대로). */}
+        <h2 className="devui-h">출처 표지 · 갱신 시각 (shared/ui/<wbr />provenance · U2)</h2>
+        <p className="devui-note">
+          출처 · 시각 · 시점 정합을 칩 하나에 하나씩 적고 차례는 늘 같습니다. 합성은 경고색과 낱말로 적고 어떤 밀도에서도 숨기지 않습니다.
+          모르는 값은 N/A 와 사유입니다. 갱신 시각 줄은 마지막으로 받은 때를 이 기기 시각으로 적고, 값이 바뀌어도 화면 낭독기가 끼어들어 읽지 않습니다.
+          견본의 값은 손으로 적은 합성 값입니다.
+        </p>
+        <div className="devui-pv-grid">
+          <ProvenanceSpecimen tier="work" density="compact" />
+          <ProvenanceSpecimen tier="work" density="regular" />
+          <ProvenanceSpecimen tier="work" density="comfortable" />
+          <ProvenanceSpecimen tier="work" density="compact" dark />
+          <ProvenanceSpecimen tier="work" density="regular" dark />
+          <ProvenanceSpecimen tier="work" density="comfortable" dark />
+          <ProvenanceSpecimen />
         </div>
       </section>
 

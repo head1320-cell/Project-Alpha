@@ -37,10 +37,11 @@ export type ChipTone = "practice" | "assumed" | "unknown" | "unmeasured" | "ok" 
 /** `ev` 는 이 칩이 어떤 근거인지(출처 source · 잰 모형 model · 기준 시각 asof) — 첫 화면 '근거 짚기' 가 이 값으로 칩을 짚는다. */
 export type Chip = { label: string; tone: ChipTone; ev?: string };
 
-export function Chips({ items, label = "이 답의 근거" }: { items: Chip[]; label?: string }) {
+/** `className` 은 감싸는 부품이 제 꼴을 더할 때만(예: 출처 표지 `tx-prov` · U2) — 칩의 클래스 · `data-tone` · `data-ev` 는 그대로다(E2E 계약). */
+export function Chips({ items, label = "이 답의 근거", className }: { items: Chip[]; label?: string; className?: string }) {
   if (!items.length) return null;
   return (
-    <ul className="tx-chips" aria-label={label}>
+    <ul className={className ? `tx-chips ${className}` : "tx-chips"} aria-label={label}>
       {items.map((c, i) => <li key={`${c.tone}-${i}`} className="tx-chip" data-tone={c.tone} data-ev={c.ev}>{c.label}</li>)}
     </ul>
   );

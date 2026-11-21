@@ -365,6 +365,8 @@ test.describe("/dev/ui — BU0 토스식 공용 부품", () => {
       ["pp", "-0.03", "−3.0%p"], ["num", "null", "N/A"], ["pct", "NaN", "N/A"], ["won", "Infinity", "N/A"],
       ["priceWon", "71200", "71,200원"], ["priceWon", "undefined", "N/A"],
       ["direction", "0.1", "up"], ["direction", "-1", "down"], ["direction", "0", "flat"], ["direction", "null", "unknown"],
+      // U2 · 이 기기 시각(24시 두 자리) — 받은 적이 없으면 null(글자를 지어내지 않는다 · 사유는 부르는 쪽이 붙인다).
+      ["clockText", "new Date(2026, 10, 21, 9, 30, 5)", "09:30:05"], ["clockText", "0", "null"],
     ];
     const rows = page.locator(".devui-krfmt-table tr");
     await expect(rows).toHaveCount(want.length);

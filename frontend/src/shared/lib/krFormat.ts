@@ -112,6 +112,17 @@ export function krDateTime(iso: string | null | undefined): string | null {
   return `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일 ${two(k.getUTCHours())}:${two(k.getUTCMinutes())}`;
 }
 
+/**
+ * 이 기기에서 받은 때(밀리초) → "09:30:05"(24시 · 두 자리씩). ★이 기기의 시계★다 — 서버 시각이 아니다(갱신 시각 줄 `Freshness` 가 쓴다 · U2).
+ * 0 · 음수 · 유한하지 않은 값은 받은 적이 없다는 뜻이라 null(지어내지 않는다).
+ */
+export function clockText(ms: N): string | null {
+  if (!ok(ms) || ms <= 0) return null;
+  const d = new Date(ms);
+  const two = (v: number) => String(v).padStart(2, "0");
+  return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+}
+
 export type Direction = "up" | "down" | "flat" | "unknown";
 export function direction(v: N): Direction {
   if (!ok(v)) return "unknown";
