@@ -67,15 +67,9 @@ BASELINE_BREAKPOINTS: tuple[str, ...] = (
     "(min-width: 1680px)",
 )
 
-#: 모든 속성에 거는 전환을 가진 선택자 — 접근성 P0-2 가 0 으로 내린다(초점 고리가 늦게 그려지는 원인).
-BASELINE_TRANSITION_ALL: tuple[str, ...] = (
-    ".brun-btn",
-    ".mc-ind",
-    ".mc-tab",
-    ".tbt-mode",
-    ".tbt-saved-del",
-    ".tscreener-handoff-clear",
-)
+#: 모든 속성에 거는 전환을 가진 선택자 — ★0 이다★(접근성 P0-2 · 2026-11-20 에 여섯을 바뀌는 속성만으로 고쳤다). 초점 고리가 늦게 그려지는 원인이라
+#: 새로 생기면 실패한다 — 목록에 더하지 말고 바뀌는 속성만 적는다(동작은 `frontend/e2e/focus-ring.spec.ts` 가 건다).
+BASELINE_TRANSITION_ALL: tuple[str, ...] = ()
 
 #: 등락색 토큰을 쓰는 선택자의 허용 목록(ADR 007 §4-1 — 등락색은 수와 표식에만). 새 선택자는 여기 더하기 전에 그것이 수 · 표식인지 본다.
 UPDOWN_ALLOW: tuple[str, ...] = (

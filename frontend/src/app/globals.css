@@ -556,7 +556,7 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
   display: flex; align-items: center; gap: 10px;
   padding: 14px 24px; background: var(--t-surface); border: none;
   cursor: pointer; font-size: 14px; font-weight: 500; color: var(--t-muted);
-  transition: all 0.1s ease; position: relative;
+  transition: color 0.1s ease, background-color 0.1s ease, border-radius 0.1s ease; position: relative;
 }
 .tbt-mode + .tbt-mode { border-left: 1px solid var(--t-border); }
 .tbt-mode:hover { color: var(--t-ink); background: #fff; }
@@ -582,7 +582,7 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .tscreener-handoff-clear {
   font-family: var(--t-mono); font-size: 11px; padding: 5px 10px;
   background: transparent; border: 1px solid var(--t-border); border-radius: 2px;
-  color: var(--t-muted); cursor: pointer; white-space: nowrap; transition: all 0.1s;
+  color: var(--t-muted); cursor: pointer; white-space: nowrap; transition: border-color 0.1s, color 0.1s;
 }
 .tscreener-handoff-clear:hover { border-color: #dc2626; color: #dc2626; }
 
@@ -597,7 +597,7 @@ a.tcrumb-up:hover { color: var(--tx-ink); text-decoration: underline; }
 .tbt-saved-list { margin-top: 8px; border: 1px solid var(--t-border); border-radius: 2px; max-height: 220px; overflow-y: auto; }
 .tbt-saved-item { display: flex; align-items: stretch; border-bottom: 1px solid var(--t-border); }
 .tbt-saved-item:last-child { border-bottom: none; }
-.tbt-saved-del { padding: 0 12px; background: transparent; border: none; border-left: 1px solid var(--t-border); color: var(--t-muted); cursor: pointer; font-size: 12px; transition: all 0.1s; }
+.tbt-saved-del { padding: 0 12px; background: transparent; border: none; border-left: 1px solid var(--t-border); color: var(--t-muted); cursor: pointer; font-size: 12px; transition: color 0.1s, background-color 0.1s; }
 .tbt-saved-del:hover { color: #dc2626; background: rgba(220,38,38,0.06); }
 
 /* 데이터 출처 배너 (Phase ① 실데이터 준비) */
@@ -1012,7 +1012,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 /* 서브탭 */
 .mc-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--t-border); flex-wrap: wrap; }
 .mc-tab { display: flex; align-items: center; gap: 7px; padding: 9px 16px; background: none; border: none; border-bottom: 2px solid transparent;
-  color: var(--t-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.12s ease; }
+  color: var(--t-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease; }
 .mc-tab:hover { color: var(--t-ink); }
 .mc-tab.on { color: var(--t-accent); border-bottom-color: var(--t-accent); }
 
@@ -1052,7 +1052,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 
 /* IndicatorCard */
 .mc-indgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.mc-ind { display: flex; flex-direction: column; gap: 5px; text-align: left; background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 2px; padding: 10px 12px; cursor: pointer; transition: all 0.12s ease; }
+.mc-ind { display: flex; flex-direction: column; gap: 5px; text-align: left; background: var(--t-surface); border: 1px solid var(--t-border); border-radius: 2px; padding: 10px 12px; cursor: pointer; transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease; }
 .mc-ind:hover { border-color: var(--t-accent); background: #fff; }
 .mc-ind-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .mc-ind-nm { font-size: 11.5px; color: var(--t-ink); font-weight: 500; }
@@ -1722,7 +1722,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; }
 .brun-err-cid { font-size: 9.5px; color: var(--t-muted); }
 .brun-err-actions { display: flex; gap: 8px; margin-top: 4px; }
 .brun-btn { padding: 6px 13px; border: 1px solid var(--t-border); border-radius: 2px; background: #fff; color: var(--t-ink);
-  font-size: 11px; font-weight: 600; cursor: pointer; transition: all .12s; }
+  font-size: 11px; font-weight: 600; cursor: pointer; transition: opacity .12s; }
 .brun-btn.primary { background: var(--t-accent); border-color: var(--t-accent); color: #fff; }
 .brun-btn:disabled { opacity: .5; cursor: default; }
 
