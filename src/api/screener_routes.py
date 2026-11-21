@@ -109,11 +109,22 @@ def _detect_data_source(items: list) -> dict:
     except Exception:
         pass
     kis_real = (not mock_allowed() and bool(os.getenv("KIS_APP_KEY")))
-    return {
+    out = {
         "fundamentals": "dart_real" if fund_real else "mock",
         "market_data":  "kis_real" if kis_real else "mock",
         "fully_real":   fund_real and kis_real,
     }
+    # ★운영에서만 — 결과 종목의 가격이 실제로 어디서 왔는가(행의 라벨로 센다 · 2026-11-21 감사 F3)★. 덧붙이기만 한다:
+    #   `market_data`·`fully_real` 은 예전 뜻 그대로다(환경으로 정한다 — 행을 보지 않는다). 키가 있어도 실시세가 아닌 행이 있으면
+    #   `market_data: kis_real` 은 과하게 말한다 — 백테스트 라벨(`perf_label`)이 그 값을 쓰므로 따로 볼 일로 남겼다(F3b).
+    if not mock_allowed():
+        from src.engine.screener import ValuationScreener
+        sources = ValuationScreener._price_summary(items)["by_source"]
+        asof_rows = sum(1 for it in items if getattr(it, "asof_price", None) is not None)
+        if asof_rows:
+            sources["asof_close"] = asof_rows      # 과거 시점 평가 — 그 시점 종가(`asof_price` 가 출처를 싣는다)
+        out["price_sources"] = sources
+    return out
 
 
 def _tactical_universe_meta(holdings: list) -> dict:
@@ -220,7 +231,7 @@ def screener_run(req: ScreenerRunRequest):
             params=params,
         )
 
-        return {
+        out = {
             "universe":         result.universe,
             "total_evaluated":  result.total_evaluated,
             "total_passed":     result.total_passed,
@@ -231,6 +242,9 @@ def screener_run(req: ScreenerRunRequest):
             "timestamp":        result.timestamp,
             "items":            [it.to_dict() for it in result.items],
         }
+        if result.prices is not None:          # 운영만 — 가격 출처별 수 · 가격이 없는 종목의 사유(감사 F3). mock 응답 모양은 그대로.
+            out["prices"] = result.prices
+        return out
     except Exception:
         logger.exception("스크리너 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
@@ -609,6 +623,8 @@ def _run_advanced_core(req: AdvancedRunRequest, progress_cb=None) -> dict:
         "liquidity_gate":  liq_stats,
         "data_source":     _detect_data_source(result.items),
     }
+    if result.prices is not None:              # 운영만 — 가격 출처별 수 · 가격이 없는 종목의 사유(감사 F3). mock 응답 모양은 그대로.
+        payload["prices"] = result.prices
     # ★여기에 `perf_label` 을 붙였다가 되물렸다 (Z4 검토)★
     # 이 응답은 **스크리닝 결과**다 — 한 시점의 횡단면 통과 종목이지 과거 데이터 위의
     # 시뮬레이션이 아니다. `backtest` 라벨을 달면 "이 숫자는 시뮬레이션에서 나왔다" 는

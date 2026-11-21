@@ -159,11 +159,16 @@ def screen_to_trade(req: ScreenToTradeRequest):
         # 비중이 안전장치 max_position_pct 초과하지 않도록
         if weight and weight > req.safety.max_position_pct:
             weight = req.safety.max_position_pct
+        def _why(it) -> str:
+            # 종합 점수는 운영에서 시세가 없으면 미상(None)이다(감사 F3) — 0점으로 적지 않는다. 주문 수량은 엔진이 자기 시세로 정한다.
+            score = getattr(it, "composite_score", None)
+            return f"스크리닝 통과 (점수 {score:.0f})" if score is not None else "스크리닝 통과 (점수 미상 · 시세 없음)"
+
         signals = [TradeSignal(
             stock_code=it.stock_code,
             stock_name=getattr(it, "corp_name", "") or it.stock_code,
             action=req.action, strength=1.0, target_weight=weight,
-            reason=f"스크리닝 통과 (점수 {getattr(it,'composite_score',0):.0f})",
+            reason=_why(it),
         ) for it in screened]
 
         # 3) 실행

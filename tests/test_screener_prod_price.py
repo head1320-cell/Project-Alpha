@@ -502,3 +502,92 @@ def test_end_to_end_on_a_loaded_daily_prices_table(world, monkeypatch, tmp_path)
     assert _unknown(rows["999999"]) and rows["999999"].price_unavailable["close"] == "not_loaded"
     assert r.prices["by_source"] == {"kis_live": 0, "daily_close": 2, "provider": 0, "unavailable": 2}
     assert world.base_calls == []
+
+
+# ── 라우트 · data_source · 하류(거래 사유 · 서술 프롬프트) ─────────────────────────────────────────────
+#: 고치기 전 `/run` 응답의 키(mock 모양은 그대로여야 한다).
+RUN_KEYS = {"universe", "total_evaluated", "total_passed", "elapsed_seconds", "cache_hits", "cache_misses", "failures",
+            "timestamp", "items"}
+#: 고치기 전 `_run_advanced_core` 응답의 키.
+ADV_KEYS = RUN_KEYS | {"universe_size", "ingested_count", "evaluated_actual", "capped", "analyzers", "liquidity_gate", "data_source"}
+DS_KEYS = {"fundamentals", "market_data", "fully_real"}
+
+
+@pytest.fixture
+def routes(monkeypatch):
+    import src.api.screener_routes as sr
+    monkeypatch.setattr(sr, "_SCREENER", ValuationScreener(dart_client=_FakeDart()))
+    monkeypatch.setattr(sr, "_RUN_ADVANCED_CACHE", sr._ResponseCache())
+    return sr
+
+
+def _adv(sr):
+    return sr._run_advanced_core(sr.AdvancedRunRequest(custom_tickers=list(U), filter_ast={"logic": "AND", "conditions": []},
+                                                       liquidity_floor="off"))
+
+
+def test_the_run_routes_carry_the_price_summary_in_production(world, routes):
+    world.closes = {"005930": _close(70_000.0)}
+    out = routes.screener_run(routes.ScreenerRunRequest(custom_tickers=list(U)))
+    assert set(out) == RUN_KEYS | {"prices"}
+    assert out["prices"]["by_source"] == {"kis_live": 0, "daily_close": 1, "provider": 0, "unavailable": 2}
+    assert {it["stock_code"]: it["current_price"] for it in out["items"]} == {"005930": 70_000.0, "000660": None, "123456": None}
+    adv = _adv(routes)
+    assert set(adv) == ADV_KEYS | {"prices"}
+    assert adv["data_source"]["price_sources"] == {"kis_live": 0, "daily_close": 1, "provider": 0, "unavailable": 2}
+    assert set(adv["data_source"]) == DS_KEYS | {"price_sources"}
+
+
+def test_the_run_routes_keep_their_mock_shape(monkeypatch, routes):
+    """★짝★ mock 응답의 키는 고치기 전과 같다 — 새 요약·라벨이 mock 에 새지 않는다."""
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    monkeypatch.setenv("SNAPSHOT_DB", "0")
+    out = routes.screener_run(routes.ScreenerRunRequest(custom_tickers=list(U)))
+    assert set(out) == RUN_KEYS
+    adv = _adv(routes)
+    assert set(adv) == ADV_KEYS and set(adv["data_source"]) == DS_KEYS
+    assert not any({"price_source", "price_unavailable"} & set(it) for it in adv["items"])
+
+
+def test_market_data_still_follows_the_environment(world, routes, monkeypatch):
+    """덧붙이기만 했다 — `market_data` 는 예전 뜻 그대로(키가 있으면 kis_real). 실제로는 실시세 0 행인데도 그렇게 말한다(F3b — 기록만).
+    이 시험은 그 사실을 적어 둔다: 뜻을 바꾸는 변경은 백테스트 라벨까지 바꾸므로 따로 승인받는다."""
+    monkeypatch.setenv("KIS_APP_KEY", "dummy")
+    world.kis(_Kis({}))                                        # 키는 있지만 시세를 하나도 주지 않는다
+    ds = _adv(routes)["data_source"]
+    assert ds["market_data"] == "kis_real"
+    assert ds["price_sources"]["kis_live"] == 0 and ds["price_sources"]["unavailable"] == 3
+
+
+def test_the_trade_reason_does_not_print_an_unknown_score_as_zero(world, monkeypatch):
+    import src.api.trading_routes as tr
+    from src.engine.screener import ScreenerResult
+    unknown = _row("005930", None, None, unavailable=True)
+    known = _row("000660", -20.0, 61.4)
+    monkeypatch.setattr(ValuationScreener, "run", lambda self, **kw: ScreenerResult(
+        universe="x", total_evaluated=2, total_passed=2, items=[known, unknown], elapsed_seconds=0,
+        cache_hits=0, cache_misses=0, failures=0))
+    seen: list = []
+
+    class _Engine:
+        def execute_signals(self, signals):
+            seen.extend(signals)
+            return {"executed": 0}
+    monkeypatch.setattr(tr, "_build_engine", lambda safety: _Engine())
+    out = tr.screen_to_trade(tr.ScreenToTradeRequest(filter_ast={"logic": "AND", "conditions": []}))
+    assert out["screened_count"] == 2
+    reasons = {s.stock_code: s.reason for s in seen}
+    assert reasons == {"000660": "스크리닝 통과 (점수 61)", "005930": "스크리닝 통과 (점수 미상 · 시세 없음)"}
+
+
+def test_the_narrative_prompt_says_the_price_is_unknown():
+    from src.services.narrative.prompts import stock_analysis_prompt
+    base = {"corp_name": "테스트전자", "stock_code": "005930", "intrinsic_value": 100_000.0, "verdict": "시세 없음",
+            "roe_score": 26.6, "stability_score": 65.0}
+    _, user = stock_analysis_prompt({**base, "current_price": None, "gap_pct": None, "composite_score": None, "gap_score": None}, {})
+    assert "현재가: N/A (시세 없음" in user and "괴리율: N/A (시세 없음" in user and "종합 점수: N/A (시세 없음" in user
+    assert "0원" not in user.split("통합 적정가")[0]
+    # ★짝★ 값이 있으면 예전과 같은 모양
+    _, user2 = stock_analysis_prompt({**base, "current_price": 70_000.0, "gap_pct": -30.0, "composite_score": 70.25,
+                                      "gap_score": 80.0}, {})
+    assert "현재가: 70,000원" in user2 and "괴리율: -30.00%" in user2 and "종합 점수: 70.2점" in user2

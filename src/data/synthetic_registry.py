@@ -24,7 +24,10 @@
 
 ## 이 등록부가 말하지 않는 것
 
-- 난수 없이 ★해시·상수로★ 값을 만드는 자리는 스캐너가 못 본다(알려진 것: `ohlcv_loader._mock_scale` — mock 전용 경로 안).
+- 난수 없이 ★해시·상수로★ 값을 만드는 자리는 스캐너가 못 본다(알려진 것: `ohlcv_loader._mock_scale` — mock 전용 경로 안 ·
+  `ohlcv_loader.mock_price_level` — 고정 표 · 표 밖은 `10,000 + (해시×137) % 200,000`. 2026-11-21 까지 ★운영 스크리너의 바탕 가격★이었다
+  (감사 F3 — 이 등록부가 못 본 까닭이 이것이다). 지금은 mock 경로에서만 닿는다: `screener._mock_price` 가 운영에서 None 이고
+  `tests/test_screener_prod_price.py` 가 운영 실행 중 이 함수를 부르면 실패하게 걸어 둔다).
 - 실데이터가 ★정확한지★는 말하지 않는다. 여기서 보는 것은 "지어냈는가" 하나다.
 """
 from __future__ import annotations

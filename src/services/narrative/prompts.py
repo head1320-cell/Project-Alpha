@@ -85,9 +85,9 @@ ROE, FCF, 부채비율, EPS/BPS/DPS를 근거로 저평가/고평가 원인 설�
 - **업종**: {stock_item.get('sector', '미분류')}
 
 ## 가격 vs 가치
-- 현재가: {stock_item.get('current_price', 0):,.0f}원
+- 현재가: {_fmt(stock_item.get('current_price'), ',.0f', '원', _NO_PRICE)}
 - 통합 적정가 (RIM·DCF·DDM 가중평균): {stock_item.get('intrinsic_value', 0):,.0f}원
-- 괴리율: {stock_item.get('gap_pct', 0):+.2f}%
+- 괴리율: {_fmt(stock_item.get('gap_pct'), '+.2f', '%', _NO_PRICE)}
 - 판정: {stock_item.get('verdict', '?')}
 
 ## 모델별 적정가
@@ -96,8 +96,8 @@ ROE, FCF, 부채비율, EPS/BPS/DPS를 근거로 저평가/고평가 원인 설�
 - DDM (배당할인): {stock_item.get('ddm_value') or 'N/A'}원
 
 ## Composite Score Breakdown (100점 만점)
-- 종합 점수: {stock_item.get('composite_score', 0):.1f}점
-- 저평가 점수 (60%): {stock_item.get('gap_score', 0):.1f}점
+- 종합 점수: {_fmt(stock_item.get('composite_score'), '.1f', '점', _NO_PRICE)}
+- 저평가 점수 (60%): {_fmt(stock_item.get('gap_score'), '.1f', '점', _NO_PRICE)}
 - ROE 점수 (20%): {stock_item.get('roe_score', 0):.1f}점
 - 안정성 점수 (20%): {stock_item.get('stability_score', 0):.1f}점
 
@@ -110,6 +110,15 @@ ROE, FCF, 부채비율, EPS/BPS/DPS를 근거로 저평가/고평가 원인 설�
 위 데이터를 종합 분석해 보고서를 작성하십시오."""
 
     return system, user
+
+
+#: 운영에서 확인된 시세가 없는 종목(감사 F3)의 가격 파생 칸 — 0 으로 적으면 모델이 0원·0점을 사실로 읽는다.
+_NO_PRICE = "N/A (시세 없음 — 가격 파생 값은 계산하지 않았습니다)"
+
+
+def _fmt(v, spec: str, suffix: str = "", missing: str = "N/A") -> str:
+    """값 → 문자열. 없으면(None) `missing` — 미상을 0 으로 적지 않는다."""
+    return missing if v is None else f"{v:{spec}}{suffix}"
 
 
 def _format_financial_summary(fin: dict) -> str:
