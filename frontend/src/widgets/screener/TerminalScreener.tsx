@@ -42,7 +42,8 @@ import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
 import { ScreenerDetail } from "./ScreenerDetail";
-import { PROVENANCE_HEADER, provenanceCells, type RunRequest } from "./screenerCsv";
+import { PROVENANCE_HEADER, provenanceCells, resultTimes, type RunRequest } from "./screenerCsv";
+import { ProvenanceBadge } from "@/shared/ui/provenance";
 // ★기본이 '닫힘' 인 창은 첫 로드에 있을 이유가 없다★ 팩터 창이 CatalogueShell 로 옮겨가며
 // shadcn/Radix ToggleGroup 을 끌고 오는데, 정적 import 로 두면 그 무게가 이 라우트의 첫
 // 로드에 그대로 실린다(실측: +17 kB). ADR 001 은 설명되지 않는 4 kB 증가를 되돌리라고 한다 —
@@ -756,6 +757,8 @@ export default function TerminalScreener() {
             <div>
               <h2 className="tx-sec-t">결과</h2>
               <p className="tx-sec-sub">종목을 누르면 상세 정보를 표시합니다.</p>
+              {/* U2-d — 보이는 결과의 시각(CSV 의 출처 칸과 같은 판단). 합성 · 평가 상한은 답 줄의 칩이 말한다. */}
+              <ProvenanceBadge label="이 결과의 시각" times={resultTimes(results.timestamp)} />
             </div>
             <div className="scr-tools">
               <DensityPicker />

@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import {
-  NO_AS_OF, PROVENANCE_HEADER, astCsvText, computedAtText, condCsvText, provenanceCells, sourceText, type RunRequest,
+  NO_AS_OF, PROVENANCE_HEADER, astCsvText, computedAtText, condCsvText, provenanceCells, resultTimes, sourceText, type RunRequest,
 } from "../src/widgets/screener/screenerCsv";
 import type { FilterConditionNode, FilterGroupNode } from "../src/shared/model/domain";
 
@@ -85,4 +85,17 @@ test("줄마다 붙는 출처 칸 — 머리의 차례 그대로 다섯 · 일�
   const on = provenanceCells({ source: { error: false, mockAllowed: false }, timestamp: null, capped: true, req: { ...req, gateOn: true }, label });
   expect(on).toEqual(["합성 아님 · 등급 미상", NO_AS_OF, "N/A(응답에 계산 시각이 없습니다)", "코스닥 150(kosdaq150) · 일부만 평가(서버의 평가 상한)", "PER(per) ≤ 12.5 · 유동성 게이트 켬"]);
   expect(PROVENANCE_HEADER).toEqual(["데이터 출처", "자료 기준 시각", "계산 시각(서버 · 시간대 표기 없음)", "유니버스", "조건식"]);
+});
+
+// U2-d — 화면의 출처 표지는 CSV 의 '계산 시각' 칸과 같은 판단 · 같은 사유(구현 뒤에 더했다 — 빨강은 변이로 본다).
+test("화면의 출처 표지(U2-d): 계산 시각은 응답 글자 그대로 + 시계 표기 · 없으면 CSV 와 같은 사유의 N/A · 자료 기준 시각은 N/A + 사유(짝)", () => {
+  expect(resultTimes("2026-11-21T09:30:05.1")).toEqual([
+    { label: "계산 시각", value: "2026-11-21T09:30:05.1(서버 시계 · 시간대 표기 없음)" },
+    { label: "자료 기준 시각", unknown: "응답에 없습니다" },
+  ]);
+  expect(computedAtText("2026-11-21T09:30:05.1"), "짝 — CSV 의 칸은 같은 글자").toBe("2026-11-21T09:30:05.1");
+  for (const bad of [undefined, null, "", "   ", 0, 1_763_700_000]) {
+    expect(resultTimes(bad)[0], `화면 ${String(bad)}`).toEqual({ label: "계산 시각", unknown: "응답에 계산 시각이 없습니다" });
+    expect(computedAtText(bad), `CSV ${String(bad)} — 같은 사유`).toBe("N/A(응답에 계산 시각이 없습니다)");
+  }
 });

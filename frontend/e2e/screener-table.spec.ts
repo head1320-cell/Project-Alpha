@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import { test, expect, type Page, type Route } from "./fixtures";
+import { contrastAudit, type AuditResult } from "./helpers";
 
 /**
  * 종목 찾기 — 결과 표의 동작 (U1-0 얼림 · 계획 `docs/superpowers/plans/2026-11-21-uiux-u1-table-screener.md`)
@@ -381,4 +382,117 @@ test("저장된 정렬이 모르는 열 · 틀린 방향 · 틀린 꼴이면 기
     await expect(page.locator('.bsc-table thead th[aria-sort="descending"]'), raw).toContainText("종합점수");
     await expect.poll(() => codes(page), raw).toEqual(ordered(s.last().items, "composite_score", "desc").slice(0, 100));
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// U2-d — 결과의 출처 표지(계산 시각 · 자료 기준 시각) · 화면 글자 = CSV 의 칸 (계획 docs/superpowers/plans/2026-11-21-uiux-u2-provenance.md)
+// ─────────────────────────────────────────────────────────────────────────────
+// ★먼저 써서 U2-c 빌드(`8684a74`)에서 빨강을 봤다★ 지키는 것(짝으로):
+//  · 계산 시각은 응답의 `timestamp` 그대로(서버 시계 · 시간대 표기 없음) — CSV 의 '계산 시각' 칸과 같은 글자(짝: 응답을 바꾸면 둘 다 바뀐다)
+//  · 응답에 시각이 없으면 화면도 CSV 도 같은 사유의 N/A · 자료 기준 시각은 응답에 없다 → N/A + 사유
+//  · 합성 · 평가 상한은 답 줄의 칩이 이미 말한다 — 표지에 두 번 적지 않는다(합성 칩은 화면에 하나)
+//  · 새 요청이 도는 동안에는 보이는 결과(앞 요청)의 시각 — 새 결과가 오면 새 시각
+//  · 칩의 글자 크기는 밀도를 따르고(촘촘 11 · 보통 12 · 넉넉 13) 두 테마에서 대비 AA · 390 에서 넘치지 않는다
+// ═══════════════════════════════════════════════════════════════════════════════
+const BADGE = '.scr-results ul.tx-chips.tx-prov[aria-label="이 결과의 시각"]';
+const tsChip = (ts: string) => `계산 시각 ${ts}(서버 시계 · 시간대 표기 없음)`;
+const AS_OF = "자료 기준 시각 N/A(응답에 없습니다)";
+/** 스트림의 결과마다 n 번째 요청을 알려 주며 고친다(hold 가 참이면 둘째 요청부터 풀어 줄 때까지 붙든다). */
+async function streamEach(page: Page, edit: (r: Result, n: number) => void, hold = false) {
+  const st = { calls: 0, holding: 0, release: () => undefined as void };
+  await page.route(STREAM, async (route: Route) => {
+    st.calls += 1;
+    const n = st.calls;
+    if (hold && n > 1) await new Promise<void>((res) => { st.release = res; st.holding += 1; });
+    const res = await route.fetch();
+    const text = await res.text();
+    const out = text.split("\n\n").map((part) => {
+      const line = part.split("\n").find((l) => l.startsWith("data:"));
+      if (!line) return part;
+      const obj = JSON.parse(line.slice(5).trim());
+      if (obj.type !== "result") return part;
+      edit(obj.data as Result, n);
+      return part.replace(line, `data: ${JSON.stringify(obj)}`);
+    }).join("\n\n");
+    await route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: out });
+  });
+  return st;
+}
+
+test("U2-d 결과의 출처 표지: 계산 시각 = CSV 의 칸(서버 값 그대로) · 자료 기준 시각 N/A(사유) · 합성 칩은 답 줄의 것 하나(짝: 응답의 시각을 바꾸면 둘 다 바뀐다)", async ({ page }) => {
+  const s = await watchStream(page);
+  await open(page);
+  const real = (s.last() as unknown as { timestamp: string }).timestamp;
+  expect(typeof real === "string" && real.length > 0, "서버가 계산 시각을 준다(빈 값을 견주는 공허한 시험이 아니다)").toBe(true);
+  const chips = page.locator(`${BADGE} .tx-chip`);
+  await expect(chips).toHaveText([tsChip(real), AS_OF]);
+  expect(await chips.evaluateAll((els) => els.map((e) => [e.getAttribute("data-tone"), e.getAttribute("data-ev")]))).toEqual([["plain", "asof"], ["unknown", "asof"]]);
+  for (const c of await chips.all()) await expect(c).toBeVisible();
+  const csv = await downloadCsv(page);
+  expect(prov(csv.header, csv.rows[0], "계산 시각(서버 · 시간대 표기 없음)"), "화면의 계산 시각 = CSV 의 칸").toBe(real);
+  await expect(page.locator('.scr .tx-chip[data-tone="practice"]'), "합성 칩은 답 줄의 것 하나(표지에 두 번 적지 않는다)").toHaveCount(1);
+  await expect(page.locator(`${BADGE} .tx-chip`).filter({ hasText: "일부만" })).toHaveCount(0);
+
+  // 짝 — 응답의 시각을 바꾸면 화면과 CSV 가 함께 바뀐다
+  await page.unroute(STREAM);
+  await watchStream(page, (r) => { (r as unknown as { timestamp: string }).timestamp = "2001-02-03T04:05:06.789"; });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(rows(page).first()).toBeVisible({ timeout: 30_000 });
+  await expect(chips.first()).toHaveText(tsChip("2001-02-03T04:05:06.789"));
+  const csv2 = await downloadCsv(page);
+  expect(prov(csv2.header, csv2.rows[0], "계산 시각(서버 · 시간대 표기 없음)")).toBe("2001-02-03T04:05:06.789");
+});
+
+test("U2-d 응답에 계산 시각이 없으면 화면도 CSV 도 같은 사유의 N/A — 지어내지 않는다", async ({ page }) => {
+  await watchStream(page, (r) => { delete (r as unknown as { timestamp?: string }).timestamp; });
+  await open(page);
+  const chips = page.locator(`${BADGE} .tx-chip`);
+  await expect(chips).toHaveText(["계산 시각 N/A(응답에 계산 시각이 없습니다)", AS_OF]);
+  await expect(chips.first()).toHaveAttribute("data-tone", "unknown");
+  const csv = await downloadCsv(page);
+  expect(prov(csv.header, csv.rows[0], "계산 시각(서버 · 시간대 표기 없음)")).toBe("N/A(응답에 계산 시각이 없습니다)");
+});
+
+test("U2-d 새 요청이 도는 동안에는 보이는 결과의 시각 — 새 결과가 오면 새 시각(짝)", async ({ page }) => {
+  const st = await streamEach(page, (r, n) => { (r as unknown as { timestamp: string }).timestamp = `2001-01-01T00:00:0${n}`; }, true);
+  await open(page);
+  const first = page.locator(`${BADGE} .tx-chip`).first();
+  await expect(first).toHaveText(tsChip("2001-01-01T00:00:01"));
+  await page.locator('[data-act="universe"]').selectOption("kosdaq150");
+  await expect.poll(() => st.holding, { timeout: 10_000 }).toBe(1);              // 새 요청이 떠났고 아직 답이 없다
+  await expect(rows(page).first(), "앞 결과가 아직 보인다").toBeVisible();
+  await expect(first, "보이는 결과의 시각 — 새 요청의 것이 아니다").toHaveText(tsChip("2001-01-01T00:00:01"));
+  st.release();
+  await expect(first, "새 결과가 오면 새 시각").toHaveText(tsChip("2001-01-01T00:00:02"), { timeout: 30_000 });
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`U2-d 표지 · ${theme}: 칩의 글자 크기는 밀도를 따른다(촘촘 11 · 보통 12 · 넉넉 13) · 결과 머리 대비 AA · 다크에 밝은 판 0`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const got: Record<string, number> = {};
+    for (const density of ["compact", "regular", "comfortable"] as const) {
+      await page.addInitScript(([d, t]) => { try { localStorage.setItem("alpha_density", d); localStorage.setItem("alpha_theme", t); } catch { /* */ } }, [density, theme]);
+      await open(page);
+      const chip = page.locator(`${BADGE} .tx-chip`).first();
+      await expect(chip).toBeVisible();
+      got[density] = await chip.evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+      const r = await page.evaluate<AuditResult>(contrastAudit(".scr-results .tx-sec-head"));
+      expect(r.checked, `${density} 검사한 글자 수`).toBeGreaterThan(5);
+      expect(r.low, `${density} ${JSON.stringify(r.low.slice(0, 6))}`).toEqual([]);
+      if (theme === "dark") expect(r.bright, `${density} ${JSON.stringify(r.bright.slice(0, 6))}`).toEqual([]);
+    }
+    expect(got).toEqual({ compact: 11, regular: 12, comfortable: 13 });
+  });
+}
+
+test("U2-d 390: 결과 머리와 쪽이 가로로 넘치지 않는다(표지는 줄을 바꾼다)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  await expect(page.locator(`${BADGE} .tx-chip`).first()).toBeVisible();
+  const over = await page.evaluate(() => {
+    const h = document.querySelector(".scr-results .tx-sec-head") as HTMLElement;
+    const m = document.querySelector(".terminal-main") as HTMLElement;
+    return { head: h.scrollWidth - h.clientWidth, main: m.scrollWidth - m.clientWidth, doc: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  expect(over).toEqual({ head: 0, main: 0, doc: 0 });
 });

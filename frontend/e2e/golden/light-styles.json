@@ -583,6 +583,9 @@
   "main:p.tx-sec-sub": [
    "rgb(95, 107, 122)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],
+  "main:ul.tx-chips.tx-prov": [
+   "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
+  ],
   "main:div.scr-tools": [
    "rgb(25, 31, 40)|rgba(0, 0, 0, 0)|rgb(229, 231, 235)|rgb(229, 231, 235)|rgb(0, 0, 0)|none|"
   ],

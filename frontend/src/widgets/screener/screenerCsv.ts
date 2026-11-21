@@ -18,6 +18,7 @@
  * React 를 들이지 않는다 — 순수 스펙(`e2e/screener-csv-logic.spec.ts`)이 브라우저 없이 가져온다.
  */
 import type { FilterConditionNode, FilterGroupNode } from "@/shared/model/domain";
+import type { ProvTime } from "@/shared/ui/provenance";
 
 /** 출처 열의 머리(결과 열 뒤에 붙는다 — 앞 열의 자리는 그대로). */
 export const PROVENANCE_HEADER = ["데이터 출처", "자료 기준 시각", "계산 시각(서버 · 시간대 표기 없음)", "유니버스", "조건식"] as const;
@@ -35,8 +36,23 @@ export function sourceText(s: SourceState): string {
   return "N/A(출처 확인 전)";
 }
 
+const NO_COMPUTED_AT = "응답에 계산 시각이 없습니다";
+const validTs = (ts: unknown): ts is string => typeof ts === "string" && ts.trim() !== "";
+
 export function computedAtText(ts: unknown): string {
-  return typeof ts === "string" && ts.trim() !== "" ? ts : "N/A(응답에 계산 시각이 없습니다)";
+  return validTs(ts) ? ts : `N/A(${NO_COMPUTED_AT})`;
+}
+
+/**
+ * 화면의 출처 표지(U2-d) — CSV 의 '계산 시각' 칸과 ★같은 판단 · 같은 사유★로, 보이는 결과(그 결과를 만든 요청의 응답)에서.
+ * 계산 시각은 응답 글자 그대로(서버 시계 · 시간대 표기 없음) · 자료 기준 시각은 응답에 없다 → N/A + 사유.
+ * 합성 · 평가 상한은 답 줄의 칩이 이미 말한다 — 표지에 두 번 적지 않는다.
+ */
+export function resultTimes(ts: unknown): ProvTime[] {
+  return [
+    validTs(ts) ? { label: "계산 시각", value: `${ts}(서버 시계 · 시간대 표기 없음)` } : { label: "계산 시각", unknown: NO_COMPUTED_AT },
+    { label: "자료 기준 시각", unknown: "응답에 없습니다" },
+  ];
 }
 
 const OP: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
