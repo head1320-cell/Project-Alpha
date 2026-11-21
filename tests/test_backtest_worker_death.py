@@ -177,17 +177,24 @@ def test_create_run_does_not_leave_an_orphan_row_when_dispatch_fails(monkeypatch
 # 콜백(커밋 ①)이 대부분을 잡지만 그것도 만능이 아니다: API 프로세스 자체가 죽거나
 # 배포로 교체되면 콜백도 함께 사라진다. 주기 스윕이 그 마지막 그물이다.
 
-def test_the_orphan_sweeper_runs_periodically_not_only_at_startup():
-    """★기동 1회면 서버를 재시작해야만 복구된다★"""
-    import inspect
+def test_the_orphan_sweeper_runs_periodically_not_only_at_startup(monkeypatch):
+    """★기동 1회면 서버를 재시작해야만 복구된다★
+
+    ★소스 문자열이 아니라 동작으로 건다★ (BE) — 예전에는 `threading.Thread(
+    target=_orphan_sweep_bg, ...)` 라는 **글자**를 찾았다. 데몬을 등록부
+    (`_start_daemon_once`)로 옮기자 동작은 그대로인데 이 테스트만 깨졌다.
+    기동 시퀀스가 **실제로** 그 루프를 넘기는지를 본다.
+    """
+    import asyncio
 
     from src.startup import lifecycle
-    src = inspect.getsource(lifecycle)
-    assert "_orphan_sweep_bg" in src, (
-        "주기 스윕 데몬이 없다 — 워커가 죽으면 재시작까지 복구되지 않는다")
-    # 기동 시퀀스가 실제로 그 데몬을 띄우는가 (선언만 하고 안 띄우면 장식이다)
-    assert "threading.Thread(target=_orphan_sweep_bg, daemon=True).start()" in src, (
-        "데몬을 정의만 하고 기동하지 않는다")
+    started: dict = {}
+    monkeypatch.setattr(lifecycle, "_start_daemon_once",
+                        lambda name, target: started.setdefault(name, target) and "started")
+    asyncio.run(lifecycle.run_startup())
+    assert started.get("orphan_sweep") is lifecycle._orphan_sweep_bg, (
+        "기동 시퀀스가 주기 스윕 데몬을 띄우지 않는다 — 워커가 죽으면 재시작까지 "
+        f"복구되지 않는다: {sorted(started)}")
 
 
 def test_the_sweeper_loop_actually_calls_sweep_orphaned(monkeypatch):
@@ -228,6 +235,48 @@ def test_reset_pool_actually_replaces_the_pool():
         brr._reset_pool()
         p2 = brr._get_pool()
         assert p1 is not p2, "재설정 뒤에도 같은 풀 객체다 — broken 상태가 그대로다"
+    finally:
+        brr.shutdown_pool()
+
+
+def test_resetting_a_pool_never_waits_on_that_pools_own_lock():
+    """★Python 3.14 에서 실제로 멈췄다★ (2026-11-08 · 런타임 업그레이드 4단계)
+
+    3.14 의 `ProcessPoolExecutor` 는 자식이 죽으면 관리 스레드가 풀의 `_shutdown_lock`
+    (재진입 불가)을 **쥔 채로** 남은 Future 에 예외를 넣고, 그 자리에서 done-콜백
+    (`_on_worker_done`)을 부른다. 콜백이 `_reset_pool()` → `pool.shutdown()` 을 부르면
+    `shutdown` 이 같은 락을 다시 잡으려다 **영원히 멈춘다** — 실행은 queued 로 남고
+    `RunMonitor` 가 계속 폴링한다(faulthandler 덤프: process.py `shutdown` ← `_reset_pool`
+    ← `_on_worker_done` ← `terminate_broken`). 3.11 은 락 밖에서 불러 드러나지 않았다.
+
+    이 시험은 그 상황을 **해석기 판과 무관하게** 만든다: 풀의 락을 쥔 채 재설정을 부른다.
+    (`_shutdown_lock` 은 CPython 내부 이름이다 — 이름이 바뀌면 이 시험이 AttributeError 로
+    알려 준다. 종단 경로는 위의 SIGKILL 시험이 건다.)
+    """
+    import threading
+
+    brr.shutdown_pool()
+    pool = brr._get_pool()
+    lock = pool._shutdown_lock
+    lock.acquire()
+    returned = threading.Event()
+    try:
+        threading.Thread(target=lambda: (brr._reset_pool(), returned.set()), daemon=True).start()
+        assert returned.wait(5), (
+            "풀의 락을 쥔 문맥(3.14 의 broken 콜백)에서 재설정이 돌아오지 않는다 — "
+            "죽은 워커의 실행이 queued 로 영원히 남는다")
+        assert brr._POOL is not pool, "재설정이 broken 풀을 버리지 않았다"
+    finally:
+        lock.release()
+    try:
+        # ★짝★ 기다리지 않는다고 **닫지도 않으면** 안 된다 — 락이 풀리면 옛 풀은 실제로 닫혀야 한다
+        # (버려 두면 관리 스레드·파이프가 남는다). 닫히면 `submit` 이 RuntimeError 를 낸다.
+        t0 = time.perf_counter()
+        while not pool._shutdown_thread and time.perf_counter() - t0 < 5:
+            time.sleep(0.05)
+        assert pool._shutdown_thread, "버린 풀을 끝내 닫지 않았다"
+        with pytest.raises(RuntimeError):
+            pool.submit(_fine, "rid")
     finally:
         brr.shutdown_pool()
 

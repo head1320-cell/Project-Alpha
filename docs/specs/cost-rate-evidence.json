@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "note": "거래비용 요율의 실측 — ★관측이 요율을 모으고, 계약은 사람이 적는다.★ 체결을 100번 본다고 증권사 수수료표를 알게 되지는 않는다(체결에서 계산한 bps 는 우대·이벤트·최소수수료에 흔들린다). 그래서 수집기가 만드는 등급 C1 은 적용선 아래에 있고, 기본값을 하나로 통일하는 것은 C2(증권사 수수료표 근거) 이상이 적히기 전까지 허용되지 않는다. 관측을 모으는 방법은 scripts/collect_cost_rates.py --write.",
+  "why_empty": "이 환경에는 live_fills 테이블 자체가 없다(2026-09-22 실측 — sqlite3.OperationalError: no such table). 실체결 기록도, 증권사 수수료표를 받을 경로도 없다(KIS 두 호스트와 제공자 다섯이 전부 프록시 CONNECT 403). ★비어 있는 것이 결함이 아니라 정직한 현재 상태다★ — 채워진 척하면 추측이 검증된 사실과 구분되지 않는다. 클라우드 배포·런칭 후 실계좌·모의계좌가 체결을 남기면 수집기가 채운다.",
+  "min_grade_to_unify": "C2",
+  "grades": {
+    "C0": "증거 없음 — 추측. 이 파일에 쓰지 않는다",
+    "C1": "관측 — 실체결에서 commission_krw / fill_value_krw 로 계산했다. 계약 요율은 모른다",
+    "C2": "증권사 수수료표에 근거",
+    "C3": "수수료표 + 실체결 교차 확인"
+  },
+  "fields": {
+    "component": "commission | slippage | tax | spread | impact",
+    "bps": "요율(bp). 사람이 적는다 — C2 이상은 수수료표에서 온다",
+    "grade": "C0~C3",
+    "evidence_source": "어디서 나왔는가 (수수료표의 어느 쪽, 또는 어느 체결)",
+    "account_kind": "live | paper | null. 우대 요율이 계좌 종류마다 다르므로 섞지 않는다",
+    "probed_at": "언제 확인했는가",
+    "observed": "수집기가 채운다. n_fills · bps_median · bps_min · bps_max · first_seen · last_seen · execution_mode"
+  },
+  "divergence": {
+    "why_this_file_exists": "같은 전략·같은 데이터인데 요청이 요율을 안 실으면 문이 정한다 — 실측(2026-09-22): screener·메인엔진·graph·legacy 는 왕복 40.0bp, stage11·stage12·realism·multi 는 왕복 13.0bp 다. 3배 차이이고 Sharpe 해석을 바꾼다. 열넷 자리의 정적 목록은 src/engine/cost_model_registry.py 가 갖는다(그쪽은 '어디 박혀 있나' 축이고 이 파일은 '실제 요율이 얼마인가' 축이다).",
+    "why_not_unified": "15bp 도 1.5bp 도 이 저장소가 재본 적이 없다. 안 재본 값으로 수렴시키면 불일치가 ★거짓 합의★ 가 된다 — 갈라져 있다는 사실이 보이는 편이 낫다.",
+    "promotes_when": "이 파일의 commission 항목이 C2 이상으로 채워지면 그때 기본값 통일을 논할 수 있다. 그 전에는 통일이 아니라 라벨링만 한다."
+  },
+  "observed": {}
+}

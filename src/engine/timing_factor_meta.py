@@ -90,6 +90,32 @@ _SOURCE_TIMING: dict[str, tuple[str, str]] = {
 }
 _PRICE_DERIVED_TIMING = ("장 마감 당일", "not_revised")
 
+# ── ★데이터 출처 — 인용문이 아니라 로더가 안다★ (AX) ──────────────────────────
+# `provenance` 는 **값이 어디서 오는가**를 말하지 않는다. 실측하니 한 칸에 셋이 섞여
+# 있다: 데이터 제공자(`'FRED/ALFRED (NFCI)'`) · 문헌 근거(`'Keller & Keuning
+# (VAA/DAA)'`) · ★그리고 17개가 `'generic (realized volatility)'` 인데 그것은 기법의
+# 종류이지 출처가 아니다★. 그래서 `classify()` 처럼 인용문을 패턴 매칭해서는 이 축을
+# 만들 수 없다 — AW 이 `FactorMeta.source` 에서 만난 것과 같은 함정이다.
+#
+# 대신 ★어느 로더를 부르는가★ 라는 구조적 사실을 적는다. 문자열은 **스토어 모듈
+# 이름**이라는 AW 의 규칙을 그대로 따른다(`base_fields_store`·`fundamentals_store`…).
+ORIGIN_ETF_PRICES = "etf_prices"   # 가격 파생 — `load_ohlcv_unified(DB→KIS→mock)`
+ORIGIN_PIT_MACRO = "pit_macro"     # 기관 시계열 — FRED/ALFRED/ECOS 빈티지 리더
+
+TIMING_ORIGINS = (ORIGIN_ETF_PRICES, ORIGIN_PIT_MACRO)
+
+# ★기본값에서 벗어나는 것만 적는다★ — `_SOURCE_TIMING` 과 같은 규율이다. 여기 없는
+# 팩터는 `evaluate()` 를 거쳐 `etf_prices` 로 간다(테스트가 AST 로 대조한다).
+# 소스가 아예 없는 §6.1 묶음은 `UNAVAILABLE_FACTORS` 에서 `origin=None` 을 스스로
+# 들고 오므로 여기 적지 않는다 — 두 군데서 같은 사실을 관리하지 않는다.
+_ORIGIN_OVERRIDES: dict[str, str] = {
+    "indicator": ORIGIN_PIT_MACRO,
+    "financial_conditions": ORIGIN_PIT_MACRO,
+    "vix_term_structure": ORIGIN_PIT_MACRO,
+    "vix_term_spread": ORIGIN_PIT_MACRO,
+    "curve_slope": ORIGIN_PIT_MACRO,
+}
+
 # ── allowed_range ──────────────────────────────────────────────────────────────
 # 단위가 범위를 결정한다. 경계가 **실제로** 있는 것만 적는다 — 수익률·스프레드에 임의의
 # 상한을 씌우면 정상 값이 검증에서 튕긴다.
@@ -115,6 +141,10 @@ def enrich(entry: dict[str, Any]) -> dict[str, Any]:
     out["provenance_class"] = classify(out.get("provenance"))
     out["use_mode"] = _USE_MODE_OVERRIDES.get(fid, "gate")
     out["allowed_range"] = list(_RANGE_BY_UNIT[out["unit"]]) if out.get("unit") in _RANGE_BY_UNIT else None
+
+    # ★출처는 선언하고 테스트가 대조한다★(AX) — `provenance` 도 `availability` 도
+    # 읽지 않는다. 둘 다 다른 축이다.
+    out["origin"] = _ORIGIN_OVERRIDES.get(fid, ORIGIN_ETF_PRICES)
 
     lag, rev = _SOURCE_TIMING.get(fid, _PRICE_DERIVED_TIMING)
     out["release_lag"] = lag
@@ -163,6 +193,8 @@ UNAVAILABLE_FACTORS: list[dict[str, Any]] = [
         "revision_policy": None,
         "availability": "unavailable",
         "unavailable_reason": reason,
+        # ★평가 함수가 없다 — 적는 것이 곧 지어내기다★(AX)
+        "origin": None,
         "expected_failure_mode": EXPECTED_FAILURE_MODE,
     }
     for fid, label, family, reason in _UNAVAILABLE_SPECS

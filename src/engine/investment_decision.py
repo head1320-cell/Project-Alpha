@@ -120,7 +120,7 @@ def _benefit_provenance(evidence: dict | None) -> dict[str, Any]:
         "self_referential": self_ref,
         "target_source": str(src),
         "evaluated_under": _PROV_SELF if self_ref else _PROV_INDEP,
-        "reason": ("편익을 잰 μ 가 **그 목표를 고른 바로 그 사후분포**입니다 — 이득은 "
+        "reason": ("편익 산출에 쓴 μ 가 **그 목표를 산출한 바로 그 사후분포**입니다 — 이득은 "
                    "구조적으로 보장되며 뷰가 정보를 담았다는 증거가 아닙니다."
                    if self_ref else
                    "목표가 최적화기 밖에서 왔으므로 편익 평가가 순환하지 않습니다."),

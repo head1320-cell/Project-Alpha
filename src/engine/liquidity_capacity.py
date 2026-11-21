@@ -1,10 +1,10 @@
 """
-Liquidity Capacity Constraint — 전략별 수용량 한계
+Liquidity Capacity Constraint — 전략별 운용 가능 규모 한계
 =========================================================
 HRP는 변동성 낮은 전략에 큰 자본 배분. 그러나 '소형주 가치' 전략에 자본 40% 배분하면
 호가창을 다 잡아먹어 자기 알파를 파괴 (capacity-induced alpha decay).
 
-각 전략의 수용량 = 그 전략이 거래하는 종목들의 일일 거래대금에 의해 제약됨.
+각 전략의 운용 가능 규모 = 그 전략이 거래하는 종목들의 일일 거래대금에 의해 제약됨.
 
 공식:
   strategy_capacity_krw = Σᵢ (ADVᵢ × max_pct_of_adv × holding_period_days)
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CapacityConfig:
-    """전략별 수용량 산정 파라미터."""
+    """전략별 운용 가능 규모 산정 파라미터."""
     max_pct_of_adv:       float = 0.05    # 일일 ADV의 5% 한도
     holding_period_days:  int = 5         # 평균 보유 기간
     safety_buffer:        float = 0.7     # 추가 안전 마진 (capacity의 70%만 사용)
@@ -48,7 +48,7 @@ class CapacityConfig:
 
 class LiquidityCapacityEstimator:
     """
-    전략별 수용량 추정.
+    전략별 운용 가능 규모 추정.
 
     Usage:
         estimator = LiquidityCapacityEstimator(engine)
@@ -83,7 +83,7 @@ class LiquidityCapacityEstimator:
         lookback_days: int = 60,
     ) -> dict:
         """
-        단일 전략의 수용량 추정.
+        단일 전략의 운용 가능 규모 추정.
 
         방법:
           1. 전략이 거래한 종목 목록 조회 (최근 trades 또는 holdings)
@@ -306,14 +306,19 @@ class LiquidityCapacityEstimator:
 
     @staticmethod
     def _fallback_capacity(sid) -> dict:
-        """capacity 추정 실패 시 무한대 가정 (제약 없음)."""
+        """capacity 를 잴 수 없을 때 — ★무한대가 아니라 모름★ (BL3 M8).
+
+        예전에는 `capacity_krw: inf` 였다(엄격한 JSON 이 아니어서 `/capacity/estimate` 응답이 깨지고, 값 자체가 '무제약' 을
+        지어냈다). 소비자(`apply_capacity_to_weights`·`realism_engine`)는 `available` 을 먼저 보고 건너뛰므로 동작은 같다.
+        """
         return {
             "strategy_id":         sid,
-            "capacity_krw":        float("inf"),
+            "capacity_krw":        None,
             "n_universe_tickers":  0,
-            "avg_adv_krw":         0,
+            "avg_adv_krw":         None,
             "available":           False,
-            "message":             "capacity 데이터 부족 — 무제약 가정",
+            "message":             "capacity 데이터 부족 — 제약을 걸지 않았습니다(용량 모름)",
+            "reason":              "전략의 종목 목록이나 거래대금(ADV)을 찾지 못했습니다.",
         }
 
     @staticmethod

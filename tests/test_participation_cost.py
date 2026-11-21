@@ -16,7 +16,7 @@
     equity(cost) = equity(0) × Π_k (1 − τ_k · bps_k/1e4)
 
 가 정확히 성립해야 한다. 정액 경로에 충격이 몰래 끼면 이 항등식이 깨진다.
-호스트가 달라도(OpenBLAS `DYNAMIC_ARCH` 흔들림, `f0c7b10`) 같은 프로세스 안의
+호스트가 달라도(OpenBLAS `DYNAMIC_ARCH` 잡음, `f0c7b10`) 같은 프로세스 안의
 두 실행을 비교하므로 안전하다 — 동결 해시보다 이쪽이 옳다.
 """
 
@@ -145,7 +145,8 @@ def test_the_assumptions_travel_with_the_output():
     assert c["alpha"] == 0.7
     assert c["law"] == "almgren_chriss_sqrt"
     # ★해상도를 신고한다★ 효과(8.5bp)의 1/850 이라 통계를 눈멀게 하지 않는다는
-    # 논증이 성립하려면 그 수가 리포트에 있어야 한다(P1 의 `round(sharpe,2)` 교훈).
+    # 논증이 성립하려면 그 수가 리포트에 있어야 한다(P1 의 `round(sharpe,2)` 교훈 — 그 고정의 첫째 까닭은
+    # 비용 전 수익에서 계산한 기준이었다는 정정은 `quant_metrics.risk_adjusted_ratios` · 2026-11-19 C1).
     assert c["impact_bps_resolution"] == 0.01
 
 
@@ -157,7 +158,7 @@ def test_the_square_root_law_is_not_reimplemented_here():
     called = {n.func.attr for n in ast.walk(tree)
               if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     assert "turnover_based_impact" in called
-    assert "sqrt" not in src, "√을 여기서 다시 계산하고 있다 — 위임해야 한다"
+    assert "sqrt" not in src, "√을 여기서 재계산하고 있다 — 위임해야 한다"
 
 
 def test_it_delegates_to_the_model_the_rest_of_the_repo_uses():

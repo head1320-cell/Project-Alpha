@@ -21,6 +21,9 @@ UI 도 `telemetry` 를 반환하지 않는다.
 from __future__ import annotations
 
 import os
+import threading
+import time
+from types import SimpleNamespace
 
 os.environ.setdefault("KIS_USE_MOCK", "1")
 
@@ -131,15 +134,37 @@ def test_the_store_reader_can_be_strict(tmp_path, monkeypatch):
 
 # ── 단계별 시간 — ★총합만으로는 병목을 못 가른다★ ──────────────────────────────
 
+class _ScriptClock:
+    """대본의 낮잠만 시간을 미는 시계 — 워커 모듈의 `time.perf_counter` 자리에만 꽂는다.
+
+    ★실제 시계로 재면 디스크가 단계의 순서를 정한다★ 계측은 단계 안의 진행 기록(SQLite 커밋)
+    시간도 그 단계에 넣는다 — 그것도 단계의 비용이라 계측의 뜻은 맞다. 그런데 CI 에서 시뮬레이션
+    단계의 커밋 둘이 한 번 0.37초를 쓰자 로딩 0.30초 · 시뮬레이션 0.05초로 짠 대본이 뒤집혔다
+    (2026-11-20 · `aeaea03` 의 PR 실행 · 같은 트리의 푸시 실행은 통과 · 그 단계의 쓰기만 0.4초 늦추면
+    이 기계에서도 같은 꼴로 실패). 이 시험이 거는 것은 ★경계를 어디에 긋는가★(로딩 시작 →
+    시뮬레이션 시작 → 코어 끝 · 총합과 같은 시계)이지 디스크의 빠르기가 아니라서 시계만 바꾼다.
+    계측 코드(`_worker` · `_record_phase_seconds`)는 그대로 돈다.
+    """
+
+    def __init__(self) -> None:
+        self._now = 1000.0
+        self._lock = threading.Lock()
+
+    def perf_counter(self) -> float:
+        with self._lock:
+            return self._now
+
+    def nap(self, seconds: float) -> None:
+        with self._lock:
+            self._now += seconds
+
+
 def _phase_client(monkeypatch, tmp_path, script):
     """`_screen_to_backtest_core` 를 진행 이벤트 대본으로 대체한 워커를 돌린다.
 
-    ★운송 수단만 바꾼다★ (기존 `test_backtest_run_routes.py` 와 같은 기법) —
-    도는 로직은 프로덕션과 같은 `_worker` 다.
+    ★운송 수단과 시계만 바꾼다★ (기존 `test_backtest_run_routes.py` 와 같은 기법) —
+    도는 로직은 프로덕션과 같은 `_worker` 다. 대본의 낮잠은 `_ScriptClock` 만 민다(위 까닭).
     """
-    import threading
-    import time as _t
-
     import src.api.screener_routes as sr
     from src.api import backtest_run_routes as brr
 
@@ -147,6 +172,11 @@ def _phase_client(monkeypatch, tmp_path, script):
                         connect_args={"check_same_thread": False, "timeout": 30})
     monkeypatch.setattr(br, "_engine", lambda: eng)
     monkeypatch.setattr(br, "_inited", False)
+    clock = _ScriptClock()
+    # 이 모듈의 시계만 — 전역 time 은 그대로(벽시계 · CPU 시간은 진짜). 모듈이 쓰는 셋 그대로:
+    # 넷째 이름을 쓰기 시작하면 여기서 AttributeError 로 드러난다(조용히 진짜 시계로 돌지 않게).
+    monkeypatch.setattr(brr, "time", SimpleNamespace(
+        perf_counter=clock.perf_counter, process_time=time.process_time, time=time.time))
 
     class _StubReq:
         def __init__(self, **kw):
@@ -158,7 +188,7 @@ def _phase_client(monkeypatch, tmp_path, script):
         for phase, done, total, nap in script:
             if progress_cb:
                 progress_cb({"phase": phase, "done": done, "total": total})
-            _t.sleep(nap)
+            clock.nap(nap)
         return {"stats": {}, "trades": [], "data_source": {"fully_real": False}}
 
     monkeypatch.setattr(sr, "_screen_to_backtest_core", _core, raising=False)
@@ -176,25 +206,35 @@ def _phase_client(monkeypatch, tmp_path, script):
     for _ in range(200):
         if (c.get(f"/api/v1/backtest/runs/{rid}/status").json()["status"]) in br.TERMINAL:
             break
-        _t.sleep(0.05)
+        time.sleep(0.05)
     return c, rid
 
 
-def test_telemetry_splits_loading_from_simulating(monkeypatch, tmp_path):
+@pytest.mark.parametrize("script, want", [
+    pytest.param([("loading", 1, 10, 0.30), ("loading", 10, 10, 0.0),
+                  ("simulating", 1, 5, 0.05), ("simulating", 5, 5, 0.0)],
+                 (0.30, 0.05), id="load-heavy"),
+    # ★짝★ 순서를 뒤집은 대본 — 대본 순서와 같은 상수(0.3 · 0.05)를 박거나 둘을 바꿔 달면 여기서 깨진다
+    pytest.param([("loading", 1, 10, 0.05), ("loading", 10, 10, 0.0),
+                  ("simulating", 1, 5, 0.40), ("simulating", 5, 5, 0.0)],
+                 (0.05, 0.40), id="sim-heavy"),
+])
+def test_telemetry_splits_loading_from_simulating(monkeypatch, tmp_path, script, want):
     """★5분 중 몇 분이 로딩인가★ — `duration_s` 총합만으로는 답할 수 없다.
 
-    로딩을 일부러 시뮬레이션보다 길게 만든 대본을 돌린다. 두 값이 그 순서를
-    반영해야 계측이 진짜 단계를 잰 것이다 — 상수를 박아도 통과하면 증거가 아니다.
+    로딩과 시뮬레이션의 길이를 대본으로 정해 돌린다. 두 값이 ★대본의 값 그대로★여야 계측이
+    진짜 단계를 잰 것이다 — 순서만 보면 대본 순서와 같은 상수를 박아도 통과하므로(2026-11-20
+    변이로 확인) 거꾸로 된 대본을 짝으로 둔다. 총합도 같은 시계여야 한다(단계 합 = 총합 —
+    예전의 '총합 + 0.5초 이하'는 CPU 시간을 총합으로 잡는 변이를 통과시켰다).
     """
-    script = [("loading", 1, 10, 0.30), ("loading", 10, 10, 0.0),
-              ("simulating", 1, 5, 0.05), ("simulating", 5, 5, 0.0)]
     c, rid = _phase_client(monkeypatch, tmp_path, script)
     t = c.get(URL.format(rid)).json()["telemetry"]
     assert t is not None, "완료된 실행인데 계측이 없다"
-    assert t["load_s"] is not None and t["sim_s"] is not None, t
-    assert t["load_s"] > t["sim_s"], f"로딩을 더 길게 짰는데 뒤집혔다: {t}"
-    assert t["load_s"] + t["sim_s"] <= t["duration_s"] + 0.5, (
-        f"단계 합이 총합을 넘는다 — 같은 시계를 안 쓴다: {t}")
+    assert t.get("load_s") is not None and t.get("sim_s") is not None, t
+    assert (t["load_s"], t["sim_s"]) == pytest.approx(want, abs=1e-3), (
+        f"단계 경계를 잘못 그었다 — 대본은 로딩 {want[0]}초 · 시뮬레이션 {want[1]}초: {t}")
+    assert t["duration_s"] == pytest.approx(t["load_s"] + t["sim_s"], abs=2e-3), (
+        f"단계 합과 총합이 다르다 — 같은 시계를 안 쓴다: {t}")
 
 
 def test_a_phase_that_never_ran_has_no_key_rather_than_zero(monkeypatch, tmp_path):

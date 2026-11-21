@@ -219,7 +219,9 @@ def test_the_account_summary_counts_every_verdict_kind():
 
 # ── ★법규 수치가 소스에 없다★ ────────────────────────────────────────────
 
-_FORBIDDEN_NUMBERS = {70.0, 70, 0.7, 900, 600, 1095,
+# 정수 70 은 따로 적지 않는다 — 70 == 70.0 이고 해시가 같아 집합 하나로 둘 다 잡는다
+# (아래 짝 테스트가 정수 70 검출을 건다).
+_FORBIDDEN_NUMBERS = {70.0, 0.7, 900, 600, 1095,
                       20_000_000, 100_000_000, 6_000_000, 9_000_000}
 
 
@@ -246,6 +248,10 @@ def test_the_number_detector_actually_detects():
     found = [n.value for n in ast.walk(tree)
              if isinstance(n, ast.Constant) and n.value in _FORBIDDEN_NUMBERS]
     assert found == [70.0]
+    int_tree = ast.parse("RISKY_CAP = 70\n")
+    found_int = [n.value for n in ast.walk(int_tree)
+                 if isinstance(n, ast.Constant) and n.value in _FORBIDDEN_NUMBERS]
+    assert found_int == [70], "정수로 적은 70 도 잡아야 한다"
     assert _FORBIDDEN_NUMBERS, "금지 목록이 비면 검사가 언제나 통과한다"
 
 

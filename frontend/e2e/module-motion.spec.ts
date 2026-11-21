@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { freezeCharts, contrastAudit, type AuditResult } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -22,10 +22,14 @@ import { freezeCharts, contrastAudit, type AuditResult } from "./helpers";
 // 4개 모듈에서 실제 렌더와 달랐고, `/backtest` 는 **하나도 렌더되지 않았다**. 아래 1번의
 // "노드 수 먼저 단언"이 그 0 을 잡아 준 덕에 목록이 틀렸다는 사실이 드러났다.
 const MODULES: { name: string; path: string; panels: string }[] = [
-  { name: "00 Dashboard",  path: "/dashboard",   panels: ".dash-card" },
-  { name: "01 Screener",   path: "/screener",    panels: ".bsc-workspace, .bsc-rail, .bsc-preset, .bsc-mcap" },
-  { name: "02 Backtester", path: "/backtest",    panels: ".tbt-chart, .tbt-config-main, .tbt-right-col, .tbt-watch-panel" },
-  { name: "03 Macro",      path: "/macro",       panels: ".mc-card, .mv-rcard" },
+  // BU1 — 홈은 토스식 절(`.tx-answer`·`.tx-sec`)로 바뀌었다. `.dash-card` 판은 없다(옛 카드 격자를 목록 줄로 대체).
+  { name: "00 Dashboard",  path: "/dashboard",   panels: ".tx-answer, .tx-sec" },
+  // BU2 — 종목 찾기도 토스식 절이다. 옛 왼쪽 레일(`.bsc-rail`·`.bsc-mcap`)은 없고, `.bsc-preset` 은 접힌 전문가 설정 안이라 판이 아니다.
+  { name: "01 Screener",   path: "/screener",    panels: ".tx-answer, .tx-sec" },
+  // BU3 — 편집기 아래 결과 자리(`.tbt-chart`)는 결과가 한 번도 뜨지 않는 죽은 자리라 지웠고, `.tbt-watch-panel` 은 어디서도 그려지지 않는다.
+  { name: "02 Backtester", path: "/backtest",    panels: ".tbt-config-main, .tbt-right-col, .bte-step" },
+  // BU5a — 머리의 국면 도넛 카드(`.mv-rcard`)는 답 한 문장(`.tx-answer`)으로 바뀌었다. 탭 안 `.mc-card` 는 그대로.
+  { name: "03 Macro",      path: "/macro",       panels: ".mc-card, .tx-answer" },
   { name: "04 Company",    path: "/insights",    panels: ".ca-cp-card, .ca-cp-panel" },
   { name: "05 Risk",       path: "/risk-tools",  panels: ".tstat, .trisk-table" },
   { name: "07 Data Infra", path: "/admin/data",  panels: ".t-honesty, .trisk-table" },
@@ -38,9 +42,14 @@ const MODULES: { name: string; path: string; panels: string }[] = [
 // (S1b-2 가 3.16:1 로 퇴출한 값)도 마찬가지다.
 // 고치는 것은 A12(모션 단계)의 범위 밖이라, CSS 특이성 가드의 `KNOWN_COLLISIONS` 와 같은
 // 방식으로 **기존 실패 수를 기록**한다. 새 결함은 빨개지고, 이 수는 줄어들 수만 있다.
+// BU0 — 셸 브레드크럼이 최상위 화면에서 빠져(`.tcrumb-sep` 결함이 사라짐) 일곱 모듈 모두 1씩 줄었다(실측 2회 같음).
+// BU3 — 백테스트 8 → 0(편집기 토스식 다시 그리기 — 옛 고정폭 흐림 글자·흰 글자 버튼이 사라졌다 · 실측 2회 같음).
+// BU2 — 종목 찾기 2 → 0(옛 레일의 `.bsc-preset-save` 1.26:1 등이 토스식 다시 그리기로 사라졌다 · 실측 2회 같음).
+// BU5a — 경제 흐름 3 → 2(머리 도넛 카드가 답 한 문장으로 바뀌었다 · 남은 둘은 탭 안 카드 — 스트레스 게이지 숫자·역전 경고, BU5b · 실측 2회 같음).
+// BU6a — 기업 분석 5 → 0(왼쪽 패널·영어 탭이 한 흐름으로 바뀌었다 · 흐름 전체가 패널 선택자에 들어와 팩터 묶음 머리 흐림 글자도 고침 · 실측 2회 같음).
 const KNOWN_LOW: Record<string, number> = {
-  "00 Dashboard": 1, "01 Screener": 3, "02 Backtester": 9,
-  "03 Macro": 4, "04 Company": 6, "05 Risk": 1, "07 Data Infra": 1,
+  "00 Dashboard": 0, "01 Screener": 0, "02 Backtester": 0,
+  "03 Macro": 0, "04 Company": 0, "05 Risk": 0, "07 Data Infra": 0,
 };
 
 /** §62 가 정의한 모션 토큰 — 초 단위. 0 은 "전이 없음"이라 항상 허용된다. */
@@ -149,20 +158,54 @@ async function chartFrame(page: Page): Promise<string | null> {
   });
 }
 
-/** 내비게이션 직후부터 30ms 간격으로 훑어 **마운트 순간을 포함**한 서로 다른 프레임 수.
+/** 내비게이션 직후부터 ★페이지 안에서 매 프레임(requestAnimationFrame)★ 차트 지문을 뜬다. 서피스가 처음
+ *  나타난 뒤 2초 동안 안 바뀔 때까지(10초 상한) 훑고 둘을 돌려준다 — `frames`: 서로 다른 지문 수, `spanMs`: 첫 서피스부터 마지막으로
+ *  지문이 바뀐 때까지의 시간. 지문은 아래 `chartFrame` 과 같다.
  *  ★첫 프레임을 기준으로 창을 잡는다★ 처음엔 고정 4.2초를 훑었는데 **0 프레임**이 나왔다 —
  *  `/insights` 의 차트는 데이터가 도착한 뒤에야 마운트되므로 그 창이 마운트보다 빨랐다.
- *  그래서 서피스가 나타날 때까지 기다리되, 나타난 뒤 2.1초를 더 훑는다(기본 애니메이션 1.5초). */
-async function countFrames(page: Page): Promise<number> {
+ *  ★R2: 프레임 수가 아니라 바뀐 시간으로 애니메이션을 잰다★ 예전에는 30ms 마다 `page.evaluate` 왕복으로 지문을
+ *  떠 프레임 수를 셌다. 쉬는 기계에서는 live 43 · frozen 2 인데, 전체 E2E 게이트처럼 CPU 가 바쁘면 왕복이 길어져
+ *  live 9~10(작업자 6 개로 재현하면 5~6)으로 떨어졌고, 애니메이션은 켜져 있는데 `frozen + 10` 에 걸렸다.
+ *  매 프레임 샘플로 바꿔도 그 부하에서는 브라우저가 초당 5 프레임쯤만 그려 live 8~10 이 나왔다 — 프레임 수는
+ *  기계 속도를 잰다. recharts 애니메이션은 ★시간 기준★(기본 1500ms)이라 느린 기계에서도 같은 시간 동안 바뀌므로,
+ *  "얼린 것보다 얼마나 더 오래 바뀌었나"는 부하와 상관없이 애니메이션만 잰다. */
+type ChartMotion = { frames: number; spanMs: number };
+async function countFrames(page: Page): Promise<ChartMotion> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __chartMotion?: { frames: Set<string>; first: number; last: number; done: boolean } };
+    const m = { frames: new Set<string>(), first: 0, last: 0, done: false };
+    w.__chartMotion = m;
+    let prev = "";
+    const tick = (now: number) => {
+      const surfaces = document.querySelectorAll(".recharts-surface");
+      if (surfaces.length) {
+        if (!m.first) m.first = now;
+        const parts: string[] = [];
+        surfaces.forEach((s) => {
+          s.querySelectorAll("path").forEach((p) => {
+            parts.push(p.getAttribute("d") ?? "", p.getAttribute("stroke-dasharray") ?? "");
+          });
+          s.querySelectorAll("clipPath rect").forEach((r) => {
+            parts.push(r.getAttribute("x") ?? "", r.getAttribute("y") ?? "",
+                       r.getAttribute("width") ?? "", r.getAttribute("height") ?? "");
+          });
+        });
+        const f = parts.join("|");
+        if (f !== prev) { m.frames.add(f); m.last = now; prev = f; }
+      }
+      // 2초 동안 안 바뀌면 끝(10초 상한) — 고정 창이면 늦게 온 데이터가 얼린 쪽 시간만 늘리고 live 는 창에 잘린다.
+      if (m.first && (now - m.last > 2000 || now - m.first > 10_000)) { m.done = true; return; }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
   await page.goto(CHART_ROUTE, { waitUntil: "commit" });
-  const frames = new Set<string>();
-  let sampled = 0;
-  for (let i = 0; i < 500 && sampled < 70; i++) {
-    const f = await chartFrame(page);
-    if (f) { frames.add(f); sampled++; }
-    await page.waitForTimeout(30);
-  }
-  return frames.size;
+  await page.waitForFunction(() => (window as unknown as { __chartMotion?: { done: boolean } }).__chartMotion?.done === true,
+    null, { timeout: 40_000 });
+  return page.evaluate(() => {
+    const m = (window as unknown as { __chartMotion: { frames: Set<string>; first: number; last: number } }).__chartMotion;
+    return { frames: m.frames.size, spanMs: Math.round(m.last - m.first) };
+  });
 }
 
 // 3. 얼리면 정지한다 — 스크린샷 결정성의 근거.
@@ -175,7 +218,7 @@ async function countFrames(page: Page): Promise<number> {
 test("★freezeCharts 를 걸면 차트가 첫 프레임부터 최종 형태다★", async ({ page }) => {
   test.setTimeout(120_000);
   await freezeCharts(page);
-  const frozen = await countFrames(page);
+  const { frames: frozen } = await countFrames(page);
   test.info().annotations.push({ type: "frozen-frames", description: String(frozen) });
   expect(frozen, "차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것").toBeGreaterThan(0);
   // 데이터 도착으로 한두 프레임은 정당하게 늘 수 있다. 애니메이션이 켜지면 수십이 된다.
@@ -195,25 +238,26 @@ test("★freezeCharts 를 걸면 차트가 첫 프레임부터 최종 형태다�
 // 똑같이 기여하므로, 차이는 오직 차트 애니메이션에서만 나온다.
 test("★freezeCharts 없이는 차트가 실제로 애니메이션된다 (얼린 것과의 차분)★",
   async ({ browser }) => {
-    test.setTimeout(150_000);   // 두 번의 전체 로드 + 각 최대 15초 샘플링
+    test.setTimeout(150_000);   // 두 번의 전체 로드 + 각 서피스가 조용해질 때까지 샘플링(10초 상한)
     const run = async (freeze: boolean) => {
       const ctx = await browser.newContext();
       const page = await ctx.newPage();
       if (freeze) await freezeCharts(page);
-      const n = await countFrames(page);
+      const m = await countFrames(page);
       await ctx.close();
-      return n;
+      return m;
     };
     const frozen = await run(true);
     const live = await run(false);
-    test.info().annotations.push({ type: "frames", description: `frozen=${frozen} live=${live}` });
+    test.info().annotations.push({ type: "motion",
+      description: `frozen=${frozen.frames}f/${frozen.spanMs}ms live=${live.frames}f/${live.spanMs}ms` });
 
-    expect(frozen, "얼린 쪽에서 차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것")
+    expect(frozen.frames, "얼린 쪽에서 차트를 한 프레임도 못 잡았다 — 라우트/선택자를 확인할 것")
       .toBeGreaterThan(0);
-    // 30ms 샘플링 × 1.5초 애니메이션이면 수십 프레임이 나온다. 데이터 도착이 만드는
-    // 몇 프레임과 확실히 구분되도록 여유 있게 +10 을 요구한다.
-    expect(live, `애니메이션이 켜지지 않았다 (live=${live}, frozen=${frozen})`)
-      .toBeGreaterThanOrEqual(frozen + 10);
+    // recharts 기본 애니메이션 1500ms 의 절반 이상을 얼린 쪽보다 더 오래 바뀌어야 한다. 데이터 도착은 양쪽에
+    // 똑같이 기여하므로(얼린 쪽 실측 ~80ms) 차이는 애니메이션에서만 나온다. 실측: 쉴 때 live ~1700ms.
+    expect(live.spanMs, `애니메이션이 켜지지 않았다 (live ${live.frames}f/${live.spanMs}ms, frozen ${frozen.frames}f/${frozen.spanMs}ms)`)
+      .toBeGreaterThanOrEqual(frozen.spanMs + 750);
   });
 
 // ── 5. §63 이 쓰는 키프레임은 layout 속성을 건드리지 않는다 ──────────────────
@@ -255,7 +299,8 @@ for (const m of MODULES) {
   test(`${m.name}: 라이트 WCAG AA (기록된 기존 결함 이하)`, async ({ page }) => {
     await freezeCharts(page);
     await goto(page, m.path);
-    // ★다크는 재지 않는다 — 이 7개 모듈에는 다크 구현이 없다★ 실측: `.dark` 규칙이
+    // 다크는 BS5 부터 `dark-modules.spec.ts` 가 주요 상태 전부에서 잰다(여기는 라이트 기록만).
+    // (BS5 이전 기록) ★다크는 재지 않는다 — 이 7개 모듈에는 다크 구현이 없다★ 실측: `.dark` 규칙이
     // `.aas-root`(73) · `.brun-results`(10) · `.aas-gate`(3) 에만 있고, 이 모듈들의
     // 클래스(`.dash-card` `.mc-card` `.tbt-*` `.bsc-*` `.trisk-*` …)에는 **0건**이다.
     // 없는 기능을 단언하면 가드가 아니라 영원한 빨강이 된다. 다크 확장은 별도 단계다.

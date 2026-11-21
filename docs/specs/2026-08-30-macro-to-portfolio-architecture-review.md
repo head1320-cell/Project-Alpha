@@ -72,6 +72,8 @@ default_rf_annual` · `company_analytics` · `quant_metrics` · `allocation_back
 "비용 3수준 전부" 라는 사전등록 절이 **무의미**해졌다. 전정밀도 일별 Sharpe 로
 바꾸고 그 사실을 공개해야 했다. ★관문의 주 통계가 관례에 따라 부호까지 바뀌면
 어떤 판정도 방어할 수 없다.★
+(정정 2026-11-19 — 그 고정의 첫째 까닭은 반올림이 아니라 요약 Sharpe 가 거래비용을 빼기 전 일별 수익에서 계산된 것이다.
+전정밀도 값도 비용과 무관하다(관측). 기록 `docs/superpowers/specs/2026-08-29-macro-regime-negative-control-design.md` 의 '정정 ⑵ 의 정정'.)
 
 ### W2 BL 불확실성이 전파되지 않는다
 

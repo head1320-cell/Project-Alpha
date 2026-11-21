@@ -1,0 +1,164 @@
+/**
+ * 분봉 백테스트의 문 — 전부 로그인 필요 · 계산만 한다(주문 경로에 닿지 않는다).
+ * 실패는 `Result` 로 — 서버 사유 그대로(상한 초과 · 어긋난 설정), 닿지 못하면 status 0, 로그인이 끝났으면 401.
+ */
+import { extractErrorDetail, getWithAuth, postJson } from "@/shared/api/apiBase";
+import { call, type Result } from "@/shared/api/result";
+import type {
+  Coverage, DayTypeAnswer, DayTypeCountsAnswer, DayTypeCountsRequest, DayTypeInputAnswer, DayTypeList, DayTypeRefusal, DayTypeRequest,
+  Divergence, DivergenceRequest, Expanded,
+  MarketIndex, MarketRegimeAnswer, MarketRegimeLimits, MarketRegimeRefusal, RegimeDayTypesAnswer, RegimeSplitAnswer, ResultList, TrialDay,
+  RunRequest, ShareRefusal, SimulateRequest, Simulation, Templates, TrialList, ValidateRequest, Validation,
+} from "./types";
+
+const BASE = "/api/v1/intraday";
+
+export const getTemplates = (): Promise<Result<Templates>> => call<Templates>(getWithAuth(`${BASE}/templates`));
+
+/** 기간과 종목을 주지 않으면 서버가 최근 한 달을 답한다. */
+export const getCoverage = (q: { from?: string; to?: string; tickers?: string[] } = {}): Promise<Result<Coverage>> => {
+  const params = new URLSearchParams();
+  if (q.from) params.set("from", q.from);
+  if (q.to) params.set("to", q.to);
+  if (q.tickers?.length) params.set("tickers", q.tickers.join(","));
+  const tail = params.toString();
+  return call<Coverage>(getWithAuth(`${BASE}/coverage${tail ? `?${tail}` : ""}`));
+};
+
+/** 규칙을 조건 나무로 풀고 검사한다 — ★계산 · 시행 기록 없음★(편집 중의 검사는 시행이 아니다). 거절은 서버의 문장 그대로. */
+export const expandRule = (rule: SimulateRequest["rule"]): Promise<Result<Expanded>> =>
+  call<Expanded>(postJson(`${BASE}/rules/expand`, { rule }));
+export const simulate = (body: RunRequest): Promise<Result<Simulation>> => call<Simulation>(postJson(`${BASE}/simulate`, body));
+export const validate = (body: ValidateRequest): Promise<Result<Validation>> => call<Validation>(postJson(`${BASE}/validate`, body));
+/** 캔버스의 '분봉 결과 조회' 노드가 고를 목록 — 내 것만. */
+export const listResults = (): Promise<Result<ResultList>> => call<ResultList>(getWithAuth(`${BASE}/results`));
+/** 올린 체결을 같은 규칙의 시뮬레이션과 견준다. ★서버는 올린 체결을 저장하지 않는다★ · 시뮬레이션 쪽은 시행으로 기록된다. */
+export const divergence = <F,>(body: DivergenceRequest<F>): Promise<Result<Divergence>> =>
+  call<Divergence>(postJson(`${BASE}/divergence`, body));
+/** 내가 돌린 분봉 백테스트의 설정들(마지막으로 돌린 것이 먼저) — 괴리 보고가 고를 목록. 내 것만. */
+export const listTrials = (): Promise<Result<TrialList>> => call<TrialList>(getWithAuth(`${BASE}/trials`));
+
+// ── 하루 유형 모형(T1) ─────────────────────────────────────────────────────────────────
+export type TrainResult = { ok: true; value: DayTypeAnswer } | { ok: false; status: number; error: string; refusal: DayTypeRefusal | null };
+
+/** 학습 — 같은 표본 · 같은 설정이면 서버가 다시 학습하지 않고 그 모형을 돌려준다(`created: false`).
+ *  거절은 사유 문장과 함께 ★세부를 버리지 않는다★ — 날이 모자랄 때 어느 사유로 몇 표본을 뺐는지 화면이 보여야 한다. */
+export async function trainDayTypes(body: DayTypeRequest): Promise<TrainResult> {
+  try {
+    const r = await postJson(`${BASE}/day-types`, body);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) {
+      const detail = (js as { detail?: unknown } | null)?.detail;
+      const refusal = detail && typeof detail === "object" && !Array.isArray(detail) && typeof (detail as { code?: unknown }).code === "string"
+        ? detail as DayTypeRefusal : null;
+      return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다 — 사유 수신 실패`), refusal };
+    }
+    return { ok: true, value: js as DayTypeAnswer };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패", refusal: null };
+  }
+}
+/** 내 모형들(최신 순 · 요약). 운영에서는 합성 분봉으로 학습한 모형을 빼고 그 수를 알린다. */
+export const listDayTypes = (): Promise<Result<DayTypeList>> => call<DayTypeList>(getWithAuth(`${BASE}/day-types`));
+/** 내 모형 하나 — 남의 것 · 없는 것은 같은 404. */
+export const getDayType = (key: string): Promise<Result<DayTypeAnswer>> =>
+  call<DayTypeAnswer>(getWithAuth(`${BASE}/day-types/${encodeURIComponent(key)}`));
+
+// ── 시장 국면(일) — K1 ───────────────────────────────────────────────────────────────────
+export const getMarketRegimeLimits = (): Promise<Result<MarketRegimeLimits>> =>
+  call<MarketRegimeLimits>(getWithAuth(`${BASE}/market-regime/limits`));
+/** 국면별 성과 나눔 — 내 시행의 일별 흐름을 국면별로(읽기만 · 시행 수 불변). 남의 시행 · 없는 시행은 같은 404 · 기록을 못 읽으면 503 — 사유는 서버 글. */
+export type SplitResult = { ok: true; value: RegimeSplitAnswer } | { ok: false; status: number; error: string };
+export async function getRegimeSplit(trialKey: string, q: { index: MarketIndex; k: number }): Promise<SplitResult> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k) });
+  try {
+    const r = await getWithAuth(`${BASE}/trials/${encodeURIComponent(trialKey)}/regime-split?${params.toString()}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`) };
+    return { ok: true, value: js as RegimeSplitAnswer };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패" };
+  }
+}
+/** 하루 유형 비율 × 국면 — 내 시행의 표본을 내 모형으로 배정해 국면별로(읽기만 · 시행 수 불변). 남의 시행 · 남의 모형 · 없는 것은 같은 404 · 기록을 못 읽으면 503 — 사유는 서버 글. */
+export type DayTypesByRegimeResult = { ok: true; value: RegimeDayTypesAnswer } | { ok: false; status: number; error: string };
+export async function getRegimeDayTypes(trialKey: string, q: { index: MarketIndex; k: number; model: string }): Promise<DayTypesByRegimeResult> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k), model: q.model });
+  try {
+    const r = await getWithAuth(`${BASE}/trials/${encodeURIComponent(trialKey)}/regime-day-types?${params.toString()}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`) };
+    return { ok: true, value: js as RegimeDayTypesAnswer };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패" };
+  }
+}
+export type RegimeResult = { ok: true; value: MarketRegimeAnswer } | { ok: false; status: number; error: string; refusal: MarketRegimeRefusal | null };
+/** 판정 기간의 거래일마다 국면 확률 — 읽기만(쓰기 0). 거절(기간 상한 · 날짜 순서)은 서버 사유 그대로. */
+export async function getMarketRegime(q: { index: MarketIndex; k: number; from: string; to: string }): Promise<RegimeResult> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k), from: q.from, to: q.to });
+  try {
+    const r = await getWithAuth(`${BASE}/market-regime?${params.toString()}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) {
+      const detail = (js as { detail?: unknown } | null)?.detail;
+      const refusal = detail && typeof detail === "object" && !Array.isArray(detail) && typeof (detail as { code?: unknown }).code === "string"
+        ? detail as MarketRegimeRefusal : null;
+      return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`), refusal };
+    }
+    return { ok: true, value: js as MarketRegimeAnswer };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패", refusal: null };
+  }
+}
+
+// ── 하루 유형 비중을 더한 시장 국면 — K5 ─────────────────────────────────────────────────
+/** 실패는 상태 · 서버 문장 · (거절이면) 코드와 문장 — 화면은 거절(400 · 404)과 실패(503 · 연결)를 다르게 보인다. */
+export type ShareResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string; refusal: ShareRefusal | null };
+
+async function shareCall<T>(res: Promise<Response>): Promise<ShareResult<T>> {
+  try {
+    const r = await res;
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) {
+      const detail = (js as { detail?: unknown } | null)?.detail;
+      const refusal = detail && typeof detail === "object" && !Array.isArray(detail) && typeof (detail as { code?: unknown }).code === "string"
+        && typeof (detail as { reason?: unknown }).reason === "string" ? detail as ShareRefusal : null;
+      return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`), refusal };
+    }
+    return { ok: true, value: js as T };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패", refusal: null };
+  }
+}
+
+/** 비중 세기 — 내 모형으로 바구니의 날마다 하루 유형을 세어 남긴다(쓰기 · 한 부름의 예산 안에서 날짜 순 · 남으면 다음 부름이 잇는다). */
+export const countDayTypeShare = (body: DayTypeCountsRequest): Promise<ShareResult<DayTypeCountsAnswer>> =>
+  shareCall<DayTypeCountsAnswer>(postJson(`${BASE}/market-regime/day-type-counts`, body));
+
+/** 지수만의 국면과 하루 유형 비중을 더한 국면을 나란히 — 읽기만(쓰기 0 · 시행 수 불변). 유형 · 종목은 이름을 되풀이한 인자로 보낸다. */
+export function getDayTypeInput(q: { index: MarketIndex; k: number; from: string; to: string; model: string; types: number[]; tickers: string[] }):
+  Promise<ShareResult<DayTypeInputAnswer>> {
+  const params = new URLSearchParams({ index: q.index, k: String(q.k), from: q.from, to: q.to, model: q.model });
+  for (const t of q.types) params.append("types", String(t));
+  for (const t of q.tickers) params.append("tickers", t);
+  return shareCall<DayTypeInputAnswer>(getWithAuth(`${BASE}/market-regime/day-type-input?${params.toString()}`));
+}
+
+/** 분봉 하루 보기(G4) — 내 시행 하나의 하루를 시행 설정으로 다시 계산한 봉과 체결(읽기만 · 시행 수 불변). 날짜 · 종목을 비우면 서버가 첫 거래일 ·
+ *  그날 첫 체결 종목을 고른다. 남의 시행 · 없는 시행은 같은 404 · 기록을 못 읽으면 503 · 기간 밖 날짜 · 시행에 없는 종목은 422 — 사유는 서버 글. */
+export type TrialDayResult<T = unknown> = { ok: true; value: TrialDay<T> } | { ok: false; status: number; error: string };
+export async function getTrialDay<T = unknown>(trialKey: string, q: { date?: string | null; ticker?: string | null } = {}): Promise<TrialDayResult<T>> {
+  const params = new URLSearchParams();
+  if (q.date) params.set("date", q.date);
+  if (q.ticker) params.set("ticker", q.ticker);
+  const tail = params.toString();
+  try {
+    const r = await getWithAuth(`${BASE}/trials/${encodeURIComponent(trialKey)}/day${tail ? `?${tail}` : ""}`);
+    const js: unknown = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, status: r.status, error: extractErrorDetail(js, `서버가 ${r.status} 로 응답했습니다. 사유 수신 실패`) };
+    return { ok: true, value: js as TrialDay<T> };
+  } catch {
+    return { ok: false, status: 0, error: "서버 연결 실패" };
+  }
+}

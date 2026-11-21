@@ -64,7 +64,7 @@ def create(req: CreateCompanySnapshotRequest):
         "price_source": snap.get("price_source"),
         "unavailable_sections": (snap.get("provenance") or {}).get("unavailable_sections", []),
         "note": ("재무의 실제 공표일과 정정 이력이 없어 이 스냅샷은 과거 시뮬레이션에 "
-                 "쓸 수 없습니다(forward_only). publication_dates.warning 을 보십시오."),
+                 "사용할 수 없습니다(forward_only). publication_dates.warning 을 확인하십시오."),
     }
 
 

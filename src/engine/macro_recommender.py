@@ -1,16 +1,18 @@
-"""매크로 추천 엔진 — 현 국면에 유리한 자산배분 전략 추천 (규칙 + 성과 + AI 서술)
+"""매크로 추천 엔진 — 현 국면에 유리한 자산배분 전략 추천 (규칙 + 성과 + 규칙 서술)
 ==========================================================================
 3종 종합:
   ① 규칙: regime_analyzer 4국면 + Stress → 전략 아키타입 적합도(RegimeAdaptiveAllocator 사상).
   ② 성과: 각 전략의 현 배분을 트레일링 12개월 수익률에 적용(실 ETF 시세 — GCP, 샌드박스 mock).
-  ③ AI 서술: ANTHROPIC_API_KEY 있으면 Claude로 근거 설명, 없으면 규칙 기반 요약(정직).
+  ③ 서술: 규칙 기반 요약(국면 적합도 · 최근 12개월 성과로 짓는다) — `narrative_source` 는 늘 "rule".
+     ★LLM 을 부르지 않는다★ — 계산 · 결정 계층의 경계(제품 규칙 §3-2 · `tests/test_llm_boundary.py`).
+     (2026-11-19 G7 ①: 예전의 'AI 서술' 가지는 없는 이름(`claude_client.get_client` · `complete`)을 불러
+     늘 규칙 글로 떨어지던 죽은 길이라 걷어 냈다 — 답은 키가 있든 없든 바이트까지 같다.)
 산출: 국면·사이클·stress + 13전략 랭킹(composite) + 최상위 추천 + 서술 + 백테스터 이식 힌트.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -93,26 +95,12 @@ def _strategy_return_12m(strat: dict, mk: str) -> float | None:
     return round(tot / wsum * 100, 2) if wsum > 0 else None
 
 
-def _ai_narrative(quad: str, stress: float, top: dict) -> tuple[str, str]:
-    """Claude 근거 서술 (키 있으면) → (text, source). 없으면 규칙 요약."""
-    rule = (f"현재 국면은 {_QUAD_KR.get(quad, quad)}이고 Stress {stress:.0f}입니다. "
+def _rule_narrative(quad: str, stress: float, top: dict) -> str:
+    """규칙 기반 서술 — 국면 · Stress · 최상위 전략의 적합도 근거 · 현 배분 앞 넷. LLM 을 부르지 않는다."""
+    return (f"현재 국면은 {_QUAD_KR.get(quad, quad)}이고 Stress {stress:.0f}입니다. "
             f"이 국면에선 '{top['name']}'({top['archetype_kr']}) 전략의 적합도가 가장 높습니다 — "
             f"{top['rationale']}. 현 배분: "
             + ", ".join(f"{h['us_label']} {h['weight']}%" for h in top["holdings"][:4]) + ".")
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        return rule, "rule"
-    try:
-        from src.services.narrative.claude_client import get_client  # 기존 클라이언트 재사용
-        client = get_client()
-        msg = client.complete(
-            system="너는 매크로 기반 자산배분 애널리스트다. 한국어로 3~4문장, 과장 없이.",
-            prompt=f"국면 {quad}, Stress {stress:.0f}. 추천 전략 {top['name']} ({top['signal']}). "
-                   f"배분 {[ (h['us_label'], h['weight']) for h in top['holdings'] ]}. 근거를 설명하라.",
-        )
-        return (msg or rule), ("claude" if msg else "rule")
-    except Exception as e:
-        logger.debug(f"AI 서술 폴백: {e}")
-        return rule, "rule"
 
 
 def recommend(market: str = "kr") -> dict:
@@ -176,7 +164,7 @@ def recommend(market: str = "kr") -> dict:
 
     ranked.sort(key=lambda x: x["composite"], reverse=True)
     top = ranked[0]
-    narrative, nsrc = _ai_narrative(quad, stress, top)
+    narrative = _rule_narrative(quad, stress, top)
 
     # 신뢰도 가중 디리스킹 — 저확신 국면이면 위험 배분을 현금성 앵커로 축소(표시 배분).
     holdings_final = confidence_overlay(top["holdings"], confidence)
@@ -204,7 +192,7 @@ def recommend(market: str = "kr") -> dict:
                 "holdings": top["holdings"],
                 "holdings_final": holdings_final,
                 "cash_overlay_pct": round(cash_final, 1)},
-        "narrative": narrative, "narrative_source": nsrc,
+        "narrative": narrative, "narrative_source": "rule",
         "ranking": [{"id": s["id"], "name": s["name"], "composite": s["composite"],
                      "fit_score": s["fit_score"], "recent_return_12m": s["recent_return_12m"],
                      "archetype_kr": s["archetype_kr"], "signal": s["signal"]} for s in ranked],

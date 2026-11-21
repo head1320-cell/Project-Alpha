@@ -1,38 +1,33 @@
 "use client";
-// 대상 경로: frontend/src/components/backtest/kit.tsx
+// 백테스터 편집기의 공통 부품(kit) — Section · SubToggle · Field · Toggle · QuickStepper · Segmented · GroupedSelect.
 //
-// 백테스터 재설계의 공통 부품. 모든 화면이 이 5개로 조립된다.
-// 색은 tone(buy=빨강 / sell=파랑 / neutral)으로 주입 — 구조는 동일.
-// (원하면 TONES 를 globals.css 의 --buy/--sell 변수로 빼도 됨)
+// BU3: 인라인 style 을 걷고 클래스(`kit-*`) + data 속성(`data-on`·`data-tone`)으로 그린다. 겉은 `--tx-*`(globals.css 끝 BU3 절).
+// 톤: buy = 빨강(사기) · sell = 파랑(팔기) — 한국 증권 앱의 관례이자 사용자가 고른 한국식 색 축. neutral = 파랑 강조.
+// 색만으로 말하지 않는다 — 모든 토글·단추는 라벨과 함께 있다.
+// ★동작·DOM 역할은 그대로★(role=switch · aria-checked · `.bs-numbox` · button 묶음) — `/dev/ui` kit 표본 테스트가 구조로 건다.
+// 이름(접근성 P0-4): 스위치 · 숫자 칸 · 고르기 칸은 곁에 ★보이는 글자★와 `aria-labelledby` 로 잇는다 — Section · SubToggle 이 제 스위치를,
+//   Field · SubToggle 이 안의 숫자 칸 · 고르기 칸을(문맥으로) 잇는다. 한 줄에 칸이 둘이거나 줄 밖에 있으면 호출부가 `label` 을 준다.
+//   화면의 글자 · 모습은 그대로다(더한 것은 id 와 aria 속성뿐) — `e2e/kit-names.spec.ts`.
 
-import { type ReactNode } from "react";
-import { X } from "lucide-react";
+import { createContext, useContext, useId, type CSSProperties, type ReactNode } from "react";
 
 export type Tone = "buy" | "sell" | "neutral";
 
-export const TONES: Record<Tone, { accent: string; bg: string; text: string }> = {
-  buy: { accent: "var(--danger)", bg: "var(--danger-light)", text: "var(--danger)" },
-  sell: { accent: "#1565c0", bg: "#e7f0fb", text: "#1565c0" },
-  neutral: { accent: "var(--text-primary)", bg: "var(--bg-section)", text: "var(--text-primary)" },
-};
-
-const R = "var(--bs-border-radius)";
-const RL = "var(--bs-border-radius-lg)";
+/** 이 줄의 보이는 글자(라벨)의 id — Field · SubToggle 이 주고, 안의 숫자 칸 · 고르기 칸이 받아 제 이름으로 삼는다. */
+const LabelIdCtx = createContext<string | undefined>(undefined);
 
 // ── GroupedSelect (optgroup 드롭다운 — 체결가 유형 등) ────────
-export function GroupedSelect({ value, onChange, groups, width = 168 }: {
+export function GroupedSelect({ value, onChange, groups, width = 168, label }: {
   value: string; onChange: (id: string) => void;
   groups: { label: string; options: { id: string; label: string }[] }[];
   width?: number;
+  /** 줄(Field) 밖에 있거나 그 줄의 글자가 이 칸의 이름이 아닐 때. 없으면 줄의 글자를 따른다. */
+  label?: string;
 }) {
+  const rowLabel = useContext(LabelIdCtx);
   return (
-    <select
-      value={value} onChange={(e) => onChange(e.target.value)}
-      style={{
-        fontSize: 13, color: "var(--text-primary)", border: "1px solid var(--border-strong)",
-        borderRadius: R, padding: "6px 9px", width, background: "var(--bg-card)", cursor: "pointer",
-      }}
-    >
+    <select className="kit-select" value={value} onChange={(e) => onChange(e.target.value)} style={{ width }}
+      aria-label={label} aria-labelledby={label ? undefined : rowLabel}>
       {groups.map((g) => (
         <optgroup key={g.label} label={g.label}>
           {g.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -42,130 +37,113 @@ export function GroupedSelect({ value, onChange, groups, width = 168 }: {
   );
 }
 
-// ── Toggle (pill switch) ──────────────────────────────────────
-export function Toggle({ on, onChange, tone = "neutral", size = "md" }: {
-  on: boolean; onChange: (v: boolean) => void; tone?: Tone; size?: "sm" | "md";
+// ── Toggle (스위치) ──────────────────────────────────────────
+export function Toggle({ on, onChange, tone = "neutral", size = "md", act, labelledBy, label }: {
+  on: boolean; onChange: (v: boolean) => void; tone?: Tone; size?: "sm" | "md"; act?: string;
+  /** 이 스위치의 이름이 되는 보이는 글자의 id(Section · SubToggle 이 준다). 낱으로 쓸 때는 `label`. */
+  labelledBy?: string; label?: string;
 }) {
-  const w = size === "sm" ? 32 : 34;
-  const k = size === "sm" ? 13 : 14;
   return (
-    <button
-      type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)}
-      style={{
-        width: w, height: w === 34 ? 18 : 17, borderRadius: 9, border: "none", cursor: "pointer",
-        padding: 2, boxSizing: "border-box", display: "inline-flex", alignItems: "center",
-        justifyContent: on ? "flex-end" : "flex-start",
-        background: on ? TONES[tone].accent : "var(--border-strong)", transition: "background .15s",
-      }}
-    >
-      <span style={{ width: k, height: k, borderRadius: "50%", background: "#fff" }} />
+    <button type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)} data-act={act}
+      aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : label}
+      className="kit-toggle" data-tone={tone} data-size={size}>
+      <span className="kit-toggle-k" aria-hidden />
     </button>
   );
 }
 
-// ── Section (collapsible card with on/off) ────────────────────
-// ★죽은 삼항 하나를 걷어냈다 (Phase B)★ 테두리 색이
-// `enabled ? "var(--border)" : "var(--border)"` 였다 — 두 가지가 같은 값이라 조건이
-// 아무 일도 하지 않았다. 비활성 상태를 구별하려던 흔적으로 보이지만, 지금 코드가 하는 일은
-// "항상 같은 테두리" 이므로 그대로 유지하고 조건만 없앴다(동작 변화 0).
-export function Section({ title, hint, tone = "neutral", enabled, onToggle, children }: {
+// ── Section (절 — 켜고 끌 수 있으면 스위치) ───────────────────
+// ★`onToggle` 이 없으면 스위치를 그리지 않는다★(BU3) — 예전에는 늘 켜진 절에도 눌러도 아무 일 없는 스위치가 있었다(`onToggle={() => {}}`).
+export function Section({ title, hint, tone = "neutral", enabled, onToggle, act, children }: {
   title: string; hint?: string; tone?: Tone; enabled: boolean;
-  onToggle: (v: boolean) => void; children?: ReactNode;
+  onToggle?: (v: boolean) => void; act?: string; children?: ReactNode;
 }) {
+  const titleId = useId();
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--bs-border-radius-lg)] px-4 py-[15px]">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: enabled ? TONES[tone].accent : "var(--border-strong)" }} />
-          <span style={{ fontSize: 15, fontWeight: 500, color: enabled ? "var(--text-primary)" : "var(--text-muted)", flexShrink: 0 }}>{title}</span>
-          {hint && <span style={{ fontSize: 12, color: enabled ? "var(--text-secondary)" : "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hint}</span>}
+    <div className="kit-sec" data-tone={tone} data-on={enabled ? "1" : "0"}>
+      <div className="kit-sec-head">
+        <div className="kit-sec-title">
+          <span className="kit-sec-t" id={titleId}>{title}</span>
+          {hint && <span className="kit-sec-hint">{hint}</span>}
         </div>
-        <Toggle on={enabled} onChange={onToggle} tone={tone} />
+        {onToggle && <Toggle on={enabled} onChange={onToggle} tone={tone} act={act} labelledBy={titleId} />}
       </div>
-      {enabled && children && (
-        <div className="border-t border-[var(--border)] mt-[13px] pt-3.5 flex flex-col gap-3.5">
-          {children}
-        </div>
-      )}
+      {enabled && children && <div className="kit-sec-body">{children}</div>}
     </div>
   );
 }
 
-// ── SubToggle (advanced sub-row inside a section) ─────────────
-export function SubToggle({ label, hint, on, onChange, tone = "neutral", children }: {
-  label: string; hint?: string; on: boolean; onChange: (v: boolean) => void; tone?: Tone; children?: ReactNode;
+// ── SubToggle (절 안의 켜고 끄는 줄) ─────────────────────────
+export function SubToggle({ label, hint, on, onChange, tone = "neutral", act, children }: {
+  label: string; hint?: string; on: boolean; onChange: (v: boolean) => void; tone?: Tone; act?: string; children?: ReactNode;
 }) {
+  const labelId = useId();
   return (
-    <div style={{ background: on ? TONES[tone].bg : "var(--bg-section)", borderRadius: R, padding: "10px 12px" }}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] text-[var(--text-primary)]">{label}</span>
-          {hint && <span className="text-[11px] text-[var(--text-secondary)]">{hint}</span>}
+    <div className="kit-sub" data-tone={tone} data-on={on ? "1" : "0"}>
+      <div className="kit-sub-head">
+        <div className="kit-sub-title">
+          <span className="kit-sub-l" id={labelId}>{label}</span>
+          {hint && <span className="kit-sub-hint">{hint}</span>}
         </div>
-        <Toggle on={on} onChange={onChange} tone={tone} size="sm" />
+        <Toggle on={on} onChange={onChange} tone={tone} size="sm" act={act} labelledBy={labelId} />
       </div>
-      {on && children && <div className="mt-2.5 flex flex-wrap items-center gap-2">{children}</div>}
+      {on && children && <div className="kit-sub-body"><LabelIdCtx.Provider value={labelId}>{children}</LabelIdCtx.Provider></div>}
     </div>
   );
 }
 
-// ── Field (labeled row) ───────────────────────────────────────
+// ── Field (라벨 + 칸) ────────────────────────────────────────
 export function Field({ label, width = 84, children }: { label: string; width?: number; children: ReactNode }) {
+  const labelId = useId();
   return (
-    <div className="flex items-center gap-[9px] flex-wrap">
-      <span style={{ fontSize: 12, color: "var(--text-secondary)", width, flexShrink: 0 }}>{label}</span>
-      {children}
+    <div className="kit-field" style={{ "--kit-lw": `${width}px` } as CSSProperties}>
+      <span className="kit-field-l" id={labelId}>{label}</span>
+      <LabelIdCtx.Provider value={labelId}>{children}</LabelIdCtx.Provider>
     </div>
   );
 }
 
-const numBox: React.CSSProperties = {
-  fontFamily: "var(--bs-font-mono)", fontSize: 14, color: "var(--text-primary)",
-  border: "1px solid var(--border-strong)", borderRadius: R, padding: "6px 8px",
-  width: 100, textAlign: "center", background: "var(--bg-card)",
-};
-
-// ── QuickStepper (number + quick +/- chips) ──────────────────
-export function QuickStepper({ value, onChange, chips = [], unit = "", min, max }: {
-  value: number; onChange: (v: number) => void; chips?: number[]; unit?: string; min?: number; max?: number;
+// ── QuickStepper (숫자 + 빠른 더하기 칩) ──────────────────────
+export function QuickStepper({ value, onChange, chips = [], unit = "", min, max, act, label }: {
+  value: number; onChange: (v: number) => void; chips?: number[]; unit?: string; min?: number; max?: number; act?: string;
+  /** 한 줄에 숫자 칸이 둘이거나 줄 밖에 있을 때. 없으면 줄의 글자(+ 단위)를 따른다. */
+  label?: string;
 }) {
+  const rowLabel = useContext(LabelIdCtx);
+  const unitId = useId();
   const clamp = (n: number) => Math.max(min ?? -Infinity, Math.min(max ?? Infinity, n));
+  // 이름 = 줄의 글자 + 단위("투자 금액 만원"). 줄의 글자가 없으면 단위만으로 이름을 짓지 않는다 — '%' 는 이름이 아니다.
+  const labelledBy = label || !rowLabel ? undefined : unit ? `${rowLabel} ${unitId}` : rowLabel;
   return (
     <>
-      <input type="number" className="bs-numbox" value={value}
-        onChange={(e) => onChange(clamp(Number(e.target.value)))} style={numBox} />
-      {unit && <span className="text-[13px] text-[var(--text-secondary)]">{unit}</span>}
-      <span className="flex gap-[5px]">
-        {chips.map((c) => (
-          <button key={c} type="button" onClick={() => onChange(clamp(value + c))}
-            className="text-[11px] text-[var(--text-secondary)] bg-none cursor-pointer border border-[var(--border)] rounded-md px-2 py-1">
-            {c > 0 ? `+${c}` : c}{unit}
-          </button>
-        ))}
-      </span>
+      <input type="number" className="bs-numbox kit-num" value={value} data-act={act}
+        aria-label={label} aria-labelledby={labelledBy}
+        onChange={(e) => onChange(clamp(Number(e.target.value)))} />
+      {unit && <span className="kit-unit" id={unitId}>{unit}</span>}
+      {chips.length > 0 && (
+        <span className="kit-chips">
+          {chips.map((c) => (
+            <button key={c} type="button" className="kit-chip" onClick={() => onChange(clamp(value + c))}>
+              {c > 0 ? `+${c}` : c}{unit}
+            </button>
+          ))}
+        </span>
+      )}
     </>
   );
 }
 
-// ── Segmented (selectable button group) ───────────────────────
-export function Segmented<T extends string>({ options, value, onChange, tone = "neutral" }: {
-  options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; tone?: Tone;
+// ── Segmented (고르는 단추 묶음) ─────────────────────────────
+export function Segmented<T extends string>({ options, value, onChange, tone = "neutral", act }: {
+  options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; tone?: Tone; act?: string;
 }) {
   return (
-    <span className="flex gap-1 bg-[var(--bg-section)] rounded-[var(--bs-border-radius)] p-[3px]">
-      {options.map((o) => {
-        const on = o.id === value;
-        return (
-          <button key={o.id} type="button" onClick={() => onChange(o.id)}
-            style={{
-              fontSize: 12, padding: "4px 13px", border: "none", cursor: "pointer", borderRadius: 6,
-              background: on ? TONES[tone].bg : "transparent",
-              color: on ? TONES[tone].text : "var(--text-secondary)", fontWeight: on ? 500 : 400,
-            }}>
-            {o.label}
-          </button>
-        );
-      })}
+    <span data-act={act} className="kit-seg" data-tone={tone}>
+      {options.map((o) => (
+        <button key={o.id} type="button" className="kit-seg-opt" aria-pressed={o.id === value} onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
     </span>
   );
 }

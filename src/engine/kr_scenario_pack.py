@@ -234,7 +234,7 @@ def _load_exposures(codes: list[str]) -> tuple[dict[str, np.ndarray], list[str],
     cov = {k: int(np.count_nonzero(v)) for k, v in exp.items()}
     weak = [FACTORS[k] for k, v in cov.items() if v == 0]
     if weak:
-        notes.append(f"노출 결측 팩터(0 기여): {', '.join(weak)} — 실데이터 적재 시 채워짐(정직 결측).")
+        notes.append(f"노출 결측 팩터(0 기여): {', '.join(weak)} — 실데이터 적재 시 채워짐(결측).")
     if n_semi:
         notes.append(f"반도체 밸류체인 분류 {n_semi}종목 (KRX 섹터 기준).")
     return exp, names, notes
@@ -353,7 +353,7 @@ def run_scenario(codes: list[str], weights: dict[str, float], scenario: str,
         "risk_proxy": {"var95_pct": var95, "cvar95_pct": cvar95, "mdd_proxy_pct": mdd_proxy},
         "execution_feasibility": sc.get("execution") or "",
         "hedge_note": sc.get("hedge_note") or "",
-        "notes": notes + ["팩터 노출 × 시나리오 계수의 선형 근사 — 실제 충격은 비선형일 수 있음(정직 한계).",
+        "notes": notes + ["팩터 노출 × 시나리오 계수의 선형 근사 — 실제 충격은 비선형일 수 있음(한계).",
                           f"VaR/CVaR는 충격+변동성 상승 파라메트릭 프록시(배율 {sev:g}×)."],
     }
 

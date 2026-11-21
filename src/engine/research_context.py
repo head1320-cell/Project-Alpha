@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from dataclasses import asdict, dataclass, replace
 from datetime import date
+
+from src.engine.build_probe import current_identity
 
 # 절단일 필드 — `as_of` 와 달리 **선언되지 않으면 비워 둔다**.
 CUTOFF_FIELDS = ("market_data_as_of", "fundamental_data_as_of", "macro_data_as_of")
@@ -55,14 +56,22 @@ class ResearchContext:
         return replace(self, **kw)
 
 
-def code_version() -> str:
-    """빌드 식별자 — ★단일 출처★
+def code_version() -> str | None:
+    """빌드 식별자 — ★단일 출처★ (AM2 에서 실제로 측정하게 됐다)
 
-    폴백 순서 `GIT_SHA → APP_VERSION → "dev"`. 저장소마다 복사되던 것을 여기로
-    모은다(`backtest_runs` 는 `BACKTEST_ENGINE_VERSION` 을 앞에 두고 나머지를
-    여기에 위임한다).
+    우선순위 `GIT_SHA → APP_VERSION → git 측정 → **미상**`. 저장소마다 복사되던
+    것을 여기로 모은다(`backtest_runs` 는 `BACKTEST_ENGINE_VERSION` 을 앞에 두고
+    나머지를 여기에 위임한다).
+
+    ★`"dev"` 를 만들지 않는다★ 옛 폴백은 `"dev"` 였고, 두 환경변수가 어디에도
+    설정돼 있지 않아 **701행이 전부 같은 값**이었다. 그래서 `research_manifest`
+    의 노후화 검사가 `"dev" == "dev"` 로 항상 참이었다 — 가드가 도달할 수 없었다.
+    모르면 `None` 이고, 사유는 `current_identity().reason` 에 있다.
+
+    ★값만으로 비교하지 마십시오★ 같은 SHA 라도 작업 트리가 더러우면 같은 코드가
+    아니다. 비교는 `src.domain.build_identity.versions_comparable` 이 한다.
     """
-    return os.getenv("GIT_SHA") or os.getenv("APP_VERSION") or "dev"
+    return current_identity().value
 
 
 def data_source() -> str:
@@ -114,6 +123,9 @@ def _canonical(ctx: ResearchContext) -> dict:
     body = dict(sorted(asdict(ctx).items()))
     body["_data_source"] = data_source()
     body["_code_version"] = code_version()
+    # ★SHA 는 커밋을 식별하지 트리를 식별하지 않는다★ 커밋 안 된 수정이 있는
+    # 실행과 없는 실행이 **같은 지문**을 갖는 것은 재현성 거짓말이다.
+    body["_code_tree"] = current_identity().tree
     return body
 
 
@@ -122,6 +134,11 @@ def fingerprint(ctx: ResearchContext) -> str:
     blob = json.dumps(_canonical(ctx), sort_keys=True, ensure_ascii=False,
                       separators=(",", ":"), default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:FINGERPRINT_LEN]
+
+
+def _identity():
+    """`describe()` 전용 — 한 번만 읽는다(캐시돼 있지만 의도를 드러낸다)."""
+    return current_identity()
 
 
 def describe(ctx: ResearchContext) -> dict:
@@ -136,6 +153,11 @@ def describe(ctx: ResearchContext) -> dict:
         "engine_version": ctx.engine_version,
         "risk_model_version": ctx.risk_model_version,
         "code_version": code_version(),
+        # ★값과 그 값을 어떻게 알았는지를 함께 낸다★ 같은 문자열이라도 측정된
+        # 것과 주입된 것은 믿을 수 있는 정도가 다르다.
+        "code_version_method": _identity().method,
+        "code_tree": _identity().tree,
+        "code_version_reason": _identity().reason,
         "data_source": data_source(),
         "cutoffs_declared": declared,
         # ★비어 있는 절단일을 as_of 로 채우지 않는다★ 채우면 강제한 적 없는
@@ -143,5 +165,7 @@ def describe(ctx: ResearchContext) -> dict:
         "cutoffs_unspecified": unspecified,
         "fingerprint": fingerprint(ctx),
         "note": ("선언하지 않은 절단일은 채우지 않습니다 — 비어 있다는 것은 "
-                 "'그 날짜로 잘랐다' 가 아니라 '자른 적이 없다' 는 뜻입니다"),
+                 "'그 날짜로 잘랐다' 가 아니라 '자른 적이 없다' 는 뜻입니다. "
+                 "★같은 지문이 같은 코드를 뜻하지는 않습니다★ — 작업 트리가 "
+                 "더러우면 같은 SHA 의 두 실행도 다른 코드입니다"),
     }

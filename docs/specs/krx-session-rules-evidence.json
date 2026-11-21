@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "note": "한국거래소 유가증권·코스닥 정규시장의 하루 운영 시각. ★확인한 칸만 적는다 — 확인하지 못한 것은 unknown 에 사유와 함께 적고 값은 만들지 않는다.★ 읽는 곳: src/data/market_rules.py::session_rules. 쓰는 곳: 분봉 품질 검사(정규장 안/밖을 가른다) · 분봉 백테스트(종가 단일가 구간에는 새로 진입하지 않는다). 이 표의 시각으로 붙인 표시는 관측이 아니라 시각으로 추론한 것이다 — 그날 실제로 단일가였는지는 분봉만으로 알 수 없다.",
+  "as_of": "2026-11-14",
+  "grades": {
+    "T0": "증거 없음 — 추측. 이 파일에 쓰지 않는다",
+    "T1": "보도·증권사 안내 자료의 요약으로 확인(검색 결과로 읽었다 — 거래소 업무규정 원문은 보지 못했다)",
+    "T2": "한국거래소 업무규정·시행세칙·공지 원문으로 확인",
+    "T3": "원문 + 실제 분봉의 첫·마지막 봉과 교차 확인"
+  },
+  "min_grade_to_apply": "T1",
+  "why_t1_applies": "이 환경에서는 거래소 원문에 닿지 못했다. 적용선을 T2 로 두면 정규장을 가를 수 없어 품질 검사가 봉 수를 세지 못한다. 출처 없는 상수를 코드에 박는 것보다 등급이 붙은 안내 자료가 낫다고 보았다 — 대신 쓰는 쪽은 '시각으로 추론'이라고 표시한다.",
+  "sources": {
+    "S1": {"title": "다올투자증권 — 거래시간 안내", "url": "https://www.daolsecurities.com/customer/usage/guideTradetime01.jsp", "kind": "증권사 안내"},
+    "S2": {"title": "삼성증권 — 연말 시장운영 일정 안내", "url": "https://www.samsungpop.com/ux/kor/customer/notice/notice/noticeViewContent.do?MenuSeqNo=23456", "kind": "증권사 안내"},
+    "S3": {"title": "알파스퀘어 — 9월 14일부터 KRX시장 밤 8시까지 거래 가능", "url": "https://alphasquare.co.kr/home/insight/posts/941994a5-b760-4675-8693-ba08d50374f1", "kind": "해설"},
+    "S4": {"title": "뉴스에프씨 — 거래소, 수능일 주식시장 1시간 순연", "url": "https://newsfc.co.kr/news/articleView.html?idxno=82257", "kind": "보도"},
+    "S5": {"title": "헤럴드경제 — 수능에 증시 한 시간 늦게 개장", "url": "https://www.heraldk.com/article/2025111215214040899", "kind": "보도"},
+    "S6": {"title": "다올투자증권 — 변동성완화장치 안내", "url": "https://www.daolsecurities.com/customer/guide/stockRelieve.jsp", "kind": "증권사 안내"}
+  },
+  "regular_session": {
+    "open": "09:00",
+    "close": "15:30",
+    "closing_auction_from": "15:20",
+    "grade": "T1",
+    "sources": ["S1", "S2", "S3"],
+    "note": "접속매매 09:00~15:20 · 종가 단일가 15:20~15:30. 장 시작 전 시가 단일가 08:30~09:00 은 이 파일이 쓰이는 자리(정규장 안/밖 · 진입 마감)에 필요하지 않아 값으로 두지 않았다."
+  },
+  "special_days": {
+    "known_pattern": "대학수학능력시험일은 정규장 개장과 폐장이 한 시간씩 늦는다(10:00~16:30)고 보도됐다",
+    "grade": "T1",
+    "sources": ["S4", "S5"],
+    "dates": null,
+    "dates_reason": "해마다 날짜가 다르고 연초 개장일 등 다른 순연일도 있다 — 날짜 목록을 확인하지 못해 만들지 않았다. 쓰는 쪽은 날짜 표 대신 그날 분봉의 첫 봉 시각을 관측해 '평소와 다른 날'을 표시한다."
+  },
+  "unknown": [
+    {"what": "시간외·애프터마켓(2026-09-14 이후 16:00~20:00 이라는 안내가 있다)", "reason": "개편 전후 자료가 섞여 있어 확정하지 못했다 — 정규장 밖의 봉은 세기만 하고 쓰지 않는다", "sources": ["S1", "S3"]},
+    {"what": "변동성완화장치(VI)가 걸린 시각", "reason": "제공자 응답에 표시가 없다. 걸리면 2분간 단일가라는 안내는 있으나(S6) 어느 봉이 그 구간인지는 분봉만으로 알 수 없다", "sources": ["S6"]},
+    {"what": "거래정지·단일가 매매 종목 지정", "reason": "제공자 응답에 표시가 없다", "sources": []},
+    {"what": "대체거래소(넥스트레이드)의 운영 시각과 통합 시세", "reason": "이 저장소의 분봉은 한국거래소 시세만 받는다 — 다루지 않는다", "sources": []}
+  ]
+}

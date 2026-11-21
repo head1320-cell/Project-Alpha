@@ -16,6 +16,7 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import src.data.research_runs as rr  # noqa: E402
+from tests.route_walk import flat_routes  # noqa: E402
 
 CODE = "005930"
 TB = f"/api/v1/company/{CODE}/thesis-backtest"
@@ -58,7 +59,7 @@ def mem_rr(monkeypatch):
 
 # ── 1. 라우트 ───────────────────────────────────────────────────────────────
 def test_the_route_is_registered_alongside_the_existing_seven(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     assert "/api/v1/company/{code}/thesis-backtest" in paths
     for p in ("/api/v1/company/{code}/valuation-sandbox",
               "/api/v1/company/{code}/financial-deep",

@@ -1,11 +1,13 @@
-"""`regime_weighting` 배선 + PIT 3필드 — ★기본값은 바이트 동일★ (MS1-a 커밋 4)
+"""`regime_weighting` 배선 + PIT 3필드 — ★기본값의 계약★ (MS1-a 커밋 4 · M4 에서 기본값이 근거 관문으로)
 ==============================================================================
-계획: `docs/plans/2026-08-25-macro-vnext-plan.md` §1.9 · §1.10.0 I5·I6
+계획: `docs/plans/2026-08-25-macro-vnext-plan.md` §1.9 · §1.10.0 I5·I6 · `docs/superpowers/plans/2026-11-16-emeans-gmm-strategy.md` §4
 
 이 파일이 고정하는 것 셋:
 
-1. ★`regime_weighting` 을 안 보내면 응답이 **현행과 바이트 동일**★ — 새 경로가
-   기존 화면을 건드리지 않는다는 것이 이 슬라이스의 전제다.
+1. ★기본값★ — MS1-a 때는 '`regime_weighting` 을 안 보내면 응답이 현행(하드)과 바이트 동일'이었다(새 경로가
+   기존 화면을 건드리지 않는다는 그 슬라이스의 전제). ★M4(받은 결정 D1-b · CLAUDE.md §3 의 별도 승인)부터 기본값은
+   근거 관문이다★ — 안 보낸 요청 = 명시한 `"evidence"` 와 같은 응답 ↔ 명시한 `"hard"` 와는 다르다(짝).
+   명시한 `"hard"` 는 현행 그대로다(하드 경로 시험 · M3 골든 `tests/golden/regime_weighting_stack.json`).
 2. ★`"probabilistic"` 이면 **결정이 실제로 바뀐다**★ — 응답만 바뀌고 비중이 그대로면
    Level 4 로 아무것도 잰 것이 없다. `bl` 에서 잰다(공분산 전용 모델은 μ 효과를
    못 보므로 과소평가한다).
@@ -112,22 +114,29 @@ def _weights(js) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 1) 기본값은 현행 그대로
+# 1) 기본값 — M4 부터 근거 관문 · 명시한 `hard` 는 현행 그대로
 # ══════════════════════════════════════════════════════════════════════════
-def test_default_is_hard_and_response_is_unchanged(client, wired):
-    """★`regime_weighting` 을 안 보내면 명시적 `"hard"` 와 **완전히 같은 응답**★"""
+def _stable(js: dict) -> str:
+    """run_id 등 실행마다 달라지는 필드를 빼고 견줄 글로."""
+    js = {k: v for k, v in js.items() if k not in ("run_id", "generated_at")}
+    return json.dumps(js, sort_keys=True, default=str)
+
+
+def test_default_is_the_evidence_gate_not_hard(client, wired):
+    """★M4 — `regime_weighting` 을 안 보내면 명시적 `"evidence"`(근거 관문)와 **완전히 같은 응답**★.
+
+    MS1-a 의 계약은 '안 보내면 명시적 `"hard"` 와 같다'였다 — 기본값은 받은 결정(D1-b)으로 바뀌었다.
+    짝을 먼저 건다: 안 보낸 응답은 명시적 `"hard"` 와 다르다(같으면 기본값이 바뀌지 않은 것이다)."""
     path = _alternating_path()
     wired(path)
     absent = _post(client)
     wired(path)
-    explicit = _post(client, regime_weighting="hard")
-
-    # run_id 등 실행마다 달라지는 필드를 빼고 비교한다.
-    for js in (absent, explicit):
-        js.pop("run_id", None)
-        js.pop("generated_at", None)
-    assert (json.dumps(absent, sort_keys=True, default=str)
-            == json.dumps(explicit, sort_keys=True, default=str))
+    hard = _post(client, regime_weighting="hard")
+    assert _stable(absent) != _stable(hard), "안 보낸 요청이 여전히 하드의 응답이다"
+    assert absent["conditional"]["requested_weighting"] == "evidence"
+    wired(path)
+    explicit = _post(client, regime_weighting="evidence")
+    assert _stable(absent) == _stable(explicit)
 
 
 def test_hard_path_declares_legacy_confidence_model(client, wired):

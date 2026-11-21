@@ -105,7 +105,7 @@ rather than redefining them.
 | `--t-ink` | `--foreground` | |
 | `--t-surface` | `--muted`, `--card` | |
 | `--t-border` | `--border`, `--input` | |
-| `--t-accent` | `--primary`, `--ring` | institutional blue `#1200ff` |
+| `--t-accent` | `--primary`, `--ring` | institutional blue `#1200ff` (since 2026-10-16: `--tx-cta`) |
 | `--t-muted` | `--muted-foreground` | |
 | `--danger` / `--color-bear` | `--destructive` | |
 
@@ -113,6 +113,13 @@ Hard constraint: **the four existing `:root` blocks are not edited or reordered.
 incident — where splitting `globals.css` shipped a broken build and the verification compared a
 stale artifact — is the precedent. Additions go at the end of the file, and every change is
 proved with a rule-level diff of the emitted stylesheet.
+
+> **Amended 2026-10-16 (user decision, C3).** The byte-identity rule is relaxed for **value** edits inside the
+> four blocks. The legacy accent family (`--bs-primary`, `--bs-link-color`, hover/rgb/subtle) and `--t-accent`
+> now reference `--tx-cta`, and `--bs-body-font-family` references `--tx-font`. These values had already been
+> overridden at EOF (BU0, C2); the overrides are deleted, so the computed result is unchanged. Blocks are still not
+> split, reordered or removed. Any edit inside them must show **zero change** in the light computed-style golden
+> and in a before/after pixel diff, or else go through the normal visible-change approval with PNGs.
 
 ### 2.2 What "institutional, data-dense" means here
 
@@ -255,3 +262,17 @@ predates this decision and 46 components depend on it.
 - [x] Baseline preserved: **42/42 Playwright · 1061 passed/10 skipped pytest · tsc 0 · eslint 0**
       (the original text said 33/1003 — true at Phase 0, never refreshed; corrected here)
 - [x] Per-route bundle table diffed; every delta ≥4 kB explained or reverted
+
+---
+
+## 6. Tailwind 4 (2026-11-08) — 옮겨 보고 되돌림
+
+Tailwind 4.3 으로 모양 차이 0(계산 스타일 23,441 요소 비교)까지 옮겼지만 화면마다 CSS gzip +1.9 kB 에 얻은 성능이 없어 3.4.19 에 머문다.
+다시 할 때의 방법(★v4 기본 import 는 유틸리티를 CSS 레이어에 넣어 이 저장소의 레이어 밖 규칙과 캐스케이드가 뒤바뀐다★ · 공식 도구가 데이터 문자열까지
+바꾼다)은 `docs/plans/2026-11-08-stack-upgrade.md` 5d 절.
+
+## 7. React 19 — `forwardRef` 대신 `ref` prop (2026-11-08)
+
+§2.3 의 "`forwardRef` + `cn()`" 구조에서 `forwardRef` 를 걷어 냈다 — React 19 의 함수 컴포넌트는 `ref` 를 prop 으로 받는다(`React.ElementRef` 대신
+`React.ComponentRef`). cva·`asChild`/Slot·`cn()`·class 이름(E2E 계약)은 그대로. `eslint.config.js` 가 `forwardRef(...)` 호출을 오류로 막으니,
+나중에 `shadcn add` 가 `forwardRef` 판을 내놓으면 같은 모양으로 옮겨 넣는다.

@@ -51,7 +51,7 @@ def test_a_split_verdict_scores_clearly_above_zero_and_names_both_sides():
 
     ★임계값을 처음엔 0.9 로 적었는데 그건 근거 없는 숫자였다★
     척도는 관측 가능한 최대(log n)로 정규화한 엔트로피다. 도구 4개가 2:2 로 갈리면
-    log2/log4 = 0.5 이고, 4갈래로 흩어져야 1.0 이다. 2:2 를 "최대 불일치" 로 보는
+    log2/log4 = 0.5 이고, 4대안으로 흩어져야 1.0 이다. 2:2 를 "최대 불일치" 로 보는
     것이 오히려 틀렸다 — 1:1:1:1 이 더 흩어진 상태이고, 그 순서는 아래 단조성
     테스트가 붙들고 있다. 여기서는 **0 이 아니라는 것**만 재는 것이 맞다.
     """
@@ -70,7 +70,7 @@ def test_two_tools_splitting_evenly_is_maximal_for_that_sample():
 
 
 def test_disagreement_rises_monotonically_as_views_scatter():
-    """2갈래보다 4갈래가 더 불일치다 — 순서가 뒤집히면 지표가 뜻을 잃는다."""
+    """2대안보다 4대안이 더 불일치다 — 순서가 뒤집히면 지표가 뜻을 잃는다."""
     two = disagreement(["A", "A", "B", "B"])["score"]
     four = disagreement(["A", "B", "C", "D"])["score"]
     assert four > two > 0.0

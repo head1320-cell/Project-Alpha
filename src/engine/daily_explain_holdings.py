@@ -60,7 +60,7 @@ _NO_PRICE_ROW = ("요청일 부근에 거래일 가격 행이 없어 가격 기�
                  "없습니다")
 _NO_TRADES_GIVEN = ("그날의 매매를 받지 못했습니다. 매매가 없었다는 뜻이 "
                     "아닙니다")
-_NO_FEE_GIVEN = "매매를 몰라 수수료와 세금을 잴 수 없습니다"
+_NO_FEE_GIVEN = "매매를 몰라 수수료와 세금을 측정할 수 없습니다"
 
 
 def _load_returns(tickers: list[str], start: str, end: str):

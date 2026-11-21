@@ -68,16 +68,16 @@ PROFILES: dict[str, dict] = {
     "raa": {
         "concept": "여러 자산에 절대 모멘텀을 적용해 추세가 살아있는 것만 동일가중 보유하는 강건한 배분.",
         "mechanism": ["나스닥(QQQ)·소형가치(IWN)·중기채(IEF)·장기채(TLT)·금(GLD) 각각 12개월 절대 모멘텀 점검.",
-                      "양(+)인 자산만 보유, 음(−)이면 그 몫은 현금(BIL). 보유분 동일가중."],
+                      "양(+)인 자산만 보유, 음(−)이면 해당 비중은 현금(BIL). 보유분 동일가중."],
         "rationale": "단순·투명한 규칙으로 과최적화를 피하고(robust) 약세 자산을 자동 배제.",
         "regime_note": "다자산 추세 환경에 강건. 전 자산 약세면 현금화로 방어.",
         "params": {"룩백": "12개월 절대", "유니버스": "5자산", "리밸런스": "월간"},
         "references": [_ref("Wesley Gray & Jack Vogel", "2015", "DIY Financial Advisor — Robust Asset Allocation", "Wiley")],
     },
     "gtaa": {
-        "concept": "5개 자산군을 10개월 이동평균 위/아래로 켜고 끄는 Faber의 글로벌 택티컬 자산배분.",
+        "concept": "5개 자산군을 10개월 이동평균 상회/하회에 따라 편입·제외하는 Faber의 글로벌 택티컬 자산배분.",
         "mechanism": ["미국주식(SPY)·선진국(EFA)·중기채(IEF)·실물(PDBC)·부동산(VNQ) 각 20%.",
-                      "각 자산이 10개월 이동평균 위면 보유, 아래면 그 몫 현금(BIL)."],
+                      "각 자산이 10개월 이동평균 위면 보유, 아래면 해당 비중은 현금(BIL)."],
         "rationale": "10개월(≈200일) 이동평균은 장기 추세의 단순·강건한 대용치 — 큰 하락장 회피에 효과적.",
         "regime_note": "추세 추종형 — 지속 추세에 유리, 횡보장 휩쏘에 약함.",
         "params": {"신호": "10개월 이동평균", "유니버스": "5자산", "리밸런스": "월간"},
@@ -102,7 +102,7 @@ PROFILES: dict[str, dict] = {
         "references": [_ref("Wouter Keller & Jan Keuning", "2017", "Breadth Momentum and Vigilant Asset Allocation (VAA)", "SSRN")],
     },
     "faa": {
-        "concept": "모멘텀·변동성·상관을 함께 본 일반화 모멘텀으로 상위 자산을 고르는 유연한 자산배분.",
+        "concept": "모멘텀·변동성·상관을 결합한 일반화 모멘텀으로 상위 자산을 선정하는 유연한 자산배분.",
         "mechanism": ["8자산(VTI·EFA·EEM·IEF·TLT·GLD·PDBC·VNQ)의 4개월 모멘텀 상위 3종 선택.",
                       "선택분 중 모멘텀이 양(+)인 것만 동일가중, 없으면 현금."],
         "rationale": "수익(모멘텀)뿐 아니라 위험(변동성)·분산(상관)을 결합해 더 안정적인 상위 선택.",
@@ -158,7 +158,7 @@ PROFILES: dict[str, dict] = {
     },
     "hrp": {
         "concept": "상관 계층 클러스터링 + 재귀이분으로 행렬역산 없이 견고한 분산을 만드는 계층적 리스크 패리티.",
-        "mechanism": ["상관행렬을 거리로 변환해 계층 클러스터링(자산을 닮은 것끼리 묶음).",
+        "mechanism": ["상관행렬을 거리로 변환해 계층 클러스터링(자산을 닮은 것끼리 그룹).",
                       "유사 자산을 인접 배치(quasi-diagonalization) 후 재귀이분으로 역분산 비중 배분."],
         "rationale": "공분산 역행렬의 불안정성(추정오차 증폭)을 피해 표본외 성과가 우월(López de Prado 2016).",
         "regime_note": "추정오차에 강건 — 자산 수가 많거나 공분산이 불안정할 때 특히 유리.",
@@ -185,7 +185,7 @@ PROFILES: dict[str, dict] = {
     "max_sharpe": {
         "concept": "기대수익/위험 비율(샤프)을 최대화하는 탄젠시 포트폴리오 — Markowitz 평균-분산의 정점.",
         "mechanism": ["트레일링 평균수익 μ와 수축 공분산 Σ로 (wᵀμ)/√(wᵀΣw) 최대화(long-only).",
-                      "수축추정으로 코너 솔루션 쏠림을 완화."],
+                      "수축추정으로 코너 솔루션 편중을 완화."],
         "rationale": "이론적으로 위험대비 최적 — 단, 기대수익 추정오차에 민감해 수축·제약으로 보정 필수.",
         "regime_note": "추세·수익 추정이 안정적인 국면에 유리. 추정오차가 큰 전환기엔 불안정.",
         "params": {"목적": "샤프 최대(탄젠시)", "추정": "Ledoit-Wolf + 트레일링 μ", "리밸런스": "월간"},
@@ -229,25 +229,41 @@ def get_profile(sid: str) -> dict | None:
 
 # ── 동적 전략 백테스트 (★매월 전략 로직 재평가·리밸런스·복리 — buy&hold 아님★) ──
 _BACKTEST_MONTHS = 48
+#: 월말 날짜를 못 얻었을 때만 — 달 라벨이 오늘부터 30일씩 거슬러 센 것임을 화면이 그림 옆에 적는다(그때는 해마다·낙폭 사건도 없다).
+_DATES_NOTE = "달 라벨은 오늘부터 30일씩 거슬러 센 어림입니다 — 실제 달과 한두 달 어긋날 수 있습니다."
 
 
-def _curve_summary(vals: list[float], port: list[float], months: int) -> dict:
-    today = datetime.now()
+def _curve_summary(vals: list[float], port: list[float], months: int, dates: list[str] | None = None) -> dict:
+    """곡선·요약. `dates`(점마다 월말 ISO 날짜)가 있으면 라벨은 그 날짜에서 나오고 해마다·월별 수익률·낙폭 구간도 붙는다(성과 그림
+    문법 ③ · 2026-11-09). 없으면 옛 어림 라벨(오늘부터 30일씩)과 그 사유만 — 날짜를 지어내지 않는다."""
     n = len(vals)
-    curve = [{"t": (today - timedelta(days=(n - 1 - i) * 30)).strftime("%y.%m"), "v": round(v, 1)}
-             for i, v in enumerate(vals)]
+    dated = bool(dates) and len(dates or []) == n
+    if dated:
+        curve = [{"t": datetime.fromisoformat(d).strftime("%y.%m"), "v": round(v, 1)} for d, v in zip(dates or [], vals)]
+    else:
+        today = datetime.now()
+        curve = [{"t": (today - timedelta(days=(n - 1 - i) * 30)).strftime("%y.%m"), "v": round(v, 1)}
+                 for i, v in enumerate(vals)]
     total = vals[-1] / vals[0] - 1 if vals[0] > 0 else 0.0
     years = months / 12.0
     cagr = (vals[-1] / vals[0]) ** (1 / years) - 1 if (years > 0 and vals[0] > 0) else 0.0
     peak, mdd = vals[0], 0.0
+    dd_pct: list[float] = []                       # 점마다 고점 대비 %(≤ 0) — 그림의 낙폭 물속(성과 그림 문법 ③ · 2026-11-09)
     for v in vals:
         peak = max(peak, v)
-        mdd = min(mdd, (v - peak) / peak)
+        d = (v - peak) / peak if peak > 0 else 0.0
+        mdd = min(mdd, d)
+        dd_pct.append(round(d * 100, 2))
     mean = sum(port) / len(port) if port else 0.0
     var = sum((x - mean) ** 2 for x in port) / len(port) if port else 0.0
     vol = math.sqrt(var) * math.sqrt(12)
     recent12 = (vals[-1] / vals[-13] - 1) if len(vals) >= 13 else None
-    return {"curve": curve, "summary": {
+    from src.engine.quant_metrics import drawdown_episodes, period_returns
+    return {"curve": curve, "drawdown_pct": dd_pct,
+            "dates": list(dates or []) if dated else None,
+            "periods": period_returns(dates or [], vals) if dated else None,
+            "drawdowns": drawdown_episodes(dates or [], vals, top=3) if dated else None,
+            "dates_note": None if dated else _DATES_NOTE, "summary": {
         "total_return_pct": round(total * 100, 1), "cagr_pct": round(cagr * 100, 1),
         "mdd_pct": round(mdd * 100, 1), "vol_pct": round(vol * 100, 1),
         "recent_12m_pct": round(recent12 * 100, 1) if recent12 is not None else None,
@@ -280,6 +296,14 @@ def backtest_strategy(sid: str, mk: str, months: int = _BACKTEST_MONTHS) -> dict
     span = min(months, avail - 1)
     if span < 6:
         return {"curve": [], "summary": {}}
+    # ★실제 월말 날짜★ — 리샘플이 달력 월말이라 어느 티커나 같은 자리에 같은 날짜. span+1 개가 있는 첫 티커에서 가져온다.
+    from src.data.etf_prices import monthly_closes_dated
+    dates: list[str] | None = None
+    for tk in closes:
+        dated = monthly_closes_dated(tk, mk, months + 3)
+        if len(dated) >= span + 1 and len(dated) == len(closes[tk]):
+            dates = [d for d, _ in dated][-(span + 1):]
+            break
     vals, port = [100.0], []
     for m in range(span, 0, -1):
         with etf_prices.as_of(m):  # m개월 전 시점 비중
@@ -297,7 +321,7 @@ def backtest_strategy(sid: str, mk: str, months: int = _BACKTEST_MONTHS) -> dict
                 pr += (wt / wsum) * (c[-m] / c[-m - 1] - 1.0)
         vals.append(vals[-1] * (1 + pr))
         port.append(pr)
-    return _curve_summary(vals, port, span)
+    return _curve_summary(vals, port, span, dates=dates)
 
 
 # ── 국면 적합도 (recommender 아키타입 × 국면) ────────────────────────────────────

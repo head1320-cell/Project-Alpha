@@ -40,7 +40,7 @@ AI 의 `실행 모드 ⟂ 잔고 출처` 와 같은 규율이다.
   가족인지는 호출부가 선언해야 한다 — ★가족을 잘못 세면 보정도 틀린다.★
 - **보정 후 유의한 것이 투자 우위라고 말하지 않는다.** CLAUDE.md §2 의 네 질문 중
   ③(예측 스킬)의 통계적 타당성만 다루고 ④(경제적 가치)는 건드리지 않는다.
-- **PBO·deflated Sharpe 를 만들지 않는다.** 둘 다 **시행 횟수 N** 을 요구하는데
+- **(실행 이력 전체의) PBO·deflated Sharpe 를 만들지 않는다.** 둘 다 **시행 횟수 N** 을 요구하는데
   이 저장소에는 그것을 세는 자리가 없다(`backtest_runs` 31행이 전부 테스트 픽스처,
   `research_runs` 6행은 검정력이 전부 NULL). ★없는 N 으로 낸 DSR 은 숫자 모양의
   날조다.★ `expected_max_z` 가 그 팽창항을 계산하긴 하지만, 그것은 호출부가 센
@@ -72,8 +72,12 @@ CORRECTION_SPA = "hansen_spa"
 #: 보정을 **하지 않았다**. ★경고만 한 것은 여기다.★
 CORRECTION_NONE = "none"
 
+#: 시행 횟수 N 으로 보정한 샤프의 확률(Bailey · López de Prado). SPA 와 같이 ★이름만 올린다★ — 산수는
+#: `src/engine/deflated_sharpe.py` 에 있고, N 을 세는 자리가 있는 곳(분봉 백테스트의 시행 기록)에서만 쓴다.
+CORRECTION_DSR = "deflated_sharpe"
+
 CORRECTIONS = (CORRECTION_BH, CORRECTION_BONFERRONI, CORRECTION_SPA,
-               CORRECTION_NONE)
+               CORRECTION_DSR, CORRECTION_NONE)
 
 _UNKNOWN_FAMILY_REASON = (
     "가족 크기를 모릅니다 — 몇 개를 동시에 봤는지 세는 자리가 없어 보정을 "
@@ -145,7 +149,7 @@ def bh_reject(p_values: list[float | None], alpha: float = 0.05) -> dict[str, An
     if m == 0:
         return {"n": 0, "n_rejected": None, "rejected": [None] * len(p_values),
                 "critical": None, "alpha": float(alpha), "n_dropped": n_dropped,
-                "reason": ("p 값을 하나도 내지 못해 보정할 가족이 없습니다 — "
+                "reason": ("p 값을 산출하지 못해 보정할 가족이 없습니다 — "
                            "★'0개 기각' 이 아니라 미상입니다.★")}
 
     order = sorted(usable, key=lambda pair: pair[1])

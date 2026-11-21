@@ -87,13 +87,13 @@ _WINDOW_REASON = {
                       "재현한 것은 아닙니다."),
     WINDOW_FULL_SAMPLE: ("적합 창이 전체표본입니다 — 추정이 결정 시점 이후의 관측까지 "
                          "보고 있습니다."),
-    WINDOW_UNMEASURED: "적합 창을 재지 못했습니다 — 잘렸는지 아닌지 알 수 없습니다.",
+    WINDOW_UNMEASURED: "적합 창을 측정하지 못했습니다 — 절단 여부를 알 수 없습니다.",
 }
 
 _VINTAGE_REASON = {
     VINTAGE_CURRENT: ("값이 현재 빈티지입니다 — 창이 잘려 있어도 그 안의 수치는 "
                       "이후 개정을 반영한 값입니다."),
-    VINTAGE_UNMEASURED: ("값의 빈티지를 재지 못했습니다 — 당시 값인지 현재 개정본인지 "
+    VINTAGE_UNMEASURED: ("값의 빈티지를 측정하지 못했습니다 — 당시 값인지 현재 개정본인지 "
                          "알 수 없습니다."),
 }
 

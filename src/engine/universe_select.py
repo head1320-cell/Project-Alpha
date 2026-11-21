@@ -371,6 +371,53 @@ def mktcap_asof(ticker: str, date: str, engine=None) -> float | None:
         return None
 
 
+#: as_of 종가로 인정하는 봉의 ★낡음 한도★(달력일). 주말·명절 연휴(설·추석에 주말이 붙으면 엿새 안팎)는 덮고,
+#: 상장폐지·거래정지·적재 공백으로 한참 전에 끊긴 봉을 "그 날 종가"라 부르지는 않는 범위다.
+#: `ohlcv_loader._COVERAGE_SLACK_DAYS`(요청 구간 끝의 허용 어긋남)와 같은 값을 쓴다 — 통계로 고른 수가 아니다(가정).
+ASOF_CLOSE_MAX_STALE_DAYS = 10
+
+
+def close_asof(ticker: str, date: str, engine=None) -> tuple[dict | None, str | None]:
+    """해당일(없으면 직전 거래일)의 ★적재된 실제 종가★ — `(행, None)` 또는 `(None, 사유)`.
+
+    행 = `{"close", "trade_date", "source", "price_basis"}` — 가격 출처는 행 단위로 관측 가능해야 한다(CLAUDE.md §4).
+    `close` 는 적재된 정의 그대로다(`price_basis` 가 그 행의 정의 — 원주가/수정주가 전환은 여기서 하지 않는다).
+
+    사유(서로 뭉개지 않는다): `not_loaded` — as_of 이하의 봉이 없다 · `stale` — 마지막 봉이 한도보다 오래됐다 ·
+    `store_error` — DB 를 읽지 못했다(미적재가 아니다) · `bad_date` — as_of 형식 오류.
+    [A] 운영의 시점 스크리닝 가격(`pit_store.price_asof_detail`)이 쓴다 — 합성값으로 채우지 않는다."""
+    from datetime import datetime
+    code = str(ticker).replace(".KS", "").replace(".KQ", "")
+    try:
+        asof = datetime.strptime(str(date)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None, "bad_date"
+    try:
+        from sqlalchemy import text
+
+        if engine is None:
+            from src.database import get_engine
+            engine = get_engine()
+        if engine is None:
+            return None, "store_error"
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT trade_date, close, source, price_basis FROM daily_prices "
+                "WHERE ticker=:t AND trade_date <= :d AND close IS NOT NULL AND close > 0 "
+                "ORDER BY trade_date DESC LIMIT 1"
+            ), {"t": code, "d": asof.isoformat()}).first()
+    except Exception as e:  # noqa: BLE001 — 못 읽은 것을 '없음'으로 바꾸지 않는다
+        import logging
+        logging.getLogger(__name__).warning("as_of 종가 조회 실패 (%s@%s): %s: %s", code, date, type(e).__name__, e)
+        return None, "store_error"
+    if row is None:
+        return None, "not_loaded"
+    day = str(row[0])[:10]
+    if (asof - datetime.strptime(day, "%Y-%m-%d").date()).days > ASOF_CLOSE_MAX_STALE_DAYS:
+        return None, "stale"
+    return {"close": float(row[1]), "trade_date": day, "source": row[2], "price_basis": row[3]}, None
+
+
 def select_universe(
     caps: list[str] | None = None,
     sectors: list[str] | None = None,

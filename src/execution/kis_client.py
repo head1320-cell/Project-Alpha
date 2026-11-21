@@ -28,6 +28,7 @@ import os
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -38,7 +39,47 @@ try:
 except ImportError:
     requests = None
 
+from src.domain.kis_failure import (
+    FAILURE_KINDS,
+    KIND_BLOCKED,
+    KIND_BUSINESS,
+    KIND_MALFORMED,
+    KIND_TOKEN,
+    KIND_TRANSPORT,
+    KIND_UNKNOWN,
+    failure_label,
+)
+
 logger = logging.getLogger(__name__)
+
+
+class KISCallError(RuntimeError):
+    """KIS 호출 실패 하나 — ★종류를 들고 다닌다★ (AR2)
+
+    ★메시지 문구는 예전 그대로다★ — `tests/test_ingest_doctor.py` 가
+    `"토큰 발급 실패"` **부분문자열**을 단언한다. 문구를 바꾸면 그 계약이 깨지므로
+    **타입과 속성만** 더한다.
+
+    ★`RuntimeError` 하위형인 이유★ — `src/` 의 모든 소비자가 `except Exception`
+    이라 하위형은 안전하고, `KISCredentialsMissing(RuntimeError)` 라는 선례가
+    이미 있다(`try_kis_client` 가 **타입으로** 잡는다).
+    """
+
+    def __init__(self, message: str, *, kind: str, rt_cd=None, status=None,
+                 kis_msg=None, msg_cd=None):
+        super().__init__(message)
+        self.kind = kind
+        self.rt_cd = rt_cd
+        self.status = status
+        self.kis_msg = kis_msg
+        #: ★표의 열쇠★(AS1) — `rt_cd` 는 `!= "0"` 이분법으로 쓰이는 거친 값이라
+        #: 혼자서는 뜻을 가리지 못한다. 없으면 `None` 이고 그것은 미상이다.
+        self.msg_cd = msg_cd
+
+    def label(self) -> dict:
+        """기록·응답에 싣는 블록. ★책임 소재를 단정하지 않는다★"""
+        return failure_label(self.kind, rt_cd=self.rt_cd, status=self.status,
+                             msg=self.kis_msg, msg_cd=self.msg_cd)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -137,10 +178,14 @@ def normalize_investor_rows(rows: list) -> list[dict]:
 
 @dataclass
 class KISCredentials:
-    """KIS API 인증 정보."""
-    app_key:        str
-    app_secret:     str
-    account_no:     str          # CANO (계좌번호 앞 8자리)
+    """KIS API 인증 정보.
+
+    ★비밀은 repr 에 나오지 않는다(BV2)★ — 앱 키·시크릿·계좌번호가 예외 메시지·로그·디버거 출력에
+    `KISCredentials(app_key='…')` 로 새지 않게 `repr=False`. 값과 동작은 그대로다.
+    """
+    app_key:        str = field(repr=False)
+    app_secret:     str = field(repr=False)
+    account_no:     str = field(repr=False)   # CANO (계좌번호 앞 8자리)
     account_prdt:   str = "01"   # ACNT_PRDT_CD (상품 코드, 기본 01)
     is_paper:       bool = False # 모의투자 여부
 
@@ -190,15 +235,44 @@ class RateLimiter:
             time.sleep(sleep_for)
 
 
+#: 연속 실패 링의 최대 길이. ★임계(5)보다 넉넉하게★ — 임계만큼만 담으면
+#: 넘치는 순간 구성이 사실상 언제나 카운트와 어긋난다.
+STREAK_RING = 20
+
+
 @dataclass
 class CircuitBreaker:
-    """N회 연속 실패 시 차단 (스레드 안전)."""
+    """N회 연속 실패 시 차단 (스레드 안전).
+
+    ★AT2 — 세는 것 옆에 **무엇을 셌는지**를 남긴다★
+
+    `auto_api` 는 이 카운트로 킬스위치를 겨냥하는데, AR 이 드러낸 대로 그 안에는
+    장 종료 같은 정상 업무 응답이 섞여 들어간다(`_request` 가 `rt_cd != "0"`
+    에서도 `record_failure()` 를 부른다). 예전에는 이 메서드가 **인자를 받지
+    않아** breaker 가 눈먼 채로 셌고, 종류는 `last_failure_kind` 한 칸뿐이라
+    *"5회 중 몇 회가 업무 응답이었나"* 를 판정 자리에서 알 수 없었다.
+
+    감사 로그로는 답할 수 없다 — `_request` 의 7개 호출부 중 감사 행이 남는
+    것은 주문·취소 둘뿐이라, `get_balance` 실패 5회는 어디에도 남지 않는다.
+    그래서 ★숫자와 같은 객체에 같은 수명으로★ 기록한다.
+
+    ★링은 카운터와 함께 비워진다★ — `failure_count` 가 0 이 되는 자리는 둘이고
+    (`record_success` · `call_allowed` 의 HALF_OPEN 전환) 하나만 비우면 구성이
+    **다른 집합**을 설명하게 된다. 넘치면 그 사실이 개수 불일치로 드러난다
+    (`failure_streak.streak_composition` 의 `describes_count`).
+
+    ★세는 것은 0줄 바뀌지 않았다★ — 임계값도, 어떤 종류가 카운트되는지도
+    그대로다. 그것을 바꾸는 것은 실거래 호출 경로 동작 변경이다(CLAUDE.md §6).
+    """
     failure_threshold: int = 5
     reset_timeout_seconds: float = 30.0
     failure_count: int = 0
     last_failure_time: datetime | None = None
     state: str = "CLOSED"
     _lock: threading.Lock = field(default_factory=threading.Lock)
+    #: ★경계 있는 링★ — 무제한이면 메모리가 새고 넘침을 감지할 수도 없다.
+    _recent_kinds: deque = field(
+        default_factory=lambda: deque(maxlen=STREAK_RING))
 
     def call_allowed(self) -> bool:
         with self._lock:
@@ -206,6 +280,8 @@ class CircuitBreaker:
                 if (datetime.now() - self.last_failure_time).total_seconds() > self.reset_timeout_seconds:
                     self.state = "HALF_OPEN"
                     self.failure_count = 0
+                    # ★카운터와 함께★ — 여기만 빠지면 0회를 5개가 설명한다.
+                    self._recent_kinds.clear()
                     return True
                 return False
             return True
@@ -214,14 +290,27 @@ class CircuitBreaker:
         with self._lock:
             self.failure_count = 0
             self.state = "CLOSED"
+            self._recent_kinds.clear()
 
-    def record_failure(self):
+    def record_failure(self, kind: str | None = None):
+        """연속 실패 하나. `kind` 는 `kis_failure.FAILURE_KINDS` 의 값.
+
+        ★기본값이 관측 행세를 하지 않게★ 모르면 `unknown` 이다 — 어휘 밖의
+        값도 마찬가지다(버리지도 믿지도 않는다).
+        """
         with self._lock:
             self.failure_count += 1
             self.last_failure_time = datetime.now()
+            self._recent_kinds.append(
+                kind if kind in FAILURE_KINDS else KIND_UNKNOWN)
             if self.failure_count >= self.failure_threshold:
                 self.state = "OPEN"
                 logger.error(f"Circuit breaker OPEN after {self.failure_count} failures")
+
+    def streak_kinds(self) -> tuple[str, ...]:
+        """지금 연속에 기록된 종류들(오래된 것부터). ★스냅샷이다★"""
+        with self._lock:
+            return tuple(self._recent_kinds)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -263,6 +352,13 @@ class KISClient:
         self.token: KISToken | None = None
         self.rate_limiter = RateLimiter()
         self.circuit_breaker = CircuitBreaker()
+        #: ★마지막 실패의 종류★ — 새 카운터가 아니라 한 칸짜리 기록이다(AR4).
+        #: 구성(무엇이 몇 번)의 증거는 `live_orders.reason_code` 와 감사 로그에
+        #: 이력으로 쌓인다.
+        self.last_failure_kind: str | None = None
+        self.last_failure_rt_cd: str | None = None
+        self.last_failure_msg_cd: str | None = None
+        self.last_failure_status: int | None = None
         self._token_lock = threading.Lock()  # 동시 첫 호출 시 토큰 1회만 발급
 
     # ─────────────────────────────────────────────────────────────────────
@@ -296,7 +392,9 @@ class KISClient:
         }
         resp = requests.post(url, json=payload, timeout=self.timeout)
         if resp.status_code != 200:
-            raise RuntimeError(f"토큰 발급 실패: {resp.status_code} {resp.text}")
+            # ★`_request` 를 타지 않으므로 breaker 에 기록되지 않는다★(실측 그대로).
+            raise KISCallError(f"토큰 발급 실패: {resp.status_code} {resp.text}",
+                               kind=KIND_TOKEN, status=resp.status_code)
         data = resp.json()
         access_token = data["access_token"]
         # KIS 토큰 만료: access_token_token_expired는 epoch 또는 datetime string
@@ -327,10 +425,20 @@ class KISClient:
     # HTTP 호출 헬퍼
     # ─────────────────────────────────────────────────────────────────────
 
+    def _note_failure(self, kind: str, rt_cd=None, status=None,
+                      msg_cd=None) -> None:
+        """마지막 실패의 종류를 남긴다. ★기록이지 카운팅이 아니다★"""
+        self.last_failure_kind = kind
+        self.last_failure_rt_cd = rt_cd
+        self.last_failure_msg_cd = msg_cd
+        self.last_failure_status = status
+
     def _request(self, method: str, path: str, headers: dict,
                   params: dict | None = None, json_body: dict | None = None) -> dict:
         if not self.circuit_breaker.call_allowed():
-            raise RuntimeError("Circuit breaker OPEN — KIS API 호출 차단됨")
+            # ★차단은 실패가 아니다★ — 호출 자체를 하지 않았으므로 카운트도 없다.
+            raise KISCallError("Circuit breaker OPEN — KIS API 호출 차단됨",
+                               kind=KIND_BLOCKED)
 
         self.rate_limiter.acquire()
         url = f"{self.base_url}{path}"
@@ -340,21 +448,36 @@ class KISClient:
                 method=method, url=url, headers=headers,
                 params=params, json=json_body, timeout=self.timeout,
             )
-            data = resp.json()
+            status = getattr(resp, "status_code", None)
+            try:
+                data = resp.json()
+            except Exception as e:                       # noqa: BLE001
+                # ★이름만 준다 — 세지는 않는다★(AR2). 예전에는 이 실패가 분류도
+                # 기록도 없이 그대로 샜다. `record_failure()` 는 **부르지 않는다**.
+                raise KISCallError(f"KIS 응답 본문을 읽을 수 없습니다: {e}",
+                                   kind=KIND_MALFORMED, status=status) from e
 
             # KIS는 HTTP 200 + rt_cd로 성공/실패 구분
             rt_cd = str(data.get("rt_cd", ""))
             if rt_cd != "0":
-                self.circuit_breaker.record_failure()
-                raise RuntimeError(
-                    f"KIS API 실패: rt_cd={rt_cd}, msg={data.get('msg1', 'unknown')}"
+                # ★열쇠를 잡는다★(AS1) — 예전에는 이 칸을 읽지도 않고 버렸다.
+                # 있다고 가정하지 않는다: 없으면 `None` 이고 그것은 미상이다.
+                msg_cd = data.get("msg_cd")
+                self.circuit_breaker.record_failure(KIND_BUSINESS)
+                self._note_failure(KIND_BUSINESS, rt_cd=rt_cd, status=status,
+                                   msg_cd=msg_cd)
+                raise KISCallError(
+                    f"KIS API 실패: rt_cd={rt_cd}, msg={data.get('msg1', 'unknown')}",
+                    kind=KIND_BUSINESS, rt_cd=rt_cd, status=status,
+                    kis_msg=data.get("msg1"), msg_cd=msg_cd,
                 )
 
             self.circuit_breaker.record_success()
             return data
         except requests.RequestException as e:
-            self.circuit_breaker.record_failure()
-            raise RuntimeError(f"네트워크 오류: {e}")
+            self.circuit_breaker.record_failure(KIND_TRANSPORT)
+            self._note_failure(KIND_TRANSPORT)
+            raise KISCallError(f"네트워크 오류: {e}", kind=KIND_TRANSPORT) from e
 
     # ─────────────────────────────────────────────────────────────────────
     # 1. 주문 (현금)
@@ -883,6 +1006,14 @@ class KISCredentialsMissing(RuntimeError):
 
 
 _kis_singleton = None
+#: ★첫 생성은 한 번만★(BV2) — 동시 첫 호출이 클라이언트를 둘 만들면 같은 앱 키로 토큰을 두 번 받는다
+#: (KIS 토큰 발급은 분당 1회). 이미 있으면 잠금 없이 돌려준다(이중 확인).
+_kis_singleton_lock = threading.Lock()
+
+#: 사용자 증권 계좌별 클라이언트(BV3) — `account_id` → 클라이언트. 서버 싱글턴과 따로 둔다.
+#: 계좌마다 토큰·속도 제한·회로 차단기가 하나씩이다(같은 계좌로 둘을 만들지 않는다).
+_account_clients: dict[str, object] = {}
+_account_clients_lock = threading.Lock()
 
 
 def try_kis_client(force_reload: bool = False):
@@ -900,9 +1031,13 @@ def try_kis_client(force_reload: bool = False):
         return None, str(e)
 
 
-def get_kis_client(force_reload: bool = False):
+def get_kis_client(force_reload: bool = False, *, account_id: str | None = None):
     """
     .env 설정에 따라 KISClient(실) 또는 MockKISClient(가짜)를 반환.
+
+    `account_id` 를 주면 그 사용자 증권 계좌의 클라이언트(BV3 — `broker_accounts` 금고의 자격 ·
+    계좌마다 모의/실계좌). ★소유자는 여기서 보지 않는다★ — 경로가 본다. 계좌 클라이언트를 비우는 길은
+    `evict_account_client` 이고, `force_reload` 와 함께 주면 거절한다(조용히 무시하지 않는다).
 
     환경변수:
       KIS_USE_MOCK=1            → MockKISClient (외부 호출 없음)
@@ -912,15 +1047,98 @@ def get_kis_client(force_reload: bool = False):
     데이터 조회(get_price/get_daily_ohlcv)는 모의·실계좌 모두 가능.
     싱글톤으로 토큰 재사용 (1분당 1회 발급 제한 대응).
     """
+    if account_id is not None:
+        if force_reload:
+            raise ValueError("force_reload 는 서버 클라이언트에만 씁니다 — 계좌 클라이언트는 "
+                             "evict_account_client 로 비웁니다.")
+        return _account_client(account_id)
     global _kis_singleton
-    if _kis_singleton is not None and not force_reload:
+    if _kis_singleton is not None and not force_reload and _servable(_kis_singleton):
+        return _kis_singleton
+    with _kis_singleton_lock:
+        if _kis_singleton is not None and not force_reload and _servable(_kis_singleton):
+            return _kis_singleton
+        _kis_singleton = _build_kis_client()
         return _kis_singleton
 
+
+def _servable(client) -> bool:
+    """붙잡아 둔 서버 클라이언트를 ★지금★ 내보내도 되는가 — mock 클라이언트는 mock 모드에서만, 실 클라이언트는 그 밖에서만.
+
+    싱글턴은 만든 시점의 모드를 기억하지만 판정은 부르는 시점에 한다(`mock_allowed()` 가 유일한 기준 — CLAUDE.md §6).
+    예전에는 한 번 만든 mock 이 게이트가 닫힌 뒤에도 그대로 나갔고, 반대로 실 클라이언트가 mock 모드에서 나갔다.
+    모드가 그대로면 같은 객체를 돌려준다(토큰 재사용). 두 클래스가 아닌 것(시험이 꽂은 대역)은 판정하지 않는다."""
+    if isinstance(client, MockKISClient):
+        return mock_allowed()
+    if isinstance(client, KISClient):
+        return not mock_allowed()
+    return True
+
+
+def _account_client(account_id: str):
+    client = _account_clients.get(account_id)
+    if client is not None:
+        return client
+    with _account_clients_lock:
+        client = _account_clients.get(account_id)
+        if client is None:
+            client = _build_account_client(account_id)
+            _account_clients[account_id] = client
+        return client
+
+
+def evict_account_client(account_id: str) -> None:
+    """계좌 클라이언트를 내린다(계좌를 지웠을 때). 없으면 아무 일도 없다."""
+    with _account_clients_lock:
+        _account_clients.pop(account_id, None)
+
+
+def _build_account_client(account_id: str):
+    """금고의 자격으로 계좌 클라이언트 하나를 만든다. 없거나 풀 수 없으면 예외가 그대로 올라간다
+    (`BrokerAccountNotFound` · `CredentialVaultUnavailable`) — ★서버 `.env` 계좌로 대신하지 않는다★."""
+    from src.execution.broker_accounts import open_account
+
+    acct = open_account(account_id)
+    if mock_allowed():
+        # 계좌마다 따로 — mock 잔고·주문이 계좌끼리 섞이지 않게.
+        return MockKISClient()
+    return KISClient(KISCredentials(
+        app_key=acct.app_key,
+        app_secret=acct.app_secret,
+        account_no=acct.account_no,
+        account_prdt=acct.account_prdt,
+        is_paper=acct.is_paper,
+    ))
+
+
+def get_order_client():
+    """주문 실행기가 쓰는 클라이언트 — ★`get_kis_client()` 와 같은 인스턴스★(BV2).
+
+    예전에는 실거래 실행기(`stage13_routes.get_executor`)가 `.env` 를 직접 읽어 `KISClient` 를 하나 더 만들었다.
+    그러면 같은 앱 키로 토큰·속도 제한·회로 차단기가 둘이 되고, 실패 관측(`api_failure_probe`)은 실행기 쪽 차단기를
+    보지 못한다. 이제 하나를 같이 쓴다.
+
+    ★주문에는 계좌번호가 필요하다★ — 시세만 쓰는 곳은 계좌번호 없이도 되므로 `get_kis_client()` 는 비어 있어도
+    만든다. 주문 실행기는 운영에서 계좌번호가 비면 만들지 않고 사유를 낸다(빈 계좌로 주문을 보내지 않는다).
+    """
+    client = get_kis_client()
+    if mock_allowed():
+        return client
+    account_no = getattr(getattr(client, "creds", None), "account_no", "")
+    if not (account_no or "").strip():
+        raise KISCredentialsMissing(
+            "KIS_ACCOUNT_NO 미설정 — 주문 실행기를 만들 수 없습니다. 운영 모드에서는 빈 계좌번호로 "
+            "주문하지 않습니다. 계좌번호를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰십시오.")
+    return client
+
+
+def _build_kis_client():
+    """`.env` 로 클라이언트 하나를 만든다 — ★이 파일 밖에서 `KISClient(`·`MockKISClient(` 를 부르지 않는다★
+    (`tests/test_single_kis_construction_path.py`)."""
     use_mock = mock_allowed()
     if use_mock:
-        _kis_singleton = MockKISClient()
         logger.info("KIS: MockKISClient (KIS_USE_MOCK=1)")
-        return _kis_singleton
+        return MockKISClient()
 
     app_key = os.getenv("KIS_APP_KEY", "")
     app_secret = os.getenv("KIS_APP_SECRET", "")
@@ -938,7 +1156,7 @@ def get_kis_client(force_reload: bool = False):
         # 운영에서 실패하면 합성이 아니라 **사유**를 낸다.
         raise KISCredentialsMissing(
             "KIS_APP_KEY/KIS_APP_SECRET 미설정 — 운영 모드에서는 합성 데이터로 "
-            "대체하지 않습니다. 키를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰세요.")
+            "대체하지 않습니다. 키를 설정하거나 개발용으로 KIS_USE_MOCK=1 을 쓰십시오.")
 
     is_paper = os.getenv("KIS_IS_PAPER", "1") == "1"
     creds = KISCredentials(
@@ -948,6 +1166,5 @@ def get_kis_client(force_reload: bool = False):
         account_prdt=os.getenv("KIS_ACCOUNT_PRDT", "01"),
         is_paper=is_paper,
     )
-    _kis_singleton = KISClient(creds)
     logger.info(f"KIS: 실연동 ({'모의투자' if is_paper else '실계좌'})")
-    return _kis_singleton
+    return KISClient(creds)

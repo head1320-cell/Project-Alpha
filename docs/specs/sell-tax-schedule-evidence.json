@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "note": "국내 상장 주식을 팔 때 붙는 세금(증권거래세 + 농어촌특별세)의 시점·시장·상품별 표. ★확인한 칸만 적는다 — 확인하지 못한 구간은 unknown 에 사유와 함께 적고 값은 만들지 않는다.★ 읽는 곳: src/data/market_rules.py::sell_tax_bp_on. 기존 sell_tax_bp() 의 고정값(18bp)은 2024년 한 해의 값이다 — 이 표가 그 사실을 보여 준다.",
+  "unit": "bp (0.01%) — 매도 대금 대비. transaction_tax_bp(증권거래세) + rural_special_tax_bp(농어촌특별세) = 합계",
+  "date_basis": "매매체결일. 세법은 양도(결제)일 기준으로 적는다 — 2019년 개정은 '결제일 2019-06-03 이후 양도분 = 체결일 2019-05-30 이후 체결분'으로 보도됐다. 그 밖의 개정은 1월 1일 양도분부터라고 보도됐고, 연말 이틀(체결은 12월 · 결제는 1월)의 세율은 이 표가 가르지 않는다(체결일로 읽는다 — 그 이틀은 오차가 있을 수 있다).",
+  "as_of": "2026-11-14",
+  "grades": {
+    "T0": "증거 없음 — 추측. 이 파일에 쓰지 않는다",
+    "T1": "보도·안내 자료의 요약으로 확인(검색 결과로 읽었다 — 법령·관보 원문은 보지 못했다)",
+    "T2": "법령(증권거래세법 시행령)·관보·기획재정부 보도자료 원문으로 확인",
+    "T3": "원문 + 실제 체결의 세금과 교차 확인"
+  },
+  "min_grade_to_apply": "T1",
+  "why_t1_applies": "이 표의 칸은 전부 T1 이다(이 환경에서는 법령 원문에 닿지 못했다). 적용선을 T2 로 두면 표 전체가 미상이 되고, 그러면 쓰는 쪽은 다시 고정값 18bp 로 돌아간다 — 출처 없는 상수보다 등급이 붙은 보도 근거가 낫다고 보았다. 대신 ★답마다 등급과 출처를 싣는다★ — 쓰는 쪽은 '추정'이라고 표시해야 한다.",
+  "sources": {
+    "S2019a": {"title": "증권거래세 인하, 5월 30일 매매체결분부터 적용", "url": "https://www.sateconomy.co.kr/news/view/179589138008079", "kind": "보도"},
+    "S2019b": {"title": "증권거래세 인하 관련 보도(2019-05-27)", "url": "https://www.metroseoul.co.kr/article/2019052700049", "kind": "보도"},
+    "S2021a": {"title": "주식 거래세 인하… 코스피 0.08%로 (2020-12-30)", "url": "https://www.segye.com/newsView/20201230515580", "kind": "보도 — 제목과 날짜만 읽었다"},
+    "S2022a": {"title": "증권거래세 단계 인하(2023년 0.20% · 2024년 0.18% · 2025년 0.15%)", "url": "https://www.taxtimes.co.kr/news/article.html?no=255608", "kind": "보도"},
+    "S2022b": {"title": "금투세·코인 과세 2025년까지 유예…증권거래세 내년부터 단계 인하", "url": "https://www.etoday.co.kr/news/view/2207906", "kind": "보도"},
+    "S2022c": {"title": "증권거래세 인하는 내년 1월 1일부터 즉시 시행(2022-12-30)", "url": "https://news.mtn.co.kr/news-detail/2022123009400448179/share-modal", "kind": "보도"},
+    "S2025a": {"title": "내년 1월부터 증권거래세율 코스피 0.05%, 코스닥 0.20%로 상향", "url": "https://www.taxtimes.co.kr/mobile/article.html?no=272624", "kind": "보도 — 시행령 개정안 입법예고"},
+    "S2025b": {"title": "15일까지 입법예고 뒤 내달 1일 시행", "url": "https://view.asiae.co.kr/article/2025120109040485489", "kind": "보도 — 입법예고"},
+    "S2025c": {"title": "2026년 1월 1일 이후 증권거래세율 조정(2025-12-22)", "url": "https://economist.co.kr/article/view/ecn202512220061", "kind": "보도"},
+    "SETF1": {"title": "국내 상장 ETF는 세금 어떻게 낼까?", "url": "https://kbam.co.kr/insights/guide/etf-tax-guide-domestic-vs-other-types", "kind": "운용사 안내"},
+    "SETF2": {"title": "ETF 세금 완전 정리: 소득세부터 증여세까지", "url": "https://www.taxnet.co.kr/contents/taxnetpost/post-detail?id=4602", "kind": "세무 안내"}
+  },
+  "schedule": [
+    {"market": "KOSPI", "instrument": "stock", "from": "2019-05-30", "to": "2020-12-31", "transaction_tax_bp": 10, "rural_special_tax_bp": 15, "grade": "T1", "sources": ["S2019a", "S2019b"], "note": "거래세 0.15% → 0.10% · 농특세 0.15% 유지"},
+    {"market": "KOSPI", "instrument": "stock", "from": "2021-01-01", "to": "2022-12-31", "transaction_tax_bp": 8, "rural_special_tax_bp": 15, "grade": "T1", "sources": ["S2021a", "S2022a"], "note": "시행일(2021-01-01)은 2020-12-30 기사의 제목·날짜에서 읽었다. 2022년에 0.23%였다는 것은 2022년 말 기사들이 '현재 0.23%'로 적는다"},
+    {"market": "KOSPI", "instrument": "stock", "from": "2023-01-01", "to": "2023-12-31", "transaction_tax_bp": 5, "rural_special_tax_bp": 15, "grade": "T1", "sources": ["S2022a", "S2022b", "S2022c"], "note": ""},
+    {"market": "KOSPI", "instrument": "stock", "from": "2024-01-01", "to": "2024-12-31", "transaction_tax_bp": 3, "rural_special_tax_bp": 15, "grade": "T1", "sources": ["S2022a"], "note": "★출처가 갈린다★ — 2022년 7월 정부 원안 기사는 '2023~2024년 0.05%'라고 적고, 2022년 12월 확정 기사는 '2024년 0.18%(코스피 0.03% + 농특세)'라고 적는다. 확정 기사를 따랐다"},
+    {"market": "KOSPI", "instrument": "stock", "from": "2025-01-01", "to": "2025-12-31", "transaction_tax_bp": 0, "rural_special_tax_bp": 15, "grade": "T1", "sources": ["S2022a", "S2025a"], "note": "거래세 0% · 농특세만"},
+    {"market": "KOSPI", "instrument": "stock", "from": "2026-01-01", "to": null, "transaction_tax_bp": 5, "rural_special_tax_bp": 15, "grade": "T1", "sources": ["S2025a", "S2025b", "S2025c"], "note": "2023년 수준으로 환원. ★근거는 입법예고와 시행 전 보도다 — 공포된 시행령 원문은 확인하지 못했다★"},
+
+    {"market": "KOSDAQ", "instrument": "stock", "from": "2019-05-30", "to": "2020-12-31", "transaction_tax_bp": 25, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["S2019a", "S2019b"], "note": "0.30% → 0.25%"},
+    {"market": "KOSDAQ", "instrument": "stock", "from": "2021-01-01", "to": "2022-12-31", "transaction_tax_bp": 23, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["S2021a", "S2022a"], "note": "시행일은 코스피 행과 같은 근거"},
+    {"market": "KOSDAQ", "instrument": "stock", "from": "2023-01-01", "to": "2023-12-31", "transaction_tax_bp": 20, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["S2022a", "S2022b", "S2022c"], "note": ""},
+    {"market": "KOSDAQ", "instrument": "stock", "from": "2024-01-01", "to": "2024-12-31", "transaction_tax_bp": 18, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["S2022a"], "note": "코스피 2024년 행과 같은 상충이 있다(원안 기사는 2023~2024년 0.20%)"},
+    {"market": "KOSDAQ", "instrument": "stock", "from": "2025-01-01", "to": "2025-12-31", "transaction_tax_bp": 15, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["S2022a", "S2025a"], "note": ""},
+    {"market": "KOSDAQ", "instrument": "stock", "from": "2026-01-01", "to": null, "transaction_tax_bp": 20, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["S2025a", "S2025b", "S2025c"], "note": "공포된 시행령 원문은 확인하지 못했다"},
+
+    {"market": "KONEX", "instrument": "stock", "from": "2019-05-30", "to": "2025-12-31", "transaction_tax_bp": 10, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["S2019a", "S2025a"], "note": "0.30% → 0.10%. 2025년 11월 기사가 '현행 코넥스 0.1%'로 적는다 — 그 사이에 바뀌지 않았다는 것은 두 시점의 값이 같다는 데서 읽었다(중간 연도를 따로 확인하지 않았다)"},
+
+    {"market": "KOSPI", "instrument": "etf", "from": "2019-05-30", "to": null, "transaction_tax_bp": 0, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["SETF1", "SETF2"], "note": "국내 상장 ETF 는 매도 때 증권거래세가 없다(운용사·세무 안내). ★면제는 0 이라는 값이다 — 미상이 아니다★. 구간은 이 표의 시작일에 맞췄다(그 이전에도 면제였는지는 확인하지 않았다). 검색 결과에 '주식형 ETF 는 부과'라고 적은 개인 블로그가 둘 있었다 — 운용사·세무 안내와 어긋나 따르지 않았다"},
+    {"market": "KOSDAQ", "instrument": "etf", "from": "2019-05-30", "to": null, "transaction_tax_bp": 0, "rural_special_tax_bp": 0, "grade": "T1", "sources": ["SETF1", "SETF2"], "note": "코스피 ETF 행과 같은 근거"}
+  ],
+  "unknown": [
+    {"market": "*", "instrument": "stock", "span": "2019-05-29 이전", "reason": "그 구간의 시작일을 확인하지 못했다(직전 세율이 코스피 0.15% + 농특세 0.15% · 코스닥 0.30% 였다는 것은 2019년 기사에서 읽었으나, 언제부터인지는 '1996년 이후 변동 없음'이라는 2차 서술뿐이다)"},
+    {"market": "KONEX", "instrument": "stock", "span": "2026-01-01 이후", "reason": "2026년 개정 보도가 코스피·코스닥·K-OTC 만 적는다 — 코넥스가 0.10% 로 유지되는지 확인하지 못했다"},
+    {"market": "*", "instrument": "etn", "span": "전 구간", "reason": "ETN 매도의 증권거래세를 확인하지 않았다"},
+    {"market": "*", "instrument": "elw", "span": "전 구간", "reason": "확인하지 않았다"},
+    {"market": "K-OTC", "instrument": "stock", "span": "전 구간", "reason": "이 표는 거래소 세 시장만 다룬다(K-OTC 는 2025년 0.15% → 2026년 0.20% 로 보도됐으나 그 앞 구간을 확인하지 않았다)"}
+  ]
+}

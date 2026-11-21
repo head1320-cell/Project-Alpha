@@ -317,7 +317,7 @@ def rebalance_decision(current_weights: dict[str, float],
             if b.get("available") and gap >= b["half_width_pct"]:
                 outside.append(k)
     band = {"available": bool(bands), "by_asset": bands, "outside": outside,
-            "reason": None if bands else "비용을 몰라 동적 밴드를 정할 수 없습니다"}
+            "reason": None if bands else "비용이 미상이라 동적 밴드를 산정할 수 없습니다"}
 
     max_gap = max((abs(float(target_weights.get(k, 0.0)) - float(current_weights.get(k, 0.0)))
                    for k in keys), default=0.0)

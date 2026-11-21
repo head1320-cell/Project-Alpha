@@ -54,7 +54,7 @@ def _configured(*env_vars: str) -> bool:
 
 @dataclass(frozen=True)
 class KeySlot:
-    """환경변수 하나(또는 한 묶음)와 그것이 여는 것."""
+    """환경변수 하나(또는 한 그룹)와 그것이 여는 것."""
 
     label: str
     env_vars: tuple[str, ...]

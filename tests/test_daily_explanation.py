@@ -71,12 +71,6 @@ def test_the_two_driver_sets_share_no_name():
     assert set(DRIVER_SETS) == {DRIVER_SET_STRATEGY, DRIVER_SET_HOLDING}
 
 
-def test_strategy_drivers_match_the_producer_verbatim():
-    """★`attribution_decomposer` 가 단일 출처다★ — 손으로 옮겨 적으면 낡는다."""
-    from src.engine.attribution_decomposer import EFFECT_COLUMNS
-    assert tuple(STRATEGY_DRIVERS) == tuple(EFFECT_COLUMNS)
-
-
 def test_every_driver_has_a_korean_label():
     """★이름 없는 드라이버는 문장에서 KeyError 가 된다★"""
     for name in (*STRATEGY_DRIVERS, *HOLDING_DRIVERS):
@@ -149,7 +143,7 @@ def test_interaction_and_unexplained_read_differently():
     assert "상호작용" in inter
     assert "상호작용" not in unexp, (
         "커버리지가 불완전한데 잔차를 복리 상호작용이라 불렀습니다")
-    assert "설명하지 못한" in unexp
+    assert "미설명 잔차" in unexp
 
 
 def test_a_complete_coverage_is_never_called_unexplained():
@@ -195,7 +189,7 @@ def test_a_holding_explanation_names_both_unmeasurable_drivers():
         drivers={DRIVER_PRICE: 0.44, DRIVER_REBALANCE: None,
                  DRIVER_FEE: None, DRIVER_DIVIDEND: None, DRIVER_FX: None},
         missing_drivers={DRIVER_REBALANCE: "그날의 매매를 받지 못했습니다",
-                         DRIVER_FEE: "매매를 몰라 비용을 잴 수 없습니다",
+                         DRIVER_FEE: "매매를 몰라 비용을 측정할 수 없습니다",
                          **UNMEASURABLE_DRIVERS},
         price_basis={"basis": "uniform_raw", "reason": None}))
     assert DRIVER_LABELS[DRIVER_DIVIDEND] in text
@@ -288,7 +282,7 @@ def test_the_missing_clause_uses_the_last_label_for_its_particle():
     text = summarize_ko(_exp(
         drivers={k: None for k in STRATEGY_DRIVERS},
         missing_drivers={"macro_effect": "미관측"}))
-    assert "매크로 오버레이는 재지 못했습니다" in text, text
+    assert "매크로 오버레이는 측정하지 못했습니다" in text, text
 
 
 def test_no_markdown_leaks_into_the_plain_sentence():
@@ -332,11 +326,10 @@ def test_the_ranked_clause_is_readable_as_a_list():
 def _user_facing_strings() -> dict[str, str]:
     """설명 계층이 사용자에게 내보내는 고정 문자열 전부."""
     import src.domain.daily_explanation as dom
-    import src.engine.daily_explain_backtest as bt
     import src.engine.daily_explain_holdings as hd
 
     out: dict[str, str] = {}
-    for mod in (dom, bt, hd):
+    for mod in (dom, hd):
         for name in dir(mod):
             if name.startswith("__"):
                 continue
@@ -374,5 +367,5 @@ def test_no_reason_string_carries_its_own_dash():
 def test_the_residual_clause_has_exactly_one_dash():
     """문장 수준에서도 확인한다 — 사유가 바뀌어도 여기가 잡는다."""
     text = summarize_ko(_exp(residual_reason="어떤 사유"))
-    clause = text.split("설명하지 못한 몫 ")[1]
+    clause = text.split("미설명 잔차 ")[1]
     assert clause.count(" — ") == 1, clause

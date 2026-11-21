@@ -47,8 +47,8 @@ def usable_for_portfolio(alpha: dict[str, Any] | None) -> tuple[bool, str | None
     if status == USABLE_STATUS:
         return True, None
     if status == "retired":
-        return False, ("폐기된 알파입니다 — 포트폴리오를 만들 수 없습니다. "
-                       "다시 쓰려면 draft 로 되돌린 뒤 사다리를 다시 올라야 합니다.")
+        return False, ("폐기된 알파입니다 — 포트폴리오를 구성할 수 없습니다. "
+                       "재사용하려면 draft 로 되돌린 뒤 승격 절차를 다시 거쳐야 합니다.")
     nxt = _PROMOTE_NEXT.get(str(status))
     step = f" 다음 단계는 {nxt} 입니다." if nxt else ""
     return False, (f"실전 사용은 {USABLE_STATUS} 알파만 가능합니다 — 현재 {status}."
@@ -212,7 +212,7 @@ def promote_alpha(alpha_id: str, to_status: str, note: str = "") -> dict:
             return {"ok": False,
                     "reason": f"{cur} → {to_status} 직행 불가 — 순서: draft → experimental → validated → approved."}
         if to_status == "validated" and not a["last_run_id"]:
-            return {"ok": False, "reason": "검증 리포트(run) 없이 validated 승격 불가 — 먼저 검증을 실행하세요."}
+            return {"ok": False, "reason": "검증 리포트(run) 없이 validated 승격 불가 — 먼저 검증을 실행하십시오."}
         if to_status == "approved" and not note.strip():
             return {"ok": False, "reason": "approved 승격에는 승인 노트가 필요합니다 (정식 승인 워크플로는 P4)."}
     try:

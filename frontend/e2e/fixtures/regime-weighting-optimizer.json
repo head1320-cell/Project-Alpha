@@ -1,0 +1,117 @@
+{
+ "belief": {
+  "conditional": true,
+  "blocked": false,
+  "blocked_reason": null,
+  "regime": {
+   "available": true,
+   "applied": true,
+   "reason": null,
+   "requested": "gmm",
+   "requested_name": "GMM 시작 분포 × 전이",
+   "used": "gmm",
+   "used_name": "GMM 시작 분포 × 전이",
+   "source": "gmm_start_forecast",
+   "h_hold": 1,
+   "pi_bar": {
+    "Goldilocks": 0.35791401904761905,
+    "Reflation": 0.20104102857142858,
+    "Stagflation": 0.16935612380952383,
+    "Disinflation": 0.27168882857142856
+   },
+   "pi0": {
+    "Goldilocks": 0.7,
+    "Reflation": 0.1,
+    "Stagflation": 0.1,
+    "Disinflation": 0.1
+   },
+   "label": "Goldilocks",
+   "skill": {
+    "available": true,
+    "candidate": "gmm_start",
+    "name": "GMM 시작 분포 × 전이",
+    "k": 1,
+    "n_eval": 24,
+    "scored": {
+     "first": "2024-08",
+     "last": "2026-07"
+    },
+    "hits": 4,
+    "hit_rate": 0.166667,
+    "brier": 0.794638,
+    "gain": 0.705362,
+    "baseline": {
+     "key": "persistence",
+     "name": "오늘 국면 유지",
+     "hits": 6,
+     "hit_rate": 0.25,
+     "brier": 1.5
+    },
+    "evidence": {
+     "e_value": 77.45639226190404,
+     "peak": 77.45639226190404,
+     "saturated": false,
+     "passed": false
+    },
+    "evidence_reason": null,
+    "threshold": 100.0,
+    "note": "배분에 쓰는 이 예측(GMM 시작 분포 × 전이)을 각 시점 이전 자료만으로 다시 세워 보유 기간 뒤의 국면과 견준 점수입니다(워크포워드). 합성 축에서 나온 점수는 장치가 뜻대로 도는지를 보일 뿐 실제로 더 맞힌다는 증거가 아닙니다."
+   },
+   "stability": {
+    "seeds": 10,
+    "modal": "Goldilocks",
+    "agree": 9,
+    "shares": {
+     "Goldilocks": 0.9,
+     "Reflation": 0.0333,
+     "Stagflation": 0.0333,
+     "Disinflation": 0.0333
+    },
+    "stable": true
+   },
+   "robustness": {
+    "available": true,
+    "method": "bootstrap_months",
+    "resamples": 20,
+    "agree": 17,
+    "share": 0.85,
+    "label": "Goldilocks",
+    "note": "가짜"
+   },
+   "fallbacks": [],
+   "dropped_regimes": {},
+   "dropped_notes": [],
+   "path_source": "regime_snapshot",
+   "gate": null
+  }
+ },
+ "explain": {
+  "title": "비중 산출 결과입니다",
+  "facts": [
+   "계산 방식: 블랙-리터먼",
+   "국면 가중 방식: GMM 시작 분포 × 전이",
+   "같은 경로의 워크포워드 점수(1개월 앞 · 평가 시점 24개) — 적중 4/24회 · 브라이어 0.795 · ‘오늘 국면 유지’ 대비 +0.705 · 순차 증거 최고 77.46",
+   "지금 점의 GMM 최다 국면: 난수 시드 10개 가운데 9개가 ‘골디락스’입니다.",
+   "달을 다시 뽑아 적합한 20번 가운데 17번 같은 국면(‘골디락스’)이었습니다 — 관측이며 시작 분포를 바꾸지 않습니다.",
+   "투자 뷰를 반영했습니다."
+  ],
+  "trust": [
+   {
+    "state": "confirmed",
+    "text": "포트폴리오 최적화가 정상 완료됐습니다."
+   },
+   {
+    "state": "unknown",
+    "text": "합성 데이터입니다 — 실제 시세가 아니므로 실제 성과를 나타내지 않습니다.",
+    "kind": "practice"
+   },
+   {
+    "state": "assumed",
+    "text": "전이행렬 파라미터의 불확실성은 공분산에 전파되지 않았습니다 — 그 구간은 표집 예측이 따로 보고합니다."
+   }
+  ],
+  "unmeasured": [
+   "국면 가중 방식이 배분의 수익 · 위험을 바꾸는지(경제적 가치)"
+  ]
+ }
+}

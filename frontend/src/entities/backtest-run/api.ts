@@ -51,6 +51,14 @@ export interface RunFull extends RunStatusLite {
   result: ScreenToBacktestResult | null;
   /** ★실행 자체의 종류★ — `is_mock_data` 에서 서버가 파생한다(Z2). */
   perf_label?: PerfLabelValue | null;
+  /** 서버가 붙이는 성과 그림의 수(2026-11-09 · `run_full`) — % 단위 낙폭 · 해마다·달마다 수익 · 낙폭 사건. 없으면 null(화면은 세지 않는다). */
+  perf?: {
+    unit: "krw";
+    drawdown_pct: (number | null)[] | null;
+    periods: { yearly: { year: number; return_pct: number; max_drawdown_pct: number; n_days: number; partial: boolean }[];
+               monthly: { year: number; month: number; return_pct: number; n_days: number; partial: boolean }[] };
+    drawdowns: { peak_date: string; trough_date: string; recovery_date: string | null; depth_pct: number; days_to_trough: number; days_to_recover: number | null }[];
+  } | null;
 }
 
 // HTTP 상태 코드를 실은 에러 — 로딩 페이지가 404(진짜 없음)와 5xx/네트워크(일시적, 재시도)를

@@ -16,6 +16,7 @@ from src.api.protected_routes import (
     auth_requirement_of_route,
     looks_like_money_route,
 )
+from tests.route_walk import flat_routes
 
 
 @pytest.fixture(scope="module")
@@ -26,7 +27,7 @@ def app():
 
 def _real_routes(app) -> dict[tuple[str, str], object]:
     out: dict[tuple[str, str], object] = {}
-    for r in app.routes:
+    for r in flat_routes(app):
         path = getattr(r, "path", None)
         for method in sorted(getattr(r, "methods", None) or []):
             if method in {"HEAD", "OPTIONS"}:

@@ -3,7 +3,7 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.legacy_schemas import (
     CVARequest,
@@ -11,6 +11,7 @@ from src.api.legacy_schemas import (
     IRCRequest,
     VaRMappingRequest,
 )
+from src.api.market_gate import require_market_download
 from src.data_loader import MarketDataLoader
 from src.models.credit_spread_idr import (
     CREDIT_SPREADS_BPS,
@@ -101,7 +102,7 @@ def credit_transition_matrix():
         "default_probabilities": DEFAULT_PROBS,
     }
 
-@router.post("/dcc-garch")
+@router.post("/dcc-garch", dependencies=[Depends(require_market_download)])
 def dcc_garch_analysis(req: DCCRequest):
     """
     DCC-GARCH dynamic correlation analysis.

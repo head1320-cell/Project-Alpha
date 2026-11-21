@@ -18,7 +18,7 @@
 // 둘은 독립이다. 실데이터 백테스트도, mock 데이터 모의투자도 있다.
 //
 // ★기존 배지 넷과 다른 것을 말한다★ — `brun-badge`(시점 정합) · `tbt-prov`(데이터
-// 출처) · `as-bt-badge`(데이터+OOS) · CockpitParts 인라인(실행 모드). 그 넷은 한 글자도
+// 출처) · `as-bt-badge`(데이터+OOS) · 실거래 화면의 실행 모드(BU9b 에서 '주문이 가는 길' 의 역으로 옮김). 그 넷은 한 글자도
 // 건드리지 않는다(E2E 계약, ADR 001). 이 컴포넌트는 **성과의 종류**만 말하므로 같은
 // 화면에 축이 다른 배지가 둘 이상 보일 수 있다 — 그것은 결함이 아니라 사실이다.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -51,15 +51,15 @@ const KIND_TEXT: Record<PerfKind, string> = {
 const KIND_HINT: Record<PerfKind, string> = {
   backtest: "과거 데이터 위의 시뮬레이션입니다 — 실제로 체결된 적이 없습니다.",
   paper: "모의투자 계좌에서 실시간으로 집행된 결과입니다 — 실제 자금이 아닙니다.",
-  shadow: "신호만 기록하고 주문은 내지 않았습니다.",
+  shadow: "신호만 기록하고 주문은 제출하지 않았습니다.",
   ra_testbed: "표준 심사 환경(테스트베드)의 성과입니다.",
   live: "실계좌에서 실제 자금으로 집행된 결과입니다.",
-  unknown: "이 수치가 무엇에서 나왔는지 응답이 말하지 않았습니다.",
+  unknown: "이 수치의 산출 근거가 응답에 없습니다.",
 };
 
 /** ★응답에 라벨이 아예 없을 때의 사유★ — 비어 있는 것과 모르는 것을 구별한다. */
 export const PERF_LABEL_MISSING_REASON =
-  "이 응답은 수치의 종류를 말하지 않습니다";
+  "이 응답에는 수치의 종류가 없습니다";
 
 function isKnownKind(k: string): k is PerfKind {
   return (PERF_KINDS as readonly string[]).includes(k);
@@ -82,7 +82,7 @@ export function resolvePerfLabel(
   if (!isKnownKind(value.kind)) {
     return {
       kind: "unknown",
-      kindReason: `알아보지 못한 종류입니다(본 값: ${JSON.stringify(value.kind)})`,
+      kindReason: `식별되지 않은 종류입니다(수신 값: ${JSON.stringify(value.kind)})`,
       dataReal: value.data_real ?? null,
       dataReason: value.data_reason ?? null,
     };

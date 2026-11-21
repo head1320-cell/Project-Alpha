@@ -292,7 +292,7 @@ def test_every_deletion_site_names_a_classified_table():
             unclassified[path] = hits
     assert not unclassified, (
         "분류되지 않은 표를 지웁니다 — `src/data/retention.py` 에 부류와 사유를 "
-        f"먼저 적으세요: {unclassified}")
+        f"먼저 적으십시오: {unclassified}")
 
 
 def test_only_the_known_helper_deletes_a_table_it_cannot_name():
@@ -306,7 +306,7 @@ def test_only_the_known_helper_deletes_a_table_it_cannot_name():
                       if any(t is None for _n, _raw, t in sites)})
     assert unknown == ["src/screener_pipeline.py"], (
         "테이블명을 동적으로 받는 삭제가 새로 생겼습니다 — 호출부 가드를 "
-        f"함께 넓히세요: {unknown}")
+        f"함께 넓히십시오: {unknown}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -326,7 +326,7 @@ def test_every_declared_table_is_classified():
                      if t not in CLASSIFIED)
     assert not missing, (
         "표는 선언됐는데 보존 분류가 없습니다 — `src/data/retention.py` 에 "
-        f"부류와 사유를 적으세요: {missing}")
+        f"부류와 사유를 적으십시오: {missing}")
 
 
 def test_every_classified_table_is_actually_declared():
@@ -341,6 +341,26 @@ def test_the_declaration_scan_sees_both_spellings():
     assert ddl == {"vin"}, ddl
     orm = _declared_tables_in('class S(Base):\n    __tablename__ = "stocks"\n')
     assert orm == {"stocks"}, orm
+
+
+def _unreadable_declarations_in(src: str) -> list[str]:
+    """`CREATE TABLE … {이름}` 인데 그 이름을 표 이름으로 풀지 못한 것 — 스캔이 ★보지 못한 표★다."""
+    body = "\n".join(_code_lines(src).values())
+    consts = _module_constants(src)
+    return sorted({name for braced, name in _CREATE.findall(body) if braced and not consts.get(name)})
+
+
+def test_a_declaration_the_scan_cannot_name_is_reported_not_skipped():
+    """★풀지 못한 이름은 '표 없음'이 아니다★ — 조용히 빠지면 분류 검사가 그 표를 영영 보지 못한다.
+
+    실제로 겪었다(2026-11-15): `_A, _B = "a", "b"` 처럼 묶어 적은 표 이름 셋(`src/data/rule_runs.py`)이 스캔에 잡히지 않아
+    새 표가 분류 없이 지나갔다."""
+    assert _unreadable_declarations_in('_A, _B = "a", "b"\nDDL = f"CREATE TABLE IF NOT EXISTS {_A} (x INT)"\n') == ["_A"]
+    assert _unreadable_declarations_in('_A = "a"\nDDL = f"CREATE TABLE IF NOT EXISTS {_A} (x INT)"\n') == []     # 짝 — 풀리면 없다
+    unreadable = {str(path): names for path in _source_files()
+                  if (names := _unreadable_declarations_in(path.read_text(encoding="utf-8")))}
+    assert not unreadable, ("표 이름을 스캔이 읽지 못하는 선언이 있습니다 — 모듈 최상위에 `이름 = \"표\"` 한 줄씩으로 적으십시오"
+                            f"(그래야 보존 분류 검사가 그 표를 봅니다): {unreadable}")
 
 
 def test_the_declaration_scan_ignores_prose_about_ddl():

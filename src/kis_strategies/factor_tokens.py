@@ -395,7 +395,7 @@ REASON_BIZREPORT = "DART 사업보고서 항목(직원·임원·수주·수출) 
 #: (`dart_client.get_dividend_info` → `fs.dps` · `fundamentals_store._real_dividend`).
 #: 그리고 그 11개의 실제 원인은 **다섯 가지로 서로 달랐다**(실측).
 REASON_DIVDATE = ("배당 기준일 미제공 — alotMatter 는 사업연도 집계라 배당락일이 "
-                  "없습니다. 일별 총수익 계열에는 배당 결정 공시가 필요합니다")
+                  "없습니다. 일별 총수익률 계열에는 배당 결정 공시가 필요합니다")
 REASON_TREASURY = ("자기주식 취득·처분 공시 미연동 — alotMatter 에는 자사주 항목이 "
                    "없습니다")
 REASON_DIVPERIOD = ("분기 보고서 다중 조회 필요 — alotMatter 를 reprt_code "
@@ -600,6 +600,11 @@ def _market_fetch(prefix: str) -> pd.DataFrame | None:
             df = load_ohlcv_unified(loader_sym, "2005-01-01",
                                     datetime.now().strftime("%Y-%m-%d"), prefer="auto")
         elif yf_sym:
+            # ★mock 게이트★(2026-11-13) — 해외 지수는 야후로 나간다. mock 은 시도하지 않고 사유를 올린다(국내 지수는 위의 일봉 로더라 막지 않는다).
+            from src.data.mock_gate import mock_allowed
+            from src.data_loader import MARKET_DOWNLOAD_BLOCKED, MarketDataBlockedInMock
+            if mock_allowed():
+                raise MarketDataBlockedInMock(MARKET_DOWNLOAD_BLOCKED)
             import yfinance as yf
             raw = yf.download(yf_sym, start="2005-01-01", progress=False, auto_adjust=False)
             if raw is not None and not raw.empty:
@@ -612,17 +617,22 @@ def _market_fetch(prefix: str) -> pd.DataFrame | None:
 
 
 def _market_df(prefix: str) -> pd.DataFrame | None:
-    """지수 OHLCV 로드(캐시). ★실패는 시효를 두고 다시 시도한다★
+    """지수 OHLCV 로드(캐시). ★실패는 시효를 두고 재시도한다★
 
     예전 독스트링은 "실패 시 None 캐시(반복 시도 방지)" 였다. 반복 시도를 막는
-    의도는 옳지만 **영구히** 막으면 기동 시 한 번의 네트워크 흔들림이 그 토큰을
+    의도는 옳지만 **영구히** 막으면 기동 시 한 번의 네트워크 장애가 그 토큰을
     프로세스 수명 내내 죽인다.
     """
     if prefix in _market_cache and not (_market_cache[prefix] is None
                                         and not _fail_fresh(f"market:{prefix}")):
         return _market_cache[prefix]
+    from src.data_loader import MarketDataBlockedInMock
     try:
         df = _market_fetch(prefix)
+    except MarketDataBlockedInMock as e:
+        # 시도하지 않은 것 — 사유를 그 문장 그대로 남긴다(예외 이름을 붙이지 않는다 — `macro_availability()` 로 화면까지 간다).
+        df = None
+        _note_failure(f"market:{prefix}", str(e))
     except Exception as e:  # noqa: BLE001
         df = None
         _note_failure(f"market:{prefix}", f"{type(e).__name__}: {e}")

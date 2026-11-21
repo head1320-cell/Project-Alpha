@@ -79,10 +79,7 @@ def simulate_exposure_profile(
     pfe_99 = np.percentile(positive_exposure, 99, axis=0)
 
     # EPE: Expected Positive Exposure (time-weighted average of EE)
-    try:
-        epe = float(np.trapezoid(ee, times) / tenor_years)
-    except AttributeError:
-        epe = float(np.trapz(ee, times) / tenor_years)
+    epe = float(np.trapezoid(ee, times) / tenor_years)          # numpy ≥2.0 (requirements 고정)
 
     # Peak EE and PFE
     peak_ee = float(ee.max())

@@ -69,6 +69,9 @@ class RegimeState:
 
     # 동적 파라미터 (다른 모듈에 주입할 값)
     dynamic_risk_free_rate:  float | None = None
+    #: Rf 가 어디서 왔나 — `KR_10Y` 계열의 `source`(BOK·MOCK …) 또는 계열이 없어 쓴 기본값이면 "default".
+    #: ★값이 아니라 라벨의 재료다★ 기본값 0.035 가 '실시간 관측'으로 불리지 않게 한다(BL3 W3-0).
+    dynamic_risk_free_rate_source: str | None = None
     dynamic_kill_dd_threshold: float | None = None
 
     # v2: 축 분해(지표별 변환 z·가중·기여 — "CPI 레벨 z vs 축" 표시 모순의 투명화) + 확률
@@ -141,6 +144,7 @@ class RegimeAnalyzer:
         # 7. 동적 파라미터
         kr_10y = s.get("KR_10Y")
         dynamic_rf = (kr_10y.latest / 100) if kr_10y and kr_10y.latest else 0.035
+        dynamic_rf_source = (getattr(kr_10y, "source", None) or "unknown") if kr_10y and kr_10y.latest else "default"
 
         # Adaptive Kill Switch DD threshold (스트레스 ↑ → 더 민감하게)
         # 기본 -10% → stress 100일 때 -5%
@@ -165,6 +169,7 @@ class RegimeAnalyzer:
             description=("실 매크로 데이터 부족 — BOK/FRED 키 설정 후 국면 분류 (현재 지표 unavailable)"
                         if insufficient else REGIME_DESCRIPTIONS.get(regime, "")),
             dynamic_risk_free_rate=dynamic_rf,
+            dynamic_risk_free_rate_source=dynamic_rf_source,
             dynamic_kill_dd_threshold=dynamic_dd,
             axis_detail={"growth": g_detail, "inflation": i_detail},
             regime_probs=probs,
@@ -334,6 +339,22 @@ def get_dynamic_risk_free_rate() -> float:
     except Exception as e:
         logger.warning(f"동적 RF 조회 실패: {e}, 기본값 사용")
         return 0.035
+
+
+def get_dynamic_risk_free_rate_with_source() -> tuple[float, str]:
+    """`(rf, 출처)` — 값은 `get_dynamic_risk_free_rate()` 와 같고 출처를 함께 준다(BL3 W3-0).
+
+    출처: `KR_10Y` 계열의 `source`(BOK·MOCK …) · 계열이 없거나 조회가 실패해 기본값이면 `"default"`.
+    ★기존 함수는 그대로 둔다★ — 킬스위치·밸류에이션이 숫자만 쓴다.
+    """
+    try:
+        state = get_regime_state()
+        if state.dynamic_risk_free_rate:
+            return state.dynamic_risk_free_rate, (state.dynamic_risk_free_rate_source or "unknown")
+        return 0.035, "default"
+    except Exception as e:
+        logger.warning(f"동적 RF 조회 실패: {e}, 기본값 사용")
+        return 0.035, "default"
 
 
 def get_adaptive_kill_threshold() -> float:

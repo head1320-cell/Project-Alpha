@@ -49,15 +49,17 @@ def _weights_at(model: str, names: list[str], R_win: np.ndarray,
                 w_prev: dict[str, float] | None,
                 bench_win: np.ndarray | None,
                 delta: float, tau: float,
-                s_override=None, extra_views: list[dict] | None = None) -> np.ndarray:
+                s_override=None, extra_views: list[dict] | None = None,
+                risk_aversion: float | None = None) -> np.ndarray:
     """한 시점의 목표 가중치 — /analyze 와 동일 경로(뷰→BL, 제약이면 constrained_solve).
 
     `s_override`/`extra_views` 는 국면 조건부 훅이 넘긴다(MS1-b0). `None` 이면
     현행과 완전히 같은 계산이다 — B0 팔이 그것이다.
+    `risk_aversion` 은 위험 성향 효용(mv_utility)만 읽는다(K2) — `None` 이면 지금과 같은 기본값.
     """
     from src.engine.allocation_studio import optimize
     opt = optimize(model, names, R_win, views=views or None, delta=delta, tau=tau,
-                   s_override=s_override, extra_views=extra_views)
+                   s_override=s_override, extra_views=extra_views, risk_aversion=risk_aversion)
     w = np.asarray(opt["weights"], dtype=float)
     if constraints is not None and getattr(constraints, "any_active", lambda: False)():
         try:
@@ -69,6 +71,7 @@ def _weights_at(model: str, names: list[str], R_win: np.ndarray,
                 constraints=constraints, w_current=w_prev,
                 groups_of=sector_groups_for(names),
                 bench_returns=bench_win,
+                risk_aversion=risk_aversion,
             )
             if sol.get("status") != "infeasible" and sol.get("weights") is not None:
                 w = np.asarray(sol["weights"], dtype=float)
@@ -96,7 +99,7 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
     리밸런스뿐이다.
 
     ★단위를 **일평균**으로 맞추는 이유★
-    구간 총수익으로 비교하면 예측을 만들 때 "이 구간이 며칠짜리인지" 를 알아야 하는데,
+    구간 총수익률으로 비교하면 예측을 만들 때 "이 구간이 며칠짜리인지" 를 알아야 하는데,
     그건 리밸런스 시점에 알 수 없는 값이다(look-ahead). 그래서 예측은 학습창의 일평균
     기대수익, 실현은 자산곡선 비율의 기하평균 일수익으로 둔다. 둘 다 하루 단위라
     비교가 성립하고 미래를 쓰지 않는다.
@@ -104,8 +107,15 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
     ★적중률은 주장하지 않고 잰다★
     이론 하한 `1-α` 를 그대로 적으면 유한표본에서 거짓이 될 수 있다. 앞 70% 로 보정하고
     뒤 30% 로 **실제 적중률을 세어** 함께 낸다. 잴 표본이 모자라면 숫자 대신 사유다.
+
+    ★시계열용(교환가능성 가정 없음) 하위 블록 `adaptive`★ (G7 ② · 2026-11-19)
+    split 이 받은 바로 그 쌍을 같은 시간 순서로 ACI(`conformal.adaptive_conformal` · γ = `ACI_GAMMA`)에 넣어
+    온라인 적중 · 그 길이에서의 보장 상한 · 같은 '다음 구간'의 구간을 나란히 낸다. 새 대상은 없다 · 기존 키는 그대로 ·
+    쌍이 모자라 블록 전체가 사유일 때는 이 하위 블록도 없다. 이 블록을 읽는 결정 경로는 없다(시험이 건다).
     """
     from src.engine.conformal import (
+        ACI_GAMMA,
+        adaptive_conformal,
         conformal_quantile,
         measure_coverage,
         required_calibration_size,
@@ -145,7 +155,7 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
     # ★홀드아웃으로 적중률을 실측한다★ 보정에 쓴 표본으로 적중률을 세면 그건 측정이
     # 아니라 자기 확인이다. 앞 70% 보정 · 뒤 30% 검사로 가른다.
     cov: dict[str, Any] = {"available": False,
-                           "reason": "적중률을 잴 홀드아웃 표본이 없습니다."}
+                           "reason": "적중률을 측정할 홀드아웃 표본이 없습니다."}
     k = int(pairs_n * 0.7)
     if k >= need and pairs_n - k >= 1:
         q = conformal_quantile(np.abs(cal_a[:k] - cal_p[:k]), alpha)
@@ -155,6 +165,9 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
             cov = measure_coverage(cal_a[k:], lo, hi)
             if cov.get("available"):
                 cov["n_calibration"] = k
+
+    # ★같은 쌍 · 같은 순서 · 같은 다음 구간★ — split 옆에 나란히(교환가능성을 가정하지 않는 쪽).
+    adaptive = adaptive_conformal(cal_a, cal_p, float(preds[-1]), alpha=alpha, gamma=ACI_GAMMA)
 
     return {
         "available": True,
@@ -166,6 +179,7 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
                         "upper": nxt["upper"][0], "half_width": nxt["q"]},
         # ★이론 하한이 아니라 실측 적중률★ 없으면 없다고 적는다.
         "measured_coverage": cov,
+        "adaptive": adaptive,
         "note": ("다음 리밸런스 구간의 **일평균** 포트폴리오 수익률 구간입니다. "
                  "교환가능성만 가정하며 분포 가정은 없습니다. 실현값은 구간 말 회전율 "
                  "비용을 반영한 값이라, 비용을 모르는 예측 대비 구간이 다소 넓게 잡힙니다."),
@@ -182,10 +196,15 @@ def _conformal_block(preds: list[float], at: list[int], eq: np.ndarray,
 #
 # 세 팔:
 #   B0  regime=None            국면 배선 없음(사다리의 바닥)
-#   B1  weighting="hard"       오늘 라벨 하나 = 확률 1 (현행 프로덕션)
+#   B1  weighting="hard"       오늘 라벨 하나 = 확률 1 (오늘 국면 유지 — M4 전의 프로덕션 기본값)
 #   N   weighting="probabilistic"  π_1..π_h 혼합 (MS1-a)
+#   G   weighting="gmm"        GMM 시작 분포 × 전이 (M3) — 달마다 그 달까지 자른 경로로 π₀ · 점수를 다시 낸다.
+#                              그 달에 세우지 못하면 ★그 달만★ 전이 예측(N 과 같은 셈) + 감사의 `gmm_fallback` 사유.
+#   E   weighting="evidence"   근거 관문 (M4 · 프로덕션 기본값) — 달마다 ★그 달까지 자른 경로의 점수★로 G 또는 N 을 고른다
+#                              (앞보기 0 · 새 셈 0줄 — 고른 달은 그 팔의 계산 그대로). 하네스의 팔은 늘 이름으로 부른다(암묵 기본값은 그대로).
 
-_REGIME_ARMS = ("hard", "probabilistic")
+_REGIME_ARMS = ("hard", "probabilistic", "gmm", "evidence")
+_ARM_LABELS = {"hard": "B1", "probabilistic": "N", "gmm": "G", "evidence": "E"}
 
 
 def _month_of(d) -> str:
@@ -283,6 +302,12 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
              "h_hold": None, "pi_bar": None, "a_contribution_pct": None,
              "confidence": None, "confidence_model": None,
              "prob_source": None, "prob_usage": None, "prob_note": None}
+    if regime.get("weighting") == "gmm":
+        # 팔 G 의 줄에만 있다(B1 · N 의 감사는 한 바이트도 바뀌지 않는다 — 골든). 세운 달은 `gmm`, 열화한 달은 `gmm_fallback`.
+        audit.update({"gmm": None, "gmm_fallback": None})
+    elif regime.get("weighting") == "evidence":
+        # 팔 E 의 줄에만 — 그 달의 관문(고른 쪽 · 사유 · 견준 점수)과, 관문이 GMM 을 고른 달의 세움 · 열화(G 와 같은 칸).
+        audit.update({"gate": None, "gmm": None, "gmm_fallback": None})
     pts = _truncated_points(regime.get("points") or [], month)
     audit["path_len"] = len(pts)
     audit["last_path_month"] = _month_of_point(pts[-1]) if pts else ""
@@ -315,20 +340,29 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
         )
         h_hold = int(regime.get("h_hold") or 1)
         audit["h_hold"] = h_hold
-        try:
-            rows = transition_posterior(count_transitions(pts))
-            probs, P = from_posterior_mean_path(rows, current, h_hold,
-                                                list(REGIMES), mode="backtest")
-            for pr in probs:
-                require_portfolio_source(pr)
-            # ★검사를 통과한 뒤에 적는다★ 먼저 적으면 통과 여부와 무관한 선언이 된다.
-            audit["prob_source"] = SOURCE_FORECAST_MEAN
-            audit["prob_usage"] = USAGE_PORTFOLIO
-            cond = regime_mixture_moments(df, by_month, [p.probs for p in probs],
-                                          P, list(REGIMES), h_hold=h_hold)
-        except Exception as e:                            # noqa: BLE001
-            audit["reason"] = f"{type(e).__name__}: {e}"
-            return None, None, audit
+        if weighting == "evidence":
+            from src.engine import regime_gmm_start as gs
+            gate = gs.evidence_gate(pts, h_hold)          # ★그 달까지 자른 경로(pts)의 점수만★ — 앞보기 0
+            audit["gate"] = {"chosen": gate["chosen"], "available": gate["available"], "reason": gate["reason"],
+                             "n_eval": gate["n_eval"], "compared": [{"key": c["key"], "brier": c["brier"]}
+                                                                    for c in gate["compared"]]}
+            weighting = gate["chosen"]
+        cond = _gmm_cond_at(pts, h_hold, df, by_month, audit) if weighting == "gmm" else None
+        if cond is None:
+            try:
+                rows = transition_posterior(count_transitions(pts))
+                probs, P = from_posterior_mean_path(rows, current, h_hold,
+                                                    list(REGIMES), mode="backtest")
+                for pr in probs:
+                    require_portfolio_source(pr)
+                # ★검사를 통과한 뒤에 적는다★ 먼저 적으면 통과 여부와 무관한 선언이 된다.
+                audit["prob_source"] = SOURCE_FORECAST_MEAN
+                audit["prob_usage"] = USAGE_PORTFOLIO
+                cond = regime_mixture_moments(df, by_month, [p.probs for p in probs],
+                                              P, list(REGIMES), h_hold=h_hold)
+            except Exception as e:                            # noqa: BLE001
+                audit["reason"] = f"{type(e).__name__}: {e}"
+                return None, None, audit
 
     if not cond.get("available"):
         audit["reason"] = cond.get("reason")
@@ -353,6 +387,44 @@ def _regime_override_at(regime: dict, month: str, R_win: np.ndarray,
             for nm, m in zip(names, cond["mu"], strict=False) if float(m) != 0.0
         ] or None
     return cond["sigma"], extra_views, audit
+
+
+def _gmm_cond_at(pts: list[dict], h_hold: int, df, by_month: dict, audit: dict) -> dict | None:
+    """팔 G 의 한 리밸런싱 — ★그 달까지 자른 경로로★ π₀ · 점수를 다시 내 혼합한다(앞보기 0).
+
+    세우지 못하거나 혼합하지 못하면 `None` 이고 `audit["gmm_fallback"]` 에 그 달의 사유를 적는다 — 부르는 쪽이 그 달만
+    전이 예측으로 계산한다. 다시 뽑기(부트스트랩)는 달마다 돌리지 않는다(라이브 경로에서만 잰다 · 계획 §3.3).
+    """
+    from src.engine import regime_gmm_start as gs
+    from src.engine.conditional_market import regime_mixture_moments
+    from src.engine.regime_probability import (
+        SOURCE_GMM_START,
+        USAGE_PORTFOLIO,
+        require_portfolio_source,
+    )
+    from src.engine.regime_transitions import REGIMES
+
+    got = gs.gmm_start_path(pts, h_hold, mode="backtest", with_robustness=False)
+    if not got.get("available"):
+        audit["gmm_fallback"] = got.get("reason") or "GMM 시작 분포를 세우지 못했습니다(사유 미상)."
+        return None
+    try:
+        probs = [require_portfolio_source(p) for p in got["probs"]]
+        cond = regime_mixture_moments(df, by_month, [p.probs for p in probs], got["P"],
+                                      list(REGIMES), h_hold=h_hold)
+    except Exception as e:                                # noqa: BLE001
+        why = str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
+        audit["gmm_fallback"] = f"GMM 시작 분포를 쓰지 못했습니다. {why}"
+        return None
+    if not cond.get("available"):
+        audit["gmm_fallback"] = gs._why("GMM 시작 분포로 혼합하지 못했습니다", cond.get("reason") or "사유 미상")
+        return None
+    audit["prob_source"] = SOURCE_GMM_START
+    audit["prob_usage"] = USAGE_PORTFOLIO
+    sk = got["skill"]
+    audit["gmm"] = {"pi0": got["pi0"], "label": got["label"],
+                    "skill": {k: sk.get(k) for k in ("k", "n_eval", "hits", "hit_rate", "brier", "gain")}}
+    return cond
 
 
 def _month_of_point(p: dict) -> str:
@@ -412,6 +484,8 @@ class WalkForwardPlan:
     #: 벤치마크 정렬(비용 무관)
     bench_aligned: Any = None
     bench_curve: Any = None
+    #: 리밸런싱마다 쓴 위험 회피 λ(K2) — 위험 성향 효용만 읽는다. None = 기본값.
+    risk_aversion: float | None = None
 
 
 def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
@@ -420,7 +494,8 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
                       window_days: int | None = None,
                       min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
                       bench: np.ndarray | None = None,
-                      regime: dict | None = None) -> WalkForwardPlan | dict:
+                      regime: dict | None = None,
+                      risk_aversion: float | None = None) -> WalkForwardPlan | dict:
     """PIT 비중 경로를 만든다 — ★비용을 인자로 받지 않는다★ (P7).
 
     각 리밸런싱 시점 k 의 가중치는 **오직 k 이전 데이터**로만 계산된다(look-ahead
@@ -444,12 +519,12 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
             return {"error": True,
                     "message": (f"'{ckind}' 은 지원하는 신뢰도 방식이 아닙니다 — "
                                 "decomposed 또는 legacy 만 됩니다.")}
-        arm = "B1" if weighting == "hard" else "N"
+        arm = _ARM_LABELS[weighting]
     regime_detail: list[dict] = []
 
     rb = _rebalance_indices(list(dates), rebalance, min_train)
     if len(rb) < 2:
-        return {"error": True, "message": "리밸런싱 구간이 부족합니다 — 기간을 늘리거나 리밸런싱 주기를 줄이세요."}
+        return {"error": True, "message": "리밸런싱 구간이 부족합니다 — 기간을 늘리거나 리밸런싱 주기를 줄이십시오."}
 
     start = rb[0]                                  # 시뮬레이션 시작(첫 리밸런싱)
     T = R.shape[0]
@@ -483,7 +558,8 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
                 try:
                     w_new = _weights_at(model, names, R_win, views, constraints,
                                         w_prev_target, bench_win, delta, tau,
-                                        s_override=s_override, extra_views=xviews)
+                                        s_override=s_override, extra_views=xviews,
+                                        risk_aversion=risk_aversion)
                 except Exception as e:                        # noqa: BLE001
                     # ★거부는 사고가 아니라 정보다★ 엔트로피 풀링은 뷰를 동시에
                     # 만족시키는 분포가 없으면 배분을 거부한다(`EPUnavailable`).
@@ -554,7 +630,68 @@ def plan_walk_forward(names: list[str], R: np.ndarray, dates: list,
         turnover=turnover_hist, rebalance_meta=rebalance_meta,
         regime_detail=regime_detail, infeasible=infeasible,
         bench_aligned=bench_aligned, bench_curve=bench_curve,
+        risk_aversion=risk_aversion,
     )
+
+
+def _lambda_used(risk_aversion: float | None) -> dict:
+    """쓴 λ 와 출처 — 주지 않았으면 관례값을 **가정**으로 밝힌다(`optimize` 의 공시와 같은 모양)."""
+    from src.engine.allocation_studio import RISK_AVERSION_DEFAULT
+    return ({"value": RISK_AVERSION_DEFAULT, "source": "default"} if risk_aversion is None
+            else {"value": float(risk_aversion), "source": "user"})
+
+
+#: 요약 · 지표 묶음의 키마다 비용 기준(C1 · 2026-11-19 받은 결정 '비용 전 · 뒤 나란히' · CLAUDE.md §3 의 별도 승인).
+#: 비용 전 = 거래비용을 빼기 전 일별 수익(`plan.port_daily`) · 비용 후 = 비용을 뺀 자본곡선 또는 거기서 되짚은 일별 수익 ·
+#: 혼합 = 칼마(비용 전 산술 연율 수익 ÷ 비용 후 최대 낙폭). 화면은 이 표를 이름표에 그대로 붙인다 — 키를 더하면 여기에도 적는다(시험이 빠진 키를 잡는다).
+_COST_BASIS: dict[str, Any] = {
+    "after_cost": ["total_return_pct", "cagr_pct", "max_drawdown_pct", "volatility_after_cost_pct",
+                   "sharpe_ratio_after_cost", "sortino_ratio_after_cost", "calmar_ratio_after_cost"],
+    "before_cost": ["volatility_pct", "sharpe_ratio", "sortino_ratio", "sharpe_ratio_full",
+                    "active_return_pct", "information_ratio"],
+    "mixed": ["calmar_ratio"],
+    "metrics": {
+        "after_cost": ["max_drawdown", "max_drawdown_days", "avg_drawdown_pct", "ulcer_index", "recovery_factor"],
+        "before_cost": ["volatility_pct", "downside_deviation_pct", "var_pct", "cvar_pct", "omega", "gain_to_pain",
+                        "tail_ratio", "skew", "kurtosis", "best_period_pct", "worst_period_pct", "information_ratio",
+                        "sharpe_ratio", "sortino_ratio", "annualized_return", "annualized_volatility"],
+        "mixed": ["calmar_ratio"],
+        # 거래 단위 손익을 넘기지 않아 값이 없는 칸(None) — 기준이 없다.
+        "not_measured": ["payoff_ratio", "avg_win", "avg_loss", "expectancy", "kelly_pct"],
+    },
+    "note": ("총수익률 · 연환산 수익률(CAGR) · 최대 낙폭은 거래비용을 뺀 자본곡선에서 계산합니다. "
+             "변동성 · 샤프 · 소르티노 · 초과수익 · 정보비율과 VaR 등 분포 지표는 거래비용을 빼기 전 일별 수익에서 계산하고, "
+             "칼마는 비용 전 연율 수익을 비용 후 최대 낙폭으로 나눈 값입니다. 비용 후 변동성 · 샤프 · 소르티노 · 칼마는 "
+             "같은 관례(무위험 연 3.5% · 표본 표준편차 · 산술 연율화)로 비용 후 일별 수익에서 다시 계산한 값입니다."),
+}
+_AFTER_COST_KEYS = (("volatility_after_cost_pct", "annualized_volatility", 100.0),
+                    ("sharpe_ratio_after_cost", "sharpe_ratio", 1.0),
+                    ("sortino_ratio_after_cost", "sortino_ratio", 1.0),
+                    ("calmar_ratio_after_cost", "calmar_ratio", 1.0))
+
+
+def _after_cost_ratios(eq: np.ndarray) -> tuple[dict[str, float | None], dict[str, str]]:
+    """비용 후 변동성 · 샤프 · 소르티노 · 칼마 — 반올림 전 자본곡선에서 비용 후 일별 수익을 되짚어 ★같은 관례★로 (C1).
+
+    리밸런싱 날은 비용을 그날 수익보다 먼저 물렸으므로 eq[i] ÷ eq[i−1] − 1 이 그날의 비용 후 수익이고, 첫날의 앞 값은
+    시작 자본 1.0 이다. 곡선이 0 이하로 내려간 날이 있으면 되짚지 않는다(0 으로 나누지 않는다 — 미상 + 사유).
+    어떤 결정도 이 값을 읽지 않는다(보이기만 한다 · 시험이 정적으로 건다).
+    """
+    from src.engine.quant_metrics import risk_adjusted_ratios
+    if eq.size and bool(np.any(eq <= 0)):
+        why = "자본곡선이 0 이하로 내려간 날이 있어 비용 후 일별 수익을 되짚지 않았습니다"
+        return {k: None for k, _, _ in _AFTER_COST_KEYS}, {k: why for k, _, _ in _AFTER_COST_KEYS}
+    prev = np.concatenate(([1.0], eq[:-1]))
+    rar = risk_adjusted_ratios(eq / prev - 1.0, eq, periods_per_year=252, risk_free=_RF)
+    vals: dict[str, float | None] = {}
+    why: dict[str, str] = {}
+    for key, src, scale in _AFTER_COST_KEYS:
+        v = rar.get(src)
+        vals[key] = None if v is None else round(float(v) * scale, 2)
+        if v is None:
+            # 사유는 단일 출처의 문장 그대로 — 화면에 그대로 뜨므로 문장 사이 줄표만 마침표로 바꾼다(뜻은 그대로).
+            why[key] = str(rar["reasons"].get(src) or "산출되지 않았습니다").replace(" — ", ". ")
+    return vals, why
 
 
 def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
@@ -614,7 +751,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
     bench_aligned = plan.bench_aligned
     bench_curve = plan.bench_curve
 
-    from src.engine.quant_metrics import compute_metrics
+    from src.engine.quant_metrics import compute_metrics, drawdown_episodes, period_returns
     metrics = compute_metrics(port, eq, periods_per_year=252,
                               benchmark_returns=bench_aligned, risk_free=_RF)
 
@@ -630,6 +767,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
     sharpe = metrics["sharpe_ratio"] or 0.0
     sortino = metrics["sortino_ratio"] or 0.0
     calmar = metrics["calmar_ratio"] or 0.0
+    after, after_why = _after_cost_ratios(eq)
     active_ret = None
     info_ratio = None
     if bench_aligned is not None and bench_aligned.size > 1:
@@ -646,8 +784,8 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             "applied": False, "convention": None,
             "mean_bps": None, "max_bps": None, "max_participation": None,
             "beyond_model_range": None, "total_cost_pct": None,
-            "reason": ("규모 가정(ImpactAssumptions)을 주지 않아 참여율 충격을 "
-                       "적용하지 않았습니다 — 정액 cost_bps 만 물렸습니다. "
+            "reason": ("규모 가정(ImpactAssumptions)을 제공하지 않아 참여율 충격을 "
+                       "적용하지 않았습니다 — 정액 cost_bps 만 부과했습니다. "
                        "회전율이 큰 팔이 그만큼 유리하게 평가됩니다."),
         }
     else:
@@ -660,7 +798,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
                 "√법칙은 이 영역에서 검량되지 않았으므로 이 규모의 충격 추정은 "
                 "★모델 적용 범위 밖★ 입니다.")
         if not imp_bps_hist:
-            notes.append("리밸런싱이 없어 충격을 잰 적이 없습니다.")
+            notes.append("리밸런싱이 없어 시장 충격을 측정한 적이 없습니다.")
         impact_block = {
             "applied": True,
             "convention": impact.as_convention(),
@@ -682,7 +820,7 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
         gross_hist = [rb_.get("gross_pct") for rb_ in rebalances if rb_.get("gross_pct")]
         short_notes.append(
             "숏 비용 미반영 — 차입수수료·숏 배당지급·증거금 이자가 이 곡선에 없습니다. "
-            "롱온리와의 비교는 그만큼 롱숏에 유리하게 기울어 있습니다.")
+            "롱온리와의 비교는 그만큼 롱숏에 유리하게 편향돼 있습니다.")
         short_notes.append(
             "실행 불가 — 이 목표는 연구·백테스트 전용입니다(차입 가능여부 미연동 · "
             "KIS 주문 유형에 공매도 없음).")
@@ -701,6 +839,10 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
         "equity_curve": list(np.round(eq, 5)),
         "bench_curve": bench_curve,
         "drawdown_curve": list(np.round(dd * 100, 3)),
+        # 해마다·달마다 수익 · 큰 낙폭 사건 — ★실린 곡선(소수 5자리)★ 에서 옮기기만(연환산 없음 · 화면은 새 수를 만들지 않는다 ·
+        # 2026-11-09). 화면이 보는 곡선과 같은 수에서 나와야 둘이 어긋나지 않는다.
+        "periods": period_returns(plan.sim_date_strs, np.round(eq, 5)),
+        "drawdowns": drawdown_episodes(plan.sim_date_strs, np.round(eq, 5), top=3),
         "rebalances": rebalances,
         "n_rebalances": len(rebalances),
         # ★절단을 주장이 아니라 기록으로 증명한다★
@@ -719,6 +861,15 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             "weights_infeasible": len(plan.infeasible),
             "infeasible_detail": plan.infeasible[:20],
             "detail": plan.regime_detail,
+            # 팔 G 만 — GMM 시작 분포를 세운 달 · 전이 예측으로 열화한 달(사유는 `detail[*].gmm_fallback`).
+            **({"gmm_months": sum(1 for d in plan.regime_detail if d.get("gmm") is not None),
+                "gmm_fallback_months": sum(1 for d in plan.regime_detail if d.get("gmm_fallback"))}
+               if plan.arm in ("G", "E") else {}),
+            # 팔 E 만 — 관문이 GMM 을 고른 달 · 전이 예측을 고른 달(사유는 `detail[*].gate.reason`).
+            **({"gate_gmm_months": sum(1 for d in plan.regime_detail if (d.get("gate") or {}).get("chosen") == "gmm"),
+                "gate_transition_months": sum(1 for d in plan.regime_detail
+                                              if (d.get("gate") or {}).get("chosen") == "probabilistic")}
+               if plan.arm == "E" else {}),
         },
         "turnover_avg_pct": round(float(np.mean(turnovers)), 2) if turnovers else 0.0,
         "impact": impact_block,
@@ -736,11 +887,16 @@ def simulate_walk_forward(plan: WalkForwardPlan, *, cost_bps: float = 10.0,
             "sharpe_ratio_full": metrics.get("sharpe_ratio"),
             "active_return_pct": round(active_ret * 100, 2) if active_ret is not None else None,
             "information_ratio": round(info_ratio, 2) if info_ratio is not None else None,
+            # ★비용 후 넷 — 위 비용 전 값과 나란히(C1)★ 위의 키는 한 바이트도 바꾸지 않는다. 미상은 None(옛 0.0 계약이 없는 새 키다).
+            **after,
+            "cost_basis": {**_COST_BASIS, "reasons": after_why},
         },
         "config": {
             "model": plan.model, "rebalance": plan.rebalance,
             "window": (f"rolling {plan.window_days}d" if plan.window_days else "expanding"),
             "cost_bps": cost_bps, "n_obs": int(T),
+            # ★λ 는 쓴 방식에서만 밝힌다★(K2 — `optimize` 와 같은 규칙) 다른 방식의 응답 모양은 그대로다.
+            **({"risk_aversion": _lambda_used(plan.risk_aversion)} if plan.model == "mv_utility" else {}),
         },
     }
 
@@ -752,7 +908,8 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
                  bench: np.ndarray | None = None,
                  min_train: int = 63, delta: float = 2.5, tau: float = 0.05,
                  regime: dict | None = None,
-                 impact: ImpactAssumptions | None = None) -> dict:
+                 impact: ImpactAssumptions | None = None,
+                 risk_aversion: float | None = None) -> dict:
     """정책 walk-forward 백테스트 — ★계획 → 시뮬레이션의 얇은 합성★ (P7).
 
     R: T×N 일별 수익률 · dates: 길이 T date-like · window_days: rolling(None=expanding).
@@ -765,7 +922,8 @@ def walk_forward(names: list[str], R: np.ndarray, dates: list,
     plan = plan_walk_forward(names, R, dates, model=model, views=views,
                              constraints=constraints, rebalance=rebalance,
                              window_days=window_days, min_train=min_train,
-                             delta=delta, tau=tau, bench=bench, regime=regime)
+                             delta=delta, tau=tau, bench=bench, regime=regime,
+                             risk_aversion=risk_aversion)
     if isinstance(plan, dict):                     # 계획 단계의 명시적 거부
         return plan
     return simulate_walk_forward(plan, cost_bps=cost_bps, impact=impact)

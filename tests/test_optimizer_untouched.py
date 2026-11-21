@@ -19,8 +19,10 @@ from src.engine.constrained_opt import Constraints
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _OPTIMIZER = _ROOT / "src" / "engine" / "constrained_opt.py"
 
-#: AD 착수 시점(커밋 8e3e1b8)의 해시. ★수치가 아니라 경계다.★
-_GOLDEN_SHA256 = "97a3b73e31fdc3e52956b36bc1b458c2287f7009406a5a561b3ef168fd63c401"
+#: 해시. ★수치가 아니라 경계다.★ AD 착수 시점(커밋 8e3e1b8) 97a3b73e… →
+#: BO O1(2026-09-28) — 사용자가 **별도 승인**한 위험 성향 손잡이: `constrained_solve(..., risk_aversion=)` 와
+#: `mv_utility` 목적식 분기를 **가산**했다(다른 방식의 목적식은 그대로 — tests/test_risk_aversion_knob.py 가 건다).
+_GOLDEN_SHA256 = "b2f524b3173fd893874e58b0bfbce18051977bd0485f20dd78e582c6c5ce4fe3"
 
 #: `Constraints` 의 필드 집합. 계좌 제약이 섞여 들어오면 달라진다.
 _GOLDEN_FIELDS = frozenset({

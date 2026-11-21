@@ -1,4 +1,8 @@
 """레거시 스크리너 (SQL 기반) — 신규는 src/api/screener_routes.py — main_api.py에서 분리(경로·동작 불변).
+
+S2(2026-11-19 받은 결정 '그 문 하나만 걷어 낸다'): 스냅샷 표의 행을 그대로 돌려주던 `POST /screener` 를 걷어 냈다 — 화면 호출 0
+(감사 `docs/specs/2026-11-13-market-snapshot-synthetic-audit.md` §3). 남은 문 넷(`GET /screener/factors` · `POST /screener/refresh` ·
+`GET /screener/status` · `GET /api/v1/screener/stocks`)은 그대로다. 그 문만 쓰던 `screener_sql.build_screener_sql` 은 지우지 않았다(보고만).
 """
 
 import logging
@@ -6,59 +10,12 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text as _sql_text
 
-from src.api.legacy_schemas import (
-    ScreenerRequest,
-)
-from src.screener_pipeline import refresh_all_snapshots
-from src.screener_sql import ALLOWED_FACTORS, build_screener_sql
+from src.screener_pipeline import refresh_all_snapshots, snapshot_origin
+from src.screener_sql import ALLOWED_FACTORS
 
 logger = logging.getLogger("api.screener_legacy")
 router = APIRouter(tags=["screener_legacy"])
 
-
-@router.post("/screener")
-def run_screener(req: ScreenerRequest):
-    """
-    Execute a screener query entirely in PostgreSQL.
-
-    The client sends alphabet-labeled conditions and a logic expression like
-    `(A AND B) OR C`. The server whitelists fields/operators, builds a
-    parameterized WHERE clause, and executes it against the snapshot tables.
-
-    All filtering runs in the DB engine. No Pandas, no in-memory aggregation.
-    """
-    try:
-        sql, params = build_screener_sql(
-            universe=req.universe,
-            conditions=req.conditions,
-            logic_expression=req.logic_expression,
-            sort_by=req.sort_by,
-            limit=req.limit,
-        )
-    except ValueError as e:
-        logger.warning(f"입력 검증 실패: {e}")
-        raise HTTPException(status_code=400, detail=f"입력 오류: {e}")
-
-    try:
-        from src.database import get_engine
-        engine = get_engine()
-        with engine.connect() as conn:
-            result = conn.execute(_sql_text(sql), params)
-            rows = [dict(r._mapping) for r in result.fetchall()]
-            # Serialize datetime fields
-            for row in rows:
-                for k, v in list(row.items()):
-                    if hasattr(v, "isoformat"):
-                        row[k] = v.isoformat()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"DB query failed: {e}")
-
-    return {
-        "universe": req.universe,
-        "count": len(rows),
-        "results": rows,
-        "sql": sql,  # for debugging / transparency
-    }
 
 @router.get("/screener/factors")
 def get_screener_factors():
@@ -76,6 +33,13 @@ async def manual_refresh_screener():
     except Exception:
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
+
+def _iso(v) -> str | None:
+    """갱신 시각 — sqlite 는 시각을 문자열로 돌려준다(그대로 `.isoformat()` 을 부르면 500 이었다)."""
+    if not v:
+        return None
+    return v.isoformat() if hasattr(v, "isoformat") else str(v)
+
 
 @router.get("/screener/status")
 def screener_status():
@@ -105,8 +69,9 @@ def screener_status():
         return {
             "equity_rows": eq_count or 0,
             "ficc_rows": ficc_count or 0,
-            "equity_updated_at": eq_updated.isoformat() if eq_updated else None,
-            "ficc_updated_at": ficc_updated.isoformat() if ficc_updated else None,
+            "equity_updated_at": _iso(eq_updated),
+            "ficc_updated_at": _iso(ficc_updated),
+            "snapshot": {"equity": snapshot_origin("equity"), "ficc": snapshot_origin("ficc")},
         }
     except Exception:
         logger.exception("요청 처리 실패")

@@ -202,6 +202,57 @@ export type ForecastCoverage =
       note: string;
     };
 
+/** 국면 경로가 실제로 쓴 구간 — 요청한 기간보다 짧으면 이 값이 진짜다(두 축이 다 계산된 달만). */
+export interface RegimeSpan {
+  first?: string | null;
+  last?: string | null;
+  n_months?: number;
+  requested?: number;
+  truncated?: boolean;
+  /** 두 축이 다 계산되지 않아 뺀 달(0 으로 채우지 않는다 · M1b). */
+  dropped_incomplete?: number;
+}
+
+export interface SkillCandidate {
+  key: string;
+  /** 서버 이름표(`regime_skill.CANDIDATE_NAMES`) — 화면이 이름을 따로 짓지 않는다. */
+  name: string;
+  available: boolean;
+  hits: number | null;
+  hit_rate: number | null;
+  brier: number | null;
+  /** 오늘 국면 유지 대비 브라이어 이득의 평균(양이면 유지보다 확률을 잘 맞혔다). 기준선 자신은 `null`. */
+  gain: number | null;
+  evidence: { e_value: number; peak: number; saturated: boolean; passed: boolean } | null;
+  reason: string | null;
+}
+
+/**
+ * 국면 예측 비교(M2) — 후보 여섯의 워크포워드 점수. ★고르지 않는다★ 후보 순서는 서버의 고정 순서(점수와 무관)이고
+ * 응답에 '가장 나은 후보' 같은 키가 없다. 미가용이면 숫자 없이 사유뿐이다.
+ */
+export type RegimeSkill =
+  | { available: false; reason: string; k: number; market: string; months: number; span: RegimeSpan }
+  | {
+      available: true;
+      k: number;
+      min_history: number;
+      n_eval: number;
+      scored: { first: string | null; last: string | null };
+      baseline: string;
+      candidates: SkillCandidate[];
+      evidence: {
+        method: string; alpha: number; compared: number; threshold: number;
+        computed: boolean; reason: string | null; note: string;
+      };
+      walk_forward: boolean;
+      note: string;
+      not_measured: string[];
+      market: string;
+      months: number;
+      span: RegimeSpan;
+    };
+
 export interface RegimeConsensus {
   /** 동수면 `null` — 임의로 한쪽을 고르면 지어낸 결론이다. */
   verdict: string | null;
@@ -213,6 +264,11 @@ export interface RegimeConsensus {
   reasons: Record<string, string>;
   disagreement: { score: number; unique: number; counts: Record<string, number>; n: number };
   note: string;
+  /**
+   * 시드별 최다 답이 과반이 아닌 도구(M1 · 군집 두 팔). ★합의 규칙은 그대로★ — 판정이 같아도 이 목록이 비어 있지
+   * 않으면 그 만장일치는 난수 시드 하나만 바꿔도 깨질 수 있다. 서버는 늘 싣는다(옛 응답 · 스텁을 위해 선택).
+   */
+  seed_unstable?: string[];
 }
 
 export const macroIntelApi = {
@@ -235,6 +291,14 @@ export const macroIntelApi = {
     const q = new URLSearchParams({ k: String(k), alpha: String(alpha) });
     const r = await fetch(`${API_BASE}/api/v1/macro/regime-forecast-coverage?${q}`);
     if (!r.ok) throw new Error(`forecast-coverage failed: ${r.status}`);
+    return r.json();
+  },
+
+  /** 시점마다 군집 두 팔을 다시 적합한다 — 첫 계산은 수십 초가 들 수 있어 화면은 단추로만 부른다. */
+  regimeSkill: async (market = "kr", months = 120, k = 1): Promise<RegimeSkill> => {
+    const q = new URLSearchParams({ market, months: String(months), k: String(k) });
+    const r = await fetch(`${API_BASE}/api/v1/macro/regime-skill?${q}`);
+    if (!r.ok) throw new Error(`regime-skill failed: ${r.status}`);
     return r.json();
   },
 

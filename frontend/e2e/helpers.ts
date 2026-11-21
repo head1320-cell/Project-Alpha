@@ -92,6 +92,20 @@ export function completedRun(runId: string = STUB_RUN_ID) {
     profit_factor: 1.35, num_trades: 3, var_pct: -2.1, cvar_pct: -2.6,
     total_commission: 41000, total_slippage: 12000, eod_liquidated: 1,
   };
+  // 서버 `run_full` 이 붙이는 성과 블록(2026-11-09) — 결과 화면은 이 수만 그린다(세지 않는다). 곡선 다섯 점과 손으로 맞춘 값.
+  const perf = {
+    unit: "krw",
+    drawdown_pct: [0, 0, -1.9, 0, 0],
+    periods: {
+      yearly: [{ year: 2023, return_pct: 12.0, max_drawdown_pct: -1.9, n_days: 5, partial: true }],
+      monthly: [
+        { year: 2023, month: 1, return_pct: 0.0, n_days: 1, partial: true }, { year: 2023, month: 2, return_pct: 3.0, n_days: 1, partial: true },
+        { year: 2023, month: 3, return_pct: -1.9, n_days: 1, partial: true }, { year: 2023, month: 4, return_pct: 6.9, n_days: 1, partial: true },
+        { year: 2023, month: 5, return_pct: 3.7, n_days: 1, partial: true },
+      ],
+    },
+    drawdowns: [{ peak_date: "2023-02", trough_date: "2023-03", recovery_date: "2023-04", depth_pct: -1.9, days_to_trough: 28, days_to_recover: 59 }],
+  };
   const result = {
     error: false,
     screened_tickers: ["005930", "000660"],
@@ -117,7 +131,7 @@ export function completedRun(runId: string = STUB_RUN_ID) {
     intraday: null, asset_alloc: null, backtest_config: {},
   };
   const input_snapshot = { universe: "kospi200", start_date: "2023-01-01", end_date: "2023-05-31", strategy_name: "Condition", benchmark: "KOSPI" };
-  return { lite: { ...base }, full: { ...base, input_snapshot, parameter_snapshot: {}, result } };
+  return { lite: { ...base }, full: { ...base, input_snapshot, parameter_snapshot: {}, result, perf } };
 }
 
 /** 완료 런의 status·상세 두 엔드포인트를 스텁하고 페이로드를 돌려준다. */
@@ -162,6 +176,9 @@ export function contrastAudit(rootSelector: string): string {
   for (const el of [root, ...root.querySelectorAll("*")]) {
     const cs = getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden") continue;
+    // 닫힌 <details> 의 내용(머리 summary 제외)은 그려지지 않는다 — 그 안은 색 전환도 돌지 않아 낡은 색이 남는다(U8 이어서가 찾음: 다크로 바꾼 뒤에도 라이트 글자색).
+    const closed = el.closest("details:not([open])");
+    if (closed && closed !== el && !el.closest("summary")) continue;
     const own = parse(cs.backgroundColor);
     const tag = el.tagName + "." + (el.getAttribute("class") || "").split(" ").slice(0, 2).join(".");
     if (own && own.a > 0.5 && lum(own.r, own.g, own.b) > 0.6) bright.push(tag + " bg=" + cs.backgroundColor);
@@ -178,5 +195,138 @@ export function contrastAudit(rootSelector: string): string {
     if (r < need) low.push(tag + " " + r.toFixed(2) + ":1 (need " + need + ") " + px + "px " + cs.color + " :: " + (el.textContent || "").trim().slice(0, 20));
   }
   return { checked, bright: [...new Set(bright)], low: [...new Set(low)] };
+})()`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BU2a · 요청 기록기 — "모습만 바꿨고 서버에 가는 요청은 한 바이트도 안 바뀌었다"를 재는 도구(스크리너 · 백테스트 · 관리 화면).
+//   단계마다 `{method, path+query, body(키 정렬 JSON)}` 를 모은다. 디바운스·중단된 요청의 순서에 흔들리지 않게
+//   ★단계 안에서는 정렬한 고유 집합★으로 묶고, 마지막 요청 뒤 `quietMs` 동안 새 요청이 없을 때 단계를 닫는다.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 키를 정렬한 JSON — 같은 값이면 같은 글자(객체 키 순서 차이를 지운다). */
+export function stableJson(v: unknown): string {
+  const norm = (x: unknown): unknown => {
+    if (Array.isArray(x)) return x.map(norm);
+    if (x && typeof x === "object") return Object.fromEntries(Object.keys(x as object).sort().map((k) => [k, norm((x as Record<string, unknown>)[k])]));
+    return x;
+  };
+  return JSON.stringify(norm(v));
+}
+
+export interface ApiRecorder {
+  /** 지금까지 모은 요청을 이 단계 이름으로 닫는다(조용해질 때까지 기다린 뒤). */
+  step(name: string): Promise<void>;
+  /** 단계별 정렬 고유 집합. */
+  steps: Record<string, string[]>;
+}
+
+export function recordApi(page: Page, pathPrefix: string | string[], quietMs = 1_500): ApiRecorder {
+  const prefixes = Array.isArray(pathPrefix) ? pathPrefix : [pathPrefix];
+  let pending: string[] = [];
+  let last = Date.now();
+  const steps: Record<string, string[]> = {};
+  page.on("request", (req) => {
+    const u = new URL(req.url());
+    // 화면은 런타임 프록시(`/api/backend/…`)를 거친다 — 앞부분을 떼고 API 경로로 맞춘다.
+    const p = u.pathname.replace(/^\/api\/backend(?=\/)/, "");
+    if (!prefixes.some((x) => p.startsWith(x))) return;
+    let body = "";
+    const raw = req.postData();
+    if (raw) { try { body = stableJson(JSON.parse(raw)); } catch { body = raw; } }
+    pending.push(`${req.method()} ${p}${u.search} ${body}`.trim());
+    last = Date.now();
+  });
+  return {
+    steps,
+    async step(name: string) {
+      // 첫 요청이 디바운스(최대 ~0.8초) 뒤에 나갈 수 있다 — 최소 quietMs 는 기다린다.
+      const started = Date.now();
+      while (Date.now() - Math.max(last, started) < quietMs) await page.waitForTimeout(200);
+      steps[name] = [...new Set(pending)].sort();
+      pending = [];
+    },
+  };
+}
+
+/**
+ * 카드 밖으로 삐져나간 칸·단추·분할 단추 (BV8). 셸이 넘친 부분을 잘라 숨기면 "가로 스크롤 없음" 검사로는 안 보인다
+ * (실측: 설정 390 에서 입력 칸 오른쪽 끝 442px · 테마 단추 357px > 카드 334px). `page.evaluate(cardsOverflow(".set .set-card"))`.
+ */
+export function cardsOverflow(cardSelector: string): string {
+  return `(() => {
+  const out = [];
+  for (const card of Array.from(document.querySelectorAll(${JSON.stringify(cardSelector)}))) {
+    const c = card.getBoundingClientRect();
+    for (const el of Array.from(card.querySelectorAll("input, button, .set-seg"))) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && (r.right > c.right + 0.5 || r.left < c.left - 0.5))
+        out.push((el.getAttribute("name") || el.className) + " " + Math.round(r.right) + ">" + Math.round(c.right));
+    }
+  }
+  return out;
+})()`;
+}
+
+/** 미니맵을 켜거나 끈다(CF5b — 켬/끔은 이 브라우저에 남아, 도구줄 단추를 그냥 누르면 반대가 될 수 있다). 눌린 상태가 다를 때만 누른다. */
+export async function minimapOn(page: Page, on: boolean): Promise<void> {
+  const b = page.locator('button[aria-label="미니맵"]');
+  if ((await b.getAttribute("aria-pressed")) !== String(on)) await b.click();
+  if (on) await page.locator(".pg-minimap").waitFor({ state: "visible" });
+  else await page.locator(".pg-minimap").waitFor({ state: "detached" });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 문체 감사 (ADR 005 · 2026-11-11) — 뿌리 아래 ★보이는 글자★가 개조식 + 합니다체인지
+// ═══════════════════════════════════════════════════════════════════
+// 화면 문체를 해요체에서 전문 용어 문체로 옮겼다(용어집 `docs/specs/2026-11-11-ui-terminology.md`). 소스는
+// `tests/test_frontend_voice.py`(래칫)가 보고, 이 감사는 ★실제로 그려진 글자★를 본다 — 소스에 없어도 서버가 준 글·조립된 문장이 화면에 나온다.
+// 예전에는 스펙마다 `BANNED…` 정규식과 em-dash·툴팁 검사를 따로 들고 있었다(14개 스펙). 한 곳으로 모은다.
+//
+//   haeyo  — 해요체 말끝이 든 글(했어요 · 이에요 · 주세요 · 됐죠 …). 판정은 래칫과 같은 규칙이다:
+//            "요" 앞 글자가 받침 없는 음절이고 모음이 ㅏㅐㅓㅔㅕㅖㅘㅙㅝㅞ 이면 말끝. 수요·주요·필요는 걸리지 않고 "개요"만 따로 뺀다.
+//   dash   — 보이는 em-dash/en-dash.
+//   banned — 풀어 쓴 영어 낱말·개발자 낱말(용어집 §6). ★통용 약어(PER·MDD·Z-Score …)는 금지가 아니다★.
+//   titles — `title` 툴팁 수(사유는 보이는 줄에 둔다).
+//
+// 서버가 준 글(`[data-server]`)·식별자(`code`·`[data-mono]`)·입력 칸은 세지 않는다 — 화면이 쓴 글이 아니다.
+// 반환값은 브라우저 안에서 도는 문자열이다(`contrastAudit` 과 같은 까닭).
+export interface VoiceResult { checked: number; haeyo: string[]; dash: string[]; banned: string[]; titles: number }
+
+export const VOICE_BANNED = "Overview|Valuation|Financials|Factors|Peers|Network|Football Field|Bull|Base|Bear|Comps|HOLD|BUY|SELL|Claude|ANTHROPIC_API_KEY|ModuleNotFoundError|mock|Mock|MOCK";
+
+export function voiceAudit(rootSelector: string, extraBanned = ""): string {
+  const banned = extraBanned ? `${VOICE_BANNED}|${extraBanned}` : VOICE_BANNED;
+  return `(() => {
+  const roots = Array.from(document.querySelectorAll(${JSON.stringify(rootSelector)}));
+  if (!roots.length) return { checked: 0, haeyo: ["NO " + ${JSON.stringify(rootSelector)}], dash: [], banned: [], titles: 0 };
+  const OPEN = new Set([0, 1, 4, 5, 6, 7, 9, 10, 14, 15]);
+  const isHaeyo = (s) => {
+    for (const m of s.matchAll(/([가-힣])요(?![가-힣])/g)) {
+      const code = m[1].charCodeAt(0) - 0xac00;
+      if (code % 28 === 0 && OPEN.has(Math.floor(code / 28) % 21) && m[0] !== "개요") return true;
+    }
+    return /(?:[가-힣]죠|군요)(?![가-힣])/.test(s);
+  };
+  const BANNED = new RegExp("\\\\b(" + ${JSON.stringify(banned)} + ")\\\\b");
+  const haeyo = [], dash = [], bannedHits = [];
+  let checked = 0, titles = 0;
+  for (const root of roots) {
+    const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walk.nextNode())) {
+      const el = n.parentElement; const s = (n.textContent || "").trim();
+      if (!s || !el || !el.getClientRects().length) continue;
+      if (getComputedStyle(el).visibility === "hidden") continue;
+      if (el.closest("[data-server], code, [data-mono], input, textarea, select, script, style")) continue;
+      checked++;
+      if (isHaeyo(s)) haeyo.push(s.slice(0, 60));
+      if (/[—–]/.test(s)) dash.push(s.slice(0, 60));
+      if (BANNED.test(s)) bannedHits.push(s.slice(0, 60));
+    }
+    titles += Array.from(root.querySelectorAll("[title]")).filter((e) => (e.getAttribute("title") || "").trim()).length
+      + Array.from(root.querySelectorAll("svg title")).filter((e) => (e.textContent || "").trim()).length;
+  }
+  return { checked, haeyo: [...new Set(haeyo)], dash: [...new Set(dash)], banned: [...new Set(bannedHits)], titles };
 })()`;
 }

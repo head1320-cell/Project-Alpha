@@ -3,7 +3,7 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.legacy_schemas import (
     EfficientFrontierRequest,
@@ -11,6 +11,7 @@ from src.api.legacy_schemas import (
     RankingRequest,
     RebalanceRequest,
 )
+from src.api.market_gate import require_market_download
 from src.data_loader import MarketDataLoader
 from src.models.portfolio_optimizer import (
     efficient_frontier,
@@ -63,7 +64,7 @@ def portfolio_rebalance(req: RebalanceRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(500, "처리 중 오류가 발생했습니다.")
 
-@router.post("/efficient-frontier")
+@router.post("/efficient-frontier", dependencies=[Depends(require_market_download)])
 def run_efficient_frontier(req: EfficientFrontierRequest):
     """Compute Markowitz efficient frontier via Monte Carlo."""
     try:
@@ -88,7 +89,7 @@ def run_efficient_frontier(req: EfficientFrontierRequest):
         logger.exception("요청 처리 실패")
         raise HTTPException(status_code=500, detail="처리 중 오류가 발생했습니다.")
 
-@router.post("/rank-assets")
+@router.post("/rank-assets", dependencies=[Depends(require_market_download)])
 def run_rank_assets(req: RankingRequest):
     """Rank assets by momentum, Sharpe, or inverse volatility."""
     try:

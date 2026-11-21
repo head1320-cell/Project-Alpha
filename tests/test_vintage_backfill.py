@@ -189,7 +189,7 @@ def test_a_transient_failure_leaves_no_mark(eng, outcome):
     stats = dh.backfill_vintages(engine=eng, client=_Client(default=outcome))
     assert stats["failed"] == 1, stats
     assert _probe_at(eng, TICKER, "2023") is None, "일시적 실패에 흔적을 남겼다"
-    assert dh.vintage_gap(eng) == [(TICKER, "2023", "11011")], "다시 시도하지 않는다"
+    assert dh.vintage_gap(eng) == [(TICKER, "2023", "11011")], "재시도하지 않는다"
 
 
 def test_the_three_outcomes_are_counted_separately(eng):
@@ -237,7 +237,7 @@ def test_a_missing_probe_column_fails_loudly(eng, monkeypatch):
     """붙은 줄 알고 진행하면 최악의 경우 **매 실행 전량 재조회**가 된다.
 
     ★이 테스트는 두 번 겨냥을 고쳤다★
-    ① 처음엔 컬럼을 지우기만 했는데 `ensure_history_table()` 의 `ALTER` 가
+    ① 처음엔 컬럼을 삭제만 했는데 `ensure_history_table()` 의 `ALTER` 가
        **다시 붙여 놓아** 통과하지 못했다 — 정상 경로는 스스로 치유된다.
     ② 그래서 마이그레이션을 no-op 으로 만들어 "삼켜져서 못 붙은" 상황을 흉내냈다.
        W 가 그 `ALTER` 를 `schema_add_columns.add_columns()` 로 옮기면서 확인이

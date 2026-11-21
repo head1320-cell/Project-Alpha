@@ -551,7 +551,7 @@ CATALOG: list[dict[str, Any]] = [
      "evaluation_frequency": "overnight",
      "params": {"days": 20}, "default_threshold": 0.0, "default_direction": "above",
      "unit": "pct", "desc": "최근 N일 (당일시가/전일종가−1) 평균(%). 종가진입→익일시가청산 기대값 프록시. "
-                            "일간 OHLC 기반이라 장중 경로는 미반영(정직한 근사).",
+                            "일간 OHLC 기반이라 장중 경로는 미반영(근사).",
      "provenance": "generic", "existing": False},
     # ── regime ──
     {"id": "defense_first", "label": "Defense First (역발상)", "family": "regime",

@@ -13,6 +13,9 @@
 ★A3 에서 이미 물렸다★ 사전등록의 주 통계로 쓴 `summary.sharpe_ratio` 가
 `round(_, 2)` 라 비용 5→100bps 에서 0.42 로 고정이었고, "비용 3수준 전부" 라는
 사전등록 절이 무의미해졌다. 그래서 여기서는 **전정밀도**를 낸다.
+(정정 2026-11-19 · C1: 그 고정의 첫째 까닭은 반올림이 아니라 요약 Sharpe 가 비용 전 일별 수익에서 계산된
+것이다 — 전정밀도도 비용과 무관하다(관측). 비용 후 값은 요약의 `sharpe_ratio_after_cost` 가 나란히 싣는다 ·
+`tests/test_walk_forward_cost_basis.py`.)
 """
 
 from __future__ import annotations
@@ -227,7 +230,7 @@ def test_every_unknown_carries_a_reason():
 # compute_metrics 와의 통합 — ★두 벌이 되지 않게★
 # ══════════════════════════════════════════════════════════════════════════
 def test_compute_metrics_now_carries_the_ratios():
-    """호출부가 바로 다음 줄에서 다시 계산할 이유가 없어야 한다."""
+    """호출부가 바로 다음 줄에서 재계산할 이유가 없어야 한다."""
     r = _series(n=500, seed=9)
     m = compute_metrics(r, _equity(r), risk_free=0.035)
     for k in ("sharpe_ratio", "sortino_ratio", "calmar_ratio",

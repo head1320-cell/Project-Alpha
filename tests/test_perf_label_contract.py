@@ -45,32 +45,24 @@ METRIC_TOKENS = (
 )
 
 #: ★사유 없는 면제는 없다★ 값이 빈 문자열이면 아래 테스트가 실패한다.
+#:
+#: ★E 에서 하나가 빠졌다(8 → 7)★ — `PolicyBacktest.tsx` 는 면제가 아니라 **고쳤다**.
+#: 그 자리의 `as-bt-badge ok` 가 `"OOS · look-ahead 없음"` 을 응답 근거 없이 상수로
+#: 단정하고 있었고(E), 이제 `PerfLabel` 과 `lookahead_evidence` 배지를 함께 그린다.
+#: `.mock`/`.real` 은 여전히 한 글자도 안 건드렸다(`allocation-stages2.spec.ts`).
+#:
+#: ★남은 것은 줄이려고 붙이지 않는다★ — 특히 `CompanyCockpit` 에 백테스트 라벨을
+#: 달면 **없는 시뮬레이션을 있다고** 말하게 된다. 목록의 길이는 목표가 아니다.
 ALLOWED: dict[str, str] = {
-    "src/widgets/backtester/BacktestResults.tsx":
-        "기존 `brun-badge`(PIT 시점정합) 배지를 유지한다 — E2E `backtest.spec.ts` 가 "
-        "`.brun-*` 를 다수 단정하므로 이 커밋에서 건드리지 않는다(ADR 001).",
-    "src/widgets/backtester/TerminalBacktester.tsx":
-        "기존 `tbt-prov`(실데이터/합성) 배지를 유지한다 — 데이터 축은 이미 말하고 있다.",
-    "src/widgets/allocation/PolicyBacktest.tsx":
-        "기존 `as-bt-badge`(데이터+OOS) 배지를 유지한다 — `allocation-stages2.spec.ts:361` "
-        "이 클래스를 붙잡고 있다.",
-    "src/widgets/landing/HeroDeckLive.tsx":
-        "랜딩 데모다. 숫자 옆에 '예시 수치' 캡션이 이미 붙어 있어 라벨보다 강하게 "
-        "말하고 있다 — 같은 자리에 두 문장이 겹치면 오히려 약해진다.",
-    "src/widgets/realism/RealismKPIs.tsx":
-        "위젯의 요점 자체가 '백테스트 대 현실' 비교이고, 카드마다 "
-        "'백테스트 과대평가 위험' 같은 자체 판정 문구를 낸다.",
-    "src/widgets/realism/ComparativeEquityChart.tsx":
-        "같은 대시보드(`RealismDashboard`)가 헤더에 `Mock Data / Live Backend` 를 "
-        "상시 표시한다(데이터 축) — ★단, 종류 축은 여전히 화면 제목에만 있다★. "
-        "`RealismKPIs` 와 같은 판단을 적용해 둘을 함께 다룬다(로드맵에 남은 갭으로 적음).",
     "src/widgets/company/CompanyCockpit.tsx":
         "★전략 성과가 아니다★ — 한 종목의 가격 이력에서 잰 위험 지표"
         "(VaR·ES·변동성·Sharpe·MDD)다. 여기에 '백테스트' 라벨을 붙이면 "
         "없는 시뮬레이션을 있다고 말하는 셈이다.",
-    "src/widgets/allocation/AllocationProvider.tsx":
-        "★화면이 아니다★ — 상태 제공자이고, 잡힌 `sharpe` 는 스터디 저장 시 만드는 "
-        "저널 초안 **문자열**이다. 성과 패널을 그리지 않는다.",
+    # (BL4) `src/widgets/allocation/AllocationProvider.tsx` — 마법사와 함께 지웠다. 허용 사유도 함께 사라진다.
+    # (BU8a) `src/widgets/landing/HeroDeckLive.tsx` — 예시 수치 덱을 지웠다(첫 화면 히어로는 서버가 지금 내는 답 + 실제 화면).
+    # 성과 그림 문법(2026-11-09) — 지표 묶음·표 쌍둥이 부품은 `shared/ui/perf/` 로 올라갔다(둘째 화면이 붙으면서 FSD 규칙이 요구).
+    # 공용 부품은 라벨을 정의하지 그리지 않는다 — 이 검사는 화면(`src/widgets`)만 본다. 그 부품을 그리는 화면(캔버스 패널 `PerfPanel` ·
+    # 결과 화면 `BacktestResults`)이 각각 `PerfLabel` 을 쓴다.
 }
 
 
@@ -151,7 +143,7 @@ def test_every_metric_widget_labels_what_the_numbers_are():
     missing = sorted(k for k, labeled in found.items() if not labeled and k not in ALLOWED)
     assert not missing, (
         "성과 지표를 그리면서 `PerfLabel` 을 쓰지 않는 위젯입니다. "
-        "붙이거나, ALLOWED 에 **사유와 함께** 등록하세요:\n  " + "\n  ".join(missing))
+        "붙이거나, ALLOWED 에 **사유와 함께** 등록하십시오:\n  " + "\n  ".join(missing))
 
 
 def test_the_allowlist_is_not_stale():
@@ -160,11 +152,11 @@ def test_the_allowlist_is_not_stale():
     ghosts = sorted(k for k in ALLOWED if k not in found)
     assert not ghosts, (
         "허용 목록에 있는데 더 이상 지표를 그리지 않는(또는 사라진) 파일입니다 — "
-        "ALLOWED 에서 지우세요:\n  " + "\n  ".join(ghosts))
+        "ALLOWED 에서 지우십시오:\n  " + "\n  ".join(ghosts))
 
     now_labeled = sorted(k for k in ALLOWED if found.get(k))
     assert not now_labeled, (
-        "이미 `PerfLabel` 을 쓰는데 허용 목록에 남아 있습니다 — 지우세요:\n  "
+        "이미 `PerfLabel` 을 쓰는데 허용 목록에 남아 있습니다 — 지우십시오:\n  "
         + "\n  ".join(now_labeled))
 
 
@@ -213,9 +205,11 @@ def test_strings_are_deliberately_not_stripped():
 
 
 def test_the_scan_is_not_vacuous():
+    # 하한 10 → 8 (2026-11-09): 성과 그림 부품(지표 묶음·표 쌍둥이)이 `shared/ui/perf` 로 올라가고 캔버스 세 렌더러가 지표를 직접
+    # 그리지 않게 되어 화면 쪽 수가 줄었다 — 검출기가 아니라 자리가 옮겨진 것(아래 실측 8: 백테스트 결과·비교·칵핏·현실성 …).
     """★공허 배제★ 검출 대상이 0개면 이 파일 전체가 아무 말도 하지 않는다."""
     found = _scan()
-    assert len(found) >= 10, f"지표를 그리는 위젯이 {len(found)}개뿐입니다 — 검출기를 의심하세요"
+    assert len(found) >= 8, f"지표를 그리는 위젯이 {len(found)}개뿐입니다 — 검출기를 의심하십시오"
     assert sum(found.values()) >= 5, "PerfLabel 을 쓰는 위젯이 너무 적습니다"
 
 

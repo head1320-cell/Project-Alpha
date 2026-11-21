@@ -88,7 +88,7 @@ def test_contradictory_views_are_reported_not_swallowed():
     assert out["available"] is True, "풀려고는 했다"
     assert out["feasible"] is False, "불가능한 뷰를 만족했다고 답했다"
     assert out["violations"], "실현 불가인데 어느 제약인지 말하지 않는다"
-    assert out["note"] and "배분하지 마세요" in out["note"]
+    assert out["note"] and "배분하지 마십시오" in out["note"]
 
 
 def test_a_collapsed_posterior_says_the_views_are_too_strong():

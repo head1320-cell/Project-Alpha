@@ -1,0 +1,510 @@
+"""AAS 그래프 — 신호·후보 노드 (BK W2) · ★스크리너·알파·팩터·슬리브를 다시 쓰지 않는다★
+==============================================================================
+스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W2
+
+마법사의 CONSTRUCT·ALPHA LAB·OPTIMIZE 도구와 스크리너를 노드로 옮긴다. 산수는 같은 함수다 —
+`screener_routes._run_advanced_core`(스크리너 3-레이어·`ValuationScreener` 는 손대지 않는다) ·
+`allocation_routes.factor_scores`(`/factor-portfolio` 본문에서 꺼냄) · `alpha_lab.score_alpha` ·
+`_factor_weights`·`_raw_weights_for_model` · `neutralize_portfolio` · `combine_sleeves`.
+
+## ★기존 도구의 조용한 폴백을 노드는 하지 않는다★
+- `_factor_weights` 는 시세가 없으면 균등 비중으로, `weights_for_model` 은 최적화가 실패하면 역변동성으로
+  **말없이** 바꾼다. 노드는 수익률 기반 비중에 그래프의 수익률을 요구하고, 최적화가 안 풀리면 **실패 + 사유**.
+
+## 계보
+- 스크리너·팩터 점수·알파(기준일 없음)는 **오늘의 값으로 고른 것**이다 — `pit: forward_only`. 이 종목들로
+  과거를 돌리면 미래를 보고 고른 셈이라, 하류의 정책 백테스트가 거절한다(BK0 문지기).
+- 알파에 기준일을 주면 공시 지연을 둔 근사 시점 정합이라 `pit: unknown`(확인되지 않았다).
+- 재무·팩터 스토어는 개발(mock) 모드에서 합성일 수 있어 `practice` 를 넘치게 단다(운영에서는 붙지 않는다).
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Literal
+
+import numpy as np
+from fastapi import HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.api import allocation_routes as _ar
+from src.api import screener_routes as _sr
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _pct, _t
+from src.api.allocation_graph_nodes import _subset, _ui, weights_value
+from src.data.mock_gate import mock_allowed
+from src.engine import portfolio_graph as pg
+
+logger = logging.getLogger(__name__)
+
+P = pg.Port
+_FORBID = ConfigDict(extra="forbid")
+
+_TODAY = "오늘 기준 값으로 선별했습니다 — 이 종목으로 과거를 백테스트하면 미래 정보로 선별한 것(룩어헤드)이 되므로 과거 검증은 차단합니다."
+_DEV = "개발 모드라 재무·시세 값이 합성일 수 있습니다 — 실제 종목 선택을 말해 주지 않습니다."
+
+
+def _plain_items(items: list[dict], keys: tuple[str, ...]) -> list[dict]:
+    return [{k: it.get(k) for k in keys if k in it} for it in items]
+
+
+# ── 스크리너 ─────────────────────────────────────────────────────────────────
+
+_UNIVERSE_LABEL = {"kospi50": "코스피 50", "kospi200": "코스피 200", "kosdaq150": "코스닥 150",
+                   "etf": "ETF", "mapped": "매핑 종목"}
+
+
+def _presets_filter() -> list[dict]:
+    """기본 조건 — ★과거 시점에서도 쓸 수 있는 항목만★(2026-11-13 · 감사 §12). 예전의 `roe`·`dividend_yield`·`debt_to_equity` 는
+    저장소가 붙이는 오늘의 팩터라 '과거 시점'을 넣으면 거절된다. 같은 지표의 기본 필드로 바꿨다(문턱의 뜻은 같다 —
+    부채자본비율 1배 = 부채비율 100%). `tests/test_pit_asof_block.py` 가 기본 조건마다 과거 시점에 쓸 수 있는지 본다."""
+    c = lambda f, op, v: {"field": f, "op": op, "value": v}  # noqa: E731
+    return [
+        {"label": "조건 없음", "value": {"logic": "AND", "conditions": [], "groups": []}},
+        {"label": "싼 종목", "value": {"logic": "AND", "conditions": [c("per", "lt", 10), c("pbr", "lt", 1)], "groups": []}},
+        {"label": "고ROE", "value": {"logic": "AND", "conditions": [c("roe_pct", "gt", 10)], "groups": []}},
+        {"label": "배당 주는", "value": {"logic": "AND", "conditions": [c("dividend_yield_pct", "gt", 3)], "groups": []}},
+        {"label": "빚이 적은", "value": {"logic": "AND", "conditions": [c("debt_ratio_pct", "lt", 100)], "groups": []}},
+    ]
+
+
+class ScreenerParams(BaseModel):
+    model_config = _FORBID
+    universe: Literal[tuple(_UNIVERSE_LABEL)] = Field("kospi50", json_schema_extra={"x-ui": _ui(
+        "후보 범위", question="종목 유니버스", widget="cards", options=_UNIVERSE_LABEL,
+        help="앞에 ‘유니버스’를 연결하면 해당 종목 내에서 선별합니다.")})
+    filter_ast: _sr.FilterGroupModel = Field(
+        default_factory=lambda: _sr.FilterGroupModel(logic="AND", conditions=[], groups=[]),
+        json_schema_extra={"x-ui": _ui("조건", question="스크리닝 조건", widget="filter",
+                                       presets=_presets_filter(),
+                                       help="조건은 서버가 필드 목록으로 검사합니다 — 정의되지 않은 필드가 있으면 계산하지 않습니다.")})
+    top_n: int = Field(10, ge=3, le=30, json_schema_extra={"x-ui": _ui(
+        "선별 종목 수", question="전달 종목 수", unit="개",
+        presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
+    sort_by: str = Field("composite_score", max_length=60, json_schema_extra={"x-ui": _ui(
+        "정렬 기준", "advanced", help="필드 id 예: composite_score · roe · per")})
+    ascending: bool = Field(False, json_schema_extra={"x-ui": _ui("오름차순", "advanced")})
+    liquidity_floor: Literal["off", "relaxed", "standard", "institutional"] = Field(
+        "standard", json_schema_extra={"x-ui": _ui("유동성 문턱", "advanced", options={
+            "off": "없음", "relaxed": "느슨하게", "standard": "보통", "institutional": "기관 수준"})})
+    as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
+        # ★주장은 증거보다 강할 수 없다(감사 §11~§12 · 2026-11-13)★ — 예전 문구 "해당일에 알 수 있던 값으로만 선별합니다"는 사실이 아니었다
+        # (조건 필드 대부분이 오늘 값으로 붙었다). 이제 그 시점 값이 없는 조건·정렬 항목은 서버가 거절하므로 그렇게 적는다.
+        "과거 시점", "advanced", help="입력하면 해당일의 종가와 그 시점 공시의 재무로 평가합니다(공시에 없는 재무 항목은 미상). "
+                                    "조건·정렬에는 그 시점 값이 있는 항목(재무 8개 · 가치평가 점수)만 쓸 수 있습니다 — "
+                                    "현재 값으로만 계산되는 항목(팩터·모멘텀 등)을 쓰면 계산하지 않고 사유를 알립니다. "
+                                    "유동성 문턱은 적용하지 않습니다. 비우면 현재 값입니다.")})
+
+
+def _screener_pit(cand: dict | None, p: ScreenerParams) -> pg.NodeOutput:
+    """시점 고정 스크리너(BL3 W1) — `/screener/run-pit` 라우트 함수 그대로(기준일 검사·룩어헤드 차단이 그 안에 있다)."""
+    try:
+        out = _sr.screener_run_pit(_sr.PITRunRequest(
+            universe=p.universe, custom_tickers=list(cand["tickers"]) if cand else None, filter_ast=p.filter_ast,
+            as_of_date=p.as_of, sort_by=p.sort_by, limit=max(p.top_n, 50)))
+    except HTTPException as e:
+        raise pg.NodeFailure(f"과거 시점으로 거르지 못했습니다 — {e.detail}") from e
+    picked = (out.get("items") or [])[: p.top_n]
+    tickers = [it["stock_code"] for it in picked if it.get("stock_code")]
+    if len(tickers) < 2:
+        raise pg.NodeFailure(f"{p.as_of}에 조건에 맞는 종목이 {len(tickers)}개뿐입니다 — 조건을 넓히거나 날짜를 변경하십시오.")
+    practice = mock_allowed()
+    view = {"tickers": tickers, "labels": _ar._labels(tickers),
+            "items": _plain_items(picked, ("stock_code", "corp_name", "composite_score", "per", "pbr", "roe",
+                                           "dividend_yield", "market_cap")),
+            "total_evaluated": out.get("total_evaluated"), "total_passed": out.get("total_passed"),
+            "universe": "직접 연결한 종목" if cand else _UNIVERSE_LABEL.get(p.universe, p.universe),
+            "data_source": {}, "liquidity_gate": None, "as_of": p.as_of}
+    asof = out.get("asof") or {}
+    # 과거 시점에는 유동성 게이트를 적용하지 않는다 — 서버가 말한 그대로 싣는다(예전엔 `None` 이라 적용 여부를 알 수 없었다).
+    view["liquidity_gate"] = asof.get("liquidity_gate")
+    # 그 시점 종가가 없어 뺀 종목·재무가 미상인 종목·공시에 없어 미상으로 둔 칸 — ★있을 때만★ 싣는다(없으면 view 모양은 그대로).
+    if ((asof.get("excluded") or {}).get("count") or (asof.get("financials_unavailable") or {}).get("count")
+            or (asof.get("financials_partial") or {}).get("count")):
+        view["asof"] = asof
+    return pg.NodeOutput(
+        values={"universe": {"tickers": tickers, "weights": None, "benchmark": "KOSPI"}}, view=view,
+        tags={"pit": "pit", "practice": practice, "sources": [f"screener_pit:{p.as_of}"]})
+
+
+def _screener(inputs: dict, p: ScreenerParams) -> pg.NodeOutput:
+    cand = inputs.get("universe")
+    if p.as_of:
+        return _screener_pit(cand, p)
+    req = _sr.AdvancedRunRequest(
+        universe=p.universe, custom_tickers=list(cand["tickers"]) if cand else None,
+        filter_ast=p.filter_ast, sort_by=p.sort_by, ascending=p.ascending,
+        limit=max(p.top_n, 50), liquidity_floor=p.liquidity_floor)
+    try:
+        out = _sr._run_advanced_core(req)
+    except HTTPException as e:
+        raise pg.NodeFailure(f"조건을 확인하십시오 — {e.detail}") from e
+    items = out.get("items") or []
+    picked = items[: p.top_n]
+    tickers = [it["stock_code"] for it in picked if it.get("stock_code")]
+    if len(tickers) < 2:
+        raise pg.NodeFailure(f"조건에 맞는 종목이 {len(tickers)}개뿐입니다 — 조건을 넓히거나 후보 범위를 넓히십시오.")
+    ds = out.get("data_source") or {}
+    practice = not bool(ds.get("fully_real"))
+    view = {"tickers": tickers, "labels": _ar._labels(tickers),
+            "items": _plain_items(picked, ("stock_code", "corp_name", "composite_score", "per", "pbr", "roe",
+                                           "dividend_yield", "market_cap")),
+            "total_evaluated": out.get("total_evaluated"), "total_passed": out.get("total_passed"),
+            "universe": "직접 연결한 종목" if cand else _UNIVERSE_LABEL.get(p.universe, p.universe),
+            "data_source": ds, "liquidity_gate": out.get("liquidity_gate")}
+    return pg.NodeOutput(
+        values={"universe": {"tickers": tickers, "weights": None, "benchmark": "KOSPI"}}, view=view,
+        provenance={"data_source": ds},
+        tags={"pit": "forward_only", "practice": practice, "sources": ["screener:" + ("real" if not practice else "mock")]})
+
+
+def _explain_screener(view: dict, prov: dict, params: Any) -> dict:
+    n = len(view.get("tickers") or [])
+    passed, evaluated = view.get("total_passed"), view.get("total_evaluated")
+    facts = [f"{view.get('universe')}에서 {evaluated}종목을 보고 {passed}종목이 조건을 통과했습니다."]
+    names = [view["labels"].get(c, c) for c in (view.get("tickers") or [])[:3]]
+    if names:
+        facts.append("앞쪽 종목: " + ", ".join(names) + ".")
+    asof = view.get("asof") or {}
+    n_excluded = (asof.get("excluded") or {}).get("count") or 0
+    n_fin_unknown = (asof.get("financials_unavailable") or {}).get("count") or 0
+    if n_excluded:
+        facts.append(f"과거 시점 종가가 적재되어 있지 않아 {n_excluded}종목을 평가에서 제외했습니다.")
+    if n_fin_unknown:
+        facts.append(f"{n_fin_unknown}종목은 해당 시점의 공시 재무를 읽지 못해 재무 지표가 미상입니다.")
+    n_partial = (asof.get("financials_partial") or {}).get("count") or 0
+    if n_partial:
+        facts.append(f"{n_partial}종목은 해당 시점 공시에 없는 재무 항목이 미상입니다(현재 값을 대신 쓰지 않습니다).")
+    gate = view.get("liquidity_gate") or {}
+    if gate.get("applied") is False and gate.get("reason") == "asof_not_supported":
+        facts.append("과거 시점에는 유동성 문턱을 적용하지 않았습니다 — 오늘의 거래대금·거래 상태로 과거를 거르지 않습니다.")
+    trust = [_t(CONFIRMED, "조건은 서버의 필드 목록으로 검사했습니다."), _t(UNKNOWN, _TODAY)]
+    if not (view.get("data_source") or {}).get("fully_real"):
+        trust.append(_t(UNKNOWN, "재무나 시세 중 하나 이상이 합성(mock) 데이터입니다 — 실제 선택을 말해 주지 않습니다."))
+    return {"title": f"조건을 충족한 종목 {n}개를 선정했습니다",
+            "headline": {"label": "넘긴 종목", "value": n, "unit": "개", "text": f"{n}개"},
+            "facts": facts, "trust": trust,
+            "unmeasured": ["이 조건의 과거 선별 성과", "선별 이후 성과"]}
+
+
+# ── 팩터 점수 ────────────────────────────────────────────────────────────────
+
+def _factor_options() -> dict[str, str]:
+    from src.engine.filter_ast import FIELD_BY_ID
+    return {fid: getattr(meta, "label", fid) for fid, meta in FIELD_BY_ID.items()}
+
+
+FactorItem = _subset("FactorItem", _ar.FactorSpec, ("id", "weight", "direction"), ui={
+    "id": _ui("팩터", options=_factor_options()),
+    "weight": _ui("가중치", help="상대 비중입니다(합이 1일 필요 없습니다)."),
+    "direction": _ui("방향", options={"0": "자동", "1": "높을수록 좋음", "-1": "낮을수록 좋음"}),
+})
+
+
+class FactorScoreParams(BaseModel):
+    model_config = _FORBID
+    factors: list[FactorItem] = Field(
+        default_factory=lambda: [FactorItem(id="per"), FactorItem(id="roe")], min_length=1, max_length=12,
+        json_schema_extra={"x-ui": _ui("팩터", question="점수 산출 팩터",
+                                       help="방향 ‘자동’은 필드에 정의된 선호 방향을 따릅니다.")})
+    sample_size: int = Field(400, ge=50, le=1500, json_schema_extra={"x-ui": _ui(
+        "표본 크기", "advanced", help="종목을 연결하지 않으면 유니버스 표본에서 점수를 산출합니다.")})
+
+
+def _factor_scores(inputs: dict, p: FactorScoreParams) -> pg.NodeOutput:
+    cand = inputs.get("universe")
+    rows = _ar._rows_for_tickers(cand["tickers"]) if cand else _ar._factor_sample_rows(p.sample_size)
+    rows = [r for r in rows if r.get("stock_code")]
+    specs = [_ar.FactorSpec(**f.model_dump()) for f in p.factors]
+    ranked, meta, cov_w = _ar.factor_scores(rows, specs)
+    if len(ranked) < 2:
+        raise pg.NodeFailure("선택한 팩터로 점수를 산출할 수 있는 종목이 부족합니다(팩터 값 결측) — 팩터나 후보를 변경하십시오.")
+    scores = {c: round(s, 3) for c, s in ranked}
+    view = {"scores": scores, "labels": _ar._labels([c for c, _ in ranked[:30]]), "factors": meta,
+            "coverage": {c: round(cov_w.get(c, 0.0) * 100, 0) for c, _ in ranked[:30]},
+            "candidates": len(rows), "source": "tickers" if cand else "sample"}
+    return pg.NodeOutput(values={"scores": {"scores": scores, "kind": "factor"}}, view=view,
+                         tags={"pit": "forward_only", "practice": mock_allowed(), "sources": ["factor_scores"]})
+
+
+def _explain_factor_scores(view: dict, prov: dict, params: Any) -> dict:
+    scores = view.get("scores") or {}
+    top = next(iter(scores), None)
+    meta = view.get("factors") or []
+    miss = [m["label"] for m in meta if not m.get("covered")]
+    facts = [f"후보 {view.get('candidates')}종목 중 {len(scores)}종목의 점수를 산출했습니다."]
+    if top:
+        facts.append(f"1위는 {view['labels'].get(top, top)}입니다.")
+    trust = [_t(CONFIRMED, "팩터마다 표준점수를 방향에 맞춰 더했습니다(±3으로 자름).")]
+    if miss:
+        trust.append(_t(UNKNOWN, f"값이 모자란 팩터는 점수에 넣지 않았습니다: {', '.join(miss)}."))
+    if view.get("source") == "sample":
+        trust.append(_t(ASSUMED, "유니버스 표본에서 선별했습니다 — 표본 순서가 고정돼 있지 않아 재실행 시 후보가 달라질 수 있습니다."))
+    trust.append(_t(UNKNOWN, _TODAY))
+    if mock_allowed():
+        trust.append(_t(UNKNOWN, _DEV))
+    return {"title": f"{len(scores)}종목의 팩터 점수를 산출했습니다", "facts": facts, "trust": trust,
+            "unmeasured": ["이 점수의 향후 수익률 예측력", "팩터끼리 겹치는 정도"]}
+
+
+# ── 알파 점수 ────────────────────────────────────────────────────────────────
+
+class AlphaParams(BaseModel):
+    model_config = _FORBID
+    expr: str = Field("zscore(mom_6m) - zscore(vol_60d)", min_length=1, max_length=400, json_schema_extra={
+        "x-ui": _ui("알파 식", question="점수 산출 식", presets=[
+            {"label": "추세 − 변동성", "value": "zscore(mom_6m) - zscore(vol_60d)"},
+            {"label": "12-1 모멘텀", "value": "zscore(mom_12_1)"},
+            {"label": "저평가·고수익성", "value": "zscore(earnings_yield) + zscore(roe)"},
+            {"label": "단기 반전", "value": "zscore(reversal_5d)"}],
+            help="알파 실험실과 같은 식입니다. 필드: mom_6m · vol_60d · roe · earnings_yield …")})
+    as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
+        "기준일", "advanced", help="비우면 오늘입니다. 과거 날짜를 입력하면 해당일까지의 값으로 계산합니다.")})
+    alpha_id: str | None = Field(None, max_length=40, json_schema_extra={"x-ui": _ui(
+        "등록된 알파", question="등록 알파 사용", widget="pick", source="alphas",
+        help="선택하면 해당 알파의 식을 사용합니다(위 식 입력란보다 우선합니다). 알파 서랍에서 등록합니다.")})
+
+
+def registry_expr(alpha_id: str) -> tuple[str, dict]:
+    """레지스트리 알파 → `(식, 출처)`. ★없는 id 를 조용히 넘기지 않는다★ (BL2b)."""
+    from src.data.alpha_registry import get_alpha
+    row = get_alpha(alpha_id)
+    if not row or not row.get("expr"):
+        raise pg.NodeFailure(f"등록된 알파 {alpha_id} 을(를) 찾지 못했습니다 — 알파 서랍에서 확인하거나 비워 두십시오.")
+    return str(row["expr"]), {"alpha_id": alpha_id, "name": row.get("name"), "version": row.get("version")}
+
+
+def _alpha_score(inputs: dict, p: AlphaParams) -> pg.NodeOutput:
+    from src.engine import alpha_lab
+    tickers = list(inputs["universe"]["tickers"])
+    expr, source = (registry_expr(p.alpha_id) if p.alpha_id else (p.expr, None))
+    out = alpha_lab.score_alpha(expr, tickers, as_of=p.as_of)
+    if not out.get("available"):
+        raise pg.NodeFailure(f"알파 점수 산출 실패 — {out.get('reason')}")
+    ranked = sorted(out["scores"].items(), key=lambda kv: kv[1], reverse=True)
+    scores = {c: round(float(s), 4) for c, s in ranked}
+    view = {"scores": scores, "labels": _ar._labels([c for c, _ in ranked[:30]]), "expr": out["expr"],
+            "as_of_requested": out.get("as_of_requested"), "as_of_effective": out.get("as_of_effective"),
+            "coverage": out.get("coverage"), "n_universe": out.get("n_universe"), "expr_source": source}
+    return pg.NodeOutput(values={"scores": {"scores": scores, "kind": "alpha", "as_of": out.get("as_of_effective")}},
+                         view=view, provenance={"as_of_effective": out.get("as_of_effective")},
+                         tags={"pit": "unknown" if p.as_of else "forward_only", "practice": mock_allowed(),
+                               "sources": ["alpha_lab"]})
+
+
+def _explain_alpha(view: dict, prov: dict, params: Any) -> dict:
+    n = len(view.get("scores") or {})
+    trust = [_t(CONFIRMED, f"{view.get('as_of_effective')}까지의 값으로 계산했습니다.")]
+    if getattr(params, "as_of", None):
+        trust.append(_t(UNKNOWN, "재무 값은 공시 지연을 둔 근사라 그날 실제로 알 수 있었는지는 확인하지 않았습니다."))
+    else:
+        trust.append(_t(UNKNOWN, _TODAY))
+    if mock_allowed():
+        trust.append(_t(UNKNOWN, _DEV))
+    src = view.get("expr_source")
+    return {"title": f"{n}종목의 알파 점수를 산출했습니다",
+            "facts": [f"식: {view.get('expr')}",
+                      *([f"등록된 알파 ‘{src.get('name')}’ v{src.get('version')}의 식입니다."] if src else []), f"{view.get('n_universe')}종목 중 {view.get('coverage')}종목이 유한한 점수를 가졌습니다."],
+            "trust": trust, "unmeasured": ["이 알파의 예측력(IC) — 알파 실험실에서 별도로 측정합니다", "거래 비용"]}
+
+
+# ── 점수로 비중 ──────────────────────────────────────────────────────────────
+
+_WEIGHTING = {"equal": "동일 가중", "factor_tilt": "점수 비례 틸트", "inverse_vol": "역변동성 가중",
+              "risk_parity": "리스크 패리티", "min_var": "최소분산", "hrp": "계층적 리스크 패리티(HRP)"}
+_RETURN_BASED = {"inverse_vol", "risk_parity", "min_var", "hrp"}
+
+
+class ScoresToWeightsParams(BaseModel):
+    model_config = _FORBID
+    top_k: int = Field(10, ge=2, le=30, json_schema_extra={"x-ui": _ui(
+        "편입 종목 수", question="편입 종목 수(상위)", unit="개",
+        presets=[{"label": "5개", "value": 5}, {"label": "10개", "value": 10}, {"label": "20개", "value": 20}])})
+    weighting: Literal[tuple(_WEIGHTING)] = Field("equal", json_schema_extra={"x-ui": _ui(
+        "배분 방식", question="비중 배분 방식", widget="cards", options=_WEIGHTING,
+        help="변동성을 쓰는 방식은 ‘수익률 데이터’ 연결이 필요합니다.")})
+
+
+def _scores_to_weights(inputs: dict, p: ScoresToWeightsParams) -> pg.NodeOutput:
+    from src.engine.allocation_studio import _cov, _inverse_vol_w, _raw_weights_for_model
+    score_map = inputs["scores"]["scores"]
+    ranked = sorted(score_map.items(), key=lambda kv: kv[1], reverse=True)[: p.top_k]
+    codes = [c for c, _ in ranked]
+    r = inputs.get("returns")
+    sigma = None
+    observed: dict = {}                        # CF3 — 관측만(공분산을 왜 못 보냈나 · 비중 0 이라 뺀 종목)
+    if p.weighting in _RETURN_BASED:
+        if r is None:
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 방식은 변동성을 사용합니다 — ‘수익률 데이터’를 연결하십시오 "
+                                 "(균등 비중으로 임의 대체하지 않습니다).")
+        missing = [c for c in codes if c not in r["returns"].columns]
+        if missing:
+            raise pg.NodeFailure(f"수익률에 없는 종목이 있습니다: {', '.join(missing)} — 같은 종목의 수익률을 연결하십시오.")
+        R = r["returns"][codes].values
+        S = _cov(R) * 252.0
+        w = _inverse_vol_w(R) if p.weighting == "inverse_vol" else _raw_weights_for_model(p.weighting, R, None, S)
+        if w is None or not np.all(np.isfinite(w)):
+            raise pg.NodeFailure(f"‘{_WEIGHTING[p.weighting]}’ 계산의 해를 구하지 못했습니다 — 역변동성으로 임의 대체하지 않습니다.")
+        w = np.asarray(w, dtype=float)
+        sigma = S
+    else:
+        pct = _ar._factor_weights(codes, dict(ranked), p.weighting, 252)
+        # `/factor-portfolio` 처럼 비중이 0 으로 반올림된 종목은 담지 않는다(틸트의 꼴찌).
+        zero = [c for c in codes if pct.get(c, 0.0) <= 0]
+        codes = [c for c in codes if pct.get(c, 0.0) > 0]
+        w = np.array([pct[c] / 100.0 for c in codes], dtype=float)
+        if zero:
+            observed["dropped_zero"] = zero
+        absent = [c for c in codes if r is not None and c not in r["returns"].columns]
+        if r is not None and not absent:
+            sigma = _cov(r["returns"][codes].values) * 252.0
+        else:
+            observed["sigma_missing"] = {"reason": "no_returns" if r is None else "codes_missing", "codes": absent}
+    w = w / w.sum()
+    view = {"weights": {c: round(float(x) * 100, 2) for c, x in zip(codes, w)}, "labels": _ar._labels(codes),
+            "weighting": p.weighting, "scores": {c: s for c, s in ranked if c in codes}, "has_sigma": sigma is not None, **observed}
+    return pg.NodeOutput(values={"weights": weights_value(codes, w, sigma_annual=sigma,
+                                                          sigma_source="표본(수익률 노드)" if sigma is not None else None)},
+                         view=view)
+
+
+def _explain_scores_to_weights(view: dict, prov: dict, params: Any) -> dict:
+    w = view.get("weights") or {}
+    top = max(w, key=lambda k: w[k]) if w else None
+    trust = [_t(CONFIRMED, f"점수 상위 {len(w)}종목을 ‘{_WEIGHTING.get(view.get('weighting'), view.get('weighting'))}’ 방식으로 배분했습니다.")]
+    if not view.get("has_sigma"):
+        miss = view.get("sigma_missing") or {}
+        if miss.get("reason") == "codes_missing":
+            trust.append(_t(UNKNOWN, "연결한 수익률에 없는 종목이 있어 공분산을 함께 전달하지 못합니다("
+                                     + ", ".join(miss.get("codes") or []) + ") — ‘위험 기여도 분해’는 이 비중을 계산하지 못합니다."))
+        else:
+            trust.append(_t(UNKNOWN, "공분산이 없어 ‘위험 기여도 분해’는 이 비중을 계산하지 못합니다 — 수익률을 연결하십시오."))
+    return {"title": f"점수 기준으로 {len(w)}종목의 비중을 산출했습니다",
+            "headline": ({"label": f"가장 큰 비중 · {view['labels'].get(top, top)}", "value": w[top], "unit": "%",
+                          "text": _pct(w[top])} if top else None),
+            "trust": trust, "unmeasured": ["이 비중의 과거 성과(규칙이 아니라 한 시점의 비중이라 정책 백테스트가 없습니다)"]}
+
+
+# ── 중립화 ───────────────────────────────────────────────────────────────────
+
+class NeutralizeParams(BaseModel):
+    model_config = _FORBID
+    mode: Literal["beta", "sector", "both"] = Field("beta", json_schema_extra={"x-ui": _ui(
+        "중립화 대상", question="중립화할 노출", widget="cards",
+        options={"beta": "시장 민감도(베타)", "sector": "업종 편중", "both": "둘 다"})})
+    target_beta: float = Field(0.0, ge=-2.0, le=2.0, json_schema_extra={"x-ui": _ui("목표 베타", "advanced")})
+    dollar_neutral: bool = Field(False, json_schema_extra={"x-ui": _ui("달러 중립(롱·숏 금액 일치)", "advanced")})
+
+
+def _neutralize(inputs: dict, p: NeutralizeParams) -> pg.NodeOutput:
+    from src.engine.neutralize import neutralize_portfolio
+    w = inputs["weights"]
+    pct = {n: float(x) * 100.0 for n, x in zip(w["names"], np.asarray(w["weights"], dtype=float))}
+    out = neutralize_portfolio(pct, mode=p.mode, target_beta=p.target_beta, dollar_neutral=p.dollar_neutral)
+    errs = [str(out[k].get("message")) for k in ("beta", "sector") if isinstance(out.get(k), dict) and out[k].get("error")]
+    if errs:
+        raise pg.NodeFailure("중립화를 하지 못했습니다 — " + " / ".join(errs))
+    after = out["weights"]
+    names = list(after)
+    arr = np.array([after[n] / 100.0 for n in names], dtype=float)
+    view = {"before": {k: round(v, 2) for k, v in pct.items()}, "after": {k: round(v, 2) for k, v in after.items()},
+            "labels": _ar._labels(names), "result": out}
+    return pg.NodeOutput(values={"weights": weights_value(names, arr, neutralized=True)}, view=view,
+                         tags={"practice": mock_allowed(), "sources": ["neutralize"]})
+
+
+def _explain_neutralize(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    b = r.get("beta") or {}
+    facts = []
+    if "beta_before" in b or "portfolio_beta_before" in b:
+        facts.append(f"베타 {b.get('beta_before', b.get('portfolio_beta_before'))} → {b.get('beta_after', b.get('portfolio_beta_after'))}")
+    shorts = [k for k, v in (view.get("after") or {}).items() if v < 0]
+    if shorts:
+        facts.append(f"숏 포지션이 생긴 종목 {len(shorts)}개가 있습니다.")
+    return {"title": "노출을 중립화한 비중을 산출했습니다", "facts": facts,
+            "trust": [_t(ASSUMED, "과거 베타·업종 분류 기준으로 중립화했습니다 — 향후 베타가 동일할지는 미상입니다."),
+                      _t(UNKNOWN, "중립화한 비중은 최적화 제약이 아니라 사후 변환이라 실행 목표로 사용할 수 없습니다.")],
+            "unmeasured": ["중립화 뒤의 기대 수익", "숏 비용"]}
+
+
+# ── 슬리브 합치기 ────────────────────────────────────────────────────────────
+
+_SLEEVE_METHODS = {"risk_parity": "리스크 패리티", "equal": "동일 가중", "inverse_vol": "역변동성 가중",
+                   "min_var": "최소분산", "hrp": "계층적 리스크 패리티(HRP)"}
+
+
+class SleeveParams(BaseModel):
+    model_config = _FORBID
+    method: Literal[tuple(_SLEEVE_METHODS)] = Field("risk_parity", json_schema_extra={"x-ui": _ui(
+        "결합 방식", question="슬리브 간 배분 방식", widget="cards", options=_SLEEVE_METHODS)})
+
+
+def _sleeve_combine(inputs: dict, p: SleeveParams) -> pg.NodeOutput:
+    from src.engine.sleeve_combine import combine_sleeves
+    sleeves = []
+    for port in ("a", "b", "c"):
+        w = inputs.get(port)
+        if w is None:
+            continue
+        sleeves.append({"name": f"그룹 {port.upper()}",
+                        "weights": {n: float(x) * 100.0 for n, x in zip(w["names"], np.asarray(w["weights"], dtype=float))}})
+    out = combine_sleeves(sleeves, method=p.method)
+    if out.get("error"):
+        raise pg.NodeFailure(str(out.get("message")))
+    cw = out["combined_weights_pct"]
+    names = list(cw)
+    arr = np.array([cw[n] / 100.0 for n in names], dtype=float)
+    view = {"result": out, "labels": _ar._labels(names)}
+    return pg.NodeOutput(values={"weights": weights_value(names, arr)}, view=view,
+                         tags={"practice": mock_allowed(), "sources": ["sleeve_combine"]})
+
+
+def _explain_sleeves(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    alloc = r.get("sleeve_allocation") or {}
+    facts = [f"{k}: {_pct(float(v))}" for k, v in alloc.items()]
+    trust = [_t(CONFIRMED, f"{r.get('n_sleeves')}개 그룹의 수익률 흐름으로 그룹 비중을 산출하고 종목 비중을 결합했습니다.")]
+    if r.get("method") in ("min_var", "hrp"):
+        trust.append(_t(UNKNOWN, "이 방식은 계산이 안 풀리면 엔진이 역변동성으로 바꿉니다 — 이 결과가 그 경우인지는 표시되지 않습니다."))
+    trust.append(_t(ASSUMED, "그룹 수익은 각 그룹의 현재 비중을 과거에 고정해 만든 흐름입니다."))
+    return {"title": f"{r.get('n_sleeves')}개 그룹을 {r.get('n_stocks')}종목 비중으로 결합했습니다", "facts": facts,
+            "trust": trust, "unmeasured": ["그룹 사이 상관이 앞으로 유지될지"]}
+
+
+# ── 등록 ─────────────────────────────────────────────────────────────────────
+
+def register(registry: pg.Registry) -> None:
+    for spec in (
+        pg.NodeSpec("screener", "스크리너", stage="signal", plain_label="스크리닝",
+                    plain_description="재무·시세 조건으로 종목을 선별합니다.",
+                    inputs=(P("universe", "Universe", required=False),), outputs=(P("universe", "Universe"),),
+                    run=_screener, params_model=ScreenerParams, explain=_explain_screener, category="신호",
+                    description="유동성 게이트 → 필터 → 정렬(/screener/run-advanced 와 같다)."),
+        pg.NodeSpec("factor_scores", "팩터 점수", stage="signal", plain_label="팩터 스코어링",
+                    plain_description="가치·수익성 등 팩터별 점수를 산출합니다.",
+                    inputs=(P("universe", "Universe", required=False),), outputs=(P("scores", "Scores"),),
+                    run=_factor_scores, params_model=FactorScoreParams, explain=_explain_factor_scores, category="신호",
+                    description="방향 인지 z-score 가중합(/factor-portfolio 의 점수와 같다)."),
+        pg.NodeSpec("alpha_score", "알파 점수", stage="signal", plain_label="알파 스코어링",
+                    plain_description="알파 실험실의 수식으로 당일(또는 기준일) 점수를 산출합니다.",
+                    inputs=(P("universe", "Universe"),), outputs=(P("scores", "Scores"),),
+                    run=_alpha_score, params_model=AlphaParams, explain=_explain_alpha, category="신호",
+                    description="score_alpha — 라이브 크로스섹션 점수."),
+        pg.NodeSpec("scores_to_weights", "점수 → 비중", stage="build", plain_label="스코어 기반 비중",
+                    plain_description="점수 상위 종목을 선정해 비중을 배분합니다.",
+                    inputs=(P("scores", "Scores"), P("returns", "Returns", required=False)),
+                    outputs=(P("weights", "Weights"),), run=_scores_to_weights, params_model=ScoresToWeightsParams,
+                    explain=_explain_scores_to_weights, category="배분",
+                    description="상위 K → 균등·틸트·역변동성·위험균등·최소분산·HRP(폴백 없음)."),
+        pg.NodeSpec("neutralize", "중립화", stage="build", plain_label="노출 중립화",
+                    plain_description="시장 베타·업종 노출을 중립화한 비중을 산출합니다.",
+                    inputs=(P("weights", "Weights"),), outputs=(P("weights", "Weights"),),
+                    run=_neutralize, params_model=NeutralizeParams, explain=_explain_neutralize, category="배분",
+                    description="베타·섹터 중립화(/neutralize 와 같다). 결과는 연구용 — 실행 목표가 아니다."),
+        pg.NodeSpec("sleeve_combine", "슬리브 결합", stage="build", plain_label="슬리브 결합",
+                    plain_description="비중 그룹 2~3개를 위험 기준으로 결합합니다.",
+                    inputs=(P("a", "Weights"), P("b", "Weights"), P("c", "Weights", required=False)),
+                    outputs=(P("weights", "Weights"),), run=_sleeve_combine, params_model=SleeveParams,
+                    explain=_explain_sleeves, category="배분",
+                    description="2단계 슬리브 결합(/combine-sleeves 와 같다)."),
+    ):
+        registry.register(spec)

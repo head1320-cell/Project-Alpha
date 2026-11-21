@@ -28,7 +28,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from src.domain.cost_model import COMPONENTS as COST_COMPONENTS
-from src.domain.cost_model import CostPolicy, trade_cost
+from src.domain.cost_model import TAX_SCHEDULE_TRADE_DATE, CostPolicy, SellTaxRate, trade_cost
 from src.domain.execution_assumption import (
     SIGNAL_LAG_DEFAULT,
     ExecutionAssumption,
@@ -111,7 +111,15 @@ def set_engine(engine):
 #: 쓰는 키는 여기 넣지 않는다(그쪽은 각자의 계약이 이미 있다).
 DIAGNOSTIC_KEYS = ("signal_path", "macro_lookahead", "fundamentals_pit",
                    "price_basis", "execution_assumption", "estimator_leakage",
-                   "cost_model")
+                   "cost_model", "fill_rules")
+
+#: `fill_rules` 블록의 설명 (BC). ★옵트인이고 기본 꺼짐★ — 켜도 부분체결·
+#: 호가 잔량·시가 단일가는 모른다.
+_FILL_RULES_NOTE = (
+    "체결 규칙은 옵트인이고 기본 꺼짐입니다 — 켜면 전일 종가 대비 가격제한 밖의 "
+    "체결은 그날 일어나지 않고, 원주가 척도에서만 호가 단위로 보수적 반올림"
+    "(매수 올림·매도 내림)합니다. 부분체결·호가 잔량·단일가 매매는 모델링하지 "
+    "않습니다. 전일 종가를 모르면 위반으로 치지 않고 미상으로 셉니다.")
 
 # ── 가격 정의가 섞인 티커를 어떻게 다루나 (로드맵 4단계) ───────────────────
 #: 한 티커의 `close` 에 원주가와 수정주가가 섞이면(`price_basis == "mixed"`)
@@ -440,6 +448,16 @@ class _EngineCost(NamedTuple):
         return self.tax + self.spread + self.impact
 
 
+def _master_flags() -> dict:
+    """매도세의 시장 · 상품을 가르는 종목 마스터 플래그 — 매매일지 · 분봉 백테스트와 같은 원천(`stock_master`).
+
+    판정은 매매일지의 `market_and_instrument` 그대로다(마스터가 ★아는 것만★ · 모르면 `None`). 문 층
+    (`trade_journal_routes`)은 들여오지 않는다 — 엔진은 데이터 층을 직접 읽는다.
+    """
+    from src.data import stock_master as sm
+    return sm.load_master_flags() or {}
+
+
 def policy_from_config(cfg) -> CostPolicy:
     """`BacktestConfig` → `CostPolicy`. ★요율을 읽는 유일한 자리★ (AK4)
 
@@ -451,13 +469,18 @@ def policy_from_config(cfg) -> CostPolicy:
     from src.data import market_rules as mr
     from src.domain.cost_model import CostPolicy
 
+    tax_on = bool(getattr(cfg, "charge_sell_tax", False))
     return CostPolicy(
         commission_bps=float(cfg.commission_rate) * 1e4,
         slippage_bps=float(cfg.slippage_rate) * 1e4,
-        charge_tax=bool(getattr(cfg, "charge_sell_tax", False)),
+        charge_tax=tax_on,
         charge_spread=bool(getattr(cfg, "charge_spread", False)),
         charge_impact=bool(getattr(cfg, "charge_market_impact", False)),
-        tax_bps=mr.sell_tax_bp() if getattr(cfg, "charge_sell_tax", False) else None,
+        # ★켜면 거래일별 세율★(S1 · 2026-11-19 받은 결정) — 정책에 세율 하나를 두지 않고 매도마다 그 체결일 ·
+        # 시장 · 상품의 세율을 세율표(`mr.sell_tax_bp_on`)에서 읽는다(`_sell_tax_for`). 고정 18bp(`mr.sell_tax_bp()`)는
+        # 실행 준비실만 쓴다. 꺼지면 예전 정책 그대로다(새 필드는 기본값 — 판본 불변).
+        tax_bps=None,
+        tax_schedule=TAX_SCHEDULE_TRADE_DATE if tax_on else None,
         spread_bps=(mr.spread_bp_default()
                     if getattr(cfg, "charge_spread", False) else None),
         impact_coeff=(mr.impact_coeff()
@@ -530,6 +553,11 @@ class BacktestConfig:
     charge_sell_tax: bool = False        # 매도 증권거래세+농특세 (기본 18bp)
     charge_spread: bool = False          # 호가 스프레드 프록시 (편도 절반)
     charge_market_impact: bool = False   # k·√참여율 — 참여율 미상이면 ★미상★
+    # ── BC: 체결 규칙 옵트인 둘 ★전부 기본 꺼짐★ ──────────────────────
+    # ★비용이 아니라 체결 가능성이다★(AK) — 그래서 `cost_model` 이 아니라
+    # `fill_rules` 진단 키가 말한다. 규칙은 `market_rules` 에서 읽는다(새 표 없음).
+    enforce_price_limit: bool = False    # 전일 종가 ±가격제한 밖 → 그날 미체결
+    round_fills_to_tick: bool = False    # 원주가 척도에서 매수 up·매도 down
     # 자산배분: 평가자산 대비 현금 상시 보유 비중 % (0=미사용). 매수 시 이 비중만큼 현금 잔류
     cash_reserve_pct: float = 0.0
     # 자산배분 ETF 바스켓 (젠포트 자산배분 옵션). None=미사용.
@@ -581,6 +609,17 @@ class BacktestConfig:
     # 종목을 알 수 없으므로). 사용자향 API에는 끄는 스위치를 노출하지 않음 — 회귀비교용 내부 값.
     dynamic_replenishment: bool = True
     replenishment_pool: list[str] | None = None  # 재편입 후보풀(symbols의 상위집합). None=비활성
+    # ── ★비용 요율의 런타임 출처 — 관측 전용★ (AZ) ──────────────────────
+    # ★비용 **계산에 쓰이지 않는다**★ — 요청이 요율을 명시했는지(문만 아는
+    # 사실)를 결과 블록까지 나르기만 한다. 실측(2026-09-22): 요청이 안 실으면
+    # 문이 정하고 왕복 비용이 screener 계열 40.0bp, stage11 계열 13.0bp 로
+    # 갈린다. ★둘 다 `None` 이면 미상이다★ — 기본값이라고 단정하지 않는다.
+    cost_door: str | None = None
+    cost_explicit_fields: frozenset[str] | None = None
+    #: 문이 **가진** 요율 칸(BA). ★`None` 이면 "문이 그 칸을 갖는지 모른다"★ 이고
+    #: 예전 판정 그대로다. 칸이 없는 문(실측: `ImportAndBacktestRequest`)에서
+    #: 안 준 것을 `door_default` 라 부르면 사유가 거짓이 된다.
+    cost_available_fields: frozenset[str] | None = None
     # 시그널 벡터화 — 조건식을 전 봉 사전계산(동일 결과, 10~100×). False면 per-bar(디버그용)
     vectorize_signals: bool = True
     # 매수 우선순위식 (젠포트 매수 종목 선택 우선순위): 봉마다 후보들의 식 값으로
@@ -645,7 +684,13 @@ class BacktestEngine:
         self._cost_reasons: dict[str, str | None] = {}
         # ★못 잰 거래를 센다★ — 0 으로 부과하면 "충격이 없었다" 는 관측이 된다.
         self._cost_unmeasured_trades = 0
+        # S1 — 거래일별 매도세의 셈(켰을 때만 쓰인다 · 꺼지면 결과에 싣지 않는다 — 바이트 불변).
+        self._sell_tax_flags: dict | None = None
+        self._sell_tax_stats: dict = {"n_sells": 0, "n_charged": 0, "rates": {}, "grades": set(), "unmeasured": {}}
         self._adv_cache: dict[str, dict] = {}
+        # ── BC: 체결 규칙 계수 — ★꺼져 있으면 전부 0 이고 가격도 불변★ ──
+        self._fill_counts = {"n_rejected_by_limit": 0, "n_limit_unknown": 0,
+                             "n_rounded": 0, "n_tick_not_raw": 0}
 
     def _adv_for(self, ticker: str, date_str: str) -> float | None:
         """후행 20봉 평균 거래대금(원). ★없으면 `None` — 0 이 아니다★ (AK4)
@@ -687,8 +732,14 @@ class BacktestEngine:
             adv = self._adv_for(ticker, date_str)
             if adv:
                 participation = float(value) / adv
-        bd = trade_cost(value, side, self._cost_policy, participation=participation)
+        sell_tax = None
+        if (self._cost_policy.charge_tax and self._cost_policy.tax_schedule == TAX_SCHEDULE_TRADE_DATE
+                and side == "sell"):
+            sell_tax = self._sell_tax_for(ticker, date_str)
+        bd = trade_cost(value, side, self._cost_policy, participation=participation, sell_tax=sell_tax)
         by = {c.name: c for c in bd.components}
+        if sell_tax is not None:
+            self._count_sell_tax(sell_tax, by["tax"])
         for name, comp in by.items():
             self._cost_krw[name] += comp.krw
             self._cost_states[name] = comp.state
@@ -699,6 +750,56 @@ class BacktestEngine:
             commission=by["commission"].krw, slippage=by["slippage"].krw,
             tax=by["tax"].krw, spread=by["spread"].krw, impact=by["impact"].krw)
 
+    def _sell_tax_for(self, ticker: str | None, date_str: str | None) -> SellTaxRate:
+        """매도 하나의 세율 — 그 체결일 · 시장 · 상품의 세율표 값. ★모르면 0 이 아니라 미상 + 사유★ (S1)
+
+        시장 · 상품은 매매일지와 같은 판정(마스터가 아는 것만)이다. 마스터가 모르면 세율표를 묻지 않는다 —
+        가까운 시장 · 상품으로 어림하지 않는다. 세율표가 답하지 못하면(표 밖 날짜 · 등급 미달) 그 문장을 그대로 쓴다.
+        """
+        from src.data import market_rules as mr
+        from src.engine.trade_journal.costs import TAX_UNKNOWN_MESSAGES, market_and_instrument
+        if self._sell_tax_flags is None:
+            self._sell_tax_flags = _master_flags()
+        market, instrument = market_and_instrument(str(ticker or "").strip().upper(), self._sell_tax_flags.get)
+        if market is None or instrument is None:
+            code = "unknown_market_or_instrument"
+            return SellTaxRate(bp=None, reason=TAX_UNKNOWN_MESSAGES[code], code=code)
+        r = mr.sell_tax_bp_on(date_str, market, instrument)
+        if not r["available"]:
+            return SellTaxRate(bp=None, reason=r["message"], code=r["reason"], grade=r.get("grade"))
+        return SellTaxRate(bp=float(r["bp"]), grade=r["grade"])
+
+    def _count_sell_tax(self, rate: SellTaxRate, comp) -> None:
+        """거래일별 매도세의 셈 — 부과 · 미상을 세율 · 사유별로. 결과의 `cost_model.sell_tax` 가 이것을 낸다."""
+        from src.domain.cost_model import STATE_CHARGED
+        st = self._sell_tax_stats
+        st["n_sells"] += 1
+        if comp.state == STATE_CHARGED:
+            st["n_charged"] += 1
+            st["rates"][comp.bps] = st["rates"].get(comp.bps, 0) + 1
+            if rate.grade:
+                st["grades"].add(rate.grade)
+            return
+        code = rate.code or "no_rate"
+        n, _ = st["unmeasured"].get(code, (0, None))
+        st["unmeasured"][code] = (n + 1, comp.reason)
+
+    def _sell_tax_block(self) -> dict:
+        st = self._sell_tax_stats
+        return {
+            "basis": TAX_SCHEDULE_TRADE_DATE,
+            "label": "추론",
+            "grades": sorted(st["grades"]),
+            "note": ("매도마다 그 거래일(체결일) · 시장 · 상품의 증권거래세와 농어촌특별세를 세율표(보도 · 안내 자료 요약)로 "
+                     "부과했습니다. 법령 원문과 대조하지 않은 추론값입니다."),
+            "n_sells": st["n_sells"],
+            "n_charged": st["n_charged"],
+            "n_unmeasured": st["n_sells"] - st["n_charged"],
+            "rates_bp": [{"bp": bp, "n": n} for bp, n in sorted(st["rates"].items())],
+            "unmeasured": [{"code": code, "n": n, "message": msg} for code, (n, msg) in sorted(st["unmeasured"].items())],
+            "round_trip_note": "왕복 bp 에는 매도세를 넣지 않았습니다. 매도세는 거래일 · 시장 · 상품마다 다릅니다.",
+        }
+
     def _cost_model_block(self) -> dict:
         """이 실행이 **무엇을 부과했고 무엇을 못 쟀나**. (AK5)
 
@@ -706,24 +807,128 @@ class BacktestEngine:
         뒤는 *"비용이 실제보다 싸게 나왔다"* 는 경고다.
         """
         from src.domain.cost_model import (
+            STATE_CHARGED,
             STATE_OFF,
+            STATE_UNMEASURABLE,
             CostBreakdown,
             CostComponent,
             cost_label,
             policy_label,
+            policy_version,
             round_trip_bps,
         )
+        states, reasons = dict(self._cost_states), dict(self._cost_reasons)
+        trade_date_tax = (self._cost_policy.charge_tax
+                          and self._cost_policy.tax_schedule == TAX_SCHEDULE_TRADE_DATE)
+        if trade_date_tax:
+            # ★거래일별이면 세금 성분의 상태는 마지막 거래가 아니라 모든 매도로 정한다★ — 한 건이라도 세율을
+            # 몰랐으면 비용이 실제보다 싸게 나온 것이다(미상 ≠ 0).
+            st = self._sell_tax_stats
+            n_unm = st["n_sells"] - st["n_charged"]
+            if n_unm:
+                states["tax"] = STATE_UNMEASURABLE
+                reasons["tax"] = (f"매도 {st['n_sells']}건 가운데 {n_unm}건은 세율을 몰라 부과하지 않았습니다. "
+                                  "0 원이 아니라 미상입니다.")
+            elif st["n_sells"]:
+                # 모든 매도에 그날의 세율이 있었다 — 성분의 사유를 마지막 거래(매수일 수 있다)의 문장으로 두지 않는다.
+                states["tax"], reasons["tax"] = STATE_CHARGED, None
         comps = tuple(
-            CostComponent(name=n, state=self._cost_states.get(n, STATE_OFF),
+            CostComponent(name=n, state=states.get(n, STATE_OFF),
                           krw=self._cost_krw[n],
-                          reason=self._cost_reasons.get(n))
+                          reason=reasons.get(n))
             for n in COST_COMPONENTS)
         total = sum(c.krw for c in comps)
-        label = cost_label(CostBreakdown(components=comps, total_krw=total))
+        # ★못 잰 성분의 수를 센다★(S1 · 2026-11-19 찾음) — 옛 블록은 이 칸을 기본값 0 으로 실어 세금 · 충격이 미상인 실행도 '0' 이었다.
+        n_unmeasurable = sum(1 for c in comps if c.state == STATE_UNMEASURABLE)
+        label = cost_label(CostBreakdown(components=comps, total_krw=total, n_unmeasurable=n_unmeasurable))
+        from src.domain.cost_provenance import rate_provenance
         return {**label,
+                # ★적용된 요율이 **어디서 왔는가**★ (AZ) — 값은 안 바꾸고
+                # 라벨만 더한다. CLAUDE.md 4절이 폴백에 요구하는 둘
+                # (라벨 · 관측 가능)을 이 키가 채운다.
+                "rate_provenance": rate_provenance(
+                    door=self.cfg.cost_door,
+                    explicit=self.cfg.cost_explicit_fields,
+                    available=self.cfg.cost_available_fields,
+                    policy=self._cost_policy),
                 "policy": policy_label(self._cost_policy),
+                # ★설정의 판본★ (AM5) 비용 설정이 다른 두 실행은 지금까지
+                # 기록에서 구별되지 않았다. 이것은 `code_version`(빌드)과 다른
+                # 축이다 — 설정이 그대로면 코드가 바뀌어도 그대로다.
+                "version": policy_version(self._cost_policy),
                 "round_trip_bps": round_trip_bps(self._cost_policy)["round_trip_bps"],
-                "n_unmeasured_trades": self._cost_unmeasured_trades}
+                "n_unmeasured_trades": self._cost_unmeasured_trades,
+                # 거래일별 매도세의 셈 — ★켰을 때만 싣는다★(꺼진 실행의 블록은 바이트까지 그대로).
+                **({"sell_tax": self._sell_tax_block()} if trade_date_tax else {})}
+
+    def _prev_close(self, ticker: str, date_str: str) -> float | None:
+        """그날 **이전** 마지막 종가. ★없으면 `None` — 0 이 아니다★"""
+        df = self.ohlcv_all.get(ticker)
+        if df is None or df.empty or "close" not in df:
+            return None
+        try:
+            prior = df.loc[df.index < pd.Timestamp(date_str), "close"].dropna()
+        except Exception:  # noqa: BLE001 — 판정 못 하면 미상이다
+            return None
+        if prior.empty:
+            return None
+        v = float(prior.iloc[-1])
+        return v if v > 0 else None
+
+    def _fill_price(self, ticker: str, price: float, date_str: str,
+                    side: str) -> float | None:
+        """체결 규칙을 적용한 가격. ★`None` 이면 그날 미체결★ (BC2)
+
+        둘 다 꺼져 있으면 **가격을 그대로** 돌려준다 — 기존 실행은 불변이다.
+
+        - 호가: ★원주가 척도에서만★ 매수 `up`·매도 `down`(보수적). 수정주가
+          척도에는 호가 단위가 실재하지 않으므로 반올림하지 않고 센다.
+        - 가격제한: ★반올림한 가격으로★ 전일 종가 ±`price_limit_pct` 를 본다.
+          밖이면 **클립하지 않고** 미체결 — 클립하면 실재하지 않는 체결이다.
+          전일 종가가 없거나 가격 정의가 섞였으면(`mixed`) ★미상 — 위반이
+          아니다★: 거부하지 않고 센다.
+        """
+        cfg = self.cfg
+        if not (cfg.enforce_price_limit or cfg.round_fills_to_tick):
+            return price
+        from src.data import market_rules as mr
+        basis = ((getattr(self, "_price_labels", None) or {}).get("basis") or {}).get(ticker)
+        if cfg.round_fills_to_tick:
+            if basis != "raw":
+                self._fill_counts["n_tick_not_raw"] += 1
+            else:
+                rounded = mr.round_to_tick(price, "up" if side == "buy" else "down")
+                if rounded != price:
+                    self._fill_counts["n_rounded"] += 1
+                price = rounded
+        if cfg.enforce_price_limit:
+            prev = None if basis == "mixed" else self._prev_close(ticker, date_str)
+            if prev is None:
+                self._fill_counts["n_limit_unknown"] += 1
+            else:
+                band = mr.price_limit_pct() / 100.0
+                if not (prev * (1 - band) - 1e-9 <= price <= prev * (1 + band) + 1e-9):
+                    self._fill_counts["n_rejected_by_limit"] += 1
+                    return None
+        return price
+
+    def _fill_rules_block(self) -> dict:
+        """이 실행이 **어떤 체결 규칙을 켰고 무엇이 일어났나**. (BC3)
+
+        ★`cost_model` 안에 두지 않는다★ — 비용이 아니라 체결 가능성이다.
+        """
+        from src.data import market_rules as mr
+        cfg = self.cfg
+        return {
+            "enforce_price_limit": bool(cfg.enforce_price_limit),
+            "round_fills_to_tick": bool(cfg.round_fills_to_tick),
+            # 꺼졌으면 요율을 싣지 않는다 — 안 쓴 값을 쓴 것처럼 보이게 하지 않는다.
+            "price_limit_pct": mr.price_limit_pct() if cfg.enforce_price_limit else None,
+            **self._fill_counts,
+            # ★덮지 않는 경로를 이름으로★ — 이 둘은 `_execute_buy` 를 안 탄다.
+            "not_covered": ["ladder_buy", "etf_sleeve"],
+            "note": _FILL_RULES_NOTE,
+        }
 
     def _emit(self, phase: str, done: int | None = None, total: int | None = None,
               extra: dict | None = None):
@@ -787,7 +992,7 @@ class BacktestEngine:
                 from src.kis_strategies.factor_expr import collect_cross, parse_expr
                 ast = parse_expr(txt)
                 if collect_cross(ast):
-                    raise ValueError("체결가 수식에는 순위/비율(횡단면)을 쓸 수 없습니다")
+                    raise ValueError("체결가 수식에는 순위/비율(횡단면)을 사용할 수 없습니다")
                 self._fill_asts[side] = ast
 
         # 종목별 OHLCV 전체 로드 (DB에서 한 번만 읽음)
@@ -1785,6 +1990,9 @@ class BacktestEngine:
             if self.cfg.max_buy_amount is not None:
                 remaining = self.cfg.max_buy_amount - existing.avg_price * existing.quantity
                 add_alloc = min(add_alloc, max(0.0, remaining))
+            price = self._fill_price(ticker, price, date_str, "buy")
+            if price is None:
+                return  # ★그날 미체결★ (BC — 가격제한 밖)
             exec_price = price * (1 + self.cfg.slippage_rate)
             if add_alloc < exec_price:
                 return
@@ -1828,6 +2036,9 @@ class BacktestEngine:
         alloc = min(alloc, self._usable_cash() * 0.95)
         if self.cfg.max_buy_amount is not None:
             alloc = min(alloc, self.cfg.max_buy_amount)  # 종목당 최대 매수 금액
+        price = self._fill_price(ticker, price, date_str, "buy")
+        if price is None:
+            return  # ★그날 미체결★ (BC — 가격제한 밖)
         if alloc < price:
             return
 
@@ -1903,6 +2114,9 @@ class BacktestEngine:
             else:
                 full_exit = False
 
+        price = self._fill_price(ticker, price, date_str, "sell")
+        if price is None:
+            return  # ★그날 미체결★ (BC — 하한가 밖이면 팔 수 없다)
         exec_price = price * (1 - self.cfg.slippage_rate)
         value = sell_qty * exec_price
         cost = self._trade_cost(value, "sell", ticker, date_str)
@@ -2288,6 +2502,8 @@ class BacktestEngine:
             # 둘 다 0원인데 앞은 선택이고 뒤는 "비용이 실제보다 싸게 나왔다" 는
             # 경고다.
             "cost_model": self._cost_model_block(),
+            # ★비용이 아니라 체결 가능성★ (BC) — 기본 꺼짐이면 계수가 전부 0 이다.
+            "fill_rules": self._fill_rules_block(),
             "asset_alloc": alloc_meta,
             "result": {
                 "id": f"bt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -2621,6 +2837,9 @@ def run_backtest(
     charge_sell_tax: bool = False,
     charge_spread: bool = False,
     charge_market_impact: bool = False,
+    # ★체결 규칙 옵트인 둘 — 기본 꺼짐★ (BC). `BacktestConfig` 와 같은 뜻.
+    enforce_price_limit: bool = False,
+    round_fills_to_tick: bool = False,
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
@@ -2670,6 +2889,14 @@ def run_backtest(
     liquidate_at_end: bool = True,
     dynamic_replenishment: bool = True,
     replenishment_pool: list[str] | None = None,
+    # ★관측 전용★(AZ) — 비용 계산에 쓰이지 않는다. 문만 아는 사실을 나른다.
+    cost_door: str | None = None,
+    cost_explicit_fields: frozenset[str] | None = None,
+    cost_available_fields: frozenset[str] | None = None,
+    # ★관측 전용★(BG) — 실행이 끝난 엔진을 콜백으로 넘긴다. 결과 dict 는 거래를
+    # 앞 500건만 싣으므로, 전략 레지스트리가 완전한 거래·종가로 보유를 복원하려면
+    # 엔진 객체가 필요하다. `None`(기본)이면 이 함수는 예전과 바이트 단위로 같다.
+    on_engine=None,
 ) -> dict:
     """
     백테스트 실행 진입점.
@@ -2702,6 +2929,8 @@ def run_backtest(
         charge_sell_tax=charge_sell_tax,
         charge_spread=charge_spread,
         charge_market_impact=charge_market_impact,
+        enforce_price_limit=enforce_price_limit,
+        round_fills_to_tick=round_fills_to_tick,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
         trailing_stop_pct=trailing_stop_pct,
@@ -2750,6 +2979,12 @@ def run_backtest(
         buy_timing=buy_timing,
         dynamic_replenishment=dynamic_replenishment,
         replenishment_pool=replenishment_pool,
+        cost_door=cost_door,
+        cost_explicit_fields=cost_explicit_fields,
+        cost_available_fields=cost_available_fields,
     )
     engine = BacktestEngine(cfg, progress_cb=progress_cb)
-    return engine.run()
+    result = engine.run()
+    if on_engine is not None:
+        on_engine(engine)
+    return result

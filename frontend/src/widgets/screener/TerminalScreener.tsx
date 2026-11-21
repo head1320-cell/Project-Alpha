@@ -1,25 +1,49 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
-// TerminalScreener — 버틀러 벤치마크 퀀트 스크리너
-//   · '팩터 추가' → 백테스터와 동일한 FactorPickerModal(똑같은 창)을 그대로 사용.
-//   · 좌측 '내 필터' rail(AND/OR · 시총 · 저장된 전략) + 라이브 종목 리스트(SSE 진행).
-//   · 표시 컬럼 ≠ 필터 컬럼(보기전용 컬럼 분리) · 임계값 분포 히스토그램 · 셀 퍼센타일
-//     히트맵 · 결과 100행/페이지 페이지네이션 + 0개 진단 · 종목 클릭→기업 분석 이동.
+// 종목 찾기 (BU2 · ADR-003) — 조건 → 답 한 문장 + 근거 칩 → 결과 표 → 시트
+//   · ★요청은 한 바이트도 바꾸지 않는다★(CLAUDE.md §6 스크리너 3-레이어) — `e2e/screener-requests.spec.ts` 골든이 건다.
+//     실행·표본·단독 통과 수 요청을 만드는 로직은 옛 화면 그대로이고, 바뀐 것은 그리는 방식뿐이다.
+//   · 답 문장·칩은 서버 값으로만: `total_passed` · `capped` · `ingested_count/universe_size` · `liquidity_gate` ·
+//     연습용 표시는 `GET /macro/connection-status` 의 `mock_allowed`(= mock_gate). 화면이 새 판단을 만들지 않는다.
+//   · ★실패는 실패로★ 스트림이 실패하면(중단 제외) 옛 결과를 지우고 alert + 다시 시도 — 낡은 결과를 새 결과처럼 두지 않는다.
+//   · 한 화면 한 일: 조건식·유동성 게이트·저장한 조건·계산 통계는 "전문가 설정"에 접는다(기능은 그대로, 게이트 기본 꺼짐 그대로).
+//   · "설계에 넣기" → `/allocation?tickers=`(캔버스가 stock_master 로 확인한 코드만 싣는다 — `tickerBridge.ts`).
+//   · 결과 표는 공용 표(`shared/ui/table` · U1-b)다 — 정렬 · 쪽 · 줄 초점의 규칙은 그쪽 순수 모듈에 있고, 이 화면은 상태(정렬 · 쪽 · 고른 줄)와 열만 든다.
+//     ★값이 없는 줄은 어느 방향에서도 끝★ · 값이 없는 칸은 `N/A` + 표 아래 사유 한 줄 · 단위는 머리에 · 막대는 종합점수 열에만(다른 값 열은 방향이 값의 크기와 어긋난다).
+//     옛 클래스(`bsc-table` · `bsc-row` · `bsc-fav` …)는 같은 요소에 갈고리로 남는다(E2E 계약 · 재는 스크립트).
+//   · 고른 줄의 상세는 넓은 창(1280px 이상)에서 ★표 옆 판★(비모달 — 표가 살아 있고 ↑ ↓ 로 줄을 넘기면 판이 따라온다 · U1-c), 그보다 좁으면 시트다.
+//     본문은 `ScreenerDetail` 하나 — 한 번에 한 그릇만 그린다. 판의 폭은 공용 구분선으로 정하고 이 브라우저에 남긴다.
+//   · 내려받은 CSV 는 줄마다 출처 열 다섯(데이터 출처 · 자료 기준 시각 · 계산 시각 · 유니버스 · 조건식 — `screenerCsv.ts` · U1-e).
+//     ★유니버스 · 조건식은 그 결과를 만든 요청의 것★ — 새 요청이 도는 동안에도 앞 결과가 보이므로, 결과를 받을 때 요청을 함께 든다.
+//   · 정렬(열 · 방향)은 이 브라우저에 남는다 — 되살릴 때 그 열이 지금 표에 없으면 기본 정렬(종합점수 ↓). 밀도 고르기는 결과 도구 줄에(U1-e).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { macroApi } from "@/entities/macro/api";
 import { screenerApiAdvanced } from "@/entities/screener/api/ast";
 import { screenerApi } from "@/entities/screener/api/core";
 import { type ScreenerResponse, type TechnicalIndicatorCatalog } from "@/entities/screener/model";
 import type { FieldsCatalog, FilterConditionNode, FilterGroupNode, ScreenerItem } from "@/shared/model/domain";
-import { verdictColor } from "@/shared/lib/format";
+import { num } from "@/shared/lib/krFormat";
+import { useMediaQuery } from "@/shared/lib/useMediaQuery";
+import { LoadingState } from "@/shared/ui/States";
+import { Splitter } from "@/shared/ui/split/Splitter";
+import { clampSplit } from "@/shared/ui/split/split";
+import { BarValue, DataTable, Na, Pager, clampPage, nextSort, pageCount, pageSlice, restoreSort, sortRows, toCsv, type Column, type SortState } from "@/shared/ui/table";
+import { DensityPicker } from "@/shared/ui/density";
+import { Answer, Notice, PageHead, Sheet, type Chip, type Figure } from "@/shared/ui/tx";
 import { setScreenerHandoff } from "@/shared/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/shared/lib/screenerPresets";
 import { parseExpr, materialize, type ExprNode } from "@/shared/lib/exprParser";
 import dynamic from "next/dynamic";
+import { X } from "lucide-react";
 import { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
+import { ScreenerDetail } from "./ScreenerDetail";
+import { PROVENANCE_HEADER, provenanceCells, resultTimes, type RunRequest } from "./screenerCsv";
+import { ProvenanceBadge } from "@/shared/ui/provenance";
 // ★기본이 '닫힘' 인 창은 첫 로드에 있을 이유가 없다★ 팩터 창이 CatalogueShell 로 옮겨가며
 // shadcn/Radix ToggleGroup 을 끌고 오는데, 정적 import 로 두면 그 무게가 이 라우트의 첫
 // 로드에 그대로 실린다(실측: +17 kB). ADR 001 은 설명되지 않는 4 kB 증가를 되돌리라고 한다 —
@@ -41,6 +65,24 @@ const sliderToMcap = (s: number) => Math.round(Math.pow(10, MCAP_LO + (MCAP_HI -
 const mcapToSlider = (eok: number) => Math.round(Math.max(0, Math.min(100, ((Math.log10(eok) - MCAP_LO) / (MCAP_HI - MCAP_LO)) * 100)));
 const fmtMcapKo = (eok: number) => eok >= 10000 ? `${(eok / 10000).toFixed(eok >= 100000 ? 0 : 1)}조` : `${Math.round(eok).toLocaleString()}억`;
 const PAGE_SIZE = 100;   // 결과 테이블 페이지당 행 수
+/** 상세의 옆 판 — 이 폭부터 판이고 그보다 좁으면 시트다(ADR 007 의 중단점 · G5 두 칸의 문턱과 같은 값). */
+const SIDE_QUERY = "(min-width: 1280px)";
+const SIDE_MIN = 320, SIDE_MAX = 560, SIDE_DEFAULT = 360, SIDE_STEP = 16, SIDE_KEY = "alpha_screener_side_w";
+/** 조건 영역을 접었는지 — 이 브라우저에만 남긴다(값이 없으면 펼침). */
+const CONDS_KEY = "alpha_screener_conds";
+/** 정렬을 남기는 열쇠 — 값은 { col, dir }. 되살릴 때 그 열이 지금 표에 있어야 쓴다(`restoreSort`). */
+const SORT_KEY = "alpha_screener_sort";
+const DEFAULT_SORT: SortState = { col: "composite_score", dir: "desc" };
+const TOP_BRIDGE = 10;   // "상위 n종목 설계에 넣기" — 표의 지금 정렬 그대로 위 n개(캔버스 종목 고르기 노드 상한 30 안)
+/** 고를 수 있는 유니버스 — id 는 서버 프리셋 id 그대로(요청 골든이 건다). */
+const UNIVERSES = [
+  { id: "kospi200", label: "코스피 200" },
+  { id: "kosdaq150", label: "코스닥 150" },
+  { id: "kospi", label: "코스피 전체" },
+  { id: "kosdaq", label: "코스닥 전체" },
+  { id: "etf", label: "ETF 전체" },
+  { id: "all_listed", label: "모든 상장 종목" },
+];
 
 interface FieldMeta { higher_better?: boolean; typical_min?: number; typical_max?: number; label: string; unit?: string }
 
@@ -62,10 +104,10 @@ function passes(v: number, op: string | undefined, t: number): boolean {
   switch (op) { case "gt": return v > t; case "lte": return v <= t; case "lt": return v < t; case "eq": return v === t; default: return v >= t; }
 }
 
-// 임계값 설정 보조 — 팩터 분포 미니 히스토그램 (통과=액센트, 미통과=회색, 빨강선=임계값)
+// 임계값 설정 보조 — 팩터 분포 미니 히스토그램 (통과=짙은 회색, 미통과=선 색, 잉크선=임계값 — 판단을 빨강/초록으로 말하지 않는다 · 파랑은 하락의 색이라 쓰지 않는다)
 function MiniHistogram({ values, op, threshold }: { values: number[]; op?: string; threshold: number }) {
   const finite = values.filter((v) => Number.isFinite(v));
-  if (finite.length < 4) return <span className="bsc-hist-empty">분포 표본 부족</span>;
+  if (finite.length < 4) return <span className="bsc-hist-empty">분포를 표시할 표본이 부족합니다</span>;
   const min = Math.min(...finite), max = Math.max(...finite), span = (max - min) || 1, BINS = 20;
   const counts = new Array(BINS).fill(0);
   finite.forEach((v) => { let b = Math.floor(((v - min) / span) * BINS); if (b >= BINS) b = BINS - 1; if (b < 0) b = 0; counts[b]++; });
@@ -78,17 +120,20 @@ function MiniHistogram({ values, op, threshold }: { values: number[]; op?: strin
         {counts.map((c, i) => {
           const mid = min + ((i + 0.5) / BINS) * span;
           const h = (c / maxC) * 28;
-          return <rect key={i} x={(i / BINS) * 100} y={29 - h} width={100 / BINS - 0.5} height={h} fill={passes(mid, op, threshold) ? "var(--t-accent)" : "#d4d4d8"} />;
+          return <rect key={i} x={(i / BINS) * 100} y={29 - h} width={100 / BINS - 0.5} height={h} fill={passes(mid, op, threshold) ? "var(--tx-sub)" : "var(--tx-line)"} />;
         })}
-        <line x1={tx * 100} y1={0} x2={tx * 100} y2={30} stroke="var(--color-bear)" strokeWidth="0.8" />
+        <line x1={tx * 100} y1={0} x2={tx * 100} y2={30} stroke="var(--tx-ink)" strokeWidth="0.8" />
       </svg>
-      <span className="bsc-hist-meta">통과 {passCount}/{finite.length} · 범위 {fmtVal(min)}~{fmtVal(max)}</span>
+      <span className="bsc-hist-meta">표본 {num(finite.length)}개 중 {num(passCount)}개 통과 · 범위 {fmtVal(min)}~{fmtVal(max)}</span>
     </>
   );
 }
 
-export default function TerminalScreener({ universe }: { universe: string }) {
+export default function TerminalScreener() {
   const router = useRouter();
+  const [universe, setUniverse] = useState("kospi200");
+  // 연습용 표시의 근거 — 서버 mock 게이트(홈·셸 prefetch 와 같은 queryKey). 실패면 "출처를 확인하지 못했어요"(침묵 금지).
+  const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
   // 카탈로그류(fields/indicators/factorFieldMap/universes) — 탭 재방문 시 재요청 없이 캐시
   // 재사용(staleTime 24h, 전역 QueryClient 기본값). 변수명은 기존 useState와 동일하게 유지해
   // 아래 로직을 건드리지 않음.
@@ -106,12 +151,17 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   const [labelOverride, setLabelOverride] = useState<Record<string, string>>({});
   const [results, setResults] = useState<ScreenerResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);   // 스트림 실패(중단 아님) — 결과 대신 alert
+  const [retry, setRetry] = useState(0);                            // [다시 시도] — 같은 요청을 한 번 더
   const [prog, setProg] = useState<{ done: number; total: number; misses: number } | null>(null);
   const [chipCounts, setChipCounts] = useState<(number | null)[]>([]);   // 팩터별 단독 통과 수
   const [focusedChip, setFocusedChip] = useState<number | null>(null);
-  const [sortCol, setSortCol] = useState("composite_score");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortPick, setSortPick] = useState<unknown>(null);                // 고른(되살린) 정렬 — 쓰기 전에 지금 표의 열로 검사한다
+  const [resultsReq, setResultsReq] = useState<RunRequest | null>(null);   // 지금 보이는 결과를 만든 요청(CSV 의 출처 칸)
   const [selected, setSelected] = useState<string | null>(null);
+  const wide = useMediaQuery(SIDE_QUERY);
+  const [condsOpen, setCondsOpen] = useState(true);
+  const [sideW, setSideW] = useState(SIDE_DEFAULT);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -146,6 +196,10 @@ export default function TerminalScreener({ universe }: { universe: string }) {
   useEffect(() => {
     try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
     try { const c = localStorage.getItem("alpha_screener_cols"); if (c) setDisplayCols(JSON.parse(c)); } catch { /* noop */ }
+    try { if (localStorage.getItem(CONDS_KEY) === "closed") setCondsOpen(false); } catch { /* noop */ }
+    try { const v = localStorage.getItem(SORT_KEY); if (v) setSortPick(JSON.parse(v)); } catch { /* 글이 깨졌으면 기본 정렬 */ }
+    // 판의 폭 — 범위 밖의 저장값은 가장 가까운 끝으로, 수가 아니면 처음 값(지어내지 않는다).
+    try { const w = localStorage.getItem(SIDE_KEY); if (w !== null) { const n = Number(w); setSideW(Number.isFinite(n) ? clampSplit(n, SIDE_MIN, SIDE_MAX) : SIDE_DEFAULT); } } catch { /* noop */ }
     setPresets(listPresets());
   }, []);
 
@@ -212,7 +266,7 @@ export default function TerminalScreener({ universe }: { universe: string }) {
 
   // ── 라이브 스크리닝 (SSE 스트리밍) — committed 조건식 또는 값 변경 시 재실행 ──
   useEffect(() => {
-    setLoading(true); setProg(null);
+    setLoading(true); setProg(null); setRunError(null);
     const ctrl = new AbortController();
     let cancelled = false;
     const t = setTimeout(async () => {
@@ -222,12 +276,22 @@ export default function TerminalScreener({ universe }: { universe: string }) {
           { universe, filter_ast: effectiveAst, sort_by: "composite_score", ascending: false, limit: 4000, liquidity_floor: gateOn ? "relaxed" : "off" },
           (done, total, misses) => { if (!cancelled) setProg({ done, total, misses }); }, ctrl.signal,
         );
-        if (!cancelled) setResults(r);
-      } catch { /* aborted/error */ }
+        if (!cancelled) {
+          setResults(r);
+          setResultsReq({ universe, universeLabel: UNIVERSES.find((u) => u.id === universe)?.label ?? universe, ast: effectiveAst, gateOn });
+        }
+      } catch (e) {
+        // 중단(조건이 바뀌어 새 실행이 시작됨)만 조용히 넘긴다. 그 밖의 실패는 옛 결과를 지우고 말한다.
+        if (!cancelled && !ctrl.signal.aborted) {
+          setResults(null);
+          setResultsReq(null);
+          setRunError(e instanceof Error ? e.message : String(e));
+        }
+      }
       finally { if (!cancelled) setLoading(false); }
     }, 350);
     return () => { cancelled = true; ctrl.abort(); clearTimeout(t); };
-  }, [effectiveAst, universe, gateOn]);
+  }, [effectiveAst, universe, gateOn, retry]);
 
   // ── 분포용 무필터 표본 (유니버스 변경 시) ── react-query로 캐시(동일 universe/gateOn
   // 재방문 시 재요청 없음)
@@ -301,6 +365,11 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return () => clearTimeout(t);
   }, [mcapRange, commitMcapNow]);
   const mcapActive = mcapRange[0] !== 0 || mcapRange[1] !== 100;
+  /** 접고 펴기 — 겉모습만 바꾼다(조건 · 요청은 그대로). 접은 것만 남기고 펴면 저장값을 지운다. */
+  const toggleConds = () => setCondsOpen((open) => {
+    try { if (open) localStorage.setItem(CONDS_KEY, "closed"); else localStorage.removeItem(CONDS_KEY); } catch { /* noop */ }
+    return !open;
+  });
   const toggleDisplayCol = (id: string) => setDisplayCols((cols) => {
     const next = cols.includes(id) ? cols.filter((c) => c !== id) : [...cols, id];
     try { localStorage.setItem("alpha_screener_cols", JSON.stringify(next)); } catch { /* noop */ }
@@ -312,9 +381,6 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     setFavs((s) => { const n = new Set(s); if (n.has(code)) n.delete(code); else n.add(code);
       try { localStorage.setItem("alpha_screener_favs", JSON.stringify([...n])); } catch { /* noop */ } return n; });
   };
-  const setSort = (col: string) => { if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc")); else { setSortCol(col); setSortDir("desc"); } };
-  const sortArrow = (col: string) => (sortCol === col ? (sortDir === "desc" ? " ▼" : " ▲") : "");
-  const goToCompany = (code: string, e: ReactMouseEvent) => { e.stopPropagation(); try { sessionStorage.setItem("alpha_company_ticker", code); } catch { /* noop */ } router.push("/insights"); };
   const sendToBacktester = () => { if (!group.conditions.length) return; setScreenerHandoff({ filterAst: effectiveAst, universe, conditionSummary: group.conditions.map((c) => condText(c, fieldLabel)), resultCount: results?.items.length ?? 0, createdAt: Date.now() }); router.push("/backtest"); };
   const handleSave = () => { if (!group.conditions.length || !presetName.trim()) return; savePreset(presetName.trim(), group, universe); setPresets(listPresets()); setPresetName(""); setShowSave(false); };
   const handleLoad = (p: ScreenerPreset) => {
@@ -336,75 +402,71 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return cols;
   }, [group, displayCols, fieldLabel]);
 
-  const sortedItems = useMemo(() => {
-    if (!results) return [];
-    return [...results.items].sort((a, b) => {
-      const av = (a as Record<string, unknown>)[sortCol], bv = (b as Record<string, unknown>)[sortCol];
-      const an = typeof av === "number" && Number.isFinite(av) ? av : -Infinity;
-      const bn = typeof bv === "number" && Number.isFinite(bv) ? bv : -Infinity;
-      return sortDir === "desc" ? bn - an : an - bn;
-    });
-  }, [results, sortCol, sortDir]);
-
-  // 셀 퍼센타일 히트맵용 컬럼 min/max
+  // 열마다의 값 범위 — 종합점수의 막대 길이와, 값 열의 소수 자리(같은 열은 같은 자리 — ADR 007 §5)를 정한다
   const colRanges = useMemo(() => {
     const r: Record<string, [number, number]> = {};
     ["composite_score", ...dataCols.map((c) => c.id)].forEach((id) => {
-      const vals = sortedItems.map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      const vals = (results?.items ?? []).map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
       if (vals.length) r[id] = [Math.min(...vals), Math.max(...vals)];
     });
     return r;
-  }, [sortedItems, dataCols]);
+  }, [results, dataCols]);
 
   // ── 값이 전부 빈 컬럼 자동 숨김 (mock 시총 등). 필터 컬럼은 유지 ──
   const emptyCols = useMemo(() => {
     const s = new Set<string>();
-    if (!sortedItems.length) return s;
-    const allNull = (id: string) => sortedItems.every((it) => { const v = (it as Record<string, unknown>)[id]; return v == null || (typeof v === "number" && !Number.isFinite(v)); });
+    const items = results?.items ?? [];
+    if (!items.length) return s;
+    const allNull = (id: string) => items.every((it) => { const v = (it as Record<string, unknown>)[id]; return v == null || (typeof v === "number" && !Number.isFinite(v)); });
     if (allNull("market_cap_억")) s.add("market_cap_억");
     dataCols.forEach((c) => { if (!c.filtered && allNull(c.id)) s.add(c.id); });
     return s;
-  }, [sortedItems, dataCols]);
+  }, [results, dataCols]);
   const shownCols = useMemo(() => dataCols.filter((c) => c.filtered || !emptyCols.has(c.id)), [dataCols, emptyCols]);
   const showMcap = !emptyCols.has("market_cap_억");
+
+  // ── 정렬 — 고른 것(이 브라우저에 남긴 것)은 ★지금 정렬할 수 있는 열★일 때만 쓴다. 모르는 열 · 지금 없는 열이면 기본(종합점수 ↓).
+  //    열의 목록은 아래 표의 정렬 머리와 같다(현재가 · 시가총액 · 값 열 · 종합점수).
+  const sortableIds = useMemo(() => ["current_price", ...(showMcap ? ["market_cap_억"] : []), ...shownCols.map((c) => c.id), "composite_score"], [showMcap, shownCols]);
+  const sort = restoreSort(sortPick, sortableIds, DEFAULT_SORT);
+  const sortedItems = useMemo(
+    () => (results ? sortRows(results.items, (it) => (it as Record<string, unknown>)[sort.col], sort.dir) : []),
+    [results, sort.col, sort.dir]);
+  // 정렬과 쪽을 한 손잡이에서 함께 바꾼다 — 효과로 쪽을 되돌리면 한 그림 동안 다른 쪽의 줄이 새 순서로 비친다(U1-0 이 찾음).
+  const setSort = (col: string) => {
+    const next = nextSort(sort, col);
+    setSortPick(next);
+    try { localStorage.setItem(SORT_KEY, JSON.stringify(next)); } catch { /* noop */ }
+    setPage(0);
+  };
 
   const sampleVals = useCallback((id: string) => sampleItems.map((it) => (it as Record<string, unknown>)[id]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)), [sampleItems]);
 
   const exportCsv = () => {
-    if (!sortedItems.length) return;
-    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", ...(showMcap ? ["시총(억)"] : []), ...shownCols.map((c) => c.label), "종합점수", "판정"];
-    const rows = sortedItems.map((it, i) => [i + 1, it.stock_code, it.corp_name, it.sector ?? "",
-      typeof it.current_price === "number" ? it.current_price : "", ...(showMcap ? [it.market_cap_억 ?? ""] : []),
-      ...shownCols.map((c) => { const v = (it as Record<string, unknown>)[c.id]; return typeof v === "number" ? v : ""; }), it.composite_score, it.verdict]);
-    const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const csv = [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    if (!sortedItems.length || !results || !resultsReq) return;
+    const header = ["순위", "종목코드", "종목명", "섹터", "현재가", ...(showMcap ? ["시총(억)"] : []), ...shownCols.map((c) => c.label), "종합점수", "판정", ...PROVENANCE_HEADER];
+    const prov = provenanceCells({ source: { error: cs.isError, mockAllowed: cs.data?.mock_allowed }, timestamp: results.timestamp, capped: !!results.capped, req: resultsReq, label: fieldLabel });
+    const num0 = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);   // 값 없음은 빈칸(0 이 아니다)
+    const rows = sortedItems.map((it, i) => [i + 1, it.stock_code, it.corp_name, it.sector ?? null, num0(it.current_price),
+      ...(showMcap ? [num0(it.market_cap_억)] : []), ...shownCols.map((c) => num0((it as Record<string, unknown>)[c.id])), num0(it.composite_score), it.verdict, ...prov]);
+    const blob = new Blob([toCsv(header, rows)], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = `screener_${universe}_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    a.href = url; a.download = `screener_${resultsReq.universe}_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
 
   const total = results?.total_passed ?? null;
   const uniTotal = results?.universe_size || universeSizes[universe] || results?.total_evaluated || 0;
   const selectedItem = selected ? sortedItems.find((it) => it.stock_code === selected) ?? null : null;
-  const focusCond = focusedChip != null ? group.conditions[focusedChip] : null;
 
-  // 페이지네이션 계산 — 정렬/새 결과 시 1페이지로 리셋
-  const pageCount = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
-  const curPage = Math.min(page, pageCount - 1);
-  const pageItems = sortedItems.slice(curPage * PAGE_SIZE, (curPage + 1) * PAGE_SIZE);
-  useEffect(() => { setPage(0); }, [results, sortCol, sortDir]);
+  // 쪽 — 새 결과가 오면 첫 쪽으로(정렬은 손잡이가 함께 되돌린다)
+  const pages = pageCount(sortedItems.length, PAGE_SIZE);
+  const curPage = clampPage(page, sortedItems.length, PAGE_SIZE);
+  const pageItems = pageSlice(sortedItems, curPage, PAGE_SIZE);
+  useEffect(() => { setPage(0); }, [results]);
   const gotoPage = (p: number) => {
-    setPage(Math.max(0, Math.min(pageCount - 1, p)));
+    setPage(clampPage(p, sortedItems.length, PAGE_SIZE));
     tableWrapRef.current?.scrollTo({ top: 0 });
   };
-  const pageNums = useMemo(() => {
-    const out: (number | "…")[] = [];
-    for (let i = 0; i < pageCount; i++) {
-      if (i === 0 || i === pageCount - 1 || Math.abs(i - curPage) <= 2) out.push(i);
-      else if (out[out.length - 1] !== "…") out.push("…");
-    }
-    return out;
-  }, [pageCount, curPage]);
 
   // 0개 진단 — 가장 제한적인(단독 통과 최소) 조건
   const diagnostic = useMemo(() => {
@@ -415,201 +477,301 @@ export default function TerminalScreener({ universe }: { universe: string }) {
     return { label: fieldLabel(group.conditions[minI].field), count: minC };
   }, [total, group, chipCounts, fieldLabel]);
 
-  const heatCell = (id: string, v: unknown) => {
-    const range = colRanges[id];
-    const pct = range && typeof v === "number" && Number.isFinite(v) && range[1] > range[0] ? (v - range[0]) / (range[1] - range[0]) : 0;
-    const hb = id === "composite_score" ? true : metaById.get(id)?.higher_better;
-    // 방향성: higher_better 면 큰 값=좋음(녹), 아니면 작은 값=좋음 → 좋을수록 길고 초록, 나쁠수록 짧고 빨강
-    let width = pct, fill = "rgba(18,0,255,0.10)";
-    if (hb !== undefined && range) {
-      const good = hb ? pct : 1 - pct;
-      width = good;
-      fill = good >= 0.5 ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.13)";
-    }
-    return (
-      <td className="num bsc-cell" key={id}>
-        <span className="bsc-cell-fill" style={{ width: `${Math.round(width * 100)}%`, background: fill }} />
-        <span className="bsc-cell-val">{fmtVal(v)}</span>
-      </td>
-    );
+  // ── 결과 표의 열 ──
+  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+  /** 값 열의 소수 자리 — 그 열에서 가장 큰 값의 크기로 정한다(같은 열은 같은 자리). */
+  const digitsOf = (id: string) => { const r = colRanges[id]; const m = r ? Math.max(Math.abs(r[0]), Math.abs(r[1])) : 0; return m >= 1000 ? 0 : m >= 100 ? 1 : 2; };
+  const numCell = (v: unknown, digits: number) => (finite(v) ? num(v, digits) : <Na />);
+  const scoreRange = colRanges.composite_score;
+  const rankBase = curPage * PAGE_SIZE;
+  const columns: Column<ScreenerItem>[] = [
+    { id: "rank", header: "순위", num: true, sticky: true, width: 48, className: "bsc-rank", cell: (_it, i) => rankBase + i + 1 },
+    { id: "fav", header: "관심", headerHidden: true, sticky: true, width: 32, className: "scr-fav-cell", cell: (it) => {
+      const fav = favs.has(it.stock_code);
+      return (
+        <button type="button" className={`tx-td-btn bsc-fav${fav ? " on" : ""}`} aria-pressed={fav}
+                aria-label={fav ? `${it.corp_name} 관심 종목에서 빼기` : `${it.corp_name} 관심 종목에 넣기`}
+                onClick={(e) => toggleFav(it.stock_code, e)}>{fav ? "★" : "☆"}</button>
+      );
+    } },
+    { id: "name", header: "종목", sticky: true, className: "scr-name-cell", cell: (it) => (
+      <>
+        <span className="bsc-name">{it.corp_name}</span>
+        <span className="scr-name-sub"><span className="scr-code">{it.stock_code}</span>{it.sector ? <> · {it.sector}</> : null}</span>
+      </>
+    ) },
+    { id: "current_price", header: "현재가(원)", num: true, sortable: true, cell: (it) => numCell(it.current_price, 0) },
+    ...(showMcap ? [{ id: "market_cap_억", header: "시가총액(억)", num: true, sortable: true,
+      cell: (it: ScreenerItem) => numCell(finite(it.market_cap_억) ? Math.round(it.market_cap_억) : null, 0) }] : []),
+    ...shownCols.map((c) => ({ id: c.id, header: c.label, num: true, sortable: true, className: c.filtered ? undefined : "viewcol",
+      cell: (it: ScreenerItem) => numCell((it as Record<string, unknown>)[c.id], digitsOf(c.id)) })),
+    // 막대는 이 열에만 — 방향이 분명하다(높을수록 좋다). 길이는 이 결과 안에서의 자리다. 시트 · 홈과 같은 소수 한 자리.
+    { id: "composite_score", header: "종합점수", num: true, sortable: true, className: "bsc-cell", cell: (it) => (finite(it.composite_score)
+      ? <BarValue ratio={scoreRange && scoreRange[1] > scoreRange[0] ? (it.composite_score - scoreRange[0]) / (scoreRange[1] - scoreRange[0]) : null}>{num(it.composite_score, 1)}</BarValue>
+      : <Na />) },
+    { id: "verdict", header: "판정", fill: true, cell: (it) => <span className="tx-chip" data-tone="plain">{it.verdict || "판정 없음"}</span> },
+  ];
+  /** 판 · 시트의 값 열 — 표와 같은 이름 · 같은 소수 자리. */
+  const detailCols = shownCols.map((c) => ({ id: c.id, label: c.label, digits: digitsOf(c.id) }));
+  const resizeSide = (w: number, done: boolean) => { setSideW(w); if (done) { try { localStorage.setItem(SIDE_KEY, String(w)); } catch { /* noop */ } } };
+  /** 판을 닫고 초점을 그 줄로 돌려준다 — 닫은 뒤 초점이 사라지지 않게(판 안에 있던 초점은 판과 함께 없어진다). */
+  const closeSide = () => {
+    const code = selected;
+    setSelected(null);
+    if (code) requestAnimationFrame(() => tableWrapRef.current?.querySelector<HTMLElement>(`tr[data-code="${CSS.escape(code)}"]`)?.focus());
   };
+  /** 이 쪽에 값 없는 칸이 있는가 — 있으면 표 아래에 사유 한 줄을 적는다(칸마다 되풀이하지 않는다). */
+  const pageHasNa = pageItems.some((it) => !finite(it.current_price) || !finite(it.composite_score) || (showMcap && !finite(it.market_cap_억))
+    || shownCols.some((c) => !finite((it as Record<string, unknown>)[c.id])));
 
-  const renderRow = (it: ScreenerItem, i: number) => {
-    const vc = verdictColor(it.verdict);
-    const isSel = selected === it.stock_code;
-    return (
-      <tr key={it.stock_code} className={`bsc-row${isSel ? " selected" : ""}`} onClick={() => setSelected(isSel ? null : it.stock_code)}>
-        <td className="bsc-rank">{i + 1}</td>
-        <td><span className={`bsc-fav${favs.has(it.stock_code) ? " on" : ""}`} onClick={(e) => toggleFav(it.stock_code, e)}>{favs.has(it.stock_code) ? "★" : "☆"}</span></td>
-        <td><span className="bsc-name">{it.corp_name}</span>{it.sector && <span className="bsc-sector">{it.sector}</span>}</td>
-        <td className="num">{typeof it.current_price === "number" ? `${it.current_price.toLocaleString()}원` : "—"}</td>
-        {showMcap && <td className="num">{it.market_cap_억 != null ? Math.round(it.market_cap_억).toLocaleString() : "—"}</td>}
-        {shownCols.map((c) => heatCell(c.id, (it as Record<string, unknown>)[c.id]))}
-        {heatCell("composite_score", it.composite_score)}
-        <td><span className="tverdict" style={{ background: vc.bg, color: vc.fg }}>{it.verdict}</span></td>
-      </tr>
-    );
-  };
+  // ── 답(서버 값만) ──
+  const chips: Chip[] = [];
+  if (cs.isError) chips.push({ label: "데이터 출처 확인 실패", tone: "unknown" });
+  else if (cs.data?.mock_allowed) chips.push({ label: "합성 시세", tone: "practice" });
+  if (results) {
+    if (typeof results.ingested_count === "number" && typeof results.universe_size === "number" && results.universe_size > 0)
+      chips.push({ label: `스냅샷 저장 ${num(results.ingested_count)}/${num(results.universe_size)}`, tone: "plain" });
+    if (results.capped) chips.push({ label: "일부만 평가했습니다", tone: "assumed" });
+    const out = results.liquidity_gate?.filtered_out ?? 0;
+    if (gateOn && out > 0) chips.push({ label: `유동성 게이트로 ${num(out)}개 뺐습니다`, tone: "plain" });
+  }
+  const topCodes = sortedItems.slice(0, TOP_BRIDGE).map((it) => it.stock_code);
+  const answerFigures: Figure[] = diagnostic ? [{ label: "가장 제한적인 조건", value: `${diagnostic.label} · 단독 ${num(diagnostic.count)}개` }] : [];
+  const progressText = prog ? `종목 ${num(prog.done)}/${num(prog.total || uniTotal)}개 계산 중` : "종목을 선별하는 중입니다";
 
   return (
-    <div>
-      <div className="bsc-workspace">
-        {/* ── 좌측: 내 필터 ── */}
-        <aside className="bsc-rail">
-          <div className="bsc-rail-head">
-            <span className="bsc-rail-title">내 필터</span>
-            {group.conditions.length > 0 && <button className="bsc-rail-clear" onClick={clearAll}>전체 초기화</button>}
-          </div>
-          <button className="bsc-add-btn" onClick={() => setModalOpen(true)}>＋ 팩터 추가</button>
+    <div className="tx-page tx-page--wide scr">
+      <PageHead title="종목 찾기" lede="조건식으로 종목을 선별합니다." />
 
-          <div className="bsc-mcap">
-            <div className="bsc-mcap-head">시가총액
-              <span className="bsc-mcap-vals">{mcapRange[0] === 0 ? "최소" : fmtMcapKo(sliderToMcap(mcapRange[0]))} ~ {mcapRange[1] === 100 ? "최대" : fmtMcapKo(sliderToMcap(mcapRange[1]))}</span>
-            </div>
-            <div className="bsc-range">
-              <div className="bsc-range-fill" style={{ left: `${mcapRange[0]}%`, right: `${100 - mcapRange[1]}%` }} />
-              <input type="range" min={0} max={100} value={mcapRange[0]} className="bsc-range-input" aria-label="시총 최소"
-                onChange={(e) => { const v = Number(e.target.value); setMcapRange(([, hi]) => [Math.min(v, hi - 1), hi]); }} />
-              <input type="range" min={0} max={100} value={mcapRange[1]} className="bsc-range-input" aria-label="시총 최대"
-                onChange={(e) => { const v = Number(e.target.value); setMcapRange(([lo]) => [lo, Math.max(v, lo + 1)]); }} />
-            </div>
-            <div className="bsc-mcap-btns">
-              <button className={`bsc-mcap-btn${!mcapActive ? " active" : ""}`} onClick={() => setMcapRange([0, 100])}>전체</button>
-              {MCAP_PRESETS.map((p) => (
-                <button key={p.id} className="bsc-mcap-btn" onClick={() => setMcapRange([p.min ? mcapToSlider(p.min) : 0, p.max ? mcapToSlider(p.max) : 100])}>{p.label}</button>
-              ))}
-            </div>
-            <div className="bsc-mcap-note">ⓘ 실데이터 연결 시 동작 (mock은 시총 미제공)</div>
-          </div>
+      {/* ── 조건 ── 접으면 한 줄 요약만 남는다(본문은 `hidden` — 접힌 조작 요소는 초점을 받지 않는다). */}
+      <section className="tx-sec bsc-workspace scr-conds" aria-label="조건">
+        <button type="button" className="scr-conds-toggle" data-act="conds-toggle" aria-expanded={condsOpen} aria-controls="scr-conds-body" onClick={toggleConds}>
+          {condsOpen ? "조건 접기" : "조건 펴기"}
+        </button>
+        {!condsOpen && (
+          <p className="scr-conds-sum">
+            유니버스 {UNIVERSES.find((u) => u.id === universe)?.label ?? universe}
+            {" · "}시가총액 {mcapActive ? `${mcapRange[0] === 0 ? "최소" : fmtMcapKo(sliderToMcap(mcapRange[0]))} ~ ${mcapRange[1] === 100 ? "최대" : fmtMcapKo(sliderToMcap(mcapRange[1]))}` : "전체"}
+            {" · "}{group.conditions.length ? `조건 ${group.conditions.length}개: ${group.conditions.map((c) => condText(c, fieldLabel)).join(" · ")}` : "조건 없음"}
+          </p>
+        )}
+        <div id="scr-conds-body" hidden={!condsOpen}>
+        <div className="scr-line-pair">
+        <div className="scr-line">
+          <label className="scr-line-k" htmlFor="scr-universe">유니버스</label>
+          <select id="scr-universe" className="scr-select" data-act="universe" value={universe} onChange={(e) => setUniverse(e.target.value)}>
+            {UNIVERSES.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+          </select>
+        </div>
 
-          {group.conditions.length === 0 ? (
-            <div className="bsc-rail-empty">아직 추가된 팩터가 없습니다.<br />「＋ 팩터 추가」로 조건을 더하면 「팩터1, 팩터2 …」로 위에 쌓이고, 조건식에 자동으로 들어갑니다.</div>
-          ) : (
-            <div className="bsc-rail-list">
-              {group.conditions.map((c, i) => {
-                const isRank = !!c.rank_mode;
-                return (
-                  <div key={i} className="bsc-rail-item">
-                    <div className="bsc-rail-item-top">
-                      <span className="bsc-rail-item-tag">팩터{i + 1}</span>
-                      <span className="bsc-rail-item-name">{fieldLabel(c.field)}{c.kind === "technical" && <span className="bsc-field-tech" style={{ marginLeft: 6 }}>기술</span>}</span>
-                      {chipCounts[i] != null && <span className="bsc-rail-item-count" title="이 팩터 단독 통과 종목 수">{chipCounts[i]!.toLocaleString()}</span>}
-                      <span className="bsc-rail-item-del" onClick={() => removeCondition(i)}>✕</span>
-                    </div>
-                    <div className="bsc-rail-item-edit">
+        <div className="scr-line">
+          <span className="scr-line-k" id="scr-mcap-k">시가총액</span>
+          <div className="scr-mcap" role="group" aria-labelledby="scr-mcap-k">
+            <button type="button" className={`scr-pill${!mcapActive ? " scr-pill--on" : ""}`} aria-pressed={!mcapActive} onClick={() => setMcapRange([0, 100])}>전체</button>
+            {MCAP_PRESETS.map((pr) => {
+              const r: [number, number] = [pr.min ? mcapToSlider(pr.min) : 0, pr.max ? mcapToSlider(pr.max) : 100];
+              const on = mcapRange[0] === r[0] && mcapRange[1] === r[1];
+              return <button key={pr.id} type="button" className={`scr-pill${on ? " scr-pill--on" : ""}`} aria-pressed={on} data-act="mcap-preset" onClick={() => setMcapRange(r)}>{pr.label}</button>;
+            })}
+            <details className="scr-mcap-custom">
+              <summary>직접 입력 <span className="scr-mcap-vals">{mcapRange[0] === 0 ? "최소" : fmtMcapKo(sliderToMcap(mcapRange[0]))} ~ {mcapRange[1] === 100 ? "최대" : fmtMcapKo(sliderToMcap(mcapRange[1]))}</span></summary>
+              <div className="bsc-range">
+                <div className="bsc-range-fill" style={{ left: `${mcapRange[0]}%`, right: `${100 - mcapRange[1]}%` }} />
+                <input type="range" min={0} max={100} value={mcapRange[0]} className="bsc-range-input" aria-label="시가총액 최소"
+                  onChange={(e) => { const v = Number(e.target.value); setMcapRange(([, hi]) => [Math.min(v, hi - 1), hi]); }} />
+                <input type="range" min={0} max={100} value={mcapRange[1]} className="bsc-range-input" aria-label="시가총액 최대"
+                  onChange={(e) => { const v = Number(e.target.value); setMcapRange(([lo]) => [lo, Math.max(v, lo + 1)]); }} />
+              </div>
+            </details>
+          </div>
+        </div>
+        </div>
+        {mcapActive && results && !showMcap && (
+          <p className="scr-note">현재 결과에는 시가총액 값이 없습니다 — 시가총액 조건은 해당 값이 있는 데이터에만 적용됩니다.</p>
+        )}
+
+        <div className="scr-line scr-line--top">
+          <span className="scr-line-k">조건</span>
+          <div className="scr-cond-list">
+            {group.conditions.length === 0 ? (
+              <p className="scr-empty">아직 조건이 없습니다. 조건을 추가하면 해당 조건을 충족한 종목만 남습니다.</p>
+            ) : group.conditions.map((c, i) => {
+              const isRank = !!c.rank_mode;
+              const name = fieldLabel(c.field);
+              return (
+                <div key={i} className={`scr-cond${focusedChip === i ? " scr-cond--focus" : ""}`}>
+                  <div className="scr-cond-row">
+                    <span className="scr-cond-tag" aria-hidden>팩터{i + 1}</span>
+                    <span className="scr-cond-name">{name}{c.kind === "technical" && <span className="scr-cond-kind">기술 지표</span>}</span>
+                    <span className="scr-cond-edit">
                       {isRank ? (
                         <>
-                          <select className="bsc-chip-op" value={c.rank_mode!} onChange={(e) => updateCondition(i, { rank_mode: e.target.value as FilterConditionNode["rank_mode"] })}>
+                          <select className="bsc-chip-op" data-act="cond-op" aria-label={`${name} 순위 방향`} value={c.rank_mode!} onChange={(e) => updateCondition(i, { rank_mode: e.target.value as FilterConditionNode["rank_mode"] })}>
                             <option value="top_pct">상위</option><option value="bottom_pct">하위</option>
                           </select>
-                          <input className="bsc-chip-val" type="number" value={String(c.rank_value ?? 30)} onChange={(e) => updateCondition(i, { rank_value: Number(e.target.value) || 0 })} />
-                          <span className="bsc-rail-item-unit">%</span>
+                          <input className="bsc-chip-val" data-act="cond-val" aria-label={`${name} 순위 %`} type="number" value={String(c.rank_value ?? 30)} onChange={(e) => updateCondition(i, { rank_value: Number(e.target.value) || 0 })} />
+                          <span className="scr-cond-unit">%</span>
                         </>
                       ) : (
                         <>
-                          <select className="bsc-chip-op" value={c.op || "gte"} onChange={(e) => updateCondition(i, { op: e.target.value as FilterConditionNode["op"] })}>
+                          <select className="bsc-chip-op" data-act="cond-op" aria-label={`${name} 비교`} value={c.op || "gte"} onChange={(e) => updateCondition(i, { op: e.target.value as FilterConditionNode["op"] })}>
                             <option value="gt">&gt;</option><option value="gte">≥</option><option value="lt">&lt;</option><option value="lte">≤</option><option value="eq">=</option>
                           </select>
-                          <input className="bsc-chip-val" type="number" step="any" value={String(c.value ?? 0)} onFocus={() => setFocusedChip(i)}
+                          <input className="bsc-chip-val" data-act="cond-val" aria-label={`${name} 값`} type="number" step="any" value={String(c.value ?? 0)} onFocus={() => setFocusedChip(i)}
                             onChange={(e) => updateCondition(i, { value: e.target.value === "" ? 0 : Number(e.target.value) })} />
                         </>
                       )}
+                    </span>
+                    <span className="scr-cond-count">{chipCounts[i] != null ? `단독 ${num(chipCounts[i]!)}개` : ""}</span>
+                    <button type="button" className="scr-cond-x" data-act="cond-remove" aria-label={`${name} 조건 빼기`} onClick={() => removeCondition(i)}>✕</button>
+                  </div>
+                  {focusedChip === i && !isRank && (
+                    <div className="bsc-hist-panel">
+                      <span className="bsc-hist-label">{name} 분포 — 임계값을 설정합니다</span>
+                      <div className="bsc-hist-wrap"><MiniHistogram values={sampleVals(c.field)} op={c.op} threshold={Number(c.value) || 0} /></div>
                     </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              );
+            })}
+            <div className="scr-cond-act">
+              <button type="button" className="bsc-add-btn" data-act="add-factor" onClick={() => setModalOpen(true)}>＋ 조건 추가</button>
+              {group.conditions.length > 0 && <button type="button" className="bsc-rail-clear" data-act="clear" onClick={clearAll}>모두 삭제</button>}
             </div>
-          )}
-
-          <div className="bsc-preset">
-            <div className="bsc-preset-head">
-              <span>저장된 전략</span>
-              <button className="bsc-preset-save" disabled={!group.conditions.length} onClick={() => setShowSave((v) => !v)}>＋ 저장</button>
-            </div>
-            {showSave && (
-              <div className="bsc-preset-dialog">
-                <input className="bsc-preset-input" placeholder="전략 이름 (예: 저PER 저PBR)" value={presetName} autoFocus
-                  onChange={(e) => setPresetName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }} />
-                <button className="bsc-preset-confirm" onClick={handleSave}>저장</button>
-              </div>
-            )}
-            {presets.length === 0 ? <div className="bsc-preset-empty">저장된 전략 없음</div> : (
-              <div className="bsc-preset-list">
-                {presets.map((p) => (
-                  <div key={p.id} className="bsc-preset-chip" onClick={() => handleLoad(p)} title={`${p.group.conditions.length}개 조건 불러오기`}>
-                    <span className="bsc-preset-chip-name">{p.name}</span>
-                    <span className="bsc-preset-chip-count">{p.group.conditions.length}</span>
-                    <span className="bsc-preset-chip-del" onClick={(e) => handleDelete(p.id, e)}>✕</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-        </aside>
+        </div>
 
-        {/* ── 우측 ── */}
-        <div className="bsc-main">
-          {/* 조건식(불리언 표현식) — 팩터 토큰 + and/or/() 직접 작성 → SEARCH */}
-          {group.conditions.length > 0 && (
+        {/* 전문가 설정 — 기능은 그대로, 기본은 접힘(한 화면 한 일). */}
+        <details className="scr-expert" data-act="expert">
+          <summary>전문가 설정 <span className="scr-expert-sub">조건식 · 유동성 게이트 · 저장한 조건 · 계산 통계</span></summary>
+          <div className="scr-expert-body">
             <div className="bsc-expr">
-              <div className="bsc-expr-row">
-                <span className="bsc-expr-label">조건식</span>
-                <input
-                  ref={exprInputRef}
-                  className={`bsc-expr-input${exprError ? " err" : ""}`}
-                  value={exprText}
-                  placeholder="예: 팩터1 and (팩터2 or 팩터3)"
-                  spellCheck={false}
-                  onChange={(e) => setExprText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
-                />
-                <button className="bsc-expr-search" onClick={runSearch} title="조건식으로 검색">SEARCH</button>
-              </div>
-              <div className="bsc-expr-tokens">
-                <span className="bsc-expr-hint">삽입:</span>
-                {group.conditions.map((c, i) => (
-                  <button key={i} className="bsc-expr-token" title={condText(c, fieldLabel)} onClick={() => insertAtCursor(`팩터${i + 1}`)}>팩터{i + 1}</button>
-                ))}
-                <span className="bsc-expr-sep" />
-                <button className="bsc-expr-op" onClick={() => insertAtCursor(" and ")}>and</button>
-                <button className="bsc-expr-op" onClick={() => insertAtCursor(" or ")}>or</button>
-                <button className="bsc-expr-op" onClick={() => insertAtCursor("(")}>(</button>
-                <button className="bsc-expr-op" onClick={() => insertAtCursor(")")}>)</button>
-              </div>
-              {exprError
-                ? <div className="bsc-expr-msg err">⚠ {exprError}</div>
-                : <div className="bsc-expr-msg ok">적용 중: <b>{committed ? exprText.trim() : "전체 종목 (조건식 없음)"}</b></div>}
+              <p className="scr-expert-h">조건식</p>
+              {group.conditions.length === 0 ? (
+                <p className="scr-note">조건을 추가하면 ‘팩터1 and (팩터2 or 팩터3)’처럼 결합할 수 있습니다.</p>
+              ) : (
+                <>
+                  <div className="bsc-expr-row">
+                    <input ref={exprInputRef} className={`bsc-expr-input${exprError ? " err" : ""}`} data-act="expr" aria-label="조건식"
+                      value={exprText} placeholder="예: 팩터1 and (팩터2 or 팩터3)" spellCheck={false}
+                      onChange={(e) => setExprText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }} />
+                    <button type="button" className="bsc-expr-search" data-act="expr-run" onClick={runSearch}>이 식으로 거르기</button>
+                  </div>
+                  <div className="bsc-expr-tokens">
+                    {group.conditions.map((c, i) => (
+                      <button key={i} type="button" className="bsc-expr-token" aria-label={`팩터${i + 1} 넣기 — ${condText(c, fieldLabel)}`} onClick={() => insertAtCursor(`팩터${i + 1}`)}>팩터{i + 1}</button>
+                    ))}
+                    <span className="bsc-expr-sep" />
+                    {["and", "or", "(", ")"].map((op) => (
+                      <button key={op} type="button" className="bsc-expr-op" onClick={() => insertAtCursor(op === "and" || op === "or" ? ` ${op} ` : op)}>{op}</button>
+                    ))}
+                  </div>
+                  {exprError
+                    ? <p className="bsc-expr-msg err" role="alert">{exprError}</p>
+                    : <p className="bsc-expr-msg ok">현재 적용 식: <b>{committed ? exprText.trim() : "전체 종목(식 없음)"}</b></p>}
+                </>
+              )}
             </div>
-          )}
 
-          {/* 임계값 분포 히스토그램 (편집 중인 조건) */}
-          {focusCond && !focusCond.rank_mode && (
-            <div className="bsc-hist-panel">
-              <span className="bsc-hist-label">{fieldLabel(focusCond.field)} 분포 — 임계값 정하기</span>
-              <div className="bsc-hist-wrap"><MiniHistogram values={sampleVals(focusCond.field)} op={focusCond.op} threshold={Number(focusCond.value) || 0} /></div>
-            </div>
-          )}
-
-          {notice && <div className="bsc-notice">{notice}</div>}
-
-          <div className="bsc-countbar">
-            <span className="bsc-count">검색된 기업 <b>{total != null ? total.toLocaleString() : "—"}</b>개</span>
-            <label className="bsc-gate-toggle" title="시가총액 300억↑ · 일평균 거래대금 3억↑ · 스프레드 1%↓ 종목만 포함">
-              <input type="checkbox" checked={gateOn} onChange={(e) => setGateOn(e.target.checked)} />
-              유동성 게이트
+            <label className="scr-gate">
+              <input type="checkbox" role="switch" className="scr-switch" data-act="gate" checked={gateOn} onChange={(e) => setGateOn(e.target.checked)} />
+              <span>
+                <b>유동성 게이트</b>
+                <span className="scr-gate-d">시가총액 300억 이상 · 일 거래대금 3억 이상 · 호가 스프레드 1% 이하인 종목만 포함합니다. 기본값은 꺼짐입니다.</span>
+              </span>
             </label>
-            {loading && <span className="bsc-spinner" />}
-            <span className="bsc-countbar-spacer" />
-            <button className="bsc-bt-btn" onClick={() => setShowColPicker((v) => !v)} title="표시 컬럼 추가 (필터와 별개)">⊞ 컬럼{displayCols.length ? ` (${displayCols.length})` : ""}</button>
-            <button className="bsc-bt-btn" onClick={exportCsv} disabled={!sortedItems.length} title="현재 결과를 CSV로 내보내기">⤓ CSV</button>
-            <button className="bsc-bt-btn" onClick={sendToBacktester} disabled={!group.conditions.length} title="이 조건식을 백테스터로 전달">이 전략 백테스트 →</button>
+
+            <div className="bsc-preset">
+              <div className="bsc-preset-head">
+                <p className="scr-expert-h">저장한 조건</p>
+                <button type="button" className="bsc-preset-save" disabled={!group.conditions.length} onClick={() => setShowSave((v) => !v)}>현재 조건 저장</button>
+              </div>
+              {showSave && (
+                <div className="bsc-preset-dialog">
+                  <input className="bsc-preset-input" aria-label="저장할 이름" placeholder="이름 (예: 저PER 저PBR)" value={presetName} autoFocus
+                    onChange={(e) => setPresetName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }} />
+                  <button type="button" className="bsc-preset-confirm" onClick={handleSave}>저장</button>
+                </div>
+              )}
+              {presets.length === 0 ? <p className="scr-note">저장한 조건 없음</p> : (
+                <div className="bsc-preset-list">
+                  {presets.map((pr) => (
+                    <span key={pr.id} className="bsc-preset-chip">
+                      <button type="button" className="bsc-preset-chip-name" onClick={() => handleLoad(pr)}>{pr.name} · 조건 {pr.group.conditions.length}개</button>
+                      <button type="button" className="bsc-preset-chip-del" aria-label={`${pr.name} 삭제`} onClick={(e) => handleDelete(pr.id, e)}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="scr-stats">
+              <p className="scr-expert-h">계산 통계</p>
+              {results ? (
+                <p className="scr-note">
+                  유니버스 {num(uniTotal)}종목 · 스냅샷 저장 {num(results.ingested_count ?? 0)} · 평가 {num(results.evaluated_actual ?? results.total_evaluated)}
+                  {" "}· 새로 계산 {num(results.cache_misses)} · 캐시 {num(results.cache_hits)} · {results.elapsed_seconds.toFixed(2)}초
+                  {results.capped ? " · 저장되지 않은 종목이 많아 이번에는 일부만 평가했습니다(데이터 상태에서 전체 적재를 실행하면 해소됩니다)." : ""}
+                </p>
+              ) : <p className="scr-note">아직 계산한 결과 없음</p>}
+            </div>
           </div>
+        </details>
+        </div>
+      </section>
+
+      {notice && <div className="scr-notice"><Notice tone="warn" title={notice} /></div>}
+
+      {/* ── 답 ── */}
+      <div className="scr-answer-wrap">
+        {runError ? (
+          <Notice tone="danger" title="종목 선별 실패">
+            스크리너 계산 연결 실패. 조건은 유지되므로 재시도하십시오.
+            <details className="scr-err-detail"><summary>상세</summary><code>{runError}</code></details>
+            <div className="scr-retry"><button type="button" className="tx-btn tx-btn--sub" onClick={() => setRetry((n) => n + 1)}>재시도</button></div>
+          </Notice>
+        ) : !results ? (
+          <LoadingState label={progressText} />
+        ) : (
+          <div className="scr-answer">
+            <Answer
+              sentence={total ? `조건을 충족한 종목 ${num(total)}개입니다` : "조건을 충족한 종목 없음"}
+              figures={answerFigures} chips={chips}
+              action={
+                <>
+                  {/* 주 행동은 하나 — 조건이 있으면 백테스트, 없으면(보낼 조건이 없다) 설계에 추가가 주 행동이다. 순서는 그대로. */}
+                  <button type="button" className={`tx-btn ${group.conditions.length ? "tx-btn--main" : "tx-btn--sub"}`} data-act="send-backtest" onClick={sendToBacktester} disabled={!group.conditions.length}>이 조건으로 백테스트</button>
+                  {topCodes.length > 0 && <Link className={`tx-btn ${group.conditions.length ? "tx-btn--sub" : "tx-btn--main"}`} href={`/allocation?tickers=${topCodes.join(",")}`}>상위 {topCodes.length}종목 설계에 추가</Link>}
+                  {!group.conditions.length && <span className="scr-hint">조건을 하나 이상 추가하면 백테스트로 전달할 수 있습니다.</span>}
+                  {loading && <span className="scr-hint" role="status">{progressText}</span>}
+                </>
+              } />
+          </div>
+        )}
+      </div>
+
+      {/* ── 결과 ── */}
+      {results && !runError && sortedItems.length > 0 && (
+        <section className="tx-sec scr-results" aria-label="결과">
+          <header className="tx-sec-head">
+            <div>
+              <h2 className="tx-sec-t">결과</h2>
+              <p className="tx-sec-sub">종목을 누르면 상세 정보를 표시합니다.</p>
+              {/* U2-d — 보이는 결과의 시각(CSV 의 출처 칸과 같은 판단). 합성 · 평가 상한은 답 줄의 칩이 말한다. */}
+              <ProvenanceBadge label="이 결과의 시각" times={resultTimes(results.timestamp)} />
+            </div>
+            <div className="scr-tools">
+              <DensityPicker />
+              <button type="button" className="tx-btn tx-btn--sub scr-tool" aria-expanded={showColPicker} onClick={() => setShowColPicker((v) => !v)}>표시 열{displayCols.length ? ` ${displayCols.length}개` : ""}</button>
+              <button type="button" className="tx-btn tx-btn--sub scr-tool" onClick={exportCsv}>CSV 내려받기</button>
+            </div>
+          </header>
 
           {showColPicker && (
             <div className="bsc-colpicker">
               <div className="bsc-colpicker-head">
-                <span>표시 컬럼 (필터와 별개로 보기만)</span>
-                <input className="bsc-colpicker-search" placeholder="컬럼 검색…" value={colSearch} onChange={(e) => setColSearch(e.target.value)} />
+                <span>표시 열 추가(조건과 무관 — 표시 전용)</span>
+                <input className="bsc-colpicker-search" aria-label="열 찾기" placeholder="열 찾기" value={colSearch} onChange={(e) => setColSearch(e.target.value)} />
               </div>
               <div className="bsc-colpicker-list">
                 {allColOptions.filter((o) => !colSearch || o.label.toLowerCase().includes(colSearch.toLowerCase()) || o.id.includes(colSearch.toLowerCase())).slice(0, 240).map((o) => (
@@ -621,79 +783,44 @@ export default function TerminalScreener({ universe }: { universe: string }) {
             </div>
           )}
 
-          <div className="bsc-progress">
-            {loading
-              ? <>데이터 확충 중… <b>{(prog?.done ?? 0).toLocaleString()}</b>/{(prog?.total ?? uniTotal).toLocaleString()} 종목 업데이트{prog && prog.misses > 0 ? ` · 신규 ${prog.misses.toLocaleString()}` : ""}</>
-              : results
-                ? <>
-                    유니버스 <b>{uniTotal.toLocaleString()}</b>종목 · 적재 {(results.ingested_count ?? 0).toLocaleString()} · 평가 {(results.evaluated_actual ?? results.total_evaluated).toLocaleString()}
-                    {gateOn && (results.liquidity_gate?.filtered_out ?? 0) > 0 ? <> · 유동성 제외 {(results.liquidity_gate?.filtered_out ?? 0).toLocaleString()}</> : null}
-                    {" · 신규 "}{results.cache_misses.toLocaleString()} · 캐시 {results.cache_hits.toLocaleString()} · {results.elapsed_seconds.toFixed(2)}s
-                    {results.capped ? <span className="bsc-capped-badge" title="미적재 종목이 많아 이번 실행에서 일부만 평가되었습니다. Data Infra에서 전체 적재를 실행하면 해소됩니다.">평가 상한 발동</span> : null}
-                  </>
-                : <>대기 중…</>}
+          {/* 표 + (넓은 창에서) 옆 판. Esc 는 초점이 표에 있든 판에 있든 판을 닫는다. */}
+          <div className="scr-body" onKeyDown={(e) => { if (e.key === "Escape" && wide && selectedItem) { e.stopPropagation(); closeSide(); } }}>
+            <div className="scr-main">
+              <DataTable label="종목 찾기 결과" columns={columns} rows={pageItems} rowKey={(it) => it.stock_code}
+                         sort={sort} onSort={setSort} selectedKey={selected} onSelect={(code) => setSelected(code)} followFocus={wide}
+                         note={pageHasNa ? `N/A 는 응답에 값이 없는 칸입니다(0 이 아닙니다).` : undefined}
+                         className="bsc-table" wrapClassName="bsc-table-wrap" wrapRef={tableWrapRef} rowClassName="bsc-row"
+                         rowAttrs={(it) => ({ "data-code": it.stock_code })} />
+
+              {pages > 1 && <Pager className="bsc-pager" label="결과 쪽" page={curPage} count={pages} total={sortedItems.length} size={PAGE_SIZE} onPage={gotoPage} />}
+            </div>
+            {wide && selectedItem && (
+              <>
+                <Splitter className="scr-side-bar" label="상세 판 폭" side="end" value={sideW} min={SIDE_MIN} max={SIDE_MAX} step={SIDE_STEP} controls="scr-side" onChange={resizeSide} />
+                <aside id="scr-side" className="scr-side" aria-label="종목 상세" style={{ width: sideW }}>
+                  <header className="scr-side-head">
+                    <div>
+                      <h3 className="scr-side-title">{selectedItem.corp_name}</h3>
+                      <p className="scr-side-sub">{selectedItem.stock_code}{selectedItem.sector ? ` · ${selectedItem.sector}` : ""}</p>
+                    </div>
+                    <button type="button" className="tx-td-btn scr-side-x" aria-label="상세 닫기" onClick={closeSide}><X size={16} aria-hidden="true" /></button>
+                  </header>
+                  <div className="scr-side-body">
+                    <ScreenerDetail item={selectedItem} cols={detailCols} mock={!!cs.data?.mock_allowed} />
+                  </div>
+                </aside>
+              </>
+            )}
           </div>
+        </section>
+      )}
 
-          {/* 적재 미완 안내 — 유니버스가 실제 상장 수보다 작게 보이는 이유를 명시 */}
-          {results && !loading && (results.ingested_count ?? 0) < (results.universe_size ?? 0) && (
-            <div className="bsc-ingest-hint">
-              이 유니버스는 마스터 {(results.universe_size ?? 0).toLocaleString()}종목 중 <b>{(results.ingested_count ?? 0).toLocaleString()}</b>종목만 적재되어 있습니다 — Admin → Data Infra에서 <b>펀더멘털 적재</b>를 실행하면 전 종목으로 확장됩니다.
-            </div>
-          )}
-
-          {/* 0개 진단 */}
-          {diagnostic && (
-            <div className="bsc-diag">조건에 맞는 종목 <b>0개</b> — 가장 제한적인 조건은 <b>{diagnostic.label}</b>(단독 {diagnostic.count.toLocaleString()}개)입니다. 완화하거나 제거해 보세요.</div>
-          )}
-
-          <div className="bsc-table-wrap" ref={tableWrapRef}>
-            <table className="bsc-table">
-              <thead>
-                <tr>
-                  <th className="bsc-rank">#</th>
-                  <th />
-                  <th>종목명</th>
-                  <th className="num sortable" onClick={() => setSort("current_price")}>현재가{sortArrow("current_price")}</th>
-                  {showMcap && <th className="num sortable" onClick={() => setSort("market_cap_억")}>시총(억){sortArrow("market_cap_억")}</th>}
-                  {shownCols.map((c) => (
-                    <th key={c.id} className={`num sortable${c.filtered ? "" : " viewcol"}`} onClick={() => setSort(c.id)} title={c.filtered ? "필터 컬럼" : "보기 컬럼"}>{c.label}{c.filtered ? "" : " ·"}{sortArrow(c.id)}</th>
-                  ))}
-                  <th className="num sortable" onClick={() => setSort("composite_score")}>종합점수{sortArrow("composite_score")}</th>
-                  <th>판정</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((it, vi) => renderRow(it, curPage * PAGE_SIZE + vi))}
-              </tbody>
-            </table>
-            {!loading && sortedItems.length === 0 && !diagnostic && <div className="bsc-empty">[ NO_MATCHES ] 조건에 맞는 종목이 없습니다</div>}
-          </div>
-
-          {/* 페이지 바 — 100행/페이지 */}
-          {pageCount > 1 && (
-            <div className="bsc-pager">
-              <button onClick={() => gotoPage(curPage - 1)} disabled={curPage === 0}>◀ 이전</button>
-              {pageNums.map((p, i) => p === "…"
-                ? <span key={`e${i}`}>…</span>
-                : <button key={p} className={p === curPage ? "on" : ""} onClick={() => gotoPage(p)}>{p + 1}</button>)}
-              <button onClick={() => gotoPage(curPage + 1)} disabled={curPage >= pageCount - 1}>다음 ▶</button>
-              <span className="bsc-pager-range">
-                {(curPage * PAGE_SIZE + 1).toLocaleString()}–{Math.min(sortedItems.length, (curPage + 1) * PAGE_SIZE).toLocaleString()} / {sortedItems.length.toLocaleString()}
-              </span>
-            </div>
-          )}
-
-          {/* 선택 종목 — 하단 고정 액션 바 */}
-          {selectedItem && (
-            <div className="bsc-action-bar">
-              <span className="bsc-action-text"><b>{selectedItem.corp_name}</b> ({selectedItem.stock_code}) · 현재가 {typeof selectedItem.current_price === "number" ? selectedItem.current_price.toLocaleString() : "—"}원 · 종합점수 {selectedItem.composite_score.toFixed(1)} · {selectedItem.verdict}</span>
-              <span className="bsc-countbar-spacer" />
-              <button className="bsc-go-company" onClick={(e) => goToCompany(selectedItem.stock_code, e)}>기업 분석 탭으로 가기 →</button>
-              <span className="bsc-action-close" onClick={() => setSelected(null)}>✕</span>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* ── 자세히 — 좁은 창의 시트(넓은 창에서는 위의 옆 판) ── */}
+      {/* 창이 넓어져 시트가 닫힐 때는 고른 줄을 지우지 않는다 — 같은 종목이 옆 판으로 옮겨 간다(닫힘 사건은 그릇이 바뀐 뒤에 온다). */}
+      <Sheet open={!wide && !!selectedItem} onClose={() => { if (!wide) setSelected(null); }} title={selectedItem?.corp_name ?? ""} testId="screener-row"
+             sub={selectedItem ? <>{selectedItem.stock_code}{selectedItem.sector ? ` · ${selectedItem.sector}` : ""}</> : undefined}>
+        {!wide && selectedItem && <ScreenerDetail item={selectedItem} cols={detailCols} mock={!!cs.data?.mock_allowed} />}
+      </Sheet>
 
       <FactorPickerModal key={modalOpen ? "open" : "closed"} open={modalOpen} tone="neutral" onClose={() => setModalOpen(false)} onInsert={handlePick} />
     </div>

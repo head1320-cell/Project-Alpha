@@ -110,7 +110,7 @@ def test_missing_exposure_honest(monkeypatch):
     def loader(codes):
         exp = {k: np.zeros(len(codes)) for k in
                ("mkt_beta", "size", "momentum", "value", "leverage", "illiquidity", "semi")}
-        return exp, [f"종목{c}" for c in codes], ["노출 결측 팩터(0 기여): 시장 베타 — 실데이터 적재 시 채워짐(정직 결측)."]
+        return exp, [f"종목{c}" for c in codes], ["노출 결측 팩터(0 기여): 시장 베타 — 실데이터 적재 시 채워짐(결측)."]
     monkeypatch.setattr(ksp, "_load_exposures", loader)
     r = run_scenario(CODES, W, "semi_selloff", severity=1.0)
     assert abs(r["portfolio_shock_pct"] - r["market_shock_pct"]) < 0.05   # 팩터 기여 0

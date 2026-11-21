@@ -1,0 +1,337 @@
+"""분봉 지표 등록부 — ★봉 i 의 값은 봉 i 까지만으로 정해진다★ (분봉 백테스트 설계 §7.1 · W4b b1).
+
+두 가지를 건다.
+1. 값 — 봉 열 개짜리 하루를 손으로 계산한 값과 견준다(계산은 시험 옆에 적는다).
+2. 성질 — 등록부의 ★모든★ 지표에 대해, 임의의 자리 k 뒤의 봉을 지우거나 터무니없는 값으로 바꿔도 앞 k 개의 값이 한 자리도
+   달라지지 않는다. 새 지표를 등록부에 더하면 이 시험이 자동으로 건다(지표마다 따로 쓰지 않는다).
+덥혀지지 않은 자리는 0 이 아니라 NaN 이다 — 미상 ≠ 0.
+"""
+from __future__ import annotations
+
+import dataclasses
+import math
+
+import numpy as np
+import pytest
+
+from src.engine.intraday import day_types as dt
+from src.engine.intraday import indicators as ind
+from src.engine.intraday.types import DayTypeRef, PrevDay, RegimeRef, RuleContext, Session
+
+
+def session(rows, prev=None, ticker="005930", date="2026-03-04") -> Session:
+    """rows: (HHMMSS, open, high, low, close, volume)"""
+    t, o, h, low, c, v = zip(*rows)
+    return Session(ticker=ticker, date=date, time=np.array(t), open=np.array(o, float), high=np.array(h, float),
+                   low=np.array(low, float), close=np.array(c, float), volume=np.array(v, float),
+                   source="kis", prev=prev)
+
+
+#        시각      시가  고가  저가  종가  거래량
+ROWS = [("090000", 100, 102, 99, 101, 10),
+        ("090100", 101, 103, 100, 102, 20),
+        ("090200", 102, 104, 101, 103, 30),
+        ("090300", 103, 103, 100, 100, 40),
+        ("090400", 100, 101, 98, 99, 50),
+        ("090500", 99, 105, 99, 104, 60),
+        ("090600", 104, 106, 103, 105, 0),
+        ("090700", 105, 105, 102, 102, 70),
+        ("090800", 102, 103, 101, 103, 80),
+        ("090900", 103, 107, 103, 106, 90)]
+S = session(ROWS, prev=PrevDay(close=98.0, high=101.0, low=95.0, basis="minute"))
+NAN = float("nan")
+
+
+def same(a, b) -> bool:
+    return np.allclose(np.asarray(a, float), np.asarray(b, float), rtol=1e-9, atol=1e-9, equal_nan=True)
+
+
+# ── 값 ───────────────────────────────────────────────────────────────────────────────
+def test_raw_columns_are_passed_through():
+    assert same(ind.compute(S, "close"), [r[4] for r in ROWS])
+    assert same(ind.compute(S, "volume"), [r[5] for r in ROWS])
+
+
+def test_vwap_is_the_running_volume_weighted_typical_price():
+    # 대표가 = (고+저+종)/3 → 100.667, 101.667, 102.667 …  ·  누적(대표가×거래량) ÷ 누적 거래량
+    tp = [(r[2] + r[3] + r[4]) / 3 for r in ROWS]
+    cum_pv, cum_v, want = 0.0, 0.0, []
+    for price, row in zip(tp, ROWS):
+        cum_pv += price * row[5]
+        cum_v += row[5]
+        want.append(cum_pv / cum_v)
+    got = ind.compute(S, "vwap")
+    assert same(got, want)
+    assert math.isclose(got[1], (100.6666666667 * 10 + 101.6666666667 * 20) / 30, rel_tol=1e-9)
+    assert got[6] == got[5]                                  # 거래 없는 봉은 VWAP 를 움직이지 않는다
+
+
+def test_vwap_is_unknown_until_the_first_trade():
+    quiet = session([("090000", 100, 100, 100, 100, 0), ("090100", 100, 101, 100, 101, 5)])
+    got = ind.compute(quiet, "vwap")
+    assert math.isnan(got[0]) and math.isclose(got[1], (101 + 100 + 101) / 3)
+
+
+def test_opening_range_is_unknown_inside_the_window_and_fixed_after_it():
+    # 첫 봉 09:00 부터 3분 → 창은 09:00·09:01·09:02 의 세 봉. 고가 max(102,103,104)=104 · 저가 min(99,100,101)=99
+    hi, lo, done = (ind.compute(S, name, {"minutes": 3}) for name in ("or_high", "or_low", "or_done"))
+    assert all(math.isnan(x) for x in hi[:3]) and all(math.isnan(x) for x in lo[:3])
+    assert same(hi[3:], [104] * 7) and same(lo[3:], [99] * 7)
+    assert same(done, [0, 0, 0, 1, 1, 1, 1, 1, 1, 1])
+
+
+def test_opening_range_counts_minutes_from_the_first_bar_not_bars():
+    # 09:01 봉이 없다(거래 없음) → 3분 창에는 09:00·09:02 의 두 봉만 든다
+    rows = [ROWS[0], ROWS[2], ROWS[3], ROWS[4]]
+    hi = ind.compute(session(rows), "or_high", {"minutes": 3})
+    assert math.isnan(hi[0]) and math.isnan(hi[1]) and same(hi[2:], [104, 104])
+
+
+def test_sma_needs_its_full_window():
+    got = ind.compute(S, "sma", {"n": 3})
+    assert math.isnan(got[0]) and math.isnan(got[1])
+    assert same(got[2:5], [(101 + 102 + 103) / 3, (102 + 103 + 100) / 3, (103 + 100 + 99) / 3])
+
+
+def test_bollinger_bands_use_the_population_deviation_of_the_window():
+    # 봉 2: 종가 101·102·103 → 평균 102 · 모표준편차 sqrt(2/3)=0.81650 → 상단 102+2×0.8165 · 하단 102−2×0.8165
+    mid, up, lo = (ind.compute(S, name, {"n": 3, "k": 2.0}) for name in ("bb_mid", "bb_upper", "bb_lower"))
+    sd = math.sqrt(2 / 3)
+    assert math.isclose(mid[2], 102) and math.isclose(up[2], 102 + 2 * sd) and math.isclose(lo[2], 102 - 2 * sd)
+    assert math.isnan(up[1]) and math.isnan(lo[1])
+
+
+def test_rsi_is_wilders_and_starts_after_n_changes():
+    # 종가 101,102,103,100,99,104 … 변화 +1,+1,−3,−1,+5 …  n=3:
+    #   봉 3(변화 셋: +1,+1,−3): 평균 상승 2/3 · 평균 하락 3/3=1 → RS=0.6667 → RSI=100−100/1.6667=40
+    #   봉 4(변화 −1): 평균 상승 (2/3×2+0)/3=0.4444 · 평균 하락 (1×2+1)/3=1 → RSI=100−100/1.4444=30.769
+    #   봉 5(변화 +5): 평균 상승 (0.4444×2+5)/3=1.9630 · 평균 하락 (1×2+0)/3=0.6667 → RSI=74.648
+    got = ind.compute(S, "rsi", {"n": 3})
+    assert all(math.isnan(x) for x in got[:3])
+    assert math.isclose(got[3], 40.0, abs_tol=1e-9)
+    assert math.isclose(got[4], 100 - 100 / (1 + 0.4444444444 / 1.0), abs_tol=1e-6)
+    assert math.isclose(got[5], 100 - 100 / (1 + 1.962962963 / 0.6666666667), abs_tol=1e-6)
+
+
+def test_rsi_guards_the_division_when_nothing_fell_or_nothing_moved():
+    up_only = session([(f"09{m:02d}00", 100 + m, 101 + m, 100 + m, 101 + m, 1) for m in range(6)])
+    flat = session([(f"09{m:02d}00", 100, 100, 100, 100, 1) for m in range(6)])
+    assert ind.compute(up_only, "rsi", {"n": 3})[5] == 100.0        # 하락이 0 — 100 이라는 값
+    assert math.isnan(ind.compute(flat, "rsi", {"n": 3})[5])        # 움직임이 0 — 정의되지 않는다(50 으로 지어내지 않는다)
+
+
+def test_volume_average_and_highest_close_look_only_at_the_bars_before():
+    vol = ind.compute(S, "vol_avg", {"bars": 3})
+    top = ind.compute(S, "highest_close", {"bars": 3})
+    assert all(math.isnan(x) for x in vol[:3]) and all(math.isnan(x) for x in top[:3])
+    assert math.isclose(vol[3], (10 + 20 + 30) / 3) and math.isclose(vol[4], (20 + 30 + 40) / 3)      # 자기 봉은 빼고
+    assert top[3] == 103 and top[5] == 103 and top[6] == 104
+
+
+def test_day_open_and_previous_day_values_are_constants():
+    assert same(ind.compute(S, "day_open"), [100] * 10)
+    assert same(ind.compute(S, "prev_close"), [98] * 10)
+    assert same(ind.compute(S, "prev_high"), [101] * 10) and same(ind.compute(S, "prev_low"), [95] * 10)
+
+
+def test_without_a_previous_day_those_values_are_unknown_not_zero():
+    alone = session(ROWS)
+    for name in ("prev_close", "prev_high", "prev_low"):
+        assert all(math.isnan(x) for x in ind.compute(alone, name)), name
+
+
+def test_minute_is_the_clock_of_the_bar_label():
+    assert same(ind.compute(S, "minute")[:3], [540, 541, 542])
+
+
+# ── 등록부와 매개변수 ──────────────────────────────────────────────────────────────────
+def test_an_unknown_indicator_or_parameter_is_refused_with_a_reason():
+    for name, params, code in (("stochastic", {}, "unknown_indicator"), ("sma", {"window": 3}, "unknown_param"),
+                               ("sma", {"n": 0}, "param_out_of_range"), ("sma", {"n": 2.5}, "param_not_integer"),
+                               ("bb_upper", {"n": 3, "k": 99}, "param_out_of_range"), ("sma", {"n": True}, "param_not_integer")):
+        with pytest.raises(ind.IndicatorError) as err:
+            ind.compute(S, name, params)
+        assert err.value.code == code, (name, params)
+
+
+def test_missing_parameters_take_the_registered_default():
+    assert same(ind.compute(S, "sma", {}), ind.compute(S, "sma", {"n": ind.INDICATORS["sma"].params["n"].default}))
+
+
+def test_the_registry_says_which_indicators_need_the_previous_day():
+    assert {n for n, spec in ind.INDICATORS.items() if spec.needs_prev} == {"prev_close", "prev_high", "prev_low"}
+
+
+# ── 지표 보탬(자유 조건식 f4) — 지수이동평균 · MACD · ATR · 당일 고가 · 당일 저가 ────────────────────────
+#   종가 101 102 103 100  99 104 105 102 103 106 · 고가 102 103 104 103 101 105 106 105 103 107 · 저가 99 100 101 100 98 99 103 102 101 103
+EMA3 = [NAN, NAN, 102, 101, 100, 102, 103.5, 102.75, 102.875, 104.4375]     # 씨앗 = 처음 셋의 평균 · 계수 2/(3+1) = 0.5
+
+
+def test_ema_starts_from_the_simple_average_of_its_first_window_and_then_leans_toward_each_new_close():
+    assert same(ind.compute(S, "ema", {"n": 3}), EMA3)
+    assert same(ind.compute(S, "ema", {"n": 1}), S.close)                  # 기간 1 = 종가 그 자체
+    two = ind.compute(S, "ema", {"n": 2})
+    assert same(two[:3], [NAN, 101.5, 102.5])                               # 계수 2/3: 101.5 + (103 − 101.5) × 2/3
+    assert np.isnan(ind.compute(S, "ema", {"n": 11})).all()                 # 봉이 모자라면 끝까지 미상이다(짧은 평균으로 때우지 않는다)
+    assert np.isnan(ind.compute(S, "ema", {"n": 10})[:9]).all() and ind.compute(S, "ema", {"n": 10})[9] == S.close.mean()
+
+
+def test_macd_is_the_short_average_minus_the_long_one_and_is_unknown_until_both_exist():
+    line = ind.compute(S, "macd", {"fast": 1, "slow": 3})                   # 단기 1 = 종가 → 종가 − 지수이동평균(3)
+    assert same(line, [NAN, NAN, 1, -1, -1, 2, 1.5, -0.75, 0.125, 1.5625])
+    fast, slow = ind.compute(S, "ema", {"n": 2}), ind.compute(S, "ema", {"n": 3})
+    assert same(ind.compute(S, "macd", {"fast": 2, "slow": 3}), fast - slow)
+    assert same(ind.compute(S, "macd", {"fast": 3, "slow": 2}), slow - fast)    # 단기가 더 길어도 정의는 그대로다(부호가 뒤집힌다)
+
+
+def test_macd_signal_averages_the_macd_line_from_its_first_value_and_the_oscillator_is_their_gap():
+    p = {"fast": 1, "slow": 3, "signal": 2}
+    line, signal, hist = ind.compute(S, "macd", {"fast": 1, "slow": 3}), ind.compute(S, "macd_signal", p), ind.compute(S, "macd_hist", p)
+    # MACD 는 셋째 봉부터 난다 → 신호(2)는 넷째 봉에서 (1 + −1)/2 = 0 으로 시작하고 계수는 2/3 다
+    assert same(signal[:8], [NAN, NAN, NAN, 0, -2 / 3, 10 / 9, 37 / 27, -7 / 162])
+    for i in range(4, 10):
+        assert np.isclose(signal[i], signal[i - 1] + (line[i] - signal[i - 1]) * 2 / 3)
+    assert same(hist, line - signal) and np.isnan(hist[:3]).all() and hist[3] == -1.0
+    assert same(ind.compute(S, "macd_signal", {"fast": 1, "slow": 3, "signal": 1}), line)     # 신호 1 = MACD 그 자체
+
+
+def test_atr_is_wilders_average_of_the_true_range_and_its_first_bar_has_only_its_own_range():
+    # 진폭: 3 3 3 3 3 6 3 3 2 4 (앞 봉 종가와의 거리가 더 큰 봉은 여기에 없다 — 아래 시험이 그 경우를 본다)
+    assert same(ind.compute(S, "atr", {"n": 3}), [NAN, NAN, 3, 3, 3, 4, 11 / 3, 31 / 9, 80 / 27, 268 / 81])
+    one = ind.compute(S, "atr", {"n": 1})                                   # 기간 1 = 진폭 그 자체
+    assert same(one, [3, 3, 3, 3, 3, 6, 3, 3, 2, 4])
+    assert one[0] == 3.0                                                    # ★전일 종가(98)를 쓰지 않는다★ — 썼다면 4 다
+
+
+def test_the_true_range_reaches_back_to_the_previous_bars_close_when_a_bar_gaps():
+    gap = session([("090000", 100, 101, 99, 100, 1), ("090100", 110, 111, 109, 110, 1), ("090200", 100, 101, 99, 100, 1)])
+    assert same(ind.compute(gap, "atr", {"n": 1}), [2, 11, 11])             # 위로 뜀: |111 − 100| · 아래로 뜀: |99 − 110|
+
+
+def test_day_high_and_low_are_the_running_extremes_and_include_the_bar_itself():
+    assert same(ind.compute(S, "day_high"), [102, 103, 104, 104, 104, 105, 106, 106, 106, 107])
+    assert same(ind.compute(S, "day_low"), [99, 99, 99, 99, 98, 98, 98, 98, 98, 98])
+    assert (ind.compute(S, "day_high") >= S.high).all() and (ind.compute(S, "day_low") <= S.low).all()
+
+
+def test_the_registry_says_which_indicators_carry_the_value_of_the_bar_before():
+    """앞 봉의 값을 이어 쓰는 지표 — 그날 첫 봉부터 다시 계산하므로 여러 날을 이은 차트의 값과 하루 내내 다르다(규칙의 주석이 말한다)."""
+    assert {n for n, spec in ind.INDICATORS.items() if spec.carries} == {"ema", "macd", "macd_signal", "macd_hist", "atr", "rsi"}
+
+
+def test_the_new_indicators_have_no_value_on_an_empty_or_one_bar_day():
+    one = session([("090000", 100, 102, 99, 101, 10)])
+    empty = Session(one.ticker, one.date, one.time[:0], one.open[:0], one.high[:0], one.low[:0], one.close[:0], one.volume[:0], "kis", None)
+    for name in ("ema", "macd", "macd_signal", "macd_hist", "atr", "day_high", "day_low"):
+        assert len(ind.compute(empty, name)) == 0, name
+    for name in ("ema", "macd", "macd_signal", "macd_hist", "atr"):
+        assert np.isnan(ind.compute(one, name)).all(), name                 # 기본 기간에는 봉 하나로 값이 없다(0 이 아니다)
+    assert same(ind.compute(one, "day_high"), [102]) and same(ind.compute(one, "day_low"), [99])
+
+
+# ── 성질: 앞보기 0 ─────────────────────────────────────────────────────────────────────
+def _random_session(seed: int, n: int = 60, *, every_minute: bool = False) -> Session:
+    """무작위 하루. 기본은 군데군데 빈 분이 있다 — `every_minute` 면 1분마다(하루 유형의 창이 서는 하루)."""
+    rng = np.random.default_rng(seed)
+    close = 10_000 + np.cumsum(rng.integers(-30, 31, n)) * 10.0
+    open_ = close + rng.integers(-2, 3, n) * 10.0
+    high = np.maximum(open_, close) + rng.integers(0, 4, n) * 10.0
+    low = np.minimum(open_, close) - rng.integers(0, 4, n) * 10.0
+    volume = rng.integers(0, 500, n).astype(float)
+    volume[rng.integers(0, n, 5)] = 0.0
+    steps = rng.integers(1, 3, n)                             # 군데군데 빈 분이 있다
+    minutes = (np.arange(n) if every_minute else np.cumsum(steps)) + 9 * 60
+    time = np.array([f"{m // 60:02d}{m % 60:02d}00" for m in minutes])
+    return Session(ticker="000001", date="2026-03-04", time=time, open=open_, high=high, low=low, close=close,
+                   volume=volume, source="kis", prev=PrevDay(close=9_990.0, high=10_100.0, low=9_900.0, basis="minute"))
+
+
+def _cut(s: Session, k: int) -> Session:
+    """앞 k 봉 — 봉 칸만 자르고 나머지(전일 값 · 규칙 맥락)는 그대로."""
+    return dataclasses.replace(s, **{f: getattr(s, f)[:k] for f in ("time", "open", "high", "low", "close", "volume")})
+
+
+def _poison(s: Session, k: int) -> Session:
+    """k 뒤의 봉을 터무니없는 값으로 — 시각과 봉 수는 그대로."""
+    def bad(a, value):
+        out = a.copy()
+        out[k:] = value
+        return out
+    return dataclasses.replace(s, open=bad(s.open, 1.0), high=bad(s.high, 9e9), low=bad(s.low, 1e-9), close=bad(s.close, 5e8),
+                               volume=bad(s.volume, 7e12))
+
+
+#: 맥락이 필요한 지표(하루 유형)에 줄 모형 — 무작위 중심 넷 · 창 10분.
+MODEL = "ab" * 32
+MODEL_K = 4
+
+
+def _context_for(name: str, seed: int) -> tuple[RuleContext | None, dict]:
+    """그 지표가 맥락을 읽으면 (맥락, 기본값이 없는 매개변수), 아니면 (None, {}).
+
+    하루 유형 = 모형 열쇠 · 시장 국면(K3) = 지수 · 국면 수 · 번호 — 국면 수 2 ~ 4 마다 그 하루의 확률(무작위 · 합 1)을 싣는다."""
+    kind = ind.INDICATORS[name].context
+    if kind is None:
+        return None, {}
+    if kind == "regimes":
+        rng = np.random.default_rng(200 + seed)
+        date = _random_session(seed).date
+        refs = {("KOSPI", k): RegimeRef(index="KOSPI", k=k, probs={date: tuple(float(x) for x in rng.dirichlet(np.ones(k)))})
+                for k in (2, 3, 4)}
+        return RuleContext(regimes=refs), {"index": "KOSPI", "k": 3, "state": 2}
+    centroids = dt.order_centroids(np.random.default_rng(100 + seed).normal(0, 30, size=(MODEL_K, 10)))
+    return RuleContext(day_types={MODEL: DayTypeRef(centroids=centroids, minutes=10, k=MODEL_K)}), {"model": MODEL}
+
+
+@pytest.mark.parametrize("name", sorted(ind.INDICATORS))
+def test_no_indicator_looks_ahead(name):
+    spec = ind.INDICATORS[name]
+    numbers = {p: r for p, r in spec.params.items() if isinstance(r, ind.Range)}
+    for seed in range(4):
+        ctx, keys = _context_for(name, seed)
+        full_session = dataclasses.replace(_random_session(seed, every_minute=ctx is not None), context=ctx)
+        cap = MODEL_K if ctx is not None else 15                   # 유형 번호는 그 모형의 유형 수까지
+        known = 0
+        for params in (dict(keys), {**keys, **{p: r.low for p, r in numbers.items()}},
+                       {**keys, **{p: min(r.high, cap) for p, r in numbers.items()}}):
+            full = ind.compute(full_session, name, params)
+            known += int((~np.isnan(full)).sum())
+            assert len(full) == len(full_session.time)
+            for k in (1, 2, 7, 23, 41, 59):
+                assert same(ind.compute(_cut(full_session, k), name, params), full[:k]), (name, params, seed, k, "지움")
+                assert same(ind.compute(_poison(full_session, k), name, params)[:k], full[:k]), (name, params, seed, k, "바꿈")
+        if ctx is not None:                                        # 공허하지 않다 — 맥락을 준 지표가 실제로 값을 냈다
+            assert known > 0, (name, seed)
+
+
+def test_the_property_test_would_catch_a_looking_ahead_indicator(monkeypatch):
+    """짝 — 성질 시험이 늘 통과하는 시험이 아님을 보인다: 앞을 보는 지표를 심으면 걸린다."""
+    cheat = ind.Indicator(lambda s: np.full(len(s.close), s.close.max()), {}, False)
+    monkeypatch.setitem(ind.INDICATORS, "cheat", cheat)
+    with pytest.raises(AssertionError):
+        test_no_indicator_looks_ahead("cheat")
+
+
+def test_the_property_test_would_catch_a_context_indicator_that_looks_ahead(monkeypatch):
+    """짝 — 맥락을 읽는 지표의 갈래도 공허하지 않다: 그날 ★마지막★ 봉들로 유형을 세는 지표를 심으면 걸린다."""
+    def last_bars(s, model, type):                                 # 창을 하루의 끝에서 잰다 — 앞보기
+        ref = s.context.day_types[model]
+        out = np.zeros(len(s.close))
+        if len(s.close) >= ref.minutes:
+            vec = (s.close[-ref.minutes:] / s.open[0] - 1.0) * 1e4
+            out[:] = 1.0 if int(dt.assign(ref.centroids, vec[None, :])[0]) == type - 1 else 0.0
+        return out
+    cheat = ind.Indicator(last_bars, dict(ind.INDICATORS["day_type_is"].params), context="day_types")
+    monkeypatch.setitem(ind.INDICATORS, "cheat_day_type", cheat)
+    with pytest.raises(AssertionError):
+        test_no_indicator_looks_ahead("cheat_day_type")
+
+
+def test_a_time_that_is_not_four_digits_is_an_error_not_a_zero():
+    """분은 봉마다 읽지 않고 한 번에 센다 — 그래도 틀린 시각을 0 분으로 읽어서는 안 된다."""
+    from src.engine.intraday.indicators import minutes_of
+    assert list(minutes_of(np.array(["090000", "153000", "0005"], dtype=object))) == [540.0, 930.0, 5.0]
+    assert list(minutes_of(np.array(["091500"]))) == [555.0] and len(minutes_of(np.array([], dtype=object))) == 0
+    for bad in ("9시0000", "09", "0a0000", ""):
+        with pytest.raises(ValueError):
+            minutes_of(np.array(["090000", bad], dtype=object))

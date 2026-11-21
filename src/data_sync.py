@@ -14,7 +14,7 @@ Design principles (e2-micro memory-safe):
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -253,7 +253,7 @@ async def daily_sync_scheduler():
         logger.error(f"Initial metadata sync failed: {e}")
 
     while True:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         # 02:00 KST = 17:00 UTC on prior day
         target = now.replace(hour=17, minute=0, second=0, microsecond=0)
         if now >= target:
@@ -278,7 +278,7 @@ async def daily_sync_scheduler():
 async def run_full_sync():
     """Synchronously invoke a full sync. For use from admin endpoints or CLI."""
     logger.info("Starting manual full sync")
-    start = datetime.utcnow()
+    start = datetime.now(timezone.utc).replace(tzinfo=None)
 
     await sync_stock_metadata()
     try:
@@ -287,9 +287,9 @@ async def run_full_sync():
     except Exception as e:
         return {"error": str(e), "elapsed_sec": 0}
 
-    elapsed = (datetime.utcnow() - start).total_seconds()
+    elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds()
     return {
         **(result or {}),
         "elapsed_sec": round(elapsed, 1),
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }

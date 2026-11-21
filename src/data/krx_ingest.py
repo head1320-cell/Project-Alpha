@@ -137,7 +137,7 @@ def ensure_table(engine) -> None:
     if missing:
         logger.warning("daily_prices 컬럼을 쓸 수 없습니다: %s — 적재(UPSERT)가 "
                        "전량 실패하고 가격 품질 보고도 불가합니다. DB 권한·스키마를 "
-                       "확인하세요.", ", ".join(missing))
+                       "확인하십시오.", ", ".join(missing))
     for sql in _ENSURE_INDEXES:
         # ★컬럼 ALTER 와 달리 삼키지 않는다★ `IF NOT EXISTS` 라 "이미 있음" 은
         # 예외가 아니다 — 여기서 예외가 나면 **진짜 실패**이고, 조용히 넘기면
@@ -205,7 +205,7 @@ def backfill(start: str, end: str | None = None,
     from src.data.krx_client import KRXClient
     client = client or KRXClient()
     if not client.is_configured:
-        return {"error": True, "message": "KRX_API_KEY 미설정 — .env에 키를 넣고 실행하세요"}
+        return {"error": True, "message": "KRX_API_KEY 미설정 — .env에 키를 넣고 실행하십시오"}
 
     engine = _get_engine(engine)
     if engine is None:

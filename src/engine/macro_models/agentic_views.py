@@ -57,7 +57,7 @@ def compile_views(assets: list[str], views: list[dict[str, Any]]) -> dict[str, A
     if not assets:
         return {"ok": False, "reason": "자산 목록이 비어 있습니다."}
     if len(views) > _MAX_VIEWS:
-        return {"ok": False, "reason": f"뷰가 너무 많습니다 ({len(views)} > {_MAX_VIEWS})."}
+        return {"ok": False, "reason": f"뷰 개수가 상한을 초과합니다 ({len(views)} > {_MAX_VIEWS})."}
 
     idx = {a: i for i, a in enumerate(assets)}
     rows, rhs, human = [], [], []
@@ -129,7 +129,7 @@ def run(assets: list[str] | None = None, views: list[dict[str, Any]] | None = No
     note = ("뷰가 서로 모순되지 않으며, 사후분포는 뷰가 요구한 것 이상을 바꾸지 않습니다."
             if feasible else
             "★이 뷰들을 동시에 만족시키는 분포가 없습니다★ 아래 위반 목록을 보고 "
-            "뷰를 완화하거나 하나를 내리세요. 이 상태로 배분하지 마세요.")
+            "뷰를 완화하거나 하나를 내리십시오. 이 상태로 배분하지 마십시오.")
     if pooled.get("note"):
         note = f"{note} {pooled['note']}"
 

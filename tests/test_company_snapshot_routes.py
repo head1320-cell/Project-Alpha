@@ -14,6 +14,7 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import src.data.company_snapshots as cs  # noqa: E402
+from tests.route_walk import flat_routes  # noqa: E402
 
 CODE = "005930"
 PREFIX = "/api/v1/company-snapshots"
@@ -40,8 +41,8 @@ def mem_cs(monkeypatch):
 # ── 1. ★라우터가 실제로 등록된다★ ──────────────────────────────────────────
 def test_the_router_is_actually_registered(client):
     """`ROUTER_MODULES` 에 없으면 저장소는 지었지만 아무도 못 부른다."""
-    paths = {(r.path, m) for r in client.app.routes
-             for m in getattr(r, "methods", set())}
+    paths = {(r.path, m) for r in flat_routes(client.app)
+             for m in (getattr(r, "methods", None) or ())}
     assert (PREFIX, "POST") in paths
     assert (PREFIX, "GET") in paths
     assert (f"{PREFIX}/{{snapshot_id}}", "GET") in paths
@@ -50,7 +51,7 @@ def test_the_router_is_actually_registered(client):
 
 def test_the_existing_company_endpoints_are_untouched(client):
     """이 슬라이스는 가산이다 — 기존 세 엔드포인트는 그대로 있다."""
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     for p in ("/api/v1/company/{code}/valuation-sandbox",
               "/api/v1/company/{code}/financial-deep",
               "/api/v1/company/{code}/risk-deep"):

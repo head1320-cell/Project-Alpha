@@ -51,7 +51,7 @@ _TOKEN_RE = re.compile(
 
 def _tokenize(text: str) -> list[str]:
     if len(text) > _MAX_LEN:
-        raise ValueError("식이 너무 깁니다")
+        raise ValueError("식이 허용 길이를 초과합니다")
     out, pos = [], 0
     while pos < len(text):
         if text[pos].isspace():
@@ -63,7 +63,7 @@ def _tokenize(text: str) -> list[str]:
         out.append(m.group(1))
         pos = m.end()
         if len(out) > _MAX_TOKENS:
-            raise ValueError("식이 너무 깁니다")
+            raise ValueError("식이 허용 길이를 초과합니다")
     return out
 
 

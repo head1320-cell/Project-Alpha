@@ -100,35 +100,3 @@ def test_empty_holdings_are_refused(client):
     assert r.status_code == 422
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 전략 수준 — ★기존 응답에 덧붙일 뿐 기존 키는 그대로★
-# ═══════════════════════════════════════════════════════════════════════════
-def test_each_daily_row_explains_itself(monkeypatch):
-    from src.api import stage11_routes as s11
-
-    class _Fake:
-        def __init__(self, engine): pass
-
-        def decompose(self, run_id, include_daily=False):
-            from src.engine.daily_explain_backtest import explain_backtest_day
-            row = {"date": "2026-09-11", "portfolio_return": 0.41,
-                   "allocation_effect": 0.31, "selection_effect": 0.16,
-                   "macro_effect": None, "netting_effect": 0.0,
-                   "cost_effect": -0.08, "regime": "GOLDILOCKS",
-                   "coverage": {"n_total": 5, "n_known": 4, "complete": False,
-                                "missing": ["macro_effect"]}}
-            row["explanation"] = explain_backtest_day(row, run_id=run_id).to_dict()
-            return {"available": True, "daily_attribution": [row]}
-
-    monkeypatch.setattr("src.database.get_sync_engine", lambda: object())
-    monkeypatch.setattr("src.engine.attribution_decomposer.AttributionDecomposer",
-                        _Fake)
-    body = s11.multibacktest_attribution(1, include_daily=True)
-    row = body["daily_attribution"][0]
-    # ★기존 키가 하나도 사라지지 않는다★
-    for k in ("date", "portfolio_return", "allocation_effect", "regime"):
-        assert k in row, k
-    exp = row["explanation"]
-    assert exp["driver_set"] == "strategy_effects"
-    assert exp["residual_kind"] == "unexplained"
-    assert "매크로 오버레이" in exp["summary_ko"]

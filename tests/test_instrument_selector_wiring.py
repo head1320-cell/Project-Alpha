@@ -11,6 +11,8 @@ os.environ.setdefault("KIS_USE_MOCK", "1")
 
 import pytest  # noqa: E402
 
+from tests.route_walk import flat_routes  # noqa: E402
+
 CATALOG = "/api/v1/allocation/exposures"
 IMPLEMENT = "/api/v1/allocation/implement"
 LEGACY = ("/api/v1/allocation/analyze",
@@ -28,7 +30,7 @@ def client():
 
 # ── 1. 라우트 ───────────────────────────────────────────────────────────────
 def test_the_routes_are_registered_and_the_neighbours_are_intact(client):
-    paths = {r.path for r in client.app.routes}
+    paths = {r.path for r in flat_routes(client.app)}
     assert CATALOG in paths and IMPLEMENT in paths
     for p in LEGACY:
         assert p in paths, p

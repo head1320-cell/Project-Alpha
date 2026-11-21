@@ -128,7 +128,7 @@ def asset_strips(market: str = "kr", months: int = 18, window: int = 60) -> dict
             assets.append({"ticker": tk, "label": label, "cells": cells,
                            "now": cells[-1] if cells else None})
     return {"market": market, "months": months, "assets": assets,
-            "note": "가격 위치 백분위 (시세 기반 · 트레일링 5년) — 멀티플 밸류에이션 아님(정직). "
+            "note": "가격 위치 백분위 (시세 기반 · 트레일링 5년) — 멀티플 밸류에이션 아님. "
                     "상단=역사 고점권 · 하단=저점권"}
 
 
@@ -164,4 +164,4 @@ def kr_us_compare(series_map: dict) -> dict:
         rows.append({"label": label, "kr": kr, "us": us,
                      "gap": round(kr - us, 2) if (kr is not None and us is not None) else None})
     return {"rows": rows,
-            "note": "동일 변환(z) 기준 양국 비교 — 다국(중·일·유럽) 지표는 수집 소스 미연동(정직 범위)"}
+            "note": "동일 변환(z) 기준 양국 비교 — 다국(중·일·유럽) 지표는 수집 소스 미연동"}

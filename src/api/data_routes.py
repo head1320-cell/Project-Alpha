@@ -532,7 +532,7 @@ def symbols_flows_status():
     st["research_usage"] = ResearchUsage.FORWARD_ONLY.value
     st["research_usage_reason"] = (
         "KIS TR 은 약 30영업일만 제공하고 개정 이력(빈티지)이 없습니다. "
-        "전방 리서치 맥락으로만 쓰이며 과거 시뮬레이션에서는 차단됩니다. "
+        "전방 리서치 맥락으로만 사용되며 과거 시뮬레이션에서는 차단됩니다. "
         "KRX 백필로 이력을 채워도 빈티지가 생기는 것은 아닙니다."
     )
     st["data_status"] = (DataStatus.MOCK if mock_allowed() else DataStatus.REAL).value

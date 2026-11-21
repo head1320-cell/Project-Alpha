@@ -103,7 +103,7 @@ _FUND_PROVENANCE = {
     "earnings_yield": "DART 연간 EPS ÷ 실주가 · 공시랙 적용(PIT 근사)",
     "book_yield": "DART 연간 BPS ÷ 실주가 · 공시랙 적용(PIT 근사)",
     "dividend_yield_f": "DART 배당공시(alotMatter) 연간 DPS · 공시랙 적용",
-    "eps_yoy": "DART 연간 EPS 변화율 — 컨센서스 미보유 대용(정직 한계)",
+    "eps_yoy": "DART 연간 EPS 변화율 — 컨센서스 미보유 대용(한계)",
 }
 _CATALOG_NOTE = (
     "필드는 그 날짜까지의 데이터로만 계산되며, 펀더멘털은 연간 보고서에 공시랙을 적용한 "
@@ -175,12 +175,12 @@ def alpha_validate(req: ValidateRequest):
         from src.engine.alpha_lab import lint_alpha, validate_alpha
         lint = lint_alpha(req.expr)
         if not lint["ok"]:
-            return {"error": True, "message": "lint 실패 — 식을 수정하세요.", "lint": lint}
+            return {"error": True, "message": "lint 실패 — 식을 수정하십시오.", "lint": lint}
 
         tickers = _resolve_universe_capped(req)
         if len(tickers) < 8:
             return {"error": True,
-                    "message": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers를 직접 지정하세요."}
+                    "message": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers를 직접 지정하십시오."}
 
         report = validate_alpha(req.expr, tickers, months=req.months, quantiles=req.quantiles)
         if report.get("error"):
@@ -252,13 +252,13 @@ def alpha_portfolio(req: AlphaPortfolioRequest):
         if blocked:
             return {"available": False, "blocked": blocked,
                     "reason": "실전 사용이 허용되지 않은 알파가 포함돼 있습니다 — "
-                              "포트폴리오를 만들지 않았습니다."}
+                              "포트폴리오를 구성하지 않았습니다."}
 
         tickers = _resolve_universe_capped(
             ValidateRequest(expr="rank(mom_1m)", tickers=req.tickers, universe=req.universe))
         if len(tickers) < 8:
             return {"available": False,
-                    "reason": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers 를 직접 지정하세요."}
+                    "reason": f"유니버스 해소 실패 ({len(tickers)}종목) — tickers 를 직접 지정하십시오."}
 
         # ── 2. 결합 (+ 중복 진단) ──
         combo = combine_alphas(specs, tickers, as_of=req.as_of)

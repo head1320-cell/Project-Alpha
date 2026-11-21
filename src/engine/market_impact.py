@@ -69,7 +69,7 @@ ASSET_CLASS_TIERS = {
 #:
 #: `threshold_basis` 가 `nominal_krw` 인 이유: 시총 임계값이 **명목 원화**라
 #: 과거에 소급하면 같은 종목이 다른 티어로 밀린다(물가·지수 수준이 다르다).
-_UNMEASURED = ("이 저장소에 이 α 를 잰 기록이 없습니다 — Almgren-Chriss √법칙의 "
+_UNMEASURED = ("이 저장소에 이 α 를 측정한 기록이 없습니다 — Almgren-Chriss √법칙의 "
                "관례적 크기 순서를 따른 값이고, 대형→소형으로 커지는 **순서**는 "
                "유동성 논리와 맞지만 각 수준은 측정치가 아닙니다.")
 TIER_PROVENANCE: dict[str, dict] = {
@@ -437,6 +437,9 @@ class ImpactAssumptions:
         2)` 가 비용 5~100bps 를 통째로 눈멀게 한 전례가 있으므로, 해상도가 효과
         (규모 간 차이 8.5bp)의 1/850 이라 여기서는 문제가 아니라는 논증이
         **리포트 안에서** 확인 가능해야 한다.
+        (정정 2026-11-19 · C1: 그 '전례'의 첫째 까닭은 반올림이 아니라 요약 Sharpe 가 비용 전
+        일별 수익에서 계산된 것이었다 — `quant_metrics.risk_adjusted_ratios` 의 정정 줄. 해상도를
+        신고하는 이 계약은 그대로 옳다.)
         """
         return {
             "portfolio_krw": float(self.portfolio_krw),
@@ -456,7 +459,7 @@ class ImpactAssumptions:
     def impact_bps(self, turnover: float, notional_krw: float) -> dict:
         """편도 회전율(분수)과 KRW notional → 충격 추정.
 
-        ★√법칙을 여기서 다시 계산하지 않는다★ 저장소가 이미 가진 모델을 부른다 —
+        ★√법칙을 여기서 재계산하지 않는다★ 저장소가 이미 가진 모델을 부른다 —
         베끼면 두 벌이 갈라지고, 갈라져도 타입 에러가 나지 않는다(P1·P2′ 에서
         두 번 물린 형태). `turnover_pct` 단위(%)는 `realism_engine` 호출부와
         같게 맞춘다.

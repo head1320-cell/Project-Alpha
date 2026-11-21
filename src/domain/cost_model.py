@@ -79,6 +79,11 @@ STATE_UNSUPPORTED = "unsupported"
 
 STATES = (STATE_CHARGED, STATE_OFF, STATE_UNMEASURABLE, STATE_UNSUPPORTED)
 
+# ── 매도세의 세율을 어디서 받는가 (S1 · 2026-11-19 받은 결정) ─────────────────
+#: 매도마다 그 체결일 · 시장 · 상품의 세율을 받는다. ★세율표는 엔진 경계에서 읽는다 — 여기서는 안 읽는다★
+#: (`market_rules.sell_tax_bp_on` · 근거 T1). 정책에 세율 하나(`tax_bps`)를 두지 않는다.
+TAX_SCHEDULE_TRADE_DATE = "trade_date"
+
 _OFF_REASON = "이 실행에서 껐습니다 — 부과하지 않기로 **선택**한 것이지 비용이 없다는 뜻이 아닙니다."
 _NO_RATE = "켜져 있으나 요율을 읽지 못했습니다 — 지어내지 않고 미상으로 둡니다."
 _NO_PARTICIPATION = ("켜져 있으나 참여율(주문금액/거래대금)을 구하지 못했습니다 — "
@@ -87,6 +92,11 @@ _NO_PARTICIPATION = ("켜져 있으나 참여율(주문금액/거래대금)을 �
 _BUY_HAS_NO_TAX = "증권거래세는 매도에만 부과됩니다 — 매수의 0 원은 미상이 아닙니다."
 _IMPACT_COEFF_NOTE = ("시장충격 계수는 ★측정치가 아니라 설정값★ 입니다 — "
                       "`impact_bp = k·√참여율` 은 문헌 근사이고 k 는 관측된 적이 없습니다.")
+_NO_TRADE_RATE = ("거래일별 세율로 켰으나 이 매도의 세율을 받지 못했습니다. 0 원으로 부과하지 않고 미상으로 둡니다.")
+_TRADE_DATE_NOTE = ("매도세는 매도마다 그 거래일(체결일) · 시장 · 상품의 세율(세율표)로 계산합니다. "
+                    "정책에는 세율 하나를 두지 않습니다.")
+_ROUND_TRIP_TAX_REASON = ("매도세는 거래일 · 시장 · 상품마다 달라 왕복 bp 에 넣지 않았습니다. "
+                          "실제 왕복은 이보다 큽니다.")
 _ROUND_TRIP_REASON = ("왕복은 같은 금액의 매수 + 매도를 가정합니다. ★시장충격은 "
                       "참여율에 달려 있어 제외★ 했으므로 실제 왕복은 이보다 큽니다.")
 
@@ -121,6 +131,25 @@ class CostPolicy:
     tax_bps: float | None = None
     spread_bps: float | None = None
     impact_coeff: float | None = None
+    #: 매도세의 세율을 어디서 받는가 — `None` 이면 위 `tax_bps` 하나(옛 동작 그대로) ·
+    #: `TAX_SCHEDULE_TRADE_DATE` 면 거래마다 `trade_cost(..., sell_tax=)` 로 받는다.
+    #: ★기본값이면 판본 해시에 넣지 않는다★ — 이 필드가 생기기 전의 정책과 같은 판본이어야 저장된 실행과
+    #: 지금 실행이 같은 설정일 때 같은 판본으로 견줘진다(`policy_version`).
+    tax_schedule: str | None = field(default=None, metadata={"version_omit_default": True})
+
+
+@dataclass(frozen=True)
+class SellTaxRate:
+    """매도 하나의 세율 — 엔진이 세율표에서 읽어 거래마다 넘긴다.
+
+    ★`bp is None` 은 0 이 아니라 미상★ 이고 `reason` 이 그 까닭이다(마스터가 시장 · 상품을 모름 · 표 밖 날짜 ·
+    등급 미달). `code` 는 사유의 열쇠, `grade` 는 세율표 줄의 근거 등급이다.
+    """
+
+    bp: float | None
+    reason: str | None = None
+    code: str | None = None
+    grade: str | None = None
 
 
 @dataclass(frozen=True)
@@ -165,9 +194,19 @@ def _impact(value: float, policy: CostPolicy, participation) -> CostComponent:
     return _charged(COMPONENT_IMPACT, value, coeff * math.sqrt(p))
 
 
-def _tax(value: float, side: str, policy: CostPolicy) -> CostComponent:
+def _tax(value: float, side: str, policy: CostPolicy,
+         sell_tax: SellTaxRate | None = None) -> CostComponent:
     if not policy.charge_tax:
         return CostComponent(COMPONENT_TAX, STATE_OFF, reason=_OFF_REASON)
+    if policy.tax_schedule == TAX_SCHEDULE_TRADE_DATE:
+        # 거래일별(S1): 매수에는 세율을 묻지 않는다 · 매도는 넘겨받은 세율만 쓴다(없으면 미상 — 0 이 아니다).
+        if side != "sell":
+            return CostComponent(COMPONENT_TAX, STATE_CHARGED, reason=_BUY_HAS_NO_TAX)
+        rate = _finite(sell_tax.bp) if sell_tax is not None else None
+        if rate is None or rate < 0:
+            why = sell_tax.reason if sell_tax is not None and sell_tax.reason else _NO_TRADE_RATE
+            return CostComponent(COMPONENT_TAX, STATE_UNMEASURABLE, reason=why)
+        return _charged(COMPONENT_TAX, value, rate)
     rate = _finite(policy.tax_bps)
     if rate is None:
         return CostComponent(COMPONENT_TAX, STATE_UNMEASURABLE, reason=_NO_RATE)
@@ -187,19 +226,21 @@ def _spread(value: float, policy: CostPolicy) -> CostComponent:
 
 
 def trade_cost(value: float, side: str, policy: CostPolicy,
-               participation=None) -> CostBreakdown:
+               participation=None, sell_tax: SellTaxRate | None = None) -> CostBreakdown:
     """거래 하나의 비용. ★다섯 성분이 언제나 실리고, 0 원에도 이유가 있다★
 
     Args:
         value: 거래 금액(원).
         side: `"buy"` | `"sell"` — ★증권거래세가 갈리는 유일한 축★.
         participation: 주문금액 / 평균 거래대금. `None` 이면 충격은 **미상**이다.
+        sell_tax: 거래일별 정책(`tax_schedule == TAX_SCHEDULE_TRADE_DATE`)의 이 매도의 세율.
+            고정 세율 정책은 이 값을 보지 않는다(옛 동작 그대로).
     """
     v = _finite(value) or 0.0
     comps = (
         _charged(COMPONENT_COMMISSION, v, _finite(policy.commission_bps) or 0.0),
         _charged(COMPONENT_SLIPPAGE, v, _finite(policy.slippage_bps) or 0.0),
-        _tax(v, side, policy),
+        _tax(v, side, policy, sell_tax),
         _spread(v, policy),
         _impact(v, policy, participation),
     )
@@ -223,7 +264,7 @@ def cost_label(breakdown: CostBreakdown) -> dict:
 
 def policy_label(policy: CostPolicy) -> dict:
     """정책 → 리포트 블록. ★설정값을 측정치처럼 적지 않는다★"""
-    return {
+    out = {
         "commission_bps": policy.commission_bps,
         "slippage_bps": policy.slippage_bps,
         "charge_tax": policy.charge_tax, "tax_bps": policy.tax_bps,
@@ -231,6 +272,55 @@ def policy_label(policy: CostPolicy) -> dict:
         "charge_impact": policy.charge_impact, "impact_coeff": policy.impact_coeff,
         "impact_coeff_note": _IMPACT_COEFF_NOTE,
     }
+    # 거래일별 세율일 때만 칸을 더한다 — 고정 세율 정책의 블록은 바이트까지 그대로다.
+    if policy.tax_schedule is not None:
+        out["tax_schedule"] = policy.tax_schedule
+        out["tax_schedule_note"] = _TRADE_DATE_NOTE
+    return out
+
+
+#: `cost_model_version` 의 자릿수. 짧게 — 기록에 실리고 사람이 읽는다.
+POLICY_VERSION_LEN = 12
+
+
+def policy_version(policy: CostPolicy) -> str:
+    """비용 정책의 판본. ★설정의 해시이지 코드 버전이 아니다★ (AM5)
+
+    채점표 #7 이 `cost_model_version` 을 **없는 것**으로 적었다. 재료는 AK 가
+    이미 만들어 두었다 — `CostPolicy` 가 frozen dataclass 라서 같은 설정은 같은
+    해시가 된다. 지금은 **비용 설정이 다른 두 백테스트가 기록에서 구별되지
+    않는다**.
+
+    ★어휘를 섞지 않는다★ 이 값은 `build_identity.KIND_COST_MODEL` 축이고
+    `code_version`(빌드)과도 `DECISION_LOGIC_VERSION`(결정 로직)과도 다르다.
+    설정이 그대로면 코드가 바뀌어도 이 값은 그대로다 — 그래서 이것만으로
+    재현성을 말할 수 없다.
+
+    ★필드를 세지 않는다★ `dataclasses.fields` 로 읽으므로 정책에 필드를 더하면
+    해시가 자동으로 따라온다. 손으로 센 목록은 반드시 낡는다(CLAUDE.md).
+
+    ★`None` 과 `0.0` 을 접지 않는다★ 미상은 0 이 아니다 — 세금을 모르는 정책과
+    세금이 0 인 정책은 다른 정책이다.
+    """
+    import dataclasses
+    import hashlib
+    import json
+
+    body = {}
+    for f in dataclasses.fields(policy):
+        v = getattr(policy, f.name)
+        # ★뒤에 더한 필드는 기본값이면 빼고 해시한다★ — 그 필드가 생기기 전 정책과 같은 판본이 된다(S1).
+        if f.metadata.get("version_omit_default") and v == f.default:
+            continue
+        if isinstance(v, bool) or v is None:
+            body[f.name] = v          # ★불리언은 숫자가 아니다★
+        elif isinstance(v, (int, float)):
+            body[f.name] = float(v)   # `15` 와 `15.0` 은 같은 정책이다
+        else:
+            body[f.name] = v
+    blob = json.dumps(body, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:POLICY_VERSION_LEN]
 
 
 def round_trip_bps(policy: CostPolicy) -> dict:
@@ -242,9 +332,110 @@ def round_trip_bps(policy: CostPolicy) -> dict:
         commission_bps=policy.commission_bps, slippage_bps=policy.slippage_bps,
         charge_tax=policy.charge_tax, tax_bps=policy.tax_bps,
         charge_spread=policy.charge_spread, spread_bps=policy.spread_bps,
-        charge_impact=False)
+        charge_impact=False, tax_schedule=policy.tax_schedule)
     buy = trade_cost(1e8, "buy", quiet).total_bps
     sell = trade_cost(1e8, "sell", quiet).total_bps
-    return {"buy_bps": round(buy, 4), "sell_bps": round(sell, 4),
-            "round_trip_bps": round(buy + sell, 4),
-            "impact_excluded": True, "reason": _ROUND_TRIP_REASON}
+    out = {"buy_bps": round(buy, 4), "sell_bps": round(sell, 4),
+           "round_trip_bps": round(buy + sell, 4),
+           "impact_excluded": True, "reason": _ROUND_TRIP_REASON}
+    # 거래일별 세율은 한 숫자에 넣지 않는다 — 넣지 않았다는 사실을 말한다(고정 세율 정책은 칸이 늘지 않는다).
+    if policy.charge_tax and policy.tax_schedule == TAX_SCHEDULE_TRADE_DATE:
+        out["tax_excluded"] = True
+        out["tax_reason"] = _ROUND_TRIP_TAX_REASON
+    return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BB · 거래별로 재지 않는 엔진의 블록 — ★정책은 말하고, 안 센 것은 미상이다★
+# ═══════════════════════════════════════════════════════════════════════════
+
+_NO_BREAKDOWN = ("이 엔진은 거래별 비용 분해를 하지 않습니다 — 요율(정책)은 "
+                 "적용했지만 성분별 금액과 측정하지 못한 거래 수는 ★집계한 적이 없어 미상★ "
+                 "입니다. 0 으로 적으면 '전부 측정했다' 는 관측이 됩니다.")
+_NOT_COUNTED = "이 엔진은 이 성분의 금액을 별도로 집계하지 않습니다 — 0 이 아니라 미상입니다."
+_IMPACT_NOT_A_RATE = ("시장충격은 참여율에 달린 식이라 고정 bp 로 적을 수 없습니다 — "
+                      "bp 칸은 미상으로 둡니다.")
+
+#: 성분 → (정책에서 켜짐 여부, 정책의 요율). ★수수료·슬리피지는 끌 수 없다★
+_SWITCH = {
+    COMPONENT_COMMISSION: (lambda p: True, lambda p: p.commission_bps),
+    COMPONENT_SLIPPAGE: (lambda p: True, lambda p: p.slippage_bps),
+    COMPONENT_TAX: (lambda p: p.charge_tax, lambda p: p.tax_bps),
+    COMPONENT_SPREAD: (lambda p: p.charge_spread, lambda p: p.spread_bps),
+    COMPONENT_IMPACT: (lambda p: p.charge_impact, lambda p: None),
+}
+
+
+def _unsupported_reason(engine: str) -> str:
+    return (f"{engine} 엔진에는 이 성분 자체가 없습니다 — ★끈 것(선택)도 못 잰 것"
+            f"(경고)도 아니고 부재입니다.★ 켤 문이 없으므로 요청으로 바꿀 수 없습니다.")
+
+
+def policy_only_block(policy: CostPolicy, *, engine: str, supported,
+                      provenance: dict, notes: dict | None = None,
+                      totals: dict | None = None) -> dict:
+    """거래별로 재지 않는 엔진의 `cost_model` 블록 (BB1). ★순수★
+
+    메인 엔진(`kis_backtest_engine._cost_model_block`)이 내는 키를 **전부**
+    같은 이름으로 싣는다 — 소비자가 어느 엔진이든 같게 읽는다. 다른 점은
+    ★센 적이 없는 것을 `None` 으로 둔다★ 는 것뿐이다.
+
+    Args:
+        engine: 블록을 낸 엔진 이름.
+        supported: 이 엔진에 **있는** 성분. 나머지는 `unsupported` 다.
+        provenance: `cost_provenance.rate_provenance(...)` 의 결과 그대로.
+        notes: 성분별 덧붙일 사유(예: 다른 충격 모델의 가정).
+        totals: ★엔진이 실제로 센★ 성분별 원화 합계. 일부만 있으면 총액은 미상.
+    """
+    supported = tuple(supported)
+    unknown = [n for n in supported if n not in COMPONENTS]
+    if unknown:
+        raise ValueError(f"알 수 없는 비용 성분: {unknown} — 오타가 조용히 "
+                         f"'unsupported' 가 되면 안 됩니다.")
+    totals = dict(totals or {})
+    stray = [n for n in totals if n not in supported]
+    if stray:
+        raise ValueError(f"이 엔진에 없는 성분의 금액: {stray} — 모순입니다.")
+    notes = dict(notes or {})
+
+    comps: dict[str, dict] = {}
+    for name in COMPONENTS:
+        note = notes.get(name)
+        if name not in supported:
+            comps[name] = {"state": STATE_UNSUPPORTED, "bps": None, "krw": None,
+                           "reason": _unsupported_reason(engine)}
+            continue
+        on, rate = _SWITCH[name]
+        if not on(policy):
+            comps[name] = {"state": STATE_OFF, "bps": None, "krw": None,
+                           "reason": _OFF_REASON}
+            continue
+        bps = _finite(rate(policy))
+        krw = _finite(totals.get(name))
+        reasons = [r for r in (
+            note,
+            None if bps is not None else (
+                _IMPACT_NOT_A_RATE if name == COMPONENT_IMPACT else _NO_RATE),
+            None if krw is not None else _NOT_COUNTED) if r]
+        comps[name] = {"state": STATE_CHARGED,
+                       "bps": round(bps, 4) if bps is not None else None,
+                       "krw": round(krw, 4) if krw is not None else None,
+                       "reason": " ".join(reasons) or None}
+
+    charged = [c for c in comps.values() if c["state"] == STATE_CHARGED]
+    counted_all = bool(charged) and all(c["krw"] is not None for c in charged)
+    return {
+        "engine": engine,
+        "components": comps,
+        # ★일부만 셌으면 합계는 미상★ — 센 것만 더하면 싼 합계가 된다.
+        "total_krw": round(sum(c["krw"] for c in charged), 2) if counted_all else None,
+        "total_bps": None,
+        "n_unmeasurable": None,
+        "rate_provenance": provenance,
+        "policy": policy_label(policy),
+        "version": policy_version(policy),
+        "round_trip_bps": round_trip_bps(policy)["round_trip_bps"],
+        "breakdown": None,
+        "breakdown_reason": _NO_BREAKDOWN,
+        "n_unmeasured_trades": None,
+    }

@@ -177,7 +177,7 @@ def scenario_pack_save(req: PackSaveRequest):
         if req.pack_id:
             raise HTTPException(
                 422, f"갱신할 시나리오 팩을 찾을 수 없습니다: {req.pack_id}. "
-                     "삭제되었을 수 있습니다 — 새 팩으로 저장하세요.")
+                     "삭제되었을 수 있습니다 — 새 팩으로 저장하십시오.")
         raise HTTPException(503, "시나리오 팩 저장소(DB)를 사용할 수 없습니다.")
     row = get_saved(pid) or {}
     return {"pack_id": pid, "version": row.get("version"),

@@ -120,7 +120,12 @@ def write_preregistration(path: str) -> dict:
     """
     from datetime import datetime, timezone
 
-    from src.engine.research_context import code_version
+    from src.engine.build_probe import current_identity
+
+    # ★한 벌만 남긴다★ 메니페스트 쪽만 트리 상태를 적고 여기는 값만 적으면,
+    # `research_context` 머리글이 경고한 바로 그 일이 다시 일어난다 —
+    # "복사본이 넷이면 언젠가 하나는 갈라진다".
+    ident = current_identity()
 
     rule = effective_decision_rule()
     nfp = rpre.null_behaviour_fingerprint()
@@ -130,7 +135,9 @@ def write_preregistration(path: str) -> dict:
         "rule_fingerprint": rpre.rule_fingerprint(rule),
         "null_fingerprint": nfp["fingerprint"],
         "null_probe": nfp["probe"],
-        "code_version": code_version(),
+        "code_version": ident.value,
+        "code_tree": ident.tree,
+        "code_version_method": ident.method,
         "registered_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "note": ("결정규칙과 널 **행동**을 고정한다. 격자·시드 같은 실행 파라미터는 "
                  "여기 없다 — 실행마다 다를 수 있고, 바뀌면 안 되는 것은 판정 규칙이다."),
@@ -257,6 +264,11 @@ def evaluate(plan, *, cost_bps: float, impact=None,
         #   0.6706→0.6087 로 움직인다). 그 값을 쓰면 사전등록의 "비용 3수준 전부"
         #   절이 **무의미**해진다 — 통계가 비용을 볼 수 없기 때문이다.
         #   두 값은 정의도 다르므로(요약 0.42 vs 일수익 0.67) 하나만 쓴다.
+        #   ★정정(2026-11-19 · C1 에서 잼)★ 요약 값이 비용을 못 본 첫째 까닭은 반올림이 아니라
+        #   기준이다 — 요약의 Sharpe 는 비용 전 일별 수익에서 계산해 전정밀도(`sharpe_ratio_full`)도
+        #   비용 5 → 200bp 에서 그대로다. 여기서 쓰는 일수익은 ★비용 후★ 자본곡선에서 되짚으므로
+        #   비용을 본다(이 선택이 옳은 까닭이 하나 더 있다). 요약에 나란히 실은 비용 후 값은 보이기만 하고
+        #   이 관문은 읽지 않는다(`tests/test_walk_forward_cost_basis.py` 의 정적 시험).
         "sharpe": _sharpe(daily),
         "sharpe_summary_rounded": s["sharpe_ratio"],
         "cagr_pct": s["cagr_pct"],
@@ -948,7 +960,9 @@ def write_verdict_manifest(rep: dict, path: str, *, report_path: str | None = No
     import hashlib
     from datetime import datetime, timezone
 
-    from src.engine.research_context import code_version
+    from src.engine.build_probe import current_identity
+
+    _ident = current_identity()
 
     # ★등록과 어긋난 실행의 판정은 기록하지 않는다 (P6 ②)★
     # 생산 동작은 전혀 안 바뀐다(메니페스트는 연구 산물이다). 대신 P5 와
@@ -1011,7 +1025,13 @@ def write_verdict_manifest(rep: dict, path: str, *, report_path: str | None = No
             # 검사 결과가 아니라 선언이 된다(그래서 지문이 비어도 안 걸렸다).
             "matches": prereg.get("matches"),
         },
-        "code_version": code_version(),
+        # ★버전만으로는 노후화를 판정할 수 없다★ SHA 는 커밋을 식별하지
+        # 트리를 식별하지 않으므로, 트리 상태를 함께 적지 않으면 소비자
+        # (`research_manifest.verification_label`)는 비교를 거부한다 — 그것이
+        # 옳다. 커밋돼 있는 옛 메니페스트가 정확히 그 상태다.
+        "code_version": _ident.value,
+        "code_tree": _ident.tree,
+        "code_version_method": _ident.method,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "report_sha256": sha,
     }

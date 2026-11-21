@@ -36,14 +36,30 @@ _MONTHS = [{"year": 2021 + (i // 12), "month": (i % 12) + 1,
             "return_pct": 1.0 + 0.4 * ((i * 7919) % 11 - 5)} for i in range(36)]
 
 
-@pytest.fixture
-def client(monkeypatch):
+def _client_with(monkeypatch, months):
     monkeypatch.setattr(br, "get_run", lambda run_id, strict=False: {
         "run_id": "bt_test", "status": "completed", "strategy_name": "시험용",
-        "result": {"monthly_returns": _MONTHS}})
+        "result": {"monthly_returns": months}})
     app = FastAPI()
     app.include_router(router)
     return TestClient(app)
+
+
+@pytest.fixture
+def client(monkeypatch):
+    return _client_with(monkeypatch, _MONTHS)
+
+
+@pytest.fixture
+def recent_client(monkeypatch):
+    """★회귀가 실제로 돌아야 하는 시험용★ 창이 지난달까지 36개월이다.
+
+    합성 매크로 계열은 오늘 기준 최근 60개월이라, 고정 창(2021-01~2023-12)과의 겹침은 날마다 준다 —
+    2026-11 에 24개(최소치)였고 2026-12-01 부터 23개였다(`tests/factor_asof.py`). 표 판본이 창보다 뒤라는 것을
+    보는 시험들은 회귀 성공이 필요 없어 고정 창(`client`)을 그대로 쓴다.
+    """
+    from tests.factor_asof import attribution_months
+    return _client_with(monkeypatch, attribution_months())
 
 
 def _get(client, **params) -> dict:
@@ -96,13 +112,13 @@ def test_the_flag_actually_truncates_and_says_so(client):
     assert sel["reason"] is None
 
 
-def test_the_numbers_do_not_move_by_default(client):
+def test_the_numbers_do_not_move_by_default(recent_client):
     """★행동 불변★ 이 슬라이스는 라벨만 늘린다 — 계수는 그대로여야 한다.
 
     기본(절단 없음)이 예전 동작이다. 값이 움직였다면 라벨 작업이 정책 변경으로
     번진 것이다.
     """
-    b = _get(client)
+    b = _get(recent_client)
     assert b["available"] is True, b.get("reason")
     # ★실측한 키를 건다★ 처음에 `alpha`·`r2`·`betas` 로 짐작해 썼다가 이 테스트가
     # 내 짐작을 잡았다 — 실제 이름은 아래다.

@@ -19,7 +19,11 @@
 없던 것은 보정 산수만이 아니라 **어휘·판정·롤업**이었다 — 네 방언이라 기계가 셀 수
 없고, 화면이 비교할 수 없었다. AH2(`estimator_evidence`)와 같은 관용구다.
 
-## ★시행 횟수를 세는 자리가 없다★ — 그래서 PBO·DSR 을 만들지 않는다
+## ★시행 횟수를 세는 자리가 없다★ — 그래서 (실행 이력 전체의) PBO·DSR 을 만들지 않는다
+
+BO O3(2026-09-28) — 캔버스 **대안 비교**에서만은 사람이 나란히 둔 원본 + 대안 수를 N 의 **하한**으로 쓴 DSR 을
+`src/engine/deflated_sharpe.py` 가 보인다(그 전에 바꿔 보고 지운 설정은 세지 않아 보정이 약한 쪽으로 틀린다 — 응답이 그렇게 말한다).
+이 레지스트리의 판정(자리별 보정 여부)은 바뀌지 않는다.
 
 둘 다 *"몇 개를 시도했나"* 의 N 을 요구한다. 실측(2026-09-15): `backtest_runs`
 31행이 **전부 테스트 픽스처**(`테스트전략`·`결과없는실행`·`귀인테스트`…),
@@ -27,6 +31,11 @@
 버전 레지스트리이지 시행 이력이 아니다. ★어느 것을 N 으로 써도 날조다.★
 `auto_alpha.selection_bias_note` 가 이미 `sqrt(2·ln N)` — DSR 의 팽창항 — 을
 계산하지만 그 N 은 그 호출이 방금 센 후보 수다.
+
+W4d(2026-11-14) — ★분봉 백테스트만은 센다.★ `src/data/intraday_trials.py` 가 사용자별로 시행(설정이 하나라도 다른
+실행)을 남기고, 판정 문이 그 수를 N 으로 쓴 DSR 을 관문 표에 싣는다(`SEARCH_SITES` 의 `intraday_trials`).
+그 N 도 ★하한★이다 — 그 도구 안에서 기록된 것만 세고, 기록에 실패하면 N=1 로 꾸미지 않고 미상으로 답한다.
+일봉 백테스트(`backtest_runs`)와 리서치 실행에는 여전히 N 을 세는 자리가 없다 — 위 실측은 그대로다.
 
 ## ★이 모듈이 주장하지 않는 것★
 
@@ -44,6 +53,7 @@ from typing import Any
 
 from src.domain.multiplicity import (
     CORRECTION_BH,
+    CORRECTION_DSR,
     CORRECTION_NONE,
     CORRECTION_SPA,
     CORRECTIONS,
@@ -57,9 +67,11 @@ from src.engine.run_evidence import AXIS_DEGRADED, AXIS_OK, AXIS_UNKNOWN, rollup
 _NOTE = (
     "이 판정은 **몇 개를 동시에 봤고 그것을 보정했나**만 말합니다. 데이터의 시점 "
     "정합은 `pit_evidence`, 추정 누출은 `estimator_evidence` 가 답하는 다른 "
-    "질문입니다. ★PBO·deflated Sharpe 는 여전히 없습니다★ — 둘 다 실행 이력의 "
-    "시행 횟수 N 을 요구하는데 이 저장소에는 그것을 세는 자리가 없어, 지금 N 을 "
-    "만들면 그것이 날조입니다.")
+    "질문입니다. ★실행 이력 전체에 대한 PBO·deflated Sharpe 는 여전히 없습니다★ — 둘 다 "
+    "시행 횟수 N 을 요구하는데, N 을 세는 자리는 분봉 백테스트 하나뿐입니다(`intraday_trials` — "
+    "그 도구에 기록된 시행만 센 **하한**). 일봉 백테스트(`backtest_runs`)와 리서치 실행에는 "
+    "N 을 세는 자리가 없어, 거기서 N 을 만들면 그것이 날조입니다. (캔버스 대안 비교는 남아 있는 "
+    "대안 수를 N 의 **하한**으로 쓴 DSR 을 따로 보입니다 — `deflated_sharpe`.)")
 
 _REASON_UNKNOWN_FAMILY = (
     "몇 개를 동시에 봤는지 선언하지 않습니다 — 보정 여부를 판정할 수 없습니다. "
@@ -145,6 +157,17 @@ SEARCH_SITES: tuple[SearchSite, ...] = (
         note=("★저장소에서 보정이 **실제로** 있는 유일한 자리★ — 여러 팔 중 최선이 "
               "벤치마크를 이기는가를 탐색 보정 후에 묻는다. 못 돌리면 사유와 함께 "
               "`None` 이다. 다만 `scripts/` 에 있어 `src/api` 에서 닿지 않는다."),
+    ),
+    SearchSite(
+        key="intraday_trials",
+        site="src/data/intraday_trials.py:family",
+        label="분봉 백테스트 시행(설정 탐색)",
+        family_source=FAMILY_DECLARED, correction=CORRECTION_DSR,
+        decision_touching=False,
+        note=("★시행 횟수 N 을 세는 첫 자리★ — 사용자가 설정을 바꿔 돌릴 때마다 시행을 남기고, 기간이 겹치고 "
+              "종목이 하나라도 겹치는 시행을 한 가족으로 세어 DSR 로 보정한다. N 은 이 도구에 기록된 것만 센 "
+              "하한이다(밖에서 해 본 것은 세지 못한다). 기록에 실패하면 N=1 로 꾸미지 않고 미상으로 답한다. "
+              "합성 분봉 위의 시행과 실제 분봉 위의 시행은 서로 세지 않는다. 계산만 하고 주문·배분에 닿지 않는다."),
     ),
     SearchSite(
         key="macro_target_bh",

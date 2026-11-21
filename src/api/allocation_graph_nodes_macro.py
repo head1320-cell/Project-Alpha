@@ -1,0 +1,398 @@
+"""AAS 그래프 — 거시·타이밍 노드 (BK W3) · ★노출 조절은 기존 함수만 부른다★
+==============================================================================
+스펙 `docs/superpowers/specs/2026-09-25-aas-all-tools-nodes-design.md` §2 W3 · §3 ·
+Macro→Allocation 승인 범위: `docs/decisions/adr-002-aas-node-canvas.md` §7
+
+- 경기 국면(`regime`): 저장된 스냅샷을 **읽는다**(`regime_snapshots.get_snapshot`/`list_snapshots`).
+  새로 만드는 일(DB 쓰기)은 매크로 탭의 몫이다 — 계산은 쓰지 않는다.
+- 타이밍 신호(`timing_signal`): `rule_set_from_specs` → `rule_set_states` → `combine` (3자 비교와 같은 파생).
+- ★노출 조절(`exposure_overlay`)★: 고른 판단(타이밍 · 타이밍+국면 · 직접)의 노출을 `three_way` 로 얻고
+  `target_versions.compile_target` 로 적용한다 — `final = base × exposure`, 줄인 만큼 현금. 이 모듈은
+  `MODE_CAP`·`REGIME_TILTS`·임계값을 읽지도 쓰지도 않는다(테스트가 소스로 확인).
+  퀀트 고객을 위한 고도화: 세 판단을 나란히 보여 주고 고른 것만 적용 · 적용 강도(줄이는 쪽으로만) ·
+  ★모든 신호를 읽지 못했으면 적용하지 않음★ · 실행 목표 상태(실행 가능/연구용)와 사유를 함께 나름.
+- 타이밍 시뮬레이션(`timing_simulation`): `simulate_rule_set` — backtest 모드는 부적격 팩터가 있으면
+  **거부**(엔진 규칙 그대로), forward 모드는 걷되 백테스트가 아니라고 말한다.
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Literal
+
+import numpy as np
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.api.allocation_graph_explain import ASSUMED, CONFIRMED, UNKNOWN, _josa, _pct, _t
+from src.api.allocation_graph_nodes import _ui, weights_value
+from src.data.mock_gate import mock_allowed
+from src.engine import portfolio_graph as pg
+
+logger = logging.getLogger(__name__)
+
+P = pg.Port
+_FORBID = ConfigDict(extra="forbid")
+
+_STATE_PLAIN = {"risk_on": "위험-온", "risk_off": "위험-오프", "unavailable": "판단 불가"}
+_REGIME_PLAIN = {"Goldilocks": "골디락스", "Reflation": "리플레이션", "Stagflation": "스태그플레이션",
+                 "Deflation": "디플레이션"}
+_MODE_PLAIN = {"NORMAL": "정상", "CAUTIOUS": "경계", "DEFENSIVE": "방어"}
+
+
+# ── 경기 국면 ────────────────────────────────────────────────────────────────
+
+class RegimeParams(BaseModel):
+    model_config = _FORBID
+    snapshot_id: str | None = Field(None, max_length=40, json_schema_extra={"x-ui": _ui(
+        "스냅샷 번호", question="사용할 스냅샷", presets=[{"label": "가장 최근", "value": None}],
+        help="비우면 최근 저장한 스냅샷을 사용합니다. 특정 번호는 전문가 설정에서 입력합니다. 스냅샷은 매크로 탭에서 생성합니다.")})
+
+
+def _regime(inputs: dict, p: RegimeParams) -> pg.NodeOutput:
+    from src.data import regime_snapshots as rs
+    latest = False
+    if p.snapshot_id:
+        snap = rs.get_snapshot(p.snapshot_id)
+        if snap is None:
+            raise pg.NodeFailure(f"경기 국면 스냅샷 {p.snapshot_id} 을(를) 찾지 못했습니다 — 번호를 확인하거나 비워 두십시오.")
+    else:
+        rows = rs.list_snapshots(limit=1)
+        if not rows:
+            raise pg.NodeFailure("저장된 경기 국면 스냅샷이 없습니다 — 매크로 탭에서 ‘지금 국면 저장’을 먼저 하십시오.")
+        snap = rs.get_snapshot(rows[0]["snapshot_id"]) or rows[0]
+        latest = True
+    usage = str(snap.get("research_usage") or "")
+    view = {k: snap.get(k) for k in ("snapshot_id", "as_of", "regime", "recommended_mode", "confidence",
+                                     "stress_score", "data_status", "research_usage", "explanation",
+                                     "phase_probabilities")}
+    view["latest"] = latest
+    return pg.NodeOutput(values={"regime": dict(snap)}, view=view,
+                         tags={"pit": "pit" if usage == "backtest_eligible" else "forward_only",
+                               "practice": str(snap.get("data_status")) == "mock",
+                               "sources": [f"regime_snapshot:{snap.get('snapshot_id')}"]})
+
+
+def _explain_regime(view: dict, prov: dict, params: Any) -> dict:
+    regime = str(view.get("regime") or "미확인")
+    mode = str(view.get("recommended_mode") or "")
+    facts = [f"권고는 ‘{_MODE_PLAIN.get(mode.upper(), mode or '미상')}’입니다.",
+             f"스트레스 {float(view.get('stress_score') or 0):.0f}/100 · 신뢰도 {float(view.get('confidence') or 0) * 100:.0f}%.",
+             f"기준일 {view.get('as_of') or '미상'} 스냅샷({view.get('snapshot_id')})입니다."]
+    if view.get("latest"):
+        facts.append("번호를 비워서 가장 최근 스냅샷을 썼습니다.")
+    trust = []
+    if view.get("research_usage") != "backtest_eligible":
+        trust.append(_t(UNKNOWN, "이 스냅샷은 현재 시점 전용입니다 — 과거 검증에는 사용하지 않습니다."))
+    if view.get("data_status") in ("partial", "mock", "unavailable"):
+        trust.append(_t(UNKNOWN, f"데이터 상태가 ‘{view.get('data_status')}’입니다 — 공표 시각을 모두 확정하지 못했습니다."))
+    plain = _REGIME_PLAIN.get(regime, regime)
+    last = plain[-1:]
+    # ㄹ 받침은 '로' — 받침 없는 말과 같다.
+    ro = "으로" if ("가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 not in (0, 8)) else "로"
+    return {"title": f"현재 경기 국면을 ‘{plain}’{ro} 판정했습니다", "facts": facts, "trust": trust,
+            "unmeasured": ["국면 판정이 앞으로 맞을지", "국면 전환 시점"]}
+
+
+# ── 타이밍 신호 ──────────────────────────────────────────────────────────────
+
+def _timing_options() -> dict[str, str]:
+    from src.engine.timing_factors import CATALOG
+    return {c["id"]: c["label"] for c in CATALOG}
+
+
+class TimingRuleItem(BaseModel):
+    model_config = _FORBID
+    factor_id: str = Field(..., min_length=1, max_length=60, json_schema_extra={"x-ui": _ui(
+        "신호", options=_timing_options())})
+    threshold: float | None = Field(None, json_schema_extra={"x-ui": _ui(
+        "기준값", "advanced", help="비우면 카탈로그 기본값입니다.")})
+
+
+_COMBOS = {"all": "모두 켜져야", "any": "하나라도 켜지면", "k_of_n": "k개 이상 켜지면", "weighted": "가중 합",
+           "continuous": "켜진 비율만큼", "regime_conditioned": "국면에 따라"}
+
+
+class TimingParams(BaseModel):
+    model_config = _FORBID
+    rules: list[TimingRuleItem] = Field(
+        default_factory=lambda: [TimingRuleItem(factor_id="abs_mom"), TimingRuleItem(factor_id="ma_month")],
+        min_length=1, max_length=12, json_schema_extra={"x-ui": _ui(
+            "신호", question="판단 신호", help="신호마다 위험-온/오프/판단 불가 셋 중 하나가 나옵니다.")})
+    combination: Literal[tuple(_COMBOS)] = Field("all", json_schema_extra={"x-ui": _ui(
+        "결합 규칙", question="신호 결합 규칙", widget="cards", options=_COMBOS)})
+    k: int = Field(1, ge=1, le=12, json_schema_extra={"x-ui": _ui("k", "advanced", help="‘k개 이상’일 때만 사용합니다.")})
+    market: Literal["kr", "us"] = Field("kr", json_schema_extra={"x-ui": _ui(
+        "시장", "advanced", options={"kr": "한국", "us": "미국"})})
+    as_of: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"x-ui": _ui(
+        "기준일", "advanced", help="비우면 오늘입니다.")})
+
+
+def _refuse_unreadable_factors(p: TimingParams) -> None:
+    """★영원히 못 읽는 팩터를 위험-오프로 조용히 세지 않는다★ (BL4 · 마법사 팩터 창의 계약).
+
+    결합 규칙은 읽지 못한 팩터를 보수적으로 위험-오프로 접는다 — 데이터가 잠시 비는 경우엔 맞는 규칙이지만, 카탈로그에
+    없는 팩터·소스가 없는 팩터·기준일 없이는 못 읽는 팩터는 **늘** 못 읽어 노출을 조용히 깎는다. 그런 규칙은 계산 전에
+    사유와 함께 막는다(엔진·결합 규칙은 바꾸지 않는다).
+    """
+    from src.engine.timing_factors import CATALOG
+    by_id = {c["id"]: c for c in CATALOG}
+    for r in p.rules:
+        c = by_id.get(r.factor_id)
+        if c is None:
+            raise pg.NodeFailure(f"카탈로그에 없는 신호입니다: ‘{r.factor_id}’ — 방향을 추측하지 않습니다. 목록에서 선택하십시오.")
+        if c.get("availability") == "unavailable":
+            raise pg.NodeFailure(f"‘{c['label']}’은(는) 사용할 수 없습니다 — "
+                                 f"{c.get('unavailable_reason') or '데이터 소스를 보유하고 있지 않습니다.'}")
+        if c.get("requires_as_of") and not p.as_of:
+            raise pg.NodeFailure(f"‘{c['label']}’은(는) 기준일(as_of)이 있어야 그 시점의 값을 읽을 수 있습니다 — "
+                                 "기준일을 입력하거나 이 신호를 제외하십시오.")
+
+
+def _timing_signal(inputs: dict, p: TimingParams) -> pg.NodeOutput:
+    from src.engine import timing_rules_v2 as v2
+    _refuse_unreadable_factors(p)
+    specs = [r.model_dump(exclude_none=True) for r in p.rules]
+    rule_set = v2.rule_set_from_specs(specs, market=p.market, combination=p.combination, k=p.k, set_id="graph")
+    try:
+        states = v2.rule_set_states(rule_set, as_of=p.as_of, market=p.market)
+        composite = v2.combine(states, method=p.combination, k=p.k, weights=None)
+    except ValueError as e:
+        raise pg.NodeFailure(f"타이밍 신호 산출 실패 — {e}") from e
+    labels = _timing_options()
+    view = {"factor_states": [{"factor_id": r.factor_id, "label": labels.get(r.factor_id, r.factor_id),
+                               "state": s.value} for r, s in zip(rule_set.rules, states)],
+            "composite": {"state": composite.state.value, "exposure": composite.exposure,
+                          "on_count": composite.on_count, "off_count": composite.off_count,
+                          "unavailable_count": composite.unavailable_count, "explanation": composite.explanation},
+            "combination": p.combination, "k": p.k, "market": p.market, "as_of": p.as_of}
+    value = {"specs": specs, "rule_set": rule_set, "states": list(states), "combination": p.combination,
+             "k": p.k, "market": p.market, "as_of": p.as_of}
+    return pg.NodeOutput(values={"signal": value}, view=view,
+                         tags={"pit": "unknown" if p.as_of else "forward_only", "practice": mock_allowed(),
+                               "sources": ["timing_rules_v2"]})
+
+
+def _explain_timing(view: dict, prov: dict, params: Any) -> dict:
+    c = view.get("composite") or {}
+    st = _STATE_PLAIN.get(c.get("state"), c.get("state"))
+    facts = [f"{f['label']}: {_STATE_PLAIN.get(f['state'], f['state'])}" for f in view.get("factor_states") or []]
+    facts.append(f"결합 규칙: {_COMBOS.get(view.get('combination'), view.get('combination'))}.")
+    trust = [_t(CONFIRMED, "규칙에 따라 신호를 판정하고 결합했습니다.")]
+    if c.get("unavailable_count"):
+        trust.append(_t(UNKNOWN, f"읽지 못한 신호 {c['unavailable_count']}개는 규칙대로 위험-오프로 셌습니다."))
+    trust.append(_t(UNKNOWN, "오늘 기준 신호입니다 — 과거 적중 여부는 ‘타이밍 시뮬레이션’에서 확인합니다."
+                    if not view.get("as_of") else "기준일 값이지만 그날 실제로 알 수 있었는지는 팩터마다 다릅니다."))
+    if mock_allowed():
+        trust.append(_t(UNKNOWN, "개발 모드라 시세가 합성일 수 있습니다 — 실제 신호를 말해 주지 않습니다."))
+    total = len(view.get("factor_states") or [])
+    title = (f"신호를 하나도 읽지 못해 규칙상 ‘{st}’로 셌습니다"
+             if total and c.get("unavailable_count") == total else
+             f"타이밍 신호는 ‘{st}’{_josa(st, '입니다', '입니다')}")
+    return {"title": title,
+            "headline": {"label": "권하는 주식 노출", "value": round(float(c.get("exposure") or 0) * 100, 1),
+                         "unit": "%", "text": _pct(float(c.get("exposure") or 0) * 100)},
+            "facts": facts, "trust": trust, "unmeasured": ["신호가 미래 수익을 맞히는지", "신호가 바뀔 때의 거래 비용"]}
+
+
+# ── ★노출 조절★ ──────────────────────────────────────────────────────────────
+
+_FOLLOW = {"timing": "타이밍 신호대로", "timing_macro": "타이밍 + 경기 국면", "manual": "직접 지정"}
+
+
+class OverlayParams(BaseModel):
+    model_config = _FORBID
+    follow: Literal[tuple(_FOLLOW)] = Field("timing", json_schema_extra={"x-ui": _ui(
+        "적용 신호", question="적용할 판단", widget="cards", options=_FOLLOW,
+        help="세 판정을 결과에 함께 표시합니다. 적용은 선택한 하나만 합니다.")})
+    manual_exposure_pct: float = Field(100.0, ge=0.0, le=100.0, json_schema_extra={"x-ui": _ui(
+        "수동 지정 노출", unit="%", presets=[{"label": "100%", "value": 100.0}, {"label": "80%", "value": 80.0},
+                                          {"label": "60%", "value": 60.0}, {"label": "40%", "value": 40.0}],
+        help="‘직접 지정’을 선택한 경우에만 적용합니다.")})
+    strength_pct: float = Field(100.0, ge=0.0, le=100.0, json_schema_extra={"x-ui": _ui(
+        "적용 강도", "advanced", unit="%",
+        help="100%는 규칙 그대로, 50%는 규칙상 축소폭의 절반만 축소합니다. 노출 확대에는 적용하지 않습니다.")})
+
+
+def _overlay(inputs: dict, p: OverlayParams) -> pg.NodeOutput:
+    from src.data.target_versions import MODE_LONG_ONLY, MODE_LONG_SHORT, compile_target
+    from src.engine.macro_overlay import conflict_explanation, overlay_from_snapshot, three_way
+    w, sig, reg = inputs["weights"], inputs.get("signal"), inputs.get("regime")
+    names = list(w["names"])
+    base = np.asarray(w["weights"], dtype=float)
+    base_pct = {n: float(x) * 100.0 for n, x in zip(names, base)}
+
+    legs, conflict, unavailable, n_signals = {}, None, 0, 0
+    if p.follow in ("timing", "timing_macro"):
+        if sig is None:
+            raise pg.NodeFailure("‘적용 신호’가 타이밍이라 ‘타이밍 신호’를 연결하십시오.")
+        if p.follow == "timing_macro" and reg is None:
+            raise pg.NodeFailure("‘타이밍 + 경기 국면’을 선택했습니다 — ‘경기 국면’을 연결하십시오.")
+    overlay = overlay_from_snapshot(reg, enabled=True) if reg is not None else None
+    if sig is not None:
+        states = sig["states"]
+        n_signals, unavailable = len(states), sum(1 for s in states if getattr(s, "value", s) == "unavailable")
+        raw = three_way(states, method=sig["combination"], overlay=overlay, k=sig["k"], weights=None)
+        legs = {k: {"state": v.state.value, "exposure": float(v.exposure), "explanation": v.explanation}
+                for k, v in raw.items()}
+        conflict = conflict_explanation(raw["timing_only"], overlay)
+    if p.follow in ("timing", "timing_macro") and n_signals and unavailable == n_signals:
+        raise pg.NodeFailure(f"신호 {n_signals}개를 모두 읽지 못했습니다 — 규칙대로면 전부 현금이 되지만, 읽지 못한 데이터로 "
+                             "비중을 0으로 만들지 않습니다. 데이터가 들어온 뒤 재계산하십시오.")
+
+    if p.follow == "manual":
+        leg_exposure, source = p.manual_exposure_pct / 100.0, "직접 정함 — 근거 없음"
+    else:
+        leg = legs["timing_only" if p.follow == "timing" else "timing_macro"]
+        leg_exposure = leg["exposure"]
+        source = (f"타이밍 규칙 {n_signals}개({sig['combination']})" if p.follow == "timing"
+                  else f"타이밍 + 경기 국면 스냅샷 {reg.get('snapshot_id')}")
+    s = p.strength_pct / 100.0
+    exposure = float(min(1.0, max(0.0, 1.0 - s * (1.0 - leg_exposure))))      # ★줄이는 쪽으로만★
+    if p.strength_pct < 100:
+        source += f" · 강도 {p.strength_pct:g}%"
+    mode = MODE_LONG_SHORT if (base < 0).any() else MODE_LONG_ONLY
+    tv = compile_target(base_pct, {"exposure": exposure, "source": source}, mode=mode,
+                        neutralized=bool(w.get("neutralized")),
+                        snapshot_id=(reg or {}).get("snapshot_id"))
+    after = tv["final_weights"]
+    arr = np.array([after[n] / 100.0 for n in names], dtype=float)
+    view = {"before": {k: round(v, 4) for k, v in base_pct.items()}, "after": after, "cash_pct": tv["cash_weight"],
+            "gross_before": tv["gross_before"], "gross_after": tv["gross_after"], "mode": mode,
+            "exposure": exposure, "leg_exposure": leg_exposure, "strength_pct": p.strength_pct,
+            "follow": p.follow, "source": source, "legs": legs, "conflict": conflict,
+            "unavailable": unavailable, "n_signals": n_signals, "overlay": overlay.to_dict() if overlay else None,
+            "status": tv["status"], "status_reason": tv["status_reason"], "labels": _labels(names)}
+    return pg.NodeOutput(
+        values={"weights": weights_value(names, arr, sigma_annual=w.get("sigma_annual"),
+                                         sigma_source=w.get("sigma_source"), target=tv, exposure=exposure,
+                                         neutralized=bool(w.get("neutralized")))},
+        view=view, tags={"overlay": True, "sources": [f"exposure_overlay:{p.follow}"]})
+
+
+def _labels(names: list[str]) -> dict[str, str]:
+    from src.api.allocation_routes import _labels as lab
+    return lab(names)
+
+
+def _explain_overlay(view: dict, prov: dict, params: Any) -> dict:
+    e = float(view.get("exposure") or 0)
+    cash = view.get("cash_pct")
+    if view.get("mode") == "long_short":
+        title = f"총 포지션을 {_pct(float(view['gross_before']))}에서 {_pct(float(view['gross_after']))}로 줄였습니다"
+    elif e >= 0.9999:
+        title = "노출을 줄이지 않았습니다 — 그대로 100%입니다"
+    else:
+        title = f"주식 비중을 100%에서 {_pct(e * 100, 0)}로 줄이고 {_pct(float(cash or 0), 0)}는 현금으로 뒀습니다"
+    legs = view.get("legs") or {}
+    facts = [f"따른 판단: {_FOLLOW.get(view.get('follow'), view.get('follow'))}."]
+    for k, lab in (("baseline", "기준"), ("timing_only", "타이밍만"), ("timing_macro", "타이밍 + 국면")):
+        if k in legs:
+            leg = legs[k]
+            facts.append(f"{lab}: {_STATE_PLAIN.get(leg['state'], leg['state'])} · 노출 {_pct(float(leg['exposure']) * 100, 0)}")
+    if view.get("conflict"):
+        facts.append(str(view["conflict"]))
+    trust = []
+    if view.get("follow") == "manual":
+        trust.append(_t(ASSUMED, "수동 지정 노출입니다 — 근거가 된 신호가 없습니다."))
+    elif float(view.get("strength_pct") or 100) >= 100:
+        trust.append(_t(CONFIRMED, "기존 규칙이 낸 노출을 그대로 비중에 곱했습니다 — 줄인 만큼은 현금입니다."))
+    else:
+        trust.append(_t(ASSUMED, f"규칙이 권한 것보다 약하게(강도 {float(view['strength_pct']):g}%) 적용했습니다."))
+    if view.get("unavailable"):
+        trust.append(_t(UNKNOWN, f"읽지 못한 신호 {view['unavailable']}개는 규칙대로 위험-오프로 셌습니다."))
+    if view.get("follow") == "timing_macro" and not (view.get("overlay") or {}).get("usable", True):
+        trust.append(_t(UNKNOWN, "경기 국면을 읽지 못해 국면은 노출을 바꾸지 않았습니다."))
+    if view.get("status") != "executable":
+        trust.append(_t(UNKNOWN, f"이 비중은 실행 목표로 사용할 수 없습니다 — {view.get('status_reason')}"))
+    trust.append(_t(UNKNOWN, "오늘의 판단을 얹은 비중이라 정책 백테스트는 막습니다."))
+    return {"title": title,
+            "headline": {"label": "주식 노출", "value": round(e * 100, 1), "unit": "%", "text": _pct(e * 100)},
+            "facts": facts, "trust": trust,
+            "unmeasured": ["이 조절의 과거 손실 축소 효과 — ‘타이밍 시뮬레이션’에서 별도로 확인합니다",
+                           "현금 보유분의 기회비용"]}
+
+
+# ── 시점별 타이밍 시뮬레이션 ──────────────────────────────────────────────────
+
+class SimulationParams(BaseModel):
+    model_config = _FORBID
+    months: int = Field(24, ge=1, le=240, json_schema_extra={"x-ui": _ui(
+        "기간", question="관측 기간(개월)", unit="개월",
+        presets=[{"label": "1년", "value": 12}, {"label": "2년", "value": 24}, {"label": "5년", "value": 60}])})
+    mode: Literal["backtest", "forward"] = Field("backtest", json_schema_extra={"x-ui": _ui(
+        "방식", widget="cards", options={"backtest": "과거 검증(사용 불가 값이면 중단)", "forward": "참고용(사용 불가 값도 표시)"},
+        help="과거 검증은 그 시점에 알 수 없던 값을 쓰는 신호가 있으면 계산하지 않습니다.")})
+
+
+def _simulation(inputs: dict, p: SimulationParams) -> pg.NodeOutput:
+    from src.engine import timing_simulation as ts
+    sig = inputs["signal"]
+    try:
+        sim = ts.simulate_rule_set(sig["rule_set"], months=p.months, mode=p.mode, market=sig["market"])
+    except ValueError as e:
+        raise pg.NodeFailure(f"시뮬레이션을 멈췄습니다 — {e}") from e
+    out = sim.to_dict()
+    return pg.NodeOutput(values={}, view={"result": out, "mode": p.mode},
+                         tags={"practice": mock_allowed(), "sources": ["timing_simulation"]})
+
+
+def _explain_simulation(view: dict, prov: dict, params: Any) -> dict:
+    r = view.get("result") or {}
+    pts = r.get("points") or []
+    trust = []
+    if r.get("backtest_eligible"):
+        trust.append(_t(CONFIRMED, "모든 신호가 그 시점에 알 수 있던 값으로 계산됐습니다."))
+    else:
+        trust.append(_t(UNKNOWN, str(r.get("warning") or "과거 검증에 사용할 수 없는 신호가 있습니다 — 참고용입니다.")))
+    if mock_allowed():
+        trust.append(_t(UNKNOWN, "개발 모드라 시세가 합성일 수 있습니다."))
+    return {"title": f"지난 {len(pts)}개 시점 동안 신호가 {r.get('state_changes', 0)}번 바뀌었습니다",
+            "facts": [f"방식: {'과거 검증' if view.get('mode') == 'backtest' else '참고용'}."],
+            "trust": trust, "unmeasured": ["이 신호를 따랐을 때의 수익률 — 여기서는 노출만 표시합니다", "거래 비용"]}
+
+
+def _save_timing_rules(values: dict, view: dict, params: Any) -> dict:
+    """타이밍 신호 → **규칙 저장** (BL2 · 마법사 TIMING 의 '규칙 저장' 을 옮김). `/timing-rules` 문을 그대로 부른다 —
+    정규화(`rule_from_spec`·`stamp_pit`)와 버전 매기기가 한 곳에만 있게."""
+    from fastapi import HTTPException
+
+    from src.api.timing_routes import TimingRuleSetRequest, allocation_timing_rules_save
+    sig = values["signal"]
+    try:
+        out = allocation_timing_rules_save(TimingRuleSetRequest(
+            name="캔버스 타이밍 규칙", market=sig["market"], rules=list(sig["specs"]),
+            gate={"combination": sig["combination"], "k": sig["k"]}, notes="노드 캔버스에서 저장"))
+    except HTTPException as e:
+        raise pg.NodeFailure(str(e.detail)) from e
+    ver = out.get("version")
+    tail = f" v{ver}" if ver is not None else " (버전 미상)"
+    return {"saved_id": out["set_id"], "text": f"타이밍 규칙으로 저장했습니다 · {out['set_id']}{tail}"}
+
+
+# ── 등록 ─────────────────────────────────────────────────────────────────────
+
+def register(registry: pg.Registry) -> None:
+    for spec in (
+        pg.NodeSpec("regime", "경기 국면", stage="signal", plain_label="경기 국면",
+                    plain_description="매크로 탭에 저장한 경기 국면 스냅샷을 불러옵니다.",
+                    inputs=(), outputs=(P("regime", "RegimeState"),), run=_regime, params_model=RegimeParams,
+                    explain=_explain_regime, category="거시", description="RegimeSnapshot 읽기(쓰기 없음)."),
+        pg.NodeSpec("timing_signal", "타이밍 신호", stage="signal", plain_label="타이밍 신호",
+                    plain_description="추세·변동성 신호로 현재 위험선호(위험-온) 여부를 판정합니다.",
+                    inputs=(), outputs=(P("signal", "TimingSignal"),), run=_timing_signal, params_model=TimingParams,
+                    explain=_explain_timing, category="타이밍",
+                    save=_save_timing_rules, save_label="타이밍 규칙 저장",
+                    description="V2 룰셋 → 팩터별 3-상태 → 조합(3자 비교와 같은 파생)."),
+        pg.NodeSpec("exposure_overlay", "노출 조절", stage="build", plain_label="노출 오버레이",
+                    plain_description="타이밍·경기 국면 판정에 따라 주식 비중을 축소하고 잔여분은 현금으로 보유합니다.",
+                    inputs=(P("weights", "Weights"), P("signal", "TimingSignal", required=False),
+                            P("regime", "RegimeState", required=False)),
+                    outputs=(P("weights", "Weights"),), run=_overlay, params_model=OverlayParams,
+                    explain=_explain_overlay, category="배분",
+                    description="three_way 노출 × compile_target(기존 함수만 · 줄이는 쪽으로만)."),
+        pg.NodeSpec("timing_simulation", "타이밍 시뮬레이션", stage="check", plain_label="타이밍 시뮬레이션",
+                    plain_description="과거 시점별 타이밍 신호를 재계산합니다.",
+                    inputs=(P("signal", "TimingSignal"),), outputs=(), run=_simulation, params_model=SimulationParams,
+                    explain=_explain_simulation, category="확인",
+                    description="simulate_rule_set — backtest 모드는 부적격 팩터면 거부."),
+    ):
+        registry.register(spec)

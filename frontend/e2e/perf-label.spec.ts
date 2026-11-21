@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { STUB_RUN_ID, completedRun, freezeCharts, trackErrors, uniq } from "./helpers";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -16,8 +16,14 @@ import { STUB_RUN_ID, completedRun, freezeCharts, trackErrors, uniq } from "./he
 //   5. 알아보지 못한 값도 `unknown` 이고 **본 값이 사유에 실린다**
 //
 // ★새 클래스도 계약이다★ — ADR 001("클래스명을 만들면 스펙도 함께"). 여기서 단정하는
-// `.perf-label*` 를 바꾸려면 이 파일도 함께 고쳐야 한다. 기존 `brun-*`·`tbt-prov`·
-// `as-bt-badge` 는 **한 글자도 건드리지 않았다**.
+// `.perf-label*` 를 바꾸려면 이 파일도 함께 고쳐야 한다. 기존 `brun-*`·`tbt-prov` 는
+// **한 글자도 건드리지 않았다**.
+//
+// ★E 에서 한 문장이 사실이 아니게 됐다★ — 원래 `as-bt-badge` 도 이 목록에 있었다.
+// 그 배지들 중 하나(`as-bt-badge ok`)가 **응답을 읽지 않는 상수 주장**
+// (`"OOS · look-ahead 없음"`)이어서 E 가 그 자리를 고쳤다. `.mock`/`.real` 은 여전히
+// 한 글자도 안 건드렸고(`allocation-stages2.spec.ts` 가 붙잡고 있다), 바뀐 자리는
+// `allocation-backtest.spec.ts` 가 `data-lookahead` 로 다시 못 박는다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const B_ID = "bt_stub_e2e_2";
@@ -91,7 +97,7 @@ test("★`perf_label` 이 없으면 `unknown` 이다 — `backtest` 로 기울�
   await expect(labels.first().locator(".perf-label__kind")).toHaveText("미상");
   // ★왜 모르는지도 함께 나온다★ — 빈 `unknown` 은 사유 없는 "unavailable" 과 같다.
   await expect(labels.first().locator(".perf-label__why"))
-    .toContainText("종류를 말하지 않습니다");
+    .toContainText("수치의 종류가 없습니다");
 });
 
 // ── 3. ★핵심 주장★ 라벨은 배치가 아니라 사실이다 ────────────────────────────

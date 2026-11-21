@@ -92,7 +92,7 @@ class MacroPitContext:
     REVISION_NOTE = (
         "매크로 **레그**(그 토큰 하나의 조건)의 참/거짓이 PIT 와 라이브에서 갈린 "
         "봉의 비율입니다. 논리 결합(and/or/every)이 이를 흡수하거나 증폭하므로 "
-        "**최종 신호**가 갈린 비율은 아닙니다."
+        "**최종 신호**가 달라진 비율은 아닙니다."
     )
 
     def measure_revision(self, name: str, df: pd.DataFrame, conds: list) -> None:

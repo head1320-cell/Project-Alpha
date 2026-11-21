@@ -74,7 +74,7 @@ def run(months: int = 60, target: str = "KOSPI", **_: Any) -> dict[str, Any]:
         return unavailable(
             STUDIO.substitute.name,
             f"임계({_TAIL_Q:.0%}) 초과 관측이 {exceed.size}개뿐입니다 — "
-            f"GPD 적합에 최소 {_MIN_EXCEED}개가 필요합니다. 표본을 늘리세요.")
+            f"GPD 적합에 최소 {_MIN_EXCEED}개가 필요합니다. 표본을 늘리십시오.")
 
     try:
         from scipy.stats import genpareto

@@ -139,7 +139,7 @@ def _oscillating(values: list[float]):
 
 
 def test_hysteresis_threads_through_the_walk(monkeypatch):
-    """★밴드 안의 흔들림은 전환이 아니다★
+    """★밴드 안의 변동성은 전환이 아니다★
 
     임계 0 근처에서 ±0.4 로 흔들리는 값. 히스테리시스 0 이면 매 시점 뒤집히고(전환 6회),
     밴드 0.5 면 직전 상태가 유지되어 전환이 **사라진다**. previous 를 시점마다 비우면

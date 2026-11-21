@@ -1,0 +1,80 @@
+"use client";
+// ═══════════════════════════════════════════════════════════════════════════════
+// 파생상품 계산기(BU7c · 사용자 결정 "있는 계산기를 탭으로 연결")
+// ─────────────────────────────────────────────────────────────────────────────
+// 옛 화면은 다섯 탭 중 옵션만 계산했고, 몬테카를로 탭의 "10,000 / ON / ON" 카드는 결과처럼 보이는 상수였다.
+// 서버에는 채권(`/analyze-bond`)·선물 헤지(`/calculate-hedge`)·신용 위험(`/calculate-cva`) 계산기가 이미 있었다 — 그것을 탭으로 잇는다.
+// 서버가 계산하지 않는 모형(변동성 곡면·금리 모형·몬테카를로)은 한 탭에 "설명만 있어요"로 모은다(가짜 결과 카드 없음).
+// 탭은 주소 `?tab=` 와 같이 움직인다(옛 주소 `vol-surface`·`xva`·`rates`·`mc` 도 받는다).
+// ═══════════════════════════════════════════════════════════════════════════════
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Chips, PageHead, Tabs } from "@/shared/ui/tx";
+import { OptionCalc } from "./OptionCalc";
+import { BondCalc } from "./BondCalc";
+import { HedgeCalc } from "./HedgeCalc";
+import { CvaCalc } from "./CvaCalc";
+import { loadCharts } from "./parts";
+
+type Tab = "option" | "bond" | "hedge" | "cva" | "models";
+const TABS: { value: Tab; label: string }[] = [
+  { value: "option", label: "옵션" }, { value: "bond", label: "채권" }, { value: "hedge", label: "선물 헤지" },
+  { value: "cva", label: "신용 위험(CVA)" }, { value: "models", label: "미지원 모형" },
+];
+const OLD: Record<string, Tab> = { "vol-surface": "models", xva: "cva", rates: "models", mc: "models" };
+export function tabOf(q: string | null): Tab {
+  if (!q) return "option";
+  return (TABS.find((t) => t.value === q)?.value) ?? OLD[q] ?? "option";
+}
+
+export function DerivativesCalc() {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const tab = tabOf(sp.get("tab"));
+  const pick = (t: Tab) => router.replace(t === "option" ? "/derivatives" : `/derivatives?tab=${t}`, { scroll: false });
+  // 차트 코드(recharts)는 첫 화면 JS 에 없다 — 붙자마자 미리 받아 [계산하기] 뒤 그림이 기다리지 않게. 못 받으면 차트 자리가 그렇게 말한다(lazyChart).
+  useEffect(() => { loadCharts().catch(() => {}); }, []);
+
+  return (
+    <div className="dv tx-page">
+      <PageHead title="파생상품 계산기" lede="옵션·채권·선물 헤지·신용 위험을 입력값으로 계산합니다. 시장 데이터는 조회하지 않습니다." />
+      <Chips label="이 계산기의 전제" items={[
+        { label: "모든 입력값은 가정입니다", tone: "assumed" },
+        { label: "계산은 서버가 수행하고 화면은 해설만 표시합니다", tone: "info" },
+      ]} />
+      <Tabs label="계산기 선택" tabs={TABS} value={tab} onChange={pick}>
+        {tab === "option" ? <OptionCalc /> : tab === "bond" ? <BondCalc /> : tab === "hedge" ? <HedgeCalc /> : tab === "cva" ? <CvaCalc /> : <ModelsInfo />}
+      </Tabs>
+    </div>
+  );
+}
+
+const MODELS: { id: string; name: string; what: string; need: string; formula: string }[] = [
+  { id: "vol-surface", name: "변동성 곡면", what: "행사가와 만기에 따라 시장이 가격에 반영한 변동성(내재변동성)을 곡면으로 표시합니다. SABR 모형으로 내삽·외삽합니다.",
+    need: "옵션 시장 호가가 필요합니다. 이 저장소에는 아직 옵션 호가를 적재하지 않습니다.", formula: "σ_imp(K, T)" },
+  { id: "rates", name: "금리 모형", what: "Hull-White 1요인 모형으로 단기 금리의 경로를 모형화하고, 채권·스왑 가격을 시장 곡선에 캘리브레이션합니다.",
+    need: "수익률 곡선과 스왑션 변동성 데이터, 그리고 캘리브레이션 계산기가 필요합니다. 서버에 이 계산 경로가 없습니다.", formula: "dr = (θ(t) − a·r) dt + σ dW" },
+  { id: "mc", name: "몬테카를로", what: "가격 경로를 다수 생성해 경로 의존형 상품(아시안·배리어 옵션 등)을 평가합니다.",
+    need: "이 화면에서 호출할 서버 계산 경로가 없습니다. 이전 화면의 경로 수·기법 카드는 계산 결과가 아니어서 삭제했습니다.", formula: "dS = μ S dt + σ S dW" },
+];
+
+function ModelsInfo() {
+  return (
+    <div className="dv-calc" data-calc="models">
+      <section className="tx-sec">
+        <h2 className="tx-sec-t">미지원 모형</h2>
+        <p className="tx-sec-sub">설명만 있습니다. 이 화면은 아래 모형으로 계산하지 않고, 결과로 오인될 수치도 표시하지 않습니다.</p>
+        <ul className="dv-models">
+          {MODELS.map((m) => (
+            <li key={m.id} className="dv-model" data-model={m.id}>
+              <h3 className="dv-h3">{m.name}</h3>
+              <p>{m.what}</p>
+              <p className="dv-model-need"><b>계산하려면</b> {m.need}</p>
+              <p className="dv-model-f"><span data-mono>{m.formula}</span></p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}

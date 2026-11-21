@@ -155,7 +155,7 @@ def unit_reason(weights: dict, declared: str | None = None) -> str | None:
         return (f"비중의 단위를 알 수 없습니다 (합 {g:g}). 분수로 주신 만액 포트폴리오"
                 f"(합 1.0)일 수도, 퍼센트로 주신 소액 포트폴리오(합 {g:g}%, 현금 "
                 f"{100 - g:g}%)일 수도 있습니다 — 둘은 주문 금액이 100배 다릅니다. "
-                f"weight_unit 에 '{PERCENT}' 또는 '{FRACTION}' 을 지정해 주십시오.")
+                f"weight_unit 에 '{PERCENT}' 또는 '{FRACTION}' 을 지정하십시오.")
     return None
 
 

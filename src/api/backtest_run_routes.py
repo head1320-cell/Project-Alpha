@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 import src.data.backtest_runs as br
 from src.domain.execution_assumption import assumption_from_result
 from src.domain.perf_kind import backtest_label
+from src.engine.quant_metrics import drawdown_episodes, period_returns
 
 logger = logging.getLogger("api.backtest_run")
 
@@ -128,15 +129,24 @@ def _reset_pool() -> None:
     표시하고 이후 모든 `submit()` 이 즉시 실패한다. 예전에는 `_POOL` 을 앱 종료
     외에 재설정하지 않아서, 한 번 죽으면 **API 를 재시작할 때까지 모든 백테스트가
     실패했다** — 사용자가 말한 "계속 일어난다" 가 그것이다.
+
+    ★닫기는 다른 스레드에서★ Python 3.14 부터 broken 풀의 done-콜백(`_on_worker_done`)은
+    관리 스레드가 그 풀의 `_shutdown_lock`(재진입 불가)을 쥔 채로 부른다. 여기서 바로
+    `shutdown()` 을 부르면 같은 락을 다시 잡으려다 영원히 멈춘다(실측 — 실행이 queued 로
+    남았다). 새 풀로 바꾸는 것은 즉시, 옛 풀을 닫는 것은 락이 풀린 뒤에 한다.
     """
     global _POOL
     with _POOL_LOCK:
         pool, _POOL = _POOL, None
     if pool is not None:
-        try:
-            pool.shutdown(wait=False, cancel_futures=True)
-        except Exception:                       # noqa: BLE001
-            logger.debug("broken 풀 정리 중 오류(무시)", exc_info=True)
+        threading.Thread(target=_close_pool, args=(pool,), name="bt-pool-close", daemon=True).start()
+
+
+def _close_pool(pool: ProcessPoolExecutor) -> None:
+    try:
+        pool.shutdown(wait=False, cancel_futures=True)
+    except Exception:                           # noqa: BLE001
+        logger.debug("broken 풀 정리 중 오류(무시)", exc_info=True)
 
 
 def _on_worker_done(run_id: str | None, fut) -> None:
@@ -166,7 +176,7 @@ def _on_worker_done(run_id: str | None, fut) -> None:
             run_id, "worker_died",
             "실행 워커가 비정상 종료했습니다("
             f"{type(exc).__name__}). 메모리 부족이나 프로세스 종료일 수 있습니다 — "
-            "유니버스 범위를 줄여 다시 실행해 보세요.")
+            "유니버스 범위를 줄여 다시 실행하십시오.")
     except Exception:                           # noqa: BLE001
         logger.exception(f"워커 사망을 기록하지 못했다 (run={run_id})")
 
@@ -284,10 +294,10 @@ _STORE_FAILURE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 #: 사용자에게 보일 문구 — ★원문은 절대 싣지 않는다★ DB 예외 문자열에는 접속
 #: URL(자격증명 포함)이 섞일 수 있다. 분류만 내보내고 원문은 로그에 남긴다.
 _STORE_FAILURE_MESSAGE = {
-    "pool_exhausted": "실행 저장소 커넥션이 모두 사용 중입니다 — 잠시 후 재시도하세요.",
-    "store_locked": "실행 저장소가 잠겨 있습니다(동시 쓰기) — 잠시 후 재시도하세요.",
-    "store_unreachable": "실행 저장소에 연결할 수 없습니다 — 잠시 후 재시도하세요.",
-    "unknown": "실행 저장소를 일시적으로 사용할 수 없습니다 — 원인을 확인 중입니다. 잠시 후 재시도하세요.",
+    "pool_exhausted": "실행 저장소 커넥션이 모두 사용 중입니다 — 잠시 후 재시도하십시오.",
+    "store_locked": "실행 저장소가 잠겨 있습니다(동시 쓰기) — 잠시 후 재시도하십시오.",
+    "store_unreachable": "실행 저장소에 연결할 수 없습니다 — 잠시 후 재시도하십시오.",
+    "unknown": "실행 저장소를 일시적으로 사용할 수 없습니다 — 원인을 확인 중입니다. 잠시 후 재시도하십시오.",
 }
 
 
@@ -347,6 +357,10 @@ _TELEMETRY_FIELDS: dict[str, tuple[str, ...]] = {
     # ★어떤 비용을 부과했고 몇 건을 못 쟀나★ (AK) — 행만 봐도 세금을 켜고 돈 런과
     # 충격을 못 잰 런을 셀 수 있어야 한다. `total_bps` 는 한 줄로 답하는 값이다.
     "cost_model": ("total_bps", "n_unmeasurable", "n_unmeasured_trades"),
+    # ★체결 규칙을 켜고 돈 런과 그것이 무엇을 막았나★ (BC) — 비용과 다른 축이다.
+    "fill_rules": ("enforce_price_limit", "round_fills_to_tick",
+                   "n_rejected_by_limit", "n_limit_unknown", "n_rounded",
+                   "n_tick_not_raw"),
 }
 
 
@@ -573,7 +587,7 @@ def create_run(req: CreateRunRequest):
                 logger.exception("디스패치 실패를 기록하지 못했다")
             # ★사유를 지우지 않는다★ "처리 중 오류" 로 뭉개면 원인을 못 찾는다.
             raise HTTPException(
-                503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+                503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 재시도하십시오 "
                      f"({type(e).__name__}).") from e
         return {"run_id": run_id, "status": "queued"}
     except HTTPException:
@@ -639,6 +653,30 @@ def run_telemetry(run_id: str):
             "available": True, "telemetry": tele, "reason": None}
 
 
+def _perf_block(row: dict) -> dict | None:
+    """★화면이 세지 않도록 서버가 낸다★ (2026-11-09 · 결과 화면 성과 그림 문법 §3.2)
+
+    저장된 `drawdown_curve` 는 비율(−0.15)이고 통계 `max_drawdown_pct` 는 %(14.9)다 — 화면이 비율을 %처럼 그리던 결함을
+    여기서 고친다(이름에 단위를 적은 `drawdown_pct`). 해마다·월별 수익률·낙폭 구간은 캔버스 불러오기 노드와 같은 함수
+    (`quant_metrics`)라 같은 실행이면 같은 수다. 곡선이 없으면 None — 화면이 "주지 않았습니다" 라고 말한다(0 으로 채우지 않는다).
+    """
+    result = row.get("result")
+    if row.get("status") != "completed" or not isinstance(result, dict):
+        return None
+    bt = result.get("backtest") if isinstance(result.get("backtest"), dict) else result
+    dates = bt.get("equity_dates") or []
+    equity = bt.get("equity_curve") or []
+    if not dates or not equity:
+        return None
+    dd = bt.get("drawdown_curve")
+    return {
+        "unit": "krw",
+        "drawdown_pct": ([None if d is None else round(float(d) * 100.0, 4) for d in dd] if dd else None),
+        "periods": period_returns(dates, equity),
+        "drawdowns": drawdown_episodes(dates, equity, top=3),
+    }
+
+
 @router.get("/runs/{run_id}")
 def run_full(run_id: str):
     try:
@@ -655,6 +693,8 @@ def run_full(run_id: str):
     # 빼면 화면이 "값이 없다" 와 "질문한 적이 없다" 를 구별할 수 없다 — 리더가
     # `unrecorded` + 사유로 **말한다**. ★미상을 0 으로 읽지 않는다★(AG).
     r["execution_assumption"] = assumption_from_result(r.get("result"))
+    # ★성과 그림의 수★ — 해마다·달마다 수익 · 낙폭 사건 · % 단위 낙폭(2026-11-09). 화면이 세지 않는다.
+    r["perf"] = _perf_block(r)
     return r
 
 
@@ -695,7 +735,7 @@ def run_retry(run_id: str):
         except Exception:                       # noqa: BLE001
             logger.exception("디스패치 실패를 기록하지 못했다")
         raise HTTPException(
-            503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 다시 시도하세요 "
+            503, "백테스트 워커를 시작하지 못했습니다 — 잠시 후 재시도하십시오 "
                  f"({type(e).__name__}).") from e
     return {"run_id": new_id, "status": "queued", "retried_from": run_id}
 
@@ -740,27 +780,17 @@ def _proxy_selection(window_as_of: str | None, truncated: bool, prox: dict) -> d
     }
 
 
-@router.get("/runs/{run_id}/factor-attribution")
-def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
-    """★무엇이 이 수익을 만들었나★ 실현수익을 매크로 팩터와 α 로 쪼갠다 (P3-2).
+class _ProxyResolutionError(Exception):
+    """팩터 대리계열을 해소하지 못했다 — 라우트는 500, 노드는 사유 있는 실패로 바꾼다."""
 
-    결합 OLS `r_t = α + Σβᵢfᵢ,t` — 단변량이면 상관된 팩터의 공통 변동을 중복
-    흡수한다. 팩터별 VIF 를 함께 내며, 높은 팩터의 기여는 짝과 상쇄되므로
-    **개별 값으로 읽지 말라**는 라벨이 붙는다.
 
-    ★산술 합과 복리 총수익은 다른 숫자다★ 항등식은 월별 수익률의 산술 합에
-    대해 닫히고, 복리와의 차이는 `compounding_gap_pct` 로 나간다.
+def factor_attribution_for_run(r: dict, run_id: str, *, series_map: dict | None = None,
+                               truncate_to_window: bool = False) -> dict:
+    """실행 한 건의 매크로 팩터 귀인 — 라우트와 캔버스 노드(BL3 W1)가 **같은 본문**을 쓴다.
 
-    아직 끝나지 않았거나 옛 스키마라 월별 수익률이 없으면 **200 + 사유**다 —
-    실행이 존재하는데 500 을 내지 않는다.
+    `series_map` 을 주면 그 매크로 계열로 대리계열을 고른다(노드는 운영에서 **저장된 관측만** 넘긴다 — 라우트처럼
+    수집기를 부르지 않는다). 비우면 예전 라우트 동작 그대로(`resolve_proxies` 가 수집기를 부른다).
     """
-    try:
-        r = br.get_run(run_id, strict=True)
-    except br.BacktestStoreError as e:
-        raise _store_unavailable(e, "full") from e
-    if r is None:
-        raise HTTPException(404, "실행을 찾을 수 없습니다.")
-
     from src.api.json_safe import finite_payload
     from src.engine.backtest_attribution import (
         factor_attribution,
@@ -781,10 +811,9 @@ def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
     window_as_of = _window_as_of(monthly["returns"])
     try:
         from src.engine.factor_exposure import resolve_proxies
-        prox = resolve_proxies(as_of=window_as_of if truncate_to_window else None)
-    except Exception:
-        logger.exception("팩터 계열 해소 실패")
-        raise HTTPException(500, "처리 중 오류가 발생했습니다.")
+        prox = resolve_proxies(series_map, as_of=window_as_of if truncate_to_window else None)
+    except Exception as e:
+        raise _ProxyResolutionError(str(e)) from e
     # ★모든 분기가 같은 라벨을 낸다★ 절단을 켜면 계열이 짧아져 아무 팩터도
     # 안 남을 수 있다(정직한 거절이다). 그때 라벨이 빠지면 소비자는 **왜**
     # 거절됐는지 — 자른 탓인지 수집기가 빈 탓인지 — 구별할 수 없다.
@@ -804,3 +833,31 @@ def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
                proxies={f: i["series"] for f, i in prox["resolved"].items()},
                unresolved=prox.get("unresolved", {}))
     return finite_payload(out)
+
+
+@router.get("/runs/{run_id}/factor-attribution")
+def run_factor_attribution(run_id: str, truncate_to_window: bool = False):
+    """★무엇이 이 수익을 만들었나★ 실현수익을 매크로 팩터와 α 로 쪼갠다 (P3-2).
+
+    결합 OLS `r_t = α + Σβᵢfᵢ,t` — 단변량이면 상관된 팩터의 공통 변동을 중복
+    흡수한다. 팩터별 VIF 를 함께 내며, 높은 팩터의 기여는 짝과 상쇄되므로
+    **개별 값으로 읽지 말라**는 라벨이 붙는다.
+
+    ★산술 합과 복리 총수익률은 다른 숫자다★ 항등식은 월별 수익률의 산술 합에
+    대해 닫히고, 복리와의 차이는 `compounding_gap_pct` 로 나간다.
+
+    아직 끝나지 않았거나 옛 스키마라 월별 수익률이 없으면 **200 + 사유**다 —
+    실행이 존재하는데 500 을 내지 않는다.
+    """
+    try:
+        r = br.get_run(run_id, strict=True)
+    except br.BacktestStoreError as e:
+        raise _store_unavailable(e, "full") from e
+    if r is None:
+        raise HTTPException(404, "실행을 찾을 수 없습니다.")
+
+    try:
+        return factor_attribution_for_run(r, run_id, truncate_to_window=truncate_to_window)
+    except _ProxyResolutionError:
+        logger.exception("팩터 계열 해소 실패")
+        raise HTTPException(500, "처리 중 오류가 발생했습니다.")

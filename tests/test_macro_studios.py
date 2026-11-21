@@ -194,7 +194,7 @@ def test_contradictory_views_are_caught_when_scenarios_are_given():
     assert out["available"]
     assert out["outputs"]["feasible"] is False
     assert out["outputs"]["violations"]
-    assert "배분하지 마세요" in out["note"]
+    assert "배분하지 마십시오" in out["note"]
 
 
 def test_a_view_on_an_unknown_asset_is_refused():

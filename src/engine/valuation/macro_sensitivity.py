@@ -286,7 +286,7 @@ def _ols_beta(x: list[float], y: list[float]) -> dict:
         return {"available": False, "reason": f"관측이 {n}개뿐입니다"}
     vx = float(((xa - xa.mean()) ** 2).sum())
     if vx <= 0:
-        return {"available": False, "reason": "설명변수가 상수라 기울기를 낼 수 없습니다"}
+        return {"available": False, "reason": "설명변수가 상수라 기울기를 산출할 수 없습니다"}
     beta = float(((xa - xa.mean()) * (ya - ya.mean())).sum() / vx)
     alpha = float(ya.mean() - beta * xa.mean())
     resid = ya - (alpha + beta * xa)
@@ -341,7 +341,7 @@ def statistical_sensitivity(code: str, *, series_map: dict | None = None,
         if len(months) < min_months:
             rows.append({"series": name, "available": False, "n_obs": len(months),
                          "reason": (f"겹치는 달이 {len(months)}개뿐이라 "
-                                    f"기울기를 내지 않았습니다 (최소 {min_months}개). "
+                                    f"기울기를 산출하지 않았습니다 (최소 {min_months}개). "
                                     "얇은 표본의 베타는 부호조차 믿을 수 없습니다.")})
             continue
         fit = _ols_beta([macro[m] for m in months], [stock[m] for m in months])
@@ -356,7 +356,7 @@ def statistical_sensitivity(code: str, *, series_map: dict | None = None,
             "n_tested": len(core), "series": list(core),
             "note": ("코어 계열을 **코드에 고정**하고 전부 보고합니다. 유의한 것만 "
                      "골라 내면 다중검정 보정 없는 데이터 마이닝이 됩니다 — "
-                     f"{len(core)}개를 동시에 봤다는 사실을 t값과 함께 읽으십시오."),
+                     f"{len(core)}개를 동시에 검정했다는 사실을 t값과 함께 해석하십시오."),
             # ★경고는 보정이 아니다★ (AJ3) — 위 문장은 이 자리가 처음부터 적고
             # 있었다. 코어를 코드에 고정하는 것은 **탐색**을 막는 좋은 규율이지만,
             # 고정된 가족에도 다중검정은 그대로 있다.

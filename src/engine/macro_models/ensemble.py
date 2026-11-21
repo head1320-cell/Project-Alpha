@@ -33,8 +33,8 @@ def disagreement(verdicts: list[str]) -> dict[str, Any]:
 
     정규화 엔트로피를 쓴다 — 0 은 만장일치, 1 은 완전 분산이다. 최빈값 비율
     (1 − max share) 도 후보였지만 그건 **몇 갈래로 갈렸는지**를 구분하지 못한다:
-    2갈래 균등과 4갈래 균등이 둘 다 0.5·0.75 로 뭉뚱그려지는 대신, 엔트로피는
-    갈래가 늘수록 단조증가한다. "얼마나 갈렸나" 를 재는 것이 목적이므로 그쪽이 맞다.
+    2대안 균등과 4대안 균등이 둘 다 0.5·0.75 로 뭉뚱그려지는 대신, 엔트로피는
+    대안이 늘수록 단조증가한다. "얼마나 갈렸나" 를 재는 것이 목적이므로 그쪽이 맞다.
 
     `counts` 를 함께 내는 이유는 점수만으로는 **무엇과 무엇이** 갈렸는지 화면이
     말할 수 없기 때문이다.
@@ -98,7 +98,7 @@ def combine_studio_views(views: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "n_available": 0, "per_tool": {}, "unavailable": unavailable,
             "reasons": reasons, "disagreement": dis,
             "note": ("가용한 도구가 하나도 없습니다 — 결론을 내지 않습니다. "
-                     "미가용 사유는 `reasons` 를 보세요."),
+                     "미가용 사유는 `reasons` 를 보십시오."),
         }
 
     counts = Counter(available.values())
@@ -112,7 +112,7 @@ def combine_studio_views(views: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
     if n_available == 1:
         note = (f"가용한 도구가 {next(iter(available))} 하나뿐입니다 — 합의가 아니라 "
-                "단일 관측입니다. 다른 도구의 미가용 사유를 함께 읽으세요.")
+                "단일 관측입니다. 다른 도구의 미가용 사유를 함께 읽으십시오.")
     elif tie:
         note = (f"판정이 {top[0][1]}:{top[1][1]} 로 동수입니다 — 임의로 한쪽을 고르지 "
                 "않습니다. 동수는 결론이 아니라 그 자체가 정보입니다.")

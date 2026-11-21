@@ -8,7 +8,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ["Geist", "system-ui", "-apple-system", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "SF Mono", "monospace"],
+        mono: ["JetBrains Mono Variable", "JetBrains Mono", "ui-monospace", "SF Mono", "monospace"],
       },
       colors: {
         // Variant Institutional Terminal tokens

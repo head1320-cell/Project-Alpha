@@ -328,7 +328,7 @@ def coverage(series_ids: list[str] | None = None, *, engine=None) -> dict[str, A
         bits = [n for n, ok in (("빈티지 전량", all_vintage),
                                 ("공표시각 전량", all_release)) if not ok]
         reason = ("충족되지 않은 조건: " + " · ".join(bits)
-                  + " — 개정 편향을 재려면 빈티지가 필요합니다.")
+                  + " — 개정 편향을 측정하려면 빈티지가 필요합니다.")
 
     return {
         "available": True,

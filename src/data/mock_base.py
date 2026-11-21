@@ -139,6 +139,17 @@ class DeterministicMockStore:
             snapshot_db.write(key, value)
         return value
 
+    def _put(self, key: str, value: Any) -> None:
+        """캐시 항목을 덮어쓴다 — `cached()` 가 돌려준 값을 내보낼 수 없다고 판정한 쪽이 쓴다.
+
+        규칙은 `cached()` 와 같다: 같은 네임스페이스 · 빈값은 영속하지 않는다."""
+        key = self._scoped(key)
+        with self._lock:
+            self._cache[key] = (time.time(), value)
+        if value and self._persist_on():
+            from src.data import snapshot_db
+            snapshot_db.write(key, value)
+
     def prime(self, keys: list[str]) -> int:
         """DB에서 여러 키를 한 번에 in-memory로 적재 (스크리너 벌크 — N개 1쿼리)."""
         keys = [self._scoped(k) for k in keys]     # ★cached() 와 같은 네임스페이스★

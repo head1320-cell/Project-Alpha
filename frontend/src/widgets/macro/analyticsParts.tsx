@@ -1,238 +1,140 @@
 "use client";
 // ═══════════════════════════════════════════════════════════════════════════════
-// analyticsParts — 상관/타이밍/국면궤적 시각화 (recharts + SVG)
-//   CorrMatrix · RollingCorrChart · AvgCorrChart · ComponentBars · TimingHistory ·
-//   TrendTable · RegimeTrajectory. "Institutional Terminal" 토큰.
+// analyticsParts — 상관 · 타이밍 · 국면 궤적 그림 (recharts + SVG)
+//   CorrMatrix · RollingCorrChart · AvgCorrChart · ComponentBars · TimingHistory · TrendTable · RegimeTrajectory.
+// BU5b-2: 상관 = 수준 양쪽 색(주황 같이 움직임 / 청록 반대로) · 상관 선 = 범주색 · 점수(신호·종합) = 중립(판단은 글자) ·
+//   가격 방향(이동평균 대비·12개월 모멘텀·추세) = 등락색 + 부호 · 툴팁 대신 읽기 줄 · 그림은 하나도 지우지 않았다.
 // ═══════════════════════════════════════════════════════════════════════════════
-import React from "react";
-import {
-  ResponsiveContainer, LineChart, Line, AreaChart, Area, ScatterChart, Scatter,
-  ReferenceArea, ReferenceLine, ReferenceDot, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-} from "recharts";
-import type { MacroCorrelations, MacroTiming, TimingComponent, TrajectoryPoint, TrendRow } from "@/entities/macro/analysisModel";
-import { useChartAnimation } from "@/shared/ui/chartStyle";
+import React, { useState } from "react";
+import type { MacroCorrelations, TimingComponent, TrendRow } from "@/entities/macro/analysisModel";
+import { moveColor } from "./cockpitParts";
+import { signed } from "./macroKo";
+import { chartModule, lazyChart } from "@/shared/ui/lazyChart";
 
-const TIP = { background: "#fff", border: "1px solid var(--t-border)", borderRadius: 2, fontSize: 11, fontFamily: "var(--t-mono, monospace)" };
-const PAIR_COLORS: Record<string, string> = {
-  "SPY-TLT": "#1200ff", "SPY-GLD": "#a16207", "SPY-PDBC": "#ea580c", "SPY-EEM": "#0891b2", "SPY-HYG": "#dc2626",
-};
-const fmt1 = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`);
+// 이 파일의 차트(RollingCorrChart, AvgCorrChart, TimingHistory, RegimeTrajectory) 코드 — 화면이 뜬 뒤에 받는다(recharts 를 첫 화면 JS 에서 뺌 · lazyChart).
+// MacroCockpit 이 붙자마자 불러 데이터와 같이 오게 한다. 이름·prop 은 그대로라 소비자는 바뀌지 않는다.
+export const loadAnalyticsCharts = chartModule(() => import("./analyticsParts.charts"));
 
-// 상관 발산색 (−1 청 / +1 적)
+export const AX = { fontSize: 11, fill: "var(--tx-sub)" } as const;
+/** 상관(−1..+1) → 칸 바탕. |c| 0.2·0.4·0.7 경계로 쪽마다 3 단 — 그리기 위한 구간이지 판단이 아니다(값은 늘 글자로). */
 export function corrFill(c: number | null | undefined): string {
-  if (c == null || !Number.isFinite(c)) return "rgba(113,113,122,0.06)";
-  const t = Math.max(-1, Math.min(1, c));
-  const a = 0.1 + 0.72 * Math.abs(t);
-  return t >= 0 ? `rgba(220,38,38,${a.toFixed(3)})` : `rgba(37,99,235,${a.toFixed(3)})`;
+  if (c == null || !Number.isFinite(c)) return "var(--mc-lv-none)";
+  const a = Math.abs(c);
+  if (a < 0.2) return "var(--mc-lv-mid)";
+  const k = a < 0.4 ? 1 : a < 0.7 ? 2 : 3;
+  return `var(--mc-lv-${c > 0 ? "pos" : "neg"}-${k})`;
 }
-function scoreColor(s: number): string {
-  if (s >= 60) return "var(--color-bull)";
-  if (s <= 40) return "var(--color-bear)";
-  return "var(--color-caution)";
-}
-function trendColor(t: string): string {
-  return t === "상승" ? "var(--color-bull)" : t === "하락" ? "var(--color-bear)" : "var(--t-muted)";
-}
+/** 범례 글자를 선 색이 아니라 잉크로 — 노랑·분홍 선 색 글자는 AA 를 떨어뜨린다(BU4 에서 배운 것). */
+export const inkLegend = (v: string) => <span style={{ color: "var(--tx-ink)" }}>{v}</span>;
 
-// ── CorrMatrix — N×N 상관 히트맵 ──
+// ── CorrMatrix — N×N 상관 지도. 줄에 초점(Tab)·칸에 올림 → 아래 읽기 줄 ──
 export function CorrMatrix({ m }: { m: MacroCorrelations["matrix"] }) {
+  const [cur, setCur] = useState<string | null>(null);
   const n = m.tickers.length;
-  if (!n) return <div className="mc-empty-sm">상관 데이터 없음</div>;
+  if (!n) return <div className="mc-empty-sm">상관을 측정할 자산 없음</div>;
+  const name = (i: number) => `${m.labels[i] ?? m.tickers[i]}(${m.tickers[i]})`;
+  const say = (i: number, j: number) => `${name(i)} · ${name(j)} · ${signed(m.values[i][j])}`;
+  /** 줄에 초점 → 그 자산과 가장 같이·가장 반대로 움직인 자산(자기 자신 제외). */
+  const rowSay = (i: number) => {
+    const others = m.values[i].map((v, j) => [v, j] as const).filter(([, j]) => j !== i);
+    if (!others.length) return name(i);
+    const hi = others.reduce((a, b) => (b[0] > a[0] ? b : a)), lo = others.reduce((a, b) => (b[0] < a[0] ? b : a));
+    return `${name(i)} · 최대 양의 상관 ${name(hi[1])} ${signed(hi[0])} · 최대 음의 상관 ${name(lo[1])} ${signed(lo[0])}`;
+  };
   return (
-    <div className="mca-matrix" style={{ gridTemplateColumns: `48px repeat(${n}, 1fr)` }}>
-      <div className="mca-mx-corner" />
-      {m.tickers.map((t) => <div key={`h${t}`} className="mca-mx-head">{t}</div>)}
-      {m.tickers.map((row, i) => (
-        <React.Fragment key={`r${row}`}>
-          <div className="mca-mx-row" title={m.labels[i]}>{row}</div>
-          {m.values[i].map((v, j) => (
-            <div key={`${i}-${j}`} className="mca-mx-cell" style={{ background: corrFill(v) }}
-              title={`${m.tickers[i]} · ${m.tickers[j]}: ${v.toFixed(2)}`}>
-              {i === j ? "" : v.toFixed(2).replace(/^0/, "").replace(/^-0/, "-")}
-            </div>
+    <div className="mc-matrix-wrap">
+      <div className="mc-tablewrap">
+        <div className="mca-matrix" style={{ gridTemplateColumns: `52px repeat(${n}, minmax(30px, 1fr))` }}>
+          <div className="mca-mx-corner" />
+          {m.tickers.map((t) => <div key={`h${t}`} className="mca-mx-head" data-mono>{t}</div>)}
+          {m.tickers.map((row, i) => (
+            <React.Fragment key={`r${row}`}>
+              <div className="mca-mx-row" data-mono tabIndex={0} aria-label={`${name(i)} 줄`} onFocus={() => setCur(rowSay(i))}>{row}</div>
+              {m.values[i].map((v, j) => (
+                <div key={`${i}-${j}`} className="mca-mx-cell" style={{ background: corrFill(v) }} onMouseEnter={() => setCur(say(i, j))}>
+                  {i === j ? "" : v.toFixed(2).replace(/^0/, "").replace(/^-0/, "−")}
+                </div>
+              ))}
+            </React.Fragment>
           ))}
-        </React.Fragment>
-      ))}
+        </div>
+      </div>
+      <div className="mc-zlegend"><span>음의 상관</span><i className="mc-zleg-grad" aria-hidden /><span>양의 상관</span></div>
+      <p className="mc-readout" aria-live="polite">{cur ?? "칸에 마우스를 올리거나 줄을 Tab 으로 선택하면 여기에 두 자산과 상관을 표시합니다"}</p>
     </div>
   );
 }
 
-// ── RollingCorrChart — 롤링 상관 추이 (주식-채권 강조) ──
-export function RollingCorrChart({ pairs }: { pairs: MacroCorrelations["pairs"] }) {
-  const anim = useChartAnimation();
-  if (!pairs.length) return <div className="mc-empty-sm">롤링 상관 데이터 없음</div>;
-  const len = Math.max(...pairs.map((p) => p.series.length));
-  const data = Array.from({ length: len }, (_, i) => {
-    const row: Record<string, string | number> = { t: pairs[0].series[i]?.t ?? "" };
-    for (const p of pairs) { const v = p.series[i]?.corr; if (v != null) row[p.key] = v; }
-    return row;
-  });
-  return (
-    <ResponsiveContainer width="100%" height={250}>
-      <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }}>
-        <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" vertical={false} />
-        <XAxis dataKey="t" tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" minTickGap={32} />
-        <YAxis domain={[-1, 1]} ticks={[-1, -0.5, 0, 0.5, 1]} tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" width={36} />
-        <Tooltip contentStyle={TIP} />
-        <Legend wrapperStyle={{ fontSize: 10 }} />
-        <ReferenceLine y={0} stroke="var(--t-ink)" strokeWidth={1} />
-        {pairs.map((p) => (
-          <Line key={p.key} type="monotone" dataKey={p.key} name={p.label}
-            stroke={PAIR_COLORS[p.key] ?? "#64748b"} strokeWidth={p.key === "SPY-TLT" ? 2.4 : 1.2}
-            dot={false} isAnimationActive={anim} />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
-  );
-}
+export const RollingCorrChart = lazyChart(loadAnalyticsCharts, (m) => m.RollingCorrChart, { height: 260, label: "이동 상관" });   // 본문은 analyticsParts.charts.tsx(화면이 뜬 뒤에 받는다)
 
-// ── AvgCorrChart — 평균 페어상관(분산 국면) ──
-export function AvgCorrChart({ avg }: { avg: MacroCorrelations["avg_corr"] }) {
-  const anim = useChartAnimation();
-  if (!avg.length) return <div className="mc-empty-sm">평균 상관 데이터 없음</div>;
-  const data = avg.map((p) => ({ t: p.t, corr: p.corr }));
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -12 }}>
-        <defs><linearGradient id="mcaAvg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#dc2626" stopOpacity={0.28} /><stop offset="100%" stopColor="#dc2626" stopOpacity={0.03} /></linearGradient></defs>
-        <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" vertical={false} />
-        <XAxis dataKey="t" tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" minTickGap={32} />
-        <YAxis domain={[0, 1]} tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" width={36} />
-        <Tooltip contentStyle={TIP} />
-        <ReferenceArea y1={0.6} y2={1} fill="rgba(220,38,38,0.06)" stroke="none" />
-        <ReferenceLine y={0.6} stroke="var(--color-bear)" strokeDasharray="3 3" label={{ value: "상관 붕괴 위험", position: "insideTopRight", fontSize: 9, fill: "var(--color-bear)" }} />
-        <Area type="monotone" dataKey="corr" stroke="#dc2626" strokeWidth={1.6} fill="url(#mcaAvg)" isAnimationActive={anim} />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
+export const AvgCorrChart = lazyChart(loadAnalyticsCharts, (m) => m.AvgCorrChart, { height: 200, label: "평균 상관" });   // 본문은 analyticsParts.charts.tsx(화면이 뜬 뒤에 받는다)
 
-// ── ComponentBars — 타이밍 신호별 기여 ──
+// ── ComponentBars — 타이밍 신호별 점수(0~100). 막대는 중립 — 점수가 높고 낮음을 색으로 판단하지 않는다. ──
 export function ComponentBars({ comps }: { comps: TimingComponent[] }) {
   return (
     <div className="mca-comps">
       {comps.map((c) => (
         <div key={c.key} className="mca-comp">
-          <span className="mca-comp-lbl">{c.label}<em>w{c.weight}</em></span>
-          <div className="mca-comp-track"><i style={{ width: `${Math.max(2, Math.min(100, c.score))}%`, background: scoreColor(c.score) }} /></div>
-          <span className="mca-comp-sc" style={{ color: scoreColor(c.score) }}>{c.score.toFixed(0)}</span>
-          <span className="mca-comp-val">{c.value != null ? c.value : "—"}</span>
+          <span className="mca-comp-lbl"><span data-server>{c.label}</span><em>가중 {c.weight}</em></span>
+          <div className="mca-comp-track" aria-hidden><i style={{ width: `${Math.max(2, Math.min(100, c.score))}%` }} /></div>
+          <span className="mca-comp-sc">{c.score.toFixed(0)}</span>
+          <span className="mca-comp-val">{c.value != null ? c.value : "N/A"}</span>
         </div>
       ))}
     </div>
   );
 }
 
-// ── TimingHistory — 종합점수 추이 + 온/오프 임계 ──
-export function TimingHistory({ history }: { history: MacroTiming["history"] }) {
-  const anim = useChartAnimation();
-  if (!history.length) return <div className="mc-empty-sm">타이밍 추이 데이터 없음</div>;
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={history} margin={{ top: 8, right: 16, bottom: 4, left: -16 }}>
-        <defs><linearGradient id="mcaTim" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--t-accent)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--t-accent)" stopOpacity={0.02} /></linearGradient></defs>
-        <CartesianGrid strokeDasharray="2 2" stroke="var(--t-border)" vertical={false} />
-        <XAxis dataKey="t" tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" minTickGap={28} />
-        <YAxis domain={[0, 100]} ticks={[0, 40, 60, 100]} tick={{ fontSize: 9, fill: "var(--t-muted)" }} stroke="var(--t-border)" width={32} />
-        <Tooltip contentStyle={TIP} />
-        <ReferenceArea y1={60} y2={100} fill="rgba(22,163,74,0.05)" stroke="none" />
-        <ReferenceArea y1={0} y2={40} fill="rgba(220,38,38,0.05)" stroke="none" />
-        <ReferenceLine y={60} stroke="var(--color-bull)" strokeDasharray="3 3" />
-        <ReferenceLine y={40} stroke="var(--color-bear)" strokeDasharray="3 3" />
-        <Area type="monotone" dataKey="score" stroke="var(--t-accent)" strokeWidth={1.8} fill="url(#mcaTim)" isAnimationActive={anim} />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
+export const TimingHistory = lazyChart(loadAnalyticsCharts, (m) => m.TimingHistory, { height: 210, label: "타이밍 이력" });   // 본문은 analyticsParts.charts.tsx(화면이 뜬 뒤에 받는다)
 
-// ── TrendTable — 자산별 추세 상태 ──
-// 조건부 서식 셀 — ▲/▼ 화살표 + 옅은 배경 틴트 (Gemini UI 개편 2순위: 테이블의 꽃)
+// ── TrendTable — 자산별 추세 ──
+// 가격 방향(이동평균 대비·12개월 모멘텀)은 등락색 + ▲▼ + 부호. 52주 고점 거리는 늘 0 이하라 색 없이 숫자. RSI 는 점 하나(잉크) — 30·70 구간 뜻은 열 머리 글자.
 function PctCell({ v }: { v: number | null | undefined }) {
-  if (v == null) return <td className="n">—</td>;
-  const up = v >= 0;
+  if (v == null || !Number.isFinite(v)) return <td className="n">N/A</td>;
   return (
-    <td className="n" style={{
-      color: up ? "var(--color-bull)" : "var(--color-bear)",
-      background: up ? "rgba(22,163,74,.06)" : "rgba(220,38,38,.05)",
-    }}>
-      <span className="mca-arrow">{up ? "▲" : "▼"}</span> {up ? "+" : ""}{v.toFixed(1)}%
+    <td className="n" style={{ color: moveColor(v) }}>
+      <span className="mca-arrow" aria-hidden>{v > 0 ? "▲" : v < 0 ? "▼" : ""}</span> {signed(v, 1)}%
     </td>
   );
 }
-
-const TREND_PILL: Record<string, { fg: string; bg: string }> = {
-  "상승": { fg: "#0e7c4a", bg: "rgba(22,163,74,.12)" },
-  "하락": { fg: "#b91c1c", bg: "rgba(220,38,38,.10)" },
-  "중립": { fg: "#71717a", bg: "rgba(113,113,122,.10)" },
-};
+/** 추세 글자(서버) → 등락 방향. 모르는 글자는 중립. */
+const TREND_DIR: Record<string, "up" | "down"> = { "상승": "up", "하락": "down" };
 
 export function TrendTable({ assets }: { assets: TrendRow[] }) {
   return (
-    <table className="mca-trend v2">
-      <thead><tr><th>자산</th><th className="n">200일선 대비</th><th className="n">12M 모멘텀</th><th className="n">52주高 거리</th><th className="n">RSI</th><th>추세</th></tr></thead>
-      <tbody>
-        {assets.map((a) => {
-          const pill = TREND_PILL[a.trend] ?? TREND_PILL["중립"];
-          const rsi = a.rsi;
-          return (
-            <tr key={a.ticker}>
-              <td><b>{a.ticker}</b> <span className="mca-trend-nm">{a.label}</span></td>
-              <PctCell v={a.vs_ma200_pct} />
-              <PctCell v={a.mom_12m} />
-              <td className="n" style={{ color: (a.dist_52w_high ?? 0) > -3 ? "var(--color-bull)" : "var(--t-muted)" }}>{fmt1(a.dist_52w_high)}%</td>
-              <td className="n">
-                {rsi != null ? (
-                  <span className="mca-rsi" title={`RSI ${rsi.toFixed(0)} (30 과매도 · 70 과매수)`}>
-                    <span className="mca-rsi-track">
-                      <i className="mca-rsi-zone" />
-                      <i className="mca-rsi-dot" style={{ left: `${Math.max(0, Math.min(100, rsi))}%`,
-                        background: rsi >= 70 ? "#dc2626" : rsi <= 30 ? "#2563eb" : "#71717a" }} />
+    <div className="mc-tablewrap">
+      <table className="mca-trend v2">
+        <thead><tr><th>자산</th><th className="n">200일선 대비</th><th className="n">12개월 모멘텀</th><th className="n">52주 고점까지</th><th className="n">RSI(30 아래 과매도 · 70 위 과매수)</th><th>추세</th></tr></thead>
+        <tbody>
+          {assets.map((a) => {
+            const dir = TREND_DIR[a.trend];
+            const rsi = a.rsi;
+            return (
+              <tr key={a.ticker}>
+                <td><b data-mono>{a.ticker}</b> <span className="mca-trend-nm">{a.label}</span></td>
+                <PctCell v={a.vs_ma200_pct} />
+                <PctCell v={a.mom_12m} />
+                <td className="n">{a.dist_52w_high == null ? "N/A" : `${signed(a.dist_52w_high, 1)}%`}</td>
+                <td className="n">
+                  {rsi != null ? (
+                    <span className="mca-rsi">
+                      <span className="mca-rsi-track" aria-hidden>
+                        <i className="mca-rsi-zone" />
+                        <i className="mca-rsi-dot" style={{ left: `${Math.max(0, Math.min(100, rsi))}%` }} />
+                      </span>
+                      {rsi.toFixed(0)}
                     </span>
-                    {rsi.toFixed(0)}
-                  </span>
-                ) : "—"}
-              </td>
-              <td><span className="mca-trend-pill" style={{ color: pill.fg, background: pill.bg }}>{a.trend}</span></td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-// ── RegimeTrajectory — 국면 궤적(경로) 산점도 ──
-export function RegimeTrajectory({ path }: { path: TrajectoryPoint[] }) {
-  const anim = useChartAnimation();
-  if (!path.length) return <div className="mc-empty-sm">궤적 데이터 없음</div>;
-  const data = path.map((p) => ({ x: p.growth, y: p.inflation, t: p.t }));
-  const last = data[data.length - 1];
-  // ★동적 스케일(CIO §2) — 궤적 전체가 축 안에 들어오도록. 라벨 통일 명명.
-  const lim = Math.max(1, Math.ceil(Math.max(...data.map((d) => Math.max(Math.abs(d.x), Math.abs(d.y))))));
-  const ticks = [-lim, -lim / 2, 0, lim / 2, lim];
-  return (
-    <div className="mc-scatter">
-      <span className="mc-quad tr">REFLATION<em>성장↑·물가↑</em></span>
-      <span className="mc-quad tl">STAGFLATION<em>성장↓·물가↑</em></span>
-      <span className="mc-quad br">GOLDILOCKS<em>성장↑·물가↓</em></span>
-      <span className="mc-quad bl">DISINFLATION<em>성장↓·물가↓</em></span>
-      <ResponsiveContainer width="100%" height={320}>
-        <ScatterChart margin={{ top: 14, right: 18, bottom: 22, left: 6 }}>
-          <ReferenceArea x1={0} x2={lim} y1={-lim} y2={0} fill="rgba(22,163,74,0.06)" stroke="none" />
-          <ReferenceArea x1={0} x2={lim} y1={0} y2={lim} fill="rgba(234,88,12,0.06)" stroke="none" />
-          <ReferenceArea x1={-lim} x2={0} y1={0} y2={lim} fill="rgba(220,38,38,0.06)" stroke="none" />
-          <ReferenceArea x1={-lim} x2={0} y1={-lim} y2={0} fill="rgba(37,99,235,0.06)" stroke="none" />
-          <XAxis type="number" dataKey="x" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "성장 →", position: "insideBottom", offset: -10, fontSize: 10, fill: "var(--t-muted)" }} />
-          <YAxis type="number" dataKey="y" domain={[-lim, lim]} ticks={ticks} tick={{ fontSize: 10, fill: "var(--t-muted)" }} stroke="var(--t-border)" label={{ value: "물가 →", angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--t-muted)" }} />
-          <ReferenceLine x={0} stroke="var(--t-border)" />
-          <ReferenceLine y={0} stroke="var(--t-border)" />
-          <Tooltip contentStyle={TIP} cursor={{ strokeDasharray: "3 3" }} formatter={(v: number | string) => Number(v).toFixed(2)} />
-          <Scatter data={data} line={{ stroke: "var(--t-accent)", strokeWidth: 1.5 }} lineType="joint"
-            fill="var(--t-accent)" fillOpacity={0.45} isAnimationActive={anim} />
-          <ReferenceDot x={last.x} y={last.y} r={16} fill="var(--t-accent)" fillOpacity={0.14} stroke="none" />
-          <ReferenceDot x={last.x} y={last.y} r={5} fill="var(--t-accent)" stroke="#fff" strokeWidth={1.5} />
-        </ScatterChart>
-      </ResponsiveContainer>
+                  ) : "N/A"}
+                </td>
+                <td><span className="mca-trend-pill" data-dir={dir ?? "flat"} style={{ color: dir === "up" ? "var(--tx-up-ink)" : dir === "down" ? "var(--tx-down-ink)" : "var(--tx-ink)" }}>
+                  {dir === "up" ? "▲ " : dir === "down" ? "▼ " : ""}{a.trend}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
+
+export const RegimeTrajectory = lazyChart(loadAnalyticsCharts, (m) => m.RegimeTrajectory, { height: 320, label: "국면 궤적" });   // 본문은 analyticsParts.charts.tsx(화면이 뜬 뒤에 받는다)

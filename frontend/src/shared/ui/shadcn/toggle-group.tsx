@@ -14,18 +14,12 @@ import * as React from "react";
 import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group";
 import { cn } from "@/shared/lib/cn";
 
-const ToggleGroup = React.forwardRef<
-  React.ElementRef<typeof ToggleGroupPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root>
->(({ className, ...props }, ref) => (
+const ToggleGroup = ({ className, ref, ...props }: React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> & { ref?: React.Ref<React.ComponentRef<typeof ToggleGroupPrimitive.Root>> }) => (
   <ToggleGroupPrimitive.Root ref={ref} className={cn("flex flex-wrap gap-1", className)} {...props} />
-));
+);
 ToggleGroup.displayName = "ToggleGroup";
 
-const ToggleGroupItem = React.forwardRef<
-  React.ElementRef<typeof ToggleGroupPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item>
->(({ className, ...props }, ref) => (
+const ToggleGroupItem = ({ className, ref, ...props }: React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> & { ref?: React.Ref<React.ComponentRef<typeof ToggleGroupPrimitive.Item>> }) => (
   <ToggleGroupPrimitive.Item
     ref={ref}
     className={cn(
@@ -40,7 +34,7 @@ const ToggleGroupItem = React.forwardRef<
     )}
     {...props}
   />
-));
+);
 ToggleGroupItem.displayName = "ToggleGroupItem";
 
 export { ToggleGroup, ToggleGroupItem };

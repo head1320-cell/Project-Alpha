@@ -78,7 +78,7 @@ _REVISION_BIAS_NOTE = {
            "공표지연을 시프트해도 이 개정 편향은 남으므로 과거 시뮬레이션에 쓸 수 "
            "없습니다(forward-only)."),
     KRX: ("KRX 공개 API 는 개정 이력을 제공하지 않습니다 — 정정 공시가 반영된 값과 "
-          "당시 공표값을 구분할 수 없어 과거 시뮬레이션에 쓸 수 없습니다(forward-only)."),
+          "당시 공표값을 구분할 수 없어 과거 시뮬레이션에 사용할 수 없습니다(forward-only)."),
     NAVER: ("검색 트렌드는 조회 시점 기준으로 재정규화되어 과거 값이 개정됩니다 — "
             "같은 기간을 다시 조회하면 다른 값이 나오므로 과거 시뮬레이션에 쓸 수 "
             "없습니다(forward-only)."),
@@ -399,6 +399,12 @@ FREQ_EVIDENCE_PATH = Path(
     or Path(__file__).resolve().parents[2] / "docs" / "specs" / "ecos-frequency-evidence.json")
 
 #: 등급 순서 — 낮은 확신이 조용히 사실이 되는 경로를 막는다.
+#:
+#: ★이것은 **확신도** 척도다 — 출처 척도가 아니다★(AV 실측). 여기서 `E2` 는
+#: *"메타 API 응답에서 관측했다"* 는 뜻이고, CLAUDE.md 2절의 `E2`(*"제공자
+#: 파생"*)와는 **다른 축**이다. 글자가 같아 섞기 쉬우니, 출처 등급이 필요한
+#: 쪽은 `src/domain/signal_evidence.py` 의 `PROV_*` 를 쓴다.
+#: CLAUDE.md 가 `capability.py` 의 `L0~L3` 에 대해 적어 둔 경고와 같은 모양이다.
 EVIDENCE_GRADES = ("E0", "E1", "E2", "E3")
 
 
@@ -586,7 +592,7 @@ def status(key: str, *, value: Any = None, as_of: str | None = None) -> dict[str
                 "reason": _NOT_INGESTED_NOTE}
     if value is None:
         return {**base, "value": None, "as_of": None, "available": False,
-                "reason": "실호출에서 값을 받지 못했습니다."}
+                "reason": "실호출에서 값을 수신하지 못했습니다."}
     return {**base, "value": value, "as_of": as_of, "available": True, "reason": None}
 
 

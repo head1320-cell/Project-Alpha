@@ -12,6 +12,9 @@ import { getActiveCaseId } from "@/shared/lib/caseStorage";
 
 export type TargetStatus = "executable" | "research_only";
 
+/** 목록 응답 — `available:false` 는 저장소를 못 읽은 것이고, 목표가 없는 것과 다르다(R0-S). */
+export interface TargetVersionList { available: boolean; versions: TargetVersion[]; reason?: string }
+
 export interface TargetVersion {
   tpv_id?: string | null;
   saved?: boolean;
@@ -34,6 +37,8 @@ export interface TargetVersion {
   net_after?: number;
   status: TargetStatus;
   status_reason: string | null;
+  /** 만든 시각(epoch 초) — 저장된 목표에만 있다. */
+  created_at?: number | null;
   run_id?: string | null;
   snapshot_id?: string | null;
   case_id?: string | null;
@@ -72,6 +77,13 @@ export const targetVersionApi = {
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`target-version 생성 실패: ${r.status}`);
+    return r.json();
+  },
+
+  /** 최신순. ★네트워크 오류를 빈 목록으로 삼키지 않는다★ — 저장소 장애는 `available:false` 로 온다. */
+  list: async (limit = 50): Promise<TargetVersionList> => {
+    const r = await fetch(`${API_BASE}/api/v1/allocation/target-versions?limit=${limit}`);
+    if (!r.ok) throw new Error(`target-version 목록 실패: ${r.status}`);
     return r.json();
   },
 

@@ -181,3 +181,53 @@ def test_the_intraday_collector_counts_the_failure_instead_of_crashing(monkeypat
     from src.data import minute_bars as mb
     with pytest.raises(kc.KISCredentialsMissing):
         mb._fetch_minute_bars("005930", "2024-01-02")
+
+
+# ── 싱글턴: 붙잡아 둔 클라이언트가 모드를 넘지 않는다 (2026-11-14 · 합성값 전수 감사) ────────────
+#
+# 위 `test_the_singleton_cannot_leak_a_mock_into_production` 은 `force_reload=True` 로 불러서 통과한다 —
+# 강제로 새로 만들면 당연히 거절된다. ★붙잡아 둔 것을 그대로 돌려주는 길★(강제 없음)은 아무도 보지 않았고,
+# 실제로 새고 있었다: mock 모드에서 한 번 만든 mock 클라이언트가 게이트가 닫힌 뒤에도 나갔다.
+# 찾은 경위 — 합성값 등록부 가드(`test_synthetic_registry.py`)가 전체 시험 순서에서 `market_data` 의 운영 문을
+# 열었더니 앞 시험이 남긴 mock 클라이언트의 일봉(난수)이 들어왔다.
+
+def test_a_cached_mock_is_not_handed_out_after_the_gate_closes(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    assert type(kc.get_kis_client()).__name__ == "MockKISClient"
+    _production(monkeypatch, keys=False)
+    with pytest.raises(kc.KISCredentialsMissing):
+        kc.get_kis_client()                       # ★강제 없이★ — 붙잡아 둔 mock 이 나오면 안 된다
+
+
+def test_a_cached_mock_gives_way_to_a_real_client_once_keys_exist(monkeypatch):
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    kc.get_kis_client()
+    _production(monkeypatch, keys=True)
+    assert type(kc.get_kis_client()).__name__ == "KISClient"
+
+
+def test_a_cached_real_client_is_not_handed_out_in_mock_mode(monkeypatch):
+    """반대 방향 — 이쪽이 더 위험하다: mock 이라고 믿는 호출부가 실계좌 클라이언트를 받는다."""
+    _production(monkeypatch, keys=True)
+    assert type(kc.get_kis_client()).__name__ == "KISClient"
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    assert type(kc.get_kis_client()).__name__ == "MockKISClient"
+
+
+@pytest.mark.parametrize("mock", ["1", "0"])
+def test_the_client_is_still_reused_while_the_mode_holds(monkeypatch, mock):
+    """짝 — 부를 때마다 새로 만들면 토큰을 매번 다시 받는다(발급 제한). 모드가 그대로면 같은 객체다."""
+    if mock == "1":
+        monkeypatch.setenv("KIS_USE_MOCK", "1")
+    else:
+        _production(monkeypatch, keys=True)
+    assert kc.get_kis_client() is kc.get_kis_client()
+
+
+def test_market_data_gets_no_bars_from_a_mock_cached_before_the_gate_closed(monkeypatch):
+    """소비자에서 본 같은 사실 — 운영의 기술적 지표가 앞서 만든 mock 의 난수 일봉으로 계산되면 안 된다."""
+    from src.data import market_data as md
+    monkeypatch.setenv("KIS_USE_MOCK", "1")
+    kc.get_kis_client()
+    _production(monkeypatch, keys=False)
+    assert md._real_kis_ohlcv("005930", days=200) is None

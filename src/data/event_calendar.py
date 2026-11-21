@@ -5,7 +5,8 @@ Event Calendar — Screener V2 Milestone 3
 
 전략:
   · earnings_date / ex_dividend_date per ticker
-  · DART 연동 여지 (현재 deterministic mock)
+  · ★실데이터 원천이 없다★ — 값은 mock 모드의 결정론적 합성뿐이다. 운영에서는 미상 + 사유
+    (조건 종류 `event` 를 쓴 요청은 `src/engine/condition_sources.py` 가 거절한다)
   · days_until(ticker, event) → 임박일수
 
 이벤트 유형:
@@ -36,6 +37,9 @@ EVENT_CATALOG: list[EventMeta] = [
 ]
 
 EVENT_BY_ID = {e.id: e for e in EVENT_CATALOG}
+
+#: 운영에서 이벤트 일정이 없는 사유 — 응답에 그대로 실린다.
+EVENTS_NO_FEED = "실적 발표·배당락 일정의 실데이터 원천이 연결돼 있지 않아 값이 없습니다."
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -72,8 +76,11 @@ class EventCalendar:
         return cls._singleton
 
     def days_until(self, stock_code: str, event_type: str) -> int | None:
-        """이벤트까지 남은 일수 (없으면 None)."""
+        """이벤트까지 남은 일수 (없으면 None). 운영에서는 원천이 없어 늘 None 이다 — 지어내지 않는다."""
         if event_type not in EVENT_BY_ID:
+            return None
+        from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
             return None
         event_date = _mock_event_date(stock_code, event_type)
         delta = (event_date - datetime.now()).days
@@ -81,6 +88,10 @@ class EventCalendar:
 
     def get_events(self, stock_code: str) -> dict:
         """종목의 모든 이벤트 임박일수."""
+        from src.data.mock_gate import mock_allowed
+        if not mock_allowed():
+            return {"earnings_days": None, "ex_dividend_days": None,
+                    "_source": "unavailable", "_reason": EVENTS_NO_FEED}
         return {
             "earnings_days":    self.days_until(stock_code, "earnings"),
             "ex_dividend_days": self.days_until(stock_code, "ex_dividend"),

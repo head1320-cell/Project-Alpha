@@ -1,0 +1,168 @@
+{
+ "type": "regime_skill",
+ "status": "ok",
+ "reason": null,
+ "view": {
+  "result": {
+   "available": true,
+   "k": 1,
+   "min_history": 36,
+   "n_eval": 84,
+   "scored": {
+    "first": "2019-11",
+    "last": "2026-10"
+   },
+   "baseline": "persistence",
+   "candidates": [
+    {
+     "key": "persistence",
+     "name": "오늘 국면 유지",
+     "available": true,
+     "hits": 79,
+     "hit_rate": 0.940476,
+     "brier": 0.119048,
+     "gain": null,
+     "evidence": null,
+     "reason": null
+    },
+    {
+     "key": "base_rate",
+     "name": "기저율",
+     "available": true,
+     "hits": 28,
+     "hit_rate": 0.333333,
+     "brier": 0.748714,
+     "gain": -0.629666,
+     "evidence": {
+      "e_value": 0.018207402466354165,
+      "peak": 1.0,
+      "saturated": false,
+      "passed": false
+     },
+     "reason": null
+    },
+    {
+     "key": "transition",
+     "name": "전이 예측",
+     "available": true,
+     "hits": 79,
+     "hit_rate": 0.940476,
+     "brier": 0.120532,
+     "gain": -0.001485,
+     "evidence": {
+      "e_value": 0.9098334749453943,
+      "peak": 1.2189550316410753,
+      "saturated": false,
+      "passed": false
+     },
+     "reason": null
+    },
+    {
+     "key": "gmm_start",
+     "name": "GMM 시작 분포 × 전이",
+     "available": true,
+     "hits": 79,
+     "hit_rate": 0.940476,
+     "brier": 0.231495,
+     "gain": -0.112448,
+     "evidence": {
+      "e_value": 0.18345258796642785,
+      "peak": 1.0496074681789294,
+      "saturated": false,
+      "passed": false
+     },
+     "reason": null
+    },
+    {
+     "key": "gmm_now",
+     "name": "GMM 지금 값",
+     "available": true,
+     "hits": 79,
+     "hit_rate": 0.940476,
+     "brier": 0.191429,
+     "gain": -0.072381,
+     "evidence": {
+      "e_value": 0.286919315888884,
+      "peak": 1.0982006999999998,
+      "saturated": false,
+      "passed": false
+     },
+     "reason": null
+    },
+    {
+     "key": "kmeans_share",
+     "name": "k-평균 시드 비율",
+     "available": true,
+     "hits": 74,
+     "hit_rate": 0.880952,
+     "brier": 0.238095,
+     "gain": -0.119048,
+     "evidence": {
+      "e_value": 0.15021875,
+      "peak": 1.0,
+      "saturated": false,
+      "passed": false
+     },
+     "reason": null
+    }
+   ],
+   "evidence": {
+    "method": "capped_betting_mixture",
+    "alpha": 0.05,
+    "compared": 5,
+    "threshold": 100.0,
+    "computed": true,
+    "reason": null,
+    "note": "브라이어 차(유지 − 후보)는 늘 −2 ~ 2 안이라 상한 가정 없이 성립하는 값입니다. 기준은 견준 후보 수 5 ÷ α 0.05 = 100이고 지나온 시점의 최고값으로 견줍니다. 후보를 고르라는 뜻이 아니라 '유지보다 확률을 잘 맞혔다'는 증거의 크기입니다."
+   },
+   "walk_forward": true,
+   "note": "각 시점에서 그때까지의 국면 경로와 성장·물가 축만으로 후보를 세워 1개월 뒤의 국면을 예측하고 실현된 국면과 견준 점수입니다(워크포워드). 모든 후보가 같은 시점 · 같은 실현값으로 채점됩니다. 점수를 나란히 보일 뿐 어느 후보를 쓰라고 하지 않습니다 — 배분이 받는 출처는 따로 정합니다.",
+   "not_measured": [
+    "국면을 맞히는 것이 배분의 수익 · 위험으로 이어지는지(경제적 가치)"
+   ],
+   "market": "kr",
+   "months": 120,
+   "span": {
+    "first": "2016-11",
+    "last": "2026-10",
+    "n_months": 120,
+    "requested": 120,
+    "truncated": false,
+    "dropped_incomplete": 0
+   }
+  }
+ },
+ "explain": {
+  "title": "후보 여섯의 1개월 뒤 국면 예측을 같은 84개 시점에서 채점했습니다",
+  "facts": [
+   "오늘 국면 유지: 적중 79/84회 · 브라이어 0.119",
+   "기저율: 적중 28/84회 · 브라이어 0.749 · 유지 대비 -0.630 · 순차 증거 최고 1.00",
+   "전이 예측: 적중 79/84회 · 브라이어 0.121 · 유지 대비 -0.001 · 순차 증거 최고 1.22",
+   "GMM 시작 분포 × 전이: 적중 79/84회 · 브라이어 0.231 · 유지 대비 -0.112 · 순차 증거 최고 1.05",
+   "GMM 지금 값: 적중 79/84회 · 브라이어 0.191 · 유지 대비 -0.072 · 순차 증거 최고 1.10",
+   "k-평균 시드 비율: 적중 74/84회 · 브라이어 0.238 · 유지 대비 -0.119 · 순차 증거 최고 1.00"
+  ],
+  "trust": [
+   {
+    "state": "confirmed",
+    "text": "각 시점 이전 자료만으로 후보를 세워 채점했습니다(미래를 쓰지 않은 채점)."
+   },
+   {
+    "state": "confirmed",
+    "text": "점수를 나란히 보일 뿐 어느 후보도 고르지 않습니다 — 배분이 받는 국면 확률의 출처는 따로 정합니다."
+   },
+   {
+    "state": "confirmed",
+    "text": "순차 증거(e-값)는 브라이어 차가 늘 −2 ~ 2 안이라 상한 가정 없이 성립합니다 — 기준 100(견준 후보 5 ÷ α 0.05)."
+   },
+   {
+    "state": "unknown",
+    "text": "개발 모드라 매크로 지표가 합성(합성)입니다 — 실제 국면을 말해 주지 않습니다.",
+    "kind": "practice"
+   }
+  ],
+  "unmeasured": [
+   "국면을 맞히는 것이 배분의 수익 · 위험으로 이어지는지(경제적 가치)"
+  ]
+ }
+}

@@ -1,0 +1,102 @@
+{
+ "_note": "G7 ② (2026-11-19) 변경 전 동작 사진 — conformal.py 의 split 함수 넷과 allocation_backtest._conformal_block 의 기존 키. 입력은 tests/test_conformal_adaptive.py 가 짓는다. 다시 뜨지 않는다(바뀌면 의도한 변화인지 먼저 따진다).",
+ "block": {
+  "alpha": 0.1,
+  "available": true,
+  "measured_coverage": {
+   "available": true,
+   "coverage": 0.6,
+   "hits": 3,
+   "mean_width": 0.013125999999999981,
+   "n": 5,
+   "n_calibration": 11
+  },
+  "n_pairs": 16,
+  "n_required": 9,
+  "next_period": {
+   "half_width": 0.008132000000000047,
+   "lower": -0.009981000000000047,
+   "point": -0.001849,
+   "upper": 0.006283000000000047
+  },
+  "note": "다음 리밸런스 구간의 **일평균** 포트폴리오 수익률 구간입니다. 교환가능성만 가정하며 분포 가정은 없습니다. 실현값은 구간 말 회전율 비용을 반영한 값이라, 비용을 모르는 예측 대비 구간이 다소 넓게 잡힙니다.",
+  "unit": "daily_mean_return"
+ },
+ "block_short": {
+  "alpha": 0.1,
+  "available": false,
+  "n_pairs": 5,
+  "n_required": 9,
+  "reason": "완료된 리밸런스 구간이 5개로 보정 최소치 9개에 미치지 못합니다 (α=0.1) — 구간을 만들 수 없습니다."
+ },
+ "coverage": {
+  "available": true,
+  "coverage": 0.75,
+  "hits": 3,
+  "mean_width": 1.0,
+  "n": 4
+ },
+ "coverage_empty": {
+  "available": false,
+  "reason": "측정할 표본이 없습니다."
+ },
+ "coverage_len": {
+  "available": false,
+  "reason": "실측/하한/상한 길이가 다릅니다."
+ },
+ "quantile_empty": {
+  "available": false,
+  "n": 0,
+  "reason": "보정 잔차가 없습니다."
+ },
+ "quantile_neg": {
+  "available": false,
+  "n": 2,
+  "reason": "잔차에 음수가 있습니다 — |y − ŷ| 를 넣어야 합니다."
+ },
+ "quantile_ok": {
+  "alpha": 0.2,
+  "available": true,
+  "n": 12,
+  "q": 0.9,
+  "rank": 11
+ },
+ "quantile_short": {
+  "alpha": 0.1,
+  "available": false,
+  "n": 3,
+  "reason": "보정 표본이 부족합니다 — 3개로는 90% 커버리지를 유한한 구간으로 보장할 수 없습니다 (최소 9개 필요).",
+  "required_n": 9
+ },
+ "required": {
+  "0.01": 99,
+  "0.05": 19,
+  "0.1": 9,
+  "0.2": 4,
+  "0.5": 1
+ },
+ "split_len": {
+  "available": false,
+  "reason": "보정 실측/예측 길이가 다릅니다: 10 vs 3"
+ },
+ "split_ok": {
+  "alpha": 0.2,
+  "available": true,
+  "lower": [
+   10.5,
+   11.5
+  ],
+  "n_cal": 10,
+  "note": "보정 10개의 절대잔차 9번째 순위값 ±0.5. 교환가능성만 가정하며 분포 가정은 없습니다.",
+  "point": [
+   11.0,
+   12.0
+  ],
+  "q": 0.5,
+  "rank": 9,
+  "upper": [
+   11.5,
+   12.5
+  ]
+ }
+}

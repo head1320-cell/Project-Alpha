@@ -17,7 +17,7 @@ import asyncio
 import logging
 import urllib.request
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 
 from sqlalchemy import text
@@ -228,7 +228,7 @@ def load_symbol_cache(engine) -> dict[str, list[dict]]:
             cache[mkt].append({"ticker": ticker, "name": name, "market": mkt})
 
         _symbol_cache = cache
-        _last_fetched = datetime.utcnow()
+        _last_fetched = datetime.now(timezone.utc).replace(tzinfo=None)
         total = sum(len(v) for v in cache.values())
         logger.info(f"Symbol cache loaded: {total} symbols")
         return cache
@@ -267,7 +267,7 @@ async def collect_master_files(engine=None) -> dict:
     """
     results = {}
     all_symbols: list[dict] = []
-    start = datetime.utcnow()
+    start = datetime.now(timezone.utc).replace(tzinfo=None)
 
     for market, url in MASTER_URLS.items():
         try:
@@ -356,7 +356,7 @@ async def collect_master_files(engine=None) -> dict:
         except Exception as e:
             logger.error(f"master flags cache save failed: {e}")
 
-    elapsed = (datetime.utcnow() - start).total_seconds()
+    elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds()
     return {
         **results,
         "total": sum(results.values()),
@@ -367,5 +367,5 @@ async def collect_master_files(engine=None) -> dict:
         "halted_count": halted_count,
         "sanity": sanity,
         "elapsed_sec": round(elapsed, 1),
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }

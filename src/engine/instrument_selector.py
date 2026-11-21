@@ -53,7 +53,7 @@ MARKETS = ("kr", "us")
 UNAVAILABLE_CRITERIA: dict[str, str] = {
     "expense_ratio": ("운용보수 데이터가 이 저장소에 없습니다 — ETF 메타데이터 "
                       "저장소가 없어 벤더 연동이 필요합니다"),
-    "corporate_actions": ("ETF 분배금·액면 이력이 없습니다 — 총수익 기준 비교를 "
+    "corporate_actions": ("ETF 분배금·액면 이력이 없습니다 — 총수익률 기준 비교를 "
                           "하려면 그 데이터가 먼저 필요합니다"),
 }
 

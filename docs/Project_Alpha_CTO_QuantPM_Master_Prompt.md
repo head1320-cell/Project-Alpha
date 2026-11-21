@@ -74,7 +74,7 @@ Read these before doing any implementation:
 
 Important existing invariants from `CLAUDE.md` include:
 
-- FastAPI 0.111.0 is fixed.
+- FastAPI is pinned in `requirements.txt` (0.162 since 2026-11-08); its `include_router` nests routes, so route tables are walked only through `tests/route_walk.py::flat_routes()`.
 - `uvicorn --workers 1` is currently required because process-local state/caches exist.
 - API traffic goes through the runtime same-origin proxy.
 - mock mode is controlled only by `src/data/mock_gate.py::mock_allowed()`.

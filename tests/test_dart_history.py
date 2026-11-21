@@ -62,7 +62,7 @@ def test_backfill_saves_and_resumes(mem_engine, corp_map):
 
 
 def test_backfill_empty_year_retried_on_resume(mem_engine, corp_map):
-    """상장 전 연도(빈 응답)는 저장이 없으므로 재실행 시 다시 시도된다."""
+    """상장 전 연도(빈 응답)는 저장이 없으므로 재실행 시 재시도된다."""
     last3 = str(__import__("datetime").datetime.now().year - 3)
     client = FakeDART(missing_years={last3})
     s1 = dh.backfill_financials(tickers=["005930"], years=3, engine=mem_engine, client=client)

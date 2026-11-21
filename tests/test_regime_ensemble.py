@@ -1,7 +1,8 @@
-"""regime_ensemble — 세 도구를 나란히 돌리고, 못 하는 것은 못 한다고 말하는가 (A7).
+"""regime_ensemble — 네 도구를 나란히 돌리고, 못 하는 것은 못 한다고 말하는가 (A7 · M1 에서 k-평균 팔을 더함).
 
 ★이 테스트가 지키는 것★
-1. 세 방법을 **합치지 않는다** — 각각의 확률이 따로 나오고 argmax 도 따로다.
+1. 방법끼리 **합치지 않는다** — 각각의 확률이 따로 나오고 argmax 도 따로다.
+   (한 방법 안의 시드 평균과 안정성은 `test_regime_seed_stability.py` 가 손 계산으로 건다.)
 2. 표본 부족·미수렴·라이브러리 부재는 `available: False` + **사유** 다.
    0 이나 균등분포로 채우면 "국면을 모르겠다" 가 "네 국면이 똑같이 가능하다" 로
    둔갑한다 — 이 저장소가 반복해서 고쳐 온 결함 유형이다.
@@ -42,9 +43,9 @@ def _series(n: int, seed: int = 7) -> dict:
     }
 
 
-def test_three_tools_run_side_by_side():
+def test_four_tools_run_side_by_side():
     r = regime_ensemble(_series(140), "kr", months=90)
-    assert set(r["tools"]) == {"axis", "markov", "cluster"}
+    assert list(r["tools"]) == ["axis", "markov", "cluster", "kmeans"]
     for name, tool in r["tools"].items():
         assert tool["available"] is True, f"{name}: {tool.get('reason')}"
         # 확률은 4국면 전부에 대해 나오고 합이 1이다.
@@ -107,7 +108,7 @@ def test_short_sample_is_unavailable_with_a_reason_not_a_uniform_prior(months):
     실제로는 아무것도 추정하지 못한 것이다.
     """
     r = regime_ensemble(_series(months + 4), "kr", months=months)
-    for name in ("markov", "cluster"):
+    for name in ("markov", "cluster", "kmeans"):
         tool = r["tools"][name]
         assert tool["available"] is False, name
         assert "probs" not in tool, f"{name}: 미가용인데 확률을 만들었다"
@@ -122,7 +123,62 @@ def test_no_axis_indicators_is_unavailable_not_zero():
 
 
 def test_agreement_reports_disagreement_when_tools_differ():
-    """세 도구가 갈리면 `unanimous` 가 False 여야 한다 — 갈린 사실이 정보다."""
+    """도구가 갈리면 `unanimous` 가 False 여야 한다 — 갈린 사실이 정보다."""
     r = regime_ensemble(_series(140), "kr", months=90)
     picks = r["agreement"]["picks"]
     assert r["agreement"]["unanimous"] == (len(set(picks.values())) == 1)
+
+
+# ── M1b · 축이 계산되지 않은 달은 0 으로 채우지 않는다(미상 ≠ 0) ─────────────────────
+# 앙상블은 예전에 성분이 없는 달의 축 점수를 0 으로 채워(`compute_axis_detail` 의 빈 값) Markov · 군집 두 팔에 넘겼다.
+# (0, 0) 은 사분면으로 Reflation 이 된다 — 계산되지 않은 달이 한 국면으로 찍혀 적합에 들어간다. `regime_path` 와 같은 규칙으로
+# 두 축이 다 계산된 달만 쓰고, 뺀 달의 수를 응답과 문장에 적는다(M2 의 국면 예측 비교와 같은 입력).
+
+def _spy_arms(monkeypatch):
+    import src.engine.regime_ensemble as ens
+    seen: dict = {}
+    for name in ("_markov_probs", "_cluster_probs", "_kmeans_probs"):
+        real = getattr(ens, name)
+
+        def spy(g, i, _real=real, _name=name):
+            seen[_name] = (list(g), list(i))
+            return _real(g, i)
+        monkeypatch.setattr(ens, name, spy)
+    return seen
+
+
+def test_months_without_both_axes_are_left_out_not_filled_with_zero(monkeypatch):
+    from src.engine.regime_transitions import regime_path
+    smap = _series(80)                                         # 예열 7개월 — 90개월을 청하면 앞의 17개월은 축이 계산되지 않는다
+    rp = regime_path(smap, market="kr", months=90)
+    dropped = rp["span"]["dropped_incomplete"]
+    assert dropped > 0, "빠진 달이 없는 자료다 — 이 시험은 공허하다"
+    seen = _spy_arms(monkeypatch)
+    r = regime_ensemble(smap, "kr", months=90)
+    want = ([p["growth"] for p in rp["points"]], [p["inflation"] for p in rp["points"]])
+    for name in ("_markov_probs", "_cluster_probs", "_kmeans_probs"):
+        assert seen[name] == want, name                       # 세 팔이 받은 것 = 두 축이 다 계산된 달만
+    assert r["n_obs"] == len(rp["points"]) == 90 - dropped
+    assert r["dropped_incomplete"] == dropped
+    assert f"축이 둘 다 계산되지 않은 {dropped}개월은 빼고 셉니다" in r["note"]
+
+
+def test_with_every_month_complete_nothing_is_left_out_and_no_sentence_is_added(monkeypatch):
+    from src.engine.regime_transitions import regime_path
+    smap = _series(400)
+    assert regime_path(smap, market="kr", months=60)["span"]["dropped_incomplete"] == 0
+    seen = _spy_arms(monkeypatch)
+    r = regime_ensemble(smap, "kr", months=60)
+    assert r["n_obs"] == 60 and r["dropped_incomplete"] == 0
+    assert len(seen["_cluster_probs"][0]) == 60
+    assert "빼고 셉니다" not in r["note"]
+
+
+def test_too_few_complete_months_makes_the_history_arms_say_so():
+    """빠진 달을 빼고 나니 36개월이 안 되면 Markov · 군집 두 팔은 값 없음 + 사유(0 으로 채워 채우지 않는다)."""
+    smap = _series(40)                                         # 60개월을 청해도 두 축이 다 계산된 달은 33개
+    r = regime_ensemble(smap, "kr", months=60)
+    assert r["n_obs"] < MIN_OBS < 60
+    for name in ("markov", "cluster", "kmeans"):
+        t = r["tools"][name]
+        assert t["available"] is False and f"표본 {r['n_obs']}개월" in t["reason"], name

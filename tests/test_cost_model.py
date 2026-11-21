@@ -267,3 +267,81 @@ def test_the_domain_module_stays_pure():
         for bad in ("sqlalchemy", "fastapi", "requests", "pandas", "numpy", "scipy",
                     "src.database", "src.data", "src.engine", "src.execution", "src.api"):
             assert not name.startswith(bad), f"순수 계층이 {name} 을 import 한다"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AM5 · `cost_model_version` — ★설정의 해시이지 코드 버전이 아니다★
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 채점표 #7 은 `cost_model_version` 이 **없다**고 적었다. AK 가 `CostPolicy` 를
+# frozen dataclass 로 만들어 두었으므로 재료는 이미 있다 — 같은 정책은 같은
+# 버전, 다른 정책은 다른 버전. 지금은 비용 설정이 다른 두 백테스트가 기록에서
+# **구별되지 않는다**.
+
+def _pol(**kw):
+    from src.domain.cost_model import CostPolicy
+    base = dict(commission_bps=15.0, slippage_bps=5.0)
+    base.update(kw)
+    return CostPolicy(**base)
+
+
+def test_the_same_policy_always_gives_the_same_version():
+    """★결정론적★ — 아니면 기록이 실행마다 달라져 쓸모가 없다."""
+    from src.domain.cost_model import policy_version
+    assert policy_version(_pol()) == policy_version(_pol())
+
+
+def test_a_different_policy_gives_a_different_version():
+    """★짝★ — 상수를 돌려주는 구현을 배제한다."""
+    from src.domain.cost_model import policy_version
+    base = policy_version(_pol())
+    assert policy_version(_pol(commission_bps=1.5)) != base
+    assert policy_version(_pol(slippage_bps=0.0)) != base
+    assert policy_version(_pol(charge_tax=True)) != base
+    assert policy_version(_pol(charge_spread=True)) != base
+    assert policy_version(_pol(charge_impact=True)) != base
+    assert policy_version(_pol(tax_bps=18.0)) != base
+    assert policy_version(_pol(spread_bps=3.0)) != base
+    assert policy_version(_pol(impact_coeff=0.1)) != base
+
+
+def test_every_policy_field_moves_the_version():
+    """★전수★ 필드를 새로 더하고 해시에서 빠뜨리면 여기서 걸린다.
+
+    `dataclasses.fields` 로 읽으므로 **손으로 센 목록이 낡을 수 없다**.
+    """
+    import dataclasses
+
+    from src.domain.cost_model import CostPolicy, policy_version
+    base_policy = _pol()
+    base = policy_version(base_policy)
+    for f in dataclasses.fields(CostPolicy):
+        cur = getattr(base_policy, f.name)
+        if isinstance(cur, bool):
+            nxt = not cur
+        elif cur is None:
+            nxt = 7.25
+        else:
+            nxt = float(cur) + 1.0
+        moved = policy_version(dataclasses.replace(base_policy, **{f.name: nxt}))
+        assert moved != base, f"{f.name} 이 버전을 움직이지 않는다"
+
+
+def test_the_version_is_a_short_stable_hex_string():
+    from src.domain.cost_model import policy_version
+    v = policy_version(_pol())
+    assert isinstance(v, str) and len(v) == 12
+    assert all(c in "0123456789abcdef" for c in v)
+
+
+def test_an_equal_but_differently_built_policy_matches():
+    """`None` 과 0.0 을 같은 것으로 접지 않는다 — ★미상 ≠ 0★"""
+    from src.domain.cost_model import policy_version
+    assert policy_version(_pol(tax_bps=None)) != policy_version(_pol(tax_bps=0.0))
+
+
+def test_an_int_and_a_float_of_the_same_value_are_the_same_policy():
+    """★정준화★ `15` 와 `15.0` 이 다른 버전이면 해시가 표현을 센 것이다."""
+    from src.domain.cost_model import policy_version
+    assert policy_version(_pol(commission_bps=15)) == \
+        policy_version(_pol(commission_bps=15.0))
