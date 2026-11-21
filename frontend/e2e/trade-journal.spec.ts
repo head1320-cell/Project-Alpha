@@ -464,3 +464,33 @@ for (const theme of ["light", "dark"] as const) {
     }
   });
 }
+
+// ── 접근성 P0-3: 숨긴 파일 입력은 탭 순서에 없다(ADR 007 결정 D4) ─────────────────────────
+
+test("자판으로 걷는 걸음마다 보이는 요소다 — 숨긴 파일 입력에 초점이 서지 않는다(짝: '파일 선택' 단추에는 서고 그 단추가 파일 대화를 연다)", async ({ page }) => {
+  await open(page);
+  await page.waitForFunction(() => { const el = document.querySelector(".tj-file"); return !!el && Object.keys(el).some((k) => k.startsWith("__reactFiber")); });
+  const stops: { tag: string; cls: string; text: string; w: number; h: number; inMain: boolean }[] = [];
+  for (let i = 0; i < 70; i++) {
+    await page.keyboard.press("Tab");
+    const s = await page.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null;
+      if (!a || a === document.body) return null;
+      const r = a.getBoundingClientRect();
+      return { tag: a.tagName.toLowerCase(), cls: String(a.className), text: (a.textContent ?? "").trim().slice(0, 20), w: r.width, h: r.height, inMain: !!a.closest(".terminal-main") };
+    });
+    if (!s) break;                                        // 걷기가 문서 끝을 지났다
+    stops.push(s);
+  }
+  const main = stops.filter((s) => s.inMain);
+  expect(main.length, "본문 안에 선 걸음이 있다").toBeGreaterThan(0);
+  expect(main.filter((s) => s.w < 2 || s.h < 2), "보이지 않는 걸음(크기 2px 미만)").toEqual([]);
+  expect(main.some((s) => s.cls.includes("tj-file-input")), "숨긴 파일 입력에 서지 않는다").toBe(false);
+  expect(main.some((s) => s.tag === "button" && s.text === "파일 선택"), "짝 — '파일 선택' 단추에는 선다").toBe(true);
+  await expect(page.locator(".tj-file-input")).toHaveAttribute("tabindex", "-1");
+
+  // 짝 — 탭 순서에서 뺀 것이 길을 막지 않는다: 단추가 파일 대화를 연다.
+  const chooser = page.waitForEvent("filechooser", { timeout: 5_000 }).catch(() => null);   // 열리지 않으면 5초 안에 그렇게 말한다(시험 시한까지 끌지 않는다)
+  await page.getByRole("button", { name: "파일 선택" }).click();
+  expect(await chooser, "단추가 파일 대화를 연다").not.toBeNull();
+});

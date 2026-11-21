@@ -143,7 +143,8 @@ function Journal_() {
               <button type="button" className="tx-btn tx-btn--main" onClick={() => input.current?.click()}>파일 선택</button>
               <button type="button" className="tx-btn tx-btn--sub tj-sample" onClick={() => load(SAMPLE_NAME, new TextEncoder().encode(SAMPLE_CSV).buffer as ArrayBuffer, true)}>예시 불러오기</button>
             </div>
-            <input ref={input} className="tj-file-input tx-sr" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" aria-label="체결 내역 파일"
+            {/* 숨긴 입력은 탭 순서에서 뺀다(접근성 P0-3) — 보이지 않는 곳에 초점이 서지 않게. 자판으로는 위의 '파일 선택' 단추가 같은 일을 한다. */}
+            <input ref={input} className="tj-file-input tx-sr" type="file" tabIndex={-1} accept=".csv,.tsv,.txt,text/csv,text/plain" aria-label="체결 내역 파일"
                    onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
           </div>
           <ul className="tj-plain-list tj-file-notes">
