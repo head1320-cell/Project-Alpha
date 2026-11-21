@@ -104,7 +104,9 @@ test("전문가 설정은 접혀 있다 — 게이트·조건식이 안 보이�
   await expect(page.locator('[data-act="gate"]')).not.toBeChecked();
 });
 
-test("행 → 시트: 그 행의 서버 값 · 기업 분석으로 · Esc 로 닫힘", async ({ page }) => {
+test("행 → 시트(좁은 창): 그 행의 서버 값 · 기업 분석으로 · Esc 로 닫힘", async ({ page }) => {
+  // 1280px 이상에서는 상세가 표 옆 판에 뜬다(U1-c · `screener-side.spec.ts`). 그보다 좁은 창에서는 예전의 시트다.
+  await page.setViewportSize({ width: 1024, height: 768 });
   let result: Result | null = null;
   await patchStream(page, (r) => { result = r; });
   await open(page);

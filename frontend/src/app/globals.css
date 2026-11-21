@@ -11149,4 +11149,22 @@ a.tx-skip:hover { color: var(--tx-on-accent); text-decoration: none; }
   .scr > * { flex: none; }
   /* 결과 절이 남은 높이를 먹고, 그 안의 표 상자는 넘치는 만큼 줄어 제 안에서 구른다(구르는 상자는 기본으로 줄어든다 — 따로 적지 않는다: 변이로 확인). */
   .scr > .scr-results { flex: 1 1 320px; min-height: 320px; display: flex; flex-direction: column; }
+  .scr-results > .scr-body { flex: 1 1 0; min-height: 0; }
 }
+
+/* ── U1-c · 종목 찾기 — 줄 상세의 옆 판(1280px 이상 · 비모달). 표(.scr-main) | 구분선 | 판. 좁은 창에서는 판이 없고 시트가 뜬다. ──
+   판은 표와 같은 높이로 서고 본문만 제 안에서 구른다. 구분선은 공용 부품(shared/ui/split)이고 겉모습만 여기서 준다. */
+.scr-body { display: flex; min-width: 0; }
+.scr-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.scr-side-bar { flex: none; position: relative; width: 9px; cursor: col-resize; touch-action: none; }
+.scr-side-bar::before { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--tx-line); }
+.scr-side-bar:is(:hover, [data-drag])::before { background: var(--tx-accent); }
+.terminal-main .tx-page.scr .scr-side-bar:focus-visible { outline: 2px solid var(--tx-focus); outline-offset: -2px; }
+.scr-side { flex: none; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.scr-side-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px var(--tx-pad-sec); border-bottom: 1px solid var(--tx-line); }
+.scr-side-title { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.4; color: var(--tx-ink); word-break: keep-all; }
+.scr-side-sub { margin: 2px 0 0; font-size: 12px; color: var(--tx-sub); }
+.scr-side-body { flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: var(--tx-pad-sec); }
+.scr-side .scr-sheet-figs { gap: 10px 12px; }
+.scr-side .scr-sheet-fig dt { font-size: 12px; }
+.scr-side .scr-sheet-fig dd { font-size: 14px; }

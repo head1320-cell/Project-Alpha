@@ -9,6 +9,8 @@
  *    — 칸 단위 조작이 없다(설계 §5.1).
  *  · 줄 초점: 고를 수 있는 표(`onSelect`)의 줄은 ★하나만 탭 순서★에 있고(나머지는 -1) ↑ ↓ Home End PageUp PageDown 이 초점을 옮긴다.
  *    Enter · Space · 누르기가 고른다. 칸 안의 단추에서 난 키는 건드리지 않는다. 고른 줄은 `aria-current`(줄 전체의 바탕).
+ *    `followFocus` 는 상세 판이 옆에 열려 있을 때 쓴다 — 고른 줄이 있으면 초점이 옮겨 간 줄을 곧바로 고른다(줄을 넘기며 견준다).
+ *    고른 줄이 없으면(판이 닫혀 있으면) 초점만 옮긴다.
  *  · 값이 없는 칸은 `Na`(`N/A`)이고 사유는 `note`(표 아래 보이는 한 줄 · 표의 설명으로 이어짐)에 한 번 적는다 — 칸마다 되풀이하지 않는다.
  *  · 클래스: 새 구조는 `tx-table*`. 화면이 스펙과 맺은 옛 클래스는 `className` · `rowClassName` · 열의 `className` 으로 같은 요소에 남긴다.
  *  · 붙는 열(`sticky`)은 앞에서부터 이어진 열만 · 마지막 붙는 열을 뺀 열은 `width`(px)를 준다(왼쪽 자리 = 앞 열 폭의 합).
@@ -48,6 +50,7 @@ export interface DataTableProps<T> {
   onSort?: (col: string) => void;
   selectedKey?: string | null;
   onSelect?: (key: string, row: T) => void;
+  followFocus?: boolean;
   /** 표 아래 보이는 한 줄(값 없음의 사유 등). 표의 설명으로 이어진다. */
   note?: ReactNode;
   className?: string;
@@ -78,7 +81,7 @@ function stickyStyles<T>(columns: Column<T>[]): (CSSProperties | undefined)[] {
 }
 
 export function DataTable<T>({
-  label, columns, rows, rowKey, sort = null, onSort, selectedKey = null, onSelect, note, className, wrapClassName, wrapRef, rowClassName, rowAttrs,
+  label, columns, rows, rowKey, sort = null, onSort, selectedKey = null, onSelect, followFocus = false, note, className, wrapClassName, wrapRef, rowClassName, rowAttrs,
 }: DataTableProps<T>) {
   const noteId = useId();
   const body = useRef<HTMLTableSectionElement>(null);
@@ -96,6 +99,7 @@ export function DataTable<T>({
     e.preventDefault();
     if (to === index) return;
     (body.current?.rows[to] as HTMLTableRowElement | undefined)?.focus();
+    if (followFocus && selectedKey !== null) onSelect(keys[to], rows[to]);
   };
 
   return (

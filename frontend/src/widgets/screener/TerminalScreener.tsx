@@ -11,6 +11,8 @@
 //   · 결과 표는 공용 표(`shared/ui/table` · U1-b)다 — 정렬 · 쪽 · 줄 초점의 규칙은 그쪽 순수 모듈에 있고, 이 화면은 상태(정렬 · 쪽 · 고른 줄)와 열만 든다.
 //     ★값이 없는 줄은 어느 방향에서도 끝★ · 값이 없는 칸은 `N/A` + 표 아래 사유 한 줄 · 단위는 머리에 · 막대는 종합점수 열에만(다른 값 열은 방향이 값의 크기와 어긋난다).
 //     옛 클래스(`bsc-table` · `bsc-row` · `bsc-fav` …)는 같은 요소에 갈고리로 남는다(E2E 계약 · 재는 스크립트).
+//   · 고른 줄의 상세는 넓은 창(1280px 이상)에서 ★표 옆 판★(비모달 — 표가 살아 있고 ↑ ↓ 로 줄을 넘기면 판이 따라온다 · U1-c), 그보다 좁으면 시트다.
+//     본문은 `ScreenerDetail` 하나 — 한 번에 한 그릇만 그린다. 판의 폭은 공용 구분선으로 정하고 이 브라우저에 남긴다.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
@@ -22,15 +24,20 @@ import { screenerApiAdvanced } from "@/entities/screener/api/ast";
 import { screenerApi } from "@/entities/screener/api/core";
 import { type ScreenerResponse, type TechnicalIndicatorCatalog } from "@/entities/screener/model";
 import type { FieldsCatalog, FilterConditionNode, FilterGroupNode, ScreenerItem } from "@/shared/model/domain";
-import { num, priceWon } from "@/shared/lib/krFormat";
+import { num } from "@/shared/lib/krFormat";
+import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { LoadingState } from "@/shared/ui/States";
+import { Splitter } from "@/shared/ui/split/Splitter";
+import { clampSplit } from "@/shared/ui/split/split";
 import { BarValue, DataTable, Na, Pager, clampPage, nextSort, pageCount, pageSlice, sortRows, type Column, type SortState } from "@/shared/ui/table";
-import { Answer, Chips, Notice, PageHead, Sheet, type Chip, type Figure } from "@/shared/ui/tx";
+import { Answer, Notice, PageHead, Sheet, type Chip, type Figure } from "@/shared/ui/tx";
 import { setScreenerHandoff } from "@/shared/lib/screenerHandoff";
 import { listPresets, savePreset, deletePreset, type ScreenerPreset } from "@/shared/lib/screenerPresets";
 import { parseExpr, materialize, type ExprNode } from "@/shared/lib/exprParser";
 import dynamic from "next/dynamic";
+import { X } from "lucide-react";
 import { type FactorPick } from "@/features/factor-picker/FactorPickerModal";
+import { ScreenerDetail } from "./ScreenerDetail";
 // ★기본이 '닫힘' 인 창은 첫 로드에 있을 이유가 없다★ 팩터 창이 CatalogueShell 로 옮겨가며
 // shadcn/Radix ToggleGroup 을 끌고 오는데, 정적 import 로 두면 그 무게가 이 라우트의 첫
 // 로드에 그대로 실린다(실측: +17 kB). ADR 001 은 설명되지 않는 4 kB 증가를 되돌리라고 한다 —
@@ -52,6 +59,9 @@ const sliderToMcap = (s: number) => Math.round(Math.pow(10, MCAP_LO + (MCAP_HI -
 const mcapToSlider = (eok: number) => Math.round(Math.max(0, Math.min(100, ((Math.log10(eok) - MCAP_LO) / (MCAP_HI - MCAP_LO)) * 100)));
 const fmtMcapKo = (eok: number) => eok >= 10000 ? `${(eok / 10000).toFixed(eok >= 100000 ? 0 : 1)}조` : `${Math.round(eok).toLocaleString()}억`;
 const PAGE_SIZE = 100;   // 결과 테이블 페이지당 행 수
+/** 상세의 옆 판 — 이 폭부터 판이고 그보다 좁으면 시트다(ADR 007 의 중단점 · G5 두 칸의 문턱과 같은 값). */
+const SIDE_QUERY = "(min-width: 1280px)";
+const SIDE_MIN = 320, SIDE_MAX = 560, SIDE_DEFAULT = 360, SIDE_STEP = 16, SIDE_KEY = "alpha_screener_side_w";
 const TOP_BRIDGE = 10;   // "상위 n종목 설계에 넣기" — 표의 지금 정렬 그대로 위 n개(캔버스 종목 고르기 노드 상한 30 안)
 /** 고를 수 있는 유니버스 — id 는 서버 프리셋 id 그대로(요청 골든이 건다). */
 const UNIVERSES = [
@@ -137,6 +147,8 @@ export default function TerminalScreener() {
   const [focusedChip, setFocusedChip] = useState<number | null>(null);
   const [sort, setSortState] = useState<SortState>({ col: "composite_score", dir: "desc" });
   const [selected, setSelected] = useState<string | null>(null);
+  const wide = useMediaQuery(SIDE_QUERY);
+  const [sideW, setSideW] = useState(SIDE_DEFAULT);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -171,6 +183,8 @@ export default function TerminalScreener() {
   useEffect(() => {
     try { const f = localStorage.getItem("alpha_screener_favs"); if (f) setFavs(new Set(JSON.parse(f))); } catch { /* noop */ }
     try { const c = localStorage.getItem("alpha_screener_cols"); if (c) setDisplayCols(JSON.parse(c)); } catch { /* noop */ }
+    // 판의 폭 — 범위 밖의 저장값은 가장 가까운 끝으로, 수가 아니면 처음 값(지어내지 않는다).
+    try { const w = localStorage.getItem(SIDE_KEY); if (w !== null) { const n = Number(w); setSideW(Number.isFinite(n) ? clampSplit(n, SIDE_MIN, SIDE_MAX) : SIDE_DEFAULT); } } catch { /* noop */ }
     setPresets(listPresets());
   }, []);
 
@@ -464,6 +478,15 @@ export default function TerminalScreener() {
       : <Na />) },
     { id: "verdict", header: "판정", fill: true, cell: (it) => <span className="tx-chip" data-tone="plain">{it.verdict || "판정 없음"}</span> },
   ];
+  /** 판 · 시트의 값 열 — 표와 같은 이름 · 같은 소수 자리. */
+  const detailCols = shownCols.map((c) => ({ id: c.id, label: c.label, digits: digitsOf(c.id) }));
+  const resizeSide = (w: number, done: boolean) => { setSideW(w); if (done) { try { localStorage.setItem(SIDE_KEY, String(w)); } catch { /* noop */ } } };
+  /** 판을 닫고 초점을 그 줄로 돌려준다 — 닫은 뒤 초점이 사라지지 않게(판 안에 있던 초점은 판과 함께 없어진다). */
+  const closeSide = () => {
+    const code = selected;
+    setSelected(null);
+    if (code) requestAnimationFrame(() => tableWrapRef.current?.querySelector<HTMLElement>(`tr[data-code="${CSS.escape(code)}"]`)?.focus());
+  };
   /** 이 쪽에 값 없는 칸이 있는가 — 있으면 표 아래에 사유 한 줄을 적는다(칸마다 되풀이하지 않는다). */
   const pageHasNa = pageItems.some((it) => !finite(it.current_price) || !finite(it.composite_score) || (showMcap && !finite(it.market_cap_억))
     || shownCols.some((c) => !finite((it as Record<string, unknown>)[c.id])));
@@ -710,37 +733,43 @@ export default function TerminalScreener() {
             </div>
           )}
 
-          <DataTable label="종목 찾기 결과" columns={columns} rows={pageItems} rowKey={(it) => it.stock_code}
-                     sort={sort} onSort={setSort} selectedKey={selected} onSelect={(code) => setSelected(code)}
-                     note={pageHasNa ? "N/A 는 응답에 값이 없는 칸입니다(0 이 아닙니다)." : undefined}
-                     className="bsc-table" wrapClassName="bsc-table-wrap" wrapRef={tableWrapRef} rowClassName="bsc-row"
-                     rowAttrs={(it) => ({ "data-code": it.stock_code })} />
+          {/* 표 + (넓은 창에서) 옆 판. Esc 는 초점이 표에 있든 판에 있든 판을 닫는다. */}
+          <div className="scr-body" onKeyDown={(e) => { if (e.key === "Escape" && wide && selectedItem) { e.stopPropagation(); closeSide(); } }}>
+            <div className="scr-main">
+              <DataTable label="종목 찾기 결과" columns={columns} rows={pageItems} rowKey={(it) => it.stock_code}
+                         sort={sort} onSort={setSort} selectedKey={selected} onSelect={(code) => setSelected(code)} followFocus={wide}
+                         note={pageHasNa ? `N/A 는 응답에 값이 없는 칸입니다(0 이 아닙니다).` : undefined}
+                         className="bsc-table" wrapClassName="bsc-table-wrap" wrapRef={tableWrapRef} rowClassName="bsc-row"
+                         rowAttrs={(it) => ({ "data-code": it.stock_code })} />
 
-          {pages > 1 && <Pager className="bsc-pager" label="결과 쪽" page={curPage} count={pages} total={sortedItems.length} size={PAGE_SIZE} onPage={gotoPage} />}
+              {pages > 1 && <Pager className="bsc-pager" label="결과 쪽" page={curPage} count={pages} total={sortedItems.length} size={PAGE_SIZE} onPage={gotoPage} />}
+            </div>
+            {wide && selectedItem && (
+              <>
+                <Splitter className="scr-side-bar" label="상세 판 폭" side="end" value={sideW} min={SIDE_MIN} max={SIDE_MAX} step={SIDE_STEP} controls="scr-side" onChange={resizeSide} />
+                <aside id="scr-side" className="scr-side" aria-label="종목 상세" style={{ width: sideW }}>
+                  <header className="scr-side-head">
+                    <div>
+                      <h3 className="scr-side-title">{selectedItem.corp_name}</h3>
+                      <p className="scr-side-sub">{selectedItem.stock_code}{selectedItem.sector ? ` · ${selectedItem.sector}` : ""}</p>
+                    </div>
+                    <button type="button" className="tx-td-btn scr-side-x" aria-label="상세 닫기" onClick={closeSide}><X size={16} aria-hidden="true" /></button>
+                  </header>
+                  <div className="scr-side-body">
+                    <ScreenerDetail item={selectedItem} cols={detailCols} mock={!!cs.data?.mock_allowed} />
+                  </div>
+                </aside>
+              </>
+            )}
+          </div>
         </section>
       )}
 
-      {/* ── 자세히(시트) ── */}
-      <Sheet open={!!selectedItem} onClose={() => setSelected(null)} title={selectedItem?.corp_name ?? ""} testId="screener-row"
+      {/* ── 자세히 — 좁은 창의 시트(넓은 창에서는 위의 옆 판) ── */}
+      {/* 창이 넓어져 시트가 닫힐 때는 고른 줄을 지우지 않는다 — 같은 종목이 옆 판으로 옮겨 간다(닫힘 사건은 그릇이 바뀐 뒤에 온다). */}
+      <Sheet open={!wide && !!selectedItem} onClose={() => { if (!wide) setSelected(null); }} title={selectedItem?.corp_name ?? ""} testId="screener-row"
              sub={selectedItem ? <>{selectedItem.stock_code}{selectedItem.sector ? ` · ${selectedItem.sector}` : ""}</> : undefined}>
-        {selectedItem && (
-          <>
-            <dl className="scr-sheet-figs">
-              <div className="scr-sheet-fig"><dt>현재가</dt><dd>{priceWon(typeof selectedItem.current_price === "number" ? selectedItem.current_price : null)}</dd></div>
-              <div className="scr-sheet-fig"><dt>종합점수</dt><dd>{num(selectedItem.composite_score, 1)}</dd></div>
-              <div className="scr-sheet-fig"><dt>판정</dt><dd><span className="tx-chip" data-tone="plain">{selectedItem.verdict || "판정 없음"}</span></dd></div>
-              {selectedItem.market_cap_억 != null && <div className="scr-sheet-fig"><dt>시가총액</dt><dd>{num(Math.round(selectedItem.market_cap_억))}억</dd></div>}
-              {shownCols.map((c) => (
-                <div key={c.id} className="scr-sheet-fig"><dt>{c.label}</dt><dd>{fmtVal((selectedItem as Record<string, unknown>)[c.id])}</dd></div>
-              ))}
-            </dl>
-            <Chips items={cs.data?.mock_allowed ? [{ label: "합성 시세", tone: "practice" }] : []} label="이 값의 근거" />
-            <div className="scr-sheet-act">
-              <Link className="tx-btn tx-btn--main" href={`/insights?code=${selectedItem.stock_code}`}>기업 분석 열기</Link>
-              <Link className="tx-btn tx-btn--sub" href={`/allocation?tickers=${selectedItem.stock_code}`}>설계에 추가</Link>
-            </div>
-          </>
-        )}
+        {!wide && selectedItem && <ScreenerDetail item={selectedItem} cols={detailCols} mock={!!cs.data?.mock_allowed} />}
       </Sheet>
 
       <FactorPickerModal key={modalOpen ? "open" : "closed"} open={modalOpen} tone="neutral" onClose={() => setModalOpen(false)} onInsert={handlePick} />
