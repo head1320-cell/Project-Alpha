@@ -143,7 +143,11 @@ def _screener(inputs: dict, p: ScreenerParams) -> pg.NodeOutput:
     if len(tickers) < 2:
         raise pg.NodeFailure(f"조건에 맞는 종목이 {len(tickers)}개뿐입니다 — 조건을 넓히거나 후보 범위를 넓히십시오.")
     ds = out.get("data_source") or {}
-    practice = not bool(ds.get("fully_real"))
+    # 연습용 판정은 그대로다 — 실(True)일 때만 실데이터로 믿는다(모름도 연습용). 다만 출처 표시는 3-값이다:
+    # ★모름을 'mock' 이라 적지 않는다★(`returns:미상` 과 같은 낱말).
+    fully_real = ds.get("fully_real")
+    practice = fully_real is not True
+    source_tag = "real" if fully_real is True else "mock" if fully_real is False else "미상"
     view = {"tickers": tickers, "labels": _ar._labels(tickers),
             "items": _plain_items(picked, ("stock_code", "corp_name", "composite_score", "per", "pbr", "roe",
                                            "dividend_yield", "market_cap")),
@@ -153,7 +157,7 @@ def _screener(inputs: dict, p: ScreenerParams) -> pg.NodeOutput:
     return pg.NodeOutput(
         values={"universe": {"tickers": tickers, "weights": None, "benchmark": "KOSPI"}}, view=view,
         provenance={"data_source": ds},
-        tags={"pit": "forward_only", "practice": practice, "sources": ["screener:" + ("real" if not practice else "mock")]})
+        tags={"pit": "forward_only", "practice": practice, "sources": [f"screener:{source_tag}"]})
 
 
 def _explain_screener(view: dict, prov: dict, params: Any) -> dict:
@@ -177,8 +181,12 @@ def _explain_screener(view: dict, prov: dict, params: Any) -> dict:
     if gate.get("applied") is False and gate.get("reason") == "asof_not_supported":
         facts.append("과거 시점에는 유동성 문턱을 적용하지 않았습니다 — 오늘의 거래대금·거래 상태로 과거를 거르지 않습니다.")
     trust = [_t(CONFIRMED, "조건은 서버의 필드 목록으로 검사했습니다."), _t(UNKNOWN, _TODAY)]
-    if not (view.get("data_source") or {}).get("fully_real"):
+    ds = view.get("data_source") or {}
+    if ds.get("fully_real") is False:
         trust.append(_t(UNKNOWN, "재무나 시세 중 하나 이상이 합성(mock) 데이터입니다 — 실제 선택을 말해 주지 않습니다."))
+    elif ds.get("fully_real") is None:
+        why = ds.get("reason") or "서버가 출처를 싣지 않았습니다."
+        trust.append(_t(UNKNOWN, f"재무나 시세의 출처를 확인하지 못했습니다. {why}"))
     return {"title": f"조건을 충족한 종목 {n}개를 선정했습니다",
             "headline": {"label": "넘긴 종목", "value": n, "unit": "개", "text": f"{n}개"},
             "facts": facts, "trust": trust,

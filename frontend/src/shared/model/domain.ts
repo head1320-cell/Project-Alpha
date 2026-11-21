@@ -109,3 +109,23 @@ export interface GraphRelations {
   customer: Array<{ code: string; name: string }>;
   competitor: Array<{ code: string; name: string }>;
 }
+
+/**
+ * 스크리너 응답의 데이터 축(`src/api/screener_routes.py::_detect_data_source`) — 반환한 줄 위의 집계.
+ * ★`null` 은 '모른다'이지 합성이 아니다★ — 줄이 없거나 출처를 관측하지 못한 줄이 있으면 `null` 이고 `reason` 이 왜인지 말한다.
+ * `fully_real === false` 만이 합성을 관측했다는 뜻이다. `mock_allowed` 는 설정(관측이 아니다).
+ * 받는 곳: `/run-advanced`(캔버스 스크리너 노드) · `/screen-to-backtest`(저장 실행의 결과) · `/data-quality`.
+ */
+export interface ScreenerDataSource {
+  /** `"dart_real"` · `"mock"` · `"mixed"` · `null`(모름). 택티컬 경로는 `"mock"` 고정 — 다른 생산자다. */
+  fundamentals: string | null;
+  /** `"kis_real"` · `"mock"` · `"mixed"` · `null`(모름). */
+  market_data: string | null;
+  fully_real: boolean | null;
+  reason?: string | null;
+  counts?: {
+    fundamentals: { real: number; mock: number; missing: number; unknown: number };
+    market_data: { real: number; mock: number; unknown: number };
+  };
+  mock_allowed?: boolean;
+}

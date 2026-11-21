@@ -81,6 +81,22 @@ test("합성 표시는 mock 일 때만 · 'GCP'·'실데이터' 글자 없음(�
   await expect(page.locator(".terminal-main")).not.toContainText("실데이터");
 });
 
+test("★출처를 모르면(fully_real null) 합성 표시가 아니다★(짝: 합성을 관측했으면 저장 플래그가 없어도 합성)", async ({ page }) => {
+  await openResults(page, (f) => {
+    (f as Record<string, unknown>).is_mock_data = null;
+    (f.result as { data_source: Record<string, unknown> }).data_source = {
+      fundamentals: null, market_data: "kis_real", fully_real: null, reason: "재무: 3종목 가운데 3종목은 이번 실행에서 재무 출처를 관측하지 못했습니다.",
+    };
+  });
+  await expect(answer(page)).not.toContainText("합성 데이터");
+  await page.unrouteAll();
+  await openResults(page, (f) => {
+    (f as Record<string, unknown>).is_mock_data = null;
+    (f.result as { data_source: Record<string, unknown> }).data_source = { fundamentals: "mock", market_data: "mock", fully_real: false };
+  });
+  await expect(answer(page)).toContainText("합성 데이터");
+});
+
 test("시점 정합 사유는 보이는 글자 — title= 툴팁이 아니다(짝: 판정이 있으면 그 요약이 보인다)", async ({ page }) => {
   await openResults(page);
   await expect(answer(page)).toContainText("시점 정합을 판정할 자료가 없습니다");

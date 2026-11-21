@@ -840,6 +840,15 @@ class FundamentalsStore(DeterministicMockStore):
         return factors
 
 
+#: 붙일 때 본 재무 출처를 남기는 항목 속성 — ★관측의 기록이지 팩터가 아니다★
+#: 값: 저장소 `_source` 그대로(`"dart_real"` · `"ffl_mock"`) · 저장소가 빈 결과면 `NO_FACTORS`(운영 미적재 — 합성 아님).
+#: 기록이 없으면(스냅샷 복원 · 계산 상한 · 계산 예외 · 주입 실패) 이번 실행은 그 줄의 출처를 ★모른다★.
+#: 밑줄 속성이라 `ScreenerItem.to_dict` · 스냅샷 · 필터 필드에 들어가지 않는다(줄의 응답 모양 불변).
+#: 읽는 쪽: `src/api/screener_routes.py::_detect_data_source`.
+FUND_SOURCE_ATTR = "_fundamentals_source"
+NO_FACTORS = "no_factors"
+
+
 def attach_fundamentals(items: list) -> int:
     """
     ScreenerItem 리스트에 펀더멘털 팩터를 동적 속성으로 주입.
@@ -870,6 +879,8 @@ def attach_fundamentals(items: list) -> int:
         except Exception:
             logger.exception(f"펀더멘털 계산 실패 [{code}] — 이 종목만 건너뜀")
             continue
+        # 출처를 값 옆에 남긴다(값은 바꾸지 않는다) — 응답의 데이터 축이 ★재조회 없이★ 이 기록만 읽는다.
+        setattr(it, FUND_SOURCE_ATTR, factors.get("_source") if factors else NO_FACTORS)
         for fid, val in factors.items():
             if not fid.startswith("_"):
                 setattr(it, fid, val)

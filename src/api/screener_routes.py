@@ -92,27 +92,114 @@ def _advanced_cache_key(req: AdvancedRunRequest) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _detect_data_source(items: list) -> dict:
-    """결과 종목의 데이터 출처 판별 (실데이터/mock 표시용)."""
-    import os
+_UNSEEN = object()
 
+
+def _row_market(it) -> str:
+    """한 줄의 시세 판정 — ★`price_is_mock` 그대로, 키 유무가 아니다★
+
+    `False` 는 이번 실행(또는 그 줄을 저장한 실행)이 실시세 패치·적재 종가를 **관측**했다는 뜻이다
+    (`ValuationScreener._enrich_kis_quotes` · as-of 종가). `True` 는 검증되지 않은 기본 바탕 가격이다 —
+    기본 `price_provider` 가 합성(`_mock_price`)이라 합성으로 센다(운영에서도 — 감사 F3).
+    그 밖(`None` — 옛 스냅샷의 `from_dict`)은 모른다.
+    """
+    v = getattr(it, "price_is_mock", None)
+    if v is False:
+        return "real"
+    if v is True:
+        return "mock"
+    return "unknown"
+
+
+def _row_fundamentals(it, gate_on: bool) -> str:
+    """한 줄의 재무 판정 — `attach_fundamentals` 가 붙일 때 남긴 출처 + 평가 엔진의 합성 여부.
+
+    - 게이트 on 에서 `fundamentals_is_mock` 이면 평가(괴리율·판정·점수)가 합성 재무로 계산됐다 → 합성.
+      ★게이트 off 에서 같은 플래그는 '계산을 거부했다'는 뜻이라 합성값이 없다★(`valuation_models`) — 보지 않는다.
+    - 기록 `dart_real` → 실 · `ffl_mock` → 합성 · `NO_FACTORS` → 없음(운영 미적재 — 합성 아님) · 기록 없음/모르는 표식 → 모름.
+    """
+    from src.data.fundamentals_store import FUND_SOURCE_ATTR, NO_FACTORS
+    if gate_on and getattr(it, "fundamentals_is_mock", None) is True:
+        return "mock"
+    src = getattr(it, FUND_SOURCE_ATTR, _UNSEEN)
+    if src == "dart_real":
+        return "real"
+    if src == "ffl_mock":
+        return "mock"
+    if src == NO_FACTORS:
+        return "missing"
+    return "unknown"
+
+
+def _axis_value(kinds: list[str], real_label: str) -> str | None:
+    """줄 판정들 → 축 하나의 값. ★한 낱말로 말할 수 있을 때만 말한다★ — 없음·모름이 섞이면 `None`."""
+    seen = set(kinds)
+    if not seen:
+        return None
+    if seen == {"real"}:
+        return real_label
+    if seen == {"mock"}:
+        return "mock"
+    if seen == {"real", "mock"}:
+        return "mixed"
+    return None
+
+
+def _detect_data_source(items: list) -> dict:
+    """결과 종목(`items` — 응답에 싣는 줄)의 데이터 출처. ★관측한 것만 말하고, 모르면 `None` + 사유★
+
+    예전에는 재무를 첫 줄 하나의 저장소 재조회로, 시세를 키 유무로 **추정**했고 예외·빈 목록·빈 팩터를
+    모두 `"mock"` 으로 접었다(CLAUDE.md §4 미상 ≠ 0). 지금은 줄마다 이미 있는 관측을 센다 —
+    ★저장소를 부르지 않는다★(라벨 함수가 DART·DB 를 부르던 부작용도 없다).
+
+    반환
+      fundamentals  "dart_real" | "mock" | "mixed" | None
+      market_data   "kis_real"  | "mock" | "mixed" | None
+      fully_real    True(두 축 모두 실) | False(어느 축이든 합성 줄을 관측) | None(그 밖 — 모른다)
+      reason        어느 축이든 `None` 이면 왜인지(개수 포함). 두 축 모두 값이 있으면 `None`
+      counts        축별 줄 수 — 재무 {real, mock, missing, unknown} · 시세 {real, mock, unknown}
+      mock_allowed  ★설정이지 관측이 아니다★(`mock_gate.mock_allowed()`)
+    """
     from src.data.mock_gate import mock_allowed
-    fund_real = False
-    try:
-        from src.data.fundamentals_store import FundamentalsStore
-        store = FundamentalsStore.get_default()
-        if items:
-            code = getattr(items[0], "stock_code", None)
-            if code:
-                f = store.get_factors(code)
-                fund_real = (f.get("_source") == "dart_real")
-    except Exception:
-        pass
-    kis_real = (not mock_allowed() and bool(os.getenv("KIS_APP_KEY")))
+    gate_on = mock_allowed()
+    rows = list(items or [])
+    fund = [_row_fundamentals(it, gate_on) for it in rows]
+    mkt = [_row_market(it) for it in rows]
+    fund_counts = {k: fund.count(k) for k in ("real", "mock", "missing", "unknown")}
+    mkt_counts = {k: mkt.count(k) for k in ("real", "mock", "unknown")}
+    fundamentals = _axis_value(fund, "dart_real")
+    market_data = _axis_value(mkt, "kis_real")
+
+    if fundamentals == "dart_real" and market_data == "kis_real":
+        fully_real: bool | None = True
+    elif fund_counts["mock"] or mkt_counts["mock"]:
+        fully_real = False          # 합성을 관측했다 — 나머지를 몰라도 '전부 실'은 아니다
+    else:
+        fully_real = None
+
+    reasons: list[str] = []
+    n = len(rows)
+    if not rows:
+        reasons.append("결과 종목이 없어 출처를 관측하지 못했습니다.")
+    else:
+        if fundamentals is None:
+            parts = []
+            if fund_counts["missing"]:
+                parts.append(f"{fund_counts['missing']}종목은 저장소에 재무가 없습니다(미적재 · 합성값을 쓰지 않았습니다)")
+            if fund_counts["unknown"]:
+                parts.append(f"{fund_counts['unknown']}종목은 이번 실행에서 재무 출처를 관측하지 못했습니다"
+                             "(스냅샷 복원 · 계산 상한 · 계산 실패)")
+            reasons.append(f"재무: {n}종목 가운데 " + " · ".join(parts) + ".")
+        if market_data is None:
+            reasons.append(f"시세: {n}종목 가운데 {mkt_counts['unknown']}종목은 시세 출처가 기록돼 있지 않습니다.")
+
     return {
-        "fundamentals": "dart_real" if fund_real else "mock",
-        "market_data":  "kis_real" if kis_real else "mock",
-        "fully_real":   fund_real and kis_real,
+        "fundamentals": fundamentals,
+        "market_data":  market_data,
+        "fully_real":   fully_real,
+        "reason":       " ".join(reasons) or None,
+        "counts":       {"fundamentals": fund_counts, "market_data": mkt_counts},
+        "mock_allowed": gate_on,
     }
 
 
@@ -1837,9 +1924,11 @@ def _screen_to_backtest_core(req: ScreenToBacktestRequest, progress_cb=None):
                 "initial_capital": req.initial_capital,
             },
             "data_source": _ds,
-            # ★이 화면들은 라벨이 아예 없었다★ — 전략 비교(StrategyComparison)가
-            # 이 응답을 그린다. `data_source` 는 **데이터 축**이고, 종류는 별개다.
-            "perf_label": backtest_label(is_mock_data=not _ds["fully_real"]).to_dict(),
+            # 종류는 백테스트로 확실하고, 데이터 축은 `data_source` 에서 온다(둘은 별개 축).
+            # ★`fully_real=None`(모름)을 `not` 으로 합성(True)에 접지 않는다★ — 예전 줄이 그랬다.
+            # (예전 주석의 소비자 '전략 비교'는 지워졌다. 결과 화면은 저장 실행의 `perf_label` 을 그린다.)
+            "perf_label": backtest_label(
+                is_mock_data=None if _ds["fully_real"] is None else not _ds["fully_real"]).to_dict(),
         }
     except HTTPException:
         raise

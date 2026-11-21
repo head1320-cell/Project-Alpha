@@ -31,6 +31,14 @@ function Bars({ values, labels, unit }: { values: Record<string, number>; labels
   );
 }
 
+/** 스크리너의 데이터 축 — ★`fully_real` 이 `true` 일 때만 실 · `false` 일 때만 합성★.
+ * 그 밖(`null` · 실리지 않음)은 미상이고 서버가 준 사유를 곁에 적는다 — 모름을 합성으로 접지 않는다. */
+function dataAxisText(ds: Dict): string {
+  if (ds.fully_real === true) return "실데이터";
+  if (ds.fully_real === false) return `합성 포함 (재무 ${String(ds.fundamentals ?? "?")} · 시세 ${String(ds.market_data ?? "?")})`;
+  return typeof ds.reason === "string" && ds.reason ? `데이터 미상 (${ds.reason})` : "데이터 미상";
+}
+
 export function ScreenerResult({ v }: { v: Dict }) {
   const items = (v.items as Dict[]) ?? [];
   const ds = (v.data_source as Dict) ?? {};
@@ -38,7 +46,7 @@ export function ScreenerResult({ v }: { v: Dict }) {
     <>
       <KV rows={[["후보 범위", String(v.universe ?? "—")], ["본 종목", String(v.total_evaluated ?? "—")],
                  ["통과", String(v.total_passed ?? "—")],
-                 ["데이터", ds.fully_real ? "실데이터" : `합성 포함 (재무 ${String(ds.fundamentals ?? "?")} · 시세 ${String(ds.market_data ?? "?")})`]]} />
+                 ["데이터", dataAxisText(ds)]]} />
       <h4 className="pg-h4">넘긴 종목</h4>
       <table className="pg-table">
         <thead><tr><th>종목</th><th className="pg-td-num">종합</th><th className="pg-td-num">PER</th><th className="pg-td-num">ROE</th></tr></thead>

@@ -400,7 +400,8 @@ function ResultsBody({ runId, run, router }: { runId: string; run: RunFull; rout
   const bt = res.backtest;
   const stats = bt.statistics as BacktestStatistics;
   const cfg = (run.input_snapshot ?? {}) as Record<string, unknown>;
-  const isMock = run.is_mock_data === true || !res.data_source?.fully_real;
+  // ★합성은 관측했을 때만★ — `fully_real: null`(모름)은 합성이 아니다. 모름은 옆의 PerfLabel 이 '데이터 미상'으로 그린다.
+  const isMock = run.is_mock_data === true || res.data_source?.fully_real === false;
   const macroLines = macroHonesty(res.macro_lookahead);
   const fundLines = fundamentalsHonesty(res.fundamentals_pit);
   const priceLines = priceHonesty(res.price_basis);

@@ -1,4 +1,4 @@
-import type { FilterGroupNode } from "@/shared/model/domain";
+import type { FilterGroupNode, ScreenerDataSource } from "@/shared/model/domain";
 import type { PerfLabelValue } from "@/shared/ui/PerfLabel";
 // 스크리너 → 백테스터 브릿지 모델 (백테스트 통계·거래·요청 페이로드).
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
@@ -169,7 +169,8 @@ export interface ScreenToBacktestResult {
     symbol_results?: SymbolPerf[];   // 종목별 성과 (실현손익·평균수익률·보유일·기여도)
   };
   backtest_config: { strategy: string; period: string; initial_capital: number };
-  data_source: { fundamentals: string; market_data: string; fully_real: boolean };
+  /** 데이터 축 — ★`fully_real: null` 은 모름이지 합성이 아니다★(`ScreenerDataSource`). */
+  data_source: ScreenerDataSource;
   /**
    * ★성과의 **종류**★ — `data_source` 와 **다른 축**이다(전자: 무슨 데이터,
    * 후자: 무슨 성과). 서버가 `src/domain/perf_kind.py` 로 파생해 싣는다.

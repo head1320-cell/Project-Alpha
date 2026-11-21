@@ -217,16 +217,42 @@ def test_the_strategy_detail_response_declares_its_kind(monkeypatch):
     assert "perf_label" not in body, "최상위가 아니라 `perf` 안에 붙는다"
 
 
-def test_the_screen_to_backtest_response_declares_its_kind():
-    """★소스 수준 확인★ — 이 코어를 돌리려면 OHLCV 적재가 필요해 단위로 못 돈다.
+@pytest.mark.parametrize("price_is_mock,fund_source,data_real", [
+    (False, "dart_real", True),     # 모든 줄이 실
+    (True, "ffl_mock", False),      # 합성을 관측
+    (False, None, None),            # 재무 출처를 관측하지 못함 — ★미상을 합성으로 접지 않는다★
+])
+def test_the_screen_to_backtest_response_derives_its_data_axis_from_data_source(
+        monkeypatch, price_is_mock, fund_source, data_real):
+    """★동작으로 본다★ — 예전에는 소스 한 줄(`not _ds["fully_real"]`)을 문자열로 박았고,
+    그 줄은 `fully_real=None` 을 `mock` 으로 접었다. 가짜 스크리너 · 가짜 엔진으로 코어를 돌린다
+    (`test_screen_to_backtest_progress.py` 와 같은 꼴)."""
+    from src.api import screener_routes as sr
+    from src.data.fundamentals_store import FUND_SOURCE_ATTR
+    from tests.test_screener_datasource import _item
 
-    그래서 "데이터 축을 `data_source` 에서 파생한다" 는 **배선 자체**를 본다.
-    동작은 `/screen-to-backtest` 를 타는 E2E(`backtest.spec.ts`)가 지킨다.
-    """
-    import pathlib
-    src = pathlib.Path("src/api/screener_routes.py").read_text(encoding="utf-8")
-    assert '"perf_label": backtest_label(is_mock_data=not _ds["fully_real"]).to_dict()' in src, (
-        "screen-to-backtest 가 `data_source` 에서 라벨을 파생하지 않습니다")
+    rows = [_item(f"{100001 + i:06d}", price_is_mock=price_is_mock) for i in range(3)]
+    if fund_source:
+        for it in rows:
+            setattr(it, FUND_SOURCE_ATTR, fund_source)
+
+    class _Res:
+        items = rows
+
+    class _Fake:
+        def run(self, **kw):
+            return _Res()
+    monkeypatch.setattr(sr, "get_screener", lambda: _Fake())
+    monkeypatch.setattr("src.kis_backtest_engine.run_backtest", lambda **kw: {"error": False, "result": {
+        "statistics": {}, "equity_curve": [], "equity_dates": [], "drawdown_curve": [],
+        "monthly_returns": [], "trades": []}})
+    out = sr._screen_to_backtest_core(sr.ScreenToBacktestRequest(
+        filter_ast={"logic": "AND", "conditions": [], "groups": []},
+        buy_conditions=None, sell_conditions=None, universe="kospi200"))
+    assert out["data_source"]["fully_real"] is data_real
+    assert _is_backtest_label(out["perf_label"])
+    assert out["perf_label"]["data_real"] is data_real
+    assert (out["perf_label"]["data_reason"] is None) is (data_real is not None)
 
 
 def test_the_screener_run_does_not_claim_to_be_a_backtest():

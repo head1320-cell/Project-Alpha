@@ -2,7 +2,7 @@
 // (src/shared/api/screenerApi.ts에서 분리 — 내용 불변)
 
 import { API_BASE } from "@/shared/api/apiBase";
-import type { ScreenerItem } from "@/shared/model/domain";
+import type { ScreenerDataSource, ScreenerItem } from "@/shared/model/domain";
 import type {
   AssetStrips,
   AxisHistory,
@@ -155,7 +155,7 @@ export type StressResult =
   | { available: false; error?: string; reason?: string };
 export interface StressRun {
   analyzers: { stress_test?: StressResult };
-  data_source?: { fundamentals: string; market_data: string; fully_real: boolean };
+  data_source?: ScreenerDataSource;
   total_passed?: number;
   timestamp?: string;
 }

@@ -301,3 +301,48 @@ def test_every_w2_node_speaks_politely_without_overclaiming(monkeypatch, alpha, 
 from tests.graph_write_guard import graph_write_guard  # noqa: E402,F401
 
 pytestmark = pytest.mark.usefixtures("graph_write_guard")
+
+
+# ── 스크리너의 데이터 축 — ★미상을 합성으로 접지 않는다★ ──────────────────────
+
+def _screen_with_axis(monkeypatch, fully_real, reason=None):
+    def core(req, progress_cb=None):
+        return {"items": [{"stock_code": c, "corp_name": c, "composite_score": 90 - i} for i, c in enumerate(T3)],
+                "total_evaluated": 50, "total_passed": 3,
+                "data_source": {"fundamentals": None, "market_data": "kis_real",
+                                "fully_real": fully_real, "reason": reason}}
+    monkeypatch.setattr("src.api.screener_routes._run_advanced_core", core)
+    return _run(_g([_node("s", "screener", top_n=3)], []))["nodes"]["s"]
+
+
+def _trust_texts(node) -> list[str]:
+    return [t["text"] for t in (node.get("explain") or {}).get("trust", [])]
+
+
+def test_an_unknown_data_axis_is_named_unknown_not_mock(monkeypatch):
+    s = _screen_with_axis(monkeypatch, None, reason="재무: 3종목 중 3종목은 출처를 관측하지 못했습니다.")
+    assert s["status"] == "ok", s["reason"]
+    assert s["lineage"]["sources"] == ["screener:미상"]
+    assert s["lineage"]["practice"] is True, "미상은 실데이터로 믿지 않는다(연습용 판정은 그대로)"
+    texts = _trust_texts(s)
+    assert not any("합성(mock)" in t for t in texts), texts
+    assert any("확인하지 못했습니다" in t and "관측하지 못했습니다" in t for t in texts), texts
+
+
+@pytest.mark.parametrize("fully_real,tag,mock_line", [(False, "screener:mock", True), (True, "screener:real", False)])
+def test_a_known_data_axis_keeps_its_tag_and_line(monkeypatch, fully_real, tag, mock_line):
+    """★짝★ 합성이면 합성 문장 · 실이면 아무 문장도 없다."""
+    s = _screen_with_axis(monkeypatch, fully_real)
+    assert s["lineage"]["sources"] == [tag]
+    texts = _trust_texts(s)
+    assert any("합성(mock)" in t for t in texts) is mock_line, texts
+    assert not any("확인하지 못했습니다" in t for t in texts), texts
+
+
+def test_an_empty_data_axis_is_unknown_not_mock():
+    """시점 고정 스크리너 노드는 데이터 축을 `{}` 로 싣는다 — 그것은 '합성' 이 아니라 '실리지 않음' 이다."""
+    from src.api.allocation_graph_nodes_signal import _explain_screener
+    ex = _explain_screener({"data_source": {}, "tickers": T3, "labels": {}, "universe": "코스피 200"}, {}, None)
+    texts = [t["text"] for t in ex["trust"]]
+    assert not any("합성(mock)" in t for t in texts), texts
+    assert any("확인하지 못했습니다" in t for t in texts), texts

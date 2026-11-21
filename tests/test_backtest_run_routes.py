@@ -105,6 +105,17 @@ def test_create_returns_run_id_immediately_then_completes(client):
     assert full["completed_at"] is not None
 
 
+@pytest.mark.parametrize("fully_real,expected", [(None, None), (True, False), (False, True)])
+def test_the_stored_mock_flag_keeps_unknown_unknown(client, monkeypatch, fully_real, expected):
+    """★스크리너가 출처를 모르면(`fully_real=None`) 저장 실행도 모른다★ — 합성(True)으로 접지 않는다."""
+    monkeypatch.setattr(sr, "_screen_to_backtest_core",
+                        lambda req, progress_cb=None: {**CANNED, "data_source": {"fully_real": fully_real}},
+                        raising=False)
+    rid = client.post("/api/v1/backtest/runs", json={"config": {"universe": "kospi200"}}).json()["run_id"]
+    assert _wait_terminal(client, rid)["status"] == "completed"
+    assert client.get(f"/api/v1/backtest/runs/{rid}").json()["is_mock_data"] is expected
+
+
 def test_engine_failure_sets_failed_with_safe_message(client, monkeypatch):
     def _boom(req, progress_cb=None):
         raise RuntimeError("DB password leak sensitive detail")
