@@ -16,19 +16,24 @@ export interface CompanyModels {
   macro: UseQueryResult<MacroSensitivity>;
 }
 
-export function useCompanyModels(code: string, price: number, marketCapEok: number | null, enabled: boolean): CompanyModels {
-  const on = enabled && price > 0;
+export function useCompanyModels(code: string, price: number | null, marketCapEok: number | null, enabled: boolean): CompanyModels {
+  // 시세가 없으면(null — 감사 F3) 묻지 않는다. 묻지 않는 쿼리의 queryFn 은 돌지 않는다 — 그래도 돌면 0 을 보내지 않고 실패한다.
+  const on = enabled && price != null && price > 0;
+  const px = (): number => {
+    if (price == null) throw new Error("NO_PRICE");
+    return price;
+  };
   const k = (m: string) => ["company", "model", m, code, price] as const;
   // 실패는 자동으로 거듭 묻지 않는다 — 카드의 [다시 시도] 가 묻는다(실패를 조용히 덮지 않게).
   const opt = { enabled: on, retry: false, staleTime: 5 * 60_000 } as const;
   return {
-    rdcf: useQuery({ queryKey: k("rdcf"), queryFn: () => modelsApi.reverseDcf(code, price, marketCapEok), ...opt }),
-    dist: useQuery({ queryKey: k("dist"), queryFn: () => modelsApi.distribution(code, price), ...opt }),
-    driver: useQuery({ queryKey: k("driver"), queryFn: () => modelsApi.driverMc(code, price), ...opt }),
-    layers: useQuery({ queryKey: k("layers"), queryFn: () => modelsApi.valueLayers(code, price), ...opt }),
-    eva: useQuery({ queryKey: k("eva"), queryFn: () => modelsApi.eva(code, price), ...opt }),
-    multiples: useQuery({ queryKey: k("multiples"), queryFn: () => modelsApi.multiples(code, price), ...opt }),
-    scenarios: useQuery({ queryKey: k("scenarios"), queryFn: () => modelsApi.scenarios(code, price), ...opt }),
-    macro: useQuery({ queryKey: k("macro"), queryFn: () => modelsApi.macroSensitivity(code, price), ...opt }),
+    rdcf: useQuery({ queryKey: k("rdcf"), queryFn: () => modelsApi.reverseDcf(code, px(), marketCapEok), ...opt }),
+    dist: useQuery({ queryKey: k("dist"), queryFn: () => modelsApi.distribution(code, px()), ...opt }),
+    driver: useQuery({ queryKey: k("driver"), queryFn: () => modelsApi.driverMc(code, px()), ...opt }),
+    layers: useQuery({ queryKey: k("layers"), queryFn: () => modelsApi.valueLayers(code, px()), ...opt }),
+    eva: useQuery({ queryKey: k("eva"), queryFn: () => modelsApi.eva(code, px()), ...opt }),
+    multiples: useQuery({ queryKey: k("multiples"), queryFn: () => modelsApi.multiples(code, px()), ...opt }),
+    scenarios: useQuery({ queryKey: k("scenarios"), queryFn: () => modelsApi.scenarios(code, px()), ...opt }),
+    macro: useQuery({ queryKey: k("macro"), queryFn: () => modelsApi.macroSensitivity(code, px()), ...opt }),
   };
 }

@@ -8,13 +8,15 @@ export interface ScreenerItem {
   corp_name: string;
   sector?: string | null;
 
-  current_price: number;
+  // ★운영에서 확인된 시세(실시세 · 적재 일봉 종가)가 없으면 가격 파생 값은 null 이다★(2026-11-21 · 감사 F3) —
+  // 서버는 합성 가격으로 메우지 않는다. 판정은 "시세 없음", 출처·사유는 응답의 price_source · price_unavailable(운영 항목에만).
+  current_price: number | null;
   intrinsic_value: number;
-  gap_pct: number;
+  gap_pct: number | null;
   verdict: string;
 
-  composite_score: number;
-  gap_score: number;
+  composite_score: number | null;
+  gap_score: number | null;
   roe_score: number;
   stability_score: number;
 

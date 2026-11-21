@@ -22,7 +22,7 @@ import { companyApi } from "@/entities/company/api";
 import { loadSignal, regimeToMacroInfo } from "@/entities/company/data";
 import { macroApi } from "@/entities/macro/api";
 import { regimeName } from "@/entities/macro/regimeKo";
-import { Answer, RetryFail, type Chip } from "@/shared/ui/tx";
+import { Answer, RetryFail, Unknown, type Chip } from "@/shared/ui/tx";
 import { UNKNOWN_TEXT, priceWon } from "@/shared/lib/krFormat";
 import { PriceChart, ValueBand, FactorBar, Gauge, Spark, ScenarioCards, VerdictBadge, PriceValueChart, type ValueBandIn } from "./parts";
 import ValuationTab from "./ValuationTab";
@@ -84,7 +84,17 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   const macro = regimeToMacroInfo(regimeRaw);
   const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
   // 가치 범위(풋볼필드·샌드박스) — 겹친 그림과 "자세히"가 같은 응답을 쓴다(요청 하나).
-  const sb = useQuery({ queryKey: ["company", "sandbox", c.code, c.price], queryFn: () => companyApi.valuationSandbox(c.code, c.price) });
+  // ★운영에서 확인된 시세가 없는 종목(감사 F3)★ — 현재가가 필요한 계산은 묻지 않고, 그림·표 자리에는 미상 + 사유를 적는다(0 으로 그리지 않는다).
+  const px = c.price;
+  const noPrice = <Unknown reason="시세 없음 · 현재가가 없어 계산하지 않습니다" />;
+  const sb = useQuery({
+    queryKey: ["company", "sandbox", c.code, px],
+    queryFn: () => {
+      if (px == null) throw new Error("NO_PRICE");   // enabled 가 막는다 — 그래도 돌면 0 을 보내지 않고 실패한다
+      return companyApi.valuationSandbox(c.code, px);
+    },
+    enabled: px != null,
+  });
 
   const [network, setNetwork] = useState<NetworkInfo | null | undefined>();
   const [risk, setRisk] = useState<RiskInfo | null | undefined>();
@@ -196,14 +206,18 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
   };
 
   // ── 답 ──
-  const hasIntrinsic = c.intrinsic > 0 && Number.isFinite(c.gapPct);
-  const sentence = hasIntrinsic
-    ? <>내재가치(추정) {priceWon(c.intrinsic)}보다 {Math.round(Math.abs(c.gapPct))}% {c.gapPct < 0 ? "낮게" : "높게"} 거래됩니다</>
-    : <>내재가치 산출 실패. 판정을 보류합니다.</>;
+  const gap = c.gapPct;
+  const hasIntrinsic = c.intrinsic > 0 && gap != null && Number.isFinite(gap);
+  const sentence = px == null
+    ? <>시세 없음. 현재가가 없어 판정을 보류합니다.</>
+    : hasIntrinsic
+      ? <>내재가치(추정) {priceWon(c.intrinsic)}보다 {Math.round(Math.abs(gap))}% {gap < 0 ? "낮게" : "높게"} 거래됩니다</>
+      : <>내재가치 산출 실패. 판정을 보류합니다.</>;
   const chips: Chip[] = [];
   // 연습용 = connection-status(mock 게이트) 또는 머리 문장 응답의 is_mock — 어느 하나라도 연습용이면 말한다.
   if (cs.data?.mock_allowed || c.isMock) chips.push({ label: "합성 시세·재무", tone: "practice" });
-  if (!c.failed.includes("valuation")) chips.push({ label: `가치 모형 ${c.models.length}개로 계산(RIM·DCF·DDM 중)`, tone: "info" });
+  if (px == null) chips.push({ label: "시세 없음 · 가치평가 계산 안 함", tone: "unknown" });
+  else if (!c.failed.includes("valuation")) chips.push({ label: `가치 모형 ${c.models.length}개로 계산(RIM·DCF·DDM 중)`, tone: "info" });
   if (c.failed.includes("valuation")) chips.push({ label: "가치평가 조회 실패", tone: "unknown" });
   if (!c.price1y.length && !c.failed.includes("prices")) chips.push({ label: "시세 없음", tone: "unknown" });
 
@@ -234,7 +248,8 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
 
       <Answer sentence={sentence} chips={chips} figures={[
         { label: "현재가", value: priceWon(c.price) },
-        { label: "내재가치", value: hasIntrinsic ? priceWon(c.intrinsic) : UNKNOWN_TEXT },
+        // 내재가치는 가격과 무관하다 — 시세가 없어도(감사 F3) 서버가 낸 값이 있으면 보인다(판정만 보류한다).
+        { label: "내재가치", value: hasIntrinsic || (px == null && c.intrinsic > 0) ? priceWon(c.intrinsic) : UNKNOWN_TEXT },
         { label: "판정(서버)", value: <span data-server>{c.verdict}</span> },
       ]} />
 
@@ -263,17 +278,17 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
           {c.failed.includes("prices") && <RetryFail title="시세 조회 실패" onRetry={onRetry} />}
           {!c.price1y.length && !c.failed.includes("prices") && <p className="ci-pv-noprice">시세가 아직 적재되지 않았습니다. 주가 선 없이 밸류에이션 밴드만 표시합니다.</p>}
           {sb.isError && <RetryFail title="밸류에이션 밴드 조회 실패" onRetry={() => void sb.refetch()} />}
-          <PriceValueChart data={c.price1y} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : 0} bands={bands} />
+          {px != null ? <PriceValueChart data={c.price1y} price={px} intrinsic={hasIntrinsic ? c.intrinsic : 0} bands={bands} /> : noPrice}
 
           <div className="ci-block">
             <h3 className="ci-block-h">모형 요약</h3>
             <p className="ci-assume-diff">위 문장의 내재가치는 무위험수익률 3.5%·베타 1.0 고정 가정입니다. 아래 줄들은 실측 기본값
               {sb.data ? <>(무위험 <span data-server>{(sb.data.assumptions.find((a) => a.key === "rf")?.source) ?? "출처 모름"}</span>, 베타 <span data-server>{(sb.data.assumptions.find((a) => a.key === "beta")?.source) ?? "출처 모름"}</span>)</> : null}
               을 사용해 값이 다를 수 있습니다.</p>
-            <ModelLadder rows={ladder} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : null} />
+            {px != null ? <ModelLadder rows={ladder} price={px} intrinsic={hasIntrinsic ? c.intrinsic : null} /> : noPrice}
           </div>
 
-          {c.failed.includes("valuation")
+          {px == null ? noPrice : c.failed.includes("valuation")
             ? <RetryFail title="가치평가 조회 실패" onRetry={onRetry}>서버 연결 실패. 모형별 값은 재시도하면 표시됩니다.</RetryFail>
             : c.models.length ? (
               <div className="ci-models">
@@ -281,7 +296,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
                   <div key={m.key} className="ci-model">
                     <p className="ci-model-h"><b>{m.label}</b><span data-mono>{m.key}</span><em>가중 {(m.weight * 100).toFixed(0)}%</em></p>
                     <p className="ci-model-v">{priceWon(m.value)}</p>
-                    <p className="ci-model-g">현재가 대비 {pct((m.value / c.price - 1) * 100)}</p>
+                    <p className="ci-model-g">현재가 대비 {pct((m.value / px - 1) * 100)}</p>
                     <details className="ci-model-more">
                       <summary>가정과 계산 보기</summary>
                       <table className="ca-cp-kv"><tbody>{m.assumptions.map((a, i) => <tr key={i}><td>{a.k}</td><td>{a.v}</td></tr>)}</tbody></table>
@@ -292,10 +307,10 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
               </div>
             ) : <p className="ci-models-none">가치 모형이 이번에는 값 산출 실패(재무 자료가 부족합니다).</p>}
 
-          {c.scenarios.length >= 2 && (
+          {px != null && c.scenarios.length >= 2 && (
             <div className="ci-block">
               <h3 className="ci-block-h">가정 변경 시 재계산 결과</h3>
-              <ScenarioCards scenarios={c.scenarios} price={c.price} />
+              <ScenarioCards scenarios={c.scenarios} price={px} />
             </div>
           )}
 
@@ -310,9 +325,9 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
             )}
             <div className="ci-block">
               <h3 className="ci-block-h">현재가와 모형별 값</h3>
-              <ValueBand price={c.price} models={c.models} intrinsic={c.intrinsic} />
+              {px != null ? <ValueBand price={px} models={c.models} intrinsic={c.intrinsic} /> : noPrice}
             </div>
-            {sb.data && <ValuationTab code={c.code} price={c.price} base={sb.data} />}
+            {sb.data && px != null && <ValuationTab code={c.code} price={px} base={sb.data} />}
             {sb.isLoading && <p className="ca-cp-note">밸류에이션 밴드 계산 중</p>}
           </details>
         </>
@@ -320,7 +335,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
 
 
       {/* ── 여러 모형(BU6a+) ── */}
-      {sec("models", <ModelsSection m={models} price={c.price} pbr={c.summary.pbr} code={c.code} />)}
+      {sec("models", px != null ? <ModelsSection m={models} price={px} pbr={c.summary.pbr} code={c.code} /> : noPrice)}
 
       {/* ── 핵심 숫자 ── (`.ca-cp-panel` 은 module-motion 패널 계약 — 예전 왼쪽 패널의 자리) */}
       {sec("numbers", (
@@ -341,10 +356,12 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
             <div className="ci-block ca-cp-card">
               <h3 className="ci-block-h">종합점수</h3>
               <div className="ca-cp-judge">
-                <Gauge value={c.score.composite} label="종합점수" size={150} />
+                {c.score.composite != null ? <Gauge value={c.score.composite} label="종합점수" size={150} /> : noPrice}
                 <div className="ca-cp-judge-rows">
-                  {([["가치(괴리)", c.score.gap], ["수익성", c.score.roe], ["안정성", c.score.stability]] as [string, number][]).map(([k, v]) => (
-                    <div key={k} className="ca-cp-judge-row"><span>{k}</span><i><b style={{ width: `${v}%` }} /></i><em>{v}</em></div>
+                  {([["가치(괴리)", c.score.gap], ["수익성", c.score.roe], ["안정성", c.score.stability]] as [string, number | null][]).map(([k, v]) => (
+                    v == null
+                      ? <div key={k} className="ca-cp-judge-row"><span>{k}</span>{noPrice}</div>
+                      : <div key={k} className="ca-cp-judge-row"><span>{k}</span><i><b style={{ width: `${v}%` }} /></i><em>{v}</em></div>
                   ))}
                 </div>
               </div>
@@ -391,7 +408,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
       {sec("risk", (
         <div className="ca-cp-pad">
           <MacroBlock q={models.macro} />
-          {riskSeen && <RiskDeepTab code={c.code} price={c.price} />}
+          {riskSeen && (px != null ? <RiskDeepTab code={c.code} price={px} /> : noPrice)}
           <div className="ci-mrisk">
           <h3 className="ci-block-h">시세 기반 위험</h3>
           {risk === undefined ? <p className="ca-cp-empty">위험 지표 계산 중</p>
@@ -499,7 +516,7 @@ export default function CompanyCockpit({ company, onPick, lazy, onRetry }: {
         </section>
         <section className="ci-rail-card">
           <h2 className="ci-rail-h">모형 요약</h2>
-          <ModelLadder rows={ladder} price={c.price} intrinsic={hasIntrinsic ? c.intrinsic : null} compact />
+          {px != null ? <ModelLadder rows={ladder} price={px} intrinsic={hasIntrinsic ? c.intrinsic : null} compact /> : noPrice}
         </section>
         <section className="ci-rail-card">
           <h2 className="ci-rail-h">동종업계 바꾸기</h2>

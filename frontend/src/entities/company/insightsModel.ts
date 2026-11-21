@@ -20,7 +20,7 @@ type N = number | null;
 export interface YearFin { year: string; revenue: N; op: N; ni: N; equity: N; fcf: N; roe: N; debt: N; eps: N; bps: N; dps: N }
 export interface QuarterFin { q: string; revenue: N; op: N; ni: N; equity: N; roe: N; debt: N; eps: N; bps: N; dps: N; opMargin: N }
 export interface ModelResult { key: "RIM" | "DCF" | "DDM"; label: string; value: number; weight: number; assumptions: { k: string; v: string }[]; components: { k: string; v: string }[] }
-export interface Peer { code: string; name: string; price: number; per: N; pbr: N; roe: N; gap: N; mktcap: N; self?: boolean }
+export interface Peer { code: string; name: string; price: N; per: N; pbr: N; roe: N; gap: N; mktcap: N; self?: boolean }
 export interface Scenario { key: "bull" | "base" | "bear"; label: string; value: number; gap: number; note: string }
 /** `t` = 축 글자(연.월) · `p` = ★서버 종가 그대로★(옮기거나 반올림하지 않는다) · `date` = 서버 날짜(읽는 줄·표의 머리). */
 export interface PricePt { t: string; p: number; date?: string }
@@ -36,13 +36,13 @@ export interface MacroInfo { regime: string; riskFree: number | null; recommende
 export interface CompanyData {
   code: string; name: string; sector: string;
   market?: string; listingDate?: string;
-  price: number; mktcap: number | null; // 억 — 모르면 null(0 으로 그리지 않는다)
+  price: number | null; mktcap: number | null; // 억 — 모르면 null(0 으로 그리지 않는다)
   /** 전일 대비 — ★일별 시세의 마지막 두 종가에서만★(둘 미만이면 null — 0% 를 지어내지 않는다). 옛 `changePct: 0` 상수를 대신한다(BU6a+). */
   dayChange: { pct: number; date: string } | null;
   /** 머리 문장(evaluate)이 연습용 재무로 계산됐는지 — 서버 `is_mock`. */
   isMock: boolean;
   verdict: string; tone: VerdictTone;
-  intrinsic: number; gapPct: number;
+  intrinsic: number; gapPct: number | null;
   models: ModelResult[];
   /** ★null = 몰라요(0 과 다르다 — BU6)★ */
   summary: { per: number | null; pbr: number | null; roe: number | null; roa: number | null; debt: number | null; divYield: number | null; payout: number | null; eps: number | null; bps: number | null; dps: number | null; revenue: number | null; op: number | null; ni: number | null; fcf: number | null; equity: number | null };
@@ -59,7 +59,7 @@ export interface CompanyData {
   weaknesses: FactorVal[];
   peers: Peer[];
   scenarios: Scenario[];
-  score: { composite: number; gap: number; roe: number; stability: number };
+  score: { composite: number | null; gap: number | null; roe: number; stability: number };
   // lazy
   signal?: SignalInfo | null;
   risk?: RiskInfo | null;

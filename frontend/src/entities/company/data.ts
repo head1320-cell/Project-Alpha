@@ -166,21 +166,24 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const sample = sampleR.ok ? sampleR.items : [];
   const catalog: FieldsCatalog = catalogR.ok ? catalogR.v : { categories: [], operators: [], rank_modes: [] } as FieldsCatalog;
   if (!item) throw new Error("NOT_FOUND");
+  // ★운영에서 확인된 시세(실시세 · 적재 일봉 종가)가 없으면 null 이다(감사 F3)★ — 서버는 합성 가격으로 메우지 않는다.
+  // 가치평가(evaluate)는 현재가를 요구하므로(gt 0) 묻지 않는다. 실패가 아니라 '계산하지 않음'이라 failed 에 넣지 않는다.
   const price = item.current_price;
+  const priced = price != null && price > 0;
   const mcapInput = fin(item.market_cap_억) ?? undefined;  // 발행주식수 도출용(BPS·EPS) → valuation 활성
   // wave 2
   const [baseR, bull, bear, histR, quarterR, barsR, peersR] = await Promise.all([
-    settle(companyApi.evaluate(code, price, { market_cap: mcapInput })),
-    companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.03, market_premium: 0.05 }).catch(() => null),
-    companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.01, market_premium: 0.07 }).catch(() => null),
-    settle(companyApi.financial(code, 8, "annual", price, mcapInput)),
-    settle(companyApi.financial(code, 8, "quarter", price, mcapInput)),
+    priced ? settle(companyApi.evaluate(code, price, { market_cap: mcapInput })) : Promise.resolve(null),
+    priced ? companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.03, market_premium: 0.05 }).catch(() => null) : Promise.resolve(null),
+    priced ? companyApi.evaluate(code, price, { market_cap: mcapInput, terminal_growth: 0.01, market_premium: 0.07 }).catch(() => null) : Promise.resolve(null),
+    settle(companyApi.financial(code, 8, "annual", price ?? undefined, mcapInput)),
+    settle(companyApi.financial(code, 8, "quarter", price ?? undefined, mcapInput)),
     companyApi.prices(code, 400).catch(() => null),
     item.sector ? settle(companyApi.peersBySector(item.sector)) : Promise.resolve({ ok: true as const, v: [] as ScreenerItem[] }),
   ]);
 
   const failed: CompanyData["failed"] = [];
-  if (!baseR.ok) failed.push("valuation");
+  if (baseR && !baseR.ok) failed.push("valuation");
   if (!histR.ok) failed.push("financials");
   if (barsR === null) failed.push("prices");
   if (!quarterR.ok) failed.push("quarters");
@@ -189,7 +192,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   if (!sampleR.ok) failed.push("factorSample");
   const quarterHist = quarterR.ok ? quarterR.v : null;
   const peerItems = peersR.ok ? peersR.v : [];
-  const base = baseR.ok ? baseR.v : null;
+  const base = baseR && baseR.ok ? baseR.v : null;
   const hist = histR.ok ? histR.v : null;
   const bars = barsR ?? [];
   const fs = (base?.financial_summary ?? {}) as Record<string, number | null>;
@@ -205,7 +208,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const models: ModelResult[] = (base?.models ?? []).filter((m) => m.available && m.intrinsic_value > 0).map(mapModel);
 
   const scen = (key: Scenario["key"], label: string, d: ValuationDetail | null, note: string): Scenario | null =>
-    d && d.intrinsic_value > 0 ? { key, label, value: Math.round(d.intrinsic_value), gap: Math.round((d.intrinsic_value / price - 1) * 1000) / 10, note } : null;
+    d && d.intrinsic_value > 0 && price != null && price > 0 ? { key, label, value: Math.round(d.intrinsic_value), gap: Math.round((d.intrinsic_value / price - 1) * 1000) / 10, note } : null;
   const scenarios = [
     scen("bull", "낙관", bull, "영구성장 3%, 시장프리미엄 5%"),
     scen("base", "기준", base, "영구성장 2%, 시장프리미엄 6%"),
@@ -235,7 +238,7 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
   const divYield = pickN("dividend_yield_pct", item.dividend_yield_pct);
   // 시총: 실값 우선, 없으면 가격×(자기자본/BPS)=가격×발행주식수 로 도출 (mock에서 market_cap_억=null 대응)
   const eqV = pick0("total_equity_억"), bpsV = pick0("bps");
-  const mktcap = fin(item.market_cap_억) ?? (eqV > 0 && bpsV > 0 ? Math.round((price * eqV) / bpsV) : null);
+  const mktcap = fin(item.market_cap_억) ?? (eqV > 0 && bpsV > 0 && price != null ? Math.round((price * eqV) / bpsV) : null);
 
   return {
     code: item.stock_code, name: item.corp_name, sector: item.sector ?? "",
@@ -255,7 +258,8 @@ export async function loadCompanyCore(code: string): Promise<CompanyData> {
     factorBasis: sampleR.ok ? { n: sample.length, source: sampleR.source } : null,
     fundamentals, priceFactors, strengths, weaknesses,
     peers, scenarios,
-    score: { composite: Math.round(item.composite_score ?? 0), gap: Math.round(item.gap_score ?? 0), roe: Math.round(item.roe_score ?? 0), stability: Math.round(item.stability_score ?? 0) },
+    // 종합 · 괴리 점수는 시세가 없으면 서버가 null 로 준다(감사 F3) — 0점으로 그리지 않는다(미상 ≠ 0).
+    score: { composite: item.composite_score == null ? null : Math.round(item.composite_score), gap: item.gap_score == null ? null : Math.round(item.gap_score), roe: Math.round(item.roe_score ?? 0), stability: Math.round(item.stability_score ?? 0) },
     signal: undefined, risk: undefined, network: undefined, narrative: undefined, macro: undefined,
   };
 }
