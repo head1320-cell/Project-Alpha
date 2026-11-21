@@ -11,14 +11,15 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { macroApi } from "@/entities/macro/api";
 import { useSession } from "@/entities/session";
 import { getLiveGate } from "@/entities/trading/liveGate";
-import { readOperator, type OpKill, type OpModeName } from "@/entities/trading/operator";
+import { readOperator, type OpKill, type OpModeName, type OpSnapshot } from "@/entities/trading/operator";
 import { loginHref } from "@/shared/lib/nextPath";
 import { krDateTime, num, priceWon } from "@/shared/lib/krFormat";
+import { Freshness } from "@/shared/ui/provenance";
 import { Answer, Notice, PageHead, RetryFail, Tabs, type Chip } from "@/shared/ui/tx";
 import { Holdings } from "./Holdings";
 import { OperatorOrders } from "./OperatorOrders";
@@ -39,9 +40,13 @@ const TABS: { value: Tab; label: string }[] = [
 export const tabOf = (v: string | null): Tab => (TABS.find((t) => t.value === v)?.value ?? "now");
 export const POLL_MS = 10_000;
 
-/** 이 브라우저 시계로 마지막으로 읽은 때 — "06:37:36". */
-const clock = (t: number) => { const d = new Date(t); const two = (v: number) => String(v).padStart(2, "0");
-  return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`; };
+/**
+ * 읽기 넷 + '마지막 수신'(U2-c). 읽기는 실패를 던지지 않고 갈래마다 결과로 돌려준다(`readOperator`) — 그래서 쿼리의
+ * `dataUpdatedAt` 은 넷 모두 실패한 읽기에도 간다(옛 화면의 '마지막 hh:mm:ss'도 그랬다). ★넷 중 하나라도 받았을 때만★ 그 때를
+ * 적고, 모두 실패하면 앞 시각을 그대로 들고 간다(받지 않은 것을 받았다고 적지 않는다). 갈래별 실패는 그 갈래가 사유와 함께 말한다.
+ */
+type LiveSnap = OpSnapshot & { okAt: number };
+const anyRead = (r: OpSnapshot) => [r.mode, r.balance, r.orders, r.kill].some((x) => x.ok);
 
 export function LiveTradingView() {
   const { session, retry } = useSession();
@@ -50,8 +55,15 @@ export function LiveTradingView() {
   const tab = tabOf(sp.get("tab"));
   const pick = (t: Tab) => router.replace(t === "now" ? "/admin/live-trading" : `/admin/live-trading?tab=${t}`, { scroll: false });
   // ★옛 화면과 같은 횟수★ — 처음 한 번 + 10초마다(탭이 뒤에 있어도) · 실패해도 다시 묻지 않음 · 창 초점으로 더 읽지 않음.
+  const qc = useQueryClient();
   const snap = useQuery({
-    queryKey: ["live", "operator"], queryFn: readOperator, staleTime: 0, retry: false,
+    queryKey: ["live", "operator"],
+    queryFn: async (): Promise<LiveSnap> => {
+      const r = await readOperator();
+      const prev = qc.getQueryData<LiveSnap>(["live", "operator"])?.okAt ?? 0;
+      return { ...r, okAt: anyRead(r) ? Date.now() : prev };
+    },
+    staleTime: 0, retry: false,
     refetchInterval: POLL_MS, refetchIntervalInBackground: true, refetchOnWindowFocus: false,
   });
   const cs = useQuery({ queryKey: ["macro", "connection-status"], queryFn: () => macroApi.connectionStatus() });
@@ -105,9 +117,8 @@ export function LiveTradingView() {
   const head = (
     <PageHead title={TITLE} lede={LEDE} actions={
       <div className="lv-head-act">
-        <span className="lv-polled" aria-live="polite">
-          {snap.isFetching ? "갱신 중입니다" : snap.dataUpdatedAt ? `10초마다 갱신합니다 · 마지막 ${clock(snap.dataUpdatedAt)}` : "10초마다 갱신합니다"}
-        </span>
+        {/* U2-c — 보이는 글자만(낭독 영역이 아니다 · 조회 중에도 글자가 바뀌지 않는다). 옛 클래스 lv-polled 는 같은 요소에 남긴다. */}
+        <Freshness as="span" className="lv-polled" updatedAt={snap.data?.okAt ?? 0} intervalMs={POLL_MS} />
         <button type="button" className="tx-btn tx-btn--sub lv-refresh" data-act="refresh" onClick={refetch}>
           <RefreshCw size={14} aria-hidden /> 새로 고침
         </button>

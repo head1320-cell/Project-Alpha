@@ -57,8 +57,9 @@
 - 덧줄(11-21 · 구현 중 정함 · HISTORY U2-b): ① 매크로의 기존 출처 칩(`entities/macro/regimeKo.ts` 의 `sourceChip`)을 감사가 놓쳤다 — 합성 쪽 낱말('합성 데이터')은 같게 두고, 그 칩의 '한국은행 실데이터'는 스튜디오에 쓰지 않는다(계열마다의 출처가 없다). ② 스튜디오 정보를 못 받으면 'N/A(스튜디오 정보를 받지 못했습니다)' 대신 계산 응답의 기간(span)을 증거로 쓰고, 그것도 없으면 표지 없음(실패 상자가 이미 말한다). ③ 게이트 실패의 글은 '출처 N/A(합성 여부를 확인하지 못했습니다)'. ④ 회색 바탕의 중립 칩에 판 + 선(스튜디오 범위 규칙 하나).
 
 ### U2-c 갱신 시각(C14) — 서버 · 요청 0줄
-- [ ] `RunMonitor.tsx`(1초 · 실행 중에만) · `RuleMonitor.tsx`(문장 그대로 + '마지막 수신') · `LiveTradingView.tsx`(`.lv-polled` 유지 · `aria-live` 뺌 · 번쩍임 없음 · 따로 있던 시각 서식을 걷음) · `DbStatusPanel.tsx`(적재 중 칩 → `Freshness` · 알림 문장의 시각도 공용 서식).
-- [ ] 스펙 새 `e2e/freshness.spec.ts`: 첫 응답 뒤 시각이 서고 다음 응답에 따라 바뀐다(짝: 응답이 실패하면 멈춘다) · 낭독 0 · 실거래 요청 골든 바이트 그대로 · `rule-arming` 의 글자 그대로.
+- [x] `RunMonitor.tsx`(1초 · 실행 중에만) · `RuleMonitor.tsx`(문장 그대로 + '마지막 수신') · `LiveTradingView.tsx`(`.lv-polled` 유지 · `aria-live` 뺌 · 번쩍임 없음 · 따로 있던 시각 서식을 걷음) · `DbStatusPanel.tsx`(적재 중 칩 → `Freshness` · 알림 문장의 시각도 공용 서식).
+- [x] 스펙 새 `e2e/freshness.spec.ts`: 첫 응답 뒤 시각이 서고 다음 응답에 따라 바뀐다(짝: 응답이 실패하면 멈춘다) · 낭독 0 · 실거래 요청 골든 바이트 그대로 · `rule-arming` 의 글자 그대로.
+- 덧줄(11-21 · 구현 중 정함 · HISTORY U2-c): ① 실거래의 '마지막 수신'은 읽기 넷 중 하나라도 받은 때(읽기가 실패를 던지지 않아 `dataUpdatedAt` 은 모두 실패해도 간다). ② 적재는 칩을 줄로 바꾸지 않고 칩의 글만 공용(`freshnessText`). ③ 실행 진행의 재연결 알림이 react-query v5 에서 뜰 수 없던 결함(`failureCount >= 3`)을 시간으로 세어 고쳤고, 이제 보이는 그 글의 줄표를 뺐다. ④ 규칙 관제는 문장과 받은 때를 한 줄에 놓는 `div.ma-mon-head` 하나.
 
 ### U2-d 종목 찾기의 출처 줄 — 요청 0줄
 - [ ] 결과 도구 줄에 출처 표지: '계산 시각 …(서버 시계 · 시간대 표기 없음)' · '자료 기준 시각 N/A(응답에 없습니다)'. 값은 CSV 출처 열과 같은 함수(`widgets/screener/screenerCsv.ts`)에서 · 그 결과를 만든 요청의 것.

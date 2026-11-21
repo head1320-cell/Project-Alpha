@@ -21,6 +21,7 @@ import type { Journal } from "@/entities/trade-journal";
 import { Basis, SummaryTable, Trades, amountWon, sign, signedWon } from "@/features/journal-result";
 import { num } from "@/shared/lib/krFormat";
 import { Notice, RetryFail } from "@/shared/ui/tx";
+import { Freshness } from "@/shared/ui/provenance";
 import { unwrap, useNames, when } from "./parts";
 
 /** 도는 가동의 관제를 다시 읽는 간격. 재생은 사람이 밀지만, 비상 정지 · 실행 모드는 그 사이에도 바뀐다. */
@@ -65,9 +66,13 @@ export function RuleMonitor({ accountId, run }: { accountId: string; run: RuleRu
       {q.data.run.grade === "E0" ? (
         <Notice tone="practice" title="합성 분봉으로 가동한 기록입니다.">계산 장치를 확인하는 용도이며 예측력이나 수익의 증거가 아닙니다.</Notice>
       ) : null}
-      <p className="ma-mon-live">
-        {live ? `가동 중: ${MONITOR_POLL_MS / 1000}초마다 다시 읽습니다.` : "끝난 가동: 다시 읽지 않습니다."}
-      </p>
+      {/* U2-c — 주기 문장은 그대로(스펙이 글자를 건다) · 곁에 그 값을 받은 때. 끝난 가동도 받은 때를 적는다. 낭독하지 않는다. */}
+      <div className="ma-mon-head">
+        <p className="ma-mon-live">
+          {live ? `가동 중: ${MONITOR_POLL_MS / 1000}초마다 다시 읽습니다.` : "끝난 가동: 다시 읽지 않습니다."}
+        </p>
+        <Freshness updatedAt={q.dataUpdatedAt} className="ma-mon-fresh" />
+      </div>
       <dl className="ma-mon-grid">
         <Orders o={m.orders} />
         <div className="ma-mon-cell ma-mon-fills">

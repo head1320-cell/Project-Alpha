@@ -22,7 +22,8 @@ import { STATUS_LABEL, USAGE_LABEL, USAGE_REASON } from "@/entities/regime-snaps
 import type { DataStatus, ResearchUsage } from "@/entities/regime-snapshot/model";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { Answer, Notice, PageHead, RetryFail, type Chip, type Figure } from "@/shared/ui/tx";
-import { UNKNOWN_TEXT } from "@/shared/lib/krFormat";
+import { UNKNOWN_TEXT, clockText } from "@/shared/lib/krFormat";
+import { freshnessText } from "@/shared/ui/provenance";
 import { MinuteBarsSection } from "./MinuteBarsSection";
 
 type DbStatus = Awaited<ReturnType<typeof api.dbStatus>>;
@@ -54,7 +55,8 @@ const UNIVERSE_KO: Record<string, string> = {
 };
 
 const n = (v: number) => v.toLocaleString("ko-KR");
-const clock = (t: number) => (t ? new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : UNKNOWN_TEXT);
+/** 적재가 돌 때 다시 읽는 간격 — 조회 주기와 '마지막 수신' 글이 같은 값을 쓴다(U2-c). */
+const INGEST_POLL_MS = 5000;
 const Unk = () => <span className="dsx-unk">{UNKNOWN_TEXT}</span>;
 const cellNum = (v: Cell): ReactNode => (typeof v === "number" ? n(v) : v == null ? <Unk /> : <span data-server>{String(v)}</span>);
 const err = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -85,7 +87,7 @@ export default function DbStatusPanel() {
   // 적재가 돌면 5초마다 다시 묻는다(옛 화면과 같은 주기). 실패해도 옛 값은 react-query 가 들고 있다 — 그때는 낡았다고 말한다.
   const db = useQuery({
     queryKey: ["data", "db-status"], queryFn: () => api.dbStatus(), retry: false,
-    refetchInterval: (q) => (Object.values(q.state.data?.ingest_running ?? {}).some(Boolean) ? 5000 : false),
+    refetchInterval: (q) => (Object.values(q.state.data?.ingest_running ?? {}).some(Boolean) ? INGEST_POLL_MS : false),
   });
   const hon = useQuery({ queryKey: ["data", "source-honesty"], queryFn: () => api.sourceHonesty(), retry: false });
   const st = db.data;
@@ -117,7 +119,8 @@ export default function DbStatusPanel() {
   ] : [];
   if (st) figures.push({ label: "적재 중", value: `${Object.values(running).filter(Boolean).length}개` });
   const chips: Chip[] = [{ label: "수집 가능 여부와 과거 검증 사용 가능 여부는 별도로 판정합니다", tone: "info" }];
-  if (st) chips.push({ label: `${clock(db.dataUpdatedAt)} 수신`, tone: "plain" });
+  // U2-c — 받은 때(이 기기 시각 · 24시)와 주기를 공용 글로. 적재가 없으면 다시 읽지 않으므로 주기를 적지 않는다.
+  if (st) chips.push({ label: freshnessText({ updatedAt: db.dataUpdatedAt, intervalMs: anyRunning ? INGEST_POLL_MS : null }), tone: "plain" });
 
   // ── 적재 확인 창 ──
   const [ask, setAsk] = useState<{ target: string; label: string; ds: Dataset[] } | null>(null);
@@ -159,7 +162,7 @@ export default function DbStatusPanel() {
       <Answer sentence={sentence} figures={figures} chips={chips} />
 
       {db.isError && st ? (
-        <Notice tone="warn" title={`최근 수신값입니다(${clock(db.dataUpdatedAt)}). 새 값 수신 실패`}>
+        <Notice tone="warn" title={`최근 수신값입니다(${clockText(db.dataUpdatedAt) ?? `${UNKNOWN_TEXT}(받은 시각 없음)`}). 새 값 수신 실패`}>
           <span data-server>{err(db.error)}</span>
           <div className="ms-act"><button type="button" className="tx-btn tx-btn--sub" onClick={() => void db.refetch()}>재시도</button></div>
         </Notice>

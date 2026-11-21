@@ -11193,6 +11193,8 @@ a.tx-skip:hover { color: var(--tx-on-accent); text-decoration: none; }
 /* 스튜디오 머리(U2-b): 회색 바탕 위에서는 중립 칩의 바탕(--tx-soft)이 화면 바탕과 같아 칩의 테가 사라진다 — 입력 계열 칩처럼
    흰 판 + 1px 선으로 가른다(로그인 화면 `.lg-srv` · 규칙 관제 `.ma-mon` 의 중립 칩과 같은 꼴). 합성 칩(경고색)은 그대로다. */
 .ms-studio .tx-prov .tx-chip:is([data-tone="plain"], [data-tone="unknown"]) { background: var(--tx-surface); box-shadow: inset 0 0 0 1px var(--tx-line); }
+/* 규칙 관제(U2-c): 주기 문장 곁에 받은 때 — 한 줄에, 좁으면 줄을 바꾼다. */
+.ma-mon-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
 
 /* ── 출처 표지 · 갱신 시각 견본(/dev/ui · app/dev/ProvenanceSpecimen.tsx) — 견본 전용 클래스. 제품 화면에 쓰지 않는다. ── */
 .devui-pv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 16px; align-items: start; }

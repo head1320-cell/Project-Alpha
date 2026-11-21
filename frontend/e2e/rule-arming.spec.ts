@@ -438,6 +438,11 @@ test("관제: 도는 가동은 주기적으로 다시 읽고 · 끝까지 돈 �
   const mon = run.locator(".ma-mon");
   await expect(mon).toHaveAttribute("data-live", "true");
   await expect(mon.locator(".ma-mon-live")).toHaveText("가동 중: 5초마다 다시 읽습니다.");
+  // U2-c — 주기 문장은 그대로 두고 곁에 받은 때(이 기기 시각 · 24시). 낭독하지 않는다(그 줄과 조상에 live · status · alert 0).
+  const fresh = mon.locator(".tx-fresh");
+  await expect(fresh).toHaveText(/^마지막 수신 \d\d:\d\d:\d\d$/);
+  const firstSeen = await fresh.innerText();
+  await expect(fresh.locator("xpath=ancestor-or-self::*[@aria-live or @role='status' or @role='alert' or @role='log']")).toHaveCount(0);
   await expect(mon.locator(".ma-mon-signals")).toHaveText("신호 0건");
   await expect(mon.locator(".ma-mon-status")).toHaveCount(0);
   await expect(mon.locator(".ma-mon-virtual")).toHaveText("가상 0건");
@@ -448,6 +453,7 @@ test("관제: 도는 가동은 주기적으로 다시 읽고 · 끝까지 돈 �
   await expect(mon.locator(".ma-mon-journal")).toHaveCount(0);                     // 하루가 끝나지 않았다
   await expect.poll(() => polls.length, { timeout: 20_000 }).toBeGreaterThanOrEqual(3);   // 처음 한 번 + 주기 조회 둘
   expect([...new Set(polls)]).toEqual(["GET"]);
+  await expect(fresh, "주기 조회가 받은 때를 옮긴다").not.toHaveText(firstSeen);
 
   // 세 봉(09:02 의 매수까지)을 문으로 민다 → 새로 고침을 누르지 않아도 주기 조회가 읽어 온다 · 든 채로는 손익이 아니다
   const three = await page.request.post(`${API}/broker-accounts/${c.account}/rule-runs/${runId}/advance`, { headers: c.headers, data: { bars: 3 } });
@@ -461,6 +467,7 @@ test("관제: 도는 가동은 주기적으로 다시 읽고 · 끝까지 돈 �
   await run.locator(".ma-arm-finish").click();
   await expect(mon).toHaveAttribute("data-live", "false");
   await expect(mon.locator(".ma-mon-live")).toHaveText("끝난 가동: 다시 읽지 않습니다.");
+  await expect(mon.locator(".tx-fresh"), "끝난 가동도 그 값을 받은 때를 적는다").toHaveText(/^마지막 수신 \d\d:\d\d:\d\d$/);
   await expect(mon.locator(".ma-mon-signals")).toHaveText("신호 2건");
   await expect(mon.locator(".ma-mon-status")).toHaveText(["기록 전용 2건"]);
   await expect(mon.locator(".ma-mon-orders")).toHaveAttribute("data-basis", "order_log");

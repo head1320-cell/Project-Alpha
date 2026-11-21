@@ -15,6 +15,10 @@ import {
   backtestRunApi, STAGE_LABELS, STAGE_ORDER, TERMINAL, type RunStatus,
 } from "@/entities/backtest-run/api";
 import { Notice, PageHead } from "@/shared/ui/tx";
+import { Freshness } from "@/shared/ui/provenance";
+
+/** 실행 상태를 다시 읽는 간격 — 조회 주기와 화면의 갱신 시각 줄이 같은 값을 쓴다(U2-c). */
+const STATUS_POLL_MS = 1000;
 
 const CONFIG_ROWS: [string, string][] = [
   ["universe", "유니버스"], ["strategy_name", "전략"], ["start_date", "시작일"],
@@ -51,7 +55,7 @@ export function RunMonitor({ runId }: { runId: string }) {
     refetchInterval: (q) => {
       if (q.state.data && TERMINAL.includes(q.state.data.status)) return false;
       if ((q.state.error as { httpStatus?: number } | null)?.httpStatus === 404) return false;
-      return 1000;
+      return STATUS_POLL_MS;
     },
     refetchIntervalInBackground: true,
     // ★retry:false + networkMode:"always"★ — 폴링 쿼리에서 retryer는 순손해다.
@@ -70,8 +74,12 @@ export function RunMonitor({ runId }: { runId: string }) {
   // 백엔드는 진짜 없는 실행만 404, DB 일시 오류는 503 → 404만 "만료/잘못된 링크"로 확정 처리.
   const trulyGone = statusQ.isLoadingError && err?.httpStatus === 404;
   // 1초 폴링 + retry:false라 한 번의 blip으로도 isError가 되므로, 연속 실패가 몇 번 쌓였을
-  // 때만 표시(깜빡임 방지). failureCount는 성공하면 0으로 리셋된다.
-  const reconnecting = statusQ.failureCount >= 3 && !!st && !TERMINAL.includes(st.status as RunStatus);
+  // 때만 표시(깜빡임 방지). ★연속 실패를 시간으로 센다(U2-c 에서 찾은 결함)★ — react-query v5 는 조회를 시작할 때마다
+  // failureCount 를 0 으로 되돌려(@tanstack/query-core 5.107 `fetchState`) retry:false 에서는 1 을 넘지 않는다. 그래서 예전의
+  // `failureCount >= 3` 은 한 번도 참이 되지 않았고 이 알림은 뜬 적이 없다. 지금 조회가 실패 중이고 마지막으로 받은 때에서
+  // 주기 세 번만큼 지났으면 재연결 중이다(성공하면 isError 가 거짓이 되어 바로 사라진다).
+  const reconnecting = statusQ.isError && !!st && !TERMINAL.includes(st.status as RunStatus)
+    && now - statusQ.dataUpdatedAt >= 3 * STATUS_POLL_MS;
   // ★"연결이 불안정" 만으로는 다음에 어디를 팔지 알 수 없다★ 백엔드가 503 에 실어 준
   // 분류(커넥션 풀 고갈 / 저장소 잠김 / 접속 불가)를 그대로 한 줄 덧붙인다. 분류가
   // 없으면(네트워크 단절 등 서버에 닿지도 못한 경우) 아무 말도 지어내지 않는다.
@@ -203,7 +211,7 @@ export function RunMonitor({ runId }: { runId: string }) {
                 {reconnecting && (
                   <>
                     <span className="brun-reconnect">
-                      · 상태를 불러오지 못하고 있습니다 — 위 수치는 최근 수신값입니다.
+                      · 상태를 불러오지 못하고 있습니다. 위 수치는 최근 수신값입니다.
                       서버에서는 계속 실행 중일 수 있습니다.
                       {storeCauseText && ` (${storeCauseText})`}
                     </span>
@@ -211,6 +219,8 @@ export function RunMonitor({ runId }: { runId: string }) {
                   </>
                 )}
               </div>
+              {/* U2-c — 마지막으로 받은 때(이 기기 시각). 재연결 중에는 그 시각에 멈춘다(위 '최근 수신값'과 같은 사실). 낭독하지 않는다. */}
+              <Freshness updatedAt={statusQ.dataUpdatedAt} intervalMs={STATUS_POLL_MS} />
             </div>
             <p className="rs-why">완료되면 결과 화면으로 자동 이동합니다. 이 창을 닫아도 실행은 계속됩니다.</p>
           </section>
