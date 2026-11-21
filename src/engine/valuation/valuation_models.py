@@ -84,9 +84,9 @@ class UnifiedValuation:
     """통합 가치평가 결과 (3 모델 합산)."""
     ticker:                 str
     corp_name:              str
-    current_price:          float
+    current_price:          float | None   # None = 확인된 가격이 없다(감사 F3) — 가격 파생 값도 미상
     intrinsic_value:        float     # 가중 평균 적정가
-    gap_pct:                float     # 괴리율 (%)
+    gap_pct:                float | None   # 괴리율 (%) — 가격이 없고 적정가가 있으면 None
     verdict:                str       # 저평가/적정/고평가
     models:                 list      # [ValuationResult × 3]
 
@@ -115,6 +115,10 @@ def weighted_intrinsic(models: list, params: ValuationParams) -> float:
             weighted_sum += m.intrinsic_value_per_share * w
             total_weight += w
     return (weighted_sum / total_weight) if total_weight > 0 else 0
+
+
+#: 가격이 없어 괴리율을 낼 수 없을 때의 판정 — "데이터 없음"(재무를 못 읽음)과 다른 사유다(감사 F3).
+NO_PRICE_VERDICT = "시세 없음"
 
 
 def compute_gap_pct(current_price: float, intrinsic: float) -> float:
@@ -441,7 +445,7 @@ class ValuationEngine:
         self.dart = dart_client or DARTClient()
 
     @staticmethod
-    def prepare_statement(fs, current_price: float, *,
+    def prepare_statement(fs, current_price: float | None, *,
                           market_cap: float | None = None):
         """수집된 `FinancialStatement` 를 **평가 입력으로** 손질한다.
 
@@ -468,7 +472,7 @@ class ValuationEngine:
     def load_statement(
         self,
         stock_code: str,
-        current_price: float,
+        current_price: float | None,
         *,
         bsns_year: str | None = None,
         market_cap: float | None = None,
@@ -532,7 +536,7 @@ class ValuationEngine:
     def evaluate(
         self,
         stock_code: str,
-        current_price: float,
+        current_price: float | None,
         params: ValuationParams | None = None,
         bsns_year: str | None = None,
         market_cap: float | None = None,
@@ -543,6 +547,9 @@ class ValuationEngine:
 
         market_cap(억원)을 받으면 DART가 발행주식수를 안 줘도 시총/주가로 도출해
         BPS·EPS를 채운다 → RIM·DCF가 활성화됨(이게 없으면 '재무 데이터 부족').
+
+        current_price: `None` 이면 가격 파생 값(괴리율·판정·PER·PBR·배당수익률)은 미상이다 — 판정은
+            `NO_PRICE_VERDICT`(2026-11-21 · 감사 F3). 숫자를 주면 예전과 한 자리도 같다.
 
         statement: `load_statement` 의 결과를 이미 갖고 있으면 넘긴다 (P2-2).
             CompanySnapshot 이 밸류에이션과 역DCF 를 **한 번의 재무 읽기**로 만들기
@@ -576,12 +583,19 @@ class ValuationEngine:
         intrinsic = weighted_intrinsic(models, params)
 
         # 5. 괴리율 + 판정
-        gap_pct = compute_gap_pct(current_price, intrinsic)
-        verdict = gap_pct_to_verdict(gap_pct)
+        # ★가격이 없으면(`current_price=None`) 가격에서 나오는 값은 미상이다(2026-11-21 · 감사 F3)★ — 운영 스크리너는 확인된
+        #   가격이 없는 종목을 합성 바탕 가격 대신 가격 없이 평가한다. 적정가·모델·재무는 가격과 무관해 그대로 낸다.
+        #   적정가가 없을 때(0)의 괴리율 0 은 가격과 무관한 정의("정의 불가")라 가격이 없어도 그대로다.
+        if current_price is None and intrinsic > 0:
+            gap_pct, verdict = None, NO_PRICE_VERDICT
+        else:
+            gap_pct = compute_gap_pct(current_price, intrinsic)
+            verdict = gap_pct_to_verdict(gap_pct)
 
-        # 6. 재무 요약
-        per = current_price / fs.eps if fs.eps and fs.eps > 0 else None
-        pbr = current_price / fs.bps if fs.bps and fs.bps > 0 else None
+        # 6. 재무 요약 (배당수익률은 `compute_ratios` 가 가격이 있을 때만 낸다)
+        has_price = current_price is not None
+        per = current_price / fs.eps if has_price and fs.eps and fs.eps > 0 else None
+        pbr = current_price / fs.bps if has_price and fs.bps and fs.bps > 0 else None
 
         financial_summary = {
             "revenue_억":          round(fs.revenue / 1e8, 0) if fs.revenue else None,
@@ -607,7 +621,7 @@ class ValuationEngine:
             corp_name=corp_name,
             current_price=current_price,
             intrinsic_value=round(intrinsic, 0),
-            gap_pct=round(gap_pct, 2),
+            gap_pct=round(gap_pct, 2) if gap_pct is not None else None,
             verdict=verdict,
             models=models,
             financial_summary=financial_summary,
